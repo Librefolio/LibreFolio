@@ -2,7 +2,7 @@
 
 > **Workstream T del programma colori**, sessione «T - token e tema». Coordinatore: sessione «UI color analysis»
 > (`aec04834-1532-4d86-9e3f-f942e82aca89`).
-> Branch `e-alfy-t-tokens-theme`, base `d9aec01936fe7207f1fa118558ce36dcafc90748` (`dev_release2`).
+> Branch `e-alfy-t-tokens-theme`, base `9a9f60dd865d4c544c1b53f0c373040f418efd6f` (`dev_release2`).
 > Corsia: porta **6155**, dati **`/tmp/librefolio-r2-t`**.
 > Comandi: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6155 --data-dir /tmp/librefolio-r2-t …`.
 >
@@ -269,8 +269,8 @@ ramo; il merge lo fa il coordinatore e la 1.3 rifà la sua galleria di riferimen
 
 **Riferimento e metodo**
 
-- `dev_release2` = `9a12e623d`. Il frontend è identico a `c1df8f4cb` (A2 integrato), perché i due commit successivi
-  toccano solo il journal e `scripts/visual_review`. Il mio HEAD resta `f43aa7200`.
+- `dev_release2` = `603713a31`. Il frontend è identico a `255d170b7` (A2 integrato), perché i due commit successivi
+  toccano solo il journal e `scripts/visual_review`. Il mio HEAD resta `eb7296451`.
 - I conteggi vengono dallo scanner di T, eseguito su una copia del target fatta con `git archive` e confrontati con la
   baseline del target: coincidono per ogni file.
 - **I 22 file spostati da A2** hanno ancora la riga col percorso vecchio (`components/{auth,settings,support}/…`): la
@@ -588,44 +588,44 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 | # | Contenuto | Stato |
 |---|---|---|
-| 1 | T-0, T-1 con il diff del CSS compilato | ✅ checkpoint `2018fd853`, integrato con `4e024dfe8` |
-| 2 | T-2, poi integrazione subito: A aspetta | ✅ checkpoint `a73eb7eda`, integrato con `d80b986bf` |
-| 3 | T-3 con la gallery completa | ✅ checkpoint `bd51acbc2`, base aggiornata con G nel merge `dad0f6292`; la gallery la lancia il coordinatore il 15/10 |
-| 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ checkpoint `f43aa7200`; spacchettamento W1/W2 `48cc52e5b`; base con X nel merge `2c7553e0b` |
-| 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ checkpoint `078dec1ae`; base con `dc9a5d232` nel merge `e1443e952`, validato il 15/10; candidata T6 fatta, l'ingresso aspetta il via del developer |
-| 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ checkpoint `0580c92ab`; base `8f1abf89e` nel merge `fe618a0e3` |
-| 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ✅ checkpoint `68c990b35`; base `d22eb6f43` nel merge `02c23c773`, validato il 15/10 con contact sheet; correzione della marca di `sw.js` e del `background_color` da committare |
-| 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ✅ checkpoint `312748dcc`; base `9bd3e39bb` nel merge `a74185670`, validato il 15/10 con contact sheet |
-| 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ✅ checkpoint `87dbd494e` |
-| 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ✅ commit `690472ce3` e `54b0076e4`; basi `2ce572779` e `dd4be16ad`; **ingresso unico di T e DV in `dev_release2` con `a0915bef9`** |
-| 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ✅ checkpoint `96a7c5bbb`, nel target |
-| 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | ✅ commit `7df164689`; validato nello slot unico del 16/10 (02:08–03:21) su `abc4c84de`; ingresso unico con 13–15 |
-| 13 | W3-c e W3-d (stati e polarità sui ruoli) | ✅ commit `078d4dcf8`; validato nello slot unico; ingresso unico |
-| 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; validato nello slot unico; ingresso unico |
-| 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
-| 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
-| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `37972b529`; terzo slot verde su `f0d19e499` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
-| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | ✅ W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d `b338a442d` e W1-f2 `eb2adb37b` (l'interruttore «stale» resta per il lotto degli interruttori): ✅ quarto slot verde su `e1ae55a6c`; la nota wiki committata (`0d5cebce7`) |
-| 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | ✅ integrato `6e569084a` |
-| 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | ✅ integrato `f043c1b58` |
-| 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | ✅ integrato `be911db7e` (commit `18824449c` e `a317392d4`) |
-| 22 | Il resto della UI: `ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`, `FileGrid`, `routes/+page.svelte`; i campi nativi di `TagInput` e `TreeSelect`; l'hover del conteggio di `DataEditor` | ✅ commit `e5e427f8e`; lo slot (`slot5.sh`, 45 minuti al massimo) verso le 17:00 |
-| 23 | Il lotto del gate: G5 (una proprietà, un ternario) e G6 (i campi nativi) nel motore; il fondale uguale nei due temi; le coppie del ruolo `selected`; gli skill; TC-15 nel backlog | ✅ commit `8fb80d3b8`; entra col resto della UI dopo lo slot |
-| 24 | I component tokens, parte 1: `ModalBase` con `tone`, `ConfirmModal` e `FileGrid` sui ruoli, 72 token tolti; `brokers-detail.spec.ts` su `data-selected` | ✅ commit `4a7ba1d7e`; base merge `1427d5ea1` (DV e BK), gate 119/119 |
-| 25 | I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) sui ruoli, 22 token tolti | ✅ commit `26b45f520` |
-| 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | ✅ commit `c4b8a4ae3` |
-| 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | ✅ commit `4b59cfe53`; base merge `4a3f5cf3f` (IW) |
-| 28 | I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) sui ruoli, 49 token tolti | ✅ commit `d39728347`; quinto slot verde (15:45–16:49, con il recupero): 312 E2E su 16 spec, `component-unit` 4.055, mutazione di TC-15 |
-| 29 | Le tabelle: i token di `table.css` sui ruoli in 8 componenti (`DataTable` e le sue parti, `OtherPeriodEffectsTable`, `RiskReturnLevel`), 231 token tolti, la regola di TC-15 in `DataTable` | ✅ commit `77bfa6a39`, base merge `9a02a02c7`; sesto slot (21:42–22:47): 298 E2E verdi e 3 rossi, tutti triati e rilanciati verdi alle 23:14–23:28 (righe 30, TC-17); entrato in `9016f47c3` (23:46) |
-| 30 | La spec del rischio sui ruoli: `risk-analysis.spec.ts` (L3), le righe confrontate con `--lf-surface-card` e `--lf-selected` risolti nella pagina; TC-17 nell'indice | ✅ commit `3c810cd04`, entrato in `9016f47c3`: `front-portfolio risk` 38/38, `tx-picker-pagination` 5/5 |
-| 31 | I 23 «ruolo-mancante»: 4 file (i chip su `bg-lf-neutral/50`, lo stato vuoto degli asset sull'accento, l'anello di `SocialShareModal`), il TSV (m1 697 → 674), la voce di `htmlSink`, lo skill (domanda 7) | ✅ commit `a092cda38`, entrato in `9016f47c3`: Vitest 300/300, `front check` 0 e 0, E2E 20/20 |
-| 32 | `CompactCashCell` sul percorso nuovo (`features/transactions/form/`): i 12 token di `table.css` sui ruoli, il segnaposto e il bordo del disabilitato come la select della cella | ✅ commit `55bced133`, entrato in `b58108665`: Vitest 179/179, `front check` 0 e 0, E2E 44/45; FM6 (TC-18, duplicato di W-B56) verde sulla punta, 10/10 |
-| 33 | Il caso (c) di `theme-roles.spec.ts`: una sonda nel contenuto della pagina invece di `dashboard-cash-balances`, migrata da DV | ✅ commit `5cac2d244`, entrato in `c1578a8bf` (11:51): desktop 13/13, mobile 11/11 + 2 saltati per costruzione |
-| 34 | Giro 3, R3-a: toast tenui, chip della (a) col bordo `X` (T3-b), qualità dei dati per gravità (e il `MISSING_PRICE` del rischio ad avviso, nel backend), opacità e link delle famiglie | ✅ commit `81a927681`; slot verde (23:31–23:51): gate 134, `component-unit` 4.959, E2E 299/299 |
-| 35 | Giro 3, R3-b: i ruoli `--lf-cat-*` dei 12 tipi, il risolutore `in srgb`, i badge col colore della famiglia e il pallino del contenuto | ✅ commit `fc0493eb9`, entrato in `7845fc3d3` (00:12): `component-unit` 4.959, `asset-list` 41/41, `asset-unit` 1.112 |
-| 36 | Giro 3, R3-c: lo skill `design-system` (regole 11 e 12, la tabella, le decisioni) e `palette.md` (i 36 ruoli dei tipi); TC-20, il caso del Lab su due sorgenti provate indipendenti | ✅ commit `6b218d4a4`, entrato in `cd686f445` (01:18): `front-designer-lab live` 12/12 desktop, gate del tema 158/158 |
-| 37 | Le colonne fisse di `DataTable` opache in ogni stato della riga (regressione di `77bfa6a39`): la riga dipinge la card e la tinta del suo stato (`--dt-row-tint`, registrata), l'evidenziazione pulsa davvero; la riga inattiva di `AssetTable` sulla stessa tinta; il test E2E | ✅ commit `2559dc87e`, entrato in `1fa64ceae` (15:4x; base merge `dd9d66281` col target `cc3c3af15`): prova del rosso 2/2 rossi su `HEAD`; `component-unit` 4.978, `asset-list` 43/43, `broker detail` 40/40 |
-| 38 | T2: nel banner della qualità dei dati il pulsante che ripara sopra l'elenco di ciò che ripara (il developer, 19/10); un chip per coppia per aggiungere o aprire una coppia; i nomi degli asset di STALE_PRICE | ✅ commit `e673d4af6`, entrato in `ccc2a4141` (16:58; base merge `68e7a2a73` col target `c0cc8330b`): prova del rosso 10/20 rossi su `HEAD`; `component-unit` 5.001; E2E 108/108 su 6 azioni |
+| 1 | T-0, T-1 con il diff del CSS compilato | ✅ checkpoint `7139acda5`, integrato con `717579fdc` |
+| 2 | T-2, poi integrazione subito: A aspetta | ✅ checkpoint `e730f39fa`, integrato con `cdb9465c9` |
+| 3 | T-3 con la gallery completa | ✅ checkpoint `c35d59cd0`, base aggiornata con G nel merge `0e7863163`; la gallery la lancia il coordinatore il 15/10 |
+| 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ checkpoint `eb7296451`; spacchettamento W1/W2 `4d9b74911`; base con X nel merge `5686fb2ac` |
+| 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ checkpoint `564af5eab`; base con `e910074cc` nel merge `3d9625a51`, validato il 15/10; candidata T6 fatta, l'ingresso aspetta il via del developer |
+| 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ checkpoint `c4cf9e616`; base `46df3789a` nel merge `864f65428` |
+| 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ✅ checkpoint `ec79e0df1`; base `6f9123d5c` nel merge `9449a8d7b`, validato il 15/10 con contact sheet; correzione della marca di `sw.js` e del `background_color` da committare |
+| 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ✅ checkpoint `96c38fb83`; base `4a3be7c73` nel merge `3f851736a`, validato il 15/10 con contact sheet |
+| 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ✅ checkpoint `2cfce25a5` |
+| 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ✅ commit `88e2aaf1f` e `13daad384`; basi `beb8f7bdd` e `48fe10e4b`; **ingresso unico di T e DV in `dev_release2` con `3d1314c2c`** |
+| 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ✅ checkpoint `1252e02f1`, nel target |
+| 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | ✅ commit `c7a882e8b`; validato nello slot unico del 16/10 (02:08–03:21) su `be704d3ba`; ingresso unico con 13–15 |
+| 13 | W3-c e W3-d (stati e polarità sui ruoli) | ✅ commit `e65fbdb40`; validato nello slot unico; ingresso unico |
+| 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `af6d4f1cf` e `67157f22e`; validato nello slot unico; ingresso unico |
+| 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `779802715` e `fa377e01d`; validato nello slot unico (impronte di G uguali); base `8601ec323` con `front check` 0 e 0; ingresso unico |
+| 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `9247e2542`, `048e209a7`, `867417069`; secondo slot verde su `418173bc8` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
+| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `1db66fb0a`; terzo slot verde su `fe4001a2a` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
+| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | ✅ W1-f1 `87c88802e`, W1-g `af14135e0`, W2-b `f7afd88a1`: ✅ terzo slot verde; W2-d `9033c0c6a` e W1-f2 `49f7e4572` (l'interruttore «stale» resta per il lotto degli interruttori): ✅ quarto slot verde su `567a8a8f8`; la nota wiki committata (`4172f2561`) |
+| 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | ✅ integrato `16ea52b26` |
+| 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | ✅ integrato `ee00f754e` |
+| 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | ✅ integrato `eb0078e67` (commit `ed7440650` e `42d595074`) |
+| 22 | Il resto della UI: `ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`, `FileGrid`, `routes/+page.svelte`; i campi nativi di `TagInput` e `TreeSelect`; l'hover del conteggio di `DataEditor` | ✅ commit `f4e186d52`; lo slot (`slot5.sh`, 45 minuti al massimo) verso le 17:00 |
+| 23 | Il lotto del gate: G5 (una proprietà, un ternario) e G6 (i campi nativi) nel motore; il fondale uguale nei due temi; le coppie del ruolo `selected`; gli skill; TC-15 nel backlog | ✅ commit `2b1d74316`; entra col resto della UI dopo lo slot |
+| 24 | I component tokens, parte 1: `ModalBase` con `tone`, `ConfirmModal` e `FileGrid` sui ruoli, 72 token tolti; `brokers-detail.spec.ts` su `data-selected` | ✅ commit `764ae4fab`; base merge `f015d83cc` (DV e BK), gate 119/119 |
+| 25 | I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) sui ruoli, 22 token tolti | ✅ commit `14965b38f` |
+| 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | ✅ commit `f2a61a4eb` |
+| 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | ✅ commit `19e1964db`; base merge `a7ed2b0a1` (IW) |
+| 28 | I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) sui ruoli, 49 token tolti | ✅ commit `9679fa9c6`; quinto slot verde (15:45–16:49, con il recupero): 312 E2E su 16 spec, `component-unit` 4.055, mutazione di TC-15 |
+| 29 | Le tabelle: i token di `table.css` sui ruoli in 8 componenti (`DataTable` e le sue parti, `OtherPeriodEffectsTable`, `RiskReturnLevel`), 231 token tolti, la regola di TC-15 in `DataTable` | ✅ commit `dac99ffda`, base merge `f3a1a419e`; sesto slot (21:42–22:47): 298 E2E verdi e 3 rossi, tutti triati e rilanciati verdi alle 23:14–23:28 (righe 30, TC-17); entrato in `3680c4010` (23:46) |
+| 30 | La spec del rischio sui ruoli: `risk-analysis.spec.ts` (L3), le righe confrontate con `--lf-surface-card` e `--lf-selected` risolti nella pagina; TC-17 nell'indice | ✅ commit `6b39521bc`, entrato in `3680c4010`: `front-portfolio risk` 38/38, `tx-picker-pagination` 5/5 |
+| 31 | I 23 «ruolo-mancante»: 4 file (i chip su `bg-lf-neutral/50`, lo stato vuoto degli asset sull'accento, l'anello di `SocialShareModal`), il TSV (m1 697 → 674), la voce di `htmlSink`, lo skill (domanda 7) | ✅ commit `687be7e72`, entrato in `3680c4010`: Vitest 300/300, `front check` 0 e 0, E2E 20/20 |
+| 32 | `CompactCashCell` sul percorso nuovo (`features/transactions/form/`): i 12 token di `table.css` sui ruoli, il segnaposto e il bordo del disabilitato come la select della cella | ✅ commit `fe6330dcd`, entrato in `e9e1fb1eb`: Vitest 179/179, `front check` 0 e 0, E2E 44/45; FM6 (TC-18, duplicato di W-B56) verde sulla punta, 10/10 |
+| 33 | Il caso (c) di `theme-roles.spec.ts`: una sonda nel contenuto della pagina invece di `dashboard-cash-balances`, migrata da DV | ✅ commit `115a84a7a`, entrato in `6c260d327` (11:51): desktop 13/13, mobile 11/11 + 2 saltati per costruzione |
+| 34 | Giro 3, R3-a: toast tenui, chip della (a) col bordo `X` (T3-b), qualità dei dati per gravità (e il `MISSING_PRICE` del rischio ad avviso, nel backend), opacità e link delle famiglie | ✅ commit `b51fe28f7`; slot verde (23:31–23:51): gate 134, `component-unit` 4.959, E2E 299/299 |
+| 35 | Giro 3, R3-b: i ruoli `--lf-cat-*` dei 12 tipi, il risolutore `in srgb`, i badge col colore della famiglia e il pallino del contenuto | ✅ commit `b0a2e977c`, entrato in `a37e5da23` (00:12): `component-unit` 4.959, `asset-list` 41/41, `asset-unit` 1.112 |
+| 36 | Giro 3, R3-c: lo skill `design-system` (regole 11 e 12, la tabella, le decisioni) e `palette.md` (i 36 ruoli dei tipi); TC-20, il caso del Lab su due sorgenti provate indipendenti | ✅ commit `e9108d54f`, entrato in `574c23cf0` (01:18): `front-designer-lab live` 12/12 desktop, gate del tema 158/158 |
+| 37 | Le colonne fisse di `DataTable` opache in ogni stato della riga (regressione di `dac99ffda`): la riga dipinge la card e la tinta del suo stato (`--dt-row-tint`, registrata), l'evidenziazione pulsa davvero; la riga inattiva di `AssetTable` sulla stessa tinta; il test E2E | ✅ commit `a2848ae11`, entrato in `dd797d670` (15:4x; base merge `0a70fd5ec` col target `3b0664d12`): prova del rosso 2/2 rossi su `HEAD`; `component-unit` 4.978, `asset-list` 43/43, `broker detail` 40/40 |
+| 38 | T2: nel banner della qualità dei dati il pulsante che ripara sopra l'elenco di ciò che ripara (il developer, 19/10); un chip per coppia per aggiungere o aprire una coppia; i nomi degli asset di STALE_PRICE | ✅ commit `a33b0fdd6`, entrato in `8c6e984ee` (16:58; base merge `1ef6b4728` col target `2599dfccc`): prova del rosso 10/20 rossi su `HEAD`; `component-unit` 5.001; E2E 108/108 su 6 azioni |
 
 ## Avanzamento
 
@@ -664,7 +664,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - **Istruzioni D-T12:** la sezione «Design System», la riga «Dark mode» e la skill `design-tools/theme-roles`.
 >
 > **Evidenze:**
-> - **CSS compilato**, build della baseline (export con `git archive d9aec019`) e di T-1, `npm run build`:
+> - **CSS compilato**, build della baseline (export con `git archive 9a9f60dd`) e di T-1, `npm run build`:
 >   - 22 file CSS su 23 identici;
 >   - nel diff di `0.*.css` (`files/T1-compiled-css.diff` della sessione T) solo +87 dichiarazioni `--lf-*` con i loro
 >     blocchi, i 4 selettori strutturali riscritti con `:where` e le 2 regole morte tolte.
@@ -696,8 +696,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   - `backend/data/prod/`, creato dall'import in-process dell'app durante `api sync`;
 >   - `scripts/test_runner/.campaign.json`.
 >
-> **Checkpoint 1:** commit `2018fd853` del coordinatore, 12 file. Merge di base `4e024dfe8`, con il `793395913` della
-> 1.3. `dev_release2` = `4e024dfe8`, entrato con un fast-forward: il cricchetto vale per tutti dal 14/10 sera.
+> **Checkpoint 1:** commit `7139acda5` del coordinatore, 12 file. Merge di base `717579fdc`, con il `b4b181946` della
+> 1.3. `dev_release2` = `717579fdc`, entrato con un fast-forward: il cricchetto vale per tutti dal 14/10 sera.
 
 ### T-2 — ✅ 14/10/2026 (checkpoint 2)
 
@@ -773,8 +773,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - **Il server di test ricostruisce il frontend all'avvio** (api sync, check, build di debug): circa 2 minuti prima
 >   di rispondere.
 >
-> **Checkpoint 2:** commit `a73eb7eda` del coordinatore, merge di base `d80b986bf` con avanzamento veloce del target.
-> Il developer ha approvato gli scatti. Poi G è entrata in `dev_release2` (`265ae5c6e`): la base di T si aggiorna
+> **Checkpoint 2:** commit `e730f39fa` del coordinatore, merge di base `cdb9465c9` con avanzamento veloce del target.
+> Il developer ha approvato gli scatti. Poi G è entrata in `dev_release2` (`94d708744`): la base di T si aggiorna
 > al checkpoint di T-3.
 
 ### T-3 — ✅ 15/10/2026 (checkpoint 3, prima della gallery)
@@ -853,7 +853,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 ### T-5 — ✅ 15/10/2026 (checkpoint 4)
 
-> **Avvio:** il coordinatore ha committato T-3 (`bd51acbc2`) e aggiornato la base con G (merge `dad0f6292`, worktree
+> **Avvio:** il coordinatore ha committato T-3 (`c35d59cd0`) e aggiornato la base con G (merge `0e7863163`, worktree
 > pulito, verificato). Con G entrato, `ui/AnimatedBackground.svelte` passa a T. Vincolo di G: il congelamento a
 > t* = 3.600 ms resta com'è, si toccano solo i colori. Checkpoint entro le 09:00, così la gallery candidata copre T-3
 > e T-5 insieme.
@@ -924,7 +924,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 ### W1–W2 · Spacchettamento — ✅ 15/10/2026 (analisi, sola lettura)
 
-> **Avvio:** il coordinatore ha committato T-5 (`f43aa7200`, worktree pulito) e ha chiesto lo spacchettamento di W1 e
+> **Avvio:** il coordinatore ha committato T-5 (`eb7296451`, worktree pulito) e ha chiesto lo spacchettamento di W1 e
 > W2 entro le 08:30: niente codice, server, test né sotto-agenti che scrivono.
 >
 > **Note implementazione:** il risultato è nella sezione «W1–W6», paragrafo «Spacchettamento di W1 e W2». In sintesi:
@@ -953,7 +953,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > **Avvio** (coordinatore, 11:41): il developer e la designer chiedono, testuale, di «aggiornare subito le
 > impostazioni… per vedere come va e poi elencare i colori che sono rimasti fuori». Palette «Pietra e Salvia» (chiaro)
 > e «Ardesia e Salvia» (scuro); D-T15 rende neutra la barra laterale. Durante il lavoro arrivano D-T16 (Q1) e la
-> conferma di D-T3 (niente ponte). Base `2c7553e0b`.
+> conferma di D-T3 (niente ponte). Base `5686fb2ac`.
 >
 > **Note implementazione:**
 > - **`lib/theme/tokens.css`:**
@@ -1067,9 +1067,9 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - **Ricetta delle tinte in scuro:** provata 8/25/40, tenuta quella del giro 1, 6/22/37, che chiede una correzione
 >   minore del testo attenuato (`#7F8C87` invece di `#818E89`).
 >
-> **Validazione del fuso `e1443e952`** (15/10, pomeriggio)
+> **Validazione del fuso `3d9625a51`** (15/10, pomeriggio)
 >
-> Il merge `e1443e952` ha due padri: `078dec1ae`, cioè T-6, e `dc9a5d232`. Porta R completo, il Lab di L, il
+> Il merge `3d9625a51` ha due padri: `564af5eab`, cioè T-6, e `e910074cc`. Porta R completo, il Lab di L, il
 > checkpoint 2 di G, la 1.2.1 e `cryptography`, già nel venv condiviso (50.0.2). Nessuna migrazione nuova; `npm`
 > invariato.
 >
@@ -1102,13 +1102,13 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - Una regressione, testuale: «è scomparsa la cosa che la header bar scrollando in basso si nasconde».
 > - Una richiesta, testuale: «almeno nel riquadro del logo, nel menù laterale, metti il verde della head della login».
 >
-> Base `c5a8a03a4`.
+> Base `ca70f780e`.
 >
 > **Diagnosi:**
 > - **Nella corsia lo scorrimento funziona.** Con lo script di diagnosi (utente E2E, dati veri, rotella del mouse) su
 >   `/dashboard` e `/assets`, in desktop e mobile, l'header va `hidden`: `translate` `0px -100%`, cima a −57 px.
 >   `/settings` in desktop non scorre affatto: la pagina sta nello schermo.
-> - **Il sintomo del developer** viene dal blocco per focus di `Header.svelte` (`focusPinned`, dal 9/9, `ef722b552`).
+> - **Il sintomo del developer** viene dal blocco per focus di `Header.svelte` (`focusPinned`, dal 9/9, `c8a77dda3`).
 >   In Chrome un clic su un pulsante dell'header, per esempio `theme-toggle`, gli lascia il focus. L'header resta
 >   allora `pinned` e non si nasconde più finché non si clicca nella pagina: provato, si scorre di 600 px e resta
 >   fermo.
@@ -1154,10 +1154,10 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 ### T-8 — 🔄 15/10/2026 (giro 2 della designer, D-T17)
 
 > **Avvio** (coordinatore, 15:37): mandato T-8 dal developer, testuale: «archiviali opportunamente e poi dai mandato ai
-> vari sotto agenti di realizzare quanto pianificato» (D-T17). Prima il merge di base `8f1abf89e`:
+> vari sotto agenti di realizzare quanto pianificato» (D-T17). Prima il merge di base `46df3789a`:
 > - conflitti su `LanguageSelector` (`data-language` di A5 più la classe del ruolo di T-3) e sul commento di
 >   `theme-roles.spec.ts` (il `registration_mode` di A5 più i casi con accesso di T);
-> - resto fuso in automatico e rivisto; il coordinatore ha committato `fe618a0e3`.
+> - resto fuso in automatico e rivisto; il coordinatore ha committato `864f65428`.
 >
 > Le prove pesanti della revisione fusa vanno insieme a quelle di T-8, quando arriva lo slot.
 
@@ -1267,8 +1267,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **13 · Descrizione nel runner.** La voce `theme-roles` di `scripts/test_runner/_frontend_utility.py`, scritta da T
 > in T-2 e T-6, descrive i casi di oggi: solo il testo di `desc`, superficie condivisa.
 
-> ✅ **14 · Checkpoint e merge di base (15/10).** Il coordinatore ha committato T-8 in `68c990b35` e ha aperto il merge
-> con `d22eb6f43` (J C-94, W FE8a, Z1, L-10, G-9).
+> ✅ **14 · Checkpoint e merge di base (15/10).** Il coordinatore ha committato T-8 in `ec79e0df1` e ha aperto il merge
+> con `6f9123d5c` (J C-94, W FE8a, Z1, L-10, G-9).
 > - **Un conflitto, nella baseline:** le righe del wizard di FE8a accanto alla riga di `AnimatedBackground`, che T-5
 >   aveva tolto e il target aveva ancora uguale alla base. Risolto con `--resolve`, il primo a tre vie su un caso reale
 >   (TC-7): restano le 6 righe del wizard, esce `AnimatedBackground`.
@@ -1276,11 +1276,11 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   nessuna cambiata dai due lati, nessuna errata. Le 7 righe `~` ci sono tutte: i due `~accept` di `themeStore` e i
 >   cinque `~split`. `--check` pulito sull'albero fuso.
 > - **Fusi in automatico e rivisti:** il runner (le registrazioni di Z1 e la `desc` di T) e il backlog.
-> - Merge committato dal coordinatore: `02c23c773`, padri `68c990b35` e `d22eb6f43`.
+> - Merge committato dal coordinatore: `9449a8d7b`, padri `ec79e0df1` e `6f9123d5c`.
 > - **Per la validazione:** nessun manifesto delle dipendenze cambiato, quindi niente `npm ci` né venv; l'API è
 >   cambiata (eventi degli asset, broker), quindi `api sync` prima di `front check`.
 
-> ✅ **15 · Validazione della revisione fusa `02c23c773`** (15/10, slot pesante dalle 17:12, un comando alla volta nella
+> ✅ **15 · Validazione della revisione fusa `9449a8d7b`** (15/10, slot pesante dalle 17:12, un comando alla volta nella
 > corsia 6155, comandi `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`):
 > - `api sync` rc 0 (l'API era cambiata: eventi degli asset, broker); `front check` 0 errori, 0 avvisi;
 > - `test … front-utility core-unit` 4.655/4.655 (150 file); i tre gate di T anche da soli, `vitest run` dei file:
@@ -1293,7 +1293,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   della corsia avviato per gli scatti e fermato, porta 6155 libera (`lsof` senza listener).
 > - **⚠️ Fuori pista — la marca di `sw.js`:** la build riscrive `// build: <md5(offline.html)[:8]>` in
 >   `frontend/static/sw.js`, e `utils pwa-assets` (`test_pwa_assets.py`, di K) controlla che coincida: senza, i client
->   installati tengono la pagina offline vecchia. T-8 ha cambiato `offline.html` senza rifare la marca: in `02c23c773`
+>   installati tengono la pagina offline vecchia. T-8 ha cambiato `offline.html` senza rifare la marca: in `9449a8d7b`
 >   resta `2ef2dd96`, la pagina dà `5e99e50d`. La build della validazione l'ha riscritta; va nel commit.
 > - **⚠️ Fuori pista — `background_color` del manifest:** lo stesso test fissa il beige `#F5F4EF`, perché le icone
 >   maskable sono dipinte fino al bordo in quel colore e il ritaglio del launcher incontra lo splash di sistema senza
@@ -1309,7 +1309,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 ### T-8b — ✅ 15/10/2026 (correzioni del developer dopo l'anteprima, D-T23–D-T26; checkpoint 8)
 
-> **Avvio** (coordinatore, 17:59): T-8 e la sua validazione committati in `63de39c45`; TC-9 accettata (il manifest
+> **Avvio** (coordinatore, 17:59): T-8 e la sua validazione committati in `88dbb19cc`; TC-9 accettata (il manifest
 > resta beige). Scrittura subito, prove pesanti al via del coordinatore.
 
 > ✅ **1 · Header neutro (D-T23).** Ruolo nuovo `--lf-surface-header`, `#EDF0EE` in chiaro e `#111615` in scuro
@@ -1388,20 +1388,20 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > toccati; `dev.py i18n check` rigoroso; script dei contrasti 0 su 270; `utils pwa-assets` 20/20; Prettier e
 > `git diff --check` puliti. Delta: 26 file tracciati, nessun file nuovo.
 
-> ✅ **11 · Checkpoint e merge di base.** Il coordinatore ha committato T-8b in `312748dcc` e aperto il merge con
-> `9bd3e39bb` (H, Z7a, Y2, E1b, J CP-4, E2b).
+> ✅ **11 · Checkpoint e merge di base.** Il coordinatore ha committato T-8b in `96c38fb83` e aperto il merge con
+> `4a3be7c73` (H, Z7a, Y2, E1b, J CP-4, E2b).
 > - **Un conflitto, `e2e/layout/header-scroll.spec.ts`:** i due lati rispondevano a `/system/instance` nella tabella
 >   sintetica. Tenuta quella di H, `[INSTANCE_CONFIG_PATH, plainInstanceConfig()]`, validata sullo schema; tolta la mia
 >   `{profile: 'selfhosted'}` di T-7. Il describe `auth-page-controls` usa il backend vero; `theme-roles.spec.ts` non
 >   ha sintetici di quella lettura.
 > - **Baseline fusa in automatico,** controllata riga per riga contro base, T e target: 317 invariate, 10 da T, 2 dal
 >   target, nessuna dai due lati, 8 righe `~` (con lo `~split` di `DataTable`). `--check` pulito, 81 file sotto il
->   record. Merge committato dal coordinatore: `a74185670`.
+>   record. Merge committato dal coordinatore: `3f851736a`.
 
-> ✅ **12 · Validazione della revisione fusa `a74185670`** (15/10, 18:33–19:03, un comando alla volta nella 6155):
+> ✅ **12 · Validazione della revisione fusa `3f851736a`** (15/10, 18:33–19:03, un comando alla volta nella 6155):
 > - `api sync` rc 0 (schemi `system` e `users` cambiati; dipendenze e migrazioni no); `front check` 0 e 0;
 > - `core-unit` 4.880 su 4.881. **⚠️ Fuori pista:** il rosso è `htmlInterpolation.gate.test.ts`, una traduzione con
->   `<` (`email.problems.SMTP_FROM_INVALID`, entrata con `b33654f22` di E, identica in `9bd3e39bb`): rosso del target,
+>   `<` (`email.problems.SMTP_FROM_INVALID`, entrata con `fbee21a83` di E, identica in `4a3be7c73`): rosso del target,
 >   non di T, segnalato subito al coordinatore. I tre gate di T da soli: 78/78;
 > - `component-unit` 3.461/3.461; `onboarding-component-unit` 449/449;
 > - E2E a 1 worker: `theme-roles` 24 e 2 saltati (l'hover su mobile), `header-scroll` 10 e 2 saltati (i due casi
@@ -1438,7 +1438,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - desktop: barra `fixed` e `padding-top` 16 px della cornice (`lg:pt-4`).
 > - Prove leggere: Prettier, `tsc` mirato (anche `--noUnusedLocals`), `--check` e `git diff --check` puliti.
 
-> ✅ **3 · Validazione** (15/10, 19:36–19:45, slot dopo L, un comando alla volta nella 6155, su `e0c88bbc3` più il
+> ✅ **3 · Validazione** (15/10, 19:36–19:45, slot dopo L, un comando alla volta nella 6155, su `50b9cbfa5` più il
 > delta):
 > - E2E `header-scroll` a 1 worker: 11 passati e 3 saltati (i tre casi della barra d'accesso, ciascuno sul suo
 >   progetto: i due mobili ✓, il desktop ✓);
@@ -1450,8 +1450,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 ### T-9 — ✅ 15/10/2026 (ramo combinato T + DV: una review e un ingresso)
 
 > **Avvio** (coordinatore, 21:29): il developer chiede una review unica per T-8b, T-8c e DV, e un ingresso unico. Il
-> ramo di T diventa il ramo combinato, T il proprietario d'integrazione. Merge del coordinatore, puliti: `620476853`
-> (`dev_release2` = `4294ba12a` sopra `87dbd494e`) e `ec1ddba96` (DV `ebd1dfff6`).
+> ramo di T diventa il ramo combinato, T il proprietario d'integrazione. Merge del coordinatore, puliti: `954f8bcd0`
+> (`dev_release2` = `2520ceaf2` sopra `2cfce25a5`) e `fca375311` (DV `05769ae42`).
 > **Esito della review** (22:2x): «mergia il lavoro fatto, correggi gli aspetti tecnici e avanza sulle altre wave».
 
 > ✅ **1 · I sei `STAND_INS` di `lib/theme/roleColors.ts`** (DV), allineati al `tokens.css` unito: card `#FAFBFA` /
@@ -1484,13 +1484,13 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   47 s; desktop in timeout all'ottavo scatto col carico a 82, dopo 7 scatti buoni con l'header visibile, poi ✓ 8/8 in
 >   49 s nella finestra tranquilla. Scatti guardati: header neutro visibile, occhio in vista, nessun anello di focus.
 
-> ✅ **4 · Controllo leggero e ingresso** (22:3x–22:49). Il primo merge di base, `2ce572779`, è superato dal secondo,
-> `dd4be16ad` (J CP-4d: schema di `portfolio.py`, i18n `dataQuality`). Rifatto da capo su `dd4be16ad`, nella 6155:
+> ✅ **4 · Controllo leggero e ingresso** (22:3x–22:49). Il primo merge di base, `beb8f7bdd`, è superato dal secondo,
+> `48fe10e4b` (J CP-4d: schema di `portfolio.py`, i18n `dataQuality`). Rifatto da capo su `48fe10e4b`, nella 6155:
 > `api sync` rc 0, `front check` 0 e 0; i gate (11 file `*.gate.test.ts` più `roleColors.test.ts`) 237/237; `i18n check`
 > stretto, 4.632 chiavi; golden `native_cash_guard` rigenerato con `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1` (il test
 > salta di proposito, «golden regenerated»), diff contro HEAD vuoto, poi 1 passato senza la variabile; E2E a 1 worker
-> `theme-roles` 24 e 2 saltati, `header-scroll` 11 e 3 saltati. **Ingresso:** `dev_release2` = `a0915bef9`, merge di
-> `dd4be16ad`; il ramo di T in avanti veloce. Da dichiarare: la riga di T-8b/T-8c in `features/auth/AuthPageFrame.svelte`
+> `theme-roles` 24 e 2 saltati, `header-scroll` 11 e 3 saltati. **Ingresso:** `dev_release2` = `3d1314c2c`, merge di
+> `48fe10e4b`; il ramo di T in avanti veloce. Da dichiarare: la riga di T-8b/T-8c in `features/auth/AuthPageFrame.svelte`
 > (file di A; A lo sa dalla 1.3).
 
 ### W3-a — ✅ 15/10/2026 (TD-2: il segno della dashboard sui ruoli; D-T27)
@@ -1560,7 +1560,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > l'effetto tempi, Patrimonio netto), in chiaro e in scuro; le tabelle Contributo ed Esposizione sotto; nei pannelli
 > rischio le card delle metriche (striscia e valore) e il tornado dello stress test.
 
-> **Ingresso:** commit `96a7c5bbb` nel target (15/10, 23:4x).
+> **Ingresso:** commit `1252e02f1` nel target (15/10, 23:4x).
 
 ### TD-3 e W3-b — 🔄 15/10/2026 (la card «Allocazione Patrimoniale»; il segno su mercato e broker; D-T27)
 
@@ -1606,7 +1606,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 > ✅ **4 · Checkpoint di scrittura** (coordinatore, 00:00, scelta (a)): `toneClasses.ts` sta sia in W3-b sia in W3-c/d,
 > quindi i lotti non si separano per path. TD-3 e W3-b si committano adesso con le sole prove leggere; W3-c/d si scrive
-> sopra; nello slot, dopo Y7 e DV, le prove pesanti coprono tutto insieme, con un solo ingresso. Commit `7df164689`.
+> sopra; nello slot, dopo Y7 e DV, le prove pesanti coprono tutto insieme, con un solo ingresso. Commit `c7a882e8b`.
 
 > **Dove guardarlo** (per il developer): Dashboard, la card «Allocazione Patrimoniale» in scuro (sfondo come le altre
 > card; Ora/Storico e Tipo/Settore/Geografica attivi sul verde azione), e la stessa nel dettaglio di un broker; liste di
@@ -1615,7 +1615,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 ### W3-c e W3-d — 🔄 16/10/2026 (gli stati e la polarità sui ruoli; D-T27)
 
-> **Avvio** (coordinatore, 00:0x): scelta (a), commit di scrittura di TD-3 + W3-b `7df164689`; OK a
+> **Avvio** (coordinatore, 00:0x): scelta (a), commit di scrittura di TD-3 + W3-b `c7a882e8b`; OK a
 > `ToastContainer.svelte` e a `ReportSetCard.svelte:351`, la 1.3 informata. Le scelte «da rivedere» vanno nella lista
 > del developer; il toast d'errore pieno è una delle domande aperte alla designer (la pagina dei toast). `DistributionEditor`
 > va con W1-d: l'asserzione `text-green-600` di `gallery.spec.ts:6067` la cambia G dopo G-13, in fila dal coordinatore.
@@ -1662,7 +1662,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > dashboard; l'import delle transazioni (lo stato dei report set); i badge dei set di file; nel rischio i chip degli
 > asset, le barre del contributo e la divergenza della diversificazione; l'esito di una sincronizzazione.
 
-> **Commit:** `078d4dcf8` (coordinatore, 16/10, 00:1x; 6 file, genitore `7df164689`).
+> **Commit:** `e65fbdb40` (coordinatore, 16/10, 00:1x; 6 file, genitore `c7a882e8b`).
 
 ### I1 — 🔄 16/10/2026 (W1-a e W1-b, i selettori di `ui/select`; le funzioni di segno di `LotCustodyModal`; D-T27)
 
@@ -1733,7 +1733,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   su un'opzione la sceglie ancora (solo la tastiera controlla `disabled || loading`). Viene da prima dei colori: riga
 >   **TC-11** del backlog.
 
-> ✅ **5 · `LotCustodyModal`** (00:50, dopo l'ingresso di J CP-16, `240675ad1`): `signedToneClass` ed
+> ✅ **5 · `LotCustodyModal`** (00:50, dopo l'ingresso di J CP-16, `5dd832c52`): `signedToneClass` ed
 > `eventDetailToneClass` sulle tabelle, `SIGN_TEXT.portfolio` per guadagno, perdita e zero; il valore assente e il
 > neutro degli eventi → `text-lf-primary`. L'import di `SIGN_TEXT` sta dopo `maskableQuantity`, lontano dalla riga 17
 > che J cambia (la base del coordinatore, simulata, è pulita). m1 219 → 205; il resto della modale va con W5.
@@ -1750,7 +1750,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > filtro dei broker), la condivisione di un broker (utenti), i segnali del grafico; la modale di custodia di un lotto
 > (le cifre col segno).
 
-> **Commit:** `6345f6950` (`LotCustodyModal`) e `1c16151a1` (I1); base del coordinatore `7d78607df` (target `03ec20ac8`,
+> **Commit:** `af6d4f1cf` (`LotCustodyModal`) e `67157f22e` (I1); base del coordinatore `875118706` (target `659f457e1`,
 > con J CP-16 e X CP11a): `LotCustodyModal` fuso da solo, il mio import, la riga di J con `closureValueLabelKey`, le mie
 > due funzioni, la sua etichetta alla 182; `--check` pulito.
 
@@ -1816,12 +1816,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > cambi (l'avviso), le formule KaTeX del pianificatore PAC; l'editor delle distribuzioni (settori, paesi) nella modale
 > dell'asset; il campo dei tag.
 
-> **Commit:** `eebbd1da4` (W1-d) e `17e26bfce` (Q10), dal coordinatore alle 01:38; albero pulito, `--check` pulito.
+> **Commit:** `779802715` (W1-d) e `fa377e01d` (Q10), dal coordinatore alle 01:38; albero pulito, `--check` pulito.
 > Approvato il ritiro di `ExactDecimalInput` ed `ExactQuantityInput`: vanno con i chiamanti, con l'OK dei proprietari.
 
 ### Slot unico — ✅ 16/10/2026 (W3, I1, `LotCustodyModal`, W1-d, Q10: le prove pesanti)
 
-> **Via** (coordinatore, 02:08): valida `abc4c84de`, la base col target `57802d827` (DV, Y7, Z4, W-B31/36, E4a). Corsia
+> **Via** (coordinatore, 02:08): valida `be704d3ba`, la base col target `7138a8261` (DV, Y7, Z4, W-B31/36, E4a). Corsia
 > 6155 e `/tmp/librefolio-r2-t`, carico 33–38; script `/tmp/libreFolio_T_r2/slot_w3_i1.sh` in ordine di priorità, con lo
 > stop a 70 minuti e il resoconto di cosa resta; albero fermo durante lo slot.
 
@@ -1844,7 +1844,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   `verificationApi.test.ts` 104/104. **Regola per gli slot:** aprire con `api sync`.
 > - Porta 6155 libera alla fine.
 
-> ✅ **Base** (coordinatore, 03:2x): `3b9c4ca1c`, col target `8850ad002` (Y4b, il rischio in `features/risk`: 103 file
+> ✅ **Base** (coordinatore, 03:2x): `8601ec323`, col target `aa2bfc6c2` (Y4b, il rischio in `features/risk`: 103 file
 > che usano `toneClasses` spostati; H CP-U2, A6d/e, X CP11b, Z7b, B2); baseline e backlog fusi da soli. Cancello sulla
 > revisione unita, nella corsia: `api sync` rc 0, `front check` 0 e 0, `--check` pulito (03:24–03:25).
 
@@ -1858,7 +1858,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > dopo l'ingresso le patch si applicano con `git apply --3way`, controllando prima `git diff <BASE_COMMIT> HEAD` sui loro
 > file. `theme-roles.mjs` non si tocca fino a Y5 (resta orfana la voce `ARBITRARY_ALLOWED` del coachmark).
 
-> ✅ **1 · W1-c** (sotto-agente su copie di `17e26bfce`): i 10 file da 225 classi legacy a 0. Il giorno di `CalendarMonth`
+> ✅ **1 · W1-c** (sotto-agente su copie di `fa377e01d`): i 10 file da 225 classi legacy a 0. Il giorno di `CalendarMonth`
 > è una catena di rami esclusivi per sfondo e testo (selezionato e capi `bg-lf-checked text-lf-on-checked`, intervallo
 > `bg-lf-selected`, in sospeso `bg-lf-checked/50` col testo primario per il contrasto, oggi `ring-lf-focus`, fuori mese e
 > futuri `text-lf-muted`): il `!text-white` del piano non serve più. La cornice di `DateRangePicker` col bordo in un solo
@@ -1870,11 +1870,11 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `tab.className`: solo classi d'immagine). `test-author` su copie: la cornice di `DateRangePicker.test.ts` divisa in
 > base, bordo chiuso e aperto, più un test che a calendario aperto vuole il bordo di focus e nessun bordo chiuso;
 > `fx-list.spec.ts:155` su `data-active`, `asset-data-editor.spec.ts:114–115, 126` su `aria-selected`. Patch
-> `w1c.patch`, 13 file; `git apply --check` pulito su `abc4c84de`.
+> `w1c.patch`, 13 file; `git apply --check` pulito su `be704d3ba`.
 > - **Da rivedere:** al passaggio i preset inattivi si scuriscono come oggi; il badge personalizzato resta ambra; la
 >   sottolineatura al passaggio delle schede è del colore della riga sotto la barra.
 
-> ✅ **2 · W1-e** (io, su copie di `abc4c84de`): `ModalBase`, fondale `var(--lf-surface-overlay)` (Q13), pannello
+> ✅ **2 · W1-e** (io, su copie di `be704d3ba`): `ModalBase`, fondale `var(--lf-surface-overlay)` (Q13), pannello
 > `var(--lf-surface-card)` con l'ombra `var(--lf-shadow-raised)` (Q8), via la regola `.dark`; il bordo `border
 > border-lf-raised` (N3) e il testo `text-lf-primary` come classi nel markup. **⚠️ Fuori pista:** lo stile di un
 > componente sta fuori dai layer di Tailwind e batte ogni utility: un bordo nel `<style>` cancellerebbe il
@@ -1892,7 +1892,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   dialogo diventano circa 2,35 px di schermo, poi l'arrotondamento per eccesso). Voluto; se la designer volesse il filo
 >   senza ingombro, basterebbe un'ombra interna al posto del bordo.
 
-> ✅ **3 · W2-a** (sotto-agente su copie di `abc4c84de`): gli 8 file da 240 classi legacy a 0. Il banner del bootstrap
+> ✅ **3 · W2-a** (sotto-agente su copie di `be704d3ba`): gli 8 file da 240 classi legacy a 0. Il banner del bootstrap
 > sulla tinta d'avviso (il modello per H); il blocco con la card dal bordo `danger-line`; il coachmark con fondale
 > `bg-lf-overlay`, bagliore `border-lf-focus shadow-[0_0_0_5px_var(--lf-tour-glow),0_0_28px_var(--lf-tour-glow)]` (Q9),
 > pannello flottante; pagine di benvenuto su `bg-lf-page`, card `bg-lf-card`, il disco dell'avatar `bg-lf-brand`; i punti
@@ -1903,7 +1903,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   inattivi dell'introduzione più tenui in scuro; le tessere del logo bianche anche in scuro (`bg-lf-logo`); fondale
 >   del coachmark al 60 % invece del 45 %.
 
-> ✅ **4 · Applicazione e prove leggere** (03:28–03:31, dopo l'ingresso `503dce683`, il ramo in avanti veloce): `git diff
+> ✅ **4 · Applicazione e prove leggere** (03:28–03:31, dopo l'ingresso `077a78abb`, il ramo in avanti veloce): `git diff
 > <BASE_COMMIT> HEAD` vuoto sui file di tutti e tre i lotti, quindi `git apply -p2` semplice (solo l'albero, niente
 > indice; il coordinatore: «se è vuoto, va bene anche la copia»), 22 file identici alle bozze. Prettier verde sui 22;
 > `--check` pulito (anche la grammatica G1–G4, ora sui file veri); nessun colore della stessa proprietà fuori da un
@@ -1920,12 +1920,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - **W2-a:** il benvenuto del primo accesso, il tour guidato (bagliore, fondale, pannello), il ripasso dell'onboarding
 >   nelle impostazioni, il banner del bootstrap.
 
-> **Commit:** `a5c7714ca` (W1-c), `d27fdef4a` (W1-e), `a0ced5980` (W2-a, con baseline e piano), dal coordinatore sopra
-> `503dce683`; base `91bae7f2e` (target `d0efca910`: H CP7b-1, J CP-6 backend).
+> **Commit:** `9247e2542` (W1-c), `048e209a7` (W1-e), `867417069` (W2-a, con baseline e piano), dal coordinatore sopra
+> `077a78abb`; base `418173bc8` (target `a42af7e28`: H CP7b-1, J CP-6 backend).
 
 ### Secondo slot — ✅ 16/10/2026 (W1-c, W1-e, W2-a)
 
-> **Via** del coordinatore: valida `91bae7f2e`; corsia 6155, carico 27 alla partenza (dalle 04:00 alle 04:30 un `all-backend`
+> **Via** del coordinatore: valida `418173bc8`; corsia 6155, carico 27 alla partenza (dalle 04:00 alle 04:30 un `all-backend`
 > di H sotto `nice -n 19`); script `/tmp/libreFolio_T_r2/slot2.sh`, che apre con `api sync`; stop a 65 minuti; un rosso
 > di valore e non di colore sulla dashboard sarebbe stato CP-6.
 
@@ -1954,8 +1954,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > rivedere:** un campo non valido resta rosso anche col fuoco (oggi diventava verde). OK della 1.3, per W e J, a `ui.ts`
 > (`INPUT`/`TITLE_INPUT`), ai due `TxForm*` e ai test di W (righe 791–792, 803–813, 826, 828, 829, 831, 834–838 di
 > `TransactionFormModal.test.ts`; 1168, 1171, 1173, 1176, 1198, 1203 di `transactions-modals.spec.ts`). `ui.ts` e i tre file
-> dei grafici sono di DV (W5-PAC, W5-charts, commit `7d3896011`, entra verso le 07:20): la bozza parte dalla sua versione
-> (`git show 7d3896011:<path>`; il target non li ha toccati dalla base di DV, `20558ead5`). Slot dopo quello di DV, verso le
+> dei grafici sono di DV (W5-PAC, W5-charts, commit `d0e6e8eec`, entra verso le 07:20): la bozza parte dalla sua versione
+> (`git show d0e6e8eec:<path>`; il target non li ha toccati dalla base di DV, `54f27d7c6`). Slot dopo quello di DV, verso le
 > 07:30.
 
 > ✅ **1 · Bozza** (`files/INPUT-draft` della sessione, `input.patch`, 11 file, la base di ogni file in `BASES`):
@@ -1974,8 +1974,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   (l'helper risolve il colore atteso nella pagina: le espressioni coi ruoli).
 
 > ✅ **2 · Ricontrollo sul target nuovo** (05:05, solo git in lettura; la macchina è della galleria fino alle 06:45): base
-> `72e66d1a6` (ingresso di TC-12 e del journal, poi Z2b, i cherry-pick di W, A6c, X CP11c, H CP7b-2, Z config). Gli 11
-> file non sono cambiati dalle basi della bozza; i 4 di DV non sono cambiati nel target dalla sua base `20558ead5`; nessun
+> `7aefcc13a` (ingresso di TC-12 e del journal, poi Z2b, i cherry-pick di W, A6c, X CP11c, H CP7b-2, Z config). Gli 11
+> file non sono cambiati dalle basi della bozza; i 4 di DV non sono cambiati nel target dalla sua base `54f27d7c6`; nessun
 > chiamante nuovo dei due campi, e nella versione di DV i chiamanti del pianificatore passano solo `{INPUT}` più classi di
 > layout; `aria-invalid={locallyInvalid}` copre anche `externalInvalid`. Se DV entra senza ritoccare i suoi 4 file, la
 > patch va liscia.
@@ -2132,7 +2132,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   (`hover:bg-lf-danger-soft text-lf-danger` / `hover:bg-lf-warning-soft text-lf-warning`); il testo d'errore
 >   `text-lf-warning`/`text-lf-danger`; i suggerimenti `text-lf-muted`; l'icona di stato resta su `STATUS_TONES`.
 > - Nessun test Vitest legge questi colori (i banner si trovano per testid); negli E2E solo la 289, già sistemata.
-> - **Da rivedere:** in scuro il testo dei banner era attenuato al 60 % di proposito (commit `7b4090d74`, 06/03), mentre
+> - **Da rivedere:** in scuro il testo dei banner era attenuato al 60 % di proposito (commit `73e5fe504`, 06/03), mentre
 >   `-on-soft` è pieno: i banner scuri «parlano» più forte; le icone in scuro passano dal 50 % al pieno; le tinte `-soft`
 >   e `-line` in scuro sono opache dove prima erano al 10 % e al 40 %; la riga di sync su `text-lf-secondary` (in scuro più
 >   spenta; `text-lf-primary` è l'alternativa); il contenuto dei chiamanti ancora legacy dentro i banner (i `<code>` di
@@ -2141,16 +2141,16 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   utility `dark:`: i suoi test «in scuro» oggi non sanno se il tema è scuro. Fuori perimetro, backlog TC-14.
 
 > ✅ **11 · Copie pronte** (06:46, galleria finita: nessun processo di Playwright, carico 10). Checkpoint di sola
-> documentazione committato dal coordinatore: `0d5cebce7` (pagina wiki, indice, log, regola 8 della skill, piano,
+> documentazione committato dal coordinatore: `4172f2561` (pagina wiki, indice, log, regola 8 della skill, piano,
 > backlog); entra col prossimo lotto di codice. `/tmp/libreFolio_T_r2/drafts_finish.sh`: Prettier sulle copie (riformattati
 > `SyncModalBase`, `AiExportOptionsPanel`, `DataEditor`), conteggio legacy 0 e letterali 0 in tutte le copie, una patch
 > per lotto (`W1f1.patch` 2 file, `W1g.patch` 3, `W2b.patch` 2, `W2d.patch` 2, `W1f2.patch` 6), da applicare con
 > `git apply -p2`. `check_source_paths.py`: 5 percorsi inesistenti in 8 citazioni, gli stessi di prima, nessuno nella
 > pagina nuova.
 
-> ✅ **12 · Applicati il lotto input, W1-f1, W1-g e W2-b** (06:5x, base `7646f39ee`: il ramo di DV `35a55cf39`, W5-PAC e
-> W5-charts sopra `72e66d1a6`, nel mio `0d5cebce7`; DV entra nel target verso le 07:35, io dopo). Ogni file dell'albero era
-> identico alla base della sua bozza (i 4 di DV a `7d3896011`), quindi `git apply -p2 --check` e poi `git apply -p2`:
+> ✅ **12 · Applicati il lotto input, W1-f1, W1-g e W2-b** (06:5x, base `3ad4f00b4`: il ramo di DV `9102008c3`, W5-PAC e
+> W5-charts sopra `7aefcc13a`, nel mio `4172f2561`; DV entra nel target verso le 07:35, io dopo). Ogni file dell'albero era
+> identico alla base della sua bozza (i 4 di DV a `d0e6e8eec`), quindi `git apply -p2 --check` e poi `git apply -p2`:
 > stesso risultato di `--3way`, senza toccare l'indice. 18 file di codice.
 > - **Prove leggere** (sotto `nice`, mentre gira lo slot di DV): Prettier `--check` verde sui 18 file; `--check` pulito,
 >   14 file sotto il loro record, nessun selettore di `app.css` orfano; Vitest `themeRoles.gate`, `themeTokens.gate` e 12
@@ -2178,14 +2178,14 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   nel testo. La pagina «server irraggiungibile» (quando `/auth/me` tace oltre 5 secondi).
 
 > ✅ **13 · I commit, e W2-d e W1-f2 sulla base nuova** (06:5x): il coordinatore ha committato i quattro lotti sopra
-> `7646f39ee`: `37972b529` input (11 file), `7bc586870` W1-f1 (2), `83cbb0855` W1-g (3), `eabf863f3` W2-b (4, con la
-> baseline e il piano). Le bozze di W2-d e W1-f2 passate alla base `eabf863f3`: W2-d invariata; per W1-f2 la copia di
+> `3ad4f00b4`: `1db66fb0a` input (11 file), `87c88802e` W1-f1 (2), `af14135e0` W1-g (3), `f7afd88a1` W2-b (4, con la
+> baseline e il piano). Le bozze di W2-d e W1-f2 passate alla base `f7afd88a1`: W2-d invariata; per W1-f2 la copia di
 > `fx-csv-import.spec.ts` rifatta sulla HEAD (che ha già la riga 289 di W1-g) con le righe 53 e 56; patch rigenerate,
 > `git apply -p2 --check` pulito. Script dello slot successivo: `/tmp/libreFolio_T_r2/slot4.sh`.
 
 ### Terzo slot — ✅ 16/10/2026 (lotto input, W1-f1, W1-g, W2-b)
 
-> **Via** del coordinatore: valida `f0d19e499`, la base merge col target `1d37087f8` (DV entrato: W5-PAC e W5-charts; poi
+> **Via** del coordinatore: valida `fe4001a2a`, la base merge col target `cb6263ca8` (DV entrato: W5-PAC e W5-charts; poi
 > Z7c-2); corsia 6155, carico 43–49 alla partenza (le due corsie pesanti della 1.3 attive); `slot3.sh`, stop a 65 minuti.
 
 > ✅ **Esito** (07:12–07:58, 45 minuti, nessun passo saltato): `api sync` rc 0; `--check` pulito; Vitest dei due gate
@@ -2202,8 +2202,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   30 s per un percorso a cui i vicini ne danno 60). La riga `test.setTimeout(60_000)` in T13 la chiede il coordinatore a
 >   W, come rafforzamento del suo spec; non entra nel lotto.
 
-> ✅ **14 · Applicati W2-d e W1-f2** (08:0x, base `769921bb0`: il terzo lotto integrato nel target, il mio ramo portato
-> avanti con fast-forward). Gli 8 file erano identici alla base delle bozze (`eabf863f3`): `git apply -p2 --check`, poi
+> ✅ **14 · Applicati W2-d e W1-f2** (08:0x, base `0996d9ed9`: il terzo lotto integrato nel target, il mio ramo portato
+> avanti con fast-forward). Gli 8 file erano identici alla base delle bozze (`f7afd88a1`): `git apply -p2 --check`, poi
 > `git apply -p2`, senza toccare l'indice.
 > - **Prove leggere** (sotto `nice`, carico 43): Prettier `--check` verde sugli 8 file; `--check` pulito, 6 file sotto il
 >   record; Vitest dei due gate, `DataEditor.test.ts` e gli 11 file di `features/ai-export/__tests__` (client, appunti,
@@ -2235,8 +2235,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 ### Quarto slot — ✅ 16/10/2026 (W2-d, W1-f2)
 
-> **Via** del coordinatore: commit `b338a442d` (W2-d) ed `eb2adb37b` (W1-f2, con l'interruttore rimasto legacy); valida
-> `e1ae55a6c`, la base merge col target `e5ef4fe4d` (il CHANGELOG aggiornato); corsia 6155, carico 46–51 (le due corsie
+> **Via** del coordinatore: commit `9033c0c6a` (W2-d) ed `49f7e4572` (W1-f2, con l'interruttore rimasto legacy); valida
+> `567a8a8f8`, la base merge col target `dfd7d1237` (il CHANGELOG aggiornato); corsia 6155, carico 46–51 (le due corsie
 > della 1.3 attive); `slot4.sh`, stop a 65 minuti.
 
 > ✅ **Esito** (08:13–08:42, 28 minuti, nessun passo saltato): `api sync` rc 0; `--check` pulito; Vitest dei due gate
@@ -2244,19 +2244,19 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > E2E a 1 worker: `asset-data-editor` 26 (le righe 287, 346 e 384 sugli agganci), `fx-editor` 4, `fx-csv-import` 21 (53
 > e 56), `front-ai-export panel` 6 e `catalog` 4. Nessun rosso. Porta libera.
 
-> ✅ **Base merge col target `d5c3c3ae3`, poi lo STOP** (08:43–08:50; Y3, Y5, Y6, Y9, Y10, C-34, J CP-10a, E5b). Il
+> ✅ **Base merge col target `c91f132e3`, poi lo STOP** (08:43–08:50; Y3, Y5, Y6, Y9, Y10, C-34, J CP-10a, E5b). Il
 > coordinatore ha aperto la merge nel worktree; conflitto atteso solo sulla baseline (le righe rinominate da Y contro le
 > mie). Risolta con `node frontend/scripts/theme/theme-roles.mjs --resolve` e messa in stage da sola (nessun altro file
 > toccato); sulla revisione unita `--check` pulito (m1 8.249), `api sync` rc 0, Vitest dei due gate 65/65, `front check`
 > 0 e 0. Alle 08:50 lo STOP del developer: niente altro, nessun processo, porta libera. Il commit di merge l'ha fatto il
-> coordinatore (`6efadbc78`), poi l'ingresso `eb4040cd1` (10:20).
+> coordinatore (`e9fcc2b6b`), poi l'ingresso `53b408a03` (10:20).
 
 ### Skill del design system (D-T29) — 🔄 16/10/2026
 
 > **Avvio** (coordinatore, 10:38, «prima di tutto»). Testuale, il developer: «nel migrare cerca di seguire i colori dei
 > temi che la designer ci ha intanto dato, e anzi, crea un file skill comune in cui metti nero su bianco i 2 temi, i
 > nomi, la palette principale e tutte le altre regole, così che in futuro i nuovi componenti vengono già fatti seguendo
-> le regole, e cita questa skill dentro il file dell'agente frontend». Base `8f2824046` (fast-forward: il quarto lotto,
+> le regole, e cita questa skill dentro il file dell'agente frontend». Base `cdf74ef2a` (fast-forward: il quarto lotto,
 > L-18, i registri del mattino). In `.github/agents/` non c'è un agente frontend: la citazione va in
 > `.github/instructions/frontend.instructions.md` e nella riga dei colori di `.github/copilot-instructions.md`.
 > Aggiunta del developer (10:5x, dal coordinatore): una sezione esplicita sulla cartella condivisa
@@ -2294,7 +2294,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - Link relativi: i 12 dello skill risolvono tutti; i percorsi tra apici esistono. Forma delle 15 tabelle: ogni riga
 >   con le celle dell'intestazione. `git diff --check` pulito.
 
-> ✅ **4 · Integrato** dal coordinatore: `6e569084a` (11:02), il mio ramo portato avanti con fast-forward.
+> ✅ **4 · Integrato** dal coordinatore: `16ea52b26` (11:02), il mio ramo portato avanti con fast-forward.
 
 ### Palette a parte, ruoli nuovi e correzioni di DV (D-T29, seguito) — 🔄 16/10/2026
 
@@ -2332,7 +2332,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > nono ripete il primo, DV-8); la riga di `chartPalettes.ts` (`growthBrokerColor` legge `categoryColor` a ogni disegno,
 > TD-1b; `SIGNAL_DEFAULT_PALETTE` ancora unica, S9); la riga di `chartTheme.ts` (per allocazione, semi-ciambella, mappe
 > e correlazione solo la cornice: mai una categoria lì); la riga di `roleColors.ts` (un ruolo si aggiunge col suo primo
-> lettore, o fallisce il controllo dei ruoli morti); i proprietari (`drawnColors.ts` di T, creato da R in `0b660632f`;
+> lettore, o fallisce il controllo dei ruoli morti); i proprietari (`drawnColors.ts` di T, creato da R in `22beea1a6`;
 > `chartColorScales.ts` di T e DV); il ridisegno al segnale C4 (TD-1b, `renderChart(true)`); le decisioni 6 e 7 di DV
 > sui segnali; la domanda aperta 1 con 2.2, 2.8, 2.9 (verificato: 2,61:1 in chiaro, 2,65:1 in scuro sulla card) e
 > l'eccezione di TD-1.
@@ -2361,7 +2361,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > gate, che test-author non poteva controllare); `svelte-check` 0 e 0 dopo le due voci; `palette.md` 102 su 102 contro
 > `tokens.css`; nomi di `SKILL.md` e `palette.md` tutti esistenti; `git diff --check` pulito.
 
-> ✅ **7 · Integrato** dal coordinatore: `f043c1b58` (11:36), il mio ramo portato avanti con fast-forward.
+> ✅ **7 · Integrato** dal coordinatore: `ee00f754e` (11:36), il mio ramo portato avanti con fast-forward.
 
 ### Il gate e i commenti nelle espressioni del markup (bug trovato da AF) — 🔄 16/10/2026
 
@@ -2381,8 +2381,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `'https://…'` col suo `//` resta. `--check` pulito; Prettier verde.
 
 > ✅ **2 · L'impatto, in sola lettura** (`/tmp/libreFolio_T_r2/g3_impact.mjs` e `g3_blind.mjs`, vecchio contro nuovo):
-> - sul target `f77743d47` (estratto con `git archive` in `/tmp`, senza leggere il checkout principale; rimisurato alle
->   12:02 dopo la caduta della rete, la prima misura su `e36e45f0d` dava lo stesso esito) e sui worktree di IW, TR, AF,
+> - sul target `8aebae844` (estratto con `git archive` in `/tmp`, senza leggere il checkout principale; rimisurato alle
+>   12:02 dopo la caduta della rete, la prima misura su `fac24df08` dava lo stesso esito) e sui worktree di IW, TR, AF,
 >   BK, IM e DV, ciascuno col suo `tokens.css`: **nessun G3 nuovo né sparito, nessun conteggio m1 o m2 cambiato, file per
 >   file** (la grammatica dà 0 violazioni ovunque, prima e dopo; m1 si misura sul testo intero, e nessun commento nel
 >   markup conteneva una classe legacy). Log: `/tmp/libreFolio_T_r2/g3_impact2.log` e `g3_blind2.log`;
@@ -2420,7 +2420,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > numero). Nomi delle utility esistenti (`design_system_tokens.py names`), link validi, larghezza ≤ 120,
 > `git diff --check` pulito.
 
-> ✅ **2 · I due campi miei**, nel lotto del resto della UI (16/10, 12:2x, su `be911db7e`): `text-lf-primary` sull'`<input>`
+> ✅ **2 · I due campi miei**, nel lotto del resto della UI (16/10, 12:2x, su `eb0078e67`): `text-lf-primary` sull'`<input>`
 > di `TagInput` e su quello di `TreeSelect`. Oggi nessun effetto visibile: il genitore dà già `text-lf-primary`
 > (`tag-input-wrapper` e il trigger del `TreeSelect`); la regola protegge dai genitori che cambiano. Il controllo del
 > coordinatore (`--all`) ora trova solo i 2 casi di DV.
@@ -2437,7 +2437,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `ui/display/BrokerIcon`, `ui/modals/ConfirmModal`, `ui/feedback/LoadingSpinner`. `ui/display` dei KPI e del rischio è
 > passato a DV; `pairCellHtml.ts` è di IW-5. Gli `<style>` con `--lf-cmp-*` (`ConfirmModal`, `FileGrid`) restano al
 > lotto dei component tokens; i 5 interruttori di `DataEditor` al lotto degli interruttori. Più `TagInput:214` e
-> `TreeSelect:357` (la regola dei campi nativi). Il via dopo l'ingresso di `be911db7e` (12:18).
+> `TreeSelect:357` (la regola dei campi nativi). Il via dopo l'ingresso di `eb0078e67` (12:18).
 
 > ✅ **1 · Le bozze su copie** (`/tmp/libreFolio_T_r2/uilot/`, 12:0x–12:1x, durante il test di regressione dello
 > scanner), dalla tabella di `theme-roles` e dai precedenti (il pulsante della barra di `DataEditor` e di
@@ -2461,7 +2461,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > Nessun chiamante passa colori per `class`/`className`/`variant` (`/tmp/libreFolio_T_r2/caller_props.mjs`); nessun test
 > asserisce queste classi.
 
-> ✅ **2 · Applicate** su `be911db7e` (nessuno dei 9 file era cambiato dal momento della copia), più `text-lf-primary`
+> ✅ **2 · Applicate** su `eb0078e67` (nessuno dei 9 file era cambiato dal momento della copia), più `text-lf-primary`
 > sui due campi nativi e sulla radice della tendina delle colonne.
 
 > ⚠️ **Fuori pista — 3 · Un contrasto che il gate non tiene** (`/tmp/libreFolio_T_r2/uilot_contrast.mjs`, col risolutore
@@ -2490,7 +2490,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `fx-destructive`, `tx-selection-after-bulk`, `asset-list`, `fx-list`, `risk-lab`, `tx-bulk-row-order`; stop a 70
 > minuti, log per unità in `/tmp/libreFolio_T_r2/slot5/units/`.
 
-> ✅ **Committato** dal coordinatore: `e5e427f8e` (12 file), con la correzione `hover:text-lf-primary` approvata. **Lo
+> ✅ **Committato** dal coordinatore: `f4e186d52` (12 file), con la correzione `hover:text-lf-primary` approvata. **Lo
 > slot:** al massimo 45 minuti, come per tutti; in coda dopo W6, BK, TR e IW, verso le 17:00. Lo script è passato nella
 > cartella di sessione (`files/T-r2/slot5.sh`, log in `files/T-r2/slot5/`), con un tetto duro: ogni passo riceve il
 > tempo che resta, e allo scadere `timeout --signal=INT`, che il runner gestisce spegnendo il suo backend
@@ -2527,12 +2527,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > negativi, scritto nello skill).
 
 > ✅ **2 · L'impatto, in sola lettura** (`files/T-r2/g56_impact.mjs`, motore committato contro nuovo, ciascun albero col
-> suo `tokens.css`; log `g56_impact.log`), sul target `54880598b` (estratto con `git archive`) e sui worktree di IW
-> (`9c79d5b35`), TR (`505a28289`), AF (`0ff61e8c0`), BK (`cb1fb5690`), IM (`53b6dd352`), DV (`a694d8fb2`):
+> suo `tokens.css`; log `g56_impact.log`), sul target `d5511c3ad` (estratto con `git archive`) e sui worktree di IW
+> (`5650908b4`), TR (`f17e78a40`), AF (`3a8dad438`), BK (`5f01eee1b`), IM (`08de0a262`), DV (`9229524dd`):
 > - **G1–G4 invariati ovunque; G5 0 ovunque**, e lo script di DV dà lo stesso (0 difetti, 0 «per fortuna») su ogni albero;
-> - **G6:** `TagInput:214` e `TreeSelect:357` (corretti nel mio `e5e427f8e`, non ancora nel target);
+> - **G6:** `TagInput:214` e `TreeSelect:357` (corretti nel mio `f4e186d52`, non ancora nel target);
 >   `charts/ChartAestheticsSection:217` e `:233` di DV (nel target e in tutti i worktree tranne quello di DV, che li ha
->   corretti in `a694d8fb2`); `assets/ScheduledInvestmentEditor:1287` solo nel worktree di AF (un `<input
+>   corretti in `9229524dd`); `assets/ScheduledInvestmentEditor:1287` solo nel worktree di AF (un `<input
 >   placeholder="optional">` con `text-lf-primary` senza ruolo del segnaposto).
 > - **La sequenza** (coordinatore, 12:5x): DV entra verso le 14:20, poi la base merge del mio ramo; AF corregge il suo
 >   campo prima di entrare; il lotto del gate entra insieme al resto della UI, dopo il mio slot. Il checkpoint si
@@ -2559,9 +2559,9 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `DistributionDialog.svelte`. G5 non li leggeva, e G6 avrebbe segnalato a torto un campo con i ruoli in una costante
 > come `IN`. Corretto con `UPPER_NAME_RE = /\b[A-Z][A-Z0-9_]*\b/g`, a ogni lunghezza: una parola conta solo se il
 > modulo dichiara una costante con quel nome. Le due riproduzioni ora danno `G5 5  text-lf-muted always, text-lf-link
-> on a condition` e nessun G6. **Rimisurato** (`files/T-r2/g56_impact2.log`) sul target nuovo `1248b7908` e sui sei
+> on a condition` e nessun G6. **Rimisurato** (`files/T-r2/g56_impact2.log`) sul target nuovo `5da4b06c9` e sui sei
 > worktree: G1–G4 invariati, **G5 0 ovunque**, e lo script di DV dà lo stesso; **G6 i 4 casi noti** (i miei due, già
-> corretti in `e5e427f8e`, e i due di DV). Il caso di AF, `ScheduledInvestmentEditor:1287`, non c'è più: AF l'ha
+> corretti in `f4e186d52`, e i due di DV). Il caso di AF, `ScheduledInvestmentEditor:1287`, non c'è più: AF l'ha
 > corretto nel suo worktree.
 
 > 📝 **Una scelta, non un difetto** (segnalata da test-author): G6 accetta un ruolo del testo in qualunque ramo, quindi
@@ -2577,7 +2577,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   «G6, a native field on roles names its text» (13 test, con `IN`); G5 e G6 nell'intestazione e in
 >   `GRAMMAR_RULES`; il limite di G6 («un ruolo del testo in qualunque ramo conta») fra «What it cannot see»; il test
 >   dell'albero rinominato G1–G6. **L'unico rosso è quello dichiarato:** il test dell'albero, sui due G6 di DV
->   (`ChartAestheticsSection:217` e `:233`), che spariscono con la base merge dopo l'ingresso di DV (`a694d8fb2`).
+>   (`ChartAestheticsSection:217` e `:233`), che spariscono con la base merge dopo l'ingresso di DV (`9229524dd`).
 > - `themeTokens.gate.test.ts`, 21/21: il describe «the backdrop is one colour in both themes» (`backdropFindings`, con
 >   controllo positivo); le 17 coppie `pairsOver` di `selected` (34 misure); il paragrafo di `selected` (TC-15) e il chip
 >   al passaggio del mouse fra «What C3 cannot express».
@@ -2617,15 +2617,15 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > del mio ramo. Le domande per la designer: il developer vuole un unico riepilogo, che raccoglie il coordinatore in un
 > file solo; io le tengo anche nello skill, e gli dico quando ne aggiungo una.
 
-> ✅ **7 · Chiusura** (14:15–14:2x, carico 60–65, sotto `nice`): stato invariato dalla pausa (HEAD `e5e427f8e`, gli 8 file
+> ✅ **7 · Chiusura** (14:15–14:2x, carico 60–65, sotto `nice`): stato invariato dalla pausa (HEAD `f4e186d52`, gli 8 file
 > del delta, porta libera); `api sync` rc 0, nessun file tracciato toccato; **`front check` 0 errori e 0 avvisi** (copre
 > i tipi dei due test); Vitest dei due gate **100/101**, l'unico rosso quello dichiarato; `--check` coi soli due G6 di
 > DV; **domanda aperta 6 alla designer** nello skill, la tinta di `selected` (il valore è di T, dal suo verde del
 > focus; muted, stati e segni sotto 4,5:1), segnalata al coordinatore; larghezze, nomi e link dello skill a posto;
 > `git diff --check` pulito.
 
-> ✅ **Committato** dal coordinatore: `8fb80d3b8` (14:19). Entra insieme al resto della UI (`e5e427f8e`) dopo il mio slot,
-> nella nostra corsia dopo IW, verso le 15:45; prima la base merge con DV (entrato, `adbc2a4b7`), che toglie il rosso
+> ✅ **Committato** dal coordinatore: `2b1d74316` (14:19). Entra insieme al resto della UI (`f4e186d52`) dopo il mio slot,
+> nella nostra corsia dopo IW, verso le 15:45; prima la base merge con DV (entrato, `f08adcef9`), che toglie il rosso
 > dichiarato. Nello slot i gate Vitest: `slot5.sh` ora lancia i quattro gate dei colori (`themeRoles`, `themeTokens`,
 > `themeColorMeta`, `themeComponentTokens`). La domanda 6 è nella raccolta del coordinatore per la designer.
 
@@ -2689,8 +2689,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > cambiato solo nella formattazione. Ipotesi 2 dello skill di triage, l'orologio: `waitFor` col budget predefinito di 1 s
 > su una catena asincrona. Verdetto: assunzione del test. Registrato **TC-16** per il proprietario dell'area dei file.
 
-> ✅ **Committato** dal coordinatore: `4a7ba1d7e` (14:48); poi la base merge con la punta `939e4998a` (DV e BK):
-> **`1427d5ea1`**, baseline risolto, gate sull'albero unito 119/119: il rosso dichiarato dei G6 di DV non c'è più. Lo
+> ✅ **Committato** dal coordinatore: `764ae4fab` (14:48); poi la base merge con la punta `9d315f9c9` (DV e BK):
+> **`f015d83cc`**, baseline risolto, gate sull'albero unito 119/119: il rosso dichiarato dei G6 di DV non c'è più. Lo
 > slot verso le 16:15, dopo IW, copre tutto il ramo (resto della UI, gate, component tokens): nell'elenco
 > `front-broker detail`, `files`, `files-destructive` e le spec distruttive di fx e asset, per `ConfirmModal`.
 
@@ -2724,7 +2724,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `--check` pulito (0 file sotto il record); i quattro gate dei colori e i 5 file di unità che nominano questi componenti
 > **312/312**. `front check` non lanciato: solo `<style>` e CSS, nessun tipo.
 
-> ✅ **Committato** dal coordinatore: `26b45f520` (14:54). Le due scelte da rivedere (il secondario come card, il
+> ✅ **Committato** dal coordinatore: `14965b38f` (14:54). Le due scelte da rivedere (il secondario come card, il
 > fantasma su `neutral`) e l'evidenza dei lotti da viola a `selected` sono nella raccolta per la designer.
 
 ### TC-15: il muted nelle opzioni evidenziate delle select — 🔄 16/10/2026 (bozze su copie, durante l'attesa degli sblocchi)
@@ -2736,11 +2736,11 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > in ognuna delle 4 select** (`ui/select`, mie), nello `<style>` del componente: dentro l'opzione evidenziata un
 > `.text-lf-muted`, del componente o di uno snippet, diventa secondary (regola 5 dello skill, al livello del
 > componente). `AiExportOptionsPanel` e `ChartSignalsSection` non si toccano più. DV intanto ha committato il suo TC-15
-> (`a6c79a8f3`, `ChartSignalsSection` e `SignalOptionContent`: i sottotitoli a secondary sempre, `hover:text-lf-link` →
+> (`fded655a0`, `ChartSignalsSection` e `SignalOptionContent`: i sottotitoli a secondary sempre, `hover:text-lf-link` →
 > `hover:text-lf-primary` sui bottoni icona); dopo l'ingresso della mia regola il coordinatore valuta se riportarli a
 > muted.
 
-> ✅ **1 · Le bozze** (`files/T-r2/tc15/`, base `26b45f520`; l'albero non è toccato):
+> ✅ **1 · Le bozze** (`files/T-r2/tc15/`, base `14965b38f`; l'albero non è toccato):
 > - `SearchSelect`, `AssetPickerPanel`: `[data-highlighted='true'] :global(.text-lf-muted) { color:
 >   var(--lf-text-secondary) }`, attributo già presente;
 > - `SimpleSelect`: la stessa regola, e `data-highlighted={index === highlightedIndex}` sulle opzioni (serve anche ai
@@ -2758,9 +2758,9 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 ### I component tokens, parte 2b: `TransactionsTable` (TR) — 🔄 16/10/2026
 
-> **Avvio** (coordinatore, 14:58): TR è entrato (`e402d3b87`); solo lo `<style>`, la base della tinta e i 13 letterali
-> che TR ha lasciato a me (TR-3). Prima il coordinatore ha committato le note del piano (`fedcf5be4`) e fatto la base
-> merge con la punta: **`1628863a0`**, baseline risolto, gate sull'albero unito 119/119.
+> **Avvio** (coordinatore, 14:58): TR è entrato (`980475174`); solo lo `<style>`, la base della tinta e i 13 letterali
+> che TR ha lasciato a me (TR-3). Prima il coordinatore ha committato le note del piano (`039d2af6f`) e fatto la base
+> merge con la punta: **`adc962f06`**, baseline risolto, gate sull'albero unito 119/119.
 
 > ✅ **1 · I 13 letterali sui ruoli** (`files/T-r2/ct_transform3.py`, che verifica il testo di partenza):
 > - la base della tinta del broker (`white`, `#0f0f18`, quattro volte) → `var(--lf-surface-card)`; i colori dei broker
@@ -2781,12 +2781,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > **m2 16 → 3** (la riga di `TransactionsTable` tolta dal baseline); `--check` pulito; i quattro gate dei colori e i 5
 > file di unità che nominano la tabella **310/310**. `front check` non lanciato: solo `<style>`.
 
-> ✅ **Committato** dal coordinatore: `c4b8a4ae3` (15:02); tutti gli hunk dentro lo `<style>`. Le due scelte da rivedere
+> ✅ **Committato** dal coordinatore: `f2a61a4eb` (15:02); tutti gli hunk dentro lo `<style>`. Le due scelte da rivedere
 > (il punto dell'evento in `info`, l'impulso dall'indaco al verde) sono i punti 23 e 24 della raccolta per la designer.
 > `ImportBrokerMismatchModal` si sblocca dopo l'ingresso di IW, verso le 15:55.
 
 > ✅ **2 · TC-15 applicato** (15:0x, via del coordinatore): le quattro bozze copiate nell'albero (le select non erano
-> cambiate dalla base delle bozze, `26b45f520` → `c4b8a4ae3`): 35 righe aggiunte, nient'altro. Prove leggere prima del
+> cambiate dalla base delle bozze, `14965b38f` → `f2a61a4eb`): 35 righe aggiunte, nient'altro. Prove leggere prima del
 > fermo: Prettier verde; `--check` pulito; i quattro gate e i 26 file di unità che nominano le select (senza
 > `SimpleSelect.test.ts`, in scrittura) **1179/1179**. Lo skill `design-system`, regola 5: la regola delle select e il
 > «fate lo stesso» per una lista nuova che tinge le righe; il backlog: TC-15 chiusa.
@@ -2805,12 +2805,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > disabilitati) e `front check`, che passa allo slot. Il coordinatore (15:41): le prove fatte bastano per il checkpoint,
 > il resto lo copre lo slot.
 
-> ✅ **Committato** dal coordinatore: `4b59cfe53` (15:4x); base merge con la punta `e9b4ac6b0` (IW): **`4a3f5cf3f`**, senza
+> ✅ **Committato** dal coordinatore: `19e1964db` (15:4x); base merge con la punta `edd0336ff` (IW): **`a7ed2b0a1`**, senza
 > conflitti, gate sull'albero unito 119/119.
 
 ### I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) — 🔄 16/10/2026
 
-> **Avvio** (coordinatore, 15:41 e 15:4x): IW è entrato (`e9b4ac6b0`); solo lo `<style>` con `dialogs.css`, prove leggere
+> **Avvio** (coordinatore, 15:41 e 15:4x): IW è entrato (`edd0336ff`); solo lo `<style>` con `dialogs.css`, prove leggere
 > minime sotto `nice`, poi checkpoint e slot. FE8b della 1.3 aspetta il mio ingresso (sposta
 > `components/transactions/**`): il mio lotto è il collo di bottiglia.
 
@@ -2829,11 +2829,11 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > prima della graffa); `--check` pulito; il gate dei token di componente, quello dei ruoli e
 > `ImportBrokerMismatchModal.test.ts` **115/115**. Il resto nello slot (`tx-import-broker-mismatch` in testa).
 
-> ✅ **Committato** dal coordinatore: `d39728347` (15:45); fuori dallo `<style>` cambia solo la riga d'import.
+> ✅ **Committato** dal coordinatore: `9679fa9c6` (15:45); fuori dallo `<style>` cambia solo la riga d'import.
 
 ### Quinto slot — 🔄 16/10/2026 (resto della UI, gate, component tokens 1–2c, TC-15)
 
-> **Via** del coordinatore (15:45): corsia 6155 sul ramo `d39728347`, taglio alle 16:30 e nessun passo nuovo dopo le
+> **Via** del coordinatore (15:45): corsia 6155 sul ramo `9679fa9c6`, taglio alle 16:30 e nessun passo nuovo dopo le
 > 16:25; carico 86, quindi 1 worker; un E2E caduto per timeout si rilancia da solo prima di giudicarlo. Lo script
 > (`files/T-r2/slot5.sh`) prende la scadenza assoluta (`DEADLINE_AT=16:30`, `MIN_LEFT=300`): ogni passo riceve il
 > tempo che resta fino alle 16:30, allo scadere `timeout --signal=INT`, che il runner gestisce spegnendo il suo backend.
@@ -2868,8 +2868,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **`tx-bulk-row-order` da solo** (coordinatore, 16:47): 16:47–16:49, corsia 6155, 2 worker (carico 41): **8 verdi**,
 > porta libera. **Tutte le 16 spec dell'elenco sono verdi: 312 E2E.** Pronto per la base merge e l'ingresso.
 
-> ✅ **Ingresso** (coordinatore, 16:51): il mio ramo nel target come `4d8ae68c4` (diario `a3ff3830b`, base merge
-> `d2125d34e`, gate 119/119): resto della UI, gate G5/G6, component tokens 1–2c, TC-15. Il target scende a 1.197 classi
+> ✅ **Ingresso** (coordinatore, 16:51): il mio ramo nel target come `1709949e8` (diario `a77d491d4`, base merge
+> `4f2ede331`, gate 119/119): resto della UI, gate G5/G6, component tokens 1–2c, TC-15. Il target scende a 1.197 classi
 > m1 e 2 letterali m2. Restano miei, in attesa della designer, il lotto degli interruttori e le categorie.
 
 ### Le tabelle: i token di componente di `table.css` — 🔄 16/10/2026 (sera)
@@ -2877,7 +2877,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > **Avvio** (coordinatore, 21:09, richiesta del developer): avviata l'app su `dev_release2`, `DataTable` e i suoi
 > componenti mostravano ancora i vecchi colori, in chiaro e in scuro: tutti i 247 token `--lf-cmp-*` di `table.css`
 > erano ancora i letterali di R-3 «a parità di aspetto», e il conteggio m1/m2 non li vedeva (lettura `var()` nei
-> componenti, valori in `lib/theme/**`). Base `fa16ce787` (fast-forward), pulita. Il metodo delle parti 1–2c: ogni
+> componenti, valori in `lib/theme/**`). Base `b524ba9c8` (fast-forward), pulita. Il metodo delle parti 1–2c: ogni
 > coppia su un ruolo, via le regole `.dark`, i token e l'import quando il file non ne legge più; l'evidenza viola
 > generica passa alla tinta di selezione (punto 22). Correzione (21:1x): `ui/display/CompactCashCell` resta fuori (lo
 > sposta FE8b stasera; mini-lotto dopo), i suoi 12 token restano. `media.css`, `files.css`, `dialogs.css` li fa AF
@@ -2931,12 +2931,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `DataTableColumnFilter`); `--check` pulito; i quattro gate dei colori e i 49 file di unità che nominano tabelle,
 > `DataEditor` e le tabelle della dashboard **1.991/1.991**. Lo slot E2E al via del coordinatore (fermo di FE8b).
 
-> ✅ **Committato** dal coordinatore: `77bfa6a39` (21:28; negli 8 componenti cambiano solo lo `<style>` e l'import); base
-> merge con la punta `102fa9ec1` (E, Y12b, C-66 della 1.3): **`9a02a02c7`**, pulita.
+> ✅ **Committato** dal coordinatore: `dac99ffda` (21:28; negli 8 componenti cambiano solo lo `<style>` e l'import); base
+> merge con la punta `b32934309` (E, Y12b, C-66 della 1.3): **`f3a1a419e`**, pulita.
 
 ### Sesto slot — 16/10/2026 sera (le tabelle)
 
-> **Via** del coordinatore (21:42): corsia 6155 su `9a02a02c7`, carico 118 (le tre run della 1.3), 1 worker sopra 60,
+> **Via** del coordinatore (21:42): corsia 6155 su `f3a1a419e`, carico 118 (le tre run della 1.3), 1 worker sopra 60,
 > taglio alle 22:50; le spec rimaste e i rossi di carico si recuperano dopo; l'ingresso dopo il fermo di FE8b.
 
 > **Esito** (21:42–22:47, carico 48–185; `files/T-r2/slot6/`): `api sync` rc 0; `--check` pulito; i quattro gate
@@ -2983,7 +2983,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **3 · La rilanciata** (`files/T-r2/rerun7.sh`, lanciata da `go7.sh`; corsia 6155, `/tmp/librefolio-r2-t`): il via
 > del coordinatore alle 23:08, con partenza alla fine della run b di G (che sta nella sua corsia, 6153 e
 > `/tmp/librefolio-r2-g`) e al più tardi alle 23:15. G è finita alle 23:11:17; la rilanciata è partita subito e ha
-> finito alle 23:33, con la porta libera. Albero: `9a02a02c7` con le modifiche dei due checkpoint. **Tutto verde, 63
+> finito alle 23:33, con la porta libera. Albero: `f3a1a419e` con le modifiche dei due checkpoint. **Tutto verde, 63
 > E2E:** `front check` 0 e 0 (23:11–23:14); `front-portfolio risk` **38/38** (23:14–23:22, 1 worker a carico 86; il
 > build rifatto perché i sorgenti erano cambiati), compresi i due rossi del sesto slot, :3532 (le tinte e la riga
 > semplice) e :3625 (la selezione sopra la tinta); `tx-picker-pagination` **5/5** (23:22–23:28, 2 worker a carico 42, P1
@@ -2998,9 +2998,9 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > bastano, a carico ~45 il test intero dura 7 s. Non è un difetto del prodotto né del lotto, che cambia solo gli stili.
 > La spec è delle transazioni, fuori perimetro: la cura va al suo proprietario, ed è nell'indice come **TC-17**.
 
-> ✅ **5 · Il checkpoint, solo test:** la spec più TC-17; committato dal coordinatore come `3c810cd04` (23:37), base
-> merge con la punta `e221a0544` (FE8b e il resto) → `be2f93abf`, il conflitto previsto sul TSV risolto con `--resolve`;
-> **entrato** con le tabelle e i 23 come `9016f47c3` (23:46): gate 119/119, `front check` 0 e 0 (dopo un `api sync` del
+> ✅ **5 · Il checkpoint, solo test:** la spec più TC-17; committato dal coordinatore come `6b39521bc` (23:37), base
+> merge con la punta `8042271e1` (FE8b e il resto) → `dd66e090b`, il conflitto previsto sul TSV risolto con `--resolve`;
+> **entrato** con le tabelle e i 23 come `3680c4010` (23:46): gate 119/119, `front check` 0 e 0 (dopo un `api sync` del
 > client del worktree, vecchio rispetto a B).
 
 ### I 27 «ruolo-mancante» — 🔄 16/10/2026 notte (coda della notte, D-T27/D-T28)
@@ -3025,7 +3025,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   temi, come in chiaro; niente ruolo, perché il bottone riceve le classi di marca in palette (`bg-slate-900
 >   text-white`) e un ruolo lo renderebbe misto.
 
-> ✅ **2 · Applicati** (22:49, dopo lo slot, dalle bozze in `files/T-r2/rm/drafts/`, base `9a02a02c7` uguale): 12
+> ✅ **2 · Applicati** (22:49, dopo lo slot, dalle bozze in `files/T-r2/rm/drafts/`, base `f3a1a419e` uguale): 12
 > sostituzioni in 4 file, le 23 classi. Lo skill `design-system`: la domanda aperta 7 (l'accento degli stati vuoti).
 
 > 🔄 **3 · Le prove leggere** (22:56–22:59, carico 38–44, sotto `nice`; log in `files/T-r2/rm/`): Prettier pulito sui 4
@@ -3068,13 +3068,13 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `front-utility support-copy-and-go` **16/16** (`SocialShareModal`, desktop e mobile) e `front-asset
 > asset-event-editor-save` **4/4** (la modale d'import).
 
-> ✅ **7 · Il checkpoint:** committato come `a092cda38` (23:37); entrato con la merge `9016f47c3` (23:46). Il target
+> ✅ **7 · Il checkpoint:** committato come `687be7e72` (23:37); entrato con la merge `3680c4010` (23:46). Il target
 > scende a **m1 674**; i token di componente letterali da 583 a 352 (a 18 con l'ingresso di AF).
 
 ### `CompactCashCell` — mini-lotto sul percorso nuovo — 🔄 16/10/2026 notte
 
-> **Avvio** (coordinatore, 23:37): i due checkpoint della notte committati (`a092cda38` i 23, `3c810cd04` la spec), base
-> merge con la punta `e221a0544` (FE8b e il resto) → `be2f93abf`; il conflitto previsto sul TSV risolto con `--resolve`.
+> **Avvio** (coordinatore, 23:37): i due checkpoint della notte committati (`687be7e72` i 23, `6b39521bc` la spec), base
+> merge con la punta `8042271e1` (FE8b e il resto) → `dd66e090b`; il conflitto previsto sul TSV risolto con `--resolve`.
 > Le bozze di `CompactCashCell` su copie subito, FROZEN sull'albero fino al via; dopo l'ingresso il fast-forward del
 > ramo.
 
@@ -3111,17 +3111,17 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > campo passa da slate-800 al fondo dei campi, uguale alla select accanto (oggi le due metà della cella sono diverse); i
 > bordi più netti come in tutti i campi migrati («da rivedere» con quelli delle tabelle).
 
-> ✅ **2 · Il via e le due aggiunte approvate** (coordinatore, 23:46, dopo l'ingresso `9016f47c3` e il fast-forward del
+> ✅ **2 · Il via e le due aggiunte approvate** (coordinatore, 23:46, dopo l'ingresso `3680c4010` e il fast-forward del
 > ramo): il segnaposto su `placeholder` e il bordo del disabilitato su `subtle`. I bordi più netti e il fondo uguale
 > nelle due metà della cella vanno fra i «da rivedere» del punto 31 (li porta il coordinatore).
 
 > ✅ **3 · Applicati e provati** (23:47–23:50, carico 131–133, sotto `nice`, permesso dal coordinatore sopra 50;
-> `files/T-r2/ccc/run-light/`): `ccc/apply.sh` ha rigenerato le bozze da `9016f47c3`, identiche a quelle riviste, e le
+> `files/T-r2/ccc/run-light/`): `ccc/apply.sh` ha rigenerato le bozze da `3680c4010`, identiche a quelle riviste, e le
 > ha copiate; `git diff --check` pulito. Prettier pulito sui 2 file; `theme-roles.mjs --check` pulito (il TSV non
 > cambia: il componente non aveva classi legacy); Vitest **179/179** (i quattro gate, `CompactCashCell.test.ts`,
 > `TransactionFormModal.test.ts`); `front check` **0 e 0**. Nessun riferimento ai token tolti.
 
-> ✅ **4 · Le E2E** (via del coordinatore alle 00:14, dopo l'ingresso di AF `9d3607eb6`; `ccc/run.sh` con `SKIP_LIGHT=1`,
+> ✅ **4 · Le E2E** (via del coordinatore alle 00:14, dopo l'ingresso di AF `a4bf32a44`; `ccc/run.sh` con `SKIP_LIGHT=1`,
 > 00:15–00:30, porta libera alle 00:30; `files/T-r2/ccc/run-e2e/`): `transactions-modals` **25/25** (2 worker),
 > `tx-wac-formmodal` **9/10** (1 worker, carico 83), `tx-fx-implied-rate` **3/3**, `tx-crud-full` **7/7**: 44 verdi, 1
 > rosso, FM6, che non dipende dal lotto (sotto).
@@ -3131,39 +3131,39 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > Cost basis override: At most 12 decimal places»: il WAC proposto al ricevente del TRANSFER (mostrato «💡 170.36 $ USD
 > per unit», riga del 17/10) parte con più di 12 decimali e lo stadio di precisione del batch lo rifiuta
 > (`transaction_batch_stages.py:117`, `decimal_limit_issue` di `backend/app/db/precision.py`, cambiato il 16/10 sera in
-> `bab52635d` e `0c3275057`; la spec è ferma dal 13/10). Ipotesi 1 (la forma della risposta) e 3 (lo stato condiviso)
+> `3ba393915` e `ffaf1c5d9`; la spec è ferma dal 13/10). Ipotesi 1 (la forma della risposta) e 3 (lo stato condiviso)
 > escluse: 1 worker, la risposta spiega il rifiuto. **A/B, 00:31–00:38:** A, la spec da sola col lotto, rosso identico;
-> B, i due file del lotto riportati a HEAD `9016f47c3` e la build rifatta, rosso identico; poi i file ripristinati
+> B, i due file del lotto riportati a HEAD `3680c4010` e la build rifatta, rosso identico; poi i file ripristinati
 > (uguali alle bozze riviste, mtime nuovo perché la prossima run ricostruisca). **Verdetto: difetto del prodotto**, già
 > sulla base e fuori dal lotto; nell'indice come **TC-18**, per il proprietario del WAC.
 
 > ✅ **5 · La riga 59 dello skill `design-system`** (richiesta del coordinatore, nello stesso checkpoint): AF ha
 > cancellato `dialogs.css` e `files.css` e lasciato in `media.css` i 2 token dell'icona d'immagine di `FileUploader`
-> (AF-11; letto con `git show 9d3607eb6:…`, in sola lettura). La riga ora elenca `media.css` e `table.css`, gli ultimi
+> (AF-11; letto con `git show a4bf32a44:…`, in sola lettura). La riga ora elenca `media.css` e `table.css`, gli ultimi
 > token di componente, tutti categoriali in attesa dei ruoli categoriali (2 + 4), e dice che il file d'area si cancella
 > quando non ha più token (il gate vuole che ogni file d'area ne definisca). Unica menzione dei file d'area nello skill;
 > la tabella resta a 5 colonne. Dopo questo ingresso lo skill lo tocca DV, nella sezione «Charts», per B4.
 
 > ✅ **6 · Il checkpoint:** il componente, `table.css`, la riga 59 dello skill, TC-18 nell'indice e il piano; committato
-> dal coordinatore come `55bced133` (00:40), base merge con la punta `618563949` → `cdb816037`, **entrato** come
-> `b58108665` (00:45): gate 119/119, `api sync` senza cambi, `front check` 0 e 0. I token di componente letterali del
+> dal coordinatore come `fe6330dcd` (00:40), base merge con la punta `cac1a3ac5` → `1f866530f`, **entrato** come
+> `e9e1fb1eb` (00:45): gate 119/119, `api sync` senza cambi, `front check` 0 e 0. I token di componente letterali del
 > target scendono a **6**, tutti categoriali (i 4 di `RiskReturnLevel`, i 2 di AF-11).
 
 > ✅ **7 · FM6 sulla punta e TC-18 chiusa** (via del coordinatore alle 01:27, dopo lo slot di B4 di DV;
-> `files/T-r2/ccc/fm6_verify.sh`, `fm6-verify/`): la 1.3 ha segnalato che W aveva già corretto il difetto in `de901f228`
+> `files/T-r2/ccc/fm6_verify.sh`, `fm6-verify/`): la 1.3 ha segnalato che W aveva già corretto il difetto in `6deb644e9`
 > (23:31, «auto cost skips decimal check»: in modalità `auto` il controllo dei decimali salta `cost_basis_override`),
-> entrato nel target con `c91bd41b2` alle 23:46, subito dopo la mia base `9016f47c3`; il difetto è nell'indice come
-> **W-B56**. Rilancio di `front-transaction tx-wac-formmodal` da solo sulla punta `b58108665` (01:28–01:38, 1 worker,
+> entrato nel target con `e50f85b5f` alle 23:46, subito dopo la mia base `3680c4010`; il difetto è nell'indice come
+> **W-B56**. Rilancio di `front-transaction tx-wac-formmodal` da solo sulla punta `e9e1fb1eb` (01:28–01:38, 1 worker,
 > carico 37–49, il build del frontend e della documentazione rifatto perché i sorgenti erano cambiati): **10/10**, FM6
 > verde in 8,7 s; porta libera alle 01:37:59. TC-18 chiusa nell'indice come duplicato di W-B56, con la segnalazione
 > originale; un commit solo docs.
 
 ### Il caso (c) di `theme-roles.spec.ts` senza componenti legacy — 🔄 17/10/2026
 
-> **Avvio** (coordinatore, 11:16; worktree portato alla punta `2dddaa95d`, pulito): un rosso della mia spec, segnalato
+> **Avvio** (coordinatore, 11:16; worktree portato alla punta `9661cafcf`, pulito): un rosso della mia spec, segnalato
 > dalla 1.3. `e2e/layout/theme-roles.spec.ts:613`, il caso (c), su desktop e mobile, si aspetta che
 > `dashboard-cash-balances` sia legacy per decisione (D-T3), `bg-white` dipinto in scuro dal remap con
-> `--theme-bg-card`; ma DV l'ha migrata su `bg-lf-card` (`daea7b31c`, 16/10, «dashboard on colour roles», mandato
+> `--theme-bg-card`; ma DV l'ha migrata su `bg-lf-card` (`09c02bc24`, 16/10, «dashboard on colour roles», mandato
 > D-T28). Su D-T3 poggiano anche il commento alle righe 88–94 e la riga ~165. L'errore di processo è del coordinatore:
 > all'ingresso di DV i gate non lanciano quella spec. Proposta: una sonda `bg-white` nel contenuto della pagina, la metà
 > del menu delle lingue com'è; decido io con test-author. Slot concesso alle 11:2x, solo questa spec, desktop e mobile,
@@ -3223,15 +3223,15 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ⚠️ **Fuori pista — il controllo dei tipi di `e2e/` dopo `api sync`** (11:50, carico 44): da 17 errori a 5. I 12 di
 > `settings/backup.spec.ts` e `fixtures/galleryBackup.ts` erano il client vecchio. Restano i 4 noti e uno nuovo,
 > `e2e/assets/asset-list.spec.ts:1046` (TS2769, il predicato `isStoredPoint` contro `FAPricePoint_Output`), dal commit
-> della 1.3 `c18517e31` (C-66, oggi 11:03): fuori perimetro, segnalato al coordinatore; Playwright non controlla i tipi,
+> della 1.3 `02348f9b3` (C-66, oggi 11:03): fuori perimetro, segnalato al coordinatore; Playwright non controlla i tipi,
 > quindi la spec gira.
 
 > ✅ **4 · L'handoff** (11:5x): CHECKPOINT READY con la spec, la frase della `desc` e il piano; committato dal
-> coordinatore come `5cac2d244` ed entrato con `c1578a8bf` (11:51).
+> coordinatore come `115a84a7a` ed entrato con `6c260d327` (11:51).
 
 ### Giro 3 della designer: toast, banner e badge dei tipi — ✅ 17/10/2026 sera (chiuso per T il 18/10, 01:18)
 
-> **Avvio** (coordinatore, 22:42; worktree portato alla punta `38b7e6313`, pulito): il giro 3 approvato dal developer
+> **Avvio** (coordinatore, 22:42; worktree portato alla punta `c3cff37f8`, pulito): il giro 3 approvato dal developer
 > alle 22:05, con la designer accanto, testuale: «leggilo e applicalo, modifica i temi colori esistenti, e se ne servono
 > altri, creali», e «aggiorna anche la skill designer color … aggiornando i colori e aggiungendo i nuovi». Specifica:
 > `designer-feedback/2026-10-17-round3-grafici/decisioni.md` (§2 toast e banner, §1.9 badge dei tipi), con gli originali
@@ -3295,7 +3295,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > della card del patrimonio le fa DV dopo R3-b. Le mie domande di R3-b e l'elenco degli «error» vanno al developer e
 > alla designer.
 
-> ✅ **4 · Applicati** (23:04, `r3/apply_r3a.sh`: bozze rigenerate da `38b7e6313`, identiche a quelle riviste; il
+> ✅ **4 · Applicati** (23:04, `r3/apply_r3a.sh`: bozze rigenerate da `c3cff37f8`, identiche a quelle riviste; il
 > commento di `bannerChip` registra la decisione T3-b, a 120 colonne): 9 file, +143/−65. **Prove leggere** (23:05–23:08,
 > carico 4–5, sotto `nice`): `theme-roles.mjs --check` pulito (il TSV non cambia: nessuna classe legacy); Vitest
 > **749/749** su 25 file (i quattro gate del colore, `htmlSink`, i test delle famiglie e dei loro lettori).
@@ -3378,7 +3378,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > check-orphans` pulito (563 file del frontend, 491 del backend); Vitest **389/389** su 15 file (i quattro gate,
 > `htmlSink`, i test nuovi, le famiglie); `front check` **0 e 0**; `--check` pulito; `diff --check` pulito.
 
-> ✅ **14 · Il checkpoint di R3-a:** committato dal coordinatore come **`81a927681`** (23:31; genitore `38b7e6313`, 17
+> ✅ **14 · Il checkpoint di R3-a:** committato dal coordinatore come **`b51fe28f7`** (23:31; genitore `c3cff37f8`, 17
 > file). **Lo slot** (`r3/slot.sh`, `LIMIT_MIN=70`) è partito alle 23:31:56, carico 4: `api sync`, `--check`, i gate,
 > `front check` e `component-unit` verdi entro le 23:34:51; poi le E2E.
 
@@ -3408,12 +3408,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > dashboard` 27, `banners` 20, `risk` 38, `front-broker detail` 40, `front-asset asset-detail` 39, `front-fx fx-detail`
 > 24, `transactions-modals` 25, `risk-lab` 44, `tx-brim-import` 8, `front-utility auth` 34. Porta libera alle 23:51:34.
 
-> ✅ **17 · R3-a entrato** (coordinatore, 23:52): **`050741670`** (genitori `ba8e06763` e `81a927681`); il ramo portato
-> in avanti a `050741670` dal coordinatore; arrivati solo `decisioni.md` e `palette-finale.json`, il piano intatto. DV
+> ✅ **17 · R3-a entrato** (coordinatore, 23:52): **`e5be0a740`** (genitori `80a1ca0e0` e `b51fe28f7`); il ramo portato
+> in avanti a `e5be0a740` dal coordinatore; arrivati solo `decisioni.md` e `palette-finale.json`, il piano intatto. DV
 > non ha ancora un checkpoint: il flag di parità lo gira chi entra per secondo.
 
 > ✅ **18 · R3-b applicato** (23:52, `r3b/apply_r3b.sh` con `TESTS_DIR` vuoto, perché test-author non aveva finito: le
-> bozze rigenerate da `050741670` sono uguali a quelle riviste): `tokens.css`, `theme-roles.mjs`, `assetTypes.ts`,
+> bozze rigenerate da `e5be0a740` sono uguali a quelle riviste): `tokens.css`, `theme-roles.mjs`, `assetTypes.ts`,
 > `AssetTable`, `AssetCard`, `ProviderComparisonModal`. **Prove leggere** (23:52–23:55, carico 4, sotto `nice`):
 > `--check` pulito con `assetTypes.ts` sotto il record, `--update`: **m1 674 → 594** (le 80 classi dei badge), m2 2 → 2;
 > Vitest 446/447 su 13 file (i quattro gate, `htmlInterpolation`, `htmlSink`, i test di `AssetTable`,
@@ -3427,7 +3427,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `assetTypeBadgeDotClass()` nullo fuori dai sottotipi, i tre punti che disegnano il badge chiamano i due aiuti con un
 > argomento); nel gate C3 31 coppie nuove per tema (i 12 testi dei badge, i 12 colori sulla card, i 7 pallini) e le
 > righe `in srgb` del controllo positivo (`#808080` contro `#636363`; l'alfa premoltiplicata). Ogni controllo morde sul
-> codice di `81a927681` e su mutanti mirati (per esempio il testo di CRYPTO riportato a `#b87916`: 3,00:1 come testo,
+> codice di `b51fe28f7` e su mutanti mirati (per esempio il testo di CRYPTO riportato a `#b87916`: 3,00:1 come testo,
 > 2,84:1 come pallino). 70/70.
 
 > ✅ **20 · Le prove leggere finali di R3-b** (00:02–00:05, carico 3): Vitest **449/449** su 13 file (i quattro gate,
@@ -3435,14 +3435,14 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `roleColors`, `contrast`); Prettier pulito sugli 8 file; `front check` **0 e 0**; `diff --check` pulito. Due righe di
 > commento oltre 120 colonne nel test, come altre quattro già in quel file a HEAD: lo stile del file.
 
-> ✅ **21 · Il checkpoint di R3-b:** committato dal coordinatore come **`fc0493eb9`** (00:04; genitore `050741670`, 10
+> ✅ **21 · Il checkpoint di R3-b:** committato dal coordinatore come **`b0a2e977c`** (00:04; genitore `e5be0a740`, 10
 > file). **La run breve** (`r3b/run.sh`, 00:05:17–00:10:42, carico 4, corsia 6155 e `/tmp/librefolio-r2-t`):
 > `component-unit` **4.959/4.959** su 187 file; `front-asset asset-list` **41/41** sul progetto desktop (il build del
 > frontend rifatto da R3-b), 0 rossi e 0 saltati; porta libera alle 00:10:42. In più, `assetTypeTables.test.ts` sta
 > nell'azione `front-asset asset-unit` (Vitest, senza server; il runner la chiama con `npx`): i suoi 24 file col binario
 > del lock, **1.112/1.112** (00:11, carico 5).
 
-> ✅ **22 · R3-b entrato:** **`7845fc3d3`** (00:12; genitori `050741670` e `fc0493eb9`); il ramo portato in avanti dal
+> ✅ **22 · R3-b entrato:** **`a37e5da23`** (00:12; genitori `e5be0a740` e `b0a2e977c`); il ramo portato in avanti dal
 > coordinatore. Il flag di parità lo gira DV al suo ingresso, perché sono entrato prima io.
 
 > ✅ **23 · R3-c, le bozze su copie** (via del coordinatore, 00:12; da applicare dopo l'ingresso di DV;
@@ -3467,7 +3467,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 > **Richiesta** (coordinatore, 00:52): DV ha un rosso che attribuisce al target, `front-designer-lab live`, il caso
 > «export JSON, reset all, import back» (atteso il blu, arriva il rosa); lanciarlo sull'albero al target senza DV
-> (`7845fc3d3`), solo la run, nessuna correzione.
+> (`a37e5da23`), solo la run, nessuna correzione.
 
 > ✅ **La run** (00:53–00:54, carico 4, corsia 6155 e `/tmp/librefolio-r2-t`, 1 worker, build già aggiornata;
 > `files/T-r2/dlab/`): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6155
@@ -3477,15 +3477,15 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 > **La causa, verificata in lettura:** il caso cambia, nella stessa run, la sorgente del colore del sottotitolo (L1,
 > rosa sulla variabile) e il letterale del foglio di stile dell'intestazione (L2, blu). Dal 16/10 le due sorgenti
-> coincidono: il sottotitolo è su `text-lf-muted` da `546204732` (14:32), e l'intestazione di `DataTable` legge
-> `var(--lf-text-muted)` dal **mio lotto delle tabelle** `77bfa6a39` (21:28; prima `--lf-cmp-datatable-header-text`).
+> coincidono: il sottotitolo è su `text-lf-muted` da `472e8d81b` (14:32), e l'intestazione di `DataTable` legge
+> `var(--lf-text-muted)` dal **mio lotto delle tabelle** `dac99ffda` (21:28; prima `--lf-cmp-datatable-header-text`).
 > L'override di L1 su `<html>` vince sul letterale riscritto da L2, e l'intestazione resta rosa. I casi L1 e L2 da soli
 > passano. Verdetto della triage: **un'assunzione del test** (due sorgenti diverse), non un difetto del prodotto; il
 > sesto slot non conteneva le spec del Lab, per questo non l'ha visto. Nessuna correzione, come chiesto.
 
 ### R3-c e TC-20 — ✅ 18/10/2026 notte
 
-> **Avvio** (coordinatore, 00:56): DV è entrato, **`b238d5b6e`** (genitori `7845fc3d3` e `73fde8c00`; `--check` pulito,
+> **Avvio** (coordinatore, 00:56): DV è entrato, **`89f0b52b6`** (genitori `a37e5da23` e `8a572d1f9`; `--check` pulito,
 > m1 590), il ramo portato in avanti dal coordinatore. Via a due cose in un solo checkpoint: R3-c rigenerato dall'albero
 > con la «Charts» di DV (la regola 11, il nome del test di parità, la correzione di BOND scritta come decisa: l'ha
 > accettata il coordinatore in D-T6 e la porta lui al developer); TC-20, il caso del Lab, con test-author (la spec era
@@ -3527,8 +3527,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > al coordinatore con i file, la run e le dichiarazioni (la spec di L presa da T; il commento di `tokens.css` oltre lo
 > skill); poi FROZEN.
 
-> ✅ **4 · Entrato** (coordinatore, 01:18): commit **`6b218d4a4`** (genitore `b238d5b6e`, gli 8 file), entrato in
-> **`cd686f445`** (genitori `b238d5b6e` e `6b218d4a4`; albero = simulazione, `--check` pulito); il ramo portato in
+> ✅ **4 · Entrato** (coordinatore, 01:18): commit **`e9108d54f`** (genitore `89f0b52b6`, gli 8 file), entrato in
+> **`574c23cf0`** (genitori `89f0b52b6` e `e9108d54f`; albero = simulazione, `--check` pulito); il ramo portato in
 > avanti, pulito, porta 6155 libera. **Il giro 3 per T è chiuso.** Restano fuori, come deciso, `TxBulkBanners` e
 > `TransactionResultBanner` (K3b di W, alla ripresa della 1.3: il via lo dà il coordinatore). Nell'indice, TC-20 aspetta
 > il commit accanto al ✅: lo aggiungo al prossimo checkpoint, per non lasciare l'indice condiviso modificato fuori da un
@@ -3538,12 +3538,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 > **Avvio** (coordinatore, 14:27): il developer, oggi, sugli asset in vista tabella: col puntatore sulla riga la colonna
 > fissa delle azioni diventa trasparente, e sotto si vede scorrere il contenuto della riga invece del menu a tre punti.
-> Causa verificata dal coordinatore: `77bfa6a39` (il mio lotto delle tabelle) ha reso traslucidi gli stati delle righe
+> Causa verificata dal coordinatore: `dac99ffda` (il mio lotto delle tabelle) ha reso traslucidi gli stati delle righe
 > di `DataTable.svelte` (prima letterali opachi), e `.td-fixed` li eredita con `background: inherit`. Richiesta: le
 > celle fisse opache in ogni stato della riga, nei due temi, senza giunture con le celle normali della stessa riga; la
 > pulsazione e la regola di TC-15 che funzionano; i contrasti di oggi; il come a me (composizioni opache, o uno strato
 > per le sole celle fisse), attenzione alle tabelle che non stanno sulla card; un test che morda, con test-author, rosso
-> sul codice di oggi. Ramo portato in avanti alla punta **`84c1bcba1`**; corsia 6155 e `/tmp/librefolio-r2-t`
+> sul codice di oggi. Ramo portato in avanti alla punta **`830d9c90a`**; corsia 6155 e `/tmp/librefolio-r2-t`
 > (cancellata per spazio: la ricrea il runner); lo slot dei colori, circa 15 minuti: `component-unit`, `front-asset
 > asset-list`, `front-broker detail`.
 
@@ -3555,8 +3555,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > suo `inherit`; in chiaro, selezionata, 223,233,228 contro 200,218,209), inchiostro visibile sotto la cella fissa
 > (118–228) e alfa calcolato 15–128 su 255. **La pulsazione non è mai partita:** `tr.highlighted` ha `background: …
 > !important`, che batte un'animazione (e i `!important` dentro i keyframe si ignorano); introdotta così il 12/07
-> (`4cdd1d8fb`, il cui piano dice «ora pulsa 3 volte in 1.8s»). **Altre tinte di riga:** `AssetTable` (riga inattiva, al
-> passaggio `warning-line` al 50 %, `25cd00a04`) ha lo stesso difetto sulla stessa tabella; `UnifiedLotsTable` (di R)
+> (`dd6dc1640`, il cui piano dice «ora pulsa 3 volte in 1.8s»). **Altre tinte di riga:** `AssetTable` (riga inattiva, al
+> passaggio `warning-line` al 50 %, `8f4c3c265`) ha lo stesso difetto sulla stessa tabella; `UnifiedLotsTable` (di R)
 > tinge le celle, non la riga, con tinte opache in `srgb` sulla card, tranne l'evidenziata (`--lf-selected` su ogni
 > cella): con la riga opaca sotto smette di lasciar vedere, e il suo aspetto non cambia; `OtherPeriodEffectsTable` è
 > trasparente (non sta sulla card) ma non ha celle fisse; `DataEditor` e il bulk hanno la colonna di selezione fissa:
@@ -3620,12 +3620,12 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **5 · Il checkpoint** (15:4x): `git diff --check` pulito, porta libera, CHECKPOINT READY al coordinatore; FROZEN.
 
 > **⚠️ Fuori pista:** `row-deleted` (bulk e `DataEditor`) sbiadisce ogni cella con `opacity: 0.55`, le fisse comprese,
-> che quindi lasciano vedere al 45 % ciò che scorre sotto: c'era già prima del lotto (`0b660632f` e prima), non è una
+> che quindi lasciano vedere al 45 % ciò che scorre sotto: c'era già prima del lotto (`22beea1a6` e prima), non è una
 > tinta di riga e non si cura con la riga opaca. Nell'indice come TC-21, per un lotto a parte (serve sbiadire il
 > contenuto senza lo sfondo).
 
-> ✅ **6 · Entrato** (coordinatore, 15:44): commit **`2559dc87e`**, con la base merge `dd9d66281` (il target `cc3c3af15`,
-> pulita), entrato in **`1fa64ceae`**; sull'albero unito i gate 119/119, `--check` pulito, `api sync` senza file
+> ✅ **6 · Entrato** (coordinatore, 15:44): commit **`a2848ae11`**, con la base merge `0a70fd5ec` (il target `3b0664d12`,
+> pulita), entrato in **`dd797d670`**; sull'albero unito i gate 119/119, `--check` pulito, `api sync` senza file
 > cambiati, `front check` 0 e 0. Il ramo portato in avanti dal coordinatore.
 
 ### T2 — il pulsante che ripara sopra ciò che ripara — ✅ 19/10/2026
@@ -3634,7 +3634,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > **sopra** l'elenco dei problemi che ripara, come un «se clicchi qui, ecco cosa ripari»; l'esempio visto è il «Sync FX»
 > (`dashboard/data-quality-sync-rates`). File: `ui/feedback/DataQualityBanner.svelte` ed eventualmente
 > `features/brokers/lots/LotDataQualityBanner.svelte` (liberi per la 1.3). Il layout è deciso, i colori restano quelli
-> del giro 3. Prima un'analisi breve. Ramo sulla punta `1fa64ceae`; corsia da ripopolare con `--force --clean` (la 1.3
+> del giro 3. Prima un'analisi breve. Ramo sulla punta `dd797d670`; corsia da ripopolare con `--force --clean` (la 1.3
 > ha fuso le migrazioni).
 
 > ✅ **1 · La corsia ripopolata** (15:47–15:48): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
@@ -3720,8 +3720,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 > ✅ **8 · Il checkpoint** (16:5x): `git diff --check` pulito, porta libera, CHECKPOINT READY al coordinatore; FROZEN.
 
-> ✅ **9 · Entrato** (coordinatore, 16:58): commit **`e673d4af6`**, con la base merge `68e7a2a73` (il target
-> `c0cc8330b`), entrato in **`ccc2a4141`**; sull'albero unito i gate 119/119, i due Vitest del banner 20/20, `api sync`
+> ✅ **9 · Entrato** (coordinatore, 16:58): commit **`a33b0fdd6`**, con la base merge `1ef6b4728` (il target
+> `2599dfccc`), entrato in **`8c6e984ee`**; sull'albero unito i gate 119/119, i due Vitest del banner 20/20, `api sync`
 > senza file cambiati, `front check` 0 e 0, il runner compila. Il ramo portato in avanti, pulito. **I punti aperti:** il
 > CHANGELOG dei colori in un'unica passata a fine programma; TC-23 girato alla 1.3; `data-group-key` (i due contenitori
 > di MISSING_FX_RATES con lo stesso testid) e `aria-busy` sul pulsante occupato da annotare come voci TC nella mia
@@ -3730,7 +3730,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 ### Ondata 2 · C1 — neutri, stati e interruttori di broker, impostazioni, strumenti e UI condivisa — ✅ 21/10/2026
 
-> **Note implementazione**: sessione figlia C1 (D-T28, «migra veloce, rifinisci dopo»), base `89e8b2e61`. 18 file di
+> **Note implementazione**: sessione figlia C1 (D-T28, «migra veloce, rifinisci dopo»), base `e44422ed0`. 18 file di
 > produzione convertiti ai ruoli, tre sotto-agenti `sonnet` per gruppo di file, ogni diff riletto. Ratchet m1
 > 590 → 383 (−207), m2 2 → 2, 45 → 32 file; baseline stretta con `--update` solo per i 18 file del perimetro. Grammatica
 > 0 violazioni. Gate dei temi + 12 Vitest dei componenti toccati: 64/65 file verdi; `front check` 0 e 0.
@@ -3772,7 +3772,7 @@ pillola soft; un meccanismo per i marchi di `supportLinks`; un ruolo «riempimen
 
 ### Ondata 2 · C1-b — FX, pagina dell'asset, provider e componenti degli asset — ✅ 21/10/2026
 
-> **Note implementazione**: base `ce3bc869a` (C1). 9 file di produzione, 2 test, tre sotto-agenti `sonnet` per gruppo, diff riletti.
+> **Note implementazione**: base `56342edf6` (C1). 9 file di produzione, 2 test, tre sotto-agenti `sonnet` per gruppo, diff riletti.
 > Prima ho controllato che i worktree di Y (`e-alfy-redesigned-spork`) e Z (`e-alfy-potential-sniffle`) non toccassero
 > nessun file del lotto. Ratchet m1 383 → 265 (−118), baseline stretta solo sui 9 file. Grammatica 0 violazioni.
 > Vitest (5 gate dei temi, i due gate degli HTML, `lib/components/assets`, `lib/utils`, `src/routes`): 3830/3831 verdi;
@@ -3808,7 +3808,7 @@ provider); una coppia di testo per il chip neutro.
 
 ### Ondata 3 · C1-c — le transazioni sui ruoli — ✅ 21/10/2026 (notte)
 
-> **Note implementazione**: base `2879ae3e4` (treno 7), `api sync` fatto. 6 file di produzione delle transazioni
+> **Note implementazione**: base `85fda260e` (treno 7), `api sync` fatto. 6 file di produzione delle transazioni
 > convertiti (tre sotto-agenti `sonnet` per gruppo, diff riletti), 2 file categoriali-only non toccati per scelta
 > (vedi sotto). Ratchet m1 243 → 174 (−69), baseline stretta solo sui 6 file. Grammatica 0 violazioni. `app.css`: tolta
 > la sola regola di rimappatura rimasta senza usi, `html.dark .bg-gray-100`; `bg-white` e `border-gray-100` (scheda viola

@@ -11,15 +11,15 @@
 
 | | |
 |---|---|
-| **Baseline** | `1ead733f2` = `dev_release2` (treno 23), pulita: contiene lo step 22 e il merge `cad759f9e`, entrato con `200b572b3`. Il treno 23 non tocca i file dello step. |
+| **Baseline** | `aca87aec4` = `dev_release2` (treno 23), pulita: contiene lo step 22 e il merge `93ba83323`, entrato con `ed4ae0bb1`. Il treno 23 non tocca i file dello step. |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
 | **Copia di prod** | 6165, `/tmp/librefolio-r2-k-prodcopy`: solo letture, mai un `dev.py test` |
 | **Ordine** | spostamento neutro di `serializeOps`; rossi via test-author, solo file già registrati; cura; gate; checkpoint con il CHANGELOG sotto 🐛 Fixed |
-| **Conflitti** | nessuno dei 17 rami locali tocca `TransactionBulkModal.svelte`, `bulkDisplay.ts`/`.test.ts`, `tx-clone.spec.ts`, `tx-bulk-row-order.spec.ts` e `brokers-detail.spec.ts` (09/10, 11:5x). Ultima modifica al modale: `a312797bf` (08/10) |
+| **Conflitti** | nessuno dei 17 rami locali tocca `TransactionBulkModal.svelte`, `bulkDisplay.ts`/`.test.ts`, `tx-clone.spec.ts`, `tx-bulk-row-order.spec.ts` e `brokers-detail.spec.ts` (09/10, 11:5x). Ultima modifica al modale: `6c027bf9f` (08/10) |
 
 ## Dati (voce 5)
 
-- Copia di prod creata il 09/10 con la procedura autorizzata, poi rinfrescata alle 12:53 dalla base `1ead733f2`:
+- Copia di prod creata il 09/10 con la procedura autorizzata, poi rinfrescata alle 12:53 dalla base `aca87aec4`:
   `004_release_1_2_0_schema`; prod spento, niente WAL, niente marcatore. La copia precedente è
   `/tmp/librefolio-r2-k-prodcopy.prev-20261009-125338`.
 - Solo conteggi:
@@ -109,7 +109,7 @@
 
 ## Passi
 
-- [x] 23.1 Base `1ead733f2` verificata pulita; copia di prod rinfrescata e conteggi; piano nel repo; il rimando dallo
+- [x] 23.1 Base `aca87aec4` verificata pulita; copia di prod rinfrescata e conteggi; piano nel repo; il rimando dallo
   step 22. ✅ 2026-10-09.
 - [x] 23.2 Spostamento neutro di `serializeOps` in `bulkDisplay.ts`; `tx-unit` e `front check` verdi. ✅ 2026-10-09.
   > **Note implementazione**:

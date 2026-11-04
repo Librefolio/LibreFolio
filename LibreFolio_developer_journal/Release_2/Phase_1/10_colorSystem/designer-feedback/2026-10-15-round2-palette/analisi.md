@@ -153,7 +153,7 @@ Il bordo delle card in rilievo in scuro (`#2E3B36`) dà 1,62 sulla pagina: è de
 
 Misurato con `node frontend/scripts/theme/theme-roles.mjs --report`.
 
-| | Inizio del cricchetto (T-1, 14/10 alle 23:08) | `dev_release2` (`8fc44558c`) | Ramo di T (`0580c92ab`) |
+| | Inizio del cricchetto (T-1, 14/10 alle 23:08) | `dev_release2` (`98e940802`) | Ramo di T (`c4cf9e616`) |
 |---|---|---|---|
 | Classi legacy (m1) | 11.435 | 11.216 (−219, −1,9 %) | 11.069 (−366, −3,2 %) |
 | Colori letterali (m2) | 1.782 | 92 (−95 %) | 83 (−95 %) |

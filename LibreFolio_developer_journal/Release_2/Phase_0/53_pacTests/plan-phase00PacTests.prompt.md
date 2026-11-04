@@ -4,12 +4,12 @@
 >
 > - **La cartella**: nata come `52_pacTests`, rinominata `53_pacTests` il 13/10, perché il 52 è di I (`52_timeAxisLastLabel`).
 > - **Workstream T** · worktree `LibreFolio-worktrees/e-alfy-silver-barnacle` · ramo `e-alfy-t-matematica-finanziaria-unica`.
-> - **Base**: `6a12f9a06` (treno 95) = target `dev_release2`, worktree pulita all'avvio.
+> - **Base**: `fac5d70c2` (treno 95) = target `dev_release2`, worktree pulita all'avvio.
 > - **Corsia**: `--test-port 6164 --data-dir /tmp/librefolio-r2-t`, usata dopo l'UNFREEZE-VENV per due misure (§1). Porta libera alla fine.
 > - **Coordinatore**: `c8328a01-f208-4ade-a352-0486d1f14de2`.
 > - **Fonti**:
 >   - 4 sottoagenti in sola lettura: la logica pura del planner, i suoi componenti, i test del frontend, i test del backend;
->   - le mie verifiche: **✔** = riverificato a mano su `6a12f9a06`; le righe senza ✔ vengono dagli inventari e si riverificano quando un lotto le tocca;
+>   - le mie verifiche: **✔** = riverificato a mano su `fac5d70c2`; le righe senza ✔ vengono dagli inventari e si riverificano quando un lotto le tocca;
 >   - skill `testing-frontend`, `testing-backend`;
 >   - devWiki letta direttamente, perché graphify manca nella worktree: `decisions/pac-rounding-against-the-plan`, `decisions/pac-draft-copies-from-owned-data`, `decisions/e2e-gaps-of-1-2-before-release`;
 >   - [README della 13](../13_pacAllocator/implementation/README.md), backlog e difetti 1, 2, 5;
@@ -319,7 +319,7 @@ Totale: ~12–13 giorni. La copertura unit del planner dovrebbe passare dal 17 %
 ## 11. Lotto T-PAC-J, solo journal (2026-10-13)
 
 > **Note implementazione**:
-> - **Mandato** (coordinatore, 13/10 sera): base `6a12f9a06`.
+> - **Mandato** (coordinatore, 13/10 sera): base `fac5d70c2`.
 >   1. Rinominare la cartella in `53_pacTests`.
 >   2. Scrivere nel piano la decisione e il chiarimento su D1.
 >   3. Nel backlog, sezione C: aggiornare C-69; una voce per ciascuno di D1–D4, una per i test che mentono, una per i minori. Tutto «dopo la 1.2», senza toccare le voci degli altri.
@@ -328,5 +328,5 @@ Totale: ~12–13 giorni. La copertura unit del planner dovrebbe passare dal 17 %
 >   - la cartella, mai committata, è spostata con `mv`;
 >   - il piano: titolo, stato, §9 e §10;
 >   - il backlog: C-69 riscritta con le misure, I1 e i lotti; C-73…C-78 in coda alla sezione C, prima della voce senza numero «Devwiki e grafo».
->   - Il target (`dev_release2` = `ce09c6ac4`, letto come ref, senza aprire il checkout) arriva ancora a C-72: i numeri da C-73 a C-78 erano liberi.
+>   - Il target (`dev_release2` = `d5d0d2b23`, letto come ref, senza aprire il checkout) arriva ancora a C-72: i numeri da C-73 a C-78 erano liberi.
 > - **Verifica**: `constraints.py:417-418` è proprio l'arrotondamento contro il piano (accrediti `floor`, addebiti `ceil`).

@@ -4,7 +4,7 @@
 
 **Modello**: Sonnet.
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-potential-sniffle` · **Branch**: `e-alfy-z-sospensione-e-risveglio`
-**HEAD di partenza (da verificare)**: `c042f2481` (fast-forward dal coordinatore da `29deddba3`).
+**HEAD di partenza (da verificare)**: `295a09c86` (fast-forward dal coordinatore da `b624004b9`).
 **Corsia**: porta `6186`, cartella dati `/tmp/librefolio-r13-z`.
 **Piano**: `06_sleepWake/plan-phase01SleepWake.prompt.md`, «Z-29d ridotto — lavoro» (~7203) e il seguito «un `data-testid` sul pulsante delle impostazioni della scheda».
 

@@ -616,11 +616,11 @@ literals, colour functions, `var()` uses and custom property definitions. On 14/
 picker's additions — test ids, `use_sites`, the class index of `occ` — are annotation, not counting: the
 Python inventory has no counterpart for them, and the parity totals did not move when they arrived. The
 same holds for the roles' `inline`, `alias_of` and `role`, and for the chart categories' `categories` and
-`category`; what the roles did change is the class expression. On 15/10/2026, on the base `9d57aa4c0`,
+`category`; what the roles did change is the class expression. On 15/10/2026, on the base `59317034a`,
 which carries the first wave of workstream T, the two class expressions took in the role utilities in the
 same change ([Colour Roles](#colour-roles)), and the inventories stayed identical line by line: the
 custom-token classes went from 764 to 912, while the 1,080 files, 1,291 hex literals and 238 colour
-functions did not move. Later that day, on the base `a0915bef9`, both took the palette's prefix list
+functions did not move. Later that day, on the base `3d1314c2c`, both took the palette's prefix list
 (decision D-a), and the inventories stayed identical again: the custom-token classes went from 1,358 to
 1,375. The `lf` uses went from 611 to 619 — 7 more `shadow-lf-shadow` and 1 `shadow-lf-shadow-card` —
 which is now the count of T's `ROLE_CLASS_RE`; the other 9 are `libre-green` uses under `accent-`,

@@ -17,9 +17,9 @@ related:
 ## Summary
 
 One plan (~1 050 lines) and a README, archived on 2026-10-09. It defined Yield on Cost from the user's transaction
-ledger, per `(asset, broker)`, and shipped it as a column of the Dashboard positions (`74afcebce`, 2026-09-11,
-merged as `d7d40c0ec`). The plan's long middle is the definition's case analysis — partial sales, same-day trades,
-transfers, splits, missing FX — and its rejected alternatives; the code at `586a4f0ea` follows it, with one later
+ledger, per `(asset, broker)`, and shipped it as a column of the Dashboard positions (`cff0f0a11`, 2026-09-11,
+merged as `5717fbdd1`). The plan's long middle is the definition's case analysis — partial sales, same-day trades,
+transfers, splits, missing FX — and its rejected alternatives; the code at `249f5a9aa` follows it, with one later
 change: since #32 the denominator comes from the single average-cost function.
 
 ## Key takeaways

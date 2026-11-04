@@ -1,6 +1,6 @@
 # B · CHECKPOINT READY — SEC-3, SEC-4, SEC-5 e il 500 con `reason` (22/10/2026)
 
-HEAD `b61c3ede3`. Nessuna operazione git. 20 file tracciati modificati, nessun file nuovo.
+HEAD `a7cade9bd`. Nessuna operazione git. 20 file tracciati modificati, nessun file nuovo.
 Interfaccia: `ondata4/B-sec345-interface.md`.
 
 ## File (un solo gruppo, un solo commit)

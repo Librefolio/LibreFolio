@@ -10,10 +10,10 @@
 > [`theme-roles`](../../../../../.github/skills/design-tools/theme-roles/SKILL.md) (tabella classe → ruolo, baseline).
 > Backlog: sezione «AF · Colori di asset e cambi» di [`BACKLOG_POST_1.2.md`](../../../Phase_0/BACKLOG_POST_1.2.md),
 > voci `AF-n`.
-> **Stato (16/10, 18:30): area migrata, tutto nel target** (`c179a5144`). Dettagli nel passo 15.
-> - **Lotti 1–8:** A `25cd00a04`, B `28aa01f8e`, C `f92675b80`, fix G6 `5cdf4c307`.
-> - **AF-6:** `8dc5b864c`. **Lotto 9 e AF-4:** `8aa3904a6`.
-> - **Docs:** `15f31f12e`, `830a805a3`, `8347b7713`.
+> **Stato (16/10, 18:30): area migrata, tutto nel target** (`5154c4957`). Dettagli nel passo 15.
+> - **Lotti 1–8:** A `8f4c3c265`, B `9ba7908eb`, C `632048183`, fix G6 `6c9f30eb1`.
+> - **AF-6:** `3f087bb42`. **Lotto 9 e AF-4:** `f503fa868`.
+> - **Docs:** `ab10b6e09`, `124bba162`, `9ad91e5eb`.
 > - **Area AF:** da m1 1.946 e m2 6 a **170 e 0**. Restano solo classi annotate: AF-1 109, AF-2 23, AF-3 8, AF-5 18,
 >   AF-7 12.
 > - **Aperte:** AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 (da
@@ -25,8 +25,8 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-congenial-spoon` |
 | Branch | `e-alfy-af-colori-asset-cambi` (rinominato dall'app all'avvio; era `e-alfy-congenial-spoon`) |
-| HEAD | `8f2824046` = baseline del kickoff ✅ all'analisi; portato dal coordinatore a `6e569084a` (= target, con Z7c-1, W-B17 e lo skill D-T29) prima del primo passo |
-| Target | `dev_release2` = `6e569084a` (16/10, 11:1x) |
+| HEAD | `cdf74ef2a` = baseline del kickoff ✅ all'analisi; portato dal coordinatore a `16ea52b26` (= target, con Z7c-1, W-B17 e lo skill D-T29) prima del primo passo |
+| Target | `dev_release2` = `16ea52b26` (16/10, 11:1x) |
 | Corsia | `--test-port 6157`, `--data-dir /tmp/librefolio-r2-af` |
 | Coordinatore | `aec04834-1532-4d86-9e3f-f942e82aca89` |
 | Bootstrap | niente `.env`, niente `frontend/node_modules`, niente `graphify-out/graph.json`: atteso. Wiki letta dalle pagine committate |
@@ -147,12 +147,12 @@ quelli che leggono le pagine come sorgente (`comparisonSignalPages`, `chartCoreH
 
 ## 4. File dell'area aperti in altri worktree (letti solo dai ref di git, mai i checkout)
 
-- **X** (`e-alfy-x-plugin-asset-e-ricerca`, `c9502ac16`): 27 commit fuori dal target, di cui 19 file nell'area (FE5c):
+- **X** (`e-alfy-x-plugin-asset-e-ricerca`, `33a848985`): 27 commit fuori dal target, di cui 19 file nell'area (FE5c):
   - 18 nuovi in `components/assets/detail/`: 6 `.svelte` (11, 20, 28, 19, 54 e 13 classi), 6 moduli `.ts` e 6 test;
   - modificato `routes/(app)/assets/[id]/+page.svelte`, da 312 a 155 classi;
   - nel suo baseline nessuna riga `~split`: all'ingresso la sistemate tu con X.
 - **Z** (`e-alfy-z-sospensione-e-risveglio`): **0 commit fuori dal target.** Z7c-1, che tocca le due rotte asset senza
-  classi, è in `dev_release2` da `dd4a97e01` (`69c95454b`), dopo il mio baseline.
+  classi, è in `dev_release2` da `e57f6850e` (`ab2fec52c`), dopo il mio baseline.
 - **Nessun commit nell'area** su W, J, A, B, H, Y, E, `hotfix-1.2.1`, `preview-colori-t8c-dv` e sui rami colori
   (T, DV, L, G, IW, TR, BK, IM).
 - **Il lavoro non committato degli altri worktree non l'ho guardato** (regola: mai leggere un altro checkout): lo
@@ -175,7 +175,7 @@ Il primo numero è m1 del baseline, il secondo quello che resta dopo il lotto.
 | 5 | Asset, ricerca e fornitori | `lib/components/assets/{AssetSearchAutocomplete,ProviderAssignmentSection,ProviderComparisonModal,IdentifierPrimaryChooser}.svelte` | 250 → 7 | chi parte prima con C-90 di X |
 | 6 | Asset, modali di gestione e dati | `lib/components/assets/{AssetCurrencyChangeModal,AssetMergeModal,BoundaryDateModal,AssetDataEditorSection,PriceDataImportModal,EventDataImportModal,DistributionDataImportModal}.svelte` | 236 → 20 | chi parte prima con O-8 di X |
 | 7 | Piano programmato | `lib/components/assets/{ScheduledInvestmentEditor,CellDateRange}.svelte` | 156 → 4; m2 2 → 0 | libero (l'interruttore resta a T) |
-| 8 | Pagina lista asset | `routes/(app)/assets/+page.svelte` | 234 → 4 | baseline aggiornato al target ≥ `69c95454b` e tuo via |
+| 8 | Pagina lista asset | `routes/(app)/assets/+page.svelte` | 234 → 4 | baseline aggiornato al target ≥ `ab2fec52c` e tuo via |
 | 9 | Dettaglio asset | `routes/(app)/assets/[id]/+page.svelte` + `lib/components/assets/detail/*.svelte` | ~300 → ~55 | dopo l'ingresso di X FE5c |
 
 **Esecuzione.**
@@ -342,7 +342,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
 
 1. ✅ (16/10) Piano nel journal (questo file), voci AF-1…AF-9 nella sezione AF del backlog, `npm ci` (approvato una volta).
    > **Note implementazione**:
-   > - piano e voci scritti dopo l'approvazione. Il coordinatore ha portato il branch a `6e569084a`: c'è lo skill
+   > - piano e voci scritti dopo l'approvazione. Il coordinatore ha portato il branch a `16ea52b26`: c'è lo skill
    >   D-T29, che conferma le scelte del piano (regola 9 su `AssetCurrencyChangeModal`, domanda aperta 3 per l'hover
    >   su `panel`, regola 10 per i test);
    > - `npm ci` verde (`/tmp/libreFolio_af_npmci.log`);
@@ -352,7 +352,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
    > **Decisioni del coordinatore (16/10, 11:1x–11:2x):**
    > - la 1.3 dà il via su tutti i lotti 1–8 e AF passa per primo. X ha piccole voci in attesa (C-66, O-20, F21/C-90,
    >   O-8), quindi hanno precedenza i lotti 1, 4, 5, 6 e 8;
-   > - il fast-forward non serve: la base `6e569084a` contiene `69c95454b`;
+   > - il fast-forward non serve: la base `16ea52b26` contiene `ab2fec52c`;
    > - **checkpoint:** A = lotti 1–3, B = lotti 4–7, C = solo il lotto 8, D = lotto 9 dopo FE5c;
    > - **via ai test del lotto 3:** X ha confermato che `AssetTable.test.ts`, `AssetTable.svelte` e
    >   `asset-list.spec.ts` non sono aperti.
@@ -528,9 +528,9 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
    > - **Prettier** ha spostato il `>` di chiusura in 6 file, per la nuova lunghezza delle classi; i token sono
    >   verificati identici.
    >
-   > **Ruoli nuovi di T** (`f043c1b58`, arrivano con la base merge): `text-lf-on-overlay` risolve AF-6.
-9. ✅ (16/10, 12:01–12:43) **Slot pesante H1+H2** sulla base `5e759bc9b` (A, B, C committati dal coordinatore, merge
-   del target `f77743d47`).
+   > **Ruoli nuovi di T** (`ee00f754e`, arrivano con la base merge): `text-lf-on-overlay` risolve AF-6.
+9. ✅ (16/10, 12:01–12:43) **Slot pesante H1+H2** sulla base `63750f447` (A, B, C committati dal coordinatore, merge
+   del target `8aebae844`).
    > **Ambiente:** corsia 6157 + `/tmp/librefolio-r2-af`, 1 worker (carico fra 36 e 165).
    > Script `/tmp/libreFolio_af_slotH12.sh`, che non avvia nessun passo nuovo dopo le 12:43; log in
    > `/tmp/libreFolio_af_slotH12/`.
@@ -567,20 +567,20 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
    > **⚠️ Fuori pista:** fra le 11:53 e le 11:57 la rete è caduta e il turno della sessione AF si è chiuso con un errore;
    > il worktree era pulito. G, che occupava la corsia pesante, è morto con la sua sessione, e il coordinatore ha
    > anticipato il via.
-10. ✅ (16/10, 12:45–13:00) **Coda breve** sulla base `0ff61e8c0`: merge di `be911db7e`, con W-B43 (spec di
-    `asset-data-editor` e `fx-csv-import` più strette), G-18 e la correzione dello scanner di T (`18824449c`, i commenti
+10. ✅ (16/10, 12:45–13:00) **Coda breve** sulla base `3a8dad438`: merge di `eb0078e67`, con W-B43 (spec di
+    `asset-data-editor` e `fx-csv-import` più strette), G-18 e la correzione dello scanner di T (`ed7440650`, i commenti
     nelle espressioni del markup).
     > Niente `api sync`: la base non toccava componenti né API.
     > - **Gate:** `--check` pulito; Vitest `themeRoles` + `themeTokens` 71/71 (prima 65: c'è il test nuovo dello scanner).
     > - **E2E, 70/70:** asset-data-editor 26 e fx-csv-import 22 (gli spec nuovi di W-B43), fx-sync-mock 5, fx-bulk 7,
     >   live-pause 8, asset-name-xss 2.
     > - Totale dei due slot: **221 E2E verdi**. Log in `/tmp/libreFolio_af_queueB/`.
-11. ✅ (16/10, 13:02) **Ritocco G6** (la regola nuova di T per i campi nativi, `a317392d4`).
+11. ✅ (16/10, 13:02) **Ritocco G6** (la regola nuova di T per i campi nativi, `42d595074`).
     > Il G6 trovava un solo caso nell'albero AF: in `ScheduledInvestmentEditor.svelte:1295` il campo note degli eventi
     > (`placeholder="optional"`) prende `placeholder:text-lf-placeholder`.
     > - **Prove:** `--check`, Prettier, Vitest dei gate 71/71, `git diff --check`. Gli E2E non vanno rifatti
     >   (coordinatore).
-    > - **Commit** `5cdf4c307`, poi nel target con A+B+C: **`bfd33a0f5`**.
+    > - **Commit** `6c9f30eb1`, poi nel target con A+B+C: **`3a36bca01`**.
 12. ✅ (16/10, 13:05) **AF-6**: il velo sull'immagine dell'asset (`AssetModalDetails:104–107`). `bg-black/40` passa a
     `bg-lf-overlay` (tabella di `theme-roles`: i fondali neri al 40–50 % vanno su `overlay`), e l'icona `Upload` da
     `text-white` a `text-lf-on-overlay`, il ruolo nuovo di T «icona sul velo».
@@ -589,8 +589,8 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
     >   103/103.
     > - **Da rivedere:** il velo passa dal 40 % di nero al 60 % del fondale (`#0D1110`), quindi è più scuro.
     >   `on-overlay` è provvisorio (domanda aperta 5 dello skill).
-13. ✅ (16/10, 16:53–17:06) **Lotto 9 · dettaglio asset**, dopo l'ingresso di FE5c (`a44951cf5`; base merge
-    `10bcf4486`). Conteggio sui file reali: 300 classi, cioè 123 della pagina e 177 dei 7 componenti di `detail/`. Si
+13. ✅ (16/10, 16:53–17:06) **Lotto 9 · dettaglio asset**, dopo l'ingresso di FE5c (`03a0c761f`; base merge
+    `cfba8b896`). Conteggio sui file reali: 300 classi, cioè 123 della pagina e 177 dei 7 componenti di `detail/`. Si
     scende a **55**, tutte AF-1: i tre interruttori della barra del grafico nella pagina (42); l'icona dei metadati, le
     tre viola delle misure e l'icona dei segnali (13).
     > **Note implementazione:**
@@ -610,7 +610,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
     >     - chip del tipo `bg-lf-neutral`; badge del fornitore sul set `success`, «Manual» sul set `warning`;
     >     - segmenti prezzi/rendimento e preset delle finestre su `checked`;
     >     - bottoni della barra `bg-lf-card border-lf-subtle hover:bg-lf-hover`.
-    > - **AF-4, fatta da me:** `AssetCurrencyChangeModal` passa a `<ModalBase tone="danger">` (T, `4d8ae68c4`), senza più
+    > - **AF-4, fatta da me:** `AssetCurrencyChangeModal` passa a `<ModalBase tone="danger">` (T, `1709949e8`), senza più
     >   il `contentClass` di colore; da 2 classi a 0.
     > - **Modifiche non di colore:**
     >   - `tone="danger"`;
@@ -636,8 +636,8 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
     > - il bottone di chiusura del banner ha l'hover sulla linea ambra;
     > - in scuro i secondari si staccano poco dalla card (domanda aperta 3);
     > - la nota dell'editor è su `-on-soft/70`.
-14. ✅ (16/10, 17:53–18:25) **Slot pesante del lotto 9** sulla base `dc360b486`: lotto 9 e AF-4 committati dal
-    coordinatore (codice `8aa3904a6`, docs `8347b7713`), più la merge del target `ce5954329` con J-17.
+14. ✅ (16/10, 17:53–18:25) **Slot pesante del lotto 9** sulla base `457b5eea8`: lotto 9 e AF-4 committati dal
+    coordinatore (codice `f503fa868`, docs `9ad91e5eb`), più la merge del target `7f93046f7` con J-17.
     > Corsia 6157 + `/tmp/librefolio-r2-af`; taglio alle 18:40, nessun passo nuovo dopo le 18:35. Script
     > `/tmp/libreFolio_af_slotD.sh`, log in `/tmp/libreFolio_af_slotD/`. I worker: 2 per ogni spec partita col carico a
     > 1 minuto sotto 60, altrimenti 1.
@@ -670,8 +670,8 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
     > **⚠️ Fuori pista — `designer-lab picker` aggiunto dal coordinatore:** il lotto aveva tolto `html.dark .text-gray-800`
     > (C4), che era il soggetto del test dell'override scuro di L-20. Lo spec sceglie dal CSSOM la regola, senza
     > nominarla, ed è passato da solo a un'altra classe ancora rimappata: 4/4.
-15. ✅ (16/10, 18:27) **Ingresso nel target: `c179a5144`.** La base merge è `c403534c7`, con la punta `ccfabfd6d`; il
-    frontend è identico a quello validato (`dc360b486`), con i gate a 119/119. Target m1 936.
+15. ✅ (16/10, 18:27) **Ingresso nel target: `5154c4957`.** La base merge è `717966d57`, con la punta `7fc972661`; il
+    frontend è identico a quello validato (`457b5eea8`), con i gate a 119/119. Target m1 936.
     > **Definition of done (§10):**
     > - lotti 1–9 migrati; l'area scende da m1 1.946 a **170**, tutte con la loro voce AF-n; m2 da 6 a **0**;
     > - `--check` pulito, baseline stretto a ogni checkpoint;
@@ -690,7 +690,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
     > | AF-7 | 12 | `AssetModalFooter` 8; `ScheduledInvestmentEditor` 4 |
 16. 🔄 (16/10, dalle 21:09) **I component tokens di file, media e menu contestuale** (richiesta del developer: sull'app
     questi componenti mostravano ancora i colori vecchi, dai letterali di R-3 in `lib/theme/components/*.css`). Base
-    `fa16ce787`; fino all'ingresso sono il solo writer di `media.css`, `files.css`, `dialogs.css`. Il metodo è quello di
+    `b524ba9c8`; fino all'ingresso sono il solo writer di `media.css`, `files.css`, `dialogs.css`. Il metodo è quello di
     T (piano T, «I component tokens, parte 1–2c»), con gli skill `design-system` e `theme-roles`.
     1. ✅ (21:09–21:2x) **Analisi**, approvata dal coordinatore (21:2x).
        > **Note implementazione:** 336 token in **8** componenti: `ImageEditModal` 69, `FileUploader` 54,
@@ -784,8 +784,8 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        > | `git diff --check` | pulito |
        >
        > Porta 6157 libera: nessun server avviato.
-    4. 🔄 (16/10, 22:04–22:47) **Slot pesante E**, nella 6157 su `943d46378` (codice `4b1b74ab2`, docs `03324bac3`, base
-       merge con la punta `bf2c22791`): la 1.3 ha prestato il suo slot 2; nessun passo nuovo dopo le 22:45. Script
+    4. 🔄 (16/10, 22:04–22:47) **Slot pesante E**, nella 6157 su `97d290be2` (codice `92c95b579`, docs `d6b208484`, base
+       merge con la punta `57f8c3daa`): la 1.3 ha prestato il suo slot 2; nessun passo nuovo dopo le 22:45. Script
        `/tmp/libreFolio_af_slotE.sh` (controlla HEAD, albero pulito e porta libera prima di partire), log in
        `/tmp/libreFolio_af_slotE/`. Tutte le E2E con 1 worker: il carico a 1 minuto era fra 65 e 151 a ogni partenza.
        > | Passo | Esito |
@@ -801,7 +801,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        > | files-pdf-offline | 1/1 |
        > | `front-broker detail`, `front-asset asset-list`, `front-transaction tx-import-upload` | non partite (taglio) |
        >
-       > Porta libera alla fine; HEAD `943d46378`, albero pulito.
+       > Porta libera alla fine; HEAD `97d290be2`, albero pulito.
        >
        > **⚠️ Fuori pista — `image-crop` F1 («ImageEditModal renders in dark mode»), triage con lo skill `test-triage`:**
        > - l'asserzione (`expect(hasDark).toBeTruthy()`, riga 647) fallisce subito, dopo 8,7 s di corpo: non è un timeout;
@@ -827,7 +827,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        con un commit solo test»): test-author, sulla sola spec `frontend/e2e/image-crop.spec.ts`, blocco «Dark Mode - Image
        Crop Components».
        > **Note implementazione:** prima ho verificato che nessun ramo locale ha commit sulla spec oltre il mio HEAD
-       > (`332b9e268`, letti solo i ref). Il `beforeEach` aspetta il toggle del tema (`toBeVisible`), legge la classe di
+       > (`4b90c5073`, letti solo i ref). Il `beforeEach` aspetta il toggle del tema (`toBeVisible`), legge la classe di
        > `<html>`, clicca solo se non è scuro e asserisce `html.dark` con `toHaveClass`; F1 asserisce lo stesso con la
        > modale aperta, dopo la navigazione a `/files` e il caricamento. Niente più ripiego sulle classi `dark:`, nessun
        > `isVisible()` istantaneo usato come attesa. Il tema regge alla navigazione: `app.html` lo riapplica da
@@ -838,8 +838,8 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        >
        > **Resta debole** (fuori dall'OK): F2 e F3 decidono con `isVisible()` istantanei se aprire le modali, e possono
        > passare senza aprirne nessuna; nessuno dei due verifica il tema. Seguito possibile, annotato in AF-12.
-    6. ✅ (16–17/10, 23:37–00:09) **Slot di recupero**, nella 6157 su `285a1cb39` (base merge del coordinatore con la
-       punta `db506eb21`: FE8b, B, E e J della 1.3; i commit `f2f13184b` e `391087b35` dentro). Nessun passo nuovo dopo
+    6. ✅ (16–17/10, 23:37–00:09) **Slot di recupero**, nella 6157 su `3cd77a619` (base merge del coordinatore con la
+       punta `127299d5f`: FE8b, B, E e J della 1.3; i commit `d67606f5c` e `82b2e46b8` dentro). Nessun passo nuovo dopo
        le 00:30. Script `/tmp/libreFolio_af_slotR.sh`, con la scadenza assoluta (il taglio passava la mezzanotte); log in
        `/tmp/libreFolio_af_slotR/`.
        > | Passo | Esito |
@@ -851,7 +851,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        > | `front-asset asset-list` (1 worker) | 30/30 |
        > | `front-transaction tx-import-upload` (2 worker) | 10/10 |
        >
-       > Porta libera alla fine; HEAD `285a1cb39`, albero pulito. Con lo slot E, tutte le spec dell'elenco del lotto sono
+       > Porta libera alla fine; HEAD `3cd77a619`, albero pulito. Con lo slot E, tutte le spec dell'elenco del lotto sono
        > verdi.
        >
        > **⚠️ Fuori pista — `brokers-detail`, «clicking the "Analyze Lots" row action opens the FIFO lots panel»:** un
@@ -864,7 +864,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        > **⚠️ Fuori pista — AF-13 di nuovo:** macOS ha toccato `frontend/src/.DS_Store` alle 23:52:26, e `asset-list` ha
        > rifatto la build all'avvio.
 17. ✅ (17/10, 00:14–03:29) **`lib/theme/drawnColors.ts` sui ruoli**, fuori area (`lib/theme`, dichiarato), richiesta del
-    coordinatore dopo l'ingresso `9d3607eb6`. Sono i 32 letterali slate (17 distinti) del rapporto di L
+    coordinatore dopo l'ingresso `a4bf32a44`. Sono i 32 letterali slate (17 distinti) del rapporto di L
     (`L-designerLab/audit-colori-fuori-metrica.md`, riga 2): il tema scuro del foglio di cheetah-grid in
     `FilePreviewModal` (26), i due bordi del foglio in chiaro, la riga indicata, i segnaposto di `LazyImage` (2),
     l'iniziale degli avatar di `FilesTable`.
@@ -889,7 +889,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        > selezione va composta sul campo e resa opaca. **Decisione del coordinatore: opzione 1**, la correzione è in
        > `roleColors.resolve()` (DV, col commit dei ruoli): sempre sRGB, `#rrggbb` o `rgba()`. Il mio ripiego locale su
        > un canvas 1×1 è stato tolto dalle bozze. Due sonde in Chromium lanciate col carico a 53 e 64, sopra la soglia.
-    3. ✅ (01:53–01:56) **Applicazione** su `323c61b73` (B4 e gli 8 ruoli entrati; i quattro file uguali alle copie
+    3. ✅ (01:53–01:56) **Applicazione** su `1bd4c0e61` (B4 e gli 8 ruoli entrati; i quattro file uguali alle copie
        delle bozze):
        > **Note implementazione:**
        > - `drawnColors.ts`: costruttori da un `ChartRoles`, senza letterali (19 righe di letture letterali
@@ -913,8 +913,8 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        `theme-roles.mjs --check` pulito; il compilatore di Svelte sui tre componenti, 0 avvisi prima e dopo;
        `py_compile` del runner; Vitest **8 file, 286/286** (`drawnColors`, `roleColors` e `roleColors.dom`, i tre gate
        dei colori, `FilePreviewModal.test`, `FilesTable.test`); `git diff --check` pulito.
-    5. ✅ (17/10, 03:06–03:29) **Slot F** nella 6157 su `c37c55649` (codice `cfa78f210`, docs `fd6e7b3d9`, base merge
-       con la punta `2818924b7`: X O-8, H-27, E-11; il runner si è unito da solo con quello della 1.3, la riga di
+    5. ✅ (17/10, 03:06–03:29) **Slot F** nella 6157 su `b8a0a595e` (codice `9bd0a19ef`, docs `4afd0f625`, base merge
+       con la punta `bd229d1c6`: X O-8, H-27, E-11; il runner si è unito da solo con quello della 1.3, la riga di
        `drawnColors.test.ts` c'è). Nessun passo nuovo dopo le 03:40. Script `/tmp/libreFolio_af_slotF.sh`, log in
        `/tmp/libreFolio_af_slotF/`.
        > | Passo | Esito |
@@ -927,7 +927,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        > | `front-asset asset-list` (1 worker) | 30/30 |
        > | `front-utility image-crop` (2 worker) | 42/42 |
        >
-       > Nessuna build in più (AF-13 non si è ripetuto); porta libera alla fine; HEAD `c37c55649`, albero pulito.
+       > Nessuna build in più (AF-13 non si è ripetuto); porta libera alla fine; HEAD `b8a0a595e`, albero pulito.
 
 ## 12. Dove guardarlo (per il developer)
 

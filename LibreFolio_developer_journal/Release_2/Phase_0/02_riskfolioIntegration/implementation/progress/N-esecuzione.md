@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | [`../N-backend-acquisizioni.md`](../N-backend-acquisizioni.md) (sola lettura) |
 | Branch | `e-alfy-risk-n-backend-acquisizioni` |
-| Baseline | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` ✅ verificata |
+| Baseline | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` ✅ verificata |
 | Lane | porta `6248` · data dir `backend/data/test-risk-n` |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 | Consegna | contratto **K8** → **E** *e* **I** (esteso, D-N9) |
@@ -241,7 +241,7 @@ Regola di segno ratificata:
 
 | Comando | Esito |
 |---|---|
-| `git rev-parse HEAD` | `cc33120e…` ✅ baseline |
+| `git rev-parse HEAD` | `3a4431d5…` ✅ baseline |
 | oracolo riskfolio 7.0.1, 2 serie × 5 misure | accordo **≤ 1 ULP** (`1,110e-16`) |
 | `pytest test_risk_analytics.py -k "<misure acquisite>"` | **21 passed**, 24 deselected, 0,47 s |
 | `pytest test_risk_analytics.py` (dopo `test-author`) | **53 passed** (era 45; originale 24) |
@@ -338,7 +338,7 @@ decisione del coordinatore sulla cache statica.
 
 ### 2. `./dev.py format` sporca sette file che non sono di nessuno
 
-La baseline `cc33120e` **non è black-pulita**. Un singolo `dev.py format` ha
+La baseline `3a4431d5` **non è black-pulita**. Un singolo `dev.py format` ha
 riformattato, oltre ai miei due file, questi sette che non ho mai aperto:
 
 | File | Righe | Natura |

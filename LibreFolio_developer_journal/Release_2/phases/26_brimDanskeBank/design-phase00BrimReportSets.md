@@ -7,7 +7,7 @@
 - ogni capitolo ha i casi limite, con il comportamento atteso, e la migrazione funzionale: *oggi → pilota (Danske) → a regime (CA, Intesa)*;
 - in fondo c'è l'analisi logica (§11).
 
-Le versioni precedenti sono nella storia di git (v4: `e3244095e`). Le novità di sostanza rispetto alla v4 sono segnate **[v5]**. Le spiega il §11.4, e quelle che toccano decisioni già prese vanno confermate (§10).
+Le versioni precedenti sono nella storia di git (v4: `222cf95b4`). Le novità di sostanza rispetto alla v4 sono segnate **[v5]**. Le spiega il §11.4, e quelle che toccano decisioni già prese vanno confermate (§10).
 
 **v5.1 (2026-09-30)**: il §4 è riscritto con i disegni di ogni passo del wizard. Si adeguano §3.3, §3.8, §8, §10 e §11. Le novità sono segnate **[v5.1]**.
 
@@ -162,7 +162,7 @@ Gli endpoint nuovi chiedono il permesso EDITOR sul broker, come il parse, e fann
 
 **Migrazione**
 - *Oggi*: file indipendenti, caricati da tre punti: il wizard, la pagina file e la pagina del broker (`BrokerImportFilesModal`).
-- *Pilota*: tutti e tre mandano il `batch_id`; i combinati sono collegati agli originali. **[v5.3]** I tre chiamanti usano `axiosInstance` con un `FormData` (Zodios non gestisce bene il multipart, come dice il codice), quindi il `batch_id` è solo un campo in più del form. Il 422 della pagina file e della pagina del broker, che mandavano `broker_id` nella query, è già corretto (`f82eaa020`, in `dev_release2` con `0743b9f44`).
+- *Pilota*: tutti e tre mandano il `batch_id`; i combinati sono collegati agli originali. **[v5.3]** I tre chiamanti usano `axiosInstance` con un `FormData` (Zodios non gestisce bene il multipart, come dice il codice), quindi il `batch_id` è solo un campo in più del form. Il 422 della pagina file e della pagina del broker, che mandavano `broker_id` nella query, è già corretto (`c043383f6`, in `dev_release2` con `28832e588`).
 - *A regime*: il set come riga raggruppata nella pagina file (D-S9).
 
 ### 3.3 `POST /sets/preview`: cosa c'è nel set

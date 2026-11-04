@@ -23,7 +23,7 @@ could see or delete it any more. Found while analysing flaky import E2E tests (p
 removing them left the broker ownerless instead of deleting it. The last-owner rule existed for *leaving* a broker
 ([[decisions/broker-last-owner-guard]]), not for deleting an account.
 
-## Solution (train 12, merge `637c5d105`)
+## Solution (train 12, merge `78b285bdc`)
 
 The developer's mandate: "apply the last-owner rule already in 1.2", with **one shared service function**.
 

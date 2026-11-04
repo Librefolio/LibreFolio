@@ -2,7 +2,7 @@
 
 > **Leggi questa pagina prima di scrivere una riga di superficie.** Non descrive
 > cosa *vorremmo* avere: descrive cosa c'è **oggi**, verificato sul codice il
-> 2026-09-18 a `2ec19b8f0`. Ogni percorso qui sotto è stato controllato con
+> 2026-09-18 a `b9d004255`. Ogni percorso qui sotto è stato controllato con
 > `ls`, non ricordato.
 >
 > Serve a rispondere a quattro domande e a nessun'altra:

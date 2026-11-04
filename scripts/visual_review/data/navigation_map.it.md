@@ -1,7 +1,7 @@
 # Mappa degli screenshot della gallery LibreFolio (`frontend/e2e/gallery.spec.ts`)
 
 > **Provenance.** Generated on 2026-10-14 by reading `frontend/e2e/gallery.spec.ts` (+ fixtures) at commit
-> `27228466c`: one table per gallery category, first column = shot ids (`category/name`; a row may list several,
+> `666d23701`: one table per gallery category, first column = shot ids (`category/name`; a row may list several,
 > abbreviating the next ones as `, -suffix`). Consumed by `scripts/visual_review/navmap.py`. Shots added to the
 > gallery later are still published, with «?» as navigation, until this file is updated (by hand, or by asking an
 > agent to re-derive it from the spec). Keep every category heading as a single word: `## <category>`.

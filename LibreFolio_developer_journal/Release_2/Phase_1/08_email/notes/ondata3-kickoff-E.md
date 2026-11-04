@@ -5,7 +5,7 @@
 > - **E-26 (b)**: dopo la registrazione oggi diciamo sempre «Ti abbiamo mandato un'email», anche quando l'email è stata trattenuta (troppe richieste per quell'indirizzo, 10 l'ora). Con E-26 la risposta del server lo dice e la scheda di registrazione spiega come averne una nuova.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-stunning-fortnight` · **Branch**: `e-alfy-e-email`
-**HEAD di partenza (da verificare)**: `2879ae3e4` (fast-forward fatto dal coordinatore; `npm ci` fatto per Linux).
+**HEAD di partenza (da verificare)**: `85fda260e` (fast-forward fatto dal coordinatore; `npm ci` fatto per Linux).
 **Corsia**: porta `6182`, cartella dati `/tmp/librefolio-r13-e`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/08_email/plan-phase01Email.prompt.md`: E-25 analisi (righe ~9384-9460), decisioni E-25.1 (~9511-9518), E-26 (~9430-9460). Backlog: E-25 ~9451, E-26 ~9456.
 

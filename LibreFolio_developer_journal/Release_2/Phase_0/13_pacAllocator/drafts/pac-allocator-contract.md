@@ -13,7 +13,7 @@
 > [Round 7](plan-phase00Step2Round7-PacRebalancerOperationalMigration.prompt.md).
 
 **Stato:** N1/C1/X1 approvati; implementazione D integrata con runtime a
-`d018e8a677289b9bc38e65b437a86e1f2684caa7`. Verifica combinata: 816 test schema,
+`7e6d0709c2dca5bc2c85472ba51d1198978885d8`. Verifica combinata: 816 test schema,
 194 test service/evaluator e statiche mirate verdi. Codec/codegen C/D end-to-end
 restano pendenti. Due tentativi infrastrutturali pre-pytest sono registrati nelle
 evidenze; nessuna dipendenza installata.

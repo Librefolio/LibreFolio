@@ -27,7 +27,7 @@ matched only because of nearby variable names — a rename would have turned the
 
 ## Solution
 
-`804bc9903` («fix(privacy): mask growth and performance amounts»): mask at the formatter's definition with
+`8fa118ba4` («fix(privacy): mask growth and performance amounts»): mask at the formatter's definition with
 `maskFormattedNumber` — in the Growth chart, and `shortMoney` in the Performance chart — so every consumer inherits it;
 the gate now guards that boundary, and its list of residual sites is empty.
 

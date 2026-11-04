@@ -1,16 +1,16 @@
 # Piano — fase 00, 35: `dev.py` dentro l'immagine Docker
 
-> **Stato**: ✅ chiuso e integrato nel treno 19 (merge `cdde3bc4d`): `5dca6e2cf`, `793aab393`, `5fe027f8f` (verifica del 2026-10-09 su `3cceb4f90`, §7.4).
+> **Stato**: ✅ chiuso e integrato nel treno 19 (merge `c61a90883`): `ffb3b39f3`, `452ed291a`, `69d0e8f4b` (verifica del 2026-10-09 su `f545b67e3`, §7.4).
 > - Al checkpoint: ✅ pronto per il checkpoint (2026-10-08, §7.3). L'approccio l'ha deciso il developer; il coordinatore ha preso le quattro decisioni di §4 (§0.1).
 >
-> - Workstream L. Base `108a2adf5` (`dev_release2`, treno 17).
+> - Workstream L. Base `03c943f53` (`dev_release2`, treno 17).
 > - Corsia 6156/6166, `/tmp/librefolio-r2-l`.
 
 ## 0. Il mandato
 
 - **Il difetto**, trovato da Q e verificato dal coordinatore, c'è già nella 1.1.0: dentro il container nessun comando `dev.py` parte.
   - `dev.py` registra sempre il test runner, e prima di `parse_args` importa `normalize_coverage_argv`.
-  - `scripts/test_runner/_common.py:21` importa `backend.test_scripts`, che `.dockerignore:30` esclude dal 01/09 (`f32e460ca`).
+  - `scripts/test_runner/_common.py:21` importa `backend.test_scripts`, che `.dockerignore:30` esclude dal 01/09 (`3b48e25b4`).
   - Così gestione utenti, `db *` e `user init-settings` sono inutilizzabili, e `ForgotPasswordCard.svelte:42` suggerisce `./dev.sh user:reset`, che nell'immagine non funziona.
 - **Il developer** (testuale): «La fix dovrebbe essere che, mentre costruisce i comandi, prima verifica che le varie directory di script esistono, altrimenti va avanti». Va bene anche un import vero dopo il controllo: così in sviluppo un import rotto resta visibile, invece di sparire come farebbe un `try/except ImportError`.
 - **Il coordinatore**:
@@ -34,7 +34,7 @@
 4. **L'`HEALTHCHECK`: implementarlo.** `localhost:6040` fisso, coerente col `CMD`. Nel checkpoint va spiegato come l'ho verificato senza il demone Docker.
 - La cartella `35_devCliImage` va bene.
 
-## 1. Stato verificato (2026-10-08, sul codice a `108a2adf5`)
+## 1. Stato verificato (2026-10-08, sul codice a `03c943f53`)
 
 - **La catena**:
   - `dev.py:2350`: `from scripts.test_runner import register_subparser`;
@@ -183,11 +183,11 @@
 ### 7.4 ✅ Integrazione e verifica finale (2026-10-09)
 
 > **Note implementazione**:
-> - **I commit**, integrati nel treno 19 (merge `cdde3bc4d`, 2026-10-08):
->   - `5dca6e2cf` fix(docker): dev.py and HEALTHCHECK in the image;
->   - `793aab393` fix(auth): reset command that works in Docker;
->   - `5fe027f8f` docs(journal): plan 35, dev.py in the image.
-> - **Verifica** su `3cceb4f90`:
+> - **I commit**, integrati nel treno 19 (merge `c61a90883`, 2026-10-08):
+>   - `ffb3b39f3` fix(docker): dev.py and HEALTHCHECK in the image;
+>   - `452ed291a` fix(auth): reset command that works in Docker;
+>   - `69d0e8f4b` docs(journal): plan 35, dev.py in the image.
+> - **Verifica** su `f545b67e3`:
 >   - `_add_unavailable` in `dev.py:2306`, con «not available in this installation»;
 >   - l'`HEALTHCHECK` su `localhost:6040` (`Dockerfile:154-155`);
 >   - la voce `utils dev-cli-image` (`_backend_utils.py:347`).

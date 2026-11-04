@@ -2,9 +2,9 @@
 
 **Stato:** FROZEN — backend handoff pronto.
 **Data:** 2026-09-16.
-**Baseline iniziale:** `941834237696f32bbabfde62a08e070e4b23758e`.
-**Baseline corrente autorizzata:** `22cb18d1d60c8b1197627e6e8eff9cb55f001d3e`
-(parent `941834237696f32bbabfde62a08e070e4b23758e`; commit exact-core
+**Baseline iniziale:** `ab1e8da6b679ed153cdc3eb8c1e57593ac442ab3`.
+**Baseline corrente autorizzata:** `3cfed2b030a72ec0b8232144d12b4e5b0b630c1e`
+(parent `ab1e8da6b679ed153cdc3eb8c1e57593ac442ab3`; commit exact-core
 disgiunto).
 **Branch:** `e-alfy-allocatore-pac`.
 **Lane riservata:** porta `6153`, data dir `/tmp/librefolio-r2-d`, venv
@@ -16,7 +16,7 @@ disgiunto).
 > - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
 > - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
 >   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
-> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+> - P1 `analyze` rimosso il 2026-09-21 (`704ba66a3`).
 >
 > L'avanzamento è nella tabella del [README](README.md) e nel
 > [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
@@ -144,13 +144,13 @@ Questo round non modifica superfici condivise/generate possedute da D-main.
   > **Fuori pista — 2026-09-16**: dopo l'integrazione API, verifica
   > obbligatoria baseline:
   > `git rev-parse HEAD && git branch --show-current` →
-  > `22cb18d1d60c8b1197627e6e8eff9cb55f001d3e`,
+  > `3cfed2b030a72ec0b8232144d12b4e5b0b630c1e`,
   > `e-alfy-allocatore-pac`; baseline autorizzata
-  > `941834237696f32bbabfde62a08e070e4b23758e`.
+  > `ab1e8da6b679ed153cdc3eb8c1e57593ac442ab3`.
   > Stop condition attivata prima di Black/gate finale. Nessun test/runtime,
   > DB o server avviato; nessuno staging/history mutation eseguito dal writer.
   >
-  > **Risoluzione — 2026-09-16**: coordinatore ha attestato che `22cb18d`
+  > **Risoluzione — 2026-09-16**: coordinatore ha attestato che `3cfed2b`
   > contiene soltanto exact-core numerico, relativi test/selector e piano Step
   > 2, senza overlap con il lease Tool. Verifica locale:
   > `git rev-parse HEAD`, `git branch --show-current`,
@@ -170,7 +170,7 @@ Questo round non modifica superfici condivise/generate possedute da D-main.
   > **Evidenza finale**:
   > `git diff --check` → exit `0`; `git diff --cached --name-only` → vuoto;
   > `git rev-parse HEAD` →
-  > `22cb18d1d60c8b1197627e6e8eff9cb55f001d3e`;
+  > `3cfed2b030a72ec0b8232144d12b4e5b0b630c1e`;
   > `lsof -nP -iTCP:6153 -sTCP:LISTEN` → nessun output, exit `1`
   > atteso: nessun listener sulla lane.
 
@@ -225,7 +225,7 @@ Nessun test viene scritto o eseguito in questo round dal writer produzione.
 > test-fixture drift, non regressione prodotto; riparazione assegnata al
 > `test-author`. Gate API, statico e review restano sospesi fino alla
 > riparazione. Stato repository al rilievo:
-> HEAD `22cb18d1d60c8b1197627e6e8eff9cb55f001d3e`, staged `0`; nessun
+> HEAD `3cfed2b030a72ec0b8232144d12b4e5b0b630c1e`, staged `0`; nessun
 > server/listener residuo sulla porta `6153`. Workstream resta `FROZEN`.
 >
 > **Note implementazione — resume gate, 2026-09-16**: dopo la riparazione

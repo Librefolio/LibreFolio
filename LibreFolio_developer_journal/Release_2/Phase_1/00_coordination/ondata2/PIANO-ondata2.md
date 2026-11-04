@@ -1,7 +1,7 @@
 # Ondata 2 — piano proposto (21/10/2026, coordinatore Opus) — NON avviato
 
 ## Stato verificato
-- `dev_release2` = `89e8b2e61` (il tuo «Claude rule update» sopra il journal del treno 6 `15a669d7c`). Treno 6 dentro, gate verde su `861a38567`. **30 commit non pushati** rispetto a `origin/dev_release2` (`b844f83f2`).
+- `dev_release2` = `e44422ed0` (il tuo «Claude rule update» sopra il journal del treno 6 `eddff8c04`). Treno 6 dentro, gate verde su `b766a5170`. **30 commit non pushati** rispetto a `origin/dev_release2` (`b417fbd95`).
 - Le tre sessioni dell'ondata 1 (y-39a, h-61-cp1, z-29s-a) e il vecchio coordinatore sono **archiviati**: servono sessioni nuove.
 - Tutti i branch dei workstream hanno **0 commit fuori da dev**: si portano avanti in fast-forward, nessun merge.
 - Lavoro sporco ancora nei worktree, già salvato in `salvataggi-worktrees-20261021/` (identico): piani di T, X, A, MF; i 3 test non tracciati di CP2 in H.
@@ -38,7 +38,7 @@ Perché così:
 - **Uno slot pesante alla volta** (`flock`): ordine previsto degli E2E: #58 → Y (`fx-settings`, `fx-list`, `asset-list`) → Z (`asset-list`) → K3a → `theme-roles`. Con 7 sessioni la RAM (8 GB liberi ora) è il rischio: se scende sotto 2 GB fermo l'ultima sessione partita.
 
 ## Preparazione (io, prima di avviare; con il tuo via)
-1. Fast-forward a `89e8b2e61` dei branch di Y, Z, H, W, T, DV (nessun commit loro fuori da dev; il lavoro sporco non viene toccato).
+1. Fast-forward a `e44422ed0` dei branch di Y, Z, H, W, T, DV (nessun commit loro fuori da dev; il lavoro sporco non viene toccato).
 2. Worktree nuovo `LibreFolio-worktrees/w-bulk-form`, branch `e-alfy-w-bulk-e-form` da `dev_release2`.
 3. `npm ci` in `frontend/` di W, w-bulk-form, T, DV (uno alla volta, in `flock`): hanno ancora i `node_modules` del Mac.
 4. `api sync` in ognuno dei 7 worktree.

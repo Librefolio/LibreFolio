@@ -1,7 +1,7 @@
 # Piano — 40: costo dei transfer in Auto e dei promote
 
-> **Stato: ✅ completato e integrato** nel **treno 28**: commit `d7c148564` (`fix(transactions): transfer auto cost
-> and promote`), merge `2a5c15c3c`, `dev_release2` = `fbb57eb41`. Archiviato il 10/10 in
+> **Stato: ✅ completato e integrato** nel **treno 28**: commit `1076fa994` (`fix(transactions): transfer auto cost
+> and promote`), merge `7b279157c`, `dev_release2` = `fcd37d8d4`. Archiviato il 10/10 in
 > `Release_2/phases/40_transferCostBasis/` (§7).
 >
 > Workstream **P**, lotto per la 1.2. Coordinator: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`.
@@ -14,7 +14,7 @@
 > metterlo, o sbaglio?». Dopo i chiarimenti, la scelta: **«Correggere 1 e 2 nel backend con una sola cura, e 3
 > facendo chiedere il costo anche col promote (Consigliato)»**.
 >
-> Base: `dev_release2` @ `083ed26dc`, HEAD verificato uguale. Nel worktree ci sono solo i rossi della verifica (2 file
+> Base: `dev_release2` @ `fef0203ca`, HEAD verificato uguale. Nel worktree ci sono solo i rossi della verifica (2 file
 > di test, non committati). Corsia `--test-port 6161 --data-dir /tmp/librefolio-r2-p`, un comando alla volta.
 >
 > **Superfici.**
@@ -25,7 +25,7 @@
 
 ## 1. Stato verificato (rapporto del 09/10)
 
-Sul codice di `083ed26dc`, tutti e tre i difetti esistevano già nella v1.1.0.
+Sul codice di `fef0203ca`, tutti e tre i difetti esistevano già nella v1.1.0.
 
 1. **Transfer in Auto di un'intera posizione: costo 0 sul broker che riceve.**
    - Per un ricevente creato insieme al suo partner, la fonte è il broker del partner e non si esclude nulla
@@ -131,7 +131,7 @@ In `validate_cost_basis`:
 ## 4. Passi
 
 - **T0** ✅ (09/10): base verificata, piano.
-  > **Note implementazione**: HEAD = `dev_release2` = `083ed26dc`; nel worktree ci sono solo i 2 file di test con i
+  > **Note implementazione**: HEAD = `dev_release2` = `fef0203ca`; nel worktree ci sono solo i 2 file di test con i
   > rossi della verifica; porta 6161 libera. Gli E2E del promote (`tx-bulk-promote-exec`, `tx-split-promote`) usano
   > solo coppie di cassa (CASH_TRANSFER): la cura 3 non li tocca.
 - **T1** ✅ (09/10): test-author. Aggiunte P34 e i controlli; adattati B2.2 e il test dell'helper; rosso visto.
@@ -252,8 +252,8 @@ C'era già nella v1.1.0.
 
 ## 7. Integrazione e archivio (10/10)
 
-- **Integrazione**: il checkpoint (manifest di 10 percorsi) è entrato nel treno 28 come commit `d7c148564`, merge
-  `2a5c15c3c`; la punta di `dev_release2` è `fbb57eb41`. Il CHANGELOG `[1.2.0]` l'ha scritto il coordinator nel treno.
+- **Integrazione**: il checkpoint (manifest di 10 percorsi) è entrato nel treno 28 come commit `1076fa994`, merge
+  `7b279157c`; la punta di `dev_release2` è `fcd37d8d4`. Il CHANGELOG `[1.2.0]` l'ha scritto il coordinator nel treno.
 - **Debito di traduzione** (unico residuo): `financial-theory/technical-analysis/performance-metrics/weighted-average-cost`
   è cambiata solo in inglese (riga 114: per un transfer, la data d'uscita prima della gamba in uscita), senza stamp.
   Le versioni IT/FR/ES vanno aggiornate nel **lotto 11 di M** (le traduzioni).

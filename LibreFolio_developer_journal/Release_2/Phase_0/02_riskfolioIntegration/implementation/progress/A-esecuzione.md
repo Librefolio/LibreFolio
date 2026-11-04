@@ -9,7 +9,7 @@
 | **Mandato** | [`../A-backend-oracolo-e-migrazione.md`](../A-backend-oracolo-e-migrazione.md) |
 | **Branch** | `e-alfy-risk-oracle-math-migration` ⚠️ *rinominato dall'app da `e-alfy-improved-meme`* |
 | **Worktree** | `e-alfy-improved-meme` (il percorso **non** è cambiato col branch) |
-| **Baseline** | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` — verificata, coincide |
+| **Baseline** | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` — verificata, coincide |
 | **Lane** | porta `6240` · data dir `backend/data/test-risk-a` |
 | **Coordinatore** | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 | **Autorizzazione** | delega permanente del developer, trasmessa dal coordinatore |
@@ -229,7 +229,7 @@ file di `ai_export/`, nessuna pagina MkDocs (di I).
 
 | Comando | Esito |
 |---|---|
-| `git rev-parse HEAD` | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` — baseline confermata |
+| `git rev-parse HEAD` | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` — baseline confermata |
 | `… services risk-oracle` | **25 passed in 3,23 s** (A1) |
 | `… utils test-runner-cli` | **19 passed in 0,11 s** (A1 — contratto del runner dopo il nuovo selettore) |
 | `… services risk-oracle` | **39 passed in 3,12 s** (A2 — blocco istogramma incluso) |
@@ -488,7 +488,7 @@ di trascrizione sarebbe peggio del contratto mancante.
 
 ```
 git ls-tree e-alfy-risk-management-replan …/contracts/   →  solo README.md
-git log --oneline -1 e-alfy-risk-management-replan       →  cc33120eb  (= la mia baseline)
+git log --oneline -1 e-alfy-risk-management-replan       →  3a4431d5a  (= la mia baseline)
 ```
 
 Il file è un file di lavoro **non committato** nel worktree del coordinatore, e leggere
@@ -2436,7 +2436,7 @@ portafoglio cripto+azioni dell'utente percorra questa strada con questi dati. Il
 
 I chiede se `+0,267 %` sia **punti percentuali di rendimento** o **variazione relativa
 della metrica**. Non ho risposto a memoria: ho recuperato l'estimatore pre-M2 dalla
-baseline (`git show cc33120…:backend/app/services/risk/metrics.py`) e ho fatto girare
+baseline (`git show 3a4431d…:backend/app/services/risk/metrics.py`) e ho fatto girare
 **tutti e due** sugli stessi campioni, stampando **entrambe le convenzioni affiancate**.
 
 ### La riconciliazione decide da sola
@@ -2527,7 +2527,7 @@ che non esiste. Pendenza chiusa, e non c'era niente da fare.
 Il coordinatore chiede di portare `historical_var` a **`1.1.0`**, e invita a contraddirlo con una
 misura. Eccola.
 
-| plugin | baseline `cc33120` | **nel mio albero** | perché |
+| plugin | baseline `3a4431d` | **nel mio albero** | perché |
 |---|---|---|---|
 | `drawdown_summary` | `1.0.0` | **`1.1.0`** | K1 aggiunge un campo, **nessun valore esistente cambia** → minore |
 | `historical_var` | `1.0.0` | **`2.0.0`** | M2 cambia valori pubblicati **a parità di ingresso** → maggiore |
@@ -2566,7 +2566,7 @@ dichiarerebbe una dipendenza a runtime che la decisione di confine **vieta**.
 `risk-oracle`; la regione incriminata (`exclusive_because` di `tools-lifecycle`, `:957-968`)
 compare **0 volte** nel mio diff.
 
-**E non è di nessuno**: la **baseline `cc33120` fallisce già `black --check`**. È committato.
+**E non è di nessuno**: la **baseline `3a4431d` fallisce già `black --check`**. È committato.
 
 Stavo per confermare l'ipotesi `ruff format` del coordinatore. **L'ho verificata invece di
 accettarla**, ed è un'altra:

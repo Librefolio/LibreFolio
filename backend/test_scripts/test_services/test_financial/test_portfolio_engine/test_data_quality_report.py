@@ -658,7 +658,7 @@ class TestTransferShareMismatchIssue:
     pair. Only the pairs dated on or before ``period_to`` count (every pair without one); none counted, no issue. An INFO
     issue: the status does not move.
 
-    On HEAD 252835dce ``models`` has no ``ShareMismatch`` (AttributeError, raised while the arguments are built),
+    On HEAD b090055f0 ``models`` has no ``ShareMismatch`` (AttributeError, raised while the arguments are built),
     ``build_data_quality_report`` takes no ``share_mismatches`` (TypeError, once ``ShareMismatch`` exists) and
     ``IssueCode`` has no ``TRANSFER_SHARE_MISMATCH`` (ValueError): every test that passes mismatches is red for that
     alone, the guards of the bound and of the status included.
@@ -788,7 +788,7 @@ class TestNoTransactionsBeforeFloorIssue:
     (MF-SEC8-2a, never released) are gone."""
 
     def test_the_builder_takes_no_rows_before_floor(self):
-        """RED on HEAD 999f1899e: ``build_data_quality_report`` still has a ``rows_before_floor`` parameter. Read on the
+        """RED on HEAD a4316d9a0: ``build_data_quality_report`` still has a ``rows_before_floor`` parameter. Read on the
         function's signature and, because ``DerivedViewsBuilder.build_data_quality_report`` forwards ``**kwargs``, on a call
         through it: an unknown keyword is a ``TypeError``."""
         assert "rows_before_floor" not in inspect.signature(build_data_quality_report).parameters, "build_data_quality_report still takes rows_before_floor: the report counts no row before 1900"
@@ -912,13 +912,13 @@ class TestNonIsoCurrencyIssue:
     ``missing_fx_pairs`` keeps every pair. A caller passing neither parameter (the lots gap report) still gets the pair
     sides, with the generic keys, and the filtering.
 
-    On HEAD 2fbbf4c4c ``IssueCode`` has no ``NON_ISO_CURRENCY`` and the builder takes neither parameter: each test passing
+    On HEAD 66e4dcba0 ``IssueCode`` has no ``NON_ISO_CURRENCY`` and the builder takes neither parameter: each test passing
     one fails on its TypeError alone, the lots form on its assertions; the guards are green.
     """
 
     def test_non_iso_currency_is_a_portfolio_issue_code_right_after_invalid_split_ratio(self):
         """Red until E-19b2: IssueCode has no NON_ISO_CURRENCY (the frontend keys on the string). It is declared right
-        after INVALID_SPLIT_RATIO, as its issues are placed. Red on HEAD 065c9df77 too: the pence warning's code still
+        after INVALID_SPLIT_RATIO, as its issues are placed. Red on HEAD 14e0a7ba3 too: the pence warning's code still
         sits between the two (Z-32cr removes it)."""
         members = [member.value for member in IssueCode]
 
@@ -1160,7 +1160,7 @@ class TestNonIsoCurrencyAssets:
     ``non_iso_currency_assets`` (``or None``), with ``report_currency=base_currency``: pinned end to end in
     ``test_portfolio_api.py::TestNonIsoCurrencyDataQuality``.
 
-    On HEAD 2fbbf4c4c ``PortfolioService`` has no such method: both tests fail on that alone. On HEAD 065c9df77
+    On HEAD 66e4dcba0 ``PortfolioService`` has no such method: both tests fail on that alone. On HEAD 14e0a7ba3
     ``HeldAssetQuoteFacts`` still requires the quote base, provider code and reported currency only the pence warning
     read (Z-32cr removes the three): ``_held`` fails on its TypeError, in both tests.
     """

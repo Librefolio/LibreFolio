@@ -6,9 +6,9 @@ ma debito che cresce col tempo. Da pescare al prossimo round di sviluppo.
 
 Queste 8 aree ereditano il debito dell'audit di pulizia (02/09). La verifica del 07/09 ha
 distinto i refactor ancora aperti dagli alias e dalle voci S6 già risolte nella tornata P0–P3.
-I marker `TODO(P2-refactor)` erano 26 al 03/09 e sono **25** alla baseline `a9138140`:
+I marker `TODO(P2-refactor)` erano 26 al 03/09 e sono **25** alla baseline `9d8b5c54`:
 `grep -rn "TODO(P2-refactor)" backend/ scripts/`. Non sono 25 task autonomi approvati.
-Al 2026-10-09 sono **21**, con la stessa `grep` (verifica Q del 2026-10-09, base `3cceb4f90`).
+Al 2026-10-09 sono **21**, con la stessa `grep` (verifica Q del 2026-10-09, base `f545b67e3`).
 
 > ⚠️ I report citati sotto sono **archiviati** in `../../phases/08_newCleanAndDocumentation_audit/`
 > (li descrivono con l'evidenza del 02/09; le righe possono essere scivolate da allora).
@@ -24,7 +24,7 @@ Al 2026-10-09 sono **21**, con la stessa `grep` (verifica Q del 2026-10-09, base
 | P4-7 | **Ciclo di vita dei cache store frontend** (`removeAssetPriceStore` mai chiamato, registry non completamente collegati al reset sessione) | Confine account già presente; pool limitato a 8 worker. Misurare entry, punti, intervalli e riferimenti prima di scegliere budget/rilascio | L | [08 §T2](../../phases/08_newCleanAndDocumentation_audit/08_frontend_state_api.md) · [14 #9](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
 | P4-8 | **Coda S6 riconciliata**: 6.2/6.3/6.4/6.7/6.8/6.11/6.12 chiuse; 6.14 limitata al refactor G già consegnato; **TRY003 congelata** | Il report 14 non incorpora tutte le chiusure successive: fa fede la verifica corrente sotto | varie | [14 #23/#26](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
 
-> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`): P4-1…P4-6 sono nel target; P4-8 è come sopra. **P4-7 resta aperto**: `frontend/src/lib/stores/assetPriceStoreRegistry.ts:30` è una `Map` senza limite né eviction, `removeAssetPriceStore` (`:64`) non viene chiamata da nessun altro file, e niente la aggancia al reset di sessione.
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `f545b67e3`): P4-1…P4-6 sono nel target; P4-8 è come sopra. **P4-7 resta aperto**: `frontend/src/lib/stores/assetPriceStoreRegistry.ts:30` è una `Map` senza limite né eviction, `removeAssetPriceStore` (`:64`) non viene chiamata da nessun altro file, e niente la aggancia al reset di sessione.
 
 ## Come leggerlo
 
@@ -34,11 +34,11 @@ Al 2026-10-09 sono **21**, con la stessa `grep` (verifica Q del 2026-10-09, base
 - **P4-8** è la coda: si spunta quando si tocca l'area.
 - I 26 marker storici sono nel piano P1 archiviato; i **25 attuali** e il loro rapporto
   con lo scope approvato sono nell'appendice A di [06_piano_sprint.md](06_piano_sprint.md).
-  Il marker scomparso era `compute_wac_iterative_multi_broker`, rimosso in `2572b240`.
+  Il marker scomparso era `compute_wac_iterative_multi_broker`, rimosso in `7a820698`.
 
 ## Analisi 2026-09-07
 
-Baseline `a9138140`; superfici, rischi e DoD in [06_piano_sprint.md](06_piano_sprint.md).
+Baseline `9d8b5c54`; superfici, rischi e DoD in [06_piano_sprint.md](06_piano_sprint.md).
 La pubblicazione iniziale non avviava refactor. Successivamente il dev ha approvato
 il solo Gruppo B r2 (SP04-SP05), in esecuzione dal 2026-09-07 nel
 [piano dedicato](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
@@ -50,8 +50,8 @@ Le spunte di presa in carico sotto non attestano il completamento dell'implement
 | P4-2 | ✅ Integrato con L/SP16: `execute_batch` ridotto a orchestratore esplicito, contesto typed + stage ordinati, contratto/atomicità invariati. [Piano](../../phases/23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md). | SP16 |
 | P4-3 | ✅ Integrato e developer-accepted con G; caratterizzazione CA, helper maturity CA/Intesa ed eToro FEE. [Piano](../../phases/18_brimTargeted/plan-phase00BrimTargeted.prompt.md). | SP09 |
 | P4-4 | ✅ Integrato con K/SP08: acquisizione, mapping prezzi ed eventi Yahoo separati con contratto invariato. [Piano](../../phases/22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md). | SP08 |
-| P4-5 | ✅ Integrato con B/SP05 (`514582a47`). [Piano](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP05 |
-| P4-6 | ✅ Integrato con B/SP04 (`514582a47`), incluso alias S6 6.7. [Piano](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP04 |
+| P4-5 | ✅ Integrato con B/SP05 (`4b28bcc31`). [Piano](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP05 |
+| P4-6 | ✅ Integrato con B/SP04 (`4b28bcc31`), incluso alias S6 6.7. [Piano](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP04 |
 | P4-7 | Parziale, L: misura/ownership prima di eviction e rilascio. | SP10 |
 | P4-8 | Coda deduplicata nella tabella seguente. | Per voce |
 
@@ -90,23 +90,23 @@ e dopo walkthrough operativo e feedback, come G-UX-DESIGN/G-UX-REVIEW del piano.
 
 ## Debito nuovo registrato 2026-09-22 — round D / I / Risk / J
 
-Baseline `0a1d98eaf` (`dev_release2`), dopo l'integrazione dei quattro workstream.
+Baseline `019cb18c4` (`dev_release2`), dopo l'integrazione dei quattro workstream.
 Tre voci **misurate**, non stimate: ciascuna riporta il comando che la riproduce.
 
 | # | Task | Perché / cosa comporta | Dimensione |
 |---|------|------------------------|-----------|
-| P4-9 | **Conversione dei test specchio** di `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` da lettura del testo sorgente a esecuzione delle funzioni (DBT-D di I) | Un test che legge il sorgente si rompe a ogni cambio di sola grafia e non prova il comportamento: la stessa proprietà si fissa **eseguendo** la funzione. Il file è verde; da convertire restano i 7 specchi ri-pinnati da `2e4c8589f`, che leggono ancora il sorgente (35 `readFileSync` nel file) | M |
+| P4-9 | **Conversione dei test specchio** di `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` da lettura del testo sorgente a esecuzione delle funzioni (DBT-D di I) | Un test che legge il sorgente si rompe a ogni cambio di sola grafia e non prova il comportamento: la stessa proprietà si fissa **eseguendo** la funzione. Il file è verde; da convertire restano i 7 specchi ri-pinnati da `dcf79a9a2`, che leggono ancora il sorgente (35 `readFileSync` nel file) | M |
 | P4-10 | **Sei siti di Risk** che rendono denaro fuori dal canale di mascheratura: 3 `not-money`, 3 che delegano a una funzione mascherata | Non registrabili nel gate per ragioni strutturali (sotto); vanno decisi come classe, non uno per uno | S |
 | P4-11 | **Copertura del gate privacy**: aggancia 1 degli 8 **consumatori** di `fmtCurrency` in `GrowthChart.svelte` | Lo scanner esige **due** token nello stesso template literal (uno valuta, uno numerico): quattro righe che rendono denaro cadono lì. L'unico consumatore visto sopravvive per i nomi delle variabili accanto, e un rename porta il gate al rosso sbagliato | M |
 
-> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`; P4-9 e P4-11 precisati con le note di I):
-> - **P4-11 è chiuso**: `804bc9903` (24/09) maschera `fmtCurrency` alla sua definizione, oggi a `GrowthChart.svelte:2156`, con `maskFormattedNumber`. Il gate custodisce quel confine (`moneyRenderSites.test.ts:193-196`), la lista `residual` è vuota (`:281`) e `GrowthChart.test.ts:1080` fissa il comportamento. Lo stesso commit maschera il secondo grafico, `PerformanceChart.svelte` (`shortMoney` `:166`, `axisTickAmount` `:183`). Le righe dell'analisi qui sotto sono del 22/09.
-> - **P4-9 resta aperto, come conversione** (DBT-D di I, [piano 20 §6.0.11](../../phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)): `2e4c8589f` (28/09) ha chiuso i rossi e il file è verde (145/145 alla misura di I). Restano i 7 specchi ri-pinnati, che leggono ancora il sorgente; nel file le letture con `readFileSync` sono 35.
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `f545b67e3`; P4-9 e P4-11 precisati con le note di I):
+> - **P4-11 è chiuso**: `8fa118ba4` (24/09) maschera `fmtCurrency` alla sua definizione, oggi a `GrowthChart.svelte:2156`, con `maskFormattedNumber`. Il gate custodisce quel confine (`moneyRenderSites.test.ts:193-196`), la lista `residual` è vuota (`:281`) e `GrowthChart.test.ts:1080` fissa il comportamento. Lo stesso commit maschera il secondo grafico, `PerformanceChart.svelte` (`shortMoney` `:166`, `axisTickAmount` `:183`). Le righe dell'analisi qui sotto sono del 22/09.
+> - **P4-9 resta aperto, come conversione** (DBT-D di I, [piano 20 §6.0.11](../../phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)): `dcf79a9a2` (28/09) ha chiuso i rossi e il file è verde (145/145 alla misura di I). Restano i 7 specchi ri-pinnati, che leggono ancora il sorgente; nel file le letture con `readFileSync` sono 35.
 > - **P4-10 è da riverificare** dopo il Round 2 della privacy: `riskAnalysisHelpers.ts` risulta `masked` in `moneyRenderSites.test.ts`.
 
 ### P4-9 — la conversione, e le due trappole già pagate
 
-**Cosa resta** (09/10). I rossi non ci sono più: `2e4c8589f` (28/09) ha cancellato per
+**Cosa resta** (09/10). I rossi non ci sono più: `dcf79a9a2` (28/09) ha cancellato per
 nome, uno alla volta, gli specchi di comportamenti rimossi, e ha ri-pinnato i 7 che
 fissavano proprietà ancora vere, ciascuno con un commento sul cambio di prodotto che
 l'aveva rotto. Resta la sostanza, DBT-D di I: quei 7 specchi leggono ancora il testo
@@ -131,10 +131,10 @@ atteso: tutto verde, con lo stesso numero di test prima e dopo ogni conversione
 
 > **Storico.** Al 22/09 i rossi nominati erano 12: 5 residui di comportamenti rimossi su
 > richiesta e 7 proprietà ancora vere in helper rinominati o rimodellati. I nomi sono nel
-> corpo del commit `22b82e3fb`, e il comando dava 12 rossi su 162 test. Il rinvio l'aveva
+> corpo del commit `e6c59e996`, e il comando dava 12 rossi su 162 test. Il rinvio l'aveva
 > deciso il developer con la sua causa: *«è imperativo riallineare la baseline, tanto i
 > test bisognerà rigirarli tutti»*. Un debito senza causa si eredita; con causa si
-> ri-discute. Al 28/09 i rossi erano 11 su 159 test, e `2e4c8589f` ha portato il file a
+> ri-discute. Al 28/09 i rossi erano 11 su 159 test, e `dcf79a9a2` ha portato il file a
 > 144 test, tutti verdi.
 
 > 🔗 **P4-9 e P4-11 condividono un meccanismo, non solo un'area.** In entrambi i casi la

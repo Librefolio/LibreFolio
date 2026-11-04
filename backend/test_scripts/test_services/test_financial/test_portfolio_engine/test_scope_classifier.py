@@ -628,7 +628,7 @@ class TestShareMismatch:
     purpose (D-MF4 = a, test_transfer_keeps_returns.py): the "share mismatch" warning is the user's only explanation of
     that P&L.
 
-    - J-43a: the warning comes for every such pair, the same day or not, once per pair. On HEAD 252835dce it sits in
+    - J-43a: the warning comes for every such pair, the same day or not, once per pair. On HEAD b090055f0 it sits in
       the in-transit branch (``tx.date != paired.date``), so a same-day pair never warns.
     - J-43b: the classifier also returns it as data, ``ClassificationResult.share_mismatches``: one ``ShareMismatch`` per
       pair, its two transaction ids lower id first, each one's broker and share (``broker_shares``) in that order, dated
@@ -748,7 +748,7 @@ def _pair_on(departure: str, arrival: str):
 class TestInTransitWindowAtDateMin:
     """MF-SEC8-2b — a linked pair stored on date.min (0001-01-01: an older version or a hand edit).
 
-    The window is [departure, arrival − 1 day]. On HEAD c0b4b6f05 ``_build_in_transit_interval`` subtracts the day
+    The window is [departure, arrival − 1 day]. On HEAD 8a6fa4158 ``_build_in_transit_interval`` subtracts the day
     before it compares the dates, so a same-day pair on date.min raises OverflowError instead of returning None. Its
     one caller, ``classify``, skips same-day pairs, so production does not reach it; the method must still keep its
     own contract. A pair that leaves on date.min and lands later keeps its window, today's.
@@ -756,7 +756,7 @@ class TestInTransitWindowAtDateMin:
 
     @pytest.mark.parametrize("day", [pytest.param("0001-01-01", id="date_min"), pytest.param("2025-06-10", id="ordinary_day")])
     def test_same_day_pair_has_no_window(self, day):
-        """Red on HEAD c0b4b6f05 for ``date_min`` (OverflowError); ``ordinary_day`` is the guard, None as today."""
+        """Red on HEAD 8a6fa4158 for ``date_min`` (OverflowError); ``ordinary_day`` is the guard, None as today."""
         sent, received = _pair_on(day, day)
 
         assert ScopeAwareTransactionClassifier._build_in_transit_interval(sent, received) is None
@@ -770,7 +770,7 @@ class TestInTransitWindowAtDateMin:
         ],
     )
     def test_different_day_pair_keeps_its_window(self, departure, arrival, last_day_in_transit):
-        """Guard (green on HEAD c0b4b6f05 and after): departure day included, arrival day excluded, even when the
+        """Guard (green on HEAD 8a6fa4158 and after): departure day included, arrival day excluded, even when the
         departure is date.min."""
         sent, received = _pair_on(departure, arrival)
 
@@ -788,7 +788,7 @@ class TestInTransitWindowAtDateMin:
         ],
     )
     def test_classify_a_pair_leaving_on_date_min_as_today(self, arrival, expected_windows):
-        """Guard (green on HEAD c0b4b6f05 and after): through ``classify``, the production path, a pair leaving on
+        """Guard (green on HEAD 8a6fa4158 and after): through ``classify``, the production path, a pair leaving on
         date.min is linked internal and has the window it has today — none on the same day."""
         sent, received = _pair_on("0001-01-01", arrival)
         c = ScopeAwareTransactionClassifier(scope_broker_ids={10, 20}, all_transactions=[sent, received], broker_shares={10: Decimal("1"), 20: Decimal("1")})

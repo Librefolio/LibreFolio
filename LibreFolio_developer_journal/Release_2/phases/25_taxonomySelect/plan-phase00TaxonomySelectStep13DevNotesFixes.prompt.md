@@ -8,7 +8,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `8bd6be663` (= `dev_release2`) |
+| **Baseline** | `f2017b9d6` (= `dev_release2`) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`; `front build --debug` prima della prima suite che avvia il backend |
 | **Copia di prod** | porta 6165, `/tmp/librefolio-r2-k-prodcopy`, fresca dalla snapshot `5c0a681bc4e4b59c` (schema `004`); solo verifiche e review |
 | **Repo esterno** | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/borsaItaliana-scraping` (voce 3a, autorizzata dal developer il 30/09) |
@@ -60,7 +60,7 @@
   `app.html:8` usa `icon-192.png` come icona iOS.
 - Cura: icone opache (RGB); maskable 192/512 dedicate, sfondo beige `#f5f4ef` pieno, logo dentro r ≤ 0,38;
   `apple-touch-icon.png` 180×180 opaca; `manifest.json` e `app.html`; PNG rigenerate.
-- **Gate del timbro**: `stamp_service_worker()` scrive in `sw.js` `md5(offline.html)[:8]`; il `d1c081102` ha cambiato
+- **Gate del timbro**: `stamp_service_worker()` scrive in `sw.js` `md5(offline.html)[:8]`; il `92e8a83b6` ha cambiato
   `offline.html` senza il timbro (oggi `450af3dd` contro `3e7bd439`; lo corregge il coordinator su `dev_release2`). Il gate
   fallisce quando i due non coincidono.
 - Test rosso: pytest su manifest, icone, `app.html` e timbro.
@@ -89,7 +89,7 @@
 - Test rosso (test-author, con fixture): ETC dell'oro in EUR, T-Bond in USD, API assente → `None`.
 
 ### 4 + 6a. «Salva» / «Crea» fuori schermo su mobile
-- Piede di `AssetModal.svelte:2180-2250` su una riga sola senza `flex-wrap`; l'interruttore del benchmark (`00d8c735b`,
+- Piede di `AssetModal.svelte:2180-2250` su una riga sola senza `flex-wrap`; l'interruttore del benchmark (`7bb84d4fc`,
   18/09) l'ha allungato. Misurato a 390 px: modifica, Salva a 434–531 px; creazione, a 434–503 px.
 - Cura: il piede va a capo (interruttori su una riga, pulsanti sotto, a destra).
 - Test rosso: E2E a 390 e 360 px, creazione e modifica: `asset-modal-save` nella finestra e toccabile.
@@ -118,7 +118,7 @@
 - Test rosso: E2E a 390 px e test di componente di `TabBar`.
 
 ### 9. Banner «prezzi non aggiornati» (`STALE_PRICE`) mai emesso
-- `portfolio_service.py:1248-1257` non passa mai `stale_prices_dto` (dal `77b976ebc`, 19/06); il motore marca fermi anche i
+- `portfolio_service.py:1248-1257` non passa mai `stale_prices_dto` (dal `0a29ee73f`, 19/06); il motore marca fermi anche i
   prezzi di transazione (`portfolio_engine.py:1429`).
 - Cura: `StalePriceAsset` dalle posizioni di fine periodo con la regola di D8; azione **`sync_asset_prices`** («Sincronizza»,
   chiave `dataQuality.cta.sync_asset_prices` nelle 4 lingue) gestita dalla Dashboard con `sync_prices_bulk` sugli asset
@@ -209,7 +209,7 @@
   > Le valute sono validate ISO dal backend (`Currency.validate_code`): lì l'escape è solo difesa in profondità.
   >
   > **Rossi preesistenti, non miei**: `chartCoreHelpers.test.ts`, blocco «GrowthChart P&L mode (G1a/G1b/G1c)», 8 test.
-  > Cercano nel sorgente stringhe assenti già su HEAD `8bd6be663` (`pnlCandlesHypotheticalShort`,
+  > Cercano nel sorgente stringhe assenti già su HEAD `f2017b9d6` (`pnlCandlesHypotheticalShort`,
   > `computeZoomWindowRange`, `const points = entry.pnl.total.points;`); il test non è modificato nel worktree.
   > svelte-check: restano solo i 3 errori della baseline (`TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics`)
   > più quello del test obsoleto di `escHtml`, che il test-author toglie. knip: nessun rilievo sui file toccati.
@@ -245,7 +245,7 @@
   >   precedenti (import, `:1943` candles, `:1987` vista percentuale): il file è di nuovo identico a HEAD, e il mio
   >   diff è in `/tmp/libreFolio_k13_growthchart_k_diff.patch` per I. Siti consegnati: `:1915`/`:1919` (`pnlRow`),
   >   `:1943` (candles), `:1987` (`buildTooltipRow(p.seriesName, …)`: in vista percentuale i nomi di serie vengono da
-  >   `name: s.name`, `:1445`, cioè anche dai broker). Non è nella v1.1.0: è entrato con `8ed7a0f0d` (18/09).
+  >   `name: s.name`, `:1445`, cioè anche dai broker). Non è nella v1.1.0: è entrato con `a1e6fce55` (18/09).
   >   Conseguenza: sul mio ramo il gate 1 segnala `GrowthChart.svelte:1943` finché la cura di I non c'è; chiesta al
   >   coordinator la scelta (fast-forward su `dev_release2` prima dei gate finali, oppure un'esclusione temporanea).
   >   `DataEditor` resta mio.
@@ -259,7 +259,7 @@
   >   `buildTooltipRow(p.seriesName, …)`. `ohlcRow` e `signedRow` ricevono solo etichette i18n. Rinforzo facoltativo del
   >   gate: `.brokerName`/`.seriesName` come primo argomento di `pnlRow`/`buildTooltipRow` sono violazioni. Il file per I
   >   non serve più.
-  > - **Rossi e cure del seguito (30/09, dopo il fast-forward su `b1835949e`)**:
+  > - **Rossi e cure del seguito (30/09, dopo il fast-forward su `cce91de6b`)**:
   >   - `GrowthChart.tooltip.test.ts` (nuovo, registrato in component-unit): **3 rossi**, uno per modalità. Linea
   >     `["Total P&L","","Rossi & Figli"]`, candele `[…,"Low","","Rossi & Figli"]`, percentuale `[…,"ROI",""]`: il nome
   >     ostile diventa un `<img>` con `onerror`. Controlli verdi: `Rossi & Figli` resta `&` (niente doppio escape) e la
@@ -379,10 +379,10 @@
   >
   > **Fuori pista (`sw.js`)**: il `mkdocs build` del docs-writer ha chiamato `copy_docs_assets()`, che rigenera le icone
   > (byte identici) e ritimbra `frontend/static/sw.js` da `450af3dd` a `3e7bd439`: lo stesso cambio del commit
-  > `3d625e703 fix(pwa): restamp the service worker` del coordinator, già su `dev_release2`. Riportato a mano al
+  > `db57e4a65 fix(pwa): restamp the service worker` del coordinator, già su `dev_release2`. Riportato a mano al
   > contenuto di HEAD (`git diff --quiet` pulito): il ritimbro è del coordinator, e un file sporco bloccherebbe il suo
   > fast-forward. Solo `mkdocs build/serve/deploy` e Docker ritimbrano, non `front build`. `dev_release2` è avanti di
-  > tre commit (`3d625e703`, `0743b9f44` BRIM, `b1835949e` CHANGELOG), senza sovrapposizioni con i file dello Step 13. Il
+  > tre commit (`db57e4a65`, `28832e588` BRIM, `cce91de6b` CHANGELOG), senza sovrapposizioni con i file dello Step 13. Il
   > gate del timbro (voce 1) sarà verde sul mio ramo solo dopo quel fast-forward, da chiedere a corsia libera.
 - [x] **13.4 Voce 9 — prezzi fermi e «Sincronizza»**. ✅ 2026-09-30.
   > **Sui dati reali** (copia fresca della snapshot, `get_summary` col codice nuovo): al 22/09 e al 26/09 nessun asset
@@ -470,7 +470,7 @@
   >   link `sizes="180x180"`, copie nella doc (`mkdocs_src/docs/static/icons/`).
   > - Generazione deterministica: rigenerata due volte, byte identici; nessun rilievo ruff nuovo su `dev.py` (43 come HEAD)
   >   e nessuna differenza black nella funzione.
-  > - **Verde**: 19/20 subito, **20/20 dopo il fast-forward** su `dev_release2` (`b1835949e`), che porta il timbro
+  > - **Verde**: 19/20 subito, **20/20 dopo il fast-forward** su `dev_release2` (`cce91de6b`), che porta il timbro
   >   `3e7bd439`. Registrato come `utils pwa-assets` (puro).
   > - **Doc** (docs-writer, solo EN): `developer/frontend/pwa.md` riallineata (schema, tabella dei file, manifest, regole
   >   della generazione, nota «Icons and the splash screen», comando del gate). Corrette anche quattro righe che parlavano di
@@ -624,8 +624,8 @@
   > condividono uno spec E2E), 5, journal. Quattro file toccano più voci (`_frontend_utility.py`, `_frontend_asset.py`,
   > `assets/[id]/+page.svelte`, `dashboard/+page.svelte`): per ognuno c'è una versione intermedia per commit, generata e
   > verificata (l'ultima coincide col worktree), in `/tmp/libreFolio_commits/k-13-split/` col manifesto.
-- [x] **13.12 Validazione della revisione combinata** — i nove commit (`53219bc00`…`d6a5853cd`) uniti a `dev_release2`
-  `b8bfd0cac` (step 1 di L, CHANGELOG, TODO_FUTURI) nel merge `80f1d9155`; lista del coordinator, nella 6155, un comando
+- [x] **13.12 Validazione della revisione combinata** — i nove commit (`6f5ab544e`…`4244753b8`) uniti a `dev_release2`
+  `225c58c5a` (step 1 di L, CHANGELOG, TODO_FUTURI) nel merge `517cc22c1`; lista del coordinator, nella 6155, un comando
   alla volta; log in `/tmp/libreFolio_k13_merge_*.log`. ✅ 2026-09-30.
   > **Note implementazione**:
   > - `front build --debug` exit 0; `front check` exit 1 con i soli 3 errori della baseline
@@ -638,7 +638,7 @@
   >   `borsa-italiana-search` 5, `borsa-italiana-funds` 17, `external brim-providers` 537 più 2 saltati, voluti dal test
   >   di L (`TestWindows1252Invariance`: il campione degiro-export ha caratteri che Windows-1252 non rappresenta).
   > - Stato alla consegna: status vuoto, nessun `MERGE_HEAD`, timbro di `sw.js` invariato, porte 6155 e 6165 libere. Il
-  >   coordinator ha poi portato `dev_release2` a `80f1d9155` e ci ha messo sopra il CHANGELOG (`8f18416df`).
+  >   coordinator ha poi portato `dev_release2` a `517cc22c1` e ci ha messo sopra il CHANGELOG (`27d99a703`).
   > - Nota scritta nello step 14 ([`plan-phase00TaxonomySelectStep14TooltipTeardownFixture.prompt.md`](plan-phase00TaxonomySelectStep14TooltipTeardownFixture.prompt.md)),
   >   per lasciare il worktree pulito al fast-forward.
 

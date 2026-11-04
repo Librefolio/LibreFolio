@@ -1,8 +1,8 @@
 # Piano di rimedio — PAC & Rebalancer
 
 **Stato:** PIANO CONSEGNATO 2026-09-21 — nessun codice di prodotto scritto.
-**Baseline verificata:** `09c6171bc` (il codice a quel commit è **identico** al
-worktree `e-alfy-allocatore-pac`; `git diff HEAD 09c6171bc` tocca solo docs).
+**Baseline verificata:** `24a5dff6c` (il codice a quel commit è **identico** al
+worktree `e-alfy-allocatore-pac`; `git diff HEAD 24a5dff6c` tocca solo docs).
 **Autorizzazione:** scrivere questo piano è autorizzato dal coordinator.
 **L'implementazione no**: resta dietro il sign-off del developer.
 **Tipo:** piano **trasversale**, non un settimo Step. Sta accanto al
@@ -17,7 +17,7 @@ worktree `e-alfy-allocatore-pac`; `git diff HEAD 09c6171bc` tocca solo docs).
 ## 1. Perché esiste questo piano
 
 Fra il 16 e il 19 settembre sono state consegnate ~9.100 righe di planner v2
-(commit `9229085e9` e `c25c1e874`, poi `3913fe217` in `dev_release2`). Il
+(commit `ae503f7e1` e `41df8ac80`, poi `67ee437a0` in `dev_release2`). Il
 codice è testato — 907 test verdi — ma **tre cose non tornano**:
 
 1. **Niente di quel lavoro è raggiungibile dall'applicazione.**
@@ -141,7 +141,7 @@ Tre affermazioni, verificate separatamente:
 
 **(a) I piani Stage _sono_ versionati.** I due file standalone di Stage 4 e
 Stage 5 sono stati **ripiegati** nel piano Step 3 come §16.13 e §16.14 e sono
-committati nel target (`git show 09c6171bc:…` → §16.10-§16.14 presenti). I file
+committati nel target (`git show 24a5dff6c:…` → §16.10-§16.14 presenti). I file
 standalone esistono solo in commit interni `copilot checkpoint`, che non
 appartengono ad alcun branch.
 
@@ -211,7 +211,7 @@ Vive in `AllocationContributionInput` (`schemas/pac_allocator.py:112`) e
 `constraints/objectives/solver/compiler/evaluator/planner_report`; in
 `models.py:87` viene perfino **scartato** nell'unpack
 (`for currency, amount, _monetary_step in self.entries`). Le uniche superfici
-UI che lo usano appartengono al prototipo Round 4 (`d66f8e58e`).
+UI che lo usano appartengono al prototipo Round 4 (`01bfae580`).
 
 **Risposta alla domanda posta** — «se la rimozione cambia un risultato
 calcolato, fermati»: **non cambia alcun risultato calcolato**, né in v2 (dove è
@@ -546,10 +546,10 @@ Raccolte qui perché il developer possa rispondere in blocco.
 ## 6. Note operative
 
 - **Server di review 6152** (PID 66314) acceso e rappresentativo del target: il
-  codice a `09c6171bc` è identico al worktree, differiscono solo le docs. È
+  codice a `24a5dff6c` è identico al worktree, differiscono solo le docs. È
   l'unico modo di rivedere l'applicazione merged. Da non fermare finché il
   developer non chiude la review.
-- Pianificato contro `09c6171bc`; l'allineamento del worktree è del
+- Pianificato contro `24a5dff6c`; l'allineamento del worktree è del
   coordinator, prima di qualunque implementazione.
 - Nessun commit, merge, rebase, push o staging in questa assegnazione.
 - Nessun file di prodotto è stato modificato per scrivere questo piano.

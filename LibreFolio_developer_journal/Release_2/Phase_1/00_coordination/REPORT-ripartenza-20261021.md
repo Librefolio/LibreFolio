@@ -13,23 +13,23 @@ Decisioni del developer aperte: Litestream (a) in 1.3 o (b) dopo (raccomandato b
 ### I 10 figli (stato dagli ultimi turni del 20/10)
 | WS | Fatto / entrato | In corso o in attesa |
 |---|---|---|
-| **A** account | N69a/N69b, A-61, H-61 `admin_setup_status` (checkpoint `64b8b9fa3`,`bdb083782`,`50d1f29c6`, ancora **fuori da dev**) | A-62 (tooltip menu tradotto, rossi in scrittura), poi A-CL1 (analisi bug changelog), N69c/d; segnale `data-security-checks`. Bloccato su: D1–D11 per N69, politica CSP di H |
-| **B** backup | B-8, B-50, B-53/54/55 (`1fd559a26`, sulla sua branch, già in dev secondo l'ultimo checkpoint del coordinatore) | FROZEN, albero pulito. Restano B7 Litestream (D1–D10), B9 arm64, BZ parte 2, B5b galleria, B-33, B-56 (dopo 1.3) |
-| **E** email | E-AI503, N62, E-20 (in lavorazione), gallery settings/email | Branch ahead 2 (`b02611402`, `a7c7de18d`); traduzione voce X in it/fr/es + `translate-stamp` **sporca nel worktree (9 file)**; E-25 GO (rossi prima), E-26, E-24, E-7, E-23 |
+| **A** account | N69a/N69b, A-61, H-61 `admin_setup_status` (checkpoint `3c13d5040`,`2c3a894b7`,`f242042b3`, ancora **fuori da dev**) | A-62 (tooltip menu tradotto, rossi in scrittura), poi A-CL1 (analisi bug changelog), N69c/d; segnale `data-security-checks`. Bloccato su: D1–D11 per N69, politica CSP di H |
+| **B** backup | B-8, B-50, B-53/54/55 (`831930830`, sulla sua branch, già in dev secondo l'ultimo checkpoint del coordinatore) | FROZEN, albero pulito. Restano B7 Litestream (D1–D10), B9 arm64, BZ parte 2, B5b galleria, B-33, B-56 (dopo 1.3) |
+| **E** email | E-AI503, N62, E-20 (in lavorazione), gallery settings/email | Branch ahead 2 (`fb0af49cf`, `bf47d9fd0`); traduzione voce X in it/fr/es + `translate-stamp` **sporca nel worktree (9 file)**; E-25 GO (rossi prima), E-26, E-24, E-7, E-23 |
 | **H** piattaforma | H-60 (review), N70 | H-61 pannello hosting: CP1 pronto (R1 da applicare da `dry/`), CP2 (ticket Ed25519 L2) dopo; aggiungere `platform.hosting_panel` a `frontend/e2e/fixtures/gallerySecurity.ts` (18ª voce, permesso di G). Branch ahead 5. 3 test CP2 non tracciati |
 | **J** numeri | J-57 (cure v1/v2), H-60 analisi | J-57 v3 con `files/j/j57c/slot_part2.sh`; L1b con base aggiornata (GO, rossi sulla parità di L1a); Gantt §29, TC-23, R1 dipende da X-Q1; CP-8/9b/9c in finestra tranquilla |
-| **MF** | P1b, P2, P3 (`e71012c67`, in dev treno 4) | **P4** (segmenti del motore): analisi inviata, aspetta GO + risposta D-P4; poi E2/P3, N78 |
+| **MF** | P1b, P2, P3 (`2032121bc`, in dev treno 4) | **P4** (segmenti del motore): analisi inviata, aspetta GO + risposta D-P4; poi E2/P3, N78 |
 | **W** import | B-52 (Fineco ok), W-B88, W-B89, **B-51 fatto** (CHECKPOINT READY in attesa di commit) | Danske cure, B-87/W-B90/91, Q-N78-1, K3a/b/c |
-| **X** plugin | X-R45b-ui, N61-form (cura pronta, non applicata `files/checks/n61form_code.py`) | Aspetta commit di X-R45b-ui; N64 (aspetta risposte developer), P3 step function per MF, Q1–Q3/S1, X-R48b sospesa (N68). Branch pulita a `6011a9ff0` ma 1 file sporco (piano 03) |
+| **X** plugin | X-R45b-ui, N61-form (cura pronta, non applicata `files/checks/n61form_code.py`) | Aspetta commit di X-R45b-ui; N64 (aspetta risposte developer), P3 step function per MF, Q1–Q3/S1, X-R48b sospesa (N68). Branch pulita a `6ca68152f` ma 1 file sporco (piano 03) |
 | **Y** cruscotto | Y-N65, Z-29d-0, Y-38 | **Y-39a** codice fatto e verde (375/375 + 1044/1044), serve ok righe runner + slot E2E ~25 min poi CHECKPOINT; Y-39b (DV: LineChart `colorByBaseline`, non toccare `chartInitOptions`), Y-40, Y-41/42. **Worktree con 11 file sporchi: è il lavoro più a rischio** |
-| **Z** sospensione | Z-29a-f (`5bbadda95`), Z-32d, Z-39 | Z-29s-a (campionamento backend): GO dato, rossi in scrittura (6 file sporchi tra cui `signal_sampling_cases.v1.json`); Z-29b aspetta Y-39 |
+| **Z** sospensione | Z-29a-f (`fa20c7ba0`), Z-32d, Z-39 | Z-29s-a (campionamento backend): GO dato, rossi in scrittura (6 file sporchi tra cui `signal_sampling_cases.v1.json`); Z-29b aspetta Y-39 |
 
 Dipendenze: **X ↔ Y**: modulo condiviso `lib/charts/chartSignalRendering.ts` (di Y, adottato da X; gate `signalRendering.gate.test.ts` con lista che può solo accorciarsi; le due pagine di dettaglio di X sono copie note, Y-42). **E ↔ G**: stampa delle traduzioni della gallery; voce di X in it/fr/es tradotta da E. **A ↔ H ↔ G**: la fixture `gallerySecurity.ts` (17 check `ok`, H-61 aggiunge `platform.hosting_panel`; A ha verificato le 17 voci). **MF ↔ X ↔ J**: step function FX per P3, L1a/L1b.
 
 ### UI color analysis (`aec04834…`, 1223 turni, 9 checkpoint)
-- **T**: T2 entrato (`ccc2a4141`), R3-c/TC-20 chiuso; fermo, branch pulita. Resta TC-23 (→1.3), `data-group-key`/`aria-busy` come voci TC.
-- **DV**: DV-14 (DPR, `chartInitOptions`) entrato `1cb7097d1`; fermo. Prossimo: DV-11 (Lab e `chartCategories` su ruoli `--lf-cat-*`) oppure serie `chartTheme` su ruoli; condizioni F-2 per `LineChart` date a Y.
-- **G**: **G-28 fatto** (`gallerySecurity.ts` fixture 17 check ok, commit `a288a181f`, entrato come `b844f83f2` = HEAD di dev); fermo. Ha anche catturato `settings/email` nelle 3 gallerie.
+- **T**: T2 entrato (`8c6e984ee`), R3-c/TC-20 chiuso; fermo, branch pulita. Resta TC-23 (→1.3), `data-group-key`/`aria-busy` come voci TC.
+- **DV**: DV-14 (DPR, `chartInitOptions`) entrato `3ffe1fcb4`; fermo. Prossimo: DV-11 (Lab e `chartCategories` su ruoli `--lf-cat-*`) oppure serie `chartTheme` su ruoli; condizioni F-2 per `LineChart` date a Y.
+- **G**: **G-28 fatto** (`gallerySecurity.ts` fixture 17 check ok, commit `41df8fd37`, entrato come `b417fbd95` = HEAD di dev); fermo. Ha anche catturato `settings/email` nelle 3 gallerie.
 - Aperto: il coordinatore colori aspetta la decisione del developer su interruttori (109 classi → `bg-lf-checked`) e serie grafici (145 letterali), o risposte della designer (Liquidity verde, flussi neutri, serie di crescita, posizione pallino). Poi: DV-11, 2 `#a855f7` residui, TC-21, G-22..G-27, B6 (rimuovere remap legacy `app.css`/`--theme-*` quando le 590 classi sono sparite), fine programma (docs, CHANGELOG unico, skill, archivio piani).
 - Sessioni L, R, TR, BK, IW, AF, IM: archiviate il 15–17/10, nessun pending.
 
@@ -42,9 +42,9 @@ Dipendenze: **X ↔ Y**: modulo condiviso `lib/charts/chartSignalRendering.ts` (
 - Screenshot di riferimento: gallery 18/10 (trio prima/dopo in `LibreFolio_subRepo/LibreFolio_visual_review/sheets/r3-2026-10-18/`), `session-state/<uuid>/files/transcript-images/` per i mock del programma colori.
 
 ## C. Git
-- `./LibreFolio`: `dev_release2` = `b844f83f2` (20/10 14:15), pulito (solo `.claude/` non tracciato), **allineato con `origin/dev_release2`** secondo il tracking locale (il remote è `git@github.com:Librefolio/LibreFolio.git`; non ho fatto fetch).
-- Ultimi 5: `b844f83f2` merge G-28 · `a288a181f` test(gallery) fixture · `a820bd4dd` merge G N69 · `e32b53473` docs journal G · `15fa228ef` changelog train 4.
-- 32 branch locali. **Con commit non in dev**: `e-alfy-a-account-e-accessi` +3 (`50d1f29c6`, 189 indietro), `e-alfy-e-email` +2 (`a7c7de18d`, 52 indietro), `e-alfy-h-piattaforma` +5 (`f9f417bfa`, 179 indietro), `e-alfy-j-numeri-e-analisi` +2 (`7321c8b9b`, 24 indietro), `preview-colori-1015` +2 (obsoleto, 2615 indietro). Tutti gli altri `e-alfy-*` sono ahead 0 (già in dev o solo indietro): MF (22 indietro), Z (102), B (199), X (192), Y (200), W (187), T (175), DV (147), G (0).
+- `./LibreFolio`: `dev_release2` = `b417fbd95` (20/10 14:15), pulito (solo `.claude/` non tracciato), **allineato con `origin/dev_release2`** secondo il tracking locale (il remote è `git@github.com:Librefolio/LibreFolio.git`; non ho fatto fetch).
+- Ultimi 5: `b417fbd95` merge G-28 · `41df8fd37` test(gallery) fixture · `7c28cad3b` merge G N69 · `864c6f101` docs journal G · `8fd43a901` changelog train 4.
+- 32 branch locali. **Con commit non in dev**: `e-alfy-a-account-e-accessi` +3 (`f242042b3`, 189 indietro), `e-alfy-e-email` +2 (`bf47d9fd0`, 52 indietro), `e-alfy-h-piattaforma` +5 (`9feab18c5`, 179 indietro), `e-alfy-j-numeri-e-analisi` +2 (`89d754c28`, 24 indietro), `preview-colori-1015` +2 (obsoleto, 2615 indietro). Tutti gli altri `e-alfy-*` sono ahead 0 (già in dev o solo indietro): MF (22 indietro), Z (102), B (199), X (192), Y (200), W (187), T (175), DV (147), G (0).
 - Worktree: i 14 `.git` puntano a `/home/alfy/...`, ma `LibreFolio/.git/worktrees/<nome>` esiste per tutti, quindi **`git worktree repair` basta** (nessuna perdita).
 - **Lavoro non committato nei worktree** (conteggio file sporchi): Y-39a 11 (codice vero: `chartSignalRendering.ts`, `ChartSettingsModal.svelte`, pagine assets/fx…), E 9 (traduzioni gallery + stamp), Z 6 (rossi Z-29s-a), H 3 (test pannello), J 2, X 1, T 1, A 1, MF 1 (solo piani/journal). I worktree W, B, G, DV sono puliti.
 

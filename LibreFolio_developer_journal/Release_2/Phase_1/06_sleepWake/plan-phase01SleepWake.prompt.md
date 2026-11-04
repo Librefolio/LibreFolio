@@ -7,9 +7,9 @@
 >
 > - **Sessione**: `Z - Sospensione e risveglio` (`d401e062`), agente `coordinated-workstream`. Coordinatore: «Release 1.3
 >   planning» (`928ffa97`).
-> - **Ramo**: `e-alfy-z-sospensione-e-risveglio`. Base dell'analisi `459131eb8`; poi `1e9e567f7` (avanzamento
+> - **Ramo**: `e-alfy-z-sospensione-e-risveglio`. Base dell'analisi `b5317cb6e`; poi `89b12e6a4` (avanzamento
 >   veloce del coordinatore, 15/10: riordino di X, W, J, A e H, lotti A–D dei colori, Designer Lab, 1.2.1); poi il merge
->   di `dev_release2` a `8f1abf89e` dopo Z1 (`4618a2116`, 15/10: H CP6, X FE5b, E1, Y1, A5, commit dei colori).
+>   di `dev_release2` a `46df3789a` dopo Z1 (`31791552d`, 15/10: H CP6, X FE5b, E1, Y1, A5, commit dei colori).
 > - **Corsia**: porta 6186, data-dir `/tmp/librefolio-r13-z`. Preambolo:
 >   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6186 --data-dir /tmp/librefolio-r13-z <CATEGORIA> <AZIONE>`,
 >   una invocazione alla volta, con `nice`.
@@ -23,40 +23,40 @@
 | Passo | Cosa | Stato |
 |---|---|---|
 | A | Analisi d'implementazione (sola lettura), inviata al coordinatore | ✅ 14/10 |
-| A2 | Riverifica dell'analisi sul codice di `1e9e567f7`, questo piano, la mia sezione del backlog | ✅ 15/10 |
+| A2 | Riverifica dell'analisi sul codice di `89b12e6a4`, questo piano, la mia sezione del backlog | ✅ 15/10 |
 | Z6a | C-49: prove senza codice di prodotto (`npm ci` dal lock, `front build --debug`, tre gate nella mia corsia) | ✅ chiuso: le prove hanno portato alla cura di Z6b, che chiude C-49 |
-| Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: commit `74d028ec6` (journal `a6199d0e7`), entrato in `9d2074b2b`; lotto del flash (solo test) entrato in `93292909d` |
-| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | **Z2a ✅ entrato** (treno 65, `8b2d4782d`); **Z2b ✅ entrato** (treno 88, `812ca49cc`); decisioni notturne N-Z2b-1…6 «da rivedere» |
-| Z3 | Scheduler: recupero immediato al ritorno e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ✅ 16/10: commit `a4da204b4` e `70ccbeadc` (diagramma), prove d'ingresso verdi; decisioni D-Z3-1…4 «da rivedere» |
-| Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ✅ entrato (treno 77, `2980e2a00`); decisioni notturne N-Z4-1…6 «da rivedere»; revisione di sicurezza senza problemi |
-| Z5 | «Aggiornamento prezzi…» | ✅ entrato con Z-13 (merge in dev `12cd3c2e0`, 16/10): commit `3b016dd4e` (journal `ac52425bc`, `09e490057`), Z-13 `9d19c2093` (journal `9d95afc85`), base aggiornata `41b44fb64`; Z-13b per Y11 nel checkpoint successivo; N-Z5-1…5 «da rivedere» |
-| Z6b | C-49: la cura | ✅ entrato tutto in `967094d81` (parte 1 `000090aaf`, parte 2 `fb3f98a0c`; CHANGELOG `4294ba12a`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
-| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ entrato** (treno 85, `e5e2595e7`; N-Z7b-1…7 «da rivedere»); **Z7c-2 ✅ entrato** (treno 97, `0dfc7cbbe`); **Z7c-1 ✅ entrato** (treno 105, `dd4a97e01`, con Z-9; N-Z7c1-1…5 «da rivedere») |
-| Z-9 | Doc delle pause dei fornitori | ✅ 16/10: `467fbac05`, entrato in `dd4a97e01` (treno 105) |
-| Z-5, Z-12 | La sync storica dall'ultima data salvata; il commento di `scheduler_state.json` | ✅ 16/10: `b36542f81` e `f561aec07`, entrati in `ebe9eb346`; CHANGELOG `7344dda47` |
-| Z-13b | La ricarica dopo un recupero salta l'«Aggiorna» dell'utente (Y11) | ✅ 16/10: `f83ab0c5b`, entrato in `26dda1a26` |
-| Z-17 | Una frase falsa in `scheduler.md`; chiusura del piano (prova su Fly) | ✅ 16/10: `e6f152622` e `b93fddb06`, entrati in `4f0a5d323` |
-| Lotto B (Z-18) | Il Dashboard non si dice «occupato» per una ricarica in background | ✅ 16/10: `1b46178bd`, entrato in `30483ec38`; CHANGELOG `4e233fe5b` |
-| Lotto A (Z-3, Z-8, Z-19) | Il «oggi» dell'utente, niente polling senza fornitore, N58 | ✅ 16/10: `a43502298`, entrato in `0f55265a1`; CHANGELOG `ac9671fd3` |
-| Z-14 | I negozi dei prezzi e dei cambi stale dopo un recupero | ✅ 17/10: `1f4986c70`, entrato in `2765773f5`; CHANGELOG `6e02e56ec` |
+| Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: commit `3bcc81d8a` (journal `07e71407b`), entrato in `47ee29a34`; lotto del flash (solo test) entrato in `65624c963` |
+| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | **Z2a ✅ entrato** (treno 65, `f20a37f48`); **Z2b ✅ entrato** (treno 88, `8b8cd9328`); decisioni notturne N-Z2b-1…6 «da rivedere» |
+| Z3 | Scheduler: recupero immediato al ritorno e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ✅ 16/10: commit `36ccc4843` e `8e321c1ec` (diagramma), prove d'ingresso verdi; decisioni D-Z3-1…4 «da rivedere» |
+| Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ✅ entrato (treno 77, `c55671542`); decisioni notturne N-Z4-1…6 «da rivedere»; revisione di sicurezza senza problemi |
+| Z5 | «Aggiornamento prezzi…» | ✅ entrato con Z-13 (merge in dev `e8a09774d`, 16/10): commit `6265e404e` (journal `ab7d09211`, `cd0c7fcf2`), Z-13 `65f32634c` (journal `470bd1dc1`), base aggiornata `77a0719b8`; Z-13b per Y11 nel checkpoint successivo; N-Z5-1…5 «da rivedere» |
+| Z6b | C-49: la cura | ✅ entrato tutto in `311d57d4c` (parte 1 `558aed788`, parte 2 `2f2455e21`; CHANGELOG `2520ceaf2`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
+| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`e87a23ca6`); **Z7b ✅ entrato** (treno 85, `b6362cca8`; N-Z7b-1…7 «da rivedere»); **Z7c-2 ✅ entrato** (treno 97, `e04fbb700`); **Z7c-1 ✅ entrato** (treno 105, `e57f6850e`, con Z-9; N-Z7c1-1…5 «da rivedere») |
+| Z-9 | Doc delle pause dei fornitori | ✅ 16/10: `8789d7540`, entrato in `e57f6850e` (treno 105) |
+| Z-5, Z-12 | La sync storica dall'ultima data salvata; il commento di `scheduler_state.json` | ✅ 16/10: `bae67ba07` e `0c287dbb2`, entrati in `6d80129f7`; CHANGELOG `ecf60af94` |
+| Z-13b | La ricarica dopo un recupero salta l'«Aggiorna» dell'utente (Y11) | ✅ 16/10: `0f59a6277`, entrato in `b06f4a0f8` |
+| Z-17 | Una frase falsa in `scheduler.md`; chiusura del piano (prova su Fly) | ✅ 16/10: `6b79efca4` e `d7ac99931`, entrati in `2f859fa72` |
+| Lotto B (Z-18) | Il Dashboard non si dice «occupato» per una ricarica in background | ✅ 16/10: `97a046fec`, entrato in `5e68a19b2`; CHANGELOG `8d558baab` |
+| Lotto A (Z-3, Z-8, Z-19) | Il «oggi» dell'utente, niente polling senza fornitore, N58 | ✅ 16/10: `d32eb1a11`, entrato in `f8e78b003`; CHANGELOG `50945715e` |
+| Z-14 | I negozi dei prezzi e dei cambi stale dopo un recupero | ✅ 17/10: `651006608`, entrato in `80f861d9a`; CHANGELOG `87e6cf5d0` |
 | Z-14b + Z-15 | Pagine aperte e pannelli di rischio e lotti dopo un recupero | ⏸ piano pronto (sezione «Z-14b + Z-15 — piano per il mattino»), **non partito**: aspetta il sì del developer (al 19/10 nessuna risposta) |
-| Z-21, Z-20 | N58: quattro funzioni solo dei test; `zodios-client` senza moduli con le rune | ✅ 17/10: `e05b231ff` (entrato in `ffd58ffbd`), `3235837ad` (entrato in `3f654c4da`) |
-| Z-22 | Un ascoltatore in più a ogni aggiornamento a caldo | ✅ 17/10: `d49263b0e`, entrato in `22d46da6e` |
-| Z-10 | Ctrl+C su `dev.py server` | ✅ 17/10: `1bd8dc332`, entrato in `a38d6bdfe`; CHANGELOG `75a1107a7` |
-| Z-16 | L'albero tradotto di `admin/filesystem` | ✅ 17/10: `3d9b30433`, entrato in `737972ef5` |
-| Z-11 | Lock dei job tra processi | ✅ 17/10: `2db7edd68`, entrato in `c5e3c199d`; CHANGELOG `47405701f` |
-| X-R55 | Tetto agli intervalli di date di prezzi e cambi (lotto di X) | ✅ 17/10: `a71d23e7e`, entrato in `ab7711f04`; CHANGELOG `eed325d99` |
-| Z-25 | Tetti alle richieste di massa | ✅ 17/10: `4b711e803`, entrato in `d0bc7a547`; CHANGELOG `282c583b5` |
-| Z-26 | L'attesa del lock con un tempo massimo | ✅ 17/10: `e9999a11a`, entrato in `8c362c1f3`; CHANGELOG `8850fe814` |
-| Z-28 | I file di lock non seguono un symlink | ✅ 17/10: `3a3d5ab1c`, entrato in `2b9786ae5`; CHANGELOG `11a6f4ea1` |
-| Z-27 (+ SEC9-2) | Le richieste di massa del web app a lotti; budget 1 M | ✅ 17/10: `8d236fa11`, entrato in `726d90d72`; CHANGELOG `f1786a883` |
-| X-R65 | Date fra il 1900 e domani nelle scritture di prezzi e cambi (lotto di X) | ✅ 17/10: `30e19b9d9`, entrato in `c726b9d89`; CHANGELOG `8df7164c8`; seguito `9539de9d4` |
-| Z-30 | Il caricamento della storia intera parte al più dal 1900 | ✅ 17/10: `501375cdc`, entrato in `fb514073b`; CHANGELOG `93065bc7c`; seguito `06ec7d443` in `80cef0e43` |
-| Z-32 (c) | L'avviso dei titoli quotati in pence (migrazione 010) | ✅ 17/10: `aa9e07544`, entrato in `46ea09b02`; CHANGELOG `22b9b90ce`. 19/10: la 010 è in discussione (sezione «Z-33 ridotta») |
-| Z-33 | Le date Yahoo sul giorno della borsa (migrazione 011, riparazione D″) | ✅ 17/10: `60170aae5`, entrato in `51b5c8db1`; CHANGELOG `b8bcc8cd2`; seguiti `79265b1a0` (`e20055213`) e `b5da2277d` (`d01a13b10`); devWiki `f74229303`. **19/10: riduzione decisa dal developer**, analisi «Z-33 ridotta»; **Z-33r** committata `065c9df77` (sezione «Z-33r»): entra in `dev_release2` con la fusione delle migrazioni 005–010 di H |
+| Z-21, Z-20 | N58: quattro funzioni solo dei test; `zodios-client` senza moduli con le rune | ✅ 17/10: `81487cd84` (entrato in `6a0f0110d`), `4e369834e` (entrato in `7f6278f4a`) |
+| Z-22 | Un ascoltatore in più a ogni aggiornamento a caldo | ✅ 17/10: `67735e1d8`, entrato in `ac42ff00d` |
+| Z-10 | Ctrl+C su `dev.py server` | ✅ 17/10: `ddbd0c298`, entrato in `6aa2bdd47`; CHANGELOG `98e06cfd1` |
+| Z-16 | L'albero tradotto di `admin/filesystem` | ✅ 17/10: `1785173df`, entrato in `ef1f02d47` |
+| Z-11 | Lock dei job tra processi | ✅ 17/10: `ddd9207b1`, entrato in `f8a6ab22c`; CHANGELOG `a6cd8b9b5` |
+| X-R55 | Tetto agli intervalli di date di prezzi e cambi (lotto di X) | ✅ 17/10: `9768cd52a`, entrato in `994f3bae0`; CHANGELOG `da059b1c7` |
+| Z-25 | Tetti alle richieste di massa | ✅ 17/10: `23112465b`, entrato in `bdaaaee4f`; CHANGELOG `73c6aceaa` |
+| Z-26 | L'attesa del lock con un tempo massimo | ✅ 17/10: `c90d4b32c`, entrato in `6841e0325`; CHANGELOG `845af59ab` |
+| Z-28 | I file di lock non seguono un symlink | ✅ 17/10: `1bf1494ba`, entrato in `85a8549c4`; CHANGELOG `680967eb5` |
+| Z-27 (+ SEC9-2) | Le richieste di massa del web app a lotti; budget 1 M | ✅ 17/10: `603d1eb6e`, entrato in `7eb7d706a`; CHANGELOG `9245c52f6` |
+| X-R65 | Date fra il 1900 e domani nelle scritture di prezzi e cambi (lotto di X) | ✅ 17/10: `708c82384`, entrato in `6408e5553`; CHANGELOG `bfcec020c`; seguito `feda9b148` |
+| Z-30 | Il caricamento della storia intera parte al più dal 1900 | ✅ 17/10: `4586433a1`, entrato in `97fa29126`; CHANGELOG `f53c6340c`; seguito `b2cc6eb88` in `0a9e2bbce` |
+| Z-32 (c) | L'avviso dei titoli quotati in pence (migrazione 010) | ✅ 17/10: `16613149c`, entrato in `ea1eaddf7`; CHANGELOG `0de969965`. 19/10: la 010 è in discussione (sezione «Z-33 ridotta») |
+| Z-33 | Le date Yahoo sul giorno della borsa (migrazione 011, riparazione D″) | ✅ 17/10: `07ffc126b`, entrato in `15e26618f`; CHANGELOG `a0ee75dda`; seguiti `56aca067c` (`b8e825be1`) e `ee9230612` (`76789beb5`); devWiki `9ad5f88fb`. **19/10: riduzione decisa dal developer**, analisi «Z-33 ridotta»; **Z-33r** committata `14e0a7ba3` (sezione «Z-33r»): entra in `dev_release2` con la fusione delle migrazioni 005–010 di H |
 | Z-29 | La lista asset su «All»: una serie ridotta per le schede | Analisi ✅ 17/10 (N90 approvata); sospesa il 19/10; **N90 ridisegnata approvata** dal developer il 19/10 (analisi aggiornata); **via per Z-29a e Z-29b** (19/10 ~12:03), in corso: sezione «Z-29a + Z-29b — lavoro» |
 
-Contabilità rimessa in pari il 19/10 (base `ede7adf75`), con i commit come prova (`git log 459131eb8..HEAD`).
+Contabilità rimessa in pari il 19/10 (base `de0823b81`), con i commit come prova (`git log b5317cb6e..HEAD`).
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
 
@@ -71,15 +71,15 @@ Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
 > l'approvazione del piano nella UI della sessione chiedeva di partire subito, ma vale l'autorizzazione inoltrata dal
 > coordinatore: Z1 non è partito.
 
-### A2 — Riverifica su `1e9e567f7` ✅ (2026-10-15)
+### A2 — Riverifica su `89b12e6a4` ✅ (2026-10-15)
 
-> **Note implementazione**: HEAD `1e9e567f7`, worktree pulito, porta 6186 libera. Rilette sul codice nuovo tutte le
-> righe citate (`grep`, `git diff -U0 459131eb8 HEAD`). I tre cicli sono gli stessi; R ha toccato
+> **Note implementazione**: HEAD `89b12e6a4`, worktree pulito, porta 6186 libera. Rilette sul codice nuovo tutte le
+> righe citate (`grep`, `git diff -U0 b5317cb6e HEAD`). I tre cicli sono gli stessi; R ha toccato
 > `assets/[id]/+page.svelte` in tre punti (r. 496, 2752, 3538) lontani dai cicli, che scendono di 10 righe. Il backend
 > è stato riordinato: scheduler in `services/platform/scheduler/`, asset in `services/assets/`, BRIM in
 > `services/brim/`, configurazione in `config/`; il lifespan e i middleware sono ancora in `main.py`. Nessuna run.
 
-## Analisi (aggiornata a `1e9e567f7`)
+## Analisi (aggiornata a `89b12e6a4`)
 
 ### 1. Stato reale
 
@@ -466,8 +466,8 @@ Pagine (solo i cicli di polling e il punto della pillola):
    > valore JSON.
 6. Merge di base e cancelli d'ingresso ✅ 2026-10-15
 
-   > **Note implementazione**: il coordinatore ha committato Z1 (`74d028ec6`, `feat(assets): pause live prices when
-   > idle`; journal `a6199d0e7`) e aperto il merge di `dev_release2` a `8f1abf89e` (H CP6, X FE5b, E1, Y1, A5, commit
+   > **Note implementazione**: il coordinatore ha committato Z1 (`3bcc81d8a`, `feat(assets): pause live prices when
+   > idle`; journal `07e71407b`) e aperto il merge di `dev_release2` a `46df3789a` (H CP6, X FE5b, E1, Y1, A5, commit
    > del programma colori). Due conflitti, risolti tenendo i due lati. In `developer/frontend/components/index.md`,
    > rispetto alla base del merge, ogni lato aveva cambiato una riga sola: Authentication viene dal loro (E1, le pagine
    > dei link dell'account), Live Prices dal mio. In `scripts/test_runner/_frontend_utility.py`: in core-unit le loro 5
@@ -475,7 +475,7 @@ Pagine (solo i cicli di polling e il punto della pillola):
    > punto «Live prices» in `user/assets/index.{it,fr,es}.md:59` sono riscritte a mano sulla frase EN, con le etichette
    > dell'app («Aggiornamento in pausa», «Mises à jour en pause», «Actualizaciones en pausa»), poi
    > `dev.py mkdocs translate-stamp --file user/assets/index.en.md` (md5 `75048ee4` → `dd8e5487`, it, fr ed es timbrati
-   > in `mkdocs_src/aphra-pipeline/.translate-hashes.json`). Merge committato dal coordinatore: `4618a2116`.
+   > in `mkdocs_src/aphra-pipeline/.translate-hashes.json`). Merge committato dal coordinatore: `31791552d`.
    >
    > Cancelli sull'albero unito, uno alla volta, con `nice -n 15`: `dev.py api sync` exit 0 in 23 s, nessun file
    > tracciato cambiato; `dev.py front check` exit 0, svelte-check 0 errori e 0 avvisi; Vitest dei tre file 19/28/6, più
@@ -552,7 +552,7 @@ Pagine (solo i cicli di polling e il punto della pillola):
 > idea, a prescindere, da mettere sia nel frontend che nello scheduler.» Registrata il 15/10: «sì, sia nello scheduler
 > sia nel frontend: il polling rispetta la pausa del fornitore e rallenta a ogni errore».
 
-### Stato reale (sola lettura, su `4618a2116`)
+### Stato reale (sola lettura, su `31791552d`)
 
 - **`RATE_LIMITED` non esiste**, né nel codice né nel piano di X (`03_pluginsAssets`): era un'aspettativa di questa
   analisi (§5), non un lavoro di qualcuno. Da qui il contratto più sotto.
@@ -699,7 +699,7 @@ fornitori: rallenta sui propri errori e rispetta il tempo d'attesa che il backen
 - Test `services scheduler-backoff`: rimandati e `retry_at`; job dovuto a `retry_at`; eccezioni con attesa crescente e
   azzeramento; stato vecchio letto senza errori. Fino all'ingresso di X5 i test usano risultati finti.
 
-> **X1–X8 entrati** (coordinatore, 16/10 ~01:13): `dev_release2` = `da21c48c4`; Z7b non aspetta più X e resta in
+> **X1–X8 entrati** (coordinatore, 16/10 ~01:13): `dev_release2` = `e87a23ca6`; Z7b non aspetta più X e resta in
 > coda dopo Z3, Z4 e Z2b. Le note di X per Z7b e Z7c, alla lettera nella sostanza:
 > 1. il rinvio si decide da `error_code`, non dallo stato: un refresh può essere OK e `RATE_LIMITED` insieme;
 > 2. `retry_after` è la pausa decisa dal confine, almeno il `Retry-After` del fornitore;
@@ -804,7 +804,7 @@ fornitori: rallenta sui propri errori e rispetta il tempo d'attesa che il backen
   sono le spec degli asset (2,3–2,7 s). L'avviso non è mai comparso.
 - Dal 15/10 il coordinatore cerca `Shared backend ignored SIGTERM for` nelle sue run di categoria.
 
-### Cosa dice il codice (verificato il 15/10 su `ef5e96eb5`, uvicorn 0.52.4, Python 3.13.16)
+### Cosa dice il codice (verificato il 15/10 su `e299e0596`, uvicorn 0.52.4, Python 3.13.16)
 
 1. **Runner** (`scripts/test_runner/_server.py:312-334`): manda SIGTERM a tutto il gruppo di processi, aspetta il
    processo principale fino a 5 s, poi il gruppo per altri 5 s. L'avviso compare se un membro del gruppo è ancora vivo.
@@ -939,8 +939,8 @@ tool.
 > **Autorizzazione del developer, alla lettera** (15/10 16:3x, inoltrata dal coordinatore; risposta alla domanda
 > «Posso far partire Z con il codice di Z7a?»): «Sì, Z parta con Z7a».
 >
-> - **Base**: piano committato in `4992b864b`, poi il merge di `dev_release2` a `dae4de4fa` (W, i colori di L-10, i
->   journal del coordinatore): HEAD `42713788e`, senza conflitti.
+> - **Base**: piano committato in `f949ae38a`, poi il merge di `dev_release2` a `ff75660ad` (W, i colori di L-10, i
+>   journal del coordinatore): HEAD `b4ab799cc`, senza conflitti.
 > - **Superfici**: `backend/app/utils/runtime/cooldown.py`, `backend/app/services/platform/provider_cooldown.py`,
 >   `backend/app/config/sleep_wake.py`, la sezione di Z in `.env.example` con l'eccezione della decisione 34, i test e
 >   le loro voci nel catalogo del runner.
@@ -1051,9 +1051,9 @@ tool.
 7. Ingresso: base aggiornata, file condivisi, revisione combinata. ✅ 2026-10-15
 
    > **Note implementazione**:
-   > - il coordinatore ha committato Z7a (`9dbd1cc34` codice, `ce2763c4c` journal) e approvato le scelte 1–3: un
+   > - il coordinatore ha committato Z7a (`6a3393ac3` codice, `3f218b161` journal) e approvato le scelte 1–3: un
    >   valore non valido finisce nel log senza fermare l'avvio, la doc va con l'aggancio (Z-9), il CHANGELOG con X o
-   >   con Z7b. Poi ha fuso `dev_release2` a `a4d1884b4` (J, A6a, il banner del Lab): HEAD `ef013ba18`, senza
+   >   con Z7b. Poi ha fuso `dev_release2` a `8b324c9e7` (J, A6a, il banner del Lab): HEAD `231772358`, senza
    >   conflitti, con le mie voci del catalogo intatte accanto alle loro;
    > - file condivisi, scritti su suo via: le docstring di `utils/runtime/__init__.py` (con `rate_window`, che mancava)
    >   e di `services/platform/__init__.py` (con la sonda di prontezza, che mancava), e
@@ -1067,7 +1067,7 @@ tool.
 > **Autorizzazione del developer, alla lettera** (15/10 17:3x, inoltrata dal coordinatore; risposta alla domanda
 > «Posso far partire Z con il codice di Z6b?»): «Sì, Z parta con Z6b».
 >
-> - **Base**: avanzamento veloce a `9c8ee20c3`, uguale a `dev_release2`. Dentro ci sono Z7a (`2ab8a3a43`) e H.
+> - **Base**: avanzamento veloce a `3690a6652`, uguale a `dev_release2`. Dentro ci sono Z7a (`758c881c8`) e H.
 >   `main.py` è ancora senza gli agganci di CP2b.
 > - **Perimetro**, dal disegno:
 >   - `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=8`, con 0 per nessun limite;
@@ -1262,8 +1262,8 @@ tool.
    > Restano per la parte 2, dopo CP2b: i test di processo, le tre righe in `app_lifespan.py`, gli import di
    > `lifecycle` in cima al modulo e il ciclo di vita vero.
    >
-   > **Ingresso della parte 1** (15/10, 18:41–18:56). Il coordinatore ha committato `f0b9bcad2` e `a014ec482`, poi ha
-   > fuso `dev_release2` a `bcd680868` (Y2, W E1b, J CP-4, E2): HEAD `c92fe1a93`. Le prove sulla revisione combinata,
+   > **Ingresso della parte 1** (15/10, 18:41–18:56). Il coordinatore ha committato `562ab3913` e `116fa2aee`, poi ha
+   > fuso `dev_release2` a `0f2e18fa7` (Y2, W E1b, J CP-4, E2): HEAD `40888acb2`. Le prove sulla revisione combinata,
    > una alla volta con `nice -n 10`:
    > - `utils test-server-preparation` 63/63, `utils runtime-isolation` 195/195, `services shutdown-budget` 178/178;
    > - `api system` 117/117, con un ciclo di vita vero del backend condiviso:
@@ -1279,12 +1279,12 @@ tool.
    > Il carico era alto (fino a 95 al minuto): prima delle due run col backend ho aspettato che scendesse sotto 60.
    > Strumenti fuori dal repo: `/tmp/libreFolio_z6b_run.sh` e l'osservatore di Z6a. Log in `/tmp/libreFolio_z6b_*`.
    >
-   > **Parte 1 entrata** in `dev_release2` a `000090aaf` (15/10 ~18:57). Avanzamento veloce del mio ramo a `10d5ccd2d`.
+   > **Parte 1 entrata** in `dev_release2` a `558aed788` (15/10 ~18:57). Avanzamento veloce del mio ramo a `8f397ab47`.
    > Il CHANGELOG lo scrive il coordinatore con la parte 2, quando tutto il budget è acceso. In attesa dello SHA di
    > CP2b, i test di processo si scrivono in bozza e non si lanciano.
    >
-   > **Checkpoint della bozza della parte 2** (15/10 ~20:00). CP2b è entrato (`4fb017a9a`) e il coordinatore ha dato
-   > il via alla parte 2. Il merge di `dev_release2` (`9b82187f6`) però si sarebbe fermato sulle mie modifiche aperte
+   > **Checkpoint della bozza della parte 2** (15/10 ~20:00). CP2b è entrato (`2f1cbd0bc`) e il coordinatore ha dato
+   > il via alla parte 2. Il merge di `dev_release2` (`46197cc43`) però si sarebbe fermato sulle mie modifiche aperte
    > al backlog e a `_backend_services.py`. Quindi: commit delle modifiche aperte (bozza dei test di processo, doc EN,
    > registrazione, journal), poi il merge. I blocchi non si sovrappongono: nel runner sono a 535 e 1336 contro 413,
    > 902, 1242 e 1501; nel backlog Z-10 sta 7 righe sopra le 49 aggiunte alla sezione B. Il punto fermo ha ruff e black
@@ -1292,7 +1292,7 @@ tool.
    > shutdown-process` è rosso, perché `lifecycle` non c'è ancora; dopo il merge resta rosso solo SDP-007, il
    > cablaggio, fino alle 3 righe.
 5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ✅ (`.env.example` con la parte 1; la doc e il
-   CHANGELOG con la parte 2: `fb3f98a0c`, CHANGELOG `4294ba12a`, entrati in `967094d81`; segnato il 16/10)
+   CHANGELOG con la parte 2: `2f2455e21`, CHANGELOG `2520ceaf2`, entrati in `311d57d4c`; segnato il 16/10)
 
    > **Note implementazione** (doc, da `docs-writer`, solo EN, nessuna build, niente stamp):
    > - `admin/configuration.en.md`: sezione nuova «⏹️ Stopping the Server» `{: #shutdown }`, fra «Startup Checks» e
@@ -1308,14 +1308,14 @@ tool.
    > 0,25 s (`subprocess.run` in `run_command_live`). Ho verificato la lettura nel codice: è un difetto che c'era già,
    > in una superficie del coordinatore, ed è finito nel backlog come Z-10. Fuori regola: una volta docs-writer ha
    > lanciato un `python3.14 -c` di sistema, in sola lettura.
-6. ✅ 15/10 — Checkpoint FROZEN; la parte 1 è entrata in `000090aaf` (segnato il 16/10: era rimasto ⏳).
+6. ✅ 15/10 — Checkpoint FROZEN; la parte 1 è entrata in `558aed788` (segnato il 16/10: era rimasto ⏳).
 
 ### Parte 2 — cablaggio (15/10, dopo CP2b)
 
 > **Via del coordinatore** (15/10 ~19:59): «CP2b è entrato … Via alla parte 2 di Z6b: le 3 righe in
 > `app_lifespan.py`, gli import di `lifecycle`, i test di processo, un ciclo di vita vero nella tua corsia (lo slot
-> pesante chiedilo a me), la doc admin, la riga del CHANGELOG». Checkpoint della bozza `1d47bd7af`, poi merge di
-> `dev_release2` (`b4597efad`): HEAD `cc0d340f3`.
+> pesante chiedilo a me), la doc admin, la riga del CHANGELOG». Checkpoint della bozza `6dc13c4f5`, poi merge di
+> `dev_release2` (`c0929bf28`): HEAD `f02f16773`.
 
 1. Cablaggio. ✅ 2026-10-15
 
@@ -1446,8 +1446,8 @@ tool.
    > default: if you raise the budget, give the container more time too (`stop_grace_period`).»
 6. Ingresso della parte 2. ✅ 2026-10-15
 
-   > **Note implementazione**: il coordinatore ha committato `fb3f98a0c` e `5b945a712`, poi ha fuso `dev_release2` a
-   > `f98c20f1b` (A6b, X CP10, J CP-4c, Y8, lo scatto di B): HEAD `7e491dd2e`, senza conflitti. Prove sulla
+   > **Note implementazione**: il coordinatore ha committato `2f2455e21` e `538097c36`, poi ha fuso `dev_release2` a
+   > `8b34601ff` (A6b, X CP10, J CP-4c, Y8, lo scatto di B): HEAD `dff74488e`, senza conflitti. Prove sulla
    > revisione combinata, una alla volta con `nice -n 10`:
    > - `services shutdown-budget` 188/188, `services app-lifecycle` 42/42;
    > - `services shutdown-process` 7/7, con i tempi di prima (1,21, 1,30, 2,06, 0,67, 4,17 e 0,19 s);
@@ -1464,7 +1464,7 @@ tool.
 ## Z2–Z4 — risveglio, attività, `wake-sync`, sospensione (autorizzati il 15/10)
 
 > **Via del developer, alla lettera** (15/10 21:3x, inoltrato dal coordinatore, alla domanda su Z2–Z4): «Sì, e d'ora in
-> poi decidi tu l'avvio dei lotti di Z». Da qui l'avvio dei lotti di Z lo dà il coordinatore. **Base**: `93292909d`
+> poi decidi tu l'avvio dei lotti di Z». Da qui l'avvio dei lotti di Z lo dà il coordinatore. **Base**: `65624c963`
 > (merge del lotto del flash in `dev_release2`).
 >
 > **Decisioni approvate come proposte** (coordinatore, 15/10 ~21:50):
@@ -1556,7 +1556,7 @@ tool.
 ### Z3 — scheduler: recupero al ritorno e lock condiviso
 
 > **Via** (coordinatore, 15/10 ~23:15, su delega del developer): «Z3 approvato con le tue quattro proposte. Sono
-> decisioni notturne, quindi annotale nel piano come «da rivedere».» Base: `3ed5315f5` (Z2a più `dev_release2`).
+> decisioni notturne, quindi annotale nel piano come «da rivedere».» Base: `962a16838` (Z2a più `dev_release2`).
 >
 > **Decisioni, da rivedere** (prese di notte dal coordinatore su delega):
 > - **D-Z3-1**: se c'è già stato un giro, è dovuto anche uno slot di un giorno configurato caduto tra l'ultimo giro e
@@ -1631,7 +1631,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    > secondo si è fermato sulla mia guardia del percorso (`/tmp` è `/private/tmp` su macOS): nessun file toccato in
    > nessuno dei due, md5 verificato.
    - Z-6 chiusa: `am_i_leader` ora gira davvero in un thread, e la docstring nuova lo dice.
-   - Per Z2b: `backup_in_progress(*, data_dir=None)` di B è nel commit `22c116679` del ramo di B; entra in
+   - Per Z2b: `backup_in_progress(*, data_dir=None)` di B è nel commit `89d6bc8cd` del ramo di B; entra in
      `dev_release2` col prossimo ingresso di B, dopo l'`all-backend` delle 01:15.
 4. ✅ 15/10 ~23:55 — Doc (docs-writer, solo inglese; build e link dopo la finestra tranquilla delle 00:00–01:15).
    - `developer/backend/scheduler.md`: le quattro ragioni, la spinta al ritorno, il lock, il busy, l'attesa di 2 s,
@@ -1642,7 +1642,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      recupera lo storico saltato, entro l'orizzonte di recupero; tolta la frase «i job continuano a girare».
    - `admin/settings.*.md`: una frase sullo slot perso, scritta da me in IT/FR/ES. **Non timbrata**: la cache di
      Aphra ha `07bbf1f8`, la pagina EN a HEAD `6496301e`. La pagina aveva già un debito di traduzione (due commit di A
-     del 15/10, `2b0715532` e `38cb2c513`; l'IT è dell'11/10): un timbro l'avrebbe nascosto.
+     del 15/10, `adf8c6f5e` e `8ccfcc788`; l'IT è dell'11/10): un timbro l'avrebbe nascosto.
    - Quattro frasi diventate false per colpa dei miei lotti, corrette (pagine solo inglesi):
      `developer/architecture/security.md` (lo scheduler su un'istanza bloccata, Z3), `overview.md` (cosa restituisce
      `shutdown_deadline()`, Z6b; la pila `activity`, `gzip`, `cors`, Z2a; e, per coerenza, `shutdown-watchdog` primo
@@ -1652,10 +1652,10 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    > siti IT/FR/ES. Il testo nomina la sezione; il frammento si aggiunge con la traduzione.
    - Restano fuori: l'elenco delle variabili in `settings.md:23–30` (incompleto, non falso) e la frase «GZip
      outermost, CORS inside it» della docstring di `middleware.py`, di H.
-5. ✅ 15/10 ~23:58 — Checkpoint FROZEN inviato; committato dal coordinatore (`a4da204b4` feat, `55ed663cf` journal),
-   base aggiornata con il merge di `dev_release2` (`25204e5ff`, pulito; `security.md` fuso da solo con le righe di H
+5. ✅ 15/10 ~23:58 — Checkpoint FROZEN inviato; committato dal coordinatore (`36ccc4843` feat, `557917fb8` journal),
+   base aggiornata con il merge di `dev_release2` (`3452a55fe`, pulito; `security.md` fuso da solo con le righe di H
    CP-U1, riletto: coerente).
-6. Ingresso, sulla revisione combinata `25204e5ff`, una prova alla volta con `nice` e carico sotto 70:
+6. Ingresso, sulla revisione combinata `3452a55fe`, una prova alla volta con `nice` e carico sotto 70:
    - ✅ 16/10 ~00:00, durante G-13: `scheduler-catchup` 73/73, `scheduler-due` 25/25, `sleep-wake-activity` 94/94,
      `app-lifecycle` 42/42; `mkdocs build` rigoroso, 0 warning; `check-links` 96 validi.
    - ✅ 16/10 ~00:10, il mermaid a occhio, servendo `mkdocs_src/site` per pochi secondi sulla porta 6186 della mia
@@ -1673,7 +1673,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
 ### Z4 — `POST /api/v1/system/wake-sync`
 
 > **Via** (coordinatore, 16/10 ~00:15, su delega del developer): «intanto vai con Z4, rossi prima»; la riga nel test di
-> `ALLOWED_WHEN_BLOCKED` di H va dichiarata; alla fine una revisione di sicurezza. Base: `70ccbeadc`. Decisioni già
+> `ALLOWED_WHEN_BLOCKED` di H va dichiarata; alla fine una revisione di sicurezza. Base: `8e321c1ec`. Decisioni già
 > prese il 15/10: **D-W1** (un secondo risveglio mentre uno gira: 409 `wake_in_progress`), **D-W2** (un token suo, con
 > le regole di B), **D-W3** (istanza bloccata: `status: "blocked"`, nessun job); punto 33 (niente `next_wake_at`);
 > D7 (risposta in streaming, uno spazio ogni ~15 s per il proxy di Fly, che chiude dopo 60 s senza byte).
@@ -1780,7 +1780,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
 ### Z7b — lo scheduler rispetta le pause dei fornitori (codice)
 
 > **Via** (coordinatore, 16/10 ~02:00): «Poi, finché B2 non entra (verso le 02:30): Z7b, i job pianificati che
-> rispettano la pausa dei fornitori. X-RL è dentro. Rossi prima.» Base: `224b6e839` (Z4 più `dev_release2`, con
+> rispettano la pausa dei fornitori. X-RL è dentro. Rossi prima.» Base: `24e80582e` (Z4 più `dev_release2`, con
 > X1–X8). Il disegno approvato è la sezione «Z7b · Scheduler» (D-Z7-1…4), con le note di X.
 >
 > **Decisioni notturne, da rivedere** (tecniche, nel mio perimetro):
@@ -1860,8 +1860,8 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
 
 ### Z2b — la sospensione dopo l'inattività (Fly)
 
-> **Via** (coordinatore, 16/10 ~03:30): «Poi Z2b», dopo l'ingresso di B2 (`5441b96ed`, con `backup_in_progress()`).
-> Base: `554e5013e`. Testo della richiesta: «solo se abilitato (`LIBREFOLIO_IDLE_SUSPEND_MINUTES`,
+> **Via** (coordinatore, 16/10 ~03:30): «Poi Z2b», dopo l'ingresso di B2 (`8c4b1da7e`, con `backup_in_progress()`).
+> Base: `c85e5a91b`. Testo della richiesta: «solo se abilitato (`LIBREFOLIO_IDLE_SUSPEND_MINUTES`,
 > `LIBREFOLIO_IDLE_SUSPEND_MODE=none|fly`, default none): dopo N minuti senza richieste dell'utente (esclusi health
 > check e polling) e subito dopo i job di un risveglio programmato, l'istanza chiede di sospendersi (Fly: API locale
 > /.fly/api, non serve un token). Accettazione: scheda nascosta o utente inattivo da più di 10 min → nessuna
@@ -1953,7 +1953,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
 > **Via** (coordinatore, 16/10 ~04:24): «FE5c di X non è fatto: X è su CP11c. Parti con Z7c-2. Z7c-1 viene dopo
 > FE5c.» «Le classi esistenti le lasci: solo ruoli nel markup nuovo.» «Attenzione a `GlobalSettingsTab.svelte`: anche
 > E5b lo tocca (l'opzione della verifica email), ed entra fra le 05:00 e le 06:00. Tieni il tuo cambio piccolo e in un
-> punto separato.» Base: `ed3ed84d2`. Il bisogno viene da N-Z7b-7: i modelli di `/settings/scheduler/log` scartano le
+> punto separato.» Base: `417cfd157`. Il bisogno viene da N-Z7b-7: i modelli di `/settings/scheduler/log` scartano le
 > chiavi nuove e `/settings/scheduler/state` ha cinque campi fissi; il pannello mostra un elemento rimandato come
 > fallito.
 >
@@ -1994,7 +1994,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    - ✅ Dopo il fermo: `api scheduler` (ricostruisce il frontend), `component-unit` intero, `api sync`: fatti alle
      07:08, voce sotto (segnato il 16/10).
    - ✅ 16/10 07:08, al via del coordinatore («Blocco finito, go», slot 1 fino alle 07:05), uno alla volta con `nice`
-     e il carico sotto 70 (`/tmp/libreFolio_z7c_run.sh`), sulla revisione combinata `8aeabc41b`:
+     e il carico sotto 70 (`/tmp/libreFolio_z7c_run.sh`), sulla revisione combinata `a569c66b9`:
      - `api scheduler` 16/16 (SAPI-001…014; SAPI-009 compreso, sul backend della corsia), 10 min 42 s con la
        ricostruzione del frontend e del sito;
      - `front-utility component-unit` intero: 150 file, 4006 test, 5 min 36 s;
@@ -2020,11 +2020,11 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    ricostruiscono: elenco dei percorsi inviato, FROZEN sui file di Z7c-2. Dopo le 06:45, al via del coordinatore:
    `api scheduler`, `component-unit` intero, `api sync`, `mkdocs build`, `check-links`; un rosso si corregge in un
    commit a sé. Z7c-1 si prepara intanto fuori dal repo (`files/z7c1-draft/` della sessione), senza prove.
-   > **Salvato** (coordinatore, 16/10 ~05:30): `00b2c25d2` feat, `3e17e19ed` journal; poi il merge di `dev_release2`
-   > (`72e66d1a6`), senza conflitti: HEAD `8aeabc41b`, albero pulito.
+   > **Salvato** (coordinatore, 16/10 ~05:30): `898172fd9` feat, `ccb564db1` journal; poi il merge di `dev_release2`
+   > (`7aefcc13a`), senza conflitti: HEAD `a569c66b9`, albero pulito.
    > **Regola dei colori** (inoltrata dal coordinatore, 16/10 ~06:13): le classi di ruolo `-lf-` solo su elementi nuovi
    > o con soli ruoli, mai su un elemento che ha già classi di tavolozza, perché `app.css` toglie il vecchio
-   > rimappaggio scuro dagli elementi con una classe `-lf-`. Verificato su `00b2c25d2`: i 9 usi di Z7c-2 sono tutti su
+   > rimappaggio scuro dagli elementi con una classe `-lf-`. Verificato su `898172fd9`: i 9 usi di Z7c-2 sono tutti su
    > `<span>`/`<p>` nuovi, accanto solo a `text-xs`, `inline-flex`, `mt-0.5`. Z7c-1 e Z-9 non hanno markup.
 
 ### Z7c-1 — il polling dal vivo rallenta sugli errori e rispetta le pause
@@ -2091,7 +2091,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      `livePriceService.test.ts` 64 su 75; gli altri 173 file verdi.
    - ✅ 16/10 08:25–08:35 — Slot 2 (coordinatore), con Z5 parcheggiato fuori dal worktree (`files/z5-park.sh park`:
      875 righe di patch e 5 file non tracciati; restava solo il giornale) e `/tmp/libreFolio_z7c1_slot.sh`:
-     - **A**, `revert-code` dalla base `dc6b32050`, `front-asset live-pause` filtrato su `\(g\)|\(h\)`: 2 rossi per il
+     - **A**, `revert-code` dalla base `33874e82d`, `front-asset live-pause` filtrato su `\(g\)|\(h\)`: 2 rossi per il
        motivo giusto. In (h) la lista col vecchio codice chiede a +0, +60, +120 e +240 s invece di aspettare i 300 s
        della pausa; in (g) gli intervalli non raddoppiano. Lo `svelte-check` della ricostruzione elenca i tipi mancanti
        nei test, come previsto: è solo diagnostico.
@@ -2103,7 +2103,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      > **⚠️ Fuori pista**: `RATE_LIMITED` era esportato ma nessun file fuori dal modulo, test compresi, lo importa
      > (i due componenti della prova usano la stringa): sarebbe un export morto per knip. Ora è privato; bozza del
      > codice e pagina di doc allineate.
-   - ✅ 16/10 08:35 — **B**, nello stesso slot: passo `code` di nuovo (file identici al commit `6eea03fcf`),
+   - ✅ 16/10 08:35 — **B**, nello stesso slot: passo `code` di nuovo (file identici al commit `147a44690`),
      `front-asset live-pause` intero 8/8 (52 s), `front-asset asset-detail` «Live price direction flash» 4/4. Porta
      6186 libera; Z5 rimesso al suo posto (`unpark`).
 4. ✅ 16/10 07:24 — Doc: passo `docs` (`live-ticker.md`) e, sui verdi di Vitest, la tabella «How it is tested»: la
@@ -2115,9 +2115,9 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    - le due descrizioni di `live-pause` in `_frontend_asset.py` (righe di Z1), dal `RUNNER.md` di test-author; la
      descrizione di `core-unit` in `_frontend_utility.py` resta com'è, perché è una riga condivisa da tutti i lotti;
    - `check-orphans`: tutti i file registrati e raggiungibili da un `all`;
-   - `revert-code` ripristina dalla base fissa `dc6b32050`, non da HEAD, visto che il commit porta il codice in HEAD.
+   - `revert-code` ripristina dalla base fissa `33874e82d`, non da HEAD, visto che il commit porta il codice in HEAD.
    ✅ 16/10 08:35 — Slot unico fatto (A e B, sopra): Z7c-1 pronto per l'ingresso, il piano è l'unico delta.
-   ✅ 16/10 10:38 — Prove d'ingresso sulla base aggiornata `a3e8e73f7` (dev `d5c3c3ae3`), con Z5 parcheggiato:
+   ✅ 16/10 10:38 — Prove d'ingresso sulla base aggiornata `1042990eb` (dev `c91f132e3`), con Z5 parcheggiato:
    `core-unit` 179 file, 6405 test (08:48); `front check` 0/0 alle 10:37, dopo il fermo voluto dal developer
    (08:5x–10:32).
    > **⚠️ Fuori pista**: il primo `front check` delle 10:34 aveva 1 errore, `verification_required` su
@@ -2125,7 +2125,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    > 08:26, prima che la base portasse E5b: dopo `api sync` è verde. Il riavvio delle ~10:03 aveva svuotato `/tmp`,
    > con lo script delle prove e la data-dir della corsia: lo script ora sta in `files/z_run.sh`, i log in
    > `files/logs/` (regola 2 del coordinatore).
-   > **Entrato** (coordinatore, 16/10 ~10:44): treno 105, merge `dd4a97e01`, insieme a Z-9; nel CHANGELOG la mia riga
+   > **Entrato** (coordinatore, 16/10 ~10:44): treno 105, merge `e57f6850e`, insieme a Z-9; nel CHANGELOG la mia riga
    > più il rimando a «Sleep and Wake › Provider Pauses».
 
 ### Z-9 — la doc delle pause dei fornitori (lotto di sola doc, dopo Z7c-1)
@@ -2154,7 +2154,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      `.env.example` resta (superficie condivisa, da dichiarare).
    - Più due link miei, in `apply_z9.py`: `developer/backend/scheduler.md` (lo stesso rimando a `.env.example`) e
      «Related» di `live-ticker.md`, che esiste solo dopo Z7c-1: `check` a secco fallisce solo lì, come previsto.
-2. ✅ 16/10 07:32 — Applicata col via del coordinatore («Z-9 is yours now, as a separate lot»), su HEAD `053dc9dec`
+2. ✅ 16/10 07:32 — Applicata col via del coordinatore («Z-9 is yours now, as a separate lot»), su HEAD `0bae6f53c`
    (Z7c-1 salvato), con `apply_z9.py`: precondizioni tutte vere, compreso il «Related» di `live-ticker.md`. Ritocco a
    mano in `scheduler.md`: il link admin si chiama «Sleep and Wake › Provider Pauses», per non avere due link
    «Provider Pauses» di fila. `mkdocs build` stretto 0 avvisi, 3076 URL relativi risolti; `check-links` 97 validi.
@@ -2170,7 +2170,7 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
 > Richiesta del developer, alla lettera: «All'avvio (e alla prima richiesta dopo un periodo di inattività) il recupero
 > dei prezzi EOD mancanti gira in background senza bloccare la UI, che mostra "Aggiornamento prezzi…"».
 
-**Stato reale** (HEAD `3660e4c92`).
+**Stato reale** (HEAD `ae2df4cf8`).
 - Backend: il recupero in background c'è già (Z3). `run_due_jobs(reason)` gira per `startup` (5 s dopo l'avvio),
   `return` (la prima richiesta dell'utente dopo 60 s di silenzio, `CATCH_UP_AFTER_SECONDS`, più 2 s d'assestamento),
   `wake` e `tick`. Da fuori nessuno sa se un giro è in corso: c'è solo `busy("scheduler")` sul registro
@@ -2302,22 +2302,22 @@ l'intestazione in `developer/backend/scheduler.md`; la parte frontend in `live-t
      - Verdi: `core-unit` 180 file, 6462 test.
      Backlog Z-13 (la pagina aperta non si ricarica da sola).
    - ✅ 16/10 08:39 — Z5 parcheggiato di nuovo per l'aggiornamento della base (coordinatore); rimesso alle 10:38 con
-     `z5-park.sh unpark` sulla base `a3e8e73f7`, senza conflitti (la base aveva toccato solo i tre file del runner, in
+     `z5-park.sh unpark` sulla base `1042990eb`, senza conflitti (la base aveva toccato solo i tre file del runner, in
      punti lontani).
-   - ✅ 16/10 10:50–11:15 — Di nuovo sulla base `a3e8e73f7`, una prova alla volta col carico sotto 50:
+   - ✅ 16/10 10:50–11:15 — Di nuovo sulla base `1042990eb`, una prova alla volta col carico sotto 50:
      `scheduler-price-refresh` 44, `sleep-wake-activity` 111, `scheduler-catchup` 73, `scheduler-backoff` 79; in
      processo PRAPI-003…008 e il file del risveglio, 80; ruff pulito; black ha riformattato solo la riga `print_info`
      di `api_system_price_refresh` in `_backend_api.py` (il file era pulito a HEAD); `api sync`; `front check` 0/0;
      `i18n check` stretto, 4775 chiavi; `check-orphans`. In processo anche i tre test di H che percorrono le rotte
      (`test_instance_block.py`: ogni rotta di `/api/v1` passa prima dal blocco, l'elenco dei permessi è invariato) e
      i due sull'ordine del router di `system` (`/system/block` resta l'ultima): 3 e 2 verdi. Dopo il commit di Z5
-     (`3b016dd4e`), di H: `services app-lifecycle` 42 e `services security-headers` 15, verdi (11:20–11:37, il secondo
+     (`6265e404e`), di H: `services app-lifecycle` 42 e `services security-headers` 15, verdi (11:20–11:37, il secondo
      in attesa del carico sotto 50).
    - Regole del coordinatore del 16/10 ~11:0x: Z5 non scrive in nessun `.svelte` delle aree dei colori (solo `.ts`,
      JSON dell'i18n, backend, test, doc). La skill `design-system` (D-T29) l'ho letta dal suo commit
-     (`git show 6e569084a:…`), non dal checkout principale, che le mie regole escludono: Z5 non ha markup, quindi
+     (`git show 16ea52b26:…`), non dal checkout principale, che le mie regole escludono: Z5 non ha markup, quindi
      niente da applicare; vale per i lotti futuri.
-4. ✅ 16/10 11:11–11:14 — Doc: le sei bozze di docs-writer, scritte sugli stessi blob di `a3e8e73f7` (verificato
+4. ✅ 16/10 11:11–11:14 — Doc: le sei bozze di docs-writer, scritte sugli stessi blob di `1042990eb` (verificato
    prima di copiarle): `admin/sleep_wake.en.md` (sezione `#price-refresh`), `developer/backend/scheduler.md`
    (sezione `#price-refresh` con un diagramma di sequenza), `live-ticker.md` (sezione `#price-refresh` e la riga del
    test), e una riga ciascuna in `developer/api/index.md`, `developer/architecture/security.md` (tra gli endpoint
@@ -2325,7 +2325,7 @@ l'intestazione in `developer/backend/scheduler.md`; la parte frontend in `live-t
    middleware dell'attività aggiunge le intestazioni registrate). La riga di `priceRefresh.test.ts` corrisponde ai
    blocchi `describe` del file finale. `mkdocs build` stretto 0 avvisi; `check-links` 97 validi; il diagramma
    controllato a occhio servendo il sito sulla porta della corsia per un minuto (screenshot), poi porta libera.
-5. ✅ 16/10 11:58–12:09 — Slot 2 (coordinatore), su HEAD `ac52425bc` con solo il giornale modificato,
+5. ✅ 16/10 11:58–12:09 — Slot 2 (coordinatore), su HEAD `ab7d09211` con solo il giornale modificato,
    `files/z5_slot.sh`: `api system` 118/118 e `api instance-block` 62/62 al primo colpo; `api system-price-refresh` 7/8,
    poi 8/8.
    > **⚠️ Fuori pista**: PRAPI-002 si è fermato nel setup, prima della rotta: `e2e_test_user` non poteva entrare (401
@@ -2342,7 +2342,7 @@ l'intestazione in `developer/backend/scheduler.md`; la parte frontend in `live-t
 > give me the list of pages and files; I'll check them against the colour areas.» Nello stesso messaggio: Z-12 dopo lo
 > slot `api`; Z-11 e Z-10 restano nel backlog; D1 confermata (la pillola resta locale).
 
-**Stato reale** (HEAD `ac52425bc`).
+**Stato reale** (HEAD `ab7d09211`).
 - Z5, a fine recupero con `last_refreshed`, chiama `requestPortfolioRefresh()`, cioè il segnale `{kind: 'refresh'}` del
   bus `stores/portfolio/portfolioMutation.ts`. Lo ascoltano tre store (`portfolioStore`, `riskStore`,
   `lotsAnalysisStore`), che alzano solo il loro contatore di freschezza, qualunque sia il segnale; l'unico componente
@@ -2461,15 +2461,15 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
    - ✅ 16/10 13:35 — Via del coordinatore: «Z-13b is the right way out»; Z-15 nel backlog, da decidere con Y dopo Y11.
    - ✅ 16/10 14:15 — Applicato (`apply_z13b.py apply`) dopo il via del developer delle 14:14, sopra il merge aperto:
      nessuno dei sei file né lo spec sta nell'indice del merge (`files/logs/z_merge_index_1334.txt`), quindi l'indice
-     resta quello del merge. Backlog: Z-13 chiusa (✅, `9d19c2093`), Z-15 aggiunta.
+     resta quello del merge. Backlog: Z-13 chiusa (✅, `65f32634c`), Z-15 aggiunta.
    - ✅ 16/10 14:15–14:33 — Controlli leggeri sotto carico 50 (`files/z13b_light.sh`, log `files/logs/z_z13b-*`):
      `git diff --check` pulito; Prettier `--check` pulito sui quattro file del frontend; `front check` 0/0;
      `store-unit` 58/58 (con `lotsAnalysisStore.test.ts`); `risk-unit` 41/41; `front build --debug` (14:28, nessun
      file di `src` più nuovo); `check-links` 97 validi. `mkdocs build` stretto **rosso, non per Z**: vedi sotto.
      > **⚠️ Fuori pista**: il build stretto si ferma su un solo avviso, `developer/backend/transactions/wac.md` →
      > `split_promote.md#transfer-giving-leg`, un'ancora che `split_promote.md` non ha su nessuno dei due lati del
-     > merge. Il link viene da dev, `54880598b` (16/10, «fix(transactions): emptied manual cost basis is refused, not
-     > kept», cherry-pick di `949da55f8`), già in `bfd33a0f5`: anche dev da solo è rosso in modalità stretta. Le mie
+     > merge. Il link viene da dev, `d5511c3ad` (16/10, «fix(transactions): emptied manual cost basis is refused, not
+     > kept», cherry-pick di `fc8f47235`), già in `3a36bca01`: anche dev da solo è rosso in modalità stretta. Le mie
      > pagine non danno avvisi. Non lo correggo io (fuori dal mio perimetro): segnalato al coordinatore. Il build
      > fermo ha lasciato nel `site/` della corsia solo EN e IT. Non tocca lo slot: `server --build-only` costruisce la
      > doc senza `--strict`, e solo se manca `site/index.html` o una pagina è più nuova.
@@ -2483,13 +2483,13 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
 
 ### Ingresso di Z5 e Z-13: aggiornamento della base (16/10, dalle 13:06)
 
-> **Salvato** (coordinatore, 16/10 ~13:05): Z-13 `9d19c2093` (feat, 14 percorsi) e `9d95afc85` (journal). Poi il
-> coordinatore ha aperto nel worktree `git merge bfd33a0f5` (dev con i lotti di H, W-B30, AF), con un conflitto in
+> **Salvato** (coordinatore, 16/10 ~13:05): Z-13 `65f32634c` (feat, 14 percorsi) e `470bd1dc1` (journal). Poi il
+> coordinatore ha aperto nel worktree `git merge 3a36bca01` (dev con i lotti di H, W-B30, AF), con un conflitto in
 > `developer/api/index.md`: «Resolve it keeping both sides, stage only that file, don't commit.»
 
 1. ✅ 16/10 13:06 — Conflitto risolto: la riga `/system` di H (pagina di blocco più ricca, la frase su `/system/info` e
    `/system/ready`, un modulo per risorsa) più la mia frase su `GET /system/price-refresh`, inserita prima della
-   sveglia programmata. La mia parte era esattamente la base `a3e8e73f7` più quella frase. Messo in stage solo quel
+   sveglia programmata. La mia parte era esattamente la base `1042990eb` più quella frase. Messo in stage solo quel
    file. Verificate le altre sovrapposizioni fuse da sole: il backlog (la mia sezione intatta), `overview.md` (la mia
    frase sulle intestazioni di risposta), `security.md` (`price-refresh` fra gli endpoint privati),
    `_backend_services.py` (una sola registrazione di `scheduler-price-refresh`; il file si legge).
@@ -2500,9 +2500,9 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
      (13:23:39, PASSED) per non lasciare a metà la data-dir della corsia;
    - ✅ 16/10 15:00–15:01, nello slot 2 (`files/z_slot2.sh backend`): `db populate --force` PASSED,
      `api system-price-refresh` 8/8, `api system` 118/118. `mkdocs build` stretto rosso solo per l'avviso di dev
-     (`54880598b`; corretto su dev in `ed500643f`, che arriva col prossimo aggiornamento della base), ignorato
+     (`d5511c3ad`; corretto su dev in `b6a3f1499`, che arriva col prossimo aggiornamento della base), ignorato
      d'accordo col coordinatore; `check-links` 97. «combined green» inviato alle 15:01.
-   Stato alla pausa: HEAD `9d95afc85`, MERGE_HEAD `bfd33a0f5`, nessun file non fuso, tutto in stage, porta 6186 libera.
+   Stato alla pausa: HEAD `470bd1dc1`, MERGE_HEAD `3a36bca01`, nessun file non fuso, tutto in stage, porta 6186 libera.
 3. Pausa del developer 13:22–14:14, FROZEN. Il coordinatore ha chiesto nel frattempo Z-13b (passo 6 di Z-13) e
    confermato l'ordine: i controlli leggeri sotto carico 50 subito; nello slot 2, dopo TR (cut-off 15:10),
    `db populate --force`, `api system-price-refresh` e `api system` → «combined green» (il merge non tocca le superfici
@@ -2510,15 +2510,15 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
    > **Nota** (16/10 ~13:30, sola lettura, da FROZEN): X ha trovato nello split FE5c-9b due difetti F26 preesistenti
    > nel prezzo dal vivo della pagina di un asset, e li cura lui. (1) Sul grafico convertito il controllo «stessa
    > chiusura» confronta la chiusura convertita con il prezzo nella valuta dell'asset, quindi ogni poll ricarica tutto
-   > il grafico. Il controllo viene da `93a88be2c` (I-bis #24), già in `v1.2.1`; Z1 (`74d028ec6`), unendo i due cicli,
+   > il grafico. Il controllo viene da `4fc3137fc` (I-bis #24), già in `v1.2.1`; Z1 (`3bcc81d8a`), unendo i due cicli,
    > l'ha portato da ogni 60 s a ogni 30 s. Niente ciclo stretto: `loadChartData` non riscrive `assetInfo`. (2) Con il
    > movimento ridotto il flash può restare acceso: il cleanup dell'effetto ferma il timer ma non azzera
-   > `livePriceDirection`. Viene da `52c8d0d70`, già in `v1.2.1`; la lista degli asset non ha il gemello. Segnalato al
+   > `livePriceDirection`. Viene da `61c24e05c`, già in `v1.2.1`; la lista degli asset non ha il gemello. Segnalato al
    > coordinatore: i paragrafi «Price flash» e «Chart head» di `live-ticker.md` descrivono i due comportamenti e vanno
    > ritoccati nel commit di X; `asset-live-pause.spec.ts` non dipende dai due fix.
-4. ✅ 16/10 ~15:05 — Il coordinatore ha creato il merge nel worktree: `41b44fb64` (genitori `9d95afc85` e
-   `bfd33a0f5`), con l'indice com'era; Z5 e Z-13 entrati in dev con il merge `12cd3c2e0` (le pagine Dashboard e broker
-   fuse da sole con il markup di DV e BK). Il suo gate su dev gira dopo l'ingresso. Il fix `ed500643f` dell'avviso
+4. ✅ 16/10 ~15:05 — Il coordinatore ha creato il merge nel worktree: `77a0719b8` (genitori `470bd1dc1` e
+   `3a36bca01`), con l'indice com'era; Z5 e Z-13 entrati in dev con il merge `e8a09774d` (le pagine Dashboard e broker
+   fuse da sole con il markup di DV e BK). Il suo gate su dev gira dopo l'ingresso. Il fix `b6a3f1499` dell'avviso
    mkdocs arriva col prossimo aggiornamento della base.
 5. ✅ 16/10 15:10 — Checkpoint di Z-13b inviato, FROZEN: i sei file di Z-13b più questo piano e il backlog (Z-13 ✅,
    Z-15). I due `.svelte` sono di DV e BK: cambiano solo righe dentro lo `<script>`; lo SHA va ai colori.
@@ -2526,8 +2526,8 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
 ### Z-12 — il commento di `scheduler_state.json` in `admin/filesystem` (16/10, dopo Z-13b)
 
 > **Via** (coordinatore, 16/10 15:11): «Go with Z-12 (the `scheduler_state.json` comment in `admin/filesystem.*`,
-> 4 languages by hand, no stamp), then propose your next item from the backlog.» Z-13b è in dev: merge `26dda1a26`
-> (commit `f83ab0c5b` e `db2441cb0`). Base del lotto: HEAD `db2441cb0`.
+> 4 languages by hand, no stamp), then propose your next item from the backlog.» Z-13b è in dev: merge `b06f4a0f8`
+> (commit `0f59a6277` e `ccd716984`). Base del lotto: HEAD `ccd716984`.
 
 1. ✅ 16/10 15:15 — Verifica sul codice: `JobState` (`scheduler/state.py`) tiene per ogni job l'ultima esecuzione
    (ora, durata, esito, riusciti, falliti, rimandati, errore), il nuovo tentativo dei rimandati (`retry_at`) e
@@ -2542,17 +2542,17 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
    > alberi IT, FR ed ES non hanno le tre righe aggiunte dopo in inglese (`backups/`, `secrets/`, `instance.key`).
    > Fuori dal lotto (debito di traduzione di altre pagine e altri flussi): nel backlog come Z-16.
 3. ✅ 16/10 15:26 — `mkdocs build` stretto (`files/logs/z_z12-mkdocs.log`): EN e IT senza avvisi miei; si ferma sul solo
-   avviso noto di dev (`wac.md` → `split_promote.md#transfer-giving-leg`, corretto in `ed500643f`, non ancora nella
+   avviso noto di dev (`wac.md` → `split_promote.md#transfer-giving-leg`, corretto in `b6a3f1499`, non ancora nella
    mia base). FR ed ES non arrivano al build per quell'arresto: la modifica è un commento dentro un blocco di codice,
    non può dare avvisi. `git diff --check` pulito; righe nuove del piano e del backlog ≤ 120 caratteri. Rispetto a dev
-   `26dda1a26` le quattro pagine e il piano sono invariati, il backlog cambia solo in altre sezioni.
+   `b06f4a0f8` le quattro pagine e il piano sono invariati, il backlog cambia solo in altre sezioni.
 4. ✅ 16/10 15:28 — Checkpoint FROZEN inviato, con la proposta del prossimo lotto: Z-5 (il recupero storico riparte
    dall'ultima data salvata invece dei 14 giorni fissi di `run_history_sync`, solo backend).
 
 ### Z-5 — la sync storica riparte dall'ultima data salvata: analisi (16/10 ~15:35, sola lettura)
 
 > **Via** (coordinatore, 16/10 15:20): «Z-5: go with the read-only analysis, then reds and code. Backend only, tests
-> in your lane.» Z-12 salvato (`f561aec07`, `b0e0cac08`). Base del lotto: HEAD `b0e0cac08`.
+> in your lane.» Z-12 salvato (`0c287dbb2`, `f95266f46`). Base del lotto: HEAD `f95266f46`.
 
 **Stato reale.**
 - `run_history_sync(state, horizon_days=14)` (`scheduler/jobs.py:115–176`) usa una sola finestra
@@ -2597,7 +2597,7 @@ nuove sullo schema vivo, in sola lettura. `_install_fake_session` sostituisce di
 vuote (`raising=False`, così i casi di oggi restano verdi anche prima del codice).
 
 **Superfici.** `backend/app/services/platform/scheduler/jobs.py`, `test_scheduler_jobs.py`, le doc del punto D6.
-Rispetto a dev `26dda1a26` cambia solo `hosting_providers.en.md`, alla riga ~104, lontano dalla frase (~157).
+Rispetto a dev `b06f4a0f8` cambia solo `hosting_providers.en.md`, alla riga ~104, lontano dalla frase (~157).
 
 **Stima.** 2–3 ore, test di backend nella corsia, nessuno slot E2E.
 
@@ -2635,9 +2635,9 @@ Rispetto a dev `26dda1a26` cambia solo `hosting_providers.en.md`, alla riga ~104
    > **⚠️ Fuori pista**: docs-writer ha trovato due frasi superate. `developer/backend/fx/configuration.md:239–241`
    > descriveva la finestra dei cambi come `today − horizon`: è questo lotto a renderla falsa, quindi l'ho corretta
    > io (inglese, la pagina non ha traduzioni). In `scheduler.md` («Configuration Integration») la frase «The backend
-   > does not validate these values» è falsa da `84d9e3360` (9/10): non c'entra con Z-5, nel backlog come Z-17.
+   > does not validate these values» è falsa da `58972c8b9` (9/10): non c'entra con Z-5, nel backlog come Z-17.
 4. ✅ 16/10 16:20–16:30 — `mkdocs build` stretto (atteso il carico sotto 50 dalle 16:08): EN e IT senza avvisi miei,
-   solo quello noto di dev (`wac.md`, corretto in `ed500643f`, non ancora nella base). `check-links` 97 validi. Le
+   solo quello noto di dev (`wac.md`, corretto in `b6a3f1499`, non ancora nella base). `check-links` 97 validi. Le
    ancore dei link aggiunti verificate anche a mano (`#history-sync`, `#run-reasons`, `#run-checks`,
    `#execution-logs`, `#pauses-and-failures`, `admin/settings.md#market-data-scheduler`).
 5. ✅ 16/10 16:32 — Checkpoint FROZEN inviato: 11 file (codice, test, sette pagine di doc, piano, backlog).
@@ -2645,7 +2645,7 @@ Rispetto a dev `26dda1a26` cambia solo `hosting_providers.en.md`, alla riga ~104
 ### Z-17 — una frase falsa in `developer/backend/scheduler.md` (16/10, mini-lotto dopo Z-5)
 
 > **Via** (coordinatore, 16/10 16:27): «Z-17: go, the sentence in `scheduler.md`, a mini-lot of its own.» Z-5 salvato
-> (`b36542f81`, `441b5196a`) ed entrato in dev con Z-12: merge `ebe9eb346`. Base del lotto: HEAD `441b5196a`.
+> (`bae67ba07`, `3cf4afc94`) ed entrato in dev con Z-12: merge `6d80129f7`. Base del lotto: HEAD `3cf4afc94`.
 
 1. ✅ 16/10 16:28 — Verifica sul codice: l'unica via di scrittura delle regole globali è
    `PATCH /api/v1/settings/global/bulk` (`api/v1/settings.py:325`), tutto o niente (`update_global_settings`,
@@ -2662,7 +2662,7 @@ Rispetto a dev `26dda1a26` cambia solo `hosting_providers.en.md`, alla riga ~104
 > in plan 06 and the «Check that it works» section in `admin/sleep_wake.en.md` (EN only). It's useful for the Cloud
 > control panel too […]; 2. sheet of the decisions «to review» in plan 06 […]; 3. plan 06 cleanup: close the
 > outdated ⏳ with proof. Docs/journal only: one checkpoint at the end with the three items.» Z-17 salvato
-> (`e6f152622` e `68b59450d`). Base: HEAD `68b59450d`.
+> (`6b79efca4` e `73d30eb21`). Base: HEAD `73d30eb21`.
 
 #### 1. Prova di accettazione su una macchina Fly vera (per il developer, prima del lancio)
 
@@ -2755,7 +2755,7 @@ piano prendono qui il loro: N-Z2b-7, N-Z3-doc, N-Z7c2-1. Percorsi relativi a `ba
 
 ✅ 16/10 16:37 — Chiusi i sette ⏳ superati, ognuno con la prova di quando è stato fatto:
 - Z6b, parte 1, passi 1, 4 e 5: i test di processo, il ciclo di vita vero e la doc col CHANGELOG sono stati fatti
-  nella parte 2 (passi 2–4, 15/10) ed entrati in `967094d81`;
+  nella parte 2 (passi 2–4, 15/10) ed entrati in `311d57d4c`;
 - Z6b, parte 2, passo 4: `api system`, `front-utility settings`, `mkdocs build` e `check-links` del 15/10 sera, già
   nelle note del passo;
 - Z3, passo 6: `api system` nelle prove di Z4 (~01:45), `db post-migration` e `test_market_calendar.py` in quelle di
@@ -2784,27 +2784,27 @@ base.
 3. ✅ 16/10 16:35 — Il foglio delle decisioni (sopra, punto 2): 43 righe.
 4. ✅ 16/10 16:37 — La pulizia (sopra, punto 3): sette ⏳ chiusi con la prova, uno resta aperto di proposito.
 5. ✅ 16/10 16:54 — `mkdocs build` stretto, atteso il carico sotto 50: nessun avviso della pagina, solo quello noto di dev
-   (`wac.md`, corretto in `ed500643f`, non ancora nella base); `check-links` 97 validi.
+   (`wac.md`, corretto in `b6a3f1499`, non ancora nella base); `check-links` 97 validi.
 6. ✅ 16/10 16:56 — Checkpoint FROZEN inviato: due file (`admin/sleep_wake.en.md`, questo piano).
-7. ✅ 16/10 16:56 — Checkpoint salvato (`b93fddb06`, `cc232ec10`) ed entrato in dev con Z-17: merge `4f0a5d323`.
+7. ✅ 16/10 16:56 — Checkpoint salvato (`d7ac99931`, `a6046c3e4`) ed entrato in dev con Z-17: merge `2f859fa72`.
    Poi, su richiesta del coordinatore (da Y), Z-18 nel backlog: durante la ricarica in background dopo un recupero la
    radice del Dashboard passa ad `aria-busy="true"` (`reportLoading` messo da `loadAll()`), e un lettore di schermo
    annuncia «occupato»; da decidere dopo l'ingresso di Y11. Verificato sul codice: la radice
    (`routes/(app)/dashboard/+page.svelte:841`) lega `aria-busy` e `data-busy` a `reportLoading`; la pagina del
    broker non ha `aria-busy` sulla radice, ma la sua icona «Aggiorna» segue `reportLoading`.
-8. ✅ 16/10 20:35 — Z-18 salvato (`3bdb16d15`). Poi la convenzione N58 (coordinatore, da H-22): nessuna funzione di
+8. ✅ 16/10 20:35 — Z-18 salvato (`989630c9f`). Poi la convenzione N58 (coordinatore, da H-22): nessuna funzione di
    produzione solo per i test. `--dead-code` segnala `reset_provider_cooldowns()` (Z7a) e
    `reset_shutdown_budget_state()` (Z6b), verificate sul codice: le chiamano solo `test_provider_cooldown.py` e
    `test_shutdown_budget.py`. Nel backlog come Z-19, da allineare nel prossimo lotto di codice di Z.
 
 ### Lotto B — Z-18 e il test dello spinner: il Dashboard non si dice «occupato» per una ricarica in background
 
-> **Via** (coordinatore, 16/10 20:39): «Base: your branch is fast-forwarded to `27994759a` (the dev tip), clean.
+> **Via** (coordinatore, 16/10 20:39): «Base: your branch is fast-forwarded to `4a62135ee` (the dev tip), clean.
 > Order: lot B first, lot A after. Lot B (Dashboard: Z-18 + the spinner test): go now. The colour team has no pending
 > lots on the Dashboard (DV W6-d has entered), and the change is `<script>` only […]. Then a short E2E slot. Lot A
-> (Z-3, Z-8, Z-19): after C-66 […]. Prepare lot A's reds now, without touching those files.» Base: `27994759a`.
+> (Z-3, Z-8, Z-19): after C-66 […]. Prepare lot A's reds now, without touching those files.» Base: `4a62135ee`.
 
-**Stato reale** (su `27994759a`). Y11 (passi 1–4b) è entrato: i pulsanti «Aggiorna» del Dashboard (`sync-button`) e
+**Stato reale** (su `4a62135ee`). Y11 (passi 1–4b) è entrato: i pulsanti «Aggiorna» del Dashboard (`sync-button`) e
 della pagina del broker (`broker-refresh`) seguono `pageBusy.busy`, e la ricarica dopo un recupero
 (`reloadAfterPriceCatchUp()` → `loadAll()` / `loadOverview()`, senza `track`) non li fa girare. Sul Dashboard la radice
 (`dashboard-page`, `+page.svelte:847–848`) lega `aria-busy` e `data-busy` a `reportLoading || contributionLoading ||
@@ -2873,7 +2873,7 @@ positivo in entrambi: un clic su «Aggiorna» dopo la ricarica fa vedere `true` 
    > passi di B con la soglia alzata (21:39–21:46).
    Dopo lo slot, sotto carico 50 (21:54–22:20): `api sync`; `front check` 0/0; `core-unit` 6853/6853 (con il
    cancello dei colori; `pluginSettingsApi.test.ts` di nuovo verde: era il client generato vecchio); `mkdocs build`
-   stretto senza avvisi (il fix `ed500643f` di dev è ora nella base); `check-links` 97 validi.
+   stretto senza avvisi (il fix `b6a3f1499` di dev è ora nella base); `check-links` 97 validi.
 4. ✅ 16/10 22:21 — Checkpoint FROZEN inviato: otto file (il Dashboard, due spec, il runner, due pagine di doc, il
    piano, il backlog con Z-18 ✅). Il `.svelte` è nell'area DV, solo `<script>`: lo SHA va ai colori; i due casi di
    `page-busy.spec.ts` li rivede Y.
@@ -2885,9 +2885,9 @@ positivo in entrambi: un clic su «Aggiorna» dopo la ricarica fa vedere `true` 
 > lot B on the combined revision.» Prima (16/10 22:22): «X's OK on Z-8: you're the writer of
 > `assetDetailLive.svelte.ts` in lot A», con tre note di X: il test che fissa gli input letti dall'effetto, il suo
 > docblock e `live-ticker.md` §«Asset detail» seguono la nuova condizione; la pulizia rimette `direction = 'neutral'`;
-> i 70 casi del file girano in `core-unit`. `dashboard-cache.spec.ts` (di Y): sì (16/10 22:21). Base: `4e233fe5b`.
+> i 70 casi del file girano in `core-unit`. `dashboard-cache.spec.ts` (di Y): sì (16/10 22:21). Base: `8d558baab`.
 
-**Stato reale** (su `4e233fe5b`).
+**Stato reale** (su `8d558baab`).
 - Z-3: le due pagine calcolano `isHeadToday` come `dateEnd >= new Date().toISOString().slice(0, 10)` (data UTC),
   mentre `dateEnd` (`resolveDateSentinel('max')` = `todayIso()`) è sul calendario dell'utente. Due facce del `>=`:
   a ovest di Greenwich, la sera, un intervallo che finisce oggi sembra passato (niente prezzo dal vivo); a est, subito
@@ -2921,7 +2921,7 @@ positivo in entrambi: un clic su «Aggiorna» dopo la ricarica fa vedere `true` 
   method that already exists (`succeeded(key)` or `released(key)`). If it can't, keep it, with one line in the
   docstring: «used by the tests only (N58 exception): …»».
 
-**Test** (test-author, in bozza da `27994759a`, invariati fino a `4e233fe5b`; `files/za-draft/README.md`):
+**Test** (test-author, in bozza da `4a62135ee`, invariati fino a `8d558baab`; `files/za-draft/README.md`):
 `asset-live-pause.spec.ts` (i)–(l) nuovi, rossi senza Z-3; `assetDetailLive.svelte.test.ts` 10 casi rossi senza Z-8
 (tre casi vecchi tolti perché contraddicono la correzione); `dashboard-cache.spec.ts` sceglie la prima riga posseduta
 con un fornitore (verde prima e dopo); `test_provider_cooldown.py` (PCD-018 riscritto sul comportamento, PCD-021 senza
@@ -2931,7 +2931,7 @@ con lo stesso codice, o con un altro, non riavvia il poller».
 
 **Passi.**
 1. ✅ 16/10 22:29–22:41 — Bozze dei test nel worktree (sei file; i blob di base sono quelli del README: nessuno è
-   cambiato da `27994759a` a `4e233fe5b`, copia = diff). Rossi leggeri, codice a HEAD (`files/za_reds.sh`): Vitest sul
+   cambiato da `4a62135ee` a `8d558baab`, copia = diff). Rossi leggeri, codice a HEAD (`files/za_reds.sh`): Vitest sul
    solo file (binario locale) 10 rossi su 76, i dieci attesi, ognuno perché l'effetto ignora il fornitore (un poller
    avviato, `stop` mai chiamato, `providerAssignment` assente dalle letture); `services provider-cooldown` 66/66.
    > **⚠️ Fuori pista**: carico a ~175 (altre corsie). Ho fermato l'attesa della catena prima di `services
@@ -3009,39 +3009,39 @@ con lo stesso codice, o con un altro, non riavvia il poller».
 
 ### Wiki-file di Z-3 e Z-20/Z-21 (16/10, sola devWiki e journal)
 
-> **Via** (coordinatore, 16/10 ~23:55): «Lot A committed (`a43502298` fix, `f8c47fc3d` journal) and entered: dev
-> `0f55265a1`, with the 2 CHANGELOG lines in `ac9671fd3`. 1. ID collision: J's line J-26 in dev already cites «Z-20»
+> **Via** (coordinatore, 16/10 ~23:55): «Lot A committed (`d32eb1a11` fix, `efed7ed20` journal) and entered: dev
+> `f8e78b003`, with the 2 CHANGELOG lines in `50945715e`. 1. ID collision: J's line J-26 in dev already cites «Z-20»
 > for the probe bridge broken on 16/10 11:18 (the decoupling of `zodios-client` from `instanceNotices`, which I had
 > assigned to you). At your next journal touch, then: Z-20 = the decoupling of `zodios-client` from
 > `instanceNotices`, so that the probe bridge doesn't need the Svelte plugin; your new item (the 4 N58 functions)
 > becomes Z-21. 2. Next: the `wiki-file` on `utc-today-vs-user-calendar` (yes), then Z-14. Z-21 after that, if
-> there's time.» Base: ff a `ac9671fd3` (coordinatore, 16/10 ~23:57), albero pulito.
+> there's time.» Base: ff a `50945715e` (coordinatore, 16/10 ~23:57), albero pulito.
 
 1. ✅ 16/10 23:40–23:58 — `wiki-file` su `LibreFolio_devWiki/wiki/problems/utc-today-vs-user-calendar.md`: sezione
    nuova «2026-10-16 — a comparison is one site, not two (Z-3)», cinque righe in «Source files», `updated:` e
    `concepts/prices-current-side-effect` fra i `related:`; la riga dell'indice; una voce in `log.md`. Storia provata
    in git, non dedotta:
-   - `2e104b919` (30/08, il commit dell'audit dei 18 punti) ha portato `defaultRange().end` e
+   - `4e719107e` (30/08, il commit dell'audit dei 18 punti) ha portato `defaultRange().end` e
      `resolveDateSentinel('max')` a `todayIso()`; le due righe di `isHeadToday`, con lo stesso idioma UTC nel padre
      del commit, sono rimaste com'erano. Prima entrambi i lati erano UTC: il confronto era coerente.
    - Quindi la faccia ovest (la sera un periodo che finisce oggi sembra passato, la vista di default) nasce il 30/08;
      quella est (dopo mezzanotte un periodo finito ieri interroga, e ogni poll scrive) è più vecchia.
    - La regola aggiunta: un confronto fra date è un punto solo; chi sposta un lato al calendario dell'utente cerca
      ogni confronto che lo legge. La data della conversione resta UTC, «corretta così» (ricerca all'indietro).
-   - I sei punti di prodotto che hanno ancora l'idioma a `ac9671fd3` sono elencati, non riclassificati.
+   - I sei punti di prodotto che hanno ancora l'idioma a `50945715e` sono elencati, non riclassificati.
    `check_source_paths.py`: 5 mancanti (8 occorrenze) prima e dopo, tutti preesistenti; la pagina 0 su 8.
    > **⚠️ Fuori pista**: il passo 6 della skill (graphify `--update`) punta al checkout principale e il grafo non c'è
    > nel worktree: non eseguito, come le altre voci del `log.md` di questa fase.
 2. ✅ 16/10 23:59 — Numerazione: Z-20 → Z-21 (le quattro funzioni N58) nel backlog e nel lotto A di questo piano; Z-20
    nuova, il disaccoppiamento. Nota per Z-20, letta nel codice e non provata: la sonda importa `$lib/api`, quindi
    `zodios-client.ts`, che importa `priceRefresh.ts` (Z5) e, sulla riga dopo, `instanceBlock.svelte.ts` di H, con
-   `$state` al primo livello dal 15/10 (`cb34327e9`). Togliere il plugin dal ponte chiede di disaccoppiare entrambi:
+   `$state` al primo livello dal 15/10 (`f0637c09e`). Togliere il plugin dal ponte chiede di disaccoppiare entrambi:
    detto al coordinatore.
 
 ### Z-14 — le pagine dei prezzi e dei cambi vedono un recupero: analisi (17/10 ~00:05, sola lettura)
 
 > **Via** (coordinatore, 16/10 ~23:55): «Next: the `wiki-file` on `utc-today-vs-user-calendar` (yes), then Z-14.»
-> Poi (17/10 ~00:00): «I'm waiting for the Z-14 analysis.» Base: `31a64eb17`, albero pulito.
+> Poi (17/10 ~00:00): «I'm waiting for the Z-14 analysis.» Base: `43954a4a9`, albero pulito.
 
 **Stato reale.**
 - I due registri (`lib/stores/assetPriceStoreRegistry.ts`, `lib/stores/fxStoreRegistry.ts`) tengono un
@@ -3145,17 +3145,17 @@ basso; una lettura in più per intervallo dopo ogni recupero, nessuna fra un rec
      helper e commenti di Z-14: non rifatti in pieno.
 6. ✅ 17/10 ~01:37 — Backlog: Z-14 ✅, Z-14b nuova (domanda di UX del mattino). Checkpoint FROZEN inviato al
    coordinatore. Nessun `.svelte`, nessuna area dei colori. (L'ora era scritta «01:40» prima dell'invio: corretta.)
-7. ✅ 17/10 01:38–01:57 — Ingresso: commit `1f4986c70` e `3a776cc9e`; base aggiornata dal coordinatore (merge di
-   `b36e3873f`, `cf37fb03c`; il conflitto in `domain-state.md` risolto come proposto: il mio paragrafo, poi la riga
+7. ✅ 17/10 01:38–01:57 — Ingresso: commit `651006608` e `d185fb1ff`; base aggiornata dal coordinatore (merge di
+   `2d25d0a94`, `63035b913`; il conflitto in `domain-state.md` risolto come proposto: il mio paragrafo, poi la riga
    di Y). Revisione combinata, controlli leggeri sotto 50 (`files/z14_combined.sh`): `api sync`; `front check` 0/0;
    `core-unit` 7708/7708; `fx-unit` 153/153; `asset-unit` 885/885; `mkdocs build` stretto senza avvisi; `check-links`
-   97. Slot 2: `front-portfolio price-refresh` intero 8/8. Entrato in dev (`2765773f5`), riga 🐛 in `6e02e56ec`.
+   97. Slot 2: `front-portfolio price-refresh` intero 8/8. Entrato in dev (`80f861d9a`), riga 🐛 in `87e6cf5d0`.
 
 ### Z-21 — N58: quattro nomi che solo i test leggono (17/10, backend, solo controlli leggeri)
 
 > **Via** (coordinatore, 16/10 ~23:55, poi 17/10 ~01:58): «Z-21 after that, if there's time.» — «Z-14 entered: dev
-> `2765773f5` […]. Your HEAD is ff'd to `6e02e56ec`, clean. Z-21: go (apply, light checks, checkpoint).»
-> Base: `6e02e56ec`, albero pulito; gli otto file di Z-21 identici a `cf37fb03c`, la base delle bozze.
+> `80f861d9a` […]. Your HEAD is ff'd to `87e6cf5d0`, clean. Z-21: go (apply, light checks, checkpoint).»
+> Base: `87e6cf5d0`, albero pulito; gli otto file di Z-21 identici a `63035b913`, la base delle bozze.
 
 **Stato reale** (vulture, «Referenced only by tests», visto nel lotto A): `cooldown_snapshot()`
 (`provider_cooldown.py`, Z7a), `ShutdownWatchdog.armed_at` e `current_shutdown_watchdog()` (`shutdown_budget.py`, Z6b),
@@ -3172,8 +3172,8 @@ che resta scoperto. Tre asserzioni più strette di prima, accettate: SWA-021 (un
 (`wait_before_call` prima dello scambio), SDB-018/026 (deadline fra due letture dell'orologio).
 
 **Passi.**
-1. ✅ 17/10 01:57–01:59 — Bozze dei test nel worktree (quattro file, copie: identici a `cf37fb03c` anche a
-   `6e02e56ec`), ruff e black puliti. Prima della modifica (`files/z21_run.sh before`, sotto 50): `services
+1. ✅ 17/10 01:57–01:59 — Bozze dei test nel worktree (quattro file, copie: identici a `63035b913` anche a
+   `87e6cf5d0`), ruff e black puliti. Prima della modifica (`files/z21_run.sh before`, sotto 50): `services
    provider-cooldown` 66/66, `shutdown-budget` 187/187, `shutdown-process` 7/7, `sleep-wake-activity` 111/111;
    `lint --dead-code` elenca i quattro nomi.
 2. ✅ 17/10 01:59 — Prodotto (`files/z21-draft/apply_z21.py code`, inverso esatto provato su una copia):
@@ -3187,10 +3187,10 @@ che resta scoperto. Tre asserzioni più strette di prima, accettate: SWA-021 (un
 
 ### Z-20 — `zodios-client` senza moduli con le rune: analisi (17/10 ~02:10, sola lettura)
 
-> **Via** (coordinatore, 17/10 ~02:05): «Z-21 committed (`e05b231ff`, `660c0babb`) and entered: dev `ffd58ffbd` […].
+> **Via** (coordinatore, 17/10 ~02:05): «Z-21 committed (`81487cd84`, `685a28254`) and entered: dev `6a0f0110d` […].
 > Z-20: analysis first, read-only, as you said.» Prima (16/10 ~23:55): «Z-20 = the decoupling of `zodios-client`
 > from `instanceNotices`, so that the probe bridge doesn't need the Svelte plugin»; (17/10 ~00:05): «Z-20 with H's
-> `instanceBlock.svelte.ts` too: understood. […] you'll do both and H reviews.» Base: `ffd58ffbd`, albero pulito.
+> `instanceBlock.svelte.ts` too: understood. […] you'll do both and H reviews.» Base: `6a0f0110d`, albero pulito.
 
 **Stato reale** (crawler degli import statici di runtime, `import type` esclusi: `files/z20_import_graph.py`):
 - da `$lib/api/index.ts` (13 moduli) e dall'ingresso della sonda `scripts/ai-export-render-prompt-probe.ts` (26) si
@@ -3200,7 +3200,7 @@ che resta scoperto. Tre asserzioni più strette di prima, accettate: SWA-021 (un
   - `instance/instanceNotices.svelte.ts` (H), attraverso `price-refresh/priceRefresh.ts` (Z5): è il pozzo di default
     degli avvisi. `priceRefresh` lo usa solo quando serve, ma l'`import` statico valuta il modulo, e il `$state` al
     primo livello, fuori da Svelte, lancia `rune_outside_svelte`.
-- J ha riparato il ponte in `985b10cbd` compilando le rune (`@sveltejs/vite-plugin-svelte`). Il ponte lo usa solo la
+- J ha riparato il ponte in `edb1dd0a0` compilando le rune (`@sveltejs/vite-plugin-svelte`). Il ponte lo usa solo la
   sonda reale del developer (`backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py`).
 - Il contratto di H (`zodios-client.test.ts`, «a 423 instance_blocked turns the block on»): il blocco è acceso quando
   il chiamante riceve l'errore, cioè in modo sincrono. Un `import()` dinamico nel ramo del 423 lo renderebbe
@@ -3284,8 +3284,8 @@ colori.
    `front-portfolio price-refresh` intero 8/8 sul codice (`files/z20_slot.sh`, impronta verificata): l'avviso
    arriva attraverso il pozzo pigro. Porta 6186 libera.
 6. ✅ 17/10 ~03:25 — Backlog: Z-20 ✅. Checkpoint FROZEN inviato al coordinatore.
-7. ✅ 17/10 03:25–03:36 — Revisione combinata (coordinatore: commit `3235837ad` e `96d77117a`, base aggiornata con
-   dev `69e1c58e9`, HEAD `cb6950f26`), controlli leggeri sotto 50 (`files/z20_combined.sh`): `api sync` rc 0;
+7. ✅ 17/10 03:25–03:36 — Revisione combinata (coordinatore: commit `4e369834e` e `e8d340dce`, base aggiornata con
+   dev `180d50d25`, HEAD `30a589c76`), controlli leggeri sotto 50 (`files/z20_combined.sh`): `api sync` rc 0;
    `front check` 0 errori e 0 avvisi; `front-utility core-unit` 7864/7864 (199 file, col cancello);
    `onboarding-component-unit` 459/459; il ponte vero carica l'ingresso della sonda (rc 0). Lo slot di
    `price-refresh` resta valido (dev non tocca quei file). Porta 6186 libera. Revisione di H: OK, le quattro
@@ -3327,7 +3327,7 @@ Z-20; (3) Z-10 se resta tempo; (4) Z-4, Z-7 e Z-11 dopo la 1.3; Z-16 col giro di
 
 ### Z-22 — un ascoltatore in più a ogni aggiornamento a caldo della faccia (17/10, dopo l'ingresso di Z-20)
 
-> **Via** (coordinatore, 17/10): «**Z-20 entered**: dev `3f654c4da`; your HEAD is ff'd. Proposal approved: **Z-22**
+> **Via** (coordinatore, 17/10): «**Z-20 entered**: dev `7f6278f4a`; your HEAD is ff'd. Proposal approved: **Z-22**
 > now». Nota di H (revisione di Z-20): «`instanceBlock.svelte.ts:23` adds a listener at every HMR without removing the
 > old one. `import.meta.hot?.dispose(stop)` with the function `subscribe()` returns fixes it.»
 
@@ -3433,7 +3433,7 @@ aspetta lo spegnimento; un secondo Ctrl+C forza). Nessun file del frontend, ness
 **Costo e rischi:** S, una quarantina di righe e quattro casi. I test con segnali e processi veri sono sensibili al
 carico: lo scambio su file evita le attese fisse, e le grazie dei casi restano larghe.
 
-> **Decisione** (coordinatore, 17/10, con l'ingresso di Z-22, dev `22d46da6e`): «**Go for Z-10** as you propose
+> **Decisione** (coordinatore, 17/10, con l'ingresso di Z-22, dev `ac42ff00d`): «**Go for Z-10** as you propose
 > (N-Z10-1; `cli_base.py`/`dev.py:448`, writer OK). **Yes to forwarding SIGTERM** in the same function: a supervisor
 > that stops `dev.py` must not leave the server orphaned. And yes to the wiki-file for the Vite gotcha, at the end.»
 
@@ -3567,7 +3567,7 @@ risveglio, un ritorno all'app), le viste già sullo schermo si riallineano da so
   oppure il caricamento come una prima visita (oggi). Serve comunque alla ricarica silenziosa di una pagina aperta:
   senza, quella ricarica accenderebbe `aria-busy`.
 
-**Stato reale** (HEAD `75a1107a7`, con Y11 sulle pagine degli asset, merge `d32d0f3d9`):
+**Stato reale** (HEAD `98e06cfd1`, con Y11 sulle pagine degli asset, merge `33040d454`):
 - Il bus: `{kind: 'prices'}` (`notifyPricesCaughtUp`, `stores/portfolio/portfolioMutation.ts:155`). Ricaricano solo
   il Dashboard (`dashboard/+page.svelte:729–737`) e la pagina del broker (`brokers/[id]/+page.svelte:449–456`), in
   background e fuori da `pageBusy`; i loro commenti dicono che rischio e lotti restano stale.
@@ -3692,7 +3692,7 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 passano a ✅ nel backlog.
 
 > **Via** (coordinatore, 17/10 ~05:32): «meanwhile, if it's quick: **Z-16** by hand (the translated tree of
 > `admin/filesystem`: the Spanish comments, plus the 3 missing rows in IT/FR/ES), no stamp, in your lane 6186 for the
-> strict build.» Base: HEAD `1a937b93e`.
+> strict build.» Base: HEAD `1da1b3123`.
 
 1. ✅ 17/10 05:30–05:33 — Gli alberi di `filesystem.it.md`, `.fr.md` ed `.es.md`:
    - le tre righe, `backups/` dopo `logs/`, `secrets/` e `instance.key` dopo `scenario_catalog/`;
@@ -3712,7 +3712,7 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 passano a ✅ nel backlog.
 > re-read inside the lock; coordinator decision D-Z3-3): **analysis first** (surfaces, interaction with leader
 > election, tests), send it to me, then reds and code».
 
-**Stato reale** (HEAD `1a937b93e`):
+**Stato reale** (HEAD `1da1b3123`):
 - **Per processo.** Ogni worker uvicorn ha:
   - il suo loop dello scheduler (`app_lifespan`);
   - il suo `asyncio.Lock` (`_run_lock`, uno per event loop);
@@ -3803,7 +3803,7 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 passano a ✅ nel backlog.
 > `_backend_services.py`, **in the scheduler block**. B has an uncommitted edit to the same file (the
 > `backup-staging` description, around line 2273): stay away from that region, add only, and don't reorder. Docs:
 > English only, no stamp. Lane 6186, light runs only (no slot needed); at the checkpoint, list the scheduler suites
-> with their counts plus `api system-wake`.» Base: HEAD `737972ef5`.
+> with their counts plus `api system-wake`.» Base: HEAD `ef1f02d47`.
 
 **Contratto** (N71):
 - `scheduler/run_lock.py`, nuovo:
@@ -3898,7 +3898,7 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 passano a ✅ nel backlog.
    (`.scheduler.lock` in `validate_test_data_dir`, file di H, facoltativa). Checkpoint FROZEN al coordinatore.
    In attesa del via da scrittore: la `desc` di `scheduler-catchup` (dice ancora «not_leader … SCU-001..032») e
    quella di `system-wake` in `_backend_api.py` (non nomina WAKE-029).
-7. ✅ 17/10 06:33–06:38 — Z-11 entrato (dev `c5e3c199d`, `CHANGELOG` 🔄 `47405701f`; base `47405701f`). Via da
+7. ✅ 17/10 06:33–06:38 — Z-11 entrato (dev `f8a6ab22c`, `CHANGELOG` 🔄 `a6cd8b9b5`; base `a6cd8b9b5`). Via da
    scrittore del coordinatore sulle due descrizioni del runner:
    - `scheduler-catchup` (`_backend_services.py`): la `desc` dice il lock fra processi (entrato dopo l'impostazione,
      il leader mai chiesto, stato e ora letti dentro, un lock che non si prende solleva prima dello stato) e il
@@ -3919,7 +3919,7 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 passano a ✅ nel backlog.
 > today+1 (timezone slack). J introduces `datetime_utils.latest_range_end()`: until J enters, write your own clamp,
 > and align it to the helper at the merge. The start at the first data point, or a 100-year span. Analysis first
 > (every entry point, who reads the clamped end, the test files), then reds with moderate dates, and the extreme dates
-> as guards with a time bound. Lane 6186.» Base: HEAD `3d13fbcdc`.
+> as guards with a time bound. Lane 6186.» Base: HEAD `c4742a661`.
 
 **Stato reale.**
 - **Prezzi degli asset.** `PriceQueryOperations.get_prices_bulk` (`services/assets/price_query.py:226`) prende
@@ -3950,12 +3950,12 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 passano a ✅ nel backlog.
   - la sincronizzazione (`services/assets/refresh.py`) taglia già la fine a oggi (X-R12). Però, con una cache,
     costruisce l'insieme dei giorni mancanti da `start` (riga ~258): `date.min` dà circa 740 000 date. È il capo
     dell'inizio, nella stessa famiglia;
-  - le variazioni a periodo fisso (MF, `ed954008e`) calcolano poche date da `as_of`, senza cicli per giorno;
+  - le variazioni a periodo fisso (MF, `8054c9c1d`) calcolano poche date da `as_of`, senza cicli per giorno;
   - gli altri cicli per giorno (motore del portafoglio, lotti, matematica finanziaria, AI Export
     `technical_shared.py:888`) sono di SEC7-1 (J) o di altri.
 - **Il web app** manda le fini dei selettori di date e i buchi dei negozi, di solito oggi.
 - **L'ora.** `utils/datetime_utils.today_date()` (UTC) c'è già; `latest_range_end()` arriva con J.
-- **Ultimi tocchi di X** su questi file, stanotte: `ed954008e` (05:50) e `a7b572ce2` (04:54).
+- **Ultimi tocchi di X** su questi file, stanotte: `8054c9c1d` (05:50) e `fd61d0030` (04:54).
 
 **Proposta** (decisioni N-XR55-1…4, «da rivedere»):
 - N-XR55-1, il taglio all'ingresso. `get_prices_bulk` e `convert_currency_bulk`, come primo passo, sostituiscono il
@@ -4118,8 +4118,8 @@ corsia.
 > io lo rivedo al checkpoint di A. X-R55 non cambia.
 
 **Allineamento con J e revisione di X** (17/10 ~07:57–08:05):
-- **Allineamento** (coordinatore, ~07:57): «X-R55 committed: `fix(prices)…` + journal, tip `79fe54183`. Base updated:
-  `4655adf3d` = yours + dev `7e6cf7914` (J's SEC7-1 included), clean. Now J's `datetime_utils.latest_range_end()`
+- **Allineamento** (coordinatore, ~07:57): «X-R55 committed: `fix(prices)…` + journal, tip `b9bdcfb0f`. Base updated:
+  `fa5a099fb` = yours + dev `fe27a7a90` (J's SEC7-1 included), clean. Now J's `datetime_utils.latest_range_end()`
   (line 102) is in the base: align `date_range_limits.py` to it […] so there's a single helper; check that J's test
   seam (`latest_range_end` patched in its consumers) still covers your modules, or say why not.»
   - L'aiuto di J è `date.today() + 1`, cioè il **calendario del server**, non UTC, come i `date.today()` dei suoi
@@ -4191,8 +4191,8 @@ corsia.
   di cambi su 100 anni (36,5 milioni) no. Il lotto nel web app resta un seguito, se un portafoglio vero arriva vicino
   al budget.
 
-> **Via** (coordinatore, 17/10 ~08:30): «X-R55 entered: dev `ab7711f04`, CHANGELOG 🔒 `eed325d99`. Your HEAD is ff'd
-> to `eed325d99`. Z-25: option C (`max_length` 1,000 items + a budget of 5 M item-days per request, with codes
+> **Via** (coordinatore, 17/10 ~08:30): «X-R55 entered: dev `994f3bae0`, CHANGELOG 🔒 `da059b1c7`. Your HEAD is ff'd
+> to `da059b1c7`. Z-25: option C (`max_length` 1,000 items + a budget of 5 M item-days per request, with codes
 > `bulk_too_many_items` / `bulk_too_many_days`), as night decision N77, for review. Add a docstring/doc line on what
 > the web app does if an instance goes over 1,000 assets (an explicit error, not a silent half page) and log the web
 > app's batching as a follow-up for Y/X. Reds first; X reviews.»
@@ -4232,7 +4232,7 @@ corsia.
 > I'll give J a line.»
 
 **Passi.**
-1. ✅ 17/10 08:35–~09:09 — Rossi di test-author, su HEAD `eed325d99`; nessun codice di prodotto toccato.
+1. ✅ 17/10 08:35–~09:09 — Rossi di test-author, su HEAD `da059b1c7`; nessun codice di prodotto toccato.
    - Nuovo `backend/test_scripts/test_services/test_bulk_limits.py` (17 casi, PURE: SQLite privato sotto
      `tmp_path`, o una sessione finta che conta le istruzioni; il gestore dei cambi chiamato direttamente).
    - API: BL-API-01 in `test_assets_prices.py`; BL-API-02/03 in `test_fx_api.py`.
@@ -4292,14 +4292,14 @@ corsia.
      (`files/z25_build.sh`).
 6. ✅ 17/10 ~09:50 — Backlog, nella mia sezione: Z-25 chiusa (✅, commit del coordinatore), con i due residui; Z-27
    aggiunta (il seguito del web app per Y e X).
-7. ✅ 17/10 ~09:57 — Il coordinatore ha committato Z-25 sul mio ramo: `4b711e803` (fix) e `036007e99` (diario).
-   HEAD verificato: `036007e99` su `4b711e803` su `eed325d99`, albero pulito, impronte dei quattro file di prodotto
+7. ✅ 17/10 ~09:57 — Il coordinatore ha committato Z-25 sul mio ramo: `23112465b` (fix) e `11344bb97` (diario).
+   HEAD verificato: `11344bb97` su `23112465b` su `da059b1c7`, albero pulito, impronte dei quattro file di prodotto
    uguali a quelle provate. Ingresso dopo la revisione di X del ciclo dei cambi; riga del CHANGELOG come proposta.
    Revisione di A8b (`scheduler.spec.ts`, una riga: `openSettingsTab(page, 'admin')`): OK, nessuna osservazione.
 
 ### Z-26 — l'attesa del lock fra processi senza tempo massimo: analisi (17/10 ~10:00, sola lettura)
 
-Voce Z-26 del backlog (basso; E, R13-SEC8, via coordinatore). HEAD `036007e99`.
+Voce Z-26 del backlog (basso; E, R13-SEC8, via coordinatore). HEAD `11344bb97`.
 
 **Stato reale.**
 - `scheduler_run_lock()` (`scheduler/run_lock.py:74`) riprova ogni `POLL_SECONDS` (0,2 s) finché il lock è libero,
@@ -4350,7 +4350,7 @@ Voce Z-26 del backlog (basso; E, R13-SEC8, via coordinatore). HEAD `036007e99`.
 > **Decisione** (coordinatore, 17/10 ~10:01): «Z-26: **D-Z26-1** = 600 s `LOCK_WAIT_SECONDS` constant, a single
 > deadline covering both waits, no env var. **D-Z26-2** = (a) `not_leader` plus the warning log, with the «only on
 > Windows» wording fixed in both pages. I'm recording both as night decision N79 for the developer's review. Go:
-> implement, reds first, light runs, then a FROZEN checkpoint. Z-24 was entered by H (`36a487e84`): close its line in
+> implement, reds first, light runs, then a FROZEN checkpoint. Z-24 was entered by H (`6a28515a3`): close its line in
 > your section with this lot.»
 
 **Contratto (N79).**
@@ -4393,8 +4393,8 @@ Voce Z-26 del backlog (basso; E, R13-SEC8, via coordinatore). HEAD `036007e99`.
      con `asyncio.timeout`), `_log_gave_up()`, `_run_locked(reason, deadline)` che traduce il timeout in
      `not_leader`. Gli stand-in del lock nei test accettano `*args, **kwargs`: la parola chiave `deadline` non li
      rompe; nessun test tocca `_run_lock()` né `time_module`.
-3. ✅ 17/10 ~10:29–10:35 — Il coordinatore ha fatto entrare Z-25 (dev `d0bc7a547`, CHANGELOG `282c583b5`) e ha
-   portato il mio ramo a `282c583b5`; dev non ha toccato `run_lock.py` né `scheduler.py`. Il punto basso di X su
+3. ✅ 17/10 ~10:29–10:35 — Il coordinatore ha fatto entrare Z-25 (dev `bdaaaee4f`, CHANGELOG `73c6aceaa`) e ha
+   portato il mio ramo a `73c6aceaa`; dev non ha toccato `run_lock.py` né `scheduler.py`. Il punto basso di X su
    Z-25 entra in questo checkpoint: «The FX 422's `item_days` is the running count at the conversion that crossed
    the budget, so it's a lower bound: say «at least {item_days}» in the FX message (or note it in
    `#convert-request-limits`), without counting on (that would change the precedence).»
@@ -4432,9 +4432,9 @@ Voce Z-26 del backlog (basso; E, R13-SEC8, via coordinatore). HEAD `036007e99`.
      (`files/z26_build.sh`). Nessuna àncora nuova.
    - Lo schema resta com'è (`schemas/sleep_wake.py:36`, «another worker runs the jobs»): ora incompleto, per scelta.
 8. ✅ 17/10 ~10:57 — Backlog, nella mia sezione: Z-26 chiusa (✅, commit del coordinatore). Z-24 era già chiusa da
-   H (dev `36a487e84`), arrivata col mio avanzamento: nulla da fare.
-9. ✅ 17/10 ~11:05 — Il coordinatore ha fatto entrare Z-26: `e9999a11a`, `74f04d4eb`, `a2b8cc75d` → dev
-   `8c362c1f3`, CHANGELOG 🐛 `8850fe814`; il mio ramo è avanzato lì (verificato, albero pulito). La descrizione di
+   H (dev `6a28515a3`), arrivata col mio avanzamento: nulla da fare.
+9. ✅ 17/10 ~11:05 — Il coordinatore ha fatto entrare Z-26: `c90d4b32c`, `c9c498d8e`, `d60e4cb10` → dev
+   `6841e0325`, CHANGELOG 🐛 `845af59ab`; il mio ramo è avanzato lì (verificato, albero pulito). La descrizione di
    `schemas/sleep_wake.py:36` resta com'è (sua decisione).
 
 ### Dopo Z-26: cosa resta di Z senza decisioni del developer (17/10 ~11:10, sola lettura)
@@ -4594,8 +4594,8 @@ riletti da me. Percorsi sotto `frontend/src/`.
    - 11:44–11:46: `mkdocs build` stretto rc 0, nessun avviso (carico 47, dopo tre minuti sopra 50); `check-links`
      97 validi (`files/z28_build.sh`).
 6. ✅ 17/10 ~11:40 — Backlog: Z-28 chiusa (✅, commit del coordinatore).
-7. ✅ 17/10 ~11:47 — Il coordinatore ha fatto entrare Z-28: `3a3d5ab1c` + `7ee75149e` → dev `2b9786ae5`, CHANGELOG 🔒
-   `11a6f4ea1`; il mio ramo è avanzato lì (verificato, albero pulito). W e H rivedono dopo l'ingresso. I quattro
+7. ✅ 17/10 ~11:47 — Il coordinatore ha fatto entrare Z-28: `1bf1494ba` + `da5d031ab` → dev `85a8549c4`, CHANGELOG 🔒
+   `680967eb5`; il mio ramo è avanzato lì (verificato, albero pulito). W e H rivedono dopo l'ingresso. I quattro
    testi del runner: «OK, apply them yourself in your next lot (description/print_info only)».
 
 ### Z-27 — le richieste di massa divise in lotti: lavoro (17/10 ~11:50)
@@ -4670,8 +4670,8 @@ riletti da me. Percorsi sotto `frontend/src/`.
   molto sotto; su intervalli di un giorno un lotto può arrivare a 1 000 voci. Non tocca questo lotto: lo segnalo.
 - Test di Z-25 (`test_bulk_limits.py`, `test_fx_api.py`, `test_assets_prices.py`) aggiornati da test-author, che ne ha
   il contesto; quelli di Z-27 passano a 800 000, con le dimensioni ricavate dalle costanti.
-- Via del coordinatore (~12:18): «1,000,000 + 800,000 web budget: OK». J-50 è già nella mia base (`5bfdbe0af`, antenato
-  di `11a6f4ea1`): rischio e AI Export oltre il budget rispondono con un rifiuto codificato (`metric`
+- Via del coordinatore (~12:18): «1,000,000 + 800,000 web budget: OK». J-50 è già nella mia base (`0392b233f`, antenato
+  di `680967eb5`): rischio e AI Export oltre il budget rispondono con un rifiuto codificato (`metric`
   `price_item_days`, rimedio `period_or_assets`), non più un 500. Il raggruppamento degli OR di `convert_bulk` è di MF
   (con SEC9-1): non lo tocco.
 - Pagine da allineare al nuovo numero: `developer/backend/assets/architecture.md` (`:284`, e `:292`, superata da
@@ -4729,8 +4729,8 @@ riletti da me. Percorsi sotto `frontend/src/`.
    (`files/z27_build.sh`); `services ai-export` 1 070 in 414 s, rc 0 (carico 24 alla partenza; dentro anche i test del
    budget di J-50). Porta 6186 libera.
 9. ✅ 17/10 ~13:10 — Backlog: Z-27 chiusa per la parte di Z (A e C); le colonne Δ restano a X con X-R59/X-R60.
-10. ✅ 17/10 ~13:11 — Il coordinatore ha fatto entrare Z-27 e SEC9-2: `107fff751`, `8d236fa11`, `61a6b758b`,
-    `26691436c` → dev `726d90d72`; CHANGELOG `f1786a883` (la riga 🔒 di Z-25 a 1 milione, la riga 🔄 nuova). Il mio
+10. ✅ 17/10 ~13:11 — Il coordinatore ha fatto entrare Z-27 e SEC9-2: `8ad26bee2`, `603d1eb6e`, `4911f114a`,
+    `6d5e5af95` → dev `7eb7d706a`; CHANGELOG `9245c52f6` (la riga 🔒 di Z-25 a 1 milione, la riga 🔄 nuova). Il mio
     ramo è avanzato lì (verificato, albero pulito). Le mie note per X le gira lui; i segnali persi a un fallimento
     parziale dei cambi vanno a X con X-R58.
 
@@ -4878,12 +4878,12 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
    (chiusura fuori da [minimo, massimo], `price_store.py:338`) passa `kept_items`, e il refresh la conta e la annuncia
    senza scriverla.
 9. ✅ 17/10 ~14:21 — Backlog: nessuna riga da chiudere nella mia sezione (X-R65 è nella coda di X); Z-30 aperta.
-10. ✅ 17/10 ~14:20–14:30 — Il coordinatore ha committato X-R65 (`30e19b9d9`, `9e52e571e`) e ha aperto la fusione di
-    dev `5603a23a7` nel mio ramo. Un conflitto, gli import di `prices.py`: tenute le due righe (la mia di
+10. ✅ 17/10 ~14:20–14:30 — Il coordinatore ha committato X-R65 (`708c82384`, `600507b2e`) e ha aperto la fusione di
+    dev `a8dc4ac7e` nel mio ramo. Un conflitto, gli import di `prices.py`: tenute le due righe (la mia di
     `date_range_limits`, quella di dev di `datetime_utils` per `_range_start_in_bounds` di MF); messo in stage solo
     quel file. Rivisti i pezzi fusi da soli (`upsert_prices_bulk`, i tetti di Z-25, `currencies.py`, le tabelle della
     pagina degli asset). Sul risultato: `range-ceiling` 57, `asset-source-guards` 39, `api assets-price` 22,
-    `mkdocs build` stretto rc 0, `check-links` 97, porta libera. Fusione committata dal coordinatore: `d12153a1f`. X
+    `mkdocs build` stretto rc 0, `check-links` 97, porta libera. Fusione committata dal coordinatore: `59987e852`. X
     rivede X-R65; MF-SEC9a entrerà prima, e dev tornerà nel mio ramo con piccoli conflitti in `prices.py`,
     `fx/currencies.py`, `test_fx_api.py`.
 
@@ -5004,11 +5004,11 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
    --check` pulito, porta 6186 libera. Proposte: riga 🔒 del CHANGELOG, commit `fix(prices): floor full-history
    load at 1900`, i due commenti fuori permesso (`planning.py`, plugin del drawdown) se il coordinatore lo autorizza.
 
-> **Aggiunta al lotto** (coordinatore, 17/10 ~15:37, incrociata col checkpoint): «X-R65 entered: dev `c726b9d89`,
-> CHANGELOG 🔒 `8df7164c8`; X's review was OK. […] Your branch is still at `d12153a1f`: I'll bring dev in at your
+> **Aggiunta al lotto** (coordinatore, 17/10 ~15:37, incrociata col checkpoint): «X-R65 entered: dev `6408e5553`,
+> CHANGELOG 🔒 `bfcec020c`; X's review was OK. […] Your branch is still at `59987e852`: I'll bring dev in at your
 > Z-30 checkpoint. Add to the Z-30 lot: X's nit, «… {count} do not» reads «1 do not» for one date; fix the
 > plural.» Il secondo merge (MF-SEC9a + X-R65) l'ha fatto il coordinatore in un worktree temporaneo
-> (`238de598d`, più `f6324af9e`); in dev `date_range_limits.py` cambia solo per la costante di MF, lontana dalla
+> (`92e432546`, più `d850e2282`); in dev `date_range_limits.py` cambia solo per la costante di MF, lontana dalla
 > riga del messaggio.
 
 10. ✅ 17/10 ~15:40–16:00 — Il plurale del 422 `date_out_of_range` (mio, `date_range_limits.py:96`): «1 does not», «N do
@@ -5016,14 +5016,14 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
     libero il resto); la citazione del messaggio in `developer/backend/assets/architecture.md` a docs-writer.
     Nota: anche i tempi dei passi 3–9 sono stati corretti sui tempi dei file (log e bozze): li avevo scritti in
     avanti.
-    > **Note implementazione**: Z-30 è entrato nel frattempo (dev `fb514073b`, combinato su `35f31d492`; il mio
-    > ramo ha dev fino a `e2e883136`): il plurale va nel lotto successivo. Rosso di test-author: RC-W08 ×3, solo il
+    > **Note implementazione**: Z-30 è entrato nel frattempo (dev `97fa29126`, combinato su `3f94984a8`; il mio
+    > ramo ha dev fino a `cd32b1229`): il plurale va nel lotto successivo. Rosso di test-author: RC-W08 ×3, solo il
     > caso di una data rosso («…: 1 do not»), 71/72. Codice: `{count} {'does' if count == 1 else 'do'} not`, una
     > riga. Docs (docs-writer): la citazione in `developer/backend/assets/architecture.md` dice anche *1 does not*;
     > nessun'altra pagina cita il messaggio. `services range-ceiling` 72/72 (`logs/z_z30p_rc.log`); ruff e black
     > puliti; porta libera.
 
-> **Decisione** (coordinatore, 17/10 ~15:40): «Z-30 entered: dev `fb514073b` […] Next: 1. The two comments
+> **Decisione** (coordinatore, 17/10 ~15:40): «Z-30 entered: dev `97fa29126` […] Next: 1. The two comments
 > (`signals/planning.py:68–70` and `drawdown/plugin.py:119–120`): OK, comments only. MF reviews. 2. The queued GBp
 > verification (read-only).»
 
@@ -5077,7 +5077,7 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
   proprietario.
 
 12. ✅ 17/10 ~15:57 — Checkpoint FROZEN (plurale, i due commenti, la verifica GBp, Z-32): 7 file tracciati, nessuno
-    nuovo, su HEAD `35f31d492`. Build stretta rc 0, 0 avvisi; `check-links` 97 validi; `git diff --check` pulito;
+    nuovo, su HEAD `3f94984a8`. Build stretta rc 0, 0 avvisi; `check-links` 97 validi; `git diff --check` pulito;
     porta 6186 libera.
 
 ### E-19 — `GBp` arriva al confronto di `refresh.py:507`? (17/10 ~16:00, sola lettura)
@@ -5098,7 +5098,7 @@ chiusure tenute in pence (1234.5, 1249.0, 1251.0). Risposta mandata al coordinat
 > Più: dove si vede (il report di qualità del portafoglio, come `NON_ISO_CURRENCY` di E-19b, stessa macchina), l'azione
 > suggerita, i test; il plugin yfinance è di X, che revisiona. (a)/(b) restano per lo sviluppatore, dopo la 1.3.
 
-**Stato reale** (HEAD `80cef0e43`).
+**Stato reale** (HEAD `0a9e2bbce`).
 - Il codice grezzo esiste solo dentro il plugin: `_YahooHistoryAcquisition.currency` = `info["currency"]`
   (`yahoo_finance/plugin.py:186`); `get_history_value` restituisce `FAHistoricalData` (`:598`). Dopo, tutto è `GBP`.
 - Nessuna colonna libera per conservarlo: l'asset ha `classification_params` (classificazione), l'assegnazione ha
@@ -5208,7 +5208,7 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
    > **⚠️ Fuori pista**: test-author ha notato che `_normalize_yahoo_date` porta le date in UTC: verificato
    > (yfinance 1.7.0 data le barre a mezzanotte del fuso della borsa) → Z-33, alto, mio (decisione del
    > coordinatore), analisi dopo questo checkpoint.
-2. ✅ 17/10 ~16:40 — Bozza fuori dal repo (`files/z32-draft/apply_z32.py`, da HEAD `80cef0e43`): modello e migrazione
+2. ✅ 17/10 ~16:40 — Bozza fuori dal repo (`files/z32-draft/apply_z32.py`, da HEAD `0a9e2bbce`): modello e migrazione
    010 (file nuovo), descrizione di `FAHistoricalData.currency`, `IssueCode.QUOTE_IN_MINOR_UNIT`, parametro del
    report, aiuto condiviso `_held_asset_quote_facts` (+ `HeldAssetQuoteFacts`, `_quote_in_minor_unit_assets`) e le
    due chiamate, cattura e scrittura nel refresh, azzeramento al cambio di provider, la tabella delle unità minori
@@ -5229,7 +5229,7 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
 > senza borsa), gli eventi (una risincronizzazione sostituisce o aggiunge per data? uno split due volte), le strade
 > di riparazione (post-migrazione che cancella e lascia rileggere, ridatazione mirata, CLI manuale) e il rischio per
 > le righe manuali, come riconoscere gli asset toccati. La scelta della riparazione va allo sviluppatore.
-3. ✅ 17/10 ~17:02 — Codice applicato (`apply_z32.py`, da HEAD `80cef0e43`): ruff e black puliti nel repo (l'I001 della
+3. ✅ 17/10 ~17:02 — Codice applicato (`apply_z32.py`, da HEAD `0a9e2bbce`): ruff e black puliti nel repo (l'I001 della
    copia era spurio). Chiave i18n `dataQuality.quoteInMinorUnit` con `dev.py i18n add` nelle 4 lingue (le etichette
    vere del campo: «Units per single price», «Unità per singolo prezzo», «Unités par prix unitaire», «Unidades por
    precio unitario»); `i18n check` passa (5 052 chiavi).
@@ -5261,7 +5261,7 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
    > parametro dopo `quote_in_minor_unit_assets`, il suo blocco dopo il mio. Il mio avviso non ha `suggestion` (solo
    > `count`, fissato dai test); nessun cambio del modello dell'avviso né del banner.
 
-### Z-33 — le date Yahoo delle borse a est di UTC: analisi (17/10 ~18:00, sola lettura, HEAD `80cef0e43`)
+### Z-33 — le date Yahoo delle borse a est di UTC: analisi (17/10 ~18:00, sola lettura, HEAD `0a9e2bbce`)
 - yfinance 1.7.0 (anche nel lock di v1.2.0 e v1.2.1: le installazioni rilasciate hanno righe spostate) data quote,
   dividendi e split a mezzanotte del fuso della borsa (`scrapers/history.py:494–501`); `_normalize_yahoo_date`
   (`plugin.py:146–150`) li porta in UTC: Milano tutto l'anno, Londra con l'ora legale, Tokyo → il giorno prima.
@@ -5288,9 +5288,9 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
 > same lot. D4: file it (the rows of assets whose yfinance assignment was removed), with (C).» Test obbligatori: i
 > giorni del cambio d'ora, la collisione col ricollegamento delle transazioni, le righe manuali intatte, il secondo
 > giro senza effetto, il ripristino di un backup vecchio. Revisori: X (plugin), H (migrazione e refresh), MF
-> (`price_store`), W (la ridatazione degli eventi). GO alle ~18:20, dopo l'ingresso di Z-32 (c) (dev `46ea09b02`).
+> (`price_store`), W (la ridatazione degli eventi). GO alle ~18:20, dopo l'ingresso di Z-32 (c) (dev `ea1eaddf7`).
 
-### Z-33 — le date Yahoo delle borse a est di UTC: lavoro (17/10 ~18:20, HEAD `22b9b90ce`)
+### Z-33 — le date Yahoo delle borse a est di UTC: lavoro (17/10 ~18:20, HEAD `0de969965`)
 
 **Contratto.**
 - Plugin: `_normalize_yahoo_date` dà la data locale dell'indice; la storia dichiara il fuso della borsa (quello
@@ -5365,7 +5365,7 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
 > session-calendar confirmation and before the last pre-upgrade fetch day; the limits are documented. Go. The
 > adjustment patchwork is a separate, pre-existing finding: file it as Z-35 (owner X + MF, post-1.3, developer
 > decision).» Nota: in dev `series_preparation.py` è diventato `market_series.py` (CP-10d): nessun mio import nuovo.
-   > **Note implementazione** (D″): `apply_z33.py` da HEAD `22b9b90ce`: il plugin (data locale, fuso dichiarato, data
+   > **Note implementazione** (D″): `apply_z33.py` da HEAD `0de969965`: il plugin (data locale, fuso dichiarato, data
    > del valore corrente nel fuso), i due campi degli schemi, il campo del modello, i due file nuovi, nel refresh il
    > passo 0 (la storia intera come calendario, solo per il controllo una tantum), la cattura del fuso (storia, cache,
    > valore corrente) e `_settle_exchange_timezone` prima di ogni scrittura; `PriceStoreOperations.redate_provider_rows`
@@ -5384,7 +5384,7 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
    > fatto girare X-R12 prima di questa correzione) non tocca i dati rilasciati.
    > **⚠️ Fuori pista**: la mia bozza faceva due chiamate (calendario + intervallo): rifatta, il passo 0 ricava anche
    > i dati dell'intervallo chiesto dalla storia intera e il passo 1 non parte per un controllo.
-4. ✅ 17/10, prima delle 19:23 — Codice applicato (`apply_z33.py`, da HEAD `22b9b90ce`): ruff e black puliti nel repo.
+4. ✅ 17/10, prima delle 19:23 — Codice applicato (`apply_z33.py`, da HEAD `0de969965`): ruff e black puliti nel repo.
 5. ✅ 17/10 19:23–19:48 — Corse leggere (`files/z33_light.sh`, carico < 50, una alla volta): `services provider-errors`
    248, `db migration-011` 15, `services asset-source-refresh` 57, `api assets-provider` 40, `api assets-price` 22,
    `db validate` 17; due rossi.
@@ -5420,12 +5420,12 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
    `price_store`; W: `event_store`). Backlog: Z-33 ✅.
    > **⚠️ Fuori pista**: gli orari dei passi 3–7 erano avanti di 30–60 minuti; corretti il 17/10 ~20:30 sugli orari
    > dei log (`files/logs/z_z33_*`: verdi 19:23–19:40, correzione 19:48, v2 20:07–20:08, build 20:11).
-8. ✅ 17/10 20:13–20:23 — Il coordinatore ha committato Z-33 (`60170aae5` + `4fc738106`) e unito dev nel mio ramo
-   (`aea501431`). Corse combinate (`files/z33_combined.sh`, 16 azioni, una alla volta, nessun salto): provider-errors
+8. ✅ 17/10 20:13–20:23 — Il coordinatore ha committato Z-33 (`07ffc126b` + `8f82c64fc`) e unito dev nel mio ramo
+   (`35eccb81c`). Corse combinate (`files/z33_combined.sh`, 16 azioni, una alla volta, nessun salto): provider-errors
    248, migration-011 15, migration-010 13, asset-source-refresh 58, asset-source 61, asset-source-guards 52,
    asset-event-store 71, event-split-ratio 78, asset-digit-limits 99, backup-staging 181, backup-apply 255;
    api assets-provider 40, assets-price 22, assets-events 45, backup-restore-apply 215; db validate 17. Porta libera.
-9. ✅ 17/10 ~20:27 — Ingresso: dev `51b5c8db1`, CHANGELOG 🐛 `b8bcc8cd2`. Pagina devWiki
+9. ✅ 17/10 ~20:27 — Ingresso: dev `15e26618f`, CHANGELOG 🐛 `a0ee75dda`. Pagina devWiki
    `wiki/problems/yahoo-bars-dated-one-day-early-east-of-utc.md` (riga dell'indice, voce del log;
    `check_source_paths.py`: i 13 percorsi della pagina esistono, i 7 mancanti del controllo sono di altre pagine).
 10. ✅ 17/10 20:36–20:48 — Revisione di MF su `redate_provider_rows` (OK, due punti), dal coordinatore (~20:35):
@@ -5482,7 +5482,7 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
     - Pagina devWiki: la presa del segno e il limite del server senza fusi. Doc developer (`architecture.md`,
       `#exchange-timezone` e i limiti): a docs-writer. Backlog: Z-36.
 
-### Z-29 — una scheda della lista asset e lo storico intero: analisi (17/10 ~20:35, sola lettura, HEAD `b8bcc8cd2`)
+### Z-29 — una scheda della lista asset e lo storico intero: analisi (17/10 ~20:35, sola lettura, HEAD `a0ee75dda`)
 
 Richiesta del coordinatore (17/10 ~20:24): sapere se Z-29 entra nella 1.3 (su un'istanza gestita piccola è un rischio
 vero di memoria e CPU); strade, costo nella lista (file di X) e nella query dei prezzi, rossi, dimensione,
@@ -5578,7 +5578,7 @@ raccomandazione. Nessun codice.
 di un cliente del cloud, e la cura è additiva e piccola. Ordine: Z-29a, poi Z-29b. (C) solo come tampone, se la 1.3 non
 ha posto per Z-29b. In attesa della decisione.
 
-### Z-33 ridotta — via la riparazione, resta la correzione del plugin: analisi (19/10 ~11:45, sola lettura, `ede7adf75`)
+### Z-33 ridotta — via la riparazione, resta la correzione del plugin: analisi (19/10 ~11:45, sola lettura, `de0823b81`)
 
 > **Decisione del developer** (19/10, inoltrata dal coordinatore, testuale): «fai solo la correzione, se servirà gli
 > utenti apriranno una issue e gli diremo di cancellare entrambi e rifare il sinc». Prima ancora: niente bonifica dei
@@ -5586,17 +5586,17 @@ ha posto per Z-29b. In attesa della decisione.
 > `origin/dev_release2`: niente riscrittura, solo commit nuovi. Regole nuove: nessuna decisione di prodotto mia (le
 > scelte sono le domande in fondo), il codice solo dopo il via, i carichi pesanti solo negli slot.
 
-**1. I commit** (tutti antenati di `ede7adf75`):
-- `60170aae5` `fix(yahoo): date bars on the exchange's own day`, 22 file (+2 825/−51): plugin, `schemas/prices.py`,
+**1. I commit** (tutti antenati di `de0823b81`):
+- `07ffc126b` `fix(yahoo): date bars on the exchange's own day`, 22 file (+2 825/−51): plugin, `schemas/prices.py`,
   `db/models.py`, `refresh.py`, `price_store.py`, `event_store.py`, `utils/exchange_dates.py` (nuovo), migrazione 011
-  (nuova), quattro file di test (uno nuovo), otto pagine di doc, `_backend_db.py`. Entrato in `51b5c8db1`; CHANGELOG
-  🐛 `b8bcc8cd2`; journal `4fc738106`.
-- `f74229303` la pagina devWiki, la riga dell'indice e la voce del log (journal `13b3d3928`).
-- `79265b1a0` (MF) `redate_provider_rows` solo in avanti: `price_store.py`, quattro test, pagina devWiki (dev
-  `e20055213`).
-- `b5da2277d` (H, X, W) la presa del segno, la guardia degli eventi, la precedenza del fuso, l'avviso del fuso
+  (nuova), quattro file di test (uno nuovo), otto pagine di doc, `_backend_db.py`. Entrato in `15e26618f`; CHANGELOG
+  🐛 `a0ee75dda`; journal `8f82c64fc`.
+- `9ad5f88fb` la pagina devWiki, la riga dell'indice e la voce del log (journal `d6d81b649`).
+- `56aca067c` (MF) `redate_provider_rows` solo in avanti: `price_store.py`, quattro test, pagina devWiki (dev
+  `b8e825be1`).
+- `ee9230612` (H, X, W) la presa del segno, la guardia degli eventi, la precedenza del fuso, l'avviso del fuso
   sconosciuto: `refresh.py`, `event_store.py`, il plugin, `exchange_dates.py`, due file di test, due pagine di doc,
-  pagina devWiki (journal `7fb23a879`, dev `d01a13b10`).
+  pagina devWiki (journal `d935a0a27`, dev `76789beb5`).
 
 **2. Cosa resta: la correzione del plugin** (`yahoo_finance/plugin.py`).
 - `_normalize_yahoo_date` → `index_value.date()`: la data della barra, del dividendo o dello split nel fuso in cui
@@ -5633,7 +5633,7 @@ ha posto per Z-29b. In attesa della decisione.
   la regola «le date nel fuso della borsa»), la precedenza in `provider_yahoo_finance.md`. A docs-writer.
 - Doc utente: la nota di `providers/yahoo-finance.en.md` (le righe spostate al primo giro) va tolta o riscritta (D5).
   Z-33 ha cambiato solo l'EN: se torna esattamente com'era, il debito di traduzione sparisce.
-- CHANGELOG: la riga 🐛 (`b8bcc8cd2`, oggi riga 170) dice che le righe vecchie vengono spostate: va riscritta (D5).
+- CHANGELOG: la riga 🐛 (`a0ee75dda`, oggi riga 170) dice che le righe vecchie vengono spostate: va riscritta (D5).
 - devWiki: la pagina `problems/yahoo-bars-dated-one-day-early-east-of-utc.md` e la sua riga d'indice; il log si scrive
   solo in aggiunta, quindi una voce nuova (D6).
 
@@ -5653,7 +5653,7 @@ ha posto per Z-29b. In attesa della decisione.
     grezzo in `test_yahoo_finance_errors.py` può restare);
   - doc: `database/assets_pricing.md` e `index.md`, `architecture.md#reported-currency`,
     `provider_yahoo_finance.md`, `frontend/data-quality-banner.md`; tre pagine utente cambiate solo in EN
-    (`assets/create-edit`, `providers/yahoo-finance`, `dashboard/index`); la riga ✨ del CHANGELOG (`22b9b90ce`).
+    (`assets/create-edit`, `providers/yahoo-finance`, `dashboard/index`); la riga ✨ del CHANGELOG (`0de969965`).
   - Z-32 (c) torna aperta, con (a) e (b), dopo la 1.3.
 
 **5. Come togliere la 011 (e la 010).** I fatti:
@@ -5731,7 +5731,7 @@ Le opzioni:
   i18n. Poi `mkdocs build` stretto e `check-links`.
 - Stima: mezza giornata la sola 011, circa un giorno con la 010.
 
-### Z-33r — la riduzione, solo la 011: lavoro (19/10 ~11:25, base `97fe88996`)
+### Z-33r — la riduzione, solo la 011: lavoro (19/10 ~11:25, base `4fef69544`)
 
 > **Via** (coordinatore, 19/10 ~11:24): «VIA per "Z-33 ridotta", solo la parte 011. La 010 resta com'è finché il
 > developer non decide (D8).» D1 = (A), testuale del developer: «al più mi dai il comando manuale da lanciare per
@@ -5754,9 +5754,9 @@ Le opzioni:
 - D6: la pagina devWiki riscritta in breve. D7: Z-34 chiusa come superata.
 
 **Passi.**
-1. ✅ 19/10 11:28–11:46 — Test (test-author): `test_asset_source_refresh.py` torna identico a `60170aae5^` (via i 37
+1. ✅ 19/10 11:28–11:46 — Test (test-author): `test_asset_source_refresh.py` torna identico a `07ffc126b^` (via i 37
    `test_z33_*`, 2 512 → 931 righe); `test_assets_provider.py` senza i 2 test della colonna; il file della 011
-   cancellato; `_backend_db.py` identico a `60170aae5^` (via `migration-011`); in `test_yahoo_finance_errors.py` restano
+   cancellato; `_backend_db.py` identico a `07ffc126b^` (via `migration-011`); in `test_yahoo_finance_errors.py` restano
    i test delle date, escono la dichiarazione del fuso e la regola, i due test dell'avviso passano a
    `plugin._exchange_zone`. Rossi visti: 2/2 («red until Z-33r: the Yahoo plugin has no _exchange_zone»).
    `check-orphans` pulito.
@@ -5771,8 +5771,8 @@ Le opzioni:
      (`010_provider_reported_currency (head)`), `upgrade head` senza nulla da fare; una sola testa.
    - Non provato: l'involucro Docker (`docker compose run …`); la SQL è la stessa.
 3. ✅ 19/10 ~11:47 — Codice (`files/z33r-draft/apply_z33r.py`, provato su copia con `smoke_z33r.py`, inverso esatto):
-   i cinque file della riparazione presi invertendo i diff di `60170aae5`, `79265b1a0` e `b5da2277d` (differiscono dalla
-   versione prima di Z-33 solo per C-97c-4 e `88d0fb840`, arrivati dopo); il plugin a mano (D2–D4); cancellati
+   i cinque file della riparazione presi invertendo i diff di `07ffc126b`, `56aca067c` e `ee9230612` (differiscono dalla
+   versione prima di Z-33 solo per C-97c-4 e `7784e8f57`, arrivati dopo); il plugin a mano (D2–D4); cancellati
    `utils/exchange_dates.py` e la 011. Ruff e black puliti; nessun riferimento rimasto.
 4. ✅ 19/10 11:30–11:50 — Doc (docs-writer, otto pagine): `architecture.md#exchange-timezone` ridotta («Dates on the
    Exchange's Own Day»: la regola, le righe vecchie restano, il rimedio, Z-36); via `events.md#yahoo-redate` e
@@ -5782,7 +5782,7 @@ Le opzioni:
    Z-36 minimo.
    > **⚠️ Fuori pista**: docs-writer corregge due mie frasi dell'analisi. (1) La riga vecchia rimasta sta sul giorno
    > senza borsa (domenica o festivo), non sulla vigilia. (2) Togliere la nota non toglie il debito di traduzione della
-   > pagina utente: IT, FR ed ES erano già indietro di due punti (`693b9ac3c` e Z-32 (c)), la nota di Z-33 non era mai
+   > pagina utente: IT, FR ed ES erano già indietro di due punti (`dbc4d86f0` e Z-32 (c)), la nota di Z-33 non era mai
    > stata tradotta.
 5. ✅ 19/10 11:49–11:58 — Corse nello slot (`files/z33r_runs.sh`, una alla volta, carico sotto 50), dopo
    `db populate --force` (la corsia era alla 011): `services provider-errors` 212, `services asset-source-refresh` 26,
@@ -5817,7 +5817,7 @@ DB alla 011 non fa partire il codice nuovo («Can't locate revision identified b
 
 Le corsie di test: `db populate --force` col codice nuovo (cancella il DB, con WAL e SHM, e lo ricrea alla testa).
 
-### Z-29 ridisegnata (N90 approvata dal developer): analisi aggiornata (19/10 ~12:00, sola lettura, `97fe88996` + Z-33r)
+### Z-29 ridisegnata (N90 approvata dal developer): analisi aggiornata (19/10 ~12:00, sola lettura, `4fef69544` + Z-33r)
 
 > **Disegno approvato** (developer, 19/10, testuale: «così va bene e vediamo come va»; dal coordinatore):
 > - la lista Asset manda `max_points`, calcolato dai pixel della scheda;
@@ -5892,11 +5892,11 @@ le regole delle voci, Vitest ed E2E, doc). Totale circa 2,5 giorni.
 **Domande.** Una sola tecnica, per il coordinatore: `resolution` sempre presente (proposta) o solo sulle voci ridotte.
 Risposta (coordinatore, 19/10 ~12:03): sempre presente, `"daily"` anche senza `max_points`, come consigliato.
 
-### Z-29a + Z-29b — la serie ridotta delle schede: lavoro (19/10 ~12:05, base `065c9df77`)
+### Z-29a + Z-29b — la serie ridotta delle schede: lavoro (19/10 ~12:05, base `14e0a7ba3`)
 
 > **Via** (coordinatore, 19/10 ~12:03): «Analisi Z-29 ridisegnata: approvata. Sulla domanda tecnica: `resolution`
 > sempre presente, `"daily"` anche senza `max_points`, come consigli. VIA per Z-29a e Z-29b sul tuo ramo, dopo Z-33r
-> (`065c9df77`)»: riapplicare il parcheggiato; prima i rossi, poi la cura; `api sync` solo col backend pronto; codice e
+> (`14e0a7ba3`)»: riapplicare il parcheggiato; prima i rossi, poi la cura; `api sync` solo col backend pronto; codice e
 > controlli leggeri con carico sotto 50; suite pesanti ed E2E in uno slot da chiedere. Z-33r non entra ancora in
 > `dev_release2`: entra con la fusione delle migrazioni 005–010 in una sola 005 (H).
 
@@ -5934,9 +5934,9 @@ Risposta (coordinatore, 19/10 ~12:03): sempre presente, `"daily"` anche senza `m
 > **In coda dopo Z-29** (coordinatore, 19/10 ~12:45): **Q4** del piano «formule veloci» di MF (decisione del developer:
 > entra tutto nella 1.3): il refresh confrontato col minimo e il massimo della cache invece del cammino giorno per
 > giorno; valori identici, test di parità; prima l'analisi breve, poi il via. Piano: sezione «Piano «formule veloci»»
-> del piano di MF (`6fcde8176`, sul ramo di MF).
+> del piano di MF (`d5e351fdd`, sul ramo di MF).
 
-### Z-32cr — via l'avviso dei pence, la 010 esce (D8): lavoro (19/10 ~12:35, base `065c9df77`)
+### Z-32cr — via l'avviso dei pence, la 010 esce (D8): lavoro (19/10 ~12:35, base `14e0a7ba3`)
 
 > **Decisione del developer** (D8, dal coordinatore, 19/10 ~12:30): «la 010 esce», testuale: «nessuna colonna nel db,
 > sono certo». Al suo posto: «in fase di search e/o "chiedi al provider", come ora con le obbligazioni pre-popoliamo il
@@ -5949,7 +5949,7 @@ Risposta (coordinatore, 19/10 ~12:03): sempre presente, `"daily"` anche senza `m
 
 **Contratto.**
 - Escono: `AssetProviderAssignment.reported_currency` (solo il modello: la colonna resta nei DB fino alla fusione, e
-  nessuno la legge né la scrive); in `refresh.py` i sei pezzi di `aa9e07544` (il campo di `_FetchedRefreshData`, la
+  nessuno la legge né la scrive); in `refresh.py` i sei pezzi di `16613149c` (il campo di `_FetchedRefreshData`, la
   variabile, la voce `"currency"` della cache della storia, la scrittura sull'assegnazione); il reset al cambio di
   fornitore (`provider_management.py`); `IssueCode.QUOTE_IN_MINOR_UNIT` (con `api sync`); in `data_quality.py` il
   parametro, il suo paragrafo e il blocco dell'avviso; in `portfolio_service.py` `_quote_in_minor_unit_assets`, i due
@@ -5966,7 +5966,7 @@ Risposta (coordinatore, 19/10 ~12:03): sempre presente, `"daily"` anche senza `m
    README); i file tornati a HEAD, i nuovi tolti; `git apply --check` delle due patch ok. Albero: solo il piano.
 2. ✅ 19/10 12:37–12:52 — Test (test-author). Via: i quattro `test_z32_*` di `test_asset_source_refresh.py` (8 casi) e
    `test_z32_reported_currency_follows_the_assignment` di `test_assets_provider.py` (6 casi), coi loro aiuti: i due
-   file sono identici a `aa9e07544^`; la classe `TestQuoteInMinorUnitIssue` (7 test, 8 casi) di
+   file sono identici a `16613149c^`; la classe `TestQuoteInMinorUnitIssue` (7 test, 8 casi) di
    `test_data_quality_report.py`; la classe `TestQuoteInMinorUnitDataQuality` di `test_portfolio_api.py`. Adattati:
    `_held(...)` di E-19b2 sui tre campi; il test dell'ordine dei codici (`NON_ISO_CURRENCY` subito dopo
    `INVALID_SPLIT_RATIO`) e quello dell'ordine degli avvisi; il confronto degli ingressi canonici su
@@ -6000,11 +6000,11 @@ Risposta (coordinatore, 19/10 ~12:03): sempre presente, `"daily"` anche senza `m
    `services roi-fifo-utils` intero 1 495, `api assets-provider` 24 (30 − 6 tolti), `api portfolio` 55,
    `front-utility component-unit` 187 file e 4 978 test, `utils gate-i18n-usage` 195, `mkdocs build` stretto senza
    avvisi (37,6 s), `check-links` 97 validi. Porta 6186 libera.
-8. ✅ 19/10 — CHANGELOG: la riga ✨ di `22b9b90ce` la toglie il coordinatore nel commit. Il rosso atteso di
+8. ✅ 19/10 — CHANGELOG: la riga ✨ di `0de969965` la toglie il coordinatore nel commit. Il rosso atteso di
    `db migration-010` va con la fusione di H (coordinatore, 13:00). Q-Q1…Q4 di Z-32 (d) al developer.
 9. ✅ 19/10 ~13:10 — Slot libero e checkpoint FROZEN al coordinatore.
 
-### Z-32 (d) — la base suggerita dal plugin: analisi breve (19/10 ~13:00, sola lettura, `065c9df77`)
+### Z-32 (d) — la base suggerita dal plugin: analisi breve (19/10 ~13:00, sola lettura, `14e0a7ba3`)
 
 > **Richiesta** (developer, dal coordinatore, 19/10 ~12:30): «in fase di search e/o "chiedi al provider", come ora
 > con le obbligazioni pre-popoliamo il campo della quantità base a 100, potremmo farlo anche se il plugin ce lo
@@ -6074,7 +6074,7 @@ guida dei plugin, `provider_yahoo_finance.md`, `user/assets/create-edit.en.md` e
 
 **Costo.** Circa mezza giornata con i test, più la revisione di X. Rossi prima (test-author), poi il codice.
 
-### Z-29: Q-Z29-1 deciso, Q-Z29-2 secondo il developer — analisi (19/10 ~14:40, sola lettura, `f64a71ddc`)
+### Z-29: Q-Z29-1 deciso, Q-Z29-2 secondo il developer — analisi (19/10 ~14:40, sola lettura, `1d03f3699`)
 
 > **Q-Z29-1** (developer, testuale): «si mi torna il campo a parte che comunica le informazioni estremali, di inizio e
 > fine, campo opzionale da mettere solo se serve, ad ora quindi quando l'aggregazione è presente». La serie disegnata
@@ -6188,12 +6188,12 @@ base il **suo** primo valore allineato).
 
 ### Revisione di N92 (X): «clear» al posto del −1, nessun prezzo ≤ 0 (19/10 ~15:20, sola lettura)
 
-> Richiesta del coordinatore (19/10 ~14:55): revisione di `09721f87f` sul ramo `e-alfy-x-plugin-asset-e-ricerca`
-> (sopra `1b2304ff2`). Verificare la fusione F.4 con `"clear"` (OHLC e cifre), `null` e assente come «non toccare»,
+> Richiesta del coordinatore (19/10 ~14:55): revisione di `e80248237` sul ramo `e-alfy-x-plugin-asset-e-ricerca`
+> (sopra `0c31bf36e`). Verificare la fusione F.4 con `"clear"` (OHLC e cifre), `null` e assente come «non toccare»,
 > `FAUpsert.model_construct` in `refresh.py`, il contratto OpenAPI e Zod, nessun lettore che tratti `"clear"` come
 > numero. Solo lettura, niente server.
 
-**Come.** `git show 09721f87f` (30 file); il backend del commit estratto con `git archive` in `/tmp/libreFolio_n92`
+**Come.** `git show e80248237` (30 file); il backend del commit estratto con `git archive` in `/tmp/libreFolio_n92`
 e i modelli provati in Python (nessun server, nessun file del repo toccato); ricerche sul commit.
 
 **Esito: OK, nessun rilievo bloccante.** Due rilievi minimi e una nota.
@@ -6386,12 +6386,12 @@ cambia, e il pianificatore dei lotti tiene insieme la scheda e i suoi bersagli c
 - il budget con gli estremi; PQS-Q14 (rifiutata prima di leggere i secchi) resta;
 - API: OpenAPI con `key`, `resolution`, `sample_like`, `sample_bounds`; una richiesta con scheda e bersaglio.
 
-### Z-29a (v3) e Z-29r — lavoro (19/10 dalle 15:17, base `14247474e`)
+### Z-29a (v3) e Z-29r — lavoro (19/10 dalle 15:17, base `cb373420a`)
 
 > **Via** (coordinatore, 19/10 ~15:16): «Base aggiornata … Il contratto rivisto (`key` + `sample_like`) va bene. Prima
 > di lanciare qualsiasi cosa, ripopola la corsia 6186 con `--force --clean`. Poi via a Z-29a: rossi dalle bozze, cura,
-> checkpoint. Z-29r può andare in parallelo, come da piano.» Base: piano `2cd88b686`, merge di `dev_release2`
-> `47af95978` (fusione delle migrazioni, con Z-33r e Z-32cr), HEAD `14247474e`; N83 di X ha toccato `price_query.py`,
+> checkpoint. Z-29r può andare in parallelo, come da piano.» Base: piano `2a88143fb`, merge di `dev_release2`
+> `09530dfa8` (fusione delle migrazioni, con Z-33r e Z-32cr), HEAD `cb373420a`; N83 di X ha toccato `price_query.py`,
 > la rotta e `test_assets_prices.py` (solo commenti e dettagli d'errore sulle righe di Z-29a).
 
 **Passi di Z-29a.**
@@ -6466,8 +6466,8 @@ cambia, e il pianificatore dei lotti tiene insieme la scheda e i suoi bersagli c
 6. ✅ 19/10 17:15 — Slot pesante (coordinatore, 17:00–17:35, corsia 6186, carico sotto 50), uno alla volta:
    17:10 `services ai-export` 1093/1093 (9′49″); 17:11 `services risk-all` sui 3 file che chiamano `get_prices_bulk`
    61 (857 esclusi); 17:12 `mkdocs build` stretto, 0 avvisi; `mkdocs check-links` 97 validi; porta libera.
-   Previsione dell'integrazione con `dev_release2` (`ccc2a4141`, base comune `47af95978`), in sola lettura con
-   `git merge-file` su copie: 4 file in comune (backlog, `schemas/prices.py` con N92 `09721f87f`, `architecture.md`,
+   Previsione dell'integrazione con `dev_release2` (`8c6e984ee`, base comune `09530dfa8`), in sola lettura con
+   `git merge-file` su copie: 4 file in comune (backlog, `schemas/prices.py` con N92 `e80248237`, `architecture.md`,
    `_backend_services.py`), nessun conflitto testuale; nel `prices.py` unito la docstring di N92 (con apici inversi) è
    seguita dal mio `model_config`. OpenAPI di un albero temporaneo (il backend di `dev_release2` + i miei file): nessuno
    dei 225 `$ref` obbligatori va verso una descrizione con apici inversi; `FAPricePoint` è un componente solo (niente
@@ -6517,7 +6517,7 @@ di X (costruito su `_fill_point` e `_sample_series`). Note di X:
   anche nel nuovo taglio dopo un `bulk_too_many_days`.
 - Facoltative, non bloccanti: gli apici inversi in Swagger; l'import di `SampleResolution` da un servizio puro.
 
-### Z-32 (d) — la base suggerita dal plugin, con la scaletta: analisi (19/10 ~17:40, sola lettura, `6510fe169`)
+### Z-32 (d) — la base suggerita dal plugin, con la scaletta: analisi (19/10 ~17:40, sola lettura, `fb0795cfb`)
 
 > **Risposte del developer** (dal coordinatore, 19/10 ~17:14). Q-Q1, testuale: «una lista espandibile, se per ora
 > solo GBp è ritornato, allora solo lui verrà convertito, se trovi altri asset in altre valute estendi subito o in
@@ -6528,10 +6528,10 @@ di X (costruito su `_fill_point` e `_sample_series`). Note di X:
 > risultato è diverso dal valore attuale, compare nella modale come campo che migra e l'utente conferma; in creazione
 > la scelta di un risultato sovrascrive come per il nome (developer, testuale: «mi aspetto avvenga lo stesso»); gli
 > asset esistenti cambiano solo se l'utente conferma nella modale. Il coordinatore: verificare la regola delle
-> obbligazioni di oggi (il 100 che «resta») e allinearla; lotto piccolo dopo il checkpoint di Z-29a (`37c3ec3ee`,
-> `6510fe169`), prima di Z-29s; revisore X.
+> obbligazioni di oggi (il 100 che «resta») e allinearla; lotto piccolo dopo il checkpoint di Z-29a (`c8e06a143`,
+> `fb0795cfb`), prima di Z-29s; revisore X.
 
-**Oggi, la regola delle obbligazioni** (letta a `6510fe169`, `frontend/src/lib/components/assets/`):
+**Oggi, la regola delle obbligazioni** (letta a `fb0795cfb`, `frontend/src/lib/components/assets/`):
 1. `shouldSeedBondQuoteBase` (`assetFormState.ts:28`) mette 100 solo a un `BOND` col campo esattamente a 1 e non
    toccato (`quoteBaseQuantityTouched`).
 2. La chiama `maybeSeedBondQuoteBase` (`AssetModal.svelte:828`) in tre punti: il precompilato dell'import (`:665`;
@@ -6645,7 +6645,7 @@ confronto.
 **Costo.** Circa un giorno e mezzo: backend mezza giornata, frontend tre quarti, doc un quarto; più la revisione di
 X. Il 19/10 alle 13:00 era mezza giornata: in più la scaletta nel confronto, la modifica e la nota della riga.
 
-### Z-32 (d) — lavoro (19/10 dalle 17:50, base `6510fe169`)
+### Z-32 (d) — lavoro (19/10 dalle 17:50, base `fb0795cfb`)
 
 > **Via** (coordinatore, 19/10 ~17:40), con le risposte del developer: Q-Q1 solo `GBp` (la lista è
 > `MINOR_UNIT_FACTORS`); Q-Q2 il testo proposto; Q-Q5 **(a)**, la riga spuntata come le altre, anche quando la
@@ -6656,7 +6656,7 @@ X. Il 19/10 alle 13:00 era mezza giornata: in più la scaletta nel confronto, la
 > toccare** in `ProviderComparisonModal.svelte` il badge del tipo col pallino (righe ~266-271, `assetTypeBadgeClass`,
 > `assetTypeBadgeDotClass`, `data-testid="asset-type-dot"`).
 
-**Q-Q6, verificato: gli altri campi si sovrascrivono, quindi la base si sovrascrive.** In modifica, a `6510fe169`:
+**Q-Q6, verificato: gli altri campi si sovrascrivono, quindi la base si sovrascrive.** In modifica, a `fb0795cfb`:
 1. La scelta (`AssetModal.svelte:708`) con un identificativo diverso da quello salvato (`:710`) chiede prima la
    conferma del cambio d'identificativo (`assets.confirm.identifierChanged`,
    `AssetModalSelectionPrompts.svelte:100-103`). Confermata (`:1695`), oppure senza cambio, passa ad
@@ -6708,7 +6708,7 @@ lo porta a 100 (Salva lo scrive).
      docstring del modulo; le costanti di `mockprov` scritte come stringhe, così il modulo si carica oggi);
    - `scripts/test_runner/_backend_services.py`: `services quote-base-suggestion`, `isolation="pure"`, dopo
      `probe-rate-limit`.
-   Ripresa (20/10): HEAD `6510fe169`, gli stessi 4 file sporchi; corsia ripopolata (08:47, `db populate --force
+   Ripresa (20/10): HEAD `fb0795cfb`, gli stessi 4 file sporchi; corsia ripopolata (08:47, `db populate --force
    --clean`, 0 anomalie). Lint: ruff pulito; black chiedeva di spezzare una riga del runner oltre i 300 caratteri,
    divisa in due `print_info` come nei vicini. `check-orphans` verde (08:48). Visti: 08:48
    `services quote-base-suggestion` 44 rossi per le ragioni dette (modello, campi, metodo e costanti di `mockprov`
@@ -6768,9 +6768,9 @@ lo porta a 100 (Salva lo scrive).
 6. Checkpoint del backend: ✅ 20/10 09:25, dopo di nuovo sul codice finale `api assets-provider` 30/30 (09:22) e
    `api plugin-settings` 16 (09:23). FROZEN. Il frontend (passi 3 e 4, il via c'è già) dopo il commit del coordinatore;
    poi Z-29a-f.
-7. ✅ 20/10 09:32 — Base nuova e revisione combinata. Il coordinatore ha committato (`3cf04d0aa` codice, `815f1819e`
-   giornale) e unito `dev_release2` (`701054da9`, con Z-29a v3 + Z-29r già in dev, N69a, X-R45b-ui, N61-form, B-8,
-   L1a): HEAD `ff5bf1543`, albero pulito. Corsia ripopolata (09:27, `--force --clean`, 0 anomalie); 09:27
+7. ✅ 20/10 09:32 — Base nuova e revisione combinata. Il coordinatore ha committato (`d6c65f0a5` codice, `0952dd330`
+   giornale) e unito `dev_release2` (`ad869d2ea`, con Z-29a v3 + Z-29r già in dev, N69a, X-R45b-ui, N61-form, B-8,
+   L1a): HEAD `6982f6c54`, albero pulito. Corsia ripopolata (09:27, `--force --clean`, 0 anomalie); 09:27
    `services quote-base-suggestion` 47/47; 09:31 `api assets-provider` 30/30 (il server ha ricostruito il frontend
    della base unita). N61-form ha toccato `AssetSearchAutocomplete.svelte` (3 righe) e il suo test: riletti prima del
    brief.
@@ -6791,7 +6791,7 @@ lo porta a 100 (Salva lo scrive).
    - ✅ 10:15 — Cura: `files/z32d-draft/apply_z32d_frontend.py`, provato su una copia di HEAD (inverso esatto),
      applicato con la stessa impronta (`z32d_frontend_applied.md5`); `dev.py i18n add` di
      `assets.modal.quoteBaseSuggested` e `…Plain` in quattro lingue. Verdi: i 5 file 284/284.
-   - (Interruzione 10:15–10:40: il rosso di `core-unit` da Z-29a, sezione sotto, committato `19bf858cb`.)
+   - (Interruzione 10:15–10:40: il rosso di `core-unit` da Z-29a, sezione sotto, committato `6e17cef6c`.)
    - ✅ 10:52 — Controlli: `front check` prima 4 errori di TS (lo stato del suggerimento dichiarato con l'annotazione
      e `null` restringeva il tipo a `null` nel `$derived` in cima allo script): `let quoteBaseHint =
      $state<QuoteBaseHint | null>(null)`, come nel resto del repo, stessa sostituzione nello script e nel worktree, di
@@ -6814,13 +6814,13 @@ lo porta a 100 (Salva lo scrive).
      `user/assets/providers/yahoo-finance.en.md` (un paragrafo su `GBp` → 100), `asset_plugin_guide.md` (la frase «does
      not read the suggestion yet» sostituita), `frontend/components/features/asset-identity.md` (sottosezione nuova
      `#quote-base-proposal`; corretta una frase che dava la decisione del confronto a `fetchAndCompareMetadata`, che
-     da `fc6220d28` è in `compareMetadata`). `mkdocs build` stretto 0 avvisi, `check-links` 97 validi.
+     da `6e9e5ca7f` è in `compareMetadata`). `mkdocs build` stretto 0 avvisi, `check-links` 97 validi.
      `translate-validate` sulle due pagine utente: 36 errori, di cui 6 miei (un link nuovo per lingua su ciascuna
      pagina) più gli avvisi dei codici nuovi (`.L`, `GBP`, `GBp`); gli altri 30 c'erano già (le traduzioni di
      `create-edit` non hanno le sezioni «🔎 Search Online results» e «📨 Let us know»). Nessuna marcatura: è debito di
      traduzione vero, per la pipeline su richiesta.
 
-**Stato alla pausa (19/10 18:20).** HEAD `6510fe169`; nessun commit, nessun comando git. File sporchi: questo piano,
+**Stato alla pausa (19/10 18:20).** HEAD `fb0795cfb`; nessun commit, nessun comando git. File sporchi: questo piano,
 `test_assets_provider.py`, `_backend_services.py` (modificati), `test_quote_base_suggestion.py` (nuovo). Nessun codice
 di prodotto nel worktree. Nessuna corsa né server della corsia; porta 6186 libera. Le bozze sono tutte in
 `files/z32d-draft/` (nulla solo in /tmp). La data-dir `/tmp/librefolio-r13-z` sparisce col riavvio.
@@ -6835,9 +6835,9 @@ di prodotto nel worktree. Nessuna corsa né server della corsia; porta 6186 libe
    `test-only-providers`), `api sync`.
 6. Passo 3 (rossi del frontend) e seguenti.
 
-### Z-29a — il rosso di `core-unit` in dev (20/10 ~10:15, base `ff5bf1543`, precedenza su tutto)
+### Z-29a — il rosso di `core-unit` in dev (20/10 ~10:15, base `6982f6c54`, precedenza su tutto)
 
-> **Segnalazione** (coordinatore, 20/10 ~10:15): nel suo gate su `701054da9`, `front-utility core-unit` dà 3 falliti,
+> **Segnalazione** (coordinatore, 20/10 ~10:15): nel suo gate su `ad869d2ea`, `front-utility core-unit` dà 3 falliti,
 > tutti in `src/lib/components/assets/detail/assetDetailPriceQuery.test.ts`
 > (`parseAssetPriceQueryWithSignalIsolation`): l'uscita contiene `"resolution": "daily"`, che il test non si aspetta.
 > «Decidi tu se è giusto che il client lo veda come predefinito […] oppure se il campo va dichiarato diversamente.»
@@ -6860,7 +6860,7 @@ di prodotto nel worktree. Nessuna corsa né server della corsia; porta 6186 libe
    > **⚠️ Fuori pista** (mio, da Z-29a): nello slot di Z-29a avevo lanciato ai-export, rischio e mkdocs, nessuna
    > suite Vitest. Da qui in avanti un cambio di contratto API passa anche da `core-unit`.
 
-### Z-29a-f — una voce ridotta senza prezzi non legge e non conta (20/10 ~11:50, base `daf7b200d`)
+### Z-29a-f — una voce ridotta senza prezzi non legge e non conta (20/10 ~11:50, base `5f4973f80`)
 
 > **Richiesta** (nota di X alla revisione di Z-29a v3, girata dal coordinatore il 20/10 ~09:10; lotto piccolo subito
 > dopo Z-32 (d)): «`include_price: false`. Le righe dei secchi si leggono e contano nel budget lo stesso, quindi una
@@ -6869,7 +6869,7 @@ di prodotto nel worktree. Nessuna corsa né server della corsia; porta 6186 libe
 > notato anche Y e MF. Serve al dialogo dei confronti (Z-29d): la voce della scheda va con `include_price: false` e dà
 > il passo al bersaglio (`sample_like`).
 
-**Oggi** (`price_query.py` a `daf7b200d`): una voce con `max_points`, `resolution` o `sample_like` e
+**Oggi** (`price_query.py` a `5f4973f80`): una voce con `max_points`, `resolution` o `sample_like` e
 `include_price: false` ha il suo piano (`_plan_samples`, due sonde per asset); se il passo è settimanale o mensile
 conta i punti più due nel budget (`:606`) e i suoi secchi si leggono (`_read_samples`, `:615`); se il passo è
 giornaliero entra nella lettura giornaliera (`asset_ranges`, `:541`) e conta i giorni del riempimento (`:608`). Alla
@@ -6906,11 +6906,11 @@ una copia). 3. Verdi: `services price-query-sampling`, `api assets-price`, i vic
    `#bulk-request-limits` (un segnaposto non conta), «The answer» e «The reads» di `#price-query-sampling` (cosa fa
    un segnaposto, il caso del dialogo detto come possibilità: il web non manda ancora questi campi). `mkdocs build`
    stretto 0 avvisi, `check-links` 97 validi.
-5. ✅ Checkpoint FROZEN. In comune con `dev_release2` (`6e1761121`, che contiene già `daf7b200d`) solo
+5. ✅ Checkpoint FROZEN. In comune con `dev_release2` (`283259261`, che contiene già `5f4973f80`) solo
    `_backend_services.py` (7 commit di dev), senza conflitto (`git merge-file`).
-   Committato `5bbadda95` (coordinatore, 20/10 ~13:15), entra col treno 4.
+   Committato `fa20c7ba0` (coordinatore, 20/10 ~13:15), entra col treno 4.
 
-### Z-29b e Z-29s — analisi breve aggiornata (20/10 ~13:30, sola lettura, `5bbadda95`)
+### Z-29b e Z-29s — analisi breve aggiornata (20/10 ~13:30, sola lettura, `fa20c7ba0`)
 
 > **Ordine deciso dal developer** (dal coordinatore, 20/10 ~13:15): Y-39 (scheda e anteprima tornano un solo
 > componente, anche per i cambi), poi Z-29b, poi Z-29s, poi Y-40 (le viste assoluto / % / rendimento mobile sulle
@@ -6971,13 +6971,13 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
 **Il lotto pronto mentre Y fa Y-39:** la parte backend di Z-29s (Z-29s-a). In alternativa, l'analisi di Q4 di MF
 («formule veloci»), anche lei fuori dai file di Y.
 
-### Z-29s-a — i segnali ridotti dal backend, la metà backend: lavoro (20/10 dalle ~13:40, base `5bbadda95`)
+### Z-29s-a — i segnali ridotti dal backend, la metà backend: lavoro (20/10 dalle ~13:40, base `fa20c7ba0`)
 
 > **Via** (coordinatore, 20/10 ~13:34): «Z-29s-a (la metà backend) durante Y-39: hai il via. Non cambia il risultato
 > voluto dal developer, anticipa solo il backend senza toccare i file di Y. Prima i rossi; rivedono MF e Y.» Z-29fx (la
 > riduzione su `/fx/currencies/convert`) in coda dopo Y-40, da decidere col developer.
 
-**Il contratto** (verificato sul codice di `5bbadda95`; copia di lavoro: `files/z29s-draft/CONTRACT.md` della sessione).
+**Il contratto** (verificato sul codice di `fa20c7ba0`; copia di lavoro: `files/z29s-draft/CONTRACT.md` della sessione).
 - La regola del browser: `renderBuckets` (un secchio per punto del prezzo, datato al punto), `downsampleRenderedSignal`
   (scalari col profilo dell'uscita, bande con l'inviluppo), e in `backendRenderer.ts` le corse fra i punti senza valore
   (linee e aree; le barre no, i nulli spariscono e basta; le bande tengono i punti completi).
@@ -7008,7 +7008,7 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
   - R4, oltre 30 corse il browser unisce i buchi: dopo la riduzione conta le corse ridotte.
 
 **Passi.**
-1. ✅ 20/10, confermati il 21/10 (12:38–12:47, base `208199bf6`, corsia 6186 popolata con `db populate --force --clean`) —
+1. ✅ 20/10, confermati il 21/10 (12:38–12:47, base `84ccb8116`, corsia 6186 popolata con `db populate --force --clean`) —
    I rossi (test-author): blocco nuovo in `test_signal_aggregation.py` (il riduttore e la tabella), la tabella,
    blocco Vitest in `timeSeriesAggregation.test.ts`, blocco in `test_price_query_sampling.py` (integrazione coi plugin
    veri: EMA, BOLLINGER, MACD, RISK_DRAWDOWN, ASSET_CALENDAR_ROLLING_RETURN), i 422 aggiornati in PQS-S03 e
@@ -7019,7 +7019,7 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    > series alone: not with signals…»); `api assets-price` 1 rosso / 31 verdi (`assert 422 == 200`, il 422 stesso).
    > Nessun errore di import o di configurazione. Il Vitest di `timeSeriesAggregation` era già verde (62) alla base: è il
    > testimone di parità lato browser, legge la tabella e prova `downsampleRenderedSignal`, non ha una cura da fare.
-2. ✅ 21/10 ~12:55 — La cura: le sostituzioni di `files/z29s-draft/apply_z29s.py`, base `208199bf6`.
+2. ✅ 21/10 ~12:55 — La cura: le sostituzioni di `files/z29s-draft/apply_z29s.py`, base `84ccb8116`.
    > **Note implementazione**: i quattro file di prodotto (`aggregation.py`, `schemas/prices.py`, `price_query.py`,
    > `api/v1/assets/prices.py`) avevano ancora gli md5 di base della bozza (`z29s_base.md5`); dopo la cura coincidono
    > con `z29s_applied.md5` byte per byte (prima del ritocco sotto). Le due descrizioni del runner
@@ -7057,7 +7057,7 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    riduzione, i residui R1–R4) e Y (il contratto: `signals` accettati col campionamento, nessun campo nuovo nelle
    richieste, `resolution` e `sample_bounds` come prima). Backlog: Z-29 (stato) e Z-40 (residui R1–R4).
 
-### Z-40 · O1 — le serie di un segnale ridotto escono sulle stesse date (21/10, ondata 2, base `89e8b2e61`)
+### Z-40 · O1 — le serie di un segnale ridotto escono sulle stesse date (21/10, ondata 2, base `e44422ed0`)
 
 > **Decisione del developer (21/10): allineare.** Dopo la riduzione le serie dello stesso segnale possono avere date
 > diverse (`_scalar_points` scarta i nulli iniziali di ogni serie per conto suo), mentre `_validate_series_alignment`
@@ -7095,7 +7095,7 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    `sample_signal_series()`). **O3**: con la riduzione restano solo la data del secchio e, per il rendimento, la
    provenienza. **O4**: Z-29b non deduce il passo dalla densità delle serie dei segnali; lo legge da `resolution`.
 
-### Z-29b — la lista Assets chiede serie ridotte: lavoro (21/10, ondata 2, base `0fdbb28a7`)
+### Z-29b — la lista Assets chiede serie ridotte: lavoro (21/10, ondata 2, base `0c8bb973f`)
 
 > Contratto: «Z-29b, il contratto della pagina» (sopra). Note di MF n1–n3 e requisito dei lotti di X applicati.
 
@@ -7128,14 +7128,14 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    > rilegge solo se il passo cambia.
 2. ✅ 21/10 — Verdi: Vitest intero 593 file / 20597 test (`--maxWorkers=4`, `LC_ALL=en_US.UTF-8`), `front check`
    0 errori 0 avvisi, `mkdocs build` exit 0, prettier pulito sui file toccati.
-3. ✅ 21/10 ~17:00 — Dopo il merge di Y-39b (`5ff6d40f5`): `AssetCard` passa `baselineValue={baseValue}` a `PriceChartCompact`
+3. ✅ 21/10 ~17:00 — Dopo il merge di Y-39b (`bce346b08`): `AssetCard` passa `baselineValue={baseValue}` a `PriceChartCompact`
    (il colore e la linea tratteggiata in assoluto partono da `base.value`, cioè `sample_bounds.first`). `api sync` 0;
    Vitest dei file toccati 97 file / 3151 test; `front check` 0/0. **E2E `front-asset asset-list` nello slot** (corsia 6186
    ripopolata, `LC_ALL=en_US.UTF-8`): 43 passati in 2,3 min, avviso di sync C-66 compreso.
    > **⚠️ Fuori pista**: O2 resta con una soluzione della pagina (`signalBaseData`), non un parametro `basePoint` di
    > `renderBackendResults` (file di Y-39b).
 
-### Z-29fx — i cambi campionati, il backend di `/fx/currencies/convert` (21→22/10, ondata 3, base `2879ae3e4`)
+### Z-29fx — i cambi campionati, il backend di `/fx/currencies/convert` (21→22/10, ondata 3, base `85fda260e`)
 
 > Brief dell'ondata 3: solo backend; la pagina dei cambi è di Y (Y-40, parte cambi). Stessa regola della query dei
 > prezzi (Z-29a, Z-29s-a, O1), nessuna seconda implementazione.
@@ -7171,7 +7171,7 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    `test_risk_signal_plugins.py` 45. Richiesta del coordinatore: i 5 test Vitest di Z-29b registrati in
    `_frontend_utility.py` (core-unit); `check-orphans` pulito (596 unitari, 515 backend).
 
-### Z-29d ridotto — l'anteprima del dialogo dei confronti: analisi (22/10, ondata 3, base `46455857a`, sola lettura)
+### Z-29d ridotto — l'anteprima del dialogo dei confronti: analisi (22/10, ondata 3, base `c57e9f2b0`, sola lettura)
 
 **Il problema, oggi in dev (dopo Z-29b).** Nel dialogo delle impostazioni di una scheda ridotta (settimanale o mensile),
 se l'utente sceglie un nuovo asset da confrontare, l'anteprima non disegna la linea finché non salva. Il motivo:
@@ -7200,7 +7200,7 @@ una scheda settimanale, scelto un bersaglio nel dialogo, l'anteprima ha la linea
 sporchi nel worktree di Y (Y-40, 196 righe nuove nella pagina, proprio su bersagli e richieste). Scritto ora, il
 caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
 
-### Z-29d ridotto — lavoro (22/10, ondata 3, base `35101193c`, dopo il merge di Y-40 asset)
+### Z-29d ridotto — lavoro (22/10, ondata 3, base `a696b6db3`, dopo il merge di Y-40 asset)
 
 > Via del coordinatore: stanotte `assets/+page.svelte` e `reducedPriceQuery.ts` sono miei; `ChartSettingsModal.svelte`
 > e lo store delle impostazioni restano di Y.
@@ -7218,7 +7218,7 @@ caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
    > `sample_like` parte prima del salvataggio) ha bisogno di un `data-testid` sul pulsante delle impostazioni della scheda
    > (`AssetCard.svelte`, oggi solo un `title` tradotto): non è un file mio stanotte. Proposto come seguito.
 
-### E2E di Z-29d — l'anteprima del dialogo dei confronti (22/10, ondata 4, base `c042f2481`)
+### E2E di Z-29d — l'anteprima del dialogo dei confronti (22/10, ondata 4, base `295a09c86`)
 
 > Brief dell'ondata 4 (Sonnet): lo spec, registrato nel runner, verde due volte nello slot; il `data-testid` sul pulsante
 > delle impostazioni di `AssetCard` lo aggiunge Y. Questo turno: analisi e spec scritto, **non ancora lanciato**.
@@ -7246,7 +7246,7 @@ caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
    confronto. Nessun conteggio di vicini, nessuna posizione, nessun testo tradotto. Non lanciato.
 2. ✅ 22/10 — Registrato in `_frontend_asset.py` (`asset-card-comparison-preview`, una funzione e una riga); `check-orphans`
    pulito (149 E2E, 607 Vitest, 518 backend raggiungibili).
-3. ✅ 22/10 — Il `data-testid` di Y è `asset-card-settings` (commit `6f816aad8`, nella base): la costante dello spec coincideva,
+3. ✅ 22/10 — Il `data-testid` di Y è `asset-card-settings` (commit `df6db2316`, nella base): la costante dello spec coincideva,
    nessuna modifica. `front check` 0/0 (tipi dello spec compresi). **Nello slot** (corsia 6186, `LC_ALL=en_US.UTF-8`, `flock`):
    verde due volte di fila (7,9 s e 7,3 s) e una terza dopo la prova sotto.
 4. ✅ 22/10 — **Prova che lo spec discrimina** (mutazione locale, ripristinata): tolta per una corsa la scrittura
@@ -7255,7 +7255,7 @@ caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
    altrove. La pagina è stata ripristinata byte per byte (`git status` pulito su di lei) e la terza corsa, con la build
    rifatta, è verde. La fragilità temuta dell'impronta del canvas non si è vista in tre corse.
 
-## Ondata 5 (23/10/2026, base `1fd80c481` = `dev_release2`, treni 9 e 10)
+## Ondata 5 (23/10/2026, base `61a6c828b` = `dev_release2`, treni 9 e 10)
 
 Due lotti: **Q1…Q3 + S1** («formule veloci» dei prezzi, treno 11b, blocca il tag, X rivede) e **Z5-F1** (l'avviso del
 rolling return tradotto, treno 11a). Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-Z.md`. Sonnet.
@@ -7364,7 +7364,7 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
 > `point_on(d)`; nessuna vista densa di finestra; `market_series.py` non si tocca (J5-2 lo cambia dopo).
 
 1. ✅ 23/10 — Rossi. `test_price_query_observations.py` (nuovo): l'oracolo è una **copia** della catena di HEAD
-   `1fd80c481` (`head_dense` + `head_convert` + `head_signals`) dentro il test. OQ-01 parità, 18 casi
+   `61a6c828b` (`head_dense` + `head_convert` + `head_signals`) dentro il test. OQ-01 parità, 18 casi
    (asset × bersaglio × finestra: nativo, diretto, inverso, coppia senza tasso, tassi che cominciano tardi, storia corta,
    chiusura 0, finestra di un giorno, prima della storia, dopo l'ultima riga, sopra il buco di tassi, festivi); OQ-02/03
    errori e ordine; OQ-04 conteggio (le conversioni date a `convert_bulk` sono una per tratto di riga-prezzo e riga-tasso
@@ -7463,14 +7463,14 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
 > `portfolio_financial` e `broker_financial`) e in `broker_cost_efficiency._average_nav` (`:563`).
 
 1. ✅ 25/10 — Rossi. `test_ai_export_performance_steps.py` (nuovo, 43 test, registrato come `services
-   ai-export-performance-steps`, PURE). L'oracolo è una **copia congelata** della funzione per giorno a `d96519b86` dentro il
+   ai-export-performance-steps`, PURE). L'oracolo è una **copia congelata** della funzione per giorno a `f7e7c3828` dentro il
    test, applicata alla stessa storia espansa a un punto al giorno. APS-01 parità campo per campo su 7 storie (copre il
    periodo, parte tardi, finisce presto, entrambi, un tratto, un giorno, vuota) × 5 piani di bucket (1, 4, 8, 16, 30); APS-02
    il giorno di un estremo e della chiusura precedente è un giorno, mai la `date` di un tratto; APS-03 parità di NAV fra tratti
    lontani, vince il giorno più vecchio; APS-04 la media è pesata per la lunghezza, il conteggio è in giorni, il periodo va dalla
    prima `date` all'ultima `through`. **26 rossi per la ragione giusta** (un tratto conta come un giorno), 17 verdi (le storie
    con un bucket solo, il giorno solo, la vuota: coincidono per costruzione).
-2. ✅ 25/10 — Cura (dopo il checkpoint piccolo di MF, `79468ddd2`). `build_performance_bucket_rows` legge i tratti con
+2. ✅ 25/10 — Cura (dopo il checkpoint piccolo di MF, `5ffd798cf`). `build_performance_bucket_rows` legge i tratti con
    `points_between` (taglio ai bordi): `min`/`max` per confronto stretto sui tratti (il primo a raggiungere il valore vince;
    la data è quella del tratto tagliato, cioè `max(date, inizio bucket)`), la chiusura precedente è il **giorno** `through`
    dell'ultimo tratto del bucket prima (`variation_start_date`). `_average_nav` pesa ogni tratto per la sua lunghezza
@@ -7482,7 +7482,7 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
    > `through` (secondo checkpoint di MF): allora la sottoclasse si toglie.
    > **⚠️ Fuori pista**: sul percorso vero (`load_portfolio_report`) il report è ancora giornaliero e senza `through`: i due
    > lettori falliscono finché non arriva il report a tratti di MF. Non c'è ripiego, è voluto (nessun doppio percorso).
-3. ✅ 26/10 — Report a tratti di MF (unione `f6ca43fdc`): le due fixture tornano a `PortfolioHistoryPoint` (che ha `through`), via
+3. ✅ 26/10 — Report a tratti di MF (unione `70c350391`): le due fixture tornano a `PortfolioHistoryPoint` (che ha `through`), via
    `_StepHistoryPoint`. `services ai-export` 1 133 passati sul percorso vero.
 4. ✅ 26/10 — Probe di diff sulle 6 copie (`base`, `eur1900`, `usd1900`, `buy1900`, `typo1500`, `nocrypto`, quelle di MF in
    `ondata5/MF-p4/corpora`): per ognuna `portfolio.overview_and_history` e `portfolio.asset_history` (tutti i broker) e
@@ -7506,7 +7506,7 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
 ### Anno breve nei punti di Z (25/10, ondata 5, D-P4)
 
 > `Date.UTC(24, …)` legge l'anno 24 come 1924. Elenco di Y: `ondata5/Y-anno-breve-fuori-ambito.md`; cura: `utcMs` di
-> `utils/dateOnly.ts` (nel ramo con `ac26cfd97`).
+> `utils/dateOnly.ts` (nel ramo con `53b195971`).
 
 1. ✅ 25/10 — Rossi. 8 test in 3 file già registrati: `TimeSeriesStore.test.ts` (serie con `0024-03-01`, `0001-01-01` e a
    cavallo del 100: i punti si trovano, nessun gap nel 19xx; l'invalidazione di un intervallo corto non tocca il 1924),
@@ -7517,7 +7517,7 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
    `subtractMonths`, `snapshotDataRenderer.dateOrdinal` (esportata per il test): `utcMs` al posto di `Date.UTC`. Verdi: Vitest
    `stores`, `features/ai-export`, `utils`, `components/charts` 135 file / 4 088 test; `front check` 0 errori 0 avvisi (dopo
    `api sync`: il client generato era vecchio e dava 4 errori in `txTradeAmountApi.ts`, non miei); Prettier pulito.
-5. ✅ 26/10 — Probe rifatto dopo l'unione di J (`7c33de840`, J `968cff655`: il lettore del rischio a tratti), **senza**
+5. ✅ 26/10 — Probe rifatto dopo l'unione di J (`23576ccb0`, J `3cf0fac47`: il lettore del rischio a tratti), **senza**
    `Z_PROBE_IGNORE_RISK`: stesse 6 copie, stesse 60 costruzioni per copia (360), HEAD contro il ramo. **0 differenze** su
    tutte, comprese `portfolio.drawdown_summary` e `broker.drawdown_summary` (`n_observations`, `coverage_ratio`) e le
    statistiche di dimensione. Log: `ondata5/Z-probe/out_full.log`.

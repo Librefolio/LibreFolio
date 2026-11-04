@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | `../S4-livello-4.md` (sola lettura) |
 | Branch | `e-alfy-h-monte-carlo` (sessione H del round 1, riusata) |
-| Baseline | `7d75a9c6c283af4bccf11f6bf380ffaa701d53eb` ✅ verificata, albero pulito |
+| Baseline | `44dd7779db5856e547a3c93d06ee7bad6b1da9ae` ✅ verificata, albero pulito |
 | Lane | porta `6156` · data dir `/tmp/librefolio-r2-s4` |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 | Analisi | consegnata prima di qualunque codice; autorizzazione del developer via approvazione del piano |

@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-redesigned-spork`
 **Branch**: `e-alfy-y-cruscotto-e-grafici`
-**HEAD di partenza (da verificare)**: `89e8b2e61` (= `dev_release2`, con dentro il treno 6; il coordinatore ha portato il tuo ramo avanti in fast-forward: Y-39a è già in dev).
+**HEAD di partenza (da verificare)**: `e44422ed0` (= `dev_release2`, con dentro il treno 6; il coordinatore ha portato il tuo ramo avanti in fast-forward: Y-39a è già in dev).
 **Corsia**: porta `6189`, cartella dati `/tmp/librefolio-r13-y`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md`. Leggi solo: «Il contratto di Y-39b» (riga ~7979), «Le risposte del coordinatore (20/10 13:34)» con «Le condizioni di DV per F-2 su `LineChart.svelte`» (riga ~8024-8045). Riga di stato Y-39b ~495.
 

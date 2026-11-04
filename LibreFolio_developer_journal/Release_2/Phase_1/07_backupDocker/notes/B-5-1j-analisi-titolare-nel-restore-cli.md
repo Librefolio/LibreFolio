@@ -6,7 +6,7 @@ Data: 2026-10-25. Autore: B. Rivisto da A (OK con modifiche, riportate qui: rego
 > migliore è che in caso di ripristino, oltre all'email che avvisa che è stato fatto si dica all'utente che per la sua sicurezza
 > la pw è stata revocata e può ottenerne una nuova seguendo la procedura della pw dimenticata».
 
-## 0. Cosa c'è oggi (letto nel codice, `d3437a203`)
+## 0. Cosa c'è oggi (letto nel codice, `e5452fdf6`)
 
 | Percorso | Chi conferma | Titolare |
 |---|---|---|

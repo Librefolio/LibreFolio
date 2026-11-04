@@ -5,7 +5,7 @@
 > - **L1b**: l'analisi dei lotti legge i cambi «a gradini» invece che un tasso al giorno: stessi numeri identici, ma più veloce sulle storie lunghe (es. 1 900 giorni). L'utente non vede differenze, solo meno attesa.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-crispy-goggles` · **Branch**: `e-alfy-j-numeri-e-analisi`
-**HEAD di partenza (da verificare)**: `2879ae3e4` (fast-forward fatto dal coordinatore; `npm ci` fatto per Linux).
+**HEAD di partenza (da verificare)**: `85fda260e` (fast-forward fatto dal coordinatore; `npm ci` fatto per Linux).
 **Corsia**: porta `6190`, cartella dati `/tmp/librefolio-r13-j`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md`: TC-23 (riga ~8094, analisi ~8452-8523, risposte del coordinatore ~8525-8532, ordine ~8905-8922); L1b (~7426 progetto L1a/L1b, ~7517, ~7531, ~7703, memo e decisioni ~9068-9101). Backlog TC-23 ~3148, L1b ~7853.
 

@@ -2,7 +2,7 @@
 
 > **Mandato**: A — Asset Global, round 3 della campagna Risk Analysis.
 > **Sessione**: `e-alfy-shiny-sniffle` · **ramo** `e-alfy-risk-asset-global-levels`
-> **Baseline**: `f829cd76b` ✅ verificata con `git rev-parse HEAD`
+> **Baseline**: `9f4618c6e` ✅ verificata con `git rev-parse HEAD`
 > **Corsia**: `--test-port 6170` · `--data-dir /tmp/librefolio-r3-a`
 > **Coordinatore**: sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca`
 > **Analisi approvata**: 21 Set 2026 · **autorizzazione sviluppatore**: *«Sì, autorizza la fase 1»*
@@ -304,13 +304,13 @@ Failed to apply database migrations
 
 ```
 001_initial → 002_identifier_other_json_list → 5b1333fa6b07
-                                                    ├── 003_asset_benchmark_flag_and_taxonomy   ← 00d8c735b
-                                                    └── 003_user_onboarding_progress            ← 35f0bb484
+                                                    ├── 003_asset_benchmark_flag_and_taxonomy   ← 7bb84d4fc
+                                                    └── 003_user_onboarding_progress            ← 4ed93c835
 ```
 
 **Due migrazioni dichiarano lo stesso `down_revision = "5b1333fa6b07"`.**
 
-> 🔑 **È il merge `f829cd76b` che ha unito i file senza unire il grafo.** Git non ha segnalato
+> 🔑 **È il merge `9f4618c6e` che ha unito i file senza unire il grafo.** Git non ha segnalato
 > nulla perché sono **file diversi**: nessun conflitto testuale, **un conflitto semantico**. È
 > esattamente la forma che il mio mandato mi dice di cercare — *«segnala la sovrapposizione
 > semantica anche quando Git non riporta conflitti»*.
@@ -494,7 +494,7 @@ un altro componente stampasse euro qui, le due dimensionali resterebbero verdi.
 
 # FASE 2 — `L1°` e `L3°` sui cinque codici di P
 
-> **Baseline**: `09117b434` ✅ verificata · **autorizzazione sviluppatore**: *«si ok, serializza
+> **Baseline**: `7998c4831` ✅ verificata · **autorizzazione sviluppatore**: *«si ok, serializza
 > questi lavori e al termine notificami»* · corsia invariata `6170` · `/tmp/librefolio-r3-a`
 
 ### Passo 2.0 — `api sync` · ✅ 21 Set 2026
@@ -631,17 +631,17 @@ service.py:170            prepared = await self._prepare_asset_series(...)   ←
 
 ## ➡️ Seguito
 
-Il lavoro post-merge di Release 2 (23/09/2026, baseline `f1047f766`) prosegue in
+Il lavoro post-merge di Release 2 (23/09/2026, baseline `9df0b7b14`) prosegue in
 [`A-postmerge-esecuzione.md`](./A-postmerge-esecuzione.md): R1 (`lastedDays`), la test list
 T1/T2, la doc utente dei livelli e la guida alla review dei numeri sulla copia di prod.
 
 > 📌 **Fatti datati, non da correggere qui** (§2.7 del foglio 09): la merge revision
 > `ab290f6b6756` citata sopra **non esiste più** — le revisioni post-002 sono state consolidate
-> in `004_release_1_2_0_schema` (`22fa0aed7`). E `risk-lab.spec.ts`, il guscio del laboratorio e
+> in `004_release_1_2_0_schema` (`126cfc0b4`). E `risk-lab.spec.ts`, il guscio del laboratorio e
 > `panelTitle` sono passati a **F** con la tabella dei workstream del 23/09.
 
 ---
 
-> **Chiusura — allineamento 09/10/2026 (Risk)**: il lavoro di questo piano è committato (`daa03c0f2`, `032b86959`, 21/09) ed è in
+> **Chiusura — allineamento 09/10/2026 (Risk)**: il lavoro di questo piano è committato (`1b0032eae`, `e38ae2300`, 21/09) ed è in
 > `dev_release2`; il seguito è in [`A-postmerge-esecuzione.md`](A-postmerge-esecuzione.md) e
 > [`A-dashboard-esecuzione.md`](A-dashboard-esecuzione.md).

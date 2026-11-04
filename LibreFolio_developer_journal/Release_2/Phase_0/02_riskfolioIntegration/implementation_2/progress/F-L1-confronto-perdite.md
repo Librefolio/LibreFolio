@@ -8,7 +8,7 @@
 | | |
 |---|---|
 | Worktree | `e-alfy-super-dollop`, ramo `e-alfy-risk-asset-global-lab` |
-| Base | `b26ca6e29` (guida D1 `73ba9f08e` + journal D2), sopra `881941e44` = punta di Risk validata |
+| Base | `a82f200c5` (guida D1 `425e44be2` + journal D2), sopra `747a56610` = punta di Risk validata |
 | Corsie | 6154 per le suite (`/tmp/librefolio-r2-f`), 6164 per la copia di prod (`/tmp/librefolio-r2-f-prodcopy`) |
 | Coordinamento | Risk (`0000738d-…`) per il giro; il coordinatore (`c8328a01-…`) per i file fuori famiglia |
 | Sessione | rinominata «F - Confronto perdite Asset Global» |
@@ -36,7 +36,7 @@
 la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo di Risk: il tooltip del «mese» non scrive
 «21 osservazioni» a mano; si usa una frase neutra.
 
-## Fatti verificati (base `b26ca6e29`)
+## Fatti verificati (base `a82f200c5`)
 
 - `AssetSetLossComparisonSection.svelte`:
   - `<table>` scritta a mano (`:127`), nome in testo nudo `{row.name}`;
@@ -96,7 +96,7 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 | L1-3 | 5 chiavi `risk.assetSet.levels.l1.columnHelp.*` nelle 4 lingue via `dev.py i18n` (dopo il RESUME) | ✅ 2026-09-30 |
 | L1-4 | cancelli: prettier, `front check`, vitest, `front-utility`, orfani, `i18n audit`, `check-links`, `front build --debug`, E2E | ✅ 2026-09-30 |
 | L1-5 | review del developer sulla 6164, con una copia di prod fresca | ✅ 2026-09-30 (terzo giro: «Va bene così») |
-| L1-6 | checkpoint a Risk | ✅ 2026-09-30 (committato: `76fd7f208` … `1b62abd2e`) |
+| L1-6 | checkpoint a Risk | ✅ 2026-09-30 (committato: `dfe4352a2` … `99a1a4ad2`) |
 
 ## Definizione di finito
 
@@ -112,7 +112,7 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 ### L1-0 · piano ✅ 2026-09-30, 11:55
 
 > **Note implementazione**:
-> - Base verificata: HEAD `b26ca6e29`, albero pulito; i blob di D1 e D2 coincidono con quelli consegnati; `sw.js` al
+> - Base verificata: HEAD `a82f200c5`, albero pulito; i blob di D1 e D2 coincidono con quelli consegnati; `sw.js` al
 >   timbro committato.
 > - Pausa del venv condiviso chiesta dal coordinatore (11:52): niente Python fino al RESUME, quindi niente `dev.py`.
 >   Si lavora sul frontend con i binari Node locali: vitest, prettier, svelte-check.
@@ -355,14 +355,14 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 > Il delta, i gruppi e i digest stanno nel messaggio a Risk. Stato: FROZEN fino al commit.
 
 > ✅ **Committato** dal developer (14:2x):
-> - `76fd7f208` G1 · `2f0d12e99` G2 · `ae4079510` G3 · `c9f8de31d` G4 · `9b38a65cc` G5 · `1b62abd2e` G6;
+> - `dfe4352a2` G1 · `67a59f9f8` G2 · `c577d9c15` G3 · `658834b57` G4 · `f7e52e455` G5 · `99a1a4ad2` G6;
 > - verificato in sola lettura (`/tmp/libreFolio_f4/verify_l1.sh`): **PASS**, con messaggi e file uguali per ogni
 >   commit, digest del contenuto `51497c65…`, 15 file, +1979/−106.
 >
 > **Fusione e fast-forward**:
-> - il checkpoint del calendario di Risk (`b32ddea77` e seguenti) è entrato prima della fusione F → Risk `3c46c8e60`,
+> - il checkpoint del calendario di Risk (`900c05498` e seguenti) è entrato prima della fusione F → Risk `f5a547463`,
 >   validata da Risk (`risk-lab` 26/26 sulla revisione combinata);
-> - il coordinatore mi porta in fast-forward su `3c46c8e60`. Verificato: HEAD `3c46c8e60`, `1b62abd2e` suo antenato,
+> - il coordinatore mi porta in fast-forward su `f5a547463`. Verificato: HEAD `f5a547463`, `99a1a4ad2` suo antenato,
 >   albero pulito;
 > - adattamenti di Risk nei miei file, con i miei OK: `horizon_observations` nei fixture e negli stub di VaR, il mese a
 >   30 giorni di calendario, il pin E2E `[1, 30]`, e i commenti di `assetSetLevels.test.ts` e dei due file dei
@@ -375,7 +375,7 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
    e `check-links`; i passi del replay restano fermi fino all'F3 di Risk);
 2. proporre a Risk il prossimo componente, con la stessa analisi di L1°; niente codice prima del via del developer.
 
-**Fatti verificati sulla base `3c46c8e60`**:
+**Fatti verificati sulla base `f5a547463`**:
 - **Il mese**: `asset_set_var` 2.0.0 (`risk_plugins/asset_set_var.py:73-99`) prende l'orizzonte in giorni di
   calendario e lo converte con `calendar_days_to_observations` (`risk/metrics.py:731`, giorni × f / 365, arrotondato,
   mai meno di 1). Il mese sono 30 giorni: 21 osservazioni su una serie quotata nei giorni di borsa, 30 su una quotata
@@ -414,7 +414,7 @@ la cura al developer nella sua sessione. In L1° nessun numero cambia. Vincolo d
 >   3 ancore note.
 > - ⚠️ La build ha riscritto di nuovo il timbro di `frontend/static/sw.js`: non toccato, fuori dal checkpoint.
 
-> ✅ **Guida committata**: `31cff1e5e` (la guida) e `3eff35036` (il journal), con `sw.js` riportato al timbro committato.
+> ✅ **Guida committata**: `5c3dd7a29` (la guida) e `c62648273` (il journal), con `sw.js` riportato al timbro committato.
 >
 > ➡️ **Seguito**: il prossimo componente, **L3° «Quanto ha pagato ciascuno per il suo rischio?»**, approvato dal developer
 > («Sì, partiamo da L3° come L1°»), prosegue nel piano [F-L3-rischio-rendimento.md](F-L3-rischio-rendimento.md).

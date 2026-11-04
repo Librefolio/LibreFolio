@@ -1,6 +1,6 @@
 # 02 — UI components & pages: color patterns
 
-> Snapshot: `dev_release2` @ `6d0b1266c` (v1.2), 2026-10-14. Read-only. Paths relative to `frontend/src/`.
+> Snapshot: `dev_release2` @ `885f7e91e` (v1.2), 2026-10-14. Read-only. Paths relative to `frontend/src/`.
 > Method: grep counts (tests excluded); individual components were not all opened, so "likely" items are inferences. Exact regex counts per class are in `00_inventory_summary.md` (CSVs: regenerate with `scripts/visual_review/color_inventory.py`).
 > ⚠️ Dark-mode values written as `dark:` classes may not render: see report 01 §6.0 (global `app.css` overrides win the cascade).
 

@@ -3,8 +3,8 @@
 > **Workstream TR del programma colori**, sessione «TR - colori delle transazioni». Coordinatore: sessione «UI color
 > analysis» (`aec04834-1532-4d86-9e3f-f942e82aca89`).
 > Branch `e-alfy-tr-transaction-colors` (rinominato dall'app; prima `e-alfy-sturdy-chainsaw`).
-> - **Baseline dell'analisi:** `8f2824046` (fast-forward del coordinatore da `dae4de4fa`, verificato alle 10:45).
-> - **Base attuale:** `6e569084a`, fast-forward del coordinatore con lo skill comune `design-system` di T (D-T29);
+> - **Baseline dell'analisi:** `cdf74ef2a` (fast-forward del coordinatore da `ff75660ad`, verificato alle 10:45).
+> - **Base attuale:** `16ea52b26`, fast-forward del coordinatore con lo skill comune `design-system` di T (D-T29);
 >   nessun file dell'area è cambiato.
 > - **Corsia:** porta **6154**, dati **`/tmp/librefolio-r2-tr`**.
 > - **Comandi:** `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6154 --data-dir /tmp/librefolio-r2-tr …`.
@@ -36,7 +36,7 @@
 
 ## 1. Inventario dal baseline
 
-`node frontend/scripts/theme/theme-roles.mjs --report` su `8f2824046` (carico 42, `nice -n 10`): totale m1 8.249 /
+`node frontend/scripts/theme/theme-roles.mjs --report` su `cdf74ef2a` (carico 42, `nice -n 10`): totale m1 8.249 /
 m2 54, ratchet 0 violazioni, grammatica 0. La mia area: **20 file con colori, m1 1.052, m2 33** (34 file in tutto; 14 a
 zero, fra cui `cells/*`, `EventExistsPanel.svelte` già sui ruoli e i `.ts`).
 
@@ -136,7 +136,7 @@ quantità è di T (`ExactQuantityInput`), già sui ruoli.
 
 Fatta con `git --no-optional-locks status`, gli hash dell'indice e i refs.
 - Nessun worktree ha modifiche sue nella mia area.
-- **X (`e-alfy-cuddly-engine`):** merge di base in corso (`MERGE_HEAD 69c95454b`, antenato del baseline). Ha in stage 6
+- **X (`e-alfy-cuddly-engine`):** merge di base in corso (`MERGE_HEAD ab2fec52c`, antenato del baseline). Ha in stage 6
   miei file **identici al baseline** (`TxFormPairSection`, `TxFormSingleSection`, `PromoteMergeModal` e il suo test,
   `TransactionFormModal` e il suo test): traffico della merge, nessun conflitto.
 - **W (`e-alfy-fluffy-meme`):** pulito; nessun commit non integrato nella mia area.
@@ -152,7 +152,7 @@ Dallo skill `design-system` (16/10) e dai precedenti di T:
 
 | Oggi | Ruolo | Fonte |
 |---|---|---|
-| campo (`input`, `textarea`, trigger): `border-gray-200/300 bg-white` + `dark:` | `border-lf-input bg-lf-field hover:border-lf-input-hover`, fuoco `focus:border-lf-focus focus:ring-lf-focus/…` | W1-a di T (`1c16151a1`), D-T18 |
+| campo (`input`, `textarea`, trigger): `border-gray-200/300 bg-white` + `dark:` | `border-lf-input bg-lf-field hover:border-lf-input-hover`, fuoco `focus:border-lf-focus focus:ring-lf-focus/…` | W1-a di T (`67157f22e`), D-T18 |
 | riquadro in sola lettura e testate di tabella `bg-gray-50` + `dark:` | `bg-lf-panel` | tabella `theme-roles` |
 | Annulla `bg-gray-100/200 text-gray-6/700 hover:bg-gray-200/300` + `dark:` | `bg-lf-panel text-lf-secondary hover:bg-lf-neutral` | domanda aperta 3; precedenti di T |
 | pulsante fantasma `text-gray-600 hover:bg-gray-100` + `dark:` | `text-lf-secondary hover:bg-lf-hover` | tabella |
@@ -277,9 +277,9 @@ deve essere vuoto.
    > repo). `cd frontend && nice -n 10 npm ci --no-audit --no-fund`, uscita 0 a carico 37. npm 11 non ha eseguito gli
    > script d'installazione di `fsevents` ed `esbuild` (approvazione degli script). `node_modules/.bin/esbuild --version`
    > risponde comunque; ci sono `vitest`, `prettier` e `svelte-check`.
-   > **⚠️ Fuori pista:** prima del passo 0 HEAD è passato da `8f2824046` a `6e569084a`. È un fast-forward del
+   > **⚠️ Fuori pista:** prima del passo 0 HEAD è passato da `cdf74ef2a` a `16ea52b26`. È un fast-forward del
    > coordinatore che porta lo skill comune `design-system` di T (D-T29) e i treni 105–106 della 1.3 (W-B17, Z7c-1, Z-9).
-   > Nessun file dell'area cambiato (`git diff --stat 8f2824046 HEAD` sull'area: solo i due skill). Lo skill nuovo è
+   > Nessun file dell'area cambiato (`git diff --stat cdf74ef2a HEAD` sull'area: solo i due skill). Lo skill nuovo è
    > ora la fonte delle regole. Ha confermato le convenzioni del §5 (Annulla `bg-lf-panel hover:bg-lf-neutral`, hover di
    > una tinta `hover:bg-lf-X-line`, interruttori fermi, categorie lasciate). Ne ha aggiunte due: testo su una tinta
    > `-on-soft` («set, never split») e card di pagina `shadow-lf-shadow-card`.
@@ -365,7 +365,7 @@ deve essere vuoto.
    > - la riga «diversa» `bg-lf-warning-soft/40`, un gradino più forte in chiaro;
    > - i pulsanti bordati su `border-lf-subtle` (come prima, sotto il 3:1 di un controllo).
    >
-   > **Controllo `dark_only_check.py`** (coordinatore, 11:28), base `6e569084a`: 6 casi, poi dichiarati falsi
+   > **Controllo `dark_only_check.py`** (coordinatore, 11:28), base `16ea52b26`: 6 casi, poi dichiarati falsi
    > positivi dal coordinatore (una classe su più righe letta riga per riga). Con lo strumento corretto: 0.
 5. ✅ (16/10) Prove leggere complessive, Prettier e `--update`.
    > **Note implementazione:** tutte in serie, sotto `nice -n 10`, ciascuna partita solo con carico < 50.
@@ -399,15 +399,15 @@ deve essere vuoto.
    >   erano già finiti con uscita 0.
    > - **Il primo lancio di `dark_only_check.py`** l'ho fatto da `frontend/` e ha dato «0 file»: il suo `git diff` vuole
    >   la radice del worktree. Rilanciato dalla radice: 0 casi in 20 file.
-   > - **Il target va avanti:** `f043c1b58` porta i ruoli nuovi di T (`hover:bg-lf-success-hover`,
+   > - **Il target va avanti:** `ee00f754e` porta i ruoli nuovi di T (`hover:bg-lf-success-hover`,
    >   `hover:bg-lf-info-hover`, `text-lf-on-overlay`, tinte di gain e loss). Nel mio perimetro tocca solo
    >   `BACKLOG_POST_1.2.md`, in righe lontane dalla sezione TR (627, 631, 2588, 3888): niente conflitto previsto, né sul
    >   baseline né sui file dell'area.
 6. ✅ (16/10) Base merge con i ruoli nuovi; lotto 5: le due conferme verdi su `bg-lf-success hover:bg-lf-success-hover
    text-lf-on-status` (chiude il backlog TR-2); spec `tx-wac-mode` su `aria-pressed`.
    > **Note implementazione:**
-   > - **Il coordinatore ha committato il primo checkpoint:** codice `1a01ae733` (21 file), docs `e0b180e12`. Ha fatto
-   >   la base merge con la punta `005ebcbf9`: **HEAD `d02b0c37c`**, albero uguale alla simulazione, `--check` pulito.
+   > - **Il coordinatore ha committato il primo checkpoint:** codice `9628283a5` (21 file), docs `718c96f11`. Ha fatto
+   >   la base merge con la punta `8a132b809`: **HEAD `d1cb9900b`**, albero uguale alla simulazione, `--check` pulito.
    >   La merge non tocca l'area. Porta lo skill `design-system` riscritto (`palette.md` a parte; i pulsanti di stato
    >   pieni `bg-lf-X text-lf-on-status hover:bg-lf-X-hover`, con `on-status` su `success-hover` e `warning-hover` fra
    >   le coppie misurate) e le regole sulla macchina condivisa nel file dell'agente.
@@ -434,7 +434,7 @@ deve essere vuoto.
    >     colonne e torna su più righe; confronto senza spazi identico), poi pulito sui 2 componenti e sullo spec;
    >   - `git diff --check` pulito; nessuna classe di colore rimasta nello spec;
    >   - `dark_only_check.py` 0 in 21 file e `native_field_check.py` 0 in 20 file, entrambi dalla base pre-TR
-   >     `6e569084a`, dalla radice;
+   >     `16ea52b26`, dalla radice;
    >   - `--check` pulito; **`--update`: m1 7.331 → 7.323 (−8), m2 34**; `--check` di nuovo pulito;
    >   - gate 66/66 (uno in più col target: G-18); Vitest dei componenti `PromoteMergeModal`, `PromoteAllModal`,
    >     `TransactionFormModal`, `WacPreviewSection`, 57/57.
@@ -459,7 +459,7 @@ deve essere vuoto.
    > - `test --test-port 6154 --data-dir /tmp/librefolio-r2-tr db populate --force --clean --with-reports`, lo stesso
    >   populate che il runner del frontend fa prima degli E2E (`_frontend_common._ensure_db_populated`).
    >
-   > Il secondo checkpoint è committato in tre: `70bae91b4` (le conferme), `a5e229084` (lo spec), `505a28289` (il
+   > Il secondo checkpoint è committato in tre: `d884b14c8` (le conferme), `4bc2fb5ff` (lo spec), `f17e78a40` (il
    > diario). Lo SHA di TR-2 è nel backlog.
    >
    > **Esito della preparazione** (12:24–12:53, tre comandi, uscita 0 per tutti; porta 6154 libera alla fine):
@@ -473,8 +473,8 @@ deve essere vuoto.
    > quando `tee` l'ha aperta. Per questo lo script esce con 1, mentre i suoi tre passi escono con 0. I log dei passi
    > ci sono.
    >
-   > ✅ **Slot A+B eseguito il 16/10, 13:20–14:21**, sul ramo portato dal coordinatore alla punta `1248b7908` (lotti di
-   > AF e IM). Due note del diario committate (`9691e8936`), base merge **`814b93319`** (baseline col `--resolve`,
+   > ✅ **Slot A+B eseguito il 16/10, 13:20–14:21**, sul ramo portato dal coordinatore alla punta `5da4b06c9` (lotti di
+   > AF e IM). Due note del diario committate (`8aaf220c9`), base merge **`fb8e84ffe`** (baseline col `--resolve`,
    > m1 combinato 4.814). Albero pulito; porta 6154 libera prima e dopo.
    >
    > **Passi**, tutti finiti prima delle 14:20, senza tagli. Sulla scorta del coordinatore (13:19) la build di prima era
@@ -526,32 +526,32 @@ deve essere vuoto.
    >   'provider_code'` (`services/assets/currency_change`, di X/AF).
    >
    > Ho girato al coordinatore entrambi i reperti.
-8. ✅ (16/10) Lotto 6: il sottotitolo di `/transactions` (TR-1), sbloccato da L-20 (`460529690`).
+8. ✅ (16/10) Lotto 6: il sottotitolo di `/transactions` (TR-1), sbloccato da L-20 (`a10e65f90`).
    > **Pausa e ripresa:** il developer ha chiesto una pausa durante lo slot; si riparte dalle 14:14 (coordinatore,
    > 14:27). Indicazioni: il lotto 6 con le prove leggere e senza un checkpoint a sé; poi uno slot breve (al massimo
    > 30 minuti, nella nostra corsia, dopo BK, verso le 15:00) con la build, le tre spec dei rossi e la spec del
    > sottotitolo; poi il checkpoint (passo 7 e lotto 6) e l'ingresso. Reperti: l'ancora di `wac.md` l'aveva già
-   > corretta la 1.3 (`ed500643f`); il log di `currency_change` lo gira il coordinatore alla 1.3.
+   > corretta la 1.3 (`b6a3f1499`); il log di `currency_change` lo gira il coordinatore alla 1.3.
    >
    > **Note implementazione:** `+page.svelte:738`, `text-gray-500 dark:text-gray-400` → `text-lf-muted`. Prove leggere
    > (14:30, carico 46–48), tutte con uscita 0:
    > - controllo per file: m1 2 → 0, G1–G4 a 0;
    > - Prettier e `git diff --check` puliti;
-   > - `dark_only_check.py` 0 in 78 file e `native_field_check.py` 0 in 77 (base `6e569084a`: dentro ci sono anche i
+   > - `dark_only_check.py` 0 in 78 file e `native_field_check.py` 0 in 77 (base `16ea52b26`: dentro ci sono anche i
    >   file di AF e IM già uniti);
    > - `--check` pulito; **`--update`: m1 4.814 → 4.812**, m2 22; `--check` di nuovo pulito;
    > - gate 71/71; C4 non chiede di togliere selettori.
    >
    > Backlog: TR-1 chiusa ✅, lo SHA arriva col checkpoint.
    >
-   > **⚠️ Fuori pista:** L-20 è entrato in `dev_release2` (`460529690`) dopo che il mio ramo era stato portato a
-   > `814b93319`, quindi qui c'è ancora la versione vecchia di `designer-lab-picker.spec.ts`. Il suo test «dark-theme
+   > **⚠️ Fuori pista:** L-20 è entrato in `dev_release2` (`a10e65f90`) dopo che il mio ramo era stato portato a
+   > `fb8e84ffe`, quindi qui c'è ancora la versione vecchia di `designer-lab-picker.spec.ts`. Il suo test «dark-theme
    > pick of a text-gray-500 element» vuole il sottotitolo in `text-gray-500`: sul mio ramo, col lotto 6, fallisce per
    > costruzione, mentre nel target L-20 lo ha già staccato. Per lo slot basta `front-designer-lab live`: legge il
    > sottotitolo con `colourSourceOf`, che regge sia la classe di palette sia il ruolo. Il picker si valida dopo
    > l'ingresso, o dopo una base merge con L-20.
-9. ✅ (16/10) Slot breve, 14:47–14:56 (8 minuti), sulla base merge **`6c6d1979f`** del coordinatore: la punta
-   `1c7b9def2` con L-20, DV, IM e il fix di C4 (la regola morta `bg-white/90` tolta da `app.css`). I gate sull'albero
+9. ✅ (16/10) Slot breve, 14:47–14:56 (8 minuti), sulla base merge **`c1c98ae18`** del coordinatore: la punta
+   `e87bf5083` con L-20, DV, IM e il fix di C4 (la regola morta `bg-white/90` tolta da `app.css`). I gate sull'albero
    unito li ha verificati il coordinatore: 89/89.
    > **Note implementazione:** `api sync` è stato lanciato fuori dallo slot appena è arrivata la merge (14:35, uscita 0,
    > da un osservatore che aspettava HEAD nuovo, nessuna merge in corso e albero pulito). Lo slot (`slot_c.sh`, tagli
@@ -567,5 +567,5 @@ deve essere vuoto.
    > | `front-designer-lab live` | 0 | 66 s | **12/12**: i tre test del sottotitolo leggono il ruolo |
    >
    > Porta 6154 libera alla fine. **I rossi dello slot A+B sono confermati «ambiente»:** le stesse tre spec, a macchina
-   > sveglia, passano tutte (31/31). Il backlog ha lo SHA di TR-1 (`546204732`).
+   > sveglia, passano tutte (31/31). Il backlog ha lo SHA di TR-1 (`472e8d81b`).
 10. ⏳ L'ingresso in `dev_release2` (coordinatore).

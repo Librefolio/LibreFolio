@@ -1105,7 +1105,7 @@ class _ObserveIn:
 
 def test_exact_error_taxonomies_and_public_entry_points_are_stable() -> None:
     # The P1 prototype entry points (evaluate_pac_budget, evaluate_rebalancing)
-    # were dropped in b82e59ffa; the surviving set below is planner v2 only.
+    # were dropped in 704ba66a3; the surviving set below is planner v2 only.
     assert issubclass(ExactScenarioContractError, ExactEvaluatorError)
     assert issubclass(ExactPolicyContractError, ExactEvaluatorError)
     assert issubclass(DuplicatePostingError, ExactLedgerError)

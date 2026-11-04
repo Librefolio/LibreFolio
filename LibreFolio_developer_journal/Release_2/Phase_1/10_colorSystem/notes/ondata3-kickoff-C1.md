@@ -3,7 +3,7 @@
 > **A cosa serve (per il developer).** È l'**ultimo pezzo che blocca il tag 1.3.0** sul fronte colori: il piano dice «niente 1.3 con neutri e stati convertiti a metà», e quasi tutti quelli rimasti stanno nelle schermate delle transazioni (Bulk, unione dei lotti, anteprima del costo medio, import). Dopo questo lotto il tema scuro è coerente anche lì. Esempio: la finestra «Promuovi e unisci» oggi ha ancora grigi e verdi fissi che nel tema scuro stonano.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-expert-barnacle` · **Branch**: `e-alfy-t-tokens-theme`
-**HEAD di partenza (da verificare)**: `2879ae3e4` (fast-forward fatto dal coordinatore).
+**HEAD di partenza (da verificare)**: `85fda260e` (fast-forward fatto dal coordinatore).
 **Corsia**: porta `6187`, cartella dati `/tmp/librefolio-r13-c1`.
 **Regole**: come nell'ondata 2 (skill `design-system` e `theme-roles`, solo ruoli, mai `dark:` su un ruolo, ruolo più vicino con `colour: closest role, to review`).
 

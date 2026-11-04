@@ -1,10 +1,10 @@
 # Piano — fase 00, Danske Bank, passo 8: la card del set su mobile (intestazione e timeline)
 
-> **Stato**: ✅ chiuso e integrato nel treno 14 (merge `975950379`): `038109e91`, `f2f94c295` (verifica del 2026-10-09 su `3cceb4f90`).
+> **Stato**: ✅ chiuso e integrato nel treno 14 (merge `b92491e54`): `ac35ad2ce`, `2c5e4e72e` (verifica del 2026-10-09 su `f545b67e3`).
 > - Al checkpoint: ✅ pronta per il checkpoint (2026-10-08, §8.3). Via del coordinatore, con la decisione del developer (§0).
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md](plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md), l'ultimo passo che ha toccato la card; la card nasce in [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md).
-> - Workstream L, issue #26. Base `ffa72cc2b` (`dev_release2` dopo il treno 12, col lotto 34 integrato).
+> - Workstream L, issue #26. Base `d9c068c99` (`dev_release2` dopo il treno 12, col lotto 34 integrato).
 
 ## 0. Decisioni
 
@@ -17,7 +17,7 @@
   - prima i rossi, col test-author, anche sul progetto mobile di Playwright. Corsia 6156/6166;
   - **coordinamento con K**: K aggiunge `ReportSetCard.escape.test.ts`, che monta la card vera dentro `ModalBase`. I `data-testid` esistenti della card **non cambiano**, in particolare quelli di «Read as» e della sua lista; se ne possono aggiungere di nuovi; il layout cambia come serve.
 
-## 1. Stato verificato (2026-10-08, sul codice a `ffa72cc2b`)
+## 1. Stato verificato (2026-10-08, sul codice a `d9c068c99`)
 
 - **Il progetto mobile** di Playwright è un iPhone 14 Pro Max (430 px, `isMobile`, `hasTouch`) su Chromium (`playwright.config.ts:130-140`).
 - **L'intestazione** (`ReportSetCard.svelte:323-357`) è una riga sola, `flex items-center gap-2`, senza a capo:
@@ -117,7 +117,7 @@ Lo scrive il coordinatore. Al checkpoint propongo una riga 🐛 per la voce Dans
 
 ### 8.0 ✅ L'analisi (2026-10-08)
 
-> **Note implementazione**: baseline `ffa72cc2b` verificata, pulita, porte libere. Letti la card, i suoi test, la spec E2E, la configurazione di Playwright e il modo in cui il runner sceglie i progetti, comprese le esecuzioni consolidate. Il contratto, la cura e i test sono in §2–§3.
+> **Note implementazione**: baseline `d9c068c99` verificata, pulita, porte libere. Letti la card, i suoi test, la spec E2E, la configurazione di Playwright e il modo in cui il runner sceglie i progetti, comprese le esecuzioni consolidate. Il contratto, la cura e i test sono in §2–§3.
 >
 > **⚠️ Fuori pista — dove mettere i test mobile**:
 > - Una voce del runner «solo mobile» filtrata per `--grep` non va bene, perché il consolidato ignora il filtro e farebbe girare tutta la spec su mobile.
@@ -181,8 +181,8 @@ Lo scrive il coordinatore. Al checkpoint propongo una riga 🐛 per la voce Dans
 ### 8.4 ✅ Integrato (2026-10-08)
 
 > **Note implementazione**:
-> - I commit: `038109e91` fix(import): set card header, timeline on phones; `f2f94c295` docs(journal): plan 26 step 8, mobile set card. Tutti e due sopra `ffa72cc2b`.
-> - Merge `975950379` nel treno 14; `dev_release2` = `9eb01c756`.
+> - I commit: `ac35ad2ce` fix(import): set card header, timeline on phones; `2c5e4e72e` docs(journal): plan 26 step 8, mobile set card. Tutti e due sopra `d9c068c99`.
+> - Merge `b92491e54` nel treno 14; `dev_release2` = `311fbd6e9`.
 > - Il coordinatore ha rifatto i controlli sulla revisione unita: component 2850, compreso l'Esc di K sulla card; `tx-import-report-set` 31 passati e 31 saltati; guida 2; selezione file 2.
 > - CHANGELOG: nessuna riga, perché i report set sono nuovi nella 1.2.0.
 > - Segue: [plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md](plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md).

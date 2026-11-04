@@ -1,9 +1,9 @@
 # Piano — fase 00, 37: i plugin BRIM di Scalable Capital (broker e conto deposito)
 
-> **Stato**: ✅ chiuso il 2026-10-10. Integrato in `dev_release2` col treno 30 (merge `262339501`; `dev_release2` = `d59762e0a`). Avanzamento e chiusura in §18. La cartella si archivia dopo il secondo giro di traduzioni di M.
+> **Stato**: ✅ chiuso il 2026-10-10. Integrato in `dev_release2` col treno 30 (merge `82875f9f0`; `dev_release2` = `641ae3239`). Avanzamento e chiusura in §18. La cartella si archivia dopo il secondo giro di traduzioni di M.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), con le decisioni del developer (§1) e l'autorizzazione testuale (§0).
-> - **Workstream S**. Ramo `e-alfy-s-export-scalable-via-chrome`, base `3cceb4f90` (treno 24b, fast-forward del developer, verificata pulita il 2026-10-09). L'analisi è stata fatta su `1ead733f2` (treno 23).
+> - **Workstream S**. Ramo `e-alfy-s-export-scalable-via-chrome`, base `f545b67e3` (treno 24b, fast-forward del developer, verificata pulita il 2026-10-09). L'analisi è stata fatta su `aca87aec4` (treno 23).
 > - **Corsia**: `--test-port 6163 --data-dir /tmp/librefolio-r2-s`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`; un comando alla volta. Mai le porte 6040, 6041 e 6150.
 > - **Riepilogo della fase dell'esportatore**: [`recap-phase00ScalableExporter.md`](recap-phase00ScalableExporter.md), controllato dal coordinatore.
 > - **Repo esterno**: `Librefolio/librefolio-exporter`, estensione Chrome MV3; v1.0.0 e v1.0.1 rilasciate; la 1.0.1 viene da questo piano (§5; §18, passo 2).
@@ -13,7 +13,7 @@
 
 - **Developer**, testuale, tramite il coordinatore (15:29): «Confermo: S parte con il piano nuovo, superfici e npm ci come proponi (Consigliato)».
 - **Coordinatore**:
-  - baseline `3cceb4f90`, confermata dopo il fast-forward;
+  - baseline `f545b67e3`, confermata dopo il fast-forward;
   - superfici in §13;
   - `npm ci` solo dal lock, niente update né `audit fix`;
   - il CHANGELOG è suo: propongo le righe a ogni checkpoint;
@@ -399,7 +399,7 @@ Altre superfici:
 
 ## 14. Passi e linea di taglio
 
-1. ✅ (2026-10-09) **Piano nel journal**, dopo la conferma della baseline `3cceb4f90`; il riepilogo va nella stessa cartella.
+1. ✅ (2026-10-09) **Piano nel journal**, dopo la conferma della baseline `f545b67e3`; il riepilogo va nella stessa cartella.
 2. ✅ (2026-10-09) **Esportatore 1.0.1** (§5) e prova del developer: commit, tag `v1.0.1` e release fatti dal developer; export dei due conti veri.
 3. ✅ (2026-10-09) **Campioni sintetici** (§4.6).
 4. ✅ (2026-10-09) **Contratto `cannot_parse_detail`**, schemi, endpoint, `api sync` e test (§7.1).
@@ -409,7 +409,7 @@ Altre superfici:
 8. ✅ (2026-10-09) **Icone** (§6).
 9. ✅ (2026-10-09, inglese) **Documentazione** (§11): pagina inglese prima del 14/10, card in `index.en.md`, navigazione, elenco dei provider, guida BRIM, pagine dell'assistente; righe di CHANGELOG proposte al coordinatore. Pagina, card, nav, elenco, guida BRIM, pagine dell'assistente e deduplica in `architecture.md` fatti.
 10. ✅ (2026-10-09) **Modale dell'assistente** (§7.2) e traduzioni (§10): `npm ci` dal lock, util, Vitest, E2E (a).
-11. ✅ (2026-10-09) **Editor in blocco per gli import separati** (§8): util, Vitest, E2E (b, c). Partito dopo il treno 25 (step 23 di K) e il merge `5eb01e2ea`.
+11. ✅ (2026-10-09) **Editor in blocco per gli import separati** (§8): util, Vitest, E2E (b, c). Partito dopo il treno 25 (step 23 di K) e il merge `52284cd0d`.
 12. ✅ (2026-10-10) **Prova umana** del developer: 7/7, e **correzioni dalla prova** (passo 12b), con l'allineamento al glossario (passo 12c).
 13. **Controlli finali**: lint e format, tutte le suite, mkdocs, porte libere; handoff. Le note per la devWiki vanno nell'handoff: il coordinatore ha chiesto di non scrivere in `LibreFolio_devWiki/` (niente `wiki-file`) finché non lo dice lui.
 
@@ -468,7 +468,7 @@ Altre superfici:
 3. Commit dei checkpoint, quando il coordinatore li chiede.
 4. Disponibilità nel weekend per le prove (§12).
 5. ~~Permesso per `npm ci` nel worktree~~: concesso, solo dal lock.
-6. Fast-forward della worktree a `3cceb4f90` (treno 24b), poi al treno con lo step 23 di K prima del passo 11.
+6. Fast-forward della worktree a `f545b67e3` (treno 24b), poi al treno con lo step 23 di K prima del passo 11.
 
 ## 18. Avanzamento
 
@@ -588,11 +588,11 @@ Altre superfici:
 
 ### Checkpoint 1 — passi 1, 3–10 (2026-10-09)
 
-> Mandato al coordinatore dopo il treno 25 (`dev_release2` = `586a4f0ea`, con lo step 23 di K): il passo 11 (`TransactionBulkModal.svelte`) parte dopo il merge di `dev_release2` nel mio ramo. Stato: FROZEN fino alla risposta.
+> Mandato al coordinatore dopo il treno 25 (`dev_release2` = `249f5a9aa`, con lo step 23 di K): il passo 11 (`TransactionBulkModal.svelte`) parte dopo il merge di `dev_release2` nel mio ramo. Stato: FROZEN fino alla risposta.
 
 ### Passo 11 — Editor in blocco per gli import separati: codice 🚧 (2026-10-09)
 
-> **Baseline**: `5eb01e2ea` (`merge: train 25 into S for step 11`, parent `305b80202`, il checkpoint 1, e `586a4f0ea`); `TransactionBulkModal.svelte` assegnato dal coordinatore dopo lo step 23 di K.
+> **Baseline**: `52284cd0d` (`merge: train 25 into S for step 11`, parent `69bf64f4b`, il checkpoint 1, e `249f5a9aa`); `TransactionBulkModal.svelte` assegnato dal coordinatore dopo lo step 23 di K.
 >
 > **Note implementazione**:
 > - `frontend/src/lib/utils/transactions/promoteSuggest.ts`: `newRowSuggestId` (id negativo `-(createdSeq + 1)`), `mixedPromotePairs` (coppie nuova × salvata nella finestra di date, con la regola di abbinamento passata dal componente) e `importableSuggestions` (i candidati del database non ancora nell'editor, per riga, per `tempId`).
@@ -626,7 +626,7 @@ Altre superfici:
 
 ### Passo 13 — Tre voci assegnate dal coordinatore ✅ (2026-10-09)
 
-> **Baseline**: `94271713b` (checkpoint 2, batch 21).
+> **Baseline**: `9f20b8119` (checkpoint 2, batch 21).
 >
 > **Note implementazione**:
 > - `TransactionFormModal.svelte:1949`: il ripiego inglese inline di `warningAdjustment` ora coincide col testo nuovo del catalogo.
@@ -640,7 +640,7 @@ Altre superfici:
 
 ### Passo 12 — Prova umana del developer ✅ (2026-10-09/10)
 
-> **Server di review**: corsia 6163 su `127.0.0.1` (l'host predefinito di `dev.py server` è `0.0.0.0`, cioè la rete locale: con dati veri non va bene), cartella dati nuova `/tmp/librefolio-r2-s-review`, commit `4347f8962` (checkpoint 3), utente di prova creato con `dev.py user --test-db create` e `LIBREFOLIO_TEST_DATA_DIR` puntato alla cartella. A fine prova, su decisione del developer: server fermato, porta libera (`lsof` vuoto), cancellati cartella dati, log e script temporanei.
+> **Server di review**: corsia 6163 su `127.0.0.1` (l'host predefinito di `dev.py server` è `0.0.0.0`, cioè la rete locale: con dati veri non va bene), cartella dati nuova `/tmp/librefolio-r2-s-review`, commit `cc61a6d78` (checkpoint 3), utente di prova creato con `dev.py user --test-db create` e `LIBREFOLIO_TEST_DATA_DIR` puntato alla cartella. A fine prova, su decisione del developer: server fermato, porta libera (`lsof` vuoto), cancellati cartella dati, log e script temporanei.
 >
 > **Controllo automatico dei CSV v2** (solo conteggi e booleani, script fuori dal repo): file broker con 23 colonne, conto deposito con 19; ogni acquisto eseguito al lordo (importo = quote × prezzo), commissione a parte; ciascun plugin rifiuta il file dell'altro col codice giusto; 0 issue; parsing ripetibile; la cassa importata torna con la formula del saldo; 5 trasferimenti, tutti con la controparte nell'altro file.
 >
@@ -694,7 +694,7 @@ Altre superfici:
 
 ### Checkpoint 4 e revisione combinata col treno 28 ✅ (2026-10-10)
 
-> **Commit del developer (batch 25)**: C1 `2046b7419` (correzioni dalla prova), C2 `cd0b404d2` (glossario; soggetto corretto dal coordinatore in `fix(i18n): …`), merge `29fa65366` del treno 28 (`fbb57eb41`), albero `b8f9a7980781` come nella simulazione.
+> **Commit del developer (batch 25)**: C1 `ec837a197` (correzioni dalla prova), C2 `1c1a294fe` (glossario; soggetto corretto dal coordinatore in `fix(i18n): …`), merge `fc9037e16` del treno 28 (`fcd37d8d4`), albero `b8f9a7980781` come nella simulazione.
 >
 > **Validazione sulla corsia 6163** (dopo `api sync`): `front-transaction all` con 4 worker **317 + 34 passed**, Vitest **805**; `front-utility core-unit` **3666**; `external brim-providers` **702 passed, 1 skipped**; `external brim-scalable` **145**; `api brim-scalable` **2**; `utils gate-i18n-usage` **195**; `svelte-check` 0/0; `mkdocs build` strict verde; worktree pulita dopo i giri.
 >
@@ -706,7 +706,7 @@ Altre superfici:
 
 > **Decisione del developer**, testuale: «sicuro di questo ordine, anche nella guida e nelle prove che feci mi parse fosse personalizzata>plugin>favicon portale>valigetta. Se non è più così o non lo è mai stato, ripristinalo per favore». Eccezione approvata: «come idea mi intriga ma lascia spazio a dubbi visto che i plugin hanno una priorità. per ora ci sono solo 2 livelli quindi facciamo così, ma in futuro potremmo pensare di aggiungere un parametro selettore» (il selettore va nel 38).
 >
-> **Storia**: la favicon prima del plugin c'era almeno dal 26/06 (`ddffb5273`, «correct priority order restored (favicon before plugin icon)», senza un motivo scritto).
+> **Storia**: la favicon prima del plugin c'era almeno dal 26/06 (`fc1f7ccd1`, «correct priority order restored (favicon before plugin icon)», senza un motivo scritto).
 >
 > **Note implementazione**: ordine personalizzata → plugin dedicato → favicon del portale → plugin di ripiego → valigetta. La soglia è una costante sola, `FALLBACK_PLUGIN_PRIORITY_LIMIT = 50` con `isFallbackPlugin` in `utils/brim/pluginKind.ts`, sulle fasce documentate in `BRIMProvider.detection_priority` (0-49 ripiego); la usano la cache delle icone (`brokerHelpers.ts`: `_fallbackPluginCodes`, `isFallbackPluginCode`, `getBrokerIconCandidates`), la catena reattiva (`brokerIconChain.svelte.ts`) e il controllo del broker sbagliato (`ImportWizardModal`, prima con il 50 scritto a mano). Commenti in testa e docstring di `BrokerIcon` aggiornati. Doc EN: riga «Portal URL» di `user/brokers/index.en.md` (assegnata, M avvisato dal coordinatore), frase della pagina Scalable, paragrafo nella sezione «Favicons» della guida BRIM. `svelte-check` 0/0, Prettier pulito.
 >
@@ -723,7 +723,7 @@ Altre superfici:
 > **⚠️ Fuori pista**:
 > - La prima versione confrontava con `Number` e una tolleranza relativa di 1e-9, come `cashAmountsCancel`: due casi di `test-author` (lati diversi oltre la precisione del double) passavano, e il backend li avrebbe rifiutati al salvataggio. Ora il confronto è esatto: **54/54** in `promoteSuggest.test.ts`.
 > - `cashAmountsCancel` (`promoteHelpers.ts`, non mio, da giugno) ha la stessa tolleranza: oltre circa 10 milioni un centesimo di differenza passa, e il backend rifiuta. Segnalato al coordinatore, non toccato.
-> - Il primo giro di PC2 ha trovato un difetto preesistente: `fieldEq('cost_basis_override')` in `txPayloadHelpers.ts:204-205` confronta oggetti come stringhe da `7f1a6ed396` (5 maggio). Segnalato; è di P.
+> - Il primo giro di PC2 ha trovato un difetto preesistente: `fieldEq('cost_basis_override')` in `txPayloadHelpers.ts:204-205` confronta oggetti come stringhe da `d1d06c0a57` (5 maggio). Segnalato; è di P.
 
 ### Checkpoint 5 — validazione sulla corsia 6163 ✅ (2026-10-10)
 
@@ -738,22 +738,22 @@ Altre superfici:
 ### Integrazione — treno 30 ✅ (2026-10-10)
 
 > **Commit**:
-> - Il CP5 è `d5c649e9f` (icone), `1a4fe32a4` (coppie di titoli, spec del lotto 40, journal) e `3efa748cd` (`fr.json`), con i messaggi proposti.
-> - Il merge `262339501` («merge(s): S into dev_release2 for train 30», genitori `e32f47133` e `3efa748cd`) porta in `dev_release2` **tutto il ramo S, dal CP1 al CP5**: nessun checkpoint era entrato prima.
-> - Seguono due commit del coordinatore: `13de4e401` (backlog 38 e indice) e `d59762e0a` (CHANGELOG del treno 30).
-> - La worktree è avanzata a `d59762e0a`, pulita.
+> - Il CP5 è `9e0beaee3` (icone), `e537a275b` (coppie di titoli, spec del lotto 40, journal) e `8762a2600` (`fr.json`), con i messaggi proposti.
+> - Il merge `82875f9f0` («merge(s): S into dev_release2 for train 30», genitori `99117e505` e `8762a2600`) porta in `dev_release2` **tutto il ramo S, dal CP1 al CP5**: nessun checkpoint era entrato prima.
+> - Seguono due commit del coordinatore: `38891cd8c` (backlog 38 e indice) e `641ae3239` (CHANGELOG del treno 30).
+> - La worktree è avanzata a `641ae3239`, pulita.
 >
 > **Verifiche in sola lettura**:
-> - A `3efa748cd` i 20 blob del CP5 coincidono con il manifest consegnato.
-> - In `d5c649e9f` coincide la fotografia intermedia del runner.
+> - A `8762a2600` i 20 blob del CP5 coincidono con il manifest consegnato.
+> - In `9e0beaee3` coincide la fotografia intermedia del runner.
 > - I percorsi di ogni commit coincidono con le liste C1, C2 e C3.
 >
-> **Cosa è cambiato dopo la validazione del CP5**: fra `3efa748cd` e `d59762e0a` cambiano 507 file.
+> **Cosa è cambiato dopo la validazione del CP5**: fra `8762a2600` e `641ae3239` cambiano 507 file.
 > - Sono il treno 29 di M (traduzioni in `mkdocs_src/`, pipeline aphra), più `dev.py`, `scripts/test_runner/_backend_utils.py` e `test_translation_cache.py`.
 > - Nessun file del frontend né di `backend/app`: le suite del CP5 valgono anche per la revisione combinata.
 > - Delle mie superfici, il treno 29 tocca solo `mkdocs.yml` (unito da git) e le traduzioni di `user/brokers/index`.
 >
-> **Revisione combinata `d59762e0a`**:
+> **Revisione combinata `641ae3239`**:
 > - `dev.py mkdocs build` strict verde.
 > - `dev.py mkdocs check-links`: 95 link validi, nessuno rotto. Il `#rolling-return` mancante in it/fr/es, segnalato al passo 12b, non c'è più.
 > - Worktree pulita dopo i giri.
@@ -764,11 +764,11 @@ Altre superfici:
 >
 > | Checkpoint | Contenuto | Commit |
 > |---|---|---|
-> | CP1 | passi 1 e 3–10: piano, campioni, contratto ed endpoint, plugin, duplicati, test API, icone, documentazione, modale e traduzioni | `305b80202` |
-> | CP2 | passo 11: suggerimenti nuova + salvata nell'editor in blocco | `94271713b` |
-> | CP3 | passo 13, voci del coordinatore: coppie del Bulk nella guida, descrizione di eToro, avviso del costo | `4347f8962` |
-> | CP4 | passi 12b e 12c: correzioni dalla prova umana, glossario | `2046b7419`, `cd0b404d2`; treno 28 nel ramo con `29fa65366` |
-> | CP5 | passi 12d, 12e e 12f: ordine delle icone, spazi in francese, coppie di titoli e spec del lotto 40 | `d5c649e9f`, `1a4fe32a4`, `3efa748cd` |
+> | CP1 | passi 1 e 3–10: piano, campioni, contratto ed endpoint, plugin, duplicati, test API, icone, documentazione, modale e traduzioni | `69bf64f4b` |
+> | CP2 | passo 11: suggerimenti nuova + salvata nell'editor in blocco | `9f20b8119` |
+> | CP3 | passo 13, voci del coordinatore: coppie del Bulk nella guida, descrizione di eToro, avviso del costo | `cc61a6d78` |
+> | CP4 | passi 12b e 12c: correzioni dalla prova umana, glossario | `ec837a197`, `1c1a294fe`; treno 28 nel ramo con `fc9037e16` |
+> | CP5 | passi 12d, 12e e 12f: ordine delle icone, spazi in francese, coppie di titoli e spec del lotto 40 | `9e0beaee3`, `e537a275b`, `8762a2600` |
 >
 > Fuori dal monorepo: l'esportatore 1.0.1 (`6672084`, tag `v1.0.1`, commit e tag del developer).
 >
@@ -780,7 +780,7 @@ Altre superfici:
 > - Interfaccia nelle 4 lingue, audit pulito. Icone con `--check` verde.
 > - Documentazione inglese completa.
 >   - CHANGELOG scritto dal coordinatore col treno 30.
->   - Build strict e `check-links` puliti su `d59762e0a`.
+>   - Build strict e `check-links` puliti su `641ae3239`.
 >   - `translate-validate` eseguito al passo 9.
 > - Prova umana 7/7. Porta 6163 libera.
 >

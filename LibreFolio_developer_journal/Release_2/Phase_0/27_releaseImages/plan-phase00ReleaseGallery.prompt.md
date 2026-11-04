@@ -1,7 +1,7 @@
 # Plan Phase 00 — Release pipeline: gallery repairs, release gate, Docker `latest`, translation alignment plan
 
 **Creato**: 2026-10-07
-**Baseline/target**: `d07412899` (`dev_release2`, train 8), fast-forward at 13:25, HEAD verified clean
+**Baseline/target**: `5f3509536` (`dev_release2`, train 8), fast-forward at 13:25, HEAD verified clean
 **Workstream**: M — branch `e-alfy-cloud-resource-sizing`, worktree `LibreFolio-worktrees/e-alfy-upgraded-telegram`
 **Coordinator**: session `c8328a01-f208-4ade-a352-0486d1f14de2`
 **Runtime lane**: ports `6158`/`6168`, data dir `/tmp/librefolio-r2-m`. Evidence outside the repo in `LibreFolio-cloud-sizing/release-pipeline/` (`r12_analysis.md`, `r12_translation_debt.{py,json}`, gallery log of run `37533864185`).
@@ -47,10 +47,10 @@
 
 | Line | Scenario | Cause | Since |
 |---|---|---|---|
-| `:237` | update-available modal | The image gate now goes through the same-origin `GET /api/v1/system/container-image-status`. The spec still mocks the browser's `ghcr.io` manifest request, which is never made. | `ef722b552` 09-09 |
-| `:526` `:678` `:812` | main dashboard, positions, data-quality banner | The captured `frontend/e2e/dashboard-report.json` (09-04) fails the current schema: `summary.holdings[*].yield_on_cost` is required. Zodios rejects the mocked report, so the dashboard shows no history: `%` is disabled, and there is no exposure table and no banner. | `74afcebce` 09-11 |
+| `:237` | update-available modal | The image gate now goes through the same-origin `GET /api/v1/system/container-image-status`. The spec still mocks the browser's `ghcr.io` manifest request, which is never made. | `c8a77dda3` 09-09 |
+| `:526` `:678` `:812` | main dashboard, positions, data-quality banner | The captured `frontend/e2e/dashboard-report.json` (09-04) fails the current schema: `summary.holdings[*].yield_on_cost` is required. Zodios rejects the mocked report, so the dashboard shows no history: `%` is disabled, and there is no exposure table and no banner. | `cff0f0a11` 09-11 |
 | `:792` | empty state (mobile) | `openMobileMenu()` probes `isVisible()` the instant `login()` returns. The drawer stays closed, so the logout button stays off-canvas. | 10-06 |
-| `:2222` | import wizard conditional steps | Since 09-14 the assets-step Continue is disabled while proposals are open. The click waits out the 10-minute test, and the `finally` masks the error. | `580bd504f` 09-14 |
+| `:2222` | import wizard conditional steps | Since 09-14 the assets-step Continue is disabled while proposals are open. The click waits out the 10-minute test, and the `finally` masks the error. | `ce718ca49` 09-14 |
 | `:3325` | asset event popover | Not proven statically. The first combo passes, every later one fails, and the fallback returns silently. Prime suspect: the date-range probe (`isVisible({timeout})` does not wait). To be confirmed by a local run. | 09-07 → 09-22 |
 
 - **Systemic:**
@@ -130,7 +130,7 @@
 
 ### 2. ✅ D1 capture procedure; first capture normalized and installed — 2026-10-07
 > **Note implementazione**:
-> - The procedure went to the coordinator: build ≥ `d07412899`, 1Y, EUR, all brokers, and the main `POST /api/v1/portfolio/report` request, saved outside the repo.
+> - The procedure went to the coordinator: build ≥ `5f3509536`, 1Y, EUR, all brokers, and the main `POST /api/v1/portfolio/report` request, saved outside the repo.
 > - The first capture (`include_breakdown`/`positions_contribution`/`pnl_candles` false, `broker_ids` `[2,1]`) was normalized by the repo script through a silent wrapper. The script prints the real net worth, and so would the scale ratio; the wrapper prints neither.
 >   - Invariants: 0 errors.
 >   - **Leaf-by-leaf proof**: 37 763 numeric leaves scaled by the same factor; 1 546 unchanged, all percent/ratio/id/count/quantity keys; 195 zero; 0 other ratios. That covers every new section: income, cost, deposit, acquisition funding, broker P&L.
@@ -231,7 +231,7 @@
 > - `:1642` captures `requestedStart`.
 > - On a price-cache hit, `:1705` `resolveMaxStartFromChartData()` moves `dateStart` from the «All» sentinel to the first price date.
 > - The events-only request then fails `:1654` `dataRequestIsCurrent()` and is discarded.
-> - Users opening an asset from the list with «All» see no event markers. Introduced by `2d22130bd` (09-17).
+> - Users opening an asset from the list with «All» see no event markers. Introduced by `f4d209b11` (09-17).
 > - Reported to the coordinator: product code, not M's. It blocks 1.2 now that the gallery gates releases.
 >
 > Evidence: `LibreFolio-cloud-sizing/release-pipeline/runs/*.log`.
@@ -280,7 +280,7 @@
 > - The data-quality shot keeps the 3M preset (as before R12), cosmetic.
 > - The positions tables resolve brokers by id from the gallery DB, so the snapshot's broker names show only in tooltips. That is fine for privacy.
 
-## Batch 2 (after commit `742e381ec`, train 9)
+## Batch 2 (after commit `06c354027`, train 9)
 
 ### 11. ✅ Prerelease tag guard — 2026-10-07
 > **Note implementazione**: developer: «sì al suffisso rc per le pre release, però non succede che faccio una pre release e poi promuovo, al più ne creo un'altra da 0 su un tag nuovo».
@@ -324,11 +324,11 @@
 > - `release-pipeline.md` (docs-writer): «🔖 Release Tags and Publishing» (anchor `#prereleases` kept) with a two-branch table, the refreshed YAML, both «why» bullets, «How to publish», the diagram box «Tag matches its kind? (rc / plain)», the gate and contract sentences, and the closed gap.
 > - `mkdocs build` strict: 0 warnings. `check-links`: 89 valid plus the pre-existing `#rolling-return`. `git diff --check`: clean.
 
-## Batch 3 — Q's screenshot inventory (base `9d79c2dbe`, train 10, Q's pages included)
+## Batch 3 — Q's screenshot inventory (base `4842662a1`, train 10, Q's pages included)
 
-### 13. ✅ Inventory: start, the event popover after I's fix, and group 1 — 2026-10-07 (committed 2026-10-08: `fb40d275b`, `1ac5d0a0a`)
+### 13. ✅ Inventory: start, the event popover after I's fix, and group 1 — 2026-10-07 (committed 2026-10-08: `55ba30948`, `b0b042021`)
 > **Note implementazione**:
-> - Clean base `9d79c2dbe`. Q's placeholders: 125 occurrences in EN pages, 40 names.
+> - Clean base `4842662a1`. Q's placeholders: 125 occurrences in EN pages, 40 names.
 >   - 8 are third-party broker-portal screenshots (Coinbase, Degiro, IBKR, …), which are out of scope because the gallery cannot produce them.
 >   - One more is a `gallery-index` editorial note (add Tools / Risk Analysis / Onboarding bullets once those shots exist).
 >   - Reference list: session file `placeholders_9d79c2dbe.txt`.
@@ -420,10 +420,10 @@
 >
 > **⚠️ Fuori pista**: the group 1 batch was committed by path while the `SettingsLayout.svelte` hook sat in the worktree. Until the SHAs arrived M did not touch the 10 batch paths, and warned the coordinator to stage them explicitly. The hook stayed out of the commits as planned.
 
-### 15. ✅ Group 3: Danske Bank report sets — 2026-10-08 (committed: `f1bda660f`, `88b30ac1a`)
+### 15. ✅ Group 3: Danske Bank report sets — 2026-10-08 (committed: `4c9c13171`, `d5c66f5dc`)
 
 > **Note implementazione**:
-> - Base `1ac5d0a0a`.
+> - Base `b0b042021`.
 > - test-author is writing 8 shots:
 >   - `brokers/import-report-set-card`, `-missing`, `-read-as`, `-file-menu`, `-pairing`;
 >   - `brokers/import-wizard-gapfix-step`;
@@ -489,10 +489,10 @@
 > - **Toasts:** they close on a JS timer that `freezeAnimations` does not pause, so a shot taken within 8 s of an action that raises one can catch it. `expectNoToast` is exported but only used in the bulk test. The risk already existed in other scenarios and was not widened.
 > - **Timeouts:** test-author's 240–600 s budgets stay. Runs measured 15–28 s per test, but the 20 s `actionTimeout` already fails a stuck step quickly, and CI is slower.
 
-### 16. ✅ Group 4: risk lab, What if simulation, missing exchange rates — 2026-10-08 (committed: `a1f34905a`, `44ac071d2`)
+### 16. ✅ Group 4: risk lab, What if simulation, missing exchange rates — 2026-10-08 (committed: `0c1302280`, `2e213a15d`)
 
 > **Note implementazione**:
-> - Base `88b30ac1a`.
+> - Base `d5c66f5dc`.
 > - test-author is writing 9 shots:
 >   - `risk/lab-correlation`, `-asset-picker`, `-hurt-table`, `-risk-return`, `-benchmark-picker`, `-notice`, `-replay`;
 >   - `risk/whatif-simulation`;
@@ -553,9 +553,9 @@
 > - **Simulation framing:** the shot starts at the top of the step. The cone is partly in frame and «What this simulation assumed» is out of frame. To revisit with the new `dashboard/risk-whatif` shots after Q's wave 1.
 > - **Q's G3 finding:** `brokers/import-report-set-file-menu` used an extended test cash statement, so it showed «Read alone with Generic CSV». Danske is the only plugin with report sets (`report_roles`, `broker_danske_bank.py:1644`). Decision sent to Q: reshoot with the real Danske cash export, whose menu has Preview / Remove from the set / Delete, in the batch after Q's wave 1. Q has added the placeholder in `danske-bank` after `-read-as`.
 
-## Batch 4 — base `57f3d96a8` (merge of `dev_release2`, train 14, into M)
+## Batch 4 — base `311af73fd` (merge of `dev_release2`, train 14, into M)
 
-### 17. ✅ Group 5 and two tooling fixes: combined revision, `--no-populate`, gallery fallback under `serve` — 2026-10-08 (committed `6a9000898…3a8e9a05d`, train 18 `70d02cd8e`)
+### 17. ✅ Group 5 and two tooling fixes: combined revision, `--no-populate`, gallery fallback under `serve` — 2026-10-08 (committed `f04a3c723…2f39f3975`, train 18 `bd7c656bf`)
 
 > **Note implementazione**:
 >
@@ -563,10 +563,10 @@
 > - `mkdocs build` strict: 0 WARNING/ERROR. `check-links`: identical to the baseline.
 > - vitest `SettingsLayout` plus the fixture guard: 39/39. `tsc` e2e: only the 2 known errors. Prettier ok.
 > - Gallery smoke 4/4: `tools hub` and `social share modal`, desktop and mobile.
-> - `support/social-share-modal` was re-shot with K's fix (`53a6b2213`). The pixels confirm the bottom strip is now dimmed.
+> - `support/social-share-modal` was re-shot with K's fix (`00854daf6`). The pixels confirm the bottom strip is now dimmed.
 > - Train 14 also brings:
->   - L's fix to the card header and timeline on phones (`038109e91`), so the G3 mobile shots have to be re-shot;
->   - I's batch (`bc08101d6`, gold dividends and period labels), which unblocks group 2.
+>   - L's fix to the card header and timeline on phones (`ac35ad2ce`), so the G3 mobile shots have to be re-shot;
+>   - I's batch (`844b32810`, gold dividends and period labels), which unblocks group 2.
 >
 > **`dev.py mkdocs gallery --no-populate`** (granted by the coordinator; a separate `fix(dev)` commit):
 > - New helper `_reuse_gallery_test_db()`. It resolves `get_test_data_dir()/sqlite/app.db`:
@@ -625,7 +625,7 @@
 > - `onboarding replay` → `settings/onboarding-replay` goes at the end of `Settings`. It runs as the admin, read-only, and never presses Replay.
 > - **Accounts:** one disposable `demo_<token>` account per test, not per combination, so the same name appears in every variant. Language and theme go through localStorage, plus a `PUT /settings/user` on the account itself for the Welcome form. The account is deleted in `afterEach`.
 > - **`SettingsLayout.test.ts`:** 40 tests (34 existing + 6 for the hook's test ids and `aria-pressed`, desktop and phone). The docblock is updated.
-> - **`unfoldCard` (G3):** the keyboard fallback for the zero-width toggle is gone, because L fixed the header (`038109e91`). A regression now fails loudly.
+> - **`unfoldCard` (G3):** the keyboard fallback for the zero-width toggle is gone, because L fixed the header (`ac35ad2ce`). A regression now fails loudly.
 >
 > **Offline gallery guard** (coordinator decision, option (a) plus a fixture; test-author):
 > - `guardGalleryOffline` runs in the top-level `beforeEach`, and `expectGalleryOffline` in `afterEach`.
@@ -702,7 +702,7 @@
 > - Prettier ok on the 7 frontend files. `tsc` e2e: only the 2 known errors. `git diff --check`: clean.
 > - Build strict and check-links were verified at 16:42 (0 WARNING/ERROR, baseline links). The later changes touch only e2e files.
 
-## Batch 5 — images in the user pages (base `70d02cd8e`, train 18, branch fast-forwarded; Q's waves 1 and 2 integrated)
+## Batch 5 — images in the user pages (base `bd7c656bf`, train 18, branch fast-forwarded; Q's waves 1 and 2 integrated)
 
 ### 18. ✅ User-page images, risk dashboard, group 2, PAC, provider compare, Danske reshoot, reduced motion, tall shots — 2026-10-08/09
 
@@ -739,7 +739,7 @@
 >   - It edits the spec after A.
 >
 > **Group 2 checks (before the brief):**
-> - I's batch is in the base: `bc08101d6 feat(charts): gold dividends, period axis labels`, integrated in train 13. Group 2 is unblocked.
+> - I's batch is in the base: `844b32810 feat(charts): gold dividends, period axis labels`, integrated in train 13. Group 2 is unblocked.
 > - Hide amounts lives in `localStorage` only (`privacyStore.svelte.ts`), so it does not leak between tests. The header's `privacy-toggle` is visible on mobile too (no `hidden` class).
 > - The mode and the P&L submode persist in `localStorage` (`dashboard-growth-pnl-submode`). Income opens at `1M` (`INCOME_OPENING_WIDTH`).
 >   - So group 2 goes in a separate test after `main dashboard`, which stays untouched, with the same framing as `main`: the three P&L shots join its carousel.
@@ -1086,9 +1086,9 @@
 >   - C4 = the worktree (`89ba5fe5e12532df…`).
 > - Commit proposals: `release-pipeline/commit_proposal_B5.txt` (C1 test, C2 docs, C3 reduced motion, C4 tall shots + journal).
 >
-> **Committed** (train 21, 2026-10-09): `ee5a2e277`, `797a629d7`, `02ae0e09d`, `d7481a7e7`, merge `e3c1aee06`; `dev_release2` = `9b2acdd5d`.
+> **Committed** (train 21, 2026-10-09): `82da6a0ba`, `4be750cfe`, `a4f6fa03e`, `20261d993`, merge `25f98a439`; `dev_release2` = `2726dec9a`.
 
-## Batch 6 — the gallery Files family and the PDF preview state (base `9b2acdd5d`, train 21, M and D integrated)
+## Batch 6 — the gallery Files family and the PDF preview state (base `2726dec9a`, train 21, M and D integrated)
 
 ### 19. ✅ The CI red `Files › file preview modal (image)` and its family; PDF loaded state; PAC back to USD — 2026-10-09
 
@@ -1106,7 +1106,7 @@
 >    - Also run the existing non-gallery E2E tests that open the preview.
 > 2. Scope = the whole gallery `Files` family, 5 tests: static tab, broker reports tab, grid view, BRIM preview, image/PDF/markdown/text preview.
 > 3. Proof: only the tests that change, plus the preview E2E tests. No CHANGELOG entry: this is test and observability work.
-> 4. D (PAC, row 15, train 21) fixed the engine (`bffc634b0 fix(pac): exact FX residual, coherent cross rates`), so `PAC_SCENARIO.externalAccount` goes back to USD.
+> 4. D (PAC, row 15, train 21) fixed the engine (`ed4b803fe fix(pac): exact FX residual, coherent cross rates`), so `PAC_SCENARIO.externalAccount` goes back to USD.
 >    - Both PAC tests share the draft, so both get run: this also checks D's fix on the result path.
 > 5. Load: the train-21 gates run on 6150 for about 30 min, so 2 workers.
 >
@@ -1193,13 +1193,13 @@
 > - `git diff --check` ok;
 > - ports free.
 >
-> **Committed** (2026-10-09): `32d62640f` (feat files, PDF state), `2e8d6a551` (test gallery Files + PAC USD).
+> **Committed** (2026-10-09): `2619baae6` (feat files, PDF state), `d4948d62d` (test gallery Files + PAC USD).
 > - **Coordinator decisions on the checkpoint** (09:40):
 >   - the line in `_frontend_utility.py` is confirmed, with M as its writer;
 >   - PAC rounding dust: option (a), images kept, the defect passed to D, and the CI regenerates after the fix;
 >   - PDF assets from third parties, FileGrid units and the global shot: to the developer.
 
-## Batch 7 — PDF preview without third-party requests (base `2e8d6a551`)
+## Batch 7 — PDF preview without third-party requests (base `d4948d62d`)
 
 ### 20. ✅ PDF engine and assets served locally, the remote as fallback; viewer only; protected PDFs — 2026-10-09
 
@@ -1218,7 +1218,7 @@
 > - proof: only the tests touched plus the preview E2E.
 >
 > **Facts (read-only analysis, 09:55–10:20):**
-> - **v1.1.0** (`837a8f2c7`, 2026-09-07) already had the EmbedPDF PDF preview (`@embedpdf/snippet` ^2.14.3; preview since `5b887dd3a` of 2026-06-04), so the CHANGELOG entry goes under **Fixed**.
+> - **v1.1.0** (`aabd8f126`, 2026-09-07) already had the EmbedPDF PDF preview (`@embedpdf/snippet` ^2.14.3; preview since `e743fea43` of 2026-06-04), so the CHANGELOG entry goes under **Fixed**.
 > - Options of the snippet (`snippet/dist/components/app.d.ts`):
 >   - `wasmUrl`;
 >   - `fonts.ui` / `fonts.signature` (`null` = no request; documented «for GDPR-sensitive, airgapped, or self-hosted deployments»);
@@ -1499,7 +1499,7 @@
 > - **⚠️ Off track: the fallback loop.** The `!host` branch cleared `pdfError` whenever it ran. So:
 >   - the iframe takes the stage's place (`pdfHost` becomes null), the effect reruns, and `pdfError` is cleared;
 >   - the stage comes back and `init` fails again, round after round, with a HEAD and a new iframe every time.
->   - It dates from `5b887dd3a` (2026-06-04, `feat(files): add inline file preview system`), so it was already in v1.1.0. It triggers only if the import or the viewer's start throws.
+>   - It dates from `e743fea43` (2026-06-04, `feat(files): add inline file preview system`), so it was already in v1.1.0. It triggers only if the import or the viewer's start throws.
 >   - **Fix:** `if (!sourceUrl) pdfError = null;` (the `!open` effect still clears it when the modal closes). Reported to the coordinator: it is tightly coupled to the fallback guard they asked for.
 > - Prettier OK. «EMPTY IN» sent: the GREEN runs plus the gates.
 >
@@ -1521,11 +1521,11 @@
 > - **M's checks:**
 >   - `git diff --check` clean;
 >   - 6158 and 6168 free;
->   - `dev_release2` = `1ead733f2` (train 23): from `2e8d6a551` no overlap with the batch 7 paths, only `CHANGELOG.md`, which M does not touch;
+>   - `dev_release2` = `aca87aec4` (train 23): from `d4948d62d` no overlap with the batch 7 paths, only `CHANGELOG.md`, which M does not touch;
 >   - load at 13:36: 14.2 / 14.2 / 14.9.
 > - **Step 20 closed.** Updated CHECKPOINT READY sent to the coordinator; M FROZEN.
 
-## Batch 8 — English pages that can already be fixed (base `3cceb4f90`, train 24b, M integrated with L and Q)
+## Batch 8 — English pages that can already be fixed (base `f545b67e3`, train 24b, M integrated with L and Q)
 
 ### 21. ✅ Connection indicator shot, PDF preview line, Docker box in `cli_tools` — 2026-10-09
 
@@ -1537,7 +1537,7 @@
 > - Gates: `mkdocs build` strict, `check-links` (only the known `#rolling-return` may remain), the gallery only for the new shot, desktop and mobile.
 >
 > **21.1 ✅ Baseline and analysis (M, 14:00)**
-> - HEAD `3cceb4f90` = `dev_release2` (fast-forward after train 24b: `6bd947519`, M's B7 commits `1028a1978` and `908f9bf1d`); worktree clean.
+> - HEAD `f545b67e3` = `dev_release2` (fast-forward after train 24b: `83bd4e5d5`, M's B7 commits `b17579305` and `773f8843b`); worktree clean.
 > - Placeholder `connection-security.en.md:14`: `<!-- [Screenshot Placeholder: security/connection-indicator — the sidebar's connection security indicator open on Connection: local network, with its reason and the How to connect securely link] -->`.
 > - How to reproduce it (L, `frontend/e2e/layout/connection-security.spec.ts`):
 >   - Chromium with `--host-resolver-rules=MAP lf-e2e.lan 127.0.0.1`;
@@ -1567,7 +1567,7 @@
 >   - `git diff --check` clean.
 > - No timestamp (not a convention); no stamp; the translation debt is left visible (IT/FR/ES gallery pages, the files bullet, cli_tools, connection-security).
 > - Note for the checkpoint: if the viewer fails, the fallback iframe (the browser's own PDF viewer) may offer print and download. The line describes the normal viewer.
-> - **Follow-up approved by M:** a **Security** bullet in «What You'll See» in `gallery/index.en.md`, the convention for a new section (Onboarding in `3a8e9a05d`), then build and check-links again.
+> - **Follow-up approved by M:** a **Security** bullet in «What You'll See» in `gallery/index.en.md`, the convention for a new section (Onboarding in `2f39f3975`), then build and check-links again.
 >
 > **21.3 ✅ Gallery index (docs-writer, 14:20)**
 > - `gallery/index.en.md:25`, «What You'll See»: `- **Security**: Connection security indicator in the sidebar, open on its level and the reason for it` (after Authentication).
@@ -1576,7 +1576,7 @@
 > - `git diff --check` clean.
 > - 6 EN docs files modified. The IT/FR/ES debt is left visible.
 >
-> **⚠️ Off track: pause and the session error (14:21 → 15:22).** The coordinator asked for a pause at 14:21; M's session went down with an error on that very message, before replying «IN PAUSA». It resumed at 15:22 on the coordinator's signal, with HEAD `3cceb4f90`, 9 files modified, ports 6158 and 6168 free.
+> **⚠️ Off track: pause and the session error (14:21 → 15:22).** The coordinator asked for a pause at 14:21; M's session went down with an error on that very message, before replying «IN PAUSA». It resumed at 15:22 on the coordinator's signal, with HEAD `f545b67e3`, 9 files modified, ports 6158 and 6168 free.
 >
 > **21.4 State on resume (M, 15:25)**
 > - Docs: done (21.2, 21.3).
@@ -1641,19 +1641,19 @@
 >   - `check-orphans` clean;
 >   - `git diff --check` clean;
 >   - 6158 and 6168 free;
->   - `dev_release2` still `3cceb4f90`: no overlap.
+>   - `dev_release2` still `f545b67e3`: no overlap.
 > - Docs gates: unchanged since 21.3 (build strict 0 WARNING, check-links only `#rolling-return`).
 > - **Not run:** the other 125 gallery shots under the new launch rule (it maps only `lf-e2e.lan`). The CI runs the whole gallery.
 > - Agents: `bc4a6092` stopped and idle, nothing half done; `96a01a8b` idle, no edit made.
 > - **Step 21 closed.** CHECKPOINT READY sent to the coordinator; M FROZEN.
 >
-> **Batch 8 committed and integrated:** `dbf4263e9` (test gallery) and `4845bdefb` (docs), merge `43de22cbd`, train 25 (`dev_release2` = `586a4f0ea`).
+> **Batch 8 committed and integrated:** `e9e76aece` (test gallery) and `afd4917f1` (docs), merge `0f9adc158`, train 25 (`dev_release2` = `249f5a9aa`).
 
-## Batch 9 — PAC shots after D's row 16 (base `083ed26dc`, train 26)
+## Batch 9 — PAC shots after D's row 16 (base `fef0203ca`, train 26)
 
 ### 22. ✅ PAC gallery shots on the integrated revision — 2026-10-09
 
-> **Coordinator's brief** (18:09): train 26 is in (`dev_release2` = `083ed26dc`; D's row 16, «rounding against the plan», merge `b81b92fd1`).
+> **Coordinator's brief** (18:09): train 26 is in (`dev_release2` = `fef0203ca`; D's row 16, «rounding against the plan», merge `18a10e98e`).
 > - Put `galleryPac.ts`'s external account back in USD (D's report);
 > - re-shoot the PAC gallery shots, desktop and mobile, PAC only;
 > - lane 6158/6168, data `/tmp/librefolio-r2-m`;
@@ -1661,9 +1661,9 @@
 > - checkpoint with the manifest, then FROZEN.
 >
 > **22.1 ✅ Baseline and analysis (M, 18:15)**
-> - HEAD `083ed26dc` = `dev_release2`; worktree clean; 6158 and 6168 free.
-> - **The external account is already in USD:** `galleryPac.ts:86` `externalAccount: {name: 'Northwind Bank', currency: 'USD', declared: '3000', toUse: '1200'}`, since `2e8d6a551` (batch 6). D's own plan says so (`plan-phase00PacRoundingDirectionFix.prompt.md:30`). The report forwarded to M is out of date: **nothing to change**.
-> - **D's row 16** (`96283eaa5 fix(pac)`, `85b2a3125 docs(pac)`):
+> - HEAD `fef0203ca` = `dev_release2`; worktree clean; 6158 and 6168 free.
+> - **The external account is already in USD:** `galleryPac.ts:86` `externalAccount: {name: 'Northwind Bank', currency: 'USD', declared: '3000', toUse: '1200'}`, since `d4948d62d` (batch 6). D's own plan says so (`plan-phase00PacRoundingDirectionFix.prompt.md:30`). The report forwarded to M is out of date: **nothing to change**.
+> - **D's row 16** (`8dfab5dc1 fix(pac)`, `0c5e5f27d docs(pac)`):
 >   - backend only (`pac_allocator/{constraints,evaluator,ledger,normalize,numeric,objectives,planner,models}.py` and the schemas), plus one comment in `StateNotice.svelte`;
 >   - credits are rounded down and debits up, once, on the exact value;
 >   - in D's own words, the dust it should remove from `pac-result-plan`: step 4 «0.01 USD Northwind → DEGIRO → 0.01 EUR», step 6 «0.14 USD → about 0.13 EUR», step 5 «about 1,233.42», and Not invested «Rounding ≈ −0.02 EUR».
@@ -1728,7 +1728,7 @@
 >   - docs build strict 0 WARNING; check-links only the known ones;
 >   - `git diff --check` clean;
 >   - 6158 and 6168 free;
->   - `dev_release2` still `083ed26dc`.
+>   - `dev_release2` still `fef0203ca`.
 > - **Tracked delta:** the PAC page (2 alts) and this journal. The PNGs are gitignored.
 > - **To the coordinator, for decision:**
 >   - **A** desktop IT routing: accept under (c), or a taller screen up to the second broker's control row;
@@ -1737,7 +1737,7 @@
 >   - backlog **C** (truncation without an ellipsis), **F** (Actions without ⋮ on mobile), **G** (NBSP in `es.json`), «ROUTING–» without a space, «Riepilogo/Récapitulatif» used twice.
 > - **Step 22 closed.** CHECKPOINT READY sent; M FROZEN.
 >
-> **Batch 9 committed and integrated:** `29103f95b` (docs pac), merge `83cb002a2`, train 27 (`dev_release2` = `9f060ef6e`).
+> **Batch 9 committed and integrated:** `c6af1ffd3` (docs pac), merge `77dfcd6bc`, train 27 (`dev_release2` = `2d5fa8289`).
 >
 > **Coordinator's decisions on batch 9** (20:01):
 > - A (desktop IT Routing): accepted under rule (c);
@@ -1747,7 +1747,7 @@
 >   - to D (backlog of row 13): C (truncation without an ellipsis), F («Actions» without ⋮ on mobile), «ROUTING–», «Riepilogo/Récapitulatif», the Targets table layout on mobile;
 >   - to S (catalogues): G (NBSP before «%» in `es.json`).
 
-## Batch 10 — Targets shots: the fixture leaves no focus and no horizontal scroll (base `9f060ef6e`, train 27)
+## Batch 10 — Targets shots: the fixture leaves no focus and no horizontal scroll (base `2d5fa8289`, train 27)
 
 ### 23. ✅ `framePacTargets`: blur and horizontal scroll reset before the shot — 2026-10-09
 
@@ -1759,7 +1759,7 @@
 > - checkpoint, then FROZEN.
 >
 > **23.1 ✅ Baseline and analysis (M, 20:10)**
-> - HEAD `9f060ef6e` = `dev_release2` (fast-forward; M's B9 commit `29103f95b` inside); worktree clean; 6158 and 6168 free.
+> - HEAD `2d5fa8289` = `dev_release2` (fast-forward; M's B9 commit `c6af1ffd3` inside); worktree clean; 6158 and 6168 free.
 > - Train 27 touched no file under `frontend/e2e`, `components/ui` or `features/tools`: the fixture is the same as in batch 9.
 > - **Cause**, `galleryPac.ts`:
 >   - `framePacTargets` types the bond's target (`typeValue` → `input.fill`). `fill` focuses the input and scrolls it into view, inside the DataTable's horizontal scroller too: `.table-wrapper`, `overflow-x: auto` (`DataTable.svelte:1559-1561`).
@@ -1806,11 +1806,11 @@
 >   - `tsc -p tsconfig.e2e.json`: only the 2 known errors;
 >   - `git diff --check` clean;
 >   - 6158 and 6168 free;
->   - `dev_release2` still `9f060ef6e`.
+>   - `dev_release2` still `2d5fa8289`.
 > - Triage: the original defect is an **assumption** (the fixture took for granted that `fill` leaves the table at rest), fixed in the fixture.
 > - **Step 23 closed.** CHECKPOINT READY sent; M FROZEN.
 >
-> **Batch 10 committed and integrated:** `0771eaaaf` (test gallery), merge `49212b6df`, train 28 (`dev_release2` = `fbb57eb41`, tree `eb2090da4488`).
+> **Batch 10 committed and integrated:** `cce6e2633` (test gallery), merge `36bdd77c3`, train 28 (`dev_release2` = `fcd37d8d4`, tree `eb2090da4488`).
 >
 > **Coordinator's decisions on batch 10** (21:59):
 > - the mobile compromise (the Target % inputs past the right edge, «Distributio» cut) is **accepted**: it is the table layout, in row 13's backlog and in 38 as **C-38**;
@@ -1818,11 +1818,11 @@
 
 ## Batch 11 — the 1.2 translation round
 
-### 24. ✅ Triage, small fixes, glossary, pipeline launch and review — 2026-10-10 (A: `8f30a7f03…01c6f1ae4`; B: `647475999…ac6ddd452`, train 29 `84e0bddac`)
+### 24. ✅ Triage, small fixes, glossary, pipeline launch and review — 2026-10-10 (A: `c7830d38c…42ace5dd3`; B: `842c78fc3…47ec11707`, train 29 `6288d5bcd`)
 
 > Tracked in its own plan: [plan-phase00TranslationRound12.prompt.md](plan-phase00TranslationRound12.prompt.md).
 
-## Batch 12 — base `e32f47133` (train 29, tree `6e38ae5b74ea`)
+## Batch 12 — base `99117e505` (train 29, tree `6e38ae5b74ea`)
 
 > Coordinator brief (2026-10-10 ~11:25), in this order:
 > 1. the CI red that passed on retry, `[desktop] gallery.spec.ts:6403` «dashboard risk what-if crisis replay (injected window)» — fix the root cause, not the timeout (a tag tolerates no red);
@@ -1834,7 +1834,7 @@
 ### 25. ✅ The red that passed on retry: the header and the resize — 2026-10-10
 
 > **Triage** (test-triage skill, evidence first: the CI log, not a re-run):
-> - Run 38037339522 (Nightly, `dev` `5340cfcc4`): attempt #126 failed in 18.7 s, retry #128 passed. Log in `release-pipeline/runs/b12/ci_run_38037339522.log`.
+> - Run 38037339522 (Nightly, `dev` `6c5c25fad`): attempt #126 failed in 18.7 s, retry #128 passed. Log in `release-pipeline/runs/b12/ci_run_38037339522.log`.
 > - Failure: `galleryRiskLab.ts:271` `headerOutOfShot` — `data-scroll-state` stayed `visible` (10 polls, 3 s) — inside `frameFromTop` ← `fitScreenToRiskBlock` (`gallery.spec.ts:6203`).
 > - It died in the **first** combination (desktop/en/light), right after `📐 … Risk block 892 px → screen 1280×908`; the retry printed the same sizes. Only the first combination resizes: `forEachLanguageAndTheme` never resets the screen, and `fitViewportToBlock` resizes only when the height differs (720 → 908, then 908 = 908).
 > - **Mechanism:** `Header.svelte` handles `resize` with `syncScrollContext()` — it cancels the pending scroll frame, puts the scroll baseline where the page stands and forces `visible`. `fitViewportToBlock` returned as soon as `setViewportSize` resolved, without waiting for the page to handle the resize; `frameFromTop` then took «header `visible`» after `scrollTo(0)` as proof that the header had seen the top. After a resize that proof is void: (A) the header is already `visible`, so the scroll to the top and the scroll down can fall in one frame, and the header sees no movement; (B) a `resize` dispatched after the scroll down resets the baseline at the target. Either way the header stays.
@@ -1874,7 +1874,7 @@
 > **Note implementazione** (docs-writer, every statement checked against the code): the missing H1 restored (a leading space made it a paragraph); the file tree with `.translate-hashes.json`, `glossaries/`, `prompts/short_article/`; new «💬 7. Prompt overrides»; «Caching» rewritten (field table, skip rule, the four transitions, `_read_source`, the tests); new «🔎 Validation Checks» `{: #validation-checks }`.
 >
 > **⚠️ Fuori pista** — the docs-writer found that the batch-11 prompts listed `data-*` among the attributes to copy, `data-title` (the carousel caption) included, while the translations translate it and `check_html_attrs` treats it as translatable: followed literally, the second round would have left the captions in English. Fixed in `step3/4/5_user.txt` (`data-*` other than `data-title`; `data-title` among the translated values, its inner HTML unchanged; placeholders unchanged) and made explicit in `validate_translations.py` (`_TEXT_ATTR` names `data-title`; it already matched through `\btitle`: old and new patterns give identical matches on all 943 pages). The page says the new rule.
-> Also found, not fixed (follow-ups): no unit test covers `text-untranslated`, `anchor-missing`, `inline-code-missing`, `_strip_code` or the block line count; 29 cache entries carry a `pending_langs` field no code reads (hand-added in `5831879a4`); the page's older headings have no emoji.
+> Also found, not fixed (follow-ups): no unit test covers `text-untranslated`, `anchor-missing`, `inline-code-missing`, `_strip_code` or the block line count; 29 cache entries carry a `pending_langs` field no code reads (hand-added in `b116eecb4`); the page's older headings have no emoji.
 
 ### 28. ✅ The translation second round, prepared — 2026-10-10
 
@@ -1890,7 +1890,7 @@
 > - Prettier clean on the fixture; `git diff --check` clean; nothing listening on 6158/6168.
 > - 23 files, 6 proposed commits: `release-pipeline/commit_proposal_B12.txt`.
 
-### 30. ✅ Batch 34: the version in the sidebar of the release screenshots — on `e501b9615` (train 77), 2026-10-13
+### 30. ✅ Batch 34: the version in the sidebar of the release screenshots — on `80ee4beee` (train 77), 2026-10-13
 
 From the I5 question (round-12 journal, step 23). The release screenshots are made by this workflow on the tag,
 and they read `-dirty`:
@@ -2015,7 +2015,7 @@ Steps:
    > **Residual:** M-25 in the backlog, a local `dev.py docker build` that reuses an older frontend build.
    >
    > **⚠️ Fuori pista:** the session broke off around 01:23 (network). The coordinator then fast-forwarded the
-   > worktree to `b1a17b49b` (train 79, with T-EN's changelog line `4e11c2f83`), which M needed for the T-EN port.
+   > worktree to `55734c380` (train 79, with T-EN's changelog line `f4eeba1d9`), which M needed for the T-EN port.
    > - The only dirty file the incoming commits also changed, `BACKLOG_POST_1.2.md`, was set back to HEAD's
    >   version, then recomposed after the fast-forward with `git merge-file` on copies: 0 conflicts, M-25 kept, the
    >   incoming lines intact.

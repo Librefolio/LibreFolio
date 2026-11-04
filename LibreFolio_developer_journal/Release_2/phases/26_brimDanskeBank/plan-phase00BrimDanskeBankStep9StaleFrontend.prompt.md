@@ -1,10 +1,10 @@
 # Piano — fase 00, Danske Bank, passo 9: il frontend vecchio dalla cache (#26, «non funziona su Chromium»)
 
-> **Stato**: ✅ chiuso e integrato nel treno 16 (merge `9055293c7`): `333bfc985`, `38dd5d1b4`, `a683b884b` (verifica del 2026-10-09 su `3cceb4f90`).
+> **Stato**: ✅ chiuso e integrato nel treno 16 (merge `ba4645a40`): `082196482`, `9561f74b7`, `f6e39ba9c` (verifica del 2026-10-09 su `f545b67e3`).
 > - Al checkpoint: ✅ pronta per il checkpoint (2026-10-08, §7.3). Via del developer per l'header e per la proposta UX (§0).
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep8MobileCard.prompt.md](plan-phase00BrimDanskeBankStep8MobileCard.prompt.md).
-> - Workstream L, issue #26. Base `9eb01c756` (`dev_release2`, treno 14).
+> - Workstream L, issue #26. Base `311fbd6e9` (`dev_release2`, treno 14).
 
 ## 0. La segnalazione e le decisioni
 
@@ -18,7 +18,7 @@
 - **Developer, sulla proposta UX** (testuale): «Chiaro, approvo la proposta di L». Va implementata com'è (§5), con la chiave aggiunta via `dev.py i18n add`.
 - **Coordinatore**: la frase per `danske-bank.en.md` **non la scrivo io**. Il treno 15 porta la riscrittura della pagina fatta da Q, e poi M ci mette le immagini. Il testo va nel checkpoint, e la inserisce chi tocca la pagina dopo il treno.
 
-## 1. Stato verificato (2026-10-08, sul codice a `9eb01c756`)
+## 1. Stato verificato (2026-10-08, sul codice a `311fbd6e9`)
 
 - **Il messaggio** viene da `ensure_parseable` (`brim_report_sets.py:404-411`): il backend rifiuta *ogni* originale letto da solo con un plugin di report set. Risponde 422 `set_required` e non sposta il file in `failed` (`brokers.py:803-811`).
 - **Quando il wizard di oggi legge un membro da solo**: `setPluginFor` (`importReportSets.ts:135-141`) lascia fuori dai set:
@@ -36,7 +36,7 @@
 - **La cache**:
   - `GET /` serve `index.html` **senza** `Cache-Control` (`main.py:442`);
   - il ramo «file esatto» del catch-all (`:494-496`) serve `index.html`, `200.html` e gli altri `.html` del build senza header;
-  - solo il fallback SPA (`:507-510`) ha `no-cache, must-revalidate`, aggiunto in `f82adc0d7` per una segnalazione beta («build vecchia fino a F5»);
+  - solo il fallback SPA (`:507-510`) ha `no-cache, must-revalidate`, aggiunto in `fa1a86656` per una segnalazione beta («build vecchia fino a F5»);
   - `/_app` è `immutable` per un anno (`:461-468`).
 
   Così un browser che ha già visto `/` può riprendere dalla cache euristica (il 10% dell'età del `Last-Modified`) l'`index.html` della versione prima, e con lui tutti i chunk vecchi.
@@ -161,7 +161,7 @@ In `backend/test_scripts/test_api/test_http_compression_api.py` (voce `api http-
 ### 7.4 ✅ Integrato (2026-10-08)
 
 > **Note implementazione**:
-> - I commit: `333bfc985` fix(server): HTML entry points always revalidate; `38dd5d1b4` fix(import): block set exports read alone; `a683b884b` docs(journal): plan 26 step 9, stale frontend. Il messaggio di C3 è stato reso ASCII: le virgolette «» sono diventate `"`.
-> - Merge `9055293c7` nel treno 16; `dev_release2` = `cf4248bd9`.
+> - I commit: `082196482` fix(server): HTML entry points always revalidate; `9561f74b7` fix(import): block set exports read alone; `f6e39ba9c` docs(journal): plan 26 step 9, stale frontend. Il messaggio di C3 è stato reso ASCII: le virgolette «» sono diventate `"`.
+> - Merge `ba4645a40` nel treno 16; `dev_release2` = `dd2c41bd2`.
 > - I controlli del treno li fa girare il coordinatore: `api http-compression`, `tx-unit`, gli E2E dei report set e `app-start-auth`.
 > - La frase per `danske-bank.en.md` è passata a M, che la inserisce nel suo lotto delle pagine utente.

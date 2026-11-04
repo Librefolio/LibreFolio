@@ -1,8 +1,8 @@
 # Plan — Propagate the real engine budget to the solver
 
-> **Predecessor**: `plan-phase00PacP1ResidueRemoval.prompt.md` (`154182295`).
+> **Predecessor**: `plan-phase00PacP1ResidueRemoval.prompt.md` (`aab74f191`).
 > **Successor**: [`plan-phase00PacRound5PostMerge.prompt.md`](plan-phase00PacRound5PostMerge.prompt.md) — round-5 post-merge defects, planner v2 UI, detailed review (2026-09-24).
-> **Baseline**: `154182295`. **Lane**: port 6152, `/tmp/librefolio-r2-d`.
+> **Baseline**: `aab74f191`. **Lane**: port 6152, `/tmp/librefolio-r2-d`.
 > **Scope**: voice 1 of the remaining-work list, *narrowed by measurement*.
 
 ---

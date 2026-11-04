@@ -1,11 +1,11 @@
 # Manifest di integrazione - Gruppo E
 
-**Baseline:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`, `refs/heads/dev_release2`.
+**Baseline:** `41a4f23ff70189a4ad827d272a368fbf2359464d`, `refs/heads/dev_release2`.
 **Aggiornato:** 2026-09-10.
 **Stato pacchetto:** R1-R5 verificati tecnicamente e applicati al checkout target
 `dev_release2` il 2026-09-09. Badge e sottotesti R4 accettati dal dev il
 2026-09-09 alle 15:51.
-**Commit/SHA di integrazione:** `ef722b552433028c051ccb1207c84f1072e51bb7`
+**Commit/SHA di integrazione:** `c8a77dda370e985fc8fe259f1232ef8a760c2f54`
 (`feat: ship urgent import and UX fixes`). **Sessione/worktree:** archiviati
 localmente il 2026-09-10; piano versionato ancora in `Phase_0`.
 **Ultima build pronta:** R5,
@@ -331,7 +331,7 @@ storiche presenti nel worktree E non vanno sovrascritte sul master corrente.
 estraneo a E e' stato chiuso per trascinamento. Archivio e SHA restano sospesi
 fino al commit manuale del pacchetto integrato.
 
-> **Note implementazione** (verifica di L del 2026-10-09 su `3cceb4f90`):
-> - ✅ L'integrazione è committata in `ef722b552` (feat: ship urgent import and UX fixes): proxy GHCR (`container_registry.py`), condivisione social (`frontend/src/lib/components/support/`), errore del broker duplicato (`brokers.py:172`), CHANGELOG `:16`, `:109`, `:113`.
+> **Note implementazione** (verifica di L del 2026-10-09 su `f545b67e3`):
+> - ✅ L'integrazione è committata in `c8a77dda3` (feat: ship urgent import and UX fixes): proxy GHCR (`container_registry.py`), condivisione social (`frontend/src/lib/components/support/`), errore del broker duplicato (`brokers.py:172`), CHANGELOG `:16`, `:109`, `:113`.
 > - ✅ Archivio: `Release_2/phases/14_feedbackImportUrgent/`.
 > - Il «secondo sync della pagina globale» di §7 è segnato come preesistente e fuori da E. Senza un riferimento a file e riga non è verificabile, e non è un buco di questo piano.

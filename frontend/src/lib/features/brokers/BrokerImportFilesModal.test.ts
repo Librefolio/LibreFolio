@@ -11,7 +11,7 @@
  * left out. When nothing deletable remains the operation stops there: no DELETE, no error, no success toast. Otherwise
  * the success toast counts the deleted files only.
  *
- * Today (`817a2d37c`) `handleDeleteMultiple` sends a DELETE for every selected id and reports the 403s in the error
+ * Today (`9d334a66b`) `handleDeleteMultiple` sends a DELETE for every selected id and reports the 403s in the error
  * banner: the first two tests are red on their first assertion, the DELETEs sent. The third is the green guard of a
  * selection the user may wholly delete; the last is a control of the harness.
  *

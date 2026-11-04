@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `cf4248bd9` = `dev_release2` (treno 16), pulita; lo step 20 (`5f8e0b905`, `260a53ae4`) è in HEAD |
+| **Baseline** | `dd2c41bd2` = `dev_release2` (treno 16), pulita; lo step 20 (`6f4e0d2a7`, `c1fbcc589`) è in HEAD |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
 | **Ordine** | test rossi prima, via test-author, poi la cura, poi il checkpoint. Il CHANGELOG lo scrive il coordinator. |
 | **Conflitti** | nessun ramo locale tocca dalla merge-base `PreferencesTab.svelte`/`.test.ts`, `settings.ts`, `AssetDataEditorSection.svelte`, `asset-event-delete.spec.ts` e `settings.spec.ts` (verificato il 08/10, 17:45) |
@@ -79,7 +79,7 @@ chiamate** della stessa classe (`count` contro `{n}`):
 
 ## Passi
 
-- [x] 21.1 Base `cf4248bd9` verificata pulita; codice letto; piano nel repo. ✅ 2026-10-08.
+- [x] 21.1 Base `dd2c41bd2` verificata pulita; codice letto; piano nel repo. ✅ 2026-10-08.
 - [x] 21.2 Rosso: il difetto 1 (vitest) e il difetto 2 (E2E, corsia 6155); poi la guardia. ✅ 2026-10-08.
   > **Note implementazione** (test-author):
   > - **E2E** `front-asset asset-event-delete`, 2 rossi e 2 verdi.
@@ -149,7 +149,7 @@ chiamate** della stessa classe (`count` contro `{n}`):
   >   - `front-broker detail` 33/33; `front-fx fx-bulk` 7/7;
   >   - `check-orphans` ok. A fine corsa nessun ascoltatore su 6155; 6165 non usata in questo step.
   > - Carico della macchina alto (loadavg fino a 108, altre corsie attive): nessun rosso, nessun ritentativo.
-  > - Nessuna sovrapposizione prevista: tra `cf4248bd9` e `dev_release2` (`108a2adf5`, treno 17, Q) nessun file del
+  > - Nessuna sovrapposizione prevista: tra `dd2c41bd2` e `dev_release2` (`03c943f53`, treno 17, Q) nessun file del
   >   lotto cambia, e nessuno dei 17 rami locali li tocca. La guardia legge però a ogni esecuzione tutti i `.svelte` e i
   >   cataloghi, quindi una chiamata nuova con il nome sbagliato, di qualunque ramo, la fa diventare rossa alla fusione.
   >   È voluto.

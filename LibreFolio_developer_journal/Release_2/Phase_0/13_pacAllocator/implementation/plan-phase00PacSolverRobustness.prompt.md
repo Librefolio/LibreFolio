@@ -1,7 +1,7 @@
 # Piano D — Robustezza del solver PAC, senza toccare il contratto
 
-**Stato:** ✅ consegnato il 2026-10-06 (CHECKPOINT READY, poi FROZEN). Iniziato il 2026-10-05: il via è del coordinator alle 17:39, dopo il commit J1 `8c98a03c1`.
-**Baseline:** `8c98a03c1` su `e-alfy-allocatore-pac`, cioè `7038c2224` più il journal J1.
+**Stato:** ✅ consegnato il 2026-10-06 (CHECKPOINT READY, poi FROZEN). Iniziato il 2026-10-05: il via è del coordinator alle 17:39, dopo il commit J1 `dc732340d`.
+**Baseline:** `dc732340d` su `e-alfy-allocatore-pac`, cioè `894236b11` più il journal J1.
 Verificata il 2026-10-05 alle 18:11: albero pulito, stage vuoto, porta 6151 libera.
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacSolverRobustness.prompt.md`
 ← Precedente: [`plan-phase00PacContractCompaction.prompt.md`](plan-phase00PacContractCompaction.prompt.md) (riga 11 del README).
@@ -678,7 +678,7 @@ Docstring e commenti:
   `:18-40`.
 
 **C901 — `normalize.py:461`** (chiesto dal coordinator il 06/10 alle 15:50). `dev.py lint` è rosso
-sul target per `validate_funding_routes` (complessità 11 su 10), arrivato con `ac18ce097`.
+sul target per `validate_funding_routes` (complessità 11 su 10), arrivato con `ccd444993`.
 - La regola del coordinator: una scomposizione, se è semplice e coperta dai test esistenti;
   altrimenti `# noqa: C901` con il motivo sulla stessa riga, come nel resto del progetto.
 - Un commit `chore(pac)` a sé, solo `normalize.py`, nel prossimo checkpoint. Il contratto non cambia.
@@ -1234,7 +1234,7 @@ Tutti con questo prefisso, un comando per volta:
 - ✅ **C901 — `normalize.py:461`, 2026-10-06, 15:55** (chiesto dal coordinator alle 15:50, commit
   `chore(pac)` a sé).
   > **Note implementazione**:
-  > - la causa: `ac18ce097` (la compattazione) ha reso facoltativo `transfer_cap`. Il blocco
+  > - la causa: `ccd444993` (la compattazione) ha reso facoltativo `transfer_cap`. Il blocco
   >   `if item.transfer_cap is not None:` porta `validate_funding_routes` da 10 a 11. Ruff sulla
   >   versione di prima passa;
   > - perché è arrivato sul target: gli statici della compattazione
@@ -1481,7 +1481,7 @@ Tutti con questo prefisso, un comando per volta:
   >   `proof.scopes.{global,incumbent_face}`, `proof.help.{status,dual,absoluteGap}` (sotto
   >   `tools.pacAllocator.planner.result`) e `tools.pacAllocator.planner.strategy.tieBreak`;
   > - **la frase di CHANGELOG** sostituisce due frasi del punto «PAC allocator» (riga 18, uguale in
-  >   `d9aad0ec9` e in `dev_release2` `6addaba05`). Prima:
+  >   `168b81823` e in `dev_release2` `81a1fe750`). Prima:
   >
   >   > Every answer says what it is worth: proven optimal, the best plan found when optimality could
   >   > not be proven, proven infeasible, or no plan within the calculation limits. These are never
@@ -1513,9 +1513,9 @@ Tutti con questo prefisso, un comando per volta:
   > - **i controlli, alle 17:01:29** (carico 7,57): `git diff --check` pulito; sui 4 file nuovi,
   >   `git diff --no-index --check`: 0 problemi; stage vuoto; `lsof -nP -iTCP:6151 -sTCP:LISTEN` e
   >   `…:6161…` vuoti. Ripetuti dopo questa voce;
-  > - **l'unione con `dev_release2` `6addaba05`, simulata alle 17:05** con `git merge-file -p`, che
+  > - **l'unione con `dev_release2` `81a1fe750`, simulata alle 17:05** con `git merge-file -p`, che
   >   scrive solo su stdout (`/tmp/libreFolio_d_s7_mergesim.sh`, log `.log` accanto). Dalla base
-  >   comune `7038c2224` sono arrivati 26 commit e 64 file; 5 sono anche miei:
+  >   comune `894236b11` sono arrivati 26 commit e 64 file; 5 sono anche miei:
   >   - i18n ×4: 0 conflitti. Io cambio 8 chiavi, loro 13, nessuna in comune e nessuna sotto
   >     `tools.pacAllocator`. Il risultato è un JSON valido di 4 505 chiavi, senza chiavi perse;
   >   - `_frontend_utility.py`: 0 conflitti; il risultato è il loro file più la mia riga;
@@ -1533,7 +1533,7 @@ Tutti con questo prefisso, un comando per volta:
 
 ## 13. Esito della review (S1)
 
-- **Chi e quando:** agente `general-purpose`, 2026-10-06, in sola lettura su `8c98a03c1`.
+- **Chi e quando:** agente `general-purpose`, 2026-10-06, in sola lettura su `dc732340d`.
 - **Rapporto:** `files/review_S1/review2_S1_report.md` della sessione, con accanto le sonde e i log
   `review2_*`.
 - **STOP CONTRATTO: no.** Tutte le correzioni raccomandate passano i validatori di oggi. Lo prova la

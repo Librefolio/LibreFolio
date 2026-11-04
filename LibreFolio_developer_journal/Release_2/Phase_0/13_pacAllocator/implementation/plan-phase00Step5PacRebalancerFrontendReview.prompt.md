@@ -1,12 +1,12 @@
 # Step 5 — shell frontend, PAC/Rebalancer e review umana
 
 **Stato:** PENDING CONTRACT, SOURCE COPY AND GENERATED CLIENT.
-> ⚠️ **Stato al 2026-09-24 (`f1047f766`).** I tre prerequisiti dell'header esistono:
+> ⚠️ **Stato al 2026-09-24 (`9df0b7b14`).** I tre prerequisiti dell'header esistono:
 > - contratto `pac_allocator` `2.0.0` / `plan` ([handoff §0](../../16_toolPlatform/handoff-pac-D.md));
 > - copia di dominio `POST /portfolio/allocation-source`;
 > - client generato.
 >
-> La UI v2 non esiste ancora: la UI P1 è stata rimossa il 2026-09-21 in `b82e59ffa`. La
+> La UI v2 non esiste ancora: la UI P1 è stata rimossa il 2026-09-21 in `704ba66a3`. La
 > costruzione riparte nel [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md), Passo C.
 > Da lì prevalgono §10 e §12 riallineate qui sotto.
 
@@ -209,7 +209,7 @@ Nessuna copia locale di parsing numerico, formatting o lifecycle già condiviso.
 > campi ora required (`cleanup_timeout_ms`/`client_timeout_ms`/
 > `engine_timeout_ms`/`memory_limit_bytes`/`request_timeout_ms` per-operation,
 > `engine_timeout_ms`/`memory_limit_bytes` per-policy), introdotti dal commit
-> pregresso `4a38b9061`. Root-caused via `.safeParse()` diretto sullo schema
+> pregresso `97dde9bf3`. Root-caused via `.safeParse()` diretto sullo schema
 > Zod. **Triage coordinator: non toccare, fixture debt per futuro test-author
 > Tool-platform, routing separato.**
 > (2) `front check` mostrava ancora gli stessi 3 errori (righe spostate) — non
@@ -533,12 +533,12 @@ Rebalancer: APPROVED | CHANGES REQUIRED
 - [ ] 13. Congelare doppio `APPROVED`.
 
 > **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
-> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti,
+> (`894236b11`). Le caselle restano come sono: questa nota dice dove sono finiti i punti,
 > senza spuntarli. La UI è stata costruita nel Passo C del
 > [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md) e rivista col developer nei
 > round 2–14.
-> - **1–6, 8–10 e 12. UI del PAC.** Fatti per il PAC: codice nel commit `6f29ec1cf` (02/10),
->   correzioni in `0900f11fa` (05/10). Il developer l'ha provata nella copia di prod sulla
+> - **1–6, 8–10 e 12. UI del PAC.** Fatti per il PAC: codice nel commit `ffe03f7fc` (02/10),
+>   correzioni in `43a4ae0d2` (05/10). Il developer l'ha provata nella copia di prod sulla
 >   porta 6161 e ha dato il via libera nel R14.5: «è tutto perfetto… procedi con
 >   l'integrazione».
 >   - Item 2: il planner non usa `ExactQuantityInput`. I campi decimali restano testo

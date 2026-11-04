@@ -53,7 +53,7 @@ responsibility with **no contract change**.
 - Residual: `get_prices_bulk` keeps a `noqa: C901 — TODO(P2-refactor)` (multi-pass query/FX/signal pipeline).
 
 ## History
-- 2026-09-11 (`3c85866dd`): SP08 split; `YahooFinanceProvider.get_history_value` split into fetch, DataFrame mapping
+- 2026-09-11 (`36fc57005`): SP08 split; `YahooFinanceProvider.get_history_value` split into fetch, DataFrame mapping
   and dividend/split parsing; the core logs through the project logger (the fix for an off-track incident in the
   plan). [[sources/phase00-asset-pricing-refactor-2026-09]]
 - 2026-10-08: asset events edited in place by id ([[problems/asset-event-edit-delete-reinsert]]).

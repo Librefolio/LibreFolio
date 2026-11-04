@@ -78,7 +78,7 @@ commensurable. *"The fan-out was not expensive: it was wrong."*
 prepares the joint series **once per request, before any analytic runs** (the benchmark, when
 asked for, joins that same preparation); each analytic answers with one row per asset.
 
-- **Backend — `d3afb92b6`** (workstream P): five auto-discovered plugins — `asset_set_kpi`,
+- **Backend — `a0a7e5ae4`** (workstream P): five auto-discovered plugins — `asset_set_kpi`,
   `asset_set_var`, `asset_set_drawdown`, `asset_set_risk_return`, `asset_set_comparison` — each
   declaring one scope (`ASSET_SET`) and one mode (`HISTORICAL`). `asset_set_kpi` publishes, per
   asset, volatility, max drawdown and its duration, Sharpe, Sortino, worst realization, DaR, CDaR
@@ -86,7 +86,7 @@ asked for, joins that same preparation); each analytic answers with one row per 
   questions rather than one, and publishes n rows."* New payload shapes (`RiskAssetSet*Output`)
   rather than new fields on the singular outputs; `RiskAssetSetReturnOutput` has no field for a
   set-level aggregate, so a capital market line cannot come back through the data.
-- **Frontend — `032b86959`** (workstream A): L1° and L3° as tables of one row per selected asset —
+- **Frontend — `e38ae2300`** (workstream A): L1° and L3° as tables of one row per selected asset —
   *"the ruler becomes the columns, the assets become the rows"*. The five analytics travel in
   **one request** for the two levels, the benchmark in the same one; a selected asset that
   cannot be measured keeps its row, with null cells. The helpers take no currency. (The

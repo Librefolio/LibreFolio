@@ -1,6 +1,6 @@
 # MF-A13 — il tasso del punto di prezzo: misura e proposta di contratto (28/10/2026)
 
-> MF, ondata 6, base `b48694f3f`. Sola lettura: nessun codice. Origine: backlog MF-A13 (`BACKLOG_POST_1.2.md:10837`),
+> MF, ondata 6, base `3f8e670f2`. Sola lettura: nessun codice. Origine: backlog MF-A13 (`BACKLOG_POST_1.2.md:10837`),
 > [analisi T-U1](analisi-T-U1-convert_bulk-20261028.md) §6. Piano: [plan-phase01FinancialMath](plan-phase01FinancialMath.prompt.md),
 > «Ondata 6». Script della misura (scratch, non nel repo): ogni riga di `price_history` del DB di prova della corsia
 > (`/tmp/librefolio-r13-o6-mf`, 2 817 righe: 2 237 USD, 580 EUR), convertita in EUR e in USD; log

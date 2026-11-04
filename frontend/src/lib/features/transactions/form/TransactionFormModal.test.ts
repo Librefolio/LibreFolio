@@ -517,7 +517,7 @@ describe('TransactionFormModal — exact quantity contract', () => {
      * B-48 — the quantities of the five cases that pin the exact path (the pre-blur push, the two hydrations, the two
      * transfer updates). They used 999999999999.12345x: eighteen significant digits, past the fifteen the backend keeps,
      * and refused by the form since B-48. Their size was only the means of the subject: no double holds eighteen digits,
-     * so a quantity that went through a JavaScript number came out changed (exactness, 75309672e). Within fifteen
+     * so a quantity that went through a JavaScript number came out changed (exactness, 5c9a44efb). Within fifteen
      * significant digits a double holds every value, so the means is now a quantity below 1e-6 — four significant
      * digits, ten decimals, within the domain — which a number writes with an exponent: an exact path and a Number path
      * still give different strings.

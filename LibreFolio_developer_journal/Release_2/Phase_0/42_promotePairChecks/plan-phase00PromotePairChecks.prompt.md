@@ -6,12 +6,12 @@
 > trovato da S e confermato dal suo E2E. Il mandato: prima i test rossi e un'analisi breve, poi la correzione dopo il
 > via.
 >
-> **Base**: worktree a `fa109eaa7`, cioè `fbb57eb41` più l'archivio della 40, pulita. Nel frattempo `dev_release2` è
-> andato a `e32f47133` (treno 29: traduzioni, pipeline e journal, nessun file mio). Corsia `--test-port 6161 --data-dir
+> **Base**: worktree a `fad70afdf`, cioè `fcd37d8d4` più l'archivio della 40, pulita. Nel frattempo `dev_release2` è
+> andato a `99117e505` (treno 29: traduzioni, pipeline e journal, nessun file mio). Corsia `--test-port 6161 --data-dir
 > /tmp/librefolio-r2-p`, un comando alla volta.
 >
-> **Base aggiornata**: `f4a42bf4a` (treno 31, 10/10, coi file del passo 1 intatti), poi `01b967c56`, il commit di
-> DistributionEditor (11/10). Al checkpoint `dev_release2` è a `b20eac991` (treno 32, che non tocca file del lotto).
+> **Base aggiornata**: `61e598b8a` (treno 31, 10/10, coi file del passo 1 intatti), poi `e21fd80fd`, il commit di
+> DistributionEditor (11/10). Al checkpoint `dev_release2` è a `d9cdc2ca7` (treno 32, che non tocca file del lotto).
 >
 > **Superfici.**
 > - Mie: `transaction_service.py` (`_validate_linked_pair`), `transaction_batch_stages.py` (`apply_promotes`),
@@ -78,7 +78,7 @@ Tutti i rossi sono scritti dal test-author. I log sono in `/tmp/libreFolio_p42_r
 ### 1.3 `fieldEq` confronta i costi per riferimento — CONFERMATO
 - In `txPayloadHelpers.ts:204-205` il ramo di `cost_basis_override` fa `(a || '') === (b || '')` su oggetti
   `{code, amount}`, quindi due costi uguali risultano sempre diversi. Lo usano `buildUpdateDiff` (`:285-287`) e
-  `diffDualItem` (`:339-343`). C'è dal `7f1a6ed39` (05/05).
+  `diffDualItem` (`:339-343`). C'è dal `d1d06c0a5` (05/05).
 - **Rossi unitari** (`txPayloadHelpers.test.ts`, `front-transaction tx-unit`): 8 su 14 nuovi.
   - `fieldEq` dà falso per uguali per valore (`'10'` e `'10.000000'`, o una copia), e per un importo vuoto o di spazi
     contro `null`.
@@ -250,7 +250,7 @@ Tutti i rossi sono scritti dal test-author. I log sono in `/tmp/libreFolio_p42_r
   - le due chiavi nelle 4 lingue;
   - 2.5 `cashAmountsCancel` esatto, riusando `assetQuantitiesCancel` di S.
   Poi i gate.
-  > **Note implementazione** (10/10, base `f4a42bf4a`, treno 31, coi 10 file del passo 1 intatti):
+  > **Note implementazione** (10/10, base `61e598b8a`, treno 31, coi 10 file del passo 1 intatti):
   > - **2.5, rosso prima del codice** (test-author): in `promoteHelpers.test.ts` un blocco nuovo
   >   «exact at large magnitudes» (righe 138–189). 4 rossi: un centesimo a 10 milioni, a 123 milioni e a 1,2 trilioni,
   >   più il caso normalizzato (CASH_OUT 10000000.00 da DB, CASH_IN 10000000.01). 4 controlli verdi: importi uguali, zeri
@@ -271,7 +271,7 @@ Tutti i rossi sono scritti dal test-author. I log sono in `/tmp/libreFolio_p42_r
   >   `tx-bulk-suggest-ux` 8/8, `tx-bulk-promote-exec` 9/9, `tx-split-promote` 6/6, `tx-import-scalable-transfers`
   >   4/4, `tx-selection-after-bulk` 10/10; `tx-bulk-promote-cost-basis` 3/4. Porta libera.
   >
-  > **⚠️ Fuori pista**: `tx-bulk-promote-cost-basis.spec.ts` (di S, `1a4fe32a4`, treno 30) PC2 promuove un
+  > **⚠️ Fuori pista**: `tx-bulk-promote-cost-basis.spec.ts` (di S, `e537a275b`, treno 30) PC2 promuove un
   > ADJUSTMENT salvato legato a uno SPLIT, che la sua intestazione chiama l'unica strada pubblica verso un ricevente
   > salvato senza costo. Con D2 quel promote è impossibile per scelta: il banner non lo propone più (`buildPromoteCtx`
   > passa gli eventi) e il backend lo rifiuterebbe con `eventTypeIncompatible`. Il test si ferma a `:569`
@@ -310,7 +310,7 @@ Tutti i rossi sono scritti dal test-author. I log sono in `/tmp/libreFolio_p42_r
   > - **Cura**: lo schema, `promote_suggest_bulk`, la riga del Bulk e `api sync`, che non tocca file tracciati. Il router
   >   non è toccato: la descrizione del campo basta per l'OpenAPI.
   > - **Chiavi**: `transactions.errors.pairQuantityMismatch` e `pairAssetMismatch` nelle 4 lingue, con
-  >   `dev.py i18n add`, dopo il commit `01b967c56` di DistributionEditor. Nessun markup nei valori, quindi
+  >   `dev.py i18n add`, dopo il commit `e21fd80fd` di DistributionEditor. Nessun markup nei valori, quindi
   >   `htmlInterpolation.gate` non vuole voci nuove.
   > - La `desc` del catalogo del runner per `tx-bulk-promote-cost-basis` ora descrive PC2, PC2b e PC2c.
   >
@@ -318,7 +318,7 @@ Tutti i rossi sono scritti dal test-author. I log sono in `/tmp/libreFolio_p42_r
   > riga sola si apre il form di modifica (`autoForm: 'edit'`), e l'helper ora lo annulla senza toccarlo. PC1–PC4 non
   > passano da quel ramo.
   >
-  > **Gate finali** (corsia 6161, uno alla volta; base `01b967c56`):
+  > **Gate finali** (corsia 6161, uno alla volta; base `e21fd80fd`):
   > - Backend:
   >   - `api batch-split-promote` 34/34;
   >   - `api transactions` 23/23, `api transfer-promotion` 3/3, `api transactions-wac` 20/20, `api brokers` 29/29,
@@ -416,14 +416,14 @@ Fuori dal lotto 42, con un checkpoint e un commit propri (coordinator, 10/10).
   francese.
 - **Gate**: `core-unit` 3676/3676, `front check` 0/0; E2E `asset-classification` 4/4, `asset-modal` 17/17,
   `tx-import-asset-inspector` 5/5; `i18n audit` completo.
-- **Checkpoint**: 8 percorsi, verificato dal coordinator (10/10). Commit `01b967c56`
-  («fix(assets): localize distribution editor labels»), fuso nel target come `e26b1b7f2` (treno 32, 11/10).
+- **Checkpoint**: 8 percorsi, verificato dal coordinator (10/10). Commit `e21fd80fd`
+  («fix(assets): localize distribution editor labels»), fuso nel target come `5c2ea6ac6` (treno 32, 11/10).
 
 ## 7. Seguito: C-46, C-47, C-48 (11/10)
 
-Il lotto 42 è nel target come `7f8233c47`, fuso come `8ca0d5535` (treno 34, `dev_release2` = `f6a5a2fcc`). Il
+Il lotto 42 è nel target come `af4463c5f`, fuso come `1a2ebd2e3` (treno 34, `dev_release2` = `ee0995874`). Il
 coordinator chiede, per il developer, di chiudere prima della 1.2 le tre voci del 38 nate da questo lotto, ognuna col
-suo rosso prima. Base: worktree a `f6a5a2fcc`, pulita. Corsia 6161.
+suo rosso prima. Base: worktree a `ee0995874`, pulita. Corsia 6161.
 
 - **C-46** ✅ (11/10): la barra della selezione (`selectedForPromote`) usa per un TRANSFER il confronto esatto del banner
   (`assetQuantitiesCancel`), con una riga accanto a quella di `cashAmountsCancel`.
@@ -519,7 +519,7 @@ suo rosso prima. Base: worktree a `f6a5a2fcc`, pulita. Corsia 6161.
   >   stock split; for a gift, type the donor's original cost.» Il resto della riga e l'admonition restano com'erano,
   >   e sulla pagina non c'è altro consiglio sui regali.
 
-**Gate del seguito** (11/10, corsia 6161, uno alla volta, base `f6a5a2fcc`; log in `/tmp/libreFolio_c4x_*.log`):
+**Gate del seguito** (11/10, corsia 6161, uno alla volta, base `ee0995874`; log in `/tmp/libreFolio_c4x_*.log`):
 - `front build --debug` OK; `front check` 0/0; ruff, black e prettier puliti; `api sync` senza file tracciati cambiati.
 - E2E, tutti verdi:
   - `tx-bulk-promote-cost-basis` 8/8, con PC5 e PC6;
@@ -540,10 +540,10 @@ suo rosso prima. Base: worktree a `f6a5a2fcc`, pulita. Corsia 6161.
 ## 8. Mini-lotto dai reperti dell'audit di M (11/10)
 
 - Decisione del coordinator (11/10): il developer è fuori e gli ha delegato le cose ragionevoli.
-- Base: `41ddc61cb` (treno 37), pulita. Corsia 6161.
+- Base: `3bbe92424` (treno 37), pulita. Corsia 6161.
 - I cataloghi i18n sono di P per queste voci, fino al checkpoint.
 
-**Integrazione del seguito (§7):** C-46…C-48 sono entrati come `bdec709d2`, con il merge `b5a71de01` (treno 37). Nel 38
+**Integrazione del seguito (§7):** C-46…C-48 sono entrati come `a892717de`, con il merge `bd20bae38` (treno 37). Nel 38
 sono ✅; le righe del CHANGELOG sono scritte dal coordinator.
 
 - **8.1 `BrokerCard`, la percentuale** ✅ (11/10). Oggi è `toFixed(2)%`, quindi «0.00%» in tutte le lingue. Va curata come il
@@ -707,8 +707,8 @@ dopo l'aggiornamento). Niente rossi, perché sono testi:
   - P-15: altre etichette inglesi scritte nel codice, cioè in `DataEditor` «Date», i contatori, un `aria-label` e
     «Reset layout», e in `BrokerSharingPanel` «max».
 
-> **Integrazione** (coordinatore, 2026-10-11): C-46…C-48 sono il commit `bdec709d2`, integrato nel treno 37 col merge
-> `b5a71de01` (`dev_release2` = `41ddc61cb`); il mini-lotto della §8 è il commit `0de730f3b`, integrato nel treno 38
-> col merge `d321f49dd` (`dev_release2` = `b578f4fec`). Nel 38 C-46…C-48 sono ✅; i residui di P stanno nella sezione P
+> **Integrazione** (coordinatore, 2026-10-11): C-46…C-48 sono il commit `a892717de`, integrato nel treno 37 col merge
+> `bd20bae38` (`dev_release2` = `3bbe92424`); il mini-lotto della §8 è il commit `f3dc1eb27`, integrato nel treno 38
+> col merge `1d29deef5` (`dev_release2` = `93b890bd6`). Nel 38 C-46…C-48 sono ✅; i residui di P stanno nella sezione P
 > di [`BACKLOG_POST_1.2.md`](../BACKLOG_POST_1.2.md), P-13…P-15 comprese. P ha finito; la chat è archiviata l'11/10, su
 > via del developer.

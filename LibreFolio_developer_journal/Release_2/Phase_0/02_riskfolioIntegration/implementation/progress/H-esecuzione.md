@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | [`../H-backend-montecarlo.md`](../H-backend-montecarlo.md) — **sola lettura** |
 | Branch | `e-alfy-h-monte-carlo` |
-| Baseline | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` — verificata, coincide |
+| Baseline | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` — verificata, coincide |
 | Lane | porta `6247` · data dir `backend/data/test-risk-h` |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 | Autorizzazione | ricevuta 17 Set 2026 — **implementazione approvata tranne GJR-GARCH** |
@@ -210,7 +210,7 @@
 
 | Comando | Esito |
 |---|---|
-| `git rev-parse HEAD` | `cc33120e…` = baseline ✅ |
+| `git rev-parse HEAD` | `3a4431d5…` = baseline ✅ |
 | `… test --test-port 6247 --data-dir backend/data/test-risk-h services risk-simulation` | **29 passed in 9.20s** ✅ (era 15) |
 | `… services risk-workers` | **11 passed in 14.53s** ✅ |
 | `… services quantlib-runtime` | **2 passed in 0.08s** ✅ |

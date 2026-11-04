@@ -1,6 +1,6 @@
 # L'anno breve (prima del 100) fuori dal mio ambito
 
-Y, 25/10/2026. Base: `1a6687be7` (il mio ramo). Cerca: `grep -rn "Date.UTC(" frontend/src` e i costruttori locali
+Y, 25/10/2026. Base: `c7d9f080e` (il mio ramo). Cerca: `grep -rn "Date.UTC(" frontend/src` e i costruttori locali
 `new Date(anno, mese, giorno)`, escludendo test e client generato.
 
 ## Il difetto

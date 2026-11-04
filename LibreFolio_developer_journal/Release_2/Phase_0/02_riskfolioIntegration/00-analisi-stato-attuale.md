@@ -2,7 +2,7 @@
 
 **Data**: 16 Settembre 2026
 **Metodo**: inventario verificato **sul codice**, non sui documenti di piano.
-**Baseline**: `e1f3fe177861d2b9b953b218f66ea7d4714ab405`
+**Baseline**: `0ba3eff69e5190889267b9487f0ec60e17bbbd0d`
 
 > I documenti della prima campagna descrivono lo stato *inteso*. Questo documento
 > descrive lo stato *reale*. Dove divergono, vale questo.

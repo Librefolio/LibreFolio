@@ -12,9 +12,9 @@ Fonti:
 
 ## Confine e autorizzazione
 
-**Baseline:** `f1047f766`, verificata 2026-09-23 10:33, albero pulito.
+**Baseline:** `9df0b7b14`, verificata 2026-09-23 10:33, albero pulito.
 
-**Checkpoint:** C2 `64d78e244` (R3, R19) · C4 `5e7ae336e` (OB-8, OB-9, IWR-006, `settings.spec`), committato 2026-09-24.
+**Checkpoint:** C2 `865509a12` (R3, R19) · C4 `6ad5c4d4b` (OB-8, OB-9, IWR-006, `settings.spec`), committato 2026-09-24.
 
 **Branch:** `e-alfy-onboarding-foundation`.
 
@@ -46,11 +46,11 @@ stop e domanda al coordinator, che aggiorna la 004.
 
 | # | difetto | causa | file |
 |---|---|---|---|
-| R3 | la modale «nuova versione» compare dopo, o sotto, il changelog | percorso **admin**: `ChangelogModal:242` → `updateAvailable.show()` → `DeferredAppPopups:41` la **rinvia** finché `modalDepth > 0`. Il percorso non-admin (`AskAdminModal` annidata, `:325`) risponde subito. Il rinvio è giusto per i popup non chiesti e sbagliato per un controllo che l'utente ha chiesto | `DeferredAppPopups.svelte` (mio, `8a8e686f0`), `ChangelogModal.svelte`, `updateCheckStore.svelte.ts`, `UpdateAvailableModal.svelte` |
+| R3 | la modale «nuova versione» compare dopo, o sotto, il changelog | percorso **admin**: `ChangelogModal:242` → `updateAvailable.show()` → `DeferredAppPopups:41` la **rinvia** finché `modalDepth > 0`. Il percorso non-admin (`AskAdminModal` annidata, `:325`) risponde subito. Il rinvio è giusto per i popup non chiesti e sbagliato per un controllo che l'utente ha chiesto | `DeferredAppPopups.svelte` (mio, `09f835892`), `ChangelogModal.svelte`, `updateCheckStore.svelte.ts`, `UpdateAvailableModal.svelte` |
 | R4 | nessun «sei aggiornato» | con R2 attiva la versione era `v1.0.1-97-…` → esito `update-available` → nessun toast «aggiornato» era dovuto. E lo stato `'newer'` **non ha resa inline** | `ChangelogModal.svelte` |
 | R19 | frase «Importa ha una guida» | `onboarding.tour.steps.transactionsNav.description`, usata da `OnboardingOverlayHost.svelte:74` | cataloghi i18n ×4 |
 | OB-8 | il replay vive in `sessionStorage` e non sopravvive a scheda chiusa o cambio dispositivo | `onboarding.svelte.ts:22` | store onboarding, `OnboardingReplaySection.svelte` |
-| OB-9 | uscire dalla route a metà guida riparte dallo step 1; 9 flow su 15 senza E2E | `OnboardingOverlayHost.svelte:641`, `ImportWizardModal:178` (`restartAtFirst`) | host, `onboardingRouteSettlement.ts` (co-autore `e38a521f0`) |
+| OB-9 | uscire dalla route a metà guida riparte dallo step 1; 9 flow su 15 senza E2E | `OnboardingOverlayHost.svelte:641`, `ImportWizardModal:178` (`restartAtFirst`) | host, `onboardingRouteSettlement.ts` (co-autore `71b37e4bf`) |
 
 **R3/R4 — osservazione che separa rinvio da impilamento.** Con il changelog aperto, dopo il
 check: `[data-testid=deferred-app-popups]` con `data-active-popup="none"` e `data-modal-depth="1"`
@@ -224,7 +224,7 @@ Assegnato dal coordinator (12:16): `tx-import-resolution` IWR-006 fallisce sempr
 > gli step Import 2 `completed`, 5 `pending`, 1 `skipped`, e gli step Bulk 4 `pending`; il populate
 > aveva seminato 165 righe di flow e **0** di step.
 >
-> **Causa.** `_grandfather_onboarding_for_test_users` (mia, `8a8e686f0`) semina solo le righe dei
+> **Causa.** `_grandfather_onboarding_for_test_users` (mia, `09f835892`) semina solo le righe dei
 > flow: le righe di step sono arrivate col Round 5 e non l'ho estesa. Al primo
 > `GET /settings/onboarding` il backend crea gli step mancanti come `pending`; le guide Import e
 > Bulk sono guidate dagli step, non dal flow, e partono per un utente che il flow dà `completed`.
@@ -288,7 +288,7 @@ Asset), desktop e mobile, lane 6158, via `test-author`.
 > **Trovato dalla mia regressione, non da C4.** `front-utility settings`: `1 failed | 44 passed`.
 > Il test registra un account nuovo e va in `/settings`; un account nuovo ha `welcome` pendente e
 > il bootstrap lo rimanda a `/welcome` (istantanea: «Welcome to LibreFolio»): timeout a 45 s. Il
-> test è del 2026-09-10 (`74bfd9cf0`), il gating del benvenuto del 2026-09-11 (`8a8e686f0`, mio):
+> test è del 2026-09-10 (`c3b039038`), il gating del benvenuto del 2026-09-11 (`09f835892`, mio):
 > rosso da allora, a ogni giro. **Fix nella spec** (via `test-author`, +16): dopo il login salta
 > via API ogni flow ancora dovuto di quell'account (`skipDueFlowsExcept`, che **salta** il
 > benvenuto invece di completarlo: completarlo scriverebbe lingua e valuta, cioè l'oggetto del
@@ -406,7 +406,7 @@ Round 7 copre un'ancora che non si monta mai o non si ferma mai; un'ancora **mon
 `display:none`** ha un rettangolo 0×0 identico da un frame all'altro, e dopo 2 frame la guida la dà
 `stable` e `anchored` a (0,0): niente stallo, niente *Continua comunque* (non è un vicolo cieco, perché
 il passo ha *Avanti*, ma la geometria è sbagliata). Il caso di F oggi non si presenta: la sua barra sta
-dentro `{#if activeTab !== 'correlation'}`, cioè è smontata (verificato dal coordinator a `2c02ff070`).
+dentro `{#if activeTab !== 'correlation'}`, cioè è smontata (verificato dal coordinator a `288998c72`).
 **Irrobustimento approvato:** un'ancora conta come assente se il suo rettangolo è 0×0 oppure se
 `checkVisibility({visibilityProperty: true})` esiste e dà falso; l'opacità **no** (i controlli rivelati
 al passaggio del mouse partono a opacità 0). Regola per chi scrive le pagine: `use:guideAnchor` solo
@@ -480,7 +480,7 @@ questo ramo non tocca `charts/`).
 > **⚠️ Fuori pista — due correzioni oltre il mandato, entrambe legate.** (1) Il mio brief chiedeva
 > solo `.en.md`, ma le pagine sviluppatore sono `.md` e dicevano ancora `sessionStorage`: corrette
 > in un secondo giro. (2) Le stesse frasi descrivevano pulsanti che non esistono più
-> dall'`8a8e686f0` («Skip permanently», «Exit replay», X che chiama `suspend()`): oggi c'è solo
+> dall'`09f835892` («Skip permanently», «Exit replay», X che chiama `suspend()`): oggi c'è solo
 > **X**, che chiama `exit()` = `skip()`. La frase su OB-9 non poteva essere vera senza correggerle,
 > quindi il `docs-writer` le ha corrette **solo** nei paragrafi toccati.
 >
@@ -492,7 +492,7 @@ questo ramo non tocca `charts/`).
 
 ### Step 7 — Review manuale e FROZEN — **Stato: ✅ review fatta il 2026-09-24; correzioni in C7**
 
-> **✅ Chiusa l'11/10** (aggiornamento Q, base `43d92ed23`): la review manuale delle correzioni C7 (step 8 e sezione «Runbook review manuale — copia prod `6168`»). Il developer, l'11/10: «credo ti sei perso perchè tutte queste ricordo di averle testate, è tutto verde, forse l'unico non testato è il punto 7, ma mi fido di te, il resto era tutto fatto». Il punto 7 del runbook (Aggiungi Broker a metà guida, chiudi e riapri: la guida della modale riparte dal primo passo) l'ha provato il coordinatore l'11/10 alle 14:44, sul target `43d92ed23`, corsia 6150: `front-utility onboarding-guides`, 24 passati, con «OB-9 contrast» (`frontend/e2e/onboarding-guides.spec.ts:460`) verde su desktop e su mobile. Storia: al 09/10 risultava non fatta (verifica Q del 2026-10-09, base `3cceb4f90`), lo confermava il developer, che decideva di non archiviare. Vedi «Cosa resta aperto» in [plan-phase00Onboarding.prompt.md](plan-phase00Onboarding.prompt.md).
+> **✅ Chiusa l'11/10** (aggiornamento Q, base `02c776e11`): la review manuale delle correzioni C7 (step 8 e sezione «Runbook review manuale — copia prod `6168`»). Il developer, l'11/10: «credo ti sei perso perchè tutte queste ricordo di averle testate, è tutto verde, forse l'unico non testato è il punto 7, ma mi fido di te, il resto era tutto fatto». Il punto 7 del runbook (Aggiungi Broker a metà guida, chiudi e riapri: la guida della modale riparte dal primo passo) l'ha provato il coordinatore l'11/10 alle 14:44, sul target `02c776e11`, corsia 6150: `front-utility onboarding-guides`, 24 passati, con «OB-9 contrast» (`frontend/e2e/onboarding-guides.spec.ts:460`) verde su desktop e su mobile. Storia: al 09/10 risultava non fatta (verifica Q del 2026-10-09, base `f545b67e3`), lo confermava il developer, che decideva di non archiviare. Vedi «Cosa resta aperto» in [plan-phase00Onboarding.prompt.md](plan-phase00Onboarding.prompt.md).
 
 > **Esito della review del developer, 2026-09-24 17:38** (copia rinfrescata, server `6168`, C6 nel working tree;
 > punti della test list; i punti 1–10 di privacy sono nel piano gemello, passo 11):
@@ -529,7 +529,7 @@ questo ramo non tocca `charts/`).
    guidato»* descrive il modulo). **Chiavi morte** del vecchio tour (`tour.steps.transactionsImport`, `brokers`,
    `assets`, `tools`, `settings`, `brokersAdd`, …, non lette da nessun file; `settings` cita ancora la guida di
    import): da togliere a fine round, quando le rimozioni sono ammesse.
-   > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): le chiavi morte del vecchio tour sono state tolte dopo il round, in `08b885d43` (2026-10-07, «remove 172 dead keys», audit i18n di O). Oggi `onboarding.tour.steps` in `frontend/src/lib/i18n/en.json` ha 8 chiavi: `dashboard`, `navigation`, `transactionsNav`, `brokersNav`, `fxNav`, `assetsNav`, `toolsNav`, `settingsNav`.
+   > **Note implementazione** (verifica Q del 2026-10-09, base `f545b67e3`): le chiavi morte del vecchio tour sono state tolte dopo il round, in `15a52c0a5` (2026-10-07, «remove 172 dead keys», audit i18n di O). Oggi `onboarding.tour.steps` in `frontend/src/lib/i18n/en.json` ha 8 chiavi: `dashboard`, `navigation`, `transactionsNav`, `brokersNav`, `fxNav`, `assetsNav`, `toolsNav`, `settingsNav`.
 2. **Punto 14:** `createOnboardingSessionResetter` azzera solo lo stato in memoria; tolta `clearAccountReplays`
    (non ha più chiamanti). Le chiavi sono già per account, quindi un altro account sullo stesso browser non le
    legge. Testo `armedAtNextTrigger` senza più la frase sul logout, 4 lingue. Test unitari e l'E2E OB-8 (b)
@@ -590,7 +590,7 @@ questo ramo non tocca `charts/`).
 >
 > **Alla ripartenza, primo passo:** leggere il rapporto del `test-author` del gate e completarlo (rosso su HEAD, verde ora, guardia sulle eccezioni stantie), registrarlo in `core-unit`; poi il punto 4; poi la verifica completa e il nuovo handoff di C7. Porte 6158 e 6168 libere, nessuno stage.
 >
-> **▶️ RIPRESA — 2026-09-25 09:09, «RIPRENDI» del coordinator.** HEAD `8347f8d6c`, stage vuoto, delta intatto
+> **▶️ RIPRESA — 2026-09-25 09:09, «RIPRENDI» del coordinator.** HEAD `f1a651cdd`, stage vuoto, delta intatto
 > (12 modificati + 2 nuovi), porte 6158/6168 libere.
 >
 > - **Punto 2 ✅ — 2026-09-25.** Il coordinator ha approvato **(B)** (regola del developer: il principio vale
@@ -641,7 +641,7 @@ questo ramo non tocca `charts/`).
 >
 > Porta 6158 libera a fine corsa; 6168 mai accesa.
 >
-> **⚠️ Fuori pista** (verifica Q del 2026-10-09, base `3cceb4f90`): la cura del punto 4 (`onNavigate` in `(app)/+layout.svelte`, `26554a57b` del 25/09) è stata tolta il 29/09 in `0aac5ef1e` («keep the app title on every page»). Ora nessuna pagina imposta il titolo: i `<title>` di Files e Tools sono stati rimossi, e `frontend/src/routes/documentTitle.guard.test.ts` vieta `<svelte:head><title>` e le scritture di `document.title` in `src`. La riga del runbook su Files e Strumenti è quindi superata.
+> **⚠️ Fuori pista** (verifica Q del 2026-10-09, base `f545b67e3`): la cura del punto 4 (`onNavigate` in `(app)/+layout.svelte`, `add18ae85` del 25/09) è stata tolta il 29/09 in `d27fe6660` («keep the app title on every page»). Ora nessuna pagina imposta il titolo: i `<title>` di Files e Tools sono stati rimossi, e `frontend/src/routes/documentTitle.guard.test.ts` vieta `<svelte:head><title>` e le scritture di `document.title` in `src`. La riga del runbook su Files e Strumenti è quindi superata.
 >
 > **⚠️ Fuori pista — riavvio del Mac alle 08:58.** `/tmp` svuotato: la cartella della lane
 > `/tmp/librefolio-r2-j-onboarding` non c'è più (la ricrea il runner al primo run) e nemmeno `-prodcopy`.
@@ -657,7 +657,7 @@ questo ramo non tocca `charts/`).
 | `ChangelogModal`, `UpdateAvailableModal`, `updateCheckStore` | nessun owner attivo | ultimo tocco 2026-09-09 |
 | cataloghi i18n | condivisi | un valore, via `dev.py`, elencato nell'handoff |
 | `ImportWizardModal`, `TransactionBulkModal` | K | vincolo girato dal coordinator: 7 ancore `import.action.*` (`:4586–4770`), 5 del Bulk, step-sync `:164–178` e `:1279`. Secondo K, R18 si ripara in `AssetModal`; rieseguire l'E2E onboarding dopo il merge di K |
-| `onboardingRouteSettlement.ts` | co-autore `e38a521f0` | toccato solo se OB-9 lo richiede — **non richiesto**: OB-9 è una riga dell'host |
+| `onboardingRouteSettlement.ts` | co-autore `71b37e4bf` | toccato solo se OB-9 lo richiede — **non richiesto**: OB-9 è una riga dell'host |
 | `backend/test_scripts/test_db/populate_mock_data.py` | condiviso | solo `_grandfather_onboarding_for_test_users` (mia) e un import: semina degli step (IWR-006). Effetto su **tutte** le lane dopo l'integrazione: `TEST_USER` davvero terminale, niente coachmark Import/Bulk nelle spec che non parlano di onboarding |
 | `frontend/e2e/settings.spec.ts` | condiviso | solo il commento del blocco replay (`sessionStorage` → `localStorage`), via `test-author` |
 | cataloghi i18n, OB-8 | condivisi | 2 valori (`onboarding.settings.armedAtNextTrigger`, `armedToast`) × 4 lingue, via `dev.py`, nessuna chiave nuova né rimossa |

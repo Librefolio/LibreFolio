@@ -1,6 +1,6 @@
 # Source: R3-SP-D Plan Chain — FormModal Props + Event Picker + WAC FX Feedback + Bugfixes
 
-> **Ingested**: 2026-06-04 @ `4e5e500c0`
+> **Ingested**: 2026-06-04 @ `684581e90`
 > **Status**: ✅ ALL DONE (2026-06-01 → 2026-06-04)
 > **Origin**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/`
 

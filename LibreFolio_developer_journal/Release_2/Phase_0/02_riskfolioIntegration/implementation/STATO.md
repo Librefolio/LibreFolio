@@ -15,7 +15,7 @@
 > - **K1–K8 consegnati** (`contracts/K*.md`), **K9 superato** (vedi [`contracts/K9.md`](./contracts/K9.md));
 > - dei debiti di §7, l'8, il 13 e il 5 sono chiusi nel codice (righe aggiornate più sotto); il 6 resta aperto.
 
-**Baseline della campagna**: `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`
+**Baseline della campagna**: `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f`
 *(«docs(journal): plan risk execution as 11 mandates», 17 Set 2026)*
 
 **Coordinatore**: worktree `e-alfy-ideal-eureka` · branch `e-alfy-risk-management-replan`
@@ -96,7 +96,7 @@ Per tutti e cinque i figli dell'ondata 1, il 17 Set 2026:
 
 | Verifica | Comando | Esito |
 |---|---|---|
-| Baseline coincidente | `git -C <worktree> rev-parse HEAD` | ✅ `cc33120eb` per tutti e cinque |
+| Baseline coincidente | `git -C <worktree> rev-parse HEAD` | ✅ `3a4431d5a` per tutti e cinque |
 | Agente nel commit | `git -C <worktree> ls-files .github/agents/coordinated-workstream.agent.md` | ✅ presente in tutti |
 | Mandati ereditati | `ls implementation/*.md` | ✅ 12 file in ognuno |
 | Bootstrap atteso | `.env` assente, `node_modules` assente | ✅ come previsto |
@@ -218,7 +218,7 @@ ragionato **correttamente su fatti vecchi**:
 | 2 | Decisioni **D85-D92** | **E** | *«D91 non esiste: `04` si ferma a D84»* — **vero nella sua baseline** |
 | 3 | La riparazione di `dev.py` di **I** (scope 1c, `:1143`) | **E** | *«il gate non vede i `DocsLink`, i 18 slug lasceranno il contatore fermo»* — **falso**, ma deducibile solo dal codice vecchio |
 
-> ## 🔑 La causa è una sola: il coordinatore **non può committare**, e ogni figlio ragiona da `cc33120eb`.
+> ## 🔑 La causa è una sola: il coordinatore **non può committare**, e ogni figlio ragiona da `3a4431d5a`.
 >
 > Più la campagna avanza, più lavoro **verificato** vive fuori dalla baseline comune. I
 > figli fanno la cosa giusta — verificare sul codice invece di credere al coordinatore —
@@ -709,7 +709,7 @@ concessa a un mandato.
 
 ### 18.1 Misura del coordinatore — l'unica corsa di questa sessione
 
-**Corsia 6250**, albero `e-alfy-ideal-eureka` a **`cc33120eb`**, `git status` di prodotto **vuoto**.
+**Corsia 6250**, albero `e-alfy-ideal-eureka` a **`3a4431d5a`**, `git status` di prodotto **vuoto**.
 
 | spec | 3 corse | esito |
 |---|---|---|
@@ -1259,7 +1259,7 @@ lascia fuori** — e il secondo errore è **visibile nel conteggio**, il primo n
 > **Trovato da `docs-writer`, verificato da I, riverificato dal coordinatore sulla baseline.**
 
 ```python
-# metrics.py:625 — BASELINE cc33120eb
+# metrics.py:625 — BASELINE 3a4431d5a
 conditional_value_at_risk = math.fsum(tail) / len(tail)   # media UNIFORME = stimatore VECCHIO
 ```
 
@@ -1447,7 +1447,7 @@ col campo nuovo *«non esercita il ramo presente: lo esercita come assente, e pa
 | **I** | documentazione (22/22 pagine) | 10 + 19 | 🔴 66 % |
 | **N** | acquisizioni | 11 + 2 | 15 % |
 
-> **Nessun mandato ha committato.** Tutti gli HEAD sono a **`cc33120eb`**; il lavoro vive nei
+> **Nessun mandato ha committato.** Tutti gli HEAD sono a **`3a4431d5a`**; il lavoro vive nei
 > worktree e nei checkpoint, **e nessun checkpoint è raggiungibile da un ramo** (§25).
 
 ### 📊 Il totale, misurato
@@ -2031,7 +2031,7 @@ Trovato il 18 Set 2026 alle 10:00, **simulando le fusioni prima di proporle**, n
 
 | | righe | delta | cosa ha fatto |
 |---|---:|---|---|
-| baseline `cc33120eb` | **817** | — | un file, 6 test, quattro consumatori |
+| baseline `3a4431d5a` | **817** | — | un file, 6 test, quattro consumatori |
 | **D** | **76** | **+10 / −751** | **lo ha SVUOTATO**, spostando i test in due file nuovi |
 | **E** | **1 753** | **+976 / −40** | **lo ha ESTESO** per i quattro livelli |
 
@@ -2075,7 +2075,7 @@ conteggio segnala.
 | **D** | **82** | 1 test, segnaposto — l'intestazione dice *«Owner: the laboratory mandate»* |
 | **F** | **812** | **6 test**, la suite vera del laboratorio |
 
-**Nessuna base comune** (il file non esiste in `cc33120eb`) → **git conflitta il file intero.**
+**Nessuna base comune** (il file non esiste in `3a4431d5a`) → **git conflitta il file intero.**
 
 ✅ **Risoluzione: vince F.** D si era dichiarato non proprietario nella propria intestazione —
 **l'ha scritto lui, e va rispettato.**

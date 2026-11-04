@@ -1,16 +1,16 @@
 # Group B - Contracts and Runes (SP04-SP05)
 
 **Approved plan:** revision 2, 2026-09-07.
-**Execution baseline:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`.
-**Integration baseline:** B checkpoint `74bfd9cf` plus `dev_release2`
-`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`.
+**Execution baseline:** `41a4f23ff70189a4ad827d272a368fbf2359464d`.
+**Integration baseline:** B checkpoint `c3b03903` plus `dev_release2`
+`63cfb55d18297b71bd6d70dc8a6d97143c95fb68`.
 **Status:** ✅ B00-B10 complete; combined automated and developer UI acceptance
 completed 2026-09-10.
-**Integration:** checkpoint `74bfd9cf0` (B00-B10 and Round 1), reconciled with
-the runtime lanes by merge `d9e8f6d3b`, compact-toast correction `00c469c3f`;
-entered `dev_release2` with merge `514582a47` (2026-09-10).
+**Integration:** checkpoint `c3b039038` (B00-B10 and Round 1), reconciled with
+the runtime lanes by merge `983b38cc4`, compact-toast correction `dde31b4e2`;
+entered `dev_release2` with merge `4b28bcc31` (2026-09-10).
 **Archive check (workstream O, 2026-10-09):** every B00-B10 and Round 1 claim
-still holds on `3cceb4f90` (train 24b): the 17 typed AI Export raises, the FX
+still holds on `f545b67e3` (train 24b): the 17 typed AI Export raises, the FX
 route schemas (`backend/app/schemas/fx.py:399-451`) and their ordered providers,
 the SignalResult rule tables (`backend/app/schemas/signals.py:1150-1272`), the
 three Runes components, `fxCreationSync`, `entityLink` and the compact row
@@ -52,7 +52,7 @@ TRY003 stays frozen. No staging/commit/push/rebase/reset. Wiki and TODO_FUTURI
 remain untouched. No general cleanup of neighboring validators or UI.
 
 G0 is complete: the developer manually aligned the initially wrong worktree
-from d192ffa1 to 4a73f5f6. All planning evidence used the requested Git object;
+from e95de3cf to 41a4f23f. All planning evidence used the requested Git object;
 no repeated investigation after alignment. The native gate approved revision2;
 the developer explicitly requested implementation at 23:16 on 2026-09-07.
 Shared runtime/generated/runner ownership still requires coordinator slots.
@@ -445,7 +445,7 @@ backfills or new backlog tasks are authorized here. P4-6 and alias6.7 close
 once; SP04/SP05 close only after their real acceptance and developer review.
 
 > **Deferred (workstream O, 2026-10-09):** both FX concerns are still static and
-> unproven on `3cceb4f90`: `leg_rates` is keyed `(norm_base, norm_quote, date)`
+> unproven on `f545b67e3`: `leg_rates` is keyed `(norm_base, norm_quote, date)`
 > without the provider (`backend/app/services/fx.py:820`, filled by every
 > provider's parallel fetch at `:893`), while `leg_events` and `leg_errors` carry
 > it (`:819`, `:821`); `compute_chain_rate` normalizes each step alphabetically
@@ -541,7 +541,7 @@ record this feedback.
 | B-UI-008 | Creation feedback | Successful FX sync toast links the flagged pair to its detail; when no sync starts, show immediate creation success with the same link. Existing asset-global creation-success toasts should link the asset; contextual dropdown/import/transaction creation must not gain links or new notifications. |
 | B-UI-009 | FX toast formatting | Use existing formatting utilities; Japanese flag before JPY and Romanian flag after RON, as emoji, not ad-hoc unflagged text. |
 | B-UI-010 | B10-07 viewport/visual sweep | No explicit verdict supplied; do not infer acceptance. |
-| B-UI-011 | Combined review on merge `d9e8f6d3`, 2026-09-10 | B-UI-11 through 15 accepted; direct/chain FX creation judged excellent, with one request to keep the linked pair, download/change counters and provider badges on the same detail row; B-UI-18 through 20 accepted; viewport review positive; B-UI-21 needs a simpler operational walkthrough. |
+| B-UI-011 | Combined review on merge `983b38cc`, 2026-09-10 | B-UI-11 through 15 accepted; direct/chain FX creation judged excellent, with one request to keep the linked pair, download/change counters and provider badges on the same detail row; B-UI-18 through 20 accepted; viewport review positive; B-UI-21 needs a simpler operational walkthrough. |
 | B-UI-012 | Final correction retest, 2026-09-10 | Compact linked FX toast reported correct. Asset currency-change confirmation appears only after Save; Cancel restores the original currency. Developer verdict: success. |
 
 > **Note implementazione** (feedback intake, 2026-09-09): accepted preference
@@ -570,8 +570,8 @@ Follow-up:
 
 ## 12. Combined-base handoff - 2026-09-10
 
-The developer checkpointed B as `74bfd9cf` and started the merge from
-`dev_release2` commit `916f12bd`. The five textual conflicts are resolved and
+The developer checkpointed B as `c3b03903` and started the merge from
+`dev_release2` commit `63cfb55d`. The five textual conflicts are resolved and
 staged; `_frontend_utility.py` was also inspected semantically. AssetModal and
 the asset list retain E's provider/edit lifecycle and receive only B's
 default-off creation-link delta. The agent has not created the merge commit.

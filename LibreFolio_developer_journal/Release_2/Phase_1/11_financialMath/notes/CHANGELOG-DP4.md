@@ -1,6 +1,6 @@
 # CHANGELOG di D-P4 — testo unico e righe da riscrivere (MF, L5, 26/10/2026)
 
-Base letta: `train11b` `d2dc09a9a` (`CHANGELOG.md`, capitolo `## [Unreleased]`). Inserisce il coordinatore.
+Base letta: `train11b` `f72935e5f` (`CHANGELOG.md`, capitolo `## [Unreleased]`). Inserisce il coordinatore.
 
 ## 1. La voce unica di «⚠️ Breaking changes»
 
@@ -36,7 +36,7 @@ cambia.
 
 ## 2. Le righe del capitolo che contraddicono la voce
 
-Sono state scritte quando il pavimento c'era. Proposta riga per riga (numeri di `d2dc09a9a`):
+Sono state scritte quando il pavimento c'era. Proposta riga per riga (numeri di `f72935e5f`):
 
 | Riga | Sezione | Testo di oggi (inizio) | Proposta |
 |---|---|---|---|

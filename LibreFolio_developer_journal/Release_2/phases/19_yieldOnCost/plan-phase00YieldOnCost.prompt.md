@@ -1,18 +1,18 @@
 # H - Yield on Cost da ledger transazioni (U3 / primo incremento SP06)
 
-**Stato:** ✅ **COMPLETATO E INTEGRATO il 2026-09-11** — commit `74afcebce`
+**Stato:** ✅ **COMPLETATO E INTEGRATO il 2026-09-11** — commit `cff0f0a11`
 (`feat(portfolio): add yield on cost`), merge di `dev_release2` nel ramo H
-`0d5787430`, ultimo commit del ramo `f092a194b`; integrato in `dev_release2` dal
-merge `d7d40c0ec` (2026-09-11 20:22, cataloghi, docs e nav MkDocs). Verificato e
+`736efbfbb`, ultimo commit del ramo `a01fbbcd5`; integrato in `dev_release2` dal
+merge `5717fbdd1` (2026-09-11 20:22, cataloghi, docs e nav MkDocs). Verificato e
 archiviato il 2026-10-09 (§14, «Aggiornamento 2026-10-09»).
 *Storia:* ✅ **H REFINEMENT DEVELOPER ACCEPTED / FROZEN 2026-09-11**;
 implementazione, gate, review e walkthrough completati. Checkpoint pronto per
 staging/integrazione manuale coordinator/developer.
 **Owner:** workstream H.
-**Baseline di analisi:** `f90d9801bd7a2d74aac6a27efe305314c6c004cc`
+**Baseline di analisi:** `e659f40bc69ada0b8df996f6a153b8ec3feebd48`
 su `dev_release2`.
-**Baseline tecnica Gate 0:** `b22998f218034e470809c58223e38b3ef449038f`,
-merge di `3503941d` + `dev_release2@b5ed1a623`, incluso il fix
+**Baseline tecnica Gate 0:** `d3da99220c294af0ac498faf932b23681dcbc3f2`,
+merge di `35dcafba` + `dev_release2@f618fec60`, incluso il fix
 `cost_basis_currency`.
 **Branch di piano:** `e-alfy-h-yield-on-cost`.
 **Target di integrazione:** `dev_release2`, tramite checkpoint manuale
@@ -327,7 +327,7 @@ resta un vero hit.
 
 ### 6.3 Gate 0 technical refresh - 2026-09-10 (COMPLETE)
 
-- Baseline finale verificata a `b22998f`, parent target `b5ed1a623`.
+- Baseline finale verificata a `d3da992`, parent target `f618fec60`.
 - Firma, payload, L1 insertion e test F letti dal codice integrato.
 - L2 insertion point e uso di `date_to or today` verificati.
 - Fingerprint transaction esistente copre ogni `Transaction.id/updated_at`;
@@ -516,7 +516,7 @@ Requisiti mobile/accessibilita':
 | H08 | Docs EN tramite docs-writer + nav coordinator | ✅ 2026-09-10 - EN complete; nav handed to coordinator |
 | H09 | Gate mirati/integrati nella lane H | ✅ 2026-09-10 - backend/API/component/type/build green |
 | H10 | Walkthrough Dashboard/Broker e feedback developer | ✅ 2026-09-11 - developer accepted |
-| H11 | Checkpoint finale, integrazione e chiusura documentale | ✅ 2026-09-11 - frozen checkpoint ready; committato `74afcebce`, ramo chiuso `f092a194b`, integrato `d7d40c0ec` (verifica d'archivio 2026-10-09) |
+| H11 | Checkpoint finale, integrazione e chiusura documentale | ✅ 2026-09-11 - frozen checkpoint ready; committato `cff0f0a11`, ramo chiuso `a01fbbcd5`, integrato `5717fbdd1` (verifica d'archivio 2026-10-09) |
 
 > **Note implementazione** (H00, 2026-09-10): creati esclusivamente piano e
 > storyboard, con backlink U3/SP06 ora marcati PLAN/DESIGN APPROVED. Nessun file applicativo,
@@ -527,15 +527,15 @@ Requisiti mobile/accessibilita':
 > autorizzazione a eseguire H01-H11.
 
 > **Note Gate 0 / H01 (2026-09-10, complete tecnicamente):** baseline
-> `b22998f`, F identity/L1/test e L2 insertion point verificati. DTO/service/test
+> `d3da992`, F identity/L1/test e L2 insertion point verificati. DTO/service/test
 > split resta valido; aggiunti il seam FIFO eligibility e una cella UI dedicata
 > per Tooltip accessibile. Coordinator ha riservato H prima di I sui file
-> portfolio condivisi. Il merge target `b5ed1a623` ha incluso
+> portfolio condivisi. Il merge target `f618fec60` ha incluso
 > `cost_basis_currency` con witness identity e L1 verdi. Unico blocco residuo:
 > autorizzazione esecutiva developer.
 
 > **Note autorizzazione esecutiva (2026-09-10):** il developer ha autorizzato
-> H02-H11 sulla baseline `b22998f`, con ownership esclusiva delle superfici H
+> H02-H11 sulla baseline `d3da992`, con ownership esclusiva delle superfici H
 > elencate nella sezione 7 e sequenza H prima di I20+.
 
 > **⚠️ Fuori pista statico (2026-09-10):** il primo controllo produzione non
@@ -713,7 +713,7 @@ Requisiti mobile/accessibilita':
 > feedback developer sul build integrato.
 
 > **Note checkpoint** (H11, 2026-09-10): H e' frozen su baseline
-> `b22998f` con 16 file modificati e 4 nuovi, nessuna superficie vietata,
+> `d3da992` con 16 file modificati e 4 nuovi, nessuna superficie vietata,
 > nessun file generated/catalog/nav/CHANGELOG e nessuna Git mutation.
 > `git diff --check` e' verde; Black/Ruff/py_compile, API, suite
 > ROI/FIFO/portfolio, component-unit, Svelte check, build, docs strict/link e
@@ -1007,14 +1007,14 @@ Feedback:
 
 | ID | Revisione | Viewport/stato | Azione | Atteso | Osservato | Decisione |
 |---|---|---|---|---|---|---|
-| H-UI-001 | `b22998f` + H dirty | Desktop Dashboard | YOC default | visibile | Visibile dopo Annualized; valori e unavailable distinti | technical pass |
-| H-UI-002 | `b22998f` + H dirty | Mobile Dashboard/Broker `430x932` | Tooltip unavailable | accessibile/pinnable | No document overflow; Enter apre Tooltip, aria-label completo, dark mode stabile | technical pass |
-| H-UI-003 | `b22998f` + H dirty | Dashboard -> Broker -> Dashboard | hide override | condiviso | Hide broker propagato al Dashboard; re-enable propagato | technical pass |
+| H-UI-001 | `d3da992` + H dirty | Desktop Dashboard | YOC default | visibile | Visibile dopo Annualized; valori e unavailable distinti | technical pass |
+| H-UI-002 | `d3da992` + H dirty | Mobile Dashboard/Broker `430x932` | Tooltip unavailable | accessibile/pinnable | No document overflow; Enter apre Tooltip, aria-label completo, dark mode stabile | technical pass |
+| H-UI-003 | `d3da992` + H dirty | Dashboard -> Broker -> Dashboard | hide override | condiviso | Hide broker propagato al Dashboard; re-enable propagato | technical pass |
 
 ## 14. Stato handoff del piano
 
 Il piano/storyboard e Gate 0 sono approvati; l'esecuzione H e' stata
-esplicitamente autorizzata il 2026-09-10 sulla baseline `b22998f`. Il
+esplicitamente autorizzata il 2026-09-10 sulla baseline `d3da992`. Il
 rifinimento richiesto dal developer e' implementato e i gate automatici sono
 verdi. API sync, cataloghi EN/IT/FR/ES, MkDocs nav e CHANGELOG coordinator-owned
 sono presenti nel worktree. Il developer ha accettato il build raffinato dopo
@@ -1022,7 +1022,7 @@ review delle cinque fixture reali. H e' frozen; restano coordinator/developer:
 staging selettivo, commit manuale, integrazione e aggiornamento dei record
 release finali.
 
-### Aggiornamento 2026-10-09 — verifica d'archivio (workstream I, su `3cceb4f90`)
+### Aggiornamento 2026-10-09 — verifica d'archivio (workstream I, su `f545b67e3`)
 
 > **Note implementazione (verifica d'archivio):** i passi che il paragrafo sopra
 > lasciava a coordinator e developer sono tutti avvenuti, e il codice di oggi
@@ -1030,21 +1030,21 @@ release finali.
 >
 > | Passo | Prova |
 > |---|---|
-> | commit dell'implementazione | `74afcebce` `feat(portfolio): add yield on cost` (2026-09-11 15:53, padre `b22998f21`) |
-> | allineamento del ramo H | merge `0d5787430` (16:07), poi `f092a194b` `fix(signals): normalize generated points` (16:40), ultimo commit del ramo |
-> | integrazione in `dev_release2` | merge `d7d40c0ec` (20:22), genitori `8273335ff` + `f092a194b`: cataloghi, docs e nav MkDocs |
+> | commit dell'implementazione | `cff0f0a11` `feat(portfolio): add yield on cost` (2026-09-11 15:53, padre `d3da99220`) |
+> | allineamento del ramo H | merge `736efbfbb` (16:07), poi `a01fbbcd5` `fix(signals): normalize generated points` (16:40), ultimo commit del ramo |
+> | integrazione in `dev_release2` | merge `5717fbdd1` (20:22), genitori `0261fe73e` + `a01fbbcd5`: cataloghi, docs e nav MkDocs |
 > | CHANGELOG | `CHANGELOG.md:26` |
 > | nav MkDocs | `mkdocs_src/mkdocs.yml:910` |
 >
-> Tutti e quattro i commit sono antenati di `3cceb4f90`. La citazione «follow-up
-> finale `f092a194b`» in `09_feedbackJobs/01_ux_dashboard.md:332` è corretta.
+> Tutti e quattro i commit sono antenati di `f545b67e3`. La citazione «follow-up
+> finale `a01fbbcd5`» in `09_feedbackJobs/01_ux_dashboard.md:332` è corretta.
 >
 > **Residuo tracciato, non un buco:** il debito di traduzione dichiarato sopra
 > («intenzionalmente rinviato») è ancora aperto: `yield-on-cost.en.md` non ha
 > it/fr/es, mentre le pagine sorelle li hanno. Rinviato:
 > `Phase_0/38_postReleaseBacklog/README.md`, voce «I-08 · debito di traduzione
 > MkDocs». La tabella H-UI della §13 resta com'è: è evidenza storica della
-> revisione `b22998f` + H dirty, non uno stato.
+> revisione `d3da992` + H dirty, non uno stato.
 >
 > **Fuori pista:** nessuno. Il piano era fermo al FROZEN del 2026-09-11 perché H
 > non poteva registrare un'integrazione fatta da altri; la sessione H non esiste

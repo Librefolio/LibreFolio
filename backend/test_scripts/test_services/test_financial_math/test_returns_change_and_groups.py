@@ -24,7 +24,7 @@ formula is copied below (``_treemap_group_ratio_today``, in Decimal) and contras
 Every figure is compared exactly: a quotient is the context's quotient of the two Decimals, with no rounding step of
 its own (``Decimal("70") / Decimal("120")``, 0.58333…3 to 28 digits, never 0.5833).
 
-Red by absence on HEAD (c2feebaa8): every name is read as an attribute of ``returns`` while the test runs, never
+Red by absence on HEAD (f0bc828de): every name is read as an attribute of ``returns`` while the test runs, never
 imported at module level, so the file collects on HEAD and each test fails there with AttributeError
 (``module ... has no attribute 'change_ratio'`` / ``'timing_effect'`` / ``'group_gain_loss'``).
 

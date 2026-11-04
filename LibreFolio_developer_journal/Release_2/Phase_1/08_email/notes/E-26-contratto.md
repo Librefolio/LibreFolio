@@ -1,11 +1,11 @@
 # E-26 (b) — Il contratto: l'email trattenuta dopo la registrazione
 
 > Workstream E, ondata 3, 22/10/2026. **Solo analisi, nessun codice.**
-> Base: worktree `e-alfy-stunning-fortnight`, branch `e-alfy-e-email`, HEAD `bb11f147984b…` (E-25 committato),
-> `dev_release2` = `2879ae3e4`.
+> Base: worktree `e-alfy-stunning-fortnight`, branch `e-alfy-e-email`, HEAD `be4f3929c4fa…` (E-25 committato),
+> `dev_release2` = `85fda260e`.
 > Decisione dello sviluppatore (20/10, 14:3x): la (b), cioè un campo nella risposta di `POST /auth/register` per
 > l'email trattenuta, più il testo (a) per il caso normale. A rivede il contratto dopo A-62. Le affermazioni qui
-> sotto sono rilette sul codice di `bb11f1479`.
+> sotto sono rilette sul codice di `be4f3929c`.
 
 ## 1. Cosa succede oggi (verificato)
 
@@ -144,7 +144,7 @@ l'email non arriva:
 Tutti questi casi finiscono solo nel log del server (`Verification email: not sent` / `the request failed`).
 L'account aspetta col suo token senza indirizzo, e «Send the link again» lo recupera.
 
-## 7. Le righe di doc da unire con quelle di E-25 (`bb11f1479`)
+## 7. Le righe di doc da unire con quelle di E-25 (`be4f3929c`)
 
 - `mkdocs_src/docs/user/getting-started.en.md`:
   - il passo 1 (:72-73), che E-25 ha lasciato com'era: la citazione diventa il testo (a);

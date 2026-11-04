@@ -1,6 +1,6 @@
 # Reperti del round di analisi statica — 22/09/2026
 
-**Baseline**: `e4a46e9e0`. Sei worktree + main, tutti puliti, tutti fermi.
+**Baseline**: `7e6f16327`. Sei worktree + main, tutti puliti, tutti fermi.
 **Vincolo del round**: nessuna modifica di codice, nemmeno ai piani.
 
 > **Cos'è questo documento.** Il round del 22/09 è stato un'analisi **puramente statica**:
@@ -22,14 +22,14 @@
 
 ## 1. Difetti di prodotto verificati (al 09/10 riparati o chiusi)
 
-> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`):
-> - **Riparati**: §1.1 (la card PAC ha il testo del planner v2, `en.json`), §1.6, §1.7 (chiavi mantenute, decisione §4), §2.3, §2.5 (`{accepted: false}`, `ff9038487`) e §2.6.
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `f545b67e3`):
+> - **Riparati**: §1.1 (la card PAC ha il testo del planner v2, `en.json`), §1.6, §1.7 (chiavi mantenute, decisione §4), §2.3, §2.5 (`{accepted: false}`, `1d015f679`) e §2.6.
 > - **Non difetti**: §1.2, §1.3 e §1.5, e §1.4 per AI Export, per decisione del developer del 2026-10-09: AI Export non ha anteprima (sotto, §1.4).
 > - **Aperto**: solo il debito di **§2.4**. Nella §1.4 FX e Tools sono chiusi.
 
 ### 1.1 ✅ (riparato) La card del tool PAC mostra la descrizione del prototipo cancellato
 
-- i18n `tools.pacAllocator.description` = testo del **P1**, rimosso in `b82e59ffa`
+- i18n `tools.pacAllocator.description` = testo del **P1**, rimosso in `704ba66a3`
 - backend `pac_allocator.py:98` = testo del **v2**, vivo
 - `frontend/src/lib/features/tools/presentation.ts` → `metadataText()` ritorna il
   fallback backend **solo se la chiave i18n manca** → **l'i18n vince**
@@ -89,10 +89,10 @@ Nessun test lo dichiara.
 `snapshotDataRenderer.ts` fa passare ogni numero per `scalar()` → `formatPromptNumber()`:
 l'anteprima del prompt è **l'intero portafoglio in chiaro**.
 
-> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`):
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `f545b67e3`):
 > - **AI Export: non è un difetto**, per decisione del developer del 2026-10-09: *«ma l'ai export non ha anteprima»*. Verificato sul codice: in `frontend/src/lib/features/ai-export/` l'unica `textarea` sono le note dell'utente (`AiExportOptionsPanel.svelte:285`). Il prompt non si mostra a schermo: si copia negli appunti (`aiExportClipboard.ts:156-158`), e in chiaro per scelta, perché è lo scopo dell'export. L'«anteprima» della riga sopra è il testo copiato.
 > - **FX: chiuso** per la decisione (c): una quotazione non è patrimonio.
-> - **Tools: chiuso.** Il planner v2 (`0210f9848`) formatta gli importi in `frontend/src/lib/features/tools/pac-allocator/planner/format.ts`, che passa per `maskable` e `shouldMaskAmount` (`:21`, `:184`).
+> - **Tools: chiuso.** Il planner v2 (`502877358`) formatta gli importi in `frontend/src/lib/features/tools/pac-allocator/planner/format.ts`, che passa per `maskable` e `shouldMaskAmount` (`:21`, `:184`).
 
 ### 1.5 ~~🔴 I 9 render di denaro scoperti~~ → ❌ **0 DIFETTI SU 9** *(riclassificati da J il 23/09, verificato)*
 
@@ -181,9 +181,9 @@ NON «il template comincia con `${`».
 > (08 §8.8). Lo dice il repo, misura di A verificata dal coordinator:
 >
 > ```
-> daa03c0f2  21/09 19:23   implementation_2/progress/A-esecuzione.md:488   ✅ 6/6
-> 032b86959  21/09 21:57   implementation_2/progress/A-esecuzione.md:622   ✅ 11/11 (erano 6)
-> 032b86959 → f1047f766    risk-lab.spec.ts   byte-identico (diff vuoto, 2057 = 2057)
+> 1b0032eae  21/09 19:23   implementation_2/progress/A-esecuzione.md:488   ✅ 6/6
+> e38ae2300  21/09 21:57   implementation_2/progress/A-esecuzione.md:622   ✅ 11/11 (erano 6)
+> e38ae2300 → 9df0b7b14    risk-lab.spec.ts   byte-identico (diff vuoto, 2057 = 2057)
 > ```
 >
 > **Vero è solo che non è mai girato sull'albero integrato**, dove il codice applicativo è
@@ -198,7 +198,7 @@ NON «il template comincia con `${`».
 > dimostra cercando la presenza, non ripetendola.
 >
 > ✅ **Misurato il 23/09, 16:15 (F-1)**: `front-portfolio risk-lab` **11/11 verdi sull'albero
-> integrato** `f1047f766`, con lo spec intatto e la porta `6154` libera dopo la corsa. Il rosso di
+> integrato** `9df0b7b14`, con lo spec intatto e la porta `6154` libera dopo la corsa. Il rosso di
 > partenza non esiste. Quello che manca è la **copertura** del sistema nuovo, non un test
 > rotto. Nota del runner nella stessa corsa: *«Shared backend ignored SIGTERM for 5s — killing
 > its process group»*. Dopo non restano processi e la porta è libera. È comportamento del
@@ -237,7 +237,7 @@ la quarta **viva**. Pezzo riusabile: `risk-lab.spec.ts` + marchio `algorithm_ver
 che impedisce al guardiano di diventare vacuo se qualcuno reinstalla i mock in un
 `beforeEach`.
 
-### 2.5 ✅ (riparato, `ff9038487`) Un default che trasforma un'omissione in un consenso
+### 2.5 ✅ (riparato, `1d015f679`) Un default che trasforma un'omissione in un consenso
 
 `frontend/src/routes/(app)/assets/[id]/+page.svelte:2174`
 
@@ -299,8 +299,8 @@ la riga**.
 
 ### 2.7 Debito di storia — non riscrivere
 
-Il commit `0a1d98eaf` dice «workstream D renamed those files out of existence».
-D li aveva **cancellati** (`b82e59ffa`). Catena del verbo:
+Il commit `019cb18c4` dice «workstream D renamed those files out of existence».
+D li aveva **cancellati** (`704ba66a3`). Catena del verbo:
 `drop` (D) → `masked` (J) → `renamed` (coordinator, nel commit) → `masked` + **agente
 invertito** (coordinator, nel messaggio). È un fatto datato: si registra, non si corregge.
 
@@ -515,8 +515,8 @@ controlli*. Lì il mondo era un processo proprio; qui è il target di qualcun al
 
 ### 3.14 Un'istruzione porta uno stato implicito che scade
 
-I ha **rifiutato** un comando di commit del coordinator perché `22b82e3fb` era già
-antenato di `e4a46e9e0` (entrato via `7fd660846`).
+I ha **rifiutato** un comando di commit del coordinator perché `e6c59e996` era già
+antenato di `7e6f16327` (entrato via `ad29c6d3a`).
 
 > **Il messaggio non è sbagliato: è stantio.** Descrive correttamente un momento che è
 > passato **mentre era in coda**. Il ritardo era del **canale**, non della rilettura: il
@@ -802,7 +802,7 @@ livelli di rischio non passa di lì**:
 
 ```
 L1HowMuchItHurts · L4Replay · L4Shock   →  riskAnalysisHelpers.formatCurrencyAmount
-riskAnalysisHelpers.ts:160   if (shouldMaskAmount()) return PRIVACY_PLACEHOLDER;   ← b66e93003, J, 22/09
+riskAnalysisHelpers.ts:160   if (shouldMaskAmount()) return PRIVACY_PLACEHOLDER;   ← 9d9613471, J, 22/09
 riskAnalysisHelpers.test.ts:387   'drops the currency marker too, unlike the shared currency formatter'
 ```
 

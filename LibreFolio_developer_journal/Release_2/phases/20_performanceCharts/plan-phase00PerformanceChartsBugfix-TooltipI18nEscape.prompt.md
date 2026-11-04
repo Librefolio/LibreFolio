@@ -1,8 +1,8 @@
 # Performance charts — voce 10: le traduzioni nell'HTML dei tooltip si leggono come testo
 
 **Stato:** ✅ **COMPLETATO E INTEGRATO**. Lotto chiuso il 2026-10-09 alle 12:25 (FROZEN). Commit del developer il
-2026-10-09 alle 12:52: `48e736855` (il gate) e `2ee77d04e` (questo giornale). In `dev_release2` col treno 23, merge
-`2c382824d`, punta `1ead733f2`. I residui 1–4 sono limiti accettati con la scelta (c) e dichiarati nell'intestazione
+2026-10-09 alle 12:52: `3255e9abe` (il gate) e `b7d136009` (questo giornale). In `dev_release2` col treno 23, merge
+`b39512ae1`, punta `aca87aec4`. I residui 1–4 sono limiti accettati con la scelta (c) e dichiarati nell'intestazione
 del gate («Completeness, stated honestly»): nessuna voce di backlog. Verificato e archiviato il 2026-10-09 in
 `Release_2/phases/20_performanceCharts/`. La voce 10 del riepilogo del 06/10 è stata affidata a I dal developer
 («Sì: la 10 a I subito»). Dopo l'analisi, il 2026-10-09 il developer ha scelto la cura (c): «(c) Controllo dei
@@ -10,7 +10,7 @@ cataloghi nel gate, nessun sito toccato» (via coordinator, 11:48).
 *Storia dello stato:* IN CORSO (2026-10-09), «Il lavoro entra nel treno 23».
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
-**Baseline:** HEAD = `dev_release2` = `da8d7a10b`. Albero pulito, rimisurato alle 11:57.
+**Baseline:** HEAD = `dev_release2` = `945593520`. Albero pulito, rimisurato alle 11:57.
 **Lane:** suite `6157` + `/tmp/librefolio-r2-i`, solo `dev.py test …`, un comando alla volta. La `6167` qui non
 serve. Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`.
 **File concessi:** solo `frontend/src/htmlInterpolation.gate.test.ts`, più questo piano. Il gate l'ha scritto K, che
@@ -46,7 +46,7 @@ Precedenti e collegati:
 - Il rischio è basso, perché i testi sono nostri. Ma una traduzione con `<` o `&` rompe il tooltip, e il gate non lo
   vede.
 
-## L'analisi (2026-10-09, sola lettura, su `da8d7a10b`)
+## L'analisi (2026-10-09, sola lettura, su `945593520`)
 
 Una sonda con gli stessi parser del gate (TypeScript e il compilatore di Svelte) ha contato i siti che un gate stretto
 segnalerebbe.
@@ -239,7 +239,7 @@ Il developer ha scelto la (c).
 
 > **Note implementazione**:
 >
-> - Baseline verificata alle 11:57: HEAD = `dev_release2` = `da8d7a10b`, 0 voci in `git status`, porte
+> - Baseline verificata alle 11:57: HEAD = `dev_release2` = `945593520`, 0 voci in `git status`, porte
 >   `6157`/`6167` libere.
 > - Il disegno è stato provato fuori dal repo, con lo stesso jsdom del frontend, sui 4 cataloghi veri
 >   (`/tmp/libreFolio_i_esc/contract_check.mjs`): 25 controlli su 25 tornano.
@@ -367,7 +367,7 @@ Il developer ha scelto la (c).
 >   `rounding_delta` è tipato `string`, ma il codice si aspetta l'unione esatta `{value, kind: "finite_decimal"} | …`.
 > - **La causa: il client API generato della mia worktree è vecchio.** Il client è ignorato da Git.
 >   - `generated.ts` e `generated-tools.ts` sono dell'8/10 alle 20:28, l'ultimo `api sync` del lotto eventi.
->   - `bffc634b0` (`fix(pac): exact FX residual, coherent cross rates`) è del 9/10 alle 07:51. Ha cambiato
+>   - `ed4b803fe` (`fix(pac): exact FX residual, coherent cross rates`) è del 9/10 alle 07:51. Ha cambiato
 >     `rounding_delta: PlannerFixedDecimal` in `ExactNumber` in `backend/app/schemas/pac_allocator.py`, insieme a
 >     `model.ts` e `LedgerTable.svelte`.
 >   - `generated-tools.ts:843` ha ancora `z.string()` per quel campo.

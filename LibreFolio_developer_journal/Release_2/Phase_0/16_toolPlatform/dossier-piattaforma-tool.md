@@ -1,6 +1,6 @@
 # Dossier — Piattaforma Tool
 
-**Redatto da:** sessione «Piattaforma tool» (branch `e-alfy-tool-platform-c-r2`, HEAD `8e7259ecc`)
+**Redatto da:** sessione «Piattaforma tool» (branch `e-alfy-tool-platform-c-r2`, HEAD `91070f6bd`)
 **Data:** 2026-09-11
 **Destinatari:** developer in revisione · prossimo autore di plugin Tool
 **Artefatto recensito:** `dev_release2` — **non** il checkpoint congelato di questa sessione
@@ -9,16 +9,16 @@
 
 ## 0. Avvertenza di lettura — leggere prima di tutto il resto
 
-Questa sessione ha costruito la piattaforma, l'ha congelata a `8e7259ecc` e l'ha consegnata.
+Questa sessione ha costruito la piattaforma, l'ha congelata a `91070f6bd` e l'ha consegnata.
 La piattaforma **non è entrata in `dev_release2` per conto proprio**: è stata fusa dentro il ramo
-dell'allocatore PAC e ha raggiunto il target dentro il merge `3913fe217`. Verificato, non assunto:
+dell'allocatore PAC e ha raggiunto il target dentro il merge `67ee437a0`. Verificato, non assunto:
 
 ```
 git rev-list --left-right --count dev_release2...e-alfy-tool-platform-c-r2  →  82   0
 ```
 
 Zero commit avanti: tutto dentro. Ma il codice che il developer sta per revisionare **non è quello
-che ho congelato io**. Fra `8e7259ecc` e `dev_release2` sono atterrate **891 inserzioni / 271
+che ho congelato io**. Fra `91070f6bd` e `dev_release2` sono atterrate **891 inserzioni / 271
 delezioni su 15 file di piattaforma**, più un file nuovo (`backend/app/services/tools/resources.py`,
 181 righe) che nel mio checkpoint non esisteva.
 
@@ -301,13 +301,13 @@ dimensionamento del pool di default non è stato scelto pensando a job da 45 sec
 **Stato ereditato.** Questa sessione è la sostituzione di una precedente sessione «C» archiviata,
 la cui compattazione falliva ripetutamente. Non ho importato la sua conversazione: ho ricevuto un
 handoff autoportante, il suo `plan.md` come riferimento legacy, e la baseline
-`4a73f5f63447e01b51993afb2e3c73e2c22a9a28`. Del progetto precedente ho conservato la struttura della
+`41a4f23ff70189a4ad827d272a368fbf2359464d`. Del progetto precedente ho conservato la struttura della
 proposta (tabella sorgenti, worker, codegen); ho invece scartato due punti già superati: la
 proprietà della sezione About (l'ordine corretto è E → C, non A → C) e il vecchio handoff PAC.
 
 **La richiesta iniziale** era solo pianificazione. È diventata, con autorizzazione esplicita del
-developer, l'implementazione completa della piattaforma, chiusa con il checkpoint `8e7259ecc`,
-fusa in D e arrivata a `dev_release2` dentro `3913fe217`.
+developer, l'implementazione completa della piattaforma, chiusa con il checkpoint `91070f6bd`,
+fusa in D e arrivata a `dev_release2` dentro `67ee437a0`.
 
 **Le decisioni, non solo la destinazione:**
 

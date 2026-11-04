@@ -1,29 +1,29 @@
 # Performance charts — round 4: review d'uso post-merge (R5–R11, R21, §2.5, P4-11, emoji K) + prosecuzione
 
 **Stato:** ✅ **COMPLETATO E INTEGRATO il 2026-10-02** — S12 chiusa alle 00:36; gate G-K sulla revisione unita
-con K; committato alle 12:40 (`9a77b1b61`, `6de5646a1`) e integrato per fast-forward: `dev_release2` = `975a115ae`
-(registro «Dopo l'integrazione»); ultimo commit del journal `dd538d650` (13:18). R-D15 è stata chiusa dopo, nella
+con K; committato alle 12:40 (`bdb11893c`, `01a64ec23`) e integrato per fast-forward: `dev_release2` = `94312819f`
+(registro «Dopo l'integrazione»); ultimo commit del journal `de84ff5ef` (13:18). R-D15 è stata chiusa dopo, nella
 famiglia di Risk (riga R-D15). Verificato e archiviato il 2026-10-09 (registro «Verifica d'archivio», in fondo).
 *Storia dello stato:* IN ESECUZIONE — piano v3 presentato il 2026-09-23, approvato il 2026-09-24. C1 committato il 2026-09-24
-alle 14:18: 8 commit per slice, `cb7ae3476`…`804bc9903`. C2 committato alle 14:51: `980dee4bf` (gallery) e
-`6a88561fd` (registro). C3 committato alle 15:39: `671d4ab49` (docs di S11 in parte: memoria, privacy e candele) e
-`4d885f1e8` (registri). Il 25/09 il developer ha deciso tutto nella chat di I: D4 (via coordinator), poi D16, D17, D18
+alle 14:18: 8 commit per slice, `322c31615`…`8fa118ba4`. C2 committato alle 14:51: `a09ebcd3a` (gallery) e
+`45aaf0891` (registro). C3 committato alle 15:39: `12a5b8d95` (docs di S11 in parte: memoria, privacy e candele) e
+`5afe63263` (registri). Il 25/09 il developer ha deciso tutto nella chat di I: D4 (via coordinator), poi D16, D17, D18
 e l'OK sulla test list di S10, con E8 ed E9 in più (§7; registro «Pausa e ripresa dopo il riavvio»). S7, S7b, S8 e S10
 sono sbloccate. `needs_engine` va per primo, in un commit a sé (coordinator, 15:24 e 15:37; registro «Triage del
 contratto di `/portfolio/report`»). Pausa dal 24/09 alle 18:35 al 25/09 alle 09:09, con un riavvio in mezzo.
-C4 committato il 2026-09-28 alle 11:41 (`00bb1ac75`…`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`).
-C5 committato il 2026-09-29 alle 10:02 (`026bc20fb`…`5e638a2ed`), poi il merge di `dev_release2` con K
-(`b2112ba61`, 12:37). C6 committato il 2026-09-29 alle 22:26: 6 commit, `6d8b951bc`…`602ea299e` (emoji, tipi E2E,
-due margini, la guardia dei grafici dei lotti, journal), poi il merge di `dev_release2` (`921f1fc05`, 22:31).
-D23 con D23b ✅ il 2026-09-30 alle 00:03; C7 committato il 2026-09-30 alle 10:01: `9d8fb520b` e `039baea22`.
+C4 committato il 2026-09-28 alle 11:41 (`e154d689e`…`66e387007`), poi il merge di `dev_release2` (`8c7a62d94`).
+C5 committato il 2026-09-29 alle 10:02 (`8ea6f2f2e`…`9b988668d`), poi il merge di `dev_release2` con K
+(`5ab9f498e`, 12:37). C6 committato il 2026-09-29 alle 22:26: 6 commit, `e4ca40e1a`…`e8aeba334` (emoji, tipi E2E,
+due margini, la guardia dei grafici dei lotti, journal), poi il merge di `dev_release2` (`1602d23d8`, 22:31).
+D23 con D23b ✅ il 2026-09-30 alle 00:03; C7 committato il 2026-09-30 alle 10:01: `bca7ac68c` e `ddc8acb8c`.
 Poi S7 (coordinator, 10:04).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
-**Baseline:** `dev_release2` = `f1047f766` (fast-forward), albero pulito, rimisurata il 2026-09-23 prima di ogni
-versione del piano e il 2026-09-24 dopo l'approvazione. Poi, sul ramo: C0 di J (`2a5927c48`, fast-forward, 11:16),
-C1 (`804bc9903`, 14:18), C2 (`6a88561fd`, 14:51) e C3 (`4d885f1e8`, 15:39); C4 (`472f51498`, 28/09 11:41), il
-merge `9016bb0d1` (11:45); C5 (`5e638a2ed`, 29/09 10:02), il merge con K `b2112ba61` (12:37); C6 (`602ea299e`,
-22:26), il merge `921f1fc05` (22:31).
+**Baseline:** `dev_release2` = `9df0b7b14` (fast-forward), albero pulito, rimisurata il 2026-09-23 prima di ogni
+versione del piano e il 2026-09-24 dopo l'approvazione. Poi, sul ramo: C0 di J (`7d9055d39`, fast-forward, 11:16),
+C1 (`8fa118ba4`, 14:18), C2 (`45aaf0891`, 14:51) e C3 (`5afe63263`, 15:39); C4 (`66e387007`, 28/09 11:41), il
+merge `8c7a62d94` (11:45); C5 (`9b988668d`, 29/09 10:02), il merge con K `5ab9f498e` (12:37); C6 (`e8aeba334`,
+22:26), il merge `1602d23d8` (22:31).
 **Lane:** copia di prod `6167` + `/tmp/librefolio-r2-i-charts-prodcopy` (server, verifica visiva, review) · suite
 `6157` + `/tmp/librefolio-r2-i-charts` (solo `dev.py test …`). **Mai** `dev.py test` sulla copia.
 Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`.
@@ -39,7 +39,7 @@ Precedenti e collegati:
   — **leggere la §9 prima di fidarsi della §1**: due voci sono state smentite dalla review.
 - Seguito: [plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md](plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md)
   — i marcatori degli eventi spariscono con «Tutti» sul hit della cache prezzi (2026-10-07). È una regressione di
-  `2d22130bd`.
+  `f4d209b11`.
 - Seguito: [plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md](plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md)
   — il dividendo diventa oro, e le etichette dell'asse di Candele e Proventi seguono uno schema nuovo (2026-10-07).
   **Sostituisce le regole sul testo di D4 e D4-bis** (§7 e «S7 — passo 0»); i separatori restano.
@@ -53,36 +53,36 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | S0 | Journal: questo file + §6.0.20 e indicatori del piano madre | approvazione | ✅ 2026-09-24 |
 | S1 | Baseline nella lane suite, prima di ogni edit | S0 | ✅ 2026-09-24 |
 | S1b | Hook `__lfChart` in `GrowthChart` e `PerformanceChart` | S1 | ✅ 2026-09-24 |
-| S2 | Privacy Growth (S2a) + Performance (S2b) | **gate-prep di J fuso dal developer** + S1b | 🔓 C0 fuso 2026-09-24 11:16 (ff `f1047f766..2a5927c48`) · S2-pre ✅ · S2a ✅ · S2b ✅ 2026-09-24 (verifica live in S6) |
+| S2 | Privacy Growth (S2a) + Performance (S2b) | **gate-prep di J fuso dal developer** + S1b | 🔓 C0 fuso 2026-09-24 11:16 (ff `9df0b7b14..7d9055d39`) · S2-pre ✅ · S2a ✅ · S2b ✅ 2026-09-24 (verifica live in S6) |
 | S2c | Review di J sul diff privacy | S2b | ✅ 2026-09-24 11:45: **J approva** (D1/D14). Parola della `why` di D13 cambiata come chiesto; gate 6/6 |
 | S3 | §2.5: omissione = annullamento | S1 | ✅ 2026-09-24 |
 | S4 | R21 Allocazione | S1 | ✅ 2026-09-24 (verifica live in S6) |
 | S4b | Emoji per ogni tipo asset | S4 | ✅ 2026-09-24 (❓ per Unknown: decisione del developer, 10:28) |
 | S5 | R21 Crescita | S1b | ✅ 2026-09-24 (verifica live in S6). Fix della gallery: commit a sé dopo C1 (opzione B), riga G |
 | S6 | Riproduzione R8/R10 sulla copia | S5 | ✅ 2026-09-24 12:05: R8 = 3 cause + 1, R10 = il moncone di coda; R21, S9 e privacy verificati dal vivo; reperto nuovo (tacche Y doppie → D18) |
-| C1 | Checkpoint unico (D14): S0–S6 + S9 + S2 | S2c, S6 | ✅ pronto 2026-09-24 12:21 · ✅ **committato 14:18**: 8 commit per slice, `cb7ae3476`…`804bc9903` (registro «C1 committato») |
-| G | Gallery: Abs esplicito prima dello scatto `main` | C1 (opzione B) | ✅ 2026-09-24: hunk scritto e verificato staticamente (registro «G»); ✅ **committato in C2**: `980dee4bf` |
-| C2 | Checkpoint: G + registro di C1 | G | ✅ **committato 2026-09-24 14:51**: `980dee4bf`, `6a88561fd` (registro «C2 committato») |
-| C3 | Checkpoint: docs di S11 in parte + registri di C2, del triage e di S11 | S11 in parte | ✅ autorizzato dal coordinator 2026-09-24 15:24 · ✅ **committato 15:39**: `671d4ab49` docs, `4d885f1e8` registri (registro «C3 committato») |
-| C4 | Checkpoint: S10 backend e unit, registri | S10 passi 1–10 | ✅ **committato 2026-09-28 11:41**: 8 commit, `00bb1ac75`…`472f51498`; merge `9016bb0d1` (registro «Checkpoint C4 — committato») |
-| C5 | Checkpoint: S10 E2E (brief 03, E7) e registri | C4 | ✅ **committato 2026-09-29 10:02**: `026bc20fb`…`5e638a2ed`; merge con K `b2112ba61` (registro «Checkpoint C5 — committato») |
-| C6 | Checkpoint: emoji, tipi E2E, margini della Crescita e dei lotti, guardia `axisBuilder`, registri | C5 + merge con K | ✅ pronto 2026-09-29 15:27 · ✅ **committato 22:26**: 6 commit, `6d8b951bc`…`602ea299e`; merge `921f1fc05`, gate rapido verde (registri «Checkpoint C6 — committato» e «Gate rapido sulla revisione combinata `921f1fc05`»). Dopo: D23 con D23b |
-| C7 | Checkpoint: D23 + D23b (il segno del locale nei grafici, il colore dello zero), registri | C6 + merge `921f1fc05` | ✅ pronto 2026-09-30 00:07 · ✅ **committato 10:01**: `9d8fb520b`, `039baea22`; `dev_release2` già contenuto, nessun merge (registro «Checkpoint C7 — committato») |
-| C8 | Checkpoint: S7 (asse a scala di Candele e Proventi, riga «parziale» con `escapeHtml`), registri | S7 | ✅ pronto 2026-09-30 23:51: 3 commit su `039baea22` (il pianificatore; la cura di S7; il journal), il runner diviso fra i commit 1 e 2; prima la `desc` del runner e i doc di tre helper di test (registri «Checkpoint C8 — preparazione» e «Checkpoint C8 — pronto») · ✅ **committato 2026-10-01 11:04**: `7bfa064f0`, `69cba356f`, `de5349e46`; merge `851d3a5cf` con `dev_release2` (`8f18416df`: il passo 13 di K e le scelte di L), una regione risolta in `GrowthChart.svelte`, gate verde (registri «Checkpoint C8 — committato», «Allineamento a `dev_release2` — merge `851d3a5cf`» e «Gate sulla revisione combinata `851d3a5cf`»). Dopo: S7b |
-| C9 | Checkpoint: S7b (tacche del denaro esatte e distinte, il meno del locale sugli assi, il bordo senza etichetta), registri | S7b | ✅ pronto 2026-10-01 15:02: 2 commit su `cd6502084` (la cura con i test; il journal); proposte al coordinator la `desc` di `growth-chart-memo` e la riga del CHANGELOG (registro «S7b — passo 6») · ✅ **committato 15:31**: `07035fd4f` (messaggio v2), `99bc08911`; nessun merge (registro «Checkpoint C9 — committato»). Dopo: S8 |
-| C10 | Checkpoint: S8 (R11: il valore di acquisto nei Proventi, una voce di legenda, il totale e le due quote, il nuovo capitale in blu KPI), registri | S8 | ✅ pronto 2026-10-01 17:57: 2 commit su `99bc08911` (la cura con i test e la `desc` concessa del runner; il journal); proposte al coordinator la clausola di S8 per la `desc` e nessuna voce del CHANGELOG (registro «S8 — passo 6») · ✅ **committato 18:47**: `c4595922e`, `567fee80e`; nessun merge (registro «Checkpoint C10 — committato»). Dopo: S8b |
-| C11 | Checkpoint: S8b (D24: il «?» della guida in fondo alla riga della finestra; D28: l'ancora inglese, il rosso di it/fr/es accettato fino ad Aphra), registri | S8b | ✅ pronto 2026-10-01 21:42: 2 commit su `567fee80e` (la cura con il test, l'ancora inglese e la clausola concessa di S8 nel runner; il journal); nessuna voce del CHANGELOG, il debito di traduzione e la nota sul rimontaggio al coordinator (registro «S8b — passo 6») · ✅ **committato 21:47**: `e3af27ff3`, `1c568bfe0`; nessun merge (registro «Checkpoint C11 — committato»). Dopo: la verifica sulla copia nella 6167 |
+| C1 | Checkpoint unico (D14): S0–S6 + S9 + S2 | S2c, S6 | ✅ pronto 2026-09-24 12:21 · ✅ **committato 14:18**: 8 commit per slice, `322c31615`…`8fa118ba4` (registro «C1 committato») |
+| G | Gallery: Abs esplicito prima dello scatto `main` | C1 (opzione B) | ✅ 2026-09-24: hunk scritto e verificato staticamente (registro «G»); ✅ **committato in C2**: `a09ebcd3a` |
+| C2 | Checkpoint: G + registro di C1 | G | ✅ **committato 2026-09-24 14:51**: `a09ebcd3a`, `45aaf0891` (registro «C2 committato») |
+| C3 | Checkpoint: docs di S11 in parte + registri di C2, del triage e di S11 | S11 in parte | ✅ autorizzato dal coordinator 2026-09-24 15:24 · ✅ **committato 15:39**: `12a5b8d95` docs, `5afe63263` registri (registro «C3 committato») |
+| C4 | Checkpoint: S10 backend e unit, registri | S10 passi 1–10 | ✅ **committato 2026-09-28 11:41**: 8 commit, `e154d689e`…`66e387007`; merge `8c7a62d94` (registro «Checkpoint C4 — committato») |
+| C5 | Checkpoint: S10 E2E (brief 03, E7) e registri | C4 | ✅ **committato 2026-09-29 10:02**: `8ea6f2f2e`…`9b988668d`; merge con K `5ab9f498e` (registro «Checkpoint C5 — committato») |
+| C6 | Checkpoint: emoji, tipi E2E, margini della Crescita e dei lotti, guardia `axisBuilder`, registri | C5 + merge con K | ✅ pronto 2026-09-29 15:27 · ✅ **committato 22:26**: 6 commit, `e4ca40e1a`…`e8aeba334`; merge `1602d23d8`, gate rapido verde (registri «Checkpoint C6 — committato» e «Gate rapido sulla revisione combinata `1602d23d8`»). Dopo: D23 con D23b |
+| C7 | Checkpoint: D23 + D23b (il segno del locale nei grafici, il colore dello zero), registri | C6 + merge `1602d23d8` | ✅ pronto 2026-09-30 00:07 · ✅ **committato 10:01**: `bca7ac68c`, `ddc8acb8c`; `dev_release2` già contenuto, nessun merge (registro «Checkpoint C7 — committato») |
+| C8 | Checkpoint: S7 (asse a scala di Candele e Proventi, riga «parziale» con `escapeHtml`), registri | S7 | ✅ pronto 2026-09-30 23:51: 3 commit su `ddc8acb8c` (il pianificatore; la cura di S7; il journal), il runner diviso fra i commit 1 e 2; prima la `desc` del runner e i doc di tre helper di test (registri «Checkpoint C8 — preparazione» e «Checkpoint C8 — pronto») · ✅ **committato 2026-10-01 11:04**: `52ba9caa7`, `ad46dfce8`, `69d4c6afb`; merge `bbaabf811` con `dev_release2` (`27d99a703`: il passo 13 di K e le scelte di L), una regione risolta in `GrowthChart.svelte`, gate verde (registri «Checkpoint C8 — committato», «Allineamento a `dev_release2` — merge `bbaabf811`» e «Gate sulla revisione combinata `bbaabf811`»). Dopo: S7b |
+| C9 | Checkpoint: S7b (tacche del denaro esatte e distinte, il meno del locale sugli assi, il bordo senza etichetta), registri | S7b | ✅ pronto 2026-10-01 15:02: 2 commit su `3dd1bc147` (la cura con i test; il journal); proposte al coordinator la `desc` di `growth-chart-memo` e la riga del CHANGELOG (registro «S7b — passo 6») · ✅ **committato 15:31**: `eb5a49f6c` (messaggio v2), `626fa5162`; nessun merge (registro «Checkpoint C9 — committato»). Dopo: S8 |
+| C10 | Checkpoint: S8 (R11: il valore di acquisto nei Proventi, una voce di legenda, il totale e le due quote, il nuovo capitale in blu KPI), registri | S8 | ✅ pronto 2026-10-01 17:57: 2 commit su `626fa5162` (la cura con i test e la `desc` concessa del runner; il journal); proposte al coordinator la clausola di S8 per la `desc` e nessuna voce del CHANGELOG (registro «S8 — passo 6») · ✅ **committato 18:47**: `7f7f31304`, `3b4e546f5`; nessun merge (registro «Checkpoint C10 — committato»). Dopo: S8b |
+| C11 | Checkpoint: S8b (D24: il «?» della guida in fondo alla riga della finestra; D28: l'ancora inglese, il rosso di it/fr/es accettato fino ad Aphra), registri | S8b | ✅ pronto 2026-10-01 21:42: 2 commit su `3b4e546f5` (la cura con il test, l'ancora inglese e la clausola concessa di S8 nel runner; il journal); nessuna voce del CHANGELOG, il debito di traduzione e la nota sul rimontaggio al coordinator (registro «S8b — passo 6») · ✅ **committato 21:47**: `fe8e57d3c`, `740582dea`; nessun merge (registro «Checkpoint C11 — committato»). Dopo: la verifica sulla copia nella 6167 |
 | S7 | Asse dei bucket (R8 dopo D4, R10) | S6 | ✅ **2026-09-30 23:05** (avviata dal coordinator alle 10:04): il pianificatore `growthLadderAxis.ts` e la cura di `GrowthChart.svelte`; la riga «parziale» passa per `escapeHtml` (fuori pista, registro «S7 — passo 6»). Unit, build, E2E seriale e con 4 worker verdi. Decisioni: D4 ✅, D16 = (ii)+(i) ✅, D17 = (a) ✅ (§7) |
-| S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso · ▶️ avviata 2026-10-01 (coordinator, dopo `cd6502084`): analisi ✅ 13:19; D25 = B ✅ 13:51; test rossi ✅ 14:46; cura ✅ 14:50; gate ✅ 15:00 · ✅ **2026-10-01 15:02**, in C9 (registro «S7b») |
-| S8 | R11 valore di acquisto | S7 | ▶️ avviata 2026-10-01 (coordinator, dopo `99bc08911`): motore rimisurato per simbolo, invariato; analisi e D26 = blu KPI ✅ 15:49; test rossi ✅ 17:06 (11 in `growth-chart-memo`, 4 in `asset-unit`, ciascuno per la ragione voluta); cura ✅ 17:14 (60/60, 530/530); D27 = legenda condivisa fra Abs e Proventi, accettata ✅ 17:14; gate ✅ 17:50 (10 verdi, l'E2E del dashboard corso due volte); `desc` del runner ✅ 17:53 · ✅ **2026-10-01 17:57**, in C10 (registro «S8») |
-| S8b | Guida del Rendimento mobile nel dettaglio asset (D24) | S8, D24 | ⏳ approvato dal developer (2026-09-30 11:52): «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente; commit a sé dopo S8 · ▶️ avviata 2026-10-01 (coordinator, dopo `567fee80e`): analisi ✅ 18:59, test rosso ✅ 19:36, cura ✅ 19:37, gate 1–5 ✅ 19:45, `check-links` ❌ → D28 ✅ 21:28 (ancora inglese ora; il rosso di it/fr/es è accettato fino ad Aphra); ancora inglese ✅ 21:33, passo 4 ✅ 21:37; `desc` del runner ✅ 21:39 · ✅ **2026-10-01 21:42**, in C11 (registro «S8b») |
-| V | Verifica sulla copia nella 6167: R8, R10, R10z (DoD, fasi di S6), S7b, R11, S8b | C11 | ✅ **2026-10-01 23:10** (coordinator, 21:48): sonda di sessione su `1c568bfe0`, 0 rossi in ogni fase; zoom dei Proventi da ×4,7 a ×1. Poi server spento, copia rinfrescata, sonda e log cancellati: avevano dati del developer (registro «Verifica sulla copia nella 6167») |
+| S7b | Tacche Y doppie (reperto N1) | S7 | 🔓 D18 = sì ✅ 2026-09-25: assi del denaro di Crescita e Performance; `%` escluso · ▶️ avviata 2026-10-01 (coordinator, dopo `3dd1bc147`): analisi ✅ 13:19; D25 = B ✅ 13:51; test rossi ✅ 14:46; cura ✅ 14:50; gate ✅ 15:00 · ✅ **2026-10-01 15:02**, in C9 (registro «S7b») |
+| S8 | R11 valore di acquisto | S7 | ▶️ avviata 2026-10-01 (coordinator, dopo `626fa5162`): motore rimisurato per simbolo, invariato; analisi e D26 = blu KPI ✅ 15:49; test rossi ✅ 17:06 (11 in `growth-chart-memo`, 4 in `asset-unit`, ciascuno per la ragione voluta); cura ✅ 17:14 (60/60, 530/530); D27 = legenda condivisa fra Abs e Proventi, accettata ✅ 17:14; gate ✅ 17:50 (10 verdi, l'E2E del dashboard corso due volte); `desc` del runner ✅ 17:53 · ✅ **2026-10-01 17:57**, in C10 (registro «S8») |
+| S8b | Guida del Rendimento mobile nel dettaglio asset (D24) | S8, D24 | ⏳ approvato dal developer (2026-09-30 11:52): «?» in fondo alla riga della finestra, solo in Rendimento mobile, verso la guida utente; commit a sé dopo S8 · ▶️ avviata 2026-10-01 (coordinator, dopo `3b4e546f5`): analisi ✅ 18:59, test rosso ✅ 19:36, cura ✅ 19:37, gate 1–5 ✅ 19:45, `check-links` ❌ → D28 ✅ 21:28 (ancora inglese ora; il rosso di it/fr/es è accettato fino ad Aphra); ancora inglese ✅ 21:33, passo 4 ✅ 21:37; `desc` del runner ✅ 21:39 · ✅ **2026-10-01 21:42**, in C11 (registro «S8b») |
+| V | Verifica sulla copia nella 6167: R8, R10, R10z (DoD, fasi di S6), S7b, R11, S8b | C11 | ✅ **2026-10-01 23:10** (coordinator, 21:48): sonda di sessione su `740582dea`, 0 rossi in ogni fase; zoom dei Proventi da ×4,7 a ×1. Poi server spento, copia rinfrescata, sonda e log cancellati: avevano dati del developer (registro «Verifica sulla copia nella 6167») |
 | S9 | R9 didascalia | S1 | ✅ 2026-09-24 (scorrimento a 375 px: verifica live in S6) |
-| S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `921f1fc05` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») · ✅ **chiusa 2026-10-02 00:36**, in S12: l'E2E della scala delle larghezze c'è (`dashboard.spec.ts:720` e `:801`, da `026bc20fb`, C5); il seguito di `maskFormattedNumber` l'ha fatto D23; DBT-A e DBT-B fuori dal round per D9 (registro «S12 — handoff finale») |
-| S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») · ▶️ ripresa 2026-10-01 (coordinator, dopo `1c568bfe0`): fatti verificati in tre passate; docs-writer ✅ 00:00; revisione con due correzioni mie; `mkdocs build` EXIT 0 e `check-links` con il solo rosso di D28, entrambi rieseguiti sui blob finali · ✅ **2026-10-02 00:12** (registro «S11-finale — le tre pagine inglesi riallineate al codice») |
-| S12 | Handoff | S10, S11, S2c | ⏳ · ▶️ avviata 2026-10-02 (coordinator, dopo `1c568bfe0`): merge-tree contro `ed3bf870a` pulito, vitest intero 6733/6733, S10 chiusa, residui, CHANGELOG e commit proposti · ✅ **2026-10-02 00:36** (registro «S12 — handoff finale») |
-| R-D15 | Review manuale di D15 sulla copia nella 6167, con il developer | S12, D15 | ▶️ avviata 2026-10-02 09:54 (coordinator, 09:45, dopo `e11298294`): build, server staccato, domanda al developer nella mia finestra · ⏸️ **sospesa 10:03**: il developer chiede di fare il punto con il coordinator (la torta qui non ha il secondo anello, che sta nei rami di Risk e F) · ⏭️ **spostata alla review della revisione unita** (2026-10-02 10:05): la torta col secondo anello vive solo nella famiglia di Risk e nessuna build mostra insieme i due lavori. Decisione del developer, verbatim: «Sì, procedi così». Server spento alle 10:35, 6167 libera, copia cancellata · ✅ **chiusa nella famiglia di Risk** (verifica d'archivio 2026-10-09): `e648c274d` (05/10, `feat(charts): history groups types by family (D15)`) e `7383ee64b` (06/10, D375); prova in `Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md:2546-2573` e checkpoint 4 ✅ (`:2988`). Oggi torta e storico usano `resolvePrimary: assetTypeFamily` (`AllocationPieChart.svelte:207`, `AllocationHistoryChart.svelte:577`) |
-| G-K | Gate sulla revisione unita dopo K (`9e9820253`) | R-D15, merge di `dev_release2` | ▶️ avviata 2026-10-02 11:05 (coordinator, 11:04, dopo il merge `9e9820253`): controllo in sola lettura ✅ 11:05; gate 1–15 nella 6157, un rosso nuovo (`S7-E4`), triage ✅ 11:50: assunzione, il gutter dell'host più le etichette dei dati; correzione solo test autorizzata alle 11:54, scritta da test-author, dashboard 24/24 in seriale e con 4 worker ✅ 12:22 · ✅ **2026-10-02 12:29**: rossi noti D28 e `toolbar-width-sweep` fr/es (a K); 2 commit proposti sopra `9e9820253` (registro «G-K») · ✅ **committato 12:40 e integrato**: `9a77b1b61`, `6de5646a1`; `dev_release2` = `975a115ae`, col CHANGELOG del coordinator (registro «Dopo l'integrazione») |
+| S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `e154d689e`→`66e387007`), poi il merge di `dev_release2` (`8c7a62d94`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `1602d23d8` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») · ✅ **chiusa 2026-10-02 00:36**, in S12: l'E2E della scala delle larghezze c'è (`dashboard.spec.ts:720` e `:801`, da `8ea6f2f2e`, C5); il seguito di `maskFormattedNumber` l'ha fatto D23; DBT-A e DBT-B fuori dal round per D9 (registro «S12 — handoff finale») |
+| S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`12a5b8d95`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») · ▶️ ripresa 2026-10-01 (coordinator, dopo `740582dea`): fatti verificati in tre passate; docs-writer ✅ 00:00; revisione con due correzioni mie; `mkdocs build` EXIT 0 e `check-links` con il solo rosso di D28, entrambi rieseguiti sui blob finali · ✅ **2026-10-02 00:12** (registro «S11-finale — le tre pagine inglesi riallineate al codice») |
+| S12 | Handoff | S10, S11, S2c | ⏳ · ▶️ avviata 2026-10-02 (coordinator, dopo `740582dea`): merge-tree contro `6d3318cdb` pulito, vitest intero 6733/6733, S10 chiusa, residui, CHANGELOG e commit proposti · ✅ **2026-10-02 00:36** (registro «S12 — handoff finale») |
+| R-D15 | Review manuale di D15 sulla copia nella 6167, con il developer | S12, D15 | ▶️ avviata 2026-10-02 09:54 (coordinator, 09:45, dopo `fda1d549c`): build, server staccato, domanda al developer nella mia finestra · ⏸️ **sospesa 10:03**: il developer chiede di fare il punto con il coordinator (la torta qui non ha il secondo anello, che sta nei rami di Risk e F) · ⏭️ **spostata alla review della revisione unita** (2026-10-02 10:05): la torta col secondo anello vive solo nella famiglia di Risk e nessuna build mostra insieme i due lavori. Decisione del developer, verbatim: «Sì, procedi così». Server spento alle 10:35, 6167 libera, copia cancellata · ✅ **chiusa nella famiglia di Risk** (verifica d'archivio 2026-10-09): `7be14d0a5` (05/10, `feat(charts): history groups types by family (D15)`) e `c8c7a35a6` (06/10, D375); prova in `Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md:2546-2573` e checkpoint 4 ✅ (`:2988`). Oggi torta e storico usano `resolvePrimary: assetTypeFamily` (`AllocationPieChart.svelte:207`, `AllocationHistoryChart.svelte:577`) |
+| G-K | Gate sulla revisione unita dopo K (`1226fa879`) | R-D15, merge di `dev_release2` | ▶️ avviata 2026-10-02 11:05 (coordinator, 11:04, dopo il merge `1226fa879`): controllo in sola lettura ✅ 11:05; gate 1–15 nella 6157, un rosso nuovo (`S7-E4`), triage ✅ 11:50: assunzione, il gutter dell'host più le etichette dei dati; correzione solo test autorizzata alle 11:54, scritta da test-author, dashboard 24/24 in seriale e con 4 worker ✅ 12:22 · ✅ **2026-10-02 12:29**: rossi noti D28 e `toolbar-width-sweep` fr/es (a K); 2 commit proposti sopra `1226fa879` (registro «G-K») · ✅ **committato 12:40 e integrato**: `bdb11893c`, `01a64ec23`; `dev_release2` = `94312819f`, col CHANGELOG del coordinator (registro «Dopo l'integrazione») |
 | P-tmp | I file di `/tmp` derivati dalla copia di prod del 29/09 (le sonde dei margini e del crash `axisBuilder`) | integrazione, OK del coordinator (12:47) | ✅ **2026-10-02 12:51**: trovati nel controllo dopo l'integrazione; 15 file cancellati senza aprirli, `ls` come prova. I 5 citati nel piano non esistono più; i reperti restano scritti nei registri che li citano (registro «Dopo l'integrazione») |
 
 ## 0. Come si è arrivati a questa versione
@@ -434,7 +434,7 @@ Regole: niente posizione/conteggi globali/clock/testo tradotto; solo `data-testi
 | S7b | `GrowthChart.test.ts` + `PerformanceChart.test.ts` | **Solo se D18 = sì.** Formatter Y a privacy OFF:<br>• tacche 5000…8000 a passo 500 → 7 etichette distinte<br>• 1000…2500 a passo 500 → 4 distinte (oggi `1k, 2k, 2k, 3k`)<br>• i valori interi restano senza decimali (`2k`, non `2,0k`)<br>**Privacy ON**: invariato, nessuna cifra (`•••`, `-•••`) |
 | S8 | `GrowthChart.test.ts` | nome e stack condivisi; legenda una volta; 900 + 300 → riga totale 1,200.00; identità di somma; **con D26** (2026-10-01): colore per zona sull'opzione vera: nuovo capitale = area «Valore di acquisto» di Abs, reinvestito = area «Rendimento», confrontati fra loro e non con letterali |
 | S9 | `GrowthChart.test.ts` + `dashboard.spec.ts` | **jsdom**: la didascalia c'è solo in candele, porta la classe `overflow-scroll-marquee` e la chiave corta. Il `ResizeObserver` inerte di `$test/component` basta: l'overflow qui non si prova.<br>**E2E a 375 px**: `data-overflowing="true"` sulla didascalia. L'attributo lo mette l'azione, quindi non serve nessuna attesa a tempo.<br>`dev.py i18n audit` pulito. Gli specchi rotti da S9 sono già convertiti (registro S9) |
-| S10 | `chartCoreHelpers.test.ts` / `dashboard.spec.ts` / `brokers-detail.spec.ts` / `test_portfolio_api.py` | **Cancellazioni** a mano, per nome, una alla volta, contando prima e dopo (−N esatto):<br>• C6, C9, C10, C11 → −4 su 159; **con D19 (developer, 2026-09-25) anche i 10 verdi del blocco di C10/C11, che provano solo una copia locale di una funzione uscita dal prodotto: −14, 159 → 145**, insieme alla copia e agli helper rimasti senza chiamanti. **C8 non si cancella più**: è guarito in S9, perché la didascalia consuma di nuovo la chiave corta. La causa di C9 è cambiata: la coppia corta/lunga non esiste più (registro S9)<br>• E1–E3, un solo `for` → −3 su 15; con loro vanno gli helper rimasti senza chiamanti<br>**Ri-pin**, ognuno col suo perché scritto:<br>• i 7 specchi<br>• E4 sulla scala: in linea nessuna scala e nessun badge; in candele la scala c'è e il gradino premuto non è `1d`<br>• E5/E6 con un'àncora a segno opzionale, soglia 3 (Dividend, Interest, Total: righe sempre rese)<br>• **E8/E9** (trovati nella misura «prima» del 2026-09-25, registro «Pausa e ripresa dopo il riavvio»; aggiunti dal developer): `dashboard.spec.ts:467` conta gli importi **con segno** (Totale più uno per broker), e `:496` riconosce l'OHLC contando quelli **senza segno**. Sotto il puntatore oggi c'è 2026-08-09, dove Coinbase vale `EUR 0.00`, e lo zero non ha segno per scelta (`e7773a143`). Rimedio come E5/E6: le righe si contano per segno opzionale, e l'OHLC si riconosce per riga, non per assenza di segno<br>• **E7** (trovato in S3; rimedio raffinato il 2026-09-24, registro «C1 committato»): la data dell'evento del peer, **solo per MAX**, ricavata dal range accettato invece che cercata nella fixture fissa (`:1970`). `successorReadyEvents` (`:769`) resta com'è, perché lo leggono anche il mock condiviso (`:2157`, `:2165`) e sezioni dello stesso test oggi verdi, a range assoluto (`:6088`, `:6241`). La correzione riaccende 61 `expect(` e 3 `expect.poll(` fermi dal 18/09: un rosso che ne esce va attribuito, non è per forza E7. Prima dell'edit lo annuncio al coordinator<br>• **Contratto di `/portfolio/report`** (`test_portfolio_api.py`, triage del 2026-09-24, registro omonimo; verdetto «assumption» accettato dal coordinator alle 15:24): `test_report_allocation_source_authenticated_contract` allarga l'insieme a mondo chiuso di `:767` da 7 a 13 chiavi, come il gemello di servizio `test_portfolio_service.py:3767` allargato nel merge `b7a0b1e1a`. **Non** a `⊇`: un sovrainsieme renderebbe il test cieco a una sezione di troppo. In più `is None` per ognuna delle 6 sezioni, perché il test esiste per dire «senza eseguire le altre viste». La coda (59 `assert` dopo `:767`, ferma dal 21/09) gira per la prima volta: un rosso che ne esce va attribuito prima di correggerlo<br>• **`needs_engine`** (difetto latente, registro omonimo; ✅ deciso dal coordinator alle 15:24: mio, in un **commit a sé**; alle 15:37: aspetta l'OK come il resto di S10, poi va **per primo**, perché è la parte più piccola e la meno legata alle altre). Prima il test API: chiede `allocation_source` insieme a una delle 6 sezioni, senza le 4 viste originali, e vuole la sezione piena e il suo nome in `included_features`. Oggi è rosso: la sezione torna `null` e `included_features` vale `["allocation_source"]`. Poi la correzione, una sola istruzione: i 6 flag in `needs_engine` (`portfolio_service.py:2404`; con 300 colonne black la spezzerà su più righe). Il test diventa verde. La cache L2 non chiede altro: la sua chiave contiene già i 6 flag (`:2375-2380`, letto il 2026-09-24), quindi un report del ramo corto non può rispondere a una richiesta diversa. Nessun conflitto con Risk: `a766a9d5d` tocca il file solo a `:694-695`, un import (misura del coordinator)<br>**Copertura mancante**: nessun E2E sulla scala `growth-candle-width-*`. Proposta: la scala è offerta in candele e in income e non in linea; un clic sposta `aria-pressed` e ridisegna (`data-chart-renders` +1)<br>**Registro (D13, deciso da J):** quando esiste il test privacy di GrowthChart (S2a), aggiorno la `why` della riga P&L totale del tooltip perché lo citi. Oggi la `why` non lo cita, perché il test non c'è<br>**Seguito non bloccante (J, S2c):** a privacy OFF `sv-SE` perde il meno U+2212 (reperto 11). J l'ha risolto con `maskFormattedNumber`, identico byte per byte da smascherato, nel suo C1 `176f19707`. **Solo quando** quel C1 è nel target e la mia base è aggiornata: `fmtCurrency`, `yAxisFormatter`, `shortMoney` e `axisTickAmount` passano su quella primitiva. Prima no: non è nel mio albero |
+| S10 | `chartCoreHelpers.test.ts` / `dashboard.spec.ts` / `brokers-detail.spec.ts` / `test_portfolio_api.py` | **Cancellazioni** a mano, per nome, una alla volta, contando prima e dopo (−N esatto):<br>• C6, C9, C10, C11 → −4 su 159; **con D19 (developer, 2026-09-25) anche i 10 verdi del blocco di C10/C11, che provano solo una copia locale di una funzione uscita dal prodotto: −14, 159 → 145**, insieme alla copia e agli helper rimasti senza chiamanti. **C8 non si cancella più**: è guarito in S9, perché la didascalia consuma di nuovo la chiave corta. La causa di C9 è cambiata: la coppia corta/lunga non esiste più (registro S9)<br>• E1–E3, un solo `for` → −3 su 15; con loro vanno gli helper rimasti senza chiamanti<br>**Ri-pin**, ognuno col suo perché scritto:<br>• i 7 specchi<br>• E4 sulla scala: in linea nessuna scala e nessun badge; in candele la scala c'è e il gradino premuto non è `1d`<br>• E5/E6 con un'àncora a segno opzionale, soglia 3 (Dividend, Interest, Total: righe sempre rese)<br>• **E8/E9** (trovati nella misura «prima» del 2026-09-25, registro «Pausa e ripresa dopo il riavvio»; aggiunti dal developer): `dashboard.spec.ts:467` conta gli importi **con segno** (Totale più uno per broker), e `:496` riconosce l'OHLC contando quelli **senza segno**. Sotto il puntatore oggi c'è 2026-08-09, dove Coinbase vale `EUR 0.00`, e lo zero non ha segno per scelta (`9c1b6a3ff`). Rimedio come E5/E6: le righe si contano per segno opzionale, e l'OHLC si riconosce per riga, non per assenza di segno<br>• **E7** (trovato in S3; rimedio raffinato il 2026-09-24, registro «C1 committato»): la data dell'evento del peer, **solo per MAX**, ricavata dal range accettato invece che cercata nella fixture fissa (`:1970`). `successorReadyEvents` (`:769`) resta com'è, perché lo leggono anche il mock condiviso (`:2157`, `:2165`) e sezioni dello stesso test oggi verdi, a range assoluto (`:6088`, `:6241`). La correzione riaccende 61 `expect(` e 3 `expect.poll(` fermi dal 18/09: un rosso che ne esce va attribuito, non è per forza E7. Prima dell'edit lo annuncio al coordinator<br>• **Contratto di `/portfolio/report`** (`test_portfolio_api.py`, triage del 2026-09-24, registro omonimo; verdetto «assumption» accettato dal coordinator alle 15:24): `test_report_allocation_source_authenticated_contract` allarga l'insieme a mondo chiuso di `:767` da 7 a 13 chiavi, come il gemello di servizio `test_portfolio_service.py:3767` allargato nel merge `d613aed44`. **Non** a `⊇`: un sovrainsieme renderebbe il test cieco a una sezione di troppo. In più `is None` per ognuna delle 6 sezioni, perché il test esiste per dire «senza eseguire le altre viste». La coda (59 `assert` dopo `:767`, ferma dal 21/09) gira per la prima volta: un rosso che ne esce va attribuito prima di correggerlo<br>• **`needs_engine`** (difetto latente, registro omonimo; ✅ deciso dal coordinator alle 15:24: mio, in un **commit a sé**; alle 15:37: aspetta l'OK come il resto di S10, poi va **per primo**, perché è la parte più piccola e la meno legata alle altre). Prima il test API: chiede `allocation_source` insieme a una delle 6 sezioni, senza le 4 viste originali, e vuole la sezione piena e il suo nome in `included_features`. Oggi è rosso: la sezione torna `null` e `included_features` vale `["allocation_source"]`. Poi la correzione, una sola istruzione: i 6 flag in `needs_engine` (`portfolio_service.py:2404`; con 300 colonne black la spezzerà su più righe). Il test diventa verde. La cache L2 non chiede altro: la sua chiave contiene già i 6 flag (`:2375-2380`, letto il 2026-09-24), quindi un report del ramo corto non può rispondere a una richiesta diversa. Nessun conflitto con Risk: `a79e12f5e` tocca il file solo a `:694-695`, un import (misura del coordinator)<br>**Copertura mancante**: nessun E2E sulla scala `growth-candle-width-*`. Proposta: la scala è offerta in candele e in income e non in linea; un clic sposta `aria-pressed` e ridisegna (`data-chart-renders` +1)<br>**Registro (D13, deciso da J):** quando esiste il test privacy di GrowthChart (S2a), aggiorno la `why` della riga P&L totale del tooltip perché lo citi. Oggi la `why` non lo cita, perché il test non c'è<br>**Seguito non bloccante (J, S2c):** a privacy OFF `sv-SE` perde il meno U+2212 (reperto 11). J l'ha risolto con `maskFormattedNumber`, identico byte per byte da smascherato, nel suo C1 `0ca72f743`. **Solo quando** quel C1 è nel target e la mia base è aggiornata: `fmtCurrency`, `yAxisFormatter`, `shortMoney` e `axisTickAmount` passano su quella primitiva. Prima no: non è nel mio albero |
 
 ---
 
@@ -498,8 +498,8 @@ LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-i-charts-prodcopy PIPENV_CUSTOM_VENV
 
 | Workstream | Loro superficie | Mia sovrapposizione | Tipo | Rischio | Mitigazione |
 |---|---|---|---|---|---|
-| **J** | `maskable.ts`, registro `moneyRenderSites.test.ts`, test 5, R7, onboarding, popup; il **gate-prep** (`moneyRenderSites.test.ts` e basta) | nel registro: 3 voci da cancellare + `:1899` (D13); le mie occorrenze nelle liste `residual`/`unmasked`. **D5′** (2026-09-24): J è l'unico scrittore di `ExposureTable`, `UnifiedLotsTable`, `LotCustodyModal`, `LotGanttChart`, `LotWacPriceChart` (quantità accanto a un prezzo) → io non li tocco | testuale + **semantico** | 🟡 | **L'ordine elimina il conflitto per costruzione**: J cambia test 5 e liste, il developer fonde nel mio ramo, poi io cancello solo le mie righe. Resta aperto un solo caso: J ritocca le liste *dopo* il gate-prep. Allora il merge toglie le occorrenze di **entrambe** le parti e non prende mai una riga intera da un lato. Test 5 e `maskable.ts` sono di J e non li tocco. Nessun contatto con i formatter di rischio di J. **C0 = `2a5927c48`** (2026-09-24), genitore `f1047f766` = il mio HEAD: il merge è un fast-forward su 2 file (`moneyRenderSites.test.ts`, `_frontend_utility.py`), **0 in comune** con i miei percorsi sporchi (misurato con `comm` su `git diff --name-only` e `git status`). **Fuso il 2026-09-24 alle 11:16** (ff), lavoro non committato intatto. S2-pre ✅: le modifiche annunciate ci sono tutte, il gate è verde e il probe dà quello che avevo previsto (registro S2-pre) |
-| **Risk** | R12 `AllocationPieChart.svelte`, forse props `AllocationPanel`; test allocazione in `dashboard.spec.ts`; usa i miei 12 rossi per sottrazione; ha già risolto un conflitto su `AllocationHistoryChart` (`7fd660846`) | `AllocationPanel.svelte` (S4), `AllocationHistoryChart.svelte` (S4b, un solo hunk in `getCategoryEmoji`), `dashboard.spec.ts`, lista rossi | testuale + semantico | 🟢 (era 🟡) | **Verificato dal coordinator (2026-09-24)**: R12 è `a34d2b4d8` e tocca solo `AllocationPieChart.svelte`, `allocationRings.ts` e il suo test. `AllocationPanel` è intatto, con le stesse props. La torta non ha una mappa tipo→emoji: usa le PNG (`getAssetTypeIconUrl`) e le emoji di settore del backend. Non c'è niente da condividere. Resta: lista rossi riannunciata a ogni modifica. **R12 rivista (2026-09-24):** la torta raggruppa ora per veicolo, con `charts/allocationFamily.ts` (solo nel ramo di Risk). Il mio `AllocationHistoryChart.svelte:596` passa ancora `primaryAssetType`: scelta in **D15**, una riga all'integrazione. **Palette (2026-09-24 11:09):** il coordinator ha girato a **Risk** il mio reperto sulle copie delle palette in `colors.test.ts` e `allocationHierarchy.test.ts`: sono nate in `420b90ebd` (famiglia D71; provenienza verificata con `git log --diff-filter=A`). Non va in S10. Il mio `AllocationHistoryChart.svelte` verrebbe solo letto, e i miei due hunk non toccano `PALETTE_*`. La torta ha a `:197` lo stesso `resolvePrimary: primaryAssetType` che Risk porta su `allocationFamily`: è la stessa mossa di D15. **D24 (2026-09-30):** nel suo ramo Risk ha messo `docs_path` sul mio `calendar_rolling_return.py`. Io quel file non lo tocco: nessun conflitto, il metadato arriva col merge |
+| **J** | `maskable.ts`, registro `moneyRenderSites.test.ts`, test 5, R7, onboarding, popup; il **gate-prep** (`moneyRenderSites.test.ts` e basta) | nel registro: 3 voci da cancellare + `:1899` (D13); le mie occorrenze nelle liste `residual`/`unmasked`. **D5′** (2026-09-24): J è l'unico scrittore di `ExposureTable`, `UnifiedLotsTable`, `LotCustodyModal`, `LotGanttChart`, `LotWacPriceChart` (quantità accanto a un prezzo) → io non li tocco | testuale + **semantico** | 🟡 | **L'ordine elimina il conflitto per costruzione**: J cambia test 5 e liste, il developer fonde nel mio ramo, poi io cancello solo le mie righe. Resta aperto un solo caso: J ritocca le liste *dopo* il gate-prep. Allora il merge toglie le occorrenze di **entrambe** le parti e non prende mai una riga intera da un lato. Test 5 e `maskable.ts` sono di J e non li tocco. Nessun contatto con i formatter di rischio di J. **C0 = `7d9055d39`** (2026-09-24), genitore `9df0b7b14` = il mio HEAD: il merge è un fast-forward su 2 file (`moneyRenderSites.test.ts`, `_frontend_utility.py`), **0 in comune** con i miei percorsi sporchi (misurato con `comm` su `git diff --name-only` e `git status`). **Fuso il 2026-09-24 alle 11:16** (ff), lavoro non committato intatto. S2-pre ✅: le modifiche annunciate ci sono tutte, il gate è verde e il probe dà quello che avevo previsto (registro S2-pre) |
+| **Risk** | R12 `AllocationPieChart.svelte`, forse props `AllocationPanel`; test allocazione in `dashboard.spec.ts`; usa i miei 12 rossi per sottrazione; ha già risolto un conflitto su `AllocationHistoryChart` (`ad29c6d3a`) | `AllocationPanel.svelte` (S4), `AllocationHistoryChart.svelte` (S4b, un solo hunk in `getCategoryEmoji`), `dashboard.spec.ts`, lista rossi | testuale + semantico | 🟢 (era 🟡) | **Verificato dal coordinator (2026-09-24)**: R12 è `a5eb89d4a` e tocca solo `AllocationPieChart.svelte`, `allocationRings.ts` e il suo test. `AllocationPanel` è intatto, con le stesse props. La torta non ha una mappa tipo→emoji: usa le PNG (`getAssetTypeIconUrl`) e le emoji di settore del backend. Non c'è niente da condividere. Resta: lista rossi riannunciata a ogni modifica. **R12 rivista (2026-09-24):** la torta raggruppa ora per veicolo, con `charts/allocationFamily.ts` (solo nel ramo di Risk). Il mio `AllocationHistoryChart.svelte:596` passa ancora `primaryAssetType`: scelta in **D15**, una riga all'integrazione. **Palette (2026-09-24 11:09):** il coordinator ha girato a **Risk** il mio reperto sulle copie delle palette in `colors.test.ts` e `allocationHierarchy.test.ts`: sono nate in `db819e4bd` (famiglia D71; provenienza verificata con `git log --diff-filter=A`). Non va in S10. Il mio `AllocationHistoryChart.svelte` verrebbe solo letto, e i miei due hunk non toccano `PALETTE_*`. La torta ha a `:197` lo stesso `resolvePrimary: primaryAssetType` che Risk porta su `allocationFamily`: è la stessa mossa di D15. **D24 (2026-09-30):** nel suo ramo Risk ha messo `docs_path` sul mio `calendar_rolling_return.py`. Io quel file non lo tocco: nessun conflitto, il metadato arriva col merge |
 | **K** | `assetTypes.ts`, select, icone composite, ImportWizard | ~~import in sola lettura di `ASSET_TYPES`/`isEtfSubtype` (S4b)~~ → **nessun import** (registro S4b: il modulo emoji non importa `assetTypes.ts`, il test leggerà `models.py`); scelta emoji coerente con le sue icone | semantico | 🟢 | nessun edit a `assetTypes.ts`. **K ha confermato (2026-09-24)**: `ASSET_TYPES` (`:17`) e `isEtfSubtype` (`:98`) restano stabili per nome, path, firma e semantica. Cambiano solo `buildAssetTypeOptions()` → `buildAssetTypeTree()` (consumatore unico `AssetModal`) e le PNG dei sottotipi, che diventano composite: la pastiglia in tabelle e treemap della dashboard è voluta. ⚠️ **Punto d'integrazione**: K aggiunge `CROWDFUND_REAL_ESTATE` (R17) in `models.py`, e il mio test di copertura di S4b andrà rosso con i due rami nel target. È nella lista d'integrazione del coordinator: l'emoji la aggiunge chi entra per secondo, con la regola dei sottotipi (§4 S4b: 🤝). **Non la anticipo** |
 | **A** | livelli per-asset Asset Global | `assets/[id]/+page.svelte:2174` | testuale | 🟢 | una riga, presto, annunciata |
 | **F** | lab asset-set, risk-lab | stesso file caldo; `chartCoreHelpers.test.ts` condiviso | testuale | 🟢 | idem |
@@ -522,7 +522,7 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D5 | developer | R9: testo corto esistente (a) o nuovo (b) | **(a)** + marquee |
 | D6 | developer | R21: ambito e chiave | mode+submode, view+tab; larghezza **non** persistita; chiave unica dashboard/broker |
 | D7 | developer | §2.5 polarità | `{accepted: false}` |
-| D8 | developer + coordinator | ri-autorizzi `chartCoreHelpers.test.ts`? | ✅ **confermato dal coordinator (2026-09-24)**. In questo round sono l'unico scrittore del file. Condizioni:<br>• cancello solo per nome, uno alla volta, contando prima e dopo (−N esatto); niente script e niente cancellazioni automatiche (il 22/09 una ha fatto sparire 162 test);<br>• ogni riconversione ha il suo perché scritto;<br>• uno specchio rotto da una mia slice si converte nella stessa slice;<br>• la baseline si rimisura in S1: fatto, 12/162<br>**Esteso agli E2E dal coordinator (2026-09-24):** in questo round sono l'unico scrittore di `e2e/portfolio/dashboard.spec.ts` e `e2e/brokers/brokers-detail.spec.ts` (J mette i suoi E2E in una spec sua). E1–E3 si cancellano per nome contando prima e dopo; E4 si ri-pinna col suo perché; E5 ed E6 si convertono con la causa misurata scritta accanto. Li ha rotti `e7773a143` (round 3), quindi la loro slice in questo round è S10. Il coordinator ha registrato i 6 rossi di partenza come fatto del target |
+| D8 | developer + coordinator | ri-autorizzi `chartCoreHelpers.test.ts`? | ✅ **confermato dal coordinator (2026-09-24)**. In questo round sono l'unico scrittore del file. Condizioni:<br>• cancello solo per nome, uno alla volta, contando prima e dopo (−N esatto); niente script e niente cancellazioni automatiche (il 22/09 una ha fatto sparire 162 test);<br>• ogni riconversione ha il suo perché scritto;<br>• uno specchio rotto da una mia slice si converte nella stessa slice;<br>• la baseline si rimisura in S1: fatto, 12/162<br>**Esteso agli E2E dal coordinator (2026-09-24):** in questo round sono l'unico scrittore di `e2e/portfolio/dashboard.spec.ts` e `e2e/brokers/brokers-detail.spec.ts` (J mette i suoi E2E in una spec sua). E1–E3 si cancellano per nome contando prima e dopo; E4 si ri-pinna col suo perché; E5 ed E6 si convertono con la causa misurata scritta accanto. Li ha rotti `9c1b6a3ff` (round 3), quindi la loro slice in questo round è S10. Il coordinator ha registrato i 6 rossi di partenza come fatto del target |
 | D9 | developer | DBT-A in questo round? DBT-B? | DBT-A rinviato; DBT-B a chi sa perché fu scritta |
 | D10 | developer | credenziali / copia | ✅ **deciso**: snapshot + utente del developer; riproduzione R8 da solo sulla copia |
 | D11 | developer + K (+ Risk) | emoji: COMMODITY/REAL_ESTATE/Unknown; ETF_MONETARY come ETF o propria; dove vive la mappa | 🛢️ / 🏠 / ~~❔~~ **❓**; ETF_MONETARY come ETF (regola K); (a) modulo mio accanto al grafico, (b) `assetTypes.ts` solo se K lo vuole. **Risk escluso (2026-09-24)**: non ha mappe da condividere. **K ha confermato la stabilità** di `ASSET_TYPES` e `isEtfSubtype` (§6). `CROWDFUND_REAL_ESTATE` non la anticipo: all'integrazione porta 🤝, per la regola dei sottotipi (§4 S4b).<br>✅ **Decisione del developer (2026-09-24 10:28):** `Unknown` nella dimensione **Tipo** passa da ❔ a **❓**, come in Settore. La **Geografia** resta 🏳️: lì la bandiera bianca è meglio. Applicata in `allocationTypeEmoji.ts`, nel checkpoint di S4b (C1) |
@@ -534,7 +534,7 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D17 | developer (da S6, 2026-09-24) | geometria dei Proventi: quante colonne per bucket | **(a) 3 colonne**:<br>• i costi, già negativi, scendono sotto lo zero nella colonna dei proventi (entrate sopra, uscite sotto), con gap 10 %;<br>• per colonna: 0,281 × slot, contro 0,163 × slot di oggi con 4 colonne e gap di default (tabella in §2 R10);<br>• legenda e tooltip invariati;<br>• si lega a S8: la terza colonna è il valore di acquisto (D2 = A).<br>Alternative:<br>• **(b)** 4 colonne con gap 10 %: 0,209 × slot; 1A/1S e 2A/2S restano, al limite (2,1 px);<br>• **(c)** 4 colonne con i gap di default: 1A/1S e 2A/2S escono dall'offerta<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): (a), 3 colonne**, costi sotto lo zero nella colonna dei proventi, gap al 10 % |
 | D18 | developer (da S6, 2026-09-24) | tacche Y doppie (reperto N1, fuori dal piano approvato): entrano nel round? | **Sì, come S7b**: stesse righe dei formatter già toccati da S2, stesso owner, un test piccolo. Regola: i decimali minimi che rendono esatta la tacca, così due tacche diverse non danno mai la stessa etichetta.<br>Il `%` (`toFixed(1)`) ha la stessa forma, latente sotto un passo di 0,1 % e mai osservata. L'indicazione «in % non va toccato» riguardava la privacy, ma la rispetto alla lettera: lo includo solo se il developer lo chiede<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): sì, come S7b, sugli assi del denaro; il `%` resta escluso** |
 | D19 | developer (da S10, 2026-09-25) | i 10 test verdi del blocco di C10/C11 («P&L zoom-window selector», `chartCoreHelpers.test.ts:2793-2929`) provano solo una copia locale di `computeZoomWindowRange`, uscita dal prodotto al round 3. Cancellato C10, non provano più nulla del prodotto: si cancellano? | **Sì**, con le regole di D8, insieme alla copia e agli helper rimasti senza chiamanti: −14 invece di −4, 159 → 145. C12 resta e si ri-pinna sulla scala delle larghezze. Per l'utente non cambia niente; un verde che non prova nulla è una garanzia falsa<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): sì, −14** |
-| D20 | developer (da S10, 2026-09-25) | il mio `test_report_income_history_flag_gates_section_and_reconciles_with_summary` (`8ed7a0f0d`, 18/09) non pulisce i suoi dati: a ogni corsa lascia nel DB della lane un utente, un broker, un asset e 3 transazioni. Non era nella test list: entra in S10? | **Sì, in un commit a sé**: `try/finally` che cancella broker, asset e utente, con lo schema del test del contratto accanto (`:900-945`). Il test vicino con lo stesso difetto (`…positions_contribution_is_date_aware`, `13052a006`) non è mio: al coordinator<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): sì, in S10, commit a sé** |
+| D20 | developer (da S10, 2026-09-25) | il mio `test_report_income_history_flag_gates_section_and_reconciles_with_summary` (`a1e6fce55`, 18/09) non pulisce i suoi dati: a ogni corsa lascia nel DB della lane un utente, un broker, un asset e 3 transazioni. Non era nella test list: entra in S10? | **Sì, in un commit a sé**: `try/finally` che cancella broker, asset e utente, con lo schema del test del contratto accanto (`:900-945`). Il test vicino con lo stesso difetto (`…positions_contribution_is_date_aware`, `d2cf5287d`) non è mio: al coordinator<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): sì, in S10, commit a sé** |
 | D21 | developer (da S10 passo 3, 2026-09-25) | reperti di `chartCoreHelpers.test.ts` fuori dalla test list (registro «S10 passo 3»). **(a)** test verdi che descrivono le candele con l'overlay per broker, tolto il 21/09, e `toPositionalValue` del prodotto senza più chiamanti: si allineano? **(b)** `splitBySign`, la correzione dell'area che spariva al cambio di segno, non ha test; al suo posto i 6 `signCrossingScenarios` provano la versione di prima e affermano metà lunghe come la sorgente, falso con la correzione: si convertono? | **(a) sì**, prodotto compreso: `toPositionalValue` esce dal prodotto in S7 (tocca già il file); escono i suoi 3 test e i 2 letterali che la pinnano; la fixture ECharts reale del crash delle candele prende la forma vera (la candela da sola); `:1998` perde la metà broker; il titolo di `:2361` si corregge. 145 → 142. **(b) sì**: gli stessi 6 casi, su una copia fedele di `splitBySign` legata alla sorgente come C4. Conteggio invariato<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): (a) sì, prodotto compreso; (b) sì, convertiti**<br>**Principio del developer, da applicare d'ora in poi (stessa risposta):** il prodotto per ora va bene; i test devono provare il prodotto di oggi, non i passi intermedi. Se scrivendo i test saltano fuori test vecchi, si tolgono; se scrivendo i nuovi saltano fuori pezzi del prodotto che non servono più, è corretto toglierli. Le domande al developer vanno fatte in italiano |
 | D22 | developer (da D21b, 2026-09-25) | `signCrossingScenarios` convertito su `splitBySign` (142/142): test-author, con le mutazioni sulla copia, trova due rami del prodotto che nessuna riga esercita. (1) Lo zero accanto a un valore positivo: il titolo promette «niente inventato a uno zero», ma nessuna riga lo prova. (2) Un incrocio fra ampiezze diverse: tutti gli incroci sono fra ±5 e ±20, quindi un peso preso dal lato sbagliato resta verde. In più 3 asserzioni sulla linea di riferimento non possono fallire, perché il test la costruisce da sé. Aggiungo le 2 righe e tolgo le 3 asserzioni? | **Sì**: righe `[5, 0, -5]` (0 incroci) e `[30, -10]` (incrocio alle 18:00); la terza colonna diventa la lista degli istanti scritta a mano; via le 3 asserzioni vuote. 142 → 144. I nomi «pari» e «dispari», scambiati, li correggo io: stessi casi, nome giusto<br>✅ **Deciso dal developer (2026-09-25, `ask_user` nella chat di I): sì, 2 righe e via le 3 asserzioni** |
 | D23 | developer (da S10, dopo la privacy di J, 2026-09-28) | I quattro formatter degli importi nei grafici scrivono il meno ASCII: `fmtCurrency` e `yAxisFormatter` in `GrowthChart.svelte`, `shortMoney` e `axisTickAmount` in `PerformanceChart.svelte`. Li porto su `maskFormattedNumber` di J (`maskable.ts:133`), che lascia il segno come lo scrive il locale del browser? Il segreto non cambia in nessuno dei due casi: cifre e k/M mascherati, il segno visibile. Cambia solo il glifo. Dalla sonda (`files/d23_probe/`): U+2212 solo in sv, fi, nb, et, lt, sl, hr, eu e fa; en, it, fr ed es (le lingue dell'interfaccia), e anche de, nl e pt, usano il trattino ASCII | **Restare ASCII**: il formatter principale (`formatCurrencyAmountPlain`/`Html`, schede KPI e tabelle) scrive sempre `-`, e prima della privacy solo `fmtCurrency` seguiva il locale; gli assi e `shortMoney` erano già ASCII. Migrare vuol dire due convenzioni nella stessa app<br>✅ **Deciso dal developer (2026-09-28, `ask_user` nella chat di I), testuale: «Migrare tutti e quattro i formatter: il meno segue il locale del browser anche su assi ed etichette».** Conseguenza, da segnalare al coordinator: i grafici seguono il locale, le schede KPI e le tabelle restano ASCII (`currencyFormat.ts`, non mio). Esecuzione: dopo C5, in un commit a sé; gli assi insieme a S7b (D18), che riscrive le stesse righe. Da conservare: `EUR 0,00` per lo zero (S2a), lo zero dell'asse mascherato (D12), e in `shortMoney` la forma segno, simbolo, `•••`. I ri-pin degli unit (`PerformanceChart.test.ts` caso 6, `GrowthChart.test.ts`) vanno al test-author |
@@ -543,20 +543,20 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D25 | developer (da S7b passo 1, 2026-10-01; il «−888» rimandato da S6) | La tacca di bordo non è una tacca regolare: ECharts la mette sul bordo che il grafico fissa (Crescita: minimo dei dati − 8 %, `GrowthChart.svelte:2245`; Performance: ±105 % della barra più lunga, `PerformanceChart.svelte:987-988`). Oggi `toFixed` la arrotonda e la nasconde; con D18 diventa esatta e illeggibile: `9,752k`, `93,64k`, `1,17344M`, `−2,55465K` (sonda ECharts 6, registro «S7b»). Nei Proventi senza costi è il «−888». Che cosa ci va? | **(B) solo tacche tonde (consigliata)**:<br>• linee, candele e `%` della Crescita: il bordo resta dov'è, senza etichetta (`showMinLabel: false`);<br>• Proventi: l'asse parte da 0, o dalla prima tacca tonda sotto i costi, come ogni grafico a barre;<br>• Performance: le due etichette di bordo spariscono (`showMinLabel`/`showMaxLabel: false`), le barre restano larghe come oggi.<br>Alternative:<br>• **(A)** bordo tondo: l'asse arriva a una tacca tonda; più spazio vuoto (P&L da −3,2k: asse a −6k), barre della Performance più corte (2.433: dal 95 % all'81 %);<br>• **(C)** com'è: il bordo stampa il valore esatto e resta il «−888»<br>✅ **B** (developer, 2026-10-01 13:51), dopo una domanda: nel P&L da −3,2k a 8,7k la tacca più bassa è −3k. Chiarito che l'asse parte da −4,15k: −3,2k è il punto più basso della linea, appena sotto la riga −3k, nella fascia senza etichetta; nulla è tagliato. Una tacca con etichetta sempre sotto il minimo è A, con la fascia vuota (qui fino a −6k): scartata |
 | D26 | developer (da S8 passo 1, 2026-10-01) | Il colore del nuovo capitale nella colonna degli acquisti dei Proventi. Oggi le due zone hanno i colori dei pool di Abs: salvia `cashContributed` per il nuovo capitale, emerald `cashGenerated` per il reinvestito (`GrowthChart.svelte:1634-1639`). Lo storyboard di R11 (§2) dice «blu KPI», e con D2 la colonna prende il nome «Valore di acquisto»: lo stesso testo dell'area blu di Abs (`dashboard.assetsAtCost` e `dashboard.bookValue` coincidono in en, it, fr ed es) e della barra blu della scheda KPI (`KpiSection.svelte:364`). Quale colore? | **Blu KPI (consigliata)**: stesso nome, stesso colore. Il nuovo capitale prende `cc('bookAssetLike')`, `#3b82f6`/`#60a5fa`, gli stessi esadecimali di `bg-blue-500`/`dark:bg-blue-400` della scheda; il reinvestito resta emerald, `cc('cashGenerated')`, il colore dell'area «Rendimento» di Abs.<br>Alternativa: salvia ed emerald come oggi, coerenti con i pool, ma sotto un nome che in Abs indica l'area blu<br>✅ **Deciso dal developer (2026-10-01 15:49, `ask_user` nella chat di I), testuale: «Blu KPI, come nello storyboard: stesso nome, stesso colore di Abs (consigliato)»** |
 | D27 | developer (da S8 passo 3, 2026-10-01) | La legenda condivisa fra le viste. Con D2 le barre degli acquisti dei Proventi e l'area blu di Abs hanno lo stesso testo in tutte e quattro le lingue. ECharts tiene la selezione della legenda per nome, e GrowthChart usa una sola istanza per tutte le viste, fondendo la legenda (`replaceMerge` copre `series` e `xAxis`). Nascondere «Valore di acquisto» in Abs lo nasconde anche nei Proventi, e viceversa: sonda ECharts 6.0.0 (registro «S8», passo 3). Il tooltip dei Proventi mostra comunque le righe. Precedente: «P&L totale» fra Linea e Candele | **Accettare (consigliata)**: stessa voce, stesso interruttore in tutte le viste; un commento nel codice.<br>Alternative: azzerare la legenda a ogni cambio di vista, per tutte le voci, con un test nuovo, fuori da R11; separare il solo «Valore di acquisto», con più codice<br>✅ **Deciso dal developer (2026-10-01 17:14, `ask_user` nella chat di I), testuale: «Accetta: stessa voce, stesso interruttore in tutte le viste; lo annoto nel diario (consigliato)»** |
-| D28 | developer (da S8b passo 4, 2026-10-01) | Il gate `mkdocs check-links` è rosso sul link di D24: `user/assets/detail/chart/#rolling-return` → «anchor not found» (`+page.svelte:3006`). Il controllo sta in `dev.py` (`_mkdocs_check_anchor`, `:1133`, da `b35a8581e`, 18/09): l'ancora deve esistere in inglese **e** in ogni traduzione presente. `chart.{it,fr,es}.md` esistono, senza la sezione delle modalità (58 righe contro 123), e le eccezioni (`MKDOCS_ANCHOR_EXCEPTIONS`, `:1126`) «devono solo restringersi». Lo schema di D24 (link con l'ancora in S8b, ancora inglese in S11-finale, traduzione dopo) non passa quindi il gate in nessun momento prima della traduzione. Oggi il link apre la pagina in cima in tutte e quattro le lingue, con o senza `#`. Che fare? | **A (consigliata)**: ora il link alla pagina senza ancora (`user/assets/detail/chart/`), gate verde, ri-pin dei 2 URL dell'E2E via test-author; per l'utente nulla cambia rispetto a oggi. In S11-finale il docs-writer mette `{: #rolling-return }` sull'intestazione inglese (nessun link lo usa ancora: nessun gate). Il `#rolling-return` torna sul link, con il ri-pin dell'E2E, nel cambio che porta in it/fr/es la traduzione della sezione con lo stesso id, come le schede KPI (`kpi-cards.*.md:15`): voce per la lista del debito di traduzione del coordinator.<br>**B**: ora l'ancora inglese (docs-writer, anticipo di S11-finale) e la traduzione della sezione in it/fr/es, chiesta dal developer (Aphra o modifica diretta): gate verde con l'ancora, E2E invariato; traduzione fuori da S8b, forse da rifare dopo S11-finale.<br>**C (sconsigliata)**: l'ancora inglese ora e una voce nuova in `MKDOCS_ANCHOR_EXCEPTIONS` per it/fr/es: contro la regola «solo restringersi», in un file condiviso.<br>Scartate senza chiedere: un'ancora piantata nelle traduzioni in cima o su un'intestazione estranea (passa il controllo ma porta nel posto sbagliato: nasconde il debito che la lista rende visibile); la pagina teorica (D24 ha scelto la guida)<br>✅ **Deciso dal developer (2026-10-01, due `ask_user` nella chat di I, entro le 21:28), testuale:** «per ora ignora l'errore, lo risolveremo dopo che avvieremo la pipeline di traduzione, l'importante è che sia in inglese»; poi, sui tempi dell'ancora inglese: «Ora in S8b, nello stesso commit: in inglese funziona subito, il rosso resta solo per it/fr/es (Consigliata)».<br>→ Il link resta `#rolling-return`. `{: #rolling-return }` va ora sull'intestazione inglese (`chart.en.md:22`), via docs-writer, senza timbro Aphra: il debito di traduzione è reale. Il rosso residuo di `check-links` («missing in: it, fr, es») è accettato fino al giro Aphra di fine round, che deve portare lo stesso id nelle tre lingue. Vincoli del coordinator, la stessa sera: le traduzioni tutte insieme a fine giro (developer, 30/09), quindi niente B; C esclusa; la voce va nella sua lista del debito di traduzione |
+| D28 | developer (da S8b passo 4, 2026-10-01) | Il gate `mkdocs check-links` è rosso sul link di D24: `user/assets/detail/chart/#rolling-return` → «anchor not found» (`+page.svelte:3006`). Il controllo sta in `dev.py` (`_mkdocs_check_anchor`, `:1133`, da `79846975c`, 18/09): l'ancora deve esistere in inglese **e** in ogni traduzione presente. `chart.{it,fr,es}.md` esistono, senza la sezione delle modalità (58 righe contro 123), e le eccezioni (`MKDOCS_ANCHOR_EXCEPTIONS`, `:1126`) «devono solo restringersi». Lo schema di D24 (link con l'ancora in S8b, ancora inglese in S11-finale, traduzione dopo) non passa quindi il gate in nessun momento prima della traduzione. Oggi il link apre la pagina in cima in tutte e quattro le lingue, con o senza `#`. Che fare? | **A (consigliata)**: ora il link alla pagina senza ancora (`user/assets/detail/chart/`), gate verde, ri-pin dei 2 URL dell'E2E via test-author; per l'utente nulla cambia rispetto a oggi. In S11-finale il docs-writer mette `{: #rolling-return }` sull'intestazione inglese (nessun link lo usa ancora: nessun gate). Il `#rolling-return` torna sul link, con il ri-pin dell'E2E, nel cambio che porta in it/fr/es la traduzione della sezione con lo stesso id, come le schede KPI (`kpi-cards.*.md:15`): voce per la lista del debito di traduzione del coordinator.<br>**B**: ora l'ancora inglese (docs-writer, anticipo di S11-finale) e la traduzione della sezione in it/fr/es, chiesta dal developer (Aphra o modifica diretta): gate verde con l'ancora, E2E invariato; traduzione fuori da S8b, forse da rifare dopo S11-finale.<br>**C (sconsigliata)**: l'ancora inglese ora e una voce nuova in `MKDOCS_ANCHOR_EXCEPTIONS` per it/fr/es: contro la regola «solo restringersi», in un file condiviso.<br>Scartate senza chiedere: un'ancora piantata nelle traduzioni in cima o su un'intestazione estranea (passa il controllo ma porta nel posto sbagliato: nasconde il debito che la lista rende visibile); la pagina teorica (D24 ha scelto la guida)<br>✅ **Deciso dal developer (2026-10-01, due `ask_user` nella chat di I, entro le 21:28), testuale:** «per ora ignora l'errore, lo risolveremo dopo che avvieremo la pipeline di traduzione, l'importante è che sia in inglese»; poi, sui tempi dell'ancora inglese: «Ora in S8b, nello stesso commit: in inglese funziona subito, il rosso resta solo per it/fr/es (Consigliata)».<br>→ Il link resta `#rolling-return`. `{: #rolling-return }` va ora sull'intestazione inglese (`chart.en.md:22`), via docs-writer, senza timbro Aphra: il debito di traduzione è reale. Il rosso residuo di `check-links` («missing in: it, fr, es») è accettato fino al giro Aphra di fine round, che deve portare lo stesso id nelle tre lingue. Vincoli del coordinator, la stessa sera: le traduzioni tutte insieme a fine giro (developer, 30/09), quindi niente B; C esclusa; la voce va nella sua lista del debito di traduzione |
 
-> **Decisioni superate dopo la chiusura del round** (verifica d'archivio 2026-10-09, codice letto a `3cceb4f90`).
+> **Decisioni superate dopo la chiusura del round** (verifica d'archivio 2026-10-09, codice letto a `f545b67e3`).
 > Non sono buchi: lavori successivi, approvati dal developer, le hanno sostituite.
 >
-> - **D16** (bucket ancorati alla fine, parziale marcato): superata da `8c7b0c0a7` (06/10, «P&L periods follow the
+> - **D16** (bucket ancorati alla fine, parziale marcato): superata da `3f4d4e4dd` (06/10, «P&L periods follow the
 >   calendar»): il developer rovescia l'ancoraggio alla fine a giorni fissi
 >   (`Phase_0/02_riskfolioIntegration/implementation_2/progress/A-dashboard-esecuzione.md:2774-2775`).
 > - **La partenza dei Proventi dal gradino più fine**, condivisa con le Candele (registro «S11-finale»): i Proventi
->   aprono su 1M da `9b57893ae` (06/10, «growth chart gap and Income at 1M»), su decisione del developer del 05/10.
+>   aprono su 1M da `6511fbb35` (06/10, «growth chart gap and Income at 1M»), su decisione del developer del 05/10.
 > - **D4 e D4-bis, solo le regole sul testo delle etichette:** sostituite da
 >   [plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md](plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md)
->   (`bc08101d6`, 08/10). I separatori restano.
-> - **D15:** applicata nella famiglia di Risk, `e648c274d` (05/10) e `7383ee64b` (06/10, D375); vedi la riga R-D15.
+>   (`844b32810`, 08/10). I separatori restano.
+> - **D15:** applicata nella famiglia di Risk, `7be14d0a5` (05/10) e `c8c7a35a6` (06/10, D375); vedi la riga R-D15.
 
 ---
 
@@ -585,10 +585,10 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 - **Condivisi**:
   - `moneyRenderSites.test.ts`: 3 voci cancellate, `:1899` secondo D13, le mie occorrenze tolte dalle liste; test 5 intatto;
   - cataloghi i18n (R9), `e2e/portfolio/dashboard.spec.ts`, `chartCoreHelpers.test.ts`, `AllocationHistoryChart.svelte` (hunk delle emoji).
-- **Gate-prep**: il merge nel mio ramo lo fa il developer; io lo verifico in S2-pre e registro nel journal lo SHA e l'esito del probe. ✅ Fatto: `2a5927c48`, probe come previsto (registro S2-pre).
+- **Gate-prep**: il merge nel mio ramo lo fa il developer; io lo verifico in S2-pre e registro nel journal lo SHA e l'esito del probe. ✅ Fatto: `7d9055d39`, probe come previsto (registro S2-pre).
 - **Girato a Risk** (coordinator, 2026-09-24 11:09): il reperto sulle copie delle palette in `colors.test.ts` e `allocationHierarchy.test.ts`. Le garanzie scritte nelle intestazioni non sono imposte da niente, e i puntatori «line 124/125» sono stantii. Nell'handoff resta solo come nota: nessun edit mio, il mio file verrebbe solo letto.
 - **Girato a J** (coordinator, 2026-09-24 15:24): le etichette di `PrivacyToggle` sono in inglese fisso («Hide
-amounts» / «Show amounts», `:13`), senza i18n; nate in `b66e93003`. Le docs EN le citano alla lettera: se J cambia
+amounts» / «Show amounts», `:13`), senza i18n; nate in `9d9613471`. Le docs EN le citano alla lettera: se J cambia
 il testo inglese, quella frase delle docs va riallineata.
 - **CHANGELOG (proposte)**: 🐛 privacy: assi, etichette e tooltip di Crescita e Performance nascondono gli importi · 🐛 separatori/etichette candele allineati ai bucket · 🐛 l'ultima candela chiude sempre sull'ultima data, il bucket parziale è marcato (D16) · 🐛 barre Income piene dal primo render · ✨ Income mostra il valore di acquisto con la quota reinvestita in cima · 🔄 didascalia candele breve, scorre se non entra · ✨ Crescita e Allocazione ricordano la vista · 🐛 Allocazione storica: emoji corrette per materie prime, immobiliare e tipo ignoto · 🐛 tacche dell'asse Y sempre distinte (se D18).
 - **Commit proposti**, in ordine indicativo (li esegue il developer). I commit di privacy vengono dopo il merge del gate-prep:
@@ -596,11 +596,11 @@ il testo inglese, quella frase delle docs va riallineata.
     fare il 7, il 7b, l'11, il 13 e il 14, più il commit della gallery (riga G) e quelli del registro.
   - ⏭️ **E per C2** (2026-09-24 14:51): il commit della gallery e il registro di C1 sono entrati come C2 (registro «C2
     committato»). Restano il 7, il 7b, l'11, il 13, il 14 e i registri successivi.
-  - ⏭️ **E per C3** (committato 2026-09-24 15:39): 2 commit, `671d4ab49` con le docs di S11 in parte (una parte del
-    14), poi `4d885f1e8` con i registri di C2, del triage e di S11 in questo file (registro «C3 committato»). Restano
+  - ⏭️ **E per C3** (committato 2026-09-24 15:39): 2 commit, `12a5b8d95` con le docs di S11 in parte (una parte del
+    14), poi `5afe63263` con i registri di C2, del triage e di S11 in questo file (registro «C3 committato»). Restano
     il 15 (S10, per primo quando arriva l'OK), il 7, il 7b, l'11, il 13, il resto del 14 (S11-finale, dopo S7/S8) e
     i registri successivi.
-  - ⏭️ **E per C4** (committato 2026-09-28 11:41): 8 commit, `00bb1ac75`→`472f51498`, con il 15 per primo, il 13 e
+  - ⏭️ **E per C4** (committato 2026-09-28 11:41): 8 commit, `e154d689e`→`66e387007`, con il 15 per primo, il 13 e
     gli unit di S10 (registro «C4 committato»). Restano l'E2E di S10 ed E7 (C5, proposto: brief 03, E7 e registri),
     D23 (commit a sé, dopo C5), il 7, il 7b, l'11, il resto del 14 e i registri successivi.
   1. `docs(journal): plan round-4 chart review`
@@ -657,7 +657,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 
 ### S1 — Baseline nella lane suite ✅ 2026-09-24
 
-> **Note implementazione:** baseline rimisurata su `f1047f766`, con il solo journal di S0 in più (nessun file di prodotto
+> **Note implementazione:** baseline rimisurata su `9df0b7b14`, con il solo journal di S0 in più (nessun file di prodotto
 > toccato). Lane suite: porta 6157, `/tmp/librefolio-r2-i-charts`. Un comando alla volta, ogni log in `/tmp/libreFolio_i_s1_*.log`.
 >
 > | # | comando | esito | lettura |
@@ -680,15 +680,15 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 | # | test | verdetto | causa | destino (S10) |
 |---|---|---|---|---|
 | C1–C12 | i 12 di `chartCoreHelpers.test.ts` (§6.0.19) | assumption | specchi sul testo sorgente, rotti da firme cambiate su richiesta | 5 da cancellare per nome (C6, C8, C9, C10, C11); 7 da ri-pinnare, ognuno col suo perché (D8 ✅). ⏭️ S9: C8 è guarito e resta (registro S9) |
-| E1–E3 | `dashboard.spec.ts:577`, un caso per sottomodo: «the zoom-window selector is present and operative in the {line,candles,income} submode» | assumption: **descrive una feature tolta** | i `growth-zoom-window-*` non esistono più. Il selettore di finestra è stato sostituito dalla scala a otto gradini (`e7773a143`) | da cancellare: −3 con un solo `for`. Con loro vanno `ZOOM_WINDOWS`, `selectZoomWindow` e `recascadeUnderCandleGrammar`, che restano senza chiamanti |
+| E1–E3 | `dashboard.spec.ts:577`, un caso per sottomodo: «the zoom-window selector is present and operative in the {line,candles,income} submode» | assumption: **descrive una feature tolta** | i `growth-zoom-window-*` non esistono più. Il selettore di finestra è stato sostituito dalla scala a otto gradini (`9c1b6a3ff`) | da cancellare: −3 con un solo `for`. Con loro vanno `ZOOM_WINDOWS`, `selectZoomWindow` e `recascadeUnderCandleGrammar`, che restano senza chiamanti |
 | E4 | `dashboard.spec.ts:607`: «candles aggregate coarser than the line at the very same window» | assumption: contratto vivo, àncora morta | Il contratto è ancora vero: le candele diventano più grossolane dove la linea resta giornaliera. Ma il test lo legge da `chart-resolution-badge`, che in candele **non viene più montato**: con la scala attiva il badge è spento (`{#if !ladderActive}`). E fissa la finestra con un pulsante che non esiste più | da ri-pinnare sulla scala |
-| E5 | `dashboard.spec.ts:534`: «the income submode receives all six of the channels it plots» | assumption | L'àncora è «almeno 3 importi **con segno**». Dal `e7773a143` lo zero non ha segno né colore, per scelta: uno zero verde si legge come un guadagno. Nel tooltip della settimana sotto il puntatore (2026-08-05 → 08-11) Dividend, Interest e Total valgono `EUR 0.00`, e resta un solo importo con segno (`+EUR 405.96`, nuovo capitale). **Le tre righe ci sono**: il test le cerca per segno | da ri-pinnare su un'àncora a segno opzionale |
+| E5 | `dashboard.spec.ts:534`: «the income submode receives all six of the channels it plots» | assumption | L'àncora è «almeno 3 importi **con segno**». Dal `9c1b6a3ff` lo zero non ha segno né colore, per scelta: uno zero verde si legge come un guadagno. Nel tooltip della settimana sotto il puntatore (2026-08-05 → 08-11) Dividend, Interest e Total valgono `EUR 0.00`, e resta un solo importo con segno (`+EUR 405.96`, nuovo capitale). **Le tre righe ci sono**: il test le cerca per segno | da ri-pinnare su un'àncora a segno opzionale |
 | E6 | `brokers-detail.spec.ts:710`: «line and income submodes render this broker own figures» | assumption | identica a E5: stesso tooltip, stessa settimana, stesso `EUR 0.00` tre volte | come E5 |
 
 - Il **reperto 1** è confermato e **corretto**. I rossi zoom-window sono davvero 4 (E1–E4), ma E4 non è da cancellare.
-- E5 ed E6 non erano previsti. Il journal non registra nessun run degli E2E di dashboard e broker dopo `e7773a143`: in
+- E5 ed E6 non erano previsti. Il journal non registra nessun run degli E2E di dashboard e broker dopo `9c1b6a3ff`: in
   §6.0.15–§6.0.19 non compaiono mai E2E, Playwright o nomi di spec.
-- **Copertura mancante** (va nella test list di S10, non è una riparazione): la scala `growth-candle-width-*` di `e7773a143` non
+- **Copertura mancante** (va nella test list di S10, non è una riparazione): la scala `growth-candle-width-*` di `9c1b6a3ff` non
   ha nessun E2E; in `e2e/` ci sono 0 occorrenze. E1–E3 erano l'unico E2E sul controllo di finestra, e il controllo che l'ha
   sostituito non ne ha nessuno.
 - **Reperto 12** (`check-orphans`): 5 unit frontend che il runner non esegue mai: `privacyStore.test.ts`,
@@ -713,7 +713,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > 10 nel piano madre. Restano al 09-23 solo le due menzioni che parlano davvero della presentazione.
 
 > **⚠️ Fuori pista (due rossi che nessuno aveva previsto, E5 ed E6):** non erano nel reperto 1 né nell'inventario del 22/09.
-> La causa è una mia slice del round 3 (`e7773a143`), quindi per la regola di D8 la conversione è mia e va in S10. La lezione
+> La causa è una mia slice del round 3 (`9c1b6a3ff`), quindi per la regola di D8 la conversione è mia e va in S10. La lezione
 > è la stessa del reperto 1, vista dall'altro lato: **un inventario fatto sugli unit non vede i rossi degli E2E**. Il 22/09
 > «12 rossi» era vero per il perimetro che avevo misurato, non per il ramo.
 
@@ -767,7 +767,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 
 | # | test | verdetto | causa | destino |
 |---|---|---|---|---|
-| E7 | `asset-detail.spec.ts:486`: «calendar-return primary mode queries exact windows and restores price controls» | **assumption (clock)** | Il mock costruisce la finestra MAX accettata come `subtractDays(end, 45)..end`, dove `end` è la data della richiesta, cioè **oggi** (`:1844`). Gli eventi del peer però sono scritti a mano: `2026-08-01` e `2026-08-03` (`:769`). Il 2026-09-17, giorno del commit `2d22130bd` (mio, G3), la finestra partiva dal `2026-08-03` e conteneva l'evento. Dal **2026-09-18** parte dal `08-04` e non lo contiene più; oggi è `2026-08-10..2026-09-24`. Il test si ferma da solo con *«contains no ready-peer event fixture»*. È un guard scritto bene: dice perché si ferma, invece di fallire tre asserzioni dopo | S10: le date delle fixture vanno **derivate** dalla stessa `end`, non scritte. Di conseguenza si spostano con loro anche i prezzi del peer allineati a quegli eventi (`:760-767`) |
+| E7 | `asset-detail.spec.ts:486`: «calendar-return primary mode queries exact windows and restores price controls» | **assumption (clock)** | Il mock costruisce la finestra MAX accettata come `subtractDays(end, 45)..end`, dove `end` è la data della richiesta, cioè **oggi** (`:1844`). Gli eventi del peer però sono scritti a mano: `2026-08-01` e `2026-08-03` (`:769`). Il 2026-09-17, giorno del commit `f4d209b11` (mio, G3), la finestra partiva dal `2026-08-03` e conteneva l'evento. Dal **2026-09-18** parte dal `08-04` e non lo contiene più; oggi è `2026-08-10..2026-09-24`. Il test si ferma da solo con *«contains no ready-peer event fixture»*. È un guard scritto bene: dice perché si ferma, invece di fallire tre asserzioni dopo | S10: le date delle fixture vanno **derivate** dalla stessa `end`, non scritte. Di conseguenza si spostano con loro anche i prezzi del peer allineati a quegli eventi (`:760-767`) |
 
 - Il test era verde il giorno in cui è stato scritto ed è rosso **da una settimana senza che nessuna riga sia cambiata**.
 - È la stessa classe dello `sleep` (test-triage §2), con il tempo di calendario al posto dei millisecondi: un orologio che il
@@ -1064,10 +1064,10 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > - ⏭️ **Risolto (coordinator, 11:05):** l'errore era nei suoi messaggi. Valgono i percorsi del kickoff, anche per il gate
 >   di S2-pre.
 
-> **Pausa, 2026-09-24 11:01:** FROZEN per il merge di C0 (`2a5927c48`, fast-forward). Al momento del FROZEN: nessun test
+> **Pausa, 2026-09-24 11:01:** FROZEN per il merge di C0 (`7d9055d39`, fast-forward). Al momento del FROZEN: nessun test
 > in corso, nessun server, 6157 e 6167 liberi. Si riprende da S2-pre, poi da questa slice.
 >
-> **Ripresa, 2026-09-24 11:16:** merge fatto (ff `f1047f766..2a5927c48`), il lavoro non committato non è stato toccato.
+> **Ripresa, 2026-09-24 11:16:** merge fatto (ff `9df0b7b14..7d9055d39`), il lavoro non committato non è stato toccato.
 > Ordine del coordinator: S2-pre, poi S2, poi questa slice.
 >
 > **Ripresa della slice, 2026-09-24 11:36** (dopo S2a/S2b):
@@ -1205,13 +1205,13 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 
 ### S2-pre — Rimisurare lo stato che S2 presuppone ✅ 2026-09-24
 
-> **Note implementazione:** il developer ha fuso C0 alle 11:16 (fast-forward `f1047f766..2a5927c48`). Prima di eseguire
+> **Note implementazione:** il developer ha fuso C0 alle 11:16 (fast-forward `9df0b7b14..7d9055d39`). Prima di eseguire
 > l'istruzione ho misurato lo stato che presuppone. Torna tutto:
 >
 > | verifica | comando | esito |
 > |---|---|---|
-> | gate-prep nel ramo | `git merge-base --is-ancestor 2a5927c48 HEAD` | ✅ HEAD = `2a5927c48`; lavoro non committato intatto (11 M + 2 ??, stage vuoto) |
-> | stato `public` | `git show 2a5927c48` | ✅ nell'unione `Status`, specchio di `AmountSensitivity = 'public'` in `maskable.ts` |
+> | gate-prep nel ramo | `git merge-base --is-ancestor 7d9055d39 HEAD` | ✅ HEAD = `7d9055d39`; lavoro non committato intatto (11 M + 2 ??, stage vuoto) |
+> | stato `public` | `git show 7d9055d39` | ✅ nell'unione `Status`, specchio di `AmountSensitivity = 'public'` in `maskable.ts` |
 > | `EventCreateMiniModal` riclassificato | idem | ✅ da `unmasked` a `public`, con la `why`: è un evento dell'asset, non dell'utente (`AssetEvent` in `models.py`) |
 > | test 5 su fixture sintetica | idem | ✅ `scanLine('fixture', shortMoneyLine, 0)`: non legge più `PerformanceChart.svelte`. `scanLine` è estratta da `scan()`, quindi la fixture passa dallo stesso codice dei file veri |
 > | liste, un elemento per riga | idem | ✅ `residual` = GrowthChart ×2, `unmasked` = PerformanceChart ×2, `public` = EventCreateMiniModal |
@@ -1352,7 +1352,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > | `npx prettier --check src/lib/utils/privacy/moneyRenderSites.test.ts` | pulito |
 >
 > - **Seguito non bloccante (S10, condizionato):** `maskFormattedNumber` di J risolve la perdita di U+2212 in `sv-SE`
->   (reperto 11). Sta nel C1 di J, `176f19707`, che non è nel mio albero. Ci passo sopra i quattro formatter solo dopo
+>   (reperto 11). Sta nel C1 di J, `0ca72f743`, che non è nel mio albero. Ci passo sopra i quattro formatter solo dopo
 >   che quel C1 è nel target e la mia base è aggiornata. Registrato nella riga S10 della §4.
 > - Il checkpoint di S2 si può preparare. Lo mando dopo la verifica dal vivo di S6, che J ha chiesto e che fa parte
 >   dell'evidenza del checkpoint.
@@ -1374,7 +1374,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > | build servito | `frontend/build/` delle 11:34, successivo a ogni mio edit di prodotto (l'ultimo alle 11:30). Un server riacceso mostrerebbe il codice del checkpoint |
 >
 > **La coppia, rimisurata e non ereditata:**
-> - Target `dev_release2` = `2a23b7ad3`, merge-base `f1047f766`, HEAD `2a5927c48`. C0 non è ancora nel target, come
+> - Target `dev_release2` = `7e461e9e1`, merge-base `9df0b7b14`, HEAD `7d9055d39`. C0 non è ancora nel target, come
 >   previsto.
 > - Il target tocca 4 path, fra journal e istruzioni. I miei sono 15: i 14 sporchi più `_frontend_utility.py` di C0
 >   (`moneyRenderSites.test.ts` sta in entrambi i gruppi). **Intersezione vuota** (`comm`).
@@ -1437,7 +1437,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >   non tocca il target: il mio ramo non entra prima che il hunk ci sia, e dal mio ramo nessuno rigenera la gallery.
 >   Nella lista d'integrazione del coordinator: *il ramo di I entra solo con il hunk della gallery*.
 > - **Commit: (1), per slice.** Patch in `/tmp`, verificate fuori dal repository, e uno script con guardie: HEAD
->   `2a5927c48` e stage vuoto; i percorsi esatti, con `LC_ALL=C` da entrambi i lati; un digest del contenuto; `git
+>   `7d9055d39` e stage vuoto; i percorsi esatti, con `LC_ALL=C` da entrambi i lati; un digest del contenuto; `git
 >   status` vuoto alla fine. Messaggi a 72 colonne, niente attribuzioni AI, nessun dato del developer. Il coordinator
 >   rivede lo script prima di darlo al developer.
 > - D4, D16, D17, D18 e l'OK sulla test list sono del developer. Non bloccano il checkpoint.
@@ -1464,7 +1464,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > |---|---|---|
 > | A — patch semplici | `git apply` in sequenza su una copia di HEAD, fuori da ogni repository; poi `cmp` con l'albero di lavoro | 14/14 identici, nessun file in più |
 > | B — patch in stage | `git apply --cached` in un indice temporaneo, `write-tree` dopo ogni patch | gli 8 alberi attesi; l'albero di lavoro messo in stage con `add -A` dà l'albero 8 |
-> | ogni confine 0…8, misurato su `2a5927c48` | copia scratch di `frontend/`; svelte-check, vitest intero, prettier sui file cambiati | svelte-check: **le stesse 44 diagnostiche** (3 errori, 41 warning) a ogni confine, confrontate per tipo, file e messaggio; nessuna in un mio file · vitest: confini 0–6, **gli stessi 12 nomi**; confini 7–8, 11 nomi, un sottoinsieme (0 nuovi, 1 guarito: *«consumes dashboard.pnlCandlesHypotheticalShort through $_()»*); `chartCoreHelpers` passa da 162 a 159 test al confine 7, come nel registro di S9 · prettier pulito a tutti e 9 |
+> | ogni confine 0…8, misurato su `7d9055d39` | copia scratch di `frontend/`; svelte-check, vitest intero, prettier sui file cambiati | svelte-check: **le stesse 44 diagnostiche** (3 errori, 41 warning) a ogni confine, confrontate per tipo, file e messaggio; nessuna in un mio file · vitest: confini 0–6, **gli stessi 12 nomi**; confini 7–8, 11 nomi, un sottoinsieme (0 nuovi, 1 guarito: *«consumes dashboard.pnlCandlesHypotheticalShort through $_()»*); `chartCoreHelpers` passa da 162 a 159 test al confine 7, come nel registro di S9 · prettier pulito a tutti e 9 |
 > | digest del contenuto | `git diff --binary --full-index` con le opzioni fissate, su una **copia** dell'indice; poi i file nuovi in ordine, path e contenuto separati da NUL | `beb2b947…a446`, identico con git 2.53, 2.54 e 2.55 e con bash 3.2 e 5.3 |
 > | dry-run sul repository reale | `run_commits.sh --dry-run` | rc 0 in tutte e 7 le prove: git 2.53, 2.54 e 2.55; bash 3.2 e 5.3; anche in `env -i` e dalla copia di backup. Byte e mtime dell'indice, oggetti, HEAD, refs e worktree invariati |
 > | commit veri, in un clone usa-e-getta | `git clone --shared` sotto `/tmp`; lo script con due sole righe cambiate (worktree e bundle) | 8 commit lineari; alberi e messaggi byte per byte; i 14 file finali identici all'albero di lavoro. Le guardie scattano davvero: file manomesso → digest; path in più → lista; argomento sconosciuto → rc 2; secondo lancio → HEAD, e restano 8 commit; patch o messaggio manomessi in una copia del bundle → guardia del bundle. Clone cancellato |
@@ -1478,14 +1478,14 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `cb7ae3476` | `docs(journal): plan round-4 chart review` | `828e3e25c076` |
-> | 2 | `a1df69f21` | `chore(charts): expose growth/perf chart instances` | `8f1119869916` |
-> | 3 | `ff9038487` | `fix(assets): read missing sync detail as cancel` | `ae601b522cc3` |
-> | 4 | `08e9625d2` | `feat(dashboard): remember allocation view` | `38143947c8e9` |
-> | 5 | `58101f08f` | `fix(dashboard): map every asset type to an emoji` | `2b74f1070d93` |
-> | 6 | `4d8900a24` | `feat(dashboard): remember growth chart view` | `d760c573aab9` |
-> | 7 | `99f7d15ec` | `fix(charts): shorten candle caption` | `3d8ab0d300ea` |
-> | 8 | `804bc9903` | `fix(privacy): mask growth and performance amounts` | `f57579354549` |
+> | 1 | `322c31615` | `docs(journal): plan round-4 chart review` | `828e3e25c076` |
+> | 2 | `6948d5e21` | `chore(charts): expose growth/perf chart instances` | `8f1119869916` |
+> | 3 | `1d015f679` | `fix(assets): read missing sync detail as cancel` | `ae601b522cc3` |
+> | 4 | `298cf5daf` | `feat(dashboard): remember allocation view` | `38143947c8e9` |
+> | 5 | `b9c1ba2d7` | `fix(dashboard): map every asset type to an emoji` | `2b74f1070d93` |
+> | 6 | `3259abb60` | `feat(dashboard): remember growth chart view` | `d760c573aab9` |
+> | 7 | `d872b46f3` | `fix(charts): shorten candle caption` | `3d8ab0d300ea` |
+> | 8 | `8fa118ba4` | `fix(privacy): mask growth and performance amounts` | `f57579354549` |
 >
 > Il bundle resta in `/tmp/libreFolio_i_c1_commits/`, con una copia nella cartella di sessione di I: non è versionato,
 > e si cancella in S12.
@@ -1520,7 +1520,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > - **Esito:** il coordinator ha mandato a tutte le lane un messaggio definitivo e ha corretto istruzioni e skill (non
 >   sono file miei). La regola nuova sulle correzioni: vanno mandate con la stessa modalità di consegna, oppure devono
 >   dire che valgono «anche se il vecchio arriva dopo». La mia §5 è stata corretta alle 13:02, ed è nel commit
->   `cb7ae3476`.
+>   `322c31615`.
 
 > **S8 — la domanda del coordinator delle 12:25, in sola lettura:** S8 **legge soltanto** il motore.
 > - Il dato è `AcquisitionFundingContribution` (`from_new_capital`, `from_reinvested`; `portfolio_engine.py:497-508`
@@ -1530,13 +1530,13 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > - Risk aggiunge 2 righe di import al motore nel tempo ②: prima di S8 rimisuro **per simbolo**, non per riga.
 > - Nel controllo ho trovato due puntatori a riga stantii nel codice:
 >   - `AllocationHistoryChart.svelte` (oggi `:124`) cita `portfolio_engine.py:1041` per il bucket sintetico
->     «Liquidity». Alla nascita (`420b90ebd`) puntava all'iniezione giusta: `:1040` il tipo, `:1041` (la riga citata)
->     il settore. Il commento è nato sul ramo di Risk, parallelo al mio. Poi il merge di Risk `7fd660846` ha portato i
->     miei commit del round 3 `8ed7a0f0d` e `d5e834de4`, che sopra quel punto aggiungono 213 righe e ne tolgono 17: 196
+>     «Liquidity». Alla nascita (`db819e4bd`) puntava all'iniezione giusta: `:1040` il tipo, `:1041` (la riga citata)
+>     il settore. Il commento è nato sul ramo di Risk, parallelo al mio. Poi il merge di Risk `ad29c6d3a` ha portato i
+>     miei commit del round 3 `a1e6fce55` e `f1f0da870`, che sopra quel punto aggiungono 213 righe e ne tolgono 17: 196
 >     di scarto, senza toccare il commento. L'iniezione oggi è a `:1236-1237`. Lo riscrive il commit d'integrazione di
 >     D15, che tocca quel commento;
 >   - `asset_sources/price_store.py:206` cita `portfolio_engine.py:2182` per `_compute_price_fingerprint`: era
->     sbagliato già alla nascita (`3c85866dd`, dove la funzione stava a `:2225`). Oggi sta a `:2550`. Non è mio: l'ho
+>     sbagliato già alla nascita (`36fc57005`, dove la funzione stava a `:2225`). Oggi sta a `:2550`. Non è mio: l'ho
 >     solo segnalato.
 > - Il rimedio è citare il simbolo e non la riga. Tutti gli altri puntatori a riga verso il motore stanno nel journal
 >   (nel devWiki nessuno), dove sono misure datate, cioè storia.
@@ -1599,7 +1599,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 ### Checkpoint C2 — committato ✅ 2026-09-24 14:51
 
 > **Note implementazione:**
-> - **Contenuto:** 2 commit su `804bc9903`: il hunk della gallery (riga G), poi il registro di C1 in questo file. Come
+> - **Contenuto:** 2 commit su `8fa118ba4`: il hunk della gallery (riga G), poi il registro di C1 in questo file. Come
 >   per C1, il bundle è stato costruito in `/tmp/libreFolio_i_c2_commits/` senza scrivere nel repository:
 >   - le 2 patch, prodotte da un indice e da un object store temporanei: `01-gallery.patch` (+9/−1) e
 >     `02-journal.patch` (+183/−7);
@@ -1619,7 +1619,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >
 > - sha256: script `4582f48b…5cac`; patch `8cc9c4bf…61fd` e `985baeec…8071`; messaggi `45ca7964…5776` e
 >   `7ae17312…bd8d`. Backup di 61 file nella cartella di sessione di I.
-> - **Il coordinator ha rifatto le verifiche da sé** (14:45): sha256 dello script, HEAD `804bc9903`, i 2 percorsi,
+> - **Il coordinator ha rifatto le verifiche da sé** (14:45): sha256 dello script, HEAD `8fa118ba4`, i 2 percorsi,
 >   stage vuoto, subject e colonne, e il dry-run (rc 0, alberi attesi, stato invariato).
 > - **Il developer ha committato alle 14:51.** La mia verifica dopo il commit, in sola lettura: ogni albero è quello
 >   atteso, ogni messaggio è identico byte per byte al suo file, ogni commit ha un solo genitore; `git status` e stage
@@ -1627,8 +1627,8 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `980dee4bf` | `fix(e2e): select Abs before the main gallery shot` | `9d040f3019f0` |
-> | 2 | `6a88561fd` | `docs(journal): record C1 commits and gallery fix` | `a580198baca5` |
+> | 1 | `a09ebcd3a` | `fix(e2e): select Abs before the main gallery shot` | `9d040f3019f0` |
+> | 2 | `45aaf0891` | `docs(journal): record C1 commits and gallery fix` | `a580198baca5` |
 >
 > Il bundle resta in `/tmp/libreFolio_i_c2_commits/`, con una copia nella cartella di sessione di I: non è versionato,
 > e si cancella in S12.
@@ -1648,7 +1648,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > **Note implementazione:**
 > - **Il rosso**, segnalato dal coordinator: `backend/test_scripts/test_api/test_portfolio_api.py::TestPortfolioReportEndpoint::test_report_allocation_source_authenticated_contract`.
 >   L'asserzione di `:767` chiede `set(report) == {7 chiavi}`.
-> - **Riprodotto su `6a88561fd`**, nella lane, con un solo test:
+> - **Riprodotto su `45aaf0891`**, nella lane, con un solo test:
 >   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6157 --data-dir /tmp/librefolio-r2-i-charts api portfolio test_report_allocation_source_authenticated_contract`
 >   → 1 fallito, 48 deselezionati, `Extra items in the left set: 'cost_history', 'deposit_history', 'broker_pnl_history',
 >   'pnl_candles', 'acquisition_funding'…`. Log completo in `/tmp/libreFolio_i_s10/report_contract_red.log`. Porta 6157
@@ -1656,11 +1656,11 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >
 > | domanda | come | risposta |
 > |---|---|---|
-> | chi ha scritto il pin | `git log -S` sul test | il PAC: `8273335ff` (11/09) e `8504f0528` (12/09) |
-> | chi ha aggiunto le 6 chiavi | `git log -S "<campo>:"` su `schemas/portfolio.py` | io. `8ed7a0f0d` (18/09, G1a/G1b/G1c) per `broker_pnl_history`, `pnl_candles` e `income_history`; `d5e834de4` (18/09, batch 2) per `cost_history`, `deposit_history` e `acquisition_funding` |
-> | dove si sono incontrati | `merge-base --is-ancestor`, poi il primo commit, in ordine topologico, che li contiene tutti e due | il mio merge `b7a0b1e1a` (21/09, 15:57), senza conflitto testuale: il primo genitore ha i campi e non il test, il secondo ha il test e non i campi |
+> | chi ha scritto il pin | `git log -S` sul test | il PAC: `0261fe73e` (11/09) e `dfa2bd274` (12/09) |
+> | chi ha aggiunto le 6 chiavi | `git log -S "<campo>:"` su `schemas/portfolio.py` | io. `a1e6fce55` (18/09, G1a/G1b/G1c) per `broker_pnl_history`, `pnl_candles` e `income_history`; `f1f0da870` (18/09, batch 2) per `cost_history`, `deposit_history` e `acquisition_funding` |
+> | dove si sono incontrati | `merge-base --is-ancestor`, poi il primo commit, in ordine topologico, che li contiene tutti e due | il mio merge `d613aed44` (21/09, 15:57), senza conflitto testuale: il primo genitore ha i campi e non il test, il secondo ha il test e non i campi |
 > | cosa ho fatto in quel merge | `git show` dei due genitori e del merge | ho allargato a 13 il gemello di servizio (`test_portfolio_service.py:3767`, §6.0.9 del piano principale). Questo no |
-> | è cambiato qualcosa dopo | `git diff b7a0b1e1a HEAD --stat` su test, schema e servizio | niente: il rosso è quello nato nel merge |
+> | è cambiato qualcosa dopo | `git diff d613aed44 HEAD --stat` su test, schema e servizio | niente: il rosso è quello nato nel merge |
 > | le 6 chiavi sono vuote | lettura del ramo senza motore (`portfolio_service.py:2404-2421`), che costruisce la risposta solo con `metadata` e `allocation_source` | sì, sono `None` per default. FastAPI le serializza come `null`, quindi entrano in `set(report)` |
 > | la coda | conteggio fino alla fine della funzione (`:926`) | 60 `assert` da `:767`: i 59 dopo il primo non girano dal 21/09. Gli insiemi annidati (source 5, asset 11, quote 6, context 8, le due fonti di cassa 7) sono identici a quelli del gemello di servizio. Quindi reggono sulla carta, ma i valori non li ho provati |
 >
@@ -1677,7 +1677,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > insieme prima di chiudere il gate.
 
 > **Reperto (difetto latente, nato nello stesso incontro):** `needs_engine` (`portfolio_service.py:2404`, nato in
-> `8273335ff`) elenca solo le 4 viste originali; le mie 6 non ci sono.
+> `0261fe73e`) elenca solo le 4 viste originali; le mie 6 non ci sono.
 > - **Il sintomo:** una richiesta con `allocation_source` e, per esempio, `include_income_history: true`, senza le altre 4
 >   viste, prende il ramo senza motore. `income_history` torna `null` e `included_features` vale `["allocation_source"]`:
 >   la richiesta è ignorata in silenzio.
@@ -1695,7 +1695,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > - `needs_engine` è mio, in S10. È un difetto dell'API anche se l'interfaccia non ci arriva: i 6 flag li ho introdotti
 >   io, e il ramo corto li ignora. Correzione: i 6 flag in `needs_engine`, più un test API che fallisce prima della
 >   correzione, in un commit a sé. L'alternativa (le 3 serie senza motore servite nel ramo corto) non si fa;
-> - nessun conflitto con Risk: `a766a9d5d` tocca `portfolio_service.py` solo a `:694-695` (un import), lontano da
+> - nessun conflitto con Risk: `a79e12f5e` tocca `portfolio_service.py` solo a `:694-695` (un import), lontano da
 >   `:2404`.
 >
 > Letto dopo la decisione: la chiave della cache L2 contiene già i 6 flag (`:2375-2380`). Un report del ramo corto in
@@ -1705,7 +1705,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 
 > **Note implementazione:**
 > - **Chi e cosa:** scritte da docs-writer, solo EN, su due pagine; io ho rivisto ogni frase contro il codice di
->   `6a88561fd`. Il perimetro è quello autorizzato dal coordinator (14:45, più `positions.en.md` dopo): solo il
+>   `45aaf0891`. Il perimetro è quello autorizzato dal coordinator (14:45, più `positions.en.md` dopo): solo il
 >   comportamento già consegnato. Nessun titolo nuovo, e titoli e ancore sono invariati.
 > - **`mkdocs_src/docs/user/dashboard/charts.en.md`** (+23/−5):
 >   - un paragrafo sulla memoria della vista di Crescita (modo e sottomodo; per utente e per browser; condivisa con il
@@ -1758,19 +1758,19 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >   dice «Assets at Cost» (`dashboard.assetsAtCostTooltip`) e «Net Asset Value».
 > - **Possibile difetto, preesistente, solo da lettura del codice, per S12:** se sono già sul `%` e cambio periodo verso
 >   uno senza dati `%`, il bottone resta premuto ma disabilitato, e il grafico è probabilmente vuoto. Il
->   `disabled={!hasPctData}` c'è da `c9013c496` (2026-06-11); il ripiego di S4 copre solo il `%` ripristinato. Va
+>   `disabled={!hasPctData}` c'è da `d0a97e702` (2026-06-11); il ripiego di S4 copre solo il `%` ripristinato. Va
 >   verificato dal vivo prima di chiamarlo difetto.
 > - **Per J, via coordinator:** le etichette di `PrivacyToggle` sono in inglese fisso («Hide amounts» / «Show
 >   amounts», `:13`), senza i18n. Le docs EN le citano.
 >
 > ⏭️ **Accettato dal coordinator (2026-09-24 15:24):** le tre correzioni del brief e gli zeri come `—` (D8). Il reperto
-> su `PrivacyToggle` viene da `b66e93003` di J, e il coordinator lo ha girato a J (§9). Le due pagine entrano in C3,
+> su `PrivacyToggle` viene da `9d9613471` di J, e il coordinator lo ha girato a J (§9). Le due pagine entrano in C3,
 > con i registri.
 
 ### Checkpoint C3 — autorizzato (2026-09-24 15:24)
 
 > **Note implementazione:**
-> - **Contenuto:** 2 commit su `6a88561fd`. Prima le docs di S11 in parte (`charts.en.md` e `positions.en.md`), poi
+> - **Contenuto:** 2 commit su `45aaf0891`. Prima le docs di S11 in parte (`charts.en.md` e `positions.en.md`), poi
 >   questo file, con i registri di C2, del triage e di S11 e le decisioni delle 15:24.
 > - **Come:** lo stesso protocollo di C1 e C2 (registri «C1 committato» e «C2 committato»). Patch e script si
 >   costruiscono in `/tmp/libreFolio_i_c3_commits/` senza scrivere nel repository; lo script deriva da quello di C2
@@ -1781,7 +1781,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 ### Checkpoint C3 — committato ✅ 2026-09-24 15:39
 
 > **Note implementazione:**
-> - **Contenuto:** 2 commit su `6a88561fd`: le docs di S11 in parte, poi questo file con i registri di C2, del triage
+> - **Contenuto:** 2 commit su `45aaf0891`: le docs di S11 in parte, poi questo file con i registri di C2, del triage
 >   e di S11 e le decisioni delle 15:24. Come per C1 e C2, il bundle è stato costruito in
 >   `/tmp/libreFolio_i_c3_commits/` senza scrivere nel repository:
 >   - le 2 patch, prodotte da un indice e da un object store temporanei: `01-docs.patch` (2 file, +27/−5) e
@@ -1789,7 +1789,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >   - lo script `run_commits.sh`, derivato da quello di C2 dallo stesso generatore a sostituzioni contate. Fra i due
 >     script cambiano 33 righe: tabelle, base, digest e i 3 percorsi. Anche gli script di verifica sono derivati
 >     così: fra 8 e 22 righe di diff ciascuno.
-> - **Le guardie** sono quelle di C1 e C2 (registro «C1 committato»), con HEAD `6a88561fd`, i 3 percorsi e i 3 alberi
+> - **Le guardie** sono quelle di C1 e C2 (registro «C1 committato»), con HEAD `45aaf0891`, i 3 percorsi e i 3 alberi
 >   di C3.
 >
 > | verifica | come | esito |
@@ -1805,7 +1805,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > - sha256: script `d7475a3b…f6cb`; patch `ca5e8f61…e405` e `eef2744c…7bbb`; messaggi `ed450357…5620` e
 >   `801e119f…1e1d`. Backup di 57 file nella cartella di sessione di I, identico al bundle file per file
 >   (ricontrollato dopo il commit).
-> - **Il coordinator ha rifatto le verifiche da sé** (15:37): sha256 dello script, HEAD `6a88561fd`, i 3 percorsi,
+> - **Il coordinator ha rifatto le verifiche da sé** (15:37): sha256 dello script, HEAD `45aaf0891`, i 3 percorsi,
 >   stage vuoto, subject e colonne, nessuna attribuzione AI e nessun importo, e il dry-run (rc 0, stato invariato).
 > - **Il developer ha committato alle 15:39.** La mia verifica dopo il commit, in sola lettura:
 >   - ogni albero è quello atteso, e ogni messaggio è identico byte per byte al suo file;
@@ -1816,11 +1816,11 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `671d4ab49` | `docs(dashboard): document chart memory and privacy` | `3e8520609e0f` |
-> | 2 | `4d885f1e8` | `docs(journal): record C2, S11 and report triage` | `f3c114b4d481` |
+> | 1 | `12a5b8d95` | `docs(dashboard): document chart memory and privacy` | `3e8520609e0f` |
+> | 2 | `5afe63263` | `docs(journal): record C2, S11 and report triage` | `f3c114b4d481` |
 >
-> - **Rispetto al target**, rifatto su `4d885f1e8`: `dev_release2` è ancora `2a23b7ad3`. `git merge-tree --write-tree`
->   fra il ramo e il target, con un object store temporaneo: rc 0, nessun conflitto. Dal merge-base `f1047f766` il
+> - **Rispetto al target**, rifatto su `5afe63263`: `dev_release2` è ancora `7e461e9e1`. `git merge-tree --write-tree`
+>   fra il ramo e il target, con un object store temporaneo: rc 0, nessun conflitto. Dal merge-base `9df0b7b14` il
 >   ramo tocca 18 percorsi e il target 4, nessuno in comune.
 > - Il bundle resta in `/tmp/libreFolio_i_c3_commits/`, con la copia nella cartella di sessione di I: non è
 >   versionato, e si cancella in S12.
@@ -1841,14 +1841,14 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 
 ### S11-finale — voci aggiunte (2026-09-24 16:07)
 
-> **Note implementazione** (solo letture su `4d885f1e8`; nessun edit alle docs, che restano per S11-finale via
+> **Note implementazione** (solo letture su `5afe63263`; nessun edit alle docs, che restano per S11-finale via
 > docs-writer):
 > - **`mkdocs_src/docs/user/dashboard/index.en.md:13-17`** (reperto di J, girato dal coordinator alle 16:07; nessun
 >   altro worktree tocca il file, quindi la correzione è mia). La pagina dice «three primary tabs» ed elenca Overview,
 >   Positions & Analysis e Transactions. Le schede sono quattro:
 >   - `DASHBOARD_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni']` (`+page.svelte:232`), con etichette
 >     Overview, Positions, **Risk** (`risk.title`) e Transactions (`:241-246`);
->   - manca Risk, che c'è da `16ff0eb57` (2026-07-28): la deriva è preesistente;
+>   - manca Risk, che c'è da `e3b443c94` (2026-07-28): la deriva è preesistente;
 >   - la scheda Risk mostra `RiskLevelsPanel` sull'intero portafoglio anche con un filtro broker attivo, e in quel
 >     caso compare il sottotitolo `risk.dashboardFullPortfolio` (`:813-833`, sottotitolo a `:827`);
 >   - nella mia base non c'è nessuna pagina utente sul rischio (`git ls-files 'mkdocs_src/docs/user/**/*risk*'` è
@@ -1867,7 +1867,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > | `:29`, il tip privacy (C3, mio) | **Asset Cost**, **Returns**, and **Capital** show `—` | «Assets at Cost» (`:1969`) |
 > | `:61`, `:63`, il tip sui portafogli a reddito | «NAV ≈ Asset Cost», «the Asset Cost area» | prosa: decide docs-writer se allinearla alla legenda |
 
-> **⚠️ Fuori pista (la deriva l'ho ripetuta io, in C3):** la frase del tip privacy entrata in `671d4ab49`
+> **⚠️ Fuori pista (la deriva l'ho ripetuta io, in C3):** la frase del tip privacy entrata in `12a5b8d95`
 > (`charts.en.md:29`) chiama **Asset Cost** la prima riga del tooltip Abs, che nell'interfaccia si chiama «Assets at
 > Cost» (`GrowthChart.svelte:1969`). Avevo segnalato la deriva come preesistente, e intanto la frase nuova la
 > ripeteva: in revisione ho controllato il comportamento (`fmtOrDash`, `:1959`), non l'etichetta. Si corregge in
@@ -1889,7 +1889,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 ### Pausa e ripresa dopo il riavvio (2026-09-24 18:35 → 2026-09-25 09:09)
 
 > **Note implementazione:**
-> - **Pausa** (24/09, 18:35), chiesta dal developer tramite il coordinator. Stato mandato: HEAD `4d885f1e8`, modificato
+> - **Pausa** (24/09, 18:35), chiesta dal developer tramite il coordinator. Stato mandato: HEAD `5afe63263`, modificato
 >   solo questo piano (+122/−12), stage vuoto, porte 6157 e 6167 libere. Nessun comando fino alla ripresa.
 > - **Ripresa** (25/09, 09:09). Durante la pausa il Mac si è riavviato, e `/tmp` è stato svuotato:
 >   - sono sparite le due lane (`/tmp/librefolio-r2-i-charts` e `/tmp/librefolio-r2-i-charts-prodcopy`), i bundle
@@ -1899,10 +1899,10 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 >     una prova, si rigenera;
 >   - i backup dei bundle nella cartella di sessione di I ci sono: C1 204 file, C2 61, C3 57, e `shasum -c` di C3
 >     passa. Non servono più per committare, perché C1, C2 e C3 sono nel ramo: restano come prova;
->   - il worktree è intatto: HEAD `4d885f1e8`, stage vuoto, modificato solo questo piano; `frontend/node_modules/.bin`
+>   - il worktree è intatto: HEAD `5afe63263`, stage vuoto, modificato solo questo piano; `frontend/node_modules/.bin`
 >     ha ancora vitest e playwright; porte 6157 e 6167 libere.
-> - **Il target** è ora `33b7ce564`, 2 commit dopo `2a23b7ad3`: `bbc622952` (istruzioni: mai `npx`, binari del lock;
->   in un worktree nuovo, `npm ci` approvato prima dei test frontend) e `33b7ce564` (journal: le proprietà incrociate
+> - **Il target** è ora `45b68698e`, 2 commit dopo `7e461e9e1`: `9c543efa2` (istruzioni: mai `npx`, binari del lock;
+>   in un worktree nuovo, `npm ci` approvato prima dei test frontend) e `45b68698e` (journal: le proprietà incrociate
 >   del 24/09). Toccano `.github/copilot-instructions.md`, la skill `lint-format-frontend` e
 >   `08_review_visiva_20260922.md`, nessuno dei miei 18 percorsi. Dal secondo, due cose mi riguardano:
 >   - la voce di `index.en.md` (tre schede invece di quattro) è registrata come mia, in S11-finale;
@@ -1940,7 +1940,7 @@ esatti ed evidenza. Poi si aggiorna la tabella «Stato di esecuzione» in testa.
 > sull'utente, e va detta così al coordinator.
 
 **Misura «prima» di S10 (lane suite, 2026-09-25, un comando alla volta; log in `/tmp/libreFolio_i_s10/`).** Il DB e
-la cartella della lane li ha ricreati il runner al primo comando, come previsto. Stessa HEAD `4d885f1e8`, stesso
+la cartella della lane li ha ricreati il runner al primo comando, come previsto. Stessa HEAD `5afe63263`, stesso
 codice di prodotto dell'ultima misura del 24/09 (registro S2b).
 
 | # | comando | esito | confronto |
@@ -1964,7 +1964,7 @@ comando la porta 6157 è libera.
   - I conti tornano: il totale è la somma dei broker.
 - **Cosa contano i test.** `:467` vuole `SIGNED_AMOUNT` = broker + 1 = 3, e ne trova 2. `:496` vuole `PLAIN_AMOUNT`
   = 4, cioè il quartetto OHLC, e ne trova 5. In tutti e due i casi l'intruso è lo stesso: lo **zero di Coinbase**,
-  che dal `e7773a143` non ha segno per scelta, come in E5 ed E6. Per `:467` è un importo che manca fra quelli con
+  che dal `9c1b6a3ff` non ha segno per scelta, come in E5 ed E6. Per `:467` è un importo che manca fra quelli con
   segno; per `:496` è un importo in più fra quelli senza segno.
 - **Perché il 24/09 erano verdi.** Il codice è lo stesso. Sono cambiati la data e il DB, che dopo il riavvio è nuovo.
   Il puntatore cade su una data che dipende da tutti e due: il 24/09 cadeva su un giorno in cui Coinbase non valeva
@@ -2014,7 +2014,7 @@ comando la porta 6157 è libera.
 > - Porta 6157 libera dopo ogni comando.
 
 > **⚠️ Fuori pista (black sul file dei test):** `black --check` sull'intero `test_portfolio_api.py` fallisce, ma
-> fallisce uguale su HEAD: 8 blocchi di deriva scritti da `0088748a8` («feat(pac): redesign FX/funding…», 18/09), a
+> fallisce uguale su HEAD: 8 blocchi di deriva scritti da `b461a6b02` («feat(pac): redesign FX/funding…», 18/09), a
 > `:1675-2320` di HEAD. Non sono miei e non li riformatto: aggiungerebbero 8 blocchi estranei ai miei due commit. Le mie
 > due parti sono pulite (`black --check --line-ranges 767-795 --line-ranges 1421-1510`). Lo segnalo al coordinator.
 
@@ -2023,8 +2023,8 @@ comando la porta 6157 è libera.
 >   chiamante: il codice conta l'uso proprio solo sui broker OWNER con quota > 0, e il test mette quella quota a 0 %.
 >   Il pin è fedele al codice, l'etichetta inganna. È semantica di `allocation_source` (PAC), non mia: al coordinator;
 > - due test vicini creano dati e non li puliscono. `…positions_contribution_is_date_aware` non è mio
->   (`13052a006`, 06/07): al coordinator. `…income_history_flag_gates_section_and_reconciles_with_summary` è **mio**
->   (`8ed7a0f0d`, 18/09, G1c): a ogni corsa lascia nel DB della lane un utente, un broker, un asset e 3 transazioni.
+>   (`d2cf5287d`, 06/07): al coordinator. `…income_history_flag_gates_section_and_reconciles_with_summary` è **mio**
+>   (`a1e6fce55`, 18/09, G1c): a ogni corsa lascia nel DB della lane un utente, un broker, un asset e 3 transazioni.
 >   Non è nella test list approvata: chiedo al developer se entra in S10.
 
 > ⏭️ **Decisione nuova del developer (2026-09-25, `ask_user` nella chat di I) → D19.** Aprendo
@@ -2110,7 +2110,7 @@ comando la porta 6157 è libera.
 > | C1 | `:908` | il range conservato è la lettura dal vivo o `null`, mai un bound ricordato; il gate `periodChanged` aggiunge solo un ramo `null` (round 2, §6.0.17) |
 > | C2 | `:1189` | fuori dalla scala, lo zoom della ricostruzione piena si rifà dal range logico vivo: si pinna solo quell'operando del ternario scala/cascata |
 > | C3 | `:1570` | stesso operando, più `renderChart(true)` sempre sul ramo pieno; i trigger della ricostruzione (privacy compresa) si controllano come insieme |
-> | C4 | `:1780` | la copia porta il corpo nuovo (`e7773a143`): 7 letterali più il negativo `p.bucketEnd >= referenceDate` dietro di loro (vedi «Fuori pista») |
+> | C4 | `:1780` | la copia porta il corpo nuovo (`9c1b6a3ff`): 7 letterali più il negativo `p.bucketEnd >= referenceDate` dietro di loro (vedi «Fuori pista») |
 > | C5 | `:1964` | `splitLine` non è più tema condiviso: ogni ramo dichiara la chiave **una volta**; si conta la chiave, non il valore (S7 la cambierà) |
 > | C7 | `:2206`, `:2226` | le due metà vengono da **una** chiamata a `splitBySign`; in candele il return contiene la candela totale **da sola** (overlay per broker tolto il 2026-09-21) |
 > | C12 | `:2812` | al posto del selettore 1W/1M/1Y/All c'è la scala: gli 8 gradini in ordine, un bottone per gradino con testid, handler e `aria-pressed` sulla stessa variabile, nessuna traccia del selettore vecchio |
@@ -2132,7 +2132,7 @@ comando la porta 6157 è libera.
 >   --reporter=json --outputFile=/tmp/libreFolio_i_s10/<passo>.json`.
 
 > **⚠️ Fuori pista (C4, decisione mia dentro D8):** test-author si è fermato su C4, e ha fatto bene. Lo specchio
-> legava alla sorgente una copia **vecchia**: `findReferenceTotalPnl` è stato riscritto in `e7773a143` per leggere la
+> legava alla sorgente una copia **vecchia**: `findReferenceTotalPnl` è stato riscritto in `9c1b6a3ff` per leggere la
 > serie **giornaliera** e mai un giorno successivo (il reperto del developer: a giugno la linea stava a ~600 invece
 > che a 0). Ri-pinnare i letterali lasciando la copia vecchia avrebbe tenuto verdi 2 test che descrivono un
 > comportamento uscito dal prodotto. Ho scelto la conversione fedele, perché C4 è uno dei 7 ri-pin approvati (D8,
@@ -2206,7 +2206,7 @@ comando la porta 6157 è libera.
 >   - ho riletto ogni `why` e le àncore di prodotto citate: `AllocationPanel.svelte:43-44`, `:48-55`, `:57-58`,
 >     `:69-71`, `:86-88`, `:111`/`:118`/`:130`, `:142`. Tornano tutte;
 >   - l'intestazione del file emoji dice che la tabella sostituita aveva 10 chiavi e ricadeva sull'emoji ETF. È vero:
->     `58101f08f`, `?? '📊'`;
+>     `b9c1ba2d7`, `?? '📊'`;
 >   - test-author ha fatto anche una corsa con `--sequence.shuffle` sul file jsdom: verde, quindi nessun caso
 >     dipende dall'ordine.
 > - Comando: `cd frontend && node_modules/.bin/vitest run src/lib/components/dashboard/AllocationPanel.test.ts
@@ -2502,7 +2502,7 @@ comando la porta 6157 è libera.
 ### Checkpoint C4 — pronto (2026-09-25 12:42)
 
 > **Note implementazione:**
-> - **Contenuto:** 8 commit su `4d885f1e8`, tutti di S10, in quest'ordine:
+> - **Contenuto:** 8 commit su `5afe63263`, tutti di S10, in quest'ordine:
 >
 > | # | commit | percorsi |
 > |---|---|---|
@@ -2580,7 +2580,7 @@ comando la porta 6157 è libera.
 ### ▶️ Ripresa (2026-09-28 10:31)
 
 > **Note implementazione:**
-> - **Stato alla ripartenza:** HEAD `4d885f1e8`, gli stessi 11 percorsi, stage vuoto, porte 6157 e 6167 libere.
+> - **Stato alla ripartenza:** HEAD `5afe63263`, gli stessi 11 percorsi, stage vuoto, porte 6157 e 6167 libere.
 >   Lo spegnimento ha svuotato `/tmp`. Il bundle l'ho ripristinato dalla copia in sessione (201 file, sha256
 >   identici); i DB di test della lane si ricreano da soli.
 > - **Ordine:** quello della nota di pausa. Questa è di nuovo l'ultima scrittura nel worktree prima del digest. Gli
@@ -2592,10 +2592,10 @@ comando la porta 6157 è libera.
 ### Checkpoint C4 — committato ✅ 2026-09-28 11:41
 
 > **Note implementazione:**
-> - **Contenuto:** 8 commit su `4d885f1e8`, tutti di S10, nell'ordine del registro «Checkpoint C4 — pronto». Il
+> - **Contenuto:** 8 commit su `5afe63263`, tutti di S10, nell'ordine del registro «Checkpoint C4 — pronto». Il
 >   bundle è in `/tmp/libreFolio_i_c4_commits/`, costruito senza scrivere nel repository, con la copia nella cartella
 >   di sessione (471 file, identica file per file).
-> - **Le guardie** sono quelle di C1–C3, con HEAD `4d885f1e8`, gli 11 percorsi e i 9 alberi di C4. Tre file si
+> - **Le guardie** sono quelle di C1–C3, con HEAD `5afe63263`, gli 11 percorsi e i 9 alberi di C4. Tre file si
 >   dividono fra più commit: gli stati intermedi li genera `gen_states.py` dai blocchi di `git diff -U0`, con la
 >   tabella blocco → commit.
 >
@@ -2623,18 +2623,18 @@ comando la porta 6157 è libera.
 >   - ogni albero è quello atteso, e ogni messaggio è identico byte per byte al suo file;
 >   - ogni patch è identica byte per byte al diff fra il commit e il suo genitore (`git diff-tree -p --binary
 >     --full-index`, con le stesse opzioni del builder);
->   - un solo genitore per commit, in fila su `4d885f1e8`; nessuna operazione in corso; stage vuoto.
+>   - un solo genitore per commit, in fila su `5afe63263`; nessuna operazione in corso; stage vuoto.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `00bb1ac75` | `fix(portfolio): honor all report section flags` | `a145aa35c5e3` |
-> | 2 | `1b3a20fb0` | `test(portfolio): pin all 13 report top-level keys` | `be103ebd60fc` |
-> | 3 | `266cebe8c` | `test(portfolio): clean up report test data` | `1701610e654f` |
-> | 4 | `2e4c8589f` | `test(charts): retire stale chart helper mirrors` | `42316a229df9` |
-> | 5 | `a3205800b` | `test(dashboard): pin growth chart privacy, memory` | `829f876e250f` |
-> | 6 | `f3fdbd8aa` | `test(dashboard): pin performance chart privacy` | `92c987630999` |
-> | 7 | `60e01ecda` | `test(dashboard): pin allocation memory, type emoji` | `4ce9adad2de8` |
-> | 8 | `472f51498` | `docs(journal): record S10 tests and checkpoint C4` | `a0644d300bfb` |
+> | 1 | `e154d689e` | `fix(portfolio): honor all report section flags` | `a145aa35c5e3` |
+> | 2 | `02c2216d7` | `test(portfolio): pin all 13 report top-level keys` | `be103ebd60fc` |
+> | 3 | `9d97bc746` | `test(portfolio): clean up report test data` | `1701610e654f` |
+> | 4 | `dcf79a9a2` | `test(charts): retire stale chart helper mirrors` | `42316a229df9` |
+> | 5 | `54615d02a` | `test(dashboard): pin growth chart privacy, memory` | `829f876e250f` |
+> | 6 | `eea5481ab` | `test(dashboard): pin performance chart privacy` | `92c987630999` |
+> | 7 | `1331ffa15` | `test(dashboard): pin allocation memory, type emoji` | `4ce9adad2de8` |
+> | 8 | `66e387007` | `docs(journal): record S10 tests and checkpoint C4` | `a0644d300bfb` |
 
 > **⚠️ Fuori pista (il conteggio dei conflitti di `merge_forecast.sh`):** la prima versione contava come conflitti le
 > righe «Auto-merging». Con `--name-only --messages` i percorsi in conflitto vengono prima della prima riga vuota, i
@@ -2644,16 +2644,16 @@ comando la porta 6157 è libera.
 > suoi 107 link simbolici sono assoluti e puntano al checkout principale, e nessun test frontend lo legge. Nelle
 > copie `vite.config.ts` non trova git e scrive la versione «unknown»: innocuo, perché vitest usa `vitest.config.ts`.
 
-### Allineamento a `dev_release2` — merge `9016bb0d1` ✅ 2026-09-28 11:45
+### Allineamento a `dev_release2` — merge `8c7a62d94` ✅ 2026-09-28 11:45
 
 > **Note implementazione:**
 > - Deciso dal developer per D, I e K. Lo script l'ha preparato il coordinator e l'ha lanciato il developer; io non
 >   ho toccato Git.
-> - `9016bb0d1`: genitori `472f51498` (C4) e `ea30d5ccf` (`dev_release2`), albero `4d9243fb0bc2`, **identico** a
+> - `8c7a62d94`: genitori `66e387007` (C4) e `953f8ab71` (`dev_release2`), albero `4d9243fb0bc2`, **identico** a
 >   quello della mia previsione (`merge_forecast.sh`, caso b) e alla simulazione del coordinator. Nessun conflitto.
 >   Fusi in automatico, in righe diverse: i 4 cataloghi i18n, `moneyRenderSites.test.ts` e `_frontend_utility.py`.
 >   Albero di lavoro pulito dopo il merge.
-> - **Cosa porta** (32 commit dal merge base `2a5927c48`): J (privacy: `maskFormattedNumber` e `maskCurrencyParts`
+> - **Cosa porta** (32 commit dal merge base `7d9055d39`): J (privacy: `maskFormattedNumber` e `maskCurrencyParts`
 >   in `maskable.ts`, `privacy-masking.spec.ts`, le etichette di `PrivacyToggle` in i18n con lo stesso inglese), A
 >   (onboarding e titolo della finestra) e le registrazioni del runner.
 >   - Nel backend solo `populate_mock_data.py` (righe di onboarding) e `test_db_referential_integrity.py`: nessun
@@ -2661,10 +2661,10 @@ comando la porta 6157 è libera.
 >   - Nessun cambio a `package.json` né al lock: niente `npm ci`.
 >   - Nessun file che le mie E2E leggono: `dashboard.spec.ts`, `brokers-detail.spec.ts`, `asset-detail.spec.ts`,
 >     `GrowthChart.svelte`, `PerformanceChart.svelte`, `Header.svelte` e `Sidebar.svelte` sono invariati.
-> - **Conseguenza per S10:** `176f19707` di J adesso è nella mia base, quindi il seguito condizionato della riga S10
+> - **Conseguenza per S10:** `0ca72f743` di J adesso è nella mia base, quindi il seguito condizionato della riga S10
 >   (i formatter su `maskFormattedNumber`) si può fare. Lo analizzo dopo la validazione.
 
-### Validazione sulla revisione combinata `9016bb0d1` — backend e unit ✅ 2026-09-28 11:52
+### Validazione sulla revisione combinata `8c7a62d94` — backend e unit ✅ 2026-09-28 11:52
 
 > **Note implementazione:** nella lane 6157 / `/tmp/librefolio-r2-i-charts` (svuotata dal riavvio: la ricrea il
 > runner), un comando alla volta, nell'ordine chiesto dal coordinator. Log completi in `/tmp/libreFolio_i_postmerge/`.
@@ -2681,12 +2681,12 @@ comando la porta 6157 è libera.
 >
 > - **Confronto con la copia di prova** (`compare_units.py`): per ognuna delle tre categorie ho letto dal runner
 >   (AST) i file registrati e sommato i loro test nel `vitest.json` misurato sulla copia di prova del merge previsto
->   (albero `4d9243fb`, lo stesso di `9016bb0d1`). File e test coincidono nelle tre categorie; nessun file registrato
+>   (albero `4d9243fb`, lo stesso di `8c7a62d94`). File e test coincidono nelle tre categorie; nessun file registrato
 >   manca dal riferimento, e nel riferimento nessuno è rosso.
 >
 > | 7 | `front build --debug` | rc 0; svelte-check 3 errori e 41 avvisi in 4 file, gli stessi dei confini di C4 (`TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics.svelte`; avvisi in `BrokerSharingPanel.svelte` e `GlobalSettingsTab.svelte`), nessuno nei miei file | come la copia di prova |
 >
-> - **Brief 03 aggiornato alla base** prima di consegnarlo (nella cartella di sessione): HEAD `9016bb0d1`, build
+> - **Brief 03 aggiornato alla base** prima di consegnarlo (nella cartella di sessione): HEAD `8c7a62d94`, build
 >   già fatta, righe di GrowthChart riverificate (badge `:2264`, `reconcileCandleWidth` `:1152`,
 >   `availableCandleWidths` `:390-406`), più due dettagli della regola della scala che il 25/09 non aveva scritto:
 >   in income la scala parte da `1W` (`INCOME_MIN_WIDTH`), e se nessun gradino entra resta il più basso da solo
@@ -2699,7 +2699,7 @@ comando la porta 6157 è libera.
 
 ### S10 — brief 03 (E2E dashboard e broker), primo giro: fermo alla base ⏸️ 2026-09-28 12:20
 
-> **Note implementazione:** il test-author ha misurato la base su `9016bb0d1` e si è fermato, come chiedeva la regola
+> **Note implementazione:** il test-author ha misurato la base su `8c7a62d94` e si è fermato, come chiedeva la regola
 > che avevo scritto nel brief, perché la dashboard non dava 15/7. Nessuna modifica alle spec.
 >
 > | azione | totale | rossi | log |
@@ -2809,8 +2809,8 @@ comando la porta 6157 è libera.
 > **Note implementazione:**
 > - **Annunciato al coordinator** prima dell'edit (13:10), come chiesto: file, righe, base attesa e protocollo per i
 >   rossi della coda. Con una domanda: gli errori di tipo a `asset-detail.spec.ts:1395` e `:1397` sono miei (G3,
->   `2d22130bd`, verificato con `git blame`); il brief 08 non li tocca, e senza un sì restano nei residui di S12.
-> - **Riverificato sulla base `9016bb0d1`** (il merge non tocca la spec: `git diff 472f51498 9016bb0d1` vuoto; Prettier
+>   `f4d209b11`, verificato con `git blame`); il brief 08 non li tocca, e senza un sì restano nei residui di S12.
+> - **Riverificato sulla base `8c7a62d94`** (il merge non tocca la spec: `git diff 66e387007 8c7a62d94` vuoto; Prettier
 >   pulito): la finestra accettata nasce a `:1843-1848` come `subtractDays(end, 45)..end`; il controllo a
 >   `:1970-1973`; la data interna a `:1974-1978`; lo spostamento di prezzi ed eventi a `:2145-2150` e `:2159-2164`.
 >   `acceptedCurrentMaxStandaloneEventDate` si legge solo lì. La coda letta (`:7595-7795`) conta `📈3` e `💰2` e
@@ -2823,8 +2823,8 @@ comando la porta 6157 è libera.
 >   attesa 28/1 (`:486`, finestra `2026-08-14..2026-09-28`), poi il rimedio, poi la coda risvegliata con il protocollo
 >   di test-triage (corregge solo le assunzioni; per difetti di prodotto, ambiente o stato condiviso si ferma), poi
 >   28/28 in seriale e con `--workers 4`.
-> - Candidati per un rosso della coda, da guardare per primi: `ff9038487` (il mio commit 3 di C1: sync mancante letto
->   come annullamento; la coda fa un sync FX con esito `partial`), `00d8c735b` e `daa03c0f2` di Risk (la coda
+> - Candidati per un rosso della coda, da guardare per primi: `1d015f679` (il mio commit 3 di C1: sync mancante letto
+>   come annullamento; la coda fa un sync FX con esito `partial`), `7bb84d4fc` e `1b0032eae` di Risk (la coda
 >   aggiunge `risk-rolling-volatility` da `signal-tree-group-risk`), privacy e onboarding.
 
 ### S10 — E7 completato ✅ 2026-09-28 13:52
@@ -2845,7 +2845,7 @@ comando la porta 6157 è libera.
 >   - il controllo si ferma solo se `start + 1 >= end` («too short to hold a strictly interior date»);
 >   - `successorReadyEvents` (`:769`) non è toccato.
 > - **La coda risvegliata** (61 `expect(` e 3 `expect.poll(`, ora a `:7598-7798`) è verde al primo giro: nessun rosso
->   da attribuire. I candidati annotati (`ff9038487`, Risk, privacy, onboarding) non hanno dato segni.
+>   da attribuire. I candidati annotati (`1d015f679`, Risk, privacy, onboarding) non hanno dato segni.
 > - **La mia verifica:**
 >   - ho letto il diff;
 >   - Prettier `--check` pulito, `diff --check` pulito;
@@ -2869,7 +2869,7 @@ comando la porta 6157 è libera.
 > - **C5:** va bene la mia proposta, 4 commit, uno per file; la dashboard resta in un commit solo.
 > - **Gli errori di tipo a `asset-detail.spec.ts:1395` e `:1397`:** sì, in un commit a sé dopo C5. Un suo messaggio
 >   precedente, che diceva «prima di C5», è superato da questo.
-> - **Dopo il commit di C5** il coordinator mi allinea a `dev_release2`, che ora contiene K (`7c61dd924`). Dopo il
+> - **Dopo il commit di C5** il coordinator mi allinea a `dev_release2`, che ora contiene K (`9a0e4ff18`). Dopo il
 >   merge verifico il test delle emoji con il tipo nuovo `CROWDFUND_REAL_ESTATE`, che per la regola della famiglia
 >   deve avere 🤝. Poi D23b, D23 e il resto, nell'ordine già scritto.
 > - **D23b** lo chiedo io al developer.
@@ -2880,7 +2880,7 @@ comando la porta 6157 è libera.
 ### Checkpoint C5 — pronto (2026-09-28 14:01)
 
 > **Note implementazione:**
-> - **Contenuto:** 4 commit su `9016bb0d1`, uno per file, solo test E2E e questo registro:
+> - **Contenuto:** 4 commit su `8c7a62d94`, uno per file, solo test E2E e questo registro:
 >
 > | # | commit | percorso |
 > |---|---|---|
@@ -2908,7 +2908,7 @@ comando la porta 6157 è libera.
 
 > **Note implementazione:**
 > - **Il bundle**, costruito il 28/09 senza scrivere nel repository, sta in `/tmp/libreFolio_i_c5_commits/`, con la
->   copia nella cartella di sessione (`files/c5_commit_bundle/`). Le guardie sono quelle di C4, con HEAD `9016bb0d1`,
+>   copia nella cartella di sessione (`files/c5_commit_bundle/`). Le guardie sono quelle di C4, con HEAD `8c7a62d94`,
 >   i 4 percorsi e i 4 alberi di C5. Nessun file si divide fra più commit.
 >
 > | verifica | come | esito |
@@ -2918,20 +2918,20 @@ comando la porta 6157 è libera.
 > | dry-run sul repository reale | matrice di 9 configurazioni (bash 3.2 e 5; git Apple, Homebrew e del bundle; `env -i`; it_IT ed en_US), più una dalla copia di backup | rc 0 in 9 su 9, «would commit 4/4». Fuori da `refs/copilot/` refs invariati; nessuno degli 11 oggetti propri del bundle nel repository |
 > | commit veri, in 3 cloni usa-e-getta | git Homebrew con bash 3.2, git 2.53 con bash 5, git Apple in `env -i` | 9/9 PASS in ognuno; il secondo lancio è rifiutato, i commit restano 4 |
 > | messaggi | `check_messages.py` | `MESSAGES OK`: subject ASCII, righe ≤ 72, niente attribuzioni AI. La scansione privacy segnala solo righe del journal già registrate come sintetiche o citazioni di controlli |
-> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`7c61dd924`) in uno store di oggetti usa-e-getta | 0 conflitti; albero `744125fb2428`. Fusi in automatico: i 4 cataloghi i18n e `_frontend_utility.py` |
+> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`9a0e4ff18`) in uno store di oggetti usa-e-getta | 0 conflitti; albero `744125fb2428`. Fusi in automatico: i 4 cataloghi i18n e `_frontend_utility.py` |
 >
 > - sha256 dello script `ce71ab36…508c`.
 > - **Il coordinator ha rifatto le verifiche da sé**, poi il developer ha committato alle 10:02 (segnale alle 10:09).
 >   La mia verifica dopo il commit, in sola lettura: ogni albero è quello di `trees.txt` del bundle; ogni messaggio è
 >   identico byte per byte al suo `.msg`; ogni commit tocca un file solo e ha un solo genitore, in fila su
->   `9016bb0d1`; albero di lavoro pulito e stage vuoto; porte 6157 e 6167 libere.
+>   `8c7a62d94`; albero di lavoro pulito e stage vuoto; porte 6157 e 6167 libere.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `026bc20fb` | `test(dashboard): re-pin and extend chart e2e` | `04fa202bb651` |
-> | 2 | `5b395204f` | `test(brokers): accept unsigned zero in P&L e2e` | `a1ecad0fd619` |
-> | 3 | `f70b9c3ba` | `test(assets): derive MAX interior date from window` | `e31f73117e8f` |
-> | 4 | `5e638a2ed` | `docs(journal): record S10 e2e and checkpoint C5` | `a92703eaa3f2` |
+> | 1 | `8ea6f2f2e` | `test(dashboard): re-pin and extend chart e2e` | `04fa202bb651` |
+> | 2 | `fce077618` | `test(brokers): accept unsigned zero in P&L e2e` | `a1ecad0fd619` |
+> | 3 | `7d19fd7e2` | `test(assets): derive MAX interior date from window` | `e31f73117e8f` |
+> | 4 | `9b988668d` | `docs(journal): record S10 e2e and checkpoint C5` | `a92703eaa3f2` |
 
 > **⚠️ Fuori pista (la prima matrice di dry-run vedeva il repository cambiare):** nella prima versione l'hash delle
 > refs e il conto degli oggetti cambiavano (454 → 455). Non era lo script: durante la corsa le sessioni dell'app
@@ -2953,8 +2953,8 @@ comando la porta 6157 è libera.
 > - **La causa, nella Crescita, è una mia regressione.** `GrowthChart.svelte:1921` mette
 >   `grid.left: CHART_PLOT_LEFT_PX` (52, `:449`) con `containLabel: true`: con `containLabel` il `left` è il bordo
 >   esterno, e le etichette Y si disegnano dentro. Quindi 52 px restano vuoti prima delle etichette.
->   - Il valore l'ho introdotto io in `ef7cce61c` (18/09), per allineare lo strato sopra il grafico; prima era `'3%'`.
->   - È superato da `e7773a143` (21/09, fetta del round 3): da allora lo strato legge il bordo misurato, `plotLeftPx`
+>   - Il valore l'ho introdotto io in `72d16b9ab` (18/09), per allineare lo strato sopra il grafico; prima era `'3%'`.
+>   - È superato da `9c1b6a3ff` (21/09, fetta del round 3): da allora lo strato legge il bordo misurato, `plotLeftPx`
 >     (`:1662`, `:2211`).
 > - **Gli altri 12 componenti ECharts, letti:**
 >
@@ -2993,17 +2993,17 @@ comando la porta 6157 è libera.
 > - **Visto nello screenshot, e rimandato:** un'etichetta «-888» sotto lo zero, che viene dalla funzione `min`
 >   dell'asse y (`:2115`). Va in S7b; lì chiedo al developer.
 
-### Allineamento a `dev_release2` con K — merge `b2112ba61` ✅ 2026-09-29 12:37
+### Allineamento a `dev_release2` con K — merge `5ab9f498e` ✅ 2026-09-29 12:37
 
 > **Note implementazione:**
 > - Lo script l'ha preparato il coordinator (`/tmp/libreFolio_merge_target_into_i3.sh`) e l'ha lanciato il developer;
 >   io non ho toccato Git.
-> - `b2112ba61`: genitori `5e638a2ed` (C5) e `4ce1dc35f` (`dev_release2`), albero `f275c8d109f7`, quello della
+> - `5ab9f498e`: genitori `9b988668d` (C5) e `5040e6c3c` (`dev_release2`), albero `f275c8d109f7`, quello della
 >   simulazione del coordinator. Nessun merge in corso, albero di lavoro pulito, stage vuoto.
 > - **Perché l'albero non è `744125fb`, quello previsto con C5:** fra la mia previsione e il merge il target è
->   avanzato di un commit, `4ce1dc35f` («the next release is v1.2.0»), che cambia una riga di `CHANGELOG.md` e
+>   avanzato di un commit, `5040e6c3c` («the next release is v1.2.0»), che cambia una riga di `CHANGELOG.md` e
 >   nient'altro. Nel merge `CHANGELOG.md` è identico a quello del target.
-> - **Cosa porta** (19 commit dal merge base `ea30d5ccf`): K, cioè la selezione del tipo a due livelli, le icone
+> - **Cosa porta** (19 commit dal merge base `953f8ab71`): K, cioè la selezione del tipo a due livelli, le icone
 >   composte, il tipo `CROWDFUND_REAL_ESTATE`, le correzioni dell'import (duplicati, scelte del resolver), le icone
 >   dei broker e l'ordine delle righe del bulk; più le voci del CHANGELOG.
 >   - Nel backend solo `models.py` (il valore nuovo dell'enum e la sua docstring) e due scenari di stress, che danno
@@ -3014,10 +3014,10 @@ comando la porta 6157 è libera.
 >     `:34`).
 >   - Nessuno dei miei file cambia: la cartella `components/dashboard`, i grafici dei lotti, le tre spec E2E, `utils/privacy`.
 > - `front build --debug` (prima di ogni suite che avvia il backend, come chiesto): rc 0. svelte-check 3 errori e 41
->   avvisi in 4 file, gli stessi, riga per riga, della build su `9016bb0d1`, nessuno nei miei file. L'`api sync` della
+>   avvisi in 4 file, gli stessi, riga per riga, della build su `8c7a62d94`, nessuno nei miei file. L'`api sync` della
 >   build non lascia file tracciati cambiati. Log in `/tmp/libreFolio_i_postmerge3/`.
 
-### Gate sulla revisione combinata `b2112ba61` ✅ 2026-09-29 12:50
+### Gate sulla revisione combinata `5ab9f498e` ✅ 2026-09-29 12:50
 
 > **Note implementazione:** nella 6157 / `/tmp/librefolio-r2-i-charts`, un comando alla volta, dopo la build di
 > debug. Log in `/tmp/libreFolio_i_postmerge3/` (`02_…` → `12_…`). Porta 6157 libera dopo ogni comando.
@@ -3051,7 +3051,7 @@ comando la porta 6157 è libera.
 >   identici byte per byte. Solo commento, 8/8.
 >
 > **⚠️ Fuori pista:** nel brief 09 avevo scritto che K aveva solo inserito `scrapeRecordKeys` fra i pezzi copiati.
-> Sbagliato, e l'ha notato il test-author: `scrapeRecordKeys` c'era già prima del merge (primo genitore `5e638a2ed`,
+> Sbagliato, e l'ha notato il test-author: `scrapeRecordKeys` c'era già prima del merge (primo genitore `9b988668d`,
 > `:76`). K ha allungato l'intestazione di 13 righe, aggiunto 3 costanti di percorso e una riga di commento fra
 > `MODELS_PY` e `read`, e un helper `readRecord` dopo `expectNoGaps`, sotto il blocco copiato. La modifica non
 > cambia: i pezzi copiati sono intatti.
@@ -3119,7 +3119,7 @@ comando la porta 6157 è libera.
 > - **Il meccanismo**, uguale nei tre grafici: l'istanza non ha un'opzione completa (appena creata, o `clear()` da
 >   `renderChart()` perché non c'è niente da disegnare). Il ResizeObserver calcola la policy responsiva dell'asse X;
 >   se è «compatta» (larghezza utile < 480) applica una patch lazy `setOption({xAxis: {splitNumber, axisLabel}})`. Al
->   frame seguente l'asse X non ha una griglia: `CartesianAxisView.render` lancia. Origine: `2d22130bd` (17/09,
+>   frame seguente l'asse X non ha una griglia: `CartesianAxisView.render` lancia. Origine: `f4d209b11` (17/09,
 >   l'asse X responsivo).
 >
 > | come ci si arriva | larghezza | chi crasha | esito |
@@ -3295,7 +3295,7 @@ comando la porta 6157 è libera.
 ### Checkpoint C6 — pronto (2026-09-29 15:27)
 
 > **Note implementazione:**
-> - **Contenuto:** 6 commit su `b2112ba61`, 11 percorsi:
+> - **Contenuto:** 6 commit su `5ab9f498e`, 11 percorsi:
 >
 > | # | subject | contenuto | percorsi |
 > |---|---|---|---|
@@ -3331,7 +3331,7 @@ comando la porta 6157 è libera.
 > **Note implementazione:**
 > - **Il bundle**, costruito fra le 15:35 e le 15:50 senza scrivere nel repository, sta in
 >   `/tmp/libreFolio_i_c6_commits/`, con la copia nella cartella di sessione (`files/c6_commit_bundle/`). Le guardie
->   sono quelle di C5, con HEAD `b2112ba61`, gli 11 percorsi e i 6 alberi di C6. Un file si divide fra due commit,
+>   sono quelle di C5, con HEAD `5ab9f498e`, gli 11 percorsi e i 6 alberi di C6. Un file si divide fra due commit,
 >   `LotComparisonChart.svelte` (commit 4 e 5), e `check_split` lo prova.
 >
 > | verifica | come | esito |
@@ -3342,26 +3342,26 @@ comando la porta 6157 è libera.
 > | dry-run sul repository reale | matrice di 9 configurazioni (bash 3.2 e 5; git Apple, Homebrew e del bundle; `env -i`; it_IT ed en_US) | rc 0 in 9 su 9, «would commit 6/6». Fuori da `refs/copilot/` refs invariati; nessuno dei 35 oggetti propri del bundle nel repository |
 > | commit veri, in 3 cloni usa-e-getta | git Homebrew 2.55 con bash 3.2, git 2.53 con bash 5, git Apple in `env -i` | 9/9 PASS in ognuno; il secondo lancio è rifiutato, i commit restano 6 |
 > | messaggi | `check_messages.py` | `MESSAGES OK`: subject ASCII fra 46 e 48 caratteri, righe ≤ 68. La scansione privacy segnala solo 2 righe del journal, già note: la riga di D23b nella tabella delle decisioni (importi d'esempio) e una riga della verifica di C5 |
-> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`5068b706c`) in uno store di oggetti usa-e-getta | 0 conflitti; albero `c6099a997801`. Fuso in automatico: `_frontend_utility.py` |
+> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`92339d088`) in uno store di oggetti usa-e-getta | 0 conflitti; albero `c6099a997801`. Fuso in automatico: `_frontend_utility.py` |
 >
 > - sha256 dello script `5ea70fc3…139d`.
 > - **Il developer ha committato alle 22:26** (segnale del coordinator alle 22:28). La mia verifica dopo il commit,
 >   in sola lettura:
->   - 6 commit in fila su `b2112ba61`, ognuno con un solo genitore;
+>   - 6 commit in fila su `5ab9f498e`, ognuno con un solo genitore;
 >   - ogni albero è quello di `trees.txt` del bundle;
 >   - ogni messaggio è identico byte per byte al suo `.msg`;
 >   - i 35 oggetti propri del bundle ora sono tutti nel repository (35 su 35);
->   - `merge-tree` sul HEAD reale con `5068b706c` dà ancora `c6099a997801`;
+>   - `merge-tree` sul HEAD reale con `92339d088` dà ancora `c6099a997801`;
 >   - albero di lavoro pulito, stage vuoto; porte 6157 e 6167 libere.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `6d8b951bc` | `fix(dashboard): emoji for CROWDFUND_REAL_ESTATE` | `573e9a48609e` |
-> | 2 | `efb1ce6c7` | `test(assets): type calendar fixture availability` | `28cdab6d2ec6` |
-> | 3 | `cda9408d4` | `fix(dashboard): shrink growth chart left gutter` | `78466d2be615` |
-> | 4 | `1d5975542` | `fix(brokers): shrink lot comparison left gutter` | `e95791e3555c` |
-> | 5 | `0e4de83f7` | `fix(brokers): stop lot chart axisBuilder crash` | `7a2997232b76` |
-> | 6 | `602ea299e` | `docs(journal): record checkpoint C6 review fixes` | `bf4a87b2a990` |
+> | 1 | `e4ca40e1a` | `fix(dashboard): emoji for CROWDFUND_REAL_ESTATE` | `573e9a48609e` |
+> | 2 | `0329e6bdc` | `test(assets): type calendar fixture availability` | `28cdab6d2ec6` |
+> | 3 | `9c477f5c4` | `fix(dashboard): shrink growth chart left gutter` | `78466d2be615` |
+> | 4 | `631801fb6` | `fix(brokers): shrink lot comparison left gutter` | `e95791e3555c` |
+> | 5 | `3aed31b07` | `fix(brokers): stop lot chart axisBuilder crash` | `7a2997232b76` |
+> | 6 | `e8aeba334` | `docs(journal): record checkpoint C6 review fixes` | `bf4a87b2a990` |
 
 > **⚠️ Fuori pista (tre, mentre costruivo il bundle; nessuno cambia il contenuto dei commit):**
 > 1. **La prima matrice di dry-run era un falso verde.** `ro_snapshot2.sh`, lo script che fotografa refs e oggetti
@@ -3374,15 +3374,15 @@ comando la porta 6157 è libera.
 >    `/tmp/libreFolio_i_margin_pw` (permessi 600), contro la regola che vieta le credenziali su file. Il file è
 >    cancellato; le sonde salvate in sessione contengono solo il percorso, non la password.
 
-### Allineamento a `dev_release2` — merge `921f1fc05` ✅ 2026-09-29 22:31
+### Allineamento a `dev_release2` — merge `1602d23d8` ✅ 2026-09-29 22:31
 
 > **Note implementazione:**
 > - Lo script l'ha preparato il coordinator (`/tmp/libreFolio_merge_target_into_i5.sh`) e l'ha lanciato il
 >   developer; io non ho toccato Git.
-> - `921f1fc05`: genitori `602ea299e` (C6) e `5068b706c` (`dev_release2`), albero `c6099a997801`. È l'albero previsto
+> - `1602d23d8`: genitori `e8aeba334` (C6) e `92339d088` (`dev_release2`), albero `c6099a997801`. È l'albero previsto
 >   dal mio `merge-tree` di C6 e dalla simulazione del coordinator. Nessun merge in corso, albero di lavoro pulito,
 >   stage vuoto.
-> - **Cosa porta** (6 commit dal merge base `4ce1dc35f`, 34 file): i seguiti della review di K (passo 12) e i
+> - **Cosa porta** (6 commit dal merge base `5040e6c3c`, 34 file): i seguiti della review di K (passo 12) e i
 >   registri.
 >   - Le bandiere: un font solo per le bandiere, `'LF Flags'` (`app.css`, `static/lf-flags.css`, `offline.html`),
 >     con il gate `src/flagFont.gate.test.ts` e l'E2E `fx-flag-font.spec.ts`.
@@ -3402,7 +3402,7 @@ comando la porta 6157 è libera.
 >   `chartCoreHelpers.test.ts`. Niente in `backend/app/`, `alembic/`, `Pipfile*`, `package.json` o nel lock: niente
 >   `npm ci`, e i gate del backend del portafoglio non si rilanciano.
 
-### Gate rapido sulla revisione combinata `921f1fc05` ✅ 2026-09-29 22:37
+### Gate rapido sulla revisione combinata `1602d23d8` ✅ 2026-09-29 22:37
 
 > **Note implementazione:** nella 6157 / `/tmp/librefolio-r2-i-charts`, un comando alla volta. Log in
 > `/tmp/libreFolio_i_m5/` (da `01_…` a `05_…`). Alla fine porte 6157 e 6167 libere; albero di lavoro pulito prima e
@@ -3554,7 +3554,7 @@ comando la porta 6157 è libera.
 > `prettier --check` sui 7 file frontend pulito; nessun `.only`, `.skip`, `fixme` o attesa a orologio fra le righe
 > aggiunte del frontend; 6157 e 6167 libere.
 >
-> **Stato finale di D23 + D23b** (HEAD `921f1fc05`, non committato; 8 file):
+> **Stato finale di D23 + D23b** (HEAD `1602d23d8`, non committato; 8 file):
 >
 > | file | cosa |
 > |---|---|
@@ -3575,7 +3575,7 @@ comando la porta 6157 è libera.
 > - **Mandato** (coordinator, 00:05): via al bundle di C7, 2 commit come proposti, con il solito protocollo. La voce
 >   di `moneyRenderSites.test.ts` va bene così: solo la mia, ri-chiavata, come concordato con J. Il `-0.00` non
 >   raggiungibile va nel suo backlog.
-> - **Contenuto:** 2 commit su `921f1fc05`, 8 percorsi:
+> - **Contenuto:** 2 commit su `1602d23d8`, 8 percorsi:
 >
 > | # | subject | contenuto | percorsi |
 > |---|---|---|---|
@@ -3605,7 +3605,7 @@ comando la porta 6157 è libera.
 > **Note implementazione:**
 > - **Il bundle**, costruito fra le 00:05 e le 00:20 senza scrivere nel repository dopo il registro «pronto», stava
 >   in `/tmp/libreFolio_i_c7_commits/`, con la copia nella cartella di sessione (`files/c7_commit_bundle/`). Le
->   guardie sono quelle di C6, con HEAD `921f1fc05`, gli 8 percorsi e i 3 alberi di C7. Nessun file si divide fra
+>   guardie sono quelle di C6, con HEAD `1602d23d8`, gli 8 percorsi e i 3 alberi di C7. Nessun file si divide fra
 >   due commit.
 >
 > | verifica | come | esito |
@@ -3616,23 +3616,23 @@ comando la porta 6157 è libera.
 > | dry-run sul repository reale | matrice di 9 configurazioni (bash 3.2 e 5; git Apple, Homebrew e del bundle; `env -i`; it_IT ed en_US) | rc 0 in 9 su 9, «would commit 2/2». Fuori da `refs/copilot/` refs invariati; nessuno dei 7 oggetti propri del bundle nel repository |
 > | commit veri, in 3 cloni usa-e-getta | git Homebrew 2.55 con bash 3.2, git 2.53 con bash 5, git Apple in `env -i` | PASS in ognuno; il secondo lancio è rifiutato, i commit restano 2; ogni clone cancellato dallo script |
 > | messaggi | `check_messages.py` | `MESSAGES OK`: subject ASCII di 48 e 38 caratteri, righe ≤ 70. La scansione privacy segnala solo righe attese: importi d'esempio in EUR nei test, «token» nella `why` del registro, «password» nel registro di C6, che descrive il file cancellato |
-> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`5068b706c`) | 0 conflitti; nessuno degli 8 percorsi è toccato dal target |
+> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`92339d088`) | 0 conflitti; nessuno degli 8 percorsi è toccato dal target |
 >
 > - sha256 dello script `485cbd92…ad58`, derivato da quello di C6 (`5ea70fc3…139d`) con sostituzioni contate.
 > - **Il developer ha committato alle 10:01** (segnale del coordinator alle 10:04). La mia verifica dopo il commit,
 >   in sola lettura:
->   - 2 commit in fila su `921f1fc05`, ognuno con un solo genitore, nessun merge;
+>   - 2 commit in fila su `1602d23d8`, ognuno con un solo genitore, nessun merge;
 >   - ogni albero è quello del bundle;
 >   - ogni messaggio è identico byte per byte al suo `.msg`;
 >   - gli 8 file del worktree hanno lo sha256 registrato nel bundle;
 >   - i 7 oggetti propri del bundle ora sono tutti nel repository (7 su 7);
->   - `dev_release2` (`5068b706c`) è antenato di HEAD: nessun allineamento da fare;
+>   - `dev_release2` (`92339d088`) è antenato di HEAD: nessun allineamento da fare;
 >   - albero di lavoro pulito, stage vuoto; porte 6157 e 6167 libere, nessun processo del worktree.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `9d8fb520b` | `fix(charts): follow locale sign in chart amounts` | `3069699e08aa` |
-> | 2 | `039baea22` | `docs(journal): record C6 merge and D23` | `2b6e7b98bba9` |
+> | 1 | `bca7ac68c` | `fix(charts): follow locale sign in chart amounts` | `3069699e08aa` |
+> | 2 | `ddc8acb8c` | `docs(journal): record C6 merge and D23` | `2b6e7b98bba9` |
 >
 > - **Dopo l'aggiornamento notturno dell'app** (coordinator, 10:04) ho controllato la corsia: nessun server né
 >   comando rimasto a metà, le due cartelle dati intatte (suite 29/09 23:48, copia 29/09 15:12). Il test-author di
@@ -3724,7 +3724,7 @@ comando la porta 6157 è libera.
 >   al coordinator insieme alla misura della barra qui sotto.
 >
 >   **Decisione (coordinator, 2026-09-30):** la aggiungo io, in aggiunta, nei 4 cataloghi con `dev.py i18n`, nel
->   commit di S7, come in `99f7d15ec`. Testi approvati così, plurale sul totale compreso. L'unione la verifica il
+>   commit di S7, come in `d872b46f3`. Testi approvati così, plurale sul totale compreso. L'unione la verifica il
 >   coordinator al merge.
 >
 >   *Correzione del 2026-09-30:* la prima stesura diceva «almeno 7 (settimana o mese)». Il gradino 3G dà un totale
@@ -3740,7 +3740,7 @@ comando la porta 6157 è libera.
 > grafico del prezzo (linea/candele, Abs/%, chip «Mensile») copre l'etichetta più alta dell'asse Y («400.0%»).
 > - Il componente è `PriceChartFull.svelte`: la barra è `absolute top-2 left-12 … flex-wrap … pr-24` (`:1062`), la
 >   griglia `{top: 20, …, left: 10, containLabel: true}` (`:890`).
-> - I miei margini di C6 non lo toccano: l'ultimo commit sul file è `2d22130bd`.
+> - I miei margini di C6 non lo toccano: l'ultimo commit sul file è `f4d209b11`.
 > - Lo misuro a larghezza telefono prima di metterlo nel piano. Il coordinator non vuole risposta prima della misura.
 
 ### Barra sopra il grafico del prezzo — misura ✅ 2026-09-30 10:40
@@ -3789,10 +3789,10 @@ comando la porta 6157 è libera.
 >     «Mensile», è il caso della storia lunga.
 >
 > **Origine**, pre-esistente dal 2026-07-30:
-> - la barra (`:1062-1096`) viene da `d42a7f19d` (Risk G6, 2026-07-30);
-> - la griglia (`:890`) da `aefb764ed` (2026-06-01);
-> - il font di 14 px dell'etichetta da `95e91d18b` (2026-07-08), il formato da `aefb764ed`.
-> - Il mio `2d22130bd` (G3) sullo stesso file aggiunge solo l'asse X responsivo.
+> - la barra (`:1062-1096`) viene da `a8e9c2028` (Risk G6, 2026-07-30);
+> - la griglia (`:890`) da `65c6bae5c` (2026-06-01);
+> - il font di 14 px dell'etichetta da `59556a315` (2026-07-08), il formato da `65c6bae5c`.
+> - Il mio `f4d209b11` (G3) sullo stesso file aggiunge solo l'asse X responsivo.
 >
 > **Opzioni** (da decidere, nessuna eseguita):
 > - **A. Una fascia sopra il canvas.** La barra esce dal grafico e sta in una riga con la barra destra della
@@ -3886,8 +3886,8 @@ comando la porta 6157 è libera.
 > `ASSET_CALENDAR_ROLLING_RETURN`. Il plugin però è nascosto: il percorso non arriva a nessuna API, e il dettaglio
 > asset non mostra il pulsante della guida. Decido io se mostrarlo e dove, eventualmente col developer.
 >
-> **Stato reale** (HEAD `039baea22`, sola lettura):
-> - Il `docs_path` di Risk non c'è né nel mio ramo né in `dev_release2` (`3d625e703`): arriverà col merge di Risk.
+> **Stato reale** (HEAD `ddc8acb8c`, sola lettura):
+> - Il `docs_path` di Risk non c'è né nel mio ramo né in `dev_release2` (`db57e4a65`): arriverà col merge di Risk.
 >   `calendar_rolling_return.py` non lo tocco, quindi non c'è conflitto.
 > - Oggi il percorso di una guida passa per questa catena:
 >   - il `docs_path` del plugin;
@@ -3967,7 +3967,7 @@ comando la porta 6157 è libera.
 >
 > **▶️ RESUME (coordinator, 2026-09-30 12:08).** Il venv è aggiornato e verificato: cambia solo
 > `borsa-italiana-scraping` (0.3.1 → 0.3.2), con le stesse dipendenze. I comandi Python riprendono. Al RESUME: HEAD
-> `039baea22`, sporchi solo il journal e lo stub `growthLadderAxis.ts`, 6157 e 6167 libere.
+> `ddc8acb8c`, sporchi solo il journal e lo stub `growthLadderAxis.ts`, 6157 e 6167 libere.
 > - Dopo il RESUME: `front build --debug` → EXIT 0 (`/tmp/libreFolio_i_s7/build_debug_resume.log`, 12:08-12:10).
 >
 > **⏸️ FREEZE, secondo giro (coordinator, 2026-09-30 12:12).** Il developer rifà l'aggiornamento con `pipenv update`
@@ -3976,7 +3976,7 @@ comando la porta 6157 è libera.
 > shell attiva. Il build di prima era già finito. Durante la pausa: solo lettura e il brief S7 nei file di sessione.
 >
 > **▶️ RESUME, secondo giro (coordinator, 2026-09-30 ~12:24).** L'aggiornamento del venv è finito e verificato; i
-> comandi Python riprendono. Al RESUME (`date` 12:24:14): HEAD `039baea22`, sporchi solo il journal e lo stub
+> comandi Python riprendono. Al RESUME (`date` 12:24:14): HEAD `ddc8acb8c`, sporchi solo il journal e lo stub
 > `growthLadderAxis.ts` (`??`), 6157 e 6167 libere.
 > - Il `frontend/build` di debug delle 12:08-12:10 resta valido: dopo è cambiato solo il venv Python, non il frontend.
 > - **Nello stesso messaggio il coordinator riconferma D24/S8b**: nessun worktree (F, A, Risk, K, D, L, J) tocca
@@ -4023,7 +4023,7 @@ comando la porta 6157 è libera.
 >
 > **Messaggio 1 del coordinator: due punti nuovi, A e B, da fare dopo S7 e prima di S8.**
 > - **A (XSS nel tooltip):** me l'aveva assegnato, poi il messaggio 2 l'ha ritirato (sotto).
-> - **B: i rossi preesistenti nella corsia di K** (6155, su `8bd6be663`). I log sono
+> - **B: i rossi preesistenti nella corsia di K** (6155, su `f2017b9d6`). I log sono
 >   `/tmp/libreFolio_k13_lane_{5,8,18,19}.log`, la mia sintesi è `/tmp/libreFolio_i_s7/k13_failures.log`.
 >   - **B1:** `chartCoreHelpers.test.ts`, 12 rossi.
 >   - **B2:** la dashboard, 4 rossi sulla finestra di zoom.
@@ -4051,7 +4051,7 @@ comando la porta 6157 è libera.
 >
 >   Il testo i18n del bucket parziale passa per `escapeHtml`, in `partialHtml`/`headerHtml`.
 >
-> **Verifica di B nella 6157, oggi, su `039baea22`.** Tutte le corse sono finite, e dopo la porta era libera (`lsof`
+> **Verifica di B nella 6157, oggi, su `ddc8acb8c`.** Tutte le corse sono finite, e dopo la porta era libera (`lsof`
 > vuoto). I log sono in `/tmp/libreFolio_i_s7/`.
 >
 > | punto | corsa | esito | log |
@@ -4062,16 +4062,16 @@ comando la porta 6157 è libera.
 > | B4 | `front-asset asset-detail "calendar-return primary mode"` | **1/1** a `:486` (1,2 min) | `b4_asset_detail_486.log` |
 >
 > - **Verdetto (test-triage): nel mio ramo non c'è nessun rosso da correggere.** La base di K contiene il cambio del
->   prodotto, `e7773a143` (antenato sia di `dev_release2` sia di `8bd6be663`). Non contiene però nessuna delle mie
+>   prodotto, `9c1b6a3ff` (antenato sia di `dev_release2` sia di `f2017b9d6`). Non contiene però nessuna delle mie
 >   cure dei test, verificato con `git merge-base --is-ancestor`:
->   - **B1:** `2e4c8589f` (C4, D19/D21/D22, «retire stale chart helper mirrors»). In questo ramo nessuno chiama più
+>   - **B1:** `dcf79a9a2` (C4, D19/D21/D22, «retire stale chart helper mirrors»). In questo ramo nessuno chiama più
 >     `computeZoomWindowRange`: le sole 3 menzioni sono guard negativi, in `chartCoreHelpers.test.ts:3022-3043`.
->   - **B2 e B3 (dashboard):** `026bc20fb` (C5, il re-pin).
->   - **B3 (broker):** `5b395204f` (C5). I test contano le righe, con il segno facoltativo:
+>   - **B2 e B3 (dashboard):** `8ea6f2f2e` (C5, il re-pin).
+>   - **B3 (broker):** `fce077618` (C5). I test contano le righe, con il segno facoltativo:
 >     `PNL_AMOUNT`/`BROKER_AMOUNT` `/^[A-Z]{3}\s[+\-\u2212]?[\d.,]+$/`.
->   - **Lo zero senza segno è D23b** (`signDisplay:'exceptZero'`, deciso dal developer il 29/09, in `9d8fb520b`, C7):
+>   - **Lo zero senza segno è D23b** (`signDisplay:'exceptZero'`, deciso dal developer il 29/09, in `bca7ac68c`, C7):
 >     è voluto, non è un difetto. Non serve ancorare il puntatore.
->   - **B4:** `f70b9c3ba` (C5, cioè E7): la data interna è `start + 1`, ricavata dalla finestra intercettata (registro
+>   - **B4:** `7d19fd7e2` (C5, cioè E7): la data interna è `start + 1`, ricavata dalla finestra intercettata (registro
 >     «S10 — E7 completato»).
 > - **Risposta al coordinator mandata:** B si chiude con l'integrazione di I. B4 esce dal mio ordine, che torna a essere
 >   S7 → S7b → S8 → S8b → la copia di prova → S11-finale → S12.
@@ -4152,7 +4152,7 @@ comando la porta 6157 è libera.
 
 ### S7 — passo 3: brief 11, i rossi unit ✅ 2026-09-30 19:35
 
-> **Note implementazione — l'esito** (test-author, agente `bce27b03`, circa 93 minuti; HEAD invariata `039baea22`).
+> **Note implementazione — l'esito** (test-author, agente `bce27b03`, circa 93 minuti; HEAD invariata `ddc8acb8c`).
 > - `growthLadderAxis.test.ts` (nuovo, 905 righe) — Part A: **45 rossi, 10 verdi** (55), identici fra r1 e r2
 >   (`/tmp/libreFolio_i_s7/a_ladder_r1.log`, `a_ladder_r2.log`). I verdi sono esattamente quelli previsti: A0 (ICU
 >   nelle 4 lingue), il piano vuoto (Empty e le 4 geometrie non misurate: 0, −5, NaN, Infinity) e la stima della
@@ -4209,7 +4209,7 @@ comando la porta 6157 è libera.
 
 ### S7 — passo 4: i rossi E2E del brief 12, la cura in laboratorio, la regola dell'ancora ✅ 2026-09-30 21:28
 
-> **Note implementazione — brief 12, l'esito** (test-author `8b791a1f`; HEAD invariata `039baea22`).
+> **Note implementazione — brief 12, l'esito** (test-author `8b791a1f`; HEAD invariata `ddc8acb8c`).
 > - Describe nuovo `GrowthChart ladder x axis (S7)` in `e2e/portfolio/dashboard.spec.ts` (`:1425`), 5 test.
 > - Due corse sul solo describe, identiche (`/tmp/libreFolio_i_s7/p_red_r1.log` 20:08, `p_red_r2.log` 20:11): **4 rossi,
 >   1 verde**. File intero (`p_file_r1.log`, 20:13): **19 passati + 4 falliti** = 23; i 18 di prima tutti verdi.
@@ -4587,7 +4587,7 @@ comando la porta 6157 è libera.
 ### Checkpoint C8 — preparazione (2026-09-30 23:08)
 
 > **Note implementazione — il mandato** (coordinator, 23:08): via al bundle di C8, con il protocollo di C7, base
-> `039baea22`, 3 commit come proposti. Prima del bundle, due ritocchi:
+> `ddc8acb8c`, 3 commit come proposti. Prima del bundle, due ritocchi:
 > - **Grant del runner.** La `desc` di `growth-chart-memo` (`scripts/test_runner/_frontend_asset.py:165`) nomina D23,
 >   il margine della griglia e S7. Va nel commit 2. Il commit 1 prende `_frontend_asset.py` in una versione
 >   intermedia: la registrazione (`:35`) e la `desc` di `asset-unit` (`:164`), nient'altro. Controllo ogni confine:
@@ -4596,11 +4596,11 @@ comando la porta 6157 è libera.
 >   commenti. Poi di nuovo `growth-chart-memo` e Prettier.
 >
 > Il resto del messaggio:
-> - **La simulazione dell'allineamento**, fatta dal coordinator (albero WIP `421363d78` × `8f18416df`, base del merge
->   `5068b706c`): 10 file toccati dai due lati, **una sola regione in conflitto**, la riga del broker sotto la candela
+> - **La simulazione dell'allineamento**, fatta dal coordinator (albero WIP `421363d78` × `27d99a703`, base del merge
+>   `92339d088`): 10 file toccati dai due lati, **una sola regione in conflitto**, la riga del broker sotto la candela
 >   in `GrowthChart.svelte`. La risoluzione tiene il mio `fmtCurrency(v, true)` e l'`escapeHtml(broker.brokerName)` di
 >   K. L'import della `:21` e gli altri 2 siti di K si fondono da soli.
-> - **Avviso da Risk.** Il suo commit (a) `840bdbc0d`, con il grant del coordinator, cambia il mio `lineChartHelpers.ts`
+> - **Avviso da Risk.** Il suo commit (a) `9cb2ea172`, con il grant del coordinator, cambia il mio `lineChartHelpers.ts`
 >   (fa da ponte a `Lower`/`Band` fra le sessioni) e il mio test `'maps a date absent…'` (contratto nuovo: Lower
 >   `[0,1,2]`, Band `[10,10,10]`). Mi arriva con l'integrazione di Risk. **Nel frattempo non tocco quei due file.**
 > - Le traduzioni senza escape nel formatter, e i `$_` che il gate di K accetta, vanno nel backlog del coordinator, per
@@ -4620,7 +4620,7 @@ comando la porta 6157 è libera.
 >
 > **⚠️ Fuori pista — il turno interrotto** (23:33). Un errore del servizio ha chiuso il mio turno, e quello di D alla
 > stessa ora. Alla ripresa (23:37) il coordinator mi ha mandato lo stato, e l'ho ricontrollato da solo:
-> - HEAD `039baea22`, il ramo giusto, gli stessi 12 percorsi (10 modificati, 2 nuovi), stage vuoto, nessun merge,
+> - HEAD `ddc8acb8c`, il ramo giusto, gli stessi 12 percorsi (10 modificati, 2 nuovi), stage vuoto, nessun merge,
 >   cherry-pick o lock in corso;
 > - la 6157 e la 6167 libere, nessun processo mio rimasto;
 > - la `desc` del runner e la nota qui sopra c'erano; i doc degli helper no, e il bundle non era partito;
@@ -4655,7 +4655,7 @@ comando la porta 6157 è libera.
 > - **Mandato** (coordinator, 23:08; ripreso alle 23:35, dopo l'interruzione): via al bundle di C8, 3 commit come
 >   proposti, con il protocollo di C7. Prima la `desc` del runner e i doc dei tre helper di test: fatti (registro
 >   «preparazione»).
-> - **Contenuto:** 3 commit su `039baea22`, 12 percorsi:
+> - **Contenuto:** 3 commit su `ddc8acb8c`, 12 percorsi:
 >
 > | # | subject | contenuto | percorsi |
 > |---|---|---|---|
@@ -4689,7 +4689,7 @@ comando la porta 6157 è libera.
 > - **Questa è l'ultima scrittura nel worktree prima del digest.** I numeri del bundle (alberi, sha256, digest)
 >   dipendono da questo file, quindi qui non ci sono: li registro dopo il commit.
 > - **Dopo C8:**
->   - l'allineamento con `dev_release2` (oggi `8f18416df`, con K);
+>   - l'allineamento con `dev_release2` (oggi `27d99a703`, con K);
 >   - sulla revisione combinata, i gate di K (`htmlInterpolation.gate.test.ts`, `htmlSink.gate.test.ts`,
 >     `GrowthChart.tooltip.test.ts`), con `growth-chart-memo`, `component-unit` e `asset-unit`;
 >   - poi S7b (tacche Y doppie, gli assi di D23, «-888»), S8 (R11), S8b (D24), la verifica sulla copia nella 6167,
@@ -4700,7 +4700,7 @@ comando la porta 6157 è libera.
 > **Note implementazione:**
 > - **Il bundle**, costruito fra le 23:52 e le 00:12 senza scrivere nel repository dopo il registro «pronto», stava
 >   in `/tmp/libreFolio_i_c8_commits/`, con la copia nella cartella di sessione (`files/c8_commit_bundle/`). Le
->   guardie sono quelle di C7, con HEAD `039baea22`, i 12 percorsi e i 3 alberi di C8. Un file si divide fra due
+>   guardie sono quelle di C7, con HEAD `ddc8acb8c`, i 12 percorsi e i 3 alberi di C8. Un file si divide fra due
 >   commit, `_frontend_asset.py`: le patch vanno solo nell'indice, e il worktree resta alla versione finale.
 >
 > | verifica | come | esito |
@@ -4711,72 +4711,72 @@ comando la porta 6157 è libera.
 > | dry-run sul repository reale | matrice di 9 configurazioni (bash 3.2 e 5; git Apple, Homebrew e del bundle; `env -i`, anche in it_IT) | rc 0 in 9 su 9, «would commit 3/3». Fuori da `refs/copilot/` refs invariati; nessuno dei 19 oggetti propri del bundle nel repository |
 > | commit veri, in 3 cloni usa-e-getta | git Homebrew 2.55 con bash 3.2, git 2.53 con bash 5, git Apple in `env -i` | PASS 16 in ognuno: le guardie, il dry-run, 3 commit lineari, il runner intermedio nel commit 1 e finale nel 2, il secondo lancio rifiutato. Ogni clone cancellato dallo script, repository reale invariato |
 > | messaggi | `check_messages.py` | `MESSAGES OK`: subject ASCII di 37, 50 e 31 caratteri, righe ≤ 69. La scansione privacy segnala 2 righe del journal, attese: la riga «messaggi» del registro di C7 e il «token rich» di ECharts |
-> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`8f18416df`, base del merge `5068b706c`), per HEAD e per l'albero di C8, in un archivio di oggetti usa-e-getta | una sola regione in conflitto, in `GrowthChart.svelte`, come nella simulazione del coordinator. Il target tocca altri 5 percorsi di C8 (i 4 cataloghi, `_frontend_asset.py`), che si fondono da soli |
+> | revisione combinata, prima del merge | `merge-tree` con `dev_release2` (`27d99a703`, base del merge `92339d088`), per HEAD e per l'albero di C8, in un archivio di oggetti usa-e-getta | una sola regione in conflitto, in `GrowthChart.svelte`, come nella simulazione del coordinator. Il target tocca altri 5 percorsi di C8 (i 4 cataloghi, `_frontend_asset.py`), che si fondono da soli |
 >
 > - sha256 dello script `1310bc9a…55cb`, derivato da quello di C7 (`485cbd92…ad58`) con sostituzioni contate.
 > - **Il developer ha committato alle 11:04** (ora d'autore 11:03:59; segnale del coordinator alle 11:12). Il
 >   coordinator ha confrontato alberi e messaggi con il bundle. La mia verifica, in sola lettura, fatta dopo il merge
 >   (`/tmp/libreFolio_i_c8_postcommit_check.sh`, 12:28):
->   - 3 commit in fila su `039baea22`, ognuno con un solo genitore;
+>   - 3 commit in fila su `ddc8acb8c`, ognuno con un solo genitore;
 >   - ogni albero è quello del bundle;
 >   - ogni messaggio è identico byte per byte al suo `.msg`;
->   - i 12 file nell'albero di `de5349e46` hanno lo sha256 registrato nel bundle;
+>   - i 12 file nell'albero di `69d4c6afb` hanno lo sha256 registrato nel bundle;
 >   - i 19 oggetti propri del bundle ora sono tutti nel repository (19 su 19);
->   - `dev_release2` (`8f18416df`) è antenato di HEAD, con il merge del registro qui sotto.
+>   - `dev_release2` (`27d99a703`) è antenato di HEAD, con il merge del registro qui sotto.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `7bfa064f0` | `feat(charts): add ladder axis planner` | `8a8d09f8e6a8` |
-> | 2 | `69cba356f` | `fix(charts): rebuild candle and income bucket axis` | `e2b708b78638` |
-> | 3 | `de5349e46` | `docs(journal): record C7 and S7` | `741865f8a6e9` |
+> | 1 | `52ba9caa7` | `feat(charts): add ladder axis planner` | `8a8d09f8e6a8` |
+> | 2 | `ad46dfce8` | `fix(charts): rebuild candle and income bucket axis` | `e2b708b78638` |
+> | 3 | `69d4c6afb` | `docs(journal): record C7 and S7` | `741865f8a6e9` |
 >
 > - **Pulizia:** cancellata `/tmp/libreFolio_i_c8_commits` (1,9 GB), dopo il confronto con `cmp` fra la copia in
 >   sessione e quella in `/tmp`: script, digest, patch e messaggi. Nella copia in sessione mancava lo script della
 >   risoluzione, `resolve_worktree.py`: l'ho aggiunto prima di cancellare (`files/c8_commit_bundle/work/`).
 
-### Allineamento a `dev_release2` — merge `851d3a5cf` ✅ 2026-10-01 12:15
+### Allineamento a `dev_release2` — merge `bbaabf811` ✅ 2026-10-01 12:15
 
 > **Note implementazione:**
 > - **L'apertura.** Lo script del coordinator, `/tmp/libreFolio_merge_target_into_i8_open.sh`, lanciato dal developer
->   dopo il commit di C8, ha riconosciuto C8 dagli alberi e ha aperto il merge con `8f18416df`. Il merge base è
->   `5068b706c`. È rimasto in conflitto il solo `GrowthChart.svelte`, nessun file non tracciato.
+>   dopo il commit di C8, ha riconosciuto C8 dagli alberi e ha aperto il merge con `27d99a703`. Il merge base è
+>   `92339d088`. È rimasto in conflitto il solo `GrowthChart.svelte`, nessun file non tracciato.
 > - **Il commit.** Lo script del coordinator, `/tmp/libreFolio_commit_i8_merge.sh`, con guardia sull'albero (dry run
 >   GUARDS_OK), lanciato dal developer alle 12:15; segnale del coordinator alle 12:19. La mia verifica, in sola
 >   lettura:
->   - `851d3a5cf`, genitori `de5349e46` e `8f18416df`, albero `6b4a1dd90394`: lo stesso che stava in stage durante
+>   - `bbaabf811`, genitori `69d4c6afb` e `27d99a703`, albero `6b4a1dd90394`: lo stesso che stava in stage durante
 >     il gate del registro qui sotto, quindi il gate vale per il commit;
 >   - subject `merge(charts): dev_release2 into I (K step 13, L picks)`;
 >   - nessun merge in corso, albero di lavoro pulito, 0 file non tracciati; porte 6157 e 6167 libere.
 > - **Cosa porta**: 21 commit e 144 file, +7460 −355.
->   - **Il passo 13 di K** (`80f1d9155`, CHANGELOG in `8f18416df`).
->     - L'escape del testo utente nei sink HTML (`53219bc00`) e i gate `htmlInterpolation.gate.test.ts` e
+>   - **Il passo 13 di K** (`517cc22c1`, CHANGELOG in `27d99a703`).
+>     - L'escape del testo utente nei sink HTML (`6f5ab544e`) e i gate `htmlInterpolation.gate.test.ts` e
 >       `htmlSink.gate.test.ts`, entrambi in core-unit.
 >     - `GrowthChart.tooltip.test.ts`, in component-unit, con tre casi: linea, candele, percentuale.
 >     - Gli escape nei grafici: `echartsTooltipHelpers.ts`, `signalLabel.ts`, `PriceChartFull`, `ExposureTreemap` e
 >       altri. Nessuno di questi file l'ho toccato io dal merge base.
->   - **STALE_PRICE con la CTA di sincronizzazione** (`f1fe176a2`).
+>   - **STALE_PRICE con la CTA di sincronizzazione** (`feb945634`).
 >     - `portfolio_service.get_report` costruisce `stale_prices` dalle `end_positions` (MARKET_PRICE, asset con
 >       provider).
 >     - In `portfolio_engine.py` la `cta_action` passa da `navigate_asset` a `sync_asset_prices`.
 >     - Test: +253 righe in `test_portfolio_service.py`, +45 in `test_data_quality_report.py`.
 >   - **Borsa Italiana**.
->     - La valuta viene dall'API dei prezzi (`fa03e116a`).
->     - `borsa-italiana-scraping` sale a 0.3.2 (`3c9f78b50`: `Pipfile` e lock, dipendenza git `ref` `95d6a59d…`).
+>     - La valuta viene dall'API dei prezzi (`8c176e019`).
+>     - `borsa-italiana-scraping` sale a 0.3.2 (`8cc2e2a6f`: `Pipfile` e lock, dipendenza git `ref` `95d6a59d…`).
 >     - Il venv condiviso l'ha già aggiornato il developer sotto freeze. Misurato al gate: borsa 0.3.2, idna 3.20,
 >       soupsieve 2.10, gli stessi del lock. Nessuna azione mia.
 >   - **Le scelte di L**, prese con cherry-pick dal suo ramo:
->     - la correzione dell'upload, `0743b9f44`: il form manda il `broker_id` (CHANGELOG `b1835949e`);
->     - dal passo 1: i CSV in cp1252 (`cc4ae7aeb`), i plugin CSV con il lettore di base (`8efbbed14`), la `desc` del
->       runner per `brim-provider-base` (`c1108c9d0`), gli ID d'asset finti nei doc (`e4dfb6d55`); CHANGELOG
->       `1622a7a38`;
+>     - la correzione dell'upload, `28832e588`: il form manda il `broker_id` (CHANGELOG `cce91de6b`);
+>     - dal passo 1: i CSV in cp1252 (`0cca3a14f`), i plugin CSV con il lettore di base (`10b1c83be`), la `desc` del
+>       runner per `brim-provider-base` (`e01179d0f`), gli ID d'asset finti nei doc (`b8321f1ee`); CHANGELOG
+>       `0b55ce668`;
 >     - cambiano anche un file di istruzioni BRIM e lo skill BRIM: non è il mio dominio.
 >   - **Il resto**:
->     - PWA: icone opache e una maskable vera (`b4f425226`), service worker ritimbrato (`3d625e703`);
->     - i nomi dei campi per i password manager (`f23f68e2e`);
->     - il layout da telefono della scheda asset (`007528dc6`);
->     - le cinque toolbar (`3e5313d3e`);
+>     - PWA: icone opache e una maskable vera (`50aebf2f7`), service worker ritimbrato (`db57e4a65`);
+>     - i nomi dei campi per i password manager (`1ddedfeec`);
+>     - il layout da telefono della scheda asset (`63bdcf058`);
+>     - le cinque toolbar (`51de5dc75`);
 >     - le pagine developer del banner e della PWA, `user/dashboard/index.en.md` (+2);
->     - TODO (`8bd6be663`, `b8bfd0cac`) e CHANGELOG.
+>     - TODO (`f2017b9d6`, `225c58c5a`) e CHANGELOG.
 >   - Niente in `alembic/`, `app/db`, `app/schemas`, nel client API o nel `package.json`/lock del frontend: niente
 >     `npm ci`, niente ripopolamento del DB.
 > - **La risoluzione**: una regione sola, `GrowthChart.svelte:2146` (5 righe → 1), la riga del broker nel tooltip
@@ -4819,12 +4819,12 @@ comando la porta 6157 è libera.
 >     HTML, `…Url`/`…Src` per gli URL;
 >   - per S11-final, `user/dashboard/index.en.md` ha 2 righe nuove del target.
 
-### Gate sulla revisione combinata `851d3a5cf` ✅ 2026-10-01 11:48 (dalle 11:17; merge aperto, albero `6b4a1dd90394`)
+### Gate sulla revisione combinata `bbaabf811` ✅ 2026-10-01 11:48 (dalle 11:17; merge aperto, albero `6b4a1dd90394`)
 
 > **Note implementazione:**
 > - Corsia: 6157, `/tmp/librefolio-r2-i-charts`, un comando alla volta, con merge aperto e albero in stage
 >   `6b4a1dd90394`, prima del commit. Il commit ha lo stesso albero (registro qui sopra): il gate vale per
->   `851d3a5cf`.
+>   `bbaabf811`.
 > - Log: `/tmp/libreFolio_i_m8_*.log`.
 > - A fine giro:
 >   - porte 6157 e 6167 libere;
@@ -4850,8 +4850,8 @@ comando la porta 6157 è libera.
 > | 14 | `api portfolio` | 55/55 | server di prova sulla 6157, poi libera |
 > | 15 | `services ai-export` | 922/922, 3 avvisi, 220 s | i 3 avvisi: `PytestUnhandledThreadExceptionWarning` di aiosqlite («Event loop is closed») alla chiusura di `test_ai_export_components_fx.py::TestPairIdentity::test_direct_pair`. Nessuno dei due lati tocca `ai_export`, FX o i conftest |
 > | 16 | E2E `front-portfolio dashboard` | 24/24, 1 worker, 1,5 min | le righe di D23/S7 e i tooltip ancorati alla fixture (C5) |
-> | 17 | E2E `front-asset asset-detail` | 28/28, 1 worker, 2,0 min | `:486` «calendar-return primary mode» verde in 1,2 min, come al gate B4 (budget 180 s di `2d22130bd`) |
-> | 18 | E2E `front-broker detail` | 32/32, 1 worker, 1,2 min | `:1072` «line and income submodes render this broker own figures» verde. Il blocco di L, «import history upload» (`0743b9f44`), sta in fondo allo spec (`:1205`) ed è verde a `:1219` |
+> | 17 | E2E `front-asset asset-detail` | 28/28, 1 worker, 2,0 min | `:486` «calendar-return primary mode» verde in 1,2 min, come al gate B4 (budget 180 s di `f4d209b11`) |
+> | 18 | E2E `front-broker detail` | 32/32, 1 worker, 1,2 min | `:1072` «line and income submodes render this broker own figures» verde. Il blocco di L, «import history upload» (`28832e588`), sta in fondo allo spec (`:1205`) ed è verde a `:1219` |
 >
 > - Nessun retry e nessun flaky nei tre log E2E. Dei rossi noti di `dev_release2` dipendenti dalla data non ne
 >   resta nessuno sulla revisione combinata: `asset-detail :486`, il P&L di `brokers-detail`, `dashboard`.
@@ -4864,7 +4864,7 @@ comando la porta 6157 è libera.
 >   - Il coordinator (12:05) conferma che non serve: nessuno dei due lati lo tocca.
 > - **Il registro arriva dopo il commit.** La regola del piano chiede di aggiornarlo a ogni passo, ma con il merge
 >   aperto lo script del coordinator verifica l'albero: tutti e tre i registri li ho scritti dopo il commit, come per
->   `921f1fc05`.
+>   `1602d23d8`.
 > - **Prossimo:** S7b (tacche Y doppie, D18), poi S8.
 
 ### S7b — Tacche Y distinte (D18, D23 sugli assi) e tacca di bordo (D25) ✅ 2026-10-01 15:02
@@ -4872,8 +4872,8 @@ comando la porta 6157 è libera.
 **Passo 1 — analisi, sola lettura ✅ 2026-10-01 13:19**
 
 > **Note implementazione:**
-> - Base: `cd6502084` (il journal di C8, sul merge `851d3a5cf`), albero pulito, porte 6157 e 6167 libere. Avvio:
->   il coordinator, dopo la verifica di `cd6502084`.
+> - Base: `3dd1bc147` (il journal di C8, sul merge `bbaabf811`), albero pulito, porte 6157 e 6167 libere. Avvio:
+>   il coordinator, dopo la verifica di `3dd1bc147`.
 > - Le righe da cambiare, entrambe mie:
 >   - `GrowthChart.svelte:1999-2008`, `yAxisFormatter`, ramo del denaro: `toFixed(0)` per i k, `toFixed(1)` per
 >     gli M, il meno ASCII scritto a mano, poi `maskable(compact)`. Il ramo `%` (`toFixed(1)`) resta (D18);
@@ -5077,7 +5077,7 @@ comando la porta 6157 è libera.
 **Passo 6 — registro e `CHECKPOINT READY` (C9) ✅ 2026-10-01 15:02**
 
 > **Note implementazione:**
-> - Base `cd6502084`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
+> - Base `3dd1bc147`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
 >   - `frontend/src/lib/components/dashboard/GrowthChart.svelte` (+21/−9);
 >   - `frontend/src/lib/components/dashboard/PerformanceChart.svelte` (+10/−5);
 >   - `frontend/src/lib/components/dashboard/GrowthChart.test.ts` (+257/−16);
@@ -5097,7 +5097,7 @@ comando la porta 6157 è libera.
 >     twice (`5.5k` printed as `6k` next to a real `6k`, `1.25M` as `1.3M`) and use the minus sign of the
 >     browser's language. An axis edge placed automatically beyond the data is no longer labelled as if it were
 >     a regular step, and the Income bars stand on an axis that starts at zero.»
-> - Conflitti attesi: nessuno. Il delta non tocca `lineChartHelpers.ts` né il suo test (Risk, `840bdbc0d`), né
+> - Conflitti attesi: nessuno. Il delta non tocca `lineChartHelpers.ts` né il suo test (Risk, `9cb2ea172`), né
 >   file condivisi o registri del coordinator.
 > - Stato: FROZEN, nessun edit, test, server o Git fino al prossimo messaggio del coordinator.
 
@@ -5107,18 +5107,18 @@ comando la porta 6157 è libera.
 > - Il coordinator ha adottato il mio messaggio v2 per il commit 1, ha rigenerato lo script prima del lancio e l'ha
 >   provato a secco (GUARDS_OK, stessi controlli su percorsi e blob). Il developer ha committato alle 15:31.
 > - La mia verifica dopo il commit, in sola lettura (15:32, `/tmp/libreFolio_i_c9_check.log`):
->   - 2 commit in fila su `cd6502084`, ognuno con un solo genitore, nessun merge;
+>   - 2 commit in fila su `3dd1bc147`, ognuno con un solo genitore, nessun merge;
 >   - i messaggi sono identici byte per byte a quelli approvati;
 >   - commit 1: i 4 file del frontend, +456 −55; commit 2: questo piano, +237 −1. In tutto 5 file, il delta di C9;
 >   - albero di lavoro pulito, stage vuoto; porte 6157 e 6167 libere.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `07035fd4f` | `fix(charts): keep money axis ticks distinct` | `d042dea789f9` |
-> | 2 | `99bc08911` | `docs(journal): record S7b and D25` | `6ca564575565` |
+> | 1 | `eb5a49f6c` | `fix(charts): keep money axis ticks distinct` | `d042dea789f9` |
+> | 2 | `626fa5162` | `docs(journal): record S7b and D25` | `6ca564575565` |
 >
-> - **`dev_release2` è andato avanti** (misurato alle 15:56): `ed3bf870a`, 4 commit `docs(todo)` fra le 12:15 e le
->   14:44 (`5405f25a1`, `e04001a49`, `9d018ba76`, `ed3bf870a`). Toccano solo `TODO_FUTURI.md` (+150), che il mio
+> - **`dev_release2` è andato avanti** (misurato alle 15:56): `6d3318cdb`, 4 commit `docs(todo)` fra le 12:15 e le
+>   14:44 (`47ca6ca0f`, `a3520a1e5`, `d7cf13880`, `6d3318cdb`). Toccano solo `TODO_FUTURI.md` (+150), che il mio
 >   ramo non ha mai toccato. Non sono in HEAD, e C9 non li ha fusi. L'allineamento lo decide il coordinator: lo
 >   segnalo nell'handoff di C10.
 > - **Mandato** (coordinator, dopo la verifica di C9): la verifica in sola lettura, poi S8 (R11) nella 6157. La
@@ -5129,7 +5129,7 @@ comando la porta 6157 è libera.
 **Passo 1 — analisi, sola lettura, e D26 ✅ 2026-10-01 15:49**
 
 > **Note implementazione:**
-> - Base: `99bc08911`, albero pulito, porte 6157 e 6167 libere.
+> - Base: `626fa5162`, albero pulito, porte 6157 e 6167 libere.
 > - **Il motore, rimisurato per simbolo** (come promesso alle 12:25): invariato, S8 lo legge soltanto.
 >   - `portfolio_engine.py`: `AcquisitionFundingContribution` a `:498`, i campi `from_new_capital` e
 >     `from_reinvested` a `:507-508`, costruito a `:1219-1224`, serializzato a `:1857-1875`;
@@ -5188,7 +5188,7 @@ comando la porta 6157 è libera.
 >   e il fatto che le barre sono gli acquisti lordi del periodo mentre il KPI è il costo aperto di oggi (il ⚠️ dello
 >   storyboard).
 > - **Conflitti attesi: nessuno.** `GrowthChart.svelte` e i due test sono miei. Non tocco `lineChartHelpers.ts` né
->   il suo test (Risk, `840bdbc0d`), né cataloghi i18n, CHANGELOG o runner, salvo la `desc` approvata.
+>   il suo test (Risk, `9cb2ea172`), né cataloghi i18n, CHANGELOG o runner, salvo la `desc` approvata.
 >
 > **Passi:**
 > 1. ✅ analisi e D26 (15:49);
@@ -5379,7 +5379,7 @@ comando la porta 6157 è libera.
 >
 > **⚠️ Fuori pista:**
 > - Due interruzioni del servizio, segnalate dal coordinator e non dovute al lavoro: alle 17:18, dopo il gate 1, e
->   alle 17:37, dopo il gate 8. Dopo ciascuna ho ricontrollato lo stato: HEAD `99bc08911`, gli stessi 4 percorsi,
+>   alle 17:37, dopo il gate 8. Dopo ciascuna ho ricontrollato lo stato: HEAD `626fa5162`, gli stessi 4 percorsi,
 >   scritture complete, porte libere, nessun processo rimasto.
 > - Il gate 8 è stato corso due volte, per la richiesta del coordinator (sopra): due verdi, nessuna differenza.
 > - Il gate 10 non era nella lista: l'ho aggiunto perché S8 cambia il consumo delle chiavi (GrowthChart ora legge
@@ -5407,7 +5407,7 @@ comando la porta 6157 è libera.
 **Passo 6 — registro e `CHECKPOINT READY` (C10) ✅ 2026-10-01 17:57**
 
 > **Note implementazione:**
-> - Base `99bc08911`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
+> - Base `626fa5162`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
 >   - `frontend/src/lib/components/dashboard/GrowthChart.svelte` (+19/−10);
 >   - `frontend/src/lib/components/dashboard/GrowthChart.test.ts` (+296/−13);
 >   - `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` (+57/−18);
@@ -5421,13 +5421,13 @@ comando la porta 6157 è libera.
 >   2. `docs(journal): record S8, D26 and D27`, questo piano.
 > - Proposte per i registri del coordinator:
 >   - la clausola di S8 per la `desc` di `growth-chart-memo` (passo 5), non applicata;
->   - CHANGELOG: nessuna voce per S8. Il sottomodo Proventi è nato dopo la 1.1.0 (`d5e834de4`, 2026-09-18; in
+>   - CHANGELOG: nessuna voce per S8. Il sottomodo Proventi è nato dopo la 1.1.0 (`f1f0da870`, 2026-09-18; in
 >     `v1.1.0` GrowthChart non legge i finanziamenti dell'acquisto): nessun comportamento rilasciato cambia. Il
 >     capitolo `[Unreleased]` non descrive ancora la modalità P&L (Linea, Candele, Proventi): una voce ✨ Added per
 >     l'intera funzione, valore di acquisto compreso, la propongo all'handoff di S12.
 > - Conflitti attesi: nessuno. `GrowthChart.svelte` e i due test sono miei; nel runner cambia solo la `desc`
->   concessa. Non tocco `lineChartHelpers.ts` né il suo test (Risk, `840bdbc0d`), né cataloghi i18n o CHANGELOG.
-> - `dev_release2` è fermo a `ed3bf870a` (misurato alle 17:55): HEAD è avanti di 42 commit e indietro di 4, i
+>   concessa. Non tocco `lineChartHelpers.ts` né il suo test (Risk, `9cb2ea172`), né cataloghi i18n o CHANGELOG.
+> - `dev_release2` è fermo a `6d3318cdb` (misurato alle 17:55): HEAD è avanti di 42 commit e indietro di 4, i
 >   quattro `docs(todo)` già segnalati in C9, che toccano solo `TODO_FUTURI.md`. L'allineamento lo decide il
 >   coordinator.
 > - Verifiche finali, dopo la chiusura del passo (17:58–18:03):
@@ -5438,7 +5438,7 @@ comando la porta 6157 è libera.
 >     (`:184`), un'uscita identica byte per byte a quella di `HEAD` (`/tmp/libreFolio_i_s8_ruff{,_head}.log`).
 >     Black: lo stesso riformato di `HEAD`, e l'unica riga diversa è la `desc` stessa
 >     (`/tmp/libreFolio_i_s8_black_{head,wt}.diff`). Le due righe di `add_test` oltre i 300 caratteri sono più
->     vecchie: `asset-unit` lo è da prima di `69d0d27c6`, `growth-chart-memo` è nata così in `69d0d27c6`. In
+>     vecchie: `asset-unit` lo è da prima di `4c470eedf`, `growth-chart-memo` è nata così in `4c470eedf`. In
 >     `scripts/test_runner/` Black riformatterebbe 15 file su 30: non è un gate del runner, e non cambio nulla;
 >   - non lanciato `front-ai-export unit`, che registra di nuovo `chartCoreHelpers.test.ts` (nel backlog del
 >     coordinator): stesso `npx vitest run` da `frontend/`, stessa configurazione, e il file è verde nel gate 5;
@@ -5454,7 +5454,7 @@ comando la porta 6157 è libera.
 >   caratteri. Ha preparato lo script `/tmp/libreFolio_commit_i_c10.sh`, l'ha provato a secco (GUARDS_OK) e su un
 >   clone (2 commit con 5 file, puliti; la seconda corsa rifiutata). Il developer ha committato alle 18:47.
 > - La mia verifica dopo il commit, in sola lettura (18:48):
->   - 2 commit in fila su `99bc08911`, ognuno con un solo genitore, nessun merge;
+>   - 2 commit in fila su `626fa5162`, ognuno con un solo genitore, nessun merge;
 >   - i messaggi sono identici byte per byte a quelli proposti (`/tmp/libreFolio_commit_i10_{1,2}.txt`);
 >   - commit 1: i 3 file del frontend e il runner, +373 −42; commit 2: questo piano, +352 −3. In tutto 5 file, il
 >     delta di C10, con i blob dichiarati;
@@ -5462,8 +5462,8 @@ comando la porta 6157 è libera.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `c4595922e` | `feat(charts): show purchase value in income bars` | `0daa0cbd3e1b` |
-> | 2 | `567fee80e` | `docs(journal): record S8, D26 and D27` | `91ecc5ce48b3` |
+> | 1 | `7f7f31304` | `feat(charts): show purchase value in income bars` | `0daa0cbd3e1b` |
+> | 2 | `3b4e546f5` | `docs(journal): record S8, D26 and D27` | `91ecc5ce48b3` |
 >
 > - **Decisioni del coordinator su C10** (18:08):
 >   - la clausola di S8 per la `desc` di `growth-chart-memo` (passo 5) è approvata senza D27, che nessun test fissa.
@@ -5473,9 +5473,9 @@ comando la porta 6157 è libera.
 >   - il `<b>${pnlLabels.bookValue}</b>` passato a `signedRow` va nella sua lista con K, insieme alle altre
 >     traduzioni non escapate;
 >   - nessun allineamento a `dev_release2` per ora: ha in più solo i 4 commit TODO, che non mi toccano.
-> - `dev_release2` resta `ed3bf870a`: HEAD è avanti di 44 commit e indietro di 4.
+> - `dev_release2` resta `6d3318cdb`: HEAD è avanti di 44 commit e indietro di 4.
 > - **Mandato** (coordinator, 18:48): la verifica in sola lettura, poi il passo successivo del piano nella 6157.
->   È S8b (D24). Il fix della data di `asset-detail.spec.ts:486` non c'è più da fare: è E7, in C5 (`f70b9c3ba`),
+>   È S8b (D24). Il fix della data di `asset-detail.spec.ts:486` non c'è più da fare: è E7, in C5 (`7d19fd7e2`),
 >   come registrato al punto B4.
 
 ### S8b — La guida del Rendimento mobile nel dettaglio asset (D24)
@@ -5483,8 +5483,8 @@ comando la porta 6157 è libera.
 **Passo 1 — analisi, sola lettura ✅ 2026-10-01 18:59**
 
 > **Note implementazione:**
-> - Base: `567fee80e`, un solo file modificato (questo piano), stage vuoto, porte 6157 e 6167 libere.
->   `dev_release2` (`ed3bf870a`) ha in più solo i 4 commit TODO, che toccano soltanto `TODO_FUTURI.md`.
+> - Base: `3b4e546f5`, un solo file modificato (questo piano), stage vuoto, porte 6157 e 6167 libere.
+>   `dev_release2` (`6d3318cdb`) ha in più solo i 4 commit TODO, che toccano soltanto `TODO_FUTURI.md`.
 > - **Il punto d'inserimento** (`assets/[id]/+page.svelte`): la riga della finestra,
 >   `asset-calendar-window-controls` (`:2965-2999`), dentro `{#if primaryMode === 'calendar-return'}`. Contiene
 >   l'etichetta, i 4 preset e `CompactDurationBadge` (`:2980-2998`). Il «?» va dopo il badge, prima del `</div>` di
@@ -5625,11 +5625,11 @@ comando la porta 6157 è libera.
 > **⚠️ Fuori pista:**
 > - **Il passo 1 sbagliava: l'ancora la controlla `dev.py`.** Avevo letto solo `scripts/docs_links.py` e
 >   `mkdocs.yml`. `cmd_mkdocs_check_links` (`dev.py:1170`) passa ogni link con `#` a `_mkdocs_check_anchor`
->   (`:1133`, da `b35a8581e`, 18/09). L'ancora deve esistere nel file inglese (`_mkdocs_anchor_slugs`, `:1096`:
+>   (`:1133`, da `79846975c`, 18/09). L'ancora deve esistere nel file inglese (`_mkdocs_anchor_slugs`, `:1096`:
 >   gli id espliciti di attr_list e gli slug delle intestazioni) **e** in ogni traduzione presente. Una pagina senza
 >   traduzione è salva, perché mkdocs-static-i18n ricade sull'inglese; una tradotta no.
 >   - `chart.{it,fr,es}.md` esistono, di 58 righe contro 123: la sezione delle modalità è arrivata il 17/09
->     (`2d22130bd`), dopo l'ultima traduzione del 04/09 (`757aac84a`);
+>     (`f4d209b11`), dopo l'ultima traduzione del 04/09 (`c5c45f686`);
 >   - le eccezioni (`MKDOCS_ANCHOR_EXCEPTIONS`, `:1126`) sono 3 e «devono solo restringersi».
 >
 >   Lo schema di D24 non passa quindi il gate in nessun momento prima della traduzione: oggi manca l'ancora
@@ -5683,7 +5683,7 @@ comando la porta 6157 è libera.
 **Passo 6 — registro e `CHECKPOINT READY` (C11) ✅ 2026-10-01 21:42**
 
 > **Note implementazione:**
-> - Base `567fee80e`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
+> - Base `3b4e546f5`. Delta: 5 file tracciati modificati, nessun file nuovo, stage vuoto:
 >   - `frontend/src/routes/(app)/assets/[id]/+page.svelte` (+2/−0, sha256 `bc1123d8c8f558e8…`);
 >   - `frontend/e2e/assets/asset-detail.spec.ts` (+89/−1, `604ce9c0d5397eb7…`): l'import prende `setLanguage`,
 >     e c'è il test nuovo;
@@ -5713,7 +5713,7 @@ comando la porta 6157 è libera.
 > - Conflitti attesi: la pagina è solo mia (coordinator, 30/09); nella spec condivisa aggiungo un test e un nome
 >   nell'import, senza toccare i test esistenti; `chart.en.md` cambia di una riga, la sovrapposizione la verifica
 >   il coordinator; nel runner cambia solo la `desc` concessa. Non tocco `dev.py`, cataloghi i18n o CHANGELOG.
-> - `dev_release2` è fermo a `ed3bf870a` (misurato alle 21:41): HEAD è avanti di 44 commit e indietro di 4, i
+> - `dev_release2` è fermo a `6d3318cdb` (misurato alle 21:41): HEAD è avanti di 44 commit e indietro di 4, i
 >   quattro `docs(todo)` già noti, che toccano solo `TODO_FUTURI.md`.
 > - Verifiche finali: `git diff --check` pulito, stage vuoto, 0 file non tracciati, 5 file tracciati; porte 6157 e
 >   6167 libere.
@@ -5727,7 +5727,7 @@ comando la porta 6157 è libera.
 >   Ha preparato lo script `/tmp/libreFolio_commit_i_c11.sh`, l'ha provato a secco (GUARDS_OK) e su un clone (2
 >   commit con 5 file, puliti; la seconda corsa rifiutata). Il developer ha committato alle 21:47.
 > - La mia verifica dopo il commit, in sola lettura (21:49):
->   - 2 commit in fila su `567fee80e`, ognuno con un solo genitore, nessun merge;
+>   - 2 commit in fila su `3b4e546f5`, ognuno con un solo genitore, nessun merge;
 >   - i messaggi, letti grezzi dal commit (`git cat-file`), sono identici byte per byte a quelli proposti
 >     (`/tmp/libreFolio_commit_i11_{1,2}.txt`: sha256 `ca90e6c9edf7294c…` e `46714f6cb6c37f49…`);
 >   - commit 1: la pagina, la spec, `chart.en.md` e il runner, +93 −3; commit 2: questo piano, +276 −2. In tutto 5
@@ -5736,8 +5736,8 @@ comando la porta 6157 è libera.
 >
 > | # | commit | subject | albero |
 > |---|---|---|---|
-> | 1 | `e3af27ff3` | `feat(assets): add rolling-return guide link` | `b4aef17e3d3d` |
-> | 2 | `1c568bfe0` | `docs(journal): record S8b and D28` | `94b615cabd22` |
+> | 1 | `fe8e57d3c` | `feat(assets): add rolling-return guide link` | `b4aef17e3d3d` |
+> | 2 | `740582dea` | `docs(journal): record S8b and D28` | `94b615cabd22` |
 >
 > - **Registri del coordinator su C11** (21:46):
 >   - D28: la risposta testuale del developer è nel suo journal. Il rosso di `check-links` per it/fr/es è noto e
@@ -5748,7 +5748,7 @@ comando la porta 6157 è libera.
 >   - nessuna voce del CHANGELOG per S8b; le voci ✨ arrivano a S12;
 >   - la nota sul `loadingDelay` di 200 ms, che rimonta l'app e perde lo stato della pagina, va nel suo triage di
 >     fine round: è prodotto, fuori dal mio perimetro.
-> - `dev_release2` resta `ed3bf870a`: HEAD è avanti di 46 commit e indietro di 4, i quattro `docs(todo)` già noti.
+> - `dev_release2` resta `6d3318cdb`: HEAD è avanti di 46 commit e indietro di 4, i quattro `docs(todo)` già noti.
 > - **Mandato** (coordinator, 21:48): la verifica sulla copia nella 6167, poi S11-finale e S12, come da piano.
 
 ### Verifica sulla copia nella 6167 — R8, R10, R10z, S7b, R11, S8b ✅ 2026-10-01 23:10
@@ -5757,7 +5757,7 @@ comando la porta 6157 è libera.
 > - **Perché.** La DoD (§8) vuole R8/R10 confermati sulla copia con le fasi della sonda di S6 (`r8`, `r10`, `r10z`).
 >   La stessa corsa copre S7b, R11 e S8b. Nessuna modifica di prodotto.
 > - **Base e freschezza:**
->   - HEAD `1c568bfe0`; l'unico file modificato è questo piano;
+>   - HEAD `740582dea`; l'unico file modificato è questo piano;
 >   - la build del frontend (19:39) è più recente di ogni file di `frontend/src`;
 >   - il sito MkDocs (21:33:56) è posteriore a `chart.en.md` (21:33:23): la pagina inglese ha
 >     `id="rolling-return"`, quella italiana no (D28).
@@ -5878,8 +5878,8 @@ comando la porta 6157 è libera.
 ### S11-finale — le tre pagine inglesi riallineate al codice (docs-writer) ✅ 2026-10-02 00:12
 
 > **Note implementazione:**
-> - **Mandato.** Coordinator, dopo C11 (`e3af27ff3` + `1c568bfe0`): «la verifica sulla copia nella 6167, poi
->   S11-finale e S12». Base HEAD `1c568bfe0`; prima di S11-finale l'unico file modificato era questo piano.
+> - **Mandato.** Coordinator, dopo C11 (`fe8e57d3c` + `740582dea`): «la verifica sulla copia nella 6167, poi
+>   S11-finale e S12». Base HEAD `740582dea`; prima di S11-finale l'unico file modificato era questo piano.
 > - **Fatti verificati prima di scrivere.** Solo letture, in tre passate fino al 2026-10-01:
 >   - i valori inglesi di ogni chiave i18n citata;
 >   - `GrowthChart.svelte`: serie, tooltip, scala delle larghezze, offerta, riconciliazione, bucket;
@@ -5987,7 +5987,7 @@ comando la porta 6157 è libera.
 >   in §5 (`:398`), la DoD in §8, l'handoff previsto in §9. Nessun edit di codice e nessun server: solo letture, la
 >   suite vitest intera, i due messaggi di commit e questo registro.
 > - **Base e target**, rimisurati alle 00:31:
->   - HEAD `1c568bfe0`; `dev_release2` `ed3bf870a`; merge-base `8f18416df`, il lato destro di m8;
+>   - HEAD `740582dea`; `dev_release2` `6d3318cdb`; merge-base `27d99a703`, il lato destro di m8;
 >   - HEAD ha 46 commit in più, 4 dei quali merge, e 4 in meno: i 4 `docs(todo)` di `dev_release2`, che toccano
 >     solo `TODO_FUTURI.md` (+150);
 >   - `git merge-tree --write-tree dev_release2 HEAD`: pulito, albero `b89b76103ca8`. Nessuno dei 4 commit tocca le
@@ -5996,7 +5996,7 @@ comando la porta 6157 è libera.
 >     precedenti; mancano i 46 commit di questo round.
 > - **Gate combinati: perché basta la suite vitest intera.**
 >   - Dopo m8 i 18 gate erano verdi sulla revisione combinata (registro «Gate sulla revisione combinata
->     `851d3a5cf`»).
+>     `bbaabf811`»).
 >   - Da m8 a HEAD cambiano 10 file: frontend, docs, runner e questo piano. Niente backend e niente cataloghi i18n,
 >     quindi `api portfolio` 55/55 e `i18n audit` (3418 chiavi per catalogo) di m8 valgono ancora.
 >   - S7b e S8 hanno rieseguito build, `front check` (floor 3/41), core-unit, component-unit, asset-unit,
@@ -6034,7 +6034,7 @@ comando la porta 6157 è libera.
 > | E2E asset detail | non corso in S1; E7: 1 fallito su 28 | 29/29 (S8b) |
 >
 > - **S10 chiusa.** La riga era rimasta 🔄, ma non c'era più niente di aperto:
->   - l'E2E della scala delle larghezze c'è, `dashboard.spec.ts:720` e `:801`, entrato con `026bc20fb` (C5,
+>   - l'E2E della scala delle larghezze c'è, `dashboard.spec.ts:720` e `:801`, entrato con `8ea6f2f2e` (C5,
 >     2026-09-29);
 >   - il seguito di `maskFormattedNumber` l'ha fatto D23, usato in `GrowthChart.svelte` e `PerformanceChart.svelte`;
 >   - D9: DBT-A rinviato, DBT-B a chi sa perché è stato scritto, fuori dal round;
@@ -6066,7 +6066,7 @@ comando la porta 6157 è libera.
 >   - mai toccati: `/tmp/libreFolio_incoming_to_a.txt` e i file del coordinator (`libreFolio_commit_i_c*.sh`, `_m1`,
 >     `_raw1`).
 > - **Residui**, nessuno blocca l'integrazione:
->   1. **`%` premuto ma disabilitato.** Possibile difetto, non verificato dal vivo, presente da `c9013c496`, prima di
+>   1. **`%` premuto ma disabilitato.** Possibile difetto, non verificato dal vivo, presente da `d0a97e702`, prima di
 >      questo round:
 >      - `GrowthChart.svelte:719` calcola `hasPctData`;
 >      - `:725-729`: il ripiego gira una volta sola, e solo per un `%` ripristinato (`restoredPctUnchecked`);
@@ -6090,7 +6090,7 @@ comando la porta 6157 è libera.
 >   11. `<b>${pnlLabels.bookValue}</b>` senza escape: già nel backlog del coordinator, con K.
 >   12. D15: `AllocationHistoryChart.svelte:596`, `resolvePrimary` → `assetTypeFamily` (K), e il commento della
 >       palette a `:123`. Il grafico va mostrato al developer.
->   13. `CROWDFUND_REAL_ESTATE` di K: **già chiuso**, niente da fare per chi integra. `6d8b951bc` (C6) gli dà 🤝
+>   13. `CROWDFUND_REAL_ESTATE` di K: **già chiuso**, niente da fare per chi integra. `e4ca40e1a` (C6) gli dà 🤝
 >       in `allocationTypeEmoji.ts`. Su `dev_release2` quel modulo non c'è ancora: lì il tipo ripiega su 📊 finché I
 >       non è integrato.
 >   14. Debito di traduzione, per Aphra e solo su richiesta del developer: charts it/fr/es da ritradurre intera;
@@ -6098,7 +6098,7 @@ comando la porta 6157 è libera.
 >   15. Le etichette di `PrivacyToggle` sono solo inglesi: girate a J.
 >   16. D9: DBT-A rinviato, DBT-B al suo autore.
 >   17. I bundle di C1–C3 esistono solo nella cartella di sessione.
-> - **Stato dei residui alla verifica d'archivio** (2026-10-09, codice letto a `3cceb4f90`, nessun test). Ognuno ha
+> - **Stato dei residui alla verifica d'archivio** (2026-10-09, codice letto a `f545b67e3`, nessun test). Ognuno ha
 >   una casa:
 >   - **rinviati** a `Phase_0/38_postReleaseBacklog/README.md`:
 >     - 1 → voce «I-03 · `%` premuto ma disabilitato». Oggi in `GrowthChart.svelte`: `hasPctData` a `:772`, il
@@ -6115,19 +6115,19 @@ comando la porta 6157 è libera.
 >       (owner M). La riga cita `:1834`; oggi `fmtCurrency` è a `GrowthChart.svelte:2156`. Q tiene aperta la
 >       cartella 09 e ha ricevuto la nota;
 >   - **chiusi:**
->     - 10 da `1c2f88d67` (08/10): `kpi-cards.en.md:125` dice «Purchase Cost»;
->     - 11 dalla voce 10, decisione (c) (`48e736855`, `2ee77d04e`): il gate controlla i cataloghi, nessun sito
+>     - 10 da `69d9d0d81` (08/10): `kpi-cards.en.md:125` dice «Purchase Cost»;
+>     - 11 dalla voce 10, decisione (c) (`3255e9abe`, `b7d136009`): il gate controlla i cataloghi, nessun sito
 >       toccato ([piano](plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md));
 >     - 12 nella famiglia di Risk (riga R-D15);
->     - 13 da `6d8b951bc`;
->     - 15 da `1466a76d6` di J: `PrivacyToggle.svelte:14` usa `header.privacy.*`;
->   - **superato:** 2, dalle guardie della gallery di M (`c80508be8`, `ee5a2e277`): `toBeEnabled` a
+>     - 13 da `e4ca40e1a`;
+>     - 15 da `b629b789a` di J: `PrivacyToggle.svelte:14` usa `header.privacy.*`;
+>   - **superato:** 2, dalle guardie della gallery di M (`22cad9ded`, `82da6a0ba`): `toBeEnabled` a
 >     `gallery.spec.ts:723`, `aria-pressed` a `:1054` e `:1148`;
 >   - **accettato:** 3. `AllocationPanel.test.ts:131-142` risale gli antenati dal testid e legge `invisible`
 >     apposta, perché jsdom non ha CSS;
 >   - **osservazioni, nessun lavoro:** 4, 7 e 17. Per il 17, i commit di C1–C3 sono nella storia e i bundle non
 >     servono più.
-> - **CHANGELOG** (lo scrive il coordinator). Controllo di novità contro `v1.1.0` (`837a8f2c7`):
+> - **CHANGELOG** (lo scrive il coordinator). Controllo di novità contro `v1.1.0` (`aabd8f126`):
 >   - in `v1.1.0` non c'erano la vista P&L (`'pnl'` compare 0 volte in `GrowthChart.svelte`), il plugin
 >     `calendar_rolling_return.py`, la memoria delle viste di Crescita e Allocazione, la privacy;
 >   - `rolling_return.py` c'era già, ma come segnale su N punti, non come modo del grafico;
@@ -6162,32 +6162,32 @@ comando la porta 6157 è libera.
 > - Le voci di §9 sul P&L non diventano righe a sé: il P&L non è mai uscito, quindi entrano nella ✨ (a).
 > - I due oggetti dei commit superavano 50 caratteri (52 e 56): accorciati prima di calcolare gli sha256.
 > - Il residuo 13 l'avevo copiato da una nota di prima di C6 (`:679`, `:818`). Rileggendo i commit davanti al
->   target per il handoff ho visto che `6d8b951bc` l'aveva già chiuso: corretto alle 00:39.
+>   target per il handoff ho visto che `e4ca40e1a` l'aveva già chiuso: corretto alle 00:39.
 > - Nella stessa rilettura il residuo 5 aveva il numero di riga del reperto (`:170`), spostato da D23 a `:180`, e
 >   legava con un «quindi» due fatti separati: corretto, con la ragione per cui `axisTickAmount` resta fuori.
 
 ### D15 — review manuale con il developer, sulla copia nella 6167 ⏭️ spostata alla revisione unita, 2026-10-02 10:05 · ✅ chiusa da Risk, 2026-10-06
 
 > **Esito (verifica d'archivio 2026-10-09).** D15 è stata applicata e rivista nella famiglia di Risk, non qui:
-> `e648c274d` (05/10, «history groups types by family (D15)») e `7383ee64b` (06/10, D375). Prova in
+> `7be14d0a5` (05/10, «history groups types by family (D15)») e `c8c7a35a6` (06/10, D375). Prova in
 > `Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md:2546-2573` e nel suo checkpoint 4 ✅
 > (`:2988`). Oggi torta e storico usano `resolvePrimary: assetTypeFamily` (`AllocationPieChart.svelte:207`,
 > `AllocationHistoryChart.svelte:577`). Il registro sotto resta com'era il 02/10.
 
 > **Note implementazione:**
-> - **Mandato.** Coordinator, 09:45, dopo `e11298294`: il developer ha approvato la review manuale di D15, cioè il
+> - **Mandato.** Coordinator, 09:45, dopo `fda1d549c`: il developer ha approvato la review manuale di D15, cioè il
 >   grafico storico dell'allocazione, `resolvePrimary` a `AllocationHistoryChart.svelte:596` e il commento della
 >   palette a `:123`. Server nella 6167 sulla copia già fatta il 01/10 alle 23:09, senza farne una nuova;
 >   `front build` prima; nessuna modifica di codice. Dopo la review: server spento, 6167 libera, copia cancellata,
 >   con `ls` come prova.
-> - **Controllo in sola lettura di S12:** HEAD `e11298294`, padre `0a9c2bbc5`, il cui padre è `1c568bfe0`; messaggi
+> - **Controllo in sola lettura di S12:** HEAD `fda1d549c`, padre `deec1aed3`, il cui padre è `740582dea`; messaggi
 >   identici alle bozze; blob uguali a quelli dichiarati; albero pulito.
 > - **Stato misurato prima di mostrare:**
 >   - in HEAD la torta (`AllocationPieChart.svelte:198`) e lo storico (`AllocationHistoryChart.svelte:596`) usano
 >     entrambi `resolvePrimary: primaryAssetType`, la vista per contenuto. Così anche su `dev_release2`
->     (`ed3bf870a`, riga `:614`). **Oggi i due grafici concordano.**
+>     (`6d3318cdb`, riga `:614`). **Oggi i due grafici concordano.**
 >   - il passaggio della torta alla vista per veicolo (`assetTypeFamily` di K) vive solo nei rami di Risk
->     (`0a22b2ab3`, `a5d9f850e`), non ancora in `dev_release2`. Lo stato «dopo» non si può mostrare senza una
+>     (`2e0c0e3ed`, `755aa988d`), non ancora in `dev_release2`. Lo stato «dopo» non si può mostrare senza una
 >     modifica di codice, che il mandato esclude: si mostra lo stato di oggi e si descrive il dopo.
 >   - la copia contiene sottotipi ETF: D15 è visibile sui dati del developer.
 >   - che cosa cambia: oggi un sottotipo ETF sta accanto al tipo del suo contenuto, in una sfumatura di quel colore,
@@ -6218,12 +6218,12 @@ comando la porta 6157 è libera.
 > **⚠️ Fuori pista:**
 > - La review si ferma prima del feedback: la build della mia finestra mescola il vecchio e il nuovo. Misurato in sola
 >   lettura alle 10:00:
->   - `dev_release2` è ancora `ed3bf870a`: io ho 48 commit in più e 4 in meno, i soli `docs(todo)`;
->   - il secondo anello e la torta per veicolo (`a34d2b4d8`, `0a22b2ab3`, `580fa8053`, `a983808ad`, `a5d9f850e`,
->     `8e809312f`) stanno solo nei rami di Risk (`e-alfy-risk-management-replan`, `-levels`) e di F
+>   - `dev_release2` è ancora `6d3318cdb`: io ho 48 commit in più e 4 in meno, i soli `docs(todo)`;
+>   - il secondo anello e la torta per veicolo (`a5eb89d4a`, `2e0c0e3ed`, `64d35f9b4`, `193e19e28`, `755aa988d`,
+>     `446b27a00`) stanno solo nei rami di Risk (`e-alfy-risk-management-replan`, `-levels`) e di F
 >     (`e-alfy-risk-asset-global-lab`, che il 01/10 ha fuso la punta di Risk). Non sono né qui né in `dev_release2`;
->   - le mie correzioni dei margini (`cda9408d4`, Crescita, 29/09; lotti `24 → 10`) e tutto il round 4 stanno solo
->     qui: Risk, F e `dev_release2` non le hanno (merge-base `8f18416df`);
+>   - le mie correzioni dei margini (`9c477f5c4`, Crescita, 29/09; lotti `24 → 10`) e tutto il round 4 stanno solo
+>     qui: Risk, F e `dev_release2` non le hanno (merge-base `27d99a703`);
 >   - quindi nessuna build di oggi mostra lo stato combinato: qui margini nuovi e torta vecchia, in Risk e F il
 >     contrario. D15 riguarda proprio lo stato combinato;
 >   - in Risk e F lo storico usa ancora `primaryAssetType` (`:614`): D15 non è applicata da nessuna parte;
@@ -6266,36 +6266,36 @@ comando la porta 6157 è libera.
 >   `/tmp/libreFolio_commit_i_d15.txt`, sha256 `19c38276a32d…`: ASCII, oggetto di 50 caratteri, righe ≤ 66,
 >   nessuno spazio in coda.
 
-### G-K — Gate sulla revisione unita dopo K (`9e9820253`) ✅ 2026-10-02 12:29 (dalle 11:05)
+### G-K — Gate sulla revisione unita dopo K (`1226fa879`) ✅ 2026-10-02 12:29 (dalle 11:05)
 
-> **Mandato** (coordinator, 11:04): K è integrato, `dev_release2` = `23828b411` (albero `24f3bfc3683d`); il developer
-> ha committato il journal di D15 (`211e6b638`) e il merge `9e9820253`. Valido la revisione unita nella corsia 6157
+> **Mandato** (coordinator, 11:04): K è integrato, `dev_release2` = `687e09503` (albero `24f3bfc3683d`); il developer
+> ha committato il journal di D15 (`2c531322b`) e il merge `1226fa879`. Valido la revisione unita nella corsia 6157
 > con l'elenco del coordinator (10:39 e 11:04), poi FROZEN con le prove. Dopo, il coordinator prepara l'avanzamento
 > di `dev_release2` con le mie voci del CHANGELOG.
 
 **Passo 1 — controllo in sola lettura ✅ 2026-10-02 11:05**
 
 > **Note implementazione:**
-> - HEAD `9e9820253`: genitori `211e6b638` + `23828b411`, albero `6aedef9cf42f` = la simulazione del coordinator;
->   `211e6b638^` = `e11298294`. Albero di lavoro pulito; 50 commit avanti e 0 indietro rispetto a `dev_release2`.
-> - Il piano ha il blob `1b2eca6bbcd9` sia in `211e6b638` sia in HEAD. Il messaggio di `211e6b638` è identico byte
+> - HEAD `1226fa879`: genitori `2c531322b` + `687e09503`, albero `6aedef9cf42f` = la simulazione del coordinator;
+>   `2c531322b^` = `fda1d549c`. Albero di lavoro pulito; 50 commit avanti e 0 indietro rispetto a `dev_release2`.
+> - Il piano ha il blob `1b2eca6bbcd9` sia in `2c531322b` sia in HEAD. Il messaggio di `2c531322b` è identico byte
 >   per byte a `/tmp/libreFolio_commit_i_d15.txt` (`git cat-file commit` più `cmp`; `--format=%B` aggiunge solo una
 >   riga vuota in coda).
-> - Il merge porta da `dev_release2` (base `8f18416df`) 6 file, nessuno toccato da I: `Tooltip.svelte` e
+> - Il merge porta da `dev_release2` (base `27d99a703`) 6 file, nessuno toccato da I: `Tooltip.svelte` e
 >   `Tooltip.test.ts` (lo Step 14 di K), `test_transactions_api.py` (il test della coppia collegata), `TODO_FUTURI.md`
->   e due piani di K. `CHANGELOG.md` non cambia dopo `8f18416df`, né da una parte né dall'altra.
+>   e due piani di K. `CHANGELOG.md` non cambia dopo `27d99a703`, né da una parte né dall'altra.
 
 **⚠️ Fuori pista — due domande del coordinator sul CHANGELOG ✅ 2026-10-02 11:10**
 
-> **Note implementazione:** solo lettura, contro `v1.1.0` = `837a8f2c7` (2026-09-07), con `git show v1.1.0:…`,
+> **Note implementazione:** solo lettura, contro `v1.1.0` = `aabd8f126` (2026-09-07), con `git show v1.1.0:…`,
 > `git log -S` e `git tag --contains`; nessun file del codice toccato.
 > 1. **Il margine a sinistra.**
 >    - Crescita: **nessuna riga.** In `v1.1.0` la griglia ha già `left: '3%'` con `containLabel`
->      (`GrowthChart.svelte:697` del tag). I 52 px li ha messi `ef7cce61c` (2026-09-18, in nessun tag),
->      `cda9408d4` torna a `'3%'`: rispetto alla release non cambia niente.
+>      (`GrowthChart.svelte:697` del tag). I 52 px li ha messi `72d16b9ab` (2026-09-18, in nessun tag),
+>      `9c477f5c4` torna a `'3%'`: rispetto alla release non cambia niente.
 >    - Confronto dei lotti: **riga 🐛 sì, solo per questo grafico.** In `v1.1.0` c'è già `left: 24` con
 >      `containLabel` (`LotComparisonChart.svelte:1159-1160` del tag), mostrato da `LotsAnalysisPanel.svelte:478`;
->      `1d5975542` lo porta a 10. Proposta: «The lot comparison chart no longer leaves an empty strip left of its
+>      `631801fb6` lo porta a 10. Proposta: «The lot comparison chart no longer leaves an empty strip left of its
 >      amounts, most visibly on phones.» «wide» esagera: sono 24 px.
 > 2. **D23 sui grafici della release: sì, ma non come è scritto.**
 >    - Il cambiamento visibile è la riga «P&L totale» del tooltip della Crescita, vista Abs (`viewMode === 'eur'`).
@@ -6303,7 +6303,7 @@ comando la porta 6157 è libera.
 >      «−EUR 12.00», e lo zero «+EUR 0.00» in verde. Oggi: «EUR +5.00», «EUR -12.00», lo zero «EUR 0.00» nel colore
 >      del testo. Vale in ogni lingua.
 >    - Le altre righe della Crescita in `v1.1.0` passano già il valore col segno a `toLocaleString` (`:692` del tag):
->      niente cambia. Il meno ASCII scritto a mano in `fmtCurrency` l'ha messo la privacy (`804bc9903`, 2026-09-24, in
+>      niente cambia. Il meno ASCII scritto a mano in `fmtCurrency` l'ha messo la privacy (`8fa118ba4`, 2026-09-24, in
 >      nessun tag) e non è mai uscito.
 >    - Performance, etichette del netto (`shortMoney`, `:166` del tag): il `-` ASCII era a mano, prima del simbolo;
 >      oggi il segno viene da Intl, sempre prima del simbolo. In en/it/fr/es il glifo resta il trattino; U+2212 solo
@@ -6332,7 +6332,7 @@ comando la porta 6157 è libera.
 > | 6 | `front-asset growth-chart-memo` | 60/60 su 1 file |
 > | 7 | `check-orphans` (11:15:42–44) | rc 0: 92 E2E, 275 unit e 224 backend, tutti registrati e raggiungibili. L'istantanea del DB che il runner annuncia va in `.testLog/00_archive/` del worktree, ignorata da `.gitignore:119`: comportamento normale del runner |
 > | 8 | `i18n audit` (11:15:52–56) | rc 0: 3418 chiavi, nessuna traduzione mancante, 392 potenzialmente inutilizzate: come a S8 |
-> | 9 | `api transactions` (11:16:24–49) | rc 0, **23 passati**, 0 saltati. `test_delete_linked_without_pair` (TX-A-031) **gira** e passa: «Got error when trying to delete only one of linked pair». È il test che il commit di K `3cdee7efa` rende padrone del suo asset |
+> | 9 | `api transactions` (11:16:24–49) | rc 0, **23 passati**, 0 saltati. `test_delete_linked_without_pair` (TX-A-031) **gira** e passa: «Got error when trying to delete only one of linked pair». È il test che il commit di K `192a3a4f3` rende padrone del suo asset |
 > | 10 | `api portfolio` (11:17:05–40) | rc 0, 55/55, 0 saltati; il server di prova sulla 6157 si chiude e la porta torna libera |
 > | 11 | E2E `front-portfolio dashboard` (11:18:14–11:20:12) | **rosso: 23/24**, 1 worker, 1,5 min. Fallisce `S7-E4` (`dashboard.spec.ts:1611`), alla precondizione di `openLadder` (`:1469`) e non all'asserzione M: a 375 px, finestra 3m, il gradino `1D` non è offerto (0 elementi in 10 s; lo screenshot mostra 3D, 1W, 2W, 1M). Triage nel Fuori pista qui sotto |
 > | 11b | E2E `front-portfolio dashboard` dopo la correzione di `S7-E4`, solo test: seriale 12:17:05–12:18:45, poi `--workers 4` 12:21:53–12:22:42 | rc 0 e **24/24** tutte e due le volte: 1,3 min con 1 worker, 29,4 s con 4. Registro «Correzione di `S7-E4`», passo 3 |
@@ -6423,7 +6423,7 @@ comando la porta 6157 è libera.
 >   non solo i numeri: chi cambia la soglia o la finestra sa cosa ricalcolare;
 > - controllo gli altri spec sensibili alla larghezza (il gutter di 15 px vale per ogni E2E): se uno diventa rosso
 >   per la stessa ragione, lo dico al coordinator prima di correggerlo;
-> - la correzione va in un commit suo sopra `9e9820253` (`test(charts): …`), preparato dal coordinator col mio
+> - la correzione va in un commit suo sopra `1226fa879` (`test(charts): …`), preparato dal coordinator col mio
 >   handoff; l'integrazione avanza fino a quel commit.
 >
 > Passi: 1. brief a test-author (solo la modifica del file, nessuna corsa nella corsia); 2. i controlli statici;
@@ -6486,7 +6486,7 @@ comando la porta 6157 è libera.
 > **Passo 4, gli spec sensibili alla larghezza** ✅ 2026-10-02 12:07. Ho cercato negli E2E chi rimpicciolisce la
 > finestra e misura pixel: oltre a brokers-detail (gate 12) e dashboard (in correzione), sono `asset-mobile-layout`
 > (390/360), `support-copy-and-go` (560) e `toolbar-width-sweep` (1700 → 320), tutti e tre di K, entrati con
-> `23828b411`. Il progetto mobile (iPhone, `isMobile`) ha scrollbar sovrapposte e nessun gutter.
+> `687e09503`. Il progetto mobile (iPhone, `isMobile`) ha scrollbar sovrapposte e nessun gutter.
 >
 > | spec | ora | esito |
 > |---|---|---|
@@ -6499,7 +6499,7 @@ comando la porta 6157 è libera.
 > > gutter», cioè barra = vw − 66, minimo 254 px. Il selettore «tutti i broker» (`allBrokers`, «Tous les
 > > courtiers» / «Todos los brókers») sporge di 253,5 − barra px (fr; 253,2 es): +4,5 a barra 249 (vw 330), +14,5
 > > a 239 (vw 320). Senza gutter la barra più stretta è 254 e ci sta per 0,5 px; le larghezze 249 e 239 esistono
-> > solo col gutter. L'italiano, più corto, passa. Tra `23828b411` e `9e9820253` sono identici la pagina
+> > solo col gutter. L'italiano, più corto, passa. Tra `687e09503` e `1226fa879` sono identici la pagina
 > > dashboard, lo spec, `utils/layout/`, `ui/toolbar/`, `app.css`; nessuno dei 21 file `frontend/src` del mio ramo
 > > è nella barra dei filtri, e il mio delta i18n (`partialBucket`, `pnlCandlesHypothetical`) non tocca
 > > `allBrokers`. Quindi il rosso si riproduce su `dev_release2` con l'host di oggi. Per mandato lo segnalo al
@@ -6538,7 +6538,7 @@ comando la porta 6157 è libera.
 **Chiusura di G-K — registro e `CHECKPOINT READY`** ✅ 2026-10-02 12:29
 
 > **Note implementazione:**
-> - Base `9e9820253` (genitori `211e6b638` + `23828b411`); `dev_release2` = `23828b411` (rimisurato alle 12:29):
+> - Base `1226fa879` (genitori `2c531322b` + `687e09503`); `dev_release2` = `687e09503` (rimisurato alle 12:29):
 >   HEAD avanti di 50 commit, indietro di 0. Delta: 2 file tracciati modificati, nessun file nuovo, stage vuoto:
 >   - `frontend/e2e/portfolio/dashboard.spec.ts` (+64/−14, blob `57ae4e61a847`), la correzione di `S7-E4`;
 >   - questo piano.
@@ -6547,7 +6547,7 @@ comando la porta 6157 è libera.
 > - Esclusi: i 29 archivi di oggi in `.testLog/00_archive/`, 15 del DB della corsia e 14 di log (cartella ignorata
 >   da `.gitignore:119`), e i risultati di Playwright; fuori dal repo, in `/tmp/`, i log, le sonde e i messaggi di
 >   commit.
-> - Commit proposti, due, sopra `9e9820253`, lo spec per primo. Messaggi ASCII, oggetti di 40 e 45 caratteri,
+> - Commit proposti, due, sopra `1226fa879`, lo spec per primo. Messaggi ASCII, oggetti di 40 e 45 caratteri,
 >   righe al massimo di 63:
 >   1. `test(charts): stabilize S7-E4 plot width`, solo lo spec (`/tmp/libreFolio_commit_i_gk_test.txt`, sha256
 >      `a3499a02b7ca3054…`);
@@ -6568,16 +6568,16 @@ comando la porta 6157 è libera.
 ### Dopo l'integrazione — i file di `/tmp` della copia di prod del 29/09 cancellati ✅ 2026-10-02 12:51
 
 > **Note implementazione:**
-> - **L'integrazione** (messaggio del coordinator delle 12:41). I due commit di G-K, `9a77b1b61` (lo spec) e
->   `6de5646a1` (questo piano), committati alle 12:40, sono entrati in `dev_release2` con un avanzamento. Sopra, il
->   coordinator ha aggiunto `9fb07c3d7` (il CHANGELOG del mio lavoro) e `975a115ae` (il TODO): `dev_release2` =
->   `975a115ae`.
+> - **L'integrazione** (messaggio del coordinator delle 12:41). I due commit di G-K, `bdb11893c` (lo spec) e
+>   `01a64ec23` (questo piano), committati alle 12:40, sono entrati in `dev_release2` con un avanzamento. Sopra, il
+>   coordinator ha aggiunto `ee53aa9d9` (il CHANGELOG del mio lavoro) e `94312819f` (il TODO): `dev_release2` =
+>   `94312819f`.
 > - **Il mio controllo in sola lettura** (12:43; script e log `/tmp/libreFolio_i_integ_check.*`, copiati nei file di
 >   sessione, in `files/postinteg/`):
->   - HEAD `6de5646a1` è contenuto in `dev_release2`: 0 commit avanti, 2 indietro;
+>   - HEAD `01a64ec23` è contenuto in `dev_release2`: 0 commit avanti, 2 indietro;
 >   - ogni commit tocca un solo file, con il blob rivisto (`57ae4e61a847` lo spec, `354f38f63889` il piano);
 >     l'albero `f76a266ba124` è quello del coordinator; i messaggi sono identici a quelli proposti;
->   - `9fb07c3d7` tocca solo `CHANGELOG.md`, `975a115ae` solo `TODO_FUTURI.md`;
+>   - `ee53aa9d9` tocca solo `CHANGELOG.md`, `94312819f` solo `TODO_FUTURI.md`;
 >   - albero di lavoro pulito, stash vuoto; 6157 e 6167 senza listener; la copia della 6167 non c'è più.
 > - **Il reperto.** In `/tmp` restavano 15 file miei derivati dalla copia di prod del 29/09, leggibili da tutti
 >   (`-rw-r--r--`) e quindi, forse, con dati del developer. Non li ho aperti. Il file della password l'avevo già
@@ -6622,14 +6622,14 @@ comando la porta 6157 è libera.
 
 > **Mandato.** Il coordinator mi ha girato la richiesta del developer: verificare i piani completati delle cartelle
 > `19_yieldOnCost` (H), `20_performanceCharts` (I) e `24_privacyGlobal` (J), allinearli al codice e archiviare in
-> `Release_2/phases/` solo le cartelle davvero finite, intere. Base `3cceb4f90`, pulita. Il codice si legge soltanto.
+> `Release_2/phases/` solo le cartelle davvero finite, intere. Base `f545b67e3`, pulita. Il codice si legge soltanto.
 >
 > - **Esito della verifica:** tutte e tre le cartelle sono FINITE. I residui veri sono le voci I-01…I-12
 >   proposte al coordinator per `Phase_0/38_postReleaseBacklog/README.md`; lui ha confermato la numerazione.
 > - **Fatto, a cartelle ancora in `Phase_0/`:**
 >   - `19_yieldOnCost`: stato in testa, H11, rinvio delle traduzioni (I-08), §14 «Aggiornamento 2026-10-09»,
 >     link verso la 09 in forma `../../Phase_0/…`;
->   - `24_privacyGlobal`: l'analisi (nota d'esito, link); Round 1 (stato, residuo #3 superato da `804bc9903`,
+>   - `24_privacyGlobal`: l'analisi (nota d'esito, link); Round 1 (stato, residuo #3 superato da `8fa118ba4`,
 >     passo 5 superato, SHA dei passi 6-8, link); Round 2 (stato, checkpoint C5-C7, SHA dei passi 12-15, nota
 >     sull'integrazione di I, rinvio I-05, link);
 >   - `20_performanceCharts`, questo piano: stato in testa, link verso la 09, riga R-D15 chiusa da Risk.
@@ -6646,7 +6646,7 @@ comando la porta 6157 è libera.
 > - **Spostamento** con lo script `/tmp/libreFolio_archive_mv.sh`:
 >   - `mv` normale e non `git mv`, su istruzione del coordinator: lo stage resta vuoto fino al commit del
 >     developer, che porta cancellazione e aggiunta nello stesso commit;
->   - guardie: HEAD `3cceb4f90`, stage vuoto, sorgenti presenti, destinazioni assenti;
+>   - guardie: HEAD `f545b67e3`, stage vuoto, sorgenti presenti, destinazioni assenti;
 >   - esito: 10 file tracciati escono da `Phase_0/`, 13 file entrano in `phases/` (i 10 più i 3 README), lo stage
 >     resta vuoto.
 > - **Link interni**, con lo script della skill, che normalizza ogni link relativo che inizia con `./` o `../`:
@@ -6660,17 +6660,17 @@ comando la porta 6157 è libera.
 >   - 6 menzioni senza percorso, che non cambiano: 4 nel journal e 2 commenti di test nel frontend;
 >   - li ho girati al coordinator. Non ho toccato file fuori dalle tre cartelle.
 > - **P4-9, la parte E2E (DBT-D): superata.**
->   - La misura del 24/09 su `f1047f766` (`08_review_visiva_20260922.md:842`) dava 5 rossi su 15 nella
+>   - La misura del 24/09 su `9df0b7b14` (`08_review_visiva_20260922.md:842`) dava 5 rossi su 15 nella
 >     dashboard e 1 su 28 nel broker. I rossi E1–E6 erano assunzioni dei test:
->     - E1–E3 sono stati cancellati, E4 ed E5 riallineati in `026bc20fb`, E6 in `5b395204f`;
->     - l'08/10 erano verdi sulla revisione unita `56483392c`: dashboard 27/27, broker 33/33;
+>     - E1–E3 sono stati cancellati, E4 ed E5 riallineati in `8ea6f2f2e`, E6 in `fce077618`;
+>     - l'08/10 erano verdi sulla revisione unita `a4a651e29`: dashboard 27/27, broker 33/33;
 >     - da allora `dashboard.spec.ts` e `brokers-detail.spec.ts` non sono cambiate. Oggi non le ho rilanciate.
 >   - Resta aperta la conversione dei test specchio: è il coordinator a decidere se resta in P4-9 o diventa una
 >     voce nuova.
 > - **Deviazioni dalla skill `plan-archive`**, entrambe del coordinator:
 >   - `mv` normale invece di `git mv`;
 >   - i collegamenti fra piani usano «Seguito» e «Piano precedente», nella sezione «Precedenti e collegati».
-> - **Controlli finali** su `3cceb4f90`:
+> - **Controlli finali** su `f545b67e3`:
 >   - sui 13 file, confrontati con `HEAD` senza toccare l'indice: nessun errore di spazi sulle righe aggiunte,
 >     nessun marcatore di conflitto;
 >   - i 10 file spostati conservano almeno il 99% delle righe, quindi git riconosce lo spostamento;

@@ -25,7 +25,7 @@ comment guarded that contract, nothing guarded the default if the contract broke
 
 ## Solution
 
-`ff9038487` («fix(assets): read missing sync detail as cancel»): the default is now `{accepted: false}` — an omission
+`1d015f679` («fix(assets): read missing sync detail as cancel»): the default is now `{accepted: false}` — an omission
 means cancel.
 
 ## Prevention

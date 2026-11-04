@@ -6,7 +6,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 
 **Modello**: Sonnet (**MF rivede** J5-1). **Giorni**: 2-3 (J5-1 1,5-2; J5-2 0,5-1).
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-crispy-goggles` · **Branch**: `e-alfy-j-numeri-e-analisi`
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro; già fast-forward).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro; già fast-forward).
 **Corsia**: porta `6190`, cartella dati `/tmp/librefolio-r13-j`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md` (sezione nuova «Ondata 5»); #48: `PROSSIMI_LAVORI.md:390-444`; R1: piano 05 ~7444-7470 e ~9323-9335, backlog ~8487-8491.
 

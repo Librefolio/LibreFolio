@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `3a8139c29`, cioè lo step 18 (`5fb27fca2`, `d998a8dd7`, `5a9a088b9`, `301906813`) più il merge di `dev_release2` `9d79c2dbe` (treno 10, con S17 di O) |
+| **Baseline** | `adc542dc2`, cioè lo step 18 (`8780697db`, `f2066621d`, `46fe8bf9d`, `f8d58cf12`) più il merge di `dev_release2` `4842662a1` (treno 10, con S17 di O) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`. Sonde sulla 6165, con la data-dir della corsia. |
 | **Ordine** | il piano nel repo, poi i test rossi col test-author, poi il codice (coordinator, 08/10) |
 | **Conflitti** | nessun ramo locale tocca dalla merge-base le superfici qui sotto (verificato il 08/10). Il lavoro non committato degli altri worktree non lo vedo. |
@@ -32,7 +32,7 @@
   6. **`SearchSelect` a tendina**: l'Esc sul trigger a lista aperta chiude la lista e non la modale.
   7. **`tx-split-promote` C3**: nel backlog.
 
-## Stato verificato alla base `3a8139c29`
+## Stato verificato alla base `adc542dc2`
 
 - **`routes/(app)/+layout.svelte`** (`onMount`, `:62-133`): `Promise.race([auth.checkAuth(), timeout 5000])`.
   - Con `!isAuth` fa `goto('/')`; il timeout entra nel `catch` e fa `goto('/')`.
@@ -134,7 +134,7 @@
 
 ## Passi
 
-- [x] **19.1 Base** `3a8139c29`: verificata pulita, blob dello step 18 uguali al manifesto, il runner fuso con la riga di
+- [x] **19.1 Base** `adc542dc2`: verificata pulita, blob dello step 18 uguali al manifesto, il runner fuso con la riga di
   `dev_release2`. ✅ 2026-10-08.
 - [x] **19.2 Decisioni**: vedi sopra. ✅ 2026-10-08.
 - [x] **19.3 Rosso**: lotto A, poi lotto B. ✅ 2026-10-08.
@@ -249,7 +249,7 @@
   >   4. `k-55`, journal.
   > - **File condivisi**:
   >   - `scripts/test_runner/_frontend_utility.py`: solo aggiunte, cioè 2 registrazioni più la voce `app-start-auth`;
-  >   - i 4 cataloghi i18n: +4 righe ciascuno sotto `auth`. `dev_release2` (`58fc35174`) li ha cambiati dopo la mia
+  >   - i 4 cataloghi i18n: +4 righe ciascuno sotto `auth`. `dev_release2` (`4527b58ea`) li ha cambiati dopo la mia
   >     base (+11/−3); `git merge-file` dà rc=0 su tutti e quattro, con JSON valido e la chiave presente.
   > - `layout.gate.test.ts` (di J e O): una sola voce nel mock.
   > - I passaggi `auth.serverUnreachable.*` sono testi nuovi per IT, FR ed ES: niente debito di traduzione nella doc.

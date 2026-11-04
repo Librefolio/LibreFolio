@@ -5,7 +5,7 @@ Riferimenti: `PROSSIMI_LAVORI.md:129-143` (V-37b), `:567-580` (#47); backlog V-3
 
 - **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-w2-form`
 - **Ramo**: `e-alfy-w2-form-transazioni` (da `dev_release2`)
-- **HEAD di partenza**: `1fd80c481d2e2bd0c0b5e07cf27984681a88e839` (= `dev_release2`, verificato 23/10/2026)
+- **HEAD di partenza**: `61a6c828b3691fc4d82bd765d38cf37204ac09a7` (= `dev_release2`, verificato 23/10/2026)
 - **Corsia**: porta `6194`, dati `/tmp/librefolio-r13-w2`. Sessione coordinatore: sotto-agente del coordinatore di release.
 - Treni: V-37b → 11a; #47 → 11b (dopo il commit di V-37b).
 
@@ -64,7 +64,7 @@ data «abc» → fuoco sulla data (sta sopra la quantità). Se il developer vuol
   > di testo. Cura: prima `input`/`combobox`, il pulsante solo se non c'è altro. Rilanciati `transactions-modals` e `tx-fx-completeness`: rc=0 entrambi.
   > Anche nello spec `transactions-modals` due messaggi di asserzione («disabled only by an incomplete form») aggiornati: ⚡ ora è sempre abilitato.
 
-## #47 · Importo totale / Prezzo unitario (11b) — analisi (23/10/2026, base `479f57872` = commit di V-37b)
+## #47 · Importo totale / Prezzo unitario (11b) — analisi (23/10/2026, base `93e932058` = commit di V-37b)
 
 **Dove si applica.** Solo BUY e SELL hanno quantità **e** cassa obbligatorie (`schemas/transactions/type_metadata.py:177-193`). ADJUSTMENT/TRANSFER hanno la cassa vietata, FX e i trasferimenti di cassa non hanno quantità, dividendo/interesse/spese non hanno quantità. Quindi la **coppia non è interessata**: il selettore vive solo nella sezione singola di BUY/SELL (`TxFormSingleSection.svelte`, il ramo «quantità + cassa»).
 

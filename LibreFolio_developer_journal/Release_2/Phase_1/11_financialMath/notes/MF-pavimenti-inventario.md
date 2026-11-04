@@ -4,11 +4,11 @@ Solo analisi, nessun codice. Basi lette (storia committata, non i worktree degli
 
 | Ramo | SHA | Cosa ci ho letto |
 |---|---|---|
-| MF `e-alfy-mf-matematica-finanziaria` | `01e180028` | motore, report, prezzi, cambi, transazioni (backend) |
-| J `e-alfy-j-numeri-e-analisi` | `7336910f9` | lotti, #48, rischio, test (con P4b dentro) |
-| W `e-alfy-w-import-e-transazioni` | `8db10d43d` | form, Bulk, import, l'avviso prima del 1900, `CalendarMonth` |
-| Y `e-alfy-y-cruscotto-e-grafici` | `36eaffa4d` | frontend del cruscotto |
-| Z `e-alfy-z-sospensione-e-risveglio` | `a8d1aab57` | AI Export |
+| MF `e-alfy-mf-matematica-finanziaria` | `8ed3b7985` | motore, report, prezzi, cambi, transazioni (backend) |
+| J `e-alfy-j-numeri-e-analisi` | `7370fc405` | lotti, #48, rischio, test (con P4b dentro) |
+| W `e-alfy-w-import-e-transazioni` | `65114c8d9` | form, Bulk, import, l'avviso prima del 1900, `CalendarMonth` |
+| Y `e-alfy-y-cruscotto-e-grafici` | `545fb8ddd` | frontend del cruscotto |
+| Z `e-alfy-z-sospensione-e-risveglio` | `ab826b37a` | AI Export |
 
 I numeri di riga sono quelli del ramo indicato; dopo il treno vanno riletti.
 
@@ -45,7 +45,7 @@ Ci sono due famiglie di limiti, e solo la prima va tolta:
 | P9 | `frontend/src/lib/features/transactions/preFloorDate.ts:2-17` (W) | 1900 | l'avviso con conferma (W5-10). **Resta**: è la protezione dai refusi. Cambia solo il commento («il pavimento resta finché…») | W |
 | P10 | `services/transactions/balances.py:65` (MF = W) | 1900 | data di comodo nel messaggio `LEDGER_UNREADABLE` quando manca `from_date` | W |
 | P11 | `utils/datetime_utils.py:102-106` (`EARLIEST_RANGE_START` e il suo docstring), `utils/date_range_limits.py:12-13` (docstring) | 1900 | la costante | condivisa: l'ultimo lotto (§2, L5) |
-| — | `frontend/src/lib/components/ui/date/CalendarMonth.svelte:224` `min="1900"` | 1900 | **già tolto da W in W5-10** (su `8db10d43d` non c'è più; c'è ancora su MF, J e Y finché non arriva il treno) | W ✅ |
+| — | `frontend/src/lib/components/ui/date/CalendarMonth.svelte:224` `min="1900"` | 1900 | **già tolto da W in W5-10** (su `65114c8d9` non c'è più; c'è ancora su MF, J e Y finché non arriva il treno) | W ✅ |
 
 ### 1.2 Limiti dei prezzi e dei cambi di un asset (non del portafoglio): da decidere (§3)
 

@@ -18,11 +18,11 @@ Five self-contained plans executed in parallel on 2026-06-01, each addressing a 
 
 | Plan | Commit | Area |
 |------|--------|------|
-| `plan-independent-BackendLogAudit.prompt.md` | `82c9224d5` | Backend: TRACE level + log policy + full audit |
-| `plan-independent-CandlestickChart.prompt.md` | `aefb764ed` | Frontend: CandlestickChart.svelte + volume bars |
-| `plan-independent-FxRangeHelper.prompt.md` | `5e12fef35` | Frontend: ensureFxRangeLoaded DRY refactor |
-| `plan-independent-LazyImageCache.prompt.md` | `315d3e826` | Frontend: client-side image preview cache |
-| `plan-independent-RsiSignalBands.prompt.md` | `7a6bd67bb` | Frontend: RSI zone-driven line style |
+| `plan-independent-BackendLogAudit.prompt.md` | `8c2006c15` | Backend: TRACE level + log policy + full audit |
+| `plan-independent-CandlestickChart.prompt.md` | `65c6bae5c` | Frontend: CandlestickChart.svelte + volume bars |
+| `plan-independent-FxRangeHelper.prompt.md` | `a8a192cd3` | Frontend: ensureFxRangeLoaded DRY refactor |
+| `plan-independent-LazyImageCache.prompt.md` | `1dc144593` | Frontend: client-side image preview cache |
+| `plan-independent-RsiSignalBands.prompt.md` | `481a20c4a` | Frontend: RSI zone-driven line style |
 
 ## Key Takeaways
 

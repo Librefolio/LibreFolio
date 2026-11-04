@@ -189,7 +189,7 @@ disegnato, ma solo mostrato nel tooltip come somma.
 
 ### Diagnosi dei margini in Abs e P&L (A, sola lettura, 05/10)
 
-- C'è **una sola** `grid` in `dashboard/GrowthChart.svelte` (`:2071`): `left: '3%'`, `containLabel: true` (`cda9408d4`).
+- C'è **una sola** `grid` in `dashboard/GrowthChart.svelte` (`:2071`): `left: '3%'`, `containLabel: true` (`9c477f5c4`).
   Quindi lo spazio che resta non viene dal margine.
 - **Causa probabile**: nelle viste a linee e candele (Abs, P&L, cioè tutte tranne l'income a barre) l'asse y ha un
   **minimo calcolato** (`min: floor(value.min − 8 % dell'ampiezza)`, `:2266`), quindi un valore grezzo, non un tick tondo.

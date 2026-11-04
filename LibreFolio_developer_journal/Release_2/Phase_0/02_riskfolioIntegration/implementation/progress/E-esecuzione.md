@@ -1,7 +1,7 @@
 # E — Esecuzione: i quattro livelli su Dashboard e Broker Detail
 
 **Mandato**: [`../E-frontend-quattro-livelli.md`](../E-frontend-quattro-livelli.md) (sola lettura)
-**Worktree**: `e-alfy-vigilant-adventure` · **Baseline**: `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`
+**Worktree**: `e-alfy-vigilant-adventure` · **Baseline**: `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f`
 **Lane**: porta `6244` · data dir `backend/data/test-risk-e`
 **Autorizzato**: 18 Set 2026 dal coordinatore sotto delega permanente del developer.
 
@@ -93,7 +93,7 @@ Disegno lasciando il posto, e quando arrivano aggiorno **anche `resultFor`**.
 ### ✅ Passo 0 — Aprire il piano vivo — *18 Set 2026*
 
 > **Note implementazione**: creato questo file. Recepiti i cinque verdetti. Baseline
-> riconfermata `cc33120eb`, albero pulito prima di cominciare.
+> riconfermata `3a4431d5a`, albero pulito prima di cominciare.
 
 ---
 
@@ -122,7 +122,7 @@ regressione disponibile durante l'estrazione, migliore di quella che avrò dopo 
 
 | Comando | Esito |
 |---|---|
-| `git rev-parse HEAD` | `cc33120eb…`, albero pulito |
+| `git rev-parse HEAD` | `3a4431d5a…`, albero pulito |
 | `dev.py api sync` | client rigenerato (`generated.ts` è gitignored e **mancava**) |
 | `dev.py front check` | **0 errori**, 41 avvisi in 2 file (preesistenti, `GlobalSettingsTab`) |
 | `dev.py test --test-port 6244 --data-dir backend/data/test-risk-e front-portfolio risk-controller-unit` | **10 passed** |
@@ -1949,7 +1949,7 @@ lì** invece di sfuggire a un letterale invecchiato.
 | mtime | `00:17`, **identico ai 10 fratelli tracciati** → una sola operazione di checkout/semina |
 | il mio file più recente | `06:39` — **sei ore dopo** |
 | generatore in `scripts/` o `dev.py` | **nessuno** |
-| i 10 fratelli | **tracciati a `cc33120eb`**; questi due no |
+| i 10 fratelli | **tracciati a `3a4431d5a`**; questi due no |
 
 `commodity` e `real-estate` sono due tipi di asset **privi di icona alla baseline**: sono di
 **B**, arrivati con la semina del bootstrap. **La mia lane non li ha prodotti.**
@@ -2225,4 +2225,4 @@ sezionamento del picker (`is_benchmark`).
 
 ## 5. Stato finale
 
-`FROZEN` · HEAD **`cc33120eb`** · 13 tracciati + 25 nuovi = **38** · nessun server · **6244 libera**.
+`FROZEN` · HEAD **`3a4431d5a`** · 13 tracciati + 25 nuovi = **38** · nessun server · **6244 libera**.

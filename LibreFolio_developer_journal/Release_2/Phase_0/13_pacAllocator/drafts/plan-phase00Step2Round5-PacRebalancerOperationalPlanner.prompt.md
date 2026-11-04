@@ -49,7 +49,7 @@ Copie di handoff byte-identiche:
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-friendly-dollop` |
 | Branch | `e-alfy-allocatore-pac` |
-| Baseline combinata | `e38a521f068c2d1b8d743775e90711fec1326fb3` |
+| Baseline combinata | `71b37e4bf0cb127f4735794ec72704475cd2e9fe` |
 | Lane futura | porta `6153`, dati `/tmp/librefolio-r2-d` |
 | Venv condiviso | `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
 | Coordinatore nel kickoff | `12a0954d-0fbe-42da-b687-979e798a50c6` |

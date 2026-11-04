@@ -4,8 +4,8 @@
 |---|---|
 | Mandato | **S4 — review del developer su L4** (round 3) |
 | Worktree | `e-alfy-friendly-bassoon` · ramo `e-alfy-h-monte-carlo` |
-| Baseline | `5b16281f766beef7ff4a23e86f24b18ef3508555` ✅ verificata |
-| Revisione integrata | `fa38f6747` — `quant/` e `L4Simulation.svelte` **identici**, verificato dal coordinatore |
+| Baseline | `ca2cbc51fb25e963530d4f26ca680110e40b96f9` ✅ verificata |
+| Revisione integrata | `93fae7970` — `quant/` e `L4Simulation.svelte` **identici**, verificato dal coordinatore |
 | Corsia | porta **6156** · data dir **`/tmp/librefolio-r2-s4`** |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 
@@ -306,7 +306,7 @@ quella è andata nel backlog e questa no.
 ### 🔴 Fuori pista — l'`i18n audit` è cieco su un terzo del catalogo
 
 Cercando se la chiave esistesse ho trovato `risk.simulation.regimeTruncated`: presente in
-**quattro lingue**, **zero riferimenti** in `.svelte`/`.ts`, introdotta da `e7836b46a`.
+**quattro lingue**, **zero riferimenti** in `.svelte`/`.ts`, introdotta da `5ecc70f48`.
 Una divulgazione scritta, tradotta e mai resa. Ma l'audit non la elenca fra le 122.
 
 **Misurato importando la funzione dell'audit, non leggendo la regex:**

@@ -4,7 +4,7 @@
 **Origine:** review indipendente bloccante ricevuta dal coordinatore alle 16:47.
 **Precedente:** [Round 4 - badge e limiti social](plan-phase00FeedbackImportUrgentRound4-SocialBoundaries.prompt.md).
 **Stato:** ✅ completato e applicato al checkout target `dev_release2` il 2026-09-09.
-**Commit/SHA di integrazione:** `ef722b552433028c051ccb1207c84f1072e51bb7`.
+**Commit/SHA di integrazione:** `c8a77dda370e985fc8fe259f1232ef8a760c2f54`.
 **Sessione/worktree:** archiviati localmente il 2026-09-10.
 
 ## Difetto

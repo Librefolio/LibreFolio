@@ -1,7 +1,7 @@
 # Y5-3 — i grafici con la serie campionata: piano di implementazione
 
 Y, 24/10/2026. Solo analisi, nessun codice, nessuna operazione git. Letti `DECISIONI-DP4.md` e `CONTRATTO-P4b.md`, poi
-il codice nel mio ramo (`e-alfy-y-cruscotto-e-grafici` a `9ccc01c8a`).
+il codice nel mio ramo (`e-alfy-y-cruscotto-e-grafici` a `87ac9e9f3`).
 
 ## 1. Che cosa c'è oggi (e che cosa si rompe)
 

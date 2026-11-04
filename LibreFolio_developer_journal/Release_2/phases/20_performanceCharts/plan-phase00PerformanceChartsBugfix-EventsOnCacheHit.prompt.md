@@ -1,14 +1,14 @@
 # Performance charts — bugfix: i marcatori degli eventi spariscono con «Tutti» e i prezzi in cache
 
-**Stato:** ✅ **COMPLETATO E INTEGRATO**. Commit del developer il 2026-10-07 alle 16:33: `60d8e790a` (la correzione
-con lo spec) e `f8f37ea5c` (questo giornale). In `dev_release2` col treno 9, merge `0a2359573` (17:42). Verificato e
+**Stato:** ✅ **COMPLETATO E INTEGRATO**. Commit del developer il 2026-10-07 alle 16:33: `93653aacd` (la correzione
+con lo spec) e `06bf6677d` (questo giornale). In `dev_release2` col treno 9, merge `6702ec8bb` (17:42). Verificato e
 archiviato il 2026-10-09 in `Release_2/phases/20_performanceCharts/`. Lavoro approvato dal developer il 2026-10-07
 («ok affidare a I la risoluzione», via coordinator alle 15:22). Il brief con diagnosi, correzione e test è andato al
 coordinator alle 15:31.
 *Storia dello stato:* COMPLETATO, FROZEN in attesa del commit (16:22).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
-**Baseline:** HEAD = `dev_release2` = `d07412899`, dopo il fast-forward da `dd538d650` (coordinator, 15:25). Albero
+**Baseline:** HEAD = `dev_release2` = `5f3509536`, dopo il fast-forward da `de84ff5ef` (coordinator, 15:25). Albero
 pulito, rimisurato alle 15:32.
 **Lane:** suite `6157` + `/tmp/librefolio-r2-i`, solo `dev.py test …`, un comando alla volta. La `6167` qui non serve.
 La coverage gira nella `6150`: un timeout si rilancia da solo, senza altro in parallelo.
@@ -40,7 +40,7 @@ Precedenti e collegati:
 
 ## Diagnosi
 
-File: `frontend/src/routes/(app)/assets/[id]/+page.svelte`, funzione `loadChartData()` (righe di `d07412899`).
+File: `frontend/src/routes/(app)/assets/[id]/+page.svelte`, funzione `loadChartData()` (righe di `5f3509536`).
 
 1. `:1642` memorizza `const requestedStart = dateStart`, la data della richiesta. Con «Tutti» è l'ancora del
    sentinella `min`.
@@ -54,9 +54,9 @@ risoluzione per un'interferenza.
 
 **La storia.**
 
-- La risoluzione anticipata sul hit viene da `5b9dddb45` (23/07).
-- La ricaduta per gli eventi viene da `b45f5afbb` (06/08).
-- La guardia `dateStart === requestedStart` viene da `2d22130bd` (17/09). **La regressione è mia**: la guardia è
+- La risoluzione anticipata sul hit viene da `0d60124ff` (23/07).
+- La ricaduta per gli eventi viene da `251df8054` (06/08).
+- La guardia `dateStart === requestedStart` viene da `f4d209b11` (17/09). **La regressione è mia**: la guardia è
   giusta, ma non sapeva della risoluzione sul hit.
 
 **Cosa perde la risposta scartata.**
@@ -124,7 +124,7 @@ test-author.
 
 ## Definition of done
 
-- Il test nuovo è rosso su `d07412899` e verde con la correzione, con le prove registrate qui.
+- Il test nuovo è rosso su `5f3509536` e verde con la correzione, con le prove registrate qui.
 - Lo spec intero e `front check` sono verdi, oppure ogni rosso è spiegato con il triage.
 - Le porte 6157 e 6167 sono libere e le copie di lavoro in `/tmp` sono cancellate.
 - Messaggi di commit pronti per il coordinator; poi FROZEN.
@@ -133,10 +133,10 @@ test-author.
 
 ### B0 e B1 — baseline, diagnosi, brief e piano (2026-10-07 15:32)
 
-> **Note implementazione**: baseline verificata: HEAD = `d07412899` = `dev_release2`, 0 voci in `git status`, nessun
+> **Note implementazione**: baseline verificata: HEAD = `5f3509536` = `dev_release2`, 0 voci in `git status`, nessun
 > listener su 6157 e 6167. Diagnosi in sola lettura sulla pagina, sulla lista, sulla pagina FX, sullo scenario della
-> gallery e sulla storia con `git log -L`. Le righe del coordinator coincidono con `d07412899`. Tra `dd538d650` e
-> `d07412899` la pagina è cambiata in 3 hunk piccoli; uno è `rearmMaxPendingBeforeReload()` (`:1387`), che riarma
+> gallery e sulla storia con `git log -L`. Le righe del coordinator coincidono con `5f3509536`. Tra `de84ff5ef` e
+> `5f3509536` la pagina è cambiata in 3 hunk piccoli; uno è `rearmMaxPendingBeforeReload()` (`:1387`), che riarma
 > «Tutti» prima di `reloadPage()` e non tocca il difetto.
 >
 > **⚠️ Fuori pista — la data dir della corsia è nuova.** Il coordinator assegna `/tmp/librefolio-r2-i`, non più
@@ -237,7 +237,7 @@ test-author.
 >
 > - Nessun server attivo; le porte 6157 e 6167 sono libere (`lsof -nP -iTCP:<porta> -sTCP:LISTEN` senza output).
 > - Ho cancellato le tre copie di lavoro in `/tmp` (`libreFolio_i_evt_{page,list}_d074.svelte`,
->   `libreFolio_i_evt_gallery_d074.ts`): erano codice tracciato di `d07412899`, senza dati privati. `ls` conferma.
+>   `libreFolio_i_evt_gallery_d074.ts`): erano codice tracciato di `5f3509536`, senza dati privati. `ls` conferma.
 > - Restano come prove i 5 log `/tmp/libreFolio_i_evt_{red,green,spec,check,prettier}.log`, con dati mock della
 >   corsia.
 > - Messaggi di commit proposti, ASCII, oggetto ≤ 61 caratteri:
@@ -249,5 +249,5 @@ test-author.
 > - Handoff al coordinator, poi FROZEN.
 >
 > **Esito (verifica d'archivio, 2026-10-09).** Il coordinator ha accorciato l'oggetto del primo commit alla regola dei
-> 50 caratteri: `60d8e790a`, `fix(assets): keep events when All hits the cache`. Il secondo, `f8f37ea5c`, ha
-> l'oggetto proposto. Entrambi sono in `dev_release2` dal treno 9 (`0a2359573`).
+> 50 caratteri: `93653aacd`, `fix(assets): keep events when All hits the cache`. Il secondo, `06bf6677d`, ha
+> l'oggetto proposto. Entrambi sono in `dev_release2` dal treno 9 (`6702ec8bb`).

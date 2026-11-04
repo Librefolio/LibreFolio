@@ -1,7 +1,7 @@
 # S1 — L1 «Quanto può fare male?» · Piano di esecuzione
 
 > **Mandato**: `implementation_2/S1-livello-1.md` · **Round 2, fase 2**
-> **Worktree**: `e-alfy-vigilant-adventure` · **Baseline**: `7d75a9c6c283af4bccf11f6bf380ffaa701d53eb`
+> **Worktree**: `e-alfy-vigilant-adventure` · **Baseline**: `44dd7779db5856e547a3c93d06ee7bad6b1da9ae`
 > **Corsia**: porta `6153` · data dir `/tmp/librefolio-r2-s1`
 > **Analisi**: consegnata al coordinatore e approvata. Questo file è il piano **vivo**.
 
@@ -30,7 +30,7 @@ quando c'è — un «Fuori pista».
 ## Passo 0 — Il piano vivo ✅ 2026-09-02
 
 > **Note implementazione**: creato questo file. Verificato prima di scrivere: `HEAD` =
-> `7d75a9c6c`, `git status --porcelain` = **0 righe**, e i conteggi di riga delle cinque
+> `44dd7779d`, `git status --porcelain` = **0 righe**, e i conteggi di riga delle cinque
 > superfici che tocco o consumo:
 >
 > ```
@@ -536,7 +536,7 @@ numeri invariati lo sono.
 
 ## Passo 11 — Il risveglio sulla revisione fusa ✅ 2026-09-18
 
-Baseline `eac926f6b84a4a2b99a876e82af71ec6c8616ec6`, verificata prima di scrivere.
+Baseline `2c2d38481cf97e9ed90d345612b1171ad4ed5a96`, verificata prima di scrivere.
 Cinque mandati dentro (N, S2, S3, S4, coordinamento). Tre voci dal coordinatore più
 un cancello su revisione nuova.
 
@@ -637,7 +637,7 @@ risk-lab                     6 passed      ← la rete di F
 ```
 
 ⚠️ **171, non 135**, e non è deriva: i miei tre file di unit sono **fermi al mio
-commit `6aba9e48d`**, e i +36 vengono da `l3Helpers` (S3), `simulationProvenance` e
+commit `0dbaa2d9d`**, e i +36 vengono da `l3Helpers` (S3), `simulationProvenance` e
 `l4/simulationModes` (S4), `l4/scenarioHelpers` (S3). **Attribuito per commit, non
 supposto.**
 

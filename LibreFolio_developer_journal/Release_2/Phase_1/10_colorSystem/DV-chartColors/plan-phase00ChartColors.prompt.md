@@ -3,8 +3,8 @@
 > **Workstream DV del programma colori**, sessione «DV - colori dei grafici». Coordinatore: sessione «UI color analysis»
 > (`aec04834-1532-4d86-9e3f-f942e82aca89`).
 > Branch `e-alfy-dv-colori-dei-grafici` (rinominato dall'app; prima `e-alfy-congenial-potato`).
-> - **Baseline dell'analisi:** `8f1abf89e`.
-> - **Base attuale:** `dae4de4fa`, fast-forward del coordinatore; nessun file dell'analisi è cambiato.
+> - **Baseline dell'analisi:** `46df3789a`.
+> - **Base attuale:** `ff75660ad`, fast-forward del coordinatore; nessun file dell'analisi è cambiato.
 > - **Corsia:** porta **6156**, dati **`/tmp/librefolio-r2-dv`**.
 > - **Comandi:** `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6156 --data-dir /tmp/librefolio-r2-dv …`.
 >
@@ -35,7 +35,7 @@
   - Sul punto 8: «sul punto 8 non sono daccordo alla copia nel frontend, se la andasse a prendere dal backend per
     essere centralizzati».
 - **15/10, 17:12, coordinatore:**
-  - S1 committato in `8b8571f9a`.
+  - S1 committato in `f6d3b9437`.
   - Ordine della 1.3, testuale: «prima DV, poi Y9 e Y10». Strada libera su `CorrelationHeatmap`,
     `AllocationHistoryChart`, `AllocationPieChart`, `SemiDonutChart`, `allocationHierarchy` e `allocationRings`.
   - `npm ci` approvato una volta, dal lock del worktree.
@@ -125,8 +125,8 @@
 
 > **Note implementazione:** analisi del 15/10 trascritta qui, con le decisioni aperte. Le voci DV-n del backlog nascono
 > con i passi: DV-1 e DV-2 sono nate in S1.
-> **⚠️ Fuori pista:** prima dell'analisi HEAD era `f27e83448`, non la baseline `8f1abf89e`: fermo e rapporto, poi
-> fast-forward del coordinatore. Dopo l'analisi HEAD è passato a `dae4de4fa` (altro fast-forward, 59 commit):
+> **⚠️ Fuori pista:** prima dell'analisi HEAD era `9a6f562db`, non la baseline `46df3789a`: fermo e rapporto, poi
+> fast-forward del coordinatore. Dopo l'analisi HEAD è passato a `ff75660ad` (altro fast-forward, 59 commit):
 > verificato che non tocca i file dell'analisi.
 
 ### S1 — Una mappa sola per le emoji dei settori, nel backend ✅ (15/10/2026; `api utilities` verde dopo `npm ci`)
@@ -172,7 +172,7 @@
 >   - Serve `npm ci`, con l'OK del coordinatore.
 > - **Dal `test-author`:** per un settore senza emoji l'endpoint dà 📊 e il motore `None`. Non fissato; voce DV-2.
 >
-> **Note implementazione (seguito, 15/10 pomeriggio):** S1 committato dal coordinatore in `8b8571f9a`. `npm ci`
+> **Note implementazione (seguito, 15/10 pomeriggio):** S1 committato dal coordinatore in `f6d3b9437`. `npm ci`
 > approvato ed eseguito una volta dal lock (exit 0). Poi `… api utilities` nella corsia 6156: 9 passati, porta libera.
 >
 > **Golden di `native_cash_guard`, regola della 1.3 (coordinatore, 15/10 alle 18:02):**
@@ -183,7 +183,7 @@
 >     (`LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1 … services roi-fifo-utils native_cash_guard`), poi verifico che il
 >     diff contro il golden di J sia solo Liquidità 💵 → 💰.
 >   - Se entro prima io: rigenera J.
-> - **J è entrato per primo** (coordinatore, 15/10 alle 18:14): CP-4 è in `dev_release2` col merge `322d55042`, e la
+> - **J è entrato per primo** (coordinatore, 15/10 alle 18:14): CP-4 è in `dev_release2` col merge `d94bf0d11`, e la
 >   variabile `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD` è nel docstring del test (`_REGEN_ENV`, verificato sul target).
 >   DV-1 chiusa nel backlog. Il golden lo rigenero io, al merge di base che fa il coordinatore prima della validazione:
 >   vedi S10, prova 0.
@@ -404,7 +404,7 @@ Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione
 | 6 | `test … front-portfolio dashboard`, `front-portfolio risk`, `front-user broker-sharing` | E2E: torta e storico (GR1), correlazione e coppie, semi-ciambella |
 | 7 | Gallery filtrata, **sulla revisione fusa dopo l'ingresso di T**, con il ramo allineato dal coordinatore | `scripts/visual_review/gallery_snapshot.sh dv-cand --checkout <worktree> --port 6156 --data-dir /tmp/librefolio-r2-dv -- --workers 6 -f "<Dashboard\|Brokers\|Assets\|Tools\|Risk Analysis>"`, poi `gallery_tool diff` contro un riferimento dello stesso giorno, con `--common-only`, maschere e stabilità |
 
-**Prova 0, sulla revisione fusa `0182d890d`** (genitori `c5bca76ae` e `10d5ccd2d`, 15/10 alle 19:04): ✅
+**Prova 0, sulla revisione fusa `5f9d9cc09`** (genitori `e0bd70627` e `8f397ab47`, 15/10 alle 19:04): ✅
 - Il golden si era già unito da solo: il golden di J con le 4 righe 💰, nessun 💵, JSON valido, 14 513 righe.
 - `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1 … test --test-port 6156 --data-dir /tmp/librefolio-r2-dv services
   roi-fifo-utils native_cash_guard`: il test salta per rigenerare, e il file viene riscritto (mtime 19:04:47).
@@ -429,7 +429,7 @@ Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione
 - Osservazione di TA-1 per J, nessun cambio: `exposureCategoryLabel` ignora maiuscole e minuscole per tipi e paesi,
   ma non per i settori. Le chiavi arrivano dagli enum del backend.
 
-**Slot pesante, prove 1–7, sulla revisione `d0065fb8e`** (genitori `fb59c7bec` e `e70be943b`; via del coordinatore il
+**Slot pesante, prove 1–7, sulla revisione `515e3e07d`** (genitori `2384ee02e` e `61ac38832`; via del coordinatore il
 15/10 alle 19:48). Una prova alla volta, nella corsia 6156:
 - `api sync` per primo, perché B porta le API del backup: rc 0, nessun file tracciato cambiato.
 - **1 · `front check`:** prima 1 errore, poi **0 errori e 0 avvisi**.
@@ -452,7 +452,7 @@ Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione
   - `risk lab correlation`, `dashboard risk diversification`, `risk what-if simulation`;
   - `PAC allocator result` (mappe di esposizione ed etichette di settore).
 
-  Comando: `/tmp/libreFolio_dv_heavy_7.sh`, cioè `gallery_snapshot.sh dv-charts-d0065fb8e`, poi `live_price_check`
+  Comando: `/tmp/libreFolio_dv_heavy_7.sh`, cioè `gallery_snapshot.sh dv-charts-515e3e07d`, poi `live_price_check`
   e `gallery_tool browse --langs it,en`. Oggi non c'è un riferimento del target con lo stesso filtro: il diff si fa
   solo se il coordinatore ne cattura uno.
   - **Primo giro, 20:29–20:38, a 6 worker:** 6 passati e 12 rossi.
@@ -472,7 +472,7 @@ Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione
     >     mobile.
     >   - **Verdetto: ambiente.** Il dashboard mobile non si blocca più.
   - `live_price_check` è pulito su tutti e tre gli snapshot.
-  - **Contact sheet unico:** `<visual_review>/snapshots/dv-charts-d0065fb8e-sheet/index.html`, con le pagine desktop e
+  - **Contact sheet unico:** `<visual_review>/snapshots/dv-charts-515e3e07d-sheet/index.html`, con le pagine desktop e
     telefono in italiano e in inglese, chiaro e scuro affiancati.
     - È unito dal primo giro e dai due rilanci: lo scatto di un rilancio sostituisce quello del primo giro con lo
       stesso percorso, e `origin.json` dice da dove viene ogni immagine.
@@ -486,11 +486,11 @@ Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione
   - **Per il giro 3, valori non toccati:** nello storico geografico il primo paese prende il primo colore senza
     chiave, Industriali, un ardesia. Le aree traslucide stanno a ΔE00 12.8 (chiaro) e 15.2 (scuro) da «Non
     classificato»; le basi a 31.9 e 29.4.
-- **Il target si è mosso** a `a744e5f89`, con J CP-4c e A6b. Merge simulato con `git merge-tree`: pulito, nessun
+- **Il target si è mosso** a `9526e4942`, con J CP-4c e A6b. Merge simulato con `git merge-tree`: pulito, nessun
   conflitto. In comune ci sono solo il backlog e `_frontend_utility.py`, in blocchi separati.
 - **Delta da committare:** `CorrelationHeatmap.test.ts`, una riga (l'argomento di tipo), e il piano.
 
-**Controllo leggero sul fuso `31d2b15d8`** (genitori `4321da3e6` e `ab2ddf86e`; via del coordinatore il 15/10 alle
+**Controllo leggero sul fuso `90b5d164c`** (genitori `f7081b160` e `1cf926658`; via del coordinatore il 15/10 alle
 21:08, dopo la galleria di G). Uno alla volta, nella corsia 6156, con la 1.3 ripartita (load all'inizio 60 / 71 / 67):
 tutto verde.
 - `api sync`: rc 0, nessun file tracciato cambiato.
@@ -523,7 +523,7 @@ tutto verde.
   - porta 6156 libera.
 - **Non lanciati, perché pesanti:** le prove 1–7, comprese `api utilities` dopo DV-2 e la gallery.
 
-**Il target si è mosso** a `be7de95b6`, con E2 e le decisioni 48–50.
+**Il target si è mosso** a `2621200a0`, con E2 e le decisioni 48–50.
 - E2 aggiunge voci in `_frontend_utility.py` a 12–20 righe dalle mie: il merge dovrebbe essere automatico.
 - La decisione 49 (D-Y11, la liquidità negativa sotto lo zero) è lavoro di Y10 sullo storico, dopo DV. La Liquidità
   tiene il suo colore GR3 sopra e sotto lo zero, e DV non deve cambiare nulla.
@@ -542,12 +542,12 @@ Prove leggere dopo i ritocchi:
 
 **49 path**, nessuno in stage. Stato FROZEN.
 
-### TD-1 — Barre «Esposizioni — ideale vs reale» del PAC, con TD-1b ✅ (16/10/2026, validato su `d3ba25ae9`)
+### TD-1 — Barre «Esposizioni — ideale vs reale» del PAC, con TD-1b ✅ (16/10/2026, validato su `0691ea84c`)
 
-**Origine.** Dalla review unica del developer sull'anteprima `ec1ddba96` (15/10, 22:08–22:20), il coordinatore ha
+**Origine.** Dalla review unica del developer sull'anteprima `fca375311` (15/10, 22:08–22:20), il coordinatore ha
 assegnato a DV un compito tecnico: il PAC usava ancora `PAC_EXPOSURE_BAR_COLORS`, cioè il verde vecchio `#1a4031` e, in
 scuro, il fluo `#00d681`. Rientra in GR1, il colore di un tipo riconoscibile «in qualsiasi vista» (D-T22: «Sì, approva
-DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` = `a0915bef9`, 15/10 alle 22:51).
+DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` = `3d1314c2c`, 15/10 alle 22:51).
 
 **Decisioni del coordinatore** (15/10: alle 22:27 sull'analisi in sola lettura, e dopo la rimisura su T-8b):
 1. **«Ideale» nel ruolo neutro `--lf-text-secondary`,** con un test che lo tiene a ΔE00 ≥ 10 da ogni categoria.
@@ -571,7 +571,7 @@ DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` 
   sono di J, che ora non ci lavora: si dichiarano all'ingresso.
 
 **Passi:**
-- [x] `api sync` sulla base `a0915bef9`: rc 0, nessun file tracciato cambiato.
+- [x] `api sync` sulla base `3d1314c2c`: rc 0, nessun file tracciato cambiato.
 - [x] Rimisura del neutro su T-8b, ed eccezione decisa.
 - [x] `roleColors.ts`: `--lf-text-secondary` in `ChartRole`, col ripiego uguale a `tokens.css` (`#4a5550` / `#9ba8a2`).
   Il commento del modulo cita TD-1. `roleColors.test.ts` 26/26: la parità copre il ruolo nuovo, e il controllo «ogni
@@ -611,11 +611,11 @@ DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` 
     `designerLabImports` 27, e `scanColors` 54.
   - Statici: compilatore Svelte 0 avvisi su `ExposureBars` e `GrowthChart`; Prettier; `theme-roles --check`;
     `git diff --check`; ruff e black sul catalogo, uguali a HEAD.
-- [x] **Checkpoint e base merge** (coordinatore): checkpoint `ada4742b7` con TD-1 + TD-1b (16 path); poi le base merge
-  `cec865899`, `dad643109` e `d3ba25ae9`, sopra il target `c7dea8be6` (J CP-15/16, X CP11a, Z3, il lotto di doc di W,
+- [x] **Checkpoint e base merge** (coordinatore): checkpoint `c8ebfcfb8` con TD-1 + TD-1b (16 path); poi le base merge
+  `44d1b06dd`, `5348a4ae3` e `0691ea84c`, sopra il target `1f5abed67` (J CP-15/16, X CP11a, Z3, il lotto di doc di W,
   E4a). Tutte uguali alla simulazione. `tokens.css` non è cambiato, quindi ripieghi e controllo ΔE restano validi.
   `api sync` rifatto su ogni base: rc 0, nessun file tracciato cambiato.
-- [x] **Prove pesanti su `d3ba25ae9`** (16/10, via del coordinatore alle 01:48; load 35 / 31 / 35), una alla volta
+- [x] **Prove pesanti su `0691ea84c`** (16/10, via del coordinatore alle 01:48; load 35 / 31 / 35), una alla volta
   nella 6156: tutto verde.
   - `front check`: 0 errori, 0 avvisi.
   - `front-utility core-unit`: 171 file, 5900 test.
@@ -661,7 +661,7 @@ DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` 
 >   Prettier e `theme-roles --check` puliti. I test di TD-1b li scrivono TA-1 (`chartCategories`, `chartTheme`) e TA-2
 >   (un caso C4 in `GrowthChart.test.ts`).
 
-### W5-PAC — Ruoli di colore nel PAC ✅ (16/10/2026, validato su `35a55cf39`)
+### W5-PAC — Ruoli di colore nel PAC ✅ (16/10/2026, validato su `9102008c3`)
 
 **Mandato.** Proposta del coordinatore, alle 02:16, approvata alle 02:20, con l'OK di J (stanotte lavora solo sul
 backend). Rientra nel mandato del developer delle 22:20: «mergia il lavoro fatto, correggi gli aspetti tecnici e
@@ -779,10 +779,10 @@ e gli stati, con la tabella della skill `theme-roles`. Con l'OK del coordinatore
   >   - 4 test che importano il PAC da fuori, 21 in tutto: `ToolsHub` 3, `ToolHost` 4, `registry` 8,
   >     `moneyRenderSites` 6.
   > - Nessun test asserisce classi del PAC, E2E compreso: test-author non serve.
-- [x] ✅ (16/10/2026) Checkpoint: commit `4743b1542` del coordinatore (02:41), 43 file. Le merge simulate con il
-  target `db384eaf5` e con il ramo di T (`abc4c84de`) sono pulite, compreso il baseline.
-- [x] ✅ (16/10/2026) Prove pesanti nello slot delle 06:45, insieme a W5-charts, sulla base merge `35a55cf39` (target
-  `72e66d1a6`, col secondo lotto di T: W1-c, W1-e con `ModalBase`, W2-a). Tutto verde: i conteggi stanno nella sezione
+- [x] ✅ (16/10/2026) Checkpoint: commit `a930b3835` del coordinatore (02:41), 43 file. Le merge simulate con il
+  target `9fe0e69b1` e con il ramo di T (`be704d3ba`) sono pulite, compreso il baseline.
+- [x] ✅ (16/10/2026) Prove pesanti nello slot delle 06:45, insieme a W5-charts, sulla base merge `9102008c3` (target
+  `7aefcc13a`, col secondo lotto di T: W1-c, W1-e con `ModalBase`, W2-a). Tutto verde: i conteggi stanno nella sezione
   «W5-charts», passo «Prove pesanti».
 
 **Dove guardarlo, per il developer:**
@@ -792,10 +792,10 @@ e gli stati, con la tabella della skill `theme-roles`. Con l'OK del coordinatore
 - I campi di testo restano com'erano fino al lotto di T sull'input. Le barre verdi «dopo il piano» e la traccia
   degli obiettivi restano anche loro come prima.
 
-### W5-charts — Ruoli di colore nei componenti di `components/charts/` ✅ (16/10/2026, validato su `35a55cf39`)
+### W5-charts — Ruoli di colore nei componenti di `components/charts/` ✅ (16/10/2026, validato su `9102008c3`)
 
 **Mandato.**
-- Proposta del coordinatore alle 02:41, dopo il commit di W5-PAC (`4743b1542`): «i file di `components/charts/` che
+- Proposta del coordinatore alle 02:41, dopo il commit di W5-PAC (`a930b3835`): «i file di `components/charts/` che
   Y9 e K-15 non toccano». Stesse regole di W5-PAC: niente catene di classi, solo neutri, marchio e stati.
 - Elenco approvato alle 02:50; via libera della 1.3 alle 02:5x: stanotte nessuna sessione tocca quei file, e Y4a
   (FE2a), che ne sposta 8 in `features/signals/`, parte dopo l'ingresso di DV.
@@ -925,11 +925,11 @@ entrambi i temi, `#e8ece9` in chiaro e `#1b2421` in scuro.
   >   `themeModeReads` 24, `designerLabImports` 27, `scanColors` 54.
   > - Nessun test asserisce colori di questi file: le classi asserite sono `animate-spin`, `lf-compact-number-input` e
   >   `hidden`, quindi test-author non serve.
-- [x] ✅ (16/10/2026) Checkpoint: commit `7d3896011` del coordinatore (03:08), 14 file. Le merge simulate con il target
-  `8850ad002` e con T (`abc4c84de`) sono pulite.
-- [x] ✅ (16/10/2026) Prove pesanti, W5-PAC e W5-charts in una sola validazione, sulla base merge `35a55cf39` del
+- [x] ✅ (16/10/2026) Checkpoint: commit `d0e6e8eec` del coordinatore (03:08), 14 file. Le merge simulate con il target
+  `aa2bfc6c2` e con T (`be704d3ba`) sono pulite.
+- [x] ✅ (16/10/2026) Prove pesanti, W5-PAC e W5-charts in una sola validazione, sulla base merge `9102008c3` del
   coordinatore.
-  > **Note implementazione**: la base merge porta il target `72e66d1a6`, col secondo lotto di T (W1-c, W1-e con
+  > **Note implementazione**: la base merge porta il target `7aefcc13a`, col secondo lotto di T (W1-c, W1-e con
   > `ModalBase`, W2-a). L'albero era uguale alla simulazione e il worktree pulito; `app.css`, baseline e backlog si sono
   > fusi da soli. Sulla revisione: m1 8.833, m2 64.
   >
@@ -950,7 +950,7 @@ entrambi i temi, `#e8ece9` in chiaro e `#1b2421` in scuro.
   >
   > - L'avviso di mathjax del runner (`CERTIFICATE_VERIFY_FAILED`, ripiego sul CDN) c'era già nel lancio di TD-1;
   >   non tocca le prove.
-  > - Alla fine la porta 6156 è libera (`lsof` vuoto), HEAD `35a55cf39`, worktree pulito.
+  > - Alla fine la porta 6156 è libera (`lsof` vuoto), HEAD `9102008c3`, worktree pulito.
 
 **Dove guardarlo, per il developer:**
 - Dettaglio di un asset e di un cambio, in chiaro e in scuro:
@@ -972,7 +972,7 @@ entrambi i temi, `#e8ece9` in chiaro e `#1b2421` in scuro.
 - Elenco, ordine e scelte approvati alle 10:58.
 - Il coordinatore manda il «chi parte prima» alla 1.3 e mi gira ogni cambio prima che io arrivi a quei file.
 
-**Base:** `8f2824046`. `/tmp` è vuota dopo il riavvio delle 10:16, quindi il convertitore l'ho ricostruito nella
+**Base:** `cdf74ef2a`. `/tmp` è vuota dopo il riavvio delle 10:16, quindi il convertitore l'ho ricostruito nella
 cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'indentazione di W5-charts.
 
 **Area: 57 file, m1 1.493, m2 0.** L'inventario usa le regole del gate (`listSources`, `codeOf`, `LEGACY_CLASS_RE`).
@@ -1084,7 +1084,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >     `AssetSetRiskReturnSection` 136 e `scanColors` 67;
   >   - 7 gate, 156/156: `themeRoles` 47, `themeTokens` 18, `themeComponentTokens` 18, `themeColorMeta` 15,
   >     `themeModeReads` 24, `designerLabImports` 27, `htmlSink` 7.
-  > - **Regola 4 dello skill `design-system`** (D-T29, `6e569084a`: «un colore, una ternaria»). In Tailwind 4 due
+  > - **Regola 4 dello skill `design-system`** (D-T29, `16ea52b26`: «un colore, una ternaria»). In Tailwind 4 due
   >   utility sulla stessa proprietà si ordinano per nome, e vince la seconda. Il passaggio ai ruoli rovescia l'ordine:
   >   un `border-lf-subtle` fisso batte un `border-lf-checked` condizionale.
   >   - Ho scritto un controllo in sola lettura, `files/dv_rule4_check.mjs` nella cartella della sessione. Cerca un ruolo
@@ -1104,7 +1104,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > **Regola 7, seguito** (coordinatore, 11:3x): T aggiunge `SIGN_TEXT.riskTable` (gain/loss) e `SIGN_BAR.histogram`
   > (gain e loss a `/80`) nel suo lotto dei ruoli, con `SIGN_BADGE`. Le adotto dopo il suo ingresso (DV-9); fino ad
   > allora restano `text-lf-loss` e `bg-lf-loss/80`.
-  > **Note implementazione** (16/10, 11:14–11:21), sulla base `b5fafb1ad` (W6-c `5d2c1ce62` più lo skill
+  > **Note implementazione** (16/10, 11:14–11:21), sulla base `a1dcd474f` (W6-c `35a103c05` più lo skill
   > `design-system`). Da qui la ricetta è lo skill `design-system` (coordinatore, 11:1x).
   >
   > - Il convertitore ha cambiato 276 stringhe in 30 file. Ne ha lasciate 5: le 4 previste a mano più la legenda di
@@ -1151,7 +1151,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > `dark:bg-*`, senza un fondo chiaro, il fondo scuro spariva.
   > - Ho scritto un controllo sulle versioni originali, `files/dv_dark_only_check.py`.
   > - In W6-a i soli casi sono i 4 campi l4 (`dark:bg-slate-700`), già sistemati con `bg-lf-field`.
-  > - Sugli originali di W6-c (`8f2824046`), W5-PAC (`74e332076`) e W5-charts (`4743b1542`): **0 casi**.
+  > - Sugli originali di W6-c (`cdf74ef2a`), W5-PAC (`627f8a5e2`) e W5-charts (`a930b3835`): **0 casi**.
   >
   > - Regola 4 (il mio controllo): 0 casi nel rischio.
   > - Prettier ha riscritto 7 file, puliti a `HEAD`, solo negli elementi toccati. Compilatore Svelte 29 file, 0 avvisi;
@@ -1160,7 +1160,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   (la legenda, punto 2.5); poi `--check` pulito.
 - [x] ✅ (16/10/2026) W6-b: conversione, ritocchi, `--update`/`--check`; checkpoint consegnato senza le Vitest, come
   W6-a.
-  > **Note implementazione** (16/10, 11:31–11:35), sulla base `622683733` (W6-a). Il convertitore ha cambiato 95
+  > **Note implementazione** (16/10, 11:31–11:35), sulla base `901e79dc1` (W6-a). Il convertitore ha cambiato 95
   > stringhe in 10 file. Ne ha lasciate 5, tutte per decisione:
   > - **`KpiSection`, 3 righe (6 classi):** le catene verso `KpiMetricBar`, ancora legacy: `valueColor`@354 e le barre
   >   @405 (valore contabile, blu) e @417 (liquidità, smeraldo).
@@ -1199,8 +1199,8 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   `OtherPeriodEffectsTable` a 8; poi `--check` pulito.
   > - **Vitest:** le 92 collegate a W6-a e W6-b (55 + 38, una in comune) girano appena il carico scende sotto 50, prima
   >   dello slot. Alle 11:33 era 73.
-- [x] ✅ (16/10/2026) DV-9, piccolo lotto prima dello slot (coordinatore, 11:36), sulla base `63e3a22d8` (W6-b
-  `daea7b31c` più il lotto dei ruoli di T `f043c1b58`, che porta `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram` e
+- [x] ✅ (16/10/2026) DV-9, piccolo lotto prima dello slot (coordinatore, 11:36), sulla base `ad375d7ba` (W6-b
+  `09c02bc24` più il lotto dei ruoli di T `ee00f754e`, che porta `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram` e
   `SIGN_BADGE`).
   > **Note implementazione** (16/10, 11:37–11:40):
   > - `AssetSetLossComparisonSection`: `LOSS_CLASS` = `` `tabular-nums ${SIGN_TEXT.riskTable.loss}` ``.
@@ -1214,7 +1214,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > - Le Vitest di questi 3 file sono già fra le 92 di W6-a e W6-b.
 - [x] ✅ (16/10/2026) Le 92 Vitest collegate a W6-a, W6-b e DV-9 (55 + 38, una in comune), un file per volta.
   > **Note implementazione:**
-  > - Dalle 11:43:35 (carico 49,7) alle 12:17:42, su `bf2afbba3` e poi sul worktree che intanto riceveva DV-8 e
+  > - Dalle 11:43:35 (carico 49,7) alle 12:17:42, su `303170a20` e poi sul worktree che intanto riceveva DV-8 e
   >   `ui/display`.
   > - Quattro pause automatiche quando il carico superava 90, ripartendo sotto 60: alle 11:46, 11:50, 12:05 e 12:13.
   > - **92 file, 3.742 test, 0 rossi** (`/tmp/libreFolio_dv_w6ab_vitest.summary`).
@@ -1224,10 +1224,10 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   pac-allocator-real`; se c'è tempo, `front-portfolio broker-filter-label` e `front-fx fx-settings`. **Tutto verde
   tranne 1 rosso di test, un'assunzione da riparare alla ripresa.**
   > **Note implementazione:**
-  > - Via del coordinatore alle 13:04, sulla base merge **`9da2e5da9`**. È la punta `bfd33a0f5` con i lotti 1–8 di AF;
+  > - Via del coordinatore alle 13:04, sulla base merge **`f65895f79`**. È la punta `3a36bca01` con i lotti 1–8 di AF;
   >   il baseline era in conflitto, risolto con `--resolve`, e il m1 combinato è 5.284.
-  > - Contiene W6-c, W6-a, W6-b, DV-9, DV-8 e `ui/display` (commit `5d2c1ce62`, `622683733`, `daea7b31c`,
-  >   `bf2afbba3`, `28f4bed75`, `a694d8fb2`).
+  > - Contiene W6-c, W6-a, W6-b, DV-9, DV-8 e `ui/display` (commit `35a103c05`, `901e79dc1`, `09c02bc24`,
+  >   `303170a20`, `bccde4369`, `9229524dd`).
   > - Corsia 6156, `/tmp/librefolio-r2-dv`, dalle 13:06:43 alle 13:38:30 (32 minuti), carico da 91 a 99, sceso a 33
   >   nel mezzo.
   > - Guardie a orario fisso: gli E2E partono fino alle 13:40, i passi leggeri fino alle 13:45. Nessun passo è saltato.
@@ -1248,7 +1248,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > | E2E `front-fx fx-settings` | 3 passed | 45 s |
   >
   > - Gli E2E sono 115 test, nessuno ripetuto; ogni E2E ha ripopolato il DB. Alla fine la porta 6156 è libera e
-  >   l'HEAD è `9da2e5da9`.
+  >   l'HEAD è `f65895f79`.
   > - Script, riassunto e log del passo stanno nella cartella della sessione, `files/w6-slot-2026-10-16/`, perché `/tmp`
   >   non sopravvive a un riavvio.
   >
@@ -1297,7 +1297,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   `themeRoles` 52/52 e `themeTokens` 19/19. Prettier, `--check` e `git diff --check` puliti.
 - [x] ✅ (16/10/2026) DV-8, le linee dei broker dal nono in poi (coordinatore, 11:48: prima di `ui/display`, perché Y8 della 1.3 aspetta
   DV-8 su `GrowthChart.svelte`).
-  > **Note implementazione** (16/10, 11:50–12:0x), sulla base `bf2afbba3` (DV-9).
+  > **Note implementazione** (16/10, 11:50–12:0x), sulla base `303170a20` (DV-9).
   > - `growthBrokerColor(index, dark, poles?)` in `lib/theme/chartPalettes.ts`: le prime 8 linee restano i primi 8 tipi
   >   della designer. Dalla nona passa da `sequenceColor('type', CATEGORY_SEQUENCE, index, dark, poles)`, cioè gli
   >   stessi 8 colori una sfumatura più in là a ogni giro (GR5), come la semi-ciambella e lo storico geografico.
@@ -1336,7 +1336,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   `scanColors`. Li copre `core-unit` nello slot di W6.
 - [x] ✅ (16/10/2026) `ui/display`: `KpiMetricBar`, `KpiDivergingFlowBar` e `RiskMetricCard` (52 classi), passati da T a
   DV con i loro chiamanti (coordinatore, 11:48). OK della 1.3 alle 11:5x.
-  > **Note implementazione** (16/10, 11:55–12:20), sulla base `28f4bed75` (DV-8).
+  > **Note implementazione** (16/10, 11:55–12:20), sulla base `bccde4369` (DV-8).
   > - Il convertitore ha cambiato 19 stringhe. I chiamanti (`KpiSection`, i livelli L1 e L2, `RiskCardGrid`) passano solo
   >   layout o ruoli (`SIGN_*`, `POLARITY_TONES`), tranne `KpiSection`.
   >
@@ -1372,13 +1372,13 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   pulito.
   > - `--update`: m1 6.853 → 6.799 (−54 = 52 + 2), m2 54 invariato. I tre componenti escono, `KpiSection` passa da 6 a
   >   4; poi `--check` pulito.
-- [x] ✅ (16/10/2026) Ingresso di W6 nel target: `adbc2a4b7` (coordinatore, 14:21). La riparazione è `b52575a3e`, la base
-  merge `f0bcf550e`, col baseline risolto. Il target scende da 5.740 a 4.290 classi m1.
+- [x] ✅ (16/10/2026) Ingresso di W6 nel target: `f08adcef9` (coordinatore, 14:21). La riparazione è `c9d52c2bb`, la base
+  merge `606776a70`, col baseline risolto. Il target scende da 5.740 a 4.290 classi m1.
 - [x] ✅ (16/10/2026) TC-15 in `ChartSignalsSection` (coordinatore, 14:21, su segnalazione di T): il testo attenuato
   sulle righe selezionate sta sotto 4,5:1. Proposta seguita: sulla riga selezionata il testo attenuato passa a
   `secondary`, e `link` non va mai sopra un `panel`. Le regole arriveranno con lo skill aggiornato dal lotto del gate di
   T, non ancora entrato.
-  > **Note implementazione** (16/10, 14:22–14:30), sulla base `f0bcf550e`.
+  > **Note implementazione** (16/10, 14:22–14:30), sulla base `606776a70`.
   >
   > **Misure** (carta, pannello e `selected` del selettore sopra la card, chiaro/scuro):
   >
@@ -1411,8 +1411,8 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >
   > **⚠️ Fuori pista: C4 rosso sul target.** `themeTokens.gate.test.ts` fa 18/19: `bg-white/90` non ha più usi, né
   > sul mio HEAD né su `dev_release2`, ma `app.css`:254–257 ne tiene ancora la regola scura.
-  > - Gli ultimi usi li hanno tolti W5-charts, W6-c, W6-b e IM (`b5abcbdaa`); la merge li ha messi insieme.
-  > - `--check` non vede C4, e il mio slot era verde su `9da2e5da9`, perché lì IM non c'era ancora.
+  > - Gli ultimi usi li hanno tolti W5-charts, W6-c, W6-b e IM (`4de16410a`); la merge li ha messi insieme.
+  > - `--check` non vede C4, e il mio slot era verde su `f65895f79`, perché lì IM non c'era ancora.
   > - Segnalato al coordinatore alle 14:31, con la proposta di togliere il blocco nel checkpoint di TC-15.
   > - **Rimedio** (coordinatore, 14:32: subito, separato da TC-15): ho tolto da `app.css` solo il blocco morto, cioè il
   >   commento «Dark mode: Cards and modals» e la regola `html.dark .bg-white\/90`.
@@ -1421,8 +1421,8 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   - Il coordinatore lo committa da solo e lo fa entrare subito, prima di TC-15.
   >   - Da allora agli ingressi lancia anche il file Vitest del gate, non solo `--check`.
 - [x] ✅ (16/10/2026) G-18: un elemento misto in `BackendTimingBar`, visto a runtime dalla prima galleria completa
-  (`designer-16b`, 2.862 scatti; coordinatore, 17:54). Entra insieme a TC-15 (`a6c79a8f3`) dopo una prova breve.
-  > **Note implementazione** (16/10, 17:55–18:00), sulla base `a6c79a8f3`.
+  (`designer-16b`, 2.862 scatti; coordinatore, 17:54). Entra insieme a TC-15 (`fded655a0`) dopo una prova breve.
+  > **Note implementazione** (16/10, 17:55–18:00), sulla base `fded655a0`.
   > - **Il caso:** il segmento del timing (`pac-planner-timing-segment`) aveva il separatore legacy (`border-r
   >   border-white … dark:border-gray-800`) e, solo per il tratto «non attribuito», il ruolo `bg-lf-neutral`. La
   >   classe si compone a runtime (`{segment.colour}`), quindi il gate statico non la vede. Si vedeva in 4 scatti del
@@ -1449,10 +1449,10 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > - `--update`: m1 4.290 → 4.288; `BackendTimingBar` da 16 a 14, restano solo le categorie delle fasi.
   > - **Vitest** (carico 49,7): `themeRoles` 52/52, `themeTokens` 19/19 (C4 compreso), `ChartSignalsSection` 21/21,
   >   `SignalTreeSelect` 28/28 (le righe di `SignalOptionContent`, TC-15), `scanColors` 67/67.
-  > - Commit `7f918f075` del coordinatore (18:04). Base merge `1a1dadba2` (con `ce5954329`), poi `baac53f99` (con
-  >   `c179a5144`, il lotto 9 di AF) e `ec3d54ca3` (con `5eaf67ff1`, C-97a della 1.3 e i docs di AF), tutte pulite.
-  >   Su `ec3d54ca3` i gate del coordinatore danno 119/119.
-  > - **Slot breve** (via del coordinatore alle 18:36), su `ec3d54ca3`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
+  > - Commit `07581c953` del coordinatore (18:04). Base merge `9cc748ae1` (con `7f93046f7`), poi `3d8ea1db9` (con
+  >   `5154c4957`, il lotto 9 di AF) e `474144a2b` (con `655c04156`, C-97a della 1.3 e i docs di AF), tutte pulite.
+  >   Su `474144a2b` i gate del coordinatore danno 119/119.
+  > - **Slot breve** (via del coordinatore alle 18:36), su `474144a2b`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
   >   18:37:11 alle 18:42:22, carico da 20 a 92. Script e log in `files/w6-g18-slot/` della sessione.
   >
   >   | Passo | Esito | Tempo |
@@ -1465,10 +1465,10 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   | E2E `front-utility pac-allocator-real`, 1 worker | 1 passed, nessun tentativo ripetuto | 231 s: il build della base nuova, il popolamento, il test in 6,8 s |
   >
   >   - `SignalOptionContent` non ha un test suo; lo coprono i due test delle select.
-  >   - Alla fine la porta 6156 è libera e l'HEAD è `ec3d54ca3`.
+  >   - Alla fine la porta 6156 è libera e l'HEAD è `474144a2b`.
 - [x] ✅ (16/10/2026) W6-e, micro-lotto: le ultime 5 classi dell'area dentro stringhe HTML, cioè le tracce e il
-  riempimento delle barre di `DistributionDialog`:102 e `TargetsStep`:63 (coordinatore, 18:44). Base `986c26a0b`,
-  stesso albero del target `81bc305b9`.
+  riempimento delle barre di `DistributionDialog`:102 e `TargetsStep`:63 (coordinatore, 18:44). Base `26feb5b0f`,
+  stesso albero del target `9e14d2691`.
   > **Note implementazione** (16/10, 18:44–19:00).
   > - **Analisi** (18:47): la traccia di `DistributionDialog` va su `bg-lf-neutral` 1:1. Quella di `TargetsStep` no:
   >   il riempimento «sconosciuto» di `STATUS_TONES.pacTargetBar` era `bg-lf-neutral`, ΔE00 0 dalla traccia. Il
@@ -1523,10 +1523,10 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >     26/26, `htmlSink` 7/7, `text` 95/95.
   > - Restano, al via del coordinatore: l'E2E `front-utility pac-allocator-real` e lo scatto di galleria
   >   `tools/pac-step-targets`, se G ha la corsia libera.
-  > - Commit `63880bc8b` del coordinatore (18:58); la punta è ferma a `81bc305b9` e la simulazione dell'ingresso è
+  > - Commit `24aeb61b6` del coordinatore (18:58); la punta è ferma a `9e14d2691` e la simulazione dell'ingresso è
   >   pulita. Lo scatto `tools/pac-step-targets` si salta: entra nella prossima galleria completa, quella del giro
   >   della designer.
-  > - **Slot breve** (via del coordinatore alle 18:58), su `63880bc8b`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
+  > - **Slot breve** (via del coordinatore alle 18:58), su `24aeb61b6`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
   >   18:59:35 alle 19:08:56, carico da 62 a 91 per le altre sessioni. Script e log in `files/w6e-slot/` della
   >   sessione.
   >
@@ -1535,10 +1535,10 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   | `api sync` | verde, 0 file tracciati cambiati | 29 s |
   >   | E2E `front-utility pac-allocator-real`, 1 worker | 1 passed, nessun tentativo ripetuto | 532 s: build di frontend e documentazione 411 s (la base aveva i docs di AF), il popolamento, il test in 11,5 s |
   >
-  >   - A fine slot la porta 6156 è libera, l'HEAD è `63880bc8b` e il worktree non ha file tracciati cambiati.
+  >   - A fine slot la porta 6156 è libera, l'HEAD è `24aeb61b6` e il worktree non ha file tracciati cambiati.
 - [x] ✅ (16/10/2026) W6-d: `PositionsPanel` 46 e `ExposureTable` 2, dalla versione di Y dopo il suo ingresso (W7 nel
-  target `0c79932a7`, via del coordinatore alle 19:58), più `aria-pressed` sui 4 bottoni di `PositionsPanel`.
-  > **Note implementazione** (16/10, 19:58–20:20), sulla base `0c79932a7`: la punta, per fast-forward, con dentro
+  target `d4202021d`, via del coordinatore alle 19:58), più `aria-pressed` sui 4 bottoni di `PositionsPanel`.
+  > **Note implementazione** (16/10, 19:58–20:20), sulla base `d4202021d`: la punta, per fast-forward, con dentro
   > anche MF wave 1b.
   > - **Analisi** (20:03): tutto 1:1, niente resta legacy. La mappa segue le ricette della Dashboard (`GrowthChart` di
   >   W6-b; `AllocationPanel` e `KpiCard` di T):
@@ -1580,9 +1580,9 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >     `AllocationPanel.negativeCash` 10/10.
   > - Resta lo slot, al via del coordinatore dopo BK: l'E2E `front-portfolio dashboard`, che guida le 4 viste di
   >   `PositionsPanel`. Gli scatti di galleria aspettano la prossima galleria completa.
-  > - Commit `45f582eeb` del coordinatore (20:14). Base merge `8f1f27a44` con la punta `624fa5609` (A-25 della 1.3:
+  > - Commit `3de4b8d5e` del coordinatore (20:14). Base merge `ea711cd97` con la punta `3ccd79507` (A-25 della 1.3:
   >   `ProfileTab`, `emailCase`), pulita; gate del coordinatore 119/119.
-  > - **Slot** (via del coordinatore alle 20:14, in parallelo a BK), su `8f1f27a44`, corsia 6156 e
+  > - **Slot** (via del coordinatore alle 20:14, in parallelo a BK), su `ea711cd97`, corsia 6156 e
   >   `/tmp/librefolio-r2-dv`, dalle 20:15:17 alle 20:23:08, carico da 51 a 30. Script e log in `files/w6d-slot/`
   >   della sessione.
   >
@@ -1592,7 +1592,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   | E2E `front-portfolio dashboard`, 1 worker | 27 passed, nessun tentativo ripetuto | 447 s: build di frontend e documentazione 243 s, il popolamento, i 27 test in 2,4 min |
   >
   >   - La spec guida le 4 viste di `PositionsPanel` e quelle di `AllocationPanel` («adesso», «storico» e le schede).
-  >   - A fine slot la porta 6156 è libera, l'HEAD è `8f1f27a44` e il worktree non ha file tracciati cambiati.
+  >   - A fine slot la porta 6156 è libera, l'HEAD è `ea711cd97` e il worktree non ha file tracciati cambiati.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 
@@ -1600,7 +1600,7 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
 legacy) e in m2 (letterali), con il conteggio, la destinazione (un ruolo o una categoria) e se dipende da una risposta
 della designer (grafici giro 3, punti 2.1–2.9). Nessun codice toccato.
 
-**Base:** `20558ead5`, uguale al target `57802d827`. I percorsi sono quelli di oggi: Y3, Y4b e Y5 spostano dashboard,
+**Base:** `54f27d7c6`, uguale al target `7138a8261`. I percorsi sono quelli di oggi: Y3, Y4b e Y5 spostano dashboard,
 rischio e broker. Per uno spostamento puro il baseline non va toccato, perché il gate accoppia i file per nome.
 
 **Metodo:** le regole stesse del gate (`theme-roles.mjs`: `listSources`, `codeOf`, `LEGACY_CLASS_RE`,
@@ -1735,7 +1735,7 @@ Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `planner/result/Or
 
 ### B4 — I neutri dei grafici sui ruoli ✅ (notte 16→17/10/2026)
 
-Mandato del coordinatore (22:18), valgono D-T27 e D-T28; base `07700355f`. Fonte: l'inventario in sola lettura di L
+Mandato del coordinatore (22:18), valgono D-T27 e D-T28; base `17021ea3c`. Fonte: l'inventario in sola lettura di L
 (`L-designerLab/audit-colori-fuori-metrica.md`, sul ramo di L): `lib/theme/chartTheme.ts` tiene 277 letterali della
 vecchia palette slate, letti da 33 file, e il ratchet m2 non li conta perché esclude `lib/theme/**`. In più ECharts usa
 i suoi predefiniti in 5 punti. Perimetro: i neutri (assi, linee e griglie, etichette, cornici e fondi dei tooltip,
@@ -1911,8 +1911,8 @@ i suoi predefiniti in 5 punti. Perimetro: i neutri (assi, linee e griglie, etich
   > - Lo script delle prove aveva un difetto: la variabile del ciclo d'attesa sovrascriveva il contatore dei file,
   >   quindi le etichette `#NN` del riassunto sono sbagliate (l'ordine e i nomi no). Corretto per la prossima volta.
 - [x] ✅ (17/10/2026) B4-6 Slot pesante al via del coordinatore.
-  > **Note implementazione.** Commit `38e17c2a5` del coordinatore (00:19), base merge `f35fd9026` con la punta
-  > `3e5336a0a` (T: tabelle, i 23, lo skill, unito da solo coi miei hunk; AF: file e media); gate del coordinatore sul
+  > **Note implementazione.** Commit `5bdb18bcd` del coordinatore (00:19), base merge `bdb6a2257` con la punta
+  > `531889efc` (T: tabelle, i 23, lo skill, unito da solo coi miei hunk; AF: file e media); gate del coordinatore sul
   > ramo unito 119/119. Via alle 00:40; slot dalle 00:40:41 alle 01:26:28, corsia 6156 e `/tmp/librefolio-r2-dv`, taglio
   > alle 01:45 (galleria di G alle 02:01), carico da 38 a 68. Script e log in `files/b4-slot/` della sessione; i passi
   > lunghi in testa, così dopo il taglio potevano partire solo quelli corti.
@@ -1932,7 +1932,7 @@ i suoi predefiniti in 5 punti. Perimetro: i neutri (assi, linee e griglie, etich
   > | E2E `front-portfolio allocation-negative-cash` | 4 passed | 97 s |
   >
   > - Le E2E a 1 worker, 204 test, nessun tentativo ripetuto. A fine slot la porta 6156 è libera, l'HEAD è
-  >   `f35fd9026` e il worktree non ha file tracciati cambiati.
+  >   `bdb6a2257` e il worktree non ha file tracciati cambiati.
   > - La galleria filtrata dei grafici la fa G dopo le 02:00 (fra le 00:00 e le 02:00 non si cattura).
 
 ### B4b — I ruoli che leggerà AF, e il ponte sempre in sRGB ✅ (17/10/2026)
@@ -2000,12 +2000,12 @@ parte, dopo lo slot di B4: solo `roleColors.ts` e i suoi test; nessun grafico ca
   > - **Y-22/23 della 1.3** (due test del layout con molti `vi.mock`, sulla punta): nessuno finge un modulo dei grafici
   >   o del tema, e il layout `(app)` non li importa; nessun test, nel worktree o sulla punta, finge `chartTheme`,
   >   `roleColors` o gli helper dei grafici. Gli export nuovi non possono mancare sotto un mock.
-  > - Commit `9080122a9` (i ruoli) e `b1350a2ea` (i docs) del coordinatore, base merge `65fd0f0fb`, ingresso
-  >   `323c61b73` (17/10, 01:53): gate 119/119, test dei ruoli 91/91, `front check` 0 e 0; i letterali di
+  > - Commit `19a537345` (i ruoli) e `8124017dc` (i docs) del coordinatore, base merge `8b01be9d0`, ingresso
+  >   `1bd4c0e61` (17/10, 01:53): gate 119/119, test dei ruoli 91/91, `front check` 0 e 0; i letterali di
   >   `chartTheme.ts` da 277 a 152, tutti serie, categorie, stati e segni (DV-10).
-- [x] ✅ (17/10/2026) B4b-4 Lo skill `design-system`, dopo l'ingresso di AF (`55b53d8c1`: `drawnColors.ts` sui
+- [x] ✅ (17/10/2026) B4b-4 Lo skill `design-system`, dopo l'ingresso di AF (`6632b7ca1`: `drawnColors.ts` sui
   ruoli, `PENDING_READERS` vuoto).
-  > **Note implementazione** (03:33–03:40, solo docs, sulla base `55b53d8c1`, avuta per fast-forward dal
+  > **Note implementazione** (03:33–03:40, solo docs, sulla base `6632b7ca1`, avuta per fast-forward dal
   > coordinatore).
   > - La riga di `roleColors.ts` nella tabella dei file: i 22 ruoli raggruppati; chi li legge (i grafici: i neutri, le
   >   sfumature GR4 e le linee dei broker, la scala della correlazione, il peso ideale del PAC, `readableText`; e
@@ -2025,7 +2025,7 @@ parte, dopo lo slot di B4: solo `roleColors.ts` e i suoi test; nessun grafico ca
 ### Giro 3 — La palette finale dei grafici ⏳ (17/10/2026 sera)
 
 Il developer, 22:05: «leggilo e applicalo, modifica i temi colori esistenti, e se ne servono altri, creali»; la designer
-ha scelto con lui le correzioni. Valgono D-T27/D-T28. Base `38b7e6313` (fast-forward del coordinatore), corsia 6156 e
+ha scelto con lui le correzioni. Valgono D-T27/D-T28. Base `c3cff37f8` (fast-forward del coordinatore), corsia 6156 e
 `/tmp/librefolio-r2-dv`. La specifica, da una sola fonte:
 `designer-feedback/2026-10-17-round3-grafici/decisioni.md` (accanto `palette-finale.json`, i due originali, il foglio
 delle scelte). Il campo di DV è il §1; i file liberi secondo la 1.3 (ferma, STOP del developer alle 21:45), salvo
@@ -2173,7 +2173,7 @@ Z-29b su `LineChart.svelte`, che resta fuori.
   > - **Una svista nella mia risposta al coordinatore delle 23:35:** non ha sottotipi solo l'ETF, anche Crowdfund
   >   (`CROWDFUND_REAL_ESTATE`). La sua sfumatura dista dall'ideale 21,5 in chiaro e 14,8 in scuro
   >   (`files/dv_r3_ideal_crowdfund.log`): nessun effetto, da correggere nell'handoff.
-- [x] ✅ (18/10/2026, 00:14) G3-7, prove leggere sulla base `38b7e6313` col lotto (`files/dv_r3_light.sh`, log in
+- [x] ✅ (18/10/2026, 00:14) G3-7, prove leggere sulla base `c3cff37f8` col lotto (`files/dv_r3_light.sh`, log in
   `files/r3-light/`; carico sempre sotto 12).
   > - Prettier pulito sui file cambiati; compilatore Svelte su 8 file, 0 errori e 0 avvisi; ratchet dei colori pulito.
   > - `front check`: **0 errori e 0 avvisi**, dopo `dev.py api sync`.
@@ -2185,17 +2185,17 @@ Z-29b su `LineChart.svelte`, che resta fuori.
   > client, ignorato da git, era fermo a una base vecchia. `api sync` (schema esportato nel processo, nessun server,
   > nessun file tracciato cambiato), poi tutta la serie di nuovo sullo stesso stato: verde. Riepilogo del primo giro in
   > `files/r3-light/summary-1-stale-client.txt`.
-- [x] ✅ (18/10/2026, 00:20) **T R3-b è entrato prima di DV** (`7845fc3d3`): i ruoli `--lf-cat-<tipo>`, `-soft` e
+- [x] ✅ (18/10/2026, 00:20) **T R3-b è entrato prima di DV** (`a37e5da23`): i ruoli `--lf-cat-<tipo>`, `-soft` e
   `-on-soft`, le utility `bg-lf-cat-etf` e `bg-lf-cat-liquidity`. Il flag di parità lo gira DV, dopo il merge del target.
   > - Parità pre-verificata in sola lettura sul commit (`files/dv_r3_parity_precheck.mjs`, `.log`): i 12 ruoli nei due
   >   temi coincidono coi valori di `chartCategories.ts`, 24 controlli su 24.
   > - Sovrapposizione col target: solo `BACKLOG_POST_1.2.md` (TC-19 di T attorno alla riga 2835, le righe di DV dalla
   >   2949): disgiunte, ma un merge non si fa su un file modificato e non committato.
-  > - Il target ha già corretto l'ideale del PAC in `decisioni.md` e `palette-finale.json` (`ba8e06763`): la nota per
+  > - Il target ha già corretto l'ideale del PAC in `decisioni.md` e `palette-finale.json` (`80a1ca0e0`): la nota per
   >   il coordinatore di G3-1…G3-4 è chiusa.
 - [x] ✅ (18/10/2026, 00:23) G3-8, sul ramo unito: il flag di parità e R3-5.
-  > **Base:** il coordinatore ha committato il checkpoint in `323ea518e` (genitore `38b7e6313`, i 37 file) e fatto la
-  > base merge `3dba7f894` (genitori `323ea518e` + `7845fc3d3`), pulita; `BACKLOG_POST_1.2.md` si è unito da sé.
+  > **Base:** il coordinatore ha committato il checkpoint in `f8a358d86` (genitore `c3cff37f8`, i 37 file) e fatto la
+  > base merge `42a6066be` (genitori `f8a358d86` + `a37e5da23`), pulita; `BACKLOG_POST_1.2.md` si è unito da sé.
   > **Note implementazione:**
   > - **Flag di parità:** `CATEGORY_ROLES_IN_TOKENS = true` in `chartCategories.test.ts`, con la data e il commit di T
   >   nel commento, e l'avviso che un colore di tipo vive in due posti fino a DV-11. Il blocco gira nel ramo `true`:
@@ -2211,7 +2211,7 @@ Z-29b su `LineChart.svelte`, che resta fuori.
   > Prettier, compilatore e ratchet puliti; `front check` 0 e 0; **32 file Vitest, 1500 test, tutti verdi**
   > (i 31 di prima più `assetTypeTables.test.ts` di T, 49).
 - [x] ✅ (18/10/2026, 00:50) G3-9, lo slot di circa 55 minuti nella 6156, al via del coordinatore.
-  > **Via alle 00:23** sul commit `08512c952` (genitore `3dba7f894`: il flag e R3-5), carico a 4, la 1.3 ferma.
+  > **Via alle 00:23** sul commit `dc1a99c1a` (genitore `42a6066be`: il flag e R3-5), carico a 4, la 1.3 ferma.
   > Script `files/r3-slot/dv_r3_slot.sh 01:20` (nessun passo nuovo dopo le 01:20), log in `files/r3-slot/`: `api sync`,
   > `core-unit`, `component-unit`, poi gli E2E con `--workers 1`: `dashboard`, `asset-detail`, `risk-lab`, `risk`,
   > broker `detail`, `front-user broker-sharing`, `pac-allocator-real`, `allocation-negative-cash`,
@@ -2231,8 +2231,8 @@ Z-29b su `LineChart.svelte`, che resta fuori.
   >   caricamento. Rimedio nel test: `page.goto('about:blank')` prima della rotta, oppure trattenere la richiesta della
   >   pagina sotto prova e non la prima che passa.
   > - **`front-designer-lab live`, «export JSON, reset all, import back»: assunzione, deterministica** (rossa anche da
-  >   sola). Il sottotitolo delle transazioni (`546204732`, 16/10, `text-lf-muted`) e l'intestazione di `DataTable`
-  >   (`77bfa6a39`, 16/10, `th { color: var(--lf-text-muted) }`) leggono lo stesso ruolo: la modifica della variabile
+  >   sola). Il sottotitolo delle transazioni (`472e8d81b`, 16/10, `text-lf-muted`) e l'intestazione di `DataTable`
+  >   (`dac99ffda`, 16/10, `th { color: var(--lf-text-muted) }`) leggono lo stesso ruolo: la modifica della variabile
   >   (rosa, su `<html>`) vince su quella del letterale della sua definizione (blu), e l'intestazione è rosa. Lo spec è
   >   fermo al 16/10 alle 02:29, prima dei due commit; la modifica dei grafici (verde) non c'entra. Rimedio nel test:
   >   due elementi con fonti di colore diverse, e la precondizione scritta.
@@ -2242,7 +2242,7 @@ Z-29b su `LineChart.svelte`, che resta fuori.
 
 Il developer, dall'anteprima 6160: correlazione, dettaglio dell'asset, broker, PAC, «tutto ECharts» ha testi e numeri
 sfocati dopo aver spostato su uno schermo Retina il browser aperto su uno schermo a meno DPI. Lavoro tecnico, non di
-colore. Base `cc3c3af15` (fast-forward del coordinatore, pulita; dentro H-57: una sola migrazione `005`, quindi la
+colore. Base `3b0664d12` (fast-forward del coordinatore, pulita; dentro H-57: una sola migrazione `005`, quindi la
 corsia 6156 + `/tmp/librefolio-r2-dv`, cancellata per liberare disco, va ripopolata con `--force --clean`). File liberi
 secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un giorno); `LineChart` libero.
 
@@ -2333,7 +2333,7 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   >    poi un lotto piccolo di DV: le due righe e la deroga tolta. Nessuna riga passata alla 1.3.
   > 4. **Docs ora:** la pagina sviluppatori dei grafici; lo stamp di Aphra se ha traduzioni.
   > **Run:** leggere sotto 50; lo slot è nostro senza via, appena il checkpoint è pronto, col carico sotto 50 (la 1.3
-  > ha confermato la deroga). T ha portato nel target le colonne fisse (`1fa64ceae`, solo `<style>` di `DataTable` e
+  > ha confermato la deroga). T ha portato nel target le colonne fisse (`dd797d670`, solo `<style>` di `DataTable` e
   > `AssetTable`): base merge del coordinatore prima del checkpoint.
 - [x] ✅ (19/10/2026) DPR-1, il codice e la pagina.
   > **Note implementazione:**
@@ -2389,9 +2389,9 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   > `AssetSetRiskReturnSection`, `L3RiskAdjusted`, `chartCoreHelpers`, i gate `htmlInterpolation` e
   > `themeModeReads`, `scanColors` del Lab.
   > - Nel backlog **DV-14**: `PriceChartFull` e `CandlestickChart` dopo Y-N65.
-  > **Checkpoint e base:** il coordinatore ha committato il checkpoint in `741a2d5c3` (genitore `cc3c3af15`, i 24 file)
-  > e fatto la base merge `be7033b1c` (genitori `741a2d5c3` e il target `ccc2a4141`, con T: colonne fisse e T2),
-  > pulita. **Slot partito alle 16:59** su `be7033b1c`, carico 49,7, taglio 17:55, `DPR_E2E_ACTION=chart-pixel-ratio`,
+  > **Checkpoint e base:** il coordinatore ha committato il checkpoint in `c4dd6e010` (genitore `3b0664d12`, i 24 file)
+  > e fatto la base merge `84fc7146b` (genitori `c4dd6e010` e il target `8c6e984ee`, con T: colonne fisse e T2),
+  > pulita. **Slot partito alle 16:59** su `84fc7146b`, carico 49,7, taglio 17:55, `DPR_E2E_ACTION=chart-pixel-ratio`,
   > log in `files/dpr-slot/`. Disco: 21 GiB liberi.
   > **La sonda dell'E2E nuovo (17:08–17:16, carico fino a 157):** «nasce a 2×» verde (3,2 s); «seguono» rosso sulla
   > sonda del test: sotto `Emulation.setDeviceMetricsOverride` `window.devicePixelRatio` arriva a 2, ma la query
@@ -2402,7 +2402,7 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   > ancora niente, un ponte esplicito: `addInitScript` registra le `MediaQueryList` di risoluzione dell'app e il test
   > le notifica dopo il cambio reale di densità, con un'annotazione che dice chi ha emesso l'evento. Tutto il resto
   > resta reale: il cambio via CDP, i grafici, zrender, il gestore del modulo e il riarmo.
-- [x] ✅ (19/10/2026, 17:42) DPR-3, lo slot su `be7033b1c` (16:59–17:41, carico 18–157, log in `files/dpr-slot/`).
+- [x] ✅ (19/10/2026, 17:42) DPR-3, lo slot su `84fc7146b` (16:59–17:41, carico 18–157, log in `files/dpr-slot/`).
   > - `test db populate --force --clean`: corsia ricreata (tabelle pulite, broker e utenti creati); `api sync` senza
   >   file tracciati cambiati.
   > - Vitest: `core-unit` 220 file e 9383 test; `component-unit` 191 file e 5010 test; `chart-safety-unit` 9 file e
@@ -2415,10 +2415,10 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   >   lettura, non riceve il `change` né all'andata né al ritorno; l'annotazione dice «dispatched by the test», e da
   >   lì i grafici seguono: 1× → 2× → 1×, stesse istanze, stessi canvas, e `data-chart-renders` invariato (2 → 2,
   >   4 → 4): niente ridisegnato dalle opzioni.
-  > - Porta 6156 libera alla fine; HEAD `be7033b1c`. Da committare: lo spec rivisto, una clausola della `desc` del
+  > - Porta 6156 libera alla fine; HEAD `84fc7146b`. Da committare: lo spec rivisto, una clausola della `desc` del
   >   runner e il piano.
-- [x] ✅ (19/10/2026, 17:47) **DPR entrato:** `56666d2ce` (il commit `80636e16e`, base merge `be870c783` con
-  `98bee0d2b`, che contiene Y-N65 `5cb47395f`). Sul ramo unito: ratchet pulito, gate dei colori 119/119,
+- [x] ✅ (19/10/2026, 17:47) **DPR entrato:** `aeea8df80` (il commit `d74f907de`, base merge `cadee222d` con
+  `f8a855320`, che contiene Y-N65 `cdc43debe`). Sul ramo unito: ratchet pulito, gate dei colori 119/119,
   `chart-safety-unit` 144/144 con K-13 sulle versioni di Y dei due file, `api sync` senza cambi, `front check` 0 e 0.
   Il worktree è sulla punta, pulito. Via a DV-14.
 - [x] ✅ (19/10/2026, 18:02) DPR-4 (DV-14), `PriceChartFull` e `CandlestickChart` su `chartInitOptions`.
@@ -2431,7 +2431,7 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   >   sintetici mordono ancora).
   > - La pagina sviluppatori (tabella delle guardie): nessuna deroga, il record resta vuoto per un caso futuro.
   > - Backlog: DV-14 chiusa, in attesa del commit.
-  > - Nessuna migrazione dal mio ultimo slot (`be7033b1c..56666d2ce` non tocca `backend/alembic` né `backend/app/db`):
+  > - Nessuna migrazione dal mio ultimo slot (`84fc7146b..aeea8df80` non tocca `backend/alembic` né `backend/app/db`):
   >   la corsia non si ripopola.
   > - test-author: in `chartFlagFont.test.ts` il record vuoto, la sua doc e l'intestazione (Part B, «why it was
   >   red»); gli altri quattro test dei due grafici non cambiano (i registratori di ECharts ignorano le opzioni, e lo
@@ -2442,7 +2442,7 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   >   `CandlestickChart.tooltipEscape` 7, `candlestickChartHelpers` 44, `priceChartHelpers` 163; i 9 file di
   >   `chart-safety-unit` in un colpo, 144 test; `front check` 0 errori e 0 avvisi; tutti verdi;
   > - slot (17:52–18:02, `files/dv14-slot/`): E2E `asset-detail` 43 su 43, `fx-detail` 28 su 28, progetto
-  >   `[desktop]`; porta 6156 libera, HEAD `56666d2ce`.
+  >   `[desktop]`; porta 6156 libera, HEAD `aeea8df80`.
 
 ## DV-10 chiusa da C2 (programma colori, ondata 2, 21/10/2026)
 

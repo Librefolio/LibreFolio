@@ -2,7 +2,7 @@
 
 **Data analisi e decisioni:** 2026-09-07
 
-**Baseline:** branch `dev_release2`, commit `a9138140`.
+**Baseline:** branch `dev_release2`, commit `9d8b5c54`.
 
 **Stato dell'analisi al 2026-09-07:** proposta pubblicata, senza avvio del codice.
 
@@ -31,7 +31,7 @@ assegnati separatamente, una suite alla volta e senza setup DB o server implicit
 pacchetto verificato e' stato applicato al checkout locale `dev_release2`.
 La review indipendente ha aperto e chiuso il Round 5 sul challenge pubblico GHCR.
 Manifest e prove: [14_feedbackImportUrgent](../../phases/14_feedbackImportUrgent/manifest-integrazione-E.md).
-Integrazione committata in `ef722b552433028c051ccb1207c84f1072e51bb7`;
+Integrazione committata in `c8a77dda370e985fc8fe259f1232ef8a760c2f54`;
 sessione/worktree E archiviati localmente il 2026-09-10. L'eventuale spostamento
 versionato del piano resta separato. U3 è integrato; U2, U8 Round 3, gli sprint non
 inclusi e F-MC-1/2/3 restano aperti.
@@ -42,7 +42,7 @@ stato aperto il piano
 Il gate richiede porta e data directory uniche per ogni worktree; la sola porta
 non separa SQLite, upload, log e report broker. I default storici restano
 invariati. Il gate e' stato consegnato nel commit
-`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a` il 2026-09-10; B/C/D stanno
+`63cfb55d18297b71bd6d70dc8a6d97143c95fb68` il 2026-09-10; B/C/D stanno
 preparando i checkpoint locali prima dell'incorporazione manuale della nuova base.
 
 **Integrazione C+D, 2026-09-10:** la piattaforma Tool C e il PAC D non entrano
@@ -69,17 +69,17 @@ calcola fee SELL e riserva fiscale con aliquota Asset prefill 26% e mantiene i
 parametri Broker per-run. Nessuna migration planner v1.
 
 **Nota storica di coordinamento, 2026-09-10:** i worktree C/D erano allora
-allineati a `4a73f5f6` e il pilot analysis-only non attendeva solver completo,
+allineati a `41a4f23f` e il pilot analysis-only non attendeva solver completo,
 copie Portfolio o migrazione Broker fractional. Questa nota non descrive lo stato
 corrente: la source baseline Round 5 era
-`e38a521f068c2d1b8d743775e90711fec1326fb3`, mentre il planning checkpoint
-corrente è `202e4056f2b915c055eeb8436eae765023201918`; il pilot è stato respinto
+`71b37e4bf0cb127f4735794ec72704475cd2e9fe`, mentre il planning checkpoint
+corrente è `e7910164c4c908b7c6315b7aa344c1e3f3001ba6`; il pilot è stato respinto
 come prodotto e nessuna implementazione operativa è iniziata.
 
 **Integrazione Gruppo B, 2026-09-10:** Contracts/Runes e Round 1 sono stati
-riconciliati con E/runtime nel merge `d9e8f6d3`; la review UI reale ha richiesto
-un solo compattamento del feedback FX, consegnato in `00c469c3`. La branch B
-finale e' entrata in `dev_release2` con il merge `514582a4`. Registro,
+riconciliati con E/runtime nel merge `983b38cc`; la review UI reale ha richiesto
+un solo compattamento del feedback FX, consegnato in `dde31b4e`. La branch B
+finale e' entrata in `dev_release2` con il merge `4b28bcc3`. Registro,
 contratti, prove e validazione combinata vivono nel
 [piano esecutivo](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md)
 e nel [Round 1](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md).
@@ -171,7 +171,7 @@ La wiki ha fornito contesto utile su FIFO v4, batch e DataEditor; il grafo dichi
 
 ### P4-1 - Scissione di `asset_source.py`
 
-**Stato:** ✅ integrato con K/SP08 (`3c85866dd`, combined `b72475f0e`).
+**Stato:** ✅ integrato con K/SP08 (`36fc57005`, combined `d84728cc7`).
 `asset_source.py` è una facciata compatibile di 21 righe; l'implementazione
 canonica vive in `asset_sources/` per responsabilità, con identità unica per
 classi, cache, thread runner ed errori. [Piano](../../phases/22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md).
@@ -187,7 +187,7 @@ classi, cache, thread runner ed errori. [Piano](../../phases/22_assetPricingRefa
 
 ### P4-2 - `TransactionService.execute_batch`
 
-**Stato:** ✅ integrato con L/SP16 (`846aefb24`, combined `ed0f4ff30`).
+**Stato:** ✅ integrato con L/SP16 (`103317ab2`, combined `7cf3e490e`).
 `execute_batch` è ora un orchestratore esplicito di 50 linee AST con contesto typed
 e stage ordinati; contratto, indici, link, WAC, saldi e ownership transazionale
 restano invariati. [Piano](../../phases/23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md).
@@ -221,7 +221,7 @@ I 35 siti C901 BRIM attuali sono 34 nei broker e uno in `_brim_io`, non 35 parse
 
 ### P4-4 - Yahoo `get_history_value`
 
-**Stato:** ✅ integrato con K/SP08 (`3c85866dd`). Acquisizione, mapping DataFrame,
+**Stato:** ✅ integrato con K/SP08 (`36fc57005`). Acquisizione, mapping DataFrame,
 dividendi e split sono separati; retry, `period="max"`, date inclusive, NaN,
 valuta fallback ed eventi best-effort restano equivalenti.
 **Taglia storica:** M; `get_history_value` aveva C901 31 alla baseline.
@@ -236,7 +236,7 @@ valuta fallback ed eventi best-effort restano equivalenti.
 
 ### P4-5 - Migrazione Runes mirata
 
-**Stato:** ✅ integrato tramite B/SP05 (`514582a47`), incluse le correzioni di
+**Stato:** ✅ integrato tramite B/SP05 (`4b28bcc31`), incluse le correzioni di
 review nel [piano dedicato](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
 **Taglia:** M.
 
@@ -252,7 +252,7 @@ review nel [piano dedicato](../../phases/11_feedbackContractsRunes/plan-phase00F
 
 ### P4-6 - Matrice dichiarativa `SignalResult`
 
-**Stato:** ✅ integrato tramite B/SP04 (`514582a47`) nel
+**Stato:** ✅ integrato tramite B/SP04 (`4b28bcc31`) nel
 [piano dedicato](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
 **Taglia:** M. Baseline: `B/schemas/signals.py:1050-1115`, C901 32; stati a `194-199`.
 
@@ -280,12 +280,12 @@ review nel [piano dedicato](../../phases/11_feedbackContractsRunes/plan-phase00F
 
 | Voce | Stato / taglia | Superfici, dipendenze e rischio principale |
 |---|---|---|
-| S6 6.2 `is_chain` / `providers_used` | ✅ Al 09/10 chiuso con B/SP04 (`514582a47`): i due campi sono in sola lettura (`schemas/fx.py:430-451`). Storico: Parziale, M | Proprieta DB `models.py:899-911`; DTO `schemas/fx.py:400-439`; API `fx.py:719-849`; frontend FX `+page.svelte:310-316`, `[pair]/+page.svelte:676-682`. Esporre dato derivato senza renderlo input obbligatorio; `providers_used` set non sostituisce la sequenza ordinata con ripetizioni `CHAIN:MOCKFX+MOCKFX`. Distinguere membership, percorso e MANUAL. Hard handoff schema -> API sync -> consumer. Nessuna migrazione DB. |
+| S6 6.2 `is_chain` / `providers_used` | ✅ Al 09/10 chiuso con B/SP04 (`4b28bcc31`): i due campi sono in sola lettura (`schemas/fx.py:430-451`). Storico: Parziale, M | Proprieta DB `models.py:899-911`; DTO `schemas/fx.py:400-439`; API `fx.py:719-849`; frontend FX `+page.svelte:310-316`, `[pair]/+page.svelte:676-682`. Esporre dato derivato senza renderlo input obbligatorio; `providers_used` set non sostituisce la sequenza ordinata con ripetizioni `CHAIN:MOCKFX+MOCKFX`. Distinguere membership, percorso e MANUAL. Hard handoff schema -> API sync -> consumer. Nessuna migrazione DB. |
 | S6 6.3 quattro `aggregate_*` | Gia chiuso, XS documentale | Rimossi per decisione P1. `DerivedViewsBuilder.build_data_quality_report`, `portfolio_engine.py:1656`; caller arricchiti `portfolio_service.py:1209,2047`. Non reintrodurre helper che perderebbero politiche di qualita/metadati. |
 | S6 6.4 `bulk_refresh_prices` | ✅ Chiuso con K/SP08 | Fasi PREPARE/FETCH/PERSIST estratte con record typed; sessione distinta per persist, resume/min, cache, timeout, filtro valuta, risultati parziali e commit a chunk preservati. |
 | S6 6.7 | Alias P4-6 | Nessun secondo task o seconda stima. |
 | S6 6.8 | ✅ Chiuso come alias P4-2 | Nessun secondo task o seconda stima. |
-| S6 6.11 assert AI Export | ✅ Al 09/10 chiuso con B/SP04 (`514582a47`): nei 7 file elencati sotto non resta nessun `assert`. Storico: Aperto, S | 17 assert strutturali, su 51 totali; 34 contestuali fuori scope. Elenco sotto. Nessun cambio cataloghi/versioni/dataset. |
+| S6 6.11 assert AI Export | ✅ Al 09/10 chiuso con B/SP04 (`4b28bcc31`): nei 7 file elencati sotto non resta nessun `assert`. Storico: Aperto, S | 17 assert strutturali, su 51 totali; 34 contestuali fuori scope. Elenco sotto. Nessun cambio cataloghi/versioni/dataset. |
 | S6 6.12 settings services | Gia risolto, XS documentale | Decisione P2-9: non fondere. `schemas/settings.py:286-360` registry; `settings_service.py:1-16` responsabilita; `global_settings_service.py:1-19` accessor. Conservare typed user settings vs chiavi globali. |
 | S6 6.14 BRIM generale | Non attivare come campagna | Consolidato nei limiti di P4-3: un provider alla volta, nessuna astrazione universale dedotta dai soli C901. |
 | TRY003 | Congelato | `pyproject.toml:71-102` non abilita TRY/TRY003. Non aggiungere ignore inutile, non abilitare la famiglia per questo lavoro. |
@@ -327,7 +327,7 @@ Patina decorativa sopra segnaposto di forma stabile. Non mantenere il numero rea
 ### U3 - Yield on Cost
 
 **Stato 2026-09-11:** ✅ **IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED**
-nel checkpoint H `74afcebce`; il merge target e' in corso. Contratto,
+nel checkpoint H `cff0f0a11`; il merge target e' in corso. Contratto,
 storyboard, correzioni review ed evidenze nel
 [piano H dedicato](../../phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
 **Taglia:** M backend + S UI/docs, con hard handoff cache FX dal workstream F.
@@ -378,7 +378,7 @@ close/rebuy. Ogni holding e' applicabile, inclusi crypto/manual; nessun
 nella L1. H invoca la stessa funzione e riusa la string identity nella L2 per
 tutti i report portfolio, aggiungendo solo dipendenze ledger/split YOC.
 Nessuna seconda helper o separazione rate/route. Il follow-up integrato in
-`b5ed1a623` aggiunge `Transaction.cost_basis_currency` alla dependency identity
+`f618fec60` aggiunge `Transaction.cost_basis_currency` alla dependency identity
 e copre identity/L1 con una terza valuta presente solo nel CBO.
 
 **Rischi / DoD:** D-1 identico al FIFO, vendite parziali non gonfiano il
@@ -801,7 +801,7 @@ prevale nella tabella seguente: B, E, F, G, H, Tool platform e I10 sono integrat
 D/I/J/K/L mantengono workstream attivi e non vanno dichiarati consegnati prima
 dei rispettivi checkpoint, review e merge.
 
-> **Al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`): D, I, J, K e L sono integrati. Restano aperti il Rebalancer (D, `13_pacAllocator`) e P4-7; la review C7 dell'onboarding resta aperta in `21_onboarding`. Il dettaglio è in `README.md`, sezione «Stato verificato sul codice — 2026-10-09».
+> **Al 2026-10-09** (verifica Q del 2026-10-09, base `f545b67e3`): D, I, J, K e L sono integrati. Restano aperti il Rebalancer (D, `13_pacAllocator`) e P4-7; la review C7 dell'onboarding resta aperta in `21_onboarding`. Il dettaglio è in `README.md`, sezione «Stato verificato sul codice — 2026-10-09».
 
 L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint e deliberatamente minimo: un solo flusso asset, nessuna API nuova, nessuna migrazione, nessuna libreria. Ogni sprint sotto ha un proprio risultato chiudibile; i sotto-step finanziari o di policy non autorizzano una soluzione implicita quando il gate resta aperto. **I 16 sprint non cambiano con questa revisione**: la sezione 11 li apre in task e corsie parallelizzabili. Per le UI indicate, il DoD comprende anche approvazione ASCII e review operativa della sezione 12.
 
@@ -817,7 +817,7 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 | **SP08 - Pricing e confini del servizio** | P4-4, P4-1, S6 6.4 | Un'unica famiglia provider/manager; evita spostamenti concorrenti di asset_source. Yahoo locale -> mappa import/cache -> moduli -> fasi refresh nella destinazione scelta. | Parita provider e manager, ownership cache/thread/sessioni, sentinelle, chunk e risultati preservati. Nessun refactor FX/portfolio aggiuntivo. |
 | **SP09 - BRIM mirato** | B1 condizionale, P4-3 | Parsing broker e output di review. Risolvere gate eToro se disponibile -> caratterizzazione Credit Agricole -> estrazione locale -> eventuale secondo consumer. | Costi eToro riconciliati oppure blocco motivato mantenuto; output completo Credit Agricole equivalente. Nessuna falsa chiusura eToro per far risultare verde lo sprint. |
 | **SP10 - Cache con ownership** | P4-7 | Registry, serie e pool condividono confine di sessione e consumer chart. Misura -> decisione budget/policy -> implementazione -> rilascio/late responses. | Limiti motivati, oggetti e richieste realmente rilasciabili, cambio account sicuro, nessuna preferenza cancellata e nessun consumer interrotto arbitrariamente. |
-| **SP11 - Benvenuto e tour** | U8 | ✅ [Implementato da J](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md): stato/migrazione -> welcome -> tour Core e contestuali -> guida Import -> replay/skip. Gate e review manuale developer completi; checkpoint `580bd504f`. | Nuovo utente guidato senza scritture finanziarie automatiche; default admin rispettati; skip/replay/refresh/account e overlay compatibili, guide riallineate. |
+| **SP11 - Benvenuto e tour** | U8 | ✅ [Implementato da J](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md): stato/migrazione -> welcome -> tour Core e contestuali -> guida Import -> replay/skip. Gate e review manuale developer completi; checkpoint `ce718ca49`. | Nuovo utente guidato senza scritture finanziarie automatiche; default admin rispettati; skip/replay/refresh/account e overlay compatibili, guide riallineate. |
 | **SP12 - Piattaforma Tool** | T0, hub iniziale T2 | Contratto plugin/executor e catalogo con schemi completi. Registry -> API auth/bulk -> worker -> tipi/renderer -> hub. | Catalogo/compute/diagnostics protetti, riuso bulk corretto, errori/limiti onesti; nessun endpoint schema/prefill Tool e nessun PAC fittizio dichiarato funzionante. |
 | **SP13 - Modello e snapshot allocatore** | Round 7 schema/evaluator/copie | Clean break P1 → snapshot completo per-run → normalizer/evaluator Decimal → ledger cash/FX/fee/tax. | Input utente distinti dagli output solver; valuta riferimento esplicita; manuale/copie equivalenti; nessun lookup worker; nessuna migration planner v1. |
 | **SP14 - Allocatore e UI completa** | PAC/Rebalancer fixed-L2 MIQP/MIQCP + oracle + custom UI | Primario fixed-L2, deployment BUY-only; PAC proportional/min-fragmentation; Rebalancer invest-only/invest-and-sell; report Broker. | Funding/FX/BUY/SELL, fee/tax reserve, proof/status, grafici e tabelle completi; nessuna esecuzione ordini; review developer separata. |
@@ -830,15 +830,15 @@ L'ordine ordina **rischio e ampiezza**, non inventa dipendenze. Il primo sprint 
 |---|---|
 | SP01–SP03 | ✅ Integrati e revisionati (E/F). |
 | SP04–SP05 | ✅ Integrati tramite B. |
-| SP06 | ✅ Al 09/10 U3, G3 (I10 e I60) e G1c (I50) nel target (merge I `2c382824d`). Storico: 🟡 U3/YOC + I10 integrati; I60/follow-up attivi su I; G1c aperto. |
-| SP07 | ✅ Al 09/10 G1a e G1b nel target (`8ed7a0f0d`, merge `2c382824d`). Storico: ⏸️ I20–I50 non iniziati. |
+| SP06 | ✅ Al 09/10 U3, G3 (I10 e I60) e G1c (I50) nel target (merge I `b39512ae1`). Storico: 🟡 U3/YOC + I10 integrati; I60/follow-up attivi su I; G1c aperto. |
+| SP07 | ✅ Al 09/10 G1a e G1b nel target (`a1e6fce55`, merge `b39512ae1`). Storico: ⏸️ I20–I50 non iniziati. |
 | SP08 | ✅ Integrato: Yahoo refactor, scissione asset-source e refresh phases; full services/API e docs verdi. |
 | SP09 | ✅ G integrato, developer-accepted e archiviato. |
 | SP10 | 🟡 Al 09/10 parziale: il registry c'è (`assetPriceStoreRegistry.ts`), ma eviction e reset di sessione mancano (P4-7 aperto). Storico: ⏸️ Differito. |
-| SP11 | ✅ Round 6 implementato, verificato e developer-accepted; checkpoint J `580bd504f` integrato nella baseline combinata D `e38a521f0`, non ancora nel target `dev_release2`. Al 09/10 è nel target dal merge `3913fe217`, fix `1982c254b` compreso; la review C7 resta aperta in `21_onboarding`. |
+| SP11 | ✅ Round 6 implementato, verificato e developer-accepted; checkpoint J `ce718ca49` integrato nella baseline combinata D `71b37e4bf`, non ancora nel target `dev_release2`. Al 09/10 è nel target dal merge `67ee437a0`, fix `18bc11a4f` compreso; la review C7 resta aperta in `21_onboarding`. |
 | SP12 | ✅ Tool platform integrata. |
-| SP13–SP14 | 🟡 Al 09/10 il planner PAC 1.0.0 è nel target (`tool_plugins/pac_allocator.py`, UI `0210f9848`); il Rebalancer e il SELL non sono implementati (D, `13_pacAllocator`). Storico: 🟡 Design/UI approvati; Round 7 pronto per checkpoint, implementazione Gate P1 frozen. Round 4 resta prototipo respinto. |
-| SP15 | ✅ Al 09/10 U2 nel target (`b66e93003`, `24_privacyGlobal` Round 2); `SensitiveValue` sospeso. Storico: ⛔ Bloccato da SP07 + SP11 + SP14. |
+| SP13–SP14 | 🟡 Al 09/10 il planner PAC 1.0.0 è nel target (`tool_plugins/pac_allocator.py`, UI `502877358`); il Rebalancer e il SELL non sono implementati (D, `13_pacAllocator`). Storico: 🟡 Design/UI approvati; Round 7 pronto per checkpoint, implementazione Gate P1 frozen. Round 4 resta prototipo respinto. |
+| SP15 | ✅ Al 09/10 U2 nel target (`9d9613471`, `24_privacyGlobal` Round 2); `SensitiveValue` sospeso. Storico: ⛔ Bloccato da SP07 + SP11 + SP14. |
 | SP16 | ✅ Integrato: context/stage pipeline, full backend, docs e review verdi. |
 
 **Sequenza non significa blocco artificiale:** SP12-14 non dipendono da SP08/09/16. Possono essere anticipati se cambia la priorita di prodotto, senza fingere che il PAC richieda prima rifare FIFO o asset_source. Il presente ordine mantiene prima il lavoro circoscritto, poi catene L, infine il nuovo solver e le integrazioni XL.
@@ -849,7 +849,7 @@ coppia distingue `no_income=0` da `insufficient_history`; split/FX/WAC e replay
 restano fail-closed. `PortfolioHolding.wac_per_unit` e `ExposureTable` sono
 fondazioni esistenti. Stima confermata: **M backend + S UI/docs**. Stato
 ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../../phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md)
-nel checkpoint H `74afcebce`; baseline `b22998f`, Gate 0 incluso
+nel checkpoint H `cff0f0a11`; baseline `d3da992`, Gate 0 incluso
 `cost_basis_currency`, contratto non-negativo con recorded-zero `net_zero`,
 UI/docs/gate completati. Sequenza sui file portfolio condivisi: H prima, I20+
 dopo.
@@ -860,9 +860,9 @@ dopo.
 
 | Sprint | Variazione dal 2026-09-11 |
 |---|---|
-| SP06 | 🟡 G1a/G1b/G1c chiusi e committati su I (`8ed7a0f0d`): P&L per broker, candele sintetiche, storico proventi con segno. Corretti 3 bug `abs()` preesistenti sul segno nella contabilita a 3 pool. Batch 2 (aggregati costi/depositi/acquisti, split nuovo-vs-reinvestito, selettori finestra) in checkpoint. Nessuna integrazione in target: I resta sul proprio ramo fino alla review developer della UI. |
-| SP11 | 🟡 J completo e committato (`580bd504f`), gia confluito nel ramo D. Non in target: rientra con D. |
-| SP13–SP14 | 🟢 **Fetta autorizzata chiusa: `operation="plan"` produce un risultato reale.** Redesign FX radicale chiuso (`0088748a8`). Step3 completo in cinque stage: Stage 1 `oracle.py` (verita di riferimento esaustiva), Stage 2 `constraints/objectives/compiler`, Stage 3 `solver.py` con il fix HALF_UP e il gate oracolo permanente, Stage 4 `proof.py` (promozione floating→provato resa **irrappresentabile**), Stage 5a `wire_numbers.py`/`planner_report.py` (proiezione pura) e Stage 5b `planner.py` (`plan_pac_allocation`). Percorso end-to-end verificato da una richiesta wire reale: `ready_no_op` e `ready_incumbent` entrambi `optimal_proven`, rivalidati contro l'intera unione `PAC_PLAN_OUTPUT_ADAPTER`. 877 test verdi, zero regressioni. **Niente in target**: tutto sul ramo di D, e Stage 3 attende ancora il commit del developer. Fuori perimetro e non iniziati: SELL, policy del rebalancer, registrazione Tool `operation="plan"`, frontend. Gate G-PAC resta aperto sul solo campionamento a scala. |
+| SP06 | 🟡 G1a/G1b/G1c chiusi e committati su I (`a1e6fce55`): P&L per broker, candele sintetiche, storico proventi con segno. Corretti 3 bug `abs()` preesistenti sul segno nella contabilita a 3 pool. Batch 2 (aggregati costi/depositi/acquisti, split nuovo-vs-reinvestito, selettori finestra) in checkpoint. Nessuna integrazione in target: I resta sul proprio ramo fino alla review developer della UI. |
+| SP11 | 🟡 J completo e committato (`ce718ca49`), gia confluito nel ramo D. Non in target: rientra con D. |
+| SP13–SP14 | 🟢 **Fetta autorizzata chiusa: `operation="plan"` produce un risultato reale.** Redesign FX radicale chiuso (`b461a6b02`). Step3 completo in cinque stage: Stage 1 `oracle.py` (verita di riferimento esaustiva), Stage 2 `constraints/objectives/compiler`, Stage 3 `solver.py` con il fix HALF_UP e il gate oracolo permanente, Stage 4 `proof.py` (promozione floating→provato resa **irrappresentabile**), Stage 5a `wire_numbers.py`/`planner_report.py` (proiezione pura) e Stage 5b `planner.py` (`plan_pac_allocation`). Percorso end-to-end verificato da una richiesta wire reale: `ready_no_op` e `ready_incumbent` entrambi `optimal_proven`, rivalidati contro l'intera unione `PAC_PLAN_OUTPUT_ADAPTER`. 877 test verdi, zero regressioni. **Niente in target**: tutto sul ramo di D, e Stage 3 attende ancora il commit del developer. Fuori perimetro e non iniziati: SELL, policy del rebalancer, registrazione Tool `operation="plan"`, frontend. Gate G-PAC resta aperto sul solo campionamento a scala. |
 
 **Lezione trasversale delle ultime due settimane, valida oltre questi sprint:** **sei difetti in sette stage** su D sono passati indenni sotto ruff, black, `py_compile` e suite unitarie tutte verdi — un `NameError` garantito da un import sotto `TYPE_CHECKING` in un modulo che istanzia a runtime; un modello SCIP che usava importi esatti dove il ledger posta importi arrotondati HALF_UP, potando via l'ottimo vero; un attributo inesistente **dentro un percorso di `raise`**, cioe nel codice che nessun test felice esercita; una costante di tolleranza calibrata sotto la `feastol` del solver, che SCIP avrebbe semplicemente assorbito; un campo del contratto wire letto in modo troncato; e un modello di soluzione costruito prima di decidere la forma, che esplodeva proprio sullo scenario il cui ottimo e non fare nulla. Tutti visibili solo a un controllo **dinamico** contro una verita indipendente. Da qui le regole: dove esiste un oracolo esaustivo, l'accordo con l'oracolo e un gate permanente e parametrizzato, mai uno script usa-e-getta; ogni percorso di `raise` va provato per il **tipo** di eccezione che dichiara, mai con `pytest.raises(Exception)`; e la verifica statica va trattata come pavimento, mai come prova.
 
@@ -874,9 +874,9 @@ rimisurato contro il codice e con evidenza per riga, è in
 [README.md § Stato esecutivo riconciliato](README.md).
 
 **Perché questa regola esiste.** Il 21/09 il coordinatore ha riportato al developer che `G3`
-era «non iniziato». Era **fatto**: backend nel target dal 10/09 (`d4b3deb2f`) e UI Asset
+era «non iniziato». Era **fatto**: backend nel target dal 10/09 (`1b20d4e2a`) e UI Asset
 committata sul ramo I. Anche `B1` risultava «bloccato in attesa di un export eToro reale»
-mentre il codice importava le fee dal 10/09 (`ebba209c5`).
+mentre il codice importava le fee dal 10/09 (`d31797b75`).
 
 La causa non è la freschezza del dato, ed è il motivo per cui aggiornare le date non basta:
 
@@ -903,7 +903,7 @@ Da qui le due regole per ogni tabella di stato di questa cartella:
 | Gate | Da chiudere prima di | Esito richiesto |
 |---|---|---|
 | G-ETORO | Modificare mapping/scarti B1 | Prova del movimento di cassa e valuta, soprattutto nonzero Withdraw Fee; decisione anti-doppio-conteggio. In assenza: task resta bloccato. |
-| G-YOC | Implementare il valore U3 | ✅ COMPLETE nel checkpoint H `74afcebce`: contratto/storyboard, Gate 0 post-F, replay D-1/split/FX, DTO fail-closed, UI/docs e review developer. |
+| G-YOC | Implementare il valore U3 | ✅ COMPLETE nel checkpoint H `cff0f0a11`: contratto/storyboard, Gate 0 post-F, replay D-1/split/FX, DTO fail-closed, UI/docs e review developer. |
 | G-ROLLING | Nuovo modo G3 | Calendario/reference lookup, lookback e limiti di staleness senza cambiare i segnali a osservazioni esistenti. |
 | G-CANDLES | Nuovo DTO/calcolo G1b | Ancora P&L/non-prezzo, conversione giornaliera, posizioni negative e politica OHLC mancante. Natura sintetica, EOD e aggregazione gia approvate. |
 | G-CACHE | Scegliere eviction/rilascio P4-7 | Misura reale, budget e ownership documentati; nessun LRU o numero massimo scelto per intuito. |
@@ -1044,7 +1044,7 @@ Regole nate da difetti reali di questo round, non da principi astratti. Ognuna c
 
 **R9 — Un dettaglio interno di una libreria non e un pericolo finche non se ne dimostra la raggiungibilita attraverso il confine pubblico.** Nata da un mio errore, non da uno di un figlio. Diagnosticando il crash delle candele avevo letto in `whiskerBoxCommon.js` che ECharts fa `item.unshift(index)` sui dati ricevuti, e ne avevo dedotto una trappola: il riuso di un array di quad tra due `setOption` avrebbe prepeso l'ordinale due volte, spostando il quad in silenzio. Il codice sorgente diceva esattamente questo. **Ma la trappola non e raggiungibile**: ECharts clona l'opzione in ingresso *prima* che quel codice giri, quindi la mutazione colpisce il clone interno, mai l'array del chiamante. I ha verificato in tre modi, incluso il `setOption` parziale con la forma esatta (`{notMerge:false, replaceMerge:['dataZoom']}`) del percorso di merge reale, e l'array torna intatto ogni volta. E la forma **speculare** di R1: li si legge un vincolo e ci si ferma prima del validator che lo governa; qui si legge un interno e si ignora il confine che lo governa. In entrambi i casi la lettura e corretta e la conclusione e sbagliata, perche il pezzo letto non era quello che decide. Un pericolo dedotto ma non riprodotto va dichiarato **come ipotesi da verificare**, mai consegnato come difetto.
 
-**R10 — Verificando l'affermazione di un figlio si legge il worktree del figlio: il branch di destinazione non e una versione piu vecchia, e un universo diverso.** Nata da un mio errore, scoperto da I che me lo ha contestato con le prove. Avevo dichiarato che `aggregateSumSeries` era completamente priva di test — 414 righe, 25 casi, 0 occorrenze — e ci avevo costruito sopra una decisione, allargando lo scope del refactor condiviso. Il numero era reale e il file era sbagliato: avevo letto **`dev_release2`**, il checkout principale, dove quel file e davvero a 0; nel worktree di I e a 538 righe, 35 casi, 23 occorrenze, perche test-author aveva chiuso quel buco nel batch 2. `git branch --contains d5e834de4` risponde `e-alfy-performance-charts-plan` **e basta**. I aveva diagnosticato "hai letto il commit padre": e una spiegazione piu benigna di quella vera. Non e un errore di recency recuperabile stando attenti alle date: **il coordinatore segue cinque worktree e il target e per costruzione indietro rispetto a tutte**, quindi ogni file non ancora integrato letto nel checkout principale mostra lo stato pre-workstream — in silenzio, senza errore, e sempre **sbilanciato nella stessa direzione**: fa sembrare non fatto il lavoro consegnato. Lasciato correre, produce una sottovalutazione sistematica di ogni figlio, ed e invisibile perche leggere il branch sbagliato restituisce un file perfettamente valido. La verifica indipendente resta il mestiere del coordinatore, ma va fatta **dove il lavoro vive**.
+**R10 — Verificando l'affermazione di un figlio si legge il worktree del figlio: il branch di destinazione non e una versione piu vecchia, e un universo diverso.** Nata da un mio errore, scoperto da I che me lo ha contestato con le prove. Avevo dichiarato che `aggregateSumSeries` era completamente priva di test — 414 righe, 25 casi, 0 occorrenze — e ci avevo costruito sopra una decisione, allargando lo scope del refactor condiviso. Il numero era reale e il file era sbagliato: avevo letto **`dev_release2`**, il checkout principale, dove quel file e davvero a 0; nel worktree di I e a 538 righe, 35 casi, 23 occorrenze, perche test-author aveva chiuso quel buco nel batch 2. `git branch --contains f1f0da870` risponde `e-alfy-performance-charts-plan` **e basta**. I aveva diagnosticato "hai letto il commit padre": e una spiegazione piu benigna di quella vera. Non e un errore di recency recuperabile stando attenti alle date: **il coordinatore segue cinque worktree e il target e per costruzione indietro rispetto a tutte**, quindi ogni file non ancora integrato letto nel checkout principale mostra lo stato pre-workstream — in silenzio, senza errore, e sempre **sbilanciato nella stessa direzione**: fa sembrare non fatto il lavoro consegnato. Lasciato correre, produce una sottovalutazione sistematica di ogni figlio, ed e invisibile perche leggere il branch sbagliato restituisce un file perfettamente valido. La verifica indipendente resta il mestiere del coordinatore, ma va fatta **dove il lavoro vive**.
 
 **Corollario di R10, emerso nello stesso scambio.** La correzione di un figlio va verificata come la sua affermazione. Nel confutare il mio numero, I ha corretto anche la mappa del modulo condiviso e ha sbagliato: sosteneva che `groupPointsByBucket` avesse esattamente tre consumatori e che `aggregateEnvelope` raggruppasse per conto suo. I siti sono **quattro**: `:134`, `:158`, `:181` e `:239`, quest'ultimo dentro `aggregateEnvelope`, che non chiama mai `mapDateToBucket`. Conseguenza concreta: `aggregateEnvelope` e **dentro** il raggio del refactor, non fuori "per costruzione". I aveva comunque proposto di catturarne i golden, ma per la ragione sbagliata ("raggruppa in modo indipendente, semmai lo unifico in futuro"); la ragione vera e immediata e che **e gia unificato e si sta cambiando cio che chiama**. Un'azione giusta poggiata su un modello sbagliato e a un refactor di distanza dall'essere eliminata da chi legge "indipendente" e toglie la rete a una funzione che sta nel percorso. **Il meccanismo dell'errore vale piu dell'errore**, e I lo ha ricostruito da solo: il suo pattern di grep catturava sia le dichiarazioni di funzione sia le chiamate a `mapDateToBucket`, quindi nell'output `:230 export function aggregateEnvelope` compariva subito **sopra** `:278` e `:293`. Ha letto il contenimento dalla **vicinanza nell'output del proprio grep** — un artefatto del pattern, non una proprieta del codice. Il guard e meccanico e riusabile: quando si attribuisce una chiamata a una funzione che la contiene, si **risolve la funzione contenitrice** (`awk` sul range, o una lettura del blocco) invece di dedurla dalla prossimita fra le righe stampate. E la quarta istanza della stessa famiglia dopo R1, R9 e R10: dato reale, letto correttamente, conclusione tratta su una relazione che l'output non codificava. Conseguenza operativa adottata: **"ho verificato X" e una frase incompleta finche non dice che cosa e stato misurato**, non soltanto che cosa se ne e concluso.
 
@@ -1118,7 +1118,7 @@ Primo piano preso in carico: [SP04-SP05 - Contratti e Runes](../../phases/11_fee
 [piano performance charts](../../phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
 registra il contratto chiuso per G3/G1a/G1b/G1c, gli storyboard ASCII v2 e lo
 split per owner. Stato **PLANNED / implementation frozen**: il refresh tecnico
-post-F e' registrato su `0af66da5`; il dev ha autorizzato e I ha completato la
+post-F e' registrato su `507e98c1`; il dev ha autorizzato e I ha completato la
 sola slice I10 backend signal, ora integrata con H/YOC su service/schema/test
 portfolio. UI G3 e I20+ restano congelati e I dovra' rileggere il target combinato.
 Il link non marca gli altri task implementati.
@@ -1171,7 +1171,7 @@ Nessuno stash, reset o cambio di base automatico per liberare una working tree s
    README o il master piu vecchio del worktree.
 5. Preparare un checkpoint versionato e revisionabile per il dev. Un normale merge
    porta **commit**, non modifiche ancora locali: al controllo del 2026-09-09 tutti
-   i worktree erano ancora a `4a73f5f6`, con il lavoro nei rispettivi diff.
+   i worktree erano ancora a `41a4f23f`, con il lavoro nei rispettivi diff.
 
 Il target deve avere le modifiche locali salvaguardate e una situazione Git adatta
 all'integrazione prima dell'operazione. Niente `git add .` indiscriminato o ripristino
@@ -1217,7 +1217,7 @@ richiedere un commit documentale successivo, non uno SHA futuro scritto in antic
 `07_feedback_import_critici.md`, U1/U4/U5/U7/U9 nel file `01`, SP01/SP02, README e
 task E1-E9 sono riconciliati nel checkout target. YOC è ora integrato; privacy,
 onboarding Round 3 e i temi multicurrency futuri restano aperti. Il pacchetto e'
-committato in `ef722b55`;
+committato in `c8a77dda`;
 sessione/worktree E sono archiviati localmente. L'archivio documentale versionato
 resta un passo distinto.
 
@@ -1315,7 +1315,7 @@ rimozione delle UI P1, perche' descrivono concetti che la UI v2 riusera' e perch
 **1036 stringhe da riscrivere** quando la UI arrivera'.
 
 **Prerequisito non negoziabile di quell'audit**: `dev.py i18n audit` **non e' affidabile
-come criterio di cancellazione**. Misurato sul target a `38d44b717`:
+come criterio di cancellazione**. Misurato sul target a `61168aa1f`:
 
 ```
 Total keys: 3187      Unused: 236
@@ -1390,7 +1390,7 @@ rimozione atterra.
 | 24 | `R/_coverage.py:155` `_finalize_coverage` | Runner fuori scope. |
 | 25 | `R/_inventory.py:107` `_collecting` | Runner fuori scope. |
 
-Il ventiseiesimo era `compute_wac_iterative_multi_broker`, rimosso con l'implementazione in `2572b240`. Yahoo history e matrice status hanno suppressioni C901 motivate ma non quel marker: la ricerca dei TODO non e un inventario completo dei task approvati.
+Il ventiseiesimo era `compute_wac_iterative_multi_broker`, rimosso con l'implementazione in `7a820698`. Yahoo history e matrice status hanno suppressioni C901 motivate ma non quel marker: la ricerca dei TODO non e un inventario completo dei task approvati.
 
 ## Appendice B - Rimandi storici riconciliati
 

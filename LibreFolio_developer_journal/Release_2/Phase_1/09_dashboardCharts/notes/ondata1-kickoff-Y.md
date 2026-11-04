@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-redesigned-spork`
 **Branch**: `e-alfy-y-cruscotto-e-grafici`
-**HEAD di partenza (da verificare)**: `e64e9df0f` (merge di `dev_release2` `208199bf6` nel tuo ramo; genitori `d8bc582a7` e `208199bf6`). Il tuo albero è **pulito**: il tuo lavoro di Y-39a (11 file) il coordinatore l'ha committato così com'era in `d8bc582a7` (commit intermedio, soggetto «feat(charts): one signal renderer for cards and preview (Y-39a)») per non perderlo, e poi ha portato dentro dev.
+**HEAD di partenza (da verificare)**: `9199fdbf6` (merge di `dev_release2` `84ccb8116` nel tuo ramo; genitori `dbdf2e9b6` e `84ccb8116`). Il tuo albero è **pulito**: il tuo lavoro di Y-39a (11 file) il coordinatore l'ha committato così com'era in `dbdf2e9b6` (commit intermedio, soggetto «feat(charts): one signal renderer for cards and preview (Y-39a)») per non perderlo, e poi ha portato dentro dev.
 **Corsia**: porta `6189`, cartella dati `/tmp/librefolio-r13-y`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md`. Leggi solo: «20/10 · Il lotto Y-39: decisioni, contratto, passi» (riga ~7902) e «I passi di Y-39a» (riga ~8044). Il tuo vecchio script dell'E2E è in `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/copilot-enel/session-state/17050e81-e75a-425a-9072-643b8a0612d8/files/scripts/y39a_e2e.sh` (ha percorsi del Mac).
 

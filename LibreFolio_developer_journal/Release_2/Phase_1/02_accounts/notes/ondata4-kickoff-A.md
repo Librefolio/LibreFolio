@@ -4,7 +4,7 @@
 
 **Modello**: Sonnet.
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-legendary-winner` · **Branch**: `e-alfy-a-account-e-accessi`
-**HEAD di partenza (da verificare)**: `c042f2481` (fast-forward dal coordinatore da `e6738808f`).
+**HEAD di partenza (da verificare)**: `295a09c86` (fast-forward dal coordinatore da `a375ededd`).
 **Corsia**: porta `6185`, cartella dati `/tmp/librefolio-r13-a`.
 **Piano**: `02_accounts/plan-phase01Accounts.prompt.md`: analisi N69-3 e N69-5 (~7633-7760), il via del lotto N69 (~8301-8358: N69c alla ~8352, N69d alla ~8356).
 

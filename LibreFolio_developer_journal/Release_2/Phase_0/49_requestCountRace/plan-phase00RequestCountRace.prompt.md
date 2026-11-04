@@ -7,7 +7,7 @@
 > - La prova e la cura sono passate da `test-author`.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), lotto 49. **Origine**: il rosso di `asset-detail` nel lotto 48, [piano della 48](../48_uiPolish/plan-phase00UiPolish.prompt.md), §8, passo 5, «Fuori pista».
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `0071b9703` (treno 72).
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `1f5334583` (treno 72).
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta. Mai le porte 6040 e 6041, mai la galleria, mai `front build` (§8).
 > - **Tocca**: solo `frontend/e2e/assets/asset-detail.spec.ts`, più il journal: questo piano, la voce 49-1 nella sezione I di `BACKLOG_POST_1.2.md` e il rimando dal piano 48.
 
@@ -139,7 +139,7 @@ La prova serve a vedere il rosso in modo deterministico, senza aspettare il cari
 - **La variante B**, un handler che registra dopo il suo primo `await`, o un handler con un nome: 16 casi LATE e 10 NAMED, tutti sicuri (`/tmp/libreFolio_i_l49_xspec_late.log`).
 - **Il test `log` di `asset-detail`** (`:8221-8227`, letto a `:8254`): è benigno. Lo documento qui e non lo tocco.
 - **Nessuna nota per altri proprietari**: le note per U e per M, se servissero, le gira il coordinatore.
-- **La scansione meccanica, dopo il lotto** (chiesta dal coordinatore, sulla revisione combinata `4334fb40d`, annotata nel lotto 50): **0 corse reali**.
+- **La scansione meccanica, dopo il lotto** (chiesta dal coordinatore, sulla revisione combinata `0138aaa61`, annotata nel lotto 50): **0 corse reali**.
   - Il metodo: uno script in sola lettura cerca in tutte le spec E2E le attese di una richiesta (dirette, su una promessa, dentro un helper) e legge la finestra sincrona fra l'`await` e il successivo, dove l'handler di `page.route` non è ancora partito; segnala le letture di stato scritto dagli handler e gli `expect` sincroni. A parte, i casi LATE (l'handler scrive dopo il suo primo `await`) e FACTORY (l'handler è costruito da una chiamata).
   - Il conto: 32 file, 94 attese di richiesta, **43 finestre segnalate, lette tutte a mano**; a mano anche i 29 LATE, i 2 FACTORY e il tracker di `risk-mocks.ts`. Nessuna lettura sincrona dipende da uno stato che l'handler non ha ancora scritto: si legge la richiesta stessa, oppure si legge dopo un poll o un'attesa sulla UI, oppure è una guardia che a fine test deve essere vuota (una scrittura tardiva lì può solo nascondere una violazione, mai dare un rosso).
   - I limiti: la lettura è testuale (commenti e stringhe sbiancati) e non distingue gli scope, quindi segnala anche nomi omonimi e annotazioni di tipo; i LATE si vedono solo per gli handler dello stesso file; gli interni dei tracker della galleria (le fixture) non li ho letti a mano.
@@ -149,7 +149,7 @@ La prova serve a vedere il rosso in modo deterministico, senza aspettare il cari
 
 - `ruff check scripts/test_runner/_frontend_broker.py`: E701 a `:44:36`, `:45:32`, `:52:36`, `:53:32`; PLC0415 a `:96:5`.
 - `black --check` lo riformatterebbe, in due pezzi: `@@ -39,20 +39,24 @@` e `@@ -92,16 +96,14 @@`.
-- È preesistente (blame `1a29e0523`, `547c06cf0`, `7d3463e2f`); le righe del lotto 48 non sono nei pezzi di black (piano 48, §8, passo 7).
+- È preesistente (blame `e892b39da`, `50a9bd209`, `7e985b3eb`); le righe del lotto 48 non sono nei pezzi di black (piano 48, §8, passo 7).
 - **È fuori dal gate**: `dev.py:1841` e `:1848` passano ruff e black solo su `backend/`.
 - **Il runner intero**: 149 errori ruff in 17 file; black riformatterebbe 15 file su 30 (`/tmp/libreFolio_i_l49_{ruff,black}_runner.log`). Se pulirlo in una volta sola lo decide il coordinatore.
 - La voce va nella sezione I del backlog come **49-1**, priorità minima. Questo lotto non tocca il file.
@@ -169,7 +169,7 @@ La prova serve a vedere il rosso in modo deterministico, senza aspettare il cari
   > **⚠️ Fuori pista**:
   > - **La prima euristica della scansione incrociata** (`/tmp/libreFolio_i_l49_xspec_scan.py`) trovava un solo sito a rischio anche in `asset-detail`, contro i 42 della scansione dedicata: come rivelatore non era affidabile. L'ho sostituita con la lettura del contesto di ogni `waitForRequest` e di ogni lettura dei contatori (`/tmp/libreFolio_i_l49_xspec_ctx*.log`, `…_xspec_reads.log`).
   > - **La variante B è un'estensione mia**: gli handler che registrano dopo il primo `await` hanno la stessa forma di corsa. Tutti sicuri (§5).
-  > - **La base è avanzata durante l'analisi**: il coordinatore ha portato il ramo in fast-forward da `0a148a109` a `0071b9703` (treno 72). Il blob dello spec non è cambiato (`6ac98fba`); i numeri di riga valgono per entrambe.
+  > - **La base è avanzata durante l'analisi**: il coordinatore ha portato il ramo in fast-forward da `8c6575030` a `1f5334583` (treno 72). Il blob dello spec non è cambiato (`6ac98fba`); i numeri di riga valgono per entrambe.
   > - **Niente `front build`**: scrive il marcatore 0, e il server di test ricostruirebbe all'avvio, col rischio di superare i 300 s di `STARTUP_TIMEOUT` (`scripts/test_runner/_server.py:43-48`). È la causa probabile del timeout d'infrastruttura del lotto 48. Se mai servisse, si usa `--debug`.
 - [x] **2. Il progetto della prova** (2026-10-12): la prova K′ (oggi §4.1, scartata al passo 3) e la classificazione delle 35 (§2).
   > **Note implementazione**:
@@ -289,7 +289,7 @@ La prova serve a vedere il rosso in modo deterministico, senza aspettare il cari
   > **⚠️ Fuori pista**: nessuno.
 - [x] **8. Il journal** (2026-10-12, fatto in anticipo, mentre `test-author` gira il passo 3): la voce 49-1 nel backlog, il rimando dal piano 48.
   > **Note implementazione**:
-  > - **La voce 49-1**, in fondo alla sezione I di `BACKLOG_POST_1.2.md`, dopo la 48-1; l'introduzione della sezione dice da quale base vengono i suoi numeri di riga (`0071b9703`).
+  > - **La voce 49-1**, in fondo alla sezione I di `BACKLOG_POST_1.2.md`, dopo la 48-1; l'introduzione della sezione dice da quale base vengono i suoi numeri di riga (`1f5334583`).
   > - Prima di scriverla ho rilanciato `ruff check` su `_frontend_broker.py`: gli stessi 5 errori della misura del passo 1.
   > - **Il piano 48** rimanda qui dall'intestazione («Seguito»).
   > - L'indice per fonte del backlog è del coordinatore: la riga per i piani 48 e 49 non la scrivo io.
@@ -300,7 +300,7 @@ La prova serve a vedere il rosso in modo deterministico, senza aspettare il cari
   >   - C2 `docs(journal): plan 49, lint debt in backlog`: questo piano, `BACKLOG_POST_1.2.md` e il piano 48.
   > - **Il manifest coi blob, i messaggi e le prove** sono nei file della sessione di I (`requestcount_commit_bundle/`).
   > - **La definizione di fatto** (§8): tutti e 8 i punti sono soddisfatti.
-  > - **Il target**: `dev_release2` è a `986e99bd3` (treno 76), 40 commit dopo la base (`/tmp/libreFolio_i_l49_conflict.log`).
+  > - **Il target**: `dev_release2` è a `926be26df` (treno 76), 40 commit dopo la base (`/tmp/libreFolio_i_l49_conflict.log`).
   >   - Dei file del lotto tocca solo `BACKLOG_POST_1.2.md`, con blocchi lontani dai miei: i suoi a `:124`, `:414`, `:517`, `:718`, `:772`, `:851`, i miei a `:178` e `:262`. La fusione a tre vie simulata in `/tmp` (`git merge-file`) è pulita, e la voce 49-1 resta.
   >   - Non tocca `fixtures/playwright.ts`, da cui viene il tipo `Request`, né `package.json`: Playwright resta 1.61.
   >   - Cambia però i grafici e `assets/[id]/+page.svelte` (una data nella lingua dell'interfaccia), che la spec attraversa. Dopo la fusione va rilanciata `front-asset asset-detail`.

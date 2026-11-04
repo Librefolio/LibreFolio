@@ -1,11 +1,11 @@
 # Piano D — Rimozione finale del P1, poi R7
 
 **Stato:** 🔄 iniziato il 2026-10-06 alle 19:39. Il via è del coordinator alle 19:25 («Via alla riga 13»),
-dopo la validazione di `7ba60a62f`. Il P1 è committato (`6ebad820b` + `838be2b6f`) e la revisione del
-treno 2 è validata (S10). R7 è partito alle 21:40 su `593293b78`, dopo il riallineamento ff del
+dopo la validazione di `f37dd269f`. Il P1 è committato (`3a03d6c1e` + `7d306fcbc`) e la revisione del
+treno 2 è validata (S10). R7 è partito alle 21:40 su `0b8362785`, dopo il riallineamento ff del
 coordinator (§6.6).
-**Baseline:** `7ba60a62f` su `e-alfy-allocatore-pac`: merge `--no-ff` di `a8ad1a500` (slice di
-robustezza) con `6addaba05` (`dev_release2`), albero `59873db3e`. Verificata alle 19:39: albero
+**Baseline:** `f37dd269f` su `e-alfy-allocatore-pac`: merge `--no-ff` di `2d84955cd` (slice di
+robustezza) con `81a1fe750` (`dev_release2`), albero `59873db3e`. Verificata alle 19:39: albero
 pulito, stage vuoto, porte 6151 e 6161 libere.
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacP1FinalRemoval.prompt.md`
 ← Precedente: [`plan-phase00PacSolverRobustness.prompt.md`](plan-phase00PacSolverRobustness.prompt.md) (riga 12 del README).
@@ -41,7 +41,7 @@ Il coordinator, il 2026-10-05:
   docs-writer, solo in inglese.
 
 Il coordinator, il 2026-10-06 alle 19:25:
-1. questo piano, con dentro le due correzioni di journal e la validazione di `7ba60a62f`;
+1. questo piano, con dentro le due correzioni di journal e la validazione di `f37dd269f`;
 2. **prima del codice**, l'elenco esatto dei file e le zone di `portfolio_service.py`. Dentro
    l'elenco concesso procedo; per ciò che ne esce aspetto il suo ok;
 3. prima i test rossi, poi codice e `api sync`; gate sulla 6151; checkpoint con la previsione sui
@@ -72,7 +72,7 @@ la fonte e la data di ogni dato. La riga 8 ha già tolto la pagina del P1. Qui r
 `allocation_source` riceve 422, perché il body (`PortfolioReportQuery`, uno `StrictModel`) rifiuta
 i campi che non conosce. Nel repo, tolto `allocationSource.ts`, nessun client lo manda più.
 
-## 2. Step 0 — correzioni del journal e validazione di `7ba60a62f` ✅ 2026-10-06
+## 2. Step 0 — correzioni del journal e validazione di `f37dd269f` ✅ 2026-10-06
 
 Le due correzioni approvate dal coordinator il 2026-10-06 entrano nel commit di journal di questa
 riga:
@@ -82,7 +82,7 @@ riga:
 2. `README.md`, riga 12: gli SHA dei tre commit e del merge. Riga 13: il link a questo piano, lo stato
    🔄 e il metodo giusto del report, `POST` (prima c'era scritto `GET`).
 
-**Validazione di `7ba60a62f`** (2026-10-06, dalle 17:31 alle 17:42, corsia 6151). Il merge non porta
+**Validazione di `f37dd269f`** (2026-10-06, dalle 17:31 alle 17:42, corsia 6151). Il merge non porta
 dipendenze né migrazioni.
 
 | Gate | Esito |
@@ -148,8 +148,8 @@ Il coordinator ha concesso tutte e cinque le voci. Nessun altro ramo le tocca, t
 | File | Cosa cambia | Nota |
 |---|---|---|
 | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` | test-author: via la classe `TestPortfolioAllocationSource` (da `:3450` alla fine del file, riga 4 832, 12 test) e gli import `:40`, `:44` e `:46` | la classe è mia (P1), il file è condiviso. Dopo il codice backend il file non si importa più senza questa modifica. L'import `:44` (`AssetSourceManager`) lo usa solo la classe tolta. Il cache-bust F2 resta coperto da `TestAccessFingerprintCacheBust` (`:607`). |
-| `scripts/test_runner/_frontend_utility.py:116` (`:120` dopo il treno `a7d0b37ec`) | via la riga di `allocationSource.test.ts` | file condiviso del runner; tolgo solo questa riga, **solo dopo lo SHA di riallineamento** (S1, Fuori pista 2) |
-| `frontend/e2e/tools/allocation-tool-fixtures.ts` | cancellato | fixture del prototipo del Round 4 (`d66f8e58e`), senza importatori; usa il report con `allocation_source` |
+| `scripts/test_runner/_frontend_utility.py:116` (`:120` dopo il treno `9e4e90675`) | via la riga di `allocationSource.test.ts` | file condiviso del runner; tolgo solo questa riga, **solo dopo lo SHA di riallineamento** (S1, Fuori pista 2) |
+| `frontend/e2e/tools/allocation-tool-fixtures.ts` | cancellato | fixture del prototipo del Round 4 (`01bfae580`), senza importatori; usa il report con `allocation_source` |
 | estensione (b): `planner/steps/SourceCopyDialog.svelte` (cancellato); `planner/copies.ts`: le varianti `price`, `exposures` e `fx` di `CopyConflict` (`:15-17`), `applyPriceCopy` (`:306-359`), `applyClassificationCopy` (`:491-536`), `applyFxCopy` (`:560-~628`), i rami di `resolveConflicts` (`:798-815`; la funzione resta per la cassa, `copyFlow.svelte.ts:5`), `restoreCopiedRate` (`:822-827`); `planner/draft.svelte.ts`: `fxPairs` (`:703`), `removeFx` (`:713-715`); `planner/shared/ConflictDialog.svelte`: `:32-38`, `:59-80` | codice v2 senza utenti | approvata dal developer il 2026-10-05, ma i file sono fuori dall'elenco. `sourceAssetKeys` (`:298`) e `clonePrice` (`:302`) li tolgo solo se restano senza utenti. Il tipo `CopyKind` non cambia. |
 | `mkdocs_src/docs/developer/architecture/patterns/tool_plugins.en.md:287` | docs-writer, solo EN | la frase «The current compiled registry binds no components at all … `renderer_missing`» è vecchia: il registry lega `pac_allocator` 1.0.0 a `PacPlannerTool.svelte` (`frontend/src/lib/features/tools/registry.ts:241-244`). La pagina non ha traduzioni: nessuno stamp. |
 
@@ -173,10 +173,10 @@ tracciati.
 
 ## 4. Previsione sui file della famiglia Risk
 
-Rami confrontati in sola lettura: `e-alfy-risk-asset-global-lab` `28559e829`,
-`e-alfy-risk-asset-global-levels` `1041c38fa` (punta avanzata durante la verifica, ricontrollata: stessi
-hunk, stesso esito i18n), `e-alfy-risk-management-replan` `9ce2efaed`. Base comune con la mia HEAD:
-`9b5291c25`.
+Rami confrontati in sola lettura: `e-alfy-risk-asset-global-lab` `5194c0065`,
+`e-alfy-risk-asset-global-levels` `efa7646d7` (punta avanzata durante la verifica, ricontrollata: stessi
+hunk, stesso esito i18n), `e-alfy-risk-management-replan` `dc18016d4`. Base comune con la mia HEAD:
+`a6ede2c0e`.
 
 - **`portfolio_service.py`.** I loro hunk: un import inserito dopo quello di `schemas.wac` (sul target
   `:78`), poi `:440-441` e `:697`. Fra il loro import e la mia riga `:79` c'è la riga
@@ -211,7 +211,7 @@ Messaggio con §3 e §4, la domanda su L2 (§6.3) e l'ordine: prima il P1, poi R
 > concesso. S3 aspetta l'ok sul file `test_portfolio_service.py` (§3.3, voce A).
 >
 > **⚠️ Fuori pista**: la punta del ramo Risk dei livelli si chiama `e-alfy-risk-asset-global-levels`
-> ed era avanzata a `1041c38fa`. L'ho ricontrollata prima dell'invio: stessi hunk in
+> ed era avanzata a `efa7646d7`. L'ho ricontrollata prima dell'invio: stessi hunk in
 > `portfolio_service.py` e nel runner, nessuna chiave i18n in comune.
 >
 > **Risposta del coordinator** (2026-10-06):
@@ -228,12 +228,12 @@ Messaggio con §3 e §4, la domanda su L2 (§6.3) e l'ordine: prima il P1, poi R
 > **⚠️ Fuori pista 2**: ho controllato in sola lettura i quattro rami del treno
 > (script `/tmp/libreFolio_d_r13/train_overlap.sh`):
 >
-> | Ramo | Punta | Contiene D (`7ba60a62f`) | File in comune con la mia lista |
+> | Ramo | Punta | Contiene D (`f37dd269f`) | File in comune con la mia lista |
 > |---|---|---|---|
-> | K `e-alfy-k-tassonomia-e-select` | `998ce67d4` | sì | i 4 cataloghi, `_frontend_utility.py` |
-> | L `e-alfy-l-danske-bank` | `eba9e8bf1` | sì | i 4 cataloghi, `_frontend_utility.py` |
-> | M `e-alfy-cloud-resource-sizing` | `d0018a5a1` | sì | i 4 cataloghi, `_frontend_utility.py` |
-> | N `e-alfy-fx-dashboard-sync` | `1ae2a53c9` | sì | i 4 cataloghi, `_frontend_utility.py` (più `FxStep.svelte`, che non tocco) |
+> | K `e-alfy-k-tassonomia-e-select` | `4e99cdb9e` | sì | i 4 cataloghi, `_frontend_utility.py` |
+> | L `e-alfy-l-danske-bank` | `f45a1df5c` | sì | i 4 cataloghi, `_frontend_utility.py` |
+> | M `e-alfy-cloud-resource-sizing` | `58bf9cfec` | sì | i 4 cataloghi, `_frontend_utility.py` |
+> | N `e-alfy-fx-dashboard-sync` | `13956cb84` | sì | i 4 cataloghi, `_frontend_utility.py` (più `FxStep.svelte`, che non tocco) |
 >
 > Git rifiuta un ff o un merge se un file che arriva col treno ha modifiche non committate, anche se le
 > righe sono lontane. Quindi anche la riga `_frontend_utility.py:116` aspetta lo SHA, insieme alle
@@ -245,7 +245,7 @@ Messaggio con §3 e §4, la domanda su L2 (§6.3) e l'ordine: prima il P1, poi R
 Dentro l'elenco concesso, quindi parte senza aspettare l'ok.
 
 > **Base di `black`**: `test_portfolio_api.py` non passa già oggi `black --check`: 8 blocchi da
-> riformattare (`:1830-2469`), tutti nati con `0088748a8` (2026-09-18, «feat(pac): redesign FX/funding
+> riformattare (`:1830-2469`), tutti nati con `b461a6b02` (2026-09-18, «feat(pac): redesign FX/funding
 > to canonical rate map»). Uno sta dentro il test legacy che tolgo. `dev.py format` applica black a
 > tutto il backend, ma nessun gate lo controlla (`dev.py lint` usa solo ruff). Non riformatto i blocchi
 > rimasti: il controllo è «nessun blocco nuovo rispetto alla base», e nel checkpoint propongo la
@@ -323,7 +323,7 @@ Corse, una per volta:
 >   che manda apposta `allocation_source` e si aspetta 422.
 > - **Tenuto apposta**: nella chiave di cache resta
 >   `tuple(sorted(broker_ids_for_scope)) if broker_ids_for_scope else None`. L'ha aggiunto il P1
->   (`8273335ff`), ma rende la chiave solo più precisa, mai sbagliata, e non era nella tabella §3.2.
+>   (`0261fe73e`), ma rende la chiave solo più precisa, mai sbagliata, e non era nella tabella §3.2.
 >   I test leggono la chiave solo dalla fine (`[-2]` FX, `[-1]` rendimento sul costo,
 >   `test_portfolio_service.py:2597-2610`), quindi togliere i membri in mezzo non sposta nulla.
 
@@ -332,7 +332,7 @@ Corse, una per volta:
 > corretto.
 
 > **⚠️ Fuori pista 2**: durante S3 è arrivato il riallineamento del coordinator: `dev_release2` e il
-> mio ramo sono a `a7d0b37ec` (treno D, K, L, M, N), con il lavoro in corso intatto. Il treno tocca,
+> mio ramo sono a `9e4e90675` (treno D, K, L, M, N), con il lavoro in corso intatto. Il treno tocca,
 > della mia lista, solo i 4 cataloghi e `_frontend_utility.py`: la riga di
 > `allocationSource.test.ts` è passata da `:116` a `:120`. Tocca anche `FxStep.svelte` (di N) e due
 > spec della Dashboard, senza riferimenti al P1. Lo S6 è sbloccato.
@@ -359,7 +359,7 @@ Corse, una per volta:
 Cancello `allocationSource.ts`, `allocationSource.test.ts` e la fixture e2e
 `allocation-tool-fixtures.ts`. La riga del runner va in S6, dopo lo SHA di riallineamento.
 
-> **Note implementazione**: prima di cancellare ho ricontrollato i riferimenti su `a7d0b37ec`
+> **Note implementazione**: prima di cancellare ho ricontrollato i riferimenti su `9e4e90675`
 > (`frontend/src`, `frontend/e2e`, `scripts`, `dev.py`). `allocationSource.ts` lo importava solo il suo
 > test (`allocationSource.test.ts:4`); `allocation-tool-fixtures.ts` non lo importava nessuno. Gli
 > altri riferimenti sono al v2 (`planner/source.ts:197`, `:313`) e al selettore del runner
@@ -375,8 +375,8 @@ Cancello `allocationSource.ts`, `allocationSource.test.ts` e la fixture e2e
 
 I file e le righe di §3.3.
 
-> **Note implementazione**: le righe di §3.3 erano ancora giuste su `a7d0b37ec` (`copies.ts` è fermo a
-> `6f29ec1cf`); solo la fine di `applyFxCopy` è `:608`, non `~628`. Prima ho controllato gli utenti:
+> **Note implementazione**: le righe di §3.3 erano ancora giuste su `9e4e90675` (`copies.ts` è fermo a
+> `ffe03f7fc`); solo la fine di `applyFxCopy` è `:608`, non `~628`. Prima ho controllato gli utenti:
 > `SourceCopyDialog.svelte` non lo importava nessuno; `ConflictDialog.svelte` resta, perché lo usa
 > `CopyFlowView.svelte:4` per i conflitti della cassa; nessuno spec e2e o unitario nomina i `testid`
 > tolti (`pac-planner-{prices,classifications,fx}-copy`, le righe price/exposures/fx del conflitto); i
@@ -417,7 +417,7 @@ I file e le righe di §3.3.
 >   con più costanti in fila) e quelle con una parte variabile. Una parte variabile vale «qualunque
 >   nome», e la chiave conta come usata se quel nome compare nel codice come stringa o come chiave di
 >   un oggetto. Una prova con chiavi sicuramente usate (`s6_control_keys.txt`) le trova tutte.
-> - **Sulla base `a7d0b37ec` con il mio lavoro**: 4 508 chiavi per lingua. Le 285 chiavi della lista
+> - **Sulla base `9e4e90675` con il mio lavoro**: 4 508 chiavi per lingua. Le 285 chiavi della lista
 >   sono tutte testi semplici (non gruppi) in tutte e 4 le lingue, e nessuna è più usata: G1 65, G2 28,
 >   G3 168, G4 14, G5 10.
 > - **Il mio lavoro non lascia altre chiavi orfane**: ho scansionato tutte le chiavi due volte,
@@ -510,7 +510,7 @@ Più il controllo con `rg` che nel sorgente non resti nessun simbolo P1.
 >
 > | # | Comando | Esito | Ora | Durata | Carico prima → dopo |
 > |---|---|---|---|---|---|
-> | 1 | `api sync` | rc 0; hash del contratto dei tool `f636854e…e33a`, uguale alla validazione di `7ba60a62f` | 20:35:02 | 19 s | 18,68 → 18,90 |
+> | 1 | `api sync` | rc 0; hash del contratto dei tool `f636854e…e33a`, uguale alla validazione di `f37dd269f` | 20:35:02 | 19 s | 18,68 → 18,90 |
 > | 2 | `front build --debug` | rc 0; svelte-check 0 errori, 0 avvisi | 20:35:39 | 89 s | 17,09 → 11,27 |
 > | 3 | `test … api portfolio` | 49 passati | 20:37:26 | 28 s | 14,33 → 17,17 |
 > | 4 | `test … services portfolio-allocation-source` | 89 passati | 20:37:57 | 6 s | 18,20 → 18,34 |
@@ -521,7 +521,7 @@ Più il controllo con `rg` che nel sorgente non resti nessun simbolo P1.
 > | 9 | `front build` | rc 0 | 20:40:08 | 80 s | 10,21 → 9,73 |
 > | 10 | `test … front-utility core-unit` | 107 file, 3 014 test passati; la lista del runner passa da 108 a 107 voci, quella in meno è `allocationSource.test.ts` | 20:41:35 | 25 s | 10,77 → 15,93 |
 > | 11 | `test … front-utility component-unit` | 101 file, 2 284 test passati | 20:42:23 | 72 s | 14,33 → 34,39 |
-> | 12 | `mkdocs check-links` | rc 1 solo per il rosso accettato D28 (`#rolling-return` in it/fr/es); 81 link validi, `user/tools/pac-allocator` ok; uguale alla validazione di `7ba60a62f` | 20:43:41 | 2 s | 34,44 → 34,44 |
+> | 12 | `mkdocs check-links` | rc 1 solo per il rosso accettato D28 (`#rolling-return` in it/fr/es); 81 link validi, `user/tools/pac-allocator` ok; uguale alla validazione di `f37dd269f` | 20:43:41 | 2 s | 34,44 → 34,44 |
 > | 13 | `lint` | «All checks passed!» | 20:43:50 | 2 s | 35,21 → 35,21 |
 > | 14 | `ruff check` sugli 8 file Python toccati | «All checks passed!» | 20:44 | — | — |
 > | 15 | `black --check` sugli stessi 8 | solo `test_portfolio_api.py`: 7 blocchi, tutti già alla base, nessuno nuovo (vedi sotto) | 20:44 | — | — |
@@ -557,7 +557,7 @@ Più il controllo con `rg` che nel sorgente non resti nessun simbolo P1.
 >   `.testLog/00_archive/test-db_20261006_203820.tar.xz`. È ignorata (`.gitignore:119`), quindi
 >   resta fuori dal checkpoint;
 > - **`i18n audit`: 260 chiavi «probabilmente inutilizzate» e 93 «non verificate».** Alla validazione
->   di `7ba60a62f` le inutilizzate erano 521. La differenza è 261, cioè le chiavi dei gruppi G1, G2 e
+>   di `f37dd269f` le inutilizzate erano 521. La differenza è 261, cioè le chiavi dei gruppi G1, G2 e
 >   G3 (65 + 28 + 168), che erano già senza riferimenti. Le altre 24 tolte (G4 e G5) l'audit non le
 >   contava, perché fino a S5 le leggeva il codice del P1. Le 260 di adesso si dividono così:
 >   - 103 sono nel backlog. La lista del backlog ne aveva 104: l'unica che l'audit non segna è
@@ -596,11 +596,11 @@ Commit proposti:
 
 > **Note implementazione**: previsione rifatta sulle punte di stasera, in sola lettura. Gli script sono
 > in `/tmp/libreFolio_d_r13/s9_*`; le copie dei log sono in `files/r13/s9/` della sessione.
-> - **K, L, M e N** sono a `a7d0b37ec`, cioè al target e alla mia HEAD: non hanno commit da
+> - **K, L, M e N** sono a `9e4e90675`, cioè al target e alla mia HEAD: non hanno commit da
 >   confrontare. Il loro lavoro non committato non lo vedo.
-> - **Famiglia Risk.** La punta è `e-alfy-risk-asset-global-levels` `22ef9d091`. Contiene
->   `e-alfy-risk-management-replan` `09b35ca98` e `e-alfy-risk-asset-global-lab` `1041c38fa`, e ha già
->   fuso il target: la base comune con la mia HEAD è `a7d0b37ec`. I file in comune sono
+> - **Famiglia Risk.** La punta è `e-alfy-risk-asset-global-levels` `54eee1fd4`. Contiene
+>   `e-alfy-risk-management-replan` `6f54b501e` e `e-alfy-risk-asset-global-lab` `efa7646d7`, e ha già
+>   fuso il target: la base comune con la mia HEAD è `9e4e90675`. I file in comune sono
 >   `portfolio_service.py`, `_frontend_utility.py` e i 4 cataloghi.
 > - **Merge a tre vie simulato** con `git merge-file -p` su copie in `/tmp`: **0 conflitti in tutti e 6
 >   i file.**
@@ -615,7 +615,7 @@ Commit proposti:
 >   solo la mia riga di `allocationSource.test.ts`.
 > - **CHANGELOG.** Il P1 non è mai uscito in una versione. Al tag `v1.1.0` nessun file di `backend` o
 >   di `frontend/src` contiene `allocation_source`, `AllocationSource` o `allocationSource`. Il modulo è
->   nato con `8273335ff` (2026-09-11), e nessun tag lo contiene. La voce PAC di `[Unreleased]`
+>   nato con `0261fe73e` (2026-09-11), e nessun tag lo contiene. La voce PAC di `[Unreleased]`
 >   (`CHANGELOG.md:18`) parla delle copie del v2, che restano: cassa (`copies.ts:230`), prezzi (`:350`),
 >   cambi (`:440`), aggiornamento al **Calcola** (`:552`) e distribuzione (`:677`). Proposta al
 >   coordinator: nessuna riga.
@@ -630,8 +630,8 @@ Commit proposti:
 
 ### S10 — validazione del treno 2 ✅ 2026-10-06 21:25
 
-Il P1 è entrato con `6ebad820b` + `838be2b6f`. Il coordinator ha poi preparato D' = `2c9671753`
-(albero `8704510fc`): i due commit più il merge di K' `e6f1bee25`, che contiene la base nuova con la
+Il P1 è entrato con `3a03d6c1e` + `7d306fcbc`. Il coordinator ha poi preparato D' = `2d322a014`
+(albero `8704510fc`): i due commit più il merge di K' `6f4550663`, che contiene la base nuova con la
 famiglia Risk. Validata sulla 6151 dalle 21:15 alle 21:25, un comando per volta, con
 `/tmp/libreFolio_d_t2/run.sh` (log `/tmp/libreFolio_d_t2/t2_<nome>.log`). Il carico è la media di un
 minuto, letta prima e dopo.
@@ -657,8 +657,8 @@ minuto, letta prima e dopo.
 | 17 | `mkdocs check-links` | rc 1 solo per il rosso accettato D28 (`#rolling-return` in it/fr/es); 89 link validi, 3 eccezioni note | 21:25:47 | 2 s | 26,05 → 26,05 |
 
 > **Note implementazione**: rapporto mandato al coordinator; il coordinator l'ha registrato e ha deciso
-> che entra nel journal del commit di R7. Poi il developer ha riallineato D con un ff a `593293b78`
-> (`dev_release2` col treno 2). Fra `2c9671753` e `593293b78` non cambia nessun file di `frontend/src`
+> che entra nel journal del commit di R7. Poi il developer ha riallineato D con un ff a `0b8362785`
+> (`dev_release2` col treno 2). Fra `2d322a014` e `0b8362785` non cambia nessun file di `frontend/src`
 > né di `backend/app`.
 >
 > **⚠️ Fuori pista**: al punto 5 i 4 test di `test_risk_api.py` si fermavano al loro controllo iniziale,
@@ -820,7 +820,7 @@ Commit: `fix(pac): …`, con la riga 🐛 del CHANGELOG proposta al coordinator,
 > **Note implementazione** (R7-S0, ✅ 2026-10-06 21:43): piano corretto come chiesto nella domanda 5 e
 > approvato dal coordinator: §6.1 con il Fuori pista e la variante B, §6.2 con 6 chiavi in 7 punti e
 > le decisioni, §6.4-§6.6, DoD, §8 e la validazione del treno 2 (S10). Prima di scrivere ho
-> verificato che fra `2c9671753` e `593293b78` non cambi nessun file di `frontend/src` né di
+> verificato che fra `2d322a014` e `0b8362785` non cambi nessun file di `frontend/src` né di
 > `backend/app`, quindi le righe citate nelle domande valgono ancora. Una sola differenza: il commento
 > di `text.ts` è a `:45`, non a `:44`.
 
@@ -896,7 +896,7 @@ Commit: `fix(pac): …`, con la riga 🐛 del CHANGELOG proposta al coordinator,
 
 > **Note implementazione** (R7-S4, ✅ 2026-10-06 23:24): gate sulla 6151, un comando per volta, con
 > `/tmp/libreFolio_d_r7/run.sh` (log `/tmp/libreFolio_d_r7/r7_<nome>.log`). Il carico è la media di un
-> minuto, letta prima e dopo. HEAD `593293b78`.
+> minuto, letta prima e dopo. HEAD `0b8362785`.
 >
 > | # | Comando | Esito | Ora | Durata | Carico prima → dopo |
 > |---|---|---|---|---|---|
@@ -919,8 +919,8 @@ Commit: `fix(pac): …`, con la riga 🐛 del CHANGELOG proposta al coordinator,
 >   ai file cambiati, HEAD contro il worktree, le 5 «chiavi» in più sono stringhe del test nuovo
 >   (`'1.000'`, `'a.b'`, `'a.bc'`, `'one'`, `'step'`), e il prefisso `1` viene dai due test. Nessuna
 >   è una chiave dei cataloghi, quindi nessun verdetto cambia.
-> - **File backend**: 236 → 237 viene dalla base. `593293b78` aggiunge
->   `test_utilities/test_translation_code_blocks.py` rispetto a `2c9671753`; io non tocco
+> - **File backend**: 236 → 237 viene dalla base. `0b8362785` aggiunge
+>   `test_utilities/test_translation_code_blocks.py` rispetto a `2d322a014`; io non tocco
 >   `backend/test_scripts`.
 > - **Prettier** (`frontend/node_modules/.bin/prettier --check`, sola lettura): 5 file su 6
 >   formattati. `DistributionDialog.svelte` ha lo stesso debito che ha a HEAD: 106 righe in
@@ -988,7 +988,7 @@ Commit: `fix(pac): …`, con la riga 🐛 del CHANGELOG proposta al coordinator,
 ## Appendice A — le 285 chiavi tolte in S6
 
 Tolte con `dev.py i18n remove <chiave> -f`, una per chiamata, in tutte e 4 le lingue. Fonte: la
-lista del P1 (sessione, `files/p12-i18n-remove-keys.txt`), ricontrollata in S6 sulla base `a7d0b37ec`.
+lista del P1 (sessione, `files/p12-i18n-remove-keys.txt`), ricontrollata in S6 sulla base `9e4e90675`.
 
 ### G1 — `tools.allocation`, senza riferimenti (65)
 

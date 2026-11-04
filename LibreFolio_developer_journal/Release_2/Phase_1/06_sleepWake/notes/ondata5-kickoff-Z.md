@@ -8,7 +8,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 
 **Modello**: Sonnet. **Giorni**: 3,5-4,5 (Q1…Q3 + S1 3-4; Z5-F1 0,5).
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-potential-sniffle` · **Branch**: `e-alfy-z-sospensione-e-risveglio`
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro; il tuo ramo aveva 0 commit avanti: fast-forward).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro; il tuo ramo aveva 0 commit avanti: fast-forward).
 **Corsia**: porta `6186`, cartella dati `/tmp/librefolio-r13-z`.
 **Piano**: il tuo `LibreFolio_developer_journal/Release_2/Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md` (sezione nuova «Ondata 5»); il piano di MF (`11_financialMath/plan-phase01FinancialMath.prompt.md` ~3703-3737 per Q1…Q3/S1; ~3681-3689 per i pavimenti, che **non** sono tuoi) e `03_pluginsAssets/` (Q1…Q3 lato X). Backlog: grep «X-Q1», «X-Q2», «X-S1», «Z-29a». Z5-F1: `UNDEFINED_METRIC_WINDOW` (grep). Skill utili: `signal-plugin`, `testing-backend`.
 

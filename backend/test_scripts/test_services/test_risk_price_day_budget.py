@@ -7,7 +7,7 @@ Workstream J «Numeri e analisi», release 1.3. Z-25 (N77) made ``AssetSourceMan
 ``try``; and for a historical replay's window, in ``risk/replay.py::prepare_historical_replay_context``, whose caller
 catches only ``RiskUnavailableError``.
 
-TODAY (base ``d67ac4603``) the error crosses ``RiskService.execute`` whole, and ``/risk/query`` maps only 403 and 404: the
+TODAY (base ``066780b81``) the error crosses ``RiskService.execute`` whole, and ``/risk/query`` maps only 403 and 404: the
 user gets a 500 — for the request's period, and for one replay inside an otherwise good request.
 
 THE RULE (coordinator, 17/10; D379's convention, ``risk_plugins/simulation/plugin.py::_resource_limit``).

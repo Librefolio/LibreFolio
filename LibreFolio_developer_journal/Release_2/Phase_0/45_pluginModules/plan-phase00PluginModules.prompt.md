@@ -2,12 +2,12 @@
 
 > - **Workstream**: U, coordinato dal «Coordinatore release 2» (`c8328a01-f208-4ade-a352-0486d1f14de2`).
 > - **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-cautious-umbrella`, ramo `e-alfy-u-plugin-modulari-e-traduzioni`.
-> - **Base d'esecuzione**: HEAD `c3b33a8fb605d28331a9fad30c52be1a7daa1ce4` (treno 55) ✔, verificata al passo U-0. Da
->   `f0f3de0d9`, su cui è stata scritta l'analisi, entrano solo doc (wiki di W, pagina Scalable di M, una riga del
+> - **Base d'esecuzione**: HEAD `497b30397560129c657bbeae7c954c6e5e534825` (treno 55) ✔, verificata al passo U-0. Da
+>   `cc8453e79`, su cui è stata scritta l'analisi, entrano solo doc (wiki di W, pagina Scalable di M, una riga del
 >   CHANGELOG): nessuna delle superfici di U.
 > - **Corsia**: porta `6174`, dati `/tmp/librefolio-r2-u-plugins`, un comando alla volta.
 > - **Stato**: IN ESECUZIONE dal 12/10. Un checkpoint FROZEN per passo; i commit li fa il coordinatore.
-> - **Storia**: v1 (12/10, su `784b35766`) superata. La v2 recepisce le decisioni del developer del 12/10: D-1
+> - **Storia**: v1 (12/10, su `393a1ee35`) superata. La v2 recepisce le decisioni del developer del 12/10: D-1
 >   (`plugin.py`), D-4 (ripiego in build, audit severo); D-2, D-3 e D-7 accettate; D-5 e D-6 sostituite dalla divisione per
 >   sottosistema.
 
@@ -42,7 +42,7 @@
 - **D-2, D-3, D-7**: il file unito resta al percorso di oggi, generato e ignorato; ogni ingresso lo genera; icone e
   `sample_reports/` restano dove sono.
 
-## 1. Stato reale (su `f0f3de0d9`)
+## 1. Stato reale (su `cc8453e79`)
 
 Invariato rispetto alla v1, che resta il riferimento dettagliato (§1.1–1.7). In sintesi:
 
@@ -401,7 +401,7 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
 
 ### U-0 — Base (in corso, 12/10)
 
-- ✅ HEAD `c3b33a8fb` verificata; worktree pulita; piano creato in questo file.
+- ✅ HEAD `497b30397` verificata; worktree pulita; piano creato in questo file.
 - **⚠️ Fuori pista — `all-backend` rossa prima di pytest.**
   - Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6174 --data-dir /tmp/librefolio-r2-u-plugins --log-file /tmp/libreFolio_u0_all_backend.log all-backend`.
   - Fase: avvio del backend condiviso, prima della raccolta dei test. Messaggio: «Shared backend exited during startup (code 1)».
@@ -409,7 +409,7 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - Toccati: il DB della corsia, `.testLog/` (ignorato da git), uno snapshot in `.testLog/00_archive/`. Nessun test eseguito.
   - Rimedio: `npm ci` in `frontend/`, dal lock, approvato dal coordinatore. Exit 0; npm 11 avvisa che 5 script
     d'installazione non sono coperti da `allowScripts` (esbuild, fsevents, es5-ext). Poi la base è ripartita.
-- ✅ **`all-backend`** sulla 6174, su `c3b33a8fb`, dopo `npm ci`: 7/7, **12 411 passati, 28 saltati, 0 falliti**, in 23
+- ✅ **`all-backend`** sulla 6174, su `497b30397`, dopo `npm ci`: 7/7, **12 411 passati, 28 saltati, 0 falliti**, in 23
   invocazioni (24 min 18 s). Comando: quello sopra, con `--log-file /tmp/libreFolio_u0_all_backend_2.log`. Conteggi per
   invocazione nei file della sessione (`u0_all_backend_counts.txt`).
 - ✅ **Client generato** dalla build del server di test (`api sync` dentro `cmd_fe_build`), sha256:
@@ -560,24 +560,24 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
 
 ### U-2 — Il catalogo costruito dalle sorgenti (chiuso il 12/10, checkpoint inviato)
 
-- ✅ **Base**: HEAD `bd8ee8e4d`, il treno 61, che contiene U-1 (`2eed3d26c`, `170d16333`), la modifica di T a
+- ✅ **Base**: HEAD `6982a51f9`, il treno 61, che contiene U-1 (`7e40a32af`, `2ff663960`), la modifica di T a
   `cli_base.py` e il CHANGELOG localizzato. Il via è del coordinatore, il 12/10.
 - ✅ **Vincolo di sequenza**, chiesto dal coordinatore: lo spostamento dei 4 cataloghi in `base/` è una **rinomina pura**,
   nello stesso commit e senza altre modifiche, così le modifiche di I e T sui file di oggi seguono la rinomina al merge.
-  - Verificato su `bd8ee8e4d`: i 4 file sono già `json.dumps(indent=2, ensure_ascii=False)` più un a capo, quindi il
+  - Verificato su `6982a51f9`: i 4 file sono già `json.dumps(indent=2, ensure_ascii=False)` più un a capo, quindi il
     file generato coincide con la sorgente byte per byte.
   - sha256 della base: en `47e03ab0…`, it `9e1fb276…`, fr `36dde70e…`, es `8c5d07e7…`.
 - ✅ **File in più assegnati** (12/10): `frontend/.prettierignore`, il nuovo `frontend/scripts/i18n-catalog-build.mjs`,
   `frontend/.gitignore`, e `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py` per una riga in
   `FrontendBridge.__enter__`.
-- ✅ **Basi del frontend su `bd8ee8e4d`** (`/tmp/libreFolio_u2_baseline.sh`; log nella sessione, `u2_base_logs/`):
+- ✅ **Basi del frontend su `6982a51f9`** (`/tmp/libreFolio_u2_baseline.sh`; log nella sessione, `u2_base_logs/`):
   - `front build` di produzione, chunk di lingua: en `Dnh_D_O3.js` `5fa1863d…`, it `D-aHihPl.js` `e6c71af9…`,
     fr `iHe4svMs.js` `4bb36828…`, es `BbCwz7lE.js` `8f997afd…`;
   - `front check`: 0 errori, 0 avvisi;
   - `i18n audit`: 4 350 chiavi, 0 mancanti, 0 morte, 3 non verificate, 1 famiglia backend;
   - Vitest: le 19 azioni verdi, 10 858 test;
   - `lint --dead-code`: exit 1, 121 righe, come prima.
-- ⏳ **Base `all-backend`** su `bd8ee8e4d`, sulla 6174. Il coordinatore non ha i conteggi del treno 61.
+- ⏳ **Base `all-backend`** su `6982a51f9`, sulla 6174. Il coordinatore non ha i conteggi del treno 61.
 - ✅ **test-author, fase A** (12/10): `backend/test_scripts/test_utilities/test_i18n_catalog_gate.py`, PURE, 49 funzioni
   e 106 casi, non ancora registrato. Eseguito in-process: 96 verdi e 10 rossi. Cinque rossi sono i controlli sull'albero
   reale, che passano solo con `base/`. Gli altri cinque sono difetti della libreria.
@@ -653,7 +653,7 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   > `/tmp/libreFolio_u2_base_all_backend_INVALID_py-switch.*`.
 - ✅ **Build di base rifatta con `node` 26.11.1** (17:29–17:34, `/tmp/libreFolio_u2_base2/`): i 4 chunk di lingua hanno gli
   stessi nomi e gli stessi sha256 della base presa con `node` 26.8.2, quindi la toolchain nuova non cambia il bundle.
-- ✅ **Base `all-backend` rifatta** su `bd8ee8e4d` con Python 3.13.16 (17:34–18:13, 39 min): 7 categorie su 7, EXIT 0,
+- ✅ **Base `all-backend` rifatta** su `6982a51f9` con Python 3.13.16 (17:34–18:13, 39 min): 7 categorie su 7, EXIT 0,
   **12 497 passati e 28 saltati** in 23 invocazioni. Conteggi per invocazione in `files/u2_base_all_backend_counts.txt`,
   log in `files/u2_base_logs/all_backend_bd8ee8e4d_py31316.console`. La porta 6174 è libera.
 - ✅ **U-2 applicato** (18:14, `files/scripts/u2_apply.py`):
@@ -730,7 +730,7 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   5. `u2_gates.sh targeted fresh cli`;
   6. `u2_gates.sh backend` (`all-backend`), da confrontare per invocazione con la base, 12 497 passati e 28 saltati;
   7. il manifest (`files/scripts/u2_manifest.sh`), poi il checkpoint U-2 e FROZEN.
-- ✅ **Ripartenza** (12/10, 19:24, «riparti» del coordinatore). HEAD è ancora `bd8ee8e4d`, con Python 3.13.16 e `node`
+- ✅ **Ripartenza** (12/10, 19:24, «riparti» del coordinatore). HEAD è ancora `6982a51f9`, con Python 3.13.16 e `node`
   26.11.1; la porta è libera. La base `all-backend` di oggi resta valida, dato lo stesso interprete.
 - ✅ **Fase B di test-author riletta**:
   - `gate-i18n-catalog` è registrato, con `isolation="pure"`, accanto a `gate-i18n-usage`. Le mie 3 descrizioni sono
@@ -831,18 +831,18 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
 - ✅ **U-2 chiuso il 12/10.** Checkpoint mandato al coordinatore con lo staging esplicito: prima `git rm --cached` dei 4
   vecchi percorsi, poi `git add` di `base/` e del resto. Stato FROZEN. Il prossimo passo, U-3, aspetta il via del
   coordinatore dopo le chiavi di I.
-- ✅ **Committato dal coordinatore** (12/10, 20:54): `1b31f9057`, con le 4 rinomine al 100 % verificate, e `0a5285dc0`,
+- ✅ **Committato dal coordinatore** (12/10, 20:54): `1331095b9`, con le 4 rinomine al 100 % verificate, e `0d9898be4`,
   con piano e backlog. Prima del commit ha provato su un clone: albero finale identico, i 4 file generati restano sul
   disco ignorati e in sola lettura, la worktree pulita.
-- ✅ **Merge del target** `8d0b222d3`, pulito: ora sono a **`7a065caed`**, albero `ae31f8455`. Il backlog, unico file
-  toccato da entrambi i lati, si è fuso da solo. Il target non aveva toccato i cataloghi dopo `bd8ee8e4d`.
+- ✅ **Merge del target** `d6dac25f3`, pulito: ora sono a **`591329f35`**, albero `ae31f8455`. Il backlog, unico file
+  toccato da entrambi i lati, si è fuso da solo. Il target non aveva toccato i cataloghi dopo `6982a51f9`.
   - `catalogIcuLocale.test.ts` (T, M-18) importa i 4 cataloghi generati, che il `globalSetup` scrive prima.
   - Il suo `readdirSync` cerca solo file `.svelte`, quindi `base/` non lo tocca.
   - Il target aggiunge 5 file Vitest ad azioni esistenti e un E2E (`docs-offline-math`): le azioni Vitest restano 19.
-- ✅ **Revisione combinata `7a065caed` validata** (20:55–21:17, `files/scripts/u2_combined.sh`, corsia 6174, una prova
+- ✅ **Revisione combinata `591329f35` validata** (20:55–21:17, `files/scripts/u2_combined.sh`, corsia 6174, una prova
   alla volta; log in `/tmp/libreFolio_u2c/`). Tutto verde:
   - **catalogo**: la build risponde «up to date»; i file generati e `base/` hanno gli sha256 della base.
-  - **pytest**, con gli stessi conteggi della U-2 su `bd8ee8e4d`:
+  - **pytest**, con gli stessi conteggi della U-2 su `6982a51f9`:
 
     | Selettore | Passati |
     |---|---|
@@ -892,19 +892,19 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   il testo di `desc`, nessun selettore. Sono preparate in `u2_apply.py`:
   - `js-cache-fail-loud`: il testo di M, aggiunto in coda (le dipendenze della libreria JS, cioè i font di MathJax);
   - `translation-cache` e `translation-validator`: il CHANGELOG tradotto per pezzi e validato capitolo per capitolo.
-    Testo mio, ricavato dai test di `e63cfb074`. M l'ha confrontato affermazione per affermazione con i test e col
+    Testo mio, ricavato dai test di `03c83af83`. M l'ha confrontato affermazione per affermazione con i test e col
     codice (12/10, 17:59): corrisponde.
 
-  I test descritti entrano col treno 66 (`2aecd5a6f`, `e63cfb074`, `92fb9c83e`) e non sono nella mia base. Fra
-  `bd8ee8e4d` e `dev_release2` (`b91d6d902`) nessun file di U-2 è cambiato, compresi i 4 cataloghi, quindi il merge è
+  I test descritti entrano col treno 66 (`6b64b5daf`, `03c83af83`, `1cf99eb86`) e non sono nella mia base. Fra
+  `6982a51f9` e `dev_release2` (`331cc6474`) nessun file di U-2 è cambiato, compresi i 4 cataloghi, quindi il merge è
   pulito.
 
 ### U-3 — Un catalogo per sottosistema e per plugin (chiuso il 12/10, checkpoint inviato)
 
 - ✅ **Preparazione in sola lettura** (12/10, 21:30–21:40, prima del via), su sandbox estratte con `git archive` in `/tmp`.
   Dettaglio in `files/u3_prep.md`, mappe chiave → sorgente in `files/u3_dry/`.
-  - **Dry run** (`files/scripts/u3_dry.py`) sul target `c57acf510` (treno 71) e sull'anteprima del treno 72 (il ramo di I,
-    `0a148a109`):
+  - **Dry run** (`files/scripts/u3_dry.py`) sul target `d59829e08` (treno 71) e sull'anteprima del treno 72 (il ramo di I,
+    `8c6575030`):
     - l'**equivalenza** delle 4 lingue, chiavi e valori, è IDENTICA, e `check --strict --against` esce con 0;
     - il piano delle mosse è ancora valido: 71 frammenti, 219 chiavi, ogni prefisso col numero previsto, nessun plugin
       nuovo con chiavi;
@@ -922,14 +922,14 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - **Chiavi di plugin usate per nome dall'interfaccia**: 9 `risk.analytics.*`, nel pannello del rischio.
   - **Prova sui chunk**: `files/scripts/locale_chunk_objects.py check-against <REV>`. Fa importare a Node i 4 chunk di
     lingua e li confronta, come oggetti, col catalogo alla revisione. Serve perché lo split cambia l'ordine delle chiavi,
-    e quindi byte e nomi dei chunk. Collaudato sulla build di U-2 contro `c57acf510`: uguale.
+    e quindi byte e nomi dei chunk. Collaudato sulla build di U-2 contro `d59829e08`: uguale.
 - ✅ **Decisioni del coordinatore** (12/10, 21:39), annotate per il developer come informazione:
   - **D-U3-1**: le 22 `risk.warnings.*` restano nel sottosistema `risk`, come vocabolario unico degli avvisi;
   - **D-U3-2**: le 9 `risk.analytics.*` usate dall'interfaccia restano nei frammenti, come da piano;
   - il debito di U-2 sull'avviso di `add` (§2.3) si chiude in U-3;
   - il gate di proprietà R1–R4 lo scrive test-author.
-- ✅ **Via** (12/10, 22:02): il treno 72 (lotto 48 di I + 2b di V) è nel target `0071b9703`. Il coordinatore mi ha portato
-  a **`f16bb7958`**; il piano 45 resta sporco e entra nel primo checkpoint di U-3. Rispetto a `7a065caed` sono cambiati
+- ✅ **Via** (12/10, 22:02): il treno 72 (lotto 48 di I + 2b di V) è nel target `1f5334583`. Il coordinatore mi ha portato
+  a **`04eca8130`**; il piano 45 resta sporco e entra nel primo checkpoint di U-3. Rispetto a `591329f35` sono cambiati
   solo i 4 `base/<lang>.json` (lotto 48): 4 351 chiavi. T non aggiunge chiavi fino allo split.
 - ✅ **L'avviso di `add`** (§2.3):
   - la nuova `base_namespace_notice(key, target, owners)` della libreria restituisce l'avviso quando una chiave apre un
@@ -938,7 +938,7 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - `dev.py i18n add` lo stampa solo senza `--into`, perché un `--into` esplicito è già la scelta dell'autore.
 
   Il lint è pulito; in `i18n-audit.py` ruff e black restano invariati rispetto a HEAD.
-- ✅ **Basi pre-split** su `f16bb7958` (`files/scripts/u3_base.sh`, 22:05–22:27, corsia 6174; conteggi in
+- ✅ **Basi pre-split** su `04eca8130` (`files/scripts/u3_base.sh`, 22:05–22:27, corsia 6174; conteggi in
   `files/u3_base_counts.tsv`):
   - backend:
 
@@ -971,14 +971,14 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   `base/<lang>.json`. Ogni frammento conserva l'ordine delle chiavi di ciascuna lingua.
 - ✅ **Prova** (`u3_gates.sh proof`):
   - `check --strict`: 4 351 chiavi, base 1, sottosistemi 17, plugin 71;
-  - **`check --against f16bb7958`: identico nelle 4 lingue**;
+  - **`check --against 04eca8130`: identico nelle 4 lingue**;
   - la build legge 89 sorgenti e riscrive le 4 lingue: cambia solo l'ordine delle chiavi;
   - i file generati restano ignorati, le sorgenti nuove no.
 - ✅ **Gate frontend dopo lo split** (`u3_gates.sh frontend`, 22:30–22:43), tutti uguali alla base pre-split:
   - `front check` 0/0;
   - **le 19 Vitest hanno i conteggi della base, azione per azione: 11 115 test**;
   - **i chunk di lingua** cambiano nome (`_e6AbF90.js`, `BfFDKEV1.js`, `pTQFMpK5.js`, `9ZmZb55i.js`), perché l'ordine
-    delle chiavi è cambiato. Decodificati da Node, sono **uguali al catalogo a `f16bb7958`** e ai file generati;
+    delle chiavi è cambiato. Decodificati da Node, sono **uguali al catalogo a `04eca8130`** e ai file generati;
   - `i18n audit` è identico alla base, con «4 351 keys from 89 source(s)» e «1 base, 71 plugin, 17 subsystem»;
   - il dead-code è identico: knip non segnala i JSON nuovi.
 - ✅ **test-author** (22:40):
@@ -1022,10 +1022,10 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   > - **Per la prossima volta**: `all-backend` prima della build di produzione, non dopo.
 - ✅ **`all-backend`, seconda prova** (22:55–23:41, 40 min 47 s): il server condiviso è partito senza ricostruire. 7
   categorie su 7, EXIT 0: **12 857 passati, 28 saltati, 0 falliti**. Rispetto alla `all-backend` finale di U-2
-  (`bd8ee8e4d` + U-2), 21 invocazioni su 23 sono identiche; le 2 diverse sono spiegate per intero:
+  (`6982a51f9` + U-2), 21 invocazioni su 23 sono identiche; le 2 diverse sono spiegate per intero:
   - utils fa **+184**: +13 casi del gate catalogo, +45 del gate di proprietà, +126 dei test entrati col treno 66, che
-    sono 94 della traduzione del CHANGELOG (`e63cfb074`) e 32 delle dipendenze di MathJax (`92fb9c83e`);
-  - API fa **+4**: i 4 test nuovi di `test_auth_api.py` (`0d6aee67c`, le password fuori dall'event loop), del target.
+    sono 94 della traduzione del CHANGELOG (`03c83af83`) e 32 delle dipendenze di MathJax (`1cf99eb86`);
+  - API fa **+4**: i 4 test nuovi di `test_auth_api.py` (`8d9687ca9`, le password fuori dall'event loop), del target.
 
   Conteggi in `files/u3_all_backend_counts.txt`; porta 6174 libera.
 - ✅ **Controlli statici**: `git diff --check` è pulito. La libreria, i due gate e `_backend_utils.py` sono puliti con
@@ -1040,9 +1040,9 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
 
 ### U-4 — La documentazione (chiusa il 13/10: parte 1 committata, parte 2 col checkpoint inviato)
 
-- ✅ **Via** (12/10, 23:48), dopo che U-3 è entrato nel treno 74 (`bcd502912`, commit `f2a394a0f` e `bcd4f6fe4`). Vincolo
-  del coordinatore: **`developer/frontend/i18n.md` per ultima**. Il CP3a di T (`133259913`) aggiunge ~130 righe sulla
-  regola dei numeri e delle date, ed è entrato col treno 75 (`104ba23d0`). Protocollo:
+- ✅ **Via** (12/10, 23:48), dopo che U-3 è entrato nel treno 74 (`e2f8bafb7`, commit `96d9c1a37` e `c49ab0362`). Vincolo
+  del coordinatore: **`developer/frontend/i18n.md` per ultima**. Il CP3a di T (`312a7fd0c`) aggiunge ~130 righe sulla
+  regola dei numeri e delle date, ed è entrato col treno 75 (`8c2ced093`). Protocollo:
   1. checkpoint U-4 senza `i18n.md`;
   2. il coordinatore lo committa e mi porta il target;
   3. scrivo `i18n.md` sopra le righe di T.
@@ -1051,7 +1051,7 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - istruzioni sul catalogo e comandi `dev.py i18n`: `.github`, `dev_workflow.en.md`, `brim_plugin_guide.md`;
   - gate da elencare: `test-walkthrough/utils.md`.
 
-  Le 4 pagine `day-count` erano già corrette (`18e872872`, «docs: point day-count at the plugin's module»).
+  Le 4 pagine `day-count` erano già corrette (`31f6f4d8b`, «docs: point day-count at the plugin's module»).
   `admin/cli_tools.*.md` cita solo `i18n audit`, che resta valido. I test frontend che leggono `en.json` usano il
   catalogo generato, allo stesso percorso.
 - ✅ **Nessun conflitto col ramo di T**: dei suoi 127 file, le doc sono solo `i18n.md` e `app-state.md`; niente `.github`,
@@ -1111,9 +1111,9 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - i commenti di `galleryPac.ts` e `risk-analysis.spec.ts`. Quest'ultimo citava `asset_risk_return.py:61`, già sbagliata
     prima dello spostamento: ora nomina `supported_scopes`/`supported_modes` in `…/asset_risk_return/plugin.py`;
   - nel backlog, U-B5 è chiusa per `day-count`; restano le pagine del devWiki.
-- ✅ **U-4, parte 1 committata** (13/10, 00:30): `c120086d2` (44 file) e `f542743d2` (journal). Poi il merge del target
-  del treno 77: ora sono a **`1e1708528`**, che contiene la sezione di T in `developer/frontend/i18n.md` («🔢 Numbers,
-  amounts and dates», `#ui-locale`, `133259913`).
+- ✅ **U-4, parte 1 committata** (13/10, 00:30): `de5338dfd` (44 file) e `154e55dd6` (journal). Poi il merge del target
+  del treno 77: ora sono a **`9846da975`**, che contiene la sezione di T in `developer/frontend/i18n.md` («🔢 Numbers,
+  amounts and dates», `#ui-locale`, `312a7fd0c`).
 - ✅ **U-4, parte 2** (via del coordinatore, 00:30), affidata a docs-writer:
   - `i18n.md`: «Architecture» e «Managing Translations» riscritte per le sorgenti, sopra le righe di T, che restano
     intatte;
@@ -1148,8 +1148,8 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
 
 ### U-5 — Gate finali e passaggio di consegne (chiuso il 13/10, handoff finale inviato)
 
-- ✅ **Via** (13/10, 00:46), dopo che U-4 è entrato nel treno 78 (`1c710c7a8`, commit `bb3772324` e `873d45175`). La
-  worktree è allineata e pulita, a HEAD `1c710c7a8`.
+- ✅ **Via** (13/10, 00:46), dopo che U-4 è entrato nel treno 78 (`93d3febf5`, commit `078cd9014` e `ce27a22fa`). La
+  worktree è allineata e pulita, a HEAD `93d3febf5`.
 - ✅ **I gate scelti** (`files/scripts/u5_gates.sh`, corsia 6174, una prova alla volta), nell'ordine:
   1. `front build --debug`, prima di tutto: il server condiviso parte senza ricostruire dentro i 300 s, il fuori pista
      di U-3;
@@ -1177,7 +1177,7 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
     pista di U-3 non si ripete.
   - **`all-backend`**: 7/7, EXIT 0, **12 869 passati, 28 saltati, 0 falliti**, in 25 min 26 s.
     - 22 invocazioni su 23 sono identiche a U-3. La diversa è utils, da 2 091 a 2 103: sono i 12 casi parametrizzati
-      (9 + 3) che `31b6063c4` (I2, dopo M-18) aggiunge a `test_translation_validator.py`, unico file di test backend
+      (9 + 3) che `70c4bc3e4` (I2, dopo M-18) aggiunge a `test_translation_validator.py`, unico file di test backend
       cambiato dopo U-3.
     - I 4 gate di U girano nel passo consolidato con tutti i loro test: `gate-i18n-catalog` 176,
       `gate-plugin-i18n-ownership` 45, `gate-plugin-layout` 33, `runtime-isolation` 167. Contati come id distinti nel
@@ -1185,8 +1185,8 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
     - Conteggi in `files/u5_all_backend_counts.txt`.
   - **`front check`** 0/0. **Le 19 Vitest** sono verdi, con **11 313 test**.
     - 11 azioni sono identiche a U-3; 8 sono cresciute, di 198 test in tutto.
-    - Dopo U-3 sono cambiati 40 file Vitest, tutti di commit del target: T CP2 (`ff7c96fd0`), T CP3 (`c17d39d5a`,
-      `33cc145b5`), V (`56830fc79`, con il nuovo `OtherPeriodEffectsTable.test.ts`, l'unico file in più, in
+    - Dopo U-3 sono cambiati 40 file Vitest, tutti di commit del target: T CP2 (`c0b6e2229`), T CP3 (`d44d4800a`,
+      `b0f4aff1d`), V (`f73ff8aa8`, con il nuovo `OtherPeriodEffectsTable.test.ts`, l'unico file in più, in
       `component-unit`, da 114 a 115).
     - I commit di U dopo U-3 (U-4) non toccano `frontend/src`.
   - **9 E2E, 197 test, 0 falliti, 0 instabili**:
@@ -1221,10 +1221,10 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - doc, istruzioni e skill sono aggiornate (U-4); le voci di backlog sono scritte; la porta è libera.
 - ✅ **Handoff finale** mandato al coordinatore. Stato FROZEN.
 - ✅ **U-B5 chiusa nel backlog** (13/10), su indicazione del coordinatore. La parte del devWiki l'aveva già fatta W, nel
-  passo D del 12/10 (`a74a5bfb6`, entrato nel treno 63 con `3f9de8bdb`): 112 citazioni spostate in 54 pagine, 8 lasciate
+  passo D del 12/10 (`aa06a5c73`, entrato nel treno 63 con `106d03d7d`): 112 citazioni spostate in 54 pagine, 8 lasciate
   come storia. Le 84 citazioni in 47 pagine della §3 erano il mio conteggio, più stretto del suo: 120 in 56 pagine,
   compresi i nomi di file nudi e un import.
-  > **Note implementazione**: verifica in sola lettura sull'HEAD `1c710c7a8`.
+  > **Note implementazione**: verifica in sola lettura sull'HEAD `93d3febf5`.
   > - `python3 LibreFolio_devWiki/check_source_paths.py` dà 5 percorsi inesistenti (8 occorrenze su 3 724), nessuno di
   >   plugin: `htmlcov-*`, `frontend/coverage-js/` e la cartella di una probe, tutti artefatti ignorati.
   > - Una ricerca dei percorsi `<famiglia>/<nome>.py`, per gli 84 plugin di oggi, trova 5 occorrenze in 2 file, ed è
@@ -1235,11 +1235,11 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
 ### U-6 — L'icona di Schwab dentro l'app, Scalable senza l'esportatore 1.0.0 (chiuso il 13/10; la parte di Schwab è
 annullata in U-6b)
 
-> Committato in `a6d1754ed` e `6084eb1a1`, nel treno 94. **La parte di Schwab è annullata in U-6b**: ci sono l'icona,
+> Committato in `2a478dabf` e `d1237b41c`, nel treno 94. **La parte di Schwab è annullata in U-6b**: ci sono l'icona,
 > lo script, le doc dell'icona e i test di Schwab. Restano Scalable senza la 1.0.0, la D4 e `scalable.md`.
 
 > **Lotto deciso dal developer il 13/10**, relayato dal coordinatore alle 10:27: la parte Schwab di U-B3 entra nella
-> 1.2 (domanda 16), e Scalable lascia l'esportatore 1.0.0 (domanda 3: si usa solo la 1.0.1). Base `ef666fdee`
+> 1.2 (domanda 16), e Scalable lascia l'esportatore 1.0.0 (domanda 3: si usa solo la 1.0.1). Base `d5873f5d3`
 > (`dev_release2`, treno 93), worktree pulita, porta 6174 libera. Corsia 6174, `/tmp/librefolio-r2-u-plugins`.
 
 #### Analisi (verificata sul codice, 13/10)
@@ -1288,7 +1288,7 @@ annullata in U-6b)
   (`frontend/src/lib/i18n/importWizard/*.json`, righe 197 e 512): `importWizard.brimNotice.scalable_fee_in_amount` e
   `importWizard.brimEvidence.scalable_fee_in_amount`. `dev.py i18n remove` le trova lo stesso: 2 chiavi × 4 lingue.
 - **API e versione**: `BRIMNotice.code` è `str`, quindi l'API non cambia. `plugin_version` resta `1.0.0`, perché il
-  plugin non è mai uscito: nessun tag contiene `305b80202`.
+  plugin non è mai uscito: nessun tag contiene `69bf64f4b`.
 - **Doc**: solo `developer/backend/brim/scalable.md` (`:59`, `:75-77`, `:123`), solo EN, via docs-writer. La guida
   utente non nomina la 1.0.0.
 - **Fuori da U**: la pagina devWiki `decisions/scalable-two-accounts-two-plugins.md:60` (historian) e il piano 37, che è
@@ -1438,12 +1438,12 @@ annullata in U-6b)
 >   mostrare la valigetta è accettabile.»
 > - «c'è stato un fraintendimento, pensavo fosse che non avevi l'url, ritorna indietro per favore»
 >
-> Base: `9c1750325`, cioè `dev_release2` del treno 94, con U-6 committato. Worktree pulita, porta 6174 libera.
+> Base: `8b824a801`, cioè `dev_release2` del treno 94, con U-6 committato. Worktree pulita, porta 6174 libera.
 > **Restano** Scalable senza la 1.0.0, la D4 («Tagesgeld») e `scalable.md`.
 
-1. ✅ (12:05) **Ripristinati da `ef666fdee`** con `git show ef666fdee:<file> > <file>`; per ognuno
-   `git diff ef666fdee -- <file>` è vuoto. Ho prima verificato che nessun altro commit dopo `ef666fdee` li avesse
-   toccati: solo `a6d1754ed`.
+1. ✅ (12:05) **Ripristinati da `d5873f5d3`** con `git show d5873f5d3:<file> > <file>`; per ognuno
+   `git diff d5873f5d3 -- <file>` è vuoto. Ho prima verificato che nessun altro commit dopo `d5873f5d3` li avesse
+   toccati: solo `2a478dabf`.
    - `broker_schwab/plugin.py`: `icon_url` torna `https://www.schwab.com/favicon.ico`;
    - `scripts/compose_broker_icons.py`;
    - `user/transactions/import/index.{en,it,fr,es}.md` e `schwab.{en,it,fr,es}.md`;
@@ -1454,9 +1454,9 @@ annullata in U-6b)
    - `mkdocs_src/docs/static/icons/brokers/schwab.png`;
    - `scripts/assets/brokers/schwab.png`.
 3. ✅ **File misti.**
-   - `providers_list.md` è quello di `ef666fdee` più la sola riga 32 della D4: la riga 11 torna al favicon del sito.
+   - `providers_list.md` è quello di `d5873f5d3` più la sola riga 32 della D4: la riga 11 torna al favicon del sito.
    - `.translate-hashes.json`: le voci `user/transactions/import/index.en.md` e `schwab.en.md` tornano ai valori esatti di
-     `ef666fdee`, cioè l'`md5` e i tre `stamped_at`, perché le pagine EN tornano identiche. Il JSON è riscritto nel suo
+     `d5873f5d3`, cioè l'`md5` e i tre `stamped_at`, perché le pagine EN tornano identiche. Il JSON è riscritto nel suo
      formato (indent 2, UTF-8), e le altre voci sono identiche a HEAD, comprese quelle di M.
 4. ✅ **Test** (test-author, lo stesso agente di U-6).
    - Tolti `test_schwab_s_icon_is_its_logo_bundled_with_the_plugins`,
@@ -1466,7 +1466,7 @@ annullata in U-6b)
    - Restano la guardia `test_every_bundled_icon_is_a_file_inside_the_served_folder` e `UPLOAD-010C`, con docstring
      che non nominano Schwab. Il numero `010C` resta, quindi c'è un buco a `010B`.
    - Le righe `schwab` rimaste nei due file sono quelle di prima di U-6, alle stesse righe (confronto con
-     `a6d1754ed^`).
+     `2a478dabf^`).
    - `py_compile`, black e ruff sono puliti.
 5. ✅ **Backlog**:
    - U-B3 torna aperta dopo la 1.2, con l'ipotesi del developer: il blocco viene dalle nostre raffiche di richieste,
@@ -1476,7 +1476,7 @@ annullata in U-6b)
    - `external brim-providers`, `api uploads`;
    - `compose_broker_icons --check`, che deve confermare Scalable identico byte per byte;
    - `mkdocs build`, `check-links` e `translate-validate`, con 0 debito su quelle pagine;
-   - `git diff ef666fdee --stat`, che sui file di U deve mostrare solo Scalable, la D4, le guardie e il journal.
+   - `git diff d5873f5d3 --stat`, che sui file di U deve mostrare solo Scalable, la D4, le guardie e il journal.
 
    **I risultati**:
 
@@ -1492,9 +1492,9 @@ annullata in U-6b)
    | `translate-validate` | 0 errori, 0 avvisi |
    | `translate --dry-run` su `index.en.md` e `schwab.en.md` | «up-to-date» |
 
-   - Le icone di Scalable sono identiche byte per byte a `ef666fdee`: `git diff ef666fdee` vuoto sulle 4 cartelle.
-   - `git diff ef666fdee --stat` sui 19 file di U mostra solo Scalable, la D4, le guardie, i cataloghi `importWizard`
-     e il journal. In `.translate-hashes.json` le due voci sono uguali a `ef666fdee`, e il resto del diff è di M.
-   - Gli altri file cambiati dopo `ef666fdee` sono di altri flussi (CHANGELOG, devWiki, M, V, T).
+   - Le icone di Scalable sono identiche byte per byte a `d5873f5d3`: `git diff d5873f5d3` vuoto sulle 4 cartelle.
+   - `git diff d5873f5d3 --stat` sui 19 file di U mostra solo Scalable, la D4, le guardie, i cataloghi `importWizard`
+     e il journal. In `.translate-hashes.json` le due voci sono uguali a `d5873f5d3`, e il resto del diff è di M.
+   - Gli altri file cambiati dopo `d5873f5d3` sono di altri flussi (CHANGELOG, devWiki, M, V, T).
 7. ✅ **Checkpoint FROZEN** inviato, col manifest (`files/u6b_manifest.txt`) e un messaggio di commit ASCII
    (`/tmp/libreFolio_commit_u6b.txt`).

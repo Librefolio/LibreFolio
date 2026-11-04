@@ -2,7 +2,7 @@
 
 > ⚠️ **Contratto superato — 2026-09-24 (workstream D, round 5).** I §1–§7 qui sotto
 > descrivono il pilot P1 `pac_allocator` `1.0.0` / `operation="analyze"`, **rimosso il
-> 2026-09-21** in `b82e59ffa` per decisione del developer («togli p1 e poi lavora su v2»).
+> 2026-09-21** in `704ba66a3` per decisione del developer («togli p1 e poi lavora su v2»).
 > Il contratto vivo è `1.0.0` / `operation="plan"` ed è descritto nella **§0**, misurata sul
 > codice. Il testo storico resta com'era, perché documenta come C e D si erano accordati; non
 > va più usato come istruzione. Correzione chiesta dall'analisi statica del round 5
@@ -21,11 +21,11 @@
 Questo documento definisce il raccordo esatto. D non copia il worker, il registry,
 il client o gli schemi Tool; aggiunge il proprio dominio nei punti di estensione C.
 
-## 0. Contratto effettivo al `111b0bbd0` (misurato il 2026-10-02, compattato il 2026-10-05)
+## 0. Contratto effettivo al `29d16bf0c` (misurato il 2026-10-02, compattato il 2026-10-05)
 
 Ogni riga cita il file e la riga da cui è stata letta. Se il codice cambia, prevale il
 codice: questa sezione è una fotografia, non una specifica. La fotografia precedente era al
-`f1047f766` (2026-09-24), con la versione `2.0.0`.
+`9df0b7b14` (2026-09-24), con la versione `2.0.0`.
 
 Il 2026-10-05 la slice di compattazione
 (`13_pacAllocator/implementation/plan-phase00PacContractCompaction.prompt.md`) ha
@@ -67,7 +67,7 @@ Il Rebalancer **non** ha un servizio registrato: i suoi tipi esistono nello sche
 - La mappa espone `toolContractMap.pac_allocator["1.0.0"]` con `componentKey: "pac-allocator"`,
   `uiVersion: "1.0.0"` e `operations: ["plan"]`. Il 2026-10-05, con il client rigenerato dopo
   la compattazione, il fingerprint misurato è `schemaFingerprint: "4f061103…"` e la generazione
-  `f636854e…`. Al `111b0bbd0` (2026-10-02) erano `bd84ef14…` e `bb77549b…`.
+  `f636854e…`. Al `29d16bf0c` (2026-10-02) erano `bd84ef14…` e `bb77549b…`.
 - **Wire compatto, richiesta risolta.** Il codec d'ingresso porta i default dello schema come
   `.optional().default(…)`: liste vuote, `"0"`, `{kind: "none"}`, e `null` per i facoltativi.
   - `ToolInput<'pac_allocator','1.0.0'>` è lo `z.input` e accetta la forma compatta.
@@ -153,7 +153,7 @@ La lane `6153` della §6 è superata. Oggi valgono:
 
 ## 1. Simboli backend D richiesti
 
-> ⚠️ **Superato → §0.1.** P1 `analyze`, rimosso il 2026-09-21 (`b82e59ffa`).
+> ⚠️ **Superato → §0.1.** P1 `analyze`, rimosso il 2026-09-21 (`704ba66a3`).
 
 File di dominio D:
 

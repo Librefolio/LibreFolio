@@ -25,7 +25,7 @@ data directory and overwrites whatever the environment said. The variable was se
 Same family as [[problems/env-var-injection-point-duplicated]]: a value injected at a point the consumer does not
 read from is a silent no-op ([[concepts/silent-no-op-option]]).
 
-## Solution (2026-10-09, `964f3427d`)
+## Solution (2026-10-09, `049d51963`)
 
 `_alembic()` in `dev.py` passes the file as an Alembic `-x` argument, `-x sqlalchemy.url=sqlite:///<file>`, which
 `env.py` reads before falling back to the settings. The path is resolved to an absolute file (a relative one starts

@@ -7,14 +7,14 @@
 
 **Data checkpoint:** 2026-09-10
 
-**Baseline originale D:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`
+**Baseline originale D:** `41a4f23ff70189a4ad827d272a368fbf2359464d`
 
-**Checkpoint D:** `cf1dd37974b2191877093e641cf00f261a241d20`
+**Checkpoint D:** `cbce2b5c46ace8b79c4d7fdc612232a12b062f93`
 
-**HEAD combinato:** `d018e8a677289b9bc38e65b437a86e1f2684caa7`
+**HEAD combinato:** `7e6d0709c2dca5bc2c85472ba51d1198978885d8`
 
-**Genitori merge:** `cf1dd37974b2191877093e641cf00f261a241d20` e
-`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`
+**Genitori merge:** `cbce2b5c46ace8b79c4d7fdc612232a12b062f93` e
+`63cfb55d18297b71bd6d70dc8a6d97143c95fb68`
 
 ## 1. Confine approvato
 
@@ -147,15 +147,15 @@ D non esegue commit, merge, rebase, cherry-pick, reset, stash o staging.
 
 Confronto statico:
 
-- merge-base tra baseline D e runtime: `4a73f5f6`;
-- runtime contiene due commit successivi: `ef722b55` e `916f12bd`;
-- overlap tra i path D e `4a73f5f6..916f12bd`: zero;
+- merge-base tra baseline D e runtime: `41a4f23f`;
+- runtime contiene due commit successivi: `c8a77dda` e `63cfb55d`;
+- overlap tra i path D e `41a4f23f..63cfb55d`: zero;
 - i cinque file tracked modificati da D hanno blob identico a baseline e runtime;
 - i nove path P1 nuovi non esistono nel runtime.
 
 Non sono attesi conflitti testuali. Sono possibili raccordi semantici:
 
-1. `916f12bd` cambia isolamento/lifecycle del runner, quindi i selector vanno rieseguiti;
+1. `63cfb55d` cambia isolamento/lifecycle del runner, quindi i selector vanno rieseguiti;
 2. la piattaforma C deve usare i veri TypeAdapter P1 e i metadata finali;
 3. il wrapper Tool deve usare `context.checkpoint()` e non importare DB/provider;
 4. il client generato deve preservare conteggio Unicode per code point e bounds condizionali.
@@ -242,8 +242,8 @@ coordinatore. Codec C/D e plugin restano un gate separato.
    > **Nota implementazione**: schema, service/evaluator e legacy re-export verificati.
 5. [x] 2026-09-10 - Preparato checkpoint prima del runtime.
    > **Nota implementazione**: overlap path zero; nessun residuo generato; piano reso portabile.
-6. [x] 2026-09-10 - Integrazione manuale del dev con `916f12bd`.
-   > **Nota implementazione**: merge `d018e8a6`, genitori checkpoint D e runtime.
+6. [x] 2026-09-10 - Integrazione manuale del dev con `63cfb55d`.
+   > **Nota implementazione**: merge `7e6d0709`, genitori checkpoint D e runtime.
 7. [x] 2026-09-10 - Rieseguiti schema/service nella lane D.
    > **Nota implementazione**: 816 schema + 194 service verdi su porta 6153;
    > ruff e Black verdi sui 14 file Python P1; DB solo nel data-dir dedicato.

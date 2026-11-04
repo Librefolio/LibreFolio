@@ -1,7 +1,7 @@
 # Plan Phase 00 — Release images (production frontend, real light/full) + HTTP compression (+ queued Tailscale watchdog)
 
 **Creato**: 2026-10-06
-**Baseline/target**: `c77c7f09e168004b4f50740d7736abe56327fe2b` (`dev_release2`), HEAD verified after the fast-forward (from `c8daff33f`)
+**Baseline/target**: `5cc2c1a74a8fd2d4f3d77498b24a96b866f13daf` (`dev_release2`), HEAD verified after the fast-forward (from `29bdc37fe`)
 **Workstream**: M — branch `e-alfy-cloud-resource-sizing`, worktree `LibreFolio-worktrees/e-alfy-upgraded-telegram`
 **Coordinator**: session `c8328a01-f208-4ade-a352-0486d1f14de2`
 **Runtime lane**: ports `6158`/`6168`, data dir `/tmp/librefolio-r2-m`; results outside the repo in `LibreFolio-cloud-sizing/release-images/`
@@ -44,8 +44,8 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-upgraded-telegram` |
 | Branch | `e-alfy-cloud-resource-sizing` (app-managed name) |
-| HEAD | `c8daff33f496425f2ad79abce516827196bc2fe9`, clean |
-| Target (analysis) | `dev_release2` `aa74797ff`: `c8daff33f` is its ancestor; `git diff c8daff33f aa74797ff` is **empty** for `release.yml`, `Dockerfile`, `.dockerignore`, `backend/app/main.py`, `dev.py`, `frontend/svelte.config.js`, `frontend/vite.config.ts`, `scripts/cli_base.py`, `mkdocs_src/mkdocs.yml` |
+| HEAD | `29bdc37fe1975ea90353a296d21a4c4959c77fa9`, clean |
+| Target (analysis) | `dev_release2` `11e7bd63c`: `29bdc37fe` is its ancestor; `git diff 29bdc37fe 11e7bd63c` is **empty** for `release.yml`, `Dockerfile`, `.dockerignore`, `backend/app/main.py`, `dev.py`, `frontend/svelte.config.js`, `frontend/vite.config.ts`, `scripts/cli_base.py`, `mkdocs_src/mkdocs.yml` |
 | Lane | ports 6158/6168, data dir `/tmp/librefolio-r2-m`; results outside the repo in `LibreFolio-cloud-sizing/` |
 | Coordinator | session `c8328a01-f208-4ade-a352-0486d1f14de2` |
 | Graph | graphify artefacts absent in this worktree (expected); devWiki not needed for these surfaces |
@@ -290,8 +290,8 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
 ## Progress (after every step: ✅ with date, «Note implementazione», «Fuori pista»)
 
 ### 0. ✅ Baseline, journal, evidence — 2026-10-06
-- Fast-forward `c8daff33f` → `c77c7f09e` run by the developer (`/tmp/libreFolio_ff_m_to_target.sh`, coordinator-reviewed); HEAD verified `c77c7f09e`, clean. The four touched files are byte-identical to the base of the drafts (`cmp` against `git show c8daff33f:<file>`).
-- File:line references re-checked on `c77c7f09e`: `main.py:22` CORS import, `:331-337` CORS block, `:419-426` `ImmutableStaticFiles`, `:47-52` Risk imports, `:219` lifespan; `release.yml:143` gallery, `:167` soft-fail report, `:177`, `:303`.
+- Fast-forward `29bdc37fe` → `5cc2c1a74` run by the developer (`/tmp/libreFolio_ff_m_to_target.sh`, coordinator-reviewed); HEAD verified `5cc2c1a74`, clean. The four touched files are byte-identical to the base of the drafts (`cmp` against `git show 29bdc37fe:<file>`).
+- File:line references re-checked on `5cc2c1a74`: `main.py:22` CORS import, `:331-337` CORS block, `:419-426` `ImmutableStaticFiles`, `:47-52` Risk imports, `:219` lifespan; `release.yml:143` gallery, `:167` soft-fail report, `:177`, `:303`.
 - Lock check for the `node_modules` clone (`release-images/evidence/node_modules_lock_check.txt`): `frontend/package-lock.json` sha256 `0dbeb7bd7f3ecb0510e26a5a3ad1042aa1d46fb41248f05b1d99fa3360d67c6a` = target = T2 scratch; `package.json` `8746adb5…` identical; installed tree vs lock: 433 packages, 0 missing, 0 version mismatches, 0 extra (134 optional packages for other platforms not installed).
 > **Note implementazione**: the evidence of the analysis and the drafts live in `LibreFolio-cloud-sizing/release-images/` (`evidence/`, `drafts/release-images.diff`, `scripts/15-17`). Pre-work before the fast-forward, outside the repo:
 > - the guard script was tested on 9 cases (`evidence/guard_cases.txt`);
@@ -312,7 +312,7 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
   - release notes print `${TAG_NAME#v}` (O2);
   - tag mapping untouched.
 - `.dockerignore`: `**/__pycache__/`, `**/*.pyc`, `**/*.pyo` (O1).
-> **Note implementazione**: applied by copying the drafts (`LibreFolio-cloud-sizing/release-images/drafts/`), whose base was verified byte-identical to `c77c7f09e` (`cmp`). Dash/sh syntax and YAML order checked.
+> **Note implementazione**: applied by copying the drafts (`LibreFolio-cloud-sizing/release-images/drafts/`), whose base was verified byte-identical to `5cc2c1a74` (`cmp`). Dash/sh syntax and YAML order checked.
 
 ### 2. ✅ HTTP compression (`main.py` middleware) — 2026-10-06
 - `main.py:23` imports `GZipMiddleware`; `main.py:340-345` adds a comment and `app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)` right after the CORS block. The Risk regions (imports `:48-53`, lifespan `:220`) are untouched.
@@ -347,12 +347,12 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
   | `e2e all` | 7 passed |
 - Each test was shown able to fail: T2 against mutated copies of the guard; T3 against the pre-change `HEAD` files (3 workflow and 2 Dockerfile violations); T1 by reasoning.
 > **⚠️ Fuori pista**:
-> - **Pre-existing red on the baseline**, unrelated to this work: `test_runtime_isolation.py::test_startup_timeout_matches_the_playwright_ci_contract[ci-absent]` expects 120 s, but commit `9db350102` ("wait up to 300 s for the shared backend") made `scripts/test_runner/_server.py:47` `STARTUP_TIMEOUT` a fixed 300. Both files are identical to `c77c7f09e`. Reported to the coordinator; not fixed here (out of scope).
+> - **Pre-existing red on the baseline**, unrelated to this work: `test_runtime_isolation.py::test_startup_timeout_matches_the_playwright_ci_contract[ci-absent]` expects 120 s, but commit `7c974f7e2` ("wait up to 300 s for the shared backend") made `scripts/test_runner/_server.py:47` `STARTUP_TIMEOUT` a fixed 300. Both files are identical to `5cc2c1a74`. Reported to the coordinator; not fixed here (out of scope).
 > - The backend `e2e` category (`search-to-prices`) queries **live providers** (justETF, Borsa Italiana, yfinance; a few dozen requests, not proxied or counted exactly). It ran as a standard gate; no further live-provider selector will be run.
 > - The worktree's `frontend/build` is now a debug build (from `server --test`), so a local `dev.py docker build` there would be refused by the new guard until `./dev.py front build`, which is the intended behaviour.
 ### 4. ✅ Proof without publishing — 2026-10-06
-- **Proof scratch** `/tmp/librefolio-r2-m-src/c77c7f09e-ri`:
-  - `git archive c77c7f09e` + the 5 changed/new files (sha256 in `evidence/proof_scratch.txt`);
+- **Proof scratch** `/tmp/librefolio-r2-m-src/5cc2c1a74-ri`:
+  - `git archive 5cc2c1a74` + the 5 changed/new files (sha256 in `evidence/proof_scratch.txt`);
   - `requirements.txt` from the T2 scratch (same `Pipfile.lock` `c6fb47b5…`);
   - `node_modules` cloned (`cp -cR`, same lock `0dbeb7bd…`).
 - **CI replay** (`scripts/ri_ci_replay.sh`, `evidence/ci_replay_{A,B}.log`):
@@ -369,7 +369,7 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
 > **⚠️ Fuori pista**:
 > - **Workaround A was not needed.** The network no longer intercepts TLS: pypi, files.pythonhosted, github, jsdelivr and googleapis present their public issuers from the host and from the Docker VM (Python 3.13, strict verification). The images were built with the product Dockerfile's own pybuilder stage; no CA was exported, so there is nothing to delete.
 > - The negative control used `front build --debug` instead of a lane `server --test` start. It is the same code path (`dev.py:185` → `:216` → `cmd_fe_build(debug=True)`), and it keeps port 6158 free for test-author.
-- **Compression on the wire** (`scripts/ri_wire_ab.sh`, `evidence/wire_ab_summary.txt`, `evidence/wire_light*_r{1,2}/`): A/B of two light images identical except `main.py` (`lf-m-ri:light` with GZip, `lf-m-ri:light-nogzip` with the `c77c7f09e` file; only the backend layer differs). Setup: lane port **6168** (6158 was in use by the test run), dataset R-mock, 1 vCPU, Playwright walk (`netwalk.cjs`), 2 rounds in opposite order.
+- **Compression on the wire** (`scripts/ri_wire_ab.sh`, `evidence/wire_ab_summary.txt`, `evidence/wire_light*_r{1,2}/`): A/B of two light images identical except `main.py` (`lf-m-ri:light` with GZip, `lf-m-ri:light-nogzip` with the `5cc2c1a74` file; only the backend layer differs). Setup: lane port **6168** (6158 was in use by the test run), dataset R-mock, 1 vCPU, Playwright walk (`netwalk.cjs`), 2 rounds in opposite order.
 
   | Window | without gzip | with gzip |
   |---|---|---|
@@ -444,7 +444,7 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
 ### 7. ✅ Checkpoint handoff — 2026-10-06
 - **Final checks:** `git diff --check` clean. The 5 product files the images were built from in the proof scratch are byte-identical to the worktree (sha256 in `evidence/proof_scratch.txt`). Ports 6158/6168 free; no `lf-m-*` container, volume or image; no server.
 - **Cleanup:**
-  - **removed:** proof images `lf-m-ri:{full,light,light-nogzip}`; the stage-test and O1-control images; today's build-cache records from these builds (20.61 → 17.99 GB; 4 shared 0-byte records of the re-pulled `python:3.13-slim` left); `/tmp/librefolio-r2-m-src/c77c7f09e-ri` (1.3 GB); `/tmp/librefolio-r2-m/ri` (347 MB); `/tmp/librefolio-r2-m/ri-test` (test data dir); temp logs (copied to `evidence/gate_*.log` first).
+  - **removed:** proof images `lf-m-ri:{full,light,light-nogzip}`; the stage-test and O1-control images; today's build-cache records from these builds (20.61 → 17.99 GB; 4 shared 0-byte records of the re-pulled `python:3.13-slim` left); `/tmp/librefolio-r2-m-src/5cc2c1a74-ri` (1.3 GB); `/tmp/librefolio-r2-m/ri` (347 MB); `/tmp/librefolio-r2-m/ri-test` (test data dir); temp logs (copied to `evidence/gate_*.log` first).
   - **kept:** `python:3.13-slim`, `alpine:3.20`; T2 scratch `/tmp/librefolio-r2-m-src/bff29231c` (`run_delta.sh`); `/tmp/librefolio-r2-m/snapshots`.
   - **in the worktree (gitignored):** `frontend/node_modules` (APFS clone), a debug `frontend/build`, `mkdocs_src/site`, `.testLog/`.
   - No CA exported, so there is no CA copy to delete.
@@ -452,7 +452,7 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
 - **State: FROZEN.** Step 6 (Tailscale) waits for the coordinator.
 
 ### 8. ✅ Startup-timeout contract (the coordinator's «step 7») — 2026-10-06
-- **Origin:** the pre-existing red found by step 3's `utils all` gate. The coordinator relayed it after integrating P0 (`dda56c9e1` → `810bab323`; `dev_release2` = `3d6f12eea` with the CHANGELOG), and assigned the fix, `playwright.config.ts`, `_server.py` and `test_runtime_isolation.py` to M.
+- **Origin:** the pre-existing red found by step 3's `utils all` gate. The coordinator relayed it after integrating P0 (`c8231cc5f` → `282082904`; `dev_release2` = `0a90315e6` with the CHANGELOG), and assigned the fix, `playwright.config.ts`, `_server.py` and `test_runtime_isolation.py` to M.
 - **`frontend/playwright.config.ts`:**
   - `STARTUP_TIMEOUT_RAW = process.env.LIBREFOLIO_TEST_STARTUP_TIMEOUT ?? '300'`, a guard that throws unless it is a whole number of seconds, and `STARTUP_TIMEOUT_S`;
   - `webServer.timeout` becomes `STARTUP_TIMEOUT_S * 1000` (was `process.env.CI ? 300 * 1000 : 120 * 1000`).

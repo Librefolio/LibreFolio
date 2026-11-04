@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `23828b411` (= `dev_release2`; il merge ha portato solo `CHANGELOG.md` e `TODO_FUTURI.md`: il codice è quello dello step 14) |
+| **Baseline** | `687e09503` (= `dev_release2`; il merge ha portato solo `CHANGELOG.md` e `TODO_FUTURI.md`: il codice è quello dello step 14) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`; ogni comando col preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
 | **Copia di prod** | non serve per (a); per (b) solo se il developer la vuole |
 | **Condivisi** | nessuno per (a): lo spec è di K. La config Playwright e le fixture condivise **non** si toccano (punto 4: solo valutazione) |
@@ -92,7 +92,7 @@ prima: un broker del test con un nome lungo, selezionato, a 320 px, su qualunque
 
 ## Passi
 
-- [x] **15.0 Analisi** — sola lettura e sonde: baseline `23828b411` (pulita), meccanismo misurato, offender e punto 4.
+- [x] **15.0 Analisi** — sola lettura e sonde: baseline `687e09503` (pulita), meccanismo misurato, offender e punto 4.
   ✅ 2026-10-02.
   > **⚠️ Fuori pista**: la prima sonda delle varianti misurava `innerWidth − clientWidth` e dava 0 ovunque in headless: era
   > la misura sbagliata, non l'assenza del gutter. Rifatta con `getBoundingClientRect` (risultati sopra). Due server
@@ -154,8 +154,8 @@ prima: un broker del test con un nome lungo, selezionato, a 320 px, su qualunque
   >
   > **Alla ripresa (05/10)**:
   > - il coordinator conferma che i 5 rossi sono di I: i 4 «zoom-window» cercano helper che hanno lasciato
-  >   `GrowthChart.svelte` con `e7773a143`, `:534` è nel gruppo di calendario noto. Le due cure sono in `dev_release2`
-  >   (`6de5646a1`), dove il gate di I dava `front-portfolio dashboard` 24/24. La prova arriva sulla revisione combinata,
+  >   `GrowthChart.svelte` con `9c1b6a3ff`, `:534` è nel gruppo di calendario noto. Le due cure sono in `dev_release2`
+  >   (`01a64ec23`), dove il gate di I dava `front-portfolio dashboard` 24/24. La prova arriva sulla revisione combinata,
   >   dopo il merge di `dev_release2` in K;
   > - `front check` (`/tmp/libreFolio_k15_front_check.log`): «svelte-check found 3 errors and 41 warnings in 4 files», la
   >   riga della baseline; i 3 errori sono quelli noti (`TransactionFormModal.test.ts:787`, `:819`,

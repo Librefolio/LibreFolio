@@ -5,7 +5,7 @@
 **Precedente:** [Round 2 - Copy and go](plan-phase00FeedbackImportUrgentRound2-Share.prompt.md).
 **Seguito:** [Round 4 - badge e limiti social](plan-phase00FeedbackImportUrgentRound4-SocialBoundaries.prompt.md).
 **Stato:** ✅ completato 2026-09-09; originali ripristinati e build R3 disponibile per la review.
-> **Note implementazione** (verifica di L del 2026-10-09 su `3cceb4f90`): integrato in `ef722b552`.
+> **Note implementazione** (verifica di L del 2026-10-09 su `f545b67e3`): integrato in `c8a77dda3`.
 
 ## Accettazioni operative del dev
 
@@ -172,7 +172,7 @@ Aggiornare subito ogni step con data, nota e detour; nessun commit/staging/push.
 > dal seed sintetico. Nessun `--force`, merge B/C, commit, staging o produzione.
 >
 > **Runtime di consegna:** `http://127.0.0.1:6041`, PID `94074`, cwd del worktree E,
-> HEAD `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`, no scheduler/reload.
+> HEAD `41a4f23ff70189a4ad827d272a368fbf2359464d`, no scheduler/reload.
 > `index.html` su disco e servito via HTTP:
 > `e5f091dd6d5521e473281fdbbde6d01140fcef20008615edc4b4516bf6906256`.
 > Checklist in `~/Documents/test-ui-urgenti/REVIEW-E-R3.md`, archiviata il 14/10/2026 in

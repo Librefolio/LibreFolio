@@ -247,7 +247,7 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
   administrator could not reactivate one on a full instance, although its place was already counted. Hence
   `holds_place()`, `place_holders()` and the `holds_place` field, which keeps **Reactivate** usable.
 - **A default changed under prepared tests** («E5b.2»): tests written at night assumed open registration, but since
-  A's `683b4ff5b` a new instance starts in `invite` mode; ten reds said `INVITE_REQUIRED`. The cure was in the tests,
+  A's `fbfbd526d` a new instance starts in `invite` mode; ten reds said `INVITE_REQUIRED`. The cure was in the tests,
   a helper that sets `open` in their private database.
 - **jsdom is not a browser** («E5b.2», «E3.8»): `fireEvent.click` reaches a disabled button and Svelte 5's delegated
   handler fires, which no browser allows — assert `toBeDisabled()` without clicking. A jsdom page is always `http:`,
@@ -267,7 +267,7 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
 
 ## What comes next
 
-- **Integration** (16/10): A's lots A7a, P18 and A-27 entered `dev_release2` (`68355911f`); E merged them, keeping
+- **Integration** (16/10): A's lots A7a, P18 and A-27 entered `dev_release2` (`e7d2daa94`); E merged them, keeping
   every line of A's `update_profile` plus E's four additions, and applied E4c on top. E enters after its `all-backend`
   slot.
 - **E6, what is left**: the domain's E2E and the `settings/email` gallery shot (with G), a delta security review of

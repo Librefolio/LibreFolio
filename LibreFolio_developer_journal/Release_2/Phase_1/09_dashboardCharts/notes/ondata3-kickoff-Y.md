@@ -3,7 +3,7 @@
 > **A cosa serve (per il developer).** Dalla lista Assets (e poi dalla lista dei cambi) l'utente sceglie con un tocco come vedere le schede: **valore assoluto**, **percentuale** o **rendimento mobile**; il dettaglio si apre nella stessa vista. Esempio: imposti «rendimento mobile» in alto e tutte le schede mostrano il rendimento a 1 anno, finestra per finestra. Il test di `OtherPeriodEffectsTable` invece è manutenzione: oggi fallisce su un computer in italiano per colpa del test, non dell'app.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-redesigned-spork` · **Branch**: `e-alfy-y-cruscotto-e-grafici`
-**HEAD di partenza (da verificare)**: `2879ae3e4` (= `dev_release2`, treno 7; fast-forward fatto dal coordinatore).
+**HEAD di partenza (da verificare)**: `85fda260e` (= `dev_release2`, treno 7; fast-forward fatto dal coordinatore).
 **Corsia**: porta `6189`, cartella dati `/tmp/librefolio-r13-y`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md`: analisi Y-40 (righe ~7739-7935, V-1…V-9), decisioni (~7905-7916), riga di stato ~496.
 

@@ -3,9 +3,9 @@
 > **Workstream BK del programma colori** (D-T28), sessione «BK - colori dei broker». Coordinatore: sessione «UI color
 > analysis» (`aec04834-1532-4d86-9e3f-f942e82aca89`).
 > Branch `e-alfy-bk-broker-colors` (rinominato dall'app; prima `e-alfy-sturdy-couscous`).
-> - **Baseline dell'analisi:** `8f2824046`.
-> - **Base attuale:** `2eef01e59`, base merge del coordinatore dopo il checkpoint L1–L3 (`82f304f4a`), con i ruoli nuovi
->   di T (`f043c1b58`: `text-lf-on-overlay`, `SIGN_BADGE`, gli hover pieni). Prima: `6e569084a`, fast-forward del
+> - **Baseline dell'analisi:** `cdf74ef2a`.
+> - **Base attuale:** `f1073da03`, base merge del coordinatore dopo il checkpoint L1–L3 (`8a8f16430`), con i ruoli nuovi
+>   di T (`ee00f754e`: `text-lf-on-overlay`, `SIGN_BADGE`, gli hover pieni). Prima: `16ea52b26`, fast-forward del
 >   coordinatore (skill `design-system` di T, D-T29, e treni della 1.3).
 > - **Corsia:** porta **6158**, dati **`/tmp/librefolio-r2-bk`**.
 > - **Comandi:** `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6158 --data-dir /tmp/librefolio-r2-bk …`.
@@ -37,7 +37,7 @@
   chieste al coordinatore (set VIEWER, `<style>` `--lf-cmp-*`, sotto-agenti, slot pesante) partono dai default proposti;
   se la sua risposta li cambia, li adeguo.
 
-## Stato attuale (verificato sul codice, 16/10, base `8f2824046`)
+## Stato attuale (verificato sul codice, 16/10, base `cdf74ef2a`)
 
 - **Area:** `lib/features/brokers/**` (15 file con classi legacy) e `routes/(app)/brokers/**` (2). `--report`: m1
   **1.153** (974 + 179), m2 0; ratchet 0 violazioni, grammatica 0. Programma: m1 8.249, m2 54.
@@ -114,7 +114,7 @@ programma passa da 8.249 a 7.256.
 > **Note implementazione**: piano scritto qui dall'analisi della sessione; `npm ci` in `frontend/` (approvato una volta),
 > verde. Self-check di sola lettura per le bozze nella cartella di sessione (`bk_selfcheck.mjs`: m1, m2 e G1–G4 sui soli
 > file dati).
-> **⚠️ Fuori pista**: alla ripresa HEAD era `6e569084a`, non `8f2824046`: fast-forward del coordinatore con la skill
+> **⚠️ Fuori pista**: alla ripresa HEAD era `16ea52b26`, non `cdf74ef2a`: fast-forward del coordinatore con la skill
 > `design-system` di T e i treni 105–106 della 1.3. Verificato: nessun file dell'area, del baseline né di `lib/theme/`
 > cambiato. La skill nuova conferma le mappature (hover su tinta → `-line`; su un pannello → `hover:bg-lf-neutral`;
 > guadagno e perdita separati da successo ed errore).
@@ -132,14 +132,14 @@ programma passa da 8.249 a 7.256.
 > scrim `bg-lf-overlay`; bottoni pieni sui ruoli d'azione, rosso pieno e ambra piena. Restano il badge del ruolo (BK-1),
 > l'interruttore e la sua manopola (BK-3), l'icona sullo scrim (BK-4).
 > **⚠️ Fuori pista**: la bozza aveva il bordo d'errore del nome su `border-lf-danger-line` (tabella: bordo 200–400 →
-> `-line`). Corretto in `border-lf-danger`: la skill `design-system` (D-T29, entrata con la base `6e569084a`) dà
+> `-line`). Corretto in `border-lf-danger`: la skill `design-system` (D-T29, entrata con la base `16ea52b26`) dà
 > `--lf-danger` per «a border (an invalid field)», e il bordo di un campo va a 3:1 (regola 5), che `-line` non raggiunge;
 > è anche il ruolo del lotto input di T. Da rivedere per il developer: il rosso è più deciso del `red-300` di prima.
 > - Non toccati, senza classi di colore: il divisore `border-t` sopra i saldi iniziali (`BrokerForm`, ~348) disegna nel
 >   `currentColor` (Tailwind 4, nessuna regola di compatibilità in `app.css`), come prima; nominarlo `border-lf-subtle`
 >   cambierebbe l'aspetto → da rivedere. Il `focus:ring-offset-2` della card tiene lo stacco bianco predefinito anche in
 >   scuro, come prima.
-> - **Controllo «solo scuro»** del coordinatore (`dark_only_check.py 6e569084a`, 11:28): 1 caso su 16 file,
+> - **Controllo «solo scuro»** del coordinatore (`dark_only_check.py 16ea52b26`, 11:28): 1 caso su 16 file,
 >   `BrokerForm.svelte:307` della base (`border … dark:border-slate-700`, nessun bordo chiaro): nella bozza è già
 >   `border border-lf-subtle`. In chiaro quel bordo, come quelli senza nome dei quattro campi del form, disegnava nel
 >   `currentColor`: ora ha il suo ruolo (subtle, input), quindi in chiaro cambia un poco → da rivedere.
@@ -165,7 +165,7 @@ programma passa da 8.249 a 7.256.
 > **Note implementazione**: self-check sui sei file: m1 0 / 0 / 2 / 0 / 4 / 60, m2 0, grammatica 0. Diff a parole
 > riletto: cambiano solo classi di colore, più l'import di `STATUS_TONES` in `LotDataQualityBanner`, che ora restituisce
 > `STATUS_TONES.dataQuality.{attention,info}.{container,button}` (stesso legacy del `DataQualityBanner` di T, migrato
-> così in `d80b9e0cd`). Radici: `text-lf-primary` sulle card e sui riquadri; pannello e skeleton su card, panel/80 e
+> così in `e75139f3e`). Radici: `text-lf-primary` sulle card e sui riquadri; pannello e skeleton su card, panel/80 e
 > neutral; segmenti dei quattro grafici `bg-lf-checked text-lf-on-checked` / `bg-lf-card text-lf-muted hover:bg-lf-hover`;
 > card di pagina `shadow-sm shadow-lf-shadow-card`; errore del pannello sulla terna danger. Restano: il trattino
 > «stimato al costo» (BK-5), la chip «in transito» di Gantt e i badge di `UnifiedLotsTable` (BK-2).
@@ -178,7 +178,7 @@ programma passa da 8.249 a 7.256.
 `nice -n 10`, carico < 50, una alla volta: `--check`; Vitest `themeRoles`, `themeTokens`, `themeComponentTokens`,
 `moneyRenderSites`; Vitest dei componenti toccati; Prettier sui file; `git diff --check`; scan «stessa proprietà» e
 catene. Poi `--update` una volta.
-> **Note implementazione** (prima tornata, 11:43–11:47, script `bk_light_gates2.sh` della sessione, base `6e569084a`):
+> **Note implementazione** (prima tornata, 11:43–11:47, script `bk_light_gates2.sh` della sessione, base `16ea52b26`):
 > - `api sync` prima (coordinatore, 11:20: le Vitest dei componenti chiedono `./generated`): 11:36, exit 0, sotto `nice`
 >   a carico 44.
 > - `node scripts/theme/theme-roles.mjs --check`: pulito, 16 file sotto il loro record.
@@ -207,12 +207,12 @@ catene. Poi `--update` una volta.
 Backlog BK-n, messaggio CHECKPOINT READY al coordinatore, FROZEN.
 > **Note implementazione**: backlog BK-1…BK-8 nella sezione BK; checkpoint con 18 file tracciati (16 sorgenti, baseline,
 > backlog) più questo piano, nuovo. Commit proposto: `feat(theme): brokers and lots on colour roles`. Dopo la base merge
-> (ruoli nuovi di T, `f043c1b58`): BK-4 su `text-lf-on-overlay`.
+> (ruoli nuovi di T, `ee00f754e`): BK-4 su `text-lf-on-overlay`.
 
 ### S5b — Mini-checkpoint dopo la base merge: BK-4 e verifica di `SIGN_BADGE` ✅ (16/10/2026, inviato ~12:10; FROZEN)
 Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; vedere se i badge dei lotti con un segno
 (BK-2) vanno su `SIGN_BADGE`.
-> **Note implementazione**: L1–L3 committati dal coordinatore in `82f304f4a`, base merge `2eef01e59` (HEAD verificato,
+> **Note implementazione**: L1–L3 committati dal coordinatore in `8a8f16430`, base merge `f1073da03` (HEAD verificato,
 > albero pulito).
 > - **BK-4:** `BrokerForm`, l'icona `Upload` sullo scrim `bg-lf-overlay`: `text-white` → `text-lf-on-overlay` (bianco nei
 >   due temi, provvisorio). `BrokerForm` 5 → 4: resta solo l'interruttore (BK-3).
@@ -229,7 +229,7 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 >   pulito su `BrokerForm`; `git diff --check` pulito; controllo «solo scuro» 0.
 
 ### S6 — Slot pesante L1–L3 ✅ (16/10/2026, 14:15–14:46, verde)
-> **Stato** (12:13): L1–L3 committati in `82f304f4a`, base merge `2eef01e59`, mini-checkpoint BK-4 in `cb1fb5690`
+> **Stato** (12:13): L1–L3 committati in `8a8f16430`, base merge `f1073da03`, mini-checkpoint BK-4 in `5f01eee1b`
 > (HEAD verificato, albero pulito). Il coordinatore concorda: LONG/SHORT resta in BK-2.
 > **Vincoli della 1.3 sui due file delle pagine:** Z-13 e Y11 toccano subito lo `<script>` di
 > `routes/(app)/brokers/+page.svelte` e di `routes/(app)/brokers/[id]/+page.svelte`; Y11 tocca anche i loro bottoni
@@ -238,7 +238,7 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 > né porta, populate solo nella mia cartella): `front build --debug`, `mkdocs build`, `test --test-port 6158 --data-dir
 > /tmp/librefolio-r2-bk db populate --force --clean --with-reports` (script `bk_prep_slot.sh` della sessione). Lo slot
 > gira sulla base attuale: gli ingressi di AF non toccano l'area; la base merge la fa il coordinatore all'ingresso.
-> ✅ **Preparazione fatta** (12:18–12:25, HEAD `cb1fb5690`, ciascun passo avviato a carico < 50):
+> ✅ **Preparazione fatta** (12:18–12:25, HEAD `5f01eee1b`, ciascun passo avviato a carico < 50):
 > - `front build --debug`: exit 0 in 213 s; il suo svelte-check: **0 errori, 0 avvisi** (vale come `front check` su
 >   quest'albero: nello slot non lo ripeto, salvo una base merge);
 > - `mkdocs build`: exit 0 in 144 s, 3.076 URL relativi risolti;
@@ -247,7 +247,7 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 > Script dello slot pronto (`bk_slot_l1l3.sh`): `api sync`, poi le E2E in ordine di priorità (broker list, detail,
 > condivisione, create-feedback, recovery, data-quality legacy e real, multi-user, privacy), poi le tre Vitest del runner;
 > smette di avviare passi dopo 42 minuti e dice cosa resta.
-> ✅ **Slot fatto** (16/10, 14:15:13–14:46:31, 31 min, su `cb1fb5690`, corsia 6158 + `/tmp/librefolio-r2-bk`; senza `nice`,
+> ✅ **Slot fatto** (16/10, 14:15:13–14:46:31, 31 min, su `5f01eee1b`, corsia 6158 + `/tmp/librefolio-r2-bk`; senza `nice`,
 > nessun passo dopo le 14:55 per il taglio del coordinatore):
 > - `api sync`: exit 0;
 > - E2E, **94/94**: `front-broker list` 9, `detail` 37, `broker-create-feedback` 2, `broker-recovery` 5;
@@ -262,7 +262,7 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 `front-broker list|detail|broker-recovery|broker-create-feedback`, `front-user broker-sharing|multi-user`,
 `front-portfolio data-quality-legacy|data-quality-real|privacy-masking`. Server spento, porta 6158 libera.
 
-### S7 — L4 · modale di custodia ✅ (16/10/2026 sera; committato in `16087f0fd`, slot verde)
+### S7 — L4 · modale di custodia ✅ (16/10/2026 sera; committato in `515f10ac6`, slot verde)
 > **Nota del coordinatore (17:54, da G-18):** `lot-custody-modal > div` è un elemento misto composto a runtime:
 > `ModalBase` mette `border border-lf-raised text-lf-primary {contentClass}`, `LotCustodyModal` gli passa
 > `contentClass="bg-white dark:bg-slate-800"`. In scuro vince la regola legacy `html.dark .bg-white { … !important }`
@@ -272,8 +272,8 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 `LotCustodyModal` dalla versione di Y — 205 → 20: `contentClass` di `ModalBase` senza colore (o `bg-lf-card`);
 commissioni e tasse `text-lf-loss`; riga selezionata dello storico `border-lf-checked bg-lf-selected`; restano i
 marcatori degli eventi e le icone «in transito».
-> **Note implementazione** (16/10, sera): via del coordinatore alle 19:58. Y è entrato (`0c79932a7`); HEAD `855227a26`
-> (nota G-18 committata in `2db15d1c5`, poi base merge), pulito. Analisi breve mandata al coordinatore, poi lavoro diretto
+> **Note implementazione** (16/10, sera): via del coordinatore alle 19:58. Y è entrato (`d4202021d`); HEAD `ce2a24e3e`
+> (nota G-18 committata in `0f53b61ae`, poi base merge), pulito. Analisi breve mandata al coordinatore, poi lavoro diretto
 > (1:1, nessuna scelta di design).
 > - 37 sostituzioni di stringhe esatte, ognuna col suo conteggio atteso (`bk_l4_apply.mjs` della sessione: scrive solo
 >   se tutti i conteggi tornano). **m1 205 → 20**, m2 0, G1–G4 0, scan «stessa proprietà» 0.
@@ -296,7 +296,7 @@ marcatori degli eventi e le icone «in transito».
 >   `--check` pulito; Vitest dei gate `themeRoles`, `themeTokens`, `themeComponentTokens`, `moneyRenderSites` 125/125;
 >   `vitest run src/lib/features/brokers/lots/` 12 file, 554/554 (con `LotCustodyModal.test.ts` di Y); `front check`
 >   (svelte-check) 0 errori, 0 avvisi; `git diff --check` pulito.
-> - **Commit e slot:** checkpoint committato dal coordinatore in `16087f0fd`, base merge `f4eeb3b63` (record della 1.3,
+> - **Commit e slot:** checkpoint committato dal coordinatore in `515f10ac6`, base merge `56d74c005` (record della 1.3,
 >   niente frontend). Preparazione fuori slot (20:11–20:17, nice, carico < 50): `front build --debug` 243 s, `mkdocs
 >   build` 83 s; `api sync` non ripetuto nello slot, perché un `generated.ts` nuovo avrebbe fatto rifare la build al
 >   runner (era successo nello slot L1–L3). **Slot L4 verde** (20:16:52–20:24:06, 7 min, corsia 6158, un worker, build

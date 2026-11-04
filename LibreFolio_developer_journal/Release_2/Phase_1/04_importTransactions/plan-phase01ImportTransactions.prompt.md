@@ -36,11 +36,11 @@
 - **Nomi** (C1, confermata dal coordinatore il 14/10 sera): un file che entra in un pacchetto di dominio tiene il suo
   nome → `services/transactions/{transaction_service,transaction_batch_stages,transaction_batch_context}.py`,
   `services/brokers/broker_service.py`. Nel taglio (W2, C4) la classe composta resta nel suo file, col suo nome
-  (testo di C4 corretto dal coordinatore in `793395913`, che arriva col prossimo aggiornamento di base).
-- **Base**: `c9bb8f257643c0b770788033789425b41ba16715` (fast-forward del coordinatore da `459131eb8`; solo journal,
+  (testo di C4 corretto dal coordinatore in `b4b181946`, che arriva col prossimo aggiornamento di base).
+- **Base**: `3a7e76015f1393b6a8b299a8b4387461859e9ceb` (fast-forward del coordinatore da `b5317cb6e`; solo journal,
   `scripts/visual_review/gallery_snapshot.sh`, `TODO_FUTURI.md`).
 
-## 1. Stato reale (verificato sul codice, base `459131eb8`, invariato in `c9bb8f257`)
+## 1. Stato reale (verificato sul codice, base `b5317cb6e`, invariato in `3a7e76015`)
 
 ### 1.1 Backend
 
@@ -155,54 +155,54 @@ continuano ad aggiornare per data e tipo, ma non toccano un evento collegato sen
 
 ## 7. Lotti e checkpoint
 
-Rimessa in pari il 19/10 (riconciliazione della ripartenza, base `3d5678283`): lo stato di ogni lotto letto nei commit di
+Rimessa in pari il 19/10 (riconciliazione della ripartenza, base `c2c5eeb70`): lo stato di ogni lotto letto nei commit di
 `dev_release2`, con la prova. Le voci del backlog hanno i loro ✅ nella sezione W di `BACKLOG_POST_1.2.md`.
 
 | # | Lotto | Contenuto | Stato |
 |---|---|---|---|
-| W0 | Base e piano | questo piano; misure di base nella corsia | ✅ 14/10, `64e3d0a7d` |
-| W1 | CP1, rinomina | `services/transactions/`, `services/brokers/`, via l'hub; import, runner, script, doc, `.github`, devWiki | ✅ 15/10, `9a44bdcec` |
-| W2 | CP2, taglio | mixin per tema (C4); broker in CRUD, summary, accessi; stadi del batch per tema | ✅ 15/10, in dev prima di `d036d4896` |
-| I1 | CP3, integrità | V-23, C-65b, L5, C-79/C-3 | ✅ 15/10, dev `dc7e4e48e` |
-| K1 | CP4, chiarezza | O-12, C-89, V-38, P-15 (W); I-10 S3 chiusa senza codice | ✅ 15/10, `532a1fd9c`, registro `0229dbc6a` |
+| W0 | Base e piano | questo piano; misure di base nella corsia | ✅ 14/10, `14346f254` |
+| W1 | CP1, rinomina | `services/transactions/`, `services/brokers/`, via l'hub; import, runner, script, doc, `.github`, devWiki | ✅ 15/10, `00c30943e` |
+| W2 | CP2, taglio | mixin per tema (C4); broker in CRUD, summary, accessi; stadi del batch per tema | ✅ 15/10, in dev prima di `4dde1c365` |
+| I1 | CP3, integrità | V-23, C-65b, L5, C-79/C-3 | ✅ 15/10, dev `0e314caf6` |
+| K1 | CP4, chiarezza | O-12, C-89, V-38, P-15 (W); I-10 S3 chiusa senza codice | ✅ 15/10, `79bdf7e10`, registro `25d82b931` |
 | W3 | CP5, router | `api/v1/brokers/` per risorsa | ❌ **non fatto**: aspettava un commit del coordinatore su `brokers.py` che non è venuto, poi la coda dei difetti l'ha superato. `api/v1/brokers.py` è ancora un file solo |
-| W4 | CP6–CP7, PL5 | `services/brim/`, rinomina poi taglio con guardia; `applyTo`, skill, guida (U-B8) | 🟡 CP6 (la rinomina) ✅ 15/10, registro `0902524e5`; **CP7 (il taglio di `brim_provider.py` per tema) non fatto**: aspettava lo stesso commit di W3 |
+| W4 | CP6–CP7, PL5 | `services/brim/`, rinomina poi taglio con guardia; `applyTo`, skill, guida (U-B8) | 🟡 CP6 (la rinomina) ✅ 15/10, registro `7172a8649`; **CP7 (il taglio di `brim_provider.py` per tema) non fatto**: aspettava lo stesso commit di W3 |
 | W5–W6 | CP8 | U-B3, U-B4 | ❌ **non fatto**: `brim_providers/static/` e `brim_providers/sample_reports/` sono ancora alla radice della famiglia (verificato il 19/10); aspettava il commit su `uploads.py` |
-| K2 | CP9 | C-70 (a, b), e (c) dopo il CP1 di H | 🟡 K2a ✅ 15/10 (`0eac8e1b6`, registro `e7cf1ae80`); **K2b** (il 400 strutturato del parse e `preview_unreadable_workbook`) e **K2c** non fatti: aspettavano il commit su `brokers.py` e `uploads.py` |
-| W7 | CP10 | schemi delle transazioni come pacchetto (C3) | ✅ 15/10, registro `58be885a9` |
-| E1 | CP11 | eventi: I-09, I-12, V-22, I-10, I-11 | ✅ 15/10: E0 dev `d226bc69e`, E1a ed E1c dev `14d58cc61`, E1b dev `fecf88c1a` |
-| FE8a | CP12–CP13 | tagli delle tre modali (annuncio §7), poi la cartella dopo il lotto A | ✅ 15/10, dev `14d58cc61` |
+| K2 | CP9 | C-70 (a, b), e (c) dopo il CP1 di H | 🟡 K2a ✅ 15/10 (`ca5bd0bb9`, registro `e956a798b`); **K2b** (il 400 strutturato del parse e `preview_unreadable_workbook`) e **K2c** non fatti: aspettavano il commit su `brokers.py` e `uploads.py` |
+| W7 | CP10 | schemi delle transazioni come pacchetto (C3) | ✅ 15/10, registro `50d9499fd` |
+| E1 | CP11 | eventi: I-09, I-12, V-22, I-10, I-11 | ✅ 15/10: E0 dev `f0a5feaa9`, E1a ed E1c dev `e81a7ba9a`, E1b dev `b71a72ee0` |
+| FE8a | CP12–CP13 | tagli delle tre modali (annuncio §7), poi la cartella dopo il lotto A | ✅ 15/10, dev `e81a7ba9a` |
 | K3 | CP14… | V-37b, eventi collegabili nel Bulk, C-65a, K-2..K-4; se c'è spazio C-45, C-61, V-24, P-2, P-12 | ⏸️ **parcheggiato il 19/10** (N91): K3a in patch nella cartella di sessione, K3b e K3c dopo la lettura del developer; C-65a con X dopo |
-| FE8b | finale | moduli usati fuori + `features/transactions/index.ts` (dopo il lotto D); P-14, U-B9 | ✅ 16/10 lo spostamento, dev `31335fe26` (`index.ts` superato da D-P4); **P-14 e U-B9**, lotti piccoli a parte, aperti |
+| FE8b | finale | moduli usati fuori + `features/transactions/index.ts` (dopo il lotto D); P-14, U-B9 | ✅ 16/10 lo spostamento, dev `af6cd2899` (`index.ts` superato da D-P4); **P-14 e U-B9**, lotti piccoli a parte, aperti |
 
 **Lotti aggiunti durante la 1.3** (dalla coda del coordinatore; prove dei singoli treni nel backlog):
 
 | Lotto | Contenuto | Stato |
 |---|---|---|
-| N1 + N1b | cassa della pagina broker (W-B5), TRANSFER orfano (V-3), correzioni post-migrazione (W-B6, W-B22, W-B23) | ✅ 15/10, dev `14d58cc61` |
-| N2 | il costo obbligatorio anche nell'API | ✅ 15/10, dev `f421e418a` |
-| F36 | i file dei broker solo a chi vede il broker (W-B3, W-B4) | ✅ 15/10, dev `434af2925` |
-| W-B20 | la cancellazione dei broker atomica per broker | ✅ 15/10, dev `23ff56b95` |
-| Doc A-14 | W-B10, W-B27 (le chiavi), W-B33, W-B35 | ✅ 16/10, dev `6fa3f8936` |
-| W-B31 + W-B36 | le regole 5–12 lette dai metadati dei tipi | ✅ 16/10, dev `4e69b5271` |
+| N1 + N1b | cassa della pagina broker (W-B5), TRANSFER orfano (V-3), correzioni post-migrazione (W-B6, W-B22, W-B23) | ✅ 15/10, dev `e81a7ba9a` |
+| N2 | il costo obbligatorio anche nell'API | ✅ 15/10, dev `e2803b875` |
+| F36 | i file dei broker solo a chi vede il broker (W-B3, W-B4) | ✅ 15/10, dev `6b85fa634` |
+| W-B20 | la cancellazione dei broker atomica per broker | ✅ 15/10, dev `f328f7991` |
+| Doc A-14 | W-B10, W-B27 (le chiavi), W-B33, W-B35 | ✅ 16/10, dev `608a21750` |
+| W-B31 + W-B36 | le regole 5–12 lette dai metadati dei tipi | ✅ 16/10, dev `c97c09e6c` |
 | Treni piccoli del 16/10 | W-B12, W-B17, W-B29, W-B30, W-B32, W-B37, W-B38, W-B39, W-B41, W-B42, W-B44, W-B45, W-B53 | ✅ 16/10, treni 98–111 |
-| Decisione 47 | la gamba che cede convertita al costo | ✅ 16/10, dev `ea72346b7` |
-| C-97a | quantità a 10 e prezzi a 12 decimali; il costo Auto | ✅ 16/10, dev `c91bd41b2` |
-| C-97b | i decimali in input | ✅ 17/10, dev `b2462042d` |
-| C-97c-1…3 | prezzi e quantità, lotti, asset e grafici | ✅ 17/10, dev `f1bfa1e31`, `016fe7af9`, `e19f7c7e6` |
-| W-B58 + W-B59 | la revisione R13-SEC2 | ✅ 17/10, dev `4e9d1815f` |
-| W-B60 | importi e valori degli eventi letti esatti | ✅ 17/10, dev `484c71afb` |
-| W-B69 | il costo Auto su un pool illeggibile; la metà del batch | ✅ 17/10, dev `c61a2db4d`, `eee5dad17` |
-| R13-SEC7-3 | i limiti d'ingresso, il giro dei giorni, le date | ✅ 17/10, dev `e609082ab` |
-| W-B71 | le finestre di date ai bordi del calendario | ✅ 17/10, dev `1431e20df` |
-| W-B74 | i saldi su righe illeggibili | ✅ 17/10, dev `80cee9c2d` |
-| W-B72 | N78: un costo dove il tipo non lo prende | ✅ 17/10, dev `7bc66c7ca`, `5603a23a7` |
-| W-B67 | il costo Auto sulla riga giusta (N84) | ✅ 17/10, dev `ac92e6fae` |
-| W-B66 | gli esponenti incollati | ✅ 17/10, dev `e820279e1` |
-| W-B68 | i valori degli eventi del fornitore troncati alla colonna | ✅ 17/10, dev `06e9d2c20` |
-| W-B70 (+ W-B73, W-B77) | i parametri degli errori, il limite dell'unione | ✅ 17/10, dev `41335f1e1` |
-| W-B48 + W-B51 | i testid negli spec; i doppioni BRIM delle crypto | ✅ 17/10, dev `4bc6b2ab1` |
-| W-B81 | i doppioni del wizard con la regola di W-B51 | ✅ 17/10, dev `5890d512c` |
+| Decisione 47 | la gamba che cede convertita al costo | ✅ 16/10, dev `4b40ca5a0` |
+| C-97a | quantità a 10 e prezzi a 12 decimali; il costo Auto | ✅ 16/10, dev `e50f85b5f` |
+| C-97b | i decimali in input | ✅ 17/10, dev `7d864f053` |
+| C-97c-1…3 | prezzi e quantità, lotti, asset e grafici | ✅ 17/10, dev `66917cfb6`, `117762058`, `22ba32954` |
+| W-B58 + W-B59 | la revisione R13-SEC2 | ✅ 17/10, dev `df1d9c2e4` |
+| W-B60 | importi e valori degli eventi letti esatti | ✅ 17/10, dev `6d402550d` |
+| W-B69 | il costo Auto su un pool illeggibile; la metà del batch | ✅ 17/10, dev `b3b0c0583`, `62faa88aa` |
+| R13-SEC7-3 | i limiti d'ingresso, il giro dei giorni, le date | ✅ 17/10, dev `d18e20c73` |
+| W-B71 | le finestre di date ai bordi del calendario | ✅ 17/10, dev `22296d87e` |
+| W-B74 | i saldi su righe illeggibili | ✅ 17/10, dev `734f7689b` |
+| W-B72 | N78: un costo dove il tipo non lo prende | ✅ 17/10, dev `27fd71603`, `a8dc4ac7e` |
+| W-B67 | il costo Auto sulla riga giusta (N84) | ✅ 17/10, dev `0734125e2` |
+| W-B66 | gli esponenti incollati | ✅ 17/10, dev `5634c9649` |
+| W-B68 | i valori degli eventi del fornitore troncati alla colonna | ✅ 17/10, dev `7b2e2c6f3` |
+| W-B70 (+ W-B73, W-B77) | i parametri degli errori, il limite dell'unione | ✅ 17/10, dev `14bd65469` |
+| W-B48 + W-B51 | i testid negli spec; i doppioni BRIM delle crypto | ✅ 17/10, dev `7ac28d903` |
+| W-B81 | i doppioni del wizard con la regola di W-B51 | ✅ 17/10, dev `57f00263b` |
 
 ## 8. Definizione di fatto (ogni lotto di riordino)
 
@@ -242,7 +242,7 @@ Rimessa in pari il 19/10 (riconciliazione della ripartenza, base `3d5678283`): l
 
 ### W0 — Base e piano ✅ (2026-10-14)
 
-1. ✅ **Base verificata** (14/10, 23:02): HEAD `c9bb8f257`, worktree pulito, ramo `e-alfy-w-import-e-transazioni`.
+1. ✅ **Base verificata** (14/10, 23:02): HEAD `3a7e76015`, worktree pulito, ramo `e-alfy-w-import-e-transazioni`.
 2. ✅ **`npm ci` dal lock** in `frontend/` (C5, richiesto dal coordinatore prima di ogni test): 433 pacchetti, nessun file
    tracciato cambiato. Log: `/tmp/libreFolio_w_npm_ci.log`.
    > **Note implementazione**: npm 11.20 avvisa che 5 pacchetti hanno script d'installazione non ancora approvati
@@ -255,7 +255,7 @@ Rimessa in pari il 19/10 (riconciliazione della ripartenza, base `3d5678283`): l
    - `lint --dead-code --scope backend`: **10 senza riferimenti + 26 solo dai test**, 581 di basso segnale;
    - `api schema`: copie in `/tmp/libreFolio_w_base_openapi.json` e `/tmp/libreFolio_w_base_tool_contracts.json`;
    - `mkdocs build`: verde (112 s); `mkdocs check-links`: 95 link validi;
-   - `check_source_paths.py`: **7 percorsi inesistenti (12 occorrenze) in 9 pagine** (erano 10/16/11 su `459131eb8`:
+   - `check_source_paths.py`: **7 percorsi inesistenti (12 occorrenze) in 9 pagine** (erano 10/16/11 su `b5317cb6e`:
      il riordino del journal fra le due basi ne ha tolti 3).
 4. ✅ **`test db populate --force --clean`** sul solo `/tmp/librefolio-r13-w` (23 s), verde.
 5. ✅ **Build del frontend in modo debug** (14/10, 23:16–23:22): `dev.py front build --debug`, 329 s, verde; log
@@ -291,7 +291,7 @@ Rimessa in pari il 19/10 (riconciliazione della ripartenza, base `3d5678283`): l
    - Nessun test o gate scansiona solo il primo livello di `services/`; i glob delle famiglie (`*_providers`,
      `*_plugins`) non vedono `transactions/` e `brokers/`.
 
-   > **Note implementazione**: W0 chiuso il 14/10 alle 23:46. Base `c9bb8f257`; nessun file del repo toccato salvo
+   > **Note implementazione**: W0 chiuso il 14/10 alle 23:46. Base `3a7e76015`; nessun file del repo toccato salvo
    > questo piano (non tracciato fino al checkpoint).
 
 ### W1 — CP1, rinomina di transazioni e broker ✅ (2026-10-15) — 🧊 checkpoint inviato, FROZEN
@@ -357,16 +357,16 @@ Rimessa in pari il 19/10 (riconciliazione della ripartenza, base `3d5678283`): l
 
    > **Note implementazione**: W1 pronto per il checkpoint il 15/10 alle 00:10. Nessun cambio di comportamento.
 
-   > **Note implementazione (coordinatore, 15/10 ~00:10)**: CP1 committato come `9a44bdcec` (codice, rinomine
-   > R099–R100) e `64e3d0a7d` (journal); base aggiornata con il merge `2c89a7b24` (`dev_release2` a `4471d39b4`: T-1,
+   > **Note implementazione (coordinatore, 15/10 ~00:10)**: CP1 committato come `00c30943e` (codice, rinomine
+   > R099–R100) e `14346f254` (journal); base aggiornata con il merge `f14733429` (`dev_release2` a `5cd1d35af`: T-1,
    > T-2, G, regole del piano). W1 entra in `dev_release2` dopo A1, insieme a W2.
 
-### Revisione combinata `2c89a7b24` ✅ (2026-10-15)
+### Revisione combinata `f14733429` ✅ (2026-10-15)
 
-- HEAD `2c89a7b24`, worktree pulito; nessuna modifica del backend fra `c9bb8f257` e `4471d39b4`
-  (`git diff --stat c9bb8f257 4471d39b4 -- backend scripts/list_api_endpoints.py` vuoto), quindi lo schema di
-  `4471d39b4` è quello esportato per la base.
-- `api schema` di `2c89a7b24` identico alla base (escluso `info.version`), contratti dei Tool compresi.
+- HEAD `f14733429`, worktree pulito; nessuna modifica del backend fra `3a7e76015` e `5cd1d35af`
+  (`git diff --stat 3a7e76015 5cd1d35af -- backend scripts/list_api_endpoints.py` vuoto), quindi lo schema di
+  `5cd1d35af` è quello esportato per la base.
+- `api schema` di `f14733429` identico alla base (escluso `info.version`), contratti dei Tool compresi.
 - Nella corsia: `services transaction` 66, `broker` 39, `financial-math` 212 (con la guardia dello strato), verdi.
 
 ### W2 — CP2, taglio di transazioni e broker ✅ (2026-10-15) — 🧊 checkpoint inviato, FROZEN
@@ -443,7 +443,7 @@ i 29 membri di `TransactionService` e i 16 di `BrokerService` assegnati tutti, n
 6. ✅ **devWiki** (C6, `/tmp/libreFolio_w2_wiki.py`): 31 righe in 26 pagine. Le righe che nominano una funzione spostata
    puntano al modulo nuovo; quelle che nominano il servizio in generale restano su `transaction_service.py` e
    `broker_service.py`, che contengono ancora le due classi. Restano com'erano le due righe di prosa di
-   `decisions/auto-cost-basis-zero-without-position.md:24-26`, legate a un commit («Checked at `083ed26dc`») con i suoi
+   `decisions/auto-cost-basis-zero-without-position.md:24-26`, legate a un commit («Checked at `fef0203ca`») con i suoi
    numeri di riga. `check_source_paths.py`: 5 percorsi inesistenti (gli stessi di dopo W1), 3 853 citati.
 7. ✅ **`scripts/coverage_analysis.py`**: la priorità HIGH e la classe dei servizi centrali passano dai due file ai due
    pacchetti (`backend/app/services/transactions/`, `backend/app/services/brokers/`), così i moduli nuovi non scendono
@@ -457,11 +457,11 @@ i 29 membri di `TransactionService` e i 16 di `BrokerService` assegnati tutti, n
    > **Note implementazione**: W2 pronto per il checkpoint il 15/10 alle 00:50. Nessun cambio di comportamento: corpi
    > alla lettera (prova AST), API identica, stessi conteggi.
 
-   > **Note implementazione (coordinatore, 15/10 ~00:50)**: CP2 committato come `97aa874a6` (codice) e `d62c9c098`
+   > **Note implementazione (coordinatore, 15/10 ~00:50)**: CP2 committato come `4672315b0` (codice) e `f64cc1ced`
    > (journal). Aggiornamento di base aperto dal coordinatore nel mio worktree: `git merge --no-ff --no-commit
-   > 8250d92b3` (`dev_release2` con A1, `services/accounts/`, e H CP1, `services/platform/` e `services/files/`).
+   > 0eb472a80` (`dev_release2` con A1, `services/accounts/`, e H CP1, `services/platform/` e `services/files/`).
 
-### Aggiornamento di base `8250d92b3` (A1, H CP1) ✅ (2026-10-15) — 🧊 FROZEN, merge commit al coordinatore
+### Aggiornamento di base `0eb472a80` (A1, H CP1) ✅ (2026-10-15) — 🧊 FROZEN, merge commit al coordinatore
 
 1. ✅ **Conflitti risolti** (00:52): 6, tutti di righe vicine, nessuno di logica. Tenuti i percorsi nuovi di tutti i
    lati: miei (`transactions/`, `brokers/`, i mixin), di A (`accounts/`) e di H (`platform/`, `files/`).
@@ -493,25 +493,25 @@ i 29 membri di `TransactionService` e i 16 di `BrokerService` assegnati tutti, n
    13 min 18 s; log `/tmp/libreFolio_w_merge_all_backend.log`, conteggi in `/tmp/libreFolio_w_merge_counts.txt`):
    **7/7 verdi, 12 965 passed, 28 skipped, 0 failed**, uguale a W2 e alla base; le unità seriali e consolidate sono
    identiche a W2 file per file. Porta 6184 libera alla fine.
-6. ✅ **`api schema`** della revisione fusa identico a quello di `8250d92b3` (escluso `info.version`), contratti dei
-   Tool compresi; quello di riferimento l'ho esportato da un albero estratto con `git archive 8250d92b3` in
-   `/tmp/libreFolio_w_ref_8250/`, senza toccare il worktree. `8250d92b3` ha lo stesso schema della mia base
-   `c9bb8f257`.
+6. ✅ **`api schema`** della revisione fusa identico a quello di `0eb472a80` (escluso `info.version`), contratti dei
+   Tool compresi; quello di riferimento l'ho esportato da un albero estratto con `git archive 0eb472a80` in
+   `/tmp/libreFolio_w_ref_8250/`, senza toccare il worktree. `0eb472a80` ha lo stesso schema della mia base
+   `3a7e76015`.
 
    > **Note implementazione**: aggiornamento di base pronto per il merge commit il 15/10 alle 01:10. Questo piano ha le
    > note dell'aggiornamento non in stage (il coordinatore ha chiesto lo stage dei soli 6 file risolti).
 
-   > **Note implementazione (coordinatore, 15/10 ~01:09)**: merge `17a644123` e nota `9198698c3`; W1 e W2 in
-   > `dev_release2` con `998fd2701`; il mio ramo portato in avanzamento veloce a `998fd2701`, worktree pulito.
+   > **Note implementazione (coordinatore, 15/10 ~01:09)**: merge `a8e8df7ee` e nota `ee85e378d`; W1 e W2 in
+   > `dev_release2` con `24776d89c`; il mio ramo portato in avanzamento veloce a `24776d89c`, worktree pulito.
 
 ### I1 — CP3, integrità (V-23, C-65b, L5, C-79/C-3) ✅ (2026-10-15) — 🧊 checkpoint inviato, FROZEN
 
 **Via del coordinatore** (15/10 ~01:09): «Via per I1 (integrità: V-23, C-65b, L5, C-79/C-3), poi K1, un checkpoint
 FROZEN ciascuno. Ogni difetto con il rosso visto prima della cura. Nelle parti frontend, le regole di T-1. Dalle 09:00
 c'è la finestra della galleria: niente `all-backend` né build pesanti. I tuoi lotti con frontend entrano prima delle
-08:45 o dopo la chiusura.» Base: HEAD `998fd2701`, pulito (verificato alle 01:12).
+08:45 o dopo la chiusura.» Base: HEAD `24776d89c`, pulito (verificato alle 01:12).
 
-**Disegno** (verificato sul codice di `998fd2701`):
+**Disegno** (verificato sul codice di `24776d89c`):
 
 - **V-23, backend**: `_append_access_issues` (`transaction_batch_stages.py:153-175`) mette ogni rifiuto d'accesso su
   `operation="create", index=0`. Cura: un rifiuto per ogni riga che tocca un broker senza EDITOR, sulle sue coordinate
@@ -619,19 +619,19 @@ c'è la finestra della galleria: niente `all-backend` né build pesanti. I tuoi 
    > lettura, come gli altri errori di riga. Nel form aperto dal bulk, che filtra per `operation` e `index`, un update
    > rifiutato compare ora sulla sua riga; prima finiva su `create:0` e lì non si vedeva.
 
-   > **Note implementazione (coordinatore, 15/10 ~02:26)**: I1 committato come `5e96df752` (codice) e `c4d8efcdc`
-   > (journal); base aggiornata con il merge `123c21efc` di `dev_release2` a `75a20ce29` (H CP2a, pacchetto `config/` e
+   > **Note implementazione (coordinatore, 15/10 ~02:26)**: I1 committato come `458103f4f` (codice) e `0e94f9ca9`
+   > (journal); base aggiornata con il merge `01c2e99af` di `dev_release2` a `a042d4c9d` (H CP2a, pacchetto `config/` e
    > guardia `services config-package`; X CP1 e CP2a, registri per famiglia, BRIM in `services/brim/registry.py`,
    > `services/assets/` senza shim). Unione automatica, worktree pulito.
 
-### Revisione combinata `123c21efc` (I1 + H CP2a + X CP1/CP2a) ✅ (2026-10-15) — 🧊 FROZEN
+### Revisione combinata `01c2e99af` (I1 + H CP2a + X CP1/CP2a) ✅ (2026-10-15) — 🧊 FROZEN
 
 Richiesta del coordinatore: `front build --debug`; `services config-package`; `utils gate-event-loop-io`, `services
-brim-provider-base`, `api transactions`, `api broker-multiuser`; `all-backend`; `api schema` contro `75a20ce29` (deve
+brim-provider-base`, `api transactions`, `api broker-multiuser`; `all-backend`; `api schema` contro `a042d4c9d` (deve
 cambiare solo `asset_event_id`); E2E `tx-broker-access`, `tx-bulk-operations` e `core-unit`; poi handoff FROZEN, con
 l'ingresso di I1 in `dev_release2` prima delle 08:45.
 
-1. ✅ **Base** (02:27): HEAD `123c21efc` (genitori `c4d8efcdc` e `75a20ce29`), worktree pulito, porta 6184 libera. Il
+1. ✅ **Base** (02:27): HEAD `01c2e99af` (genitori `0e94f9ca9` e `a042d4c9d`), worktree pulito, porta 6184 libera. Il
    merge tocca 5 dei miei file solo con righe altrui: in `brokers.py` e `brim_provider.py` l'import di
    `BRIMProviderRegistry` da `services/brim/registry.py` e di `AssetCRUDService` da `services/assets/crud.py` (X); in
    `_backend_utils.py` e nella pagina `event-loop-blocking.md` il percorso `assets/core.py` (X); il backlog. Le mie
@@ -643,7 +643,7 @@ l'ingresso di I1 in `dev_release2` prima delle 08:45.
    di I1 non leggono variabili d'ambiente (grep di `os.environ`/`getenv` a zero), e nessuna riga aggiunta da I1 ne legge.
 4. ✅ **Selettori di I1** (02:29–02:31): `utils gate-event-loop-io` 14, `services brim-provider-base` 37,
    `api transactions` 26, `api broker-multiuser` 20; gli stessi conteggi di prima del merge.
-5. ✅ **`api schema`** contro `75a20ce29` (esportato da un albero `git archive 75a20ce29` in `/tmp/libreFolio_w_ref_75a2/`,
+5. ✅ **`api schema`** contro `a042d4c9d` (esportato da un albero `git archive a042d4c9d` in `/tmp/libreFolio_w_ref_75a2/`,
    escluso `info.version`): cambia **solo** `GET /api/v1/transactions`, col parametro `asset_event_id` e la descrizione
    dell'endpoint; contratti dei Tool identici. `openapi.json` e `generated.ts` sono esclusi dal controllo di freschezza
    della build (`_BUILD_GENERATED_SOURCES`, `scripts/cli_base.py:513`): l'esportazione non fa ricostruire il frontend.
@@ -651,7 +651,7 @@ l'ingresso di I1 in `dev_release2` prima delle 08:45.
    `/tmp/libreFolio_w_i1m_testlog/`, conteggi in `/tmp/libreFolio_w_i1m_counts.txt`): **7/7 verdi, 13 458 passed, 28
    skipped, 0 failed**. Unità seriali e consolidate identiche alla run di I1 file per file; il gruppo parallelo passa da
    11 117 a 11 584 (+467), e il conteggio dei test raccolti (`pytest --collect-only` sui 66 file di test toccati dal
-   merge, prima in un albero `git archive c4d8efcdc`, poi nel worktree) lo spiega tutto: `test_config_package.py` nuovo
+   merge, prima in un albero `git archive 0e94f9ca9`, poi nel worktree) lo spiega tutto: `test_config_package.py` nuovo
    (+472, H) e `test_provider_core_cache.py` 33 → 28 (−5, X: tolto il test parametrizzato
    `test_legacy_and_canonical_public_symbols_share_identity`, quello dei simboli vecchi). Nessun altro file cambia
    numero.
@@ -667,22 +667,22 @@ l'ingresso di I1 in `dev_release2` prima delle 08:45.
    `front-transaction tx-broker-access` 5 passed, `front-transaction tx-bulk-operations` 10 passed, `front-utility
    core-unit` 4 245 (130 file), gli stessi conteggi di prima del merge. Porta 6184 libera alla fine.
 
-   > **Note implementazione**: revisione combinata `123c21efc` validata il 15/10 alle 02:56; pronta per l'ingresso di I1
+   > **Note implementazione**: revisione combinata `01c2e99af` validata il 15/10 alle 02:56; pronta per l'ingresso di I1
    > in `dev_release2`. Per W4 (PL5): `services/brim/` esiste già, con `__init__.py` e `registry.py` di X;
    > `brim_provider.py:78-79` importa ora da `services/assets/crud.py` e `services/brim/registry.py`.
 
-   > **Note implementazione (coordinatore, 15/10 ~03:06)**: I1 in `dev_release2` come `dc7e4e48e` (merge di `625e3dacc`
-   > su `ae998da78`); record del coordinatore in `f39be79b7` (CHANGELOG, chiusure di V-23, C-79, C-65 ricerca inversa, L5,
-   > C-3; W-B9 spostata a X; l'avviso di aiosqlite è C-93, a J). Il mio ramo è avanzato a `f39be79b7`, pulito.
+   > **Note implementazione (coordinatore, 15/10 ~03:06)**: I1 in `dev_release2` come `0e314caf6` (merge di `15654bb88`
+   > su `aebf0a0e6`); record del coordinatore in `896a3342d` (CHANGELOG, chiusure di V-23, C-79, C-65 ricerca inversa, L5,
+   > C-3; W-B9 spostata a X; l'avviso di aiosqlite è C-93, a J). Il mio ramo è avanzato a `896a3342d`, pulito.
 
 ### K1 — CP4, chiarezza (O-12, C-89, V-38, P-15 parte W, I-10 S3) ✅ (2026-10-15) — 🧊 checkpoint inviato, FROZEN
 
 **Via del coordinatore** (15/10 ~03:06): «Via per K1. Regole per oggi: `ui/data-editor` è frontend, e T lo tiene in coda
 finché K1 non entra. K1 entra prima delle 08:45 solo se è pronta e validata; altrimenti dopo la chiusura della finestra
 della galleria. Dalle ~08:45, al mio avviso, niente `all-backend` né build pesanti fino all'avviso di fine.» Base: HEAD
-`f39be79b7`, pulito, porta libera (03:06).
+`896a3342d`, pulito, porta libera (03:06).
 
-**Verifica sul codice** (`f39be79b7`):
+**Verifica sul codice** (`896a3342d`):
 
 - **O-12**: `importWizard.assetsCount` («{n} unique assets, {m} need resolution») senza plurale nelle 4 sorgenti
   `frontend/src/lib/i18n/importWizard/<lang>.json:45`; il chiamante (`ImportWizardModal.svelte:4845`) passa due numeri
@@ -785,7 +785,7 @@ della galleria. Dalle ~08:45, al mio avviso, niente `all-backend` né build pesa
    > di `DataEditor` cambierà.
 5. ✅ Piano, backlog (W-B13), CHANGELOG proposto, handoff FROZEN (03:55).
 
-### Passaggio degli eventi da X (X CP2b, `92b42d796`, record `05c21b2b6`) — per E1
+### Passaggio degli eventi da X (X CP2b, `53e3cdd39`, record `92049913b`) — per E1
 
 Comunicato dal coordinatore il 15/10 ~03:55; arriva nella mia base all'aggiornamento del checkpoint di K1.
 
@@ -807,14 +807,14 @@ Comunicato dal coordinatore il 15/10 ~03:55; arriva nella mia base all'aggiornam
   `currency_change.py:86-135`; `crud.py:506-517` e `689-800` (il merge che migra gli eventi). C-65a (la modale al cambio di
   fornitore) chiede W e X insieme.
 
-### Revisione combinata `1d1c7e67d` (K1 + A3, H CP3, X CP2b) ✅ (2026-10-15) — 🧊 FROZEN
+### Revisione combinata `24cd228fd` (K1 + A3, H CP3, X CP2b) ✅ (2026-10-15) — 🧊 FROZEN
 
-K1 committato dal coordinatore come `532a1fd9c` (codice) e `05e738d18` (journal); base aggiornata col merge `1d1c7e67d`
-di `dev_release2` a `05c21b2b6` (A3: frontend di Settings e login, cataloghi `auth`; H CP3; X CP2b: asset tagliati,
+K1 committato dal coordinatore come `79bdf7e10` (codice) e `972ed77b5` (journal); base aggiornata col merge `24cd228fd`
+di `dev_release2` a `92049913b` (A3: frontend di Settings e login, cataloghi `auth`; H CP3; X CP2b: asset tagliati,
 `api/v1/assets/` per risorsa, API identica). Unione automatica, worktree pulito. Validazione mirata richiesta entro le
 08:20, senza `all-backend` (il backend lo copre la run di J sulla stessa combinazione).
 
-1. ✅ **Base** (03:53): HEAD `1d1c7e67d` (genitori `05e738d18`, `05c21b2b6`), pulito, porta 6184 libera.
+1. ✅ **Base** (03:53): HEAD `24cd228fd` (genitori `972ed77b5`, `92049913b`), pulito, porta 6184 libera.
 2. ✅ **`front build --debug`** (03:53–03:55, 83 s): verde, svelte-check 0 errori e 0 avvisi.
 3. ✅ **`i18n check`** stretto verde, 4 371 chiavi; **`theme-roles.mjs --check`**: «Colour gates: clean»;
    **`check-orphans`**: 118 E2E, 367 Vitest e 269 file backend raggiungibili da un `all`.
@@ -825,9 +825,9 @@ di `dev_release2` a `05c21b2b6` (A3: frontend di Settings e login, cataloghi `au
    fx-csv-import` 21, `front-fx fx-editor` 4.
 6. ✅ **`mkdocs build`** stretto verde; `git diff --check` pulito; porta 6184 libera (04:04).
 
-   > **Note implementazione (coordinatore, 15/10 ~04:06)**: K1 in `dev_release2` con l'avanzamento veloce a `d915c869f`;
-   > record in `0229dbc6a` (CHANGELOG con le 4 righe; chiuse O-12, C-89, V-38, W-B8 e la parte W di P-15; I-10 S3 chiusa
-   > senza codice nel README del 38; W-B13 spostata nella sezione X). Il mio ramo è avanzato a `0229dbc6a`, pulito.
+   > **Note implementazione (coordinatore, 15/10 ~04:06)**: K1 in `dev_release2` con l'avanzamento veloce a `0a5b05666`;
+   > record in `25d82b931` (CHANGELOG con le 4 righe; chiuse O-12, C-89, V-38, W-B8 e la parte W di P-15; I-10 S3 chiusa
+   > senza codice nel README del 38; W-B13 spostata nella sezione X). Il mio ramo è avanzato a `25d82b931`, pulito.
    > `ui/data-editor` ora è di T (avvisato, con la nota su `asset-data-editor.spec.ts:384`).
 
 ### W4 — CP6–CP7, PL5: `services/brim/` ⏳ (2026-10-15) — CP6 🧊 checkpoint inviato, FROZEN
@@ -835,7 +835,7 @@ di `dev_release2` a `05c21b2b6` (A3: frontend di Settings e login, cataloghi `au
 **Via del coordinatore** (15/10 ~04:06): «Via per W4 (`services/brim/`, PL5: rinomina, poi taglio con la guardia;
 aggiorna le due costanti del cancello `gate-event-loop-io`; `applyTo`, skill, guida U-B8). W3 (`api/v1/brokers/`) e
 W5–W6 (`uploads.py`) aspettano un commit del coordinatore su quei file, e git non segue il codice spostato. Se W4 finisce prima, passa a K2 o W7. Le run pesanti di W4 vanno chiuse prima delle
-08:45, o fatte dopo l'avviso di fine della finestra della galleria.» Base: HEAD `0229dbc6a`, pulito, porta libera (04:06).
+08:45, o fatte dopo l'avviso di fine della finestra della galleria.» Base: HEAD `25d82b931`, pulito, porta libera (04:06).
 
 **Forma** (piano 43, P2.1; §6 del piano generale, C1 e «Regole di ogni lotto di riordino»): `brim_provider.py` è
 rinominato **e** tagliato, quindi due checkpoint in fila.
@@ -885,15 +885,15 @@ rinominato **e** tagliato, quindi due checkpoint in fila.
      l'ordine, soprattutto nei plugin), poi `ruff` pulito; `black` invariato (la sola `coverage_analysis.py`, già fra i 29
      file sporchi della base); `lint --dead-code` senza reperti nuovi (i due di `brim_provider.py` col percorso nuovo; il
      resto delle differenze da I1 viene dagli spostamenti di X e H);
-   - **`api schema` identico** a quello di `0229dbc6a` (OpenAPI e contratti dei Tool; riferimento esportato da un albero
+   - **`api schema` identico** a quello di `25d82b931` (OpenAPI e contratti dei Tool; riferimento esportato da un albero
      `git archive` in `/tmp/libreFolio_w_ref_0229/`).
 4. ✅ **Selettori del dominio** (04:12–04:13): `services brim-provider-base` 37, `brim-parse-pool` 8, `brim-report-sets`
    259, `brim-gap-fix` 99; `utils gate-event-loop-io` 14, `gate-plugin-layout` 33, `gate-plugin-i18n-ownership` 45.
 5. ✅ **`all-backend`** (04:13–04:27, `--workers 2`; log `/tmp/libreFolio_w4a_all_backend.log`, unità in
    `/tmp/libreFolio_w4a_testlog/`): **7/7 verdi, 13 749 passed, 28 skipped, 0 failed**. Non ho una run completa della
-   base `0229dbc6a` (il coordinatore la fa coprire dalla run di J su `1d1c7e67d`, stesso codice): i conteggi li provo con
+   base `25d82b931` (il coordinatore la fa coprire dalla run di J su `24cd228fd`, stesso codice): i conteggi li provo con
    la raccolta, file per file, dei 17 file di test toccati dalla rinomina, uguali alla base (1 876 test da tutte e due le
-   parti, `pytest --collect-only` nell'albero `git archive 0229dbc6a` e nel worktree). La raccolta intera dell'albero di
+   parti, `pytest --collect-only` nell'albero `git archive 25d82b931` e nel worktree). La raccolta intera dell'albero di
    base non si fa in `/tmp`: alcuni test leggono file fuori da `backend/` e `scripts/` (doc, workflow).
 6. ✅ **Doc**: `mkdocs build` stretto verde, `check-links` 95 validi; `git diff --check` pulito; porta 6184 libera
    (04:30). Prettier pulito sui due commenti di `frontend/src/lib/utils/brim/`.
@@ -921,46 +921,46 @@ rinominato **e** tagliato, quindi due checkpoint in fila.
    > Volume: circa 18 righe in `api/v1/brokers.py`, 8 in `brim_report_sets.py`, 1 in `auth.py`, 1–2 in
    > `brim_parse_pool.py`, circa 150 riferimenti nei test.
 
-### Revisione combinata `370189b3d` (W4 CP6 + H `web_link_finder`, J CP-1) ✅ (2026-10-15) — 🧊 FROZEN
+### Revisione combinata `93a246aa2` (W4 CP6 + H `web_link_finder`, J CP-1) ✅ (2026-10-15) — 🧊 FROZEN
 
-CP6 committato dal coordinatore come `548a0688d` (98 file; git abbina le 4 rinomine al 98–100 %; il suo controllo AST:
-56 file con soli import, negli altri 8 cambiano solo stringhe di percorso) e `7066176cf` (journal); base aggiornata col
-merge `370189b3d` di `dev_release2` a `209e4a6f0`. Sul fuso il coordinatore ha già verificato: 0 import irrisolti, 0
+CP6 committato dal coordinatore come `1ff66e047` (98 file; git abbina le 4 rinomine al 98–100 %; il suo controllo AST:
+56 file con soli import, negli altri 8 cambiano solo stringhe di percorso) e `63575c6fa` (journal); base aggiornata col
+merge `93a246aa2` di `dev_release2` a `7839f8f80`. Sul fuso il coordinatore ha già verificato: 0 import irrisolti, 0
 patch mute (`patch_effect.py` di J), nessun percorso nuovo nelle guardie D-J18. Controllo leggero chiesto, senza
 `all-backend`. **CP7 aspetta un commit del coordinatore su `brokers.py`** (lo stesso che aspetta W3): dopo l'ingresso
 di CP6 si passa a **W7**, poi K2.
 
-1. ✅ **Base** (04:34): HEAD `370189b3d` (genitori `7066176cf`, `209e4a6f0`), pulito, porta libera.
-2. ✅ **`services config-package`**: 567 passed. Il conteggio è quello di `209e4a6f0`: 481 casi, uno per modulo di
+1. ✅ **Base** (04:34): HEAD `93a246aa2` (genitori `63575c6fa`, `7839f8f80`), pulito, porta libera.
+2. ✅ **`services config-package`**: 567 passed. Il conteggio è quello di `7839f8f80`: 481 casi, uno per modulo di
    `backend/app` fuori da `config/`, più 86 test fissi. La rinomina sposta 4 moduli senza aggiungerne né toglierne; cambiano
    solo i 4 id dei parametri, da `services/brim_<x>.py` a `services/brim/brim_<x>.py`. I 6 id sotto `services/brim/` sono i
    miei 4 più `__init__.py` e `registry.py` di X.
 3. ✅ `utils gate-event-loop-io` 14, `services brim-provider-base` 37.
-4. ✅ **`pytest --collect-only`** contro `209e4a6f0` (albero `git archive` di `backend`, `scripts`, `pyproject.toml`,
+4. ✅ **`pytest --collect-only`** contro `7839f8f80` (albero `git archive` di `backend`, `scripts`, `pyproject.toml`,
    `dev.py` e `pytest.ini` in `/tmp/libreFolio_w_ref_209e/`): **13 881 test da tutte e due le parti, identici file per
    file (270 file)**.
 
    > **⚠️ Fuori pista**: senza `pytest.ini` l'albero estratto stampa la raccolta in un altro formato, e senza `dev.py`
    > `test_dev_port_check.py` non si raccoglie. Con i due file la raccolta è completa.
-5. ✅ **`api schema`** contro `209e4a6f0`: OpenAPI e contratti dei Tool identici.
+5. ✅ **`api schema`** contro `7839f8f80`: OpenAPI e contratti dei Tool identici.
 6. ✅ `git diff --check` pulito; porta 6184 libera (04:37).
 
    > **⚠️ Fuori pista (segnalato dal coordinatore)**: la riscrittura di CP6 ha cambiato anche un riferimento storico. La
    > docstring di `backend/test_scripts/test_services/test_brim_report_sets.py` dice `git show
    > v1.1.0:backend/app/services/brim/brim_provider.py`, ma nella v1.1.0 il file stava in `services/brim_provider.py`.
-   > Lo correggo nel prossimo lotto (W7). Scansione delle righe aggiunte da `548a0688d` con un percorso nuovo accanto a
+   > Lo correggo nel prossimo lotto (W7). Scansione delle righe aggiunte da `1ff66e047` con un percorso nuovo accanto a
    > un'ancora storica (`git show`, versioni, SHA): è l'unico caso. L'altro riscontro, `architecture.md`, parla del
    > commit del database, non di git.
 
-   > **Note implementazione (coordinatore, 15/10 ~04:38)**: CP6 in `dev_release2` con l'avanzamento veloce a `155d9b050`;
-   > record in `0902524e5`; il mio ramo è avanzato lì, pulito.
+   > **Note implementazione (coordinatore, 15/10 ~04:38)**: CP6 in `dev_release2` con l'avanzamento veloce a `956a4ab6c`;
+   > record in `7172a8649`; il mio ramo è avanzato lì, pulito.
 
 ### W7 — schemi delle transazioni come pacchetto (C3) ⏳ (2026-10-15) — W7a 🧊 checkpoint inviato, FROZEN
 
 **Via del coordinatore** (15/10 ~04:38): «Via per W7 (schemi delle transazioni come pacchetto, C3), con la docstring di
 `test_brim_report_sets.py`; poi K2. `schemas/transactions.py` è importato da altre sessioni: nell'handoff elenca gli
 importatori fuori dal tuo dominio. Dalle ~08:45, al mio avviso, niente `all-backend` né build pesanti fino all'avviso di
-fine.» Base: HEAD `0902524e5`, pulito, porta libera (04:38).
+fine.» Base: HEAD `7172a8649`, pulito, porta libera (04:38).
 
 **Forma** (C3 e il precedente di X, `schemas/assets/`): `backend/app/schemas/transactions.py` (1 371 righe) diventa il
 pacchetto `backend/app/schemas/transactions/`, con un `__init__.py` di sola docstring (nessun barile), il modulo
@@ -1000,9 +1000,9 @@ BRIM, transazioni e broker, salvo `test_schemas/test_schema_computed_fields.py` 
      toccati; `lint --dead-code` senza reperti nuovi (l'unica differenza da CP6 è lo spostamento di J,
      `pac_allocator/source/portfolio_allocation_source.py`); guardia delle patch su `backend.app.schemas.transactions`:
      0 siti;
-   - **`api schema` identico** a `0902524e5` (OpenAPI e contratti dei Tool, riferimento da un albero `git archive` in
+   - **`api schema` identico** a `7172a8649` (OpenAPI e contratti dei Tool, riferimento da un albero `git archive` in
      `/tmp/libreFolio_w_ref_0902/`);
-   - **`pytest --collect-only`** contro `0902524e5`: identico file per file su 270 file, salvo `test_config_package.py`
+   - **`pytest --collect-only`** contro `7172a8649`: identico file per file su 270 file, salvo `test_config_package.py`
      567 → 568: la guardia ha un caso per modulo di `backend/app`, e il pacchetto aggiunge il suo `__init__.py` (l'id
      `schemas/transactions.py` diventa `schemas/transactions/__init__.py` e `schemas/transactions/transactions.py`).
 3. ✅ **Selettori** (04:42–04:45): `schemas transactions` 75, `services config-package` 568, `services brim-report-sets` 259,
@@ -1015,13 +1015,13 @@ BRIM, transazioni e broker, salvo `test_schemas/test_schema_computed_fields.py` 
    > **Note implementazione**: W7a pronto il 15/10 alle 05:01: rinomina pura, schema identico, raccolta identica salvo
    > il caso del nuovo `__init__.py`.
 
-   > **Note implementazione (coordinatore, 15/10 ~05:03)**: W7a committato come `00a19bf72` (`R100` più l'`__init__`
-   > nuovo; 59 file con soli import, negli altri 5 solo hub, docstring e una stampa) e `f71a77e03` (journal). Via per W7b
-   > sopra W7a, **senza aggiornare la base adesso** (X CP3 e A4 chiudono le loro run sulla base `0902524e5`): W7a entra
+   > **Note implementazione (coordinatore, 15/10 ~05:03)**: W7a committato come `589e5f512` (`R100` più l'`__init__`
+   > nuovo; 59 file con soli import, negli altri 5 solo hub, docstring e una stampa) e `cc4e6bad5` (journal). Via per W7b
+   > sopra W7a, **senza aggiornare la base adesso** (X CP3 e A4 chiudono le loro run sulla base `7172a8649`): W7a entra
    > insieme a W7b, in due commit separati; al checkpoint di W7b il coordinatore aggiorna la base e io valido una volta
    > sola la revisione combinata, con `all-backend`.
 
-**Passi W7b** (taglio), sopra `f71a77e03`:
+**Passi W7b** (taglio), sopra `cc4e6bad5`:
 
 1. ✅ **Taglio** (05:05, `/tmp/libreFolio_w7b_cut.py`): ogni nodo di primo livello si porta dietro i commenti e i banner
    che lo precedono; i moduli nuovi hanno una docstring, il blocco d'import originale (poi `ruff --select F401,I --fix`: 64
@@ -1052,29 +1052,29 @@ BRIM, transazioni e broker, salvo `test_schemas/test_schema_computed_fields.py` 
    - `backend.app.main` si importa; i 21 nomi TX dell'hub vengono dal modulo che li definisce; gli schemi di
      `TXBatchResponse` e `TXTypesResponse` si generano; `TX_TYPE_METADATA` ha 12 tipi; nessun import da riscrivere;
    - `ruff` e `black` puliti sui 19 file Python toccati; codice morto uguale a W7a; guardia delle patch: 0 siti;
-   - **`api schema` identico** a `0902524e5` (OpenAPI e contratti dei Tool);
-   - **`pytest --collect-only`**: 13 886 test, identici a `0902524e5` file per file, salvo `test_config_package.py` 567 →
+   - **`api schema` identico** a `7172a8649` (OpenAPI e contratti dei Tool);
+   - **`pytest --collect-only`**: 13 886 test, identici a `7172a8649` file per file, salvo `test_config_package.py` 567 →
      572 (un caso per modulo: il `__init__.py` di W7a più i 4 moduli nuovi);
    - corsia: `schemas transactions` 75, `services config-package` 572, `services transaction` 66, `api transactions` 26,
      `transactions-validate` 11, `events-suggest` 9, `batch-split-promote` 35, `transfer-promotion` 3,
      `transactions-wac` 20, `tx-balance-walk` 9.
    - `all-backend` sulla revisione combinata, dopo l'aggiornamento della base del coordinatore.
 
-   > **Note implementazione (coordinatore, 15/10 ~05:13)**: W7b committato come `e28aad42f` (28 file: 4 nuovi, 24
-   > modificati; il suo controllo AST: 59/59 nomi identici fra il nucleo di prima e i 5 moduli) e `b60e91d83` (journal).
+   > **Note implementazione (coordinatore, 15/10 ~05:13)**: W7b committato come `30847a9c0` (28 file: 4 nuovi, 24
+   > modificati; il suo controllo AST: 59/59 nomi identici fra il nucleo di prima e i 5 moduli) e `57632e99f` (journal).
 
-### Revisione combinata `304e6d176` (W7a + W7b + A4) ✅ (2026-10-15) — 🧊 FROZEN
+### Revisione combinata `fede4e738` (W7a + W7b + A4) ✅ (2026-10-15) — 🧊 FROZEN
 
-Base aggiornata dal coordinatore col merge `304e6d176` di `dev_release2` a `be2ad6573` (A4: migrazione 005,
+Base aggiornata dal coordinatore col merge `fede4e738` di `dev_release2` a `03a7f744d` (A4: migrazione 005,
 `account_tokens`, colonne nuove di `users`, `token_service`); merge pulito, senza file fusi in automatico. Sul fuso il
 coordinatore ha verificato 0 import irrisolti e 0 patch mute. X CP3 è ancora in validazione: se entra prima di W7, un
 secondo aggiornamento con un controllo leggero (cambi e schemi delle transazioni sono domini separati).
 
-1. ✅ **Base** (05:17): HEAD `304e6d176` (genitori `b60e91d83`, `be2ad6573`), pulito, porta libera.
+1. ✅ **Base** (05:17): HEAD `fede4e738` (genitori `57632e99f`, `03a7f744d`), pulito, porta libera.
 2. ✅ **Build**: `front build --debug` verde (svelte-check 0 errori, 0 avvisi); `mkdocs build` stretto verde (05:19).
-3. ✅ **`api schema` contro `be2ad6573`** (albero `git archive` in `/tmp/libreFolio_w_ref_be2a/`): OpenAPI e contratti dei
+3. ✅ **`api schema` contro `03a7f744d`** (albero `git archive` in `/tmp/libreFolio_w_ref_be2a/`): OpenAPI e contratti dei
    Tool identici.
-4. ✅ **`pytest --collect-only` contro `be2ad6573`**: 13 971 → 13 976; identico su 272 file salvo `test_config_package.py`
+4. ✅ **`pytest --collect-only` contro `03a7f744d`**: 13 971 → 13 976; identico su 272 file salvo `test_config_package.py`
    568 → 573, un caso per ciascuno dei 5 moduli nuovi del pacchetto (gli id `schemas/transactions.py` →
    `schemas/transactions/{__init__,batch,event_suggest,promotion,transactions,type_metadata}.py`).
 5. ✅ **`all-backend`** (05:19–05:32, `--workers 2`; unità in `/tmp/libreFolio_w7m_testlog/`): **7/7 verdi, 13 965 passed,
@@ -1086,32 +1086,32 @@ secondo aggiornamento con un controllo leggero (cambi e schemi delle transazioni
    > codice `preview_unreadable_workbook`, passano da `brokers.py:1010-1013`, `:717-719` e `uploads.py:292-295`, i file
    > che aspettano il commit del coordinatore. Proposta: K2a ora, K2b dopo quel commit.
 
-   > **Note implementazione (coordinatore, 15/10 ~05:34)**: piano committato come `2afede53a`; X CP3 entrato alle 05:30
-   > (cambi tagliati in `services/fx/` e `api/v1/fx/`, API identica). Ultimo aggiornamento di base: merge `f0b1ab58b` di
-   > `dev_release2` a `5d21f2d85`, pulito. K2: divisione approvata (K2a subito dopo l'ingresso di W7; K2b dopo il commit
+   > **Note implementazione (coordinatore, 15/10 ~05:34)**: piano committato come `10d5f723a`; X CP3 entrato alle 05:30
+   > (cambi tagliati in `services/fx/` e `api/v1/fx/`, API identica). Ultimo aggiornamento di base: merge `dfe6c19f5` di
+   > `dev_release2` a `a6cab44eb`, pulito. K2: divisione approvata (K2a subito dopo l'ingresso di W7; K2b dopo il commit
    > del coordinatore su `brokers.py` e `uploads.py`; per `file_preview.py` accordo con H attraverso il coordinatore).
 
-### Controllo leggero di `f0b1ab58b` (W7 + X CP3) ✅ (2026-10-15) — 🧊 FROZEN
+### Controllo leggero di `dfe6c19f5` (W7 + X CP3) ✅ (2026-10-15) — 🧊 FROZEN
 
-1. ✅ **Base** (05:34): HEAD `f0b1ab58b` (genitori `2afede53a`, `5d21f2d85`), pulito, porta libera.
-2. ✅ **`api schema` contro `5d21f2d85`**: OpenAPI e contratti dei Tool identici.
-3. ✅ **`pytest --collect-only` contro `5d21f2d85`**: 13 976 → 13 981; identico su 272 file salvo `test_config_package.py`
+1. ✅ **Base** (05:34): HEAD `dfe6c19f5` (genitori `10d5f723a`, `a6cab44eb`), pulito, porta libera.
+2. ✅ **`api schema` contro `a6cab44eb`**: OpenAPI e contratti dei Tool identici.
+3. ✅ **`pytest --collect-only` contro `a6cab44eb`**: 13 976 → 13 981; identico su 272 file salvo `test_config_package.py`
    573 → 578 (i 5 moduli nuovi del pacchetto, come nelle prove precedenti).
 4. ✅ **`services config-package`**: 578 passed = 492 casi per modulo di `backend/app` fuori da `config/` (487 a
-   `5d21f2d85`, più i 5 del pacchetto: 6 id sotto `schemas/transactions/` al posto di `schemas/transactions.py`) e 86
+   `a6cab44eb`, più i 5 del pacchetto: 6 id sotto `schemas/transactions/` al posto di `schemas/transactions.py`) e 86
    test fissi. Porta libera.
 
    > **Note implementazione (coordinatore, 15/10 ~05:36)**: W7a e W7b in `dev_release2` con l'avanzamento veloce a
-   > `1cd7300f3`; record in `58be885a9` (nessuna riga nel CHANGELOG: è un riordino); il mio ramo è avanzato lì, pulito.
+   > `6e17be873`; record in `50d9499fd` (nessuna riga nel CHANGELOG: è un riordino); il mio ramo è avanzato lì, pulito.
 
 ### K2a — C-70 (a) e L6: i rifiuti dei plugin DEGIRO e Generic CSV, tradotti ✅ (2026-10-15) — 🧊 FROZEN
 
 **Via del coordinatore** (15/10 ~05:36): «Via per K2a, con un checkpoint FROZEN. Le run pesanti vanno chiuse entro le
 08:45, oppure dopo l'avviso di fine della finestra della galleria.» Divisione approvata alle 05:34: K2a ora; K2b (il 400
 strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordinatore su `brokers.py` e `uploads.py`; per
-`file_preview.py` accordo con H attraverso il coordinatore (D-W17). Base: HEAD `58be885a9`, pulito, porta libera (05:36).
+`file_preview.py` accordo con H attraverso il coordinatore (D-W17). Base: HEAD `50d9499fd`, pulito, porta libera (05:36).
 
-**Disegno** (verificato sul codice di `58be885a9`):
+**Disegno** (verificato sul codice di `50d9499fd`):
 
 - Il canale c'è: `BRIMRefusal(code, message, context)` (`schemas/brim.py:292`), da `BRIMProvider.cannot_parse_detail`;
   il frontend (`utils/brim/defaultPluginCheck.ts:86`, `resolveParseRefusalMessage`) traduce
@@ -1204,9 +1204,9 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
      - `utils gate-i18n-catalog` 176, `gate-i18n-usage` 195, `gate-plugin-i18n-ownership` 45; `i18n check` stretto
        (4 378 chiavi); `i18n audit`: 0 inutilizzate, le 7 chiavi nuove «used» (i 4 «not verified» sono di prima);
      - `front-utility core-unit` 132 file, 4 266 passed (con `catalogIcuLocale.test.ts`);
-     - `api schema` contro `58be885a9` (albero `git archive` in `/tmp/libreFolio_w_ref_58be/`): OpenAPI e contratti
+     - `api schema` contro `50d9499fd` (albero `git archive` in `/tmp/libreFolio_w_ref_58be/`): OpenAPI e contratti
        dei Tool identici.
-     - `pytest --collect-only` contro `58be885a9`: 13 981 → **14 038** (+57): `test_brim_degiro.py` 169 → 197,
+     - `pytest --collect-only` contro `50d9499fd`: 13 981 → **14 038** (+57): `test_brim_degiro.py` 169 → 197,
        `test_brim_providers.py` 707 → 734, `test_brim_provider_base.py` 37 → 39; identico sugli altri 269 file.
      - **`all-backend`** (06:19–06:31, `--workers 2`; unità in `/tmp/libreFolio_w_k2a_testlog/`): **7/7 verdi, 14 027
        passed, 28 skipped, 0 failed**; 14 027 + 28 = 14 038 + 17 (le unità ripetute), come nelle run precedenti.
@@ -1215,7 +1215,7 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
        rifiuto tradotto; i casi sono di Scalable) e `tx-import-degiro` 4 passed (06:34–06:35).
      - `git diff --check` pulito; porta 6184 libera (06:35).
 
-   > **Note implementazione (coordinatore, 15/10 ~06:35)**: (1) W-B15 nella sezione W (`c81670354`):
+   > **Note implementazione (coordinatore, 15/10 ~06:35)**: (1) W-B15 nella sezione W (`323389c72`):
    > `tx-bulk-operations.spec.ts:428` prende la chiusura per testo; nella stessa famiglia X-R9 chiede due `data-testid`
    > in `DataImportModal.svelte` (componente di W): il `ConfirmModal` di `:305` e il pulsante Annulla di `:287`, per
    > `fx-csv-import.spec.ts:250,261` (X li userà col FE4). Vanno nel primo lotto di W che tocca già quel file. (2)
@@ -1233,22 +1233,22 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
 
    ✅ **K2a completato** (06:36) — 🧊 FROZEN in attesa del checkpoint del coordinatore.
 
-   > **Note implementazione (coordinatore, 15/10 ~06:38)**: K2a committato come `0eac8e1b6` (`fix(brim): coded
-   > DEGIRO/Generic CSV refusals`, 18 file) e `4cb9fa5bf` (journal). Aggiornamento di base: merge `388a20f65` di
-   > `dev_release2` a `786f3e216` (J C-93, H CP4 col router di sistema e l'area degli avvisi nel layout, J G-8, X CP4
+   > **Note implementazione (coordinatore, 15/10 ~06:38)**: K2a committato come `ca5bd0bb9` (`fix(brim): coded
+   > DEGIRO/Generic CSV refusals`, 18 file) e `af58f227c` (journal). Aggiornamento di base: merge `fc88d01e9` di
+   > `dev_release2` a `ff541961a` (J C-93, H CP4 col router di sistema e l'area degli avvisi nel layout, J G-8, X CP4
    > con gli schemi degli asset per tema); `backend-schemas.instructions.md` fuso da solo, con `assets/` e
    > `transactions/`. X-R9 e W-B15 nel lotto E1; le altre righe superate di quel file restano al coordinatore, per una
    > passata unica a fine riordino.
 
-### Controllo leggero di `388a20f65` (K2a + J C-93, H CP4, J G-8, X CP4) ✅ (2026-10-15) — 🧊 FROZEN
+### Controllo leggero di `fc88d01e9` (K2a + J C-93, H CP4, J G-8, X CP4) ✅ (2026-10-15) — 🧊 FROZEN
 
-1. ✅ **Base** (06:38): HEAD `388a20f65` (genitori `4cb9fa5bf`, `786f3e216`), pulito, porta libera. Il merge non tocca
+1. ✅ **Base** (06:38): HEAD `fc88d01e9` (genitori `af58f227c`, `ff541961a`), pulito, porta libera. Il merge non tocca
    nessun file di K2a salvo `backend-schemas.instructions.md`, con i due pacchetti presenti.
 2. ✅ **Frontend**: `front build --debug` (06:38–06:40) con svelte-check 0 errori, 0 avvisi; `i18n check` stretto
    (4 392 chiavi, 18 sottosistemi); Vitest `tx-unit` 22 file, 903 passed; `core-unit` 134 file, 4 290 passed (le 2
    file in più sono i test di `features/instance/` di H CP4, registrati in `_frontend_utility.py`).
 3. ✅ **E2E** col layout nuovo di H: `tx-import-broker-mismatch` 5 passed, `tx-import-degiro` 4 passed (06:41–06:43).
-4. ✅ **Contro `786f3e216`** (albero `git archive` in `/tmp/libreFolio_w_ref_786f/`): `api schema` con OpenAPI e
+4. ✅ **Contro `ff541961a`** (albero `git archive` in `/tmp/libreFolio_w_ref_786f/`): `api schema` con OpenAPI e
    contratti dei Tool identici; `pytest --collect-only` 14 014 → 14 071 (+57: `test_brim_degiro.py` +28,
    `test_brim_providers.py` +27, `test_brim_provider_base.py` +2), identico sugli altri 269 file.
 5. ✅ **Selettori di K2a** sul fuso (06:44–06:45): `services brim-parse-race` 42, `brim-provider-base` 39;
@@ -1257,11 +1257,11 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
 
 ### Analisi di E1 (eventi) e via per E0 ✅ (2026-10-15)
 
-> **Note implementazione (coordinatore, 15/10 ~06:46)**: K2a in `dev_release2` con l'avanzamento veloce a `62c964242`;
-> record `e7cf1ae80` (CHANGELOG con le due righe; chiuse C-70 parte a e L6; C-95 nuova, l'albero delle istruzioni). Il
+> **Note implementazione (coordinatore, 15/10 ~06:46)**: K2a in `dev_release2` con l'avanzamento veloce a `2055f257a`;
+> record `e956a798b` (CHANGELOG con le due righe; chiuse C-70 parte a e L6; C-95 nuova, l'albero delle istruzioni). Il
 > mio ramo è avanzato lì, pulito.
 
-**Analisi di E1, in sola lettura** (06:46–06:55, su `e7cf1ae80`; appunti fuori dal repo). In sintesi:
+**Analisi di E1, in sola lettura** (06:46–06:55, su `e956a798b`; appunti fuori dal repo). In sintesi:
 
 - I-09 confermata: `FAAssetEventPoint.type` è un `str` senza controllo (`schemas/assets/events.py:49`), la colonna è
   l'enum `AssetEventType` (`db/models.py:983`); i plugin di X emettono solo tipi maiuscoli, quindi un validatore sul punto
@@ -1277,7 +1277,7 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
   ogni evento, `AssetDataEditorSection.svelte:365-378`); l'export degli eventi non porta gli id (`api/v1/backup.py:277-330`).
 
 > **Note implementazione (coordinatore, 15/10 ~06:55)**: (1) decisioni 20–23 aggiornate nel file delle decisioni
-> (`ee5d81a6f`), con la premessa corretta del 20, l'export senza id, la proposta precisata («Usa questo», «Crea
+> (`b62c4f482`), con la premessa corretta del 20, l'export senza id, la proposta precisata («Usa questo», «Crea
 > comunque», «Annulla») e le strade A e B del 23; il developer non ha ancora risposto, E1a ed E1b aspettano. (2)
 > Migrazione di E1a: la **008** (C7: 005 e 006 ad A, 007 a X); `down_revision` sulla testa trovata all'aggiornamento di
 > base; se entro prima della 006 o della 007, il primo numero libero, da riallineare all'aggiornamento. (3) Le righe di X
@@ -1289,7 +1289,7 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
 
 ### E0 — X-R9, W-B15, I-11a, I-11d ✅ (2026-10-15) — 🧊 FROZEN
 
-**Disegno** (verificato sul codice di `e7cf1ae80`):
+**Disegno** (verificato sul codice di `e956a798b`):
 
 - **I-11a** — `CsvEditor.svelte:416-437` scarta come doppioni tutte le righe con la stessa data, qualunque sia il tipo:
   un dividendo e uno split dello stesso giorno non entrano (la guida lo dice come limite, `data-editor.en.md:70`). Cura:
@@ -1349,15 +1349,15 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
 
    ✅ **E0 completato** (07:33) — 🧊 FROZEN; entra dopo la chiusura della finestra della galleria.
 
-   > **Note implementazione (coordinatore, 15/10 ~07:34)**: E0 committato come `692fbae39` (`fix(data-editor): events
-   > keyed by date and type`, 12 file) e `f901eb6fb` (journal). Aggiornamento di base: merge `2bf015afa` di
-   > `dev_release2` a `c3047aa17` (J C-93, H CP4, J G-8, X CP4, A4b, X J-5, H CP5a, la versione fissata nelle gallerie),
+   > **Note implementazione (coordinatore, 15/10 ~07:34)**: E0 committato come `167ba7e8c` (`fix(data-editor): events
+   > keyed by date and type`, 12 file) e `a8b502a68` (journal). Aggiornamento di base: merge `942d14b20` di
+   > `dev_release2` a `cdf54467f` (J C-93, H CP4, J G-8, X CP4, A4b, X J-5, H CP5a, la versione fissata nelle gallerie),
    > pulito; `.translate-hashes.json` fuso come testo. E0 entra dopo la finestra della galleria; le chiusure di I-11a,
    > I-11d, X-R9 e W-B15 e la riga del CHANGELOG le scrive il coordinatore.
 
-### Revisione combinata `2bf015afa` (E0 + A4b, X J-5, H CP5a…) ✅ (2026-10-15) — 🧊 FROZEN
+### Revisione combinata `942d14b20` (E0 + A4b, X J-5, H CP5a…) ✅ (2026-10-15) — 🧊 FROZEN
 
-1. ✅ **Base** (07:35): HEAD `2bf015afa` (genitori `f901eb6fb`, `c3047aa17`), pulito, porta libera;
+1. ✅ **Base** (07:35): HEAD `942d14b20` (genitori `a8b502a68`, `cdf54467f`), pulito, porta libera;
    `.translate-hashes.json` si legge (251 voci) e tiene l'md5 di `data-editor.en.md` timbrato in E0. Dei file di E0 il
    merge tocca solo il backlog e `.translate-hashes.json`, con righe aggiunte.
 2. ✅ **`front build --debug`** (07:35–07:36, client rifatto per l'API di H CP5a): svelte-check 0 errori, 0 avvisi.
@@ -1368,9 +1368,9 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
 5. ✅ **Doc**: `mkdocs build` stretto con 0 avvisi; `check-links` 95 validi. `git diff --check` pulito; porta 6184 libera
    (07:44).
 
-   > **Note implementazione (coordinatore, 15/10 ~07:45–07:51)**: E0 validato e committato (`2326624c1`), poi entrato
-   > in `dev_release2` con `d226bc69e` alle 07:51, prima della finestra, su richiesta del coordinatore colori. **Via per
-   > FE8a** (annuncio nel §7 del piano generale, `2c699f85c`). Dal coordinatore colori: nessun loro annuncio aperto sui
+   > **Note implementazione (coordinatore, 15/10 ~07:45–07:51)**: E0 validato e committato (`00d97d1ab`), poi entrato
+   > in `dev_release2` con `f0a5feaa9` alle 07:51, prima della finestra, su richiesta del coordinatore colori. **Via per
+   > FE8a** (annuncio nel §7 del piano generale, `15e62c3ff`). Dal coordinatore colori: nessun loro annuncio aperto sui
    > tre file; T li converte nell'ondata W4, sui pezzi già tagliati; conteggi da ripartire: `ImportWizardModal` m1 595
    > più il letterale `#dc2626`, `TransactionBulkModal` 190, `TransactionFormModal` 218; comando `theme-roles.mjs --split
    > <vecchio>:<nuovi>`, poi `--check`; il `#dc2626` in uno dei pezzi, classi nuove solo sui ruoli `lf-*`. Regole: solo
@@ -1379,7 +1379,7 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
 
 ### FE8a — i tagli delle tre modali ⏳ (2026-10-15)
 
-**Analisi** (07:45–07:50, su `2326624c1`):
+**Analisi** (07:45–07:50, su `00d97d1ab`):
 
 - Il peso sta negli script (righe di script / template): Form 1 378 / 790, Bulk 3 143 / 460, Wizard 4 414 / ~1 500.
   Quasi tutte le funzioni chiudono sullo stato del componente (nel Form 2 pure su 39, script
@@ -1419,9 +1419,9 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    altre righe che citano la modale restano vere, la logica è nel padre); `check_source_paths.py` invariato (5 path di
    prima); `mkdocs build` stretto con 0 avvisi; `check-links` verde.
 
-   > **Note implementazione (coordinatore, 15/10 ~08:18)**: FE8a-1 committato come `8a62cea7f` (`refactor(tx-form): cut
+   > **Note implementazione (coordinatore, 15/10 ~08:18)**: FE8a-1 committato come `cddee78d9` (`refactor(tx-form): cut
    > form modal by section`, 9 file; baseline 218 = 35 + 6 + 96 + 56 + 25, `--check` pulito anche dal coordinatore) e
-   > `04a3b2691` (journal). Orari dal coordinatore colori: dalle 08:45 alle ~10:15 `dev_release2` è fermo (gallerie r1 e
+   > `ccdff43e2` (journal). Orari dal coordinatore colori: dalle 08:45 alle ~10:15 `dev_release2` è fermo (gallerie r1 e
    > r2); dalle 08:45 alla fine della finestra (~12:30) niente run pesanti nella corsia (E2E delle transazioni, build).
    > FE8a-1 entra dopo la finestra, dopo R e L, con il controllo leggero sul fuso.
 
@@ -1459,8 +1459,8 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    ai pezzi); `check_source_paths.py` invariato. `mkdocs build` stretto con 0 avvisi; `check-links` verde (08:43,
    prima della finestra).
 
-   > **Note implementazione (coordinatore, 15/10 ~08:45)**: FE8a-2 committato come `464350cc7` (`refactor(tx-bulk): cut
-   > bulk modal banners, toolbar`, 9 file; 190 = 88 + 54 + 48, `--check` pulito anche dal coordinatore) e `ba9819ec0`
+   > **Note implementazione (coordinatore, 15/10 ~08:45)**: FE8a-2 committato come `d101a032c` (`refactor(tx-bulk): cut
+   > bulk modal banners, toolbar`, 9 file; 190 = 88 + 54 + 48, `--check` pulito anche dal coordinatore) e `e67897100`
    > (journal, W-B11 chiusa). Via per il Wizard, solo codice. svelte-check concesso durante la finestra: al massimo 3
    > volte, una alla volta, con `nice -n 15`, niente Vitest, E2E né build; le righe-sonda fuori dal commit.
 
@@ -1492,7 +1492,7 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    devWiki: `decisions/brim-broker-scoped.md`, `problems/playwright-probes-ignore-timeout.md`,
    `entities/import-wizard-modal.md` (le righe su ciò che ora sta nei passi); `check_source_paths.py` invariato. Nessun
    pezzo muta in loco una prop ricevuta senza `bind:` (controllo statico).
-5. ✅ **Prove dopo l'avviso di fine finestra** (slot pesante 2, 15:28–15:58, revisione combinata `06459c1b3` + E1a):
+5. ✅ **Prove dopo l'avviso di fine finestra** (slot pesante 2, 15:28–15:58, revisione combinata `894770a8a` + E1a):
    svelte-check, Vitest `tx-unit`, `core-unit`, `component-unit`
    (`ImportWizardModal.test.ts`), E2E `front-transaction all --workers 4`, `front-utility onboarding-tour` (la guida
    dell'import ancora le sue àncore ai passi), `mkdocs build` e `check-links`; poi l'handoff FROZEN.
@@ -1501,8 +1501,8 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    > dettagli e la doc nella sezione E1, passo 2. `mkdocs build` stretto (0 avvisi) e `check-links` (95) ✅ alle 16:05.
 
    > **Note implementazione (coordinatore, 15/10 ~09:05)**: FE8a-3 committato come checkpoint prima delle prove,
-   > `b92e655d9` (`refactor(import-wizard): cut wizard steps and footer`, 13 file; 595 = 222 + 20 + 22 + 67 + 77 + 86 +
-   > 101, `#dc2626` nel padre, `--check` pulito) e `063e5b7cf` (journal). Le prove della lista dopo la finestra, prima
+   > `ce06bd1f9` (`refactor(import-wizard): cut wizard steps and footer`, 13 file; 595 = 222 + 20 + 22 + 67 + 77 + 86 +
+   > 101, `#dc2626` nel padre, `--check` pulito) e `19259c941` (journal). Le prove della lista dopo la finestra, prima
    > dell'ingresso.
 
 ### N1 — numeri e dati: la cassa della pagina broker (W-B5) e il TRANSFER orfano (V-3) ⏳ (2026-10-15)
@@ -1519,7 +1519,7 @@ quando è pronto; N1b-2 (la migrazione) in un commit a parte, **solo con l'ok es
 decisioni). Durante la finestra: codice e singoli file pytest senza server, uno alla volta, con `nice -n 15`; `api`,
 `all-backend` ed E2E dopo l'avviso di fine.
 
-**Disegno** (verificato sul codice di `063e5b7cf`):
+**Disegno** (verificato sul codice di `19259c941`):
 
 - **N1a · W-B5 (B15, D-J16)**: `BrokerSummaryOperations.get_summary` (`services/brokers/summary.py:74,78,86`) legge
   `TransactionService.get_cash_balances` e `get_asset_holdings` (`services/transactions/balances.py:153-163`), due somme
@@ -1623,7 +1623,7 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
      > DML prima del savepoint → nessuna riga. ~~Lo stesso vale per `assets/crud.py:392` (X), dove ogni asset cancellato
      > in blocco entra subito nel commit: lo segnalo al coordinatore.~~ W-B19 e W-B20 nella sezione W del backlog.
      > **Correzione** (11:19, reperti di X girati dal coordinatore): avevo letto solo la riga 392. `delete_assets_bulk` è
-     > già atomico: un `UPDATE` vuoto prima del primo savepoint (`assets/crud.py:349-351`, da `e50d66408`) fa emettere
+     > già atomico: un `UPDATE` vuoto prima del primo savepoint (`assets/crud.py:349-351`, da `904fddc6e`) fa emettere
      > `BEGIN`, e lo fissa `test_asset_source.py::test_delete_assets_bulk_commit_failure_propagates_and_rolls_back_tentative_deletes`.
      > Il listener `begin` generale è scartato (X: lettura, commit di un altro scrittore, poi scrittura → subito
      > `SQLITE_BUSY_SNAPSHOT`, che `busy_timeout` non aspetta). Cura decisa per W-B20: un aiuto in `db/session.py` che apre
@@ -1650,7 +1650,7 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    > import, obbligano a scegliere un costo (manuale o Auto). Una metà ricevuta senza costo nasce solo dall'API chiamata
    > direttamente, o da dati più vecchi della 1.0. Per N1b-2 non cambia nulla: il caso «senza costo» resta una rete di
    > sicurezza. Nessuna voce di backlog: quella scritta alle 16:15 su una lettura sbagliata è ritirata dal coordinatore e
-   > tolta (il suo id, W-B25, entrato in `d7c7dcab7`, non si riusa).
+   > tolta (il suo id, W-B25, entrato in `479c62176`, non si riusa).
    > **Note implementazione** (10:00): `OrphanPairHalfFix` (`fix_id` `orphan_pair_halves`): `detect` trova le righe
    > TRANSFER/CASH_TRANSFER/FX_CONVERSION senza la metà (link NULL o verso una riga assente) e logga un **warning** con
    > le conversioni per tipo, le righe che resteranno senza costo, quelle lasciate come sono (gamba in uscita di un
@@ -1687,7 +1687,7 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    > → **45/45**; un link verso una riga che esiste non si tocca (guardia verde).
 4. Verdi senza server durante la finestra ✅ (11:00); `api`, `all-backend` ed E2E dopo l'avviso di fine ✅ (slot pesante
    2, 15:58); handoff FROZEN per N1a+N1b-1, e N1b-2 separato.
-   > **Prove dopo la finestra** (slot pesante 2, revisione combinata `06459c1b3` + E1a): `api sync` (il parametro
+   > **Prove dopo la finestra** (slot pesante 2, revisione combinata `894770a8a` + E1a): `api sync` (il parametro
    > `as_of` c'è nel client generato); `all-backend` 7/7 (comprende `api brokers`, `api account-deletion`, `api
    > batch-split-promote`, `services broker`, `db post-migration-orphan-pairs` 47); `front check` dentro la `front build
    > --debug` (0/0); E2E `front-broker detail` 37, `front-broker list` 9, `front-user account-deletion` 1. Dettagli
@@ -1706,14 +1706,14 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    > `api batch-split-promote` (il riordino di `apply_splits`); `all-backend`; `front check`; E2E `front-broker
    > detail`, `front-broker list` (testo della conferma), `front-user account-deletion`; `mkdocs build` stretto e
    > `check-links`. Prima di tutto questo, le prove di FE8a-3 già in fila.
-   > **Checkpoint** (coordinatore, 11:04): `6be11ecf3` fix(brokers): user-day summary, orphan pair halves (26 file);
-   > `0737055e0` docs(journal): W N1 checkpoint, W-B17..W-B20; `5e19c6018` fix(db): post-migration fix for orphan pair
-   > halves (4 file), **per ultimo**: senza l'ok sul 46 prima dell'ingresso il ramo entra fino a `0737055e0`. Risposte:
+   > **Checkpoint** (coordinatore, 11:04): `fdd37e4a0` fix(brokers): user-day summary, orphan pair halves (26 file);
+   > `d4f889142` docs(journal): W N1 checkpoint, W-B17..W-B20; `e553492ce` fix(db): post-migration fix for orphan pair
+   > halves (4 file), **per ultimo**: senza l'ok sul 46 prima dell'ingresso il ramo entra fino a `d4f889142`. Risposte:
    > doc di N1b-2 solo in inglese (`developer/architecture/database/index.md`, `admin/cli_tools.en.md`), in un commit
    > sopra N1b-2, senza IT/FR/ES né stamp (il debito di `cli_tools` sta in A-10: W-B21 nella mia sezione, A-10 non è
    > ancora nel mio ramo); W-B20 da decidere, non ora (poi, alle 11:19, cura decisa: vedi la correzione sopra);
    > CHANGELOG all'ingresso, con le mie righe.
-5. ✅ Doc di N1b-2 (docs-writer, EN, 11:20), sopra `5e19c6018`; poi le prove dopo la finestra (punto 4).
+5. ✅ Doc di N1b-2 (docs-writer, EN, 11:20), sopra `e553492ce`; poi le prove dopo la finestra (punto 4).
    > **Note implementazione**: `developer/architecture/database/index.md` (la seconda correzione: perché, cosa rileva,
    > converte e lascia, i controlli, i log, il comando del test) e `admin/cli_tools.en.md` (tre punti per
    > l'amministratore, e nel riquadro il dry run **prima del primo avvio della nuova versione**: dopo, la correzione è
@@ -1723,17 +1723,17 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    > prima di `orphan_pair_halves`, a ogni avvio con una copia in più (quadro del piano 34, già prima di N1b-2): W-B22;
    > (2) lo script a mano non configura il log, quindi niente righe INFO per transazione: W-B23. Tutte e due da
    > assegnare: file del quadro.
-   > **Docs committate** (coordinatore, 11:19): `3f42dda9d` sopra `5e19c6018`. W-B22 e W-B23 **assegnate a me** come
+   > **Docs committate** (coordinatore, 11:19): `8850f4138` sopra `e553492ce`. W-B22 e W-B23 **assegnate a me** come
    > lotto **N1b-3**, sopra il commit delle docs (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha
    > un link pendente non arriva mai a `orphan_pair_halves`). Rossi prima; durante la finestra solo prove leggere.
 
 ### N1b-3 — il quadro delle correzioni post-migrazione: violazioni di FK preesistenti (W-B22) e log dello script (W-B23) ✅ (2026-10-15)
 
-**Via del coordinatore** (15/10 ~11:25, base `eb3bb0529`): W-B22 e W-B23 assegnate a me, lotto sopra il commit delle docs
+**Via del coordinatore** (15/10 ~11:25, base `b21417702`): W-B22 e W-B23 assegnate a me, lotto sopra il commit delle docs
 di N1b-2 (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha un link pendente non arriva mai a
 `orphan_pair_halves`). Rossi prima; durante la finestra solo prove leggere (`nice`, senza server).
 
-**Disegno** (verificato su `eb3bb0529`):
+**Disegno** (verificato su `b21417702`):
 
 - **W-B22**: `_apply_one` (`backend/app/db/post_migration/__init__.py`) aggiunge ai controlli della correzione
   `_common_problems`, che vuole `PRAGMA foreign_key_check` **vuoto** sull'intero DB. Una violazione già presente fa
@@ -1777,12 +1777,12 @@ di N1b-2 (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha 
    delle violazioni nuove e il warning; lo script logga sulla console; tolta la frase delle righe INFO perse) e
    `admin/cli_tools.en.md` (un punto per il warning delle violazioni già presenti; nel riquadro, lo script stampa il
    log e non scrive file). Solo EN (W-B21). `mkdocs build` e `check-links` dopo la finestra.
-4. ✅ Handoff FROZEN (committati dal coordinatore: `0e4bd9790` fix(db), `05f2cb106` journal). `mkdocs build` stretto e
+4. ✅ Handoff FROZEN (committati dal coordinatore: `da2d2142a` fix(db), `dc97b5dfa` journal). `mkdocs build` stretto e
    `check-links` sulla revisione combinata ✅ (16:05, sezione E1, passo 2).
 
 ### E1 — eventi: decisioni 20–23 del developer (V-22, I-09, I-10 S4 e resto, I-11c, I-12) ⏳ (2026-10-15)
 
-**Via del coordinatore** (15/10 12:44, base `05f2cb106`), con le decisioni del developer (file delle decisioni e chat
+**Via del coordinatore** (15/10 12:44, base `dc97b5dfa`), con le decisioni del developer (file delle decisioni e chat
 del 15/10 12:30–12:44):
 
 - **20**: «+ Nuovo evento» non sovrascrive mai. Se esiste un evento con la stessa data e lo stesso tipo, manuale o del
@@ -1798,7 +1798,7 @@ del 15/10 12:30–12:44):
 - Dipendenza: B0 (`api/v1/backup.py` → pacchetto `api/v1/backup/`) non è ancora in `dev_release2`; E1 non tocca
   l'export degli eventi. Fino all'avviso di fine della finestra della galleria (~13:00) solo prove leggere.
 
-**Disegno** (verificato su `05f2cb106`; appunti dell'analisi del mattino in `files/e1-prep.md` della sessione):
+**Disegno** (verificato su `dc97b5dfa`; appunti dell'analisi del mattino in `files/e1-prep.md` della sessione):
 
 - **E1a, backend** (moduli miei da X CP2b: `api/v1/assets/events.py`, `services/assets/event_store.py`,
   `schemas/assets/events.py`):
@@ -1852,7 +1852,7 @@ del 15/10 12:30–12:44):
 
 1. ✅ Rossi E1a (test-author): servizio 13:38, API 14:44 (slot pesante 2).
    > **Rossi del servizio visti** (13:38, `nice -n 10`, dopo la pausa delle dipendenze; `cryptography 50.0.2` e
-   > `pycparser 3.11` nell'ambiente condiviso, `dc9a5d232` su `dev_release2`): nuovo
+   > `pycparser 3.11` nell'ambiente condiviso, `e910074cc` su `dev_release2`): nuovo
    > `test_services/test_asset_event_store.py` con l'azione `services asset-event-store` (`write-global`): **40 test, 34
    > rossi, 6 guardie verdi** — tipi non normalizzati (`'dividend' == 'DIVIDEND'`, `DID NOT RAISE`, riga grezza
    > `'dividend'`), elementi già salvati prima del rifiuto, asset mancante «0 salvati», `details == {}`, `mode`/`event_ids`
@@ -1894,9 +1894,9 @@ del 15/10 12:30–12:44):
    > La riga registrata del toast della mini-modale (`moneyRenderSites.test.ts`) resta identica; il pannello mostra
    > importo e valuta in due espressioni di markup (asset events = pubblici).
 2. ✅ Cura E1a; `api sync` (slot pesante 2, 14:41–14:51).
-   > **Checkpoint e merge** (coordinatore, 14:38–14:40): `c658119af` (rossi E1a), `313dde70e` (E1c), `87a034a89`
-   > (journal); merge di `dev_release2` a `ec0dc7ebd` (H CP6, X FE5b, `cryptography`, la 1.2.1) committato come
-   > `06459c1b3`. Conflitti risolti da me e messi in stage: `themeRoles.baseline.tsv` (`--resolve`; poi `--check` rosso
+   > **Checkpoint e merge** (coordinatore, 14:38–14:40): `3b3c708cc` (rossi E1a), `81a6ec804` (E1c), `bf43ead2b`
+   > (journal); merge di `dev_release2` a `e2653c2d1` (H CP6, X FE5b, `cryptography`, la 1.2.1) committato come
+   > `894770a8a`. Conflitti risolti da me e messi in stage: `themeRoles.baseline.tsv` (`--resolve`; poi `--check` rosso
    > sul caso R-8, `themeStore.ts` `#166534`; `--accept` con la ragione D3 autorizzata dal coordinatore colori; poi
    > pulito, `~accept` una sola volta; unione esatta dei due lati) e il backlog (la nota di chiusura di W-B15 più le mie
    > W-B17…W-B24). Uniti da soli e controllati: `api/v1/brokers.py` (i tipi dei report in linea; le righe `as_of`
@@ -1928,7 +1928,7 @@ del 15/10 12:30–12:44):
    > `detail` è ancora una stringa), cioè lo stesso testo inglese di prima senza il codice davanti. E1b la sostituisce
    > con l'errore tradotto: l'ancora di `/tmp/libreFolio_w_e1b_fix.py` riallineata, dry run ok. L'editor non cambia: legge
    > solo `e.message` di Axios, come prima.
-   > **Prove dello slot 2, revisione combinata** (HEAD `06459c1b3` + E1a e i ritocchi sopra, `nice -n 10`, una alla volta):
+   > **Prove dello slot 2, revisione combinata** (HEAD `894770a8a` + E1a e i ritocchi sopra, `nice -n 10`, una alla volta):
    > `all-backend` **7/7 gruppi verdi** (14:51–15:27; 14 609 passati, 28 saltati, 0 rossi: servizi 7 627, utilità 2 369,
    > schemi 1 705 con 6 avvisi preesistenti di `test_pac_planner_schemas.py`, API 1 120, db 16/16 compresi
    > `post-migration-event-types`, `post-migration` 41 e `post-migration-orphan-pairs` 47); Vitest `front-utility
@@ -2110,16 +2110,16 @@ del 15/10 12:30–12:44):
    > **E1a entra da solo** (coordinatore, 16:00, dopo il punto 46): doc sviluppatore di E1a ✅ (passo 2), handoff
    > FROZEN d'ingresso con il CHANGELOG di FE8a, N1, N1b-2/3, E1a ed E1c (16:10). Le pagine utente, la devWiki e il resto
    > con E1b.
-   > **Committati** (coordinatore): `a2fb6936f` `fix(events)!: all-or-nothing upsert, scoped delete` (con `BREAKING
-   > CHANGE`) e `d7c7dcab7` (journal); il cambio di `detail` in oggetto va sotto ⚠️ Breaking changes, come proposto; il
-   > CHANGELOG lo scrive il coordinatore. **Secondo merge di base** (`MERGE_HEAD` `243c8c9ff`: E1, Y1, A5, H C-96 e G-10,
-   > Z1, G-9, colori), committato come `15a8355cc`. Conflitti risolti da me e messi in stage: `themeRoles.baseline.tsv`
+   > **Committati** (coordinatore): `6fb148aa0` `fix(events)!: all-or-nothing upsert, scoped delete` (con `BREAKING
+   > CHANGE`) e `479c62176` (journal); il cambio di `detail` in oggetto va sotto ⚠️ Breaking changes, come proposto; il
+   > CHANGELOG lo scrive il coordinatore. **Secondo merge di base** (`MERGE_HEAD` `35532d372`: E1, Y1, A5, H C-96 e G-10,
+   > Z1, G-9, colori), committato come `69b731ab8`. Conflitti risolti da me e messi in stage: `themeRoles.baseline.tsv`
    > (`--resolve`, `--check` pulito senza ripetere l'`--accept` D3; vince il lato più stretto: 222, 88, 35 per i miei
    > split, GrowthChart 86 uguale) e `_backend_db.py` (in `db_order` sia `post-migration-orphan-pairs` sia
    > `migration-006`; 18 azioni senza doppioni). Rivisti gli uniti da git sui due lati: `test_post_migration.py`,
    > `_backend_services.py`, `cli_tools.en.md`, `database/index.md`, `.translate-hashes.json`, il backlog (`T-B4` doppio
    > già sui due lati, non mio: lo sistema il coordinatore).
-   > **Prove sulla revisione combinata `15a8355cc`** (16:12–16:18, `nice -n 10`, una alla volta, lista del coordinatore):
+   > **Prove sulla revisione combinata `69b731ab8`** (16:12–16:18, `nice -n 10`, una alla volta, lista del coordinatore):
    > `api sync` (393 righe del client cambiate, tutte di account e accessi arrivati col merge: utenti, inviti, token;
    > nessuna mia); `front check` svelte-check **0/0**; `theme-roles --check` pulito; `db post-migration` **41**,
    > `post-migration-orphan-pairs` **47**, `post-migration-event-types` **36**; `db populate --force --clean`; `api brokers`
@@ -2153,8 +2153,8 @@ quantità o costo, e lo verifico contro quello che fanno il modulo e il Bulk.
 
 **Passi**: 1. ✅ analisi e disegno al coordinatore (16:40); 2. ✅ rossi (test-author, 18:43–19:15); 3. ✅ cura (18:52, più il
 collegamento all'evento alle 19:16); 4. ✅ prove; 5. ✅ doc; CHANGELOG proposto nell'handoff (19:30).
-> **Via a N2** (coordinatore, 18:15, dopo l'ingresso di E1b: `dev_release2` = `fecf88c1a`, CHANGELOG `f0d2c77e2`; il mio
-> ramo in pari per avanzamento veloce, HEAD `f0d2c77e2`, pulito). Rossi chiesti a un test-author nuovo (18:16: (a) la
+> **Via a N2** (coordinatore, 18:15, dopo l'ingresso di E1b: `dev_release2` = `b71a72ee0`, CHANGELOG `6a3e35f91`; il mio
+> ramo in pari per avanzamento veloce, HEAD `6a3e35f91`, pulito). Rossi chiesti a un test-author nuovo (18:16: (a) la
 > modifica delle sole note e dei soli tag di un TRANSFER ricevuto e di un'ADJUSTMENT +qty salvati senza costo, (b) i
 > metadati come fonte con `TX_TYPE_METADATA` modificato nel test; le guardie). **Cura pronta, non applicata**
 > (`/tmp/libreFolio_w_n2_fix.py`, dry run ok): `cost_basis_required(type, quantity)` in `type_metadata.py`, usata da
@@ -2200,7 +2200,7 @@ collegamento all'evento alle 19:16); 4. ✅ prove; 5. ✅ doc; CHANGELOG propost
 > **36**, `transactions` **26**, `transactions-validate` **11**, `transactions-wac` **20**; `ruff`/`black` puliti; porta
 > libera. **Doc** (docs-writer, solo sviluppatore EN, niente stamp): `developer/frontend/data-quality-banner.md:176`,
 > `developer/frontend/components/features/transaction-form.md:227-240` (anche due frasi già sbagliate prima di N2: «salta
-> solo le creazioni consumate da una promozione», da `d7c148564`; «costo zero», da `bdec709d2`),
+> solo le creazioni consumate da una promozione», da `1076fa994`; «costo zero», da `a892717de`),
 > `developer/backend/transactions/wac.md:528-550` e `:655-657`, `split_promote.md:211-212`. **Prove della doc** (19:28,
 > `nice -n 15`, carico 36): `mkdocs build` stretto, 0 avvisi (43 s, 3 036 URL), `check-links` 95 validi. `git diff
 > --check` pulito. Handoff FROZEN di N2 (19:30).
@@ -2208,7 +2208,7 @@ Ordine dei lotti (coordinatore, 16:30): **E1b, poi N2, poi W-B20**; FE8b sul suo
 coordinatore. Scopo delle modifiche (coordinatore, 16:30): la regola vale alla creazione e per le modifiche che toccano
 tipo, quantità, segno o costo; note, tag e descrizione di una riga vecchia senza costo restano modificabili.
 
-**Analisi** (16:40, letta sul codice di `4a303b50b`) — **la premessa va corretta**: il backend la regola **la controlla
+**Analisi** (16:40, letta sul codice di `5d10c96e7`) — **la premessa va corretta**: il backend la regola **la controlla
 già**, per ogni percorso dell'API.
 - `TransactionService.execute_batch` (`transaction_service.py:113-161`) è l'unico percorso di creazione e modifica:
   `POST /transactions/validate`, `/transactions/commit` e `promote-transfer` (`promotion.py:167`, che gli passa
@@ -2250,9 +2250,9 @@ change to its type, quantity or cost still needs one.»
 
 ### Coda dei lotti dopo E1b (coordinatore, 15/10 16:30 e 18:02)
 
-- **E1b committato** (coordinatore, 18:05): `af4408608` feat(events), `0ffaa9127` docs(events), `a62d36062` docs(wiki),
-  `5749cef7d` docs(journal); base aggiornata con `dev_release2` `a718e5281` (J, A6a, H, Z7a, il banner del Lab) senza
-  conflitti → HEAD `949ab6bea`. **Prove sulla revisione combinata** (18:03–18:11, `nice -n 10`, una alla volta): `api sync`
+- **E1b committato** (coordinatore, 18:05): `387eec118` feat(events), `3f2f08d23` docs(events), `dc3b935a3` docs(wiki),
+  `effe8d953` docs(journal); base aggiornata con `dev_release2` `3a02cc91e` (J, A6a, H, Z7a, il banner del Lab) senza
+  conflitti → HEAD `7726e257f`. **Prove sulla revisione combinata** (18:03–18:11, `nice -n 10`, una alla volta): `api sync`
   (157 righe del client, tutte di A6a e H: anteprima di cancellazione dell'account, sonda dell'indirizzo; nessuna mia);
   `front check` svelte-check **0/0**; `services asset-event-store` **61/61**; `db populate --force --clean`; `api
   assets-events` **45/45**; Vitest `eventSaveError` **57/57**, `EventExistsPanel` **8/8**; E2E `asset-event-editor-save`
@@ -2280,7 +2280,7 @@ change to its type, quantity or cost still needs one.»
 visibili a tutti. I file comuni e personali sono di H: accordarsi sull'elenco e sullo scarico. Lotto dopo N2, prima di
 W-B20. `backend/app/main.py` congelato fino al CP2b di H (questo lotto non lo tocca).
 
-**Analisi** (19:40, letta sul codice di `f8e0a9b35`):
+**Analisi** (19:40, letta sul codice di `4514f7ab3`):
 - Le rotte dei report sono `brim_router` in `backend/app/api/v1/brokers.py` (`/api/v1/brokers/import/…`). Il caricamento vuole un
   broker con EDITOR (`:577-601`); la lista (`:653-684`) filtra per broker accessibili; info, anteprima, scarico, ultimo
   parse, controllo del plugin (VIEWER+) e parse, cancellazione (EDITOR) passano da `_get_brim_file_with_access`
@@ -2362,7 +2362,7 @@ dice chi vede i report) e handoff.
 > utente `user/files/index.en.md` (l'admin vede e cancella ogni report: debito di traduzione di una frase).
 > **⚠️ Fuori pista** (dai reperti del docs-writer): (1) `_is_brim_file_id` confrontava con `file_id.lower()`, quindi un UUID
 > **maiuscolo** passava e su un disco che non distingue maiuscole (macOS) il file veniva servito → controllo stretto,
-> rosso prima (test-author); (2) un file senza broker «vero» (prima di `f0b7aad8d`, 24/01/2026) non ha nemmeno il
+> rosso prima (test-author); (2) un file senza broker «vero» (prima di `58c985976`, 24/01/2026) non ha nemmeno il
 > caricatore: è solo dell'admin (la doc lo dice); (3) docstring delle rotte e di `BRIMFileListItem` (finisce nell'OpenAPI)
 > col prefisso sbagliato o senza la regola nuova → `/tmp/libreFolio_w_f36_tweaks.py` (dry run ok, anche `is not None`
 > per «ha un broker»); (4) `broker_ids` non toglie i file senza broker → **W-B32**. Corretta da me la frase della doc sul
@@ -2390,8 +2390,8 @@ dice chi vede i report) e handoff.
 > `all-backend` nello slot (chiesto), poi l'handoff.
 > **`all-backend --workers 2`** (slot pesante 2, 21:50–22:15, `nice -n 10`): **7/7 gruppi**, 14 803 passati, 4 saltati, 0
 > rossi. Porta libera, slot restituito. Backlog: **W-B3** e **W-B4** chiuse (✅ F36). Handoff FROZEN (22:17).
-> **Ingresso di F36** (coordinatore 22:17: committato `3907eed36`, `258407d4d`, `4213b175a`, `c65421690`; base aggiornata con
-> `dev_release2` `2415faf33` senza conflitti → HEAD `d3afcf779`). Prove sulla revisione combinata (22:17–22:30, `nice`):
+> **Ingresso di F36** (coordinatore 22:17: committato `0ca9b160d`, `d9d81761a`, `822860f10`, `aacf9b1a6`; base aggiornata con
+> `dev_release2` `3709f6922` senza conflitti → HEAD `34b7cf3f7`). Prove sulla revisione combinata (22:17–22:30, `nice`):
 > `api sync` (602 righe, tutte d'altri: impostazioni dei plugin, lavori del backup), `front check` **0/0**, `api brim`
 > **116/116**, Vitest `ImportWizardModal` **26/26**, `check-orphans` pulito; l'E2E `files-uploader` dopo la pausa di T
 > (22:28, 10 minuti senza E2E): **8/8** (22:32–22:34). Pronto all'ingresso.
@@ -2404,7 +2404,7 @@ IMMEDIATE`), usato da `delete_bulk` per broker; il rosso prima. Il listener `beg
 (`SQLITE_BUSY_SNAPSHOT`). Ordine (coordinatore, 22:17): W-B20, poi la 47 quando J ha CP-16, poi A-14 con W-B10 e le
 chiavi di W-B27.
 
-**Analisi** (22:30, codice di `d3afcf779`): `BrokerService.delete_bulk`
+**Analisi** (22:30, codice di `34b7cf3f7`): `BrokerService.delete_bulk`
 (`backend/app/services/brokers/broker_service.py:424-520`) **non ha nessun savepoint**: per ogni broker un `try` che, su
 un'eccezione, aggiunge un risultato fallito e passa al successivo. Quello che `delete_by_broker` (N1b-1: costi Auto,
 conversioni delle metà rimaste, cancellazioni) aveva già scritto resta nella sessione, e `DELETE /brokers` fa commit
@@ -2428,7 +2428,7 @@ commit; dopo la cura il primo è cancellato e il secondo è com'era. Guardie: la
 cancellazione dell'account; nessun commit prima della fine della richiesta.
 
 **Passi**: 1. ✅ rossi (test-author); 2. ✅ cura; 3. ✅ prove; 4. ✅ doc e handoff (sotto, con il dettaglio).
-> **F36 entrato** (coordinatore 22:35: treno 63, merge `434af2925`, registri `e05eaf17d`; CHANGELOG sotto una nuova «🔒
+> **F36 entrato** (coordinatore 22:35: treno 63, merge `6b85fa634`, registri `304f55b7b`; CHANGELOG sotto una nuova «🔒
 > Security» di `[Unreleased]`). **Via a W-B20** come disegnato (savepoint per broker con `_delete_one` e il `flush` dentro);
 > `begin_writes` in `db/session.py` è un file condiviso: funzione piccola, documentata, solo in aggiunta, dichiarata
 > nell'handoff. Cura pronta: `/tmp/libreFolio_w_wb20_fix.py` (dry run ok; l'import di `begin_writes` dopo `db.models`).
@@ -2497,8 +2497,8 @@ cancellazione dell'account; nessun commit prima della fine della richiesta.
    > **Note implementazione**: nessun file nuovo; delta di 9 file tracciati. Non girati: `all-backend` (lo chiedo nello
    > slot se il coordinatore lo vuole), E2E (nessun cambiamento del frontend né dell'API), `api sync` (nessuno schema
    > toccato).
-> **Ingresso di W-B20** (coordinatore 23:33: committato `d6b457849` fix, `357f2cd72` docs, `81bf8204f` wiki, `d4c034936`
-> giornale; base aggiornata con `dev_release2` `4ef2fc199`, merge pulito, solo il backlog fuso da sé → HEAD `70f7ab9bc`;
+> **Ingresso di W-B20** (coordinatore 23:33: committato `9afa14eb5` fix, `3b7bc8c90` docs, `8c71369fe` wiki, `3023a7d43`
+> giornale; base aggiornata con `dev_release2` `394d0ad45`, merge pulito, solo il backlog fuso da sé → HEAD `949e7e56e`;
 > `all-backend` **non richiesto**: `begin_writes` è nuovo e lo chiama solo `delete_bulk`, bastano mirate e mutazione).
 > Prove sulla revisione combinata (23:34–23:41, `nice -n 10`, carico sotto 70 controllato prima): `services broker`
 > **70/70**; `db populate --force --clean`; `api brokers` **34/34**; `api users-admin` **64/64** (atteso il calo del
@@ -2515,7 +2515,7 @@ lavoro, lo dico subito.
 Ordine del coordinatore (23:33): finché J non ha CP-16, il lotto di doc A-14 con W-B10, più le chiavi di W-B27 e W-B33;
 le chiavi i18n vogliono `core-unit` prima dell'handoff; dalle 00:00 alle 01:15 niente E2E.
 
-**Analisi** (23:45, codice di `70f7ab9bc`):
+**Analisi** (23:45, codice di `949e7e56e`):
 - **A-14** — `mkdocs_src/docs/developer/architecture/access_control.md`, «🔒 The "Last Owner" Rule»: dice che l'ultimo OWNER
   «cannot remove themselves» e che per andarsene deve promuovere un altro OWNER o cancellare il broker. Il codice (F4):
   `leave_broker()` (`services/brokers/access.py`) lascia andare l'ultimo OWNER e **cancella il broker** (`delete_bulk` con
@@ -2588,16 +2588,16 @@ remove`); 3. ✅ prove (`i18n check`, `utils gate-i18n-catalog`, `utils gate-i18
    > del secondo giro (il primo giro: 0 avvisi, 96 link validi); li giro dopo «galleria finita», o li gira il
    > coordinatore al treno. W-B34 attende il developer.
 
-> **Lotto di doc salvato** (coordinatore 00:02: `bf66d4fe7`, `f062418e4`, `865bccb9d`, `32f8f659c`; worktree pulito). Dopo
+> **Lotto di doc salvato** (coordinatore 00:02: `4d2ceca8a`, `e1e35f3db`, `735288484`, `c273eda33`; worktree pulito). Dopo
 > le 01:15: `mkdocs build` stretto e `check-links`, poi l'ingresso. A-14 nella sezione di A la chiude il coordinatore.
-> **W-B20 entrato** (treno 69, merge `23ff56b95`, riga 🐛 nel CHANGELOG). **W-B30** alla lista di domattina: proposta
+> **W-B20 entrato** (treno 69, merge `f328f7991`, riga 🐛 nel CHANGELOG). **W-B30** alla lista di domattina: proposta
 > inviata alle 00:10 (un `null` esplicito toglie il costo manuale, la regola di N2 risponde `costBasisRequired` dove serve).
 
 ### W-B31 — la regola 12 del costo letta dai metadati ⏳ (2026-10-16)
 
 Via del coordinatore (00:02): prove leggere; l'import circolare lo risolvo come preferisco, annotando la scelta.
 
-**Analisi** (00:15, codice di `32f8f659c`):
+**Analisi** (00:15, codice di `c273eda33`):
 - La regola 12 di `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py:190-205`)
   ammette `cost_basis_mode` solo per TRANSFER e ADJUSTMENT con quantità > 0, scritto a mano. I metadati
   (`type_metadata.py`) dicono lo stesso oggi: TRANSFER `cost_basis_pair = [forbidden, required_qty_pos]`, ADJUSTMENT
@@ -2676,15 +2676,15 @@ validatore: lascia la dipendenza al contrario, e le regole 5–11, anch'esse cop
    > populate`, `api transactions` (copre `GET /transactions/types`), `api transactions-validate`, `api
    > transactions-wac`, `api sync` (atteso senza differenze).
 
-> **W-B31 committato come checkpoint** (coordinatore 00:35: `b29f41e51` refactor, `d01ce77f7` giornale; worktree
-> pulito). Le prove API di W-B31 e la build del lotto di doc dopo «galleria finita», su `d01ce77f7` o oltre.
+> **W-B31 committato come checkpoint** (coordinatore 00:35: `3b9747e9a` refactor, `46b067f74` giornale; worktree
+> pulito). Le prove API di W-B31 e la build del lotto di doc dopo «galleria finita», su `46b067f74` o oltre.
 
 ### W-B36 — le regole 5–11 lette dai metadati, la parte che coincide ⏳ (2026-10-16)
 
 Via del coordinatore (00:33): la parte che coincide, dopo il commit di W-B31, con i quattro casi che non coincidono come
 eccezioni esplicite che rimandano alla decisione **P6** (lista del developer di domattina); prove leggere.
 
-**Analisi** (00:40–00:50, sola lettura, codice di `b29f41e51`), tipo per tipo contro `TX_TYPE_METADATA`:
+**Analisi** (00:40–00:50, sola lettura, codice di `3b9747e9a`), tipo per tipo contro `TX_TYPE_METADATA`:
 
 | Regola | A mano | Tabella | Esito |
 |---|---|---|---|
@@ -2753,7 +2753,7 @@ un rosso per regola che prova la lettura della tabella, le guardie dei casi P6 (
 
 ### Decisione 47 — la gamba che cede convertita al costo: analisi ⏳ (2026-10-16)
 
-Sblocco (coordinatore 01:07): J CP-16 in `dev_release2` (`240675ad1`, commit `335fb89cf`: un ADJUSTMENT negativo con
+Sblocco (coordinatore 01:07): J CP-16 in `dev_release2` (`5dd832c52`, commit `4c94e8b32`: un ADJUSTMENT negativo con
 `cost_basis_override` chiude ogni lotto FIFO che consuma a quel costo per unità, il valore come incasso; senza, resta una
 correzione a prezzo zero). Firma di J: la gamba convertita è un ADJUSTMENT −q con il costo Auto **del suo broker**
 (`compute_wac_iterative(broker della riga, data della riga, esclusa la riga)`); per un TRANSFER ancora legato
@@ -2823,7 +2823,7 @@ cede; J-17 è nella lista del developer. Analisi in sola lettura fino al via (i 
   stampa ogni gamba col costo (anche a secco); la docstring di `orphan_pair_halves.py`.
 
 > **Ripresa delle prove** (coordinatore 01:33). **Lotto di doc verde**: `mkdocs build` stretto (uscita 0, 0 avvisi, 81 s)
-> e `check-links` (96 validi), su HEAD `d01ce77f7`; segnalato pronto all'ingresso (01:37).
+> e `check-links` (96 validi), su HEAD `46b067f74`; segnalato pronto all'ingresso (01:37).
 > **W-B36, passo 1 ✅** (01:40): `schemas transactions` → **8 failed, 97 passed**, per il motivo atteso (TX-S-096…103:
 > «still the hand-written copy»; la parità TX-S-095, le guardie P6, i messaggi e il test 1.9 riscritto verdi). Log
 > `/tmp/libreFolio_w_wb36_red1.log`.
@@ -2848,9 +2848,9 @@ cede; J-17 è nella lista del developer. Analisi in sola lettura fino al via (i 
 > `TXCreateItem.asset_event_id` è un'altra copia a mano nell'API (con quella di `cost_basis_pair`: residuo di W-B36 nel
 > backlog). Handoff FROZEN di W-B31 e W-B36 (02:15).
 
-> **Lotto di doc entrato** (treno 72, merge `6fa3f8936`, solo `32f8f659c`); A-14 chiusa dal coordinatore nella sezione di A.
-> **W-B36 committato** (`dcb33859f` codice e test, `ad346751b` doc, `a92dc76ec` giornale); base aggiornata con
-> `dev_release2` `bbfba9169` (dentro CP-16, CP-15, X CP11a, Z3/Z4, E4a, Y7) → HEAD `3b3ede3ed`. Prove d'ingresso di
+> **Lotto di doc entrato** (treno 72, merge `608a21750`, solo `c273eda33`); A-14 chiusa dal coordinatore nella sezione di A.
+> **W-B36 committato** (`2c028539c` codice e test, `4dcc2c532` doc, `2d1e3a9e7` giornale); base aggiornata con
+> `dev_release2` `9ab06bf17` (dentro CP-16, CP-15, X CP11a, Z3/Z4, E4a, Y7) → HEAD `de1e4a6c0`. Prove d'ingresso di
 > W-B31 + W-B36 sulla revisione combinata (02:00–02:10, `nice`, carico sotto 70): `schemas transactions` **105/105**,
 > `services transaction` **66/66**, `db populate`, `api transactions` **26/26**, `api transactions-validate` **11/11**.
 > Porta 6184 libera. Pronti all'ingresso. Le note: il commento di `static_uploads.py:80` lo gira il coordinatore a H, il
@@ -2932,17 +2932,17 @@ aspetta J-17).
    > che cede). Non girati: E2E (lo split e la finestra del broker dal frontend: chiedo lo slot prima dell'ingresso),
    > `all-backend` (slot del coordinatore).
 
-> **Decisione 47 committata come checkpoint** (coordinatore 04:05: `a66bbc1a4`, `8b3e6b766`, `7d28466be`, `cb247a696`);
-> base aggiornata (merge di `dev_release2` `2c485d3d4`, dentro H CP-U2; un conflitto di sola aggiunta in
-> `LibreFolio_devWiki/log.md` risolto dal coordinatore tenendo tutte le voci) → HEAD `817a2d37c`. L'ingresso della 47
-> aspetta J-17. W-B31 + W-B36 entrati (treno 78, merge `4e69b5271`). Il testo V-3 per A lo gira il coordinatore.
+> **Decisione 47 committata come checkpoint** (coordinatore 04:05: `2248aa292`, `aae074cf1`, `ccacdfc99`, `82e70e07b`);
+> base aggiornata (merge di `dev_release2` `77a315d36`, dentro H CP-U2; un conflitto di sola aggiunta in
+> `LibreFolio_devWiki/log.md` risolto dal coordinatore tenendo tutte le voci) → HEAD `9d334a66b`. L'ingresso della 47
+> aspetta J-17. W-B31 + W-B36 entrati (treno 78, merge `c97c09e6c`). Il testo V-3 per A lo gira il coordinatore.
 > **Coda della notte** (coordinatore 04:05), ciascuno in commit separati dalla 47 (entrano con un cherry-pick): 1. W-B37;
 > 2. la riga dell'escaper in `TransactionBulkModal.svelte:1879` (C-34 di Y) e la voce da togliere dalla sua guardia;
 > 3. W-B35 (docstring, `api sync`, `front check`); 4. W-B12. W-B29 dopo le 06:45 (slot E2E).
 
 ### W-B37 — il modale dei report salta i file non cancellabili ✅ (2026-10-16) — 🧊 FROZEN
 
-**Analisi** (04:10, codice di `817a2d37c`): `handleDeleteMultiple(fileIds)` di
+**Analisi** (04:10, codice di `9d334a66b`): `handleDeleteMultiple(fileIds)` di
 `frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte` manda un DELETE per ogni file selezionato e riporta i
 403 come errore; dopo CP-U2 di H `FilesTable` nasconde «elimina» sulle righe con `can_delete: false`, e la pagina File
 (`frontend/src/routes/(app)/files/+page.svelte`, `deletableSelection` e `handleBulkDeleteFiles`) salta quei file con
@@ -3001,15 +3001,15 @@ populate`; `api broker-multiuser test_cross_broker_access_failure_is_atomic` **2
 della corsia; `api broker-multiuser` intero **20/20**. Porta libera. Reperto: anche `TestMultiUserRoles`,
 `TestEditorRestrictions` e MULTI-007/008b/008c lasciano broker o transazioni → **W-B41**.
 
-> **Coda della notte entrata** (treno 89 in `dev_release2`: `7bed1bdce` W-B37, `60917185c` C-34, `d35e3c8f3` W-B35,
-> `8129f8176` W-B12, `0fc27a8b8` journal del coordinatore). Nel mio ramo gli stessi lotti sono `c8da45fc4`, `5d6965b79`,
-> `91ae33e34`, `232524cb1`, `7923ae8d4` (HEAD, verificato alle 04:40; worktree pulito). C-34 di Y9, arrivata dopo: già
+> **Coda della notte entrata** (treno 89 in `dev_release2`: `7b35ae884` W-B37, `2de6634b7` C-34, `415343824` W-B35,
+> `8cc111827` W-B12, `5ebf4b2d2` journal del coordinatore). Nel mio ramo gli stessi lotti sono `99b0f81b8`, `0e41d057f`,
+> `f036593e4`, `33d1696e6`, `63407a7fd` (HEAD, verificato alle 04:40; worktree pulito). C-34 di Y9, arrivata dopo: già
 > fatta; la guardia di Y non è né in `dev_release2` né nella mia base → la voce di `TransactionBulkModal` la toglie Y nel
 > suo lotto (detto al coordinatore). Prossimi, come proposto nell'handoff: W-B41, poi W-B38.
 
 ### W-B41 — gli altri test di `test_broker_multiuser_api.py` puliscono i loro broker ✅ (2026-10-16) — 🧊 FROZEN
 
-**Analisi** (04:42, codice di `7923ae8d4`): in `backend/test_scripts/test_api/test_broker_multiuser_api.py` 11 test
+**Analisi** (04:42, codice di `63407a7fd`): in `backend/test_scripts/test_api/test_broker_multiuser_api.py` 11 test
 creano il broker con `create_broker` e non lo cancellano: MULTI-001…005, 007, 008, 008b, 008c (`TestMultiUserRoles`),
 009 e 010 (`TestEditorRestrictions`); 007, 008b e 008c lasciano anche un DEPOSIT. MULTI-006 cancella da sé il suo broker
 (è il test della cancellazione) e resta com'è: registrarlo farebbe riportare a `drop()` un broker già cancellato.
@@ -3038,7 +3038,7 @@ id 8) e 76 transazioni; `api broker-multiuser` **20/20**; dopo 8 broker (max id 
 ### W-B29 — `asset-event-delete.spec.ts` su asset propri ✅ (2026-10-16) — 🧊 FROZEN
 
 Slot E2E 2 dato dal coordinatore alle 04:48, **stop duro alle 05:25** (05:30–06:45 macchina ferma: nessuna prova). Build
-debug fresca (04:47, ricostruita dal runner su `7923ae8d4`). **Analisi**: lo scenario 1 trova Apple per testo della card e
+debug fresca (04:47, ricostruita dal runner su `63407a7fd`). **Analisi**: lo scenario 1 trova Apple per testo della card e
 le scrive un DIVIDEND a oggi − 230 giorni (stessa chiave per desktop e mobile nello stesso giorno → il secondo upsert
 sovrascrive il primo); lo scenario 2 usa il DIVIDEND di Apple realizzato da una transazione del mock e marca le righe con
 una sonda `isVisible().catch` (un rosso cancellerebbe eventi condivisi). Il modello giusto è
@@ -3070,7 +3070,7 @@ dai collegamenti del mock (`.first()` sui pallini degli eventi). Sola lettura: n
 
 ### W-B38 — gli errori multipli della creazione arrivano renderizzati ✅ (2026-10-16) — 🧊 FROZEN
 
-**Analisi** (04:58, codice di `7923ae8d4`): `TXCreateItem.validate_transaction_rules`
+**Analisi** (04:58, codice di `63407a7fd`): `TXCreateItem.validate_transaction_rules`
 (`backend/app/schemas/transactions/transactions.py`), con due o più violazioni, impacchetta in `multipleBusinessRuleErrors`
 per ciascuna `e.message_template`: «{type} requires asset_id» arriva così in `TXValidationIssue.error` (batch, spacchettato
 in `transactions/transaction_batch_stages.py:45`) e in `BRIMValidationIssue.message` (import, `brim/brim_provider.py:564`).
@@ -3099,17 +3099,17 @@ testo renderizzato con i parametri in `ctx` (W-B38), e quello della regola 10 pe
 > `ImportWizardModal` cambia solo una riga d'import): non toccarli fino al suo ingresso (dopo le 06:45). Nessuno dei due
 > tocca il delta di W-B41, W-B29, W-B38. 05:30–06:45 macchina ferma: nessuna prova.
 
-> **Lotti committati** (coordinatore, 05:20): `f2b6c0983` W-B41, `f9969056e` W-B29, `52387e2c0` W-B38, `238ff0381` journal →
-> HEAD `238ff0381` (verificato, worktree pulito). I tre cherry-pick su `dev_release2` simulano puliti ed entrano dopo il
+> **Lotti committati** (coordinatore, 05:20): `3c60341ac` W-B41, `09140dbc6` W-B29, `b9f26d4e7` W-B38, `1afbbc47a` journal →
+> HEAD `1afbbc47a` (verificato, worktree pulito). I tre cherry-pick su `dev_release2` simulano puliti ed entrano dopo il
 > blocco dei colori (destinazione ferma fino alle ~06:45); il journal entra con la 47. Prenotazione nuova: lotto «input» dei
 > colori (mattino) su `transactions/form/TxFormSingleSection.svelte`, `TxFormPairSection.svelte`, righe di
 > `TransactionFormModal.test.ts` e di `e2e/transactions/transactions-modals.spec.ts`. Durante la sosta (05:30–06:45): le
 > analisi in sola lettura di W-B39 e W-B42 (via del coordinatore); `routes/(app)/transactions/+page.svelte` è libero (Y5
-> cambia al più la riga d'import di `BrokerIcon`, già sul suo ramo `6f7ac70ce`). Il codice dopo l'aggiornamento della base.
+> cambia al più la riga d'import di `BrokerIcon`, già sul suo ramo `53e6d7773`). Il codice dopo l'aggiornamento della base.
 
 ### W-B39 — uno split o una promozione rifiutati lo dicono ✅ (2026-10-16) — 🧊 FROZEN
 
-**Stato reale** (codice di `238ff0381`, sola lettura):
+**Stato reale** (codice di `1afbbc47a`, sola lettura):
 - `frontend/src/routes/(app)/transactions/+page.svelte`: `confirmSplit()` (~437) e `onPromoteMergeConfirm()` (~408, anche
   per `confirmPromote`) chiamano `commitTransactions` (`utils/transactions/txCommitApi.ts`), che ha `toast: false` di
   serie; su `committed=false` scrivono solo `console.error`, la modale (`TransactionActionModal` per lo split,
@@ -3154,12 +3154,12 @@ build` e `check-links`.
 `wacFxUnavailableSplit` con `i18n add`, `tx-split-refusal.spec.ts` con coppia propria e `route.fulfill`, frase vicino alla
 riga 79; il toast invece del riquadro va nella lista come decisione notturna. Codice da scrivere dopo il suo commit di merge,
 anche durante la sosta; Vitest, `mkdocs build` ed E2E dopo le 06:45.
-**Base aggiornata** (05:22–05:24): merge di `dev_release2` (`72e66d1a6`) aperto dal coordinatore su `238ff0381`; un conflitto
+**Base aggiornata** (05:22–05:24): merge di `dev_release2` (`7aefcc13a`) aperto dal coordinatore su `1afbbc47a`; un conflitto
 in `mkdocs_src/docs/developer/architecture/overview.md`, l'elenco degli `STARTUP_STEPS`: tenuti tutti e due, nell'ordine del
 codice fuso (`app_lifespan.py:207-215`): 11 `lone-transfer-legs` (47), 12–15 invariati, 16 `idle-monitor` (Z). Rivisti i
 file fusi da soli cambiati da tutte e due le parti: rispetto a `dev_release2` restano solo le aggiunte della 47 (5 file; le
 righe tolte sono testi della merge-base riscritti dalla 47); gli altri identici; ogni voce W del backlog una volta sola.
-Messo in stage solo `overview.md`; commit di merge del coordinatore `b8dd7bdc4` (genitori `238ff0381` + `72e66d1a6`),
+Messo in stage solo `overview.md`; commit di merge del coordinatore `f34cb6eb1` (genitori `1afbbc47a` + `7aefcc13a`),
 verificato. `mkdocs build` dopo le 06:45.
 **Cura pronta, non applicata** (05:27): `/tmp/libreFolio_w_wb39_cure.py` (dry run pulito, 3 file, ogni modifica trovata una
 volta): nuovo `frontend/src/lib/utils/transactions/commitRefusal.ts` (`commitRefusalMessage`: titolo scappato, poi una riga
@@ -3178,7 +3178,7 @@ ha una riga di data); IT, FR, ES a mano sulla stessa riga 79 (lessico delle pagi
 «Promouvoir la paire»/«Séparer la paire», «Promover par»/«Separar par»); solo la riga 79 in tutte e quattro, la riga 50 della
 47 intatta. Doc per sviluppatori: nessuna pagina descrive come la pagina riporta un commit; il solo posto adatto alla riga
 «`wacFxUnavailable` su `split` prova prima `wacFxUnavailableSplit`» è `developer/backend/transactions/split_promote.md:90-94`,
-che viene dal commit della 47 (`8b3e6b766`) → quella riga entra con la 47 (residuo annotato qui). `translate-stamp` della
+che viene dal commit della 47 (`aae074cf1`) → quella riga entra con la 47 (residuo annotato qui). `translate-stamp` della
 pagina dopo le 06:45.
 **Rossi scritti** (05:48, test-author, niente eseguito: macchina ferma):
 - `frontend/src/lib/utils/transactions/resolveValidationMessage.test.ts`: un `describe` W-B39. (a) rosso: `wacFxUnavailable`
@@ -3276,14 +3276,14 @@ intatti.
 Prova: E2E `front-asset asset-event-delete` nello slot. ✅ (slot 1, 07:16–07:19): **4/4** (182 s; scenario 3 19,0 s,
 scenario 4 8,7 s), al primo giro; `prettier` pulito (riformattato alle 06:51), `front check` 0/0.
 
-> **W-B39 e W-B42 committati** (coordinatore, 07:27): `df898b445` W-B39, `3564129b5` W-B42, `e7e03b19a` journal → HEAD
-> `e7e03b19a` (verificato, worktree pulito); in `dev_release2` per cherry-pick `c881237a9`, `9df17ef20` (treno 98), CHANGELOG
+> **W-B39 e W-B42 committati** (coordinatore, 07:27): `6d0769307` W-B39, `07908fdf6` W-B42, `f3ac21364` journal → HEAD
+> `f3ac21364` (verificato, worktree pulito); in `dev_release2` per cherry-pick `7be9dbe6b`, `db12b3ad8` (treno 98), CHANGELOG
 > con la riga proposta; il journal entra con la 47. Le 4 note sulla UI degli asset vanno a X, il `testId` di `ConfirmModal` alla
 > sezione C. Via a: W-B44, analisi di W-B32, W-B43 dopo W1-g di T.
 
 ### W-B44 — `PromoteMergeModal`: un solo `promote-merge-modal`, e Annulla col suo `data-testid` ✅ (2026-10-16) — 🧊 FROZEN
 
-**Analisi** (07:30, codice di `e7e03b19a`): `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte` mette
+**Analisi** (07:30, codice di `f3ac21364`): `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte` mette
 `promote-merge-modal` su `ModalBase` (`testId`, reso sul `role="dialog"`, `ModalBase.svelte:237`) e sul `div` interno (riga
 105): due elementi. Il pulsante Annulla (~259) non ha `data-testid`. Chi lo usa: `e2e/gallery.spec.ts:3378`
 (`[data-testid="promote-merge-modal"][role="dialog"]`: il `ModalBase`), `tx-selection-after-bulk.spec.ts:492` e
@@ -3310,7 +3310,7 @@ cherry-pick pulito.
 
 ### W-B32 — i report senza broker nella lista di ogni broker ✅ (2026-10-16) — 🧊 FROZEN
 
-**Stato reale** (codice di `e7e03b19a`, sola lettura):
+**Stato reale** (codice di `f3ac21364`, sola lettura):
 - `brim_provider.list_files(broker_ids=…)` (`backend/app/services/brim/brim_provider.py:1068-1071`) tiene i file del filtro **e**
   quelli senza broker («legacy»). Tre chiamanti passano `broker_ids`: `delete_files_for_brokers` (:1277) e
   `brim_report_sets.collect_members` (:128) filtrano già per uguaglianza su `target_broker_id`; la rotta `GET
@@ -3338,7 +3338,7 @@ esplicito i report senza broker fuori, senza filtro invariato, `list_files` inta
 F36-01/04/05 invariate, doc con docs-writer; dopo W-B44, commit separati. Cura pronta in `/tmp/libreFolio_w_wb32_cure.py`
 (dry run pulito: la docstring della rotta e il filtro di tre righe prima del ramo dell'admin). Rosso: test-author in corso
 (07:34), senza corsia.
-**W-B44 committato** (coordinatore, 07:43): `911252a85` sul ramo (HEAD, verificato), cherry-pick `df6e2df10` in
+**W-B44 committato** (coordinatore, 07:43): `8e91c200b` sul ramo (HEAD, verificato), cherry-pick `dc89bf527` in
 `dev_release2` (treno 99). Le righe del journal di W-B44 restano col prossimo commit del journal.
 **W-B32, preparazione dello slot** (slot 2 verso le 08:30, dopo J ed E5b, chiamato dal coordinatore):
 - Rosso scritto ✅ (07:41, test-author, niente eseguito): F36-16
@@ -3362,13 +3362,13 @@ F36-01/04/05 invariate, doc con docs-writer; dopo W-B44, commit separati. Cura p
   salvato senza broker non sono in questa lista, chi li ha caricati e gli admin li trovano nella pagina File);
   `user/files/index.en.md:69` (una frase: compaiono solo lì). Controllate e lasciate: `access_control.md:39-41`,
   `frontend/components/features/brokers/modals.md:155-173` (diventa vera), e altre 12 pagine. Reperto: l'upload chiede un
-  broker da `f0b7aad8d` (24/01), lo stesso commit che registra chi carica: nessun file senza broker ha un caricatore
+  broker da `58c985976` (24/01), lo stesso commit che registra chi carica: nessun file senza broker ha un caricatore
   registrato, quindi in pratica li vedono solo gli admin (il test F36-16 pianta un file con caricatore: copre il ramo).
 - IT/FR/ES a mano (07:52) sulle due pagine utente, col lessico di ciascuna: `user/brokers/import.{it,fr,es}.md` (paragrafo
   dopo la riga 56) e `user/files/index.{it,fr,es}.md` (fine della riga 44). Cache di Aphra: `import.en.md` senza altro debito
   (md5 di HEAD = cache, 3 lingue fatte) → `translate-stamp --file user/brokers/import.en.md`, solo dopo un `--dry-run` che
   nomina quella pagina sola (senza `--file` lo stamp prende tutte le pagine del nav); `files/index.en.md` ha già debito
-  (`14819e3b0`, la sezione «Shared or personal») → niente stamp.
+  (`cd1dd7ad8`, la sezione «Shared or personal») → niente stamp.
 - `/tmp/libreFolio_w_docs_gate.sh 08:25` in corso (07:52): `mkdocs build` strict, `check-links`, il dry run e lo stamp, ognuno
   col carico < 50 (regola delle 07:48) e attese di 60 s; si arrende alle 08:25 per non toccare lo slot.
 - Prove della doc ✅ (07:53–07:55, carico 27–35): `mkdocs build` strict (68 s), `check-links` puliti; dry run dello stamp: «1
@@ -3387,13 +3387,13 @@ F36-01/04/05 invariate, doc con docs-writer; dopo W-B44, commit separati. Cura p
   differenza tracciata: client e `openapi.json` ignorati); `front check` 0 errori, 0 avvisi; `git diff --check` pulito; porta
   libera. I file di W-B32 sono identici fra HEAD e `dev_release2`: cherry-pick pulito.
 
-> **W-B32 committato** (coordinatore, 08:18): `77fbc8687` sul ramo, cherry-pick `84d24ed03` in `dev_release2` (treno 101),
-> journal `a4f682261`. **Base aggiornata**: merge di `dev_release2` (`c94254695`) senza conflitti → HEAD `647167f46`
+> **W-B32 committato** (coordinatore, 08:18): `3c1956ad6` sul ramo, cherry-pick `fe3176208` in `dev_release2` (treno 101),
+> journal `afb2b65b6`. **Base aggiornata**: merge di `dev_release2` (`faac6763c`) senza conflitti → HEAD `3c2ab5bee`
 > (verificato, worktree pulito). Via a W-B43 (TC-13) e W-B45 (T13), commit separati, prove leggere col carico < 50.
 
 ### W-B45 — T13 di `transactions-modals.spec.ts` col tempo dei vicini ✅ (2026-10-16) — 🧊 FROZEN
 
-**Analisi** (08:19, codice di `647167f46`): T13 (`invalid TX in BulkModal shows issues banner with clickable error`,
+**Analisi** (08:19, codice di `3c2ab5bee`): T13 (`invalid TX in BulkModal shows issues banner with clickable error`,
 `frontend/e2e/transactions/transactions-modals.spec.ts:1211`) passa da `openCreateFlow`, il form, lo spazio di lavoro e la
 risposta di `validate` col tempo di serie (30 s); gli altri test del file con `test.setTimeout(60_000)` (399, 431, 485, 585,
 628, 707) lo hanno per il giro di benvenuto di un conto nuovo. Col carico a 43–49 T13 è scaduto prima di ogni controllo; da
@@ -3405,7 +3405,7 @@ in `dev_release2`: cherry-pick pulito.
 
 ### W-B43 — tre debolezze in `asset-data-editor.spec.ts` e `fx-csv-import.spec.ts`: analisi ✅, codice ⛔ (2026-10-16)
 
-**Stato reale** (codice di `647167f46`): il lotto W1-g di T è entrato (`fx-csv-import.spec.ts:289` usa
+**Stato reale** (codice di `3c2ab5bee`): il lotto W1-g di T è entrato (`fx-csv-import.spec.ts:289` usa
 `getByTestId('info-banner-info')`), ma **il lotto di T sui quattro file di `ui/data-editor`** (riservato dalle 05:13: `DataEditor`,
 `CsvEditor`, `DataImportModal`, `ErasableNumberCell`, più `asset-data-editor.spec.ts:287` e `fx-csv-import.spec.ts:53,56`, dove un
 attributo di stato sostituisce `.text-red-500`) **non è né nella mia base né in `dev_release2`**: le righe 53 e 56 di
@@ -3424,21 +3424,21 @@ componente di `ui/data-editor` ha un `data-state`. Le tre debolezze di TC-13:
 **Blocco**: le tre cure usano l'attributo o i `data-testid` che porta il lotto di T, e le righe sono riservate a T: W-B43 aspetta
 quel lotto (detto al coordinatore). Poi: test-author, E2E dei due spec in uno slot.
 
-> **W-B45 committato** (coordinatore, 08:25): `7ab9add9e` sul ramo (HEAD, verificato), cherry-pick `72ac088fc` (treno 102).
+> **W-B45 committato** (coordinatore, 08:25): `5db4a8d5a` sul ramo (HEAD, verificato), cherry-pick `6098781bb` (treno 102).
 > Via: il triage delle voci di sicurezza e dati aperte (W-B1, W-B3, W-B4, W-B5, W-B17), poi la prima ancora aperta per
 > gravità, rosso prima, lotto piccolo; W-B19 (copia della convalida del saldo) è matematica finanziaria di J: avvisare prima.
 
 ### Triage di W-B1, W-B3, W-B4, W-B5, W-B17 ✅ (2026-10-16)
 
-Sul codice di `7ab9add9e`, sola lettura:
-- **W-B1** (icona dei plugin con `startswith`): **già chiusa** da `6e8251014` (14/10, in `v1.2.1`: `git tag --contains`),
+Sul codice di `5db4a8d5a`, sola lettura:
+- **W-B1** (icona dei plugin con `startswith`): **già chiusa** da `7a9f639c6` (14/10, in `v1.2.1`: `git tag --contains`),
   «fix(server): keep served file paths inside their folder»: `serve_plugin_static` (`backend/app/api/v1/uploads.py:545`) usa
   `confined_path` (`backend/app/utils/runtime/paths.py`: `resolve()` della radice e del candidato, poi `is_relative_to`);
   CHANGELOG 1.2.1 «The server keeps every file it serves inside the folder it belongs to». Chiusa nel backlog col riferimento.
-- **W-B3** e **W-B4**: già ✅ (F36, `3907eed36`); le righe del CHANGELOG («Broker reports uploaded by older versions are no
+- **W-B3** e **W-B4**: già ✅ (F36, `0ca9b160d`); le righe del CHANGELOG («Broker reports uploaded by older versions are no
   longer open to every user», «Report file ids are checked first») sono in [Unreleased], non in 1.2.1 (il commit non è in
   nessun tag): aggiunti i riferimenti.
-- **W-B5**: già ✅ (`6be11ecf3`, N1a); il resto è W-B19 (di J, non lo tocco).
+- **W-B5**: già ✅ (`fdd37e4a0`, N1a); il resto è W-B19 (di J, non lo tocco).
 - **W-B17**: **aperta** → il lotto seguente.
 
 ### W-B17 — una FX_CONVERSION su due broker rifiutata dall'API ✅ (2026-10-16) — 🧊 FROZEN
@@ -3480,8 +3480,8 @@ modello di `pairAssetMismatch`). **Verdi**: `services transaction` **67/67** (08
 **Prove** (08:47, carico 40): `black`/`ruff` puliti; `i18n check` strict (4770 chiavi); `prettier` pulito sui 4 JSON; `git diff
 --check` pulito; i file sono identici in `dev_release2`.
 > **⏸ STOP del developer** (coordinatore, ~08:50): nessuna prova in corso, porta libera, worktree lasciato com'era. **Ripresa**
-> alle 10:32: HEAD ancora `7ab9add9e`, delta di W-B17 intatto. Notizie: il lotto di T su `ui/data-editor` è entrato alle 10:19
-> (`eb4040cd1`) → W-B43 sbloccata, base da aggiornare al prossimo checkpoint; **P2 decisa dal developer** («una rettifica non è
+> alle 10:32: HEAD ancora `5db4a8d5a`, delta di W-B17 intatto. Notizie: il lotto di T su `ui/data-editor` è entrato alle 10:19
+> (`53b408a03`) → W-B43 sbloccata, base da aggiornare al prossimo checkpoint; **P2 decisa dal developer** («una rettifica non è
 > mai un prezzo»): la 47 entra dopo il lotto J-17 di J.
 **Dopo la ripresa** (10:33–10:36, carico 11–32):
 - Portata della regola: `TXUpdateItem` non ha `broker_id` (un update non sposta una gamba); i tipi in coppia non hanno
@@ -3507,7 +3507,7 @@ modello di `pairAssetMismatch`). **Verdi**: `services transaction` **67/67** (08
 - `mkdocs build` strict ✅ (110 s) e `check-links` ✅ (97 validi), 10:42–10:47, carico 40–42; `git diff --check` pulito; porta
   libera.
 - **Cherry-pick**: i file di W-B17 sono identici in `dev_release2`, tranne `service.md`, che differisce solo per gli hunk della
-  47 (`8b3e6b766`, righe 71–101 e 252–355; `dev_release2` non l'ha cambiata dopo la merge-base); simulato con `git merge-file`
+  47 (`aae074cf1`, righe 71–101 e 252–355; `dev_release2` non l'ha cambiata dopo la merge-base); simulato con `git merge-file`
   (base = HEAD, nostra = `dev_release2`, loro = il worktree): 0 conflitti, la riga nuova al suo posto.
 > **⚠️ Fuori pista**: il riavvio delle 10:03 ha svuotato `/tmp`: gli script e i log di prima (`/tmp/libreFolio_w_*`, citati nelle
 > sezioni W-B39, W-B42, W-B44, W-B32, W-B17) non ci sono più; le prove restano trascritte qui. Regola nuova (coordinatore,
@@ -3515,16 +3515,16 @@ modello di `pairAssetMismatch`). **Verdi**: `services transaction` **67/67** (08
 > copiati lì (`files/logs/`). Regola nuova anche per i colori: prima di scrivere in un `.svelte` delle aree IW, TR, AF, BK, IM,
 > DV o T, avvisare il coordinatore; backend, test fuori da quelle cartelle e doc no.
 
-> **W-B17 committato** (coordinatore, 10:49): `926a5c422` sul ramo, cherry-pick `4647c4af4` in `dev_release2` (treno 106),
-> CHANGELOG con la riga proposta; il journal resta sul ramo con la 47. **Base aggiornata**: merge di `dev_release2` (`b82e7765f`,
-> dentro il lotto `ui/data-editor` di T, `eb4040cd1`) senza conflitti → HEAD `8c930d5de` (verificato, worktree pulito). Via a
+> **W-B17 committato** (coordinatore, 10:49): `cb568c636` sul ramo, cherry-pick `33124dd9d` in `dev_release2` (treno 106),
+> CHANGELOG con la riga proposta; il journal resta sul ramo con la 47. **Base aggiornata**: merge di `dev_release2` (`fa72b0ddf`,
+> dentro il lotto `ui/data-editor` di T, `53b408a03`) senza conflitti → HEAD `8e0519a51` (verificato, worktree pulito). Via a
 > W-B43: i test e la cura nei due spec, scrittura prima; lo slot E2E quando se ne libera uno. W-B46 resta nel backlog.
 
 ### W-B43 — tre debolezze in `asset-data-editor.spec.ts` e `fx-csv-import.spec.ts`: codice ⏳ (2026-10-16)
 
-**Dopo il lotto di T** (codice di `8c930d5de`): `CsvEditor.svelte` dà `data-state="valid"` alla ✓ di ogni riga (~551),
+**Dopo il lotto di T** (codice di `8e0519a51`): `CsvEditor.svelte` dà `data-state="valid"` alla ✓ di ogni riga (~551),
 `data-state="invalid"` alla ✗ (~557, ~560) e al distintivo d'errore della barra di stato (~510); `DataEditor.svelte` dà
-`data-editor-stale-count` al contatore delle righe stantie (~641). T ha già portato i due spec sui nuovi selettori (`eb2adb37b`):
+`data-editor-stale-count` al contatore delle righe stantie (~641). T ha già portato i due spec sui nuovi selettori (`49f7e4572`):
 - test 21 (`asset-data-editor.spec.ts`, «stale toggle is visible in toolbar»): il contatore per `data-editor-stale-count`, ma
   tutto ancora dentro `if (await staleToggle.isVisible({timeout: 3000}).catch(() => false))`, su Apple (dato condiviso);
 - «price CSV import: invalid rows show error indicators» (~279): `[data-state="invalid"].first()`, che può essere il
@@ -3588,7 +3588,7 @@ piede di `DataImportModal`, «• N error(s)» e «• duplicates», in inglese 
 
 ### W-B30 (P5) — un costo manuale svuotato si toglie: analisi ✅ (2026-10-16)
 
-Codice di `c25c3f8b4`, sola lettura:
+Codice di `918eaca58`, sola lettura:
 - `_apply_update_values` (`backend/app/services/transactions/batch_edits.py:252-265`): `if item.cost_basis_override is not
   None:` → un `null` esplicito e un campo assente sono la stessa cosa: il costo resta, in silenzio. Pydantic v2 li distingue con
   `item.model_fields_set`.
@@ -3653,13 +3653,13 @@ rimedio è il tempo dello spec (come W-B45). Porta libera. FROZEN, handoff alle 
 servizio (~11:55) ha interrotto il mio turno e fatto cadere il test-author di W-B36b (DNS) dopo 417 righe in
 `test_transaction_service.py`, non verificate: un test-author nuovo le rivede e aggiunge la puntina di `cashNonzero`.
 
-**P6, il controllo dei dati** ✅ (12:01, carico 43; skill `real-data-copy`, `git show baa1b6e7e:…`): copia di lavoro
+**P6, il controllo dei dati** ✅ (12:01, carico 43; skill `real-data-copy`, `git show 195130dd5:…`): copia di lavoro
 `/tmp/librefolio-r2-w-realdata` dalla copia di riferimento del coordinatore (demo del developer, Alembic 008, prezzi di oggi, solo
 EUR, un utente), `umask 077`, nessun marcatore di produzione, `go-rwx`; `sqlite3 "file:…/app.db?mode=ro" < p6_legacy_rows.sql`
 (sola lettura, nessun server). **Risultato: caso 1 = 0, caso 2 = 0, caso 3 = 0, caso 4 = 0** righe fuori regola. Copia
 **cancellata** alle 12:01 (`lsof +D` vuoto, `rm -rf`, `ls`: «No such file or directory»); nessun file derivato tenuto.
 
-**W-B43 committato** (coordinatore, 12:02): `d6a260c89` sul ramo (HEAD, verificato), cherry-pick `a59593570` in `dev_release2`
+**W-B43 committato** (coordinatore, 12:02): `b194a535b` sul ramo (HEAD, verificato), cherry-pick `4d68a375d` in `dev_release2`
 (treno 109); triage del test 19 accettato (ambiente).
 
 **W-B30, rossi** ✅ (12:01, carico 49): `services transaction-cost-basis-rule TestDecisionP5AnExplicitNullEmptiesTheCost` →
@@ -3694,7 +3694,7 @@ costanti (`LEGACY_SHAPES`, `LEGACY_LABELS`, `AUTO_MODES`) sopra la classe; il pa
 nella docstring del modulo resta solo il punto «Not covered» riscritto (diventava falso). Due dipendenze dalla 47 trovate e
 tolte: il nome nudo `cost_basis_allowed` e `select` (dalla riga d'import della 47, in `_stored_cost`: ora
 `session.get(Transaction, id, populate_existing=True)`, che emette sempre la sua SELECT). **Simulazione del cherry-pick**
-(`git merge-file`, base HEAD `d6a260c89`, nostra `dev_release2`, loro il worktree; file in `files/sim/`): **0 conflitti su tutti
+(`git merge-file`, base HEAD `b194a535b`, nostra `dev_release2`, loro il worktree; file in `files/sim/`): **0 conflitti su tutti
 i 9 file** del lotto; sui tre `.py` risultanti `ruff` e `black --check` puliti (`--stdin-filename` col percorso vero: nessun
 nome indefinito, quindi nessuna dipendenza nascosta dalla 47), nessun marcatore della 47 nel file dei test risultante.
 **Doc** ✅: docs-writer in inglese (`user/transactions/form.en.md:40`, la frase sulla modifica di una transazione salvata;
@@ -3710,7 +3710,7 @@ event?» manca in IT/FR/ES). `mkdocs build` (strict) **exit 0** (12:30, carico 3
 > vera. (2) Il tooltip `transactions.costBasisOverride.tooltip` e la riga «Normal transfer» di
 > `financial-theory/…/adjustment.{en,it,fr}.md` dicono ancora «vuoto = calcolato in automatico». Fuori dal lotto: W-B49.
 
-**W-B30 committato** (coordinatore, 12:47): `949da55f8` sul ramo (HEAD, verificato), cherry-pick `54880598b` in `dev_release2`
+**W-B30 committato** (coordinatore, 12:47): `fc8f47235` sul ramo (HEAD, verificato), cherry-pick `d5511c3ad` in `dev_release2`
 (treno 111) con la riga 🐛 del CHANGELOG; il cancello `services transaction-cost-basis-rule` e `services transaction` sul
 risultato lo gira il coordinatore. Numerazione: **W-B50** alle quattro note di IW-8 (test del wizard di import), scritto nel
 BACKLOG. Le note non mi erano arrivate: lette nella cronologia del coordinatore (10:22) e verificate sugli spec.
@@ -3742,7 +3742,7 @@ BACKLOG. Le note non mi erano arrivate: lette nella cronologia del coordinatore 
 guardie); puntina TX-S-110 **1/1**; `services transaction` **96/96**; `schemas transactions` **106/106**; `services
 transaction-cost-basis-rule` **80/80**; `services broker` **76/76**; `services brim-create-transaction` **14/14** (la via di
 CREATE); `i18n audit` exit 0, nessuna traduzione mancante (`transactions.errors` è un prefisso dinamico). Porta libera.
-**Simulazione del cherry-pick** su `dev_release2` `34e1e8092`: **0 conflitti** sugli 11 file; sui `.py` risultanti `ruff` e
+**Simulazione del cherry-pick** su `dev_release2` `6f48db0b9`: **0 conflitti** sugli 11 file; sui `.py` risultanti `ruff` e
 `black` puliti, i JSON validi; `_find_promote_rule_match`, usato dal test del promote, c'è in `dev`. Nessuna superficie
 dell'API cambiata (niente `api sync`). Doc: docs-writer in corso (`developer/backend/transactions/service.md`, solo la sezione
 «Per-type rules», lontano dalle righe della 47).
@@ -3773,7 +3773,7 @@ confrontando gli AST senza docstring (B con la copia del worktree delle 12:57 in
 dentro la classe P5 (748–841).
 
 **⏸️ PAUSA del developer** (~13:25): nessun comando né specialista in corso, nessun merge aperto, porta 6184 libera. HEAD
-`949da55f8`. **Alla ripresa**: rileggere le metà nuove di TX-S-104…107 (lettura iniziata); poi, col carico sotto 50, `schemas
+`fc8f47235`. **Alla ripresa**: rileggere le metà nuove di TX-S-104…107 (lettura iniziata); poi, col carico sotto 50, `schemas
 transactions`, `services transaction`, `services transaction-cost-basis-rule` (A ha asserzioni nuove, non ancora girate);
 nuova simulazione del cherry-pick (A, B e C cambiati dopo quella delle 12:57; C contro `dev_release2` da solo); `git diff
 --check`; handoff FROZEN con **due commit**: W-B36b (5 file backend, 4 JSON i18n, `service.md`, i due file di test) e il seguito
@@ -3783,18 +3783,18 @@ di W-B30 (solo `test_transaction_cost_basis_rule.py`, prosa); il journal resta s
 verificati alle 13:05 (`[]` senza `changed_fields`; il codice sul campo del caso; `[]` sull'altro campo; il codice con
 `{"type"}`). **Verdi sui test riallineati** ✅ (14:14–14:19, carico 43–46): `schemas transactions` **106/106**; `services
 transaction` **96/96**; `services transaction-cost-basis-rule` **80/80**. Porta libera. **Simulazione del cherry-pick** su
-`dev_release2` `04dcf3a37`: commit 1 (W-B36b, 12 file) **0 conflitti**, commit 2 (seguito di W-B30, 1 file) **0 conflitti**;
+`dev_release2` `457842067`: commit 1 (W-B36b, 12 file) **0 conflitti**, commit 2 (seguito di W-B30, 1 file) **0 conflitti**;
 sui `.py` risultanti `ruff`/`black` puliti, JSON validi, nessuna riga della 47 nei file risultanti. `git diff --check` pulito.
 **Handoff FROZEN** (14:2x): due commit, il journal resta sul ramo.
 
-**W-B36b committato** (coordinatore, 14:30): `7ad5a8849` (fix) e `05c0f647b` (test come guardie) sul ramo (HEAD `05c0f647b`,
-verificato), in `dev_release2` coi cherry-pick `277d26cd0` e `b51bb3663`; il cancello lo gira il coordinatore.
+**W-B36b committato** (coordinatore, 14:30): `78accc772` (fix) e `142177122` (test come guardie) sul ramo (HEAD `142177122`,
+verificato), in `dev_release2` coi cherry-pick `ca09c5895` e `34e742ae4`; il cancello lo gira il coordinatore.
 
 ### C-97 — più cifre decimali per quantità e prezzi (issue #43): analisi ✅ (2026-10-16)
 
-> Assegnata dal coordinatore (13:23); testo nel BACKLOG, sezione C (`b171c058e`). Già deciso: quantità **10** decimali, prezzi
+> Assegnata dal coordinatore (13:23); testo nel BACKLOG, sezione C (`fa474ad3a`). Già deciso: quantità **10** decimali, prezzi
 > (`price_history`) **12**, importi **restano 6**; oltre il limite si **rifiuta** con un messaggio che dice il massimo, **mai
-> arrotondare in silenzio**. Analisi in sola lettura (HEAD `05c0f647b`): inventario con due explore (backend, frontend), le
+> arrotondare in silenzio**. Analisi in sola lettura (HEAD `142177122`): inventario con due explore (backend, frontend), le
 > affermazioni chiave verificate o misurate da me (SQLAlchemy 2.0.52, SQLite 3.54, Pydantic 2.13).
 
 **Stato reale**
@@ -3897,13 +3897,13 @@ in input lo rifiuta D1; dai provider si legge a 15 cifre.
 > **⚠️ Fuori pista — W-B30 ha rotto la build strict di `dev_release2`** (coordinatore, 14:31): il paragrafo «An explicit `null`
 > in an update» di `developer/backend/transactions/wac.md` (docs-writer) linka `split_promote.md#transfer-giving-leg`, un'ancora
 > che esiste solo sul mio ramo (decisione 47). La mia simulazione del cherry-pick controllava conflitti, lint e JSON, non la
-> build della doc sul risultato. Il coordinatore ha corretto `dev` con `ed500643f` (il link senza l'ancora). **All'ingresso della
+> build della doc sul risultato. Il coordinatore ha corretto `dev` con `b6a3f1499` (il link senza l'ancora). **All'ingresso della
 > 47: rimettere l'ancora** in `wac.md` (al merge le due versioni di quella riga si incontrano: tenere quella con l'ancora).
 > **Procedura da ora**, prima di ogni handoff con cherry-pick: `files/scripts/sim_cherry_pick.sh <target> [--docs] <file>…`
 > (cartella di sessione) esporta l'albero del target con `git archive`, ci scrive il merge a tre vie di ogni file del lotto (base
 > HEAD, nostra il target, loro il worktree), passa `ruff`/`black` sui `.py` e `json.load` sui `.json`, e se il lotto ha un `.md`
 > lancia `dev.py mkdocs build` (strict) e `check-links` **dentro l'albero simulato**, col carico sotto 50. Validata sul caso vero
-> (14:33): su `ed500643f^` (= `04dcf3a37`, lo stesso target della simulazione di W-B36b) → **FAILED**, con l'avviso esatto
+> (14:33): su `b6a3f1499^` (= `457842067`, lo stesso target della simulazione di W-B36b) → **FAILED**, con l'avviso esatto
 > dell'ancora mancante; build in circa 70 s; albero rimosso a fine prova.
 
 ### C-97a — quantità a 10 e prezzi a 12 decimali, backend: disegno ⏳ (2026-10-16)
@@ -4006,7 +4006,7 @@ nessun numero. Copia cancellata (`lsof +D` vuoto, `rm -rf`, `ls`: «No such file
 > nello stile della nota `VARCHAR(14)` della 004: la dichiarazione che SQLite ignora, la lettura del modello, nessun DDL,
 > nessuna riscrittura dei dati, l'effetto per chi ha già dati (e i dati del developer identici). La modifica di
 > `001_initial.py` resta in C-97a; se C-97a entra prima della 009, la nota segue con la 009. **FE8b**: IW e TR sono in `dev`
-> (`e9b4ac6b0`); aspetta l'ingresso di T (~16:45), lo dice il coordinatore.
+> (`edd0336ff`); aspetta l'ingresso di T (~16:45), lo dice il coordinatore.
 > **A** (16:05): la nota è nella 009, parola per parola, come punto 2 («Quantities keep 10 decimal places and prices 12 (C-97,
 > issue #43): no DDL, no data step.»), accanto al punto 1 di A (P18); la prima riga della 009 nomina C-97. Entra nel prossimo
 > commit di A (con A-24); `ruff`, `black` e Alembic puliti, una testa.
@@ -4078,7 +4078,7 @@ Queries»; righe 63–105 identiche a HEAD), `developer/architecture/database/in
 > per le obbligazioni) lo chiamano, docstring e istruzioni DB. In corso: i due test-author (aspettative della base di costo a
 > 12; rosso PEPE per unità; l'aiuto e i due plugin; sette colonne `RealDecimal`) e il docs-writer (D5 nelle pagine scritte,
 > sottosezione «Decimal places» nella guida BRIM). **A** (17:05): la frase su D5 nella 009, nel suo prossimo checkpoint (A-27,
-> commit a parte: la 009 era già committata in `bbe6c35da` col testo precedente).
+> commit a parte: la 009 era già committata in `c2996a022` col testo precedente).
 
 **C-97a, D5 e D6: rossi, cura, verdi** ✅ (17:10–17:16, nella finestra dello slot, senza il cancello del carico, 90–145): rossi
 `services transaction-decimal-places` **6 falliti** (il costo per unità oltre il limite atteso `{"max": 12}`, oggi 6; il costo
@@ -4106,7 +4106,7 @@ nessun file tracciato nuovo dall'`api sync`. **Fermo** sulle prove leggere fino 
 carico 130–170): restano `utils gate-i18n-usage`, `front check`, `check-orphans` e la simulazione del cherry-pick con la build
 strict sull'albero simulato.
 
-> **FE8b libero** (coordinatore, 17:45): T è entrato (`4d8ae68c4`), il lavoro dei colori su `components/transactions/**` è
+> **FE8b libero** (coordinatore, 17:45): T è entrato (`1709949e8`), il lavoro dei colori su `components/transactions/**` è
 > tutto in `dev`. **Ordine (scelta di W)**: C-97a (handoff), poi **FE8b**, poi C-97b e C-97c: FE8b sposta e divide i moduli
 > delle transazioni (moduli condivisi e `features/transactions/index.ts`) che C-97b tocca (`TxForm*Section.svelte`, gli
 > input), così C-97b scrive sui file nella loro casa nuova. FE8b parte dall'analisi, sulla base aggiornata dopo C-97a.
@@ -4127,14 +4127,14 @@ dev_release2 --docs`, 46 file del lotto, il journal escluso): **0 conflitti**; `
 del Designer Lab, non mia; le mie righe sono solo l'aggiunta di `real-decimal`); JSON validi; **`mkdocs build` strict exit 0 e
 `check-links` exit 0 sull'albero simulato**. `git diff --check` pulito; porta libera. **Handoff FROZEN** (18:2x): un commit.
 
-**C-97a committato** (coordinatore, 18:29): `5c4426e75` (codice) e `d8c2a13c7` (journal) sul ramo (HEAD `d8c2a13c7`, verificato,
-worktree pulito), cherry-pick **`bab52635d`** in `dev_release2` (treno 123), senza conflitti; il cancello su `dev` lo gira il
+**C-97a committato** (coordinatore, 18:29): `2a3c1bd60` (codice) e `24f1c3c96` (journal) sul ramo (HEAD `24f1c3c96`, verificato,
+worktree pulito), cherry-pick **`3ba393915`** in `dev_release2` (treno 123), senza conflitti; il cancello su `dev` lo gira il
 coordinatore; la riga 🐛 del CHANGELOG nei suoi record. **Il conteggio di D5** (18:29, carico 31, copia di lavoro, sola lettura):
 nei dati del developer **nessuna riga ha `cost_basis_override`**: D5 non cambia nessun numero. Copia cancellata (`lsof +D` vuoto,
 `rm -rf`, `ls`). Prossimi: W-B53, FE8b (analisi), C-97b, C-97c.
 
 **C-97a, la forma dei valori calcolati (D6)** ✅ (2026-10-16, 19:4x–20:0x). **Trovato da MF**: il suo `all-backend` (su
-`0452e592c`, con C-97a) ha 2 rossi in External, `TestCreditAgricoleCanonicalCharacterization::test_csv_freezes_entire_output[securities]`
+`cb3b2e32d`, con C-97a) ha 2 rossi in External, `TestCreditAgricoleCanonicalCharacterization::test_csv_freezes_entire_output[securities]`
 e `test_xlsx_matches_entire_literal_csv_output[securities]` («complete parse output drifted»). Riprodotti nella mia corsia: **2 falliti**.
 **Triage** (skill `test-triage`; §1 no: i valori ci sono tutti, cambia la forma): confronto campo per campo, cambia solo
 `cost_basis_override.amount` (le 14 righe ADJUSTMENT del 2024-06-05; gli INTEREST nel messaggio di pytest sono l'inizio del dict
@@ -4154,13 +4154,13 @@ aggiornata; le attese già scritte per D6 (1000/3, 100000/3, 2/3, 1/3 su importo
 0.951234567891) restano valide, verificate a mano prima della cura. **Verdi** (corsia 6184, slot 2): `utils real-decimal`
 **96**; **tutto** `external brim-providers` **736 passati, 1 saltato** (il caso Degiro di `TestWindows1252Invariance`, già
 saltato prima); `services transaction-decimal-places` **44**. `black`/`ruff` puliti, `git diff --check` pulito. **Simulazione
-del cherry-pick** su `dev_release2` (`b9c549300`), i 2 file: **0 conflitti, pulito**. Doc invariate: descrivono la regola del
+del cherry-pick** su `dev_release2` (`003e6a3b0`), i 2 file: **0 conflitti, pulito**. Doc invariate: descrivono la regola del
 valore (half-even alla scala, poi 15 cifre), che resta vera. **Handoff** al coordinatore come checkpoint a sé, prima di W-B53:
 `backend/app/db/precision.py` e `backend/test_scripts/test_utilities/test_real_decimal.py`.
 
 ### W-B53 — scaldare il pool BRIM all'avvio: analisi ⏳ (2026-10-16)
 
-**Stato reale** (HEAD `d8c2a13c7`): `backend/app/services/brim/brim_parse_pool.py` crea il pool alla prima analisi (`_get_pool`,
+**Stato reale** (HEAD `24f1c3c96`): `backend/app/services/brim/brim_parse_pool.py` crea il pool alla prima analisi (`_get_pool`,
 `ProcessPoolExecutor` con contesto `forkserver`); il primo worker è un interprete nuovo che importa
 `backend.app.services.brim.brim_provider` e tutto il registro dei plugin. Il test a tempo (`TIMEOUT = 30`,
 `backend/test_scripts/test_api/test_brim_api.py`, `TestParseEndpoint`) arriva dopo i 9 test di `TestFileStorage`: il suo primo
@@ -4274,7 +4274,7 @@ processi o connessioni quando lo si importa: lo importa il forkserver, che deve 
 
 **W-B53, prove leggere e simulazione** ✅ (20:00–20:17, carico 46–49): `black`/`ruff` puliti sugli 11 `.py`, `git diff --check`
 pulito, `check-orphans` (360 file backend raggiungibili). **Simulazione del cherry-pick** su `dev_release2`: dev è andato avanti
-(merge di A, `68355911f`, poi `9d9030a94` e `624fa5609`): **3 conflitti veri** più 2 del journal.
+(merge di A, `e7d2daa94`, poi `63668634f` e `3ccd79507`): **3 conflitti veri** più 2 del journal.
 - `test_app_lifecycle.py`, la docstring del modulo: la frase di H-15 (`plugin-secrets-check`) nello stesso punto della mia →
   tenute tutte e due, prima quella di H-15.
 - `overview.md`: il mio ramo ha ancora il passo `lone-transfer-legs` della decisione 47, che dev non ha, e dev ha
@@ -4291,21 +4291,21 @@ pulito, `check-orphans` (360 file backend raggiungibili). **Simulazione del cher
 > fusioni, poi il lint **dentro l'albero simulato**; e `--resolved=DIR`, che mette al posto di una fusione in conflitto il file
 > risolto (rifiutato se ha ancora i marcatori).
 
-Risoluzioni in `files/wb53_resolved/` (3 file, contro `9d9030a94`; fra quello e `624fa5609` nessuno dei 17 file è cambiato).
-Simulazione con le risoluzioni su `624fa5609`: **0 conflitti, lint pulito, `mkdocs build` strict exit 0, `check-links` exit 0**.
+Risoluzioni in `files/wb53_resolved/` (3 file, contro `63668634f`; fra quello e `3ccd79507` nessuno dei 17 file è cambiato).
+Simulazione con le risoluzioni su `3ccd79507`: **0 conflitti, lint pulito, `mkdocs build` strict exit 0, `check-links` exit 0**.
 **Revisione combinata** (dev + W-B53, nell'albero simulato, corsia 6184): `services config-brim` **51**, `app-lifecycle` **51** (i
 miei 49 e i 2 di H-15), `config-env-example` **38**, `brim-parse-pool` **17**. Porta libera. **Handoff FROZEN** (20:2x): due
 commit, codice e journal; su dev solo il primo.
 
-**W-B53 committato** (coordinatore, 20:18): `193412cdf` (codice) e `7fda52929` (journal) sul ramo (HEAD `7fda52929`, verificato,
-worktree pulito); cherry-pick **`618d7208e`** in `dev_release2` (treno 133) con le mie 3 risoluzioni (`overview.md` controllato:
+**W-B53 committato** (coordinatore, 20:18): `e6cd72aec` (codice) e `d5aa7099e` (journal) sul ramo (HEAD `d5aa7099e`, verificato,
+worktree pulito); cherry-pick **`b28a9342c`** in `dev_release2` (treno 133) con le mie 3 risoluzioni (`overview.md` controllato:
 16 `brim-parse-pool`, 17 `scheduler`, 18 `idle-monitor`); il cancello su dev lo gira il coordinatore; la riga ✨ del CHANGELOG nei
 suoi record. **MF** (MF-I2, `auto_cost.py`): risposto (a), cambia lui le 4 righe di `is_split_linked` sul suo ramo; il mio ramo
 in quel file aggiunge solo `_handover_cost` (decisione 47), lontano dal blocco 70–95.
 
 ### FE8b — la cartella delle transazioni in `features/`: analisi ⏳ (2026-10-16)
 
-**Stato reale** (HEAD `7fda52929`; `dev_release2` `618d7208e`: **stessa lista di file**, contenuti diversi, vedi sotto; strumenti
+**Stato reale** (HEAD `d5aa7099e`; `dev_release2` `b28a9342c`: **stessa lista di file**, contenuti diversi, vedi sotto; strumenti
 in sola lettura: `files/scripts/fe8b_inventory.py`, `files/scripts/fe8b_mapping.py`, uscite in `files/fe8b/`):
 - **FE8a fatto** (15/10): i tagli delle tre modali in `form/`, `bulk/`, `wizard/`. I padri restano grandi (Wizard 5 053, Bulk
   3 389, Form 1 704 righe): il ridisegno dello stato in classi è fuori dalla 1.3 (disegno di FE8a). **FE8b è una sola rinomina.**
@@ -4325,13 +4325,13 @@ in sola lettura: `files/scripts/fe8b_inventory.py`, `files/scripts/fe8b_mapping.
   sviluppatori 11 pagine; **devWiki 99 pagine, 258 righe**; 3 docstring del backend (`schemas/transactions/type_metadata.py`,
   `test_brim_providers.py`, `test_brim_degiro.py`; `test_brim_providers.py:6202` **legge `utils/brim/pluginKind.ts` come
   testo**). I 3 test del Designer Lab usano `TX_TABLE` solo come chiave di una fixture in memoria: non leggono il file.
-- **Il precedente di Y** (FE7 `6f7ac70ce`, FE3 `aec49a9cb`, FE6 `ce828e9c1`, FE2 `51aff4a12`, tutti del 16/10): sole
+- **Il precedente di Y** (FE7 `53e6d7773`, FE3 `a73af926d`, FE6 `76392f7ee`, FE2 `7aec1899a`, tutti del 16/10): sole
   rinomine (FE7: 101 file, 138 righe tolte e 138 messe), **nessun barile nuovo e D-P4 rinviato a FE9** («fra feature si
   importa dal file che definisce», D-Y5 e D-Y13 del piano 09), righe di misura della baseline rinominate con gli stessi conteggi,
   **dichiarazioni `~split` lasciate com'erano** (anche quella di `GrowthChart`), doc e devWiki nello stesso commit; un modulo
   usato da molti fuori (`BrokerIcon`, 17) è andato in `ui/display`; `utils/broker/` è rimasto dov'era.
-- **La mia base è indietro di 343 commit**: fra questi i lotti dei colori sui file delle transazioni (12:08–15:44, `48ecea1e2`,
-  `1a01ae733`, `9c79d5b35`, `70bae91b4`, `c4b8a4ae3`, `d39728347`), per cui 36 dei file da spostare differiscono da dev
+- **La mia base è indietro di 343 commit**: fra questi i lotti dei colori sui file delle transazioni (12:08–15:44, `f24d8d129`,
+  `9628283a5`, `5650908b4`, `d884b14c8`, `f2a61a4eb`, `9679fa9c6`), per cui 36 dei file da spostare differiscono da dev
   (+1 115/−882). I miei commit su quei file (W-B44, W-B39, C-34, C-97a) sono già in dev con altri id. → **prima di FE8b serve
   l'aggiornamento della base**, o la rinomina porterebbe contenuti vecchi.
 
@@ -4408,7 +4408,7 @@ build` e `check-links`; `check_source_paths.py`. In slot: `front-transaction all
 `front-portfolio dashboard`, `front-utility files`, `front-asset asset-data-editor`, `front-utility onboarding-tour`.
 
 **FE8b: via** (coordinatore, 20:41): F1–F4 come raccomandato (niente `index.ts`, `utils/brim/` diviso, `CompactCashCell` in
-`form/`, ogni modale nella cartella della sua parte). **Passo 0, aggiornamento della base** ✅: la fusione di dev `e5c80ad7c`
+`form/`, ogni modale nella cartella della sua parte). **Passo 0, aggiornamento della base** ✅: la fusione di dev `4463ac8f8`
 aperta dal coordinatore nel mio worktree, **7 conflitti risolti per unione** (`files/scripts/merge_e5c80ad7c_resolve.py`):
 `test_app_lifecycle.py` e `settings.md` col lato di dev, che contiene già il mio; `overview.md` nell'ordine del codice fuso
 (11 `lone-transfer-legs`, poi i passi di dev 12–19); `wac.md` col link ancorato a `split_promote.md#transfer-giving-leg`
@@ -4420,22 +4420,22 @@ della 47, salvo le mie 3 risoluzioni). > **⚠️ Fuori pista**: in `devWiki/log
 updated…» già all'aggiornamento di base delle 10:49 (due entrate aggiunte in fondo dai due lati, intercalate da git): cosmetico,
 lasciato. Prove sul tree fuso: `app-lifecycle` 51, `lone-transfer-legs` 20, `orphan-transfer-numbers` 21, `broker` 79,
 `transaction-cost-basis-rule` 80, `roi-fifo-utils` 833, `portfolio-engine` 40, `lots-analysis-pure` 163, `mkdocs build` strict
-e `check-links` exit 0, `check_source_paths.py` a 5. Committata dal coordinatore: **`cec9c6ab1`**; poi dev `27994759a` (J-24,
-MF C e MF-I2 su `auto_cost.py`, A-25, Z) fuso pulito: HEAD **`f33306e41`**. Lo strumento dello spostamento è pronto
+e `check-links` exit 0, `check_source_paths.py` a 5. Committata dal coordinatore: **`9ec433713`**; poi dev `4a62135ee` (J-24,
+MF C e MF-I2 su `auto_cost.py`, A-25, Z) fuso pulito: HEAD **`f3baf431b`**. Lo strumento dello spostamento è pronto
 (`files/scripts/fe8b_move.py`, dry run pulito: 0 import irrisolti, 0 nomi di cartelle vecchie, ogni file spostato ≥ 95 %
 simile, 4 barili espansi, 6 `vi.mock`, 12 righe della baseline, 360 menzioni di percorso). **La 47 entra in dev prima di FE8b**
 (coordinatore, 20:52), dopo la prova con J-24.
 
 ### Decisione 47 in dev: la prova con J-24 ✅ (2026-10-16)
 
-**J-24** (`9d702ae8d`, regola P21 del developer, «ogni importo al cambio del suo giorno»): un ADJUSTMENT in uscita con un costo
+**J-24** (`52756026a`, regola P21 del developer, «ogni importo al cambio del suo giorno»): un ADJUSTMENT in uscita con un costo
 lasciava il capitale al costo storico del pool e non realizzava nulla; ora esce a quantità × costo dichiarato al cambio del suo
 giorno (D), e la differenza dal costo medio che il pool cede (C) è realizzata, come nei lotti (CP-7a); il flusso del giorno per
 TWRR e MWRR segue. La 47 scrive proprio quelle righe: la gamba che cede, ADJUSTMENT-out al **costo Auto del suo broker**
 (`_handover_cost` → `compute_wac_iterative` senza suggerimento di valuta: la valuta dell'**ultimo acquisto**, ogni acquisto
 convertito al cambio del suo giorno).
 
-**Prove su `f33306e41`** (20:54–20:59, corsia 6184, `files/scripts/j24_checks.sh`, una alla volta): `app-lifecycle` **51**,
+**Prove su `f3baf431b`** (20:54–20:59, corsia 6184, `files/scripts/j24_checks.sh`, una alla volta): `app-lifecycle` **51**,
 `lone-transfer-legs` **20**, `orphan-transfer-numbers` **21**, `broker` **79**, `transaction-cost-basis-rule` **80**,
 `roi-fifo-utils` **865** (con i test di J-24), `portfolio-engine` **41**, `lots-analysis-pure` **163**. Tutto verde.
 
@@ -4456,7 +4456,7 @@ Dashboard lo legge): coperto in due metà, W scrive la riga (in EUR, più i casi
 Prossimi: `all-backend` nello slot del coordinatore (~21:30–21:40), l'ingresso della 47 per fusione del mio ramo (47 e journal,
 43 file senza conflitti, verificato dal coordinatore), poi FE8b.
 
-**FE8b, inventario sulla base nuova** ✅ (21:0x, HEAD `6162dfc0f`, sola lettura): stessi 125 file (42 103 righe: −233 dai
+**FE8b, inventario sulla base nuova** ✅ (21:0x, HEAD `ebbd2025a`, sola lettura): stessi 125 file (42 103 righe: −233 dai
 lotti dei colori di dev), stessi 17 moduli e 31 righe d'import da fuori, stessi 7 `vi.mock`; mappa **identica** (124
 spostamenti, 2 barili). Dry run di `files/scripts/fe8b_move.py`: 191 file riscritti, 575 riferimenti (356 menzioni di percorso),
 0 import irrisolti, 0 nomi di cartelle vecchie, 0 relativi sconosciuti, ogni file spostato ≥ 95 % simile. Corretti nello
@@ -4469,7 +4469,7 @@ già morti in due pagine della devWiki (`CashTransactionModal`, `TransactionStag
 l'ambiente file per file (`// @vitest-environment`), non per percorso: lo spostamento non cambia ambiente a nessun test. Pronto
 ad applicarlo dopo l'ingresso della 47.
 
-**Decisione 47, `all-backend`** ✅ (slot 2, 21:19:54–21:52:38, 32 min 39 s, carico 50–119; HEAD `6162dfc0f`, la 47 con J-24;
+**Decisione 47, `all-backend`** ✅ (slot 2, 21:19:54–21:52:38, 32 min 39 s, carico 50–119; HEAD `ebbd2025a`, la 47 con J-24;
 `files/scripts/allb_47.sh`, `dev.py test --test-port 6184 --data-dir /tmp/librefolio-r13-w --workers 2 --log-dir … all-backend`):
 **7/7 categorie verdi** (External, DB, Services, Utils, Schema, API, E2E), «ALL BACKEND TESTS PASSED», **0 falliti**. Passaggi
 paralleli a 2 worker: 171 unità 12 584 passati e 5 saltati; 49 unità 3 091; 12 unità 1 833; 70 unità 1 914 passati e 2
@@ -4478,13 +4478,13 @@ Le righe «❌» del log sono i messaggi attesi dei test negativi dei fornitori 
 Porta libera dopo; DB di test archiviato dal runner (`00_archive/test-db_20261016_215237.tar.xz`); log per unità in
 `files/logs/allb_47_units_2119/`. Pronta per l'ingresso (fusione del mio ramo in dev, 47 e journal).
 
-**La 47 entrata** (coordinatore, 21:5x): fusione `ea72346b7` (treno 142), CHANGELOG `bf2c22791`; il mio ramo portato avanti
-veloce a `bf2c22791`, pulito. Dal team dei colori: i 3 test del Designer Lab liberi (aggiornarli); i lotti T e AF di stasera
+**La 47 entrata** (coordinatore, 21:5x): fusione `4b40ca5a0` (treno 142), CHANGELOG `57f8c3daa`; il mio ramo portato avanti
+veloce a `57f8c3daa`, pulito. Dal team dei colori: i 3 test del Designer Lab liberi (aggiornarli); i lotti T e AF di stasera
 non toccano le 12 righe della baseline; nessun ingresso durante il congelamento. **FE8b: via e congelamento annunciato.**
 
 ### FE8b — la cartella delle transazioni in `features/`: lo spostamento ⏳ (2026-10-16)
 
-1. ✅ **Spostamento** (21:56, `files/scripts/fe8b_move.py --apply` su `bf2c22791`; prima il dry run sulla base nuova, identico:
+1. ✅ **Spostamento** (21:56, `files/scripts/fe8b_move.py --apply` su `57f8c3daa`; prima il dry run sulla base nuova, identico:
    tre commit di dev toccavano solo altre righe di `_frontend_utility.py` e altre rotte): 124 file in `features/transactions/`
    (radice 24, `form/` 13, `bulk/` 18, `import/` 56, `events/` 8, `cells/` 3, `wac/` 2), i 2 barili tolti, `utils/brim/` con
    `pluginText` e `pluginKind`; 191 file riscritti, 575 riferimenti (4 barili espansi, 6 `vi.mock`, 12 righe della baseline, 356
@@ -4506,7 +4506,7 @@ non toccano le 12 righe della baseline; nessun ingresso durante il congelamento.
    - `front check` al primo giro **27 errori in 7 file, tutti in `features/backup/`** (`RestoreStatus`, `control_totals`, …),
      che FE8b non tocca. > **⚠️ Fuori pista — ambiente**: il client generato (`src/lib/api/generated.ts` e `openapi.json`,
      ignorati da git) era delle 21:47, cioè dell'avvio del server di `all-backend`, prima dell'avanzamento veloce che ha portato
-     l'API del ripristino di B (`1e2f6374a`). `dev.py api sync` (nessun file tracciato cambiato), poi di nuovo tutto il punto 1.
+     l'API del ripristino di B (`f440254d5`). `dev.py api sync` (nessun file tracciato cambiato), poi di nuovo tutto il punto 1.
      Lezione: dopo un aggiornamento di base che porta API, `api sync` prima di svelte-check.
    - Secondo giro: `front check` **0 errori, 0 avvisi**; Vitest `front-transaction tx-unit` **907**, `front-utility core-unit`
      **7 270** (con i gate dell'HTML e dei colori), `component-unit` **4 246**, `front-broker broker-unit` **60**, `front-asset
@@ -4515,14 +4515,14 @@ non toccano le 12 righe della baseline; nessun ingresso durante il congelamento.
      rischio, onboarding, dipendenze `@embedpdf` non elencate). Nella feature solo `txStoreGetFiltered` e `txStoreGetVersion`
      (`txStore.svelte.ts`): **già inutilizzati su HEAD** al percorso vecchio, e nessun barile li esportava. **Nessun reperto
      nuovo.**
-   - Dev è avanzato durante il congelamento (`bf2c22791` → `4e233fe5b`: Z-18, J CP-7b, E-4): l'unico file in comune è la rotta
+   - Dev è avanzato durante il congelamento (`57f8c3daa` → `8d558baab`: Z-18, J CP-7b, E-4): l'unico file in comune è la rotta
      della Dashboard (Z alle righe 109–650, FE8b alle righe d'import 78–79: nessun conflitto); nessun riferimento nuovo ai
      percorsi vecchi, nessun file nuovo nelle cartelle congelate.
    - **Commit pronto** (22:3x): 376 percorsi nel commit del codice (`files/fe8b/stage_code.txt`: 126 tolti, 124 nuovi, 126
      modificati), il journal a parte (`files/fe8b/stage_journal.txt`); nessun file ignorato o generato fra loro; `git diff
      --check` pulito; porta libera.
-4. ✅ **Prove del punto 2, gli E2E** (slot 1, 22:28–23:24, carico 44–150; dopo il commit del coordinatore: **`74e390c98`**,
-   252 file e le 124 rinomine riconosciute, più `bc8a58fba` del journal; `files/scripts/fe8b_point2.sh`):
+4. ✅ **Prove del punto 2, gli E2E** (slot 1, 22:28–23:24, carico 44–150; dopo il commit del coordinatore: **`936ff309f`**,
+   252 file e le 124 rinomine riconosciute, più `2b7ffb2f7` del journal; `files/scripts/fe8b_point2.sh`):
    - `db populate --force`; `front-transaction all --workers 4`: 343 + 32 passati (32 saltati del progetto mobile), **6
      rossi, nessuno dello spostamento**:
      - **3 sono un difetto di C-97a, mio, in dev dalle 18:29**: `tx-commit-all-types` «TRANSFER (asset) … dual brokers», `tx-wac-bulk`
@@ -4538,7 +4538,7 @@ non toccano le 12 righe della baseline; nessun ingresso durante il congelamento.
      asset-data-editor` **26**, `front-utility onboarding-tour` **10**. Porta libera.
    - **FE8b pronto per l'ingresso.** W-B56 (la media dell'anteprima senza arrotondamento, da decidere con MF) nel backlog.
 
-**FE8b entrato** (coordinatore, 23:2x): **`31335fe26`** in `dev_release2`; congelamento finito. Prossimi: C-97a, il costo Auto;
+**FE8b entrato** (coordinatore, 23:2x): **`af6cd2899`** in `dev_release2`; congelamento finito. Prossimi: C-97a, il costo Auto;
 poi C-97b e C-97c.
 
 ### C-97a — il costo Auto non passa dal controllo dei decimali ✅ (2026-10-16)
@@ -4562,20 +4562,20 @@ checkpoint a sé, subito dopo l'ingresso di FE8b, prima di C-97b.
    del codice), con la ragione in docstring. Una frase nella pagina `developer/backend/transactions/service.md`, «Decimal
    limits» (senza traduzioni). `black`/`ruff` puliti.
 3. ✅ **Verdi** (23:27, carico 49): `services transaction-decimal-places` **84** (i 40 nuovi e i 44 di prima),
-   `transaction-cost-basis-rule` **80**. **Simulazione del cherry-pick** su `dev_release2` (`778156983`), i 3 file: 0 conflitti,
+   `transaction-cost-basis-rule` **80**. **Simulazione del cherry-pick** su `dev_release2` (`9990d7f03`), i 3 file: 0 conflitti,
    lint pulito, `mkdocs build` strict e `check-links` exit 0. Da girare in uno slot, come conferma: `api transactions-validate` e
    i 3 E2E che l'hanno trovato.
-4. ✅ **Conferma prima dell'ingresso** (slot 1, 23:34–23:46, carico 42–92; dopo il commit del coordinatore `de901f228` e
-   `11baeab0f`; `files/scripts/c97a_auto_confirm.sh`): `db populate --force`; `api transactions-validate` **12**;
+4. ✅ **Conferma prima dell'ingresso** (slot 1, 23:34–23:46, carico 42–92; dopo il commit del coordinatore `6deb644e9` e
+   `a978c1e71`; `files/scripts/c97a_auto_confirm.sh`): `db populate --force`; `api transactions-validate` **12**;
    `front-transaction tx-commit-all-types` **19** (il TRANSFER fra due broker passa), `tx-wac-bulk` **11** (con WB4),
    `tx-wac-formmodal` **10** (con FM6). Porta libera. **Pronto per l'ingresso.**
 
-**C-97a, il costo Auto, committato** (coordinatore, 23:3x): `de901f228` (codice) e `11baeab0f` (journal). Conferma prima
+**C-97a, il costo Auto, committato** (coordinatore, 23:3x): `6deb644e9` (codice) e `a978c1e71` (journal). Conferma prima
 dell'ingresso nello slot 2 (`files/scripts/c97a_auto_confirm.sh`: `db populate --force`, `api transactions-validate`, i 3 E2E).
 
 ### C-97b — i decimali in input: analisi ⏳ (2026-10-16)
 
-**Stato reale** (HEAD `11baeab0f`, percorsi dopo FE8b; sola lettura). Il backend (C-97a) accetta una quantità a 10 decimali, un
+**Stato reale** (HEAD `a978c1e71`, percorsi dopo FE8b; sola lettura). Il backend (C-97a) accetta una quantità a 10 decimali, un
 prezzo o un costo per unità a 12, un importo a 6, ogni valore a 15 cifre significative; un evento a 6 (`AssetEvent.value`
 `Numeric(18, 6)`, `EVENT_TOO_MANY_DIGITS`). Oltre il limite rifiuta col massimo (D2). In input:
 1. **Form, quantità a 6**: `ExactQuantityInput maxFractionDigits={6}` sul campo `draft.quantity` in `form/TxFormSingleSection.svelte:176,
@@ -4612,7 +4612,7 @@ asset-data-editor`. Doc utente: le pagine che dicono 6 decimali, da cercare; CHA
 
 **Peso**: medio (6 file di codice, ~6 file di test). Ordine: rossi (test-author), cura, prove, doc, handoff.
 
-**C-97a, il costo Auto, entrato** (coordinatore, 23:5x): `c91bd41b2` in `dev_release2` (i 2 commit); il plan 04 entra con C-97b.
+**C-97a, il costo Auto, entrato** (coordinatore, 23:5x): `e50f85b5f` in `dev_release2` (i 2 commit); il plan 04 entra con C-97b.
 **C-97b: via pieno** (coordinatore, 23:5x): il team dei colori non ha nulla di aperto su `ExactQuantityInput`, `ExactDecimalInput`,
 `AssetDataEditorSection`; per il messaggio `text-lf-danger`, bordo `border-lf-danger`, nessuna classe di palette. X avvisato per
 O-8 su `AssetDataEditorSection` (solo le mie righe `step`; chi entra per secondo risolve).
@@ -4649,10 +4649,10 @@ dell'evento porterà anche `max_integer_digits` (W-B58), e la frase di `events.s
 
 ### W-B58 e W-B59 — la revisione R13-SEC2 di E: ✅ handoff FROZEN (2026-10-17)
 
-**Fonte**: piano 08 di E, «R13-SEC2» (in dev da `6cadaf427`): reperto 1 (MEDIUM 8/10) e note 1, 2, 4, 5 → **W-B58**; nota 12
+**Fonte**: piano 08 di E, «R13-SEC2» (in dev da `79154f73b`): reperto 1 (MEDIUM 8/10) e note 1, 2, 4, 5 → **W-B58**; nota 12
 (disponibilità 9/10, provata) → **W-B59**. Priorità del coordinatore (17/10, 00:0x): prima di C-97b, da chiudere prima del rilascio;
 rossi prima; `price_query.py` è di X: lo scrivo io, X lo rivede al checkpoint; niente riga 🔒 nel CHANGELOG (C-97a non è uscita).
-HEAD `11baeab0f` (in dev); i file toccati sono identici fra HEAD e la punta di dev (`git diff HEAD dev_release2` vuoto su di loro).
+HEAD `a978c1e71` (in dev); i file toccati sono identici fra HEAD e la punta di dev (`git diff HEAD dev_release2` vuoto su di loro).
 
 **Stato reale verificato (W-B58)**:
 - **Lettura** — `db/real_decimal.py:53-62`: un REAL ±inf solleva `TypeError` (l'esponente `'F'` confrontato con un intero); da
@@ -4853,7 +4853,7 @@ limita le cifre significative solo su una colonna `RealDecimal`: su un importo (
 `1234567890.123457`, ancora 16 cifre significative → la docstring (già di C-97a: «always passes») corretta a mano in
 `db/precision.py`, solo testo. Il `git fetch` che avevo messo in una riga di controllo l'ho fermato subito: nessun ref cambiato
 (`FETCH_HEAD` del 16/10), e non lo rifaccio (git in sola lettura). Simulazione (`sim_cherry_pick.sh dev_release2 --docs`, 31 file
-compresi piano e backlog) su dev **`3a5ff5194`** (dopo la fine del blocco dei segnali di J, `b36e3873f`): **0 conflitti**,
+compresi piano e backlog) su dev **`d0a163747`** (dopo la fine del blocco dei segnali di J, `2d25d0a94`): **0 conflitti**,
 `price_query.py` fuso con l'import da `services/signals/`; ruff e black puliti sui `.py` fusi; `mkdocs build` stretto e `check-links`
 verdi sull'albero simulato (carico 48). `git diff --check` pulito; porta 6184 libera.
 
@@ -4879,8 +4879,8 @@ CHANGELOG (C-97a e W-B53 non sono usciti). Dopo l'ingresso: C-97b riprende (la c
 
 ### C-97b — i decimali in input: la cura ✅, handoff FROZEN, E2E ✅ (2026-10-17)
 
-**Ripresa** (coordinatore, 02:0x): W-B58/W-B59 committati (`7a4fdf024`, `e69544f79`, journal `94fbd54fd`) ed entrati in dev
-(`4e9d1815f`, revisione di X ok; le sue 2 note su `price_query.py` vanno a X come X-R40). HEAD `94fbd54fd` verificato; nel
+**Ripresa** (coordinatore, 02:0x): W-B58/W-B59 committati (`dc92f2b54`, `d09f753ae`, journal `9a270cfae`) ed entrati in dev
+(`df1d9c2e4`, revisione di X ok; le sue 2 note su `price_query.py` vanno a X come X-R40). HEAD `9a270cfae` verificato; nel
 worktree solo i file di C-97b. W-B57 (TC-17 dei colori) aggiunta alla mia sezione del backlog: entra con C-97b.
 
 **Passo 1 — la cura ✅ (02:1x)**: `files/scripts/c97b_cure.py --apply` (6 file), poi `prettier` (nessuna modifica):
@@ -4951,7 +4951,7 @@ segue il budget: «Whole numbers only» a 0); build stretta e `check-links` verd
 quantità del Form (`user/transactions/import/how-to.en.md` ~284 dice già 10): niente.
 
 **Passo 5 — la simulazione ✅ (03:0x)**: `sim_cherry_pick.sh dev_release2 --docs`, 27 file (codice, test, i18n, doc, runner,
-journal) su dev **`2818924b7`**: **0 conflitti**, JSON validi, `mkdocs build` stretto e `check-links` verdi sull'albero simulato
+journal) su dev **`bd229d1c6`**: **0 conflitti**, JSON validi, `mkdocs build` stretto e `check-links` verdi sull'albero simulato
 (carico 42). `git diff --check` pulito.
 
 **Handoff FROZEN (03:1x)**, chiesto dal coordinatore prima dello slot: lui committa, unisce dev, e lo slot prova la revisione
@@ -4960,13 +4960,13 @@ combinata. Due commit proposti: `feat(transactions): 10-decimal input, digit mes
 galleria 03:50–04:45, poi Y): prima, sulla HEAD nuova, `api sync` (il client generato è ignorato da git) e `front check` a carico
 < 50; poi `files/scripts/c97b_slot.sh`. Riga del CHANGELOG da aggiungere alla voce C-97 (#43), all'ingresso, dal coordinatore.
 
-**Prima dello slot ✅ (03:30–03:3x)**: C-97b committato (`24aa1d69b`, `527306638`), dev `2818924b7` unito → HEAD **`1f779d386`**;
+**Prima dello slot ✅ (03:30–03:3x)**: C-97b committato (`a8a08cf27`, `a6e7609ac`), dev `bd229d1c6` unito → HEAD **`ee573e009`**;
 sopra, `dev.py api sync` (carico 35, uscita 0; il client generato è ignorato da git: nessuna differenza tracciata) e `front check`
 **0/0** (carico 40). E2E di R13-SEC5 (revisione di sicurezza di E su C-97b): niente sopra la soglia, e il lotto chiude un pozzo
 `{@html}` nella cella del Bulk; tre note basse → **W-B66** (un `1e-8` incollato diventa `18`; un incolla enorme blocca la
 scheda: `10n ** places` e una regex quadratica; il toast a 2 decimali, con C-97c).
 
-**Passo 6 — gli E2E ✅ (slot 2, 04:48–05:13)**, `files/scripts/c97b_slot.sh` su HEAD **`1f779d386`** (la revisione combinata; nel
+**Passo 6 — gli E2E ✅ (slot 2, 04:48–05:13)**, `files/scripts/c97b_slot.sh` su HEAD **`ee573e009`** (la revisione combinata; nel
 worktree solo i file di test di W-B60 e il journal, nessun file di `frontend/` né di `backend/app/`; `api sync` già fatto alle 03:30
 sulla stessa HEAD): `db populate --force` ok, `tx-bulk-operations` **11** (la guardia del satoshi compresa), `tx-event-create-exists`
 **8**, `tx-event-picker` **5**, `transactions-modals` **25**, `tx-commit-all-types` **19**, `tx-wac-bulk` **11**,
@@ -4983,11 +4983,11 @@ Restano, a carico < 50: `front check`, `front-utility component-unit` e `core-un
 
 ### W-B60 — importi e valori degli eventi senza il rumore del double: ✅ handoff FROZEN, `all-backend` dopo l'unione (2026-10-17)
 
-**Ordine del coordinatore** (03:0x): C-97b committato (`24aa1d69b`, `527306638`), base aggiornata con dev `2818924b7` → HEAD
-**`1f779d386`**, pulito. Nell'attesa dello slot di C-97b (dopo le 04:45): l'analisi di W-B60 e i rossi, **solo file di test**;
+**Ordine del coordinatore** (03:0x): C-97b committato (`a8a08cf27`, `a6e7609ac`), base aggiornata con dev `bd229d1c6` → HEAD
+**`ee573e009`**, pulito. Nell'attesa dello slot di C-97b (dopo le 04:45): l'analisi di W-B60 e i rossi, **solo file di test**;
 nessun codice di prodotto finché gli E2E di C-97b non sono verdi, perché lo slot provi esattamente questa revisione.
 
-**Stato reale verificato** (HEAD `1f779d386`, sola lettura):
+**Stato reale verificato** (HEAD `ee573e009`, sola lettura):
 - `Transaction.amount` (`db/models.py:892`) e `AssetEvent.value` (`:1052`) sono `Numeric(18, 6)`: SQLAlchemy li rilegge col
   formato `'%.6f'` del double, quindi da ~11 cifre intere il rumore entra nei 6 decimali (`123456789012.345` →
   `123456789012.345001`, `12345678901.2345` → `12345678901.234501`; con le 15 cifre intere di N63, `99999999999999.9` →
@@ -5053,7 +5053,7 @@ su una riga così (oggi fallisce su `Infinity`: nulla peggiora) → in **W-B63**
 finché C-97b non è verde. (E le due righe di `ledger_totals.py`, di J, le scrivo io in W-B60, solo testo: aggiunte allo script
 `files/scripts/wb60_cure.py`, da applicare con la cura.)
 
-**W-B62 — stato reale** (HEAD `1f779d386`):
+**W-B62 — stato reale** (HEAD `ee573e009`):
 - `price_query.get_current_prices_bulk` (`services/assets/price_query.py:703`, di X): `cv = await core.call_provider(…)`, poi
   **`core._asset_current_cache.set(cache_key, cv)` prima di ogni controllo** (`:785`), poi `FACurrentPriceItem(value=cv.value)`.
   Un `1E+50000000` è un `Decimal` finito: pydantic lo accetta (rifiuta solo ±Infinity e NaN, che cadono nel `except` e vanno al
@@ -5148,8 +5148,8 @@ di V-4: `_find_created_tx_for_wac` ripiega sull'ultima riga con broker, asset, d
 → W-B63 (dopo D-W63-1). Dopo C-97b, J scrive un `case` in `features/transactions/events/eventSaveError.ts` (il 409 di P-10,
 `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`): lo rivedo io.
 
-**C-97b entrato** (coordinatore, 05:1x): dev `b2462042d`, la mia frase aggiunta alla voce C-97 del CHANGELOG in `b214c8200`. Il mio
-ff fallisce per i file di W-B60 non committati: HEAD resta `1f779d386`, la punta arriva al checkpoint di W-B60 (col piano 04).
+**C-97b entrato** (coordinatore, 05:1x): dev `7d864f053`, la mia frase aggiunta alla voce C-97 del CHANGELOG in `8fb618fc5`. Il mio
+ff fallisce per i file di W-B60 non committati: HEAD resta `ee573e009`, la punta arriva al checkpoint di W-B60 (col piano 04).
 
 **W-B60 — la cura ✅ (05:1x)**: gli E2E di C-97b sono verdi, quindi il codice di prodotto è ammesso.
 `files/scripts/wb60_cure.py --apply` (3 file): `backend/app/db/models.py` (`Transaction.amount` e `AssetEvent.value` →
@@ -5187,32 +5187,32 @@ l'importo `Numeric` (la docstring del modulo, il commento di N63, l'esempio di `
 grandezza): con la lettura nuova un pareggio al settimo decimale arrotonda diversamente (`784.0774475`: prima `…447`, ora `…448`) e un
 valore di 10+ cifre intere può superare le 15 significative → **W-B68**, basso.
 
-**Il percorso del coordinatore** (05:29): lo slot 3 per `all-backend --workers 2`, ma sulla revisione combinata (HEAD `1f779d386` è
+**Il percorso del coordinatore** (05:29): lo slot 3 per `all-backend --workers 2`, ma sulla revisione combinata (HEAD `ee573e009` è
 130 commit indietro rispetto a dev): doc finite → CHECKPOINT READY e FROZEN con le liste da mettere in stage → lui committa e unisce
 dev nel mio ramo → `all-backend --workers 2` nella mia corsia (6184) quando il carico a 5 minuti è < 50. CHANGELOG: la mia riga come
 riga 🐛 a sé, non dentro C-97.
 
-**La simulazione e le risoluzioni ✅ (05:4x–05:5x)**: su dev `252835dce`, 3 conflitti in 2 file, tutti fra W-B60 e X-R38/X-R50
-(i cambi di X, `80f5c65ff` e `243ab6150`, la parte FX di W-B58): in `test_real_decimal.py` due paragrafi della docstring e due sezioni
+**La simulazione e le risoluzioni ✅ (05:4x–05:5x)**: su dev `b090055f0`, 3 conflitti in 2 file, tutti fra W-B60 e X-R38/X-R50
+(i cambi di X, `ecc550580` e `88ba2e6e2`, la parte FX di W-B58): in `test_real_decimal.py` due paragrafi della docstring e due sezioni
 di test aggiunti nello stesso punto (×2); in `architecture/database/index.md` la tabella (la riga dell'importo mia, `RealDecimal(18,
 6)`; quella del cambio di X, 14 cifre intere). Risolti per unione, prima X poi W-B60 (`files/scripts/wb60_resolve.py` →
-`files/wb60_resolved/`). Rifatta su dev **`1c2bac918`** con `--resolved`: **0 conflitti**, lint pulito nell'albero simulato, `mkdocs
+`files/wb60_resolved/`). Rifatta su dev **`9464ea750`** con `--resolved`: **0 conflitti**, lint pulito nell'albero simulato, `mkdocs
 build` stretto e `check-links` verdi; i due file risolti non sono cambiati in dev fra le due punte (fuori di essi, solo altre sezioni
 del backlog, che si fondono da sole). Prova semantica: `utils real-decimal` lanciato nell'albero simulato (il codice di dev più il mio)
 → **267 passati** (i 239 di W-B60 più i 28 di X-R38/X-R50).
 
-**W-B60 — `all-backend` e ingresso (06:36–06:5x)**: `all-backend --workers 2` su `c5761ac55` (05:57–06:36, 38m44s; la build del
+**W-B60 — `all-backend` e ingresso (06:36–06:5x)**: `all-backend --workers 2` su `7d5c4351c` (05:57–06:36, 38m44s; la build del
 frontend 17 minuti): **6 categorie su 7 verdi**; nei servizi 6 486 passati, 5 saltati, **2 falliti**, entrambi in
-`test_lone_transfer_legs.py` → **W-B69** (sotto). Non di W-B60: gli stessi 2 rossi su un'esportazione pura di dev `1c2bac918` (senza
-W-B60) e da soli nel worktree (carico 23–25). W-B60 entrato: dev `484c71afb`, CHANGELOG 🐛 `0dc58c70b`; HEAD avanzata a `0dc58c70b`.
-Revisione di X-R47 (`5f68a8db0`, sola lettura): OK, una nota bassa (il rapporto mostrato com'è, `-0.5`, in frasi IT/FR/ES che
+`test_lone_transfer_legs.py` → **W-B69** (sotto). Non di W-B60: gli stessi 2 rossi su un'esportazione pura di dev `9464ea750` (senza
+W-B60) e da soli nel worktree (carico 23–25). W-B60 entrato: dev `6d402550d`, CHANGELOG 🐛 `e6f9c9324`; HEAD avanzata a `e6f9c9324`.
+Revisione di X-R47 (`ad95e8699`, sola lettura): OK, una nota bassa (il rapporto mostrato com'è, `-0.5`, in frasi IT/FR/ES che
 scrivono «0,5»).
 
 ### W-B69 — il costo Auto calcolato ignorando una riga illeggibile (regressione di W-B58): analisi ✅ (2026-10-17)
 
 **Stato reale**: la decisione 1 della 47 vuole che una gamba che cede, il cui costo non si calcola, resti un TRANSFER con una
 ragione. I test lo provocano piantando nel suo insieme una riga di quantità `'n/a'` (testo): prima di W-B58 la lettura sollevava
-(TypeError) e il calcolo con lei. Da W-B58 (`7a4fdf024`) `RealDecimal` legge `None`: `compute_wac_iterative` (facciata di MF,
+(TypeError) e il calcolo con lei. Da W-B58 (`dc92f2b54`) `RealDecimal` legge `None`: `compute_wac_iterative` (facciata di MF,
 `portfolio_service.py`) carica la riga (`quantity IS NOT NULL AND quantity != 0` vale per un testo) e
 `cost_movement_from_transaction` (`financial_math/average_cost.py:294`) tratta `None` come 0 e la salta: la media esce **senza
 quella riga** e la gamba diventa un ADJUSTMENT a quel costo, per sempre. Con W-B60 un importo illeggibile letto `None` fa peggio:
@@ -5236,7 +5236,7 @@ di MF, nessuna scrittura) e gli altri lettori che saltano un `None` (la pulizia 
 **Fonte**: piano 08 di E, «R13-SEC7», reperto 3 (MEDIUM 8/10, DoS da qualsiasi utente: OOM), più le due aggiunte del coordinatore
 (06:3x): `balances.py:75` e la data controllata in scrittura (J). Priorità: prima di W-B69.
 
-**Stato reale** (HEAD `0dc58c70b`):
+**Stato reale** (HEAD `e6f9c9324`):
 - `services/brokers/broker_service.py:173`: i saldi iniziali di un broker nuovo diventano un dict grezzo con
   `format(currency_obj.amount, "f")` prima di `execute_batch`; `Currency.validate_amount` (`schemas/common.py`) fa solo
   `Decimal(str(v))`, e pydantic accetta `1E+999999999` (finito): `format` scrive un miliardo di cifre sul loop degli eventi.
@@ -5328,7 +5328,7 @@ le paga più (passo 3 del disegno); altri giri per giorno su tutta la storia, se
    pagine utente le ho scritte io (`files/scripts/sec73_user_docs_i18n.py`, 12 file, le etichette dal catalogo); `translate-validate`
    pulito su `how-to`, `import/index`, `index`; timbrate solo `how-to` e `import/index` (la cache di Aphra combaciava con l'EN di HEAD).
    `mkdocs build` stretto ok (87 s, carico 35), `check-links` ok (docs-writer).
-   > **⚠️ Fuori pista**: `form.en.md` ha un debito di traduzione precedente, mio (E1b, `0ffaa9127`): il punto «Missing event?» e il suo
+   > **⚠️ Fuori pista**: `form.en.md` ha un debito di traduzione precedente, mio (E1b, `3f2f08d23`): il punto «Missing event?» e il suo
    > link `events.md#new-event`, la cui sezione manca anche in `events.{it,fr,es}.md` → non timbrata (il timbro nasconderebbe il debito),
    > resta alla pipeline. `transactions/index.en.md` aveva già una deriva non timbrata (cache ≠ EN di HEAD) → non timbrata.
    > **⚠️ Fuori pista**: discordanze trovate dal docs-writer: (1) il giro giorno per giorno partiva da `from_date`, non dalla prima riga:
@@ -5337,17 +5337,17 @@ le paga più (passo 3 del disegno); altri giri per giorno su tutta la storia, se
    > fallisce» (H-41) non si riproduce: la colonna `Text` di SQLite salva un numero come testo (`'42'`) → tolto dalla docstring del modello
    > e dal piano; (3) il costo unito su entrambe le righe di una coppia di cassa → **W-B72**; (5) la pagina utente dice che l'unione sceglie
    > data e costo → **W-B73**; (6) la docstring di `execute_batch` senza `check_dates` → corretta.
-5. ✅ **Simulazione sulla punta di dev** (2026-10-17 08:20): `sim_cherry_pick.sh 7f8e69be6 --docs` sui 51 file del lotto (SEC7-3 +
+5. ✅ **Simulazione sulla punta di dev** (2026-10-17 08:20): `sim_cherry_pick.sh 8217b9009 --docs` sui 51 file del lotto (SEC7-3 +
    H-41, giornale compreso; dev è 98 commit avanti): 0 conflitti, ruff/black e JSON puliti, `mkdocs build` stretto e `check-links` ok
    sull'albero simulato (carico 35). Dev ha toccato un solo file del lotto, `BACKLOG_POST_1.2.md` (altre sezioni).
    > **Note implementazione**: la metà dei rossi di W-B69 che resta a me (33 rossi, 24 guardie, `test_transaction_cost_basis_rule.py`)
    > è parcheggiata in `files/wb69_mine/` (copia e diff, sha256 `3f48c081db18…`) e il file riportato al contenuto di HEAD con
    > `git show HEAD:… >` (nessun comando git che scrive): fuori dal checkpoint e dal giro completo sulla revisione combinata. La metà di
    > MF (17 test, file a sé) gli è stata mandata direttamente (`files/wb69_for_mf/`), con la bozza di `auto_cost.py` e il cucito.
-6. ✅ **Handoff** (2026-10-17 08:3x): CHECKPOINT READY, FROZEN. Committati dal coordinatore: `c0b67f4c8` (cura), `61acbc16b` (test),
-   `4bd1d28f6` (doc), `6da4ae0ae` (giornale); base `eced298f8` (+ dev `eed325d99`), poi **`5ece98c29`** (+ dev `73443c6db`: W-B69 di MF,
+6. ✅ **Handoff** (2026-10-17 08:3x): CHECKPOINT READY, FROZEN. Committati dal coordinatore: `9522d816e` (cura), `ed50c9c53` (test),
+   `f98ad2a80` (doc), `3b62fb19f` (giornale); base `a7cf62e31` (+ dev `da059b1c7`), poi **`873568fd4`** (+ dev `acad94499`: W-B69 di MF,
    X-R53, B-31, Y-25; `wac.md`, `service.md`, `database/index.md` fusi da soli).
-7. ⏳ **Giro completo** (`files/scripts/allb_sec73.sh`, slot 2, `5ece98c29`, 08:55–09:48, carico a 5 minuti 48,8 alla partenza):
+7. ⏳ **Giro completo** (`files/scripts/allb_sec73.sh`, slot 2, `873568fd4`, 08:55–09:48, carico a 5 minuti 48,8 alla partenza):
    **rosso**. 5 categorie su 7 verdi (External, DB, Utils, Schema, E2E); Services: worker 0 21 falliti / 8239 passati, worker 1 2 / 7444
    (5 saltati); API: worker 1 7 / 1072 (2 saltati). Porta libera dopo.
    - **`services asset-digit-limits`, due casi `1E+400` (miei)**. (a) **Regressione vera**: `event_store._storable_events` analizzava
@@ -5357,9 +5357,9 @@ le paga più (passo 3 del disegno); altri giri per giorno su tutta la storia, se
      test di W-B58 costruiva la richiesta aspettando l'`EVENT_TOO_MANY_DIGITS` del magazzino → da ri-fissare.
    - **`email-verification`** (21 services + 7 API, non miei): tutti `EmailRateLimitedError` con `retry_after` ≈ 899 s, il
      `SlidingWindowLimiter` in memoria di 15 minuti (`RESEND_BY_ADDRESS`/`FORGOT_BY_ADDRESS`) speso da test che dividono un processo
-     sotto 2 worker. Da soli verdi (09:51–09:52, carico 27–30: services 127, API 60), e così nei cancelli F (`f4dab3db7`) e D del
+     sotto 2 worker. Da soli verdi (09:51–09:52, carico 27–30: services 127, API 60), e così nei cancelli F (`7e0b30590`) e D del
      coordinatore: isolamento fra test, non SEC7-3; passato a E dal coordinatore.
-   > **⚠️ Fuori pista**: la base è cambiata (`eced298f8` → `5ece98c29`) mentre il primo lancio aspettava ancora nel cancello del carico:
+   > **⚠️ Fuori pista**: la base è cambiata (`a7cf62e31` → `873568fd4`) mentre il primo lancio aspettava ancora nel cancello del carico:
    > fermato senza che il giro fosse partito (nessuna riga «start», porta libera, nessun processo) e rilanciato sulla base nuova.
 8. ✅ **Cura in avanti** (`files/scripts/sec73_fix_events.py --apply`, 2026-10-17 09:5x): in `_storable_events` l'analisi di ogni
    evento grezzo dentro un `try`; un `ValidationError` lo scarta con lo stesso avviso, col giorno e il tipo, **mai il valore** (può essere
@@ -5375,7 +5375,7 @@ le paga più (passo 3 del disegno); altri giri per giorno su tutta la storia, se
 
 #### Revisione del lotto di MF (W-B69, la sua metà) — ✅ (2026-10-17)
 
-`1b4e4a27d` (in dev `c61a2db4d`), dopo il fatto, in sola lettura via git: `auto_cost.py` uguale alla mia bozza e al contratto
+`8c828f91a` (in dev `b3b0c0583`), dopo il fatto, in sola lettura via git: `auto_cost.py` uguale alla mia bozza e al contratto
 (`UnreadablePoolError(count)` senza id; `_unreadable_pool_rows` coi filtri della facciata, il costo salvato ma letto `None`; il cucito per
 riga col rilancio senza lista); `lone_transfer_legs.py` solo commenti; i 17 test identici byte per byte a quelli consegnati (sha256
 `1272a3d3c0b6…`), registrati come `services auto-cost-unreadable-pool` (classe `write-scoped` della categoria); doc accurata (il
@@ -5427,7 +5427,7 @@ salva più. Residuo di chiarezza (W-B70, sotto): l'unione non avvisa, e `string_
    > revisione del lotto di MF. Il cucito che ho chiesto: `_compute_wac_for_auto_items(..., unreadable=lista)` raccoglie per riga in
    > `auto_cost.py` (file di MF). Materiale a MF: `files/wb69_for_mf/` (la mia bozza, la metà dei rossi).
 
-### W-B71, W-B72, W-B74 — analisi (2026-10-17, sola lettura, HEAD `eced298f8`)
+### W-B71, W-B72, W-B74 — analisi (2026-10-17, sola lettura, HEAD `a7cf62e31`)
 
 Richiesta del coordinatore (17/10 08:36): analisi in sola lettura durante l'attesa dello slot; li faccio dopo il giro completo e
 l'entrata, nell'ordine che scelgo.
@@ -5503,8 +5503,8 @@ Script di W-B71 pronto (`files/scripts/wb71_cure.py`, dry run pulito su 4 file).
 
 ### W-B71 — le finestre di date ai bordi del calendario: cura ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `9b23bdbfe` (dev, avanzato dal coordinatore dopo l'entrata di SEC7-3: cura `550e462a5`, giornale `b46a49385`, dev
-`e609082ab`, CHANGELOG `dbc2e7225`). Disegno: sezione «W-B71, W-B72, W-B74 — analisi» qui sopra.
+**Base**: HEAD `d9cd65d0b` (dev, avanzato dal coordinatore dopo l'entrata di SEC7-3: cura `48667572f`, giornale `b1f025ab5`, dev
+`d18e20c73`, CHANGELOG `eb5b82ce3`). Disegno: sezione «W-B71, W-B72, W-B74 — analisi» qui sopra.
 
 **Ordine cambiato** (proposto al coordinatore, 17/10 10:0x): W-B71 ora; la metà del batch di W-B69 con `EARLIEST_RANGE_START` quando
 entra MF-SEC8-2; poi W-B74, poi W-B72 (N78). Perché W-B74 dopo W-B69: il suo rifiuto è per broker (una riga illeggibile rende ignoti i
@@ -5524,8 +5524,8 @@ allora, e quelli parcheggiati di W-B69 non si riscrivono due volte.
    > `brim_report_sets.py` ha cinque `± 1 giorno` su date del report caricato o di righe salvate (`:164`, `:243`, `:253`, `:437`,
    > `:440`): stesso 500 con un file costruito → dentro W-B71 con `shift_date` (miei file BRIM), rossi in `test_brim_report_sets.py`.
    > Script della cura riscritto (5 file, dry run pulito); il pezzo nuovo in `files/scripts/wb71_balances_sets_part.py.txt`.
-2. ✅ **Cura**: `files/scripts/wb71_cure.py` (dry run pulito su 4 file anche su `9b23bdbfe`).
-   > **Note implementazione**: ordine approvato dal coordinatore (10:0x). Avanzamento a dev `91f4de9cb` (MF-SEC8-2, `e119c71bc`) chiesto
+2. ✅ **Cura**: `files/scripts/wb71_cure.py` (dry run pulito su 4 file anche su `d9cd65d0b`).
+   > **Note implementazione**: ordine approvato dal coordinatore (10:0x). Avanzamento a dev `040b6f8dd` (MF-SEC8-2, `7acb12d17`) chiesto
    > e fatto **prima** della cura: `EARLIEST_RANGE_START` di MF e il mio `shift_date` stanno nello stesso punto di
    > `utils/datetime_utils.py`; MF l'ha messo prima di `latest_range_end()`, quindi l'ancora dello script regge (dry run di nuovo
    > pulito). MF-SEC8-2 non tocca i file dei test di W-B71.
@@ -5554,8 +5554,8 @@ allora, e quelli parcheggiati di W-B69 non si riscrivono due volte.
 
 ### W-B69 — la metà del batch (W) e il pavimento di N74 condiviso ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `2dddaa95d` (dev con W-B71 dentro: `b801dc687` + `0955164a6` → `1431e20df`, CHANGELOG `2dddaa95d`). Il cuore di W-B69 è
-di MF (`1b4e4a27d`, rivisto qui sopra); a me il batch, col pavimento condiviso `EARLIEST_RANGE_START` (MF-SEC8-2, già in dev).
+**Base**: HEAD `9661cafcf` (dev con W-B71 dentro: `d17b68c65` + `0aa2d78bc` → `22296d87e`, CHANGELOG `9661cafcf`). Il cuore di W-B69 è
+di MF (`8c828f91a`, rivisto qui sopra); a me il batch, col pavimento condiviso `EARLIEST_RANGE_START` (MF-SEC8-2, già in dev).
 
 1. ✅ **Rossi**: la mia metà ripresa da `files/wb69_mine/` (il file non era cambiato dalla base del parcheggio; diff identico): `services
    transaction-cost-basis-rule` **33 rossi**, 104 verdi (11:15, carico 24); ogni rosso ora fallisce su un `UnreadablePoolError` che esce
@@ -5581,7 +5581,7 @@ di MF (`1b4e4a27d`, rivisto qui sopra); a me il batch, col pavimento condiviso `
 
 ### W-B74 — una riga illeggibile e il giro dei saldi ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `6eaf0774c` (dev con la metà del batch di W-B69: `18fc070c8` + `729d6edee` → `eee5dad17`; CHANGELOG `6eaf0774c`, la riga
+**Base**: HEAD `7da9f65bc` (dev con la metà del batch di W-B69: `8ab0769b3` + `345f13236` → `62faa88aa`; CHANGELOG `7da9f65bc`, la riga
 di MF estesa). Disegno: sezione «W-B71, W-B72, W-B74 — analisi».
 
 1. ✅ **Rossi** (test-author `6341ec42`, 11:2x–11:4x, carico 32–45): **17 nuovi** — `test_transaction_service.py`
@@ -5616,7 +5616,7 @@ di MF estesa). Disegno: sezione «W-B71, W-B72, W-B74 — analisi».
 
 #### Revisione di Z-28, la metà BRIM — ✅ (2026-10-17)
 
-`3a3d5ab1c` (`fix(locks): refuse symlinked lock files`), dopo il fatto, in sola lettura: `brim_provider._acquire_file_lock` apre con
+`1bf1494ba` (`fix(locks): refuse symlinked lock files`), dopo il fatto, in sola lettura: `brim_provider._acquire_file_lock` apre con
 `os.open(…, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)` e chiude il descrittore se `flock` alza; `_release_file_lock` sblocca e chiude in
 un `finally`. L'unico chiamante, `_broker_metadata_lock`, tratta il descrittore come opaco, e un'apertura rifiutata alza prima di
 scrivere `held[key]` (nessuna profondità rimasta appesa); la chiave è `broker_<int>`, nessun input dell'utente. I test
@@ -5625,7 +5625,7 @@ protegge l'ultimo componente; una cartella `.locks` simbolica verrebbe seguita, 
 
 ### W-B72 — un costo dove il tipo non ne prende (N78): cura ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `e908f0d4f` (dev con W-B74: `bd5deeb36` + `29f544846` → `80cee9c2d`). **Decisione notturna N78** (coordinatore, 08:39, da
+**Base**: HEAD `918d72741` (dev con W-B74: `c833090a7` + `83c693309` → `734f7689b`). **Decisione notturna N78** (coordinatore, 08:39, da
 rivedere col developer): la regola 12 estesa a `cost_basis_override` su ogni scrittura, codice `costBasisNotAllowed {type, qty}`, le
 righe già salvate restano. Solo TRANSFER e ADJUSTMENT a quantità > 0 prendono un costo (`cost_basis_allowed`).
 
@@ -5716,11 +5716,11 @@ righe già salvate restano. Solo TRANSFER e ADJUSTMENT a quantità > 0 prendono 
 
    Prove: `mkdocs build` stretto con uscita 0 e nessun avviso; `check-links` con 97 collegamenti validi e 0 rotti. Rivisto da
    me contro il codice; i `params` degli update li verifico a `batch_edits.py:205`.
-7. ✅ **Simulazione** (17/10, 13:05–13:09): `files/scripts/sim_cherry_pick.sh dev_release2 --docs` sui 19 file, dev `4e11fabec`
-   (HEAD `e908f0d4f` antenato): 0 conflitti; ruff e black sui 9 `.py` uniti e `json.load` sui 4 cataloghi puliti; `mkdocs build`
+7. ✅ **Simulazione** (17/10, 13:05–13:09): `files/scripts/sim_cherry_pick.sh dev_release2 --docs` sui 19 file, dev `6bf596033`
+   (HEAD `918d72741` antenato): 0 conflitti; ruff e black sui 9 `.py` uniti e `json.load` sui 4 cataloghi puliti; `mkdocs build`
    stretto e `check-links` con uscita 0 sull'albero simulato. Il `wac.md` di dev (J-12/N81, il paragrafo dei due wipe) si unisce da
    solo, venti righe sotto il nostro. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN inviato al coordinatore.
-8. ✅ **Dopo l'ingresso: un rosso di dev** (17/10, trovato da X; ingresso `e71b68d50` + `19c2f596e` → `7bc66c7ca`). `front-utility
+8. ✅ **Dopo l'ingresso: un rosso di dev** (17/10, trovato da X; ingresso `cd5adc0f1` + `440aa5e72` → `27fd71603`). `front-utility
    core-unit` → `src/htmlInterpolation.gate.test.ts`, «finds no markup in any translation outside the reviewed sanitized keys».
    Le due chiavi nuove portavano `<b>…</b>` in tutte e 4 le lingue, sul modello di `costBasisRequired`. Il cancello ammette markup
    solo nelle tre chiavi riviste di `SANITIZED_MARKUP_KEYS` (tutte `transactions.errors.*`, rese da `resolveIssueMessage` con
@@ -5739,9 +5739,9 @@ righe già salvate restano. Solo TRANSFER e ADJUSTMENT a quantità > 0 prendono 
 > `PydanticSerializationError` su `BRIMValidationIssue.model_dump(mode="json")`). Oggi non è raggiungibile: i plugin passano istanze di
 > `Currency` (non rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici.
 
-### W-B67 — il costo Auto sulla riga sbagliata: analisi (2026-10-17, sola lettura, HEAD `f731d462e`)
+### W-B67 — il costo Auto sulla riga sbagliata: analisi (2026-10-17, sola lettura, HEAD `4904e9d89`)
 
-**Base**: HEAD `f731d462e` = dev con W-B72 (`e71b68d50` + `19c2f596e` → `7bc66c7ca`, CHANGELOG `f731d462e`). Via del coordinatore:
+**Base**: HEAD `4904e9d89` = dev con W-B72 (`cd5adc0f1` + `440aa5e72` → `27fd71603`, CHANGELOG `4904e9d89`). Via del coordinatore:
 «W-B67, reds first».
 
 **Difetto 1, la riga** (la voce del backlog, confermato nel codice). `_compute_wac_for_auto_items` (`auto_cost.py:47`) trova la
@@ -5886,12 +5886,12 @@ doc → handoff.
    > (`{code, amount: '0'}`) è salvata con quello 0 prima del passo WAC (`apply_creates`, e `_apply_update_values` per un update).
    > Prima di W-B67 entrava quindi nei gruppi delle altre righe come `ADD_ZERO_COST`, non `ADD_UNKNOWN_COST`. La cura copre
    > entrambi i casi: la riga resta fuori finché il suo costo non è scritto.
-6. ✅ **Simulazione** (17/10, 13:46–13:49): `sim_cherry_pick.sh dev_release2 --docs` sui 10 file, dev `04955c498` (HEAD
-   `f731d462e` antenato; dev ha portato SEC8-2a/2b, SEC9-1 e altro di MF, ma nulla sul percorso del WAC: solo
+6. ✅ **Simulazione** (17/10, 13:46–13:49): `sim_cherry_pick.sh dev_release2 --docs` sui 10 file, dev `fbbf55b63` (HEAD
+   `4904e9d89` antenato; dev ha portato SEC8-2a/2b, SEC9-1 e altro di MF, ma nulla sul percorso del WAC: solo
    `rows_before_floor` nei DTO di `portfolio_service`). 0 conflitti, ruff e black puliti, `mkdocs build` stretto e `check-links`
    con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN.
 
-### W-B66 — il campo decimale: un esponente incollato, un incolla enorme: analisi (2026-10-17, sola lettura, HEAD `f731d462e`)
+### W-B66 — il campo decimale: un esponente incollato, un incolla enorme: analisi (2026-10-17, sola lettura, HEAD `4904e9d89`)
 
 Via del coordinatore (17/10 13:49): «W-B66 → W-B68», dopo l'ingresso di W-B67. Voce del backlog da E (R13-SEC5, revisione di
 C-97b). Il punto (3), il toast di «+ New event», resta in C-97c.
@@ -5941,8 +5941,8 @@ Nessun backend, nessuna API.
 
 ### W-B66 — cura ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `f078b766c` = dev con W-B67 (`279b3d5bd` + `581757965` → `ac92e6fae`, CHANGELOG `f078b766c`). Poi, alle 14:14,
-HEAD `5603a23a7` = dev con la cura del cancello dell'HTML (`21b8aa975` + `cc86dee84`): avanzamento veloce del coordinatore, a
+**Base**: HEAD `78594ef05` = dev con W-B67 (`21600e728` + `cfdb76b4f` → `0734125e2`, CHANGELOG `78594ef05`). Poi, alle 14:14,
+HEAD `a8dc4ac7e` = dev con la cura del cancello dell'HTML (`4da83b8e2` + `cdec6b2de`): avanzamento veloce del coordinatore, a
 worktree pulito. Il dry run della cura di W-B66 resta pulito.
 
 1. ✅ **Decisioni del coordinatore** (17/10, 14:00):
@@ -6032,14 +6032,14 @@ worktree pulito. Il dry run della cura di W-B66 resta pulito.
    | `dev.py front check` | svelte-check 0 errori, 0 avvisi |
 5. ✅ **Doc**: `developer/frontend/components/core-ui/atoms.md` «ExactDecimalInput», tre aggiunte: l'esponente incollato e il
    messaggio, `min`/`max` solo nel budget, le frecce e la linearità. La pagina non ha traduzioni.
-6. ✅ **Simulazione** (17/10, 14:46–14:50): `sim_cherry_pick.sh dev_release2 --docs` sui 13 file, dev `f8e1f6aed` (HEAD
-   `5603a23a7` antenato; dev non ha toccato i miei file, solo altre sezioni del backlog). 0 conflitti, i 4 cataloghi si caricano,
+6. ✅ **Simulazione** (17/10, 14:46–14:50): `sim_cherry_pick.sh dev_release2 --docs` sui 13 file, dev `443833b23` (HEAD
+   `a8dc4ac7e` antenato; dev non ha toccato i miei file, solo altre sezioni del backlog). 0 conflitti, i 4 cataloghi si caricano,
    `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera (nessun
    server: solo Vitest e i runner `front-utility`). Handoff FROZEN.
 
 ### W-B68 — i valori degli eventi dei provider troncati alla colonna: analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `731140500` = dev con W-B66 (`b8e180ff8` + `32282ffac` → `e820279e1`, CHANGELOG `731140500`). Via del coordinatore
+**Base**: HEAD `21e5a99ea` = dev con W-B66 (`0b03a8dd5` + `c6a57a95c` → `5634c9649`, CHANGELOG `21e5a99ea`). Via del coordinatore
 (14:49): «W-B68: GO, failing tests first». W-B75 è passata a H (la rivedo al suo checkpoint).
 
 **Stato verificato** (sola lettura):
@@ -6108,13 +6108,13 @@ Doc: dove `developer/` descrive la scrittura degli eventi dei provider (W-B58, W
    - `developer/backend/assets/events.md`: il paragrafo sugli eventi dei provider, con il troncamento, la forma, lo split
      giudicato troncato e l'esempio di prima;
    - `developer/architecture/database/index.md`: anche gli eventi dei provider sono troncati (`storable_value`).
-5. ✅ **Simulazione** (17/10, 15:09–15:11): `sim_cherry_pick.sh dev_release2 --docs` sui 6 file, dev `79d4ca239` (HEAD
-   `731140500` antenato; dev ha cambiato dei miei file solo il backlog, in altre sezioni). 0 conflitti; ruff e black puliti;
+5. ✅ **Simulazione** (17/10, 15:09–15:11): `sim_cherry_pick.sh dev_release2 --docs` sui 6 file, dev `117c6d7f0` (HEAD
+   `21e5a99ea` antenato; dev ha cambiato dei miei file solo il backlog, in altre sezioni). 0 conflitti; ruff e black puliti;
    `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN.
 
-### C-97c — la visualizzazione di quantità e prezzi: analisi (2026-10-17, sola lettura, HEAD `cc2e9307c`)
+### C-97c — la visualizzazione di quantità e prezzi: analisi (2026-10-17, sola lettura, HEAD `0d03a2c75`)
 
-**Base**: HEAD `cc2e9307c` = dev con W-B68 (`f3836e99b` → `06e9d2c20`, CHANGELOG `cc2e9307c`). Ordine del coordinatore (15:11):
+**Base**: HEAD `0d03a2c75` = dev con W-B68 (`2da2b5886` → `7b2e2c6f3`, CHANGELOG `0d03a2c75`). Ordine del coordinatore (15:11):
 le due revisioni in coda (W-B75 di H, il chunking BRIM di MF, ai loro checkpoint), poi **C-97c**, poi W-B70.
 
 **Perimetro** (dal punto 7 dell'analisi di C-97, più due resti):
@@ -6223,7 +6223,7 @@ Quel che c'è già:
    > `ParseDetailModal`, `ReportSetCard`, gli ultimi due non toccati. Nessun test fallito: 823 verdi, 92 saltati per il timeout.
    > Rilanciati da soli a carico 28: 92 verdi; poi l'azione intera a carico 27: 915 verdi. Carico, non un rosso.
 6. ✅ **Simulazione** (17/10, 16:02–16:04): `sim_cherry_pick.sh dev_release2 --docs` sui 19 file (il test nuovo, non
-   tracciato, compreso), dev `e9746b959` (HEAD `cc2e9307c` antenato; dev ha cambiato il backlog e una riga del runner
+   tracciato, compreso), dev `3c3a6eef8` (HEAD `0d03a2c75` antenato; dev ha cambiato il backlog e una riga del runner
    `_frontend_utility.py`, che si unisce da sola con la registrazione del test nuovo). 0 conflitti; `mkdocs build` stretto e
    `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito. Handoff FROZEN.
 
@@ -6249,9 +6249,9 @@ Quel che c'è già:
 | `GapFixStep:72` | quantità a 8 | 10 |
 | `DataEditor:212`, riga di sola lettura | `Number(val)…max 4` | `formatPrice(Number(val), {minDecimals: 0, floorDecimals: 4})` |
 
-### C-97c-2 — quantità e prezzi dei lotti (BK): analisi e cura ✅ (2026-10-17) — entrato (`a8ec9d309` → `016fe7af9`)
+### C-97c-2 — quantità e prezzi dei lotti (BK): analisi e cura ✅ (2026-10-17) — entrato (`d808c0e1c` → `117762058`)
 
-**Base**: HEAD `a84020b09` = dev con C-97c-1 (`7b251606a` → `f1bfa1e31`, CHANGELOG `a84020b09`; `theme-roles --check` pulito sulla
+**Base**: HEAD `f071a20dd` = dev con C-97c-1 (`dfa7ec049` → `66917cfb6`, CHANGELOG `f071a20dd`; `theme-roles --check` pulito sulla
 punta). Via del coordinatore: «Go C-97c-2 (BK, lots); J reviews».
 
 **Siti** (`frontend/src/lib/features/brokers/lots/`):
@@ -6339,12 +6339,12 @@ Il cancello del denaro non registra siti dei lotti.
    `priceFractionDigits`, e ciò che non cambia (totali, rapporti degli split a 8, assi). Nessun'altra pagina fissa le cifre dei
    lotti (grep di `six|6|eight|8|ten|10` + `fraction|decimal|digit` e dei nomi delle funzioni); la lista dei formatter di
    `developer/frontend/i18n.md` nomina le funzioni senza le cifre.
-5. ✅ **Simulazione** (17/10, 16:52–16:54): `sim_cherry_pick.sh dev_release2 --docs` sui 12 file, dev `2405097c7` (HEAD `a84020b09`
+5. ✅ **Simulazione** (17/10, 16:52–16:54): `sim_cherry_pick.sh dev_release2 --docs` sui 12 file, dev `82427f533` (HEAD `f071a20dd`
    antenato, 42 commit avanti, nessuno dei quali tocca i 12 file né la cartella dei lotti): 0 conflitti; `mkdocs build` stretto e
    `check-links` con uscita 0 sull'albero unito (log `files/logs/c97c2/20_sim.log`). `git diff --check` pulito. Handoff FROZEN;
    revisione di J.
 
-### W-B70 — la descrizione unita oltre 500, gli errori di campo senza il loro contesto: analisi (2026-10-17, sola lettura, HEAD `a84020b09`)
+### W-B70 — la descrizione unita oltre 500, gli errori di campo senza il loro contesto: analisi (2026-10-17, sola lettura, HEAD `f071a20dd`)
 
 **Stato reale**
 
@@ -6429,7 +6429,7 @@ Il cancello del denaro non registra siti dei lotti.
 
 ### C-97c-3 — prezzi degli asset (AF) e dei grafici, quantità della dashboard (DV): analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `6e503e0f6` = dev con C-97c-2 (`4e02e5fee` → `016fe7af9`, CHANGELOG `6e503e0f6`), con X-R59 di Y (`f317e3a9f`).
+**Base**: HEAD `b1cd1ea3e` = dev con C-97c-2 (`97e5ad486` → `117762058`, CHANGELOG `b1cd1ea3e`), con X-R59 di Y (`d2f489be8`).
 Via del coordinatore (17/10 16:5x): «C-97c-3 first (it closes C-97c), then W-B70». OK di scrittura sui `.svelte` di AF e DV dal
 D-C97c-1, solo per la formattazione dei numeri. Revisori: X (AF), Y (DV).
 
@@ -6522,13 +6522,13 @@ file nuovo `AssetPriceSummary.test.ts` (registrato in component-unit); nel cance
    cifre di questi siti (grep dei nomi delle funzioni e di `2|4|6 dp`, `decimals`). Backlog: **W-B78** (le 10 cifre delle quantità scritte
    a mano in 10 punti di 9 file; una costante in `utils/core`, dopo la 1.3).
 5. ✅ **Simulazione** (17/10, 17:58–18:01): `sim_cherry_pick.sh dev_release2 --docs` sui 27 file (il test nuovo, non tracciato,
-   compreso), dev `685d76dab` (HEAD `6e503e0f6` antenato, 42 commit avanti; tocca due miei file condivisi, il backlog e
+   compreso), dev `86e120a43` (HEAD `b1cd1ea3e` antenato, 42 commit avanti; tocca due miei file condivisi, il backlog e
    `_frontend_utility.py`, in altre righe): 0 conflitti; `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito (log
    `files/logs/c97c3/20_sim.log`). `git diff --check` pulito. Handoff FROZEN; revisori X (AF) e Y (DV). Chiude C-97c.
 
 ### W-B70 (+ W-B77) — i parametri degli errori di campo, la descrizione unita oltre 500: cura ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `a5d615fd7` = dev con C-97c-3 (`164babac1` → `e19f7c7e6`, CHANGELOG `a5d615fd7`). Via e decisioni D-W70-1…5 del
+**Base**: HEAD `5dabe4366` = dev con C-97c-3 (`f5417833b` → `22ba32954`, CHANGELOG `5dabe4366`). Via e decisioni D-W70-1…5 del
 coordinatore (sopra, «W-B70 — analisi»). OK di scrittura: `PromoteMergeModal.svelte`, `TransactionBulkModal.svelte`; in BRIM solo
 l'import, i doppioni e i siti di chiamata (la SEC9g di MF è in `search_asset_candidates_bulk`).
 
@@ -6637,20 +6637,20 @@ di «promuovi tutto», scritto e girato nello slot).
    Porta 6184 libera dopo. Il rosso di PC7 è ragionato dal codice (oggi la coppia da 501 si unisce in una riga), non visto: la cura era
    già applicata quando lo slot è arrivato.
 6. ✅ **Simulazione** (17/10, 19:16–19:18): `sim_cherry_pick.sh dev_release2 --docs` sui 29 file (i due nuovi, non tracciati, compresi),
-   dev `a6adb0066` (HEAD `a5d615fd7` antenato; dev tocca solo il backlog, in altre sezioni): 0 conflitti; `mkdocs build` stretto e
-   `check-links` con uscita 0 (log `files/logs/wb70/31_sim.log`; la stessa a 18:56 su `d9e9a88b2`). `git diff --check` pulito.
+   dev `7bd2d2eb5` (HEAD `5dabe4366` antenato; dev tocca solo il backlog, in altre sezioni): 0 conflitti; `mkdocs build` stretto e
+   `check-links` con uscita 0 (log `files/logs/wb70/31_sim.log`; la stessa a 18:56 su `cd465b044`). `git diff --check` pulito.
    Handoff FROZEN; H rivede W-B77.
 
-### Revisioni dopo l'ingresso: MF-SEC9g (di E) ed E-19a, la guardia del gap-fix ✅ (2026-10-17, sola lettura, HEAD `c9ebc1102`)
+### Revisioni dopo l'ingresso: MF-SEC9g (di E) ed E-19a, la guardia del gap-fix ✅ (2026-10-17, sola lettura, HEAD `4b4b5d935`)
 
-W-B70 entrato: dev `41335f1e1` (`07fcf4303`), CHANGELOG `c9ebc1102`. `theme-roles --check` pulito sulla HEAD (le condizioni del
+W-B70 entrato: dev `14bd65469` (`318332072`), CHANGELOG `4b4b5d935`. `theme-roles --check` pulito sulla HEAD (le condizioni del
 coordinatore dei colori per C-97c: classi invariate, il cancello pulito a ogni checkpoint, un colore solo col suo via).
-- **MF-SEC9g** (`316f9c0d3`): **OK, nessun reperto**. Semantica identica: gli indici ISIN e ticker tengono i valori salvati nell'ordine
+- **MF-SEC9g** (`e0fee38aa`): **OK, nessun reperto**. Semantica identica: gli indici ISIN e ticker tengono i valori salvati nell'ordine
   dell'universo e si leggono con `.upper()` come l'uguaglianza di prima; un matcher compilato per ago con la stessa regola del testo
   vuoto; gli stessi campi del nome, nello stesso ordine, e le stesse porte di priorità. Il thread legge solo le viste semplici, costruite
   sul loop dagli attributi già caricati; `_add_candidate` legge esattamente i quattro campi della vista. Osservazione: il confronto dei
   nomi generici resta O(estrazioni × universo) di CPU, ora fuori dal loop.
-- **E-19a, la guardia del gap-fix** (`e4a4af4e2`, doc `180e7b20d`): **OK**. Le righe sono quelle che `get_balances_at_end_of` somma
+- **E-19a, la guardia del gap-fix** (`e60fd3cb9`, doc `6884a9793`): **OK**. Le righe sono quelle che `get_balances_at_end_of` somma
   (broker, data fino ad `as_of`, le stesse esclusioni; `amount` NOT NULL); il controllo di W-B74 prima; una query DISTINCT per
   checkpoint o verifica; il messaggio è testo semplice in `GapFixStep` (`{group.error}`): i codici citati sono sicuri. Nota: il 409 arriva
   in inglese in ogni lingua, come quello di W-B74 → **W-B80** (dopo la 1.3).
@@ -6687,7 +6687,7 @@ da chiedere quando pronto.
    `api sync` (il client generato era di nuovo quello di prima dell'avanzamento: 7 errori nei file di X).
 3. ✅ **Slot** (via del coordinatore 19:4x, insieme a W-B51; `files/scripts/wb4851_slot.sh`, log `files/logs/wb4851_slot_*.log`):
    `front-asset asset-data-editor` **30/30**, `front-fx fx-csv-import` **22/22** (dopo `db populate --force` sulla mia cartella).
-4. ✅ **Checkpoint** (17/10, 19:5x) — 🧊 FROZEN: simulazione su dev `2fbbf4c4c` con `--docs` pulita (0 conflitti, build stretta e
+4. ✅ **Checkpoint** (17/10, 19:5x) — 🧊 FROZEN: simulazione su dev `66e4dcba0` con `--docs` pulita (0 conflitti, build stretta e
    `check-links`), `theme-roles --check` pulito, `git diff --check` pulito, porta 6184 libera.
 
 ### W-B51 — la tolleranza dei duplicati BRIM sulle quantità crypto: analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
@@ -6734,7 +6734,7 @@ arrotondato contro uno 0,000153 salvato (resta un doppione), il caso degli inter
 
 ### W-B81 — i doppioni del wizard con la regola di W-B51: analisi e cura (2026-10-17) ✅
 
-**Base**: HEAD `c97001b80` = dev con W-B48 e W-B51 (`080f7ee7f`, `52573b4aa`, `5c2faced1` → `4bc6b2ab1`, CHANGELOG `c97001b80`). Via del
+**Base**: HEAD `4832a3f4c` = dev con W-B48 e W-B51 (`802718ec4`, `08cd992de`, `2dabbccaf` → `7ac28d903`, CHANGELOG `4832a3f4c`). Via del
 coordinatore (17/10 19:4x): «Vitest first; `importDedup.ts:145-157` applies exactly D-W51-1; fold the `toFixed(4)` group identity onto
 the same rule, no float compare on decimals; name the shared cases so backend and frontend pin the same table».
 
@@ -6792,15 +6792,15 @@ schermo, non decidono un doppione: restano.
      percorso dei dati veri).
 6. ✅ **Backlog**: W-B81 ✅.
 
-> **W-B81 entrata** (17/10 20:4x): dev `5890d512c` (`f5536f856` + `e8b29cc0e`), CHANGELOG `05b6b834e` (la riga di W-B51 estesa). E2E di
+> **W-B81 entrata** (17/10 20:4x): dev `57f00263b` (`af7f85a32` + `234a1919a`), CHANGELOG `db3ff0539` (la riga di W-B51 estesa). E2E di
 > conferma dopo l'ingresso, sul tip, chiesto dal coordinatore: `front-transaction tx-import-duplicate-precedence`
 > (`files/scripts/wb81_post_e2e.sh`, dietro il cancello di carico).
-> ✅ 17/10 20:50, carico 20–49: `api sync`, `db populate`, **`tx-import-duplicate-precedence` 6/6** (37,6 s) sul tip `05b6b834e`; porta 6184
+> ✅ 17/10 20:50, carico 20–49: `api sync`, `db populate`, **`tx-import-duplicate-precedence` 6/6** (37,6 s) sul tip `db3ff0539`; porta 6184
 > libera dopo. Log `files/logs/wb81/post_*.log`.
 
 ### Revisione dopo l'ingresso — Z-33, `redate_provider_events` (2026-10-17) ✅ OK
 
-`backend/app/services/assets/event_store.py:101` (commit `60170aae5`, dev `51b5c8db1`), chiamata da `_settle_exchange_timezone`
+`backend/app/services/assets/event_store.py:101` (commit `07ffc126b`, dev `15e26618f`), chiamata da `_settle_exchange_timezone`
 (`refresh.py:513-574`). Verificato:
 - l'evento si sposta solo se la storia fresca ha il suo tipo su S+1 e non su S (`event_target`); il resto della refresh non scrive
   nulla senza la storia piena o il fuso (`Nothing written…`), quindi nessuna riga nuova esiste prima del controllo;
@@ -6819,9 +6819,9 @@ schermo, non decidono un doppione: restano.
   la fusione col gemello, nessun doppione accanto allo spostato.
 Esito: **OK**, nessun reperto.
 
-### K3 — analisi in sola lettura (2026-10-17, base `05b6b834e`)
+### K3 — analisi in sola lettura (2026-10-17, base `db3ff0539`)
 
-Via del coordinatore (17/10 20:4x): «Start K3 now: analysis first. Read B-47/B-48 first». W-B65 di B è in dev (`cde76dc54`):
+Via del coordinatore (17/10 20:4x): «Start K3 now: analysis first. Read B-47/B-48 first». W-B65 di B è in dev (`04a408377`):
 `TransactionBulkModal.svelte` è libero.
 
 **Stato reale, voce per voce**
@@ -6925,9 +6925,9 @@ B-47 e B-48 sono nella sezione di B: chiusura chiesta al coordinatore); 7. simul
    > riceve, la coppia sparisce dalla griglia: il passo 1 di `collapsePairedOps` legge la cassa ignota del segnaposto come 0 e nasconde la
    > metà leggibile. Cura nello stesso lotto: il segnaposto è sempre il partner nascosto della metà leggibile, come nella prima costruzione.
 
-> **▶️ Ripresa il 21/10 (ondata 2, W frontend, base `89e8b2e61`)** — le tre scelte di W confermate dal developer (PC5 diviso, valori nel dominio ≤ 15 cifre, K-3b nello stesso lotto).
+> **▶️ Ripresa il 21/10 (ondata 2, W frontend, base `e44422ed0`)** — le tre scelte di W confermate dal developer (PC5 diviso, valori nel dominio ≤ 15 cifre, K-3b nello stesso lotto).
 > - ✅ 21/10 **Passo 1, rossi**: `git apply` della patch parcheggiata, pulito. Il secondo giro (K-3b, PC5 diviso, sei casi nel dominio) era già dentro la patch. Rilancio: **28 rossi Vitest** (26 del primo giro + 2 di K-3b), ciascuno per la sua causa.
-> - ✅ 21/10 **Passo 2, cura**: `k3a_cure.py` col dry run pulito su 8 file anche sul codice di `89e8b2e61`, poi `--apply`. Tocca `parseDecimalInput.ts`, `ExactQuantityInput`, `CompactCashCell`, `transactionTypeStore.ts`, `TransactionBulkModal`, `TransactionFormModal`, `TxFormSingleSection`, `TxFormPairSection` (+151/−28). Poi `prettier --write` su `CompactCashCell.svelte` (la cura lasciava un `<input>` su una riga).
+> - ✅ 21/10 **Passo 2, cura**: `k3a_cure.py` col dry run pulito su 8 file anche sul codice di `e44422ed0`, poi `--apply`. Tocca `parseDecimalInput.ts`, `ExactQuantityInput`, `CompactCashCell`, `transactionTypeStore.ts`, `TransactionBulkModal`, `TransactionFormModal`, `TxFormSingleSection`, `TxFormPairSection` (+151/−28). Poi `prettier --write` su `CompactCashCell.svelte` (la cura lasciava un `<input>` su una riga).
 > - ✅ 21/10 **Passo 3, verdi leggeri**: i 9 file Vitest toccati 601/601; `front check` 0 errori / 0 avvisi; `core-unit` 9845/9845; `component-unit` 5186/5186 (con `TransactionBulkModal.test.ts` registrato); `theme-roles --check` pulito; prettier pulito.
 > - ✅ 21/10 **Passo 4, E2E nello slot** (corsia 6184, uno alla volta in `flock`): `tx-bulk-operations` 15/15, `tx-bulk-promote-cost-basis` 9/9, `tx-fx-completeness` 4/4, `tx-edit-save-gate` 3/3. Log in `salvataggi-worktrees-20261021/ondata2/wf-e2e-<nome>.log`.
 > - ✅ 21/10 **Passi 5–6**: nessuna pagina utente da cambiare; K-2…K-4 ✅ in `38_postReleaseBacklog`, B-47/B-48 con la nota «chiusura chiesta al coordinatore». Passo 7: CHECKPOINT READY al coordinatore.
@@ -6940,7 +6940,7 @@ B-47 e B-48 sono nella sezione di B: chiusura chiesta al coordinatore); 7. simul
 > `tx-fx-completeness`). La cura non è mai stata applicata.
 > - **Dove**: cartella di sessione di W (`e71e0e34-…`), `files/parked/`: `k3a-reds-20261019.patch` (10 file: i 9 tracciati e
 >   `bulk/TransactionBulkModal.test.ts` nuovo; 1 858 righe), `k3a_cure.py` (la cura, dry run pulito su 8 file), `k3a_light.sh`, gli hash
->   (`k3a-parked-sha256.txt`) e lo stato (`k3a-parked-state.txt`). La patch ricostruisce byte per byte i file del 17/10 su `05b6b834e`
+>   (`k3a-parked-sha256.txt`) e lo stato (`k3a-parked-state.txt`). La patch ricostruisce byte per byte i file del 17/10 su `db3ff0539`
 >   (provata su una copia di HEAD, `shasum -c`).
 > - Worktree riportato a HEAD per quei file e il non tracciato tolto; `git apply --check` della patch sul worktree pulito: OK.
 > - **Con la regola del 19/10 sono domande, non decisioni**: le scelte fatte da me in questa sezione (PC5 diviso, i valori nel dominio,
@@ -6948,7 +6948,7 @@ B-47 e B-48 sono nella sezione di B: chiusura chiesta al coordinatore); 7. simul
 
 ### Revisione dopo l'ingresso — J-57, sul percorso dell'import (2026-10-19) ✅ OK, due domande
 
-Ripartenza del 19/10 (fase 2): base `3d5678283`. J-57 è `b7e2bb3bd` (dev `539371064`). Sola lettura, solo il percorso dell'import:
+Ripartenza del 19/10 (fase 2): base `c2c5eeb70`. J-57 è `900fd2661` (dev `e537abd1b`). Sola lettura, solo il percorso dell'import:
 plugin BRIM → wizard → Bulk → validate/commit. La decisione del developer (19/10): J-57 resta, «Auto» senza niente da mediare è
 rifiutato, lo 0 manuale (il regalo) è permesso nel form e nel wizard, e il messaggio suggerisce «Manuale e 0». J sta analizzando come
 completarlo nel wizard: questa revisione serve a J e al coordinatore.
@@ -6998,11 +6998,11 @@ senza costo, rifiutata con `costBasisRequired`. Latente: oggi nessun plugin riem
 e senza costo). Cura proposta, dopo il via: all'ingresso dell'import un costo senza modalità diventa Manuale, e il gap-fix scrive
 `cost_basis_mode="manual"` come Crédit Agricole e Intesa; un rosso Vitest e uno pytest.
 
-### Fase 2 della ripartenza — tre analisi in sola lettura (2026-10-19, base `3d5678283`)
+### Fase 2 della ripartenza — tre analisi in sola lettura (2026-10-19, base `c2c5eeb70`)
 
 Regola del 19/10: nessuna decisione di prodotto da W. Ogni scelta che cambia ciò che l'utente vede, i numeri o i dati è una
 domanda al coordinatore, con le opzioni e il consiglio. Nessun codice: si implementa solo dopo il via. Le tre analisi leggono il
-codice di `3d5678283`; l'inventario (B) unisce quattro passate in sola lettura e le mie verifiche delle voci di W.
+codice di `c2c5eeb70`; l'inventario (B) unisce quattro passate in sola lettura e le mie verifiche delle voci di W.
 
 #### A. N78-bis — il costo ammesso e obbligatorio, calcolato dal backend
 
@@ -7190,7 +7190,7 @@ future, perché negli export futuri cambieranno».
 **I dati che abbiamo non bastano per rispondere.** Non esiste nel repository una riga Fineco con la data valuta futura rispetto al
 suo export, né due export dello stesso periodo.
 - I 4 report d'esempio (`brim_providers/sample_reports/fineco-export.csv`, `fineco_variant_a.csv`, `fineco_btp_market.csv`,
-  `fineco_btp_placement.csv`) sono sintetici: aggiunti col plugin (`98c78f981`, 25/07/2026; `7778f7ba5`, 12/08/2026), con intestatari
+  `fineco_btp_placement.csv`) sono sintetici: aggiunti col plugin (`246309b7b`, 25/07/2026; `025c4bada`, 12/08/2026), con intestatari
   e dossier inventati e nessuna data di export nel file. Le righe sono del 2023–2024, e alcune date un export vero non le avrebbe: un
   rimborso di domenica 13/10/2024 con la valuta lo stesso giorno, un altro di domenica 01/09/2024 regolato martedì 03/09.
 - L'unico fixture Fineco scritto nei test (`test_brim_providers.py:2529`) è un rimborso sopra la pari, senza date future.
@@ -7256,7 +7256,7 @@ a 1–3: è la scelta prudente, ed è quella di Danske Bank. Da sola però non c
 quando si importa un file vecchio di qualche giorno: nel file la riga resta com'era all'export, e Fineco non scrive la data
 dell'export. Per quel caso serve W-B83: una compravendita con quantità o controvalore vuoti non entra a 0.
 
-### N74 · Fineco opzione (a), W-B83 e le righe sicure — analisi (2026-10-19, sola lettura, base `b82208bed`)
+### N74 · Fineco opzione (a), W-B83 e le righe sicure — analisi (2026-10-19, sola lettura, base `d570a9c3d`)
 
 Il developer su Q-N74-1, testuale: «si si, fai come dice l'opzione a, ma non fare un avviso, solo una nota, o forse nulla, e
 piuttosto scriviamo questo principio nella skill che spiega come fare i plugin, si devono importare solo le date sicure».
@@ -7488,7 +7488,7 @@ io la skill); 5. backlog (W-B83 ✅, N74); 6. simulazione e checkpoint.
   (Fineco), `danske_bank.md` (la nota `excluded_not_yet_settled`), la pagina utente Fineco (due punti in «Good to know»), e i resti
   del limite di un anno in `assets/architecture.md`, `form.en.md`, `import/index.en.md`, `import/how-to.en.md`. `mkdocs build`
   (strict) e `check-links` verdi. `translate-validate` esce 1: il debito delle due voci nuove di `fineco.en.md` (resta, come
-  deciso) e tre errori di `form.en.md` vecchi (una voce del 15/10, `0ffaa9127`, mai tradotta).
+  deciso) e tre errori di `form.en.md` vecchi (una voce del 15/10, `3f2f08d23`, mai tradotta).
   > **⚠️ Fuori pista**:
   > - **Danske `plugin_version` 1.0.0 → 1.0.1.** Lo segnala il docs-writer: il contratto di `brim_provider.py` chiede il salto
   >   quando l'uscita cambia, e la gravità di `excluded_not_yet_settled` cambia. Applicato, con i due test che fissavano la
@@ -7496,7 +7496,7 @@ io la skill); 5. backlog (W-B83 ✅, N74); 6. simulazione e checkpoint.
   >   «rilettura disponibile».
   > - **Il disco pieno, verso le 15:45**: liberati i miei 174 MB (`files/devtree_1c2bac918`, un vecchio albero esportato); il
   >   coordinatore ha poi liberato ~21 GiB.
-  > - **N83 su dev** (developer, 19/10, `cb5ad77be`): i prezzi e i cambi scritti a mano non hanno più il pavimento del 1900, e
+  > - **N83 su dev** (developer, 19/10, `558fb1d90`): i prezzi e i cambi scritti a mano non hanno più il pavimento del 1900, e
   >   `stored_date_bounds()` è diventata `latest_stored_date()`, che rende solo domani. Il codice del lotto non la chiama
   >   (`EARLIEST_RANGE_START, latest_range_end()`), quindi si fonde pulito. Andavano corretti i testi che dicevano «la stessa coppia
   >   di `stored_date_bounds()`»: la docstring di `transaction_date_bounds()`, `service.md` e tre docstring dei test (al
@@ -7506,8 +7506,8 @@ io la skill); 5. backlog (W-B83 ✅, N74); 6. simulazione e checkpoint.
 - ✅ 5. Il passo finale dopo le modifiche tardive (19/10 15:51-15:52, `files/scripts/n74_final.sh`, log `files/logs/n74/final_*.log`):
   - `ruff` e `black --check` puliti; `services transaction-decimal-places` 202; `mkdocs build` (strict) verde; `mkdocs check-links`
     verde. Porta 6184 libera.
-  - Simulazione d'integrazione, alla maniera del coordinatore (`files/scripts/n74_sim_light.sh dev_release2 merge`: base `ede7adf75`,
-    dev `1fa64ceae`, 30 file). Un solo conflitto, quello atteso: `developer/backend/assets/architecture.md` (N83). Il giornale si
+  - Simulazione d'integrazione, alla maniera del coordinatore (`files/scripts/n74_sim_light.sh dev_release2 merge`: base `de0823b81`,
+    dev `dd797d670`, 30 file). Un solo conflitto, quello atteso: `developer/backend/assets/architecture.md` (N83). Il giornale si
     fonde da sé. I rilievi di lint sui file fusi sono tutti di `scripts/test_runner/_frontend_transaction.py`, già su HEAD.
   - La simulazione «cherry-pick» (base HEAD) dava conflitti anche sul giornale: è un artefatto, perché dev non ha ancora i miei
     commit di giornale.
@@ -7517,8 +7517,8 @@ io la skill); 5. backlog (W-B83 ✅, N74); 6. simulazione e checkpoint.
 ### N74 — il merge di `dev_release2` e le risposte del developer (D1–D4) (2026-10-19)
 
 **Commit e merge.**
-- Il coordinatore ha committato il lotto: `8a86011ce` (codice) e `80059e18b` (giornale).
-- Ha poi fuso `dev_release2` (`1fa64ceae`) nel ramo: `a68a26a75`, genitori `80059e18b` e `1fa64ceae`, albero pulito.
+- Il coordinatore ha committato il lotto: `417176e1b` (codice) e `7b98cb75a` (giornale).
+- Ha poi fuso `dev_release2` (`dd797d670`) nel ramo: `61f7c5e27`, genitori `7b98cb75a` e `dd797d670`, albero pulito.
 - Conflitto, quello previsto: `developer/backend/assets/architecture.md`, contro N83. Risolto tenendo il paragrafo di dev e
   cambiando solo «with an end a year ahead» in «and the same last date».
 - Verifiche sulla revisione combinata (15:56-16:01, carico 19-44, log `files/logs/n74/merge_*.log`):
@@ -7547,10 +7547,10 @@ io la skill); 5. backlog (W-B83 ✅, N74); 6. simulazione e checkpoint.
 - Nessun'altra traduzione portava il vecchio limite.
 - **Lo stamp.** Per ogni pagina ho trovato la versione inglese timbrata confrontando l'MD5 di `.translate-hashes.json` con la storia
   git del file.
-  - `import/index.en.md` e `import/how-to.en.md`: timbrate l'ultima volta a `4bd1d28f6` (17/10); da allora l'unica deriva inglese è
-    N74 (`8a86011ce`), ora pareggiata. Timbrate (`translate-stamp`, it/fr/es); `translate --dry-run`: «up-to-date».
-  - `form.en.md` **non** timbrata: l'ultima timbratura è `532a1fd9c` (15/10), e da allora derivano anche `0ffaa9127` (la voce
-    «Missing event?»), `54880598b` (il costo manuale svuotato) e `4bd1d28f6`. Il resto del debito resta ad Aphra.
+  - `import/index.en.md` e `import/how-to.en.md`: timbrate l'ultima volta a `f98ad2a80` (17/10); da allora l'unica deriva inglese è
+    N74 (`417176e1b`), ora pareggiata. Timbrate (`translate-stamp`, it/fr/es); `translate --dry-run`: «up-to-date».
+  - `form.en.md` **non** timbrata: l'ultima timbratura è `79bdf7e10` (15/10), e da allora derivano anche `3f2f08d23` (la voce
+    «Missing event?»), `d5511c3ad` (il costo manuale svuotato) e `f98ad2a80`. Il resto del debito resta ad Aphra.
 
 **D2 — Danske Bank: quali stati si scartano con certezza (analisi, sola lettura)**
 
@@ -7589,7 +7589,7 @@ Le opzioni per il developer:
 In (b) e in (c): un rosso prima della cura; `plugin_version` 1.0.2; il motivo `reservation` tradotto nelle quattro lingue in
 `importWizard.reportSet.reason`, perché il dettaglio del set lo mostra.
 
-### W-B85 · «Noto in silenzio, ignoto con avviso»: analisi (2026-10-19, sola lettura, base `0dd60928d`)
+### W-B85 · «Noto in silenzio, ignoto con avviso»: analisi (2026-10-19, sola lettura, base `f1e5e4b46`)
 
 Il developer, testuale, sul principio per tutti i plugin BRIM: «quello che sappiamo va ignorato, venga scartato, presente al più nei
 log, quello che non sappiamo se sia corretto scartarlo, lo scartiamo, ma facciamo comparire un avviso in cui si evidenzia il fatto
@@ -7740,7 +7740,7 @@ Domanda: dentro W-B85, o una voce a parte?
 - **OK di scrittura** su `frontend/src/lib/i18n/importWizard/*.json` per `importWizard.reportSet.reason.reservation` e, se D-W85-3 è
   l'aiuto unico, `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`.
 
-### W-B85 · Danske Bank, «noto in silenzio, ignoto con avviso»: cura (2026-10-19, base `9857be3d2`)
+### W-B85 · Danske Bank, «noto in silenzio, ignoto con avviso»: cura (2026-10-19, base `c2462c1c0`)
 
 **Il via del coordinatore (16:23)**, per i punti 1 e 2 già decisi:
 - la cura Danske: «Varaus» → `reservation`, in silenzio con il log; `excluded_status` → avviso con `report_issue`; versione 1.0.2;
@@ -7789,14 +7789,14 @@ Vincoli:
   > ora nomina i due usi (segnalato dal docs-writer).
   > **Nota**: un ordine rifiutato o annullato di Danske («Hylätty», «Peruttu») prende l'avviso con il link, finché il plugin non
   > impara quella parola. È voluto: nessun export vero ha mai mostrato quegli stati.
-- ✅ 5. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `ccc2a4141`): pulita. La base di fusione è il mio HEAD
-  `9857be3d2`, e dev non tocca nessuno dei 12 file.
-- ✅ 6. Dopo il commit (`323c120eb`, `8ccf38604`), con l'OK del coordinatore: IT, FR ed ES di `user/transactions/import/danske-bank`
+- ✅ 5. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `8c6e984ee`): pulita. La base di fusione è il mio HEAD
+  `c2462c1c0`, e dev non tocca nessuno dei 12 file.
+- ✅ 6. Dopo il commit (`9579b9cd8`, `0068eafd7`), con l'OK del coordinatore: IT, FR ed ES di `user/transactions/import/danske-bank`
   correggono solo la frase che prometteva «niente scartato in silenzio» (`files/scripts/wb85_danske_tr.py`, ogni sostituzione
   contata). Ora dicono che nessuna riga si perde e che gli avvisi elencano quelle da controllare: è vero anche senza le due voci nuove,
   che restano ad Aphra. Nessuno stamp.
 
-### B-52 · La data dell'operazione: analisi (2026-10-19, sola lettura, base `8ccf38604`)
+### B-52 · La data dell'operazione: analisi (2026-10-19, sola lettura, base `0068eafd7`)
 
 **Il principio del developer**, testuale: «usare la data dell'operazione fatta dall'utente, e in base alle colonne disponibili capire
 se è "stabile e contabilizzata", chi lo espone come colonna si usa quella, chi ha la colonna della data valuta, verifica che quella
@@ -7922,7 +7922,7 @@ registra ciascuno, contro il principio. Dopo lo sprint, come W-B86.
 
 **Pesi**: Fineco S–M; Danske M–L, con la cura; i doppioni (a) M; il CSV generico M, con la doc e le traduzioni; la skill e la guida S.
 
-### B-52 · La data dell'operazione: cura (2026-10-19, base `a364a100a`)
+### B-52 · La data dell'operazione: cura (2026-10-19, base `205e213bb`)
 
 **Le decisioni del developer** (via il coordinatore, 17:13-17:55):
 - **I doppioni: (b), nessun codice.** Testuale: «in futuro le sovrapposizioni restano scoperte? i prossimi reimport saranno con la
@@ -7982,7 +7982,7 @@ registra ciascuno, contro il principio. Dopo lo sprint, come W-B86.
 
 #### ⏸️ B-52 · pausa generale del developer (19/10 18:12): lo stato per ripartire
 
-Base `a364a100a`, nessun commit di B-52. 10 file sporchi. Nessun processo nella corsia, porta 6184 libera; i test-author fermi.
+Base `205e213bb`, nessun commit di B-52. 10 file sporchi. Nessun processo nella corsia, porta 6184 libera; i test-author fermi.
 
 **Fatto**
 - I rossi (test-author `b52-reds`, primo giro), confermati da me alle 18:04: Fineco 9 e 30, Danske 29 e 327, API 1 e 3. Stanno in
@@ -8052,8 +8052,8 @@ Poi, dopo B-52: l'analisi Q-N78-1 (il costo dell'ADJUSTMENT in uscita, con MF). 
 
 #### ▶️ B-52 · ripresa del 20/10
 
-- ✅ 08:50: corsia ripopolata (`db populate --force --clean`, carico 20; `/tmp` era stato svuotato). HEAD `a364a100a`, gli stessi 10
-  file sporchi. Dev (`ecc7ac667`) non ha toccato nessun file del lotto dalla base di fusione `9857be3d2`. I miei commit di W-B85
+- ✅ 08:50: corsia ripopolata (`db populate --force --clean`, carico 20; `/tmp` era stato svuotato). HEAD `205e213bb`, gli stessi 10
+  file sporchi. Dev (`d61270a14`) non ha toccato nessun file del lotto dalla base di fusione `c2462c1c0`. I miei commit di W-B85
   aspettano ancora l'ingresso.
 - **⚠️ Fuori pista, due scoperte nel codice di Danske, prima della cura:**
   1. `_data_lines` scrive ogni elemento di `analysis.pairs` come una riga «pair», qualunque sia il suo esito. Cambiare solo
@@ -8178,11 +8178,11 @@ di finire riassunta in silenzio. È più giusto (la custodia copre quel giorno e
   `files/scripts/b52_front.sh`):
   - `ReportSetCard.test.ts` 47, `front-transaction tx-unit` 999;
   - Prettier e `theme-roles --check` puliti; `i18n check` (5106 chiavi); `front check` senza errori né avvisi.
-- ✅ 6. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `701054da9`, base `9857be3d2`, 16 file): pulita. Dev
+- ✅ 6. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `ad869d2ea`, base `c2462c1c0`, 16 file): pulita. Dev
   non ha toccato i file del lotto; ruff e black puliti sui file fusi.
 - ✅ 7. Il backlog: W-B89, la data descritta ancora come «settlement date» in modelli, schemi e doc (file condivisi).
 
-### W-B89 · La data di una transazione è la data dell'operazione, anche nelle descrizioni: cura ✅ (2026-10-20, base `9989facda`)
+### W-B89 · La data di una transazione è la data dell'operazione, anche nelle descrizioni: cura ✅ (2026-10-20, base `45c9f9d7d`)
 
 Il via del coordinatore (10:10): lotto piccolo prima di B-51. Le descrizioni di `transactions.date` dicono «trade date», non
 «settlement date», in `models.py`, negli schemi e nella doc del DB; poi `api sync`. Solo testo, nessuno schema del DB.
@@ -8199,9 +8199,9 @@ Il via del coordinatore (10:10): lotto piccolo prima di B-51. Le descrizioni di 
 - Prove (10:14-10:17, carico 39-43, `files/scripts/wb89_light.sh`, log `files/logs/wb89/`), tutte exit 0: `api sync` (nessun file
   tracciato cambiato: il client generato è ignorato), ruff e black sui 3 file Python, `front check` senza errori né avvisi, `mkdocs
   build` strict.
-- La simulazione su dev `f73514a77`: pulita. Dev contiene il mio HEAD e non tocca i 4 file.
+- La simulazione su dev `1feacc35e`: pulita. Dev contiene il mio HEAD e non tocca i 4 file.
 
-### B-51 · Le note blu contate come avvisi nel passo 3 del wizard (2026-10-20, base `ef2a17998`)
+### B-51 · Le note blu contate come avvisi nel passo 3 del wizard (2026-10-20, base `7eb69b8d2`)
 
 Trovato da B nella revisione di N74, approvato dal coordinatore come difetto: la colonna «⚠️» dei risultati conta anche le note
 `info` blu (un file Fineco mostra «⚠️ 1»; anche Scalable, Danske, Crédit Agricole), e il dettaglio della lettura chiama tutto
@@ -8329,7 +8329,7 @@ cambiare, rimozioni comprese; lo zero in `text-lf-muted` va bene. Prima i rossi.
   >   rianalizza già da sé;
   > - `brim_plugin_guide.md:910` e `developer/backend/brim/architecture.md:392` dicono dove compaiono le note («parse-detail +
   >   confirmation modal»): vero, ma non nominano i conti nuovi della colonna e dei riquadri.
-- ✅ 5. La simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `f73514a77`, base `9989facda`, 22 file): pulita.
+- ✅ 5. La simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `1feacc35e`, base `45c9f9d7d`, 22 file): pulita.
   - Dev ha toccato `how-to.en.md` (il paragrafo di J-57, riga ~288) e il runner (un'altra funzione): fusi senza conflitti.
   - Ruff e black sul runner fuso danno i 4 PLC0415 e il formato che il file di dev ha già da sé: non sono di B-51.
   - Nessun E2E legge i conti o le chiavi tolte: cliccano solo `import-wizard-warning-confirm`, che compare come prima (con
@@ -8338,7 +8338,7 @@ cambiare, rimozioni comprese; lo zero in `text-lf-muted` va bene. Prima i rossi.
   guida, «un file è fallito»). B-51 sta nella sezione di B: la chiude il coordinatore. Fuori dal lotto: la galleria del passo 3
   (`import-wizard-step3`) mostra la colonna e il riquadro vecchi, da rigenerare in uno slot pesante.
 
-### W-B92 · Fineco: la commissione è già dentro il Controvalore — analisi e cura (2026-10-21, base `89e8b2e61`)
+### W-B92 · Fineco: la commissione è già dentro il Controvalore — analisi e cura (2026-10-21, base `e44422ed0`)
 
 **Il fatto.** Discussione #49 (`@Xgialippo`, con l'Excel vero): nel report di Fineco il **Controvalore** di un acquisto contiene già la
 commissione e quello di una vendita l'ha già tolta. Il plugin (layout con colonne di commissione) prendeva il Controvalore tal quale
@@ -8381,7 +8381,7 @@ Il developer ha promesso all'utente il nome nel CHANGELOG. Numeri delle fixture:
   limitations» anche Q-WB-1/2/3 (Rimborso con commissione, commissione maggiore del Controvalore, righe non EUR). Resta al coordinatore
   `CHANGELOG.md:99` («Fineco importer (beta)»).
 
-### W-B86 e W-B87 · «Noto in silenzio, ignoto con avviso» negli altri plugin (2026-10-21, base `a7c6db19f`)
+### W-B86 e W-B87 · «Noto in silenzio, ignoto con avviso» negli altri plugin (2026-10-21, base `f67ce0771`)
 
 **Il via del coordinatore (21/10)**: il passo B del workstream W backend. Aiuto condiviso in `_brim_io.py`, W-B86 solo sui 4 plugin stabili
 (decisione del 19/10), D-W85-4 nella versione minima (approvata dal developer il 21/10). Le chiavi `importWizard.brimNotice.*` le scrive W.
@@ -8407,7 +8407,7 @@ Il developer ha promesso all'utente il nome nel CHANGELOG. Numeri delle fixture:
 - ✅ 4. Chiavi i18n (21/10, via del coordinatore): `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`, `importWizard.brimEvidence.*`
   (4 lingue); tolte `scalable_not_executed` (brimNotice e brimEvidence). `i18n check` verde (5119 chiavi).
 
-### N78-1 · A che valore esce un'unità in una rettifica in uscita: analisi (2026-10-21/22, sola lettura, base `2879ae3e4`)
+### N78-1 · A che valore esce un'unità in una rettifica in uscita: analisi (2026-10-21/22, sola lettura, base `85fda260e`)
 
 Ondata 3, lavoro notturno, solo analisi (con i fatti preparati da MF nel piano 11, «N78-1 con W — preparazione»). Il documento per
 il developer è fuori dal repo: `salvataggi-worktrees-20261021/ondata3/N78-1-analisi.md`.
@@ -8425,7 +8425,7 @@ il developer è fuori dal repo: `salvataggi-worktrees-20261021/ondata3/N78-1-ana
 - ✅ 3. Raccomandazione di W: (b) come default (Auto = prezzo del giorno, al costo senza prezzo), (c) come scelta esplicita, la
   decisione 47 allineata a J-10; N78-bis come primo passo in ogni caso. Domande Q-N78-1a…h nel documento.
 
-### N78-1 · Una rettifica in uscita non ha valore: cura (2026-10-22, base `2879ae3e4`)
+### N78-1 · Una rettifica in uscita non ha valore: cura (2026-10-22, base `85fda260e`)
 
 **Le decisioni del developer** (21/10 sera, via il coordinatore; testo intero in `ondata3/N78-1-analisi.md` § 8): (1) un
 ADJUSTMENT in uscita non ha valore, abbassa solo la quantità, anche per il TWRR; (2) decisione 47: la gamba sola che cede esce senza
@@ -8500,7 +8500,7 @@ no). Il database del developer lo controlla il coordinatore con uno script ester
 - ✅ 6. Doc (docs-writer, 35 pagine inglesi: utente, teoria finanziaria, sviluppatore), build stretto 0 avvisi, check-links 97. Debito di
   traduzione reale su 20 pagine tradotte. I commenti del backend che citavano ancora J-24 aggiornati da me.
 
-### Ondata 4 · W: Q-N78-1k, helper legacy, regola dei plugin in beta con Fineco, W-BS — analisi del primo turno (2026-10-22, base `c042f2481`)
+### Ondata 4 · W: Q-N78-1k, helper legacy, regola dei plugin in beta con Fineco, W-BS — analisi del primo turno (2026-10-22, base `295a09c86`)
 
 Sola lettura; il documento è `salvataggi-worktrees-20261021/ondata4/W-analisi-turno1.md`.
 - ⏳ 1. **Q-N78-1k**: la coppia di ADJUSTMENT collegati si può creare solo da API o è un dato vecchio (nessun punto del Form, del Bulk o dei plugin la crea; il Form
@@ -8545,7 +8545,7 @@ Sola lettura; il documento è `salvataggi-worktrees-20261021/ondata4/W-analisi-t
   > **⚠️ Fuori pista**: `pairDescriptionMismatch` e `pairTagsMismatch` non hanno nessun messaggio in `transactions.errors.*` (4 lingue): il cancello dei codici scorre solo `TXValidationCode`. Preesistente, non toccato.
   > Un'altra: la registrazione dell'azione sta in `scripts/test_runner/_backend_services.py`, che il lavoro di W-BS (non ancora committato) ha già toccato: due hunk additivi distinti.
 
-### Ondata 5 · W: W5-1 (W-B88), W5-3 (B2), W5-5 (C-70b) — analisi del primo turno (2026-10-23, base `1fd80c481`)
+### Ondata 5 · W: W5-1 (W-B88), W5-3 (B2), W5-5 (C-70b) — analisi del primo turno (2026-10-23, base `61a6c828b`)
 
 Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-W.md`. Corsia 6183 / `/tmp/librefolio-r13-w` (ricreata con `db populate --force --clean`).
 
@@ -8607,7 +8607,7 @@ Frontend: `parseFailure.ts` (`resolveParseFailureMessage`), cablato in `ImportWi
 > **Note implementazione**: la pagina Files (`routes/(app)/files/+page.svelte:722`) usa ancora `getFilePreviewError`: mostra il testo inglese `message` come prima (file non assegnato a W: lo segnalo). Il testo salvato in `error_message` del file resta inglese (diagnostica).
 > **⚠️ Fuori pista**: lo spec nominava solo `uploads.py`; anche `GET /brokers/import/files/{id}/preview` aveva `detail=str(e)`: coperto.
 
-### Ondata 5 · W5-2 (W-B87) — analisi del primo turno (2026-10-24, base `e5c5608d2`)
+### Ondata 5 · W5-2 (W-B87) — analisi del primo turno (2026-10-24, base `8324c839d`)
 Documento completo: `salvataggi-worktrees-20261021/ondata5/W-analisi-W5-2.md`. In breve: Revolut `Quantity` = azione aggiunta (prova: TSLA 0,0822 → 0,2465 = 3 per 1); Trading 212 close/open con `Time` a 9 ms, il campione è uno split **inverso** (serve
 un campione sintetico moltiplicativo); l'ADJUSTMENT in entrata prende `cost_basis_override = 0` esplicito; flag gestito = `BRIMFieldTodo(field="asset_event_id", reason_code="possible_split")`, che il Bulk chiude da solo quando la riga ha un evento;
 `EVENT_TYPES_TX_COMPATIBLE` non ha SPLIT (da verificare). eToro: fee → FEE, SDRT → TAX, rimborso → INTEREST (proposta). Swissquote: coppie `FX_CONVERSION` per `Order #`. IBKR: il report non ha `Symbol`: resta avviso. Trade Republic: `Waarde (netto)` potrebbe già contenere `Kosten`: serve un file vero (ferma solo TR).
@@ -8619,7 +8619,7 @@ Risposte del coordinatore all'analisi: D3 IBKR e D4 T212 (distribuzione, convers
 > **Note implementazione**: il campione Trading 212 ha le righe `Stock split` **spostate di una colonna** (le azioni stanno in `Currency (Price / share)`, l'ID in `Price / share`): `_split_shares` legge `No. of shares` e, se vuota, la cella dopo; il test-author ha aggiunto un caso col layout vero. Il campione T212 è uno split inverso: resta avviso.
 > **⚠️ Fuori pista**: nessuna; Trade Republic (D2), il rimborso eToro (D1) e IBKR (D3) restano come sono.
 
-#### W5-2b · revisione di MF su `86c014295` + blocco 3 (Bulk) — esito (2026-10-24)
+#### W5-2b · revisione di MF su `00b616f8c` + blocco 3 (Bulk) — esito (2026-10-24)
 MF: l'import va bene, tre cose da sistemare e test numerici. Collegata a uno SPLIT, il costo medio usa la **quantità della riga** (`average_cost.py:300`), il FIFO il **rapporto dell'evento** (`fifo/engine.py:511-535`): coincidono solo se riga = tenute × (rapporto − 1).
 ✅ 24/10 **1 · rapporto e arrotondamento**: il todo `possible_split` porta nel `context` `held_before`, `ratio` (8 decimali), `suggested_ratio` (la frazione tonda con denominatore ≤ 5 entro lo 0,5%, altrimenti il rapporto a 6 decimali) e `rounding_delta` (= tenute × (suggerito − 1) − aggiunte). Revolut somma le righe dello stesso ticker sopra lo split (nel campione vero lo split è la prima riga di TSLA: nessun rapporto, nessun avviso); T212 prende le azioni della riga `close`. Helper `split_ratio_hint` in `_brim_io.py`.
 ✅ **2 · valuta del costo 0 (Revolut)**: colonna `Currency` della riga, altrimenti la valuta più frequente del file, altrimenti il simbolo del `Total Amount`; scelta: nessun cambio USD inventato per un importo nullo.
@@ -8811,7 +8811,7 @@ Domanda del developer: la differenza di giorni fra file titoli e file conto dipe
 > **Note implementazione**: questo è solo piano, nessun file del repository toccato oltre a questo; nessun dato personale (gli importi dell'analisi non entrano nei test).
 > **⚠️ Fuori pista**: nessuna. Punto da confermare con il developer al via: la finestra di regolamento di CA in giorni di calendario (10) invece dei giorni lavorativi di Danske.
 
-#### W5-7 · Ondata 6 (2026-10-28, base `32674edb8`, sessione figlia W, corsia 6201)
+#### W5-7 · Ondata 6 (2026-10-28, base `bc1d4c06c`, sessione figlia W, corsia 6201)
 Ordine dei checkpoint (kickoff W): **CP1** gradino 1 · **CP2** gradini 2-5 (abbinamento, punti di verità, buco di luglio; revisione Opus in sola lettura prima del commit) · **CP3** gradini 6, 8 (+7 facoltativo) con la pagina del plugin nella guida (`brim_plugin_guide.md` libera W6-11 di W2).
 
 **Decisioni del 28/10 che cambiano il piano sopra:** la data salvata è la *data operazione* anche per le sottoscrizioni in collocamento (regola 9 della skill `brim-plugin`); l'abbinamento usa la data valuta dei titoli con la data valuta del conto; il gradino 7 (`portfolio`) cade se il cammino critico stringe.
@@ -8840,7 +8840,7 @@ Ordine dei checkpoint (kickoff W): **CP1** gradino 1 · **CP2** gradini 2-5 (abb
 > **Perché rimandato**: è facoltativo e ultimo per piano; non dà transazioni né correzioni, solo verifiche di posizione e di «Liquidità», e chiede un file reale di «Andamento Portafoglio» di cui oggi non c'è nessun campione (la sua forma non è nota, a differenza del conto e dei titoli). Il resto del lotto funziona senza. Da riprendere quando c'è un campione vero da cui ricavare le colonne dell'istantanea; il ruolo si aggiunge a `report_roles` come `required=False, multiple=False, extensions=[".xlsx"]` senza toccare l'analisi esistente.
 > **Core toccato nel lotto**: `brim_report_sets.apply_history` con policy `import`: H0 non oltre il giorno dopo il primo checkpoint (l'apertura sopravviveva solo se una riga la seguiva entro un giorno); `summarize` (Danske) invariato, fotografia JSON di Danske identica byte per byte.
 
-#### W5-9 · #47 rifatto con il calcolo nel frontend — esito (2026-10-25, base `a235d1094`)
+#### W5-9 · #47 rifatto con il calcolo nel frontend — esito (2026-10-25, base `99fbfcc80`)
 Decisione del developer (25/10): niente endpoint per una moltiplicazione o una divisione. Principio: il frontend non fa i conti complessi, ma piccole somme e moltiplicazioni ci stanno.
 ✅ **Tolto** (backend): `POST /transactions/trade-amount`, `financial_math/trade_amount.py`, `schemas/transactions/trade_amount.py`, `services/transactions/trade_amount.py`, `test_trade_amount.py` e il blocco #47 di `test_transactions_api.py`, le righe di `backend.instructions.md`, `financial-math.instructions.md`, `financial_math.md` e del docstring di `financial_math/__init__.py`. (Frontend) `txTradeAmountApi.ts` e `planTradeAmountRequest`.
 ✅ **Un solo helper** `form/txTradeAmount.ts`: `amountFromUnitPrice`, `unitPriceFromAmount`, `calculateTradeValue`. Decimali esatti con `BigInt` a scala fissa: ogni numero è `coefficiente × 10^-scala`, il prodotto o il quoziente si forma come un'unica frazione, arrotondata **una volta** half-even a 6 decimali (importo) o 12 (prezzo). Niente float, nessuna dipendenza. Convenzione invariata: `qty / quote_base_quantity × prezzo`; base ≤ 0 o non intera = 1; limiti 10/6/12 decimali e 15 cifre significative come prima; `driverAfterEdit` invariato. Il risultato è testo semplice (senza esponente né zeri finali, `0` per zero), identico a quello che dava il server.
@@ -8851,7 +8851,7 @@ Decisione del developer (25/10): niente endpoint per una moltiplicazione o una d
 ✅ `api sync` eseguito (il client generato non ha più la rotta). Doc utente `transactions/form.en.md` (§ «Total amount or unit price»): calcolo immediato nel form, pareggio half-even, vista con le due forme. Debito di traduzione: IT/FR/ES di quella sezione non c'erano già (nessun timbro).
 **Test** (test-author): `txTradeAmount.test.ts` 220 (tabelle base 1/100, pareggi half-even su 7ª e 13ª cifra, trappole del float, **corpus di parità** di 91 righe generato una volta con `Decimal(prec=80, ROUND_HALF_EVEN)` di Python e incollato come dati), `TransactionFormModal.entryMode.test.ts` 39 (riscritto, nessun mock di rotta), `assetStore.test.ts` 6 (nuovo), E2E `transactions-modals.spec.ts` (obbligazione base 100 e vista salvata).
 Dopo: `services financial-math` 2490, `api transactions` 26, Vitest su `features/transactions/form` + gate + assetStore verdi, `front check` 0/0, `check-orphans` pulito, prettier/ruff/black puliti, mkdocs build e check-links verdi.
-> **Note implementazione**: HEAD aveva già il merge di W2 (`9044c6d59`) deciso dal coordinatore; il lavoro è sopra `a235d1094`. L'asset non ancora nello store non calcola nulla: se serve un valore anche prima del caricamento, lo store va caricato prima (il form lo fa già con `ensureAssetsLoaded`).
+> **Note implementazione**: HEAD aveva già il merge di W2 (`32c135a43`) deciso dal coordinatore; il lavoro è sopra `99fbfcc80`. L'asset non ancora nello store non calcola nulla: se serve un valore anche prima del caricamento, lo store va caricato prima (il form lo fa già con `ensureAssetsLoaded`).
 > **⚠️ Fuori pista**: nessuna. Playwright `front-transaction transactions-modals` (corsia 6183): **30 verdi** dopo due correzioni dei test nuovi (il BUY salvato non aveva descrizione, quindi nessuna cella `tx-desc-*` da cliccare; e riscrivere lo stesso importo 985 non cambia nulla, quindi il prezzo restava a guidare: ora si scrive 985,5 → prezzo 98,55). Con il prezzo che guida e cancellato l'importo mantiene l'ultimo valore calcolato (comportamento di prima, non specificato).
 
 #### W5-10 · D-P4: avviso con conferma per le date prima del 1900 — esito (2026-10-25)
@@ -8867,7 +8867,7 @@ I pavimenti del backend **non** si toccano (cadranno dopo i gradini di MF, J e Y
 > **⚠️ Fuori pista**: nessuna. Non coperto: il gate dei suggerimenti non visti prima degli altri due; il clic su una riga del banner dentro il Bulk intero (solo nel test del banner).
 
 #### W5-11 · anno breve (0–99) nei punti del campo data e dell'import — esito (2026-10-25)
-Elenco di Y: `ondata5/Y-anno-breve-fuori-ambito.md`. `Date.UTC(24, …)` e `new Date(24, …)` leggono un anno da 0 a 99 come 19xx: un refuso `0024-03-01` (quello che D-P4 vuole segnalare) veniva rifiutato o spostato di un secolo. La cura è `utcMs` di `dateOnly.ts` (portata dal coordinatore, `d61f9cdaf`).
+Elenco di Y: `ondata5/Y-anno-breve-fuori-ambito.md`. `Date.UTC(24, …)` e `new Date(24, …)` leggono un anno da 0 a 99 come 19xx: un refuso `0024-03-01` (quello che D-P4 vuole segnalare) veniva rifiutato o spostato di un secolo. La cura è `utcMs` di `dateOnly.ts` (portata dal coordinatore, `c07d7c9a0`).
 ✅ **Rossi prima** (test-author): 47 test rossi su 288, ognuno per il motivo dell'anno breve. ✅ **Cura**:
 - `parseTypedDate.ts` (punto 1): `isRealDate` usa `utcMs`, rifiuta l'anno 0 e oltre 9999 (il primo giorno salvabile è `0001-01-01`) e scrive l'anno a quattro cifre (`0024-03-01`, non `24-03-01`).
 - `dateArrowStep.ts` (2, 3): `shiftIsoDate` e `daysInMonth` con `utcMs`; le frecce si fermano a `0001-01-01` e `9999-12-31` (prima, da `0001-01-01` in giù tornavano 1900).
@@ -8893,7 +8893,7 @@ Dopo: `services transaction-decimal-places`/`-edge-cases`/`transaction_service` 
 
 ## 13. Ondata 6 · W2 (28/10/2026)
 
-Kickoff: `salvataggi-worktrees-20261021/ondata6/kickoff-W2.md`. Base `32674edb8`, corsia 6203 (`/tmp/librefolio-r13-o6-w2`). Checkpoint 1 = MF-L, consegnato da solo (MF lo aspetta).
+Kickoff: `salvataggi-worktrees-20261021/ondata6/kickoff-W2.md`. Base `bc1d4c06c`, corsia 6203 (`/tmp/librefolio-r13-o6-w2`). Checkpoint 1 = MF-L, consegnato da solo (MF lo aspetta).
 
 ### Checkpoint 1 · MF-L — via `BRSummary.holdings`
 ✅ (28/10) **Analisi**: nessuna pagina legge `holdings` di `GET /brokers/{id}/summary` (il frontend legge `cash_balances`, `user_role`, `user_share_percentage`; i `holdings` delle pagine broker/dashboard sono del *report* di portafoglio). Chi lo scriveva: il ciclo di `get_summary`, `_holding_average_costs`, `_get_latest_prices_batch`.
@@ -8904,7 +8904,7 @@ Kickoff: `salvataggi-worktrees-20261021/ondata6/kickoff-W2.md`. Base `32674edb8`
 > **Note implementazione**: `TransactionService.get_asset_holdings` resta (testato, usato dai test del decimal-places) ma ora **non ha più chiamanti nell'app**: candidato al codice morto, da decidere con W6-12 (stesso file `balances.py`). `BRSummary.total_value_base_currency` non è mai valorizzato dal backend, ma `brokers/[id]/+page.svelte:884` lo legge (ramo morto): file di Y, solo segnalato.
 > **⚠️ Fuori pista**: nessuna.
 
-### Checkpoint 2 · W6-7, W6-5, W-B63, note di W5-8 (28/10/2026, base `833cbbde5`)
+### Checkpoint 2 · W6-7, W6-5, W-B63, note di W5-8 (28/10/2026, base `86b41f936`)
 ✅ **W6-7 (C-42 + W-B46)** — l'API rifiuta la coppia di cassa incoerente. **Rosso prima**: `services linked-cash-pair` (nuovo, `test_linked_cash_pair.py`): 28 rossi e 12 guardie verdi (`ondata6/W2-w67-red.log`). **Cura**: `_validate_linked_pair` (`services/transactions/validation.py`) dopo le regole sui broker: CASH_TRANSFER con valute diverse → `pairCurrencyMismatch` (`currencyA`, `currencyB`); importi non esattamente opposti in `Decimal` → `pairAmountMismatch` (`amountA`, `amountB`); FX_CONVERSION nella stessa valuta → `pairCurrencySame` (`currency`). Le regole di valuta e importo stanno in `_cash_pair_values_issue` (limite di complessità di ruff). Il problema si vede sul primo create del gruppo, `/commit` e `/validate`, niente scritto. Messaggi in 4 lingue (`transactions.errors.*`). I dati già salvati non si toccano (guardia: una coppia salvata con valute diverse si modifica come prima). W-B46: un test confronta le `pair_field_constraints` di `TX_TYPE_METADATA` con quelle che la funzione fa rispettare, e fallisce se la tabella ne dichiara una che la funzione non conosce (la funzione resta a mano, ma non può più staccarsi dalla tabella senza che qualcuno lo veda).
 > **Note implementazione**: l'aggiornamento di UNA sola gamba di una coppia salvata (C-42, ultimo punto) resta fuori: la decisione del 23/10 dice «l'API rifiuta la coppia incoerente; i dati salvati non si toccano», e `validate_updated_pairs` non cambia.
 
@@ -8921,7 +8921,7 @@ Kickoff: `salvataggi-worktrees-20261021/ondata6/kickoff-W2.md`. Base `32674edb8`
 ✅ **Prove del checkpoint 2** (corsia 6203; log in `ondata6/W2-cp2*.log`): `services linked-cash-pair` 40 (rossi prima 28), `generic-csv-cost-todo` 7, `utils real-decimal` 285, `services asset-event-store` 75, `asset-digit-limits` 99, `fx-core` 42, `fx-sync-service` 38, `linked-adjustment-pair` 21, `transfer-pair-order` 64, `transaction` 132, `brim-gap-fix` 118; `db migration-005` 108, `db validate` 18; `api fx-sync` 10, `assets-price` 32, `assets-events` 45, `asset-prices-export` 5, `backup-export-extras` 8, `prices-sync-delta` 5, `transactions` 26, `transactions-validate` 12; `external brim-economic-rows` 76 e `brim-date-order` 76; `i18n check` ok; ruff e black puliti sui file toccati. Non eseguiti: `mkdocs build`, Vitest/E2E (nessun file frontend tocca il codice, solo le chiavi i18n), un avvio con dati reali.
 > **⚠️ Fuori pista**: due test di Swissquote (`test_brim_economic_rows.py`, file di W) costruivano le gambe finte senza `currency` e `amount`, che la regola nuova legge: completati (`currency=tx.cash.code`, `amount=tx.cash.amount`), 76 verdi.
 
-### Checkpoint 3 · FB-16 — «Totale / Prezzo unitario» sulla riga dell'importo (28/10/2026, base `d90612861`)
+### Checkpoint 3 · FB-16 — «Totale / Prezzo unitario» sulla riga dell'importo (28/10/2026, base `12169887a`)
 Decisione del developer del 28/10: il selettore sta **sulla stessa riga** dell'importo e dice solo come leggere il numero scritto; il form resta importo + valuta; dopo l'inserimento, al posto del suggerimento sotto il campo, compare **l'altro valore**; si salva sempre il totale; riaprendo si vede il totale; vale per tutti i tipi con quantità e importo; calcolo con lo stesso helper del browser di W5-9 (`txTradeAmount.ts`, mai una copia); rilettura di tutti i suggerimenti del form.
 ✅ **Rossi prima** (test-author, contro HEAD in una cartella scratch): `TransactionFormModal.entryMode.test.ts` riscritto (55 test: 47 rossi, 8 guardie verdi) e `transactionsEntryModeKeys.test.ts` nuovo (44 test sulle 4 lingue senza fallback inglese: 23 rossi). E2E `transactions-modals` riscritto sul contratto nuovo (view mode e blocco «Total / Unit price»).
 ✅ **Codice**: `TransactionFormModal.svelte` — `tradeEntryMode` (come si legge il numero) al posto di `tradeDriver`+badge; `cashCellValue` (il campo mostra il totale, o il prezzo unitario scritto), `derivedCash` (l'altro valore, da `calculateTradeValue`), `onEntryModeChange` (il numero resta, cambia la lettura), `onCashInput`; il totale non calcolabile svuota `draft.cash.amount` (mai un prezzo unitario spedito come importo). `TxFormSingleSection.svelte`: il selettore (`TxEntryModeToggle.svelte`) sta nella riga dell'etichetta del cash, `TxCashDerived.svelte` («= 1 000,80 in totale» / «= 83,40 per unità», per N unità se la base ≠ 1) al posto del suggerimento di segno (`tx-form-cash-hint`); `TxTradePriceRow.svelte` tolto. `CompactCashCell.svelte`: nuova prop `maxFractionDigits` (12 con il prezzo unitario): oltre il tetto il campo è invalido e il testo resta com'è scritto, mai troncato al blur (prima il blur lo portava a 8 decimali: difetto trovato dal test-author).
@@ -8930,8 +8930,8 @@ Decisione del developer del 28/10: il selettore sta **sulla stessa riga** dell'i
 > **Note implementazione**: «sulla stessa riga dell'importo» l'ho letto come la riga dell'**etichetta** del campo (selettore a destra di «Cash *»): sul campo c'è già l'importo più la valuta e la colonna è stretta. Il test-author lo prova come ordine nel documento e come bounding box in desktop, non come disegno. Un prezzo unitario con più di 12 decimali non è mai calcolato né troncato: campo rosso, nessun altro valore, torna il suggerimento.
 > **⚠️ Fuori pista**: un `git rm --cached` per errore sul file cancellato `TxTradePriceRow.svelte`: indice riportato com'era con `git reset -q -- <file>` (ora ` D`). Non girati: E2E mobile, `--workers 4`, `mkdocs build`.
 
-### Checkpoint 3 · FB-17 — barra Bulk e Edit di riga in broker › Transazioni (28/10/2026, base `2f2a7e73a`)
-Richiesta del developer: nel tab Transazioni della pagina broker la selezione multipla deve mostrare la barra Bulk (Edit / Clone / Delete) e la riga l'Edit, come nella pagina Transazioni, per chi ha `canEdit`. Aspettava FB-7 di Y sullo stesso file (unito dal coordinatore: `6afa8067a`).
+### Checkpoint 3 · FB-17 — barra Bulk e Edit di riga in broker › Transazioni (28/10/2026, base `25c251511`)
+Richiesta del developer: nel tab Transazioni della pagina broker la selezione multipla deve mostrare la barra Bulk (Edit / Clone / Delete) e la riga l'Edit, come nella pagina Transazioni, per chi ha `canEdit`. Aspettava FB-7 di Y sullo stesso file (unito dal coordinatore: `dc75ed6cc`).
 ✅ **Rossi prima** (test-author, contro HEAD in una cartella scratch): `TransactionsTable.actions.test.ts` (15: 7 rossi, 8 guardie), E2E nuovo `e2e/brokers/broker-transactions-actions.spec.ts` (8: 7 rossi, 1 guardia: il VIEWER), `bulk/selectionGuards.test.ts` (14, con 5 mutanti uccisi; rosso perché il modulo non esisteva).
 ✅ **Causa che non si vedeva**: la modale Bulk legge gli originali dallo `txStore` (`txStoreGet(txId)!`), che la pagina broker non riempiva: Edit/Clone/Delete da quel tab sarebbero andati in errore. `loadTransactions` ora chiama `txStoreSetAll(main, partner)`.
 ✅ **Codice**: `brokers/[id]/+page.svelte` — `DataTableToolbar` (Edit/Clone/Delete) nella riga dei comandi del tab, solo con `canEdit` e almeno una riga spuntata; `hideActions={!canEdit}` con `onEditRow`/`onCloneRow`/`onDeleteRow` che aprono la modale Bulk sulla riga; `onSelectionChange`; dopo il commit la selezione si svuota e il tab si ricarica (`handleBulkCommitted`). Nuovo `bulk/selectionGuards.ts` (`splitEditableRows`, `guardEditableRows`): la regola «le righe non modificabili restano fuori con un avviso, se non resta nulla non si apre nulla» ora è una sola per la pagina Transazioni (che ne usa la funzione, `guardViewerOnly`) e per il broker. `TransactionsTable.svelte`: **un'azione di riga è offerta solo se la pagina ha passato il suo gestore** (altrimenti il pulsante non fa nulla): la pagina broker non cabla lo Split di riga e non lo mostra; la pagina Transazioni passa tutti i gestori e non cambia.
@@ -8939,7 +8939,7 @@ Richiesta del developer: nel tab Transazioni della pagina broker la selezione mu
 > **Note implementazione**: nella pagina broker la barra ha solo le tre azioni (niente «Link as pair»). Modifica o clone di una sola riga apre anche il form sopra la griglia Bulk (`autoForm`), come già sulla pagina Transazioni. Il pulsante «× / N selezionate» di `DataTableToolbar` non ha `data-testid`: non l'ho inventato, i test svuotano la selezione togliendo le spunte.
 > **⚠️ Fuori pista**: `front check` mostrava `count_stored_prices_…` mancante nel client generato (non mio): era il client vecchio dopo le unioni di X; risolto con `api sync`. Non girati: `front-broker all` / `front-transaction all` interi, E2E mobile.
 
-### Checkpoint 4 · W6-1, W6-3, W6-4, W6-8, W6-9, W6-6, W6-2, W2-6, FB-18 (28/10/2026, base `b58cff240`)
+### Checkpoint 4 · W6-1, W6-3, W6-4, W6-8, W6-9, W6-6, W6-2, W2-6, FB-18 (28/10/2026, base `2ed33ca1e`)
 Nove lotti piccoli, tutti con il rosso scritto prima dal `test-author` (4 agenti in parallelo, contro HEAD): le prove sono in `ondata6/W2-cp4-*.log` e `W2-cp4.summary`.
 
 ✅ **W6-1 (P-2)** — l'anteprima del costo medio chiama «Diluizione» una riga di split. `WacPreviewSection.svelte`: una tabella `EFFECT_BADGES` per `add`, `reduce`, `split_rescale`, `add_zero_cost`; `split_rescale` ha il suo testo (`transactions.wacPreview.effect.splitRescale`, 4 lingue) e un badge `info`; il ramo morto `add_at_wac` e la chiave `addAtWac` sono tolti. **Rosso prima**: 2 + 15 (`WacPreviewSection.test.ts`, `transactionsWacPreviewEffectKeys.test.ts`).
@@ -8954,19 +8954,19 @@ Nove lotti piccoli, tutti con il rosso scritto prima dal `test-author` (4 agenti
 ✅ **FB-18** — CSV generico, formato delle date: quattro opzioni nuove accanto a `day_first` e `month_first` (invariati bit per bit): `day_first_short` (gg/mm/aa), `month_first_short` (mm/gg/aa), `year_first_short` (aa/mm/gg), `year_first` (aaaa-mm-gg). Ogni opzione è descritta con le lettere della lingua (gg/mm/aa, dd/mm/yy, jj/mm/aa, dd/mm/aa) e un esempio completo («gg/mm/aa — 03/04/26 = 3 aprile 2026»). `%y` è quello di Python: 00–68 → 2000–2068, 69–99 → 1969–1999. Le opzioni corte non hanno il rientro «giorno prima ↔ mese prima» (25/12/26 con `month_first_short` non si legge): la scelta è esplicita. **Rosso prima**: 50 su 192 (`test_brim_date_order.py`) + 2 API. Doc: `generic-csv.en.md`, sezione «Date format» (le altre lingue sono debito di traduzione).
 ✅ **W2-6** — colonna «Prezzo unitario» in sola lettura, nascondibile, in `TransactionsTable` (`unitPrice`, `tx-unit-price-cell-<id>`) e nel Bulk (`unit_price`, `tx-bulk-unit-price`). Un solo helper: `rowUnitPrice` in `form/txTradeAmount.ts` (passa da `calculateTradeValue`, la stessa del form; `tradeHasUnitPrice` è la regola «ha una quantità, un importo e un asset» che ora usa anche il form) e `unitPriceCell.ts` che disegna la cella per entrambe le griglie. Prezzo pubblico (la maschera della privacy non lo nasconde). Per toglierlo: la colonna nelle due griglie, `unitPriceCell.ts`, `rowUnitPrice` e la chiave `transactions.table.unitPrice`. **Rosso prima**: 21 + 5 Vitest e 1 E2E (`tx-bulk-operations.spec.ts`).
 
-### Checkpoint 4.1 · triage dei tre rossi del coordinatore (30/10/2026, commit `66f780dbb`)
+### Checkpoint 4.1 · triage dei tre rossi del coordinatore (30/10/2026, commit `a9d7a3b2b`)
 ✅ **`front-broker detail` (5 su 41)** — causa mia, verdetto «assunzione»: `brokers-detail.spec.ts` leggeva `summary.holdings` da `GET /brokers/{id}/summary`, il campo che MF-L (checkpoint 1) aveva tolto. Ora l'helper `brokerHoldings` legge `summary.holdings` del report di portafoglio (`POST /portfolio/report`, con `broker_ids`). 41/41 su corsia nuova. Sul ramo di Y non si vedeva perché non ha MF-L.
 ✅ **`costCellState.test.ts` (timeout 5 s)** — «lentezza» del test: il primo import dinamico trascinava `txPayloadHelpers` sotto carico 44. Import statico; 22 verdi, `tx-unit` 1334 verdi.
 ✅ **E7 `tx-bulk-diagnostics.spec.ts:333`** — non riproducibile (da solo verde in 48,6 s; tre ripetizioni a due worker verdi). Provvisorio «lentezza»: nel giro del coordinatore durava 1,4 min con carico 44. Su richiesta, il ciclo per riga ora usa `UI_TIMEOUT` (10 s) con il commento del perché.
 
-### Checkpoint 5 · FB-18b, W6-12, W6-11 (30/10/2026, base `66f780dbb`)
+### Checkpoint 5 · FB-18b, W6-12, W6-11 (30/10/2026, base `a9d7a3b2b`)
 ✅ **FB-18b** — una data non leggibile nel CSV generico non è più una stringa inglese generica: `UnreadableDateError` → `BRIMNotice` `date_unreadable` con `context {row, value, order}`; dopo le prime 20 righe una sola `date_unreadable_more` `{n}`. Testi in `importWizard.brimNotice.date_unreadable[_more]` (guida BRIM; il cancello dei frammenti dei plugin ammette solo `brimPlugins.*` e `pluginSettings.brim.*`), 4 lingue, con un `select` ICU sul formato e il percorso vero delle voci (Impostazioni › Plugin › Importazione dai broker › CSV generico › «Formato delle date» › «Rianalizza tutti»). **Rosso prima**: 30 su 222 + 37 su 38 (Vitest). Il formato data non ha un campo nel wizard: sta in Settings › Plugins, e il wizard offre «Re-parse all» (solo dopo un file letto).
 > **⚠️ Fuori pista**: il test dell'agente confrontava il parametro `more` (= `n`) con il numero di avvisi `_more` (1): corretto nel test.
 ✅ **W6-12 (W-B19)** — `_validate_broker_balances` legge la cassa con `financial_math.native_cash.first_negative_cash` (mai una somma a mano); il cammino delle quantità è `_first_negative_asset`; errore = giorno più basso fra cassa e quantità, a parità la cassa; `batch_index` = ultimo riduttore del batch fra `NegativeCash.reducers`, altrimenti `("create", -1)`. **Regola cambiata** (developer, 30/10): un broker senza la spunta `allow_cash_overdraft` non ha mai cassa negativa, **nemmeno quella iniziale**: `if txs:` tolto per la cassa, con `from_date` il saldo iniziale si controlla anche senza transazioni dopo (esempio: cassa −100 dal 10/10, cancello l'unica transazione del 15/10 → prima passava, ora rifiutato). Con la spunta nulla cambia. Le quantità restano come oggi. **Rosso prima**: 12 su 58 (`services balance-validator-cash-rule`, con un differenziale di 320 ledger casuali contro una copia congelata del vecchio cammino, verde dappertutto salvo la differenza dichiarata). 
 > **Note implementazione**: togliere la spunta a un broker con cassa già negativa è rifiutato (`success=False`, `validation_triggered=True`) e il broker **tiene la spunta**: `update_broker` (`api/v1/brokers.py`) fa il rollback se `success_count == 0`. Limite latente: `BrokerService.update_bulk` lascia comunque `allow_cash_overdraft=False` nella sessione dopo il rifiuto; la correttezza dipende dal rollback del chiamante (oggi uno solo). 3 test API (`api broker-overdraft-off-refused`).
 ✅ **W6-11 (W-B91)** — `how-to.{en,it,fr,es}.md`: «A file failed» non manda più a un bottone che può mancare: «Re-parse all» c'è nell'analisi solo dopo almeno un file letto; altrimenti si torna a «Select Files» e si clicca «Parse (N)». Timbro Aphra. Le due tabelle per sviluppatori citate nel backlog non menzionano più il pulsante.
 
-### Checkpoint 6 · `BrokerService.update_bulk`: il rifiuto rimette tutto com'era nella sessione (30/10/2026, base `40fbbc845`)
+### Checkpoint 6 · `BrokerService.update_bulk`: il rifiuto rimette tutto com'era nella sessione (30/10/2026, base `452b415fe`)
 Decisione del developer (30/10, R5): il rifiuto di togliere la spunta a un broker con cassa o quantità già negative resta com'è (`success=False`, `validation_triggered=True`, endpoint singolo invariato). Il limite latente riportato nel checkpoint 5 si chiude: prima l'oggetto restava cambiato nella sessione e solo il rollback dell'endpoint salvava la situazione.
 ✅ **Rosso prima** (test-author, `services broker-update-bulk-refusal`, `test_broker_update_bulk_refusal.py`, 19 test): 10 rossi e 9 guardie. Due broker in una chiamata (uno rifiutato, uno valido), commit del chiamante dopo il successo parziale e rilettura con una sessione nuova: il rifiutato tornava cambiato in tutti i campi dell'item (nome, descrizione, URL, plugin, `is_active`, `opened_at`, la spunta); lo stesso per lo shorting; l'oggetto in sessione subito dopo `update_bulk`; nulla da scrivere al flush.
 ✅ **Cura** (`brokers/broker_service.py`): la validazione gira dentro `session.no_autoflush` (legge le spunte nuove dall'oggetto; un flush scriverebbe la riga prima della risposta), e al rifiuto `await session.refresh(broker)` ricarica l'oggetto dal DB, che non è mai stato toccato.

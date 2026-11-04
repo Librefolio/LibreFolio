@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `80f1d9155` (= `dev_release2^`; `dev_release2` = `8f18416df`, il CHANGELOG del coordinator) |
+| **Baseline** | `517cc22c1` (= `dev_release2^`; `dev_release2` = `27d99a703`, il CHANGELOG del coordinator) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k` |
 | **Copia di prod** | non serve: nessun cambiamento visibile all'utente |
 | **Condivisi** | nessuno: per il coordinator nessun altro worktree tocca `Tooltip.svelte`, `Tooltip.test.ts`, `ChartSignalsSection.test.ts`, `test_transactions_api.py` |
@@ -60,7 +60,7 @@ ricostruisce il percorso esatto; la cura della voce 1 chiude comunque la strada 
 ### 3. `test_asset_id` salta sempre il suo test
 
 - La fixture (`test_transactions_api.py:127-160`) prova `GET /assets` senza `asset_ids`, obbligatorio
-  (`assets.py:810-812`) → 422; poi `POST /assets`, dichiarato `status_code=201` (`assets.py:94`, dal `0d8ad8ad9` del
+  (`assets.py:810-812`) → 422; poi `POST /assets`, dichiarato `status_code=201` (`assets.py:94`, dal `8351a673e` del
   21/11/2025), ma controlla `== 200` → `pytest.skip("Could not create test asset")`.
 - L'unico utilizzatore, `test_delete_linked_without_pair` (`:961-1068`), ignora comunque il valore: a `:990-1004` rifà
   il proprio get-or-create, con lo stesso GET da 422 e un POST con un oggetto invece di una lista, poi legge
@@ -71,7 +71,7 @@ ricostruisce il percorso esatto; la cura della voce 1 chiude comunque la strada 
 
 ## Passi
 
-- [x] **14.0 Analisi e autorizzazione** — analisi in sola lettura su `80f1d9155`, mandata al coordinator il 30/09;
+- [x] **14.0 Analisi e autorizzazione** — analisi in sola lettura su `517cc22c1`, mandata al coordinator il 30/09;
   superfici approvate dal coordinator; autorizzazione del developer l'01/10. ✅ 2026-10-01.
 - [x] **14.1 Test rosso del Tooltip** (test-author) — nuovo describe in `Tooltip.test.ts` con i timer finti: hover in
   attesa, attesa dopo averlo fissato, attesa dopo il tocco, frame con distruzione sincrona. Controllo positivo prima

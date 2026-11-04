@@ -37,7 +37,7 @@ With a working favicon the same race was only cosmetic. The diagnosis written wh
 
 ## Solution
 
-`2412c3fe4` («fix(brokers): plugin icon first, late img events», train 72), in
+`9b2d731cd` («fix(brokers): plugin icon first, late img events», train 72), in
 `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts`:
 
 - **each event belongs to its own image**: `eventUrl(event)` reads `currentTarget.getAttribute('src')`; `handleError`

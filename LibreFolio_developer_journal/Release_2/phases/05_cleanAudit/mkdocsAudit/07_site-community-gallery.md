@@ -200,7 +200,7 @@ dashboardBtn.href = fallbackUrl;
 
 Il commento originale nella cronologia Git (`getting-started/installation/"; //
 Relative to index.md`) indica che questo percorso era valido prima della ristrutturazione
-della documentazione (commit `83e2b3cb`, *"docs: restructure documentation architecture"*).
+della documentazione (commit `4ecb27a1`, *"docs: restructure documentation architecture"*).
 
 **Controprova**: la nav corrente in `mkdocs.yml:621-622` espone le due pagine come
 `user/getting-started.md` e `user/installation.md` (percorsi pubblicati:

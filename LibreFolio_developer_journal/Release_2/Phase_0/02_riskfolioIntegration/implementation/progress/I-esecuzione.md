@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | [`../I-documentazione.md`](../I-documentazione.md) — **sola lettura** |
 | Branch | `e-alfy-risk-analysis-documentation` (worktree `e-alfy-shiny-broccoli`) |
-| Baseline | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` ✅ verificata |
+| Baseline | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` ✅ verificata |
 | Lane | **nessuna** — questo mandato non avvia server. Mai `mkdocs serve` (porta fissa 6042) |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 | Autorizzazione | relayata dal coordinatore sotto delega permanente del developer |
@@ -122,7 +122,7 @@
   > **⚠️ Fuori pista — il contratto non è verificabile da qui.**
   > `implementation/contracts/K7.md` **non esiste nel mio worktree** e non è nella
   > storia condivisa: `git ls-tree e-alfy-risk-management-replan …/contracts/` restituisce
-  > solo `README.md`, e il branch è fermo a `cc33120eb`. Il file vive non committato nel
+  > solo `README.md`, e il branch è fermo a `3a4431d5a`. Il file vive non committato nel
   > worktree del coordinatore, che non devo leggere. Riportato: **un contratto che una
   > sola parte può vedere non è ancora un contratto.**
   >
@@ -2107,7 +2107,7 @@
 
 | Comando | Esito |
 |---|---|
-| `git rev-parse HEAD` | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` ✅ = baseline |
+| `git rev-parse HEAD` | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` ✅ = baseline |
 | `… dev.py mkdocs check-links` — **prima** | `✅ 12 valid link(s)` · scope 1 = **3** |
 | `… dev.py mkdocs check-links` — **dopo** | `✅ 24 valid link(s)` · scope 1 = **15** · EXIT=0 |
 | `mkdocs build --strict --site-dir <fuori repo>` (sonda Q-I-2) | EXIT=0 · **0 warning** |
@@ -2393,7 +2393,7 @@ di build. Registrato perché `grep -ci warning` da solo darebbe `1` e sembrerebb
 > esistevano dal primo tempo).
 >
 > ⚠️ I fatti venivano dal worktree **non committato** di N (`acquired.py` assente
-> dal mio albero, ramo di N ancora a `cc33120eb`). **Non li ho relayati**:
+> dal mio albero, ramo di N ancora a `3a4431d5a`). **Non li ho relayati**:
 > `riskfolio 7.0.1` **è installato**, quindi ho verificato la matematica alla fonte.
 
 **Verificato da me, non dichiarato**
@@ -2684,7 +2684,7 @@ scritto l'altra nella colonna delle definizioni.**
 > **Verificato da me, ed è più netto di come l'ha detto:**
 >
 > ```
-> git log --oneline -1 e-alfy-risk-n-backend-acquisizioni  -> cc33120eb   (baseline)
+> git log --oneline -1 e-alfy-risk-n-backend-acquisizioni  -> 3a4431d5a   (baseline)
 > git branch -a --contains 1aaea6949                       -> VUOTO
 > git for-each-ref --contains 1aaea6949
 >   -> refs/copilot/checkpoints/da23d09e-…/…    UNICO ref

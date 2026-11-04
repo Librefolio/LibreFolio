@@ -1,7 +1,7 @@
 # T-U1 — I punti che chiamano `convert_bulk`: una politica unica per i buchi e l'età del tasso
 
-> Ondata 6, giorno 1 (28/10/2026), MF, **sola lettura**. Base letta: `f4a5e6e0a` (i 7 commit fino a `32674edb8`
-> non toccano `backend/app` né `frontend/src`: `git diff --stat f4a5e6e0a 32674edb8 -- backend/app frontend/src` è
+> Ondata 6, giorno 1 (28/10/2026), MF, **sola lettura**. Base letta: `a99aee28f` (i 7 commit fino a `bc1d4c06c`
+> non toccano `backend/app` né `frontend/src`: `git diff --stat a99aee28f bc1d4c06c -- backend/app frontend/src` è
 > vuoto). Backlog: T-U1 (`BACKLOG_POST_1.2.md:864`), MF-A13 (`:10837`). Piano: [plan-phase01FinancialMath](plan-phase01FinancialMath.prompt.md), «Ondata 6».
 > Compagno: [inventario dei «giorni in cui cambia qualcosa»](inventario-change-days-20261028.md).
 

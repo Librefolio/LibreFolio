@@ -4,7 +4,7 @@ that were asked, as the dict of today; and the native cash valued from those ste
 The developer's rule: «è imperativo non sbagliare i calcoli, veloci sì, ma precisi». The cure must give the same digits,
 exponent included, and only then be fast.
 
-Today (HEAD ``2f4ab1962``) the portfolio engine (``portfolio/engine.py::_preload_fx_rates``) and the native cash
+Today (HEAD ``41f66f23a``) the portfolio engine (``portfolio/engine.py::_preload_fx_rates``) and the native cash
 (``native_cash.py::compute_native_cash``) ask ``convert_bulk`` for one unit of each foreign currency on every calendar day
 they may read, and keep the answers in a dict: ``fx_rate_map[(currency, target, day)]`` and
 ``NativeCash.unit_rates[(currency, day)]``. A day nobody asked is absent: ``.get`` gives None.
@@ -55,13 +55,13 @@ The steps are built as X's ``unit_rate_steps`` builds them (``backend/app/servic
 day with the backward-fill anchor, plus every row inside a window; a row between two windows is no step) by
 ``_steps_like_unit_rate_steps``; ``test_fx_rate_steps.py`` pins that rule against the database.
 
-RED on HEAD 2f4ab1962, by absence: ``AskedDayRates`` (and ``merged_windows``) do not exist, every test that builds one
+RED on HEAD 41f66f23a, by absence: ``AskedDayRates`` (and ``merged_windows``) do not exist, every test that builds one
 fails with that message (``_asked_day_rates_class``, ``_merged_windows``). GREEN on HEAD: the fixture self-checks (``TestTheFixtures``), which never touch the cure.
 After a cure that adds ``AskedDayRates`` but keeps ``NativeCash.__post_init__`` on ``_rate_series`` for every Mapping,
 every parity test is green and ``TestTheNativeCashCost`` stays red: that is the cost red.
 
 Mutants, measured first on a scratch reference cure (green 187/187), then on MF's cure (2026-10-20, a scratch copy of
-HEAD 2f4ab1962 + the cure: green 197/197); the counts are MF's cure's:
+HEAD 41f66f23a + the cure: green 197/197); the counts are MF's cure's:
 - the view not limited to the windows (``at`` read on any day) — 80 reds, ``TestTheViewIsTheDictOfToday`` and (7);
 - windows not merged — 63 reds: nested/overlapping windows, a bisect over unmerged windows misses days; and (4);
 - the native cash calendar from the steps missing a currency's first step — 25 reds, ``rate_change_days`` parity;
@@ -152,7 +152,7 @@ def _dense_today(steps: Mapping[Pair, Any], windows: Mapping[Pair, Sequence[Wind
 
 
 def _unit_requests_today(foreign: Sequence[CashMovement], rates_until: date | None) -> list[tuple[str, date]]:
-    """THE ORACLE of the native cash's asked days: HEAD 2f4ab1962's ``native_cash._unit_requests``, verbatim (the
+    """THE ORACLE of the native cash's asked days: HEAD 41f66f23a's ``native_cash._unit_requests``, verbatim (the
     floor read as the literal ``FLOOR_1900``: the constant ``EARLIEST_RANGE_START`` is gone, D-P4 L5)."""
     first: dict[str, date] = {}
     last: dict[str, date] = {}

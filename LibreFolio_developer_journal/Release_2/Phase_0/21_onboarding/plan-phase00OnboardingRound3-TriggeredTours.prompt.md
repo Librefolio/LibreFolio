@@ -12,8 +12,8 @@
 ## Confine e stato
 
 **Baseline worktree:** merge checkpoint pulito
-`8f7acd610127d1ba24dcddfef5b9acf4552d4f51`; target resta isolato a
-`4949b2f4c04050e46f643de848894b6706349f34`.
+`bbb47c60b912945863b0344287b21d99690b8402`; target resta isolato a
+`8f189e2670c24f6866d0462204caa15c972c61f0`.
 
 **Stato:** implementazione manual-first autorizzata.
 
@@ -475,7 +475,7 @@ Evidenze statiche valide:
 
 ## Checkpoint storico pre-Round 3 (superseded)
 
-**HEAD:** `4a9ae876e4599b5fdec5ade512b65b9c31a584a5`
+**HEAD:** `b451104361df9394ba4fcfef20f85e173dc54281`
 
 **Branch:** `e-alfy-onboarding-foundation`
 
@@ -520,9 +520,9 @@ coordinator. Nessun merge/staging/commit è stato eseguito da J.
 
 ## Checkpoint manual-first Round 3
 
-**HEAD/base combinata:** `8f7acd610127d1ba24dcddfef5b9acf4552d4f51`.
+**HEAD/base combinata:** `bbb47c60b912945863b0344287b21d99690b8402`.
 
-**Target isolato:** `4949b2f4c04050e46f643de848894b6706349f34`.
+**Target isolato:** `8f189e2670c24f6866d0462204caa15c972c61f0`.
 
 **Branch:** `e-alfy-onboarding-foundation`.
 

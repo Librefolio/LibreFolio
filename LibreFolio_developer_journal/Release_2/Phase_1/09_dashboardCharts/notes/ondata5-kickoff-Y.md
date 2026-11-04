@@ -6,7 +6,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 
 **Modello**: Sonnet. **Giorni**: 4,5-6 (Y5-1 1; F1 0,5; F2 0,25; F3 0,25; F4 0,5-1; Y5-2 2-3).
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-redesigned-spork` · **Branch**: `e-alfy-y-cruscotto-e-grafici`
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro; già fast-forward).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro; già fast-forward).
 **Corsia**: porta `6189`, cartella dati `/tmp/librefolio-r13-y`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` (sezione nuova «Ondata 5»); Z-14b/Z-15: piano 06 ~3555-3690 (`06_sleepWake/`, «pronto»), backlog ~8628 e ~8638; #48: `PROSSIMI_LAVORI.md:390-444`. Skill: `design-system`, `devpy-i18n`, `testing-frontend`.
 

@@ -2383,7 +2383,7 @@ class TestRowsBefore1900StartTheHistory:
     written last). ``control``: only the API DEPOSIT on 1900-01-01 — its history starts there. Cleanup: the seeded rows by
     id with the ORM, then both brokers (force: their API rows), then the user.
 
-    RED on HEAD 999f1899e: ``floor``'s ``range.start`` and first history step are 1900-01-01 (the engine's floor), not 1899-03-01,
+    RED on HEAD a4316d9a0: ``floor``'s ``range.start`` and first history step are 1900-01-01 (the engine's floor), not 1899-03-01,
     and each of its three ``data_quality`` sections holds the ``TRANSACTIONS_BEFORE_FLOOR`` warning. GREEN on HEAD: the control
     scope (no row before 1900: no warning, history from its first row).
     """
@@ -2473,7 +2473,7 @@ class TestRowsBefore1900StartTheHistory:
         return [issue["code"] for issue in quality["issues"] if issue["code"] == "TRANSACTIONS_BEFORE_FLOOR"]
 
     async def test_rows_before_1900_start_the_history_and_raise_no_warning(self, test_server):
-        """RED on HEAD 999f1899e: the floor scope's history starts on 1900-01-01 and each ``data_quality`` section holds one
+        """RED on HEAD a4316d9a0: the floor scope's history starts on 1900-01-01 and each ``data_quality`` section holds one
         TRANSACTIONS_BEFORE_FLOOR. After L1: ``range.start``, ``history[0].date`` and ``metadata.computed_date_from`` are the
         earliest row's day (1899-03-01), no section holds the warning; the control scope starts on 1900-01-01 and has none."""
         print_section("Portfolio Report: transactions before 1900 (MF-PAV-L1)")
@@ -2536,7 +2536,7 @@ class TestNonIsoCurrencyDataQuality:
     2025. Cleanup undoes the ORM writes first (the seeded rows deleted by id, the asset's currency and the base currency put
     back to EUR), then the brokers (force: their API rows), the assets, the user.
 
-    Red on HEAD 2fbbf4c4c: no section holds a ``NON_ISO_CURRENCY`` issue, and MISSING_FX_MARKET lists ``978-EUR``; the
+    Red on HEAD 66e4dcba0: no section holds a ``NON_ISO_CURRENCY`` issue, and MISSING_FX_MARKET lists ``978-EUR``; the
     barriers and the control are green there too.
     """
 

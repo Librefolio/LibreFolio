@@ -18,20 +18,20 @@ related:
 ## Summary
 
 One plan of about 1,800 lines, mostly in Italian, by workstream Q, from 2026-10-07 to 10-10. Q compared the
-documentation with the code from v1.1.0 (commit `837a8f2c7`): 809 commits, 205 files under `mkdocs_src/docs`. The work ran
+documentation with the code from v1.1.0 (commit `aabd8f126`): 809 commits, 205 files under `mkdocs_src/docs`. The work ran
 in two parts — Q1, the user, admin and theory pages; Q2, the developer manual, kept separable — and then in 23 steps
 (S1–S23) that followed the developer's reviews and the trains of the other workstreams. Only English pages were
 written; the translations came afterwards, in workstream M's round.
 
 | Part | Dates | What it did |
 |------|-------|-------------|
-| Q1 (`dfcbc0003`) | 2026-10-07 | User and admin pages, theory, the screenshot inventory with named placeholders |
-| Q2 (`7b06e9f9f`) | 2026-10-07 | The developer manual: the 1.2 drift, two errors older than 1.1, the onboarding and risk pages |
-| S12–S13 (`a09220321`, `dc9209b3e`) | 2026-10-07/08 | The broker Risk tab anchor; simulation limits that name their remedy (`resource_limit`) |
-| S16–S18, three waves (`eee56b42a`, `1c2f88d67`, `22d80282a`) | 2026-10-08 | The developer's review: plain user pages, technical detail moved to the developer manual, every page re-checked on the code |
-| S19 (`ef1397227`) | 2026-10-08 | What train 19 changed: `dev.py` in the image, FX and i18n, events |
-| S20 (`5980ab86f`) | 2026-10-09 | The connection security page, with masked Tailscale addresses |
-| S22–S23 | 2026-10-09 | The Sharpe and Sortino pages convert the risk-free rate with the series' frequency (`1fdcaef38`); the last English pages before the translation round (`664fe9687`) |
+| Q1 (`f1d446a4e`) | 2026-10-07 | User and admin pages, theory, the screenshot inventory with named placeholders |
+| Q2 (`88833f6f9`) | 2026-10-07 | The developer manual: the 1.2 drift, two errors older than 1.1, the onboarding and risk pages |
+| S12–S13 (`706133cb7`, `b18787f4c`) | 2026-10-07/08 | The broker Risk tab anchor; simulation limits that name their remedy (`resource_limit`) |
+| S16–S18, three waves (`074815a60`, `69d9d0d81`, `cc33206c9`) | 2026-10-08 | The developer's review: plain user pages, technical detail moved to the developer manual, every page re-checked on the code |
+| S19 (`7e47dc0e7`) | 2026-10-08 | What train 19 changed: `dev.py` in the image, FX and i18n, events |
+| S20 (`bc9ccb552`) | 2026-10-09 | The connection security page, with masked Tailscale addresses |
+| S22–S23 | 2026-10-09 | The Sharpe and Sortino pages convert the risk-free rate with the series' frequency (`1f9d7005d`); the last English pages before the translation round (`7fbed02ac`) |
 
 ## Key Takeaways
 
@@ -47,11 +47,11 @@ written; the translations came afterwards, in workstream M's round.
 - **English-only pages link translated pages without anchors**: a strict translated build checks the anchor in the
   translated page, whose slug differs ([[decisions/docs-anchors-from-the-render]]).
 - **`mkdocs serve` lost the gallery images**: MkDocs rewrites `site_url` to the local address, so the fallback to the
-  online screenshots asked the local server; fixed in `bb48d7e0a` by reading the canonical URL.
+  online screenshots asked the local server; fixed in `b17ac29ec` by reading the canonical URL.
 - **The translation debt was reported, not hidden**: 58 stale English pages and 22 never translated at the start. The
-  translations came in M's batch 11 (train 29, `e32f47133`, [[sources/phase00-translation-round12-2026-10]]).
+  translations came in M's batch 11 (train 29, `99117e505`, [[sources/phase00-translation-round12-2026-10]]).
 - **Closed at the end** (2026-10-10): the eight broker-portal screenshots stay hidden placeholders, a post-1.2 backlog
-  item, by the developer's decision; the `security/connection-indicator` placeholder was shot by M (`dbf4263e9`); the
+  item, by the developer's decision; the `security/connection-indicator` placeholder was shot by M (`e9e76aece`); the
   page of [[features/F-102]] exists since S20.
 
 ## Pages created from this source

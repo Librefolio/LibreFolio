@@ -1,6 +1,6 @@
 # B · B5-2 — `backup pending --json` and `--recover <choice>`: the interface the red tests pin (23/10/2026)
 
-Base: `1fd80c481`. Requester: the cloud coordinator. Kickoff: `ondata5/kickoff-B.md` item 1. Files: `scripts/backup_cli.py`, optionally a small
+Base: `61a6c828b`. Requester: the cloud coordinator. Kickoff: `ondata5/kickoff-B.md` item 1. Files: `scripts/backup_cli.py`, optionally a small
 read-only helper in `backend/app/services/platform/instance_backup/apply.py`; tests in `utils backup-cli*`.
 
 ## The states (what `--json` calls `state`)

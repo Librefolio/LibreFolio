@@ -1,6 +1,6 @@
 # Ondata 3 — piano (21/10/2026, coordinatore Opus) — APPROVATO dal developer, lavoro notturno
 
-Base: `dev_release2` = `2879ae3e4` (treno 7, 22 commit non pushati).
+Base: `dev_release2` = `85fda260e` (treno 7, 22 commit non pushati).
 
 ## Decisioni del developer (21/10 sera)
 - Fino a **10 sessioni** in parallelo (le 7 dell'ondata 2 hanno retto bene).
@@ -41,7 +41,7 @@ Modelli: H Opus (sicurezza); gli altri Sonnet; io verifico ogni consegna rilanci
 Inventario CSP di H (~1 h) → E2E di C1 (`theme-roles`, `front-transaction all`) → E2E di Y (`asset-list`, `fx-settings`) → E2E di X (dettagli) → C2 (`dashboard`, `designer-lab-live`) → E/J se servono → passo 5 di H (corsa completa sotto la politica) → gate del treno 8.
 
 ## Preparazione
-1. Fast-forward a `2879ae3e4` di Y, Z, H, T (C1), DV (C2), W, E, J.
+1. Fast-forward a `85fda260e` di Y, Z, H, T (C1), DV (C2), W, E, J.
 2. A e X: commit della loro sezione di piano rimasta sporca, poi merge di `dev_release2`.
 3. `npm ci` in E, A, J, X.
 4. Brief alle 6 sessioni esistenti (Y, Z, H, C1, C2, W); 4 sessioni nuove (E, A, J, X).

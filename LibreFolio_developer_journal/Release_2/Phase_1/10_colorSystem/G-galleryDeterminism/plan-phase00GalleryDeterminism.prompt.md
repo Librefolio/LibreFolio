@@ -5,7 +5,7 @@
 > Problema e misura di partenza: [README della 56](README.md), [stabilità del 14/10](evidence/stability-2026-10-14.md).
 > Programma: [piano dei colori](../plan-phase00ColorSystemThemeLab.prompt.md). Backlog: sezione «G · Gallery
 > deterministica (56)» di [BACKLOG_POST_1.2.md](../../../Phase_0/BACKLOG_POST_1.2.md).
-> Dal merge di `dev_release2` del 14/10 (`424adb31c`) la cartella 56 è `Phase_1/10_colorSystem/G-galleryDeterminism/` e
+> Dal merge di `dev_release2` del 14/10 (`29ec4156c`) la cartella 56 è `Phase_1/10_colorSystem/G-galleryDeterminism/` e
 > il programma 55 è `Phase_1/10_colorSystem/`: «la 56» resta il nome del workstream.
 >
 > **✅ Chiuso il 15/10/2026** su decisione del coordinatore (16:05).
@@ -17,7 +17,7 @@
 
 ## 0. Baseline e corsia
 
-- HEAD di partenza `b631308d5` = `dev_release2` (fast-forward da `6d0b1266c` fatto dal coordinatore il 14/10).
+- HEAD di partenza `44623e084` = `dev_release2` (fast-forward da `885f7e91e` fatto dal coordinatore il 14/10).
 - Corsia: porta **6153**, dati **`/tmp/librefolio-r2-g`**; Python con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`.
 - **Regole delle run (coordinatore, 14/10 20:10):**
   - run filtrate fino a 5 worker: basta avvisare;
@@ -58,7 +58,7 @@ elencate come accettate.
   nell'[analisi del 15/10](evidence/analysis-final-2026-10-15.md).
 - Le 4 instabili di inquadratura sono corrette al passo 7 e verificate con run mirate. Resta 1 variante su 16 di
   `assets/detail-measures`, che diventa G-11 nel backlog.
-- `media/asset-picker-modal` è corretta alla radice da G-10 (H, `b4533a949`).
+- `media/asset-picker-modal` è corretta alla radice da G-10 (H, `44d353f62`).
 - Chiusura decisa dal coordinatore il 15/10 alle 16:05.
 
 ## 2. Analisi (14/10/2026)
@@ -332,7 +332,7 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 >   cambiati quasi in ogni variante (risk lab, what-if e risk della dashboard 16/16; lotti FIFO, dettaglio asset,
 >   broker 8/8), quelli presi prima quasi mai. Nella correlazione cambiano solo le coppie con Apple; il grafico del
 >   dettaglio finisce con un salto all'ultimo punto.
-> - Meccanismo, già presente in `b631308d5`: l'`afterEach` della gallery fa `page.unrouteAll()` — toglie la guardia
+> - Meccanismo, già presente in `44623e084`: l'`afterEach` della gallery fa `page.unrouteAll()` — toglie la guardia
 >   offline — con la pagina ancora sull'ultima schermata, poi `expectFaviconImagesLoading` (un `expect.poll` sulla pagina
 >   viva). Il dettaglio asset interroga `POST /assets/prices/current` per il suo asset ogni 30 s (`_fetchLivePrice`) e ogni
 >   60 s dopo 5 s (`pollCurrentPriceOnce`): un tick in quel varco arriva al backend, che chiede a Yahoo e scrive la
@@ -502,7 +502,7 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 >   bastano. È la stessa firma dei rossi «ogni volta diversi» del 14/10.
 > - **Esito:** il README del toolkit dice `-- --workers 6`. Il default in `dev.py` va a J (C-94, decisione del
 >   coordinatore): C-94 sta già cambiando `cmd_mkdocs_gallery`, e G non tocca `dev.py`.
-> - G-8 è chiusa da J (`6ce5ea180`): le rotte di lettura di `/tools` non passano più per la finestra di ingresso di 2 s.
+> - G-8 è chiusa da J (`e26b0e9fb`): le rotte di lettura di `/tools` non passano più per la finestra di ingresso di 2 s.
 
 ### Passo 6 — Misura finale ✅ (15/10, `g-final3`; 4 inquadrature corrette dopo, al passo 7)
 - 2 run complete nello stesso giorno, diff + stability, maschere per R; README, evidence e backlog aggiornati.
@@ -534,10 +534,10 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > misura confronta due run della stessa configurazione.
 > **Risultato** (15/10, coordinatore; analisi di G in sola lettura, poi
 > [evidence/analysis-final-2026-10-15.md](evidence/analysis-final-2026-10-15.md)).
-> - **Condizioni:** X = `2338aaf79`, checkout principale, corsia 6150, altre corsie ferme, carico 11–16.
+> - **Condizioni:** X = `2ddbf77f7`, checkout principale, corsia 6150, altre corsie ferme, carico 11–16.
 >   - r1 09:14:58, 1833 s; r2 09:45:57, 1791 s;
 >   - exit 0, 2824 PNG ciascuna, stessi 32 stale;
->   - `app_version` fissata (`v0.0.0-review`, toolkit `70c84accc`);
+>   - `app_version` fissata (`v0.0.0-review`, toolkit `bca1bee38`);
 >   - `live_price_check` 0 su entrambe. I 7 marcatori sono ancora nel codice dopo il riordino di X
 >     (`services/assets/price_query.py`).
 > - **Classi:** 40 stabili, 112 basse, 19 medie, 6 instabili (14/10: 57, 74, 19, 27). Delle 27 instabili del 14/10, 8
@@ -606,7 +606,7 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > - *`files/static-grid`, miniatura diversa da corsia a corsia:* tutti gli avatar del seed hanno lo stesso `uploaded_at`,
 >   e `list_uploads` li ordina solo per data, lasciando i pari nell'ordine della directory, cioè degli UUID casuali. È la
 >   causa anche di `media/asset-picker-modal`, la prima instabile rimasta → **G-10**, prodotto, da instradare.
-> - *C-94 (J):* porterà il default dei worker a circa il 60 % dei core. Non è ancora in `dev_release2` (`9d57aa4c0`); il
+> - *C-94 (J):* porterà il default dei worker a circa il 60 % dei core. Non è ancora in `dev_release2` (`59317034a`); il
 >   README del toolkit dice «until C-94».
 > **⚠️ Fuori pista — rebuild e carico all'avvio:** la run A ha ricostruito la build debug con la versione fissata
 > (`build.log` nello snapshot, toolkit di X) e ha rifatto il populate: carico 57 alle 12:29, con la candidata di T in
@@ -634,7 +634,7 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > volte su 4 run contando `g-final3`. La causa sta fra i `syncScrollContext()` di `Header.svelte`; serve una run
 > strumentata. Registrato G-11, non corretto ora.
 
-### Passo 8 — G-9, scelta dell'indicatore verificata ✅ (15/10: codice `5da3c9eba`; DoD 10/10 alle 15:56, i rossi di carico rifatti da soli a 1 worker sulla revisione fusa `6f0198a08`)
+### Passo 8 — G-9, scelta dell'indicatore verificata ✅ (15/10: codice `b95ba1ea5`; DoD 10/10 alle 15:56, i rossi di carico rifatti da soli a 1 worker sulla revisione fusa `75973bc5f`)
 - **Difetto.** Nella candidata di L lo scatto `mobile/it/light/assets/detail-signals-macd` ha il menu degli indicatori
   aperto e il MACD non applicato, in 1 variante su 16, con il test verde.
 - **Prova (impronta 🔎).** Lo scatto sbagliato ha `{"y":798,"dh":1538,…,"focus":"signal-tree-option-macd"}`; le altre 15
@@ -677,8 +677,8 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > - *Fuori dal perimetro, non toccato:* `SignalTreeSelect.test.ts` (righe 16–17 e 306–310) descrive ancora il vecchio
 >   flusso a clic dell'helper; `TreeSelect.svelte:17–19` resta vero per lo scatto con la tendina aperta. Su richiesta del
 >   coordinatore (15/10, 13:58) sono la voce **G-12** del backlog, con il proprietario da instradare.
-> **Ripresa (13:36):** `cryptography` installato (`dc9a5d232`); comandi Python di nuovo permessi.
-> **⚠️ Fuori pista — build scadute dopo il merge.** La base `9f3b141a8` porta sorgenti frontend più recenti della build
+> **Ripresa (13:36):** `cryptography` installato (`e910074cc`); comandi Python di nuovo permessi.
+> **⚠️ Fuori pista — build scadute dopo il merge.** La base `acf4f8375` porta sorgenti frontend più recenti della build
 > delle 12:26, e 6 pagine della documentazione. Il server di test le ricostruisce all'avvio se le date dei sorgenti sono
 > più recenti, entro un limite di 300 s. Ricostruite prima, sotto carico 32–44:
 > - build debug con la versione fissata `v0.0.0-review`: 13:37–13:42, 4 min 37 s, rc 0;
@@ -705,9 +705,9 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 >   nell'handoff. Snapshot `g-g9-w5`; log, confronto con `g-final3-r1` e log delle build in
 >   `g-workstream/2026-10-15/logs/`.
 >
-> **DoD chiusa (15/10, 15:48–15:56): 10/10.** Codice committato dal coordinatore in `5da3c9eba`; journal in `e3153b75d`.
-> Il coordinatore ha poi fatto il merge di base con `dev_release2` (`8f1abf89e`: Y1, A5 e l'archivio del giro 2 della
-> designer): HEAD `6f0198a08`. Del nostro perimetro il target non tocca nulla; `frontend/e2e/fixtures/instance-config.ts`
+> **DoD chiusa (15/10, 15:48–15:56): 10/10.** Codice committato dal coordinatore in `b95ba1ea5`; journal in `771b4f49a`.
+> Il coordinatore ha poi fatto il merge di base con `dev_release2` (`46df3789a`: Y1, A5 e l'archivio del giro 2 della
+> designer): HEAD `75973bc5f`. Del nostro perimetro il target non tocca nulla; `frontend/e2e/fixtures/instance-config.ts`
 > è nuovo e la gallery non lo importa.
 > - *Prima della run, sulla revisione fusa* (`files/prebuild_alone.sh` della sessione):
 >   - build debug con la versione fissata `v0.0.0-review`: 15:39–15:46, 6 min 30 s, carico da 40 a 58, rc 0;
@@ -716,7 +716,7 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 >   head all'avvio: dopo la run il DB è a `006_registration_mode`, con `registration_mode` = `open`. I test dei segnali
 >   entrano con l'account della gallery e non ne registrano uno nuovo.
 > - *Dipendenze.* `package.json` e il lock cambiano solo la versione del progetto (`1.1.0` → `0.0.0`); il `Pipfile`
->   aggiunge `cryptography`, già installato dal developer (`dc9a5d232`). Nessun `npm ci`.
+>   aggiunge `cryptography`, già installato dal developer (`e910074cc`). Nessun `npm ci`.
 > - *Run* (`files/verify_g9_alone.sh` della sessione): corsia 6153, `--no-populate`, `-w 1`, un test per invocazione,
 >   carico da 42 a 91 (altre corsie attive).
 >
@@ -775,7 +775,7 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
 
 ## ▶️ Ripresa del 14/10 (19:15)
 
-- «RIPRENDI» del coordinatore alle 19:15. HEAD `b631308d5`, 9 righe di `git status`, porta 6153 libera.
+- «RIPRENDI» del coordinatore alle 19:15. HEAD `44623e084`, 9 righe di `git status`, porta 6153 libera.
 - **⚠️ Fuori pista — il Mac è stato riavviato durante la pausa** (`uptime`: 11 minuti alle 19:21): `/tmp` vuota, quindi
   DB della corsia e log in `/tmp` persi. I log erano già stati copiati. DB ripopolato alle 19:25:
   `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-g pipenv run python dev.py test --data-dir /tmp/librefolio-r2-g -q db
@@ -816,20 +816,20 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
 ## 4. Registro
 
 - **14/10, 23:50 — Checkpoint 1 di G (codice) pronto, FROZEN.**
-  - HEAD `b631308d5` = target `dev_release2`; 9 file tracciati modificati e 3 nuovi.
+  - HEAD `44623e084` = target `dev_release2`; 9 file tracciati modificati e 3 nuovi.
   - Evidenze: «Verifica del checkpoint» sopra.
   - Commit proposti in `files/commit_g4.txt` e `files/commit_gallery.txt` della sessione.
   - Prossimo: misura finale del coordinatore il 15/10 dalle 09:00, su `dev_release2` con G (passo 6). Poi il checkpoint
     2 di G: analisi, maschere, evidenze, README della 56 e chiusura di G-1, G-2, G-3.
-- **14/10, 23:55 — Merge di base di `dev_release2` (`424adb31c`) risolto, non chiuso: lo chiude il coordinatore.**
-  - HEAD `0076f4269`: il checkpoint 1, committato dal coordinatore in `e23bf842c` + `0076f4269`.
+- **14/10, 23:55 — Merge di base di `dev_release2` (`29ec4156c`) risolto, non chiuso: lo chiude il coordinatore.**
+  - HEAD `c04485214`: il checkpoint 1, committato dal coordinatore in `80b1aefe5` + `c04485214`.
   - Tre conflitti, risolti e messi in stage solo loro:
     - *backlog*: la sezione G intera, poi la sezione «T (colori)» intatta; i link di G puntano a
       `../Phase_1/10_colorSystem/G-galleryDeterminism/…`, dove il target ha spostato la cartella 56;
     - *questo piano*: spostato dal rename della cartella. Link relativi corretti; `live_price_check` lanciato con
       `pipenv run python -m scripts.visual_review.live_price_check`;
     - *README del toolkit*: la riga `W=` del target più le mie righe, con pipenv.
-  - Gate sulla revisione combinata, corsia 6153 (`validate_merge.sh`, log in `g-workstream/2026-10-14/logs/merge-424adb31c/`):
+  - Gate sulla revisione combinata, corsia 6153 (`validate_merge.sh`, log in `g-workstream/2026-10-14/logs/merge-29ec4156c/`):
     - `theme-roles.mjs --check` pulito;
     - `front-utility core-unit`: 130 file e 4245 test verdi;
     - `front check` 0/0;
@@ -838,9 +838,9 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
   - Residuo per il checkpoint 2: la docstring di `live_price_check.py` mostra ancora `python3 …`. È una riga, in un file
     non in conflitto, quindi non toccato ora.
 - **15/10, 10:20–11:00 — Checkpoint 2 di G aperto.**
-  - Misura finale del coordinatore su X = `2338aaf79` (`g-final3`). Analisi di G in sola lettura, con l'albero pulito per
+  - Misura finale del coordinatore su X = `2ddbf77f7` (`g-final3`). Analisi di G in sola lettura, con l'albero pulito per
     l'aggiornamento di base.
-  - Il coordinatore ha portato il ramo a `6ed99c694` con un avanzamento veloce (X più un commit di journal della 1.3).
+  - Il coordinatore ha portato il ramo a `fdec6c509` con un avanzamento veloce (X più un commit di journal della 1.3).
   - Decisioni del coordinatore:
     - piano approvato: test-author sulle 4 inquadrature, poi le modifiche leggere;
     - run mirate solo dopo la chiusura della finestra, che annuncia lui; fino ad allora nessuna E2E;
@@ -848,43 +848,43 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
     - il prossimo riferimento dello stesso giorno per R deve contenere G2.
   - test-author `g-frames-c2` lanciato (passo 7); modifiche leggere fatte da G.
 - **15/10, 12:50 — Checkpoint 2 di G pronto, FROZEN.**
-  - HEAD `6ed99c694`.
+  - HEAD `fdec6c509`.
   - Il delta del passo 7 più evidenze, README e backlog: G-1 aggiornata; G-2, G-3, G-6 ✅; nuove G-9, G-10, G-11.
   - Verifica: `g-c2-w1-a/b`, 8 + 8 verdi, `live_price_check` 0.
   - Commit proposto in `files/commit_c2.txt` della sessione.
 - **15/10, 12:53 — Checkpoint 2 committato e integrato** dal coordinatore.
-  - Commit `fcf6c6686`, fuso con il target `09a536cd0` in `9f3b141a8` (uguale alla simulazione, `tsc` e2e con i soli 2
-    errori di base); `dev_release2` = `9f3b141a8`. Verificato da G in sola lettura alle 12:54.
+  - Commit `ef4bed687`, fuso con il target `4dbe6875f` in `acf4f8375` (uguale alla simulazione, `tsc` e2e con i soli 2
+    errori di base); `dev_release2` = `acf4f8375`. Verificato da G in sola lettura alle 12:54.
   - G-10 girata alla 1.3 (difetto del prodotto, probabilmente H, che ha `services/files`). G-11 resta in backlog.
   - G-9 rinviata alla chiusura della finestra. Durante il FROZEN, in sola lettura: diagnosi (passo 8) e brief di
     test-author preparato fuori dal repo.
 - **15/10, 13:01 — Via a G-9** (coordinatore): test-author più una run filtrata dei test dei segnali, corsia 6153, base
-  `9f3b141a8`. test-author `g-g9-select` lanciato alle 13:03.
+  `acf4f8375`. test-author `g-g9-select` lanciato alle 13:03.
 - **15/10, 13:12 — STOP ai comandi Python** (coordinatore): il developer installa `cryptography` nell'ambiente Python
   condiviso, circa 10 minuti. Nessun comando Python di G era in corso. test-author continua sul codice con la statica
   Node; la run filtrata di G-9 aspetta la «ripresa».
 - **15/10, 13:36 — Ripresa**; 13:46–13:56 run G-9 (passo 8). Alle 13:50 il coordinatore fissa il budget comune con la 1.3:
   al massimo 3 suite pesanti, 1 nostra. Dopo questa run, nessuna E2E, gallery o suite completa senza chiedere il posto.
 - **15/10, 13:58 — G-9 pronto per il checkpoint, FROZEN.**
-  - HEAD `9f3b141a8`.
+  - HEAD `acf4f8375`.
   - Delta: `gallery.spec.ts`, il piano, il backlog.
   - Commit proposto in `files/commit_g9.txt` della sessione.
   - Chiesto il posto per rifare da soli i 4 test con rossi di carico.
-- **15/10, 13:58 — G-9 committata dal coordinatore:** `5da3c9eba`, sopra `9f3b141a8`.
+- **15/10, 13:58 — G-9 committata dal coordinatore:** `b95ba1ea5`, sopra `acf4f8375`.
   - Entra nel target dopo la ripetizione da soli, a 1 worker, dei 4 test con rossi di carico, quando la DoD è 10/10.
   - G è in coda per il posto dopo L, che chiude L-10 in circa 25 minuti; il via lo dà il coordinatore.
   - Le due note fuori perimetro diventano **G-12** nel backlog, con il proprietario da instradare.
   - FROZEN; delta non committato: questa riga, il passo 8 e il backlog (G-9, G-12).
 - **15/10, 15:36 — Slot pesante a G** (coordinatore), in tre passi.
-  - Journal committato in `e3153b75d`. Merge di base con `dev_release2` (`8f1abf89e`): HEAD `6f0198a08`, padri
-    `e3153b75d` e `8f1abf89e`, worktree pulito.
+  - Journal committato in `771b4f49a`. Merge di base con `dev_release2` (`46df3789a`): HEAD `75973bc5f`, padri
+    `771b4f49a` e `46df3789a`, worktree pulito.
   - 15:39–15:48 build debug e MkDocs sulla revisione fusa.
   - 15:48–15:56 i test con rossi di carico, da soli a 1 worker: 5 verdi su 5 → **G-9 ✅, DoD 10/10** (passo 8).
   - 15:56 porta 6153 libera, comunicata al coordinatore: lo slot passa alla gallery Y2 della 1.3.
   - Handoff per l'ingresso; delta non committato: il passo 8, queste righe e il backlog (G-9 ✅). FROZEN.
-- **15/10, 16:00 — G-9 in `dev_release2`** (coordinatore): `1470bd693`, merge di `c635da129` (il journal di G-9). Il
-  ramo di G è stato portato al target con un avanzamento veloce: HEAD `1470bd693`, albero pulito. La base contiene la
-  correzione di H per G-10 (`b4533a949`, entrata con `744f5a0ee`).
+- **15/10, 16:00 — G-9 in `dev_release2`** (coordinatore): `a837a41fe`, merge di `cd99d0e05` (il journal di G-9). Il
+  ramo di G è stato portato al target con un avanzamento veloce: HEAD `a837a41fe`, albero pulito. La base contiene la
+  correzione di H per G-10 (`44d353f62`, entrata con `f8b36d4de`).
   - **G-10 ✅** nel backlog, con il commit di H.
   - **G-12 instradata alla 1.3** dal coordinatore: `SignalTreeSelect.test.ts` è del perimetro dei grafici.
   - **Cosa resta del piano di G:**
@@ -904,8 +904,8 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
       macchina. Finché C-94 di J non entra nel target, le gallery complete vanno lanciate con `-- --workers 6`, come
       dice il README del toolkit.
   - Delta non committato: questa riga e il backlog (G-10 ✅, G-12 instradata). FROZEN.
-- **15/10, 16:05 — Piano chiuso** (decisione del coordinatore). Journal `5fb5d3767`, portato in `dev_release2` con un
-  avanzamento veloce; HEAD di G `5fb5d3767`.
+- **15/10, 16:05 — Piano chiuso** (decisione del coordinatore). Journal `53a33ea22`, portato in `dev_release2` con un
+  avanzamento veloce; HEAD di G `53a33ea22`.
   - **DoD ✅** (§1) e **G-1 ✅** nel backlog, con la misura `g-final3`. G-11 resta aperta nel backlog.
   - **Prossimo compito di G, assegnato dal coordinatore: G-13**, la nuova coppia di riferimento.
     - Quando T entra in `dev_release2`: D-T20, dopo la revisione di T-8 da parte del developer.
@@ -922,9 +922,9 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
   - Voci nuove: G-14 (fuso orario della gallery), G-15 (barra delle schede di Settings in spagnolo).
   - **G-16** (`tools/pac-result-exposures`): verificata, e `stable` nella coppia.
   - **G-13 ✅, 16/10.**
-    - Tre gallery complete di `a2c1c39f4`: r1 con 6 rossi di carico, r2 e r3 verdi.
+    - Tre gallery complete di `c85ecd330`: r1 con 6 rossi di carico, r2 e r3 verdi.
     - **Coppia del rumore r1↔r2**; r2↔r3 attraversa la data UTC (il planner del PAC, N26).
-    - **Riferimento `g-ref13-r3`.** Candidata della notte `g-cand16a` (`72e66d1a6`), verde, con il foglio di
+    - **Riferimento `g-ref13-r3`.** Candidata della notte `g-cand16a` (`7aefcc13a`), verde, con il foglio di
       confronto per il developer.
     - Evidenze: [analisi G-13](evidence/analysis-g13-2026-10-16.md), [stabilità](evidence/stability-2026-10-16.md).
     - README del toolkit: la regola della data UTC, le durate, il comportamento al 16/10.
@@ -946,7 +946,7 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
 ## G-18 · Guardia G3 a runtime nella galleria (16/10)
 
 Richiesta del coordinatore alle 10:43; il developer gli aveva detto «vedi tu». Piano approvato alle 10:53. Base
-`8f2824046`.
+`cdf74ef2a`.
 
 **Il problema.** Il gate G3 di `theme-roles` trova gli elementi misti solo se sono scritti così nel sorgente. Non vede
 le classi composte a runtime:
@@ -1046,7 +1046,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
    > **Note implementazione**: nel README le righe della tabella (`gallery_snapshot.sh` scrive anche
    > `mixed_elements.json`; `gallery_tool.py` ha `mixed`) e una sezione 6, «Mixed elements (the runtime twin of G3)»:
    > perché, cosa c'è nel file, i tre comandi, l'avvertenza sul file candidato, `--collect` a mano. Backlog: G-18 ⏳.
-5. ✅ 16/10 — Checkpoint al coordinatore (codice in `07fe58276`, base `5489d7a28`). Poi, nello slot della coda pesante:
+5. ✅ 16/10 — Checkpoint al coordinatore (codice in `3266fd3be`, base `94e297004`). Poi, nello slot della coda pesante:
    - la run filtrata `gallery_snapshot.sh g-mixed-probe … -- -f "Settings" --workers 4`;
    - DoD: un record per PNG, 0 errori, conteggi di ruolo e legacy maggiori di 0, il riassunto per area;
    - e quanti elementi misti ci sono oggi.
@@ -1093,7 +1093,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - Due snapshot filtrati sui 15 test che aprono il dettaglio, `-f "Asset (detail|chart settings|distribution)"`, a 6
     worker nella corsia 6153:
     - A `d69e14a6e`: la testa di X con i 27 file di FE5c riportati a dev;
-    - B `668d27837`: la testa di X.
+    - B `9258e88bd`: la testa di X.
   - Kit di sessione, `files/fe5c/`: `fe5c_verify.sh` (preflight, prebuild, snap, fill, compare) e `fe5c_check.py`
     (lockcheck, select, paths, merge, verdict).
   - I rossi di carico (carico 80–166) li hanno recuperati dei fill sullo stesso SHA e nello stesso giorno: 6 su A, 5 su B.
@@ -1132,7 +1132,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - Poi la galleria completa `designer-16b` sul target con il lotto di T, i fill dei rossi, il diff con `sheet` e il
     pacchetto `LibreFolio_review_colori_giro3_2026-10-16`.
 
-  > **Note implementazione**: builder committato dal coordinatore in `390aa3b11` (README §3b).
+  > **Note implementazione**: builder committato dal coordinatore in `e4ecf2c0a` (README §3b).
   > - Prova a secco su `baseline-r2` → `g-cand16a`: zip da 133 MB in 630 s.
   > - Link controllati: 6.543, tutti presenti nel pacchetto, tranne `SKILL.md` nella palette copiata così com'è.
 
@@ -1141,7 +1141,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   > - La galleria `designer-16b` è finita; i fill non servono più e `package` non è stato lanciato.
   > - Il builder resta pronto: `files/g16b/g16b.sh package` della sessione rifà inventario, diff, `sheet` e zip.
 - **Riferimento della sera del 16/10: lo snapshot `designer-16b`** (lasciato così com'è, su richiesta del coordinatore).
-  - Commit `fa374e41d`: il target con il lotto di T, più il builder.
+  - Commit `1a6bde6bb`: il target con il lotto di T, più il builder.
   - Cattura 16:53–17:52, 6 worker, carico 60–170: in parallelo W e Y della 1.3 e un vitest di B.
   - 2.862 PNG; 249 test verdi, 1 saltato (`mobile menu open`, solo mobile), **10 rossi di carico, non recuperati**:
     - desktop: dashboard empty state, data-quality banner, profile tab, transaction form modal e le varianti es/dark
@@ -1157,7 +1157,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       - `lot-custody-modal > div` (`LotCustodyModal.svelte`): `border-lf-raised text-lf-primary` del modale insieme
         a `bg-white dark:bg-slate-800`, probabilmente da una prop del chiamante. 2 scatti, 32 varianti; motivo
         «attesa-1.3». In scuro lo sfondo resta il vecchio slate.
-- **`settings/plugins` per la 1.3 ✅, 16/10 18:27–18:34.** Commit `ccfabfd6d`: la punta, con X-R27 e X-R28. Due run
+- **`settings/plugins` per la 1.3 ✅, 16/10 18:27–18:34.** Commit `7fc972661`: la punta, con X-R27 e X-R28. Due run
   identiche, `g-plugins-a` e `g-plugins-b`, sullo stesso build, filtro `-f "Settings plugins"`, 2 worker, carico 23–28.
   - Esito: 2 test su 2 verdi per run, 16 PNG ciascuna, `live_price_check` pulito.
   - **a↔b: 16 immagini identiche su 16**: lo scatto è `stable`.
@@ -1165,7 +1165,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - Le impronte sono uguali in tutte le varianti: desktop `dh` 761, schermo allungato a 745 per un blocco di 656 px;
     mobile `dh` 887.
   - Guardate a occhio es/light desktop e it/dark mobile: rese corrette, nessun trabocco della barra delle schede.
-- **`settings/email` per la 1.3 ✅, 16/10 21:22–21:37.** Commit `102fa9ec1`: la punta, con E (`56759b2c8`) e Y12b.
+- **`settings/email` per la 1.3 ✅, 16/10 21:22–21:37.** Commit `b32934309`: la punta, con E (`19d4d90d4`) e Y12b.
   Due run identiche, `g-email-a` e `g-email-b`, sullo stesso build, 2 worker. Il filtro
   `-f "Settings email \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2069`.
   - Carico: a è partita con carico 58. b è partita a 122, dopo l'attesa massima di 5 min: giravano le corsie di W, Z,
@@ -1176,7 +1176,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       32×32 a (24, 548).
     - È il rumore già misurato in G-13 (`low`, al massimo 0,0041 %, Δ 1), e lo stesso riquadro cambiava nella coppia
       di FE5c. Lo scatto resta `low`.
-  - **G-15 chiusa.** La barra delle schede ora scorre (`affae6ffe`, 15/10) e tiene in vista la scheda attiva: «Correo» e
+  - **G-15 chiusa.** La barra delle schede ora scorre (`3fc98c2e4`, 15/10) e tiene in vista la scheda attiva: «Correo» e
     «E-mail» si vedono.
     - In francese e spagnolo, nella vista admin su desktop, la barra trabocca ancora: «Perfil»/«Profil» è fuori vista e
       la seconda scheda è tagliata al bordo («…ferencias»). Nello scatto non c'è segno che la barra scorra.
@@ -1193,37 +1193,37 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - il dettaglio del broker, che apre «Interactive Brokers»;
     - le posizioni e i lotti del dettaglio broker, che aprono «Coinbase»;
     - la lista dei broker.
-  - **MF N54**, entrato in `8d244d1c6`: dove prima c'era «—» può comparire un MWRR, nei portafogli più giovani
+  - **MF N54**, entrato in `324348aac`: dove prima c'era «—» può comparire un MWRR, nei portafogli più giovani
     dell'intervallo. Nella galleria solo dove si legge il backend, non nelle card della Dashboard.
-  - **J-24**, entrato in `31a59bdb1`: nella demo circa **−165 EUR** di realizzato e di P&L. L'aggiustamento AAPL −3 di
+  - **J-24**, entrato in `35a48deac`: nella demo circa **−165 EUR** di realizzato e di P&L. L'aggiustamento AAPL −3 di
     IBKR esce a 160 USD contro un costo medio di circa 220.
     - Nel prodotto cambiano le card dei KPI, il grafico di crescita e P&L dal giorno −20 e la tabella Performance della
       Dashboard, il dettaglio del broker IBKR e la vista Periodo. Non cambiano NAV e lotti.
     - **Nella galleria (correzione del 17/10) cambia solo `brokers/detail`**, il dettaglio di IBKR. Gli scatti della
       Dashboard vengono dalla fixture, e la vista Periodo del dettaglio broker si fotografa su Coinbase.
     - Dettagli: piano di J, §10 «J-24».
-  - **J CP-7b**, entrato in `48da9bf3c`, solo backend (coordinatore, 16/10 22:23):
+  - **J CP-7b**, entrato in `d4284390b`, solo backend (coordinatore, 16/10 22:23):
     - AAPL, il lotto ADJUSTMENT (tx 60, IBKR): il prezzo di riferimento passa da 300.0201 a **299.82 USD**, «Open
       Return» da 2,342 % a **2,410 %**, e il banner `REFERENCE_PRICE_FALLBACK` mostra 299.82.
     - Test KRW Stock (Directa): sparisce il banner «No market price available … estimated at cost».
     - Il resto non cambia. Nella galleria può vedersi nei lotti di Apple, `dashboard/fifo-lots-*`, dove compare quel
       lotto.
-  - **MF-A**, entrato in `536501541` (17/10): la vista Performance delle posizioni prende i valori dal motore. Nella
+  - **MF-A**, entrato in `d7557b79e` (17/10): la vista Performance delle posizioni prende i valori dal motore. Nella
     galleria cambiano solo `brokers/positions-performance-table` e `-map` (Coinbase), non quelli della Dashboard.
     MF-P, nello stesso ingresso, aggiunge campi che il frontend non legge ancora.
-  - **J-27**, entrato in `e221a0544`: i totali del registro leggono solo importi decimali semplici. Nella notte del
+  - **J-27**, entrato in `8042271e1`: i totali del registro leggono solo importi decimali semplici. Nella notte del
     17/10 i passi del PAC senza grafici sono identici o nel rumore, e i target hanno gli stessi numeri: nessun effetto
     visto.
-  - **X, sotto-lotto 3**, entrato in `4469f37b6`: la ricerca della galleria dell'import risponde con errori, e la
+  - **X, sotto-lotto 3**, entrato in `9e9a529f0`: la ricerca della galleria dell'import risponde con errori, e la
     modale dell'asset precompilata mostra «Can't find it? Let us know» sotto «nessun risultato».
-  - **B4 dei backup**, entrato con `df1f0d52c` (17/10): lo scatto `settings/backup-ready` cambia di testo e di forma.
+  - **B4 dei backup**, entrato con `a7c407c59` (17/10): lo scatto `settings/backup-ready` cambia di testo e di forma.
     - La descrizione della card del backup è riscritta.
     - Fra il backup pronto e «Create a new backup» c'è la scelta «Kind of backup», chiaro o sicuro (`backup-mode`,
       chiaro di partenza), con le due descrizioni. L'avviso sulla riservatezza (`backup-privacy-notice`) resta, legato
       alla scelta «chiaro».
     - La fixture `galleryBackup.ts` risponde ora `encrypted: false`, quindi la nota della copia cifrata non compare.
     - La card si allunga ancora, e su mobile la card del ripristino scende più in basso (G-20).
-  - **Y, lotto R17/W8/P4**, entrato in `1565b6bbb` (17/10 05:27). La Dashboard legge dal backend la variazione del
+  - **Y, lotto R17/W8/P4**, entrato in `d7b84ebac` (17/10 05:27). La Dashboard legge dal backend la variazione del
     giorno, l'effetto timing e il G/L dei gruppi. `dashboard-report.json` non ha quei campi (`pnl_change_1d` e le sue
     due percentuali, `timing_effect_percent`, `holding_groups`), e resta così finché il developer non la ricattura (sua
     decisione (c)). Il prodotto è corretto. Verificato nel codice e sulle immagini del 16 e 17/10:
@@ -1239,7 +1239,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - P4, le percentuali della vista Performance prese dal backend: nella fixture la percentuale accanto a ogni barra è
       identica alla vecchia (14 righe su 14), e quelle delle componenti stanno nel tooltip. Nessun cambio visibile;
     - il dettaglio del broker usa le stesse card ma legge il backend, che ha quei campi: le righe restano.
-  - **J-43**, entrato in `09cb9231a` (17/10 07:07): il DB popolato dà agli utenti demo, admin compreso (IB al 40 %), una
+  - **J-43**, entrato in `42d00b0d8` (17/10 07:07): il DB popolato dà agli utenti demo, admin compreso (IB al 40 %), una
     riga INFO nel banner della qualità dei dati, per un trasferimento fra broker posseduti a quote diverse. **Nella
     galleria non si vede**, finché il report vero dell'admin tiene il suo avviso:
     - il banner del report vero è chiuso in ogni scatto. Con un avviso, l'intestazione conta solo errori e avvisi
@@ -1253,7 +1253,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       che vi scrive il test;
     - se l'avviso dell'admin sparisse, il banner chiuso direbbe la frase delle sole note (`dataQuality.headerInfoOnly`),
       nel tono informativo.
-  - **A8b**, entrato in `6e2b2c8b7` (17/10 09:10): cambiano tutti gli scatti della pagina Settings, nella struttura e
+  - **A8b**, entrato in `e7d4a4162` (17/10 09:10): cambiano tutti gli scatti della pagina Settings, nella struttura e
     non nel colore. Misurato nella run del punto 33 (record più sotto):
     - la barra in alto ha «Amministrazione» a destra, il gruppo di Impostazioni globali, Utenti, Backup, Email e
       Security;
@@ -1269,8 +1269,8 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - fuori dalla run cambiano allo stesso modo, nella barra in alto: `about`, `about-plugin-diagnostics`,
       `about-tool-diagnostics`, `user-preferences`, `onboarding-replay`, `password-modal` e
       `support/social-share-modal`, tutti aperti dall'admin sulla pagina Settings.
-  - **A9**, entrato in `ba8f3b06e` (17/10 11:10): la nota legale. È nei due lati della coppia del giro 3 (`ba8e06763`
-    e `cd686f445`), quindi cambia solo contro i riferimenti più vecchi: `designer-16b`, `baseline-r2`, `g-night17-*`.
+  - **A9**, entrato in `5c1806198` (17/10 11:10): la nota legale. È nei due lati della coppia del giro 3 (`80a1ca0e0`
+    e `574c23cf0`), quindi cambia solo contro i riferimenti più vecchi: `designer-16b`, `baseline-r2`, `g-night17-*`.
     Verificato sulle immagini del 18/10:
     - in fondo alla barra laterale, sotto la versione, una riga col disclaimer breve («Not financial advice.», «Non è
       una consulenza finanziaria.»), senza i link a termini e privacy, che la corsia di test non configura. Su desktop è
@@ -1279,8 +1279,8 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - la nota intera (`LegalNotice`) sotto la card della pagina di benvenuto. Su mobile, in francese e spagnolo, la
       pagina non sta più nell'inquadratura e lo scatto fallisce (G-25). Nella scheda About la nota sta sotto
       l'inquadratura di `settings/about` (1280×720): nello scatto non si vede.
-  - **Giro 3 dei colori**, entrato il 18/10: T R3-a `050741670`, T R3-b `7845fc3d3`, DV `b238d5b6e`; riferimento
-    completo `cd686f445`. Misurato nella coppia dello stesso giorno del 18/10, record «Galleria del giro 3» più sotto.
+  - **Giro 3 dei colori**, entrato il 18/10: T R3-a `e5be0a740`, T R3-b `a37e5da23`, DV `89f0b52b6`; riferimento
+    completo `574c23cf0`. Misurato nella coppia dello stesso giorno del 18/10, record «Galleria del giro 3» più sotto.
     Contro un riferimento più vecchio cambiano:
     - i grafici delle allocazioni per tipo, settore e paese, la mappa (in blu), la semi-ciambella delle quote (anche
       nella scheda Info del broker), la correlazione (anche dietro il selettore del laboratorio), le esposizioni del
@@ -1297,9 +1297,9 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - G-26: `settings/password-modal` su mobile, lo scorrimento della pagina sotto la modale.
   - **Ancora senza scatto:** G-24, la modale «What's new» di C-54 (`WhatsNewModal.svelte`). Per gli utenti di test
     `whats_new` è `null`, quindi non compare in nessuno scatto.
-  - **Il nuovo riferimento del rumore**, dopo A8b e A9: `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`
+  - **Il nuovo riferimento del rumore**, dopo A8b e A9: `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-574c23cf0`
     (maschere e `stability.json`), al posto di `g-ref13` del 16/10, cancellato il 19/10.
-  - **N69a**, entrato in `3e82ed2e0` (20/10 09:17): il gruppo «Amministrazione» è solo degli admin, e la lista utenti
+  - **N69a**, entrato in `5e5bed597` (20/10 09:17): il gruppo «Amministrazione» è solo degli admin, e la lista utenti
     ha gli avatar. Cambi voluti, non di colore:
     - `settings/plugins`, la vista del membro (e2e_test_user): nella barra in alto non c'è più «Amministrazione»;
       restano Profilo, Preferenze, Plugin e Informazioni;
@@ -1310,7 +1310,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - nella vista dell'admin il gruppo c'era già: nient'altro cambia.
     - **N69c, non ancora entrato** (il coordinatore avvisa): la modalità d'iscrizione passa nella scheda Utenti.
       Cambieranno `settings/global-settings`, che perde quella sezione, e `settings/users`, che la guadagna.
-  - **N69b**, entrato in `1e711253a` (20/10 13:34): il pallino dei controlli di sicurezza per gli admin. Ogni pagina
+  - **N69b**, entrato in `5ba3a3859` (20/10 13:34): il pallino dei controlli di sicurezza per gli admin. Ogni pagina
     che un admin apre legge `GET /api/v1/security/checks`. Con un errore o un avviso compaiono:
     - un pallino di 8 px, ambra o rosso, sullo scudo della riga della connessione nella barra laterale;
     - nei dettagli della riga, un link «N security warnings»;
@@ -1328,7 +1328,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
         (l'elenco di A8b qui sopra): è il cambio atteso;
       - lo scudo della riga della connessione ora sta in un contenitore, per il pallino: identico a occhio contro il
         18/10, e a = b in `security/connection-indicator`.
-- **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `b89985a8b`: la punta, con B (`0cd910a7e`: B3
+- **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `0d471c5d6`: la punta, con B (`1d9709ec4`: B3
   ripristino, B5b, B5c). Due run identiche, `g-backup-a` e `g-backup-b`, sullo stesso build, 2 worker. Il filtro
   `-f "Settings backup ready \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2126`.
   - Carico e orario:
@@ -1363,13 +1363,13 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - `expected_notes.md`, le differenze attese.
 
     Provato prima della notte senza toccare la corsia: il confronto su una coppia piccola, e `run` con uno stub.
-  - **«Prima», `778156983`** (16/10 23:19), lanciato alle 02:01 da un'automazione della sessione.
+  - **«Prima», `9990d7f03`** (16/10 23:19), lanciato alle 02:01 da un'automazione della sessione.
     - Base 02:02–02:47, con circa 10 min di build. 7 rossi di carico:
       - 5 desktop fra le 02:13 e le 02:16, col carico a 172 (le corsie della 1.3 sulle porte 6182, 6185 e 6189, e il
         Playwright di un altro worktree);
       - 2 mobile alle 02:44, col carico a 141.
     - Fill a 2 worker, desktop 02:47–03:00 e mobile 03:00–03:03: tutti verdi. 2.016 PNG.
-  - **«Dopo», `55b53d8c1`**, al via del coordinatore delle 03:33.
+  - **«Dopo», `6632b7ca1`**, al via del coordinatore delle 03:33.
     - Base 03:36–04:13 (build 247 s). 3 rossi di carico, col carico a 74–82:
       - allocazioni desktop: il click sul tema non è tornato in 20 s;
       - editor dei dati dell'asset desktop: `GET /api/v1/ai-export/catalog` ha risposto in 44,5 s;
@@ -1380,8 +1380,8 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     test è passato nel fill.
   - In tutte e 6 le catture nessun prezzo live. **Misti G-18: 0 su 2.016, da tutti e due i lati.**
   - **Fra i due commit:**
-    - colore: T, le tabelle (`9016f47c3`); AF, media, file e menu (`9d3607eb6`); T, `CompactCashCell` (`b58108665`);
-      DV, B4 (`323c61b73`); AF, i colori disegnati (`55b53d8c1`);
+    - colore: T, le tabelle (`3680c4010`); AF, media, file e menu (`a4bf32a44`); T, `CompactCashCell` (`e9e1fb1eb`);
+      DV, B4 (`1bd4c0e61`); AF, i colori disegnati (`6632b7ca1`);
     - dato: J-27, MF-A e MF-P; testo: X, sotto-lotto 3;
     - la cattura cambia di una sola riga, in `galleryBackup.ts` (B4 dei backup), che serve solo allo scatto del
       backup, fuori dal filtro.
@@ -1405,7 +1405,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - I lotti della notte lavorano su `<style>`, token di componente e colori dei grafici in JS.
     - I 4 file usciti dal baseline (m1 da 697 a 674) non compaiono negli scatti del filtro.
     - La guardia resta utile per le classi miste; non misura una migrazione fatta nel CSS.
-  - **Dove guardare:** `LibreFolio_visual_review/diffs/g-night17-prima-778156983__vs__g-night17-dopo-55b53d8c1/`, con
+  - **Dove guardare:** `LibreFolio_visual_review/diffs/g-night17-prima-778156983__vs__g-night17-dopo-6632b7ca1/`, con
     `contact_sheet.it.html` (il foglio), `night_summary.it.md` (il riassunto per gruppo), `night_expected_notes.md`,
     `night_expected.txt`, `night_report.md` e `index.html`.
 
@@ -1414,9 +1414,9 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   >   (nota del coordinatore). Su sua richiesta la 1.3 ha fermato i passi pesanti fino alle 03:30. Il «dopo» ha avuto
   >   il blocco annunciato, 03:35–04:35.
   > - Alle 02:25 macOS ha toccato `frontend/src/.DS_Store`, e il primo fill del «prima» ha rifatto il build dello
-  >   stesso commit (6 min in più). Nel «dopo» c'era già `c53012fcb` («ignore hidden and test files in build check»):
+  >   stesso commit (6 min in più). Nel «dopo» c'era già `03cc3899d` («ignore hidden and test files in build check»):
   >   i fill hanno riusato il build.
-  > - La nota di MF-A citava `5c9ad06d7`, che porta solo il diario di MF: il codice è in `536501541`.
+  > - La nota di MF-A citava `3bde7df80`, che porta solo il diario di MF: il codice è in `d7557b79e`.
   > - Leggendo la spec ho trovato che la Dashboard della galleria viene dalla fixture: corrette la nota di J-24 e la
   >   classificazione di MF-A, qui sopra.
 - **Commento di `gallery.spec.ts` corretto ✅, 17/10 mattina** (coordinatore, dopo J-43). Il commento del test
@@ -1429,8 +1429,8 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - Solo commenti: nessuna riga di codice cambia, nessuna run.
   - Note di Y R17/W8/P4 e J-43 qui sopra, nella «Nota per la prossima galleria completa».
 - **Punto 33 della designer ✅, 17/10 09:24–09:46.** La barra delle schede nella vista admin di Settings, dopo A8b
-  (`6e2b2c8b7`: il gruppo «Amministrazione», la seconda barra, la sfumatura ai bordi, il badge). Chiesta dal
-  coordinatore alle 09:13; via alle 09:23, nello slot lasciato libero dalla spike di B. Commit `e58be67fe`.
+  (`e7d4a4162`: il gruppo «Amministrazione», la seconda barra, la sfumatura ai bordi, il badge). Chiesta dal
+  coordinatore alle 09:13; via alle 09:23, nello slot lasciato libero dalla spike di B. Commit `6bc4d25bd`.
   - **La modifica di A alla spec**, letta prima della run: `openGlobalSettings` chiama `openSettingsTab(page, 'admin')`
     (`fixtures/settings-tabs.ts`), che apre il gruppo e poi Impostazioni globali nella seconda barra; restano
     `aria-selected` e l'attesa su `data-busy`. È corretta: i quattro chiamanti entrano come TEST_ADMIN, e gli altri
@@ -1473,7 +1473,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     partire col carico alto.
 - **Galleria del giro 3 ✅, 18/10 02:00–04:02.** Prima e dopo dello stesso giorno per la designer; vale anche come
   nuovo riferimento dopo A9. Chiesta dal coordinatore il 18/10 alle 00:57. Il «dopo» l'ha corretto lui alle 01:2x, da
-  `b238d5b6e` a `cd686f445`: in più ci sono solo lo skill, il caso del Lab live e un commento di `tokens.css`,
+  `89f0b52b6` a `574c23cf0`: in più ci sono solo lo skill, il caso del Lab live e un commento di `tokens.css`,
   verificati. Le sue decisioni delle 01:24: `dopo2` sì, collettore CSP acceso, G-24 definita, zip sì.
   - **Kit di sessione**, `files/r3/`:
     - `r3.sh` (preflight, run, fill, compare, sheet, status): la galleria completa a 6 worker; si parte col carico
@@ -1488,9 +1488,9 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
 
     | Cattura | Commit | Inizio–fine | Durata | Esito |
     |---|---|---|---|---|
-    | `g-r3-prima-ba8e06763` | `ba8e06763` | 02:00:51–02:34:09 | 31,1 min di test | 258 ✓, 1 saltato, 1 ✘ |
-    | `g-r3-dopo-cd686f445` | `cd686f445` | 02:36:46–03:10:40 | build 143 s, poi 29,4 min | 258 ✓, 1 saltato, 1 ✘ |
-    | `g-r3-dopo2-cd686f445` | `cd686f445` | 03:10:41–03:42:03 | 29,3 min | 258 ✓, 1 saltato, 1 ✘ |
+    | `g-r3-prima-80a1ca0e0` | `80a1ca0e0` | 02:00:51–02:34:09 | 31,1 min di test | 258 ✓, 1 saltato, 1 ✘ |
+    | `g-r3-dopo-574c23cf0` | `574c23cf0` | 02:36:46–03:10:40 | build 143 s, poi 29,4 min | 258 ✓, 1 saltato, 1 ✘ |
+    | `g-r3-dopo2-574c23cf0` | `574c23cf0` | 03:10:41–03:42:03 | 29,3 min | 258 ✓, 1 saltato, 1 ✘ |
 
     - **Lo stesso rosso nelle tre catture**, rifatto a 2 e a 1 worker con lo stesso esito: [mobile]
       `Onboarding › welcome setup`, in francese e spagnolo. `welcome-avatar-preview` resta visibile al 78,75 %, con lo
@@ -1523,17 +1523,17 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     nell'ordine di `decisioni.md`.
   - **Lo zip:** `LibreFolio_visual_review/package/LibreFolio_review_colori_giro3_2026-10-18.zip`, 131 MB.
     - Viene da `build_designer_round.py` sul dopo: 726 immagini per lato, coi motivi e le domande del coordinatore (i
-      suoi file delle 02:37) e l'inventario `inventory/g-r3-dopo-cd686f445`.
+      suoi file delle 02:37) e l'inventario `inventory/g-r3-dopo-574c23cf0`.
     - ⚠️ **Fuori pista:** lo strumento scrive che il «prima» è la v1.2 e che i dati cambiano col giorno. Era vero il
       16/10, non stanotte. Ho corretto il testo delle pagine generate con `relabel_package.py` (726 tabelle, 4 note, la
       guida e l'indice) e rifatto lo zip con la stessa struttura; l'originale resta accanto, `…tool-original.zip`.
       Proposta: un'opzione dello strumento per l'etichetta del «prima».
-  - **I diff:** `diffs/g-r3-prima-ba8e06763__vs__g-r3-dopo-cd686f445` (e `__raw`); il rumore,
-    `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`.
+  - **I diff:** `diffs/g-r3-prima-ba8e06763__vs__g-r3-dopo-574c23cf0` (e `__raw`); il rumore,
+    `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-574c23cf0`.
   - ⚠️ **Fuori pista:** la prima versione del foglio dava 104 scatti cambiati fuori dalle aree, e 77 erano differenze di
     pochi pixel. Ora il foglio separa un cambio visibile (almeno lo 0,01 % dei pixel oltre 12 livelli) dalle differenze
     minime, e mostra la classe di rumore di ogni scatto.
-  - ⚠️ **Fuori pista:** `r3.sh expected` mette `81a927681` fra la logica di cattura solo per due test: la registrazione
+  - ⚠️ **Fuori pista:** `r3.sh expected` mette `b51fe28f7` fra la logica di cattura solo per due test: la registrazione
     di un test unitario (`_frontend_utility.py`) e un test di servizio. La spec, le fixture e i dati della galleria non
     cambiano.
 - **README di `scripts/visual_review/` al riferimento del 18/10 ✅, 19/10.** Chiesto dal coordinatore il 19/10 alle
@@ -1552,7 +1552,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       catturato dalle 02:00;
     - al passo 3b, il limite dell'etichetta del «prima» di `build_designer_round.py` (G-27).
   - **G-27 nel backlog**, approvata dal coordinatore il 18/10 alle 04:05 per un lotto successivo.
-  - **Base:** HEAD `b04cab48c`. Sul target, `1fa64ceae`, il README e questo piano non sono cambiati da allora, e la
+  - **Base:** HEAD `cc7ce003b`. Sul target, `dd797d670`, il README e questo piano non sono cambiati da allora, e la
     sezione G del backlog è identica: l'unione è pulita.
   - ⚠️ **Fuori pista:** `g-ref13` è del **16/10** (r1 e r2 alle 00:02–01:31, r3 alle 05:28), non del 13/10 come avevo
     scritto il 18/10 nella Nota, nel record del giro 3 e in G-26. Corretto nei tre punti, e nella riga dei fatti del
@@ -1564,7 +1564,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     maschere di `g-final3__r1__vs__r2`) e «Dati di riferimento» in `10_colorSystem/README.md` (`baseline-r1` e
     `baseline-r2`). Gli altri sono registri del passato.
 - **N69 nella galleria: analisi e cura (G-28), 20/10 ✅.** Via del coordinatore alle 13:48; verificata alle 14:2x. Chiesta
-  dal coordinatore alle 13:35, solo analisi; base `15fa228ef`, per fast-forward, pulita. Alle 13:4x il coordinatore ha
+  dal coordinatore alle 13:35, solo analisi; base `8fd43a901`, per fast-forward, pulita. Alle 13:4x il coordinatore ha
   aggiunto che il pallino vale per tutte le scene da admin, e che E scrive le voci di `settings/email` nelle 8 pagine
   della galleria.
   - **Quello che ho verificato nel codice:**
@@ -1598,7 +1598,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - le asserzioni provano che la fixture ha risposto e che non c'è pallino, link o badge;
     - a occhio contro il trio del 18/10 («giorno diverso»): la riga della connessione uguale, il badge sparito, le
       iniziali in `users`, `plugins` senza «Amministrazione».
-  - **Il via, 13:48.** Docs entrati (`e32b53473`, ingresso `a820bd4dd`); worktree avanzato a `a820bd4dd`, pulito.
+  - **Il via, 13:48.** Docs entrati (`864c6f101`, ingresso `7c28cad3b`); worktree avanzato a `7c28cad3b`, pulito.
     Perimetro: la fixture, la riga nel `beforeEach` esterno e le asserzioni della scena; niente testi alternativi né
     pagine della galleria. Valori ricavati dal backend, senza aspettare A: la 1.3 glieli fa guardare al checkpoint.
     Slot dei colori nella 6153 concesso subito. Dopo il riavvio `/tmp/librefolio-r2-g` non c'era.
@@ -1640,7 +1640,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       >   prebuild alle 13:55. Il `satisfies` del `detail: {source: 'generated'}` passa.
     - **Passo 3 — Coppia a/b filtrata:** ✅ 20/10, `files/g28/g28.sh capture a`, poi `capture b`.
       > **Note implementazione**:
-      > - `g28-a-a820bd4dd`: 14:05:56–14:08:36; `g28-b-a820bd4dd`: 14:08:46–14:11:27. Carico da 14 a 39, 4 worker.
+      > - `g28-a-7c28cad3b`: 14:05:56–14:08:36; `g28-b-7c28cad3b`: 14:08:46–14:11:27. Carico da 14 a 39, 4 worker.
       > - Prima di ognuna, `dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-g db populate --force --clean`.
       > - Lo stesso codice nelle due (hash del diff della spec e della fixture: `22673e59570d38f1`). I file cambiati
       >   sono solo quelli di G-28, controllati prima di ogni cattura.
@@ -1663,7 +1663,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - **Passo 4 — Confronto e checkpoint:** ✅ 20/10.
       > **Note implementazione**: il foglio `LibreFolio_visual_review/sheets/g28-2026-10-20/index.html` (5,7 MB, 136
       > immagini). Mette accanto a ogni scatto del 20/10, in italiano nei due temi e nei due schermi, lo stesso del 18/10
-      > (`g-r3-dopo2-cd686f445-full`), «giorno diverso», senza diff di pixel (G-13). Ingrandisce dove starebbe il
+      > (`g-r3-dopo2-574c23cf0-full`), «giorno diverso», senza diff di pixel (G-13). Ingrandisce dove starebbe il
       > pallino: lo scudo della riga su desktop, il pulsante del menu o la riga nel cassetto sul telefono. A occhio:
       > - nessun pallino, in nessuno scatto;
       > - nei dettagli della scena nessun link ai controlli, e la riga identica al 18/10;

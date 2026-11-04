@@ -1,6 +1,6 @@
 """Red-first tests for lot 41 — per-broker P&L lines without jumps at internal transfers.
 
-The defect (portfolio_engine @ d59762e0a). A broker's P&L line is ``P_b = V_b - C_b``,
+The defect (portfolio_engine @ 641ae3239). A broker's P&L line is ``P_b = V_b - C_b``,
 with ``C_b`` the broker's cumulative external cash flow. An internal pair
 (``linked_internal``) carries no external cash flow, so on the arrival day the sender's
 line drops by the moved value and the receiver's line jumps by it: capital moving

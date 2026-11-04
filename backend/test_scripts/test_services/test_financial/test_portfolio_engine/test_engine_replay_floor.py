@@ -14,7 +14,7 @@ novelties, not the days, so the floor protects nothing and hides the first rows'
   built on them (never released) are gone.
 
 - ``TestTheFrameStartsOnTheFirstRow`` — through ``calculate`` on a private in-memory SQLite database. RED on HEAD
-  999f1899e (frame from 1900-01-01): with ``date_from`` None, ``date(1, 1, 1)`` or 1899-06-01, a book whose first row is
+  a4316d9a0 (frame from 1900-01-01): with ``date_from`` None, ``date(1, 1, 1)`` or 1899-06-01, a book whose first row is
   dated 1890-01-01 emits its first state on 1890-01-01 (``date_from`` 1899-06-01: on 1899-06-01, after the first row),
   every day to the end without a gap, the first one holding the 1890 rows (cash 600, the 10 X at their cost of 400,
   capital 1000); a ``date_from`` of 1895-06-01 (after the first row, before the floor) is kept. A later 1890 row acts on

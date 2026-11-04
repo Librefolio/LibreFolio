@@ -8,7 +8,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 
 **Modello**: Sonnet. **Giorni**: 2,5-3,5 (V-37b 1,5-2; #47 1-1,5).
 **Worktree**: **il worktree che l'app ti ha dato; ramo nuovo da `dev_release2`** (NON quello di D `e-alfy-d-dipendenze`, che si archivia). Scrivi nel tuo piano il percorso e il nome del ramo che trovi.
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro).
 **Corsia**: porta `6194`, cartella dati `/tmp/librefolio-r13-w2` (la porta era di D, ora libera: il coordinatore ha chiuso D).
 **Attenzione, worktree nuovo**: non ha `node_modules` e `generated.ts` aggiornati. **Non lanciare `npm ci`** (divieto comune): il primo turno è solo lettura e analisi; prima del primo `front check` o Vitest chiedi al coordinatore `npm ci` + `api sync` e chiudi il turno. Il venv Python è quello condiviso (`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`, mai `pipenv run` nudo da un worktree nuovo).
 **Piano**: **file nuovo tuo**, in `LibreFolio_developer_journal/Release_2/Phase_1/04_importTransactions/` accanto al piano di W, ma **non** dentro il piano di W (un solo scrittore per file): `plan-phase01Step2TransactionForm-W2.prompt.md` (nome provvisorio, il coordinatore può rinominarlo), con link al piano di W (`plan-phase01ImportTransactions.prompt.md`). Riferimenti: `PROSSIMI_LAVORI.md:129-143` (V-37b) e `:567-580` (#47); backlog V-37b ~2104. Skill: `design-system`, `devpy-i18n`, `testing-frontend`.

@@ -1,9 +1,9 @@
 # A — Asset Global · piano vivo post-merge (Release 2)
 
-> **Segue** [`A-esecuzione.md`](./A-esecuzione.md) (round 3, fasi 1–2, chiuso in `032b86959`).
+> **Segue** [`A-esecuzione.md`](./A-esecuzione.md) (round 3, fasi 1–2, chiuso in `e38ae2300`).
 > **Mandato**: A — *livelli di confronto per-asset di Asset Global*.
 > **Coordinator**: sessione `c8328a01-f208-4ade-a352-0486d1f14de2` (Release 2 backlog analysis).
-> **Baseline**: `f1047f766` ✅ verificata con `git rev-parse` · 23/09/2026 10:36:51 CEST · albero pulito.
+> **Baseline**: `9df0b7b14` ✅ verificata con `git rev-parse` · 23/09/2026 10:36:51 CEST · albero pulito.
 > **Approvazione**: piano approvato dal developer il 23/09/2026, test list T1/T2 compresa.
 > **Lane**: suite `6153` · `/tmp/librefolio-r2-a` — copia di prod `6163` · `/tmp/librefolio-r2-a-prodcopy`.
 > **Credenziali della copia**: fornite dal developer, **deliberatamente non registrate qui**.
@@ -100,7 +100,7 @@
 
 > **🔴 Reperto fuori perimetro — il cancello privacy non lo esegue nessuno.** `check-orphans` sulla
 > baseline trova **7 orfani**: i miei due (attesi) e **cinque di J**, tutti arrivati col merge
-> privacy del 22/09 (`b66e93003` e seguenti): `privacyStore.test.ts`, `privacyStoreSsr.test.ts`,
+> privacy del 22/09 (`9d9613471` e seguenti): `privacyStore.test.ts`, `privacyStoreSsr.test.ts`,
 > `currencyFormat.test.ts`, `maskable.test.ts` e **`moneyRenderSites.test.ts`** — cioè proprio il
 > cancello che *«testa la premessa della regola»* privacy. Esiste, è verde se lo lanci a mano (l'ho
 > fatto il 22/09), e **nessuna azione di `dev.py test` lo lancia**. È la forma R2-19 esatta:
@@ -273,7 +273,7 @@ Stessa riserva, stesso owner, nessun verdetto.
 > *«Sopra la retta significa pagato meglio per il rischio preso»*. Sulla Dashboard è vero: la retta
 > c'è. **Sulla mia pagina la retta è impossibile per costruzione** — e la frase rimetteva **a
 > parole** esattamente il giudizio che la forma del payload rende inesprimibile. Tutti i cancelli
-> verdi: chiave presente, ICU valido, referenziata. È la mia fase 2 (`032b86959`).
+> verdi: chiave presente, ICU valido, referenziata. È la mia fase 2 (`e38ae2300`).
 > - **Rete prima**: in `assetSetI18n.test.ts` un blocco *«L3° never describes a line it cannot
 >   draw»* che legge **dal sorgente del componente** quale chiave rende la nota (così segue il
 >   componente se cambia chiave), con **controllo positivo** (la nota di portafoglio deve essere
@@ -368,7 +368,7 @@ Stessa riserva, stesso owner, nessun verdetto.
 
 ---
 
-> **Stato**: piano, nessuna riga di codice. **Baseline verificata**: `f1047f766`, pulita,
+> **Stato**: piano, nessuna riga di codice. **Baseline verificata**: `9df0b7b14`, pulita,
 > 23/09 10:36:51 CEST. Porte `6153`/`6163` libere, `/tmp/librefolio-r2-a*` assenti (reboot).
 > **Perimetro di A dalla tabella nuova**: *livelli di confronto per-asset di Asset Global*.
 
@@ -380,9 +380,9 @@ Stessa riserva, stesso owner, nessun verdetto.
 
 | revisione | cosa registra il mio piano vivo (tracciato) |
 |---|---|
-| `daa03c0f2` · 21/09 19:23 | `front-portfolio risk-lab` ✅ **6/6** — «da non eseguibile a verde» |
-| `032b86959` · 21/09 21:57 | `front-portfolio risk-lab` ✅ **11/11 (erano 6)** |
-| `032b86959` → `f1047f766` | spec **byte-identico**: `git diff --stat` vuoto, 2057 righe entrambi |
+| `1b0032eae` · 21/09 19:23 | `front-portfolio risk-lab` ✅ **6/6** — «da non eseguibile a verde» |
+| `e38ae2300` · 21/09 21:57 | `front-portfolio risk-lab` ✅ **11/11 (erano 6)** |
+| `e38ae2300` → `9df0b7b14` | spec **byte-identico**: `git diff --stat` vuoto, 2057 righe entrambi |
 
 **Vero è solo**: *mai eseguito sull'albero integrato* (dopo D/I/J). L'istruzione del developer —
 *farlo girare prima di aggiornarlo* — resta giusta. **La premessa «rimasto super indietro» no**.
@@ -417,7 +417,7 @@ registro: ragionamento corretto sul pezzo che non decide.
 ### 0.3 Minore — R1 punta a `:163`, il sorgente è `:138`
 
 `:163` è il frame a runtime della console; nel sorgente la chiamata è
-`AssetSetLossComparisonSection.svelte:138`. File invariato da `032b86959`.
+`AssetSetLossComparisonSection.svelte:138`. File invariato da `e38ae2300`.
 
 ---
 
@@ -470,8 +470,8 @@ pannello»* prende la regressione anche sotto maschera, qualunque forma J scelga
 
 ### §1.7 / §2.3 — `panelTitle`: **di F, non mia**
 
-Introdotta da F in `f2ad97dd4` (18/09, verificato). Io l'ho resa orfana smontando il monolite
-(`daa03c0f2`), ma la chiave e la sua gestione di fine round sono di F. **Nessuna azione mia**, e per
+Introdotta da F in `9ea2726ce` (18/09, verificato). Io l'ho resa orfana smontando il monolite
+(`1b0032eae`), ma la chiave e la sua gestione di fine round sono di F. **Nessuna azione mia**, e per
 decisione del developer non si cancella ora. (Nessuna **mia** chiave viva è dichiarata morta.)
 
 ### §2.6 — deriva di commenti: le mie due sono **in file di F**
@@ -644,7 +644,7 @@ N giorni» della peggior discesa non veniva resa (sintassi di traduzione errata)
 
 ## Passo 8 — correzione post-commit: la regola della finestra · ✅ 24/09/2026
 
-> **Baseline**: `f7bf5a85d` (checkpoint committato: `e0364c535` → `e2327e9a3` → `f7bf5a85d`, 9+3+2
+> **Baseline**: `098150743` (checkpoint committato: `e9cb26fcc` → `68d97a1e5` → `098150743`, 9+3+2
 > file), albero pulito. Scongelato **solo** per questo commit: la pagina utente e questo piano.
 
 > **Note implementazione**:
@@ -695,7 +695,7 @@ N giorni» della peggior discesa non veniva resa (sintassi di traduzione errata)
 
 ## Chiusura — allineamento 09/10/2026 (scritta da Risk)
 
-Le voci passate a Risk qui sopra, sul codice di `3cceb4f90`:
+Le voci passate a Risk qui sopra, sul codice di `f545b67e3`:
 - la baseline fra i punti riportati: ✅ la guardia c'è (`backend/app/services/series_preparation.py`);
 - l'**inizio tardivo** che non si vede: ⏳ **aperto**, nessun lettore di `baseline_inside_requested_range` e
   `short_history` nel frontend → README della cartella, aperti;

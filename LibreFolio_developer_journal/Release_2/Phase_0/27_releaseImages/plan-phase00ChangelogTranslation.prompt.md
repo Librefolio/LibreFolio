@@ -124,11 +124,11 @@ runner registration); the cache sandbox points the changelog at `tmp_path`.
    > `deepseek-ai/DeepSeek-V4.1-Flash`): 25 pieces × 3 = 75 translations, 0 failed, 38 min 59 s, estimate ~1.05M tokens;
    > `CHANGELOG.{it,fr,es}.md` with 5 units each (preamble, 1.2.0, 1.1.0, 1.0.1, 1.0.0), chapter lines identical; the
    > post-step reported no structural issue. Then `translate-validate` 0/0, `translate-diff` 642/642 (627 pages + 15
-   > chapters), dry-run «nothing to translate». The branch had been fast-forwarded to `094c92b99` (train 59, with its
+   > chapters), dry-run «nothing to translate». The branch had been fast-forwarded to `8f7729aca` (train 59, with its
    > two CHANGELOG lines) at 15:42, before the run: the run read that English. Log `release-pipeline/runs/b25/b25_translate.log`
    > (12 «sk-» matches, all the piece key `risk-analysis…`; no key).
 6. ✅ Review of the output (labels against the catalogues, the glossary, the structure); hand fixes; stamp — 2026-10-12 17:02.
-   > **Note implementazione** (after the fast-forward to `bd8ee8e4d`, train 61: T's frontend and
+   > **Note implementazione** (after the fast-forward to `6982a51f9`, train 61: T's frontend and
    > `about.en.md`, U-1; `CHANGELOG.md` unchanged, the dry-run still empty for it): `release-pipeline/scripts/b25_changelog_review.py`
    > (bold spans paired piece by piece against the UI catalogues; batch 11's glossary rules; English lines left). First
    > pass: 21 labels differing, 17 glossary hits, 5 pieces with unequal bold counts, 0 English lines. Fixed by
@@ -150,9 +150,9 @@ runner registration); the cache sandbox points the changelog at `tmp_path`.
    >   watches): `translate-stamp --file user/settings/about.en.md`, it/fr/es. Then `translate --dry-run`: «Nothing to
    >   translate» for the pages, «nothing to translate» for the CHANGELOG.
 7. ✅ The widened M-19 line. The coordinator wrote the new ending in English («online, every one of those pages called
-   a third-party server», `e9bc300f0`). After the fast-forward, M ported that piece by hand into it/fr/es, then ran
+   a third-party server», `b7d548d7d`). After the fast-forward, M ported that piece by hand into it/fr/es, then ran
    `translate-stamp --file CHANGELOG.md` — 2026-10-12 17:33.
-   > **Note implementazione**: the coordinator fast-forwarded the branch to `0afac8e14` (train 64), with 103 files and
+   > **Note implementazione**: the coordinator fast-forwarded the branch to `bb1696929` (train 64), with 103 files and
    > no overlap with M's dirty paths but one: `BACKLOG_POST_1.2.md`. The target had added its own hunks, and V's 67
    > lines in section V, above and below section M. Git refuses a fast-forward over a locally modified file it changes,
    > so M resolved it with no Git write:
@@ -229,7 +229,7 @@ runner registration); the cache sandbox points the changelog at `tmp_path`.
    >   17:23). No command of M's failed. The Prettier step left the gates and came back, and the spec's run in M's
    >   lane moved after the fast-forward.
 9. ✅ Gates, checkpoint — 2026-10-12 17:50.
-   > **Note implementazione** (base `0afac8e14`, train 64; script `release-pipeline/scripts/b25_final_gates.sh`, logs
+   > **Note implementazione** (base `bb1696929`, train 64; script `release-pipeline/scripts/b25_final_gates.sh`, logs
    > `runs/b25/b25_final_*`, the machine's load beside each step, 65–148):
    > - `--workers 4 utils all`: 32 units, 1,861 passed, 0 failed (121 s). That is the run before plus the reds fixed
    >   and 39 new cases.
@@ -251,8 +251,8 @@ runner registration); the cache sandbox points the changelog at `tmp_path`.
    >   - **Negative control**: with the site's `vendor/mathjax/output/` renamed away, both fail on the font assertion
    >     with its message («a 404 there is a font the site does not have: ./dev.py cache js, then ./dev.py mkdocs
    >     build»). The folder was restored (22 fonts) and the spec parked again; 6158 and 6168 are free.
-10. ✅ The first append, batch 26 — 2026-10-12 18:00. Committed: batch 25 is `2aecd5a6f`…`81e221f4e` (tree
-    `8c50c8df95eb`), train 66; the branch fast-forwarded to `b91d6d902`, which adds one line to [1.2.0] → ✨ Added,
+10. ✅ The first append, batch 26 — 2026-10-12 18:00. Committed: batch 25 is `6b64b5daf`…`1c7d1c22e` (tree
+    `8c50c8df95eb`), train 66; the branch fast-forwarded to `331cc6474`, which adds one line to [1.2.0] → ✨ Added,
     after «Connection security in the sidebar»: «**The changelog speaks your language.** …, marked “Not translated
     yet”.»
     > **Note implementazione**: the dry-run planned `CHANGELOG.md#1.2.0/added` ×3, ~50.4K tokens each. A model run
@@ -325,7 +325,7 @@ runner registration); the cache sandbox points the changelog at `tmp_path`.
     >
     > So **the red is shown**. Then it stopped, idle. Ports 6158, 6168 and 6042 free; no process of M's lane running.
     >
-    > **After «riparti»** (19:24, base `0c8412745`, train 67):
+    > **After «riparti»** (19:24, base `b74c81cfc`, train 67):
     > - **The cure.** The draft went into `changelog.ts`: the typesetting section and its two exports, the module
     >   comment, and `TYPESETTERS` (`fr` → `typesetFrenchMarkdown`), applied in `load()` before `parseChangelog()`.
     >   Prettier clean.
@@ -341,7 +341,7 @@ runner registration); the cache sandbox points the changelog at `tmp_path`.
     >   - the frontend's ten opaque elements, not the hook's extra `iframe`/`noembed`/`noframes`/`xmp`/formulas, which a
     >     changelog never holds.
     > - **Backlog:** M-23 ✅ «nella 1.2, M».
-    > - **Gates on `a5653f9ef`** (train 68, T's CP1 of M-18 in; script `release-pipeline/scripts/b27_final_gates.sh`,
+    > - **Gates on `78101574b`** (train 68, T's CP1 of M-18 in; script `release-pipeline/scripts/b27_final_gates.sh`,
     >   logs `runs/b27/b27_final_*`, load 33–52):
     >   - `front-utility core-unit`: 124 files, 3,961 passed;
     >   - `check-orphans` clean (109 e2e specs, 352 unit tests);

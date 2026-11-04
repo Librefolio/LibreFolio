@@ -1,6 +1,6 @@
 # B · CHECKPOINT READY — B4, B-33, B5, SEC-2 (22/10/2026)
 
-Worktree `e-alfy-miniature-telegram`, ramo `e-alfy-b-backup-e-docker`, HEAD `3c89f6f86`. Nessuna operazione git.
+Worktree `e-alfy-miniature-telegram`, ramo `e-alfy-b-backup-e-docker`, HEAD `533fbe8c1`. Nessuna operazione git.
 In totale: 17 file tracciati modificati + 3 nuovi. Esclusi dal commit: il client generato, `site/` di mkdocs, i log in
 `ondata4/`.
 

@@ -3,7 +3,7 @@
 > **A cosa serve (per il developer).** Oggi gli indicatori tecnici (medie mobili, RSI, bande…) si disegnano con **un solo codice** nelle schede della lista e nell'anteprima delle impostazioni (Y-39a), ma le due **pagine di dettaglio** (asset e cambio) hanno ancora un codice loro. Con Y-42 tutte e quattro usano lo stesso: un indicatore appare identico in lista, anteprima e dettaglio, e una correzione futura si fa in un posto solo invece che in tre. L'utente non vede differenze, se non che i casi oggi diversi diventano uguali.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-cuddly-engine` · **Branch**: `e-alfy-x-plugin-asset-e-ricerca`
-**HEAD di partenza (da verificare)**: il coordinatore ha committato la tua sezione di piano rimasta sporca (+25 righe in `03_pluginsAssets/plan-phase01PluginsAssets.prompt.md`) e ha fuso `dev_release2` (`2879ae3e4`) nel tuo ramo (era 244 commit indietro): lo SHA esatto è nel messaggio d'avvio. `npm ci` fatto per Linux.
+**HEAD di partenza (da verificare)**: il coordinatore ha committato la tua sezione di piano rimasta sporca (+25 righe in `03_pluginsAssets/plan-phase01PluginsAssets.prompt.md`) e ha fuso `dev_release2` (`85fda260e`) nel tuo ramo (era 244 commit indietro): lo SHA esatto è nel messaggio d'avvio. `npm ci` fatto per Linux.
 **Corsia**: porta `6191`, cartella dati `/tmp/librefolio-r13-x`.
 **Piano e backlog**: Y-42 nel backlog `Phase_0/BACKLOG_POST_1.2.md` (~9860-9870) e nel piano di Y `09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` (~8017, «Fuori dal lotto… Y-42»). Il tuo piano: `03_pluginsAssets/plan-phase01PluginsAssets.prompt.md` (leggi solo la tua sezione più recente).
 

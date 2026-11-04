@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | `../F2-primitive-e-contratto.md` ⚠️ **non ancora consegnato** — lavoro dal kickoff |
 | Branch | `e-alfy-risk-primitives-cards` |
-| Baseline | `2ec19b8f0644eeab3d1b96efa52e6c183a8f807f` ✅ verificata |
+| Baseline | `b9d004255b4caaefc1ba100c70fed01f34b07cc1` ✅ verificata |
 | Lane | porta `6152` · data dir `/tmp/librefolio-r2-f2` |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 
@@ -338,7 +338,7 @@ sto chiudendo. Si solleva **solo la metà rivolta al chiamante**: props + regola
 
 ---
 
-## 🔴 Baseline rossa — `2ec19b8f0`, non causata da F2
+## 🔴 Baseline rossa — `b9d004255`, non causata da F2
 
 `AssetModal.providerLifecycle.test.ts` → **2 test rossi**, una sola causa.
 
@@ -352,7 +352,7 @@ expected [ { asset_id: 8101, …(15) } ] to strictly equal [ { …(14) } ]
 |---|---|
 | **non è mio codice** | il primo giro girava col catalogo **senza** i miei file; `git status` mostrava solo 3 percorsi **untracked** |
 | **è deterministico** | in isolamento: `1 failed \| 1807 skipped`. **Fallisce da solo** → non è ordinamento né parallelismo |
-| **causa** | `00d8c735b feat(assets): add benchmark flag and risk taxonomy` aggiunge `is_benchmark` al payload (`AssetModal.svelte:1341,:1479`) |
+| **causa** | `7bb84d4fc feat(assets): add benchmark flag and risk taxonomy` aggiunge `is_benchmark` al payload (`AssetModal.svelte:1341,:1479`) |
 | **lo spec non lo sa** | `grep -c is_benchmark AssetModal.providerLifecycle.test.ts` → **0** |
 | **il 2º rosso è a cascata** | l'assert a `:1033` lancia → il click che farebbe partire `save assignment` non avviene mai → risulta «unconsumed» |
 
@@ -399,7 +399,7 @@ frontend/.gitignore:13
 ```
 
 **`generated.ts` è ignorato**, quindi non viaggia col merge e **`git status` non può
-mostrarlo**. Il coordinatore mi aveva portato a `2ec19b8f0` con un fast-forward pulito,
+mostrarlo**. Il coordinatore mi aveva portato a `b9d004255` con un fast-forward pulito,
 e il client era rimasto quello di prima. Sei worktree su otto erano nello stesso stato.
 
 > Avevo controllato che **`git status` fosse pulito** e ne avevo dedotto che l'albero
@@ -461,7 +461,7 @@ che quel rosso non dipendeva dalla staleness.
 
 | Comando | Esito |
 |---|---|
-| `git rev-parse HEAD` | `2ec19b8f0644eeab3d1b96efa52e6c183a8f807f` ✅ combacia |
+| `git rev-parse HEAD` | `b9d004255b4caaefc1ba100c70fed01f34b07cc1` ✅ combacia |
 | `… front-utility component-unit` *(prima della registrazione)* | ❌ **69 file / 1808 test**, 2 rossi — identico alla baseline: **i miei file non erano raccolti** |
 | `… component-unit "saves with pending verification and pending metadata"` | ❌ `1 failed \| 1807 skipped` — **il rosso di baseline fallisce anche da solo** |
 | `… component-unit "RiskCardGrid"` | ✅ **`7 passed`** · `1 passed \| 69 skipped (70)` · exit 0 |

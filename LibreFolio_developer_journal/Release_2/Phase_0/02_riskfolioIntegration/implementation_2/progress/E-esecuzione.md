@@ -2,7 +2,7 @@
 
 > **Mandato**: round 3, campagna Risk Analysis. Togliere il banner beta da L1/L2/L3 e da
 > Asset Global, lasciarlo sul **solo gradino simulazione di L4** (D46 / Q4).
-> **Baseline**: `032b86959f783aec6ef784ff565027947435c71d` ✅ verificata con `git rev-parse HEAD`.
+> **Baseline**: `e38ae23000cbc9cc1e752a5e79f152be7447814c` ✅ verificata con `git rev-parse HEAD`.
 > **Corsia**: `--test-port 6174` · `--data-dir /tmp/librefolio-r3-e`.
 > **Piano d'analisi approvato dal coordinatore.** Opzione **A** per il testo (raccomandata,
 > approvata implicitamente con il piano) — **vetabile**, vedi §Decisioni.
@@ -385,22 +385,22 @@ aggiunte annidate** — quindi non spostano le righe su cui lavora lui.
 
 ## FROZEN
 
-**21 Settembre 2026.** Baseline `032b86959`. Nessun commit, merge, rebase, push, reset o
+**21 Settembre 2026.** Baseline `e38ae2300`. Nessun commit, merge, rebase, push, reset o
 `checkout --` eseguito dal mandato. Lavoro messo in stage e commesso dal coordinatore.
 Corsia `6174` / `/tmp/librefolio-r3-e`: **server spento, cartella dati buttata.**
 
 ### Atterraggio
 
 ```
-c57fc7ef2   feat(risk): take the beta banner off the levels that have left beta   (10 file, +476 / −23)
-7d50fe4fe   linea di integrazione, tutto il round 3 dentro
+1405d2764   feat(risk): take the beta banner off the levels that have left beta   (10 file, +476 / −23)
+6a2987d31   linea di integrazione, tutto il round 3 dentro
 ```
 
 Cancelli rimisurati dal coordinatore **sulla revisione fusa**: `front check` 3 ereditati, zero
 in un file risk · `tsc e2e` 0 in `e2e/portfolio/` · **14 · 11 · 2** (Asset Detail ferma) ·
 `check-orphans` zero orfani · `api risk` 11 · `services risk-all` 441.
 
-⚠️ **Una modifica non commessa resta sopra `c57fc7ef2`**: la correzione qui sopra all'ipotesi
+⚠️ **Una modifica non commessa resta sopra `1405d2764`**: la correzione qui sopra all'ipotesi
 `api sync`, falsificata dopo la fusione. **Riguarda solo questo file**, nessun file di
 prodotto. Da mettere in stage al prossimo giro — **o da lasciare, ma non da dimenticare**: una
 causa falsificata lasciata in un documento permanente è esattamente il debito che Ⓗ descrive,

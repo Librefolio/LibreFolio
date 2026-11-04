@@ -2,12 +2,12 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-sturdy-memory`
 **Branch**: `e-alfy-h-piattaforma`
-**HEAD di partenza (da verificare)**: `8db27b418` (merge di `dev_release2` `208199bf6` nel tuo ramo; genitori `f9f417bfa` e `208199bf6`).
+**HEAD di partenza (da verificare)**: `69eccfc41` (merge di `dev_release2` `84ccb8116` nel tuo ramo; genitori `9feab18c5` e `84ccb8116`).
 **Corsia**: porta `6181`, cartella dati `/tmp/librefolio-r13-h`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/01_platform/plan-phase01Platform.prompt.md`. Leggi solo queste sezioni: «Lotto H-61: Hosting panel» (riga ~9655), «H-61, il via e le decisioni (20/10, 11:43) — passi del checkpoint 1», «H-61, checkpoint 2 … preparazione» (riga ~10079).
 
 ## Dove eri rimasto
-Il 20/10 hai chiuso L1 del pannello (token per scopo, limite, log, tag «Hosting panel», controllo `platform.hosting_panel`, Q5 sulla sospensione) e il coordinatore l'ha committato come **checkpoint intermedio** (`e917659c9`) con **rossi voluti**: `api panel-status` 20, `api hosting-panel-routes` 4 su 15, `api instance-block` 1, perché mancava R1. Poi ha portato nel tuo ramo il pezzo di A (`admin_setup_status()`, commit `64b8b9fa3`) e, oggi, `dev_release2` (che contiene anche `frontend/e2e/fixtures/gallerySecurity.ts` di G). Non ci sono lavori tuoi sporchi tranne 3 file di test **non tracciati** di CP2 (`test_services/test_hosting_panel_{tickets,registry,access_tickets}.py`): **lasciali dove sono, non li toccare, non li lanciare**.
+Il 20/10 hai chiuso L1 del pannello (token per scopo, limite, log, tag «Hosting panel», controllo `platform.hosting_panel`, Q5 sulla sospensione) e il coordinatore l'ha committato come **checkpoint intermedio** (`fb5bfb6d3`) con **rossi voluti**: `api panel-status` 20, `api hosting-panel-routes` 4 su 15, `api instance-block` 1, perché mancava R1. Poi ha portato nel tuo ramo il pezzo di A (`admin_setup_status()`, commit `3c13d5040`) e, oggi, `dev_release2` (che contiene anche `frontend/e2e/fixtures/gallerySecurity.ts` di G). Non ci sono lavori tuoi sporchi tranne 3 file di test **non tracciati** di CP2 (`test_services/test_hosting_panel_{tickets,registry,access_tickets}.py`): **lasciali dove sono, non li toccare, non li lanciare**.
 
 ## Cosa fare ora (un solo lotto: chiudere il checkpoint 1)
 1. **Rileggi da solo i file fusi** da A e da `dev_release2` (le tre doc che toccavate entrambi: `admin/settings.en.md`, `developer/architecture/security.md`, `developer/architecture/settings.md`, più `access_control.md`). Se qualcosa non torna, dillo.

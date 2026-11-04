@@ -1,8 +1,8 @@
 # Asset data operations — bond classification, distribution CSV, delete links
 
 **Avvio:** 2026-09-10. **Owner:** workstream F coordinato da Release 2.
-**Stato:** ✅ COMPLETATO 2026-09-10 · codice in `e50d66408` (A1, A2, B3) e `cc57b6a38` (rifinitura dell'import CSV, 2026-09-11) · developer-reviewed (`09_feedbackJobs/03_asset_dati_classificazione.md:77-78`, `04_brim_import.md:120`) · verificato sul codice il 2026-10-09 (Q, base `3cceb4f90`) e archiviato in `Release_2/phases/`.
-**Baseline:** `8b99e0020c92a945daf0821ee0654a0a2a21efd0`
+**Stato:** ✅ COMPLETATO 2026-09-10 · codice in `904fddc6e` (A1, A2, B3) e `aa30eac00` (rifinitura dell'import CSV, 2026-09-11) · developer-reviewed (`09_feedbackJobs/03_asset_dati_classificazione.md:77-78`, `04_brim_import.md:120`) · verificato sul codice il 2026-10-09 (Q, base `f545b67e3`) e archiviato in `Release_2/phases/`.
+**Baseline:** `ec9ae2afc66d36649f538bb05f56ffb51285939e`
 (`dev_release2`).
 **Scope:** SP03 A1, A2 e B3 da
 [`06_piano_sprint.md`](../../Phase_0/09_feedbackJobs/06_piano_sprint.md).
@@ -50,7 +50,7 @@ cronologia.
 - [x] Creare questo piano prima di modificare codice.
 
 > **Note implementazione (2026-09-10):** HEAD esatto
-> `8b99e0020c92a945daf0821ee0654a0a2a21efd0`, branch
+> `ec9ae2afc66d36649f538bb05f56ffb51285939e`, branch
 > `e-alfy-asset-data-operations`, worktree pulito. Il grafo devWiki ignorato non
 > e' disponibile nel worktree; consultate direttamente le pagine committed
 > `data-editor-unification` e `F-095`. Tool C e PAC D non toccano le superfici
@@ -234,7 +234,7 @@ cronologia.
 - [x] Aggiungere/regolare il test minimo e rieseguire gate component/format. ✅ 2026-09-10
   > **Note implementazione** (verifica Q del 2026-10-09): `frontend/src/lib/components/ui/data-editor/DataEditor.test.ts:365-377` («blocks duplicate canonical identities»), con il testo `duplicate names`.
 - [x] Inviare delta/evidenza al coordinatore e tornare FROZEN. ✅ 2026-09-10
-  > **Note implementazione** (verifica Q del 2026-10-09): assorbito dal checkpoint finale del §10 (riga «Validare, inviare checkpoint e tornare FROZEN»); il codice è entrato con `e50d66408`.
+  > **Note implementazione** (verifica Q del 2026-10-09): assorbito dal checkpoint finale del §10 (riga «Validare, inviare checkpoint e tornare FROZEN»); il codice è entrato con `904fddc6e`.
 
 ## 9. Detour post-integrazione — cost basis FX
 

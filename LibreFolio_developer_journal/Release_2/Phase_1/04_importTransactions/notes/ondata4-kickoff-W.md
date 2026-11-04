@@ -5,7 +5,7 @@
 > **Poi, W-BS.** Per i plugin BRIM i segreti sono improbabili e i parametri molto più probabili (esempio: «formato della data» per il CSV generico), ma il sistema deve **supportare tutto** se un giorno arriva: parametri e segreti, impostazioni personali e d'istanza, segreti cifrati con la chiave d'istanza. Oggi solo i provider di prezzi e cambi possono dichiarare impostazioni (`services/plugin_settings/`, CP10 di X): un plugin BRIM che ci provasse sarebbe rifiutato («the plugins of BRIMProviderRegistry cannot declare settings»). Con W-BS la strada è **predisposta**: una famiglia `brim` accanto ad `asset` e `fx`, con le stesse regole di `asset`; un plugin BRIM che dichiara un campo compare da solo nella scheda Plugin come gli altri, e un segreto non torna mai in chiaro. **Non si realizza nessun campo adesso**: finché nessun plugin dichiara nulla, l'utente non vede differenze.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fluffy-meme` · **Branch**: `e-alfy-w-import-e-transazioni`
-**HEAD di partenza (da verificare)**: `c042f2481` (fast-forward dal coordinatore da `fe9e48bee`).
+**HEAD di partenza (da verificare)**: `295a09c86` (fast-forward dal coordinatore da `69693694a`).
 **Corsia**: porta `6183`, cartella dati `/tmp/librefolio-r13-w`.
 **Piano e analisi**: `04_importTransactions/plan-phase01ImportTransactions.prompt.md`, «N78-1 · Una rettifica in uscita non ha valore: cura» (~8428; la domanda 1k alla ~8498); la tua analisi `salvataggi-worktrees-20261021/ondata3/N78-1-analisi.md` (§8 le decisioni); backlog W-B93 (`:6878-6885`).
 **Modello**: Sonnet (la cura di Q-N78-1k la rivede MF su Opus).

@@ -4,7 +4,7 @@
 
 ## Stato e autorizzazione
 
-**Baseline worktree:** `4a9ae876e4599b5fdec5ade512b65b9c31a584a5` più il delta
+**Baseline worktree:** `b451104361df9394ba4fcfef20f85e173dc54281` più il delta
 onboarding Foundation/Round 1 non committato.
 
 **Autorizzazione developer relayed verbatim dal coordinator, 2026-09-11:**

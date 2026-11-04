@@ -1,8 +1,8 @@
 # Piano Phase 00 — BRIM Danske Bank: pilota multi-report + fix della codifica CSV
 
 **Creato**: 2026-09-28
-**Stato**: ✅ chiuso (verifica del 2026-10-09 su `3cceb4f90`). Il pilota Danske e il framework dei report set sono integrati in `dev_release2`, attraverso i passi 4–9 dei piani accanto. Restano solo rinvii decisi, nel backlog dopo la 1.2 (§12).
-**Baseline/target**: `ea30d5ccf99e918a84ebd49bd5e65fb0f50a9628` (`dev_release2`), HEAD verificato
+**Stato**: ✅ chiuso (verifica del 2026-10-09 su `f545b67e3`). Il pilota Danske e il framework dei report set sono integrati in `dev_release2`, attraverso i passi 4–9 dei piani accanto. Restano solo rinvii decisi, nel backlog dopo la 1.2 (§12).
+**Baseline/target**: `953f8ab71f0769d15a07058aac933923bf73ff94` (`dev_release2`), HEAD verificato
 **Workstream**: L — ramo `e-alfy-l-danske-bank`, worktree `LibreFolio-worktrees/e-alfy-shiny-train`
 **Coordinator**: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`
 **Runtime lane**: porta `6156`, data dir `/tmp/librefolio-r2-l` (la porta di review `6166` non si usa)
@@ -238,7 +238,7 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 > - Controllo dei valori sui file copiati: presenti solo i segnaposto dell'autore (`ACCOUNT_HOLDER_NAME`, `Account_number`), nessuna data né importo reale.
 >
 > **⚠️ Fuori pista**:
-> - La baseline iniziale non coincideva: il worktree era nato da `origin/dev_release2`, 35 commit indietro. Il coordinatore ha preparato il fast-forward a `ea30d5ccf`, poi verificato.
+> - La baseline iniziale non coincideva: il worktree era nato da `origin/dev_release2`, 35 commit indietro. Il coordinatore ha preparato il fast-forward a `953f8ab71`, poi verificato.
 > - Il perimetro è cresciuto su decisione del developer: documento di design dei set, poi il pilota.
 > - Un messaggio del coordinatore ha riportato la sessione in plan mode, e il piano è stato riapprovato dal developer.
 
@@ -335,11 +335,11 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 >
 > | Commit | Oggetto | File |
 > |---|---|---|
-> | `6ea71ea8d` | fix(brim): fall back to cp1252 for CSV exports | 3 |
-> | `9d9c26d0d` | fix(brim): read CSV plugins via the base reader | 30 |
-> | `28eca0dde` | docs(journal): plan the Danske Bank importer | 4 |
+> | `35db1061f` | fix(brim): fall back to cp1252 for CSV exports | 3 |
+> | `dbe2f7276` | fix(brim): read CSV plugins via the base reader | 30 |
+> | `76b43f693` | docs(journal): plan the Danske Bank importer | 4 |
 >
-> **Merge di allineamento** `1110f2aa7` (developer, 14:00): genitori `28eca0dde` e `7c61dd924` (`dev_release2` con K), albero `53ba0fd4`. Da K arrivano `AssetType.CROWDFUND_REAL_ESTATE`, due scenari di stress, e nel frontend la select dei tipi, le icone e il wizard d'import. Nessuna superficie BRIM toccata.
+> **Merge di allineamento** `0e03de161` (developer, 14:00): genitori `76b43f693` e `9a0e4ff18` (`dev_release2` con K), albero `53ba0fd4`. Da K arrivano `AssetType.CROWDFUND_REAL_ESTATE`, due scenari di stress, e nel frontend la select dei tipi, le icone e il wizard d'import. Nessuna superficie BRIM toccata.
 >
 > **Gate dopo il merge** (lane `6156`, un comando per volta):
 >
@@ -366,21 +366,21 @@ Il set rende esplicita questa realtà. Lo schema qui sotto è il contenuto che i
 >
 > | Commit | Oggetto | Contenuto |
 > |---|---|---|
-> | `e892e2e0e` | test(runner): describe brim-provider-base scope | 1 file |
-> | `dafff60da` | docs(brim): fake asset IDs are high positive | skill e istruzione |
-> | `c9ad3bb03` | docs(journal): record Danske step 1 commits | piano |
+> | `28ec3704d` | test(runner): describe brim-provider-base scope | 1 file |
+> | `bc7c73648` | docs(brim): fake asset IDs are high positive | skill e istruzione |
+> | `66a0fa6d7` | docs(journal): record Danske step 1 commits | piano |
 
 ### 1c. ✅ Fix del 422 nell'upload dalla pagina file e dal dettaglio broker — 2026-09-30
 
 Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corregge subito dopo la pausa del venv, in un commit a sé con prima il test rosso, senza aspettare il design».
 
-- **Il bug.** `POST /brokers/import/upload` chiede `broker_id` nel form (`Form(...)`, dal commit `eb78aacdb` del 15/06). Due chiamanti lo mandano ancora nella query (`?broker_id=`):
+- **Il bug.** `POST /brokers/import/upload` chiede `broker_id` nel form (`Form(...)`, dal commit `f8f413bb0` del 15/06). Due chiamanti lo mandano ancora nella query (`?broker_id=`):
   - `BrokerImportFilesModal.svelte:124`, la modale «storico import» del dettaglio broker;
   - `files/+page.svelte:511`, la scheda BRIM della pagina file.
 
   Risultato: 422 a ogni upload da lì, dalla v0.9.0 alla v1.1.0 rilasciata. Il wizard è corretto. Nessun test lo copriva: i test API e l'E2E caricano già con il form.
 - **Perimetro.** La cura, e solo quella, più quattro `data-testid` per i test; `batch_id` e CHANGELOG restano fuori. Dopo i test rossi del test-author, nei due spec già registrati (`brokers/brokers-detail.spec.ts` → `front-broker detail`; `files.spec.ts` → `front-utility files`).
-- **Base**: merge `183ce7b3d` (`dev_release2` in L, developer). `npm ci` autorizzato dal coordinatore.
+- **Base**: merge `1606ce7d0` (`dev_release2` in L, developer). `npm ci` autorizzato dal coordinatore.
 
 **Passi**
 1. ✅ `npm ci` (una volta, dal lock): exit 0. Avviso di npm 11 sugli script d'installazione non approvati (esbuild, fsevents, es5-ext): nessuna azione.
@@ -425,10 +425,10 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 >
 > | Commit | Dove | Oggetto |
 > |---|---|---|
-> | `f82eaa020` | ramo di L | fix(brim): send broker_id in upload form |
-> | `7a6c772a4` | ramo di L | docs(brim): record the upload 422 fix |
-> | `0743b9f44` | `dev_release2` | cherry-pick `-x` di `f82eaa020`, stesso diff |
-> | `b1835949e` | `dev_release2` | voce 🐛 Fixed del CHANGELOG, scritta dal coordinatore |
+> | `c043383f6` | ramo di L | fix(brim): send broker_id in upload form |
+> | `2b7d41cf9` | ramo di L | docs(brim): record the upload 422 fix |
+> | `28832e588` | `dev_release2` | cherry-pick `-x` di `c043383f6`, stesso diff |
+> | `cce91de6b` | `dev_release2` | voce 🐛 Fixed del CHANGELOG, scritta dal coordinatore |
 
 ### 2. ✅ Documento di design dei set — approvato il 2026-09-30 (v5.3)
 
@@ -484,7 +484,7 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 > - Per lo stesso motivo un blocco sul PMC di una rettifica negativa non si può risolvere nell'editor: nel plugin Danske la linea vecchia avrà un avviso, non un blocco. Il CSV generico emette il blocco su ogni rettifica senza PMC, di qualunque segno: va verificato se ha lo stesso problema, ma è fuori dal mio perimetro e l'ho segnalato al coordinatore.
 > - Nell'[analisi](analysis-phase00BrimDanskeBank.md) ho corretto «ID finto negativo»: gli ID finti sono positivi alti (regola 8 della skill).
 >
-> **Commit del journal v4**: `e3244095e` (developer, 12:57), «docs(journal): design v4 of the Danske report sets».
+> **Commit del journal v4**: `222cf95b4` (developer, 12:57), «docs(journal): design v4 of the Danske report sets».
 >
 > **Note implementazione (2026-09-29) — design v5, riscrittura completa**. Richiesta del developer: «rifai il piano di design partendo dalla nuova api e risalendo, spiegando i vari casi limite e come ci si dovrebbe comportare, ed evidenziando per ogni capitolo, a livello funzionale, la migrazione da ora al tendere, e alla fine un'analisi logica per trovare incongruenze».
 > - **Struttura nuova**: la nuova API è il capitolo centrale (§3, endpoint per endpoint, con quello che ciascuno chiede al plugin e al core); poi si risale a wizard (§4), pagina file (§5), guide (§6) e banche (§7). Ogni capitolo ha una tabella dei casi limite e un riquadro «Migrazione» (oggi → pilota → a regime). In fondo, l'analisi logica (§11): invarianti, copertura dei casi, sette scenari Danske, incongruenze A1–A14, tensioni R1–R9.
@@ -495,7 +495,7 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 > - Rileggendo la v5 durante la scrittura ho trovato tre incongruenze mie (A12–A14): la spiegazione delle correzioni avrebbe contato righe già presenti; mancava il checkpoint quando il CSV inizia dopo l'XLSX; la prima formulazione di `H0` era sbagliata in tre casi. Sono corrette nel testo e registrate nel §11.4.
 > - La guida utente CA dice che il saldo iniziale sta in testa all'XLSX dell'estratto: la v4 lo dava «da verificare» (A10).
 >
-> **Commit del journal v5**: `ed83ea279` (developer, 13:29).
+> **Commit del journal v5**: `faf5365a6` (developer, 13:29).
 >
 > **Note implementazione (2026-09-30) — design v5.1**. Il developer approva l'impianto fino al wizard, ma chiede un dettaglio del §4 con i disegni dei passi. Il suo dubbio principale: «dopo l'upload, come capiscono l'utente o il sistema quali file caricati includere, e se serve includere altro già caricato?».
 > - Il §4 è riscritto con una tabella «oggi → pilota» e i disegni di ② Seleziona file (casi A, B, C, D e la variante col buco), ③ Analizza (con il dettaglio del set), Correzioni, Revisione, «Allinea con la banca» (primo import, buco, verifica che non torna) ed editor.
@@ -516,7 +516,7 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 >   - §8, §10 (D-S8, D-S9, D-S22, D-S31), §11 (A15 risolta, A16, R10).
 > - Il controllo dei valori inventati, rilanciato sul §4 nuovo, dà lo stesso esito: coincide solo «0,00».
 >
-> **Commit del journal v5.1 e v5.2**: `14122a76a` (developer).
+> **Commit del journal v5.1 e v5.2**: `e6403915c` (developer).
 >
 > **Note implementazione (2026-09-30) — design v5.3**. Il developer chiede come si mostra un file obbligatorio che manca, cosa fa `POST /gap-fix`, e se c'è già un'analisi logica.
 > - §4.2: il set incompleto si vede già al passo ①, dove basta trascinare il file mancante nello stesso caricamento; al passo ② resta il caso B.
@@ -525,30 +525,30 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 >   - **A18**: il set dipendeva dal plugin scelto in automatico. Ora un file di cui un plugin a set riconosce il ruolo entra nel suo set; il CSV generico, per esempio, accetta qualsiasi CSV con un'intestazione.
 >
 >   Aggiunto anche lo **scenario 8**: due set dello stesso broker importati insieme su un broker vuoto non contano niente due volte.
-> - §3.2: i tre chiamanti restano su `axiosInstance` con `FormData`, e il `batch_id` è un campo in più del form; il 422 è già corretto (`f82eaa020`).
+> - §3.2: i tre chiamanti restano su `axiosInstance` con `FormData`, e il `batch_id` è un campo in più del form; il 422 è già corretto (`c043383f6`).
 > - Il controllo dei valori inventati dà lo stesso esito.
 >
-> **Commit del journal v5.3**: `1f8d2ea82` (developer).
+> **Commit del journal v5.3**: `12c4601d1` (developer).
 >
 > **✅ Gate 2 chiuso (2026-09-30).** Il developer: «ho letto il piano, e mi pare possa funzionare, almeno vorrei tentare». Poi, con ask_user: «Confermo il design v5.3 com'è, con le sette decisioni come proposte».
 > - D-S13 e D-S25…D-S30 passano a ✅ nel design.
 > - L'approvazione è inoltrata al coordinatore con le parole del developer.
 >
 > **Prima dello sviluppo**, su richiesta del developer («se ci sono altri lavori preparatori che abbiamo concluso e che potrebbero essere utili agli altri agenti, facciamo un commit cherry pick anche per loro»):
-> - proposti al coordinatore i cherry-pick `-x` in `dev_release2` di `6ea71ea8d`, `9d9c26d0d`, `e892e2e0e` e `dafff60da`, cioè il fix della codifica, il runner e la regola degli ID finti;
+> - proposti al coordinatore i cherry-pick `-x` in `dev_release2` di `35db1061f`, `dbe2f7276`, `28ec3704d` e `bc7c73648`, cioè il fix della codifica, il runner e la regola degli ID finti;
 > - il journal resta in L fino all'integrazione finale (scelta del developer, ask_user);
-> - la simulazione con `git merge-tree`, in sequenza sull'albero di `b1835949e`, è pulita: 35 file, identici all'HEAD di L;
-> - gate sull'HEAD `1f8d2ea82`: `services brim-provider-base` 34 passati; `external brim-providers` 537 passati e 2 saltati.
+> - la simulazione con `git merge-tree`, in sequenza sull'albero di `cce91de6b`, è pulita: 35 file, identici all'HEAD di L;
+> - gate sull'HEAD `12c4601d1`: `services brim-provider-base` 34 passati; `external brim-providers` 537 passati e 2 saltati.
 >
 > **Cherry-pick in `dev_release2`** (developer, 2026-09-30), albero `3ec4420c1` come nella simulazione:
 >
 > | Commit in `dev_release2` | Cherry-pick `-x` di |
 > |---|---|
-> | `cc4ae7aeb` | `6ea71ea8d` fix(brim): fall back to cp1252 for CSV exports |
-> | `8efbbed14` | `9d9c26d0d` fix(brim): read CSV plugins via the base reader |
-> | `c1108c9d0` | `e892e2e0e` test(runner): describe brim-provider-base scope |
-> | `e4dfb6d55` | `dafff60da` docs(brim): fake asset IDs are high positive |
-> | `1622a7a38` | la voce del CHANGELOG, scritta dal coordinatore |
+> | `0cca3a14f` | `35db1061f` fix(brim): fall back to cp1252 for CSV exports |
+> | `10b1c83be` | `dbe2f7276` fix(brim): read CSV plugins via the base reader |
+> | `e01179d0f` | `28ec3704d` test(runner): describe brim-provider-base scope |
+> | `b8321f1ee` | `bc7c73648` docs(brim): fake asset IDs are high positive |
+> | `0b55ce668` | la voce del CHANGELOG, scritta dal coordinatore |
 >
 > I 35 file sono identici a quelli di L, quindi al prossimo aggiornamento della base non ci saranno conflitti.
 >
@@ -607,7 +607,7 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
   - all'integrazione `openapi.json` e `generated.ts` si rigenerano, non si uniscono a mano, perché anche D cambia il contratto (R4.9);
   - `POST /upload` riceve `batch_id` come campo del form. I tre chiamanti (wizard, pagina file, `BrokerImportFilesModal`) restano su `axiosInstance` con `FormData`, come oggi: nel codice è scritto che Zodios non gestisce bene il `FormData`.
 
-### 5. ✅ Plugin Danske — fatto nel piano Step4 (`fda716b46`, `791db7fee`)
+### 5. ✅ Plugin Danske — fatto nel piano Step4 (`872f6bcc0`, `d10166df4`)
 
 - Test rossi sui campioni sintetici: abbinamento, esclusioni R4, R5 e R6, riconciliazione, segni, valuta, `Tuotto`, scissione, latin-1, header HTML, colonna senza nome.
 - Poi il parser custody, il parser cash, il motore, l'assemblaggio.
@@ -697,28 +697,28 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test \
   - la guida spiega l'export e la regola dei periodi;
   - test rossi prima e poi verdi; checkpoint consegnato.
 
-## 12. ✅ Chiusura del workstream (verifica del 2026-10-09 su `3cceb4f90`)
+## 12. ✅ Chiusura del workstream (verifica del 2026-10-09 su `f545b67e3`)
 
 | Passo | Piano | Codice (commit) | Stato |
 |---|---|---|---|
-| 1, la codifica dei CSV | questo piano, §6, passo 1 | `6ea71ea8d`, `8efbbed14` | ✅ |
-| 1c, il 422 dell'upload | questo piano, §6, passo 1c | `f82eaa020` | ✅ |
+| 1, la codifica dei CSV | questo piano, §6, passo 1 | `35db1061f`, `10b1c83be` | ✅ |
+| 1c, il 422 dell'upload | questo piano, §6, passo 1c | `c043383f6` | ✅ |
 | 2, il design dei set | `design-phase00BrimReportSets.md` (v5.3) | — | ✅ approvato il 2026-09-30 |
 | 3, le risposte dell'autore | questo piano, §6, passo 3 | — | ✅ 2026-09-28 |
-| 4–8, il framework, il plugin, il wizard, la doc | `plan-phase00BrimDanskeBankStep4Implementation.prompt.md` | `b271faaa2`, `b70e9ecce`, `75579a13b`, `fda716b46`, `791db7fee`, `8c3271235`, `9336c0e9b`, `1a3ba20f2`, `cdb8b3301`, `15c91d42a`, `aa9c62291`, `5df39167a` | ✅ |
-| Voce 8, la ririlevazione dei plugin | `plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md` | `b0abeb07d` | ✅ |
-| F2, la robustezza dell'upload | `plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md` | `c3e6fa0a8` | ✅ (F3/F4 rinviati) |
-| Il bottone e R6 | `plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md` | `955148dfb` | ✅ |
-| La card su mobile | `plan-phase00BrimDanskeBankStep8MobileCard.prompt.md` | `038109e91` (treno 14) | ✅ |
-| Il frontend vecchio, i set non raggruppati | `plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md` | `333bfc985`, `38dd5d1b4` (treno 16) | ✅ |
+| 4–8, il framework, il plugin, il wizard, la doc | `plan-phase00BrimDanskeBankStep4Implementation.prompt.md` | `9293307fd`, `555b44d15`, `920d04a18`, `872f6bcc0`, `d10166df4`, `6f4e68867`, `b23259a4e`, `76dd9d264`, `9a0645f8b`, `b24cb4e1f`, `8bd5bcb73`, `e93a35c22` | ✅ |
+| Voce 8, la ririlevazione dei plugin | `plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md` | `e3f53e3cc` | ✅ |
+| F2, la robustezza dell'upload | `plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md` | `40e943a5b` | ✅ (F3/F4 rinviati) |
+| Il bottone e R6 | `plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md` | `0c58d90e5` | ✅ |
+| La card su mobile | `plan-phase00BrimDanskeBankStep8MobileCard.prompt.md` | `ac35ad2ce` (treno 14) | ✅ |
+| Il frontend vecchio, i set non raggruppati | `plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md` | `082196482`, `9561f74b7` (treno 16) | ✅ |
 
 > **Note implementazione — i rinvii, ricontrollati sul codice**:
 > - **Risolti dopo**:
 >   - A18: il campo `exclude_file_ids` esiste (`schemas/brim.py:633`), lo usa `collect_members` (`brim_report_sets.py:121-134`) e lo manda il wizard (`ImportWizardModal.svelte:3910`, `:3932`);
 >   - `compatible_plugins` non è più congelato: passo 5, `plugins_signature` in `brim_provider.py`;
 >   - R6: passo 7;
->   - CAC-011/012 e i file `ca-*`: piano 33 (`860c934ac`, `abfcdf2be`);
->   - E2-001: `5df39167a`;
+>   - CAC-011/012 e i file `ca-*`: piano 33 (`66eacc577`, `f7e439511`);
+>   - E2-001: `e93a35c22`;
 >   - la deriva della doc: `brim/architecture.md:46` non chiama più il CSV generico ripiego universale, e `get_provider()` non compare più nella doc;
 >   - la regola 8 della skill: gli ID finti sono «high positive», mai negativi;
 >   - la frase della pagina utente sulla mappatura manuale delle colonne: tolta dalla doc inglese;

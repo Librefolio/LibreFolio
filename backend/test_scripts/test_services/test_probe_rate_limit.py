@@ -35,11 +35,11 @@ module's ``logger`` is a recorder. The route tests of the override let the route
 configuration and the uvicorn launch stood in for, any real process, exec or signal failing the test, ``os.environ``
 unchanged — and reads the environment handed to the stood-in launch; it is imported only by those tests.
 
-Red on HEAD ``f252acb4a`` (before MF-SI2): every test of the route, of ``probe_limiter`` and of the setting — no
+Red on HEAD ``2c3e4d452`` (before MF-SI2): every test of the route, of ``probe_limiter`` and of the setting — no
 ``probe_rate_limit`` in ``config/plugins.py``, no ``probe_limiter`` nor ``SlidingWindowLimiter`` in ``providers``, a
 route that never refuses — and the lane switch (no variable in the lane's server environment).
 
-Red on HEAD ``04955c498`` (MF-SI2 in, before MF-SEC9a), the limiter read once at import into ``PROBES_BY_USER``: every
+Red on HEAD ``fbbf55b63`` (MF-SI2 in, before MF-SEC9a), the limiter read once at import into ``PROBES_BY_USER``: every
 route test — the route counts on that limiter, never asking ``probe_limiter()``, so the private one is never hit and a
 value set by the test never applies —; ``test_probe_limiter_without_the_variable_is_30_probes_per_60_seconds`` (a new
 limiter at each call: counts that would never add up); ``test_a_limit_the_setting_comes_back_to_keeps_its_counts`` and
@@ -113,7 +113,7 @@ def clock() -> FakeClock:
 @pytest.fixture
 def limiter(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
     """A private limiter on the fake clock, answered by ``probe_limiter()`` in place of the one in force: the route asks
-    for it at each probe (before f252acb4a there was no ``probe_limiter`` and this fails)."""
+    for it at each probe (before 2c3e4d452 there was no ``probe_limiter`` and this fails)."""
     private = SlidingWindowLimiter(LIMIT, WINDOW, clock=clock)
     monkeypatch.setattr(providers, "probe_limiter", lambda: private, raising=True)
     return private
@@ -164,7 +164,7 @@ def _no_inherited_probe_limit(monkeypatch: pytest.MonkeyPatch) -> None:
 def _fresh_probe_limiters(monkeypatch: pytest.MonkeyPatch) -> None:
     """The test's own limiters by limit and its own «already logged»: nothing counted or logged by another test, or by
     the module's import, is seen here, and nothing of this test outlives it. ``raising=False``: code without the names
-    (HEAD 04955c498) then runs as it did, and its tests fail on what it does, not on a missing name."""
+    (HEAD fbbf55b63) then runs as it did, and its tests fail on what it does, not on a missing name."""
     monkeypatch.setattr(providers, "PROBES_BY_LIMIT", {}, raising=False)
     monkeypatch.setattr(providers, "_PROBE_SETTING_LOGGED", set(), raising=False)
 
@@ -237,7 +237,7 @@ async def _use_the_whole_limit(probe_request: FAProviderProbeRequest, user: Simp
 
 def test_probe_limiter_without_the_variable_is_30_probes_per_60_seconds():
     """Red: without ``LIBREFOLIO_PROBE_RATE_LIMIT`` the limiter in force is one ``SlidingWindowLimiter`` of 30 hits per
-    60 s, the same object at every call — a new one per probe would never count past one hit (on HEAD 04955c498:
+    60 s, the same object at every call — a new one per probe would never count past one hit (on HEAD fbbf55b63:
     ``probe_limiter()`` built a new limiter at each call, the route kept the one of the import)."""
     first = providers.probe_limiter()
     assert isinstance(first, SlidingWindowLimiter), f"probe_limiter() returned {first!r}"
@@ -466,7 +466,7 @@ def test_limiter_keeps_30_with_one_error_for_a_value_it_cannot_use(set_probe_lim
 async def test_with_the_limit_off_every_probe_reaches_the_manager(set_probe_limit, log, manager_calls, probe_request):
     """Red: with ``LIBREFOLIO_PROBE_RATE_LIMIT=0`` the route, asking ``probe_limiter()`` at each probe, counts and
     refuses nothing: 40 probes of one user — past the default 30 — all reach the manager with the user's id; the warning
-    naming ``LIBREFOLIO_PROBE_RATE_LIMIT=0`` is logged once, not once per probe (on HEAD 04955c498 the route counted on
+    naming ``LIBREFOLIO_PROBE_RATE_LIMIT=0`` is logged once, not once per probe (on HEAD fbbf55b63 the route counted on
     the limiter of the import, 30 a minute: the 31st probe was refused)."""
     set_probe_limit("0")
 
@@ -490,7 +490,7 @@ async def test_the_route_applies_the_limit_the_setting_built(set_probe_limit, lo
     """Red: the limiter the route counts on is the one ``probe_limiter()`` builds from the variable: the first
     ``applied`` probes of a user reach the manager and the next one is 429 ``PROBE_RATE_LIMITED`` with ``retry_after``
     60, never reaching it; ONE limiter built for them all, of ``applied`` per 60 s. A value that cannot be used applies
-    30, not no limit, its error logged once over the 31 probes. (On HEAD 04955c498 the route counted on the limiter of
+    30, not no limit, its error logged once over the 31 probes. (On HEAD fbbf55b63 the route counted on the limiter of
     the import: none built, the number configured never applied.)"""
     set_probe_limit(value)
 
@@ -507,7 +507,7 @@ async def test_the_route_applies_the_limit_the_setting_built(set_probe_limit, lo
 async def test_a_new_limit_applies_at_the_next_probe(set_probe_limit, log, built_on_fake_clock, manager_calls, probe_request):
     """Red: a limit changed between two probes applies at the next one, with no restart. At 2 the third probe of a user
     is refused; set to 5, the next probe reaches the manager — a limiter of 5 of its own, its first hit — and so do four
-    more, the sixth refused; turned off, the next probes reach the manager, counted nowhere. (On HEAD 04955c498 the
+    more, the sixth refused; turned off, the next probes reach the manager, counted nowhere. (On HEAD fbbf55b63 the
     limit of the import applied until the next start: the third probe at 2 reached the manager.)"""
     set_probe_limit("2")
     for _ in range(2):
@@ -532,7 +532,7 @@ async def test_a_limit_the_setting_comes_back_to_keeps_its_counts(set_probe_limi
     """Red: a limit the setting comes back to is the same limiter, its counts kept: at 2, two probes; at 5, one; back at
     2, the user is refused at once — the two hits of before still in the window — and ``probe_limiter()`` answers the
     first limiter again; once the window has passed, the user probes again. Two limiters built in all, never a third.
-    (On HEAD 04955c498 the route counted on the limiter of the import: back at 2 the probe reached the manager.)"""
+    (On HEAD fbbf55b63 the route counted on the limiter of the import: back at 2 the probe reached the manager.)"""
     set_probe_limit("2")
     for _ in range(2):
         assert await _probe(probe_request, USER_A) is _ANSWER
@@ -556,7 +556,7 @@ def test_each_warning_and_error_is_logged_once_per_value(set_probe_limit, log):
     """Red: read at each probe, the setting is logged once per value, never once per read: ``0`` read seven times
     (five, then two after other values) gives one warning; ``abc`` read seven times and ``-1`` three give one error
     each, naming its value; an unset or a usable value logs nothing. Every read still answers the limit in force: None
-    when off, 30 for a value that cannot be used. (On HEAD 04955c498 ``probe_limiter()`` logged at each call — one line
+    when off, 30 for a value that cannot be used. (On HEAD fbbf55b63 ``probe_limiter()`` logged at each call — one line
     per probe once read at each probe.)"""
     reads = [("0", 5), ("abc", 5), ("-1", 3), ("0", 2), ("abc", 2), (None, 2), ("7", 2)]
     answers = []

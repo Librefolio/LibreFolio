@@ -10,8 +10,8 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fuzzy-robot` |
 | Branch | `e-alfy-designer-lab` (rinominato dall'app, era `e-alfy-fuzzy-robot`) |
-| HEAD | `b631308d5ef5482a8ffdc2878a4459fcf6909827` = base del kickoff ✓ (dopo il ff del coordinatore) |
-| Destinazione | `dev_release2` @ `b631308` |
+| HEAD | `44623e084145c4cf759e04a0e9fa5200f172fa5f` = base del kickoff ✓ (dopo il ff del coordinatore) |
+| Destinazione | `dev_release2` @ `44623e0` |
 | Corsia | porta 6152 (libera), dati `/tmp/librefolio-r2-l` |
 | Coordinatore | `aec04834-1532-4d86-9e3f-f942e82aca89` |
 | Ambiente | Node v26.11.1, npm 11.20; Chromium di Playwright in cache; `node_modules`, `.env` e graphify assenti (atteso: wiki letta direttamente) |
@@ -26,7 +26,7 @@
 | Le classi Tailwind leggono variabili a runtime | ⏳ da riverificare nello spike | manca la build (niente `node_modules`) |
 | 17 grafici ridisegnano a **qualunque** cambio di classe su `<html>` | ❌ **parziale** | vedi la tabella qui sotto |
 | ECharts importato direttamente, nessun modulo centrale | ✅ (29 file, 25 non di test; **tutti** da `'echarts'`, nessun `echarts/core`): un solo prototipo `ECharts` | grep degli import |
-| 1.821 colori scritti a mano | ✅ come totale: hex 1.610 + funzioni 211 | `analysis/00_inventory_summary.md`; `frontend/src` è identico tra `6d0b126` e `b631308` |
+| 1.821 colori scritti a mano | ✅ come totale: hex 1.610 + funzioni 211 | `analysis/00_inventory_summary.md`; `frontend/src` è identico tra `885f7e9` e `44623e0` |
 | Ripartizione per zona (1.084/69/533/118/17) | ⚠️ non riproducibile | `color_inventory.py` scorre le righe con le regex e **non classifica le zone** |
 
 **Osservatori del tema (verificati):**

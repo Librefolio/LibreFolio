@@ -6,13 +6,13 @@
 > - **In attesa**: T-1 aspetta F (lotto 41); FE1 aspetta la review C7 dell'onboarding (Q); B3b aspetta il via del coordinatore (§7.1).
 >
 > - **Workstream T** · worktree `LibreFolio-worktrees/e-alfy-silver-barnacle` · ramo `e-alfy-t-matematica-finanziaria-unica` (rinominato dall'app all'avvio; prima `e-alfy-silver-barnacle`).
-> - **Base**: HEAD `b20eac991446833b247291cf0e9cfb85b98feeb4` = target `dev_release2` (treno 32), verificata all'avvio; worktree pulita.
+> - **Base**: HEAD `d9cdc2ca741e8afbc18a65ee1f5d305ad52bae85` = target `dev_release2` (treno 32), verificata all'avvio; worktree pulita.
 > - **Corsia**: `--test-port 6164 --data-dir /tmp/librefolio-r2-t`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta. Mai le porte 6040 e 6041.
 > - **Coordinatore**: `c8328a01-f208-4ade-a352-0486d1f14de2`.
 > - **Due parti**: Parte 1 (§0–§9), la casa unica, ha la priorità. Parte 2 (§P2), il «Code reordering» intero.
 > - **Wiki**: `graphify-out/graph.json` assente (atteso in una worktree nuova). Lette direttamente `decisions/financial-math-single-average-cost`, `entities/portfolio-engine`, `entities/lots-analysis-service`. Ingresso di I: §16 del piano 41, non rifatto.
 > - **Fonti**: 6 sottoagenti `explore` in sola lettura per l'inventario (backend orchestrazione, backend dati, AI Export, rischio/segnali/PAC, frontend portafoglio, frontend mercati), 3 per la parte 2, più le mie letture.
->   - **✔** = riverificato a mano da me su `b20eac99`.
+>   - **✔** = riverificato a mano da me su `d9cdc2ca`.
 >   - Le righe senza ✔ vengono dagli inventari: si riverificano quando un lotto le tocca (regola del backlog 38).
 > - **Pesi**: scala del backlog 38 (minimo, basso, medio-basso, medio, alto), coi conteggi che li motivano.
 
@@ -50,12 +50,12 @@ Testuali, dal kickoff del coordinatore:
 - **Coordinatore**, sulla probe di B2: niente dati di produzione.
   - Si popola il DB della corsia 6164 con i dati sintetici.
   - Se c'è un asset con `quote_base_quantity ≠ 1`, probe mirata su quello. Altrimenti bastano i test funzionali, e nel checkpoint si scrive «probe non eseguita: nessun qbq≠1 nei dati di test».
-- **v1.1.0** (tag `837a8f2c7`, 2026-09-07): i tre bug c'erano già, quindi vanno sotto 🐛 Fixed del capitolo 1.2.
-  - B1 da `2fd6a44c2` (2026-03-02);
-  - B2 da `3e3f9c41f` (2026-09-01);
-  - B3 da `2a647c2f1` (2026-07-16).
+- **v1.1.0** (tag `aabd8f126`, 2026-09-07): i tre bug c'erano già, quindi vanno sotto 🐛 Fixed del capitolo 1.2.
+  - B1 da `ab5ebac9f` (2026-03-02);
+  - B2 da `e3aee4032` (2026-09-01);
+  - B3 da `4ee089e93` (2026-07-16).
 
-## 1. Stato reale (verificato su `b20eac99`)
+## 1. Stato reale (verificato su `d9cdc2ca`)
 
 ### 1.1 Le case di oggi
 
@@ -319,7 +319,7 @@ backend/app/services/fx.py                      resta: infrastruttura dei cambi 
 backend/app/utils/financial/                    sparisce
 ```
 
-- Le righe sono indicative, su `b20eac99`: F le sposterà.
+- Le righe sono indicative, su `d9cdc2ca`: F le sposterà.
 - `DailyStateBuilder` resta un modulo da ~1 200 righe. Tagliarlo ancora (valutazione, cassa, trasferimenti) è lavoro della parte 2, non dello spostamento.
 
 ### 3.2 Regola del layer (emendata)
@@ -626,7 +626,7 @@ Incontrati durante l'inventario; il dettaglio è in §P2:
 ## P2. Code reordering, backend e frontend
 
 > - **Natura**: analisi, nessun codice.
-> - **Fonti**: 3 sottoagenti `explore` su `b20eac99` (famiglie di plugin; file grandi e `utils/` del backend; struttura del frontend), più verifiche mie (✔). Righe indicative.
+> - **Fonti**: 3 sottoagenti `explore` su `d9cdc2ca` (famiglie di plugin; file grandi e `utils/` del backend; struttura del frontend), più verifiche mie (✔). Righe indicative.
 > - **Chiusura**: quando una parte è applicata, la voce di `TODO_FUTURI.md` si cancella (lo fa il coordinatore).
 
 ### P2.0 Principi comuni (gli stessi della parte 1)
@@ -876,7 +876,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 
 ### T0 — Piano nel journal ✅ (2026-10-11)
 
-> **Note implementazione**: questo file nasce dal piano di sessione dell'analisi (parti 1 e 2), con l'autorizzazione e le decisioni del 2026-10-11 (§0.1) e il disegno dei bug (§7.1). Base `b20eac99`, worktree pulita prima di cominciare.
+> **Note implementazione**: questo file nasce dal piano di sessione dell'analisi (parti 1 e 2), con l'autorizzazione e le decisioni del 2026-10-11 (§0.1) e il disegno dei bug (§7.1). Base `d9cdc2ca`, worktree pulita prima di cominciare.
 >
 > **⚠️ Fuori pista**:
 > - **B3 era più grande della stima.** I ripieghi sull'importo non convertito nel servizio dei lotti non sono 6 ma ~20: valutazione giornaliera (`:401-404`), sintesi, Gantt, storici, proceeds, eventi economici (`_converted_external_amount`).
@@ -966,9 +966,9 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 
 > Consegnato al coordinatore FROZEN (messaggio del 2026-10-11): 13 file tracciati modificati + questo piano.
 > - Commit e righe di CHANGELOG proposti nel messaggio.
-> - Base `b20eac99`; il target è avanzato a `251067435` (treni 33–36) senza file in comune con questo delta.
+> - Base `d9cdc2ca`; il target è avanzato a `c90f1a9fb` (treni 33–36) senza file in comune con questo delta.
 
-> **Integrato nel treno 37**: `dev_release2` = `41ddc61cb`, commit `9fab65f4a`…`9bb2b0c16`, merge `bfd962b9c`. Il coordinatore ha accorciato il soggetto del commit del piano: `docs(journal): plan 43, financial math home`. Worktree riallineata a `41ddc61cb` in fast-forward (contiene H di I, P, M).
+> **Integrato nel treno 37**: `dev_release2` = `3bbe92424`, commit `20044ab93`…`654520147`, merge `c670ba0d7`. Il coordinatore ha accorciato il soggetto del commit del piano: `docs(journal): plan 43, financial math home`. Worktree riallineata a `3bbe92424` in fast-forward (contiene H di I, P, M).
 
 ### Riconciliazione con l'analisi di F di I (coordinatore, 2026-10-11)
 
@@ -1040,7 +1040,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 
 #### Scoperte sul renderer dell'AI Export (2026-10-11, mandate al coordinatore)
 - **`asset.lot_detail` è in `PAYLOAD YAML FALLBACK` dalla v1.1.0.**
-  - F6 (`3e3f9c41f`) l'ha portato a v2, ma il renderer della v1.1.0 accettava solo `component_version === 1`.
+  - F6 (`e3aee4032`) l'ha portato a v2, ma il renderer della v1.1.0 accettava solo `component_version === 1`.
   - `COMPACT_COMPONENT_VERSIONS` oggi conosce solo le due provenance.
   - Domanda al coordinatore: con v3, compatto o YAML?
 - **Nelle tabelle compatte `null` resta il testo `null`** (`null=explicitly unavailable` nel preambolo), non una cella vuota. Una colonna sparisce solo se è `null` in tutte le righe.
@@ -1122,7 +1122,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 >   - Selezione: `asset.position_and_history`, 1Y, full, porta 6164.
 > - **Esito della sonda**: snapshot HTTP 200, sorgente invariata, scansione dei segreti passata, porta libera.
 >   - Lo stato della sonda è però «1 fallimento» per ciascun caso: il controllo pubblico `raw_ratio_weight_name` trova `portfolio_weight_ratio` nella tabella `portfolio_role.unavailable` di `asset.position_scope`.
->   - È preesistente (`ea0558b3c`), non è B3b, ed è segnalato al coordinatore.
+>   - È preesistente (`d5227e4ef`), non è B3b, ed è segnalato al coordinatore.
 > - **Prima e dopo del blocco lotti**, renderer ufficiale caricato come lo carica la sonda.
 >   - Il «dopo» coincide byte per byte col blocco del prompt salvato dalla sonda.
 >   - Il «prima» è il percorso della versione sconosciuta (YAML), lo stesso che prendeva la v2 a HEAD: il renderer di HEAD differisce solo nella mappa, e l'intestazione del blocco non porta la versione.
@@ -1190,7 +1190,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 - **Prossimo**: PL3, poi BU1 e FE1, ciascuno con l'elenco dei file prima di scrivere codice, poi T-1 dopo F.
 
 ### Treno 38 e decisioni dopo B3b (coordinatore, 2026-10-11)
-- **B3b** è nel batch 36, treno 38: `dev_release2` = `b578f4fec`, i commit da `59a7c3e2f` a `7269f4085`, il merge `0e44fa787`. Il developer ha approvato le decisioni di B3b prese dal coordinatore al suo posto (opzione A col bump, `lot_detail` compatto, il contatore).
+- **B3b** è nel batch 36, treno 38: `dev_release2` = `93b890bd6`, i commit da `f20c8ba78` a `e8993b6c8`, il merge `5594ffd01`. Il developer ha approvato le decisioni di B3b prese dal coordinatore al suo posto (opzione A col bump, `lot_detail` compatto, il contatore).
 - **BU1: opzione A**, niente prima della 1.2. Il motivo è lo strato: `schemas/` non importa mai `services/`, e `db/models.py` importa solo `utils/`; `sector_fin_utils`, `geo_utils` e `identifier_utils` sono importati da `schemas/assets.py:58-60` e `db/models.py:36`. `currency_utils` aspetta `services/fx/` (PL4, dopo F). BU1 si unisce a BU2 dopo la 1.2, in attesa di **D-P7**: aiuti puri di dominio in `backend/app/domain/` senza I/O, oppure in `utils/` con la regola scritta. La riga è nell'indice, sezione T.
 - **PL3, file condivisi assegnati**: `backend.instructions.md`, le righe della tabella `:32-37`. Niente `risk_plugin_guide.md` e niente `mkdocs.yml`: la guida del rischio esiste già in `risk/architecture.md` (`#plugin-contract`, `#adding-an-analytic`).
 - **FE1, file condivisi assegnati**: `routes/(app)/+layout.svelte` (4 import), `scripts/test_runner/_frontend_utility.py:325-330`.
@@ -1284,11 +1284,11 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 >     - 0 nomi grezzi;
 >     - la sonda ha 0 fallimenti, controlli pubblici compresi;
 >     - UI e sonda identiche, stringa e byte UTF-8.
-> - **Cosa c'era già nella v1.1.0**: il difetto (`ea0558b3c`).
+> - **Cosa c'era già nella v1.1.0**: il difetto (`d5227e4ef`).
 
 ### T-1 — inventario sulla base con F (2026-10-12) — 🧊 in attesa dell'ok del coordinatore
-- **Base**: `5d62658bb` (treno 42, con F). Worktree pulita, corsia 6164 libera.
-- **Riverifiche** (le righe di §3.1 erano su `b20eac99`):
+- **Base**: `408b31119` (treno 42, con F). Worktree pulita, corsia 6164 libera.
+- **Riverifiche** (le righe di §3.1 erano su `d9cdc2ca`):
   - `portfolio_engine.py`, 2 872 righe:
     - modelli `:115-229`, `:448-619`, `:1826-1872`;
     - classificatore `:237-436`;
@@ -1331,7 +1331,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 
 #### Base prima di T-1 ✅ (2026-10-12)
 > **Note implementazione**:
-> - `all-backend` sulla 6164, su `5d62658bb`: 7/7, **12 353 passed, 28 skipped, 0 failed** (22 min 56 s). I conteggi per sessione sono nei file della sessione (`t1/baseline_all_backend_summaries.txt`).
+> - `all-backend` sulla 6164, su `408b31119`: 7/7, **12 353 passed, 28 skipped, 0 failed** (22 min 56 s). I conteggi per sessione sono nei file della sessione (`t1/baseline_all_backend_summaries.txt`).
 > - **Statici**:
 >   - il backend è pulito per ruff e black: i 197 reperti di ruff e i 29 file di black sono tutti in `dev.py` e `scripts/`, fuori dai file di T-1;
 >   - dead code: 38 reperti;
@@ -1364,7 +1364,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 >   - dead code: uguale alla base, meno i 2 reperti del barile.
 >   - `all-backend` sulla 6164: 7/7, **12 353 passed, 28 skipped, 0 failed** (20 min 05 s). Identico alla base anche in ognuna delle 23 invocazioni. Porta 6164 libera.
 
-#### Proposte di I (treno 43, `d27a2f729`, solo journal) ✅ (2026-10-12)
+#### Proposte di I (treno 43, `2b84585f3`, solo journal) ✅ (2026-10-12)
 > **Note implementazione**:
 > - Le righe dell'inventario seguono la ripartizione di §17.6 del piano 41:
 >   - P1 → U4;
@@ -1375,7 +1375,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 > - Il commento PURE di `financial-math` nel runner («each module's only I/O is convert_bulk, which every test replaces on its module with a double») entra con B, insieme alla `desc` e alla guardia.
 
 ### Passo B — il taglio (2026-10-12)
-> Il coordinatore ha committato A sul ramo di T (`1cc9cd8f5` refactor, `528ef2fe1` journal), senza integrarlo. B parte da `528ef2fe1`. `risk/service.py:1304` e il suo import sono assegnati a T.
+> Il coordinatore ha committato A sul ramo di T (`775a3dd41` refactor, `1aa156f57` journal), senza integrarlo. B parte da `1aa156f57`. `risk/service.py:1304` e il suo import sono assegnati a T.
 
 #### B1 — FIFO in tre moduli ✅ (2026-10-12)
 > **Note implementazione**:
@@ -1477,7 +1477,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 >   - `:2038` → `daily_state.py:366`;
 >   - `:2040` → `financial_math/price_marks.py:146`;
 >   - `:2046` → `:312`.
->   - Ho verificato le righe sul codice del 01/10 (`5405f25a1`), il commit che le ha scritte.
+>   - Ho verificato le righe sul codice del 01/10 (`47ca6ca0f`), il commit che le ha scritte.
 >   - La menzione `portfolio_engine` a `:2030` resta: non è fra le righe assegnate.
 > - **Docstring dello strato e dei pacchetti**: la mappa con i sotto-moduli di `fifo`, `portfolio` e `lots`.
 
@@ -1503,7 +1503,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 > - **Statici**:
 >   - ruff e black come la base;
 >   - dead code come la base, meno i 2 reperti del barile;
->   - `api sync`: `generated.ts` e altri 3 file identici. `openapi.json` cambia solo in `info.version`, che viene da `git describe` (la HEAD è `528ef2fe1`). Rigenerato da `HEAD` in una copia, è l'unica differenza.
+>   - `api sync`: `generated.ts` e altri 3 file identici. `openapi.json` cambia solo in `info.version`, che viene da `git describe` (la HEAD è `1aa156f57`). Rigenerato da `HEAD` in una copia, è l'unica differenza.
 > - **Doc**: `mkdocs build` stretto ok; `check-links` 95 link validi.
 > - **devWiki**: `check_source_paths.py` a 6, come la base.
 > - **Grep dei vecchi percorsi** (`backend/`, `scripts/`, `dev.py`, `.github/`, `mkdocs_src/docs/developer/`, `pyproject.toml`): 9 righe, tutte volute. Sono le vecchie case nella sezione delle guardie del file d'istruzioni e la tabella vecchio → nuovo della pagina nuova.
@@ -1515,10 +1515,10 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 - Due voci per dopo la 1.2 nella sezione T dell'indice: T-W1 e T-R1.
 
 ### Treno 45 (coordinatore, 2026-10-12)
-- T-1 è nel target (merge `76a7b099b`, commit `a57a43fbd`, `4e4ae37e5`, `09c089147`, `8e0c4f245`). P-5 del 38 è chiusa da `1cc9cd8f5`.
+- T-1 è nel target (merge `7bb3a58f4`, commit `7d1ddc50f`, `d1cd80513`, `332b82660`, `cf8cc7120`). P-5 del 38 è chiusa da `775a3dd41`.
 
 ### C-53 — `reconciled` falso per un residuo di arrotondamento (developer: approvata per la 1.2) — analisi (2026-10-12)
-- **Base**: `378338fed` (treno 46). Corsia 6164.
+- **Base**: `7c3119d97` (treno 46). Corsia 6164.
 - **Il difetto**: `portfolio_financial.py:490` e `broker_financial.py:435` (le stesse righe anche dopo T-1) fanno `reconciled = residual_amount == Decimal("0")`.
   - Il residuo è `period_pnl − (Δ non realizzato + realizzato + entrate − costi e tasse + altro)`.
   - Il servizio calcola `period_other_result` come termine di chiusura della stessa scomposizione (`portfolio_service.py`, `:1959`), quindi il residuo è zero per costruzione. Quando non lo è, resta l'arrotondamento dei Decimal a 28 cifre (1e-24).
@@ -1592,11 +1592,11 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 - **Dopo il checkpoint**: BU1 e BU2, cominciando dall'elenco dei file.
 
 ### Treno 47 (coordinatore, 2026-10-12)
-- C-53 è nel target: merge `e25eb913d`, CL `5d0585595`, commit `876d2b430`, `45691452a`, `25e358eb0`.
+- C-53 è nel target: merge `c081f9976`, CL `9f63eec22`, commit `323c5ff13`, `a65eff5d8`, `ab0626da0`.
 - Il reperto HHI sul broker senza posizioni è registrato come C-55, da verificare dopo la 1.2.
 
 ### BU1/BU2 — analisi (2026-10-12) 🧊 in attesa dell'ok
-- **Base**: `5d0585595`. 74 file importano i moduli di `utils/` (45 nell'app, 28 nei test, più `dev.py`). Nessuna migrazione, `scripts/` o `frontend/scripts` li importa.
+- **Base**: `9f63eec22`. 74 file importano i moduli di `utils/` (45 nell'app, 28 nei test, più `dev.py`). Nessuna migrazione, `scripts/` o `frontend/scripts` li importa.
 - **Nessun test patcha** `clear_cache` o altre globali di `cache_utils`. L'unica patch su un modulo è in `test_version.py` (`version_utils.get_git_version`, sull'oggetto modulo).
 - **Dipendenze fra moduli**: `currency_utils` → `geo_utils`, `translation_utils`; `geo_utils` → `decimal_utils`, `translation_utils`; `decimal_utils` → `db.models`. Quindi oggi geo e currency caricano i modelli del DB al momento dell'import.
 - **Stringhe**:
@@ -1631,7 +1631,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 - **Ordine**: la base `all-backend`; BU1 (sole rinomine) con i suoi gate e un checkpoint; il commit del coordinatore; poi BU2 con i suoi gate e il checkpoint finale. `fx.py` e `config.py` li toccano tutti e due i commit.
 
 #### Base prima di BU ✅ (2026-10-12)
-> `all-backend` sulla 6164, su `5d0585595`: 7/7, **12 409 passed, 28 skipped, 0 failed** (23 min 11 s). Presi anche gli statici: ruff, black, dead code e gli hash di `api sync`.
+> `all-backend` sulla 6164, su `9f63eec22`: 7/7, **12 409 passed, 28 skipped, 0 failed** (23 min 11 s). Presi anche gli statici: ruff, black, dead code e gli hash di `api sync`.
 
 #### BU1 — le cartelle di `utils/` ✅ (2026-10-12)
 > **Note implementazione**:
@@ -1675,7 +1675,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 > - **Lezione**: in una rinomina si cercano anche i percorsi calcolati dal file stesso (`__file__`, `parents`), oltre agli import.
 
 ### Treno 50 (coordinatore, 2026-10-12)
-- BU1 è nel target: commit `346b7e292` e `390ba7d9a`, merge `bdc078efc`. W aggiorna le righe «Source files» dei moduli spostati.
+- BU1 è nel target: commit `71a3d9e46` e `5b313d817`, merge `0af65b270`. W aggiorna le righe «Source files» dei moduli spostati.
 
 #### BU2 — le due eccezioni alla regola della foglia ✅ (2026-10-12)
 > **Note implementazione**:
@@ -1697,15 +1697,15 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 > - `check_source_paths.py`: 11 percorsi inesistenti (20 occorrenze, 16 pagine). Sono le righe dei moduli di BU1, che aggiorna W.
 
 ### Checkpoint BU2 ✅ (2026-10-12) — committato e integrato dal coordinatore
-- Commit `8dae5cc6e`, `4388db8df`, `f038ce39a`; manifest e blob verificati dal coordinatore, funzioni spostate identiche all'AST.
+- Commit `c8dda3958`, `214624747`, `466fe0983`; manifest e blob verificati dal coordinatore, funzioni spostate identiche all'AST.
 
 ### Treno 53 (coordinatore, 2026-10-12)
-- BU2 e la regola delle versioni dell'AI Export sono nel target: `dev_release2` = `f0f3de0d9`, worktree in fast-forward lì.
+- BU2 e la regola delle versioni dell'AI Export sono nel target: `dev_release2` = `cc8453e79`, worktree in fast-forward lì.
 
 ### C-55 — analisi (2026-10-12) ✅ approvata dal developer
 > **Richiesta** (coordinatore): solo analisi. Dove sta il difetto «invalid HHI points», cosa vede l'utente, la cura con la versione rispetto a `v1.1.0`, i rossi, la stima.
 >
-> **Base**: HEAD `f0f3de0d9`, worktree pulita, corsia 6164 (`/tmp/librefolio-r2-t`). Porta libera prima e dopo ogni sonda.
+> **Base**: HEAD `cc8453e79`, worktree pulita, corsia 6164 (`/tmp/librefolio-r2-t`). Porta libera prima e dopo ogni sonda.
 
 **Dove sta il difetto: nel controllo della sonda.** Il payload e il backend sono corretti.
 - **La sonda**: `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py:847-853`, in `audit_snapshot_semantics`.
@@ -1800,7 +1800,7 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
   - prima i rossi via test-author in `test_ai_export_real_prompt_probe.py` (`utils ai-export-probe-helpers`), con le guardie che restano verdi;
   - poi la matrice reale dei 24 casi coi byte confrontati, sulla 6164;
   - niente bump, niente CHANGELOG; il `reason_code` impreciso va in T-U9, dopo la 1.2.
-- Base `f0f3de0d9`, uguale al target. Entrambi i file sono puliti per ruff e black sulla base.
+- Base `cc8453e79`, uguale al target. Entrambi i file sono puliti per ruff e black sulla base.
 - **Correzione all'analisi**: il riepilogo del broker c'è anche in S1 (`market_value` 0, non `null`). Quindi il `reason_code` `broker_summary_unavailable` è impreciso in S1 e in S2, non solo in S2.
 
 Passi:
@@ -1855,7 +1855,7 @@ Passi:
 > - La riga C-55 della sezione C resta al coordinatore.
 
 ### Checkpoint C-55 ✅ (2026-10-12) — committato e integrato dal coordinatore
-- Base `f0f3de0d9`, uguale al target. 4 file modificati, nessun file nuovo.
+- Base `cc8453e79`, uguale al target. 4 file modificati, nessun file nuovo.
 - Due commit proposti:
   1. `fix(ai-export): probe accepts an unavailable HHI`: la sonda e il suo file di test (`/tmp/libreFolio_commit_t_c55_1.txt`);
   2. `docs(journal): record C-55`: questo piano e `BACKLOG_POST_1.2.md`, solo la sezione T (`/tmp/libreFolio_commit_t_c55_2.txt`).
@@ -1863,12 +1863,12 @@ Passi:
 - Esclusi: gli artefatti delle sonde, i semi e gli script in `/tmp`, il DB della corsia.
 
 ### Treno 56 (coordinatore, 2026-10-12)
-- C-55 è nel target, col treno 56 (merge `767eb2e31`). La worktree è in fast-forward a `e7d698c4d`.
+- C-55 è nel target, col treno 56 (merge `a138b38f8`). La worktree è in fast-forward a `d81bb4965`.
 
 ### CL — CHANGELOG localizzato, parte frontend: analisi (2026-10-12) ✅ approvata
 > **Richiesta** (developer, via coordinatore, testuale): «T prende la parte frontend del CHANGELOG localizzato al posto di I: I resta su asse x, rifinitura UI e M-18, e U può dividere prima i cataloghi».
 > - **Il contratto di M**: `CHANGELOG.{it,fr,es}.md` alla radice; le righe `## [x.y.z] - data` identiche alla sorgente; un capitolo non tradotto manca dal file; il frontend mostra il capitolo tradotto se c'è, altrimenti quello inglese, con la versione come chiave.
-> - Base `e7d698c4d`, worktree pulita, corsia 6164. I file `CHANGELOG*.md` non li tocco.
+> - Base `d81bb4965`, worktree pulita, corsia 6164. I file `CHANGELOG*.md` non li tocco.
 
 **Stato attuale, verificato**:
 - `changelog.ts:9` importa `CHANGELOG.md?raw` in modo statico; il parser è a `:40`. La modale si importa in modo statico da `Sidebar.svelte:13` e `AboutTab.svelte:19`.
@@ -1933,7 +1933,7 @@ Passi:
 > - Checkpoint a sé, FROZEN. Commit proposto `/tmp/libreFolio_commit_t_cl_key.txt`.
 
 ### CL — via al resto (coordinatore, 2026-10-12)
-- CL-0 è nel target: `a8691bd27` (la chiave) e `0aca4948f` (il piano), treno 57, `dev_release2` = `37304d716`. Worktree in fast-forward lì, pulita.
+- CL-0 è nel target: `d748b89ac` (la chiave) e `519c7f064` (il piano), treno 57, `dev_release2` = `963e8188b`. Worktree in fast-forward lì, pulita.
 - **Il contratto** del modulo `changelog.ts`: gli export di oggi restano invariati. Gli export nuovi:
   - `DisplayedChapter` (`ChangelogChapter` + `lang`);
   - `baseLanguage(locale)`;
@@ -2023,7 +2023,7 @@ Passi:
 > - Effetto sul rendering: il paragrafo separa le due liste, che prima uscivano fuse in una sola.
 
 ### Checkpoint CL ✅ (2026-10-12) — committato dal coordinatore, treno 60
-- Base `37304d716`. 11 file modificati e 1 nuovo, `e2e/layout/changelog-locale.spec.ts`.
+- Base `963e8188b`. 11 file modificati e 1 nuovo, `e2e/layout/changelog-locale.spec.ts`.
 - Quattro commit proposti:
   1. `feat(changelog)`: il codice, i test e il blocco del runner;
   2. `fix(runner)`: `cli_base.py` e `test_runtime_isolation.py`;
@@ -2032,12 +2032,12 @@ Passi:
 - Niente CHANGELOG. Il `CHANGELOG.it.md` sintetico è stato cancellato.
 
 ### Treno 60 (coordinatore, 2026-10-12)
-- Il CHANGELOG localizzato è committato sul ramo di T: `8f67f89de`, `ee8a19384`, `b02bf6c54`, `fba291f53` (albero `7d4b685304f4`). Entra nel treno 60.
+- Il CHANGELOG localizzato è committato sul ramo di T: `e255149cc`, `5f4d572c7`, `53b64a00e`, `0f5e2bb4a` (albero `7d4b685304f4`). Entra nel treno 60.
 
 ### M-18 — i numeri scritti con `toFixed`: analisi (2026-10-12) — superata dalla nuova regola qui sotto
 > **Richiesta**: dal developer, via coordinatore, testuale: «T prende M-18 in parallelo: I resta sulla rifinitura UI».
 > - Le fonti: il giro 12 di M, §11 (`27_releaseImages/plan-phase00TranslationRound12.prompt.md:658`, `:663`).
-> - Base `fba291f53`, corsia 6164.
+> - Base `0f5e2bb4a`, corsia 6164.
 
 **Lo stato verificato**:
 - Nel frontend ci sono 138 `toFixed`, fuori dai test.
@@ -2206,7 +2206,7 @@ Correzioni al conteggio automatico:
 ### M-18 — nuova regola: la lingua della UI per tutto (developer, 2026-10-12)
 > **Decisione** del developer, testuale: «Lingua della UI per tutto, importi e date compresi: lavoro più grande, con più rischio sulla 1.2».
 > - Del coordinatore: (b) le 12 chiamate con `$currentLanguage` passano dalla fonte unica; (c) i 56 decimali si fanno adesso; (d) `currencyFormat` passa dalla fonte unica.
-> - **Analisi rifatta, senza codice**, letta sul target `55304116f` con `git grep` in sola lettura: il target ha 12 file del frontend che mancano alla mia base (`responsiveXAxis.ts`, i grafici). Script `/tmp/libreFolio_m18b_grep.sh`.
+> - **Analisi rifatta, senza codice**, letta sul target `28c647832` con `git grep` in sola lettura: il target ha 12 file del frontend che mancano alla mia base (`responsiveXAxis.ts`, i grafici). Script `/tmp/libreFolio_m18b_grep.sh`.
 
 **1. La fonte unica**: `uiLocale()`, in un modulo `.svelte.ts` che legge `currentLanguage` con `fromStore`, così è reattiva.
 - **La mappa**: lingua della UI L, tag principale del browser B (`navigator.language`).
@@ -2308,7 +2308,7 @@ Correzioni al conteggio automatico:
 
 ### M-18 CP1 — via libera (coordinatore, 2026-10-12)
 - **Decisioni**: l'inglese senza regione ripiega su `en-GB` (developer); si usa solo il tag principale del browser (coordinatore); M-17 e `ProviderAssignmentSection` vanno nel CP2.
-- Base `55304116f`: il coordinatore mi ha fatto avanzare in fast-forward; il piano è rimasto modificato. Il CP1 non tocca nessun file di I.
+- Base `28c647832`: il coordinatore mi ha fatto avanzare in fast-forward; il piano è rimasto modificato. Il CP1 non tocca nessun file di I.
 - **Note di I**, recepite:
   - in un componente **legacy** la lettura dentro un helper è untracked (wiki `problems/legacy-component-language-untracked`);
   - `formatBytes` ha le unità con `get(_)`;
@@ -2333,7 +2333,7 @@ Correzioni al conteggio automatico:
 > - Per ordine del coordinatore, niente comandi frontend nuovi; un rosso con quell'errore è dell'ambiente.
 > - Ho detto a test-author di fermare i comandi e di riferire quali rossi ha già visto prima del guasto.
 > - La cura (`/tmp/libreFolio_m18_cp1_apply.py`, 42 file, e `/tmp/libreFolio_m18_cp1_core.py`) è pronta e la prova a secco è passata, ma **non l'applico** finché ogni rosso non è stato visto rosso.
-> - Nota dal coordinatore: T-SG e T-DI sono già nella mia sezione del backlog (`bf831ef10`). Non vanno duplicate; le voci nuove vanno in fondo.
+> - Nota dal coordinatore: T-SG e T-DI sono già nella mia sezione del backlog (`23e9a6b45`). Non vanno duplicate; le voci nuove vanno in fondo.
 
 #### M-18 CP1 passo 1 — i rossi ✅ (2026-10-12)
 > **Note implementazione** (test-author): tutti i rossi visti rossi su `node` sano (v26.11.1), in sequenza fra le 17:41 e le 17:46. Log in `/tmp/libreFolio_m18_reds_final_*.log`.
@@ -2369,7 +2369,7 @@ Correzioni al conteggio automatico:
 >   - il badge della quota in `brokers-detail`: 2 passed (in francese all'apertura, e passando in francese sul posto);
 >   - `asset-classification`: 4 passed;
 >   - `tx-import-asset-inspector`: 5 passed.
-> - **Sovrapposizioni**: il target è ora a `0c8412745` (treno 67) e ha cambiato 418 file, nessuno dei miei. Non aggiunge `toFixed`, non passa `$currentLanguage` a `formatPercent` e non ha mock parziali nuovi di `$lib/i18n`.
+> - **Sovrapposizioni**: il target è ora a `b74c81cfc` (treno 67) e ha cambiato 418 file, nessuno dei miei. Non aggiunge `toFixed`, non passa `$currentLanguage` a `formatPercent` e non ha mock parziali nuovi di `$lib/i18n`.
 >
 > **⚠️ Fuori pista**:
 > - **Arrotondamento**: Intl arrotonda il decimale più corto che rilegge il valore (`1.45` → `1.5`), mentre `toFixed` arrotonda il valore stesso (`1.4`). Quindi `formatFixed` e `formatPercent` pre-arrotondano con `toFixed`. Per il `%` serve anche a evitare lo spostamento dato da `/100` (`1.2345` a tre cifre).
@@ -2384,7 +2384,7 @@ Correzioni al conteggio automatico:
 > - **Il segno sullo zero**: le percentuali e i decimali scritti a mano mettevano `+` anche sullo zero (`+0.00%`). Ora seguono la regola condivisa di `formatPercent`: niente segno sullo zero. Nessun test del CP1 lo fissava. I rischi del livello L4 tengono il loro `−`/`+`.
 
 ### Checkpoint M-18 CP1 🧊 (2026-10-12) — inviato dopo «riparti» (19:24), FROZEN fino al commit
-- Base `55304116f`. 52 file modificati e 7 nuovi; nessuno è di I.
+- Base `28c647832`. 52 file modificati e 7 nuovi; nessuno è di I.
 - Due commit proposti:
   1. `fix(i18n): write figures in the interface language`: codice, test e righe del runner (`/tmp/libreFolio_commit_t_m18cp1_1.txt`);
   2. `docs(journal): record M-18 CP1`: questo piano (`/tmp/libreFolio_commit_t_m18cp1_2.txt`).
@@ -2431,7 +2431,7 @@ Correzioni al conteggio automatico:
   - la run completa con coverage del coordinatore gira sulla 6176: se un mio E2E scade, prima lo rilancio da solo, poi indago.
 
 ### M-18 CP2 — via (coordinatore, 2026-10-12 sera)
-- **Base**: `a5653f9ef` (treno 68, il CP1 è dentro: `5b2aad5c4`, `d00c06685`). Worktree pulita, porta 6164 libera.
+- **Base**: `78101574b` (treno 68, il CP1 è dentro: `cdc341b6a`, `834586174`). Worktree pulita, porta 6164 libera.
 - **Dal coordinatore**:
   - galleria: proposta A, passata a M con la docstring di `galleryLocale.ts:4-7`;
   - CHANGELOG: una sola volta, col CP2;
@@ -2586,7 +2586,7 @@ Correzioni al conteggio automatico:
 > - **C ha trovato un altro sito**: `problemCount` (`chartSignalsHelpers.ts:31-33`, `String(value)`) passa conteggi e copertura ai messaggi dei segnali.
 >   - Cura: `formatFixed(value, 1, {trim: true})`. In inglese un conteggio da 1 000 in su si scrive raggruppato.
 >   - Rosso chiesto a C. La cura è nel passo 2: `/tmp/libreFolio_m18_cp2_apply2.py`, 21 operazioni su 6 file.
-> - **Il target è andato avanti**: `e37770d5e` (treno 70). L'unico file in comune è `BACKLOG_POST_1.2.md`, in sezioni diverse. M ha già applicato la proposta A della galleria (`e8d5a5668`). `ProviderAssignmentSection` di I non è ancora entrato.
+> - **Il target è andato avanti**: `874ea6c87` (treno 70). L'unico file in comune è `BACKLOG_POST_1.2.md`, in sezioni diverse. M ha già applicato la proposta A della galleria (`250a6df1e`). `ProviderAssignmentSection` di I non è ancora entrato.
 > - **Il riferimento per M** (formati visibili per lingua): `/tmp/libreFolio_m18cp2_examples.txt`, calcolato con Intl.
 
 #### M-18 CP2 passo 5 — seconda parte della cura, decisioni (2026-10-12 sera)
@@ -2615,7 +2615,7 @@ Correzioni al conteggio automatico:
 >   - 13 passed.
 > - **Ipotesi scartate**: §1 la forma della risposta non c'entra, è geometria; §2 non sono attese a tempo; §3 l'asset è creato dal test e la scatola che esce è il gruppo delle azioni, testo tradotto.
 > - **Dal coordinatore**: è **V-19** (`BACKLOG_POST_1.2.md:763`), deterministico anche a 1 worker, visto da V sulla stessa base.
->   - Causa: il cambio dei termini `7c66234a7` («Exportación IA»), già nel treno 68.
+>   - Causa: il cambio dei termini `6f0648408` («Exportación IA»), già nel treno 68.
 >   - Le date spagnole, più corte, spostano gli stessi rossi di circa 20 px.
 >   - La cura è nel lotto 48 di I (C5, soglie denseRow). **Non li tocco.** Chi entra per secondo rilancia la sweep sulla revisione combinata.
 
@@ -2642,7 +2642,7 @@ Correzioni al conteggio automatico:
 >   | `asset-detail` | 32 passed |
 
 ### Checkpoint M-18 CP2 🧊 (2026-10-12 sera) — FROZEN, in attesa del coordinatore
-- **Base**: `a5653f9ef` (treno 68). **Target**: `e37770d5e` (treno 70). In comune solo `BACKLOG_POST_1.2.md`, in sezioni diverse: C-61..C-64 del coordinatore, T-ST e T-ICU in fondo alla sezione T.
+- **Base**: `78101574b` (treno 68). **Target**: `874ea6c87` (treno 70). In comune solo `BACKLOG_POST_1.2.md`, in sezioni diverse: C-61..C-64 del coordinatore, T-ST e T-ICU in fondo alla sezione T.
 - **Delta**: 119 file modificati (82 di prodotto, 35 di test, il piano e il backlog). Nessun file nuovo, niente in stage.
 - **I rossi visti rossi**: 105. A 3, B 33, C 40 + 16, D 13.
 - **Riparazioni**: il gate HTML, il registro dei siti monetari, e due contratti sul sorgente (`GrowthChart`, la torta).
@@ -2662,7 +2662,7 @@ Correzioni al conteggio automatico:
   - `ProviderAssignmentSection` (`:333`, `:585`, `:616`), se entra il cambio di I.
 
 ### M-18 CP3a — via (coordinatore, 2026-10-12 21:44)
-- **Base**: `64a3ddccc`, cioè il CP2 committato (`ff7c96fd0`, 117 file, e `64a3ddccc`, il journal). Worktree pulita. Il coordinatore non mi porta ancora il target.
+- **Base**: `56b18a3f2`, cioè il CP2 committato (`c0b6e2229`, 117 file, e `56b18a3f2`, il journal). Worktree pulita. Il coordinatore non mi porta ancora il target.
 - **Sequenza**:
   1. **CP3a** sulla mia base: i decimali esatti, le 2 pagine developer dalla patch, e le due righe già sbagliate di `app-state.md`;
   2. il treno 72 porta il lotto 48 di I (con `ProviderAssignmentSection`) e la 2b di V; poi checkpoint del CP3a, e il coordinatore mi porta il target (U-2, I e V);
@@ -2713,12 +2713,12 @@ Correzioni al conteggio automatico:
 >   - `check-orphans` pulito;
 >   - `front check` con 0 errori e 0 avvisi;
 >   - Prettier e `diff --check` puliti.
-> - **Sovrapposizione col target** `0071b9703`, che non contiene ancora il CP2. Vera sovrapposizione rispetto alla base `a5653f9ef`:
+> - **Sovrapposizione col target** `1f5334583`, che non contiene ancora il CP2. Vera sovrapposizione rispetto alla base `78101574b`:
 >   - `BACKLOG_POST_1.2.md`, in sezioni diverse;
->   - la pagina dell'asset, toccata da I (`7f8febd9d`, toolbar spagnola) e dal CP2 (una data e un import), in pezzi diversi. Simulazione del coordinatore: pulita.
+>   - la pagina dell'asset, toccata da I (`a91ffd892`, toolbar spagnola) e dal CP2 (una data e un import), in pezzi diversi. Simulazione del coordinatore: pulita.
 
 ### Checkpoint M-18 CP3a 🧊 (2026-10-12 sera) — FROZEN, in attesa del coordinatore
-- **Base**: `64a3ddccc` (CP2 sul ramo). **Delta**: 15 file modificati: 7 di prodotto, 4 di test, 2 pagine developer, il piano e il backlog. Nessun file nuovo.
+- **Base**: `56b18a3f2` (CP2 sul ramo). **Delta**: 15 file modificati: 7 di prodotto, 4 di test, 2 pagine developer, il piano e il backlog. Nessun file nuovo.
 - **Commit proposti** (ASCII), in `/tmp/libreFolio_commit_t_m18cp3a_{1,2,3}.txt`:
   1. `fix(i18n): exact decimals in the UI language`: prodotto e test;
   2. `docs(dev): figures in the interface language`: le 2 pagine;
@@ -2726,8 +2726,8 @@ Correzioni al conteggio automatico:
 - **Poi il CP3b**, sul target: `ProviderAssignmentSection` (`:333`, `:585`, `:616`, sulla base che contiene il cambio di I) e la validazione combinata unica, compresa la sweep anche in es.
 
 ### M-18 CP3b — via (coordinatore, 2026-10-12 22:39)
-- **Il CP3a è committato**: `c17d39d5a` (11 file), `133259913` (le 2 pagine developer), `052b9f8bd` (journal).
-- **Il target del treno 72 è fuso sul ramo**: HEAD `c272d93b4`, merge pulito. Contiene U-2, il lotto 48 di I (clipboard, `ProviderAssignmentSection`) e la 2b di V.
+- **Il CP3a è committato**: `d44d4800a` (11 file), `312a7fd0c` (le 2 pagine developer), `5dcfbc7e7` (journal).
+- **Il target del treno 72 è fuso sul ramo**: HEAD `74cc4b252`, merge pulito. Contiene U-2, il lotto 48 di I (clipboard, `ProviderAssignmentSection`) e la 2b di V.
   - U-2: i cataloghi sono `src/lib/i18n/base/<lang>.json`. `src/lib/i18n/<lang>.json` è generato dagli hook (`predev`, `prebuild`, `precheck`, il `globalSetup` di Vitest) e non è più tracciato.
   - `package.json` aggiunge solo gli hook: nessuna dipendenza nuova, niente `npm ci`.
   - Niente chiavi nuove.
@@ -2753,7 +2753,7 @@ Correzioni al conteggio automatico:
 > - **Validazione combinata in corso** (log `/tmp/libreFolio_t1_m18cp3bv_*`).
 
 #### M-18 CP3b passo 3 — la validazione combinata unica ✅ (2026-10-12 notte)
-> **Revisione**: `c272d93b4` (CP2 + CP3a + il target del treno 72: U-2, il lotto 48 di I, la 2b di V) più la cura del CP3b. Corsia 6164, 34 azioni in una sola corsa, tutte `exit=0` (log `/tmp/libreFolio_t1_m18cp3bv_*`).
+> **Revisione**: `74cc4b252` (CP2 + CP3a + il target del treno 72: U-2, il lotto 48 di I, la 2b di V) più la cura del CP3b. Corsia 6164, 34 azioni in una sola corsa, tutte `exit=0` (log `/tmp/libreFolio_t1_m18cp3bv_*`).
 > - `check-orphans` pulito; `front check` con 0 errori e 0 avvisi.
 > - **Vitest**: 19 azioni, **11 309 test**. Tra queste core-unit 4 090, component-unit 3 077, tx 887, ai-export 433, asset 762, risk-levels 493 + 248.
 > - **`toolbar-width-sweep`: 15/15, anche in es**, con la cura di I (C5). I 2 rossi di V-19 non ci sono più.
@@ -2775,24 +2775,24 @@ Correzioni al conteggio automatico:
 >   | support-copy-and-go | 16 |
 >   | settings | 45 |
 >
-> - **Dopo la validazione il target si è mosso**: `bcd502912` porta i treni 73 (M, W) e 74 (U-3, il catalogo diviso per sottosistema e per plugin).
+> - **Dopo la validazione il target si è mosso**: `e2f8bafb7` porta i treni 73 (M, W) e 74 (U-3, il catalogo diviso per sottosistema e per plugin).
 >   - Delle mie modifiche (CP2 + CP3) tocca solo `BACKLOG_POST_1.2.md`.
 >   - Con U-3 le chiavi cambiano file sorgente (`chart.tooltip.stale` sta ora in `i18n/charts/`), ma il catalogo generato `src/lib/i18n/<lang>.json` resta allo stesso percorso, quello che importano 7 dei miei test.
 >   - La validazione sopra **non contiene U-3**.
 
 ### Checkpoint M-18 CP3b 🧊 (2026-10-12 notte) — FROZEN, in attesa del coordinatore
-- **Base**: `c272d93b4`. **Delta**: 4 file: `ProviderAssignmentSection.svelte` e il suo test, il piano, il backlog (T-EN1 con «points»).
+- **Base**: `74cc4b252`. **Delta**: 4 file: `ProviderAssignmentSection.svelte` e il suo test, il piano, il backlog (T-EN1 con «points»).
 - **Commit proposti**:
   1. `fix(i18n): probe figures in the UI language` (`/tmp/libreFolio_commit_t_m18cp3b_1.txt`);
   2. `docs(journal): record M-18 CP3b` (`/tmp/libreFolio_commit_t_m18cp3b_2.txt`).
 - **Per il CHANGELOG del coordinatore**: M-18 è completo. Le cifre di ogni tipo (percentuali, decimali, byte, durate, importi, date, assi, decimali esatti) seguono la lingua dell'interfaccia; M-17 è risolto. Le voci aperte di backlog sono T-DI, T-ST, T-ICU, T-EN1, T-EN2, T-COL e T-DEAD.
 
 ### T-EN1 + T-EN2 — via (coordinatore, 2026-10-12 23:54)
-- **Base**: HEAD `104ba23d0` = target `dev_release2` (treno 75: il CP2 e il CP3 di M-18 sono dentro), worktree pulita. Corsia 6164.
+- **Base**: HEAD `8c2ced093` = target `dev_release2` (treno 75: il CP2 e il CP3 di M-18 sono dentro), worktree pulita. Corsia 6164.
 - **Mandato**: le chiavi con `dev.py i18n add`, che sceglie la sorgente giusta (dopo lo split di U-3); il controllo con `dev.py i18n where`; prima i rossi, via test-author; il gate `utils gate-plugin-i18n-ownership` resta verde; `toolbar-width-sweep` non serve, salvo un'etichetta che allarghi una barra. Restano dopo la 1.2: T-ICU, T-COL, T-DEAD, T-DI, T-ST. La galleria di M aspetta questo lotto.
 
 #### T-EN — analisi (2026-10-12 notte)
-**I siti** (riverificati su `104ba23d0`):
+**I siti** (riverificati su `8c2ced093`):
 - **T-EN1, il tooltip degli eventi del grafico dei prezzi**. `PriceChartFull.svelte:776-792` (`formatEventEntry`): quando il valore dell'evento è convertito, scrive in ogni lingua:
   - «orig.» (`:786`);
   - «(Nd back)» (`:788`);
@@ -2938,13 +2938,13 @@ Correzioni al conteggio automatico:
 > - **v1.1.0**: le quattro scritte inglesi c'erano già. Per il CHANGELOG serve quindi una riga 🐛.
 
 ### Checkpoint T-EN 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
-- **Base**: `104ba23d0`. **Delta**: 23 file modificati più 2 nuovi, 25 in tutto.
+- **Base**: `8c2ced093`. **Delta**: 23 file modificati più 2 nuovi, 25 in tutto.
 - **Commit proposti**:
   1. `/tmp/libreFolio_commit_t_ten_1.txt`, `fix(i18n): chart and probe texts in UI language`: codice, test, cataloghi, runner;
   2. `/tmp/libreFolio_commit_t_ten_2.txt`, `docs(journal): record T-EN1 and T-EN2`: il piano e il backlog.
 
 ### T-SHK + T-CL — via (coordinatore, 2026-10-13 03:15)
-- **Base**: `273b188ea` (treno 82), pulita. Corsia 6164.
+- **Base**: `a8f882310` (treno 82), pulita. Corsia 6164.
 - **Carico**: finché il coordinatore non dà il «via», solo spec singole a 1 worker, perché gira la galleria di M.
 - **Mandato**:
   1. **D5, la tabella dello shock** (README della 02, «Difetti noti»): etichette leggibili al posto degli id dei bucket; la prima colonna col nome della dimensione; i gruppi a peso zero non diventano righe, nel frontend, senza cambiare l'API.
@@ -2953,7 +2953,7 @@ Correzioni al conteggio automatico:
 - **Regole**: prima un'analisi breve, poi si parte senza aspettare. Ci si ferma solo per un cambio di API o di backend, o per una scelta di prodotto che non è nel mandato. Test via test-author, rossi prima.
 
 #### T-SHK — analisi (2026-10-13)
-**Le superfici** (verificate su `273b188ea`):
+**Le superfici** (verificate su `a8f882310`):
 - `levels/l4/L4Shock.svelte`:
   - `rowLabel` (`:100-106`) restituisce `row.bucketId` grezzo;
   - anche l'editor del dettaglio scrive l'id grezzo (`:136-148`: testo, `title`, `aria-label`). È lo stesso difetto e lo curo insieme;
@@ -2996,7 +2996,7 @@ Correzioni al conteggio automatico:
 **D8, il drawdown massimo**:
 - Le chiavi sono `risk.metrics.maxDrawdown` (pannello legacy, `:192`) e `risk.levels.l1.technical.worst` (L1, `:400`).
 - Oggi: it «Drawdown massimo» contro «Massimo drawdown»; fr «Repli maximal» contro «Perte maximale». In en ed es sono già uguali.
-- **Il termine del glossario**: `cd0b404d2` fissa «repli» per *drawdown*, ma la tabella del glossario (`mkdocs_src/aphra-pipeline/glossaries/glossary.json`) dà per *maximum drawdown* it «drawdown massimo» e fr «perte maximale». La doc usa questi due 40 e 45 volte, gli altri due zero.
+- **Il termine del glossario**: `1c1a294fe` fissa «repli» per *drawdown*, ma la tabella del glossario (`mkdocs_src/aphra-pipeline/glossaries/glossary.json`) dà per *maximum drawdown* it «drawdown massimo» e fr «perte maximale». La doc usa questi due 40 e 45 volte, gli altri due zero.
 - **Cura**: it `risk.levels.l1.technical.worst` → «Drawdown massimo»; fr `risk.metrics.maxDrawdown` → «Perte maximale», con `dev.py i18n update`.
 - **Rosso**: un test di catalogo, «le due etichette del drawdown massimo coincidono in ogni lingua».
 
@@ -3006,7 +3006,7 @@ Correzioni al conteggio automatico:
 - **`GrowthChart.svelte`** (commento di `fmtCurrency`, ~`:2156`): il segno viene da `uiLocale()`, non dalla locale del browser. Ho verificato su Node: `-` (U+002D) in en-GB, en-US, it, fr, es e nelle loro regioni.
 
 #### T-SHK + T-CL — tre aggiunte (coordinatore, 2026-10-13 03:39, dalla galleria completa di M)
-1. **Priorità alta, blocca il tag.** `ProviderComparisonModal`: `data-dist-pct` è la stringa mostrata e, da `5b2aad5c4` (M-18 CP1), segue la lingua (`100,00%`). La galleria (`e2e/fixtures/galleryProviderCompare.ts:309`) si aspetta `'100.00%'` e diventa rossa su desktop e mobile.
+1. **Priorità alta, blocca il tag.** `ProviderComparisonModal`: `data-dist-pct` è la stringa mostrata e, da `cdc341b6a` (M-18 CP1), segue la lingua (`100,00%`). La galleria (`e2e/fixtures/galleryProviderCompare.ts:309`) si aspetta `'100.00%'` e diventa rossa su desktop e mobile.
    - **Cura**: il nome dell'attributo non cambia. `formatDistribution` dà a ogni voce `pct` (mostrato, localizzato) e `hook` (`(v×100).toFixed(2)%`, uguale in ogni lingua), e l'attributo legge `hook`.
    - È l'aggancio stabile che `ProviderComparisonModal.test.ts:38` documenta: né la galleria né i test vanno cambiati.
    - Rosso prima, in it o fr.
@@ -3087,12 +3087,12 @@ Correzioni al conteggio automatico:
 > - Porta 6164 libera.
 > - **Backlog**: T-CAT (due rese delle categorie: PAC e rischio) e T-GRP (i gruppi geografici dell'host, e il limite dei pesi senza `bucket_audit`).
 > - **README della 02**: la voce «L4, la tabella dello shock» di «Difetti noti» è marcata risolta.
-> - **CHANGELOG**: la tabella dello shock è nata nella 1.2, quindi niente 🐛 a parte. Le correzioni entrano nella riga che la descrive (L316 a `273b188ea`).
+> - **CHANGELOG**: la tabella dello shock è nata nella 1.2, quindi niente 🐛 a parte. Le correzioni entrano nella riga che la descrive (L316 a `a8f882310`).
 >   - Il placeholder della descrizione c'era già nella v1.1.0: vale una riga 🐛 minima, oppure si unisce alle righe «follow your language».
 >   - D8 rende vera L263 («drawdown is named the same way»).
 
 ### Checkpoint T-SHK + T-CL 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
-- **Base**: `273b188ea`.
+- **Base**: `a8f882310`.
 - **Commit proposti**:
   1. `/tmp/libreFolio_commit_t_shk_1.txt`, `fix(assets): stable dist hook, translated hint`;
   2. `/tmp/libreFolio_commit_t_shk_2.txt`, `fix(risk): name shock buckets, hide unheld ones`;
@@ -3101,7 +3101,7 @@ Correzioni al conteggio automatico:
 - I file per commit sono nel manifest `/tmp/libreFolio_shk_manifest.txt`.
 
 ### T-ISO + T-FB — via (coordinatore, 2026-10-13 04:34)
-- **Il lotto T-SHK + T-CL è integrato**: `dfc4f9ccc`…`c424562f5`, treno 85; `dev_release2` = `fadf43b01` = la mia HEAD, pulita. «Perte maximale» va bene.
+- **Il lotto T-SHK + T-CL è integrato**: `f571b5199`…`c725a22f5`, treno 85; `dev_release2` = `9f243a38b` = la mia HEAD, pulita. «Perte maximale» va bene.
 - **Mandato**. Il coordinatore cambia la decisione di prima: la riga 🔄 «Numbers and dates follow the interface language everywhere» promette «chart axes and tooltips».
   1. **T-ISO, parte frontend**:
      - le date del tooltip del grafico dei prezzi, cioè il `{date}` di `chart.tooltip.valueAt`, le righe ↩ e 💱, l'evento nei periodi aggregati e `fxRateDate`;
@@ -3112,7 +3112,7 @@ Correzioni al conteggio automatico:
 - **Regole**: analisi breve e poi via; ci si ferma per un cambio di API; rossi prima, via test-author; spec singole a 1 worker sulla 6164; checkpoint FROZEN col manifest. Gli scatti dei tooltip non contano per la galleria finale, lo shock sì.
 
 #### T-ISO + T-FB — analisi (2026-10-13)
-**T-ISO, le superfici** (su `fadf43b01`; il formattatore è quello delle date dei tooltip dei lotti: `formatAxisDate(uiLocale(), iso, true)`, cioè `12 ott 2026`, `12 Oct 2026`, `12 oct. 2026`):
+**T-ISO, le superfici** (su `9f243a38b`; il formattatore è quello delle date dei tooltip dei lotti: `formatAxisDate(uiLocale(), iso, true)`, cioè `12 ott 2026`, `12 Oct 2026`, `12 oct. 2026`):
 - **`PriceChartFull.svelte`**:
   - le righe dell'elenco del coordinatore: `formatEventEntry` (`:778`, la data dell'evento nei periodi aggregati), `fxRateDate` (`:789`), `valueAt` (`:1017`, `:1020`, `:1029`), ↩ (`:1018`), 💱 (`:1023`).
   - **Anche l'intestazione del tooltip** (`buildTooltipHeader`, `:340-352`): il giorno è ISO, la settimana ha `weekRange` con due ISO, il mese ha `valueAt` in ISO. È la data più visibile del tooltip e la promessa del 🔄 la copre: la includo.
@@ -3232,7 +3232,7 @@ Correzioni al conteggio automatico:
 > - **Backlog**: T-ISO e T-FB marcate ✅.
 
 ### Checkpoint T-ISO + T-FB 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
-- **Base**: `fadf43b01`.
+- **Base**: `9f243a38b`.
 - **Commit proposti**:
   1. `/tmp/libreFolio_commit_t_iso_1.txt`, `fix(charts): tooltip dates follow the UI language`;
   2. `/tmp/libreFolio_commit_t_iso_2.txt`, `fix(signals): catalogue fallbacks, page errors`;
@@ -3242,7 +3242,7 @@ Correzioni al conteggio automatico:
 - **Il runner va nel commit 2**, perché registra anche il file nuovo di quel commit. Fra il commit 1 e il 2, `LineChart.test.ts` resta un orfano.
 
 ### T-ISO, la riparazione di `component-unit` — via (coordinatore, 2026-10-13 06:08)
-- **T-ISO + T-FB è integrato**: treno 88, `dev_release2` = `50886d1ca` = la mia HEAD, pulita.
+- **T-ISO + T-FB è integrato**: treno 88, `dev_release2` = `e38b8b1cd` = la mia HEAD, pulita.
 - **I gate del treno**: 8 rossi in `front-utility component-unit`, tutti in `AssetModal.providerLifecycle.test.ts`. `expectResults` (`:424-440`) riconosce la riga dello storico dal `date_range` grezzo nel testo, e dopo T-ISO quel testo è formattato.
 - **Mandato**:
   - un aggancio sulle righe `provider-test-result` che non dipende dalla lingua, usato dal test al posto del testo;
@@ -3299,14 +3299,14 @@ Correzioni al conteggio automatico:
 > - **Porta 6164 libera.**
 
 ### Checkpoint della riparazione 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
-- **Base**: `50886d1ca`.
+- **Base**: `e38b8b1cd`.
 - **Commit proposti**:
   1. `/tmp/libreFolio_commit_t_iso_r1.txt`, `fix(assets): probe rows name their operation`: il componente e i due spec;
   2. `/tmp/libreFolio_commit_t_iso_r2.txt`, `docs(journal): record the T-ISO probe repair`: piano 43 e backlog.
 - **I file per commit** sono nel manifest `/tmp/libreFolio_tdr_manifest.txt`.
 
 ### Il tooltip del periodo in corso — via (coordinatore, 2026-10-13 06:42)
-- **Base**: treno 91, `dev_release2` = `fa6299689` = la mia HEAD, pulita. Dentro c'è il lotto 51 di I. La sua R-5 (`1acd1bf10`) mette il marcatore di un evento dell'ultimo periodo parziale, settimanale o mensile, sull'ultima data con un dato.
+- **Base**: treno 91, `dev_release2` = `21ab8a539` = la mia HEAD, pulita. Dentro c'è il lotto 51 di I. La sua R-5 (`ca1f01663`) mette il marcatore di un evento dell'ultimo periodo parziale, settimanale o mensile, sull'ultima data con un dato.
 - **Il difetto, segnalato da I** (piano della 51, §R-5, «un fratello»): il tooltip di quel punto dice ancora «value at» la fine teorica del periodo (`PriceChartFull.svelte:348-352`). Le due date non coincidono.
 - **Mandato**:
   - il tooltip del punto aggregato nomina la data del suo ultimo dato, oppure l'intervallo vero se il formato ha un intervallo, con `formatDay`;
@@ -3344,7 +3344,7 @@ Correzioni al conteggio automatico:
   - i due file, poi `front-utility core-unit` e `component-unit`;
   - `front check` e Prettier;
   - gli E2E `front-asset asset-detail` e `front-fx fx-detail`.
-- **Aggiunta del coordinatore (06:53)**: chiudere T-EVW nel backlog, col rimando, perché è la R-5 di I (`1acd1bf10`, treno 91), confermata a runtime da V.
+- **Aggiunta del coordinatore (06:53)**: chiudere T-EVW nel backlog, col rimando, perché è la R-5 di I (`ca1f01663`, treno 91), confermata a runtime da V.
   > **Note implementazione**: T-EVW ✅ nella sezione T del backlog, coi rimandi al piano della 51 (sezione «R-5») e a questa sezione.
 
 #### Il periodo in corso, passo 1 — i rossi ✅ (2026-10-13)
@@ -3381,7 +3381,7 @@ Correzioni al conteggio automatico:
 > - **Riga 🐛 proposta**, da unire a quella della R-5 di I nel blocco `#### 📈 Charts`: vedi il checkpoint.
 
 ### Checkpoint del periodo in corso 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
-- **Base**: `fa6299689`.
+- **Base**: `21ab8a539`.
 - **Commit proposti**:
   1. `/tmp/libreFolio_commit_t_bkt_1.txt`, `fix(charts): open period tooltip ends on its day`: l'helper, le due testate, i due spec;
   2. `/tmp/libreFolio_commit_t_bkt_2.txt`, `docs(journal): record the open period tooltip`: piano 43 e backlog (T-EVW ✅).

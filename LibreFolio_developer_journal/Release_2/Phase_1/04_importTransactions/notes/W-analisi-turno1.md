@@ -1,6 +1,6 @@
 # W · ondata 4 · analisi del primo turno (solo lettura)
 
-Base `c042f2481` (= `dev_release2`), worktree pulito. Quattro lotti, nell'ordine del brief: **Q-N78-1k**, l'helper legacy, la regola
+Base `295a09c86` (= `dev_release2`), worktree pulito. Quattro lotti, nell'ordine del brief: **Q-N78-1k**, l'helper legacy, la regola
 dei plugin in beta con Fineco su `RowSkips`, **W-BS**. Nessun file toccato.
 
 ---

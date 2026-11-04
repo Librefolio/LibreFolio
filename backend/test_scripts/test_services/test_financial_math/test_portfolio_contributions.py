@@ -3,7 +3,7 @@ MF-A5 (workstream MF, lot A5) — the base of a closed position's annualized ret
 
 Module under test: ``backend/app/services/financial_math/portfolio/contributions.py``. A position fully sold in the
 period annualizes its result on a base over its flight time (``closed_position_annualized``). Until MF-A5 (HEAD
-203197f5a) the base was the cost of the units it **sold**; but the row's result also carries what the units it moved to
+8c8c13a89) the base was the cost of the units it **sold**; but the row's result also carries what the units it moved to
 another broker of the scope did while there (the P22 tract adjustment, ``transfer_tract_adjustments``). J's example:
 10 units, cost 1 000, start value 1 100; sell 5 for 625, transfer 5 worth 600 on arrival to a broker of the scope: the
 row's P&L is +125 (ΔUGL −100 + realized +125 + tract +100), HEAD's base 500 (25 %), the base now 1 000 (12.5 %).
@@ -30,7 +30,7 @@ MF-A8 (J's review of MF-A5, the mirror on the receiving side). A row that receiv
 their result from their value on arrival (its tract adjustment, ``−(V − C)``, takes back what they gained before), but
 its sales' and moves' costs are their historical cost: the base must add ``V − C`` too. J's example: 5 bought for 500
 at A, moved to B worth 600, sold at B for 660: B's realized 160 + tract −100 = P&L 60, on 600 (10 %), not on HEAD's 500
-(12 %). Product (HEAD 685d76dab + uncommitted):
+(12 %). Product (HEAD 86e120a43 + uncommitted):
 
 * ``transfer_tracts_moved_in(transfers, date_from, end)``: per **receiver** ``(broker_id, asset_id)``, Σ(V − C) of its
   counted tracts — the same ``counted_tract`` rule; negative when the units arrived worth less than they cost;
@@ -45,7 +45,7 @@ MF-A5 class above, which never pass ``moved_in``.
 MF-A9 (the same mirror, for a position still open). A row opened in the period by counted tracts, still holding every
 unit they brought, has no start value: ``annualized_period_return`` falls back on its end cost — their historical cost —
 while its result counts them from their value on arrival. The A8 chain A → B → C: C holds the 5 units, worth
-V₂ = 645 on arrival (C₂ = 500), 650 at the end: P&L 5, on 645 now, on 500 on HEAD (770928213). Product (HEAD +
+V₂ = 645 on arrival (C₂ = 500), 650 at the end: P&L 5, on 645 now, on 500 on HEAD (52a417c20). Product (HEAD +
 uncommitted): ``annualized_period_return(..., moved_in=None)`` — with ``moved_in`` the fallback base is
 ``end_cost + moved_in``, None unless positive; without it HEAD's rule exactly (``end_cost`` ≠ 0, a negative one
 included). A usable start value wins either way. The service passes it only to a row with no exit in the period (the
@@ -103,7 +103,7 @@ def _transfer(departure: date = MIDDLE, arrival: date = MIDDLE, *, sender: int =
 
 
 # =============================================================================
-# HEAD's transfer_tract_adjustments (contributions.py @ 203197f5a), verbatim but for its name
+# HEAD's transfer_tract_adjustments (contributions.py @ 8c8c13a89), verbatim but for its name
 # =============================================================================
 
 
@@ -473,7 +473,7 @@ class TestTransferTractsMovedIn:
 
 
 def _head_closed_position_base(cost_sold: Decimal, sales: int, moved_out: tuple[Decimal, int] | None, exits: int) -> Decimal | None:
-    """HEAD's closed_position_base (contributions.py @ 685d76dab), verbatim but for its name and the zero's."""
+    """HEAD's closed_position_base (contributions.py @ 86e120a43), verbatim but for its name and the zero's."""
     moved_cost, moved_count = moved_out or (ZERO, 0)
     if exits != sales + moved_count:
         return None
@@ -653,7 +653,7 @@ A9_DAYS = (A9_TO - MI_ONWARD_ARRIVAL).days
 
 
 def _head_annualized_period_return(period_pnl: Decimal | None, start_value: Decimal | None, end_cost: Decimal | None, *, window_from: date | None, end: date) -> Decimal | None:
-    """HEAD's annualized_period_return (contributions.py @ 770928213), verbatim but for its name, its quantum's and its
+    """HEAD's annualized_period_return (contributions.py @ 52a417c20), verbatim but for its name, its quantum's and its
     helper's module (``period_return_on_start``, unchanged)."""
     ratio = contributions.period_return_on_start(period_pnl, start_value)
     if ratio is None and period_pnl is not None and end_cost is not None and end_cost != 0:

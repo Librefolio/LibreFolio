@@ -3,9 +3,9 @@
 > **ARCHIVIO:** piano non corrente. L'entrypoint della suite target è
 > [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
 
-**Stato:** approvato dal developer; Phase A numerica committata a `a6960ef04`;
-slice Asset global committata a `7a02517e6`; WIP Round 2 preservato a
-`8273335ff`; merge H chiuso dal developer a `d7d40c0ec`. Ripresa Round 2
+**Stato:** approvato dal developer; Phase A numerica committata a `900ceadd8`;
+slice Asset global committata a `92957e751`; WIP Round 2 preservato a
+`0261fe73e`; merge H chiuso dal developer a `5717fbdd1`. Ripresa Round 2
 completa autorizzata dopo il gap audit: slice A-D concluse, produzione E-F
 implementata e in validazione; superfici condivise, cataloghi e documentazione
 restano ai writer coordinati. Nessuna integrazione dichiarata prima della nuova
@@ -13,7 +13,7 @@ review developer.
 
 ← Piano precedente: [PAC allocator P1](plan-phase00PacAllocator.prompt.md)
 
-**Baseline:** `570beb386a7e72085a4ae8f84fb7c966e734c9b1`, oltre al redesign
+**Baseline:** `2217fa3669fbfec9f0982409e594bcf109192189`, oltre al redesign
 PAC non ancora committato ma gia validato prima della review manuale.
 
 ## 1. Obiettivo
@@ -732,14 +732,14 @@ Pannello:
     > CHANGELOG/cataloghi/integrazione condivisa del coordinatore.
 11. [ ] Gate combinati e nuova review manuale desktop/mobile su lane 6153.
    > **Nota implementazione 2026-09-11 - ripresa post-merge**: verificato
-   > `HEAD=d7d40c0ec4773bc1b81ecefe8b6d8c5e2389ba00`, merge chiuso, index vuoto e
+   > `HEAD=5717fbdd1b057f5b720006d306497460e4ed8140`, merge chiuso, index vuoto e
    > set preservato esattamente limitato a piano + test PAC API + E2E + unit.
    > Graph wiki non disponibile nel worktree; ricerca mirata sulle pagine
    > committate senza risultati PAC pertinenti. Riletti contratto Round 2,
    > istruzioni frontend/testing e wiring corrente prima di modificare la
    > produzione.
    > **Nota implementazione parziale 2026-09-11 - merge H**: verificati
-   > `HEAD=8273335ff` e `MERGE_HEAD=f092a194b`; risolti additivamente e staged
+   > `HEAD=0261fe73e` e `MERGE_HEAD=a01fbbcd5`; risolti additivamente e staged
    > soltanto `CHANGELOG.md`, `backend/app/schemas/portfolio.py`,
    > `backend/app/services/portfolio_service.py` e
    > `backend/test_scripts/test_api/test_portfolio_api.py`. Conservati i

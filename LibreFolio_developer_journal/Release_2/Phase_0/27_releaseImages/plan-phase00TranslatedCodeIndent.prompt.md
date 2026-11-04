@@ -1,13 +1,13 @@
 # Plan Phase 00 — Translated code blocks keep the source indentation (pipeline fix + `code-block-indent` check)
 
 **Creato**: 2026-10-06
-**Baseline/target**: `a7d0b37eca78db4e0474156b1f3fb6b6196b177e` (`dev_release2`, the train D, K, L, M, N), tree `3c6421cda`, HEAD verified clean
+**Baseline/target**: `9e4e90675037c0ef64ecec1b3ca43a29da0f9b8b` (`dev_release2`, the train D, K, L, M, N), tree `3c6421cda`, HEAD verified clean
 **Workstream**: M — branch `e-alfy-cloud-resource-sizing`, worktree `LibreFolio-worktrees/e-alfy-upgraded-telegram`
 **Coordinator**: session `c8328a01-f208-4ade-a352-0486d1f14de2`
 **Runtime lane**: ports `6158`/`6168`, data dir `/tmp/librefolio-r2-m`; evidence outside the repo in `LibreFolio-cloud-sizing/release-images/step8/`
 **Previous plan**: [plan-phase00ReleaseImages.prompt.md](plan-phase00ReleaseImages.prompt.md). Its step 6 (Tailscale) fixed the flattened compose by hand, and this plan removes the cause.
 **Origin**: the coordinator's «passo 8», analysis only: `LibreFolio-cloud-sizing/release-images/step8/step8-analysis.md` (exact list `step8-list.md`)
-**Autorizzazione developer**: «si mi torna, allora di ad M di correggere lo script. riguardo al correggere le pagine già convertite sono in dubbio visto che tra poco dobbiamo rifare il grande allineamento, che ne pensi? magari solo per le pagine che comunque sono fuori dallo scope?», relayed by the coordinator on 2026-10-06 at 20:00. Start relayed after the realignment to `a7d0b37ec`.
+**Autorizzazione developer**: «si mi torna, allora di ad M di correggere lo script. riguardo al correggere le pagine già convertite sono in dubbio visto che tra poco dobbiamo rifare il grande allineamento, che ne pensi? magari solo per le pagine che comunque sono fuori dallo scope?», relayed by the coordinator on 2026-10-06 at 20:00. Start relayed after the realignment to `9e4e90675`.
 
 ## 0. Decisions (relayed by the coordinator)
 
@@ -32,9 +32,9 @@
   - si ripara subito solo la lista **B**, cioè quelle che l'allineamento non ritraduce: 54 coppie, 18 pagine (17 indicatori e `price-resolution`), solo mermaid;
   - la lista **A** (9 coppie: `docker_advanced`, `service_exposure`, `create-edit`) la rigenera la pipeline corretta;
   - provato su copia: la cache non si accorge della riparazione (stesso piano di traduzione, EN e cache identici byte per byte). Le 51 segnalazioni rimaste sono tutte in A, e la pipeline corretta le porta a 0.
-- **Gate di release**: `translate-validate` blocca ogni esecuzione di `release.yml` tranne quelle su `dev`, compresa una release pubblicata (`release.yml:123-126`: `continue-on-error` solo su `dev`; il workflow non gira mai su un push a `main`). Oggi è già rosso (606 errori su `a7d0b37ec`); dopo l'allineamento il nuovo controllo dà 0 per costruzione.
+- **Gate di release**: `translate-validate` blocca ogni esecuzione di `release.yml` tranne quelle su `dev`, compresa una release pubblicata (`release.yml:123-126`: `continue-on-error` solo su `dev`; il workflow non gira mai su un push a `main`). Oggi è già rosso (606 errori su `9e4e90675`); dopo l'allineamento il nuovo controllo dà 0 per costruzione.
 
-## 1. Current state (`a7d0b37ec`)
+## 1. Current state (`9e4e90675`)
 
 - **Cause:** `mkdocs_src/aphra-pipeline/translate_docs.py:418-419`, `_clean_translation()` step 7: `text = re.sub(r'  +', ' ', text)` on the whole document.
   - It is called at `:1784`, right before the only output write (`:1785`) in `_translate_one_lang` (`:1611`).
@@ -46,7 +46,7 @@
 - **Selection rule** of the next alignment (`run_translate`, `:1963-1979`): `(page, lang)` is skipped iff the EN md5 equals the cached `md5` and `lang` is in `langs_done`. Translated files never enter the decision.
   - `translate-stamp` (`:3003-3116`) also reads only the EN md5.
   - So a whitespace repair of translated files is invisible to the cache by construction.
-- **Release gate:** `release.yml:123-126` runs `translate-validate --hide-localized` with `continue-on-error` only on `dev`. The workflow runs on a push to `dev`, a manual dispatch or a published release (never on a push to `main`), so the step blocks every run except `dev`, a published release included. It is red today (606 errors at `a7d0b37ec`), so the alignment must happen before the next release anyway.
+- **Release gate:** `release.yml:123-126` runs `translate-validate --hide-localized` with `continue-on-error` only on `dev`. The workflow runs on a push to `dev`, a manual dispatch or a published release (never on a push to `main`), so the step blocks every run except `dev`, a published release included. It is red today (606 errors at `9e4e90675`), so the alignment must happen before the next release anyway.
 
 ## 2. Design
 
@@ -93,7 +93,7 @@ A third-party import would make `dev.py` silently drop the translate commands: i
   - Both are more than 60 lines from `:303`.
 - `mkdocs_src/docs/developer/docs/translation-pipeline.md` §6 «Post-processing cleanup» and the «Automated Checks» table (docs-writer, EN only, developer pages are EN-only).
 
-## 3. The two lists (computed on `a7d0b37ec` with the pipeline's own selection rule)
+## 3. The two lists (computed on `9e4e90675` with the pipeline's own selection rule)
 
 Script: `s8_alignment_plan.py`. It extracts `get_translatable_files`, `_extract_nav_paths`, `_detect_target_languages` and `_file_md5` by AST, without importing the module.
 - The next alignment (`./dev.py mkdocs translate`, no `--force`) re-translates **177 page × language pairs on 59 pages**: 37 pages whose EN changed and 22 never translated.
@@ -149,7 +149,7 @@ All are `financial-theory/technical-analysis/…`, `mermaid`, block #0, it/fr/es
 
 ## 4. Evidence gathered before coding (scratch copies only)
 
-- **Cache invisibility.** A B-only repair was made on a `git archive` copy of `a7d0b37ec`, with the prototype: 54 blocks, 54 files, 342 lines, 0 violations (whitespace only, inside blocks).
+- **Cache invisibility.** A B-only repair was made on a `git archive` copy of `9e4e90675`, with the prototype: 54 blocks, 54 files, 342 lines, 0 violations (whitespace only, inside blocks).
   - The pipeline plan is identical before and after (177 pairs).
   - The EN sources and `.translate-hashes.json` are byte-identical.
   - 51 blocks stay flagged, all in A.
@@ -207,7 +207,7 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py mkdocs chec
 ## Progress (after every step: ✅ with date, «Note implementazione», «Fuori pista»)
 
 ### 1. ✅ Plan file and cross-link — 2026-10-06
-> **Note implementazione**: this file; forward link added to `plan-phase00ReleaseImages.prompt.md` (header + Progress §9). Lists A/B from `s8_alignment_plan_target.json` (`a7d0b37ec` export).
+> **Note implementazione**: this file; forward link added to `plan-phase00ReleaseImages.prompt.md` (header + Progress §9). Lists A/B from `s8_alignment_plan_target.json` (`9e4e90675` export).
 
 ### 2. ✅ Red tests (test-author) — 2026-10-06
 > **Note implementazione**: `backend/test_scripts/test_utilities/test_translation_code_blocks.py`, 80 tests. The fixtures mirror the real pages (annotated compose, list steps, `!!!` snippet, Mermaid tabs, `???` HuJSON, tilde ASCII art); the damaged translation is the old step 7 applied to an ideal translation. Runner entry `utils translation-code-blocks` (`_backend_utils.py`: function before `utils_all`, `add_test` before `"all"`, hunks at old lines 225/371, far from `:303`). Red run: 80 collected, 19 failed + 59 errors + 2 green by design (fixture self-check, the marker-gap regression pin), no collection error (`step8/libreFolio_m_s8_red.log`).
@@ -245,11 +245,11 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py mkdocs chec
 |---|---|
 | `utils translation-code-blocks` | 80/80 |
 | `--workers 4 utils all` | green, 907 passed (827 + 80) |
-| `translate-validate`, old code on `a7d0b37ec` (export) | 606 errors, exit 1 (baseline) |
-| `translate-validate`, new code on `a7d0b37ec` before the repair | 711 = 606 + **105** `code-block-indent`; every other count identical |
+| `translate-validate`, old code on `9e4e90675` (export) | 606 errors, exit 1 (baseline) |
+| `translate-validate`, new code on `9e4e90675` before the repair | 711 = 606 + **105** `code-block-indent`; every other count identical |
 | `translate-validate`, new code on the repaired worktree | 657 = 606 + **51** `code-block-indent`, all in A (`docker_advanced` 21, `service_exposure` 24, `create-edit` 6); LOCALIZED `code-block-modified` 177 → 170 and Files OK 328 → 335 (7 B blocks differed only in indentation) |
 | `mkdocs build` (strict) | exit 0, 0 warnings |
-| `mkdocs check-links` | 81 valid, 3 known exceptions, 1 broken `user/assets/detail/chart/#rolling-return`: pre-existing (already on `d0018a5a1`), page untouched |
+| `mkdocs check-links` | 81 valid, 3 known exceptions, 1 broken `user/assets/detail/chart/#rolling-return`: pre-existing (already on `58bf9cfec`), page untouched |
 | `git diff --check` · `git diff -w` on docs | clean · empty |
 | `.translate-hashes.json` · `*.en.md` | untouched · 0 changed |
 | Ports 6158/6168 | free |

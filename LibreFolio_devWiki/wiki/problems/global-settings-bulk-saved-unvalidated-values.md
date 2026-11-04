@@ -27,7 +27,7 @@ The service wrote each item as it came, one key at a time, with no type or range
 a valid value for a global setting. The per-key limits (`SettingConstraint`, `GLOBAL_SETTINGS_CONSTRAINTS` — e.g.
 `session_ttl_hours` 1…8760, `max_file_upload_mb` 1…1024) were introduced by the fix.
 
-## Solution (2026-10-09, `84d9e3360`)
+## Solution (2026-10-09, `58972c8b9`)
 
 - `validate_global_setting_value(key, value, value_type)` (`backend/app/schemas/settings.py`) checks the storage
   type first, then the key's entry in `GLOBAL_SETTINGS_CONSTRAINTS`, and normalises what cannot change meaning:

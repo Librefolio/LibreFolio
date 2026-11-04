@@ -8,7 +8,7 @@ mkdocs: "developer/backend/scheduler.md"
 
 # Domain: SCHEDULER
 
-> **Corrected 2026-10-09 (checked at `586a4f0ea`).** This page was written as a design ("under active development").
+> **Corrected 2026-10-09 (checked at `249f5a9aa`).** This page was written as a design ("under active development").
 > The scheduler shipped in Phase 08 ([[sources/phase08-scheduler-backend]], [[entities/market-data-scheduler]]): code in
 > `backend/app/services/platform/scheduler/`, admin endpoints `GET /api/v1/settings/scheduler/state` and `/log`, configuration
 > in the admin Global settings (`SchedulerConfigModal.svelte`). History-sync times are in the configured **scheduler

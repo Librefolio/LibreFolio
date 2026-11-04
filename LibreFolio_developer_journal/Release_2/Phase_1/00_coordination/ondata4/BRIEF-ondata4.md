@@ -1,6 +1,6 @@
 # Ondata 4 — brief del coordinatore (22/10/2026), da strutturare in piano
 
-Base: `dev_release2` = `e2d3b8a51` (treni 7 e 8, 80 commit non pushati). La 1.3 non esce prima di novembre: niente fretta,
+Base: `dev_release2` = `a092417e5` (treni 7 e 8, 80 commit non pushati). La 1.3 non esce prima di novembre: niente fretta,
 meglio un'ondata corposa e ben ordinata come la 3 (10 lavori in parallelo, un comando pesante alla volta con `flock`).
 Il developer vuole il piano prima di qualunque avvio.
 

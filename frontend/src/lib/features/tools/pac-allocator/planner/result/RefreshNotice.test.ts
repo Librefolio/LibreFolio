@@ -4,7 +4,7 @@
  *
  * RED until X-R45b-ui.
  *
- * Subject. X-R45b (backend 292d7e55e): when the latest saved rate of a pair is 0 or not finite,
+ * Subject. X-R45b (backend fa330c6c4): when the latest saved rate of a pair is 0 or not finite,
  * `POST /portfolio/allocation-source` quotes the previous valid one and adds the warning
  * `allocation.saved_fx_skipped` (params pair, skipped_date, used_date). The re-read before «Calcola» copies that
  * older rate into an Auto pair, and `RefreshNotice` (props `summary`, `asOf`, `testid`) says what it changed. It has

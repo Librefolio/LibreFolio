@@ -3,7 +3,7 @@
 > **Stato**: ✅ **Checkpoint pronto** (2026-10-13), poi FROZEN. Il coordinatore ha approvato **a3** al posto di (a) (§0) e mi ha portato in fast-forward al treno 93. Gli stadi: a3 con Lots (C1), 3a (C2), 3b con la settimana di Alloc (C3), il periodo in corso di Growth (C3b, §2.3), il commento (C4), la doc (C5) e questo piano (C6); il manifest è al passo 11.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), lotto 52. **Origine**: il fratello di R-2 sugli assi del tempo (piano 51 §1), più le date dei tooltip trovate da T (3a, 3b).
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `fa6299689` (treno 91), poi **`ef666fdee`** (treno 93, con `bucketSpanUpTo` di T); worktree pulito tranne questa cartella, porta 6157 libera.
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `21ab8a539` (treno 91), poi **`d5873f5d3`** (treno 93, con `bucketSpanUpTo` di T); worktree pulito tranne questa cartella, porta 6157 libera.
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta, **1 worker**. Mai le porte 6040 e 6041, mai `--force`, mai la galleria, mai `mkdocs serve`.
 > - **Tocca** (previsto): `frontend/src/lib/components/charts/responsiveXAxis.ts`, `GrowthChart.svelte`, `AllocationHistoryChart.svelte`, `LotComparisonChart.svelte`, i loro test (`chartCoreHelpers.test.ts`, `GrowthChart.test.ts`, `AllocationHistoryChart.test.ts`, un test della comparazione dei lotti), il commento di `frontend/e2e/layout/toolbar-width-sweep.spec.ts`, la pagina `mkdocs_src/docs/developer/frontend/components/charts.md` (via docs-writer).
 > - **Non tocca**: `priceChartHelpers.ts` (è di T: `bucketSpanUpTo` lo uso e basta), la devWiki (ha un solo scrittore, W: le proposte vanno al coordinatore), il CHANGELOG (è del coordinatore).
@@ -30,7 +30,7 @@ Per le prove, spec singole a 1 worker. Checkpoint FROZEN col manifest.»
 
 **La decisione del coordinatore, dopo lo STOP su (a) (2026-10-13, in sintesi)**:
 
-- **Fast-forward fatto**: HEAD `ef666fdee` (treno 93: `bucketSpanUpTo` di T in `priceChartHelpers.ts`, più una riga del CHANGELOG). Il piano 52 è intatto.
+- **Fast-forward fatto**: HEAD `d5873f5d3` (treno 93: `bucketSpanUpTo` di T in `priceChartHelpers.ts`, più una riga del CHANGELOG). Il piano 52 è intatto.
 - **a3 approvata al posto di (a).** La misura prima del render (`getTextRect`) deve restare conservativa. Dopo la cura rifaccio la stessa sonda (attesi 0 tagli) e metto nel rapporto **i montaggi en ed es a 320 e 360 px**.
 - **LotComparison passa per l'helper**: una regola sola.
 - **CHANGELOG** (è del coordinatore):
@@ -51,7 +51,7 @@ Per le prove, spec singole a 1 worker. Checkpoint FROZEN col manifest.»
 
 ### 1.2 La sonda a runtime
 
-- **Dove**: fuori dal repo, `/tmp/libreFolio_i_l52_rt/rt-l52.spec.ts` (Playwright, 1 worker), contro il server della corsia 6157 sulla base `fa6299689`.
+- **Dove**: fuori dal repo, `/tmp/libreFolio_i_l52_rt/rt-l52.spec.ts` (Playwright, 1 worker), contro il server della corsia 6157 sulla base `21ab8a539`.
 - **La matrice**: 560 casi per variante. Growth (Abs, %, P&L) e Alloc × 4 lingue × 6 periodi (7, 14, 30, 45, 90, 365 giorni) × 5 larghezze (320, 360, 390, 440, 1280 px), più Lots (gli asset 1 e 6, nei modi valore e rendimento; il 17 non ha il grafico) × 4 lingue × 5 larghezze.
 - **La misura**: la scena di zrender. Prendo l'istanza dal suo `_dom`, applico `setOption({animation: false, grid: patch})`, leggo i rettangoli delle etichette (`label_<tick>`, `ignore` per quelle nascoste da `hideOverlap`) e ripristino. Un'etichetta è **tagliata** se il suo rettangolo esce dal canvas.
 - **Le varianti**:
@@ -123,7 +123,7 @@ Per le prove, spec singole a 1 worker. Checkpoint FROZEN col manifest.»
   - `:1404`: «settimana dal … al …».
 - **Alloc**, `buildAllocationTooltipHeader` (`AllocationHistoryChart.svelte:557-567`): `:559` («settimana» e «valore al»), `:563` («valore al»), `:566` (l'intestazione giornaliera, `row.date`).
 - **La cura**: `formatDay` (`frontend/src/lib/utils/core/formatAxisDate.ts:77`), che è già nella base.
-- **Provenienza (3c)**: **dalla v1.0.0** (`222a77c5e`, la risoluzione dinamica). In `v1.1.0` le intestazioni settimanale, mensile e giornaliera di entrambi i grafici stampano già l'ISO. Fa eccezione la sola intestazione della scala di Growth («1W - inizio → fine», `e7773a143`/`8c7b0c0a7`), nata nella 1.2: la scala non c'è nella `v1.1.0`.
+- **Provenienza (3c)**: **dalla v1.0.0** (`4f1f81283`, la risoluzione dinamica). In `v1.1.0` le intestazioni settimanale, mensile e giornaliera di entrambi i grafici stampano già l'ISO. Fa eccezione la sola intestazione della scala di Growth («1W - inizio → fine», `9c1b6a3ff`/`3f4d4e4dd`), nata nella 1.2: la scala non c'è nella `v1.1.0`.
 
 **3b: la comparazione dei lotti, nel periodo aperto, nomina un giorno che deve ancora venire.**
 
@@ -135,7 +135,7 @@ Per le prove, spec singole a 1 worker. Checkpoint FROZEN col manifest.»
 
 ### 1.7 Il periodo in corso di Growth (reperto nuovo, 2026-10-13)
 
-Studiando 3a e 3b sulla base `ef666fdee`, ho trovato due difetti vicini, fuori dal mandato ma sulle stesse righe.
+Studiando 3a e 3b sulla base `d5873f5d3`, ho trovato due difetti vicini, fuori dal mandato ma sulle stesse righe.
 
 - **Growth, modi Abs, % e P&L a linee** (non la scala), a risoluzione settimanale o mensile:
   - `buildBucketInfos` (`GrowthChart.svelte:809-836`) mette ogni secchio sulla **fine del periodo** (`date: bucketEnd`);
@@ -173,12 +173,12 @@ Le due attese restano. Lo faccio dopo il fast-forward, perché il treno 93 potre
 ## 3. Passi
 
 1. ✅ 2026-10-13: analisi del motore di ECharts e sonda a runtime (§1.1–1.4).
-   > **Note implementazione**: matrice di 560 casi per variante sulla base `fa6299689`, server della corsia 6157. Montaggi e log in `/tmp/libreFolio_i_l52_probe/`.
+   > **Note implementazione**: matrice di 560 casi per variante sulla base `21ab8a539`, server della corsia 6157. Montaggi e log in `/tmp/libreFolio_i_l52_probe/`.
 2. ✅ 2026-10-13: provenienza di 3a e 3b sui tag `v1.1.0` e `v1.0.0` (§1.5).
-3. ✅ 2026-10-13: la decisione del coordinatore (a3, Lots per l'helper, l'ordine, il CHANGELOG) e il fast-forward a `ef666fdee` (§0).
+3. ✅ 2026-10-13: la decisione del coordinatore (a3, Lots per l'helper, l'ordine, il CHANGELOG) e il fast-forward a `d5873f5d3` (§0).
    > **Note implementazione**: il delta dei treni 92–93 non tocca Growth, Alloc, LotComparison, `responsiveXAxis.ts` né `toolbar-width-sweep.spec.ts`. T ha toccato `priceChartHelpers.ts`, `PriceChartFull`, `CandlestickChart` e la pagina della coppia FX; V alcuni E2E; W la wiki.
 4. ✅ 2026-10-13: **C1, a3 con Lots**: l'helper in `responsiveXAxis.ts` e i tre consumatori. I rossi via test-author (l'helper con una misura finta, i consumatori), poi la cura, i verdi e l'istantanea.
-   > **Disegno rifinito (2026-10-13, lettura del codice sulla base `ef666fdee`)**:
+   > **Disegno rifinito (2026-10-13, lettura del codice sulla base `d5873f5d3`)**:
    > - **La causa precisa**: `containLabel` riserva solo l'**altezza** delle etichette x (`estimateLabelUnionRect`), mai la metà dell'ultima etichetta centrata che sporge oltre il bordo destro. L'estensione dell'asse del tempo è min/max dei dati, senza arrotondamenti; con lo zoom **qualunque giorno** del periodo può finire sul bordo.
    > - **`responsiveXAxis.ts`, disegno (c)**: `buildResponsiveXAxisPolicy` e `ResponsiveXAxisPolicy` restano **identici** (il pin letterale del ramo del tempo di `updateChartData` non tollera una chiave in più). Un helper a parte, `timeAxisGridRight({width, values, locale, base, measure})`: `inset = ⌈più larga/2⌉ + 2` (0 senza candidati); `base` in px (numero, o stringa con `%` della larghezza); restituisce `inset > base in px ? inset : base`. La stringa `'4%'` resta sul desktop, così ECharts segue la larghezza da solo; in jsdom (larghezza 0) esce l'inset in px.
    > - **I candidati non dipendono dal modo** (compatto o no): i capi (`dayMonth`, o `dayMonthYear` se il periodo attraversa un anno), e ogni giorno da primo−1 a ultimo+1 nei formati che il formatter gli può dare (giorno e mese; il 1° anche il mese; il 1° gennaio l'anno). Oltre i 366 giorni basta un anno bisestile sintetico. Cache dei candidati per `lingua|primo|ultimo`; la funzione non è esportata, i test la osservano con una misura finta che registra.
@@ -247,7 +247,7 @@ Le due attese restano. Lo faccio dopo il fast-forward, perché il treno 93 potre
    >   I log sono `/tmp/libreFolio_i_l52_green_{asset-unit,growth-chart-memo,allocation-unit,component-unit}.log`.
    > - **Le prove statiche**: `dev.py front check` dà 0 errori e 0 avvisi (`/tmp/libreFolio_i_l52_c1_front_check.log`); prettier `--check` sugli 8 file è pulito senza riscritture; `git diff --check` è pulito.
    > - **Nessun pin vecchio è caduto.** I due letterali `right: '4%'` ancora nei test (`chartCoreHelpers.test.ts:414`, `growthLadderAxis.test.ts:1689`) sono opzioni costruite a mano dentro i test, non pin del codice.
-   > - **L'istantanea** è in `files/l52_c1_snapshot/` (stato di sessione): 8 file più `BLOBS.txt` con gli hash, sulla base `ef666fdee`.
+   > - **L'istantanea** è in `files/l52_c1_snapshot/` (stato di sessione): 8 file più `BLOBS.txt` con gli hash, sulla base `d5873f5d3`.
 5. ✅ 2026-10-13: **C2, 3a più la settimana di Alloc**: `formatDay` nelle intestazioni di Growth e Alloc; in Alloc la settimana finisce con `bucketSpanUpTo(row.date, row)`, perché è la stessa riga di 3a (§2.3). I rossi via test-author (`GrowthChart.test.ts` e il test di Alloc), poi la cura, i verdi e l'istantanea.
    - **L'àncora dell'E2E**: `dashboard.spec.ts:396` alza il tooltip delle candele cercando una data ISO nell'intestazione (`TOOLTIP_DATE`, usata a `:663`). Dopo la cura l'intestazione è nella lingua della UI, e il locale dipende dalla regione del browser (`en-US` o `en-GB`, `uiLocale.ts`). Quindi l'àncora diventa l'anno, che ogni intestazione porta in ogni lingua e a ogni larghezza. Nella card non c'è altro testo con quattro cifre di fila. L'àncora nuova è compatibile prima e dopo la cura.
    > **I rossi (2026-10-13)**: test-author `c2-reds`, brief in `files/l52_briefs/02-c2-reds.md` (stato di sessione). Nessun file di prodotto toccato: i blob restano quelli di C1.
@@ -290,7 +290,7 @@ Le due attese restano. Lo faccio dopo il fast-forward, perché il treno 93 potre
    >
    >   I log sono `/tmp/libreFolio_i_l52_green_c2_{growth,alloc,assetunit,compunit}.log`.
    > - **Le prove statiche**: `dev.py front check` dà 0 errori e 0 avvisi (`/tmp/libreFolio_i_l52_c2_frontcheck.log`); prettier `--check` sui 5 file è pulito; `git diff --check` è pulito.
-   > - **L'istantanea** è in `files/l52_c2_snapshot/` (stato di sessione): 5 file più `BLOBS.txt`, sulla base `ef666fdee`. I 4 file del solo C1 restano sui blob di C1.
+   > - **L'istantanea** è in `files/l52_c2_snapshot/` (stato di sessione): 5 file più `BLOBS.txt`, sulla base `d5873f5d3`. I 4 file del solo C1 restano sui blob di C1.
 6. ✅ (2026-10-13; resta solo la corsa canonica in corsia, vedi «Fuori pista») **C3, 3b**: `bucketSpanUpTo` nei lotti. Il rosso via test-author, poi la cura, i verdi e l'istantanea.
    > **Disegno (2026-10-13)**:
    > - **Dove sta il punto**: `toChartSeriesPoints` (`:308`) è `aggregateLineSeries`, che lascia il punto sul suo ultimo giorno con dati, più `namedPoint(date, value)`. Quindi `data.value[0]` e `data.name` sono il giorno del punto, mentre `bucketStart`, `bucketEnd` e `resolution` arrivano da `pointBucketMeta` (`:298`). Il trigger `axis` tiene solo le serie alla distanza minima, quindi i param condividono una x.
@@ -325,7 +325,7 @@ Le due attese restano. Lo faccio dopo il fast-forward, perché il treno 93 potre
    > - **Le prove statiche**:
    >   - `npm run check` dà svelte-check con 0 errori e 0 avvisi (`/tmp/libreFolio_i_l52_c3_npmcheck_r1.log`);
    >   - prettier `--check` sui 3 file è pulito, e `git diff --check` pure.
-   > - **L'istantanea** è in `files/l52_c3_snapshot/`, base `ef666fdee`. Blob: componente `4c3e4b5e` (C1 + C3), helper `65e05d0b`, test `c88a0f23`.
+   > - **L'istantanea** è in `files/l52_c3_snapshot/`, base `d5873f5d3`. Blob: componente `4c3e4b5e` (C1 + C3), helper `65e05d0b`, test `c88a0f23`.
    >
    > **⚠️ Fuori pista**: il coordinatore ha dichiarato FREEZE-VENV (2026-10-13), il developer aggiorna il venv condiviso. Fino a UNFREEZE-VENV niente `dev.py`, `pipenv` né server.
    > - Quindi i verdi e il controllo dei tipi sono girati con node puro: `frontend/node_modules/.bin/vitest run <file>` e `npm run check`. Il loro aggancio del catalogo usa il `python3` di sistema, non il venv.
@@ -443,12 +443,12 @@ Le due attese restano. Lo faccio dopo il fast-forward, perché il treno 93 potre
    >   - C4 `test(e2e): reword the pill sweep login comment`, C5 `docs: document the time-axis right inset`, C6 `docs(journal): plan 52, time-axis last label` (un file ciascuno; C6 è questo piano).
    >   - Sei file passano per più stadi, col blob di ogni stadio nel manifest: `GrowthChart.svelte` e `GrowthChart.test.ts` (C1, C2, C3b), `chartCoreHelpers.test.ts` (C1, C3b), `AllocationHistoryChart.svelte` e il suo test (C1, C2), `LotComparisonChart.svelte` (C1, C3).
    > - **I controlli dello script**, tutti verdi:
-   >   - ogni blob di stadio coincide con la sua istantanea, presa sulla HEAD `ef666fdee`, e il worktree coincide con l'ultimo stadio di ogni file;
+   >   - ogni blob di stadio coincide con la sua istantanea, presa sulla HEAD `d5873f5d3`, e il worktree coincide con l'ultimo stadio di ogni file;
    >   - il delta (`git diff` più i non tracciati) è uguale ai 14 percorsi del manifest;
    >   - i messaggi: oggetto entro 50 caratteri, seconda riga vuota, solo ASCII, righe entro 72;
    >   - privacy: 0 rilievi sulle righe aggiunte, su tutto il piano e sui messaggi;
    >   - `git diff --check` pulito, niente in stage, porta 6157 libera.
-   > - **Il target** `dev_release2` = `f8dbdddaf` ha 35 commit dopo la mia HEAD, che è la base comune (treni 94–96). Nessuno dei 14 percorsi cambia nel target, e il target non tocca i grafici, la Dashboard, i lotti, `utils/core`, gli E2E del lotto, la pagina della doc né i cataloghi: la fusione non ha sovrapposizioni.
+   > - **Il target** `dev_release2` = `a3cb0f0a2` ha 35 commit dopo la mia HEAD, che è la base comune (treni 94–96). Nessuno dei 14 percorsi cambia nel target, e il target non tocca i grafici, la Dashboard, i lotti, `utils/core`, gli E2E del lotto, la pagina della doc né i cataloghi: la fusione non ha sovrapposizioni.
    > - **Al coordinatore, nel messaggio del checkpoint**:
    >   - la provenienza di ogni difetto (a3 e l'intestazione della scala di Growth nuove nella 1.2; 3a, 3b, la settimana di Alloc e il periodo in corso di Growth dalla v1.0.0);
    >   - la riga 🐛 del periodo in corso (`CHANGELOG.md:162` del target), da allargare al grafico Growth, alla storia dell'allocazione e al grafico di comparazione dei lotti, con un testo proposto; 3a è già coperto dalla riga 🔄 «Numbers and dates follow the interface language everywhere» (`:266`);

@@ -192,7 +192,7 @@ handler `async def serve_file` esegue nel corpo dell'handler:
   quanto più grande l'immagine)
 - `img.save(output, ...)` — `:440`
 
-Il ramo esisteva identico all'epoca dell'audit (introdotto da `1eebfe91`, 2026-01-20) ed
+Il ramo esisteva identico all'epoca dell'audit (introdotto da `a8f8d6a5`, 2026-01-20) ed
 è sfuggito alla verifica dei 104 siti: il vecchio audit aveva correttamente isolato il
 solo `open()` testuale. L'impatto è superiore al reperto A7 originale: non solo I/O ma
 anche CPU di resize dentro l'event loop. Rimedio: stesso pattern di `_read_text_preview`

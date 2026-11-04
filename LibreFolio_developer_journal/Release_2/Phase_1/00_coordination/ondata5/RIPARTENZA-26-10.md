@@ -16,15 +16,15 @@ Il diario completo resta in `RECAP-ondata5.md`; qui c'è solo quello che serve p
 
 | Sessione | Stato | Ultimo commit sul ramo | Prossimo passo |
 |---|---|---|---|
-| **MF** (sotto-agente) | secondo checkpoint di D-P4 **salvato come «wip»**, non ancora verificato da me | `f355e61a4` (wip) sopra `1164a1e65` | leggere `verify_b16/summary.txt` (la verifica girava alla pausa); se è verde, riscrivere il messaggio del commit e unirlo nei rami di J, Y e Z |
-| **J** | lotti e #48 a tratti **salvati come «wip»**: codice identico a HEAD (lotti 178/178, #48 12/12), circa 280 test esistenti ancora da adattare | `9bf2a3066` (wip) | finire l'adattamento dei test; poi i due lettori del rischio (`risk/data_quality.py`, `risk/results.py`), togliere i `*_dates` e l'anno breve in `assetSetLevels` |
-| **Y** | passi 1–3 fatti: `stepSeries.ts`, l'adattatore per GrowthChart (25 casi di parità), l'anno breve nei grafici | `1a6687be7` | collegare i grafici al report a gradini (GrowthChart, allocazioni, P&L per broker, lotti, #48), circa 5 giorni |
-| **Z** | l'AI Export legge i tratti (`a7eb38d5c`), anno breve fatto | `fa6539998` | dopo l'unione di MF: il probe di diff sulle 6 copie (atteso: 0 differenze) |
-| **W** | tutti i lotti dell'ondata 5 chiusi (W5-8, W5-9 #47 nel browser, W5-10 avviso prima del 1900, W5-11 anno breve) | `8db10d43d` | libero; W5-7 (Crédit Agricole) ha il piano pronto, il codice è dell'ondata 6 |
-| **X** | tutti i lotti chiusi (X5-4c, X5-5 anno breve) | `6b02bc7f6` | libero |
-| **A** | A5-4 `user reassign-owner` fatto | `2f2c925c2` | A5-5 (email dopo un ripristino) e OWN-083 dopo le tue risposte 15–17 |
-| **B** | analisi B5-1j fatta e rivista da A (ok con 6 modifiche, già integrate) | `d3437a203` (+ nota B5-1i non committata, voluta) | codice di B5-1j dopo le tue risposte 15–17 |
-| **H** | H5-6 (P-2/P-3 del cloud) fatto, SHA girati al cloud | `1fd2a19ab` | libero |
+| **MF** (sotto-agente) | secondo checkpoint di D-P4 **salvato come «wip»**, non ancora verificato da me | `f355e61a4` (wip) sopra `ca7599e8a` | leggere `verify_b16/summary.txt` (la verifica girava alla pausa); se è verde, riscrivere il messaggio del commit e unirlo nei rami di J, Y e Z |
+| **J** | lotti e #48 a tratti **salvati come «wip»**: codice identico a HEAD (lotti 178/178, #48 12/12), circa 280 test esistenti ancora da adattare | `2dda00fc6` (wip) | finire l'adattamento dei test; poi i due lettori del rischio (`risk/data_quality.py`, `risk/results.py`), togliere i `*_dates` e l'anno breve in `assetSetLevels` |
+| **Y** | passi 1–3 fatti: `stepSeries.ts`, l'adattatore per GrowthChart (25 casi di parità), l'anno breve nei grafici | `c7d9f080e` | collegare i grafici al report a gradini (GrowthChart, allocazioni, P&L per broker, lotti, #48), circa 5 giorni |
+| **Z** | l'AI Export legge i tratti (`ad25c4dad`), anno breve fatto | `135d58a78` | dopo l'unione di MF: il probe di diff sulle 6 copie (atteso: 0 differenze) |
+| **W** | tutti i lotti dell'ondata 5 chiusi (W5-8, W5-9 #47 nel browser, W5-10 avviso prima del 1900, W5-11 anno breve) | `65114c8d9` | libero; W5-7 (Crédit Agricole) ha il piano pronto, il codice è dell'ondata 6 |
+| **X** | tutti i lotti chiusi (X5-4c, X5-5 anno breve) | `89cdc2e0e` | libero |
+| **A** | A5-4 `user reassign-owner` fatto | `ced82862e` | A5-5 (email dopo un ripristino) e OWN-083 dopo le tue risposte 15–17 |
+| **B** | analisi B5-1j fatta e rivista da A (ok con 6 modifiche, già integrate) | `e5452fdf6` (+ nota B5-1i non committata, voluta) | codice di B5-1j dopo le tue risposte 15–17 |
+| **H** | H5-6 (P-2/P-3 del cloud) fatto, SHA girati al cloud | `909cce0f3` | libero |
 
 ## 3. D-P4 — la strada che resta
 
@@ -78,7 +78,7 @@ set; data operazione dalla colonna `Data Op.`; abbinamento valuta con valuta; so
   - un solo `import {spyOnApi}` nei test email e plugin-settings;
   - la riga delle famiglie in `plugin_settings.md`;
   - testlist segnata «✅ pronta».
-- **Rossi noti che si chiudono con le unioni:** X5-F4b nel ramo di X (gli manca `cf9d58ec0` di Y); B5-1i (si chiude
+- **Rossi noti che si chiudono con le unioni:** X5-F4b nel ramo di X (gli manca `7ed4e59e7` di Y); B5-1i (si chiude
   con B5-1j).
 
 **Righe del CHANGELOG raccolte:**
@@ -106,7 +106,7 @@ set; data operazione dalla colonna `Data Op.`; abbinamento valuta con valuta; so
 
 1. Leggere `verify_b16/summary.txt`. Se è verde: riscrivere il messaggio di `f355e61a4` come
    `feat(portfolio)!: …`; se è rosso: rimandare a MF con i log.
-2. Riscrivere il messaggio di `9bf2a3066` (J) solo dopo la sua verifica.
+2. Riscrivere il messaggio di `2dda00fc6` (J) solo dopo la sua verifica.
 3. Unire MF nei rami di J, Y e Z; far ripartire J (test), Y (grafici) e Z (probe).
 4. Con le tue risposte 15–17: B scrive B5-1j, A scrive A5-5 e poi OWN-083.
 

@@ -60,13 +60,13 @@ Isolation: PURE. No lane database, no server, no network: pure functions over po
 aggregators called on hand-built plans, the replaced module attributes put back by monkeypatch, the shared fixture read
 from the repository.
 
-Red at HEAD 14247474e (before Z-29r), each for the reason its docstring gives: every SAG-M, SAG-P, SAG-E and SAG-A test
+Red at HEAD cb373420a (before Z-29r), each for the reason its docstring gives: every SAG-M, SAG-P, SAG-E and SAG-A test
 fails at ``_aggregation()`` — ``backend.app.services.signals.aggregation`` does not exist. With the module written and
 AI Export not yet moved, SAG-A01…A06 stay red (AI Export never calls the module and ignores its maps) while SAG-A07…A10
 pass (today's AI Export already agrees with the rule: the move must keep it so). Green then, written green:
 SAG-T01…T03 (they pin the table against the TypeScript, not the code).
 
-Z-29s-a (contract of 20/10 on 5bbadda95, coordinator's lot; developer's Q-Z29-2 of 19/10): a sampled card's signal
+Z-29s-a (contract of 20/10 on fa20c7ba0, coordinator's lot; developer's Q-Z29-2 of 19/10): a sampled card's signal
 series are reduced by the backend as the chart would reduce them, each output by its own ``aggregation_profile``. The
 module gains ``sample_signal_series(series, profile, resolution, render_dates)``, pure, pinned here (SAG-S):
 
@@ -104,7 +104,7 @@ its non-parity cases are the residues R1 and R3 and one synthetic input, each sa
 series of one signal reduced and aligned (point 13): each through ``align_signal_series`` here (SAG-S10), each series
 drawn alone by the browser as a case is (the Vitest), R5 the one that is not.
 
-Red at 5bbadda95 (before Z-29s-a), each for the reason its docstring gives: SAG-S02…S08 fail at ``_sampler()`` —
+Red at fa20c7ba0 (before Z-29s-a), each for the reason its docstring gives: SAG-S02…S08 fail at ``_sampler()`` —
 ``sample_signal_series`` does not exist. It is read from the module at the call, never imported at the top, so that the
 26 tests above still collect and pass. Green then, written green: SAG-S01 (it pins the table, not the code).
 
@@ -1086,7 +1086,7 @@ def test_sag_s02_every_table_case_through_sample_signal_series(case):
     reduced by ``sample_signal_series(series, profile, resolution, render_dates)`` into a series of the same class whose
     points, as the wire writes them, are the case's ``expected``, each gap marker included (points 9-12).
 
-    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    Red at fa20c7ba0: ``sample_signal_series`` does not exist.
     """
     series = _table_series(case)
     reduced = _reduce(series, case["profile"], case["resolution"], [date.fromisoformat(day) for day in case["render_dates"]])
@@ -1151,7 +1151,7 @@ def test_sag_s03_the_reduced_series_keeps_every_field_but_its_points(kind, resol
     monthly: the result is the same class and, its points aside, equal to the series as the wire writes it; its points
     are reduced (other dates than the input's).
 
-    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    Red at fa20c7ba0: ``sample_signal_series`` does not exist.
     """
     series = _small_series(kind, **_rich_output())
     render_dates = _SMALL_WEEKS if resolution == "weekly" else (date(2026, 1, 31),)
@@ -1205,7 +1205,7 @@ def test_sag_s04_a_calendar_return_representative_keeps_its_provenance(profile):
     tied minimum or maximum, the earliest's provenance (the 6th, not the 8th; the 7th, not the 9th; the 12th, not the
     18th). Each scalar profile, weekly, the last week cut on the 20th.
 
-    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    Red at fa20c7ba0: ``sample_signal_series`` does not exist.
     """
     points = _calendar_points(*_CALENDAR_VALUES)
     series = SignalLineSeries(**_OUTPUT, points=points)
@@ -1222,7 +1222,7 @@ def test_sag_s05_a_gap_marker_is_a_value_point_without_value():
     without value on the 7th, last weekly (render dates the 11th, 18th and 25th) give the 6th's point re-dated on the
     11th, a marker on the 12th, the 21st's point re-dated on the 25th, each representative with its own provenance.
 
-    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    Red at fa20c7ba0: ``sample_signal_series`` does not exist.
     """
     points = _calendar_points((5, 1.0), (6, 2.0), (7, None), (20, 3.0), (21, 4.0))
     series = SignalLineSeries(**_OUTPUT, points=points)
@@ -1251,7 +1251,7 @@ def test_sag_s06_a_profile_that_does_not_fit_the_kind_is_refused(kind, profile, 
     events_verbatim): band_envelope on a line, an area or a bar; a scalar profile on a band; events_verbatim on either —
     weekly or monthly, on a series with a value in every bucket (the refusal is not an empty reduction's).
 
-    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    Red at fa20c7ba0: ``sample_signal_series`` does not exist.
     """
     sample = _sampler()
     render_dates = list(_SMALL_WEEKS[:2]) if resolution == "weekly" else [date(2026, 1, 31)]
@@ -1265,7 +1265,7 @@ def test_sag_s07_the_callers_series_is_not_changed(kind):
     (a calendar-return line with a gap and every field set; a band with an incomplete point) is, as the wire writes it,
     what it was, with the same point objects in the same order, each on its own date.
 
-    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    Red at fa20c7ba0: ``sample_signal_series`` does not exist.
     """
     if kind == "band":
         series = _small_series("band", **_rich_output())
@@ -1284,7 +1284,7 @@ def test_sag_s08_daily_gives_the_series_unchanged(kind):
     """SAG-S08: daily, a line, an area, a bar and a band are given back unchanged — as the wire writes them, their nulls
     and a band's incomplete point included, in their own class — as the chart's daily path draws the series as sent.
 
-    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    Red at fa20c7ba0: ``sample_signal_series`` does not exist.
     """
     series = _small_series(kind)
     reduced = _reduce(series, FITTING_PROFILE[kind], "daily", [_day(day) for day in range(5, 17)])

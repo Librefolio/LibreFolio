@@ -3,7 +3,7 @@
 > **Stato**: ✅ chiuso il 2026-10-12, checkpoint al coordinatore (§8, passo 7). Fermo dalle 18:26 alle 19:24 (STOP del developer via coordinatore); ripreso al «riparti» del coordinatore, con la decisione (b) sul reperto di copy-and-go (§8, passo 4). **Seguito**: il lotto 49, la corsa dei contatori di `asset-detail.spec.ts` (§8, passo 5, «Fuori pista»; [piano della 49](../49_requestCountRace/plan-phase00RequestCountRace.prompt.md)).
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`). È la voce della coda di I dopo il piano 47. M-17 è passato a T, dentro M-18.
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `55304116f` (treno 60).
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `28c647832` (treno 60).
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta. Mai le porte 6040 e 6041, mai la galleria.
 > - **Origine**:
 >   - BrokerIcon, la modale e il pannello: le segnalazioni del developer durante le verifiche sul server;
@@ -22,12 +22,12 @@
   - **M-20 (b): sì**. Prima la regola del rifiuto entra nell'helper, con un test in `clipboard.test.ts`; poi migrano FilesTable e FileGrid. Il lancio sincrono e la firma restano;
   - **M-17 passa a T**: `DateRangePicker.svelte`, `GlobalSettingsTab.svelte` e `DataEditor.svelte` non si toccano;
   - **H3 e H2** vanno nella sezione I del backlog, priorità bassa, scritte nel checkpoint;
-    - **ritocco**, coordinatore, 12/10: su richiesta del developer le ha scritte lui nella sezione C del backlog (`bf831ef10`), come **C-56 (H3)** e **C-57 (H2)**. La sezione I non le riporta; questo piano le cita per ID;
+    - **ritocco**, coordinatore, 12/10: su richiesta del developer le ha scritte lui nella sezione C del backlog (`23e9a6b45`), come **C-56 (H3)** e **C-57 (H2)**. La sezione I non le riporta; questo piano le cita per ID;
   - **il piano qui**, col numero 48;
   - **i file del runner**:
     - `_frontend_broker.py` è di I;
     - `_frontend_utility.py` non è di I. Il 12/10 il coordinatore lo ha dato a T, per il CP1 di M-18: T aggiunge i suoi Vitest alle liste di `core-unit` e `component-unit`, la stessa lista del gate. Dopo il checkpoint di T il file va a I o a M, a chi è pronto per primo, e il coordinatore lo comunica. Intanto il file del gate si prepara, e si registra solo dopo l'avviso;
-    - **l'avviso**, coordinatore, 12/10 sera: «Da adesso `scripts/test_runner/_frontend_utility.py` è tuo». Il lotto 28 di M (treno 70, `b063b16ca`) aggiunge `front_docs_offline_math` e il suo `add_test(… "docs-offline-math" …)` subito dopo `connection-security`; la base di I resta `55304116f` e il target arriva al checkpoint con un merge. Le aggiunte di I stanno lontane da quel blocco;
+    - **l'avviso**, coordinatore, 12/10 sera: «Da adesso `scripts/test_runner/_frontend_utility.py` è tuo». Il lotto 28 di M (treno 70, `641cd5452`) aggiunge `front_docs_offline_math` e il suo `add_test(… "docs-offline-math" …)` subito dopo `connection-security`; la base di I resta `28c647832` e il target arriva al checkpoint con un merge. Le aggiunte di I stanno lontane da quel blocco;
   - **i cataloghi** sono di I per questo lotto, solo via `dev.py i18n`. Si cambiano i valori di `importWizard.brokerMismatch.remove` e `.move` nelle 4 lingue e si aggiunge `assets.probe.copyErrorDetail`. Nel checkpoint va l'elenco di chiavi e valori, per U;
   - **ProviderAssignmentSection**: I tocca prima `:591-596`, poi T tocca le durate a `:585` e `:616` sopra la modifica di I;
   - **i siti di formattazione** nei file del lotto non si toccano: I li segnala al coordinatore (fatto il 12/10, per T);
@@ -36,7 +36,7 @@
     - la riga 🐛 di M-20 la scrive il coordinatore, col testo di I (§7);
     - la doc che cita i testi della modale e il rischio del timer per la galleria vanno a M, dopo;
     - si chiude con un checkpoint (manifest e messaggi), poi FROZEN con la 6157 libera.
-- **V-19 entra nel lotto**, coordinatore, 12/10, sull'analisi di I: la ricalibrazione D5 delle due soglie `denseRow`, dashboard 950→990 e dettaglio dell'asset 850→890, in un commit a parte (C5) prima del journal. Niente riga di CHANGELOG: «Exportación IA» viene da `7c66234a7` e non è mai uscita (la 1.1 aveva «Exportar IA»). L'allineamento del padding del trigger di AiExportMenu ai vicini (`px-2.5 gap-1.5`) va in fondo alla sezione I del backlog, dopo la 1.2: da solo darebbe circa 12 px contro gli 11,8 px di sforamento (corretto al passo 5: lo sforamento peggiore è 18,8 px, quindi da solo non basterebbe). La nota devWiki va a W tramite il coordinatore. Dopo la cura, gli stessi selettori uno alla volta; col carico alto (80–190) uno sweep che va in timeout si rilancia prima di cercarne la causa.
+- **V-19 entra nel lotto**, coordinatore, 12/10, sull'analisi di I: la ricalibrazione D5 delle due soglie `denseRow`, dashboard 950→990 e dettaglio dell'asset 850→890, in un commit a parte (C5) prima del journal. Niente riga di CHANGELOG: «Exportación IA» viene da `6f0648408` e non è mai uscita (la 1.1 aveva «Exportar IA»). L'allineamento del padding del trigger di AiExportMenu ai vicini (`px-2.5 gap-1.5`) va in fondo alla sezione I del backlog, dopo la 1.2: da solo darebbe circa 12 px contro gli 11,8 px di sforamento (corretto al passo 5: lo sforamento peggiore è 18,8 px, quindi da solo non basterebbe). La nota devWiki va a W tramite il coordinatore. Dopo la cura, gli stessi selettori uno alla volta; col carico alto (80–190) uno sweep che va in timeout si rilancia prima di cercarne la causa.
 
 ## 1. I difetti
 
@@ -47,14 +47,14 @@ Parole del developer: «l'icona del broker, anche se impostata, la prima volta c
 - Le superfici segnalate passano le props piene: la pagina del broker (`brokers/[id]/+page.svelte:469`), la BrokerCard (`:92`) e il selettore della Dashboard (`dashboard/+page.svelte:930`).
 - **La causa (H1), una corsa fra due `<img>` nel `{#key}` di `BrokerIcon.svelte` (`:62-64`)**:
   - in `brokerIconChain.svelte.ts` lo stato del plugin (`pluginIconUrl`, `:52`) parte `null` anche con la cache calda, e lo imposta l'effetto `:56-76` dopo il primo render;
-  - l'ordine dei candidati (`:82-102`, da `d5c649e9f`): `icon_url` → l'icona del plugin fatto per il broker (P) → `/favicon.ico` del portale → l'icona del plugin generico;
+  - l'ordine dei candidati (`:82-102`, da `9e0beaee3`): `icon_url` → l'icona del plugin fatto per il broker (P) → `/favicon.ico` del portale → l'icona del plugin generico;
   - quindi il primo render mostra la favicon, poi arriva P e il `{#key}` crea una seconda `<img>`;
   - l'errore della favicon arriva dopo, dall'`<img>` staccata. Svelte 5.48.0 compila `onload` e `onerror` in `$.event(…)`, che toglie il listener solo da `body`, `window`, `document` e dagli elementi media (`svelte/src/internal/client/dom/elements/events.js:111-127`): quello dell'`<img>` resta;
   - `handleError()` (`:151-156`) marca il candidato **corrente**, cioè P, non l'URL che ha fallito. Torna la favicon, fallisce, non resta nessun candidato: la valigetta;
   - `failedUrls` si azzera solo quando cambiano le props (`:108-122`), quindi resta così fino a F5.
 - Con una favicon valida il difetto è solo estetico: il `load` dell'`<img>` staccata (`handleLoad()`, `:147-149`) mette `imageLoaded = true` mentre P carica ancora.
 - Nella 1.1.0 la favicon veniva prima del plugin, quindi niente scambio e niente corsa: nessuna riga 🐛.
-- **Fuori dalla cura** (nel backlog, sezione C, priorità bassa: C-56 e C-57, scritte dal coordinatore in `bf831ef10`; §0):
+- **Fuori dalla cura** (nel backlog, sezione C, priorità bassa: C-56 e C-57, scritte dal coordinatore in `23e9a6b45`; §0):
   - **H3 (C-56), le props vuote**: nessuna superficie segnalata passa props vuote, e BrokerBadge riempie già i campi mancanti dallo store (`BrokerBadge.svelte:46-63`). Un chiamante che passasse a `BrokerIcon` il solo id partirebbe dalla valigetta. Se si fa, `settledIconFieldIds` resta (`brokerStoreIconHydration.test.ts`);
   - **H2 (C-57), la lista dei plugin che fallisce**: `ensurePluginIconsLoaded` (`brokerHelpers.ts:52`) mette una cache vuota e non riprova (`:66`), e le chiamate dopo (`brokerStore.ts:148`, `:156`) escono subito. È un'ipotesi sul sintomo: serve un rosso con la lista che fallisce una volta sola.
 
@@ -284,7 +284,7 @@ La galleria non si lancia.
   >   - Le altre copie, che non aprono schede, non sono state misurate.
   >   - `messages/C4.txt`: l'ultima voce («a new case proves the legacy copy in a real browser») è falsa. Va riscritta dopo la decisione.
   > - **non iniziato**: il rosso dei casi dello spec contro l'helper di base, `core-unit`, l'istantanea C4; poi C5 (V-19), C6 (journal), statici, checkpoint.
-  > - **worktree**: HEAD `55304116f`, 29 file sporchi (26 modificati, 3 non tracciati), niente in stage. Nessun processo di corsia, 6157 libera (`lsof` exit 1).
+  > - **worktree**: HEAD `28c647832`, 29 file sporchi (26 modificati, 3 non tracciati), niente in stage. Nessun processo di corsia, 6157 libera (`lsof` exit 1).
   > - **al «riparti»**: prima la decisione sul reperto. Poi il rosso contro l'helper di base: copia di riserva della cura in `/tmp`, `git show HEAD:…`, ripristino verificato con shasum. Poi lo spec intero verde, `core-unit`, l'istantanea.
   >
   > **▶️ Riparti** (2026-10-12 19:24, coordinatore): scelta **(b)**.
@@ -351,7 +351,7 @@ La galleria non si lancia.
   > **Note implementazione**:
   > - **Il piano**: H3 e H2 sono citate come C-56 e C-57 (§0, §1.1); il passo 5 riporta il reperto di `asset-detail` e la decisione sul lotto 49.
   > - **La sezione I del backlog**, in fondo, ha una voce sola, **48-1**: il padding del trigger di AiExportMenu, coi numeri corretti del passo 5. La corsa di `asset-detail` non entra nel backlog, perché è il lotto 49.
-  > - **C-56 e C-57 non sono nella base.** Le ha scritte il coordinatore in `bf831ef10`, che è nel target ma non in `55304116f`; la sezione C della worktree non le ha ancora, e non la tocco. Fra la base e il target (`b1c8f22df`) il backlog cambia alle righe 43, 51, 82, 99, 301, 418, 434-435, 593 e 614 della base, nessuna dentro la sezione I (101-187): non mi aspetto conflitti.
+  > - **C-56 e C-57 non sono nella base.** Le ha scritte il coordinatore in `23e9a6b45`, che è nel target ma non in `28c647832`; la sezione C della worktree non le ha ancora, e non la tocco. Fra la base e il target (`cc3a92c2e`) il backlog cambia alle righe 43, 51, 82, 99, 301, 418, 434-435, 593 e 614 della base, nessuna dentro la sezione I (101-187): non mi aspetto conflitti.
 - [x] **7. Statici e checkpoint** (2026-10-12).
   > **Note implementazione**:
   > - `dev.py front check`: `svelte-check found 0 errors and 0 warnings` (`/tmp/libreFolio_i_ui_front_check.log`).

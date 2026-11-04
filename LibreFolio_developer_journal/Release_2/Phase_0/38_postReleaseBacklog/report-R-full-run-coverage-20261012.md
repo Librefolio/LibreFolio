@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **Base** | `a5653f9efa8d56746e40e7a0a8662a10a7182956` (treno 68, con il CP1 di M-18), verificata con `git rev-parse HEAD`, albero pulito |
+| **Base** | `78101574b9643da3fcfd277cf37bf1f620a55d7b` (treno 68, con il CP1 di M-18), verificata con `git rev-parse HEAD`, albero pulito |
 | **Comando** | `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc LIBREFOLIO_TEST_STARTUP_TIMEOUT=900 pipenv run python dev.py test --coverage --fresh-run --cov-clean-backend --cov-clean-backend-e2e --workers 2 --test-port 6176 --data-dir /tmp/librefolio-r2-r-cov all` |
 | **Durata** | 19:40:55 → 00:02:03 = **4 h 21 min** (più 5 min del tentativo 1, morto prima dei test: §1.2) |
 | **Carico** | load 1-min tra 9,6 e **151** (picchi 112 alle 20:28, 125 alle 23:05, 151 alle 23:13); media 1-min 37,9 sui campioni ogni 30 s 22:20→00:02 |
@@ -24,13 +24,13 @@
 | (b) ambiente | 0 | — (il solo incidente d'ambiente è avvenuto prima dei test: §1.2) | — |
 | (c) interferenza fra test | 0 | nessun rosso mostra dati o stato spostati da un vicino | — |
 | (d) difetto del test | 0 come causa diretta | ma sotto i rossi (a) ci sono budget fissi su percorsi che dipendono dal carico (§3.2, §3.3) | V |
-| (e) difetto del prodotto | **2** | `toolbar-width-sweep` in spagnolo: la barra di Asset Detail e della Dashboard sfora di 5–17 px | **M** (introdotto da `7c66234a7`), cura in UI (soglie) |
+| (e) difetto del prodotto | **2** | `toolbar-width-sweep` in spagnolo: la barra di Asset Detail e della Dashboard sfora di 5–17 px | **M** (introdotto da `6f0648408`), cura in UI (soglie) |
 
 **I primi da guardare**
 
 1. **(e) `toolbar-width-sweep` · es** — regressione vera e deterministica: rifallisce da sola, identica al pixel, anche
-   a load 15. La causa è il cambio di termine «Exportar IA» → «Exportación IA» di `7c66234a7` (M, treno 40, 11/10
-   22:27), arrivato dopo la calibrazione delle soglie (`3e5313d3e`, 30/09). §3.1.
+   a load 15. La causa è il cambio di termine «Exportar IA» → «Exportación IA» di `6f0648408` (M, treno 40, 11/10
+   22:27), arrivato dopo la calibrazione delle soglie (`51de5dc75`, 30/09). §3.1.
 2. **Il teardown di `jsCoverage`** — 15 rossi su 29 sono la raccolta della coverage JS che consuma il budget di 30 s
    del test: esistono solo con `--coverage js` e sotto carico. Il fixture non ha un timeout proprio. §3.2.
 3. **`login()` ritorna prima che l'app sia partita** — 9 rossi (auth ×5, AI Export ×4) aspettano 3–5 s un URL o un
@@ -136,9 +136,9 @@ chiamato flaky.
   `__coverage__`): la strumentazione non c'entra. Tre misure, stessi numeri: run 23:22 (load 18), rilancio con
   coverage 00:10 (load 15), rilancio senza 01:57 (load 16).
 - **Era verde prima**: K lo ha chiuso **15/15** il 07/10 (step 18.7, corsia 6155), prima del cambio di termine.
-- **Causa**: `7c66234a7` «fix(i18n): apply the developer's term choices» (M, 11/10 22:27, treno 40) porta
+- **Causa**: `6f0648408` «fix(i18n): apply the developer's term choices» (M, 11/10 22:27, treno 40) porta
   `frontend/src/lib/i18n/es.json:65,1642,1955` da «Exportar IA» a **«Exportación IA»** (+3 caratteri). Le soglie della
-  barra erano state calibrate prima, il 30/09 (`3e5313d3e` «fix(ui): recalibrate the five top toolbars»):
+  barra erano state calibrate prima, il 30/09 (`51de5dc75` «fix(ui): recalibrate the five top toolbars»):
   - `frontend/src/routes/(app)/assets/[id]/+page.svelte:2773` → `denseRow: 850`, ma in `denseRow` il contenuto della
     barra misura **868,8 px** (barra + sforamento, costante su tutte e quattro le larghezze rosse);
   - `frontend/src/routes/(app)/dashboard/+page.svelte:829` → `denseRow: 950`, contenuto **968 px**.
@@ -176,7 +176,7 @@ chiamato flaky.
 - **Perché**: `login()` (`fixtures/auth-helpers.ts:7-39`) aspetta solo che il form sparisca e `domcontentloaded`
   (`:37-38`), non che l'app abbia redirezionato. Con il backend strumentato e il load 45–112, `GET /auth/me` e
   l'onboarding superano facilmente i 3–5 s (oltre i 5 s l'app mostra apposta il pannello «server lento»,
-  `(app)/+layout.svelte:97`, K-19 `93fd33702`).
+  `(app)/+layout.svelte:97`, K-19 `e6174d56a`).
 - **Precedente**: K, step 18.5 del 07/10 (`LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep18CoverageTriage.prompt.md`),
   ha diagnosticato lo stesso schema («`login()` ritorna prima del redirect… `setLanguage` aspetta il selettore solo
   5 s») e lo ha corretto **solo** in `toolbar-width-sweep.spec.ts`. L'helper condiviso è rimasto com'era.
@@ -239,7 +239,7 @@ Playwright). Dati della run congelati in `/tmp/libreFolio_R_cov_snapshot/`.
 | misura | quando | backend | E2E→backend | fonte |
 |---|---|---|---|---|
 | questa run | 12–13/10 | **91,51 %** (righe 93,53, rami 84,78) su 53 896 stmt | 29,32 % | qui |
-| run del 07/10 (K) | 07/10 | 36,8 % — **non confrontabile**: falsata dalla corsa del `coverage combine`, corretta l'08/10 (`751f496b3`) | — | `phases/28_fxDashboardSync/plan-phase00CoverageCombineRace.prompt.md:25` |
+| run del 07/10 (K) | 07/10 | 36,8 % — **non confrontabile**: falsata dalla corsa del `coverage combine`, corretta l'08/10 (`25fb153b6`) | — | `phases/28_fxDashboardSync/plan-phase00CoverageCombineRace.prompt.md:25` |
 | P1-18 | 03/09 | 91 % | 29 % | `phases/08_newCleanAndDocumentation_audit/17_stabilizzazione.md:151-153` |
 | wiki | 31/08 | righe 92,39 %, rami 82,64 % | — | `wiki/concepts/coverage-rate-vs-volume.md:74` |
 | skill testing-backend | inizio 09 | 91,36 % su 37 336 stmt | — | `testing-backend/SKILL.md` |
@@ -279,7 +279,7 @@ Percentuali più basse (≥ 30 stmt): `services/scheduler/scheduler.py` 60,18 %,
 \* righe con almeno uno statement istanbul (stessa regola di `istanbul-lib-coverage`).
 
 - **Senza `src/lib/features/tools`**: 78,42 % statement, 67,64 % rami.
-- **Il planner del PAC** (`src/lib/features/tools/pac-allocator/planner/`, nato il 25/09 con `0210f9848`): 7 008
+- **Il planner del PAC** (`src/lib/features/tools/pac-allocator/planner/`, nato il 25/09 con `502877358`): 7 008
   statement al **14,01 %** (unit 16,97 %, E2E 5,78 %); 47 dei 56 file allo 0 % sono suoi. Nessuna spec E2E lo
   esercita: `layout/document-title.spec.ts` apre la pagina di un tool solo per il titolo, e `gallery.spec.ts`
   (`e2e/fixtures/galleryPac.ts`), l'unica che lo percorre, è esclusa dalla suite per scelta
@@ -315,7 +315,7 @@ monocart, che non vedeva i rami dei template Svelte: i rami di oggi (62,82 %) no
 **Stato finale** (13/10, 02:08):
 
 - nessun server acceso, **porta 6176 libera**, nessun processo della corsia;
-- worktree su `a5653f9ef`, **nessun file tracciato modificato** (`git status` vuoto);
+- worktree su `78101574b`, **nessun file tracciato modificato** (`git status` vuoto);
 - nella worktree restano solo artefatti ignorati: `node_modules` (dal `npm ci`), la build del frontend in modalità
   **debug non strumentata** (nessuna build strumentata lasciata in giro), il sito MkDocs, `.testLog/` della run e i
   report di coverage **della run completa**, ripristinati dalla copia congelata dopo i rilanci (che li avevano

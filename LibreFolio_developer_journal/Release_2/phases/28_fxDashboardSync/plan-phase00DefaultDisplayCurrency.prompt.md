@@ -1,11 +1,11 @@
 # Valuta iniziale delle pagine: la Default Currency dell'utente, non quella dell'istanza
 
-> Lotto di N, 08/10. Coordinator: c8328a01. Base `108a2adf5` (treno 17; nessun file di codice cambiato rispetto a
-> `cf4248bd9`), worktree pulito. Corsia 6159/6169, `/tmp/librefolio-r2-n`.
+> Lotto di N, 08/10. Coordinator: c8328a01. Base `03c943f53` (treno 17; nessun file di codice cambiato rispetto a
+> `dd2c41bd2`), worktree pulito. Corsia 6159/6169, `/tmp/librefolio-r2-n`.
 > Decisione del developer (verbatim): «Dalla Default Currency dell'utente: è un difetto». Si corregge senza
 > attendere approvazione.
 
-## 1. Stato reale (verificato su `108a2adf5`)
+## 1. Stato reale (verificato su `03c943f53`)
 
 `globalSettings.default_currency` è la valuta dell'**istanza** per i **nuovi** utenti: la chiave i18n dice «Default
 currency for new users» (`en.json:2027`). La valuta dell'utente è `userSettings.base_currency`.
@@ -80,7 +80,7 @@ della `PUT` e del ripristino. Nessuna scrittura condivisa. Precedenti di interce
 
 1. ✅ (08/10) Analisi breve, mandata al coordinator. **Approvata, compreso il quinto punto** (AI Export dell'FX).
    Concessi: le due righe del runner e il blocco NR di `asset-modal.spec.ts:221-262`.
-   > **⚠️ Fuori pista**: il coordinator ha avanzato il worktree al treno 17 (`108a2adf5`), che non cambia nessun file
+   > **⚠️ Fuori pista**: il coordinator ha avanzato il worktree al treno 17 (`03c943f53`), che non cambia nessun file
    > di codice. L'azione del test unit si chiama `front-utility core-unit`, non `unit`.
 2. ✅ (08/10) Testid sui due select dei broker (`broker-page-target-currency`, `broker-detail-target-currency`),
    messi prima del rosso. Il test-author ha scritto `e2e/portfolio/default-currency.spec.ts` (6 test),
@@ -109,5 +109,5 @@ della `PUT` e del ripristino. Nessuna scrittura condivisa. Precedenti di interce
 6. ✅ (08/10) Checkpoint: 3 commit proposti in `/tmp/libreFolio_commits/libreFolio_commit_n_defcur_C1..C3.txt` (la
    correzione con i suoi test e le registrazioni; l'NR di `asset-modal`; questo piano). Liste in
    `n_defcur_paths_C1..C3.txt`, blob in `n_defcur_blobs.txt`, albero in `n_defcur_final_tree.txt`. Stato: FROZEN.
-   > **Integrato** (allineamento del 09/10): `51d1a64db` (correzione, test, registrazioni), `4c214bc16` (NR di
-   > `asset-modal`), `9ca9078cc` (questo piano), treno 18 (`38a7230e2`). Nessun residuo.
+   > **Integrato** (allineamento del 09/10): `19748fbe0` (correzione, test, registrazioni), `1be30c313` (NR di
+   > `asset-modal`), `b8c4fcbda` (questo piano), treno 18 (`b14753b56`). Nessun residuo.

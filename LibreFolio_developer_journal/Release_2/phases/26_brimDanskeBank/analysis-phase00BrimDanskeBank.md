@@ -3,7 +3,7 @@
 > Workstream **L - Danske Bank** · 2026-09-28 · piano collegato:
 > [plan-phase00BrimDanskeBank.prompt.md](plan-phase00BrimDanskeBank.prompt.md).
 > Nessun valore dei file reali: solo struttura, forme mascherate, parole di servizio.
-> §0–§7 scritti prima del fast-forward a `ea30d5ccf` (non dipendono dalla baseline);
+> §0–§7 scritti prima del fast-forward a `953f8ab71` (non dipendono dalla baseline);
 > §8 scritto dopo, con le verifiche sul codice.
 
 ## 0. Metodo
@@ -230,7 +230,7 @@ finché non arrivano campioni.
   - aspettare o no le risposte dell'autore;
   - il permesso per il campione sintetico, che blocca `sample_reports/` e i test.
 
-## 8. Dopo il fast-forward (HEAD `ea30d5ccf`): verifiche su codice e precedenti
+## 8. Dopo il fast-forward (HEAD `953f8ab71`): verifiche su codice e precedenti
 
 **Schema delle transazioni**
 

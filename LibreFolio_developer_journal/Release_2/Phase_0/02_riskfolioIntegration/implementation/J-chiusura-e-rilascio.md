@@ -361,7 +361,7 @@ deciso davvero — e a scoprire che **una cosa data per decisa non lo era mai st
 - [x] Asset Detail invariato e ancora col suo banner;
   ↳ *allineamento 09/10*: ✅ `AssetRiskScenariosView.svelte` (Asset Detail tiene il suo banner)
 - [x] `### 🔄 Changed` creata in `[Unreleased]`, con la voce M2 nei suoi tre fatti;
-  ↳ *allineamento 10/10*: ✅ le voci M2 e A9 sono nel capitolo 1.2.0, sotto «🔄 Changed» (`586a4f0ea`, 09/10), con l'ordine di grandezza e non una cifra sola (README della cartella, B4). Il 09/10 era ⏳ «mai scritta»
+  ↳ *allineamento 10/10*: ✅ le voci M2 e A9 sono nel capitolo 1.2.0, sotto «🔄 Changed» (`249f5a9aa`, 09/10), con l'ordine di grandezza e non una cifra sola (README della cartella, B4). Il 09/10 era ⏳ «mai scritta»
 - [x] gate di integrazione verdi sulla **revisione combinata**;
   ↳ *allineamento 09/10*: ↪ assorbito dal secondo giro e dai treni di `dev_release2`
 - [x] superfici condivise **rilette a mano**, non solo testate;

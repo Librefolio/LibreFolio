@@ -1,11 +1,11 @@
 # Piano — fase 00, 36: l'indicatore di sicurezza della connessione e il login senza enumerazione
 
-> **Stato**: ✅ chiuso e integrato nel treno 24 (merge `01da03047`): `3392c4f05`, `07da532fb`, `28c85d34f` (verifica del 2026-10-09 su `3cceb4f90`, §8.7).
+> **Stato**: ✅ chiuso e integrato nel treno 24 (merge `275d99218`): `12106dbd3`, `6c0e15bd0`, `716b0b4eb` (verifica del 2026-10-09 su `f545b67e3`, §8.7).
 > - Al checkpoint: ✅ pronto per il checkpoint (2026-10-09), FROZEN dopo l'handoff. L'analisi è approvata dal developer e la revisione dal coordinatore; la cura del login è approvata dal developer; D1, D3 e D5 sono decise (§0.1).
 >
 > - Workstream L, ramo `e-alfy-l-danske-bank`.
-> - Base `da8d7a10b` (treno 22), worktree pulito al via.
-> - I commit del 34s2 sono già nel treno 22: da `2fb8b8502` a `696105587`, merge `47c56581b`.
+> - Base `945593520` (treno 22), worktree pulito al via.
+> - I commit del 34s2 sono già nel treno 22: da `a531b99f7` a `ee42551ac`, merge `eb15f6ed9`.
 > - Corsia 6156 / 6166, `--data-dir /tmp/librefolio-r2-l`, un comando alla volta.
 > - Coordinatore: sessione `c8328a01-…`.
 
@@ -69,7 +69,7 @@ Bisogna anche verificare che S21 di O (`stores/app/auth.ts`, `LoginCard`) mostri
   - `reason.uncertain` diventa generico, perché copre entrambi i casi discordi;
   - `cookieWarning` diventa vero anche con `never`, e dà il rimedio per Nginx.
 
-## 1. Stato verificato (codice a `da8d7a10b`)
+## 1. Stato verificato (codice a `945593520`)
 
 **Backend**
 - In `api/v1/system.py`, `plugin-diagnostics` e `container-image-status` usano già `Depends(get_current_user)`. Gli schemi sono in `schemas/system.py`, tutti `StrictModel`.
@@ -279,7 +279,7 @@ Nessuna migrazione e nessuna dipendenza nuova. `api sync` va fatto in ogni workt
 ### 8.0 ✅ Analisi e piano (2026-10-09)
 
 > **Note implementazione**:
-> - HEAD verificato: `da8d7a10b`, worktree pulito.
+> - HEAD verificato: `945593520`, worktree pulito.
 > - Letti `system.py`, `schemas/system.py`, il login di `auth.py`, `auth_service.py`, Sidebar, Header, gli store `auth`, `DocsLink`, il runner (`_frontend_utility.py`, `_backend_api.py`), `playwright.config.ts` e `main.py`.
 > - DevWiki: niente di specifico sull'indicatore; graphify assente, come previsto.
 >
@@ -469,11 +469,11 @@ I messaggi e i percorsi sono in `/tmp/libreFolio_commits/l-36-c{1,2,3}.{msg,path
 ### 8.7 ✅ Integrazione e verifica finale (2026-10-09)
 
 > **Note implementazione**:
-> - **I commit**, integrati nel treno 24 (merge `01da03047`, 2026-10-09):
->   - `3392c4f05` fix(auth): login does not reveal accounts;
->   - `07da532fb` feat(ui): connection security indicator;
->   - `28c85d34f` docs(journal): plan 36, connection security.
-> - **Verifica** su `3cceb4f90`:
+> - **I commit**, integrati nel treno 24 (merge `275d99218`, 2026-10-09):
+>   - `12106dbd3` fix(auth): login does not reveal accounts;
+>   - `6c0e15bd0` feat(ui): connection security indicator;
+>   - `716b0b4eb` docs(journal): plan 36, connection security.
+> - **Verifica** su `f545b67e3`:
 >   - `GET /system/connection` (`system.py:220-221`);
 >   - l'indicatore e il pallino sul burger;
 >   - la pagina utente di Q, `user/connection-security.en.md` (S20, stesso treno);

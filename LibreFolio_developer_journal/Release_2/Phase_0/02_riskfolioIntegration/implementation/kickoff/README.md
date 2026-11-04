@@ -21,7 +21,7 @@ Sequenza, e non è negoziabile:
 
 1. il developer committa;
 2. il coordinatore legge lo SHA: `git rev-parse HEAD`;
-3. lo SHA sostituisce il segnaposto — **fatto il 17 Set 2026: `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`**;
+3. lo SHA sostituisce il segnaposto — **fatto il 17 Set 2026: `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f`**;
 4. **solo allora** si creano le sessioni.
 
 Conseguenza utile: con `base_branch: e-alfy-risk-management-replan` **non serve alcun
@@ -68,7 +68,7 @@ nel worktree `e-alfy-ideal-eureka`. Riferisci a lui, non al developer direttamen
 
 ## Da dove nasci
 Branch base: `e-alfy-risk-management-replan`
-Baseline attesa: `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`
+Baseline attesa: `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f`
 
 ⚠️ **Prima cosa da fare**: `git rev-parse HEAD`. Se non coincide con la baseline
 attesa, **fermati e riportalo**. Non continuare l'analisi su una base diversa da
@@ -193,10 +193,10 @@ git -C <worktree> ls-files .github/agents/coordinated-workstream.agent.md
 
 La prima prova che il figlio è nato dalla baseline attesa. La seconda che l'agente
 esiste **nel commit**, non solo sul disco del coordinatore — ed è già verificata su
-`619c2d79e`, insieme a `release-coordinator` e alle skill citate (`test-triage`,
+`bf03c37b1`, insieme a `release-coordinator` e alle skill citate (`test-triage`,
 `testing-*`, `lint-format-*`, `plan-archive`, `wiki-*`).
 
-Se la prima dà uno SHA diverso da `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`, **ci si ferma e si riconcilia**. Il
+Se la prima dà uno SHA diverso da `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f`, **ci si ferma e si riconcilia**. Il
 figlio deve fare la stessa verifica e riportare la discrepanza invece di continuare:
 per questo è il primo punto del preambolo.
 
@@ -232,13 +232,13 @@ Regola del contratto `release-coordinator`, e non si aggira:
 
 ## ⚠️ Per ogni sessione creata DOPO il commit del 18 Set — J in particolare
 
-> ## 🔴 Lo SHA `cc33120eb…` scritto qui sopra **sarà sbagliato**.
+> ## 🔴 Lo SHA `3a4431d5a…` scritto qui sopra **sarà sbagliato**.
 >
 > Vale per le undici sessioni dell'onda 1-2. **Chi crea una sessione nuova sostituisce lo
 > SHA con quello del commit corrente**, e la prima cosa che il mandato fa resta
 > `git rev-parse HEAD` **contro lo SHA del proprio kickoff, non contro questo file**.
 >
-> Se un mandato confrontasse contro `cc33120eb` troverebbe una differenza e la segnalerebbe
+> Se un mandato confrontasse contro `3a4431d5a` troverebbe una differenza e la segnalerebbe
 > come baseline rotta: **un allarme falso prodotto da un documento invecchiato**, cioè il
 > difetto che questa campagna ha trovato **sette volte**.
 

@@ -1,6 +1,6 @@
 # Voci aperte del backlog post-1.2 — verifica del 22/10/2026
 
-Fatto dal coordinatore di release della 1.3, sul ramo `dev_release2` (HEAD `c042f2481`). Fonte: `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md`.
+Fatto dal coordinatore di release della 1.3, sul ramo `dev_release2` (HEAD `295a09c86`). Fonte: `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md`.
 Il riordino ha toccato solo quel file (✅ e ⏭️ con nota); nessun commit, nessuna voce tolta. Questo file è l'elenco di quello che resta.
 
 **Come sono state controllate.** Il parser ha trovato 940 voci con ID nel backlog (le 954 del conto iniziale contano righe diverse), 505 già con ✅ e 435 senza. Per ognuna delle 435 un controllo in sola lettura su `git log`, messaggi dei commit, `CHANGELOG.md` `[Unreleased]`, piani della Phase_1 e codice attuale. Nessun test è stato lanciato.
@@ -50,15 +50,15 @@ Nota sulle taglie: la taglia viene dal peso scritto nella voce, non da una mia s
 | ID | Perché togliere | Prova |
 |---|---|---|
 | C-83 (superseded) | superata: è una nota sul comportamento voluto, la regola «mai conteggi globali» è già nelle regole dei test | È una nota sul comportamento (la pagina salva la barra del giorno: `api/v1/assets/prices.py`, «intra-day upsert»), voluto. La regola «mai un conteggio globale» è già in `.claude/agents/test-author.md:415`, in `coordinated-workstream.md:259` e in CLAUDE.md «Wri |
-| R-8 (duplicate) | doppione di TC-7 (ora ✅) | Doppione di TC-7 (riga 2969, che dice «R-8 della sezione R, spostata qui»). Il lavoro c'è: `mergeBaselines` in `frontend/scripts/theme/theme-roles.mjs:826` è un merge a tre vie con `~accept` (commit `68c990b35`, entrato con `a0915bef9`). |
-| X-R45 (superseded) | annullata il 19/10 dal developer | Annullata il 19/10 per decisione del developer: il filtro dei tassi inutilizzabili nei lettori diretti è stato tolto con `c720e25cb` (entrato con `09747a3ee`). Il caso del PAC è coperto da X-R45b (`292d7e55e`, avviso e tasso precedente valido). |
-| X-R73 (superseded) | il codice duplicato non esiste più | Il doppione non c'è più: `stored_date_bounds()` è stata tolta da `cb5ad77be` (N83, niente più il limite 1900 sulle scritture; entrato con `1b2304ff2`). `_range_start_in_bounds` in `api/v1/assets/prices.py` ora usa `EARLIEST_RANGE_START` e `latest_range_end()`  |
+| R-8 (duplicate) | doppione di TC-7 (ora ✅) | Doppione di TC-7 (riga 2969, che dice «R-8 della sezione R, spostata qui»). Il lavoro c'è: `mergeBaselines` in `frontend/scripts/theme/theme-roles.mjs:826` è un merge a tre vie con `~accept` (commit `ec79e0df1`, entrato con `3d1314c2c`). |
+| X-R45 (superseded) | annullata il 19/10 dal developer | Annullata il 19/10 per decisione del developer: il filtro dei tassi inutilizzabili nei lettori diretti è stato tolto con `a057becce` (entrato con `c3c0b212f`). Il caso del PAC è coperto da X-R45b (`fa330c6c4`, avviso e tasso precedente valido). |
+| X-R73 (superseded) | il codice duplicato non esiste più | Il doppione non c'è più: `stored_date_bounds()` è stata tolta da `558fb1d90` (N83, niente più il limite 1900 sulle scritture; entrato con `0c31bf36e`). `_range_start_in_bounds` in `api/v1/assets/prices.py` ora usa `EARLIEST_RANGE_START` e `latest_range_end()`  |
 | W-B21 (duplicate) | doppione di A-10 (aperta; prima aggiungere in A-10 la riga su `orphan_pair_halves`) | La voce stessa dice «va nel debito di traduzione di A-10». A-10 è aperta. |
 | W-B40 (superseded) | la domanda è risolta da N78-1/W-B93 | La domanda («l'ADJUSTMENT in uscita creato senza costo») è risolta da N78-1/W-B93: una rettifica in uscita non ha valore, un costo su un'uscita è rifiutato (`costBasisNotAllowed`), il Bulk mostra il costo solo in entrata (`TransactionBulkModal.svelte:212`). |
-| J-11 (superseded) | deciso e fatto con W-B93 (N78-1) | Deciso dal developer il 21/10 e fatto da W-B93 (N78-1): 79068afe5 entrato con 2469c0852. Le regole: i motori chiudono l'uscita a 0 qualunque valore sia salvato, la regola 12b rifiuta un costo su un'uscita, il CSV generico chiede il costo solo in entrata. |
-| J-30 (duplicate) | doppione di W-B53 (✅) | Doppione di W-B53 (✅, chiusa da W il 16/10): il pool BRIM è precaricato e riscaldato all'avvio, opzionale (LIBREFOLIO_BRIM_PREWARM). Lavoro 618d7208e / 193412cdf, entrambi in dev_release2. |
-| MF-J4 (duplicate) | doppione di J-43 (✅) | Doppione di J-43 (✅ in sezione J, riga 7585, che cita MF-J4): a46f85bda, entrato con 09cb9231a. classifier.py:~148 ora scrive l'avviso fuori dal ramo `tx.date != paired.date`. |
-| MF-SEC9b (duplicate) | doppione di E-18 (✅) | Doppione di E-18 (✅, riga 9368, «Codici di valuta stretti sulle scritture (MF-SEC9b)»): ed8b3c28e, entrato con 73366626e. |
+| J-11 (superseded) | deciso e fatto con W-B93 (N78-1) | Deciso dal developer il 21/10 e fatto da W-B93 (N78-1): 4bad3e4a3 entrato con 3be99b76e. Le regole: i motori chiudono l'uscita a 0 qualunque valore sia salvato, la regola 12b rifiuta un costo su un'uscita, il CSV generico chiede il costo solo in entrata. |
+| J-30 (duplicate) | doppione di W-B53 (✅) | Doppione di W-B53 (✅, chiusa da W il 16/10): il pool BRIM è precaricato e riscaldato all'avvio, opzionale (LIBREFOLIO_BRIM_PREWARM). Lavoro b28a9342c / e6cd72aec, entrambi in dev_release2. |
+| MF-J4 (duplicate) | doppione di J-43 (✅) | Doppione di J-43 (✅ in sezione J, riga 7585, che cita MF-J4): 2b5adbc4f, entrato con 42d00b0d8. classifier.py:~148 ora scrive l'avviso fuori dal ramo `tx.date != paired.date`. |
+| MF-SEC9b (duplicate) | doppione di E-18 (✅) | Doppione di E-18 (✅, riga 9368, «Codici di valuta stretti sulle scritture (MF-SEC9b)»): 18c499238, entrato con 988805031. |
 | L-5 (superseded) | la condizione non si è avverata (R-1 chiusa) | La condizione ('se R-1 sostituisce gli osservatori dei grafici con uno store') non si è avverata: R-1 è chiusa (15/10, D4) e ha tenuto il ridisegno su ogni cambio di classe di `<html>` (`onThemeClassChange` in `frontend/src/lib/theme/themeMode.ts`). Il ruolo d |
 
 ### Spostate altrove (nessuna azione tranne, se si vuole, togliere la riga)
@@ -68,15 +68,15 @@ Nota sulle taglie: la taglia viene dal peso scritto nella voce, non da una mia s
 - **C-88** — Spostata il 18/10 in `TODO_FUTURI.md`, «🧬 Profilo dei dati dell'asset» (`TODO_FUTURI.md:109`, «ex C-88»).
 - **W-B9** — La voce stessa dice «spostata nella sezione X dal coordinatore il 15/10».
 - **W-B13** — La voce stessa dice «spostata nella sezione X dal coordinatore il 15/10».
-- **J-2** — La voce stessa dice: spostata nella sezione C il 15/10 come C-94. C-94 è già chiusa (1c67dd5d9, entrato con 2faa88a34).
-- **J-5** — La voce dice: spostata nella sezione X il 15/10, e chiusa da X con 743fca514 (esiste, è in dev_release2). Esiste anche la voce ✅ in sezione X (riga 5338).
+- **J-2** — La voce stessa dice: spostata nella sezione C il 15/10 come C-94. C-94 è già chiusa (53d02245d, entrato con 52df1480d).
+- **J-5** — La voce dice: spostata nella sezione X il 15/10, e chiusa da X con addc90a46 (esiste, è in dev_release2). Esiste anche la voce ✅ in sezione X (riga 5338).
 
 ## Rimandate alla 1.4 (segnate ⏭️ nel backlog)
 
-- **T-PL5 · `brim_provider.py` diventa `services/brim/`** — nessun effetto visibile (codice/test/doc) Stato: open. La rinomina è fatta (`services/brim/`, W4 CP6 `548a0688d`), ma `backend/app/services/brim/brim_provider.py` ha ancora 2 349 righe, un file solo. È elencata in `Phase_2/ATTIVITA_INIZIO_1.4.md` come «W4/CP7».
+- **T-PL5 · `brim_provider.py` diventa `services/brim/`** — nessun effetto visibile (codice/test/doc) Stato: open. La rinomina è fatta (`services/brim/`, W4 CP6 `1ff66e047`), ma `backend/app/services/brim/brim_provider.py` ha ancora 2 349 righe, un file solo. È elencata in `Phase_2/ATTIVITA_INIZIO_1.4.md` come «W4/CP7».
 - **T-PL7 · Un router proprio per i segnali, con gli URL invariati** — nessun effetto visibile (codice/test/doc) Stato: open. `backend/app/api/v1/signals.py` ha 63 righe e solo `/signals/preview`; gli altri endpoint dei segnali stanno in `api/v1/assets/prices.py` e `api/v1/fx/currencies.py`. In `ATTIVITA_INIZIO_1.4.md` come «CP5 (T-PL7)».
 - **T-P2.2 · I file grandi del backend, divisi per cuciture** — nessun effetto visibile (codice/test/doc) Stato: partial. Restano tre tagli (letti oggi): `services/portfolio_service.py` 2 238 righe (CP-8), `api/v1/brokers.py` 1 265 righe (W3), `schemas/risk.py` 1 851 e `schemas/signals.py` 1 372 righe (CP-9b/9c). Tutti nell'elenco di `ATTIVITA_INIZIO_1.4.md`. Gli altri tagli (PAC, transazioni, broker_service, price_sto
-- **T-SG · I file sciolti in cima a `backend/app/services/`, raggruppati per dominio** — nessun effetto visibile (codice/test/doc) Stato: partial. Le tre cartelle dei servizi piccoli sono già fatte: `services/accounts/` (`b53dfd705`, integrato con `769cc31cb`), `services/platform/` e `services/files/` (`a52018fd7`, integrato con `6a605904c`), più `transactions/` e `brokers/` (`9a44bdcec`); tutte in dev dal 15/10 (primo ingresso `d036d4896`). R
+- **T-SG · I file sciolti in cima a `backend/app/services/`, raggruppati per dominio** — nessun effetto visibile (codice/test/doc) Stato: partial. Le tre cartelle dei servizi piccoli sono già fatte: `services/accounts/` (`9966ec451`, integrato con `ea1f73618`), `services/platform/` e `services/files/` (`b3d1811b6`, integrato con `3cea9aaac`), più `transactions/` e `brokers/` (`00c30943e`); tutte in dev dal 15/10 (primo ingresso `4dde1c365`). R
 - **U-B3 · Le icone dentro la cartella del plugin** — nessun effetto visibile (codice/test/doc) Stato: open. `backend/app/services/brim_providers/static/` (con `scalable`) è ancora alla radice della famiglia; `broker_scalable/` ha solo `i18n`, `__init__.py`, `plugin.py`. È nell'elenco `ATTIVITA_INIZIO_1.4.md` (W5-W6).
 - **U-B4 · `sample_reports/` per plugin** — nessun effetto visibile (codice/test/doc) Stato: open. `backend/app/services/brim_providers/sample_reports/` ha ancora 62 elementi alla radice della famiglia; `ATTIVITA_INIZIO_1.4.md` (W5-W6).
 - **X-R10 · Commenti e pagine dei cambi un po' più ottimisti del codice** — nessun effetto visibile (codice/test/doc) Stato: open. Restano 4 dei 5 punti: `currencyGraphStore.ts` righe 5 e 11 («stable», «can never go stale»); `developer/frontend/fx-chain-algorithm.md` usa ancora `getOrBuildGraph()` (riga ~283); `fx_plugin_guide.md` riga 67 dice ancora «when a user adds a new currency pair»; `developer/architecture/settings_cache
@@ -173,7 +173,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **C-42 · I vincoli delle coppie anche per contante e cambio** (backlog, riga 93)
   - Cosa cambia per l'utente: Un client dell'API può ancora salvare una coppia di cassa sbilanciata (importo o valuta del CASH_TRANSFER, valute dell'FX_CONVERSION).
   - Peso: medio → media; parziale: resta aperta solo una parte
-  - Ancora valida: Fatta la regola «le due metà dell'FX_CONVERSION stanno sullo stesso broker» (W-B17, `926a5c422`, entrato con `ea72346b7`; anche `pairBrokerMismatch` in `backend/app/services/transactions/validation.py`). `_validate_linked_pair` non controlla ancora `cash_currency` e `cash_amount` (il resto della tabella `pair_field_constraints` di `type_metadata.py`); lo traccia W-B46 (aperta, sezione W).
+  - Ancora valida: Fatta la regola «le due metà dell'FX_CONVERSION stanno sullo stesso broker» (W-B17, `cb568c636`, entrato con `4b40ca5a0`; anche `pairBrokerMismatch` in `backend/app/services/transactions/validation.py`). `_validate_linked_pair` non controlla ancora `cash_currency` e `cash_amount` (il resto della tabella `pair_field_constraints` di `type_metadata.py`); lo traccia W-B46 (aperta, sezione W).
   - Aspetta: decisione developer; già scritta «dopo la 1.3»
   - Proprietario suggerito: W
   - Note: Il TRANSFER (asset e quantità) è chiuso dal lotto 42. Il pezzo che resta coincide con W-B46: tenere una voce sola. «Leggere la tabella» cambia ciò che l'API accetta, quindi la decisione è del developer.
@@ -201,7 +201,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **I-07 · Il controllo dei tipi sugli E2E** (backlog, riga 97)
   - Cosa cambia per l'utente: Nessun effetto visibile (test): gli E2E sono ora privi dei 2 errori di tipo, ma nessun controllo li guarda.
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: I 2 errori sono spariti con E-17 (`b7e066908`, entrato con `fc979d0b4`): mappa `$lib` in `frontend/tsconfig.e2e.json` e `backdrop: false` in `onboarding-tour.spec.ts`. Ma `tsc -p tsconfig.e2e.json` non è in nessun gate: `dev.py` ed `package.json` lanciano solo `svelte-check` su `tsconfig.json` (`dev.py:734`, `package.json` «check»).
+  - Ancora valida: I 2 errori sono spariti con E-17 (`d79aafd03`, entrato con `ef66e0e01`): mappa `$lib` in `frontend/tsconfig.e2e.json` e `backdrop: false` in `onboarding-tour.spec.ts`. Ma `tsc -p tsconfig.e2e.json` non è in nessun gate: `dev.py` ed `package.json` lanciano solo `svelte-check` su `tsconfig.json` (`dev.py:734`, `package.json` «check»).
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: C
   - Note: Resta da fare solo il gate. E-17 (sezione E-, ✅) dice che restano 3 TS2769 di C-66, di un ramo attivo: da rimisurare prima di mettere il gate.
@@ -249,7 +249,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **C-65 · Evento → transazione: il resto del collegamento (F-090)** (backlog, riga 187)
   - Cosa cambia per l'utente: Cambiando provider di un asset, le transazioni collegate agli eventi vecchi si scollegano senza che l'utente sia avvisato.
   - Peso: medio-basso → media; parziale: resta aperta solo una parte
-  - Ancora valida: Fatta la ricerca inversa `GET /transactions?asset_event_id=` (C-65b: `5e96df752`, entrato con `dc7e4e48e`; presente in `backend/app/api/v1/transactions.py:181`). Manca la modale al cambio di provider (C-65a): `services/assets/provider_management.py:230-240` mette ancora `asset_event_id=None` in silenzio.
+  - Ancora valida: Fatta la ricerca inversa `GET /transactions?asset_event_id=` (C-65b: `458103f4f`, entrato con `0e314caf6`; presente in `backend/app/api/v1/transactions.py:181`). Manca la modale al cambio di provider (C-65a): `services/assets/provider_management.py:230-240` mette ancora `asset_event_id=None` in silenzio.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: X
   - Note: C-65a è fuori dal lotto K3 di W (parcheggiato il 19/10, N91), si fa con X dopo. Non è nelle ondate 4/5 né in ATTIVITA_INIZIO_1.4: serve decidere dove metterla. Collegata a W-B2.
@@ -271,11 +271,11 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: La fixture `jsCoverage` (`frontend/e2e/fixtures/playwright.ts`, teardown dopo `await use()`) legge ancora `window.__coverage__` solo al teardown (I1); `pac-allocator-real.spec.ts` non è più cambiato dal 13/10; nessun commit dei lotti A, B, C del piano 53.
   - Aspetta: già scritta «dopo la 1.3»
   - Proprietario suggerito: J
-  - Note: Il developer: «Tutto dopo la 1.2». Il piano 1.3 mette i lotti di test del PAC (A–C) fuori dalla 1.3. Il sotto-lavoro `localProblems` di C-76 è già chiuso (`5810e03d2`).
+  - Note: Il developer: «Tutto dopo la 1.2». Il piano 1.3 mette i lotti di test del PAC (A–C) fuori dalla 1.3. Il sotto-lavoro `localProblems` di C-76 è già chiuso (`0e95c62e1`).
 - **C-70 · I rifiuti di lettura dei plugin di import sono solo in inglese** (backlog, riga 228)
   - Cosa cambia per l'utente: Un file che il plugin non sa leggere dà ancora il rifiuto in inglese in ogni lingua per il 400 del parse e per l'anteprima.
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Parte a chiusa il 15/10: K2a, DEGIRO e Generic CSV rifiutano con un `BRIMRefusal` a codice, tradotto, e nominano il plugin (`0eac8e1b6`, entrato con `62c964242`). Restano la cornice del 400 e dell'anteprima (ora C-70b, E con W che rivede, patch parcheggiata dal 19/10) e le frasi dei plugin (E-21).
+  - Ancora valida: Parte a chiusa il 15/10: K2a, DEGIRO e Generic CSV rifiutano con un `BRIMRefusal` a codice, tradotto, e nominano il plugin (`ca5bd0bb9`, entrato con `2055f257a`). Restano la cornice del 400 e dell'anteprima (ora C-70b, E con W che rivede, patch parcheggiata dal 19/10) e le frasi dei plugin (E-21).
   - Aspetta: lotto C-70b / E-21; già scritta «ondata 5»
   - Proprietario suggerito: E
   - Note: PROSSIMI_LAVORI, esito 22/10: C-70b prima, poi E-21, entrambe in ondata 5. K2b/K2c sono tolte come doppioni di C-70b.
@@ -285,7 +285,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: `frontend/vitest.config.ts:47` cita `frontend/scripts/unit-report.js`, che non esiste (c'è `js-coverage-report.js`); `scripts/test_runner/_common.py:120` nomina ancora `_consolidate._run_playwright_batch`.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: C
-  - Note: La pagina wiki svelte-template-branches è stata toccata il 13/10 (`f1a1674cd`), il resto della lista non è stato ricontrollato punto per punto.
+  - Note: La pagina wiki svelte-template-branches è stata toccata il 13/10 (`41300ace1`), il resto della lista non è stato ricontrollato punto per punto.
 - **C-77 · Test del PAC che dichiarano più di quanto verificano** (backlog, riga 308)
   - Cosa cambia per l'utente: Nessun effetto visibile (test): alcuni test del PAC dichiarano più di quanto verificano.
   - Peso: medio-basso → media
@@ -322,7 +322,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **C-91 · Collaudare gli import di Interactive Brokers e Fineco su report veri** (backlog, riga 431)
   - Cosa cambia per l'utente: L'import di Interactive Brokers resta etichettato Beta; Fineco no.
   - Peso: minimo → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Fineco fuori dalla beta (W-B92, `a7c6db19f`, entrato con `065cfa49e`, discussione #49). `mkdocs_src/docs/user/transactions/import/ibkr.en.md` ha ancora «Beta» alla riga 3, e nessun report vero di IB è arrivato.
+  - Ancora valida: Fineco fuori dalla beta (W-B92, `f67ce0771`, entrato con `02e6be47d`, discussione #49). `mkdocs_src/docs/user/transactions/import/ibkr.en.md` ha ancora «Beta» alla riga 3, e nessun report vero di IB è arrivato.
   - Aspetta: altro: un report vero di Interactive Brokers dall'utente
   - Proprietario suggerito: W
   - Note: Resta aperta per IB; Fineco è chiuso (PROSSIMI_LAVORI, esito 22/10).
@@ -349,7 +349,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **C-99 · Manuale admin: nuova struttura, variabili d'ambiente divise per categoria** (backlog, riga 520)
   - Cosa cambia per l'utente: Il manuale admin resta con una pagina di configurazione sola e una tabella di variabili non completa.
   - Peso: medio → media
-  - Ancora valida: Nessuna pagina per categoria in `mkdocs_src/docs/admin/` (c'è ancora `configuration.en.md` unico); `.env.example` non è diviso; nessun controllo che ogni `LIBREFOLIO_*` stia in una pagina. Fatta solo la regola provvisoria per i figli (E6.1, `3480cbc53`).
+  - Ancora valida: Nessuna pagina per categoria in `mkdocs_src/docs/admin/` (c'è ancora `configuration.en.md` unico); `.env.example` non è diviso; nessun controllo che ogni `LIBREFOLIO_*` stia in una pagina. Fatta solo la regola provvisoria per i figli (E6.1, `f38b44960`).
   - Aspetta: lotto dei lotti cloud di H, A, B, E, Z (devono essere entrati e nessuno deve avere pagine admin aperte)
   - Proprietario suggerito: C
   - Note: Decisa «nella 1.3» dal developer (16/10), un solo lotto del coordinatore con il docs-writer. Non compare nelle ondate di PROSSIMI_LAVORI: va messo in una.
@@ -474,7 +474,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **P-15 · Altre etichette inglesi scritte nel codice** (backlog, riga 729)
   - Cosa cambia per l'utente: In inglese restano il pulsante «Reset layout» delle colonne e «max» nella condivisione del broker.
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Parte di W chiusa il 15/10 (K1: `532a1fd9c`, entrato con `d915c869f`: contatori e `aria-label` di `DataEditor`, «Help» e «Close» di `DataImportModal`). Restano «Reset layout» (`components/table/ColumnVisibilityToggle.svelte:167`) e «max» (`features/brokers/BrokerSharingPanel.svelte:830`).
+  - Ancora valida: Parte di W chiusa il 15/10 (K1: `79bdf7e10`, entrato con `0a5b05666`: contatori e `aria-label` di `DataEditor`, «Help» e «Close» di `DataImportModal`). Restano «Reset layout» (`components/table/ColumnVisibilityToggle.svelte:167`) e «max» (`features/brokers/BrokerSharingPanel.svelte:830`).
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: Y
   - Note: Il resto è assegnato a Y (decisione Q6 del piano 04).
@@ -484,21 +484,21 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **T-U1 · Un piano dei cambi unico: mancanti e provenienza** (backlog, riga 782)
   - Cosa cambia per l'utente: Nessun effetto visibile oggi; a lavoro finito un cambio mancante o vecchio sarebbe segnalato nello stesso modo in ogni pagina.
   - Peso: medio → media
-  - Ancora valida: Non esiste un piano dei cambi unico con la provenienza: motore (`financial_math/portfolio/engine.py` `_preload_fx_rates`), lotti (`lots/conversions.py`, `FxRateResolver`), YoC (`yield_on_cost.py:471`), costo medio (`average_cost.py:357`) e cassa nativa (`native_cash.py:476`) chiamano ancora `convert_bulk` ciascuno a modo suo; `price_query.py:863` ricava ancora il fattore per divisione. Fatto solo un pezzo: `oriented_rate` in `financial_math/fx_rates.py` (J-1 voce 4, `068d5dd51`), usato da fx, PAC e WAC. Nessun commit con T-U1 nel titolo.
+  - Ancora valida: Non esiste un piano dei cambi unico con la provenienza: motore (`financial_math/portfolio/engine.py` `_preload_fx_rates`), lotti (`lots/conversions.py`, `FxRateResolver`), YoC (`yield_on_cost.py:471`), costo medio (`average_cost.py:357`) e cassa nativa (`native_cash.py:476`) chiamano ancora `convert_bulk` ciascuno a modo suo; `price_query.py:863` ricava ancora il fattore per divisione. Fatto solo un pezzo: `oriented_rate` in `financial_math/fx_rates.py` (J-1 voce 4, `ff9a926a8`), usato da fx, PAC e WAC. Nessun commit con T-U1 nel titolo.
   - Aspetta: decisione developer
   - Proprietario suggerito: MF
   - Note: Parti nate qui: MF-A13 (tasso ricavato per divisione tre volte) e `STALE_FX` (8b, avviso sui cambi vecchi) sono già scritte «dopo la 1.3» o in attesa del developer; il resto non ha un lotto. Se il coordinatore vuole chiudere T-U1, conviene spezzarla in queste due voci e dichiarare chiuso il resto.
 - **T-U4 · Rendimenti e annualizzazione** (backlog, riga 801)
   - Cosa cambia per l'utente: Nessun effetto visibile (restano due controlli duplicati nel codice dei segnali).
   - Peso: medio → media; parziale: resta aperta solo una parte
-  - Ancora valida: Resta R11. In `backend/app/services/signals/risk_adapters.py:191-193` e `:222-224` la regola «fattore di annualizzazione finito e positivo» è ancora scritta due volte, invece di chiamare `positive_annualization_factor` di `financial_math/returns.py` (che `risk/metrics.py` usa). Il test di parità fra le versioni pandas e quelle scalari esiste già dal 18/09 (`test_risk_metrics_oracle.py`, blocco (g), `f5fe80d44`): quello che manca è solo togliere le due copie.
+  - Ancora valida: Resta R11. In `backend/app/services/signals/risk_adapters.py:191-193` e `:222-224` la regola «fattore di annualizzazione finito e positivo» è ancora scritta due volte, invece di chiamare `positive_annualization_factor` di `financial_math/returns.py` (che `risk/metrics.py` usa). Il test di parità fra le versioni pandas e quelle scalari esiste già dal 18/09 (`test_risk_metrics_oracle.py`, blocco (g), `3b4a8a1f9`): quello che manca è solo togliere le due copie.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: J
-  - Note: Fatto: R1/R2, R3, R5, P1, C1 (J, `58f8e3967`, `70bc2d290`, `4ea6cc61e`), R6-R10 (MF-D, entrato con `8d244d1c6`), il 365 con nome (`068d5dd51`). Il resto della voce può essere dichiarato chiuso; R11 è un lotto minimo.
+  - Note: Fatto: R1/R2, R3, R5, P1, C1 (J, `5a03de0f9`, `ce16feab5`, `e8201817e`), R6-R10 (MF-D, entrato con `324348aac`), il 365 con nome (`ff9a926a8`). Il resto della voce può essere dichiarato chiuso; R11 è un lotto minimo.
 - **T-U5 · Prezzo del giorno e valorizzazione** (backlog, riga 808)
   - Cosa cambia per l'utente: Nessun effetto visibile oggi; a lavoro finito il prezzo «del giorno» sarebbe lo stesso in portafoglio, broker e PAC.
   - Peso: medio-alto → grande; parziale: resta aperta solo una parte
-  - Ancora valida: R4 e B8 sono chiusi (MF-A: `9a1d57bfa`, entrato con `536501541`; `compute_holding_value` in `financial_math/valuation.py`). Restano copie dell'ultima chiusura grezza: `portfolio_service.py:495` `_get_price_at_date` (variazione a 1 giorno, `:758`) e `brokers/summary.py:245` (ultimo `close` per asset, V3); il PAC (V4, istantanea esatta) e V10 (riempimento in lettura) non sono stati rivisti.
+  - Ancora valida: R4 e B8 sono chiusi (MF-A: `957018db7`, entrato con `d7557b79e`; `compute_holding_value` in `financial_math/valuation.py`). Restano copie dell'ultima chiusura grezza: `portfolio_service.py:495` `_get_price_at_date` (variazione a 1 giorno, `:758`) e `brokers/summary.py:245` (ultimo `close` per asset, V3); il PAC (V4, istantanea esatta) e V10 (riempimento in lettura) non sono stati rivisti.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: MF
   - Note: CP-8 (taglio di `portfolio_service.py`, 1.4) tocca la stessa funzione: meglio farlo prima o insieme.
@@ -636,13 +636,13 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **M-12 · La riga «FX on cash» negli scatti della galleria** (backlog, riga 1050)
   - Cosa cambia per l'utente: Gli scatti della vista Performance nella galleria non mostrano la riga «FX on cash».
   - Peso: basso → piccola
-  - Ancora valida: `frontend/e2e/dashboard-report.json` non contiene la stringa «FX on cash» (0 occorrenze); l'ultima modifica è `a26051686` del 14/10. La riga esiste nell'app (`dashboard.fxOnCash`) ed è provata da `e2e/portfolio/foreign-cash-real.spec.ts`, ma non è nella galleria.
+  - Ancora valida: `frontend/e2e/dashboard-report.json` non contiene la stringa «FX on cash» (0 occorrenze); l'ultima modifica è `72f361a10` del 14/10. La riga esiste nell'app (`dashboard.fxOnCash`) ed è provata da `e2e/portfolio/foreign-cash-real.spec.ts`, ma non è nella galleria.
   - Aspetta: altro: una nuova cattura dai dati del developer con un broker che tenga liquidità in un'altra valuta (`dev.py mkdocs normalize-dashboard-fixture`)
   - Proprietario suggerito: M
 - **M-15 · Le sonde della galleria che dovrebbero essere `expect`** (backlog, riga 1069)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: La parte della galleria è chiusa: assorbita da G (G-5, ✅ 14/10), commit `0076f4269` (primo ingresso `d036d4896`). Resta il difetto fuori dalla galleria: `frontend/e2e/transactions/tx-picker-pagination.spec.ts:159` `isVisible({timeout: 2_000})` e `:162` `isEnabled({timeout: 1_000})` (la sonda a tempo che ignora il timeout).
+  - Ancora valida: La parte della galleria è chiusa: assorbita da G (G-5, ✅ 14/10), commit `c04485214` (primo ingresso `4dde1c365`). Resta il difetto fuori dalla galleria: `frontend/e2e/transactions/tx-picker-pagination.spec.ts:159` `isVisible({timeout: 2_000})` e `:162` `isEnabled({timeout: 1_000})` (la sonda a tempo che ignora il timeout).
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: M
   - Note: La voce può chiudersi spostando in G-5 la parte fatta e lasciando qui una riga sola.
@@ -663,7 +663,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **M-24 · La galleria non fissa `navigator.language`** (backlog, riga 1156)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola
-  - Ancora valida: `frontend/e2e/fixtures/galleryLocale.ts:85-87` (`stampDocumentLocale`) registra solo `new Intl.NumberFormat().resolvedOptions().locale`, non `navigator.language`; `expectDrawnUnder` non lo controlla. Il commit `1e4a3ecd5` ha solo scritto nel commento il limite.
+  - Ancora valida: `frontend/e2e/fixtures/galleryLocale.ts:85-87` (`stampDocumentLocale`) registra solo `new Intl.NumberFormat().resolvedOptions().locale`, non `navigator.language`; `expectDrawnUnder` non lo controlla. Il commit `fc66a1055` ha solo scritto nel commento il limite.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: M
   - Note: Si vede solo con `dev.py mkdocs gallery --headed` o `--ui`.
@@ -766,7 +766,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: Migrati ad account usa-e-getta: `broker-create-feedback`, `brokers-detail`, `tx-clone`, `tx-fx-completeness`, `tx-bulk-*` (diagnostics, import-handoff, row-order), `tx-import-degiro`, `tx-import-report-set`, `tx-import-upload`, `tx-selection-after-bulk` (usano `registerDisposableUser`/`createOwnedBroker`). Ancora su `TEST_USER` senza account proprio (grep): `asset-merge`, `broker-recovery`, `fx-flag-font`, `files`, `tx-import-asset-inspector`, `tx-import-ca-contract`, `tx-import-file-selection`, `tx-import-matching`, `tx-wac-bulk`, probabilmente anche `tx-broker-icon-hydration`, `tx-import-duplicate-precedence`.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
-  - Note: Il lavoro è a poco a poco, senza un commit di chiusura; una prima parte è in `ad16a4d3c` (entrato con `6e9f2c47a`). La voce resta aperta per i spec elencati qui.
+  - Note: Il lavoro è a poco a poco, senza un commit di chiusura; una prima parte è in `e00076b50` (entrato con `f6db5ab7a`). La voce resta aperta per i spec elencati qui.
 - **V-17 · Il runner: la chiave `settings` prende anche `fx-chart-settings`, e il setup di Playwright ripopola** (backlog, riga 1477)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola; parziale: resta aperta solo una parte
@@ -783,10 +783,10 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **V-21 · Sonde e selettori vietati rimasti negli spec curati dalla 2b** (backlog, riga 1527)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Chiusa in gran parte (commit `5d5c7caed`, `e01289a65`, `12402625b`, `eb269ecde`: tx-delete, sonde, T1a/T1b, files). Residui verificati oggi: `tx-delete.spec.ts` ha ancora 4 occorrenze di `.checkbox-btn`/`.disabled-select-icon`; `tx-wac-fx.spec.ts` ha 17 `isVisible().catch`, `tx-wac-mode.spec.ts` 1; `data-asset-field` non esiste in `src`; `transactions-modals.spec.ts:7` dice ancora «port 6041»; l'opzione `skipCash` (:107) è ancora lì.
+  - Ancora valida: Chiusa in gran parte (commit `1308d3aa7`, `717d7c61f`, `cacbb9851`, `6a5721755`: tx-delete, sonde, T1a/T1b, files). Residui verificati oggi: `tx-delete.spec.ts` ha ancora 4 occorrenze di `.checkbox-btn`/`.disabled-select-icon`; `tx-wac-fx.spec.ts` ha 17 `isVisible().catch`, `tx-wac-mode.spec.ts` 1; `data-asset-field` non esiste in `src`; `transactions-modals.spec.ts:7` dice ancora «port 6041»; l'opzione `skipCash` (:107) è ancora lì.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
-  - Note: Entrati con `73d083e46` (5d5c7caed, e01289a65), `83e65bb87` (12402625b), `986e99bd3` (eb269ecde).
+  - Note: Entrati con `9a7e411d1` (1308d3aa7, 717d7c61f), `eb3a7ecbd` (cacbb9851), `926be26df` (6a5721755).
 - **V-24 · Nel bulk editor la cella del costo in Auto può mostrare per un attimo «💡 0.00» come `ready`** (backlog, riga 1671)
   - Cosa cambia per l'utente: Per un istante la cella del costo in Auto dell'editor bulk mostra «💡 0.00» come se fosse già calcolato.
   - Peso: basso, UX → piccola
@@ -802,7 +802,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **V-31 · `fx-sync-mock` lascia i tassi MOCKFX che il suo sync scrive** (backlog, riga 1798)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola
-  - Ancora valida: `frontend/e2e/fx/fx-sync-mock.spec.ts` non ha `afterAll` che tolga i tassi MOCKFX scritti (grep vuoto); l'header è stato corretto in `586fd8aca` e `fx-destructive` curato nello stesso commit.
+  - Ancora valida: `frontend/e2e/fx/fx-sync-mock.spec.ts` non ha `afterAll` che tolga i tassi MOCKFX scritti (grep vuoto); l'header è stato corretto in `1ce37932e` e `fx-destructive` curato nello stesso commit.
   - Aspetta: già scritta «dopo la 1.3»
   - Proprietario suggerito: V
   - Note: Tollerato, nessun rosso.
@@ -812,7 +812,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: Il rischio latente è curato: `asset-event-delete.spec.ts:238-` lavora su un asset creato dal test (`createOwnedAsset`), non più sugli eventi di Apple. Restano: `assets/assets-helpers.ts:52-62` (`navigateToAssetByName` ripiega sulla prima card/riga), `asset-modal.spec.ts:252` (`firstCard`), pulizie senza verifica dell'esito non ricontrollate.
   - Aspetta: già scritta «dopo la 1.3»
   - Proprietario suggerito: X
-  - Note: Il rischio latente è sparito con la riscrittura di `af4408608` (entrato con `fecf88c1a`), non per una cura di V-32.
+  - Note: Il rischio latente è sparito con la riscrittura di `387eec118` (entrato con `b71a72ee0`), non per una cura di V-32.
 - **V-34 · La pulizia di `trackTransactionWrites` controlla solo lo stato HTTP** (backlog, riga 1845)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola
@@ -822,14 +822,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **V-35 · `fx-detail:923`: il pannello «aesthetics» resta aperto dopo il secondo click, una volta, sotto carico** (backlog, riga 1858)
   - Cosa cambia per l'utente: Forse, molto di rado e sotto carico, il pannello «estetica» del grafico FX non si chiude al secondo click; mai visto a mano.
   - Peso: medio (meccanismo sconosciuto) → media
-  - Ancora valida: Sotto osservazione dal 13/10: nessun nuovo rosso scritto nel backlog. Strumentazione già in dev (`84cdf6dbb`, entrato con `bfdc40f31`: `aria-expanded` e log `[fx-panel-log]`).
+  - Ancora valida: Sotto osservazione dal 13/10: nessun nuovo rosso scritto nel backlog. Strumentazione già in dev (`19fd79d8f`, entrato con `665481b66`: `aria-expanded` e log `[fx-panel-log]`).
   - Aspetta: test rosso
   - Proprietario suggerito: Y
   - Note: Se ricompare, leggere `[fx-panel-log]`; se lo stato torna `true` senza click è un difetto di prodotto.
 - **V-37 · Nel form, «valid» accanto a un errore che blocca Apply** (backlog, riga 1890)
   - Cosa cambia per l'utente: Nel form delle transazioni «valid» non compare più accanto a un errore che blocca Apply, e una data scritta male non viene più ignorata; manca ancora il controllo completo del pulsante «⚡ Validate now».
   - Peso: altro (UX) → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Minimo e 1b chiusi da `b77885f0b` (entrato con `7c9c26549`). V-37b ancora aperta: `TransactionFormModal.svelte:1594` ha ancora `disabled={!isFormComplete}`; PROSSIMI_LAVORI «V-37b» → ondata 5, a W.
+  - Ancora valida: Minimo e 1b chiusi da `2d24c3c0e` (entrato con `9d9551846`). V-37b ancora aperta: `TransactionFormModal.svelte:1594` ha ancora `disabled={!isFormComplete}`; PROSSIMI_LAVORI «V-37b» → ondata 5, a W.
   - Aspetta: già scritta «ondata 5»
   - Proprietario suggerito: W
   - Note: Per il backlog: tenere la voce con la sola V-37b.
@@ -948,7 +948,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **L-12 · Il runner può ricostruire in release a metà giro** (backlog, riga 2122)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: medio → media
-  - Ancora valida: `_ensure_frontend_build()` in `scripts/test_runner/_frontend_common.py` chiama ancora `auto_build_frontend(debug=False, ...)`: se un file di `frontend/src` è più nuovo della build, ricostruisce in release e il server di test serve una build senza Lab. Nessun commit l'ha cambiato dopo il 14/10 (ultimo: `755eaa27d`, non correlato). Il passo `server --test --build-only` in primo piano riduce la finestra, ma non la chiude.
+  - Ancora valida: `_ensure_frontend_build()` in `scripts/test_runner/_frontend_common.py` chiama ancora `auto_build_frontend(debug=False, ...)`: se un file di `frontend/src` è più nuovo della build, ricostruisce in release e il server di test serve una build senza Lab. Nessun commit l'ha cambiato dopo il 14/10 (ultimo: `9d082e12d`, non correlato). Il passo `server --test --build-only` in primo piano riduce la finestra, ma non la chiude.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: H
   - Note: Prima di toccare, un test rosso o la riproduzione: il 14/10 non si è mai verificato.
@@ -975,14 +975,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **L-19 · Due esempi della pagina developer del Lab non corrispondono più al codice** (backlog, riga 2189)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola
-  - Ancora valida: La pagina `mkdocs_src/docs/developer/frontend/designer-lab.md` cita ancora `AssetCard.svelte` riga 133 (riga 1203; oggi la riga 133 di `AssetCard.svelte` è `let absoluteData = $derived(chartData);` e il file non contiene più `emerald`) e `DataTable.svelte:1607` con `#64748b` (righe 1323, 1340, 1367; la riga 1607 è `color 0.15s;` e `#64748b` non c'è più nel file). Il commit `f5f1eeb06` citato fra le menzioni non li ha corretti.
+  - Ancora valida: La pagina `mkdocs_src/docs/developer/frontend/designer-lab.md` cita ancora `AssetCard.svelte` riga 133 (riga 1203; oggi la riga 133 di `AssetCard.svelte` è `let absoluteData = $derived(chartData);` e il file non contiene più `emerald`) e `DataTable.svelte:1607` con `#64748b` (righe 1323, 1340, 1367; la riga 1607 è `color 0.15s;` e `#64748b` non c'è più nel file). Il commit `47757753d` citato fra le menzioni non li ha corretti.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: L
   - Note: Serve una cattura nuova dal Lab, non solo un numero di riga (vedi testo della voce).
 - **L-21 · Censimento a runtime dei colori predefiniti di ECharts e delle librerie** (backlog, riga 2204)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: medio → media
-  - Ancora valida: Nessun commit di un censimento a runtime con `getOption()`; solo il documento di audit (`5ff3b07c8`). `CHART_INIT_THEME` (`frontend/src/lib/components/charts/chartFont.ts:34`) fissa ancora solo il font. Non ho ricontato i 5 punti citati: il censimento serve proprio a quello.
+  - Ancora valida: Nessun commit di un censimento a runtime con `getOption()`; solo il documento di audit (`b17557991`). `CHART_INIT_THEME` (`frontend/src/lib/components/charts/chartFont.ts:34`) fissa ancora solo il font. Non ho ricontato i 5 punti citati: il censimento serve proprio a quello.
   - Aspetta: altro: uno slot con il server (corsia) per un giro del Lab su ogni pagina con un grafico
   - Proprietario suggerito: L
 - **L-22 · Il catalogo del Lab elenca i colori scritti nei commenti** (backlog, riga 2214)
@@ -1010,7 +1010,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **R-7 · Due viste non seguono il cambio di tema dal vivo** (backlog, riga 2301)
   - Cosa cambia per l'utente: L'anteprima a tabella dei file non cambia colore dal vivo dopo un cambio di tema: serve riaprirla.
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Curato `SemiDonutChart.svelte:87` (`onThemeClassChange`, `onChartColorsChange`) con `c5bca76ae` (entrato con `a0915bef9`). Ancora aperto: `features/files/FilePreviewModal.svelte:296` legge `isDarkTheme()` solo al disegno, nessun osservatore.
+  - Ancora valida: Curato `SemiDonutChart.svelte:87` (`onThemeClassChange`, `onChartColorsChange`) con `e0bd70627` (entrato con `3d1314c2c`). Ancora aperto: `features/files/FilePreviewModal.svelte:296` legge `isDarkTheme()` solo al disegno, nessun osservatore.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: DV
   - Note: Resta solo FilePreviewModal (cheetah-grid).
@@ -1066,7 +1066,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **G-22 · La scheda Security nella galleria, e il badge di «Amministrazione» da una fixture** (backlog, riga 2731)
   - Cosa cambia per l'utente: nessun effetto visibile (manca lo scatto della scheda Security).
   - Peso: medio → media; parziale: resta aperta solo una parte
-  - Ancora valida: Fatto da G-28: `fixtures/gallerySecurity.ts` (tutti i controlli «ok» per ogni scena, `a288a181f`, entrato con `b844f83f2`). Manca: nessun `security-finding`/`settings-tab-security` in `gallery.spec.ts` (grep vuoto), né lo scatto della riga di connessione.
+  - Ancora valida: Fatto da G-28: `fixtures/gallerySecurity.ts` (tutti i controlli «ok» per ogni scena, `41df8fd37`, entrato con `b417fbd95`). Manca: nessun `security-finding`/`settings-tab-security` in `gallery.spec.ts` (grep vuoto), né lo scatto della riga di connessione.
   - Aspetta: altro: scatti con controlli da guardare, test-author con G; A rivede la fixture
   - Proprietario suggerito: A
 - **G-23 · `settings/cache-panel` dipende dai test vicini** (backlog, riga 2763)
@@ -1179,14 +1179,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **DV-7 · W5-PAC e W5-charts: colori rimasti in palette, in attesa di una scelta o di un lotto di T** (backlog, riga 3238)
   - Cosa cambia per l'utente: Resta qualche colore di palette fisso nei grafici del PAC e del rischio, che non cambia con le scelte della designer.
   - Peso: minimo → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Fatto: traccia delle barre (W6-e), barre KPI (R3-5, `bg-lf-cat-etf`/`bg-lf-cat-liquidity`), i 4 interruttori di ChartAestheticsSection (C1, `ce3bc869a`), «quota dopo il piano» di AssetTable/ResultCell/DistributionDialog passate a `bg-lf-checked` (C1, provvisorio «to review»). Restano: BackendTimingBar con 12 classi (6 fasi, `bg-sky-500…`) e RiskReturnLevel con 4 (punto cielo e rombo ambra, `bg-sky-600`/`bg-amber-600`, righe 170) nella baseline themeRoles.baseline.tsv.
+  - Ancora valida: Fatto: traccia delle barre (W6-e), barre KPI (R3-5, `bg-lf-cat-etf`/`bg-lf-cat-liquidity`), i 4 interruttori di ChartAestheticsSection (C1, `56342edf6`), «quota dopo il piano» di AssetTable/ResultCell/DistributionDialog passate a `bg-lf-checked` (C1, provvisorio «to review»). Restano: BackendTimingBar con 12 classi (6 fasi, `bg-sky-500…`) e RiskReturnLevel con 4 (punto cielo e rombo ambra, `bg-sky-600`/`bg-amber-600`, righe 170) nella baseline themeRoles.baseline.tsv.
   - Aspetta: designer
   - Proprietario suggerito: DV
   - Note: Le fasi di BackendTimingBar sono i punti 2.1/2.5 della designer; la legenda di RiskReturnLevel è il punto 2.5; il colore «reale» per asset (invece di `bg-lf-checked`) aspetta la scelta di C1 «closest role».
 - **DV-10 · B4: quel che i neutri dei grafici sui ruoli lasciano alla designer** (backlog, riga 3312)
   - Cosa cambia per l'utente: Alcuni neutri e colori dei grafici sono stati mappati sul ruolo «più vicino» e la designer deve ancora guardarli.
   - Peso: minimo → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: C2 (21/10, `6fc379b1b`, entrato con `23d31392a`) ha portato chartTheme.ts da 153 letterali a 4 (via seriesRoles.ts, parità col tokens.css) e treemapPnlColor/toneClasses sui ruoli; il piano di DV, «DV-10 chiusa da C2», elenca «Da rivedere con la designer»: verde NAV vs gain vicini in chiaro, blu delle serie = info, viola = Stock, `openBadge` su `--lf-action` a 1,95:1 in scuro, marker acquisto/vendita su gain/loss. I 4 helper che leggono i ruoli su `<html>` e i limiti del ponte (lab/lch/display-p3) restano come note.
+  - Ancora valida: C2 (21/10, `5445d8298`, entrato con `e7e939d56`) ha portato chartTheme.ts da 153 letterali a 4 (via seriesRoles.ts, parità col tokens.css) e treemapPnlColor/toneClasses sui ruoli; il piano di DV, «DV-10 chiusa da C2», elenca «Da rivedere con la designer»: verde NAV vs gain vicini in chiaro, blu delle serie = info, viola = Stock, `openBadge` su `--lf-action` a 1,95:1 in scuro, marker acquisto/vendita su gain/loss. I 4 helper che leggono i ruoli su `<html>` e i limiti del ponte (lab/lch/display-p3) restano come note.
   - Aspetta: designer
   - Proprietario suggerito: DV
   - Note: Il lavoro di codice è fatto: resta la revisione con la designer. Si può chiudere la voce quando la mappa «voce → ruolo» è approvata.
@@ -1216,7 +1216,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **IW-8 · Note di test-author su `tx-brim-import.spec.ts` e `tx-import-resolution.spec.ts`** (backlog, riga 3415)
   - Cosa cambia per l'utente: nessun effetto visibile (test).
   - Peso: basso → piccola
-  - Ancora valida: e2e/transactions/tx-brim-import.spec.ts:200-202 usa `step4.locator('text=Resolve Assets')` con `if (await resolveSection.isVisible(...))` (guardia che salta l'asserzione); tx-import-resolution.spec.ts:43 e ~478 parlano ancora di «amber badge». Nessun commit li ha toccati dopo `48ecea1e2`.
+  - Ancora valida: e2e/transactions/tx-brim-import.spec.ts:200-202 usa `step4.locator('text=Resolve Assets')` con `if (await resolveSection.isVisible(...))` (guardia che salta l'asserzione); tx-import-resolution.spec.ts:43 e ~478 parlano ancora di «amber badge». Nessun commit li ha toccati dopo `f24d8d129`.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
   - Note: Spec dell'area W (area import): da spostare a W. Il badge è `bg-lf-warning-soft`, quindi «amber» è solo un commento da aggiornare.
@@ -1226,7 +1226,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **TR-4 · Le categorie lasciate nelle transazioni** (backlog, riga 3452)
   - Cosa cambia per l'utente: Alcuni colori di categoria nelle transazioni (promozione e unione, split viola, chip dei cambi) restano fissi.
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: C1-c (`25f4cc6d0`, entrato con `d5b8499b0`) ha migrato i tipi d'evento, la riga «in attesa» e i badge del WAC e ha reso `span.text-indigo-500` un testid. Restano 69 classi (baseline): PromoteMergeModal 40, TransactionBulkModal 9, TxFormOptionalSection 6, TxBulkToolbar 4, TxFormPairSection 4, TxBulkBanners 2, AssetEventPicker 2, pairCellHtml 2.
+  - Ancora valida: C1-c (`d33abb0b8`, entrato con `945ba50f2`) ha migrato i tipi d'evento, la riga «in attesa» e i badge del WAC e ha reso `span.text-indigo-500` un testid. Restano 69 classi (baseline): PromoteMergeModal 40, TransactionBulkModal 9, TxFormOptionalSection 6, TxBulkToolbar 4, TxFormPairSection 4, TxBulkBanners 2, AssetEventPicker 2, pairCellHtml 2.
   - Aspetta: designer
   - Proprietario suggerito: TR
   - Note: Servono ruoli categoriali per i lati del confronto, split, coppie/cambi e «promuovi» (indaco). Si lega a IW-5. Il selettore di tx-wac-bulk.spec.ts è già su un `data-testid`.
@@ -1236,14 +1236,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **AF-1 · Accenti degli strumenti della barra del grafico** (backlog, riga 3481)
   - Cosa cambia per l'utente: Gli strumenti della barra del grafico (misura viola, editor, estetica) hanno ancora l'accento viola della misura fisso.
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: C1-b (`1778fd328`) ha portato editor/estetica/icone di sezione a `warning`/`success`/`info`. Restano il viola dello strumento misura: routes/(app)/fx/[pair]/+page.svelte 17 classi, assets/[id]/+page.svelte 6, AssetDetailMeasuresSection.svelte 11 (baseline).
+  - Ancora valida: C1-b (`87fd605b2`) ha portato editor/estetica/icone di sezione a `warning`/`success`/`info`. Restano il viola dello strumento misura: routes/(app)/fx/[pair]/+page.svelte 17 classi, assets/[id]/+page.svelte 6, AssetDetailMeasuresSection.svelte 11 (baseline).
   - Aspetta: designer
   - Proprietario suggerito: AF
   - Note: La Q12 («niente arcobaleno») va verso un colore unico: lo decide la designer.
 - **AF-3 · Riquadri decorativi degli stati vuoti** (backlog, riga 3496)
   - Cosa cambia per l'utente: Il riquadro del pannello vuoto dei cambi resta ambra (quello degli asset ora segue l'accento dell'app).
   - Peso: minimo → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: assets/+page.svelte righe ~2008, ~2023: `bg-lf-selected`/`text-lf-link` (`f92675b80`/`a092cda38`); routes/(app)/fx/+page.svelte righe 1341-1342 ancora `bg-amber-100 dark:bg-amber-900/30` e `text-amber-600` (4 classi, nella baseline).
+  - Ancora valida: assets/+page.svelte righe ~2008, ~2023: `bg-lf-selected`/`text-lf-link` (`632048183`/`687be7e72`); routes/(app)/fx/+page.svelte righe 1341-1342 ancora `bg-amber-100 dark:bg-amber-900/30` e `text-amber-600` (4 classi, nella baseline).
   - Aspetta: designer
   - Proprietario suggerito: AF
   - Note: È la domanda aperta 7 del skill design-system (un accento per pagina o il verde dell'app).
@@ -1264,7 +1264,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **AF-12 · `image-crop.spec.ts` F1 cerca il tema scuro nelle classi** (backlog, riga 3534)
   - Cosa cambia per l'utente: nessun effetto visibile (test): F2 e F3 di image-crop possono passare senza aprire le modali.
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: F1 e il `beforeEach` sono a posto: `f2f13184b` (entrato con `9d3607eb6`) legge `html.dark` e aspetta il toggle. In e2e/image-crop.spec.ts F2 (righe ~655-670) e F3 (~672-682) usano ancora `isVisible().catch(() => false)` e non verificano il tema.
+  - Ancora valida: F1 e il `beforeEach` sono a posto: `d67606f5c` (entrato con `a4bf32a44`) legge `html.dark` e aspetta il toggle. In e2e/image-crop.spec.ts F2 (righe ~655-670) e F3 (~672-682) usano ancora `isVisible().catch(() => false)` e non verificano il tema.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
   - Note: Il seguito possibile è già annotato nella voce; spec del proprietario dei file.
@@ -1280,14 +1280,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **BK-2 · Badge dei lotti ancora in palette** (backlog, riga 3567)
   - Cosa cambia per l'utente: Restano viola fissi le etichette «distribuito», «N broker» e «in transito» nelle tabelle dei lotti e nel Gantt.
   - Peso: medio → media; parziale: resta aperta solo una parte
-  - Ancora valida: C1 (`ce3bc869a`) ha portato direzione, stato e custodia ai ruoli. Restano 20 classi viola nella baseline: UnifiedLotsTable.svelte 12 (righe ~151 e ~281, `violet-200/50/700`), LotCustodyModal.svelte 4, LotGanttChart.svelte 4.
+  - Ancora valida: C1 (`56342edf6`) ha portato direzione, stato e custodia ai ruoli. Restano 20 classi viola nella baseline: UnifiedLotsTable.svelte 12 (righe ~151 e ~281, `violet-200/50/700`), LotCustodyModal.svelte 4, LotGanttChart.svelte 4.
   - Aspetta: designer
   - Proprietario suggerito: BK
   - Note: Aspetta il ruolo categoriale (DV-7 giro dei badge); il chip viola di LOT_GANTT_COLORS.inTransit è già su `--lf-cat-stock`: allineare.
 - **BK-5 · Campione della legenda «stimato al costo»** (backlog, riga 3582)
   - Cosa cambia per l'utente: Nel grafico di confronto dei lotti, il trattino della legenda «stimato al costo» ha un grigio diverso da quello della linea (in scuro molto più scuro).
   - Peso: minimo → piccola
-  - Ancora valida: LotComparisonChart.svelte: legenda `border-lf-input` (`ce3bc869a`), ma `LOT_COMPARISON_COLORS.estimatedValue` in chartTheme.ts:412 è `rolePair('--lf-cat-other')` (tokens.css: chiaro `#727b87` contro `#7e8984`, scuro `#a9b0bb` contro `#606f6a`).
+  - Ancora valida: LotComparisonChart.svelte: legenda `border-lf-input` (`56342edf6`), ma `LOT_COMPARISON_COLORS.estimatedValue` in chartTheme.ts:412 è `rolePair('--lf-cat-other')` (tokens.css: chiaro `#727b87` contro `#7e8984`, scuro `#a9b0bb` contro `#606f6a`).
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: DV
   - Note: Cura di una riga: `border-lf-cat-other` al posto di `border-lf-input` (o far leggere alla legenda lo stesso ruolo della linea).
@@ -1297,14 +1297,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **IM-3 · Famiglie di plugin di «Informazioni»** (backlog, riga 3613)
   - Cosa cambia per l'utente: Nella scheda «Informazioni» resta viola fissa la card dei segnali installati.
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: C1 (`ce3bc869a`) ha portato asset, cambi e import su `selected`/`link`, `info-soft`, `warning-soft`. Restano 5 classi viola nella card «Installed Signals» di features/settings/tabs/AboutTab.svelte (baseline) e `bg-white`/`border-gray-100` per quella card (app.css).
+  - Ancora valida: C1 (`56342edf6`) ha portato asset, cambi e import su `selected`/`link`, `info-soft`, `warning-soft`. Restano 5 classi viola nella card «Installed Signals» di features/settings/tabs/AboutTab.svelte (baseline) e `bg-white`/`border-gray-100` per quella card (app.css).
   - Aspetta: designer
   - Proprietario suggerito: IM
   - Note: Si chiude con il ruolo categoriale viola.
 - **IM-6 · Badge del provider nel log dello scheduler** (backlog, riga 3621)
   - Cosa cambia per l'utente: I badge dei provider nel log dello scheduler hanno ancora tre colori di identità fissi (ECB blu, Frankfurter indaco, tasso fisso verde).
   - Peso: minimo → piccola
-  - Ancora valida: lib/utils/providerHelpers.ts `PROVIDER_COLORS`: ECB, FRANKFURTER, FIXED_RATE ancora in palette (12 classi nella baseline), MANUAL e il colore di ripiego già sui ruoli (`1778fd328`); SchedulerLogModal.svelte:588 legge la tabella.
+  - Ancora valida: lib/utils/providerHelpers.ts `PROVIDER_COLORS`: ECB, FRANKFURTER, FIXED_RATE ancora in palette (12 classi nella baseline), MANUAL e il colore di ripiego già sui ruoli (`87fd605b2`); SchedulerLogModal.svelte:588 legge la tabella.
   - Aspetta: designer
   - Proprietario suggerito: IM
   - Note: Lo span segue la tabella: nessuna modifica nel file della voce, serve il ruolo categoriale dei provider.
@@ -1314,14 +1314,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **H-3 · Una chiave d'istanza persa dopo il primo uso sembra un primo uso** (backlog, riga 3666)
   - Cosa cambia per l'utente: Se il file della chiave d'istanza sparisce, l'avvio ora avvisa con il conteggio dei segreti illeggibili, ma LibreFolio genera ancora una chiave nuova senza accorgersi.
   - Peso: medio-basso → media; parziale: resta aperta solo una parte
-  - Ancora valida: Resta l'opzione A (valore di controllo della chiave nel DB): `backend/app/services/platform/instance_key.py` ha ancora in testa la frase «a file that is gone looks like a first use»; nessun `key-check` nel codice. L'opzione B (avviso all'avvio + doc nell'ordine giusto) è in dev: `cb37c79cf` (entrato con `0ecc5ed27`) e `481a93f1c`.
+  - Ancora valida: Resta l'opzione A (valore di controllo della chiave nel DB): `backend/app/services/platform/instance_key.py` ha ancora in testa la frase «a file that is gone looks like a first use»; nessun `key-check` nel codice. L'opzione B (avviso all'avvio + doc nell'ordine giusto) è in dev: `f1fe51270` (entrato con `46ffd23de`) e `f05b15230`.
   - Aspetta: decisione developer; già scritta «dopo la 1.3»
   - Proprietario suggerito: H
   - Note: Nel backlog la A è la decisione P24 ancora aperta; il consiglio scritto nel piano H §14 è rimandarla dopo la 1.3. Si può segnare ✅ la parte B e lasciare la A aperta.
 - **H-5 · Debito di traduzione delle pagine admin toccate da H** (backlog, riga 3693)
   - Cosa cambia per l'utente: Le pagine admin nuove o toccate da H (hosting_providers, filesystem, docker_advanced, connection_checks...) restano senza traduzione IT/FR/ES.
   - Peso: basso → piccola
-  - Ancora valida: `mkdocs_src/docs/admin/` ha `hosting_providers.en.md` senza versioni it/fr/es; i commit di traduzione recenti (es. `3d9b30433`) toccano solo `filesystem`. Il conteggio di `translate-validate` non è stato rilanciato (vietato eseguire).
+  - Ancora valida: `mkdocs_src/docs/admin/` ha `hosting_providers.en.md` senza versioni it/fr/es; i commit di traduzione recenti (es. `1785173df`) toccano solo `filesystem`. Il conteggio di `translate-validate` non è stato rilanciato (vietato eseguire).
   - Aspetta: decisione developer
   - Proprietario suggerito: H
   - Note: La traduzione parte solo su richiesta esplicita del developer. Ordine da rispettare per le ancore: cli_tools#backup prima di filesystem/docker_advanced, connection_checks#client-address prima di configuration/docker_advanced.
@@ -1420,7 +1420,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: Resta: `users.py` `GET /users/search?admins=true` rende l'email degli admin (`user_service.py` riga ~898, `UserSearchItem.email`); `brokers.py:233` ha ancora `include_inaccessible`.
   - Aspetta: decisione developer
   - Proprietario suggerito: A
-  - Note: La parte file è fatta: CP-U1 (decisione 36), `b9383ecfb` «feat(uploads): common and personal file scope», entrato con `6a3a2a1cc`; `GET /uploads` filtra con `can_view_upload`, un file personale altrui risponde 404, il CHANGELOG ha le righe «Uploaded files have a scope». La voce è una decisione di privacy (multi-utente/cloud): l'email degli admin serve al banner «chiedi all'admin».
+  - Note: La parte file è fatta: CP-U1 (decisione 36), `e9305176d` «feat(uploads): common and personal file scope», entrato con `a1e4a5b8e`; `GET /uploads` filtra con `can_view_upload`, un file personale altrui risponde 404, il CHANGELOG ha le righe «Uploaded files have a scope». La voce è una decisione di privacy (multi-utente/cloud): l'email degli admin serve al banner «chiedi all'admin».
 - **A-4 · devWiki: prosa con i vecchi percorsi dei servizi account, e due pagine di dominio non allineate** (backlog, riga 4610)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: minimo → piccola
@@ -1577,7 +1577,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **X-R29 · Sync: l'avviso di C-66 con il conteggio preciso, e quanti dati manuali** (backlog, riga 5546)
   - Cosa cambia per l'utente: L'avviso prima del Sync conta le righe viste dalla pagina, non quelle salvate, e non dice quante sono manuali.
   - Peso: basso → piccola
-  - Ancora valida: Nessun endpoint che conti le righe salvate nell'intervallo e quelle manuali (`source_plugin_key`) in `backend/app/api`; C-66 resta con l'opzione A (`32c64bbd9`).
+  - Ancora valida: Nessun endpoint che conti le righe salvate nell'intervallo e quelle manuali (`source_plugin_key`) in `backend/app/api`; C-66 resta con l'opzione A (`5c4d1c2c3`).
   - Aspetta: decisione developer
   - Proprietario suggerito: X
   - Note: Opzione B di C-66, scelta del coordinatore: è un'estensione, non un difetto.
@@ -1603,7 +1603,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **X-R39 · Editor dei dati dell'asset: le stranezze trovate con O-8** (backlog, riga 5604)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Fatto: il banner d'errore dell'editor dei cambi ha `data-testid="fx-editor-error"` (`88d0fb840`, entrato con `2c43ac451`, X-R46). Restano: `AssetDataEditorSection.svelte` allarga l'intervallo con tutte le righe `appended` (riga ~430), `onsave?.(...)` non è atteso (riga ~444), il salvataggio è ancora in tre richieste con messaggio che non dice la scrittura parziale, conteggi non simmetrici fra eventi e prezzi.
+  - Ancora valida: Fatto: il banner d'errore dell'editor dei cambi ha `data-testid="fx-editor-error"` (`7784e8f57`, entrato con `fc8ea34e0`, X-R46). Restano: `AssetDataEditorSection.svelte` allarga l'intervallo con tutte le righe `appended` (riga ~430), `onsave?.(...)` non è atteso (riga ~444), il salvataggio è ancora in tre richieste con messaggio che non dice la scrittura parziale, conteggi non simmetrici fra eventi e prezzi.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: X
   - Note: Resta aperta per 4 punti su 5.
@@ -1636,7 +1636,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **X-R56 · Uno SPLIT di un provider con un rapporto non valido, salvato prima di X-R47, non si può correggere** (backlog, riga 5837)
   - Cosa cambia per l'utente: Uno SPLIT di un provider salvato con rapporto non valido prima di X-R47 non si può né correggere né cancellare se ha transazioni collegate.
   - Peso: basso → piccola
-  - Ancora valida: Nessun commit con X-R56 oltre il commit di soli appunti (`950102c65`); `EVENT_NOT_EDITABLE` e `EVENT_IN_USE` valgono ancora; X-R53 (il prerequisito) è chiusa.
+  - Ancora valida: Nessun commit con X-R56 oltre il commit di soli appunti (`d5acc9724`); `EVENT_NOT_EDITABLE` e `EVENT_IN_USE` valgono ancora; X-R53 (il prerequisito) è chiusa.
   - Aspetta: altro: prima l'analisi (via di recupero o riscrittura dal refresh)
   - Proprietario suggerito: X
 - **X-R61 · Il Sync di una sola card o riga sovrascrive i prezzi salvati senza l'avviso di C-66** (backlog, riga 5864)
@@ -1715,14 +1715,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **X-R82 · PAC, cambi salvati: un ramo e un codice che nessun dato raggiunge più** (backlog, riga 6020)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: minimo → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: La premessa (ramo `saved_fx_invalid` e codice non raggiungibili) non vale più: X-R45b (`292d7e55e`, entrato con `09747a3ee`) ha reso di nuovo raggiungibile `rate = ... else None` e `allocation.saved_fx_invalid` in `pac_allocator/source/fx_quotes.py`. Resta aperta solo la docstring di `_validate_canonical_fx_pair` (`schemas/portfolio.py:1258`), che dice «'usd/eur' -> 'EUR/USD'» ma il codice rifiuta l'ordine discendente con un errore.
+  - Ancora valida: La premessa (ramo `saved_fx_invalid` e codice non raggiungibili) non vale più: X-R45b (`fa330c6c4`, entrato con `c3c0b212f`) ha reso di nuovo raggiungibile `rate = ... else None` e `allocation.saved_fx_invalid` in `pac_allocator/source/fx_quotes.py`. Resta aperta solo la docstring di `_validate_canonical_fx_pair` (`schemas/portfolio.py:1258`), che dice «'usd/eur' -> 'EUR/USD'» ma il codice rifiuta l'ordine discendente con un errore.
   - Aspetta: già scritta «dopo la 1.3»
   - Proprietario suggerito: X
   - Note: Si può ridurre la voce alla sola docstring e togliere le strade (a)(b)(c).
 - **X-R83 · Pagina dell'asset: il ramo che fonde il Sync dell'asset della pagina non si raggiunge** (backlog, riga 6037)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: minimo → piccola
-  - Ancora valida: `frontend/src/routes/(app)/assets/[id]/+page.svelte` riga ~2032 ha ancora il ramo `canMergeOnly` dentro `assetId === pageAssetId`, raggiungibile solo dal Sync di una card di confronto, ma la pagina esclude il proprio asset dai confronti: ramo morto. L'ipotesi di difetto visibile è stata ritirata (`e3c6f5782`).
+  - Ancora valida: `frontend/src/routes/(app)/assets/[id]/+page.svelte` riga ~2032 ha ancora il ramo `canMergeOnly` dentro `assetId === pageAssetId`, raggiungibile solo dal Sync di una card di confronto, ma la pagina esclude il proprio asset dai confronti: ramo morto. L'ipotesi di difetto visibile è stata ritirata (`9bd05e1c3`).
   - Aspetta: già scritta «dopo la 1.3»
   - Proprietario suggerito: X
 - **X-R84 · Un chunk che non si carica dopo il login dà «500 Internal Error» e SvelteKit non riprova** (backlog, riga 6049)
@@ -1735,7 +1735,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **X-N64b · Dettaglio dell'asset: le serie dei confronti in modalità prezzi, in cache per periodo** (backlog, riga 6061)
   - Cosa cambia per l'utente: Su un periodo già visto con confronti in modalità prezzi, le serie dei confronti si chiedono di nuovo al server.
   - Peso: basso → piccola
-  - Ancora valida: N64 (`34b6d45c0`) ha messo in cache indicatori e rendimenti; `loadComparisonAssetsData` è ancora chiamata dalla pagina (`assets/[id]/+page.svelte` riga ~1585) con memo per impronta, senza la cache dei segnali.
+  - Ancora valida: N64 (`02709d276`) ha messo in cache indicatori e rendimenti; `loadComparisonAssetsData` è ancora chiamata dalla pagina (`assets/[id]/+page.svelte` riga ~1585) con memo per impronta, senza la cache dei segnali.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: X
 - **X-N64c · La cache dei segnali per singolo segnale** (backlog, riga 6067)
@@ -1760,7 +1760,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: `backend/app/services/assets/provider_management.py` righe ~224-246: sul cambio di parametri `Transaction ... asset_event_id=None` poi `delete(AssetEvent)`, senza rifiuto né avviso (solo uno split con rettifiche senza costo è rifiutato).
   - Aspetta: lotto C-65a (modale al cambio di provider, X e W)
   - Proprietario suggerito: X
-  - Note: Fatta la metà «togliere il provider»: X-R62 rifiuta con 409 `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, commit `9fcbbe523`, entrato con `907fb3b97`. Resta il cambio di parametri/provider. C-65a non è in nessuna ondata di PROSSIMI_LAVORI.
+  - Note: Fatta la metà «togliere il provider»: X-R62 rifiuta con 409 `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, commit `48b72521a`, entrato con `c90d72f38`. Resta il cambio di parametri/provider. C-65a non è in nessuna ondata di PROSSIMI_LAVORI.
 - **W-B7 · `TODO_FUTURI`, eventi collegabili: percorso e conteggi superati** (backlog, riga 6125)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: minimo → piccola
@@ -1781,14 +1781,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: `backend/test_scripts/test_api/test_account_deletion_api.py`: ACCDEL-003 è già riscritta («green since plan 34 step 2»), ma ACCDEL-002/004/005 dicono ancora «green today and after» (righe ~756, 849, 880), `_service_delete_brokers` «on today's code» (444), e ci sono molti altri «NEW, red today» (ACCDEL-001, LOCK-01, LOCK-03, 006, 007, 008).
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
-  - Note: Solo prosa. Le docstring stantie sono più di quelle elencate; il file è stato toccato poi da commit di A (`16164411d`, `09ee732e2`): se ne parla con A.
+  - Note: Solo prosa. Le docstring stantie sono più di quelle elencate; il file è stato toccato poi da commit di A (`fa5823276`, `486e607c1`): se ne parla con A.
 - **W-B19 · La convalida dei saldi del batch somma la cassa da sé (copia della casa unica)** (backlog, riga 6192)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola; parziale: resta aperta solo una parte
   - Ancora valida: `backend/app/services/transactions/balances.py`: i saldi iniziali (`_get_balances_before_date`, `get_balances_at_end_of`) ora usano `native_balances`; ma `_validate_broker_balances` somma ancora la cassa giorno per giorno a mano (`cash_balances[tx.currency] = … + tx.amount`).
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
-  - Note: Fatta la metà dei saldi: `6be11ecf3` (entrato con `14d58cc61`; il piano MF la conta come «G2 fatta da C-97 e W-B19»). Resta il cammino di convalida su una funzione pura della casa (`financial_math`), da misurare sui set BRIM; le quantità sono su `position_quantities`.
+  - Note: Fatta la metà dei saldi: `fdd37e4a0` (entrato con `e81a7ba9a`; il piano MF la conta come «G2 fatta da C-97 e W-B19»). Resta il cammino di convalida su una funzione pura della casa (`financial_math`), da misurare sui set BRIM; le quantità sono su `position_quantities`.
 - **W-B24 · Chi può modificare i dati condivisi degli asset: un modello per il futuro** (backlog, riga 6248)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola
@@ -1809,7 +1809,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: `AssetDataEditorSection.svelte` riga ~403: `eventSaveErrorMessage(err, $t, eventItems, typeLabel)` senza `dateLabel`, quindi le date escono ISO (`eventSaveError.ts` ha il parametro `dateLabel` con default `iso => iso`).
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: X
-  - Note: Fatto: le due chiavi `events.deleteBlocked`/`deleteNotFound` tolte (A-14) e il prefisso «Save failed:» ora è `dataEditor.saveFailed` via `notify` (`9c3b9d803`, O-8, entrato con `b1b4960c4`). Resta solo `dateLabel`.
+  - Note: Fatto: le due chiavi `events.deleteBlocked`/`deleteNotFound` tolte (A-14) e il prefisso «Save failed:» ora è `dataEditor.saveFailed` via `notify` (`48ab8ecd1`, O-8, entrato con `f35e8ef01`). Resta solo `dateLabel`.
 - **W-B28 · Debito di traduzione delle pagine utente di E1b** (backlog, riga 6271)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: minimo → piccola
@@ -1844,7 +1844,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: `frontend/e2e/transactions/tx-brim-import.spec.ts`: guardia `text=Resolve Assets` (righe 200, 232) e `if (isEnabled)` (160) ancora presenti; `tx-import-resolution.spec.ts` righe 43 e 478 parlano ancora di «amber badge».
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
-  - Note: Test-author. Il lotto IW (`48ecea1e2`) è dentro.
+  - Note: Test-author. Il lotto IW (`f24d8d129`) è dentro.
 - **W-B57 · Il picker del Bulk ha 5 s per aprirsi, pochi sotto carico** (backlog, riga 6510)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: minimo → piccola
@@ -1857,7 +1857,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: `models.py:1009` (`PriceHistory.volume`) e `:1104` (`FxRate.rate`) sono ancora `Numeric`, non `RealDecimal`; `event_store.py` riga ~48 `Currency(code=..., amount=ev.value)` fallisce su un valore `None`; nessun passo in `db/post_migration/` per gli inf.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
-  - Note: Importo e valore dell'evento chiusi da W-B60: `841130215`, entrato con `484c71afb`. Restano volume, cambio, la query degli eventi su `None`, e la correzione post-migrazione (decisione D-W63-1).
+  - Note: Importo e valore dell'evento chiusi da W-B60: `3fb98c1b7`, entrato con `6d402550d`. Restano volume, cambio, la query degli eventi su `None`, e la correzione post-migrazione (decisione D-W63-1).
 - **W-B78 · Le 10 cifre decimali di una quantità sono scritte a mano in 9 file del frontend** (backlog, riga 6715)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: minimo → piccola
@@ -1882,18 +1882,18 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
   - Ancora valida: Esito 22/10 di PROSSIMI_LAVORI: la parte 1.3 è fatta; i plugin in beta restano come regola («si fanno quando il plugin esce dalla beta»); Fineco è ancora in `ROW_SKIPS_PENDING` (`test_brim_row_skips.py`).
   - Aspetta: già scritta «ondata 5»
   - Proprietario suggerito: W
-  - Note: Fatto: aiuto `RowSkips`, 4 plugin stabili, `fcf39fab0` (entrato con `065cfa49e`). Resta: regola nella skill `brim-plugin` e nella guida, e Fineco su `RowSkips`: PROSSIMI_LAVORI li mette in ondata 4, a W (il campo «later» ha solo ondata 5).
+  - Note: Fatto: aiuto `RowSkips`, 4 plugin stabili, `377047f86` (entrato con `02e6be47d`). Resta: regola nella skill `brim-plugin` e nella guida, e Fineco su `RowSkips`: PROSSIMI_LAVORI li mette in ondata 4, a W (il campo «later» ha solo ondata 5).
 - **W-B87 · Plugin che saltano in silenzio righe con un effetto economico** (backlog, riga 6829)
   - Cosa cambia per l'utente: I sei plugin che saltavano righe con effetto economico ora avvisano con un link; l'import vero di quelle righe non c'è.
   - Peso: alto → grande; parziale: resta aperta solo una parte
   - Ancora valida: Esito 22/10 di PROSSIMI_LAVORI: l'import vero delle righe con effetto economico si fa «quando il plugin esce dalla beta», non è un lotto.
   - Aspetta: altro: il plugin deve uscire dalla beta (servono report affidabili)
   - Proprietario suggerito: W
-  - Note: Fatto l'avviso aggregato: `fcf39fab0`, entrato con `065cfa49e` (Revolut 1.2.0, Trading 212 1.1.0, eToro 1.2.0, Trade Republic, Swissquote, IBKR).
+  - Note: Fatto l'avviso aggregato: `377047f86`, entrato con `02e6be47d` (Revolut 1.2.0, Trading 212 1.1.0, eToro 1.2.0, Trade Republic, Swissquote, IBKR).
 - **W-B88 · Quale data registra ogni plugin BRIM, contro il principio di B-52** (backlog, riga 6842)
   - Cosa cambia per l'utente: Alcuni plugin di import registrano la data valuta invece della data dell'operazione.
   - Peso: medio → media
-  - Ancora valida: Nessun commit di codice: `git log` dopo `a79a223cd` sui plugin non cita W-B88 (solo Fineco, Danske, `RowSkips`, N78-1). PROSSIMI_LAVORI: «❌ non iniziato».
+  - Ancora valida: Nessun commit di codice: `git log` dopo `d606ae4ba` sui plugin non cita W-B88 (solo Fineco, Danske, `RowSkips`, N78-1). PROSSIMI_LAVORI: «❌ non iniziato».
   - Aspetta: già scritta «ondata 5»
   - Proprietario suggerito: W
   - Note: Inventario e correzioni su tutti e 10 i plugin, anche in beta; nessuna bonifica dei dati già salvati.
@@ -1930,10 +1930,10 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **J-1 · Copie della matematica comune fuori dall'inventario del 43** (backlog, riga 6984)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Fatti: giorni<->osservazioni e tasso orientato nella casa (068d5dd51), G/L % della posizione (gain_loss_ratio, 58f8e3967), rendimenti dal minimo/massimo del cambio (price_return in fx_timing_context.py), rendimento che recupera una perdita (campo del backend, CP-13a ffa08dd7d), CompoundSignal.ts dichiarato come eccezione (@financial-math-exception). Resta solo il punto 3 (series_preparation.py non esiste più): oggi è market_series.py:167 `close / native_close`, tracciato da MF-A13 (aperta).
+  - Ancora valida: Fatti: giorni<->osservazioni e tasso orientato nella casa (ff9a926a8), G/L % della posizione (gain_loss_ratio, 5a03de0f9), rendimenti dal minimo/massimo del cambio (price_return in fx_timing_context.py), rendimento che recupera una perdita (campo del backend, CP-13a 2f52e1e8d), CompoundSignal.ts dichiarato come eccezione (@financial-math-exception). Resta solo il punto 3 (series_preparation.py non esiste più): oggi è market_series.py:167 `close / native_close`, tracciato da MF-A13 (aperta).
   - Aspetta: lotto MF-A13
   - Proprietario suggerito: MF
-  - Note: Si può chiudere J-1 rimandando il resto a MF-A13. Lavoro: 068d5dd51 entrato con c81389cad; 58f8e3967; 30b464272; CP-13a ffa08dd7d entrato con 0452e592c.
+  - Note: Si può chiudere J-1 rimandando il resto a MF-A13. Lavoro: ff9a926a8 entrato con 429b93bd3; 5a03de0f9; 17c3cf9cd; CP-13a 2f52e1e8d entrato con cb3b2e32d.
 - **J-4 · Prosa della devWiki con i percorsi del PAC di prima del riordino** (backlog, riga 7032)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso → piccola
@@ -1964,7 +1964,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **J-19 · Il PAC finisce in `worker_crashed` sotto carico** (backlog, riga 7255)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: da capire; basso, robustezza → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Strumentazione fatta: a8299354f (codice d'uscita del worker in ToolItemMetrics.worker_exit_code e riga di log `Tool worker crashed`), entrata con 635b50537. La causa del worker_crashed sotto carico non è stata trovata: backend/app/services/tools/executor.py scrive il codice ma nessuna caduta è stata ancora analizzata.
+  - Ancora valida: Strumentazione fatta: 7046995ed (codice d'uscita del worker in ToolItemMetrics.worker_exit_code e riga di log `Tool worker crashed`), entrata con 08a9753be. La causa del worker_crashed sotto carico non è stata trovata: backend/app/services/tools/executor.py scrive il codice ma nessuna caduta è stata ancora analizzata.
   - Aspetta: test rosso
   - Proprietario suggerito: J
   - Note: La voce stessa dice «Resta aperta la causa: alla prossima caduta, il triage con questi dati». Senza una nuova caduta non c'è nulla da fare.
@@ -1992,13 +1992,13 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **J-31 · Debito di traduzione di CP-13a (il guadagno che recupera un drawdown)** (backlog, riga 7398)
   - Cosa cambia per l'utente: Le pagine IT/FR/ES su max drawdown e current drawdown non sono allineate all'inglese.
   - Peso: basso, documentazione → piccola
-  - Ancora valida: max-drawdown.it.md ultimo commit f06175d0b (11/10), max-drawdown.en.md cdeb77b8e (16/10, P19): le traduzioni dicono ancora che il sistema calcola solo la lettura corrente.
+  - Ancora valida: max-drawdown.it.md ultimo commit 1c7860567 (11/10), max-drawdown.en.md 5c30f3b30 (16/10, P19): le traduzioni dicono ancora che il sistema calcola solo la lettura corrente.
   - Aspetta: decisione developer (giro di traduzione, solo su richiesta esplicita)
   - Proprietario suggerito: J
 - **J-32 · Debito di traduzione di J-24 (la rettifica in uscita consegna al cambio del suo giorno)** (backlog, riga 7405)
   - Cosa cambia per l'utente: Le pagine IT/FR/ES su rettifica in uscita e capitale versato non sono allineate all'inglese.
   - Peso: basso, documentazione → piccola
-  - Ancora valida: deposited-capital.it.md ultimo commit 0db7ea383 (12/10), deposited-capital.en.md 79068afe5 (22/10); l'ancora #outgoing-adjustments è solo in inglese.
+  - Ancora valida: deposited-capital.it.md ultimo commit 48889cf28 (12/10), deposited-capital.en.md 4bad3e4a3 (22/10); l'ancora #outgoing-adjustments è solo in inglese.
   - Aspetta: decisione developer (giro di traduzione, solo su richiesta esplicita)
   - Proprietario suggerito: J
   - Note: Dopo N78-1 (22/10) l'inglese è cambiato ancora: il debito è più grande di quello scritto.
@@ -2047,14 +2047,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **J-62 · R11: i gemelli pandas di volatilità e Sharpe mobili, senza parità e con due copie del validatore** (backlog, riga 7870)
   - Cosa cambia per l'utente: nessun effetto visibile (codice/test/doc)
   - Peso: basso, numeri (regola 10) → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Parità già fissata: backend/test_scripts/test_services/test_risk_metrics_oracle.py:2107-2180 confronta rolling_annualized_volatility/sharpe_values con il ciclo di riferimento che chiama risk.metrics (da f5fe80d44, 18/09), quindi la frase «nessun test fissa la parità» non è più vera. Resta la seconda parte: signals/risk_adapters.py:191-193 e ~222-224 ripetono ancora «fattore finito e positivo» invece di leggere financial_math.returns.positive_annualization_factor.
+  - Ancora valida: Parità già fissata: backend/test_scripts/test_services/test_risk_metrics_oracle.py:2107-2180 confronta rolling_annualized_volatility/sharpe_values con il ciclo di riferimento che chiama risk.metrics (da 3b4a8a1f9, 18/09), quindi la frase «nessun test fissa la parità» non è più vera. Resta la seconda parte: signals/risk_adapters.py:191-193 e ~222-224 ripetono ancora «fattore finito e positivo» invece di leggere financial_math.returns.positive_annualization_factor.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: J
   - Note: Il test di parità da scrivere forse non serve; resta solo la sostituzione delle due copie del validatore (nessun valore cambia). Andrebbe controllato con J se il test di oracolo basta come «R11».
 - **J-64 · Il CSV generico chiede il costo dove c'è già o dove non si può dare** (backlog, riga 7896)
   - Cosa cambia per l'utente: Il CSV generico chiede ancora il costo a una rettifica in entrata con costo 0 scritto nel file, e l'utente deve riscriverlo.
   - Peso: basso, dati e chiarezza → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: Secondo difetto (uscita bloccata) sparito con W-B93: 79068afe5 entrato con 2469c0852, plugin.py:456-461 ora controlla `added_tx.quantity > 0`. Primo difetto ancora vero: broker_generic_csv/plugin.py:461 `has_cbo = ... float(str(cbo.amount)) == 0` tratta un costo 0 come mancante.
+  - Ancora valida: Secondo difetto (uscita bloccata) sparito con W-B93: 4bad3e4a3 entrato con 3be99b76e, plugin.py:456-461 ora controlla `added_tx.quantity > 0`. Primo difetto ancora vero: broker_generic_csv/plugin.py:461 `has_cbo = ... float(str(cbo.amount)) == 0` tratta un costo 0 come mancante.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: W
   - Note: Il file è del plugin BRIM (W). Un costo 0 è un costo vero (decisione Q-J57-3): togliere la condizione == 0 sul solo caso scritto nel file.
@@ -2102,7 +2102,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **Z-15 · Dopo un recupero dei prezzi i pannelli di rischio e dei lotti restano indietro** (backlog, riga 8124)
   - Cosa cambia per l'utente: Dopo un recupero dei prezzi, i pannelli di rischio e dei lotti già aperti restano con le cifre vecchie, segnate stale.
   - Peso: basso → piccola
-  - Ancora valida: La ricarica in background di Z-13 (`f83ab0c5b`) non tocca `refreshVersion` né i pannelli: nessun consumatore di `{kind: 'prices'}` fuori dalla dashboard, dalla pagina broker e dalle cache (grep). Piano pronto, non partito.
+  - Ancora valida: La ricarica in background di Z-13 (`0f59a6277`) non tocca `refreshVersion` né i pannelli: nessun consumatore di `{kind: 'prices'}` fuori dalla dashboard, dalla pagina broker e dalle cache (grep). Piano pronto, non partito.
   - Aspetta: decisione developer (insieme a Z-14b)
   - Proprietario suggerito: Y
   - Note: La condizione 'dopo Y11' è soddisfatta (Y11 in dev).
@@ -2122,7 +2122,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **Z-32 · Le linee Yahoo in pence (`GBp`) salvate come sterline** (backlog, riga 8303)
   - Cosa cambia per l'utente: Un asset Yahoo quotato in pence (`GBp`) ora riceve il suggerimento 100 come «unità per prezzo», ma i dividendi restano in pence.
   - Peso: medio → media; parziale: resta aperta solo una parte
-  - Ancora valida: Fatto: (d), la base suggerita dal provider. In dev con `3cf04d0aa` (backend, entrato con `5f2f8e056`) e `daf7b200d` (frontend, entrato con `ecbad6861`); CHANGELOG riga 93. (c) è stata tolta (Z-32cr). Restano (a) Yahoo divide per 100 e (b) base 100 e dividendi divisi: `utils/currency_units.py` ha solo `MINOR_UNIT_FACTORS = {"GBp": 100}` e `ZAc`/`ILA` sono ancora rifiutati (`schemas/common.py` `NEVER_RELABELLED_CURRENCY_CODES`).
+  - Ancora valida: Fatto: (d), la base suggerita dal provider. In dev con `d6c65f0a5` (backend, entrato con `4da26592d`) e `5f4973f80` (frontend, entrato con `ba874fb50`); CHANGELOG riga 93. (c) è stata tolta (Z-32cr). Restano (a) Yahoo divide per 100 e (b) base 100 e dividendi divisi: `utils/currency_units.py` ha solo `MINOR_UNIT_FACTORS = {"GBp": 100}` e `ZAc`/`ILA` sono ancora rifiutati (`schemas/common.py` `NEVER_RELABELLED_CURRENCY_CODES`).
   - Aspetta: già scritta «dopo la 1.3»
   - Proprietario suggerito: X
   - Note: Resta aperta la parte (a)/(b), non la (d). Le righe già salvate in pence come sterline restano da decidere.
@@ -2240,7 +2240,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **E-19 · L'avviso dei codici di valuta non ISO salvati** (backlog, riga 9385)
   - Cosa cambia per l'utente: Un codice di valuta non ISO salvato ora viene segnalato (avviso e suggerimento), ma non si corregge da solo.
   - Peso: medio-piccolo (avviso), medio (correzione) → media; parziale: resta aperta solo una parte
-  - Ancora valida: Fatto e in dev: E-19a `e4a4af4e2` (entrato con `c7c6f94f0`), E-19b1 `6e539da02` e `71480131e` (entrati con `1742aaaaa`), E-19b2 `279764d88` (entrato con `b878f043c`), le due LOW di H `e84778677` (entrato con `0897502a9`). `dev.py db currencies` esiste. Resta la correzione dei dati (D1 modello, D2 asset senza wipe): nessun codice in `backend/app/services/platform/stored_currencies.py` che corregga.
+  - Ancora valida: Fatto e in dev: E-19a `e60fd3cb9` (entrato con `d44616c3b`), E-19b1 `f78efb23f` e `bb0b8e415` (entrati con `9955157aa`), E-19b2 `c7170932f` (entrato con `fda487a06`), le due LOW di H `5a318eb45` (entrato con `a78084fc2`). `dev.py db currencies` esiste. Resta la correzione dei dati (D1 modello, D2 asset senza wipe): nessun codice in `backend/app/services/platform/stored_currencies.py` che corregga.
   - Aspetta: decisione developer (D1 e D2)
   - Proprietario suggerito: E
   - Note: Se si sceglie la correzione automatica (C), deve escludere anche `GBp` (scritto nella voce).
@@ -2371,14 +2371,14 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **MF-SEC9d · Nessun tetto globale alle chiamate concorrenti per fornitore** (backlog, riga 10128)
   - Cosa cambia per l'utente: nessun effetto visibile oggi (carico sui fornitori con richieste molto grandi)
   - Peso: basso, carico → piccola; parziale: resta aperta solo una parte
-  - Ancora valida: La seconda parte (OR annidati di BRIM, chunk di delete_rates_bulk e conteggi) è fatta: f0e54254f, entrato con 29e30b6cc. Resta il tetto globale per fornitore: assets/price_query.py:1134 `sem = asyncio.Semaphore(concurrency)` è ancora locale alla richiesta; refresh.py:397 idem.
+  - Ancora valida: La seconda parte (OR annidati di BRIM, chunk di delete_rates_bulk e conteggi) è fatta: e16729c7a, entrato con 24b52f8e4. Resta il tetto globale per fornitore: assets/price_query.py:1134 `sem = asyncio.Semaphore(concurrency)` è ancora locale alla richiesta; refresh.py:397 idem.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: X
   - Note: La voce dice «Solo informazione per ora». Il file è di X (price_query/refresh).
 - **MF-A6 · La polvere rompe l'identità del §7** (backlog, riga 10172)
   - Cosa cambia per l'utente: nessun effetto visibile (una quantità di polvere sotto 1e-5 vale per il motore giornaliero ma non per le righe)
   - Peso: basso, numeri → piccola
-  - Ancora valida: backend/app/services/financial_math/portfolio/daily_state.py:467,585,634 usa `qty <= 0` mentre le righe e la finestra usano QUANTITY_DUST_THRESHOLD (data_quality_thresholds.py:41); il lato doc è entrato con 09d29671d.
+  - Ancora valida: backend/app/services/financial_math/portfolio/daily_state.py:467,585,634 usa `qty <= 0` mentre le righe e la finestra usano QUANTITY_DUST_THRESHOLD (data_quality_thresholds.py:41); il lato doc è entrato con 3753c01dd.
   - Aspetta: già scritta «dopo la 1.3»
   - Proprietario suggerito: MF
 - **MF-A11 · Una base unica per le righe aperte nel periodo** (backlog, riga 10190)
@@ -2404,7 +2404,7 @@ Ordine: come nel backlog. Taglie: p = piccola, m = media, g = grande. Proprietar
 - **MF-FV · Piano «formule veloci»: togliere i pavimenti all'indietro senza pagarli** (backlog, riga 10231)
   - Cosa cambia per l'utente: nessun effetto visibile (il calcolo dei grafici e delle viste è più veloce)
   - Peso: grande, nessun valore (parità al bit) → grande; parziale: resta aperta solo una parte
-  - Ancora valida: P1 (af479abe7), P2 (82e9454eb) e P3 (b8c2f614b + e71012c67, entrato con 015094472) sono in dev. P4 (motore a segmenti, daily_state.py:300-340 consegna ancora un fotogramma per giorno) e i pavimenti all'indietro non sono iniziati: nessun commit P4.
+  - Ancora valida: P1 (b04a676ab), P2 (d5e7f3278) e P3 (286a3d880 + 2032121bc, entrato con 44f268c94) sono in dev. P4 (motore a segmenti, daily_state.py:300-340 consegna ancora un fotogramma per giorno) e i pavimenti all'indietro non sono iniziati: nessun commit P4.
   - Aspetta: niente, si può prendere subito
   - Proprietario suggerito: MF
   - Note: La voce dice «tutto nella 1.3». Non è in nessuna ondata di PROSSIMI_LAVORI né in ATTIVITA_INIZIO_1.4: il coordinatore dovrebbe dire dove sta P4.

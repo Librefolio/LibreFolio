@@ -1,4 +1,4 @@
-# W5-2 · W-B87 — analisi del primo turno (W, 24/10/2026, base `e5c5608d2`)
+# W5-2 · W-B87 — analisi del primo turno (W, 24/10/2026, base `8324c839d`)
 
 Letti: il codice dei cinque plugin, i `sample_reports/`, `type_metadata.py`, `financial_math/splits.py`, la cartella `bulk/` e `events/` del frontend.
 

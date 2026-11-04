@@ -3,8 +3,8 @@
 **Data:** 2026-09-08. **Origine:** nuovo feedback utente, successivo alla prima analisi.
 **Stato:** ✅ completato dal **Gruppo E - Import e UX urgenti** e applicato al
 checkout target `dev_release2` il 2026-09-09; commit/SHA manuale pendente.
-**Al 2026-10-09:** committato in `ef722b552` (2026-09-09) e nel target.
-**Baseline:** branch locale `dev_release2`, commit `4a73f5f6`.
+**Al 2026-10-09:** committato in `c8a77dda3` (2026-09-09) e nel target.
+**Baseline:** branch locale `dev_release2`, commit `41a4f23f`.
 
 Questo report apre una corsia urgente prima del restante backlog. Non dichiara gia
 riprodotti o risolti i sintomi: cause, prove e avanzamento per-step appartengono al
@@ -34,7 +34,7 @@ dev ha completato la review operativa delle superfici richieste. La review
 indipendente ha inoltre rilevato e fatto correggere il challenge pubblico GHCR
 di E9 nel [Round 5](../../phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound5-GHCRAuth.prompt.md).
 Il pacchetto e' nel checkout principale; non e' ancora committato o archiviato.
-**Al 2026-10-09:** committato in `ef722b552`; il piano di E è in `14_feedbackImportUrgent/`.
+**Al 2026-10-09:** committato in `c8a77dda3`; il piano di E è in `14_feedbackImportUrgent/`.
 
 **Integrazione 2026-09-08:** E7/E8 ricevuti e presi in carico nel piano14 come task
 distinti da E3. E9 aggiunto nella stessa data per il controllo aggiornamenti. Prima

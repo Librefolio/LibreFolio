@@ -1,7 +1,7 @@
 # MF-P4b — contratto della serie «a gradini» (cura B di D-P4)
 
 MF, 25/10/2026. Questo contratto sostituisce la versione del 24/10 sulla cura A (il campionamento), che non vale più.
-Base: `e-alfy-mf-matematica-finanziaria` a `445386f80`. Analisi e misure: `DECISIONI-DP4.md`, sezione «Proposta del
+Base: `e-alfy-mf-matematica-finanziaria` a `3424bc0db`. Analisi e misure: `DECISIONI-DP4.md`, sezione «Proposta del
 developer». Serie fuori dal report: `ANALISI-serie-a-gradini.md`, con la stessa forma.
 
 **Decisioni del developer e del coordinatore (25/10):**

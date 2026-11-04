@@ -25,14 +25,14 @@ Two defects of the transaction form, found by workstream V on 2026-10-13 and pre
 
 - **The date picker never reported its validity.** `SingleDatePicker` kept the refused text on screen with
   `data-invalid="true"`, but its bound value kept the previous date, and it had no way to tell the form. The defect
-  dates from `52b48fd83` (2026-08-27), in v1.1.0.
+  dates from `e67974a3c` (2026-08-27), in v1.1.0.
 - **The badge read only the server's verdict.** The form validates a sign-corrected draft: a quantity of −1 on a
   purchase reaches the server as 1, and the server answers *valid*. A manual validation also bypassed the scheduler's
   own gate.
 
 ## Solution
 
-The minimum, now (`b77885f0b`, train 96; the developer: «Il minimo ora, più la data se la sonda la conferma; il
+The minimum, now (`2d24c3c0e`, train 96; the developer: «Il minimo ora, più la data se la sonda la conferma; il
 pre-step completo dopo la 1.2»):
 
 - the picker reports its validity (`onvaliditychange`), and a refused date becomes one of the form's own errors;
@@ -40,10 +40,10 @@ pre-step completo dopo la 1.2»):
   validation, the *valid* badge and **Apply**, which instead focuses the first wrong field; **⚡ Validate now** does
   the same, and validation starts again by itself once the errors are cleared;
 - three E2E tests («A refused entry blocks the form», `transactions-modals.spec.ts`) and unit tests on the form and
-  the picker; the user guide says that the form checks nothing while it shows a mistake of its own (`73a75650e`).
+  the picker; the user guide says that the form checks nothing while it shows a mistake of its own (`c5ea18fdb`).
 
 The [1.2.0] chapter has one 🐛 line for each defect, under «📥 Imports and transaction editing», both «Present since
-v1.1.0» (`f8dbdddaf`).
+v1.1.0» (`a3cb0f0a2`).
 
 ## Still open
 

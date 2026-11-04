@@ -25,7 +25,7 @@ THE CONTRACT.
 - It values nothing at cost, so asking for it never raises ``CURRENT_PRICE_ASSUMED_AT_COST``; its rates are asked for
   every day even when it is requested alone. ``PRICE_HISTORY`` (per lot) is unchanged.
 
-TODAY (base ``7dbd46aa6``): the service normalizes the requested analyses first, and ``'MARKET_PRICE_HISTORY' is not a
+TODAY (base ``b6651cfa1``): the service normalizes the requested analyses first, and ``'MARKET_PRICE_HISTORY' is not a
 valid LotAnalysisType`` (ValueError); the response has no ``market_price_history`` (AttributeError). The analysis is
 asked for by its string and the field read inside the tests, so only these tests fail and the file still collects. Each
 red says what it reads today in its docstring; GUARD marks a test green today and after.

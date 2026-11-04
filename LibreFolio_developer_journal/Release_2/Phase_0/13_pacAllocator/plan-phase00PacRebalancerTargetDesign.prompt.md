@@ -6,7 +6,7 @@ checkpoint planning-only.
 **Tipo:** indice e visione end-to-end; non sostituisce i quattro piani
 specialistici e non è un contratto wire definitivo.
 **Scope:** SP13–SP14.
-**Baseline di pianificazione:** `202e4056f2b915c055eeb8436eae765023201918`.
+**Baseline di pianificazione:** `e7910164c4c908b7c6315b7aa344c1e3f3001ba6`.
 **Implementazione:** non autorizzata da questo documento.
 
 > Questo è l'entrypoint della suite target nella root `13_pacAllocator/`.

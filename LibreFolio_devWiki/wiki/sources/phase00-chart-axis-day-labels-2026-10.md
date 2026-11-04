@@ -19,7 +19,7 @@ related:
 One plan of about 300 lines, in Italian, by workstream I, written and delivered on 2026-10-12: the first item of I's
 queue after M-16. It answers a regression the developer reported during his checks on the server — the line charts no
 longer named the day on their x-axis — and the coordinator's item 1, the P&L lines that kept removed brokers. Both
-defects came from 1.2 work (`2d22130bd`, 2026-09-17; `8ed7a0f0d`, 2026-09-18).
+defects came from 1.2 work (`f4d209b11`, 2026-09-17; `a1e6fce55`, 2026-09-18).
 
 | Section | What it holds |
 |---------|---------------|
@@ -45,10 +45,10 @@ defects came from 1.2 work (`2d22130bd`, 2026-09-17; `8ed7a0f0d`, 2026-09-18).
 
 | Commit | What |
 |--------|------|
-| `4c05c1d85` | C1 — the compact rules: the day on compact x-axes |
-| `e72b0b56e` | C2 — the P&L lines rebuilt on a broker change |
-| `8682f0bbd` | C3 — localized labels off compact mode |
-| `ace3455e2` | C4 — the plan, and item 47-1 in the backlog |
+| `9cccf79bb` | C1 — the compact rules: the day on compact x-axes |
+| `76dae604b` | C2 — the P&L lines rebuilt on a broker change |
+| `7aff6c163` | C3 — localized labels off compact mode |
+| `f2de2a2b1` | C4 — the plan, and item 47-1 in the backlog |
 
 ## Pages created from this source
 

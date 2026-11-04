@@ -1,13 +1,13 @@
 # Piano Phase 00 — SP08 Asset pricing e confini del servizio
 
 **Creato:** 2026-09-11
-**Stato:** ✅ completato 2026-09-11 · integrato in `dev_release2` (codice `3c85866dd`, chiusura del journal
-`73d207b90`) · archiviato il 2026-10-09 dopo la verifica sul codice (vedi «Verifica d'archivio», in fondo)
+**Stato:** ✅ completato 2026-09-11 · integrato in `dev_release2` (codice `36fc57005`, chiusura del journal
+`311a81210`) · archiviato il 2026-10-09 dopo la verifica sul codice (vedi «Verifica d'archivio», in fondo)
 **Workstream:** K — SP08
 **Coordinator:** sessione `c8328a01-f208-4ade-a352-0486d1f14de2`
 **Worktree:** `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fuzzy-fishstick`
 **Branch:** `e-alfy-asset-pricing-boundaries`
-**Baseline approvata:** `dev_release2` @ `4949b2f4c04050e46f643de848894b6706349f34`
+**Baseline approvata:** `dev_release2` @ `8f189e2670c24f6866d0462204caa15c972c61f0`
 **Corsia runtime:** porta `6159`, data dir assoluta `/tmp/librefolio-r2-k-pricing`
 **Autorizzazione developer ricevuta verbatim:** `Sì: piano K completo raccomandato`
 
@@ -110,7 +110,7 @@ identità e monkeypatch canonico.
 > **Note implementazione**: letti contratto coordinated-workstream, istruzioni backend,
 > provider asset e test; caricati `asset-plugin` e `wiki-search`; verificati backlog,
 > report archiviati e codice corrente. Baseline ripristinata e ricontrollata:
-> HEAD esatto `4949b2f4c04050e46f643de848894b6706349f34`, worktree pulito,
+> HEAD esatto `8f189e2670c24f6866d0462204caa15c972c61f0`, worktree pulito,
 > porta 6159 libera. Ricevuta autorizzazione developer verbatim. Branch rinominata
 > tramite tool app-native prima di qualsiasi file.
 
@@ -358,7 +358,7 @@ identità e monkeypatch canonico.
 > Python modificati/nuovi, Ruff mirato e `git diff --check` sono verdi.
 > Review dedicata: nessun problema significativo. Build MkDocs e link check
 > verdi come registrato al Passo 8. HEAD resta
-> `4949b2f4c04050e46f643de848894b6706349f34`; manifest/lock frontend conservano
+> `8f189e2670c24f6866d0462204caa15c972c61f0`; manifest/lock frontend conservano
 > gli hash pre-bootstrap; porta 6159 libera. Nessun file staged, nessun commit
 > o mutazione history.
 
@@ -420,10 +420,10 @@ non si esegue senza richiesta developer separata.
 ## Verifica d'archivio (2026-10-09)
 
 > Fatta dal workstream P su richiesta del coordinator (la sessione K non esiste più), in sola lettura sul codice di
-> `dev_release2` @ `3cceb4f90` (treno 24b).
+> `dev_release2` @ `f545b67e3` (treno 24b).
 
-- **Integrazione**: `3c85866dd` (`refactor(assets): split pricing service`), merge di allineamento `b72475f0e`,
-  chiusura del journal `73d207b90`; tutti antenati di `dev_release2`. Nel backlog risultano chiusi P4-1, P4-4 e
+- **Integrazione**: `36fc57005` (`refactor(assets): split pricing service`), merge di allineamento `d84728cc7`,
+  chiusura del journal `311a81210`; tutti antenati di `dev_release2`. Nel backlog risultano chiusi P4-1, P4-4 e
   S6 6.4 (`Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md:46,49,59`).
 - **Codice di oggi, coerente con la DoD**:
   - `backend/app/services/asset_source.py` è una facciata di 21 righe senza definizioni; i 10 moduli di

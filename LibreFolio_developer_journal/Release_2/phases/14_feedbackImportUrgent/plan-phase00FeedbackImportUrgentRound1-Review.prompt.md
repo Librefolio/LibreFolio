@@ -8,7 +8,7 @@
 
 > **Ripresa 2026-09-09:** il dev riprende dopo perdita connessione/cambio postazione.
 > Sorgenti, traduzioni, changelog e fixture consegnate sono presenti nel worktree,
-> HEAD invariato `4a73f5f6`. La 6041 risponde ancora con PID 72570 del worktree E e
+> HEAD invariato `41a4f23f`. La 6041 risponde ancora con PID 72570 del worktree E e
 > hash build `3f50bf24...`: non contiene ancora R1/U4/U7/U9. Riattivato soltanto
 > l'author con lavoro residuo U4 (il precedente seguito era una promessa senza file)
 > e avviata review read-only Astra/max dell'integrazione. Gli altri writer hanno
@@ -177,7 +177,7 @@ assente non fanno sparire file. Nessun ampliamento dei permessi.
 > DataTable, diventando ovale. Rimossa la soglia fissa: le dimensioni esplicite e
 > il default 32 px del renderer restano intatti, con flex-shrink disabilitato.
 
-## 8. U7 - prima variante verificata, raffinamento richiesto nel Round 2 — ✅ superato dai Round 2–4 (2026-09-09, `ef722b552`)
+## 8. U7 - prima variante verificata, raffinamento richiesto nel Round 2 — ✅ superato dai Round 2–4 (2026-09-09, `c8a77dda3`)
 
 Implementare il blocco condiviso popup/About e la seconda modale di recupero manuale.
 Le schede social non chiudono l'origine. Nessuna pubblicazione automatica o diagnosi

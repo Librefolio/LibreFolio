@@ -47,7 +47,7 @@ basis → balance replay → response*.
 
 ## History
 - 2026-04-29: unified validate/commit pipeline ([[decisions/unified-batch-pipeline]]).
-- 2026-09-11 (`846aefb24`): SP16 decomposition — [[sources/phase00-transaction-batch-refactor-2026-09]].
+- 2026-09-11 (`103317ab2`): SP16 decomposition — [[sources/phase00-transaction-batch-refactor-2026-09]].
 
 ## Source files
 

@@ -3,9 +3,9 @@
 > **Seguito**: [step 2 — cache del frontend tra le pagine](plan-phase00FxDashboardSyncStep2PageCache.prompt.md)
 > (06/10, analisi).
 
-> **Stato (09/10, allineato da N su `3cceb4f90`): FINITO e archiviato in `Release_2/phases/28_fxDashboardSync/`.**
-> Questo step è stato implementato e integrato il 06/10: `5c1b52612` (FX), `f7134bb7f` (segno del KPI), `929887ad8`
-> (doc), `b4bddc411` (journal). Le righe sotto che parlano di «analisi» e di *plan mode* raccontano la mattina del
+> **Stato (09/10, allineato da N su `f545b67e3`): FINITO e archiviato in `Release_2/phases/28_fxDashboardSync/`.**
+> Questo step è stato implementato e integrato il 06/10: `2c58e7c9b` (FX), `fe3b5a182` (segno del KPI), `23439016f`
+> (doc), `366b4399e` (journal). Le righe sotto che parlano di «analisi» e di *plan mode* raccontano la mattina del
 > 06/10. Tutti i lotti di N in questa cartella sono indicizzati nel [README](README.md). L'unico residuo di questo
 > piano è la pagina devWiki di D6 (§11): rinviata, `Phase_0/38_postReleaseBacklog/README.md`, voce N-9.
 
@@ -21,7 +21,7 @@
 |---|---|
 | **Worktree** | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-symmetrical-spoon` |
 | **Branch** | `e-alfy-fx-dashboard-sync` (rinominato via app da `e-alfy-symmetrical-spoon`, 06/10) |
-| **Baseline** | HEAD `c77c7f09e168004b4f50740d7736abe56327fe2b` = target `dev_release2`. La worktree era nata su `d9aad0ec9` (`origin/dev_release2`); fast-forward fatto dal developer e confermato dal coordinator il 06/10. Fra i due commit nessun file di questo perimetro cambia (diffstat: solo `SearchSelect.svelte` e i18n fra i file vicini), quindi le righe citate valgono sul target |
+| **Baseline** | HEAD `5cc2c1a74a8fd2d4f3d77498b24a96b866f13daf` = target `dev_release2`. La worktree era nata su `168b81823` (`origin/dev_release2`); fast-forward fatto dal developer e confermato dal coordinator il 06/10. Fra i due commit nessun file di questo perimetro cambia (diffstat: solo `SearchSelect.svelte` e i18n fra i file vicini), quindi le righe citate valgono sul target |
 | **Lane** | `--test-port 6159 --data-dir /tmp/librefolio-r2-n`; server di review, se approvato, `127.0.0.1:6169`. Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py` |
 | **Dati** | solo sintetici. Mai porta 6040, mai `--force` sul server, mai copie di prod |
 | **Bootstrap** | `frontend/node_modules` **assente** (verificato) → `npm ci` (pre-approvato) al passo 0. `.env` assente: atteso, non si copia. `graphify-out/graph.json` e `.graphify_python` assenti: atteso, wiki letto pagina per pagina |
@@ -109,7 +109,7 @@ provider (`AssetModal.svelte:1449-1461`); margine di una settimana prima e dopo 
 
 ---
 
-## 1. Stato attuale verificato (HEAD `c77c7f09e`)
+## 1. Stato attuale verificato (HEAD `5cc2c1a74`)
 
 ### 1.1 Il «Sincronizza» del banner usa il periodo della pagina
 
@@ -370,7 +370,7 @@ provider (`AssetModal.svelte:1449-1461`); margine di una settimana prima e dopo 
 - `FxStep.svelte` e la chiave i18n della PAC: area D. Se D sta toccando lo stesso blocco, conviene integrare N prima
   o dopo D, non in parallelo.
 - Cataloghi i18n: writer condiviso, ma su chiavi diverse da quelle degli altri rami.
-- `select.md`: L l'ha appena toccato (`e09ec9b47`, già nel target). Io cambio solo `:233-234`.
+- `select.md`: L l'ha appena toccato (`c7b97ede9`, già nel target). Io cambio solo `:233-234`.
 - `_frontend_utility.py`: catalogo condiviso, solo righe nuove nelle liste.
 - `loadComparisonData.ts`: nessun ramo noto, da confermare.
 - Sovrapposizioni semantiche: `FxPairSyncCompleteDetail.start/end` lo leggono solo i test. Chi aggiunge un nuovo
@@ -409,7 +409,7 @@ provider (`AssetModal.svelte:1449-1461`); margine di una settimana prima e dopo 
 
    > **Note implementazione**:
    > - piano approvato nell'app (uscita dal plan mode) il 06/10; si applicano le raccomandazioni D1–D8;
-   > - HEAD `c77c7f09e` riverificato; `node_modules` assente, quindi `npm ci`: 433 pacchetti, log in
+   > - HEAD `5cc2c1a74` riverificato; `node_modules` assente, quindi `npm ci`: 433 pacchetti, log in
    >   `/tmp/libreFolio_n_npmci.log`;
    > - copiato questo piano nel journal.
    >

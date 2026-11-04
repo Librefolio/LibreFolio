@@ -4,7 +4,7 @@
 > [`../plan-phase00PacRebalancerTargetDesign.prompt.md`](../plan-phase00PacRebalancerTargetDesign.prompt.md).
 
 **Stato:** approvato dal developer; baseline rollback-safe A-F committata a
-`8504f0528`; aggiornamento target coordinato chiuso a `1e0b9bc519c1`. Round 3
+`dfa2bd274`; aggiornamento target coordinato chiuso a `cf62af7f30c5`. Round 3
 autorizzato sulle sole superfici PAC-owned. ToolHub, cataloghi i18n e CHANGELOG
 restano ai writer condivisi e non entrano in D fino al loro checkpoint frozen.
 
@@ -34,10 +34,10 @@ Riskfolio entra in Round 3.
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-friendly-dollop` |
 | Branch | `e-alfy-allocatore-pac` |
-| Rollback A-F | `8504f05280d9ff15485b6f8c07fb2b93ab45e1b5` |
-| Target coordinatore | `e1f3fe177861d2b9b953b218f66ea7d4714ab405` |
-| HEAD combinato | `1e0b9bc519c13339353b840596048d5e012e6e85` |
-| Parent HEAD | `8504f0528` + `e1f3fe177` |
+| Rollback A-F | `dfa2bd2740a6ac682ae2534c6de612cecf2379c2` |
+| Target coordinatore | `0ba3eff69e5190889267b9487f0ec60e17bbbd0d` |
+| HEAD combinato | `cf62af7f30c5f80fe679df5888757cb382ae0bc7` |
+| Parent HEAD | `dfa2bd274` + `0ba3eff69` |
 | Stato iniziale | clean; index e untracked vuoti |
 | Lane | porta `6153`, data `/tmp/librefolio-r2-d` |
 | Venv | `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
@@ -275,13 +275,13 @@ CHANGELOG.
 ## 6. Passi
 
 1. [x] 2026-09-12 - Preservare baseline rollback-safe e materializzare il piano.
-   > **Nota implementazione**: il developer ha committato A-F a `8504f0528`; il
-   > coordinatore ha integrato il target `e1f3fe177` in D. Verificato HEAD
-   > `1e0b9bc519c1`, parent esatti, target contained, status/index/untracked
+   > **Nota implementazione**: il developer ha committato A-F a `dfa2bd274`; il
+   > coordinatore ha integrato il target `0ba3eff69` in D. Verificato HEAD
+   > `cf62af7f30c5`, parent esatti, target contained, status/index/untracked
    > puliti. Fermati shell `221` e PID `35419`; porta `6153` libera. Creato
    > questo piano e cross-linkato Round 2 prima di ogni edit produzione.
    > **Evidenza**: `git rev-parse HEAD`, `git log -1 --format`,
-   > `git merge-base --is-ancestor e1f3fe177... HEAD`, `git status
+   > `git merge-base --is-ancestor 0ba3eff69... HEAD`, `git status
    > --porcelain=v1 --untracked-files=all`, `lsof -nP -iTCP:6153
    > -sTCP:LISTEN`.
    > **Fuori pista**: la review Round 2 e stata respinta anche per due

@@ -48,7 +48,7 @@ cure's contract: ``bulk_upsert_events(data, session, *, current_user_id=None)``,
 caller. With a ``current_user_id``, ``transaction_ids`` keeps the transactions that user can see — a ``BrokerUserAccess``
 row for the transaction's broker, as ``delete_events_bulk`` decides ``accessible_transactions`` — sorted, and a new key,
 ``hidden_transactions_count``, counts the others; the message keeps the total count only. X-R47b (E's security review
-of 5f68a8db0: fail closed, where R13-SEC7's cure still named every id without a caller): the details always carry both
+of ad95e8699: fail closed, where R13-SEC7's cure still named every id without a caller): the details always carry both
 keys, and without a ``current_user_id`` no transaction is named — ``transaction_ids`` is [] and
 ``hidden_transactions_count`` counts them all — while the route always passes its caller (``_current_user.id``, no
 fallback). The case: a SPLIT with a costless incoming ADJUSTMENT on each of two brokers of the unit's own, user A
@@ -896,7 +896,7 @@ def test_the_split_predicate_is_a_plain_function():
 # ADJUSTMENT linked to the SPLIT, on any user's broker, and any user can trigger it: an asset is global. With the caller
 # given (``current_user_id``, which POST /assets/events passes), ``transaction_ids`` keeps the ones on a broker the
 # caller holds an access to, sorted, and ``hidden_transactions_count`` counts the others; without one, none is named
-# (X-R47b, E's security review of 5f68a8db0: fail closed): ``transaction_ids`` [] and ``hidden_transactions_count`` all
+# (X-R47b, E's security review of ad95e8699: fail closed): ``transaction_ids`` [] and ``hidden_transactions_count`` all
 # of them — the route always passes its caller. The case: a manual SPLIT of 2 with a costless ADJUSTMENT +10 linked on
 # each of the unit's brokers — broker B's created first, so the hidden one has the lower id and a positional filter
 # shows the wrong one — user A holding an access to broker A alone, user B to broker B alone (so broker B is another
@@ -1053,7 +1053,7 @@ async def test_the_events_endpoint_shows_the_caller_only_the_adjustments_on_thei
 async def test_without_a_caller_the_p10_refusal_names_no_adjustment_and_counts_them_all(owned):
     """Red today (X-R47b): without a caller the refusal names both adjustments, broker B's too, and counts none: fail open.
 
-    Contract (X-R47b, E's security review of 5f68a8db0: fail closed): given no ``current_user_id``, ``bulk_upsert_events``
+    Contract (X-R47b, E's security review of ad95e8699: fail closed): given no ``current_user_id``, ``bulk_upsert_events``
     knows no user who may see either adjustment, so the retype of the SPLIT (day 320) is refused with
     EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, its details exactly {asset_id, item_index 0, event_id, date, ``transaction_ids``
     [], ``hidden_transactions_count`` 2} — no id named, both counted, no other key; nothing written, events and

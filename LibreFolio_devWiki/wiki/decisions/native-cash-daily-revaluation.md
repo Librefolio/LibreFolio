@@ -69,8 +69,8 @@ centralized WAC").
    - *(b)* a field in `portfolio.flows_income` listing the rows per broker, with a version bump.
    - **The developer's decision (2026-10-12, via the coordinator): (a) now, (b) after release 1.2 with a typed code.**
      Today an `OtherPeriodEffect` has no code, so the frontend and any filter can only match the English description.
-     At `5d0585595` this is a decision, not yet a row of the post-1.2 backlog: section I still lists F-AI (b) as open,
-     and the row enters with I's next checkpoint. *It entered with `8339b0a06` (plan 44, train 48): «F-AI (b) · «FX on
+     At `9f63eec22` this is a decision, not yet a row of the post-1.2 backlog: section I still lists F-AI (b) as open,
+     and the row enters with I's next checkpoint. *It entered with `9065d9212` (plan 44, train 48): «F-AI (b) · «FX on
      cash» per nome nell'export del portafoglio», a typed code on `OtherPeriodEffect`, about ¾ day plus the probe.*
 
 ## Decision

@@ -584,7 +584,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 
 ### A1 — ⏳ in corso (2026-09-30)
 
-- Journal della pianificazione committato: `f6f0d2637`. Il coordinatore dà il via ad A1 e conferma che la base va bene così: fuori dal journal, `dev_release2` ha in più solo le righe del CHANGELOG.
+- Journal della pianificazione committato: `fef332772`. Il coordinatore dà il via ad A1 e conferma che la base va bene così: fuori dal journal, `dev_release2` ha in più solo le righe del CHANGELOG.
 - Test rossi affidati al test-author, sull'interfaccia fissata qui:
   - file nuovo `test_services/test_brim_report_sets.py`;
   - registrazione `services brim-report-sets`, subito dopo `brim-provider-base`;
@@ -617,7 +617,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 >
 > ### A1 — ✅ pronta per il checkpoint (2026-09-30)
 
-**Commit di A1**: `b271faaa2` feat(brim): add report-set schemas and storage (5 file) e `796db3f61` docs(journal): record report-set phase A1.
+**Commit di A1**: `9293307fd` feat(brim): add report-set schemas and storage (5 file) e `f3b57139a` docs(journal): record report-set phase A1.
 
 ### A2 e C1 — ⏳ in corso (2026-09-30)
 
@@ -656,7 +656,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 > - ruff segnalava `parse_file` troppo complessa (12 > 10) dopo le mie aggiunte. Invece di un `noqa`, la guardia dei set e i punti di verità sono passati in due funzioni d'appoggio (`_refuse_report_set_member`, `_report_set_truth`), più un costruttore dell'errore 422. Test rilanciati: servizio 214, API 48.
 > - Il test-author, per i test rossi, ha lanciato `dev.py format`, che passa black su tutto il backend: ha riformattato 6 file estranei. Li ha ripristinati byte per byte e ha verificato gli altri con gli hash; nel worktree non ne resta traccia. **Regola**: black solo sui file toccati (`python -m black <file>`), mai `dev.py format`.
 
-**Commit di A2 e C1**: `b70e9ecce` feat(brim): add report-set preview and combine API (12 file) e `f480b5688` docs(journal): record report-set phase A2. **Regola del coordinatore**: niente `dev.py format`; black e prettier solo sui file toccati; un file estraneo toccato per errore va segnalato, non ripristinato.
+**Commit di A2 e C1**: `555b44d15` feat(brim): add report-set preview and combine API (12 file) e `7e161055d` docs(journal): record report-set phase A2. **Regola del coordinatore**: niente `dev.py format`; black e prettier solo sui file toccati; un file estraneo toccato per errore va segnalato, non ripristinato.
 
 ### A3 — ⏳ in corso (2026-09-30)
 
@@ -690,7 +690,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 >   Il test saltato è `test_delete_linked_without_pair`: lo salta la fixture `test_asset_id` («Could not create test asset»), che dipende dallo stato del database della corsia, non dalla modifica.
 > - `dev.py lint` pulito; black pulito sui 7 file Python toccati; `git diff --check` pulito; porta 6156 libera.
 
-**Commit di A3**: `75579a13b` feat(brim): add gap-fix endpoint e `bf589e339` docs(journal): record report-set phase A3.
+**Commit di A3**: `920d04a18` feat(brim): add gap-fix endpoint e `fe20f6162` docs(journal): record report-set phase A3.
 
 ### B — ⏳ in corso (2026-09-30)
 
@@ -751,18 +751,18 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 >
 > ### B — ✅ pronta per il checkpoint (2026-09-30)
 
-**Commit di B**: `fda716b46` feat(brim): add Danske Bank report-set importer (14 file) e `2cb29faf1` docs(journal): record report-set phase B.
+**Commit di B**: `872f6bcc0` feat(brim): add Danske Bank report-set importer (14 file) e `36803418e` docs(journal): record report-set phase B.
 
 ### Aggiornamento della base e correzione R13 (2026-09-30 → 2026-10-01)
 
-- **Merge di `dev_release2` (`8f18416df`) in L**: aperto dallo script del coordinatore. I 7 conflitti sono stati risolti con la versione di L: i 6 previsti più `test_brim_providers.py`, perché dal lato di `dev_release2` quei file avevano solo i cherry-pick dei commit di L. L'albero è `4873e78e1`, come atteso.
+- **Merge di `dev_release2` (`27d99a703`) in L**: aperto dallo script del coordinatore. I 7 conflitti sono stati risolti con la versione di L: i 6 previsti più `test_brim_providers.py`, perché dal lato di `dev_release2` quei file avevano solo i cherry-pick dei commit di L. L'albero è `4873e78e1`, come atteso.
   - Validato a merge aperto, nella corsia 6156, un comando alla volta:
     - `front build --debug` ok; `front check` 3 errori, il pavimento, in file non di L; `component-unit` 2182; `check-orphans` pulito;
     - E2E: `files` 22, `tx-import-upload` 9, `front-broker detail` 29 passati e 1 fallito (`:713` GrowthChart, di I);
     - backend: le 8 suite BRIM dei servizi, `services transaction` 68, `brim-providers` 574 passati e 2 saltati, `brim-danske-bank` 324, `api brim` 63.
-  - Commit del merge: `5d48c668f`, genitori `2cb29faf1` e `8f18416df`.
+  - Commit del merge: `d027669c1`, genitori `36803418e` e `27d99a703`.
 
-> **⚠️ Fuori pista**: `core-unit` è rosso dal commit di B (`fda716b46`), non dal merge. Fallisce `optionFilter.test.ts › ranking › on the real import-plugin list (R13)`, con «broker_danske_bank.py, provider_code: the return is not a string literal».
+> **⚠️ Fuori pista**: `core-unit` è rosso dal commit di B (`872f6bcc0`), non dal merge. Fallisce `optionFilter.test.ts › ranking › on the real import-plugin list (R13)`, con «broker_danske_bank.py, provider_code: the return is not a string literal».
 > - Il test legge i sorgenti di tutti i plugin BRIM e vuole che `provider_code` restituisca una stringa letterale; il plugin restituiva la costante `PROVIDER_CODE`.
 > - Per la stessa ragione `_PROVIDER_CODE_RE` del runner (`_backend_external.py`) non trovava Danske: l'aiuto di `--providers`/`--exclude-providers` elencava 30 plugin BRIM invece di 31. Il filtro funzionava lo stesso, perché non ha `choices`.
 > - **Lezione**: una modifica a un plugin BRIM fa girare anche `front-utility core-unit`. Una fase «solo backend» non lo è, se un test del frontend legge i sorgenti.
@@ -779,11 +779,11 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 >   - la guida sviluppatore dirà che `provider_code` è una stringa letterale, e perché;
 >   - la pagina utente si chiamerà `danske-bank.en.md`, perché il `docs_url` del plugin è `…/danske-bank/` e le pagine prendono il nome dal `docs_url` (`credit_agricole/`, `generic-csv/`). Il piano diceva `danske_bank.en.md`.
 
-**Commit della correzione R13**: `791db7fee` fix(brim): return a literal Danske provider code e `fb90a8697` docs(journal): record the base merge and the R13 fix.
+**Commit della correzione R13**: `d10166df4` fix(brim): return a literal Danske provider code e `18138d678` docs(journal): record the base merge and the R13 fix.
 
 ### C2 — ⏳ in corso (2026-10-01)
 
-- Via del coordinatore, da `fb90a8697`: la voce 0 di K è nella base dal merge `5d48c668f`.
+- Via del coordinatore, da `18138d678`: la voce 0 di K è nella base dal merge `d027669c1`.
 - **C2.0 scritta**, nel §5: la specifica di dettaglio prima dei test rossi.
 
 > **⚠️ Fuori pista** (dalla lettura del wizard):
@@ -838,7 +838,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 > - **E2E nuovi**: `tx-import-report-set` 4/4 al primo giro (R1–R4), dopo `front build --debug`.
 > - **Regressione E2E del wizard**: verdi `tx-import-upload` 9, `tx-import-flow` 10, `tx-import-duplicate-precedence` 6, `tx-asset-identity` 9, `tx-import-resolution` 12, `tx-import-matching` 6, `front-utility onboarding-tour` 10.
 >
-> **⚠️ Fuori pista: quattro rossi che c'erano già** (triage con la skill `test-triage`). Per confrontare ho esportato `HEAD` (`fb90a8697`, senza C2) con `git archive` in `/tmp`, e ho fatto girare gli stessi spec nella stessa corsia e con lo stesso stato. Poi ho cancellato la copia.
+> **⚠️ Fuori pista: quattro rossi che c'erano già** (triage con la skill `test-triage`). Per confrontare ho esportato `HEAD` (`18138d678`, senza C2) con `git archive` in `/tmp`, e ho fatto girare gli stessi spec nella stessa corsia e con lo stesso stato. Poi ho cancellato la copia.
 >
 > | Spec | Con C2 | Base senza C2 | Verdetto |
 > |---|---|---|---|
@@ -851,12 +851,12 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 >
 > ### C2 — ✅ pronta per il checkpoint (2026-10-01)
 
-**Commit di C2**: `8c3271235` feat(import): report sets in the import wizard e `918693ed9` docs(journal): record report-set phase C2.
+**Commit di C2**: `6f4e68867` feat(import): report sets in the import wizard e `56b4ed0cf` docs(journal): record report-set phase C2.
 
 ### C3 — ⏳ in corso (2026-10-01)
 
-- Via del coordinatore, da `918693ed9`, nella corsia 6156.
-- **Base dei controlli**: `front-utility onboarding-component-unit` su `918693ed9`, 408/408 verde (contiene `ImportWizardModal.test.ts`).
+- Via del coordinatore, da `56b4ed0cf`, nella corsia 6156.
+- **Base dei controlli**: `front-utility onboarding-component-unit` su `56b4ed0cf`, 408/408 verde (contiene `ImportWizardModal.test.ts`).
 - **Concessioni del coordinatore**: nel §7 (le liste a mano della guida, `preferences.en.md` per la fase D).
 - **C3.0 scritta**, nel §5: la specifica di dettaglio prima dei test rossi.
 
@@ -940,12 +940,12 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 
 ### C3 — ✅ pronta per il checkpoint (2026-10-01)
 
-**Commit di C3**: `9336c0e9b` feat(import): align imports with bank truth e `8ec9f46e0` docs(journal): record report-set phase C3.
+**Commit di C3**: `b23259a4e` feat(import): align imports with bank truth e `3556fd240` docs(journal): record report-set phase C3.
 
 ### C3b — ⏳ in corso (2026-10-01)
 
 - Decisione del developer, riportata dal coordinatore: correggere subito il limite delle bozze incomplete, prima della fase D.
-- Base `8ec9f46e0`. Prima di ogni modifica, nella corsia 6156: `services brim-gap-fix` 99/99 e `api brim` 63/63.
+- Base `3556fd240`. Prima di ogni modifica, nella corsia 6156: `services brim-gap-fix` 99/99 e `api brim` 63/63.
 - **C3b.0 scritta**, nel §5. Il comportamento è quello predefinito del coordinatore. Le scelte d'implementazione: la validazione riga per riga nel backend, con lo stesso helper dell'editor; l'unione `TXCreateItem | dict` sulle sole `pending_creates`; il passo che si apre anche con sole esclusioni.
 - **Via del coordinatore** su C3b come descritta: la validazione nel backend con `_parse_lenient`, `excluded_pending: List[TXValidationIssue]`, il passo che si apre anche con sole esclusioni, `selection` rigida.
   - Scelta fra unione e `List[dict]`: resta l'unione con `union_mode="left_to_right"` esplicito; il motivo è nella C3b.0.
@@ -969,7 +969,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 
 ### D — ⏳ in corso (2026-10-01)
 
-- Via del coordinatore da `8ec9f46e0`. Nessun altro ramo tocca `mkdocs.yml`, le pagine dell'import, `user/files`, `preferences.en.md` e `patterns/brim_plugin_guide.md`. La nota di C3b entra nel commit del journal di D.
+- Via del coordinatore da `3556fd240`. Nessun altro ramo tocca `mkdocs.yml`, le pagine dell'import, `user/files`, `preferences.en.md` e `patterns/brim_plugin_guide.md`. La nota di C3b entra nel commit del journal di D.
 - **Traduzioni**: un fatto nuovo in una pagina tradotta è debito vero, **senza stamp**; la lista di `translate-validate` va nella consegna. La card e la riga degli indici it/fr/es le scrivo io, come il §7 e la guida dei plugin prevedono, poi lo stamp dell'indice.
 - **Basi prima delle modifiche**:
   - `mkdocs build` verde;
@@ -1020,11 +1020,11 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 
 ### D — ✅ pronta per il checkpoint (2026-10-01)
 
-**Commit di D**: `b643afb31` docs(import): document Danske Bank and report sets e `cf5cb2e35` docs(journal): record phase D and the dropped C3b.
+**Commit di D**: `10d255b2b` docs(import): document Danske Bank and report sets e `72e5960f2` docs(journal): record phase D and the dropped C3b.
 
 ### E — ⏳ in corso (2026-10-01)
 
-- Decisione del developer, riportata dal coordinatore: «Etichetta e due pagine in fase E; A17 nel backlog». Via da `cf5cb2e35`, corsia 6156.
+- Decisione del developer, riportata dal coordinatore: «Etichetta e due pagine in fase E; A17 nel backlog». Via da `72e5960f2`, corsia 6156.
 
 #### E.0 Specifica (2026-10-01)
 
@@ -1094,7 +1094,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 
 ### E — ✅ completata (2026-10-01)
 
-**Commit di E**: `1a3ba20f2` fix(brim): mark later-import checkpoints as gaps, `37abcd203` docs(import): mention report sets in import pages e `2d0923a4c` docs(journal): record phase E.
+**Commit di E**: `76dd9d264` fix(brim): mark later-import checkpoints as gaps, `f0c7de942` docs(import): mention report sets in import pages e `63eea40cb` docs(journal): record phase E.
 
 ---
 
@@ -1112,7 +1112,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 - **Il developer** ha provato sia gli export reali dell'autore della issue, caricati da lui solo sul server di review, sia i campioni sintetici.
   - **Privacy**: niente dei file reali entra in test, campioni, log, piano o messaggi di commit. I difetti si riproducono coi dati sintetici. Alla fine la `--data-dir` di review si cancella.
 - Esito: il flusso è corretto, «Dopo il buco» compare, la pagina File «mi pare sufficiente». Chiede miglioramenti grafici e ha trovato difetti.
-- Via del coordinatore alla fase F, da `2d0923a4c`, nella corsia 6156. Superfici:
+- Via del coordinatore alla fase F, da `63eea40cb`, nella corsia 6156. Superfici:
   - wizard, `ParseDetailModal`, `ReportSetCard`, `GapFixStep`, i18n `importWizard.*`;
   - per U2-B, la preview del backend più `api sync`;
   - **anche D4–D7**: `TransactionBulkModal.svelte`, `TransactionFormModal.svelte` se serve, i loro test, i testi dell'editor.
@@ -1265,7 +1265,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 
 ### F1 — ✅ pronta per il checkpoint (2026-10-02)
 
-> **F1 committata** dal developer: `e57d08b84` (13 file) e `cf87bb2ff` (journal).
+> **F1 committata** dal developer: `040dd5287` (13 file) e `ac72e6c45` (journal).
 >
 > **⚠️ Fuori pista — la verifica d'ambiente di `tx-import-file-selection`** (autorizzata dal coordinatore, 2026-10-02):
 > - `test db populate --force --clean` sulla sola `/private/tmp/librefolio-r2-l`, exit 0. Dopo, `broker_reports/{uploaded,parsed,failed}` hanno 0 voci e 0 file.
@@ -1274,7 +1274,7 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 
 ### F2 — ⏳ in corso (2026-10-02)
 
-Base `cf87bb2ff`, corsia 6156.
+Base `ac72e6c45`, corsia 6156.
 
 #### F2.0 Contratto (2026-10-02)
 
@@ -1458,11 +1458,11 @@ Precisa le voci di F.0 su U1–U4; dove F.0 non decideva, la scelta è indicata.
 ### ⏸ Pausa (2026-10-02), chiesta dal developer tramite il coordinatore
 
 - **Fatto**:
-  - F1 committata (`e57d08b84` + `cf87bb2ff`);
+  - F1 committata (`040dd5287` + `ac72e6c45`);
   - la verifica d'ambiente di `tx-import-file-selection`: verde;
   - F2: rosso, cura, gate e documentazione, tutto verde (vedi le note sopra).
 - **In corso**: niente. Nessun comando interrotto, nessun server acceso; le porte 6156 e 6166 sono libere (`lsof` vuoto).
-- **Lo stato non committato**: HEAD `cf87bb2ff`, 23 path sporchi (21 M + 2 nuovi: `GapFixToggle.svelte` e `ReportSetCard.test.ts`), compreso questo piano. La `mkdocs build` non ha lasciato effetti collaterali tracciati.
+- **Lo stato non committato**: HEAD `ac72e6c45`, 23 path sporchi (21 M + 2 nuovi: `GapFixToggle.svelte` e `ReportSetCard.test.ts`), compreso questo piano. La `mkdocs build` non ha lasciato effetti collaterali tracciati.
 - **Prossimo passo esatto**, alla ripresa («riprendi»):
   1. rileggere i diff delle tre pagine di documentazione (controllo mio), poi `git diff --check`;
   2. mandare al coordinatore `CHECKPOINT READY` F2, con:
@@ -1474,7 +1474,7 @@ Precisa le voci di F.0 su U1–U4; dove F.0 non decideva, la scelta è indicata.
 
 ### ▶️ Ripresa (2026-10-05), «Riprendi» del coordinatore
 
-- **Stato alla ripresa**: lo stesso della pausa. HEAD `cf87bb2ff`, 23 path, `git diff --check` pulito, porta 6156 libera. La pulizia notturna di `/tmp` ha lasciato la corsia intatta (`app.db` c'è) e anche lo script del controllo privacy. Il client generato ha ancora `history_end`.
+- **Stato alla ripresa**: lo stesso della pausa. HEAD `ac72e6c45`, 23 path, `git diff --check` pulito, porta 6156 libera. La pulizia notturna di `/tmp` ha lasciato la corsia intatta (`app.db` c'è) e anche lo script del controllo privacy. Il client generato ha ancora `history_end`.
 - **La mia revisione dei tre diff della documentazione**:
   - la guida dei plugin e la pagina sviluppatore del wizard corrispondono al codice. La frase «sets uploaded in this session are selected and open» era già in D, e il codice la conferma (`expandedSets` riceve i set della sessione);
   - nella pagina utente, l'esito `summarized` riguarda **movimenti** di ogni tipo, non solo trade: il plugin lo assegna anche alle righe di cassa. Ho corretto la parola a mano, «the trades summarised» → «the movements summarised». È l'unica modifica dopo il docs-writer.
@@ -1487,12 +1487,12 @@ Precisa le voci di F.0 su U1–U4; dove F.0 non decideva, la scelta è indicata.
 
 ### F2 — ✅ pronta per il checkpoint (2026-10-05)
 
-> **F2 committata** dal developer (2026-10-05): `cdb8b3301` (codice), `5b35da6d4` (docs) e `5904ad20d` (journal). Blob uguali ai record, albero pulito.
+> **F2 committata** dal developer (2026-10-05): `9a0645f8b` (codice), `346cb1731` (docs) e `6da7fa2b5` (journal). Blob uguali ai record, albero pulito.
 
 ## 13. Merge di baseline e validazione della revisione unita (2026-10-05)
 
-- **Il merge**, fatto dal developer con lo script del coordinatore: `c59f9d7c2` «merge(l): dev_release2 into L before F2 integration».
-  - Genitori `5904ad20d` (L) e `9b5291c25` (`dev_release2`); albero `c4d1cea6a`, come nella simulazione; merge-base `8f18416df`.
+- **Il merge**, fatto dal developer con lo script del coordinatore: `c21b12d72` «merge(l): dev_release2 into L before F2 integration».
+  - Genitori `6da7fa2b5` (L) e `a6ede2c0e` (`dev_release2`); albero `c4d1cea6a`, come nella simulazione; merge-base `27d99a703`.
   - Porta K (Step 14 e 15), i giri di I, il pavimento di svelte-check a 0/0, il runner con l'attesa a 300 s, la PR #30 (`services/fx.py`) e la riparazione di `broker-sharing.spec.ts`: 54 file.
 
 ### 13.1 ✅ I file uniti da Git (2026-10-05)
@@ -1568,7 +1568,7 @@ Nessun test saltato né instabile. Albero: solo il piano modificato. Porta 6156 
 - **Gate della documentazione** (passo 6):
   - `mkdocs build` strict: exit 0, senza warning;
   - `mkdocs check-links`: 81 link validi, i 3 🟡 noti, e **1 rosso non mio**: `user/assets/detail/chart/#rolling-return`. L'ancora c'è in `chart.en.md:22` ma manca in it/fr/es; il link sta in `frontend/src/routes/(app)/assets/[id]/+page.svelte:3006`.
-    - È identico su `dev_release2` (`9b5291c25`), non c'era nel mio ramo prima del merge, e il mio diff verso `dev_release2` non lo tocca.
+    - È identico su `dev_release2` (`a6ede2c0e`), non c'era nel mio ramo prima del merge, e il mio diff verso `dev_release2` non lo tocca.
     - Probabilmente è il rosso D28 che il coordinatore aveva dichiarato noto e accettato il 02/10. Lo segnalo, e non lo correggo: i file non sono miei.
 
 ### 13.5 ⏳ Prossimo passo: la scelta del plugin di un set
@@ -1578,13 +1578,13 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 - Poi due righe di decisione al coordinatore, per l'ordine delle integrazioni e per il CHANGELOG.
 - La bozza dell'analisi è nella cartella di sessione, fuori dal repo.
 
-> **Commit della validazione** (developer, 2026-10-05): `adf3b8cd7` «docs(import): Danske Bank is alpha» e `8c6853281` journal.
-> - **Danske è integrato**: `dev_release2` è avanzato a `8c6853281`, poi il commit `c8daff33f` del coordinatore con le righe del CHANGELOG. Il ramo di L resta un commit indietro, ed è normale.
+> **Commit della validazione** (developer, 2026-10-05): `c70b0fb96` «docs(import): Danske Bank is alpha» e `2f20d6a38` journal.
+> - **Danske è integrato**: `dev_release2` è avanzato a `2f20d6a38`, poi il commit `29bdc37fe` del coordinatore con le righe del CHANGELOG. Il ramo di L resta un commit indietro, ed è normale.
 > - Il D28 (`#rolling-return` in it/fr/es) è il rosso accettato, confermato dal coordinatore.
 
 ## 14. Passo G — la scelta del plugin di un set (2026-10-05)
 
-**Base**: `8c6853281`, corsia 6156. **Via del coordinatore**: «Via al passo G sul tuo ramo… prima il piano nel journal… poi i test rossi col test-author; poi l'implementazione e il checkpoint. G deve entrare prima del taglio della release.»
+**Base**: `2f20d6a38`, corsia 6156. **Via del coordinatore**: «Via al passo G sul tuo ramo… prima il piano nel journal… poi i test rossi col test-author; poi l'implementazione e il checkpoint. G deve entrare prima del taglio della release.»
 
 > **⚠️ Fuori pista**: prima di cominciare ho lanciato per riflesso un `git fetch -q origin`. Aggiorna solo i riferimenti remoti, non il ramo né i file, ma non è un comando di sola lettura, quindi non va fatto: non lo ripeto.
 
@@ -1806,7 +1806,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 >
 > **⚠️ Fuori pista — `front-utility files-uploader`, 6/6 rossi.** Verdetto della test-triage: **assumption** del test, che non viene da G.
 > - La spec ha un elenco chiuso di GET permessi e riceve `GET /api/v1/settings/onboarding`, l'avvio dell'onboarding (`onboardingApi.ts:81`); la pagina File non si apre mai.
-> - La spec è cambiata l'ultima volta in `ef722b552`; le modifiche di G non toccano onboarding, layout né la spec.
+> - La spec è cambiata l'ultima volta in `c8a77dda3`; le modifiche di G non toccano onboarding, layout né la spec.
 > - L'ho segnalato al coordinatore: non è un mio file.
 >
 > **⚠️ Fuori pista — la corsia dopo il giro**:
@@ -1931,7 +1931,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 | `tx-brim-import` / `tx-ca-contract` | T1 e CAC-011/012, rossi già accettati; `10 passed` in CAC |
 | `front check` | **0/0** |
 | `check-orphans` | pulito: 96 E2E, 281 Vitest e 227 backend raggiungibili |
-| privacy (`/tmp/libreFolio_l_e_privacy.py 8c6853281`) | 0 collisioni su 3399 righe aggiunte |
+| privacy (`/tmp/libreFolio_l_e_privacy.py 2f20d6a38`) | 0 collisioni su 3399 righe aggiunte |
 | `git diff --check` | pulito; 26 file tracciati modificati, 0 nuovi; porte 6156 e 6166 libere |
 
 > **⚠️ Fuori pista — E2-001 (`tx-import-asset-inspector`)**:
@@ -1950,11 +1950,11 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 ### 15.1 ✅ I commit e il merge di baseline (2026-10-05)
 
 - I commit del developer, fatti con l'ORDER del coordinatore (`/tmp/libreFolio_ORDER_0510_lg.sh`) e verificati da lui; albero `5a4ed0eee`:
-  - `15c91d42a` feat(import): choose how a report set is read
-  - `a33eb243b` test(e2e): declare the onboarding GET in files-uploader
-  - `96b7a4903` docs(import): how a report set is read and when the generic CSV applies
-  - `a2dcf786f` docs(journal): Danske workstream step G
-- Il merge `361c1acbd` (`merge(l): dev_release2 into L before step G integration`): genitori `a2dcf786f` e `d9aad0ec9` (il PAC planner di D e il suo changelog); albero `e88472305`, uguale alla simulazione; worktree pulito.
+  - `b24cb4e1f` feat(import): choose how a report set is read
+  - `1b298b858` test(e2e): declare the onboarding GET in files-uploader
+  - `a1f867067` docs(import): how a report set is read and when the generic CSV applies
+  - `8dd7c34e3` docs(journal): Danske workstream step G
+- Il merge `b530d1639` (`merge(l): dev_release2 into L before step G integration`): genitori `8dd7c34e3` e `168b81823` (il PAC planner di D e il suo changelog); albero `e88472305`, uguale alla simulazione; worktree pulito.
 - Le correzioni ai messaggi, chieste da L prima del run e applicate dal coordinatore:
   - C1, il punto «Memory»: la memoria non legge `combined_into` ma `derived_from`, `parsed_plugin_code` e `processed_at`. L'errore era nel mio checkpoint;
   - C1, il punto «Wizard»;
@@ -1962,13 +1962,13 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
   - C3, il punto «Developer pages».
 - **Decisione del developer sui rossi** (testuale, tramite il coordinatore): «E2-001 da capire subito dopo G, CAC nel backlog (Consigliato)».
 
-### 15.2 ✅ Validazione della revisione unita `361c1acbd` (2026-10-05 → 2026-10-06), corsia 6156, un comando per volta — interrotta il 05/10 perché il developer stacca, ripresa il 06/10
+### 15.2 ✅ Validazione della revisione unita `b530d1639` (2026-10-05 → 2026-10-06), corsia 6156, un comando per volta — interrotta il 05/10 perché il developer stacca, ripresa il 06/10
 
 - G e D si sovrappongono solo nei cataloghi i18n ×4, che Git ha unito da solo.
 
 | Verifica | Esito |
 |---|---|
-| i18n a tre vie (`git show`, base `8c6853281`) | in ogni lingua 4505 chiavi = 3543 + 7 (G) + 955 (D); nessuna chiave mancante, in più o con valore diverso; le 7 chiavi di G ci sono tutte |
+| i18n a tre vie (`git show`, base `2f20d6a38`) | in ogni lingua 4505 chiavi = 3543 + 7 (G) + 955 (D); nessuna chiave mancante, in più o con valore diverso; le 7 chiavi di G ci sono tutte |
 | `api sync` / `front build --debug` / `mkdocs build` (strict) | ok / ok / ok, 0 WARNING e 0 ERROR |
 | `services brim-report-sets` / `brim-parse-race` / `brim-parse-pool` / `brim-parse-error` | `255` / `14` / `8` / `4 passed` |
 | `external brim-providers` | `626 passed`, 1 saltato |
@@ -1980,7 +1980,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 | E2E utility e broker | `files` 22, `files-uploader` 6, `select` 17, `image-crop` 42, `onboarding-tour` 10, `settings` 45; `front-broker detail` 33 |
 | Rossi | T1 e CAC-011/012, già accettati (CAC va nel backlog); **E2-001**, allo stesso punto del giro finale di G |
 
-- **Ripresa del 2026-10-06** («Riprendi» del coordinatore). Lo stato era come allo stop: HEAD `361c1acbd`, solo il piano modificato, la data-dir presente, le porte libere, `dev_release2` = `d9aad0ec9`, antenato di HEAD. La macchina è carica per i servizi di sistema; il carico (load average) è annotato prima e dopo ogni comando.
+- **Ripresa del 2026-10-06** («Riprendi» del coordinatore). Lo stato era come allo stop: HEAD `b530d1639`, solo il piano modificato, la data-dir presente, le porte libere, `dev_release2` = `168b81823`, antenato di HEAD. La macchina è carica per i servizi di sistema; il carico (load average) è annotato prima e dopo ogni comando.
 
 | Verifica (06/10) | Esito | Carico |
 |---|---|---|
@@ -1990,7 +1990,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 | `mkdocs check-links` | 81 link validi, i 3 gialli noti e il solo rosso D28 (`#rolling-return` in it/fr/es), già accettato | — |
 | `git diff --check` | pulito; l'unico file modificato è il piano | — |
 
-- La revisione unita è **pronta per l'integrazione**: l'avanzamento in fast-forward di `dev_release2`, da `d9aad0ec9` a `361c1acbd`, più il commit del journal con questo §15.
+- La revisione unita è **pronta per l'integrazione**: l'avanzamento in fast-forward di `dev_release2`, da `168b81823` a `b530d1639`, più il commit del journal con questo §15.
 - All'integrazione il client API va rigenerato (`api sync`), perché il client generato è ignorato.
 - I rossi restano T1 e CAC-011/012, già accettati (CAC va nel backlog), ed E2-001 (§15.3).
 - Alla fine del giro le porte 6156 e 6166 sono libere (`lsof` senza ascolto) e nessun processo del runner è attivo.
@@ -2010,8 +2010,8 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 ## 16. Triage di E2-001 (2026-10-06)
 
 **Avvio**:
-- G è integrato: `dev_release2` = `385238e85`, cioè `bff6dea45` più il CHANGELOG (`v1.1.0-464`). Il client API è rigenerato dal coordinatore.
-- Il ramo di L è a `bff6dea45`, pulito. Corsia 6156 e `/tmp/librefolio-r2-l`.
+- G è integrato: `dev_release2` = `5c50065a1`, cioè `5b3ab9f38` più il CHANGELOG (`v1.1.0-464`). Il client API è rigenerato dal coordinatore.
+- Il ramo di L è a `5b3ab9f38`, pulito. Corsia 6156 e `/tmp/librefolio-r2-l`.
 
 ### 16.1 ✅ Le prove già raccolte, prima di rilanciare (skill §0)
 
@@ -2065,7 +2065,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 
 ### 16.3 ✅ Il verdetto (2026-10-06): **defect** nel prodotto (`SearchSelect`), fuori dal perimetro di L
 
-- **La causa**: `openDropdown()` ignora ogni apertura che arriva meno di 200 ms dopo l'ultima chiusura (`Date.now() - lastClosedAt < 200`). La guardia viene da `f9e79d580` (17/04, «dropdown not reopening after selection on mobile») e serve contro il clic fantasma del tocco sul trigger sotto l'opzione. Però si applica a **qualunque** chiusura: mouse, tastiera, selezione.
+- **La causa**: `openDropdown()` ignora ogni apertura che arriva meno di 200 ms dopo l'ultima chiusura (`Date.now() - lastClosedAt < 200`). La guardia viene da `ed6abe07b` (17/04, «dropdown not reopening after selection on mobile») e serve contro il clic fantasma del tocco sul trigger sotto l'opzione. Però si applica a **qualunque** chiusura: mouse, tastiera, selezione.
   - Il test seleziona USD, salva, riceve il 409, annulla e riapre la tendina in circa 190 ms. Il clic vero viene scartato in silenzio, `isOpen` resta falso e l'attesa della listbox scade dopo 10 s.
   - Lo stato «riapertura bloccata» non si vede da nessuna parte, né per il test né per l'utente (skill §6). Un test non può aspettarlo senza un orologio.
 - **Perché non è il test**: nessuna posizione, nessun conteggio, nessuna attesa sbagliata. Il test fa ciò che può fare un utente veloce o un programma. E la guardia non ha un test unitario (`SearchSelect.test.ts` non la copre).
@@ -2083,8 +2083,8 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 **Vincoli del coordinatore**:
 - i test rossi li scrive il test-author, in un **file separato**, `frontend/src/lib/components/ui/select/SearchSelect.reopen.test.ts`. La famiglia Risk ha aggiunto 127 righe a `SearchSelect.test.ts` sul suo ramo;
 - la registrazione in `component-unit` (`scripts/test_runner/_frontend_utility.py`) è **una riga**, subito dopo `SearchSelect.test.ts`, non in fondo, e la `desc=` non si tocca.
-  - Su `cda8cba1c` F inserisce `AssetPickerPanel.test.ts` dopo `AssetTypeSelect.test.ts`, cioè quattro righe più giù, e cambia le `desc=` di `core-unit` e `component-unit`;
-  - prima del checkpoint, `git merge-file -p` contro la versione di `cda8cba1c` (base `9b5291c25`), salvando subito il codice d'uscita;
+  - Su `3260a6488` F inserisce `AssetPickerPanel.test.ts` dopo `AssetTypeSelect.test.ts`, cioè quattro righe più giù, e cambia le `desc=` di `core-unit` e `component-unit`;
+  - prima del checkpoint, `git merge-file -p` contro la versione di `3260a6488` (base `a6ede2c0e`), salvando subito il codice d'uscita;
 - la spec di E2-001 non si tocca;
 - i gate: `component-unit`; E2-001 ripetuto con la misura dell'intervallo; `select` e qualche `tx-import-*` con molte `SearchSelect`; `front check`.
 
@@ -2122,9 +2122,9 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 > | `tx-bulk-operations` / `tx-wac-bulk` | `10` / `10 passed` |
 >
 > - **Una firma indipendente**: Chrome conferma il secondo clic in circa 3 ms quando lo scarta (P1, P2, P4) e in 14–18 ms quando apre la lista, perché deve disegnarla (P3 e tutte le corse dopo la correzione).
-> - **`git merge-file -p`** sul runner contro `cda8cba1c` (base `9b5291c25`): **rc=0**, nessun marcatore di conflitto. Il file unito contiene sia `SearchSelect.reopen.test.ts` sia `AssetPickerPanel.test.ts` di F, e si legge senza errori.
+> - **`git merge-file -p`** sul runner contro `3260a6488` (base `a6ede2c0e`): **rc=0**, nessun marcatore di conflitto. Il file unito contiene sia `SearchSelect.reopen.test.ts` sia `AssetPickerPanel.test.ts` di F, e si legge senza errori.
 > - **Spec candidate allo stesso rosso** (scansione statica, una guardia per istanza):
->   - `tx-fx-completeness.spec.ts:370→375` sceglie EUR e poi USD **nella stessa** `SearchSelect` (`tx-form-cash-to`), con solo due asserzioni rapide in mezzo. Oggi è mascherata da `openSearchSelect` (riga 82), che riclicca finché `aria-expanded="true"` (`toPass`, 3 s; introdotta in `ef722b552`). Con la correzione il ciclo non serve più: da semplificare (backlog);
+>   - `tx-fx-completeness.spec.ts:370→375` sceglie EUR e poi USD **nella stessa** `SearchSelect` (`tx-form-cash-to`), con solo due asserzioni rapide in mezzo. Oggi è mascherata da `openSearchSelect` (riga 82), che riclicca finché `aria-expanded="true"` (`toPass`, 3 s; introdotta in `c8a77dda3`). Con la correzione il ciclo non serve più: da semplificare (backlog);
 >   - `tx-commit-all-types`, `tx-fx-implied-rate` e `fx-add-pair` sono falsi positivi: scelgono in istanze diverse;
 >   - nessun'altra spec riapre la stessa istanza in fretta.
 > - Non eseguiti: `tx-import-report-set` e `tx-import-file-selection`, sensibili ai file BRIM rimasti dopo `api brim` di stamattina. Il permesso di `--clean` è scaduto con G.
@@ -2137,7 +2137,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 > - un solo `db populate --force --clean`, autorizzato, sulla corsia 6156 (`/private/tmp/librefolio-r2-l`): i file della corsia passano da 854 a 0;
 > - poi, sull'albero di allora e senza toccare file: `tx-import-report-set` **18 passed** (carico 36,8) e `tx-import-file-selection` **2 passed**.
 >
-> **Integrazione**: `5df39167a` (fix), `e09ec9b47` (docs), `eade0c135` (journal), poi il merge `af5591991` (albero `b2e5e16d4`). `dev_release2` = `aa74797ff` (`v1.1.0-471`), con la riga 🐛 nel CHANGELOG. Nel backlog di fine round del coordinatore: CAC-011/012, il ciclo `toPass` di `openSearchSelect` (`tx-fx-completeness.spec.ts:82`), l'opzione `--trace` del runner e la nota su Invio e `triggerFocusedAt`.
+> **Integrazione**: `e93a35c22` (fix), `c7b97ede9` (docs), `542b01ab9` (journal), poi il merge `199b0f8fd` (albero `b2e5e16d4`). `dev_release2` = `11e7bd63c` (`v1.1.0-471`), con la riga 🐛 nel CHANGELOG. Nel backlog di fine round del coordinatore: CAC-011/012, il ciclo `toPass` di `openSearchSelect` (`tx-fx-completeness.spec.ts:82`), l'opzione `--trace` del runner e la nota su Invio e `triggerFocusedAt`.
 
 ## 17. Review del passo G (2026-10-06)
 
@@ -2145,7 +2145,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 
 ### 17.1 ✅ La corsia di review (2026-10-06)
 
-- **Codice**: il worktree a `af5591991`, cioè `dev_release2` meno il CHANGELOG. `front build --debug`; il server dice `v1.1.0-470-gaf5591991`.
+- **Codice**: il worktree a `199b0f8fd`, cioè `dev_release2` meno il CHANGELOG. `front build --debug`; il server dice `v1.1.0-470-gaf5591991`.
 - **Data-dir**: `/tmp/librefolio-r2-l-review`, nuova e separata da quella dei test. Un solo `test --test-port 6166 --data-dir /tmp/librefolio-r2-l-review db populate --force --clean`, autorizzato solo lì.
   - Utenti di test creati con `dev.py user --test-db create` (più `promote` dell'admin) e impostazioni globali con `init-settings`, tutti con `LIBREFOLIO_TEST_DATA_DIR` sulla stessa data-dir.
   - Verifica: cambia solo l'`app.db` della review; in questo worktree non esiste un DB di test predefinito.
@@ -2269,7 +2269,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 > - `user/transactions/import/danske-bank.en.md`, «🔀 How the set is read»: «uno per uno» cambia solo come vengono letti i file e non la spunta; un file spuntato senza plugin mostra *Select plugin…* e «Analizza» aspetta. «Leggi da solo» non cambia la spunta; solo «Togli dal set» toglie la spunta. Il file non spuntato mostra «—»: si spunta per scegliere il plugin, e Danske lo rimette nel set (dopo «uno per uno», file per file). La nota è «in cima alla scheda aperta», che risponde a R5. La pagina non ha traduzioni.
 > - `developer/frontend/components/features/import-wizard.md`: un punto nuovo sui file singoli (`handleSelectionChange`, colonna Plugin, `step2CanParse` e i due avvisi, il `{#key}` e perché); la griglia della timeline e `report-set-timeline-label`; «Read as» con `SimpleSelect` e i testid; `readSetAs`, `readFileAlone` e `removeFileFromSet` col nuovo contratto; il ritorno al set file per file.
 > - **⚠️ Fuori pista — crash dell'app verso le 14:18**, durante il lavoro del docs-writer, che non ha consegnato il rapporto:
->   - stato ritrovato: HEAD `af5591991`, 7 file modificati, niente in stage, nessuna porta occupata e nessun processo rimasto;
+>   - stato ritrovato: HEAD `199b0f8fd`, 7 file modificati, niente in stage, nessuna porta occupata e nessun processo rimasto;
 >   - i file di codice hanno l'ultima modifica alle 13:53, prima dei gate verdi, quindi i gate restano validi;
 >   - le due pagine (14:16 e 14:18) le ho rilette: sono complete, coerenti col codice e senza frasi vecchie rimaste (verificato con grep), e `importWizard.pluginRequired` e l'ordine degli avvisi esistono come la doc li descrive;
 >   - ho rifatto il passo interrotto, cioè i gate della doc: `mkdocs build` strict exit 0 con 0 WARNING/ERROR; `check-links` 81 validi, i 3 gialli noti e il solo rosso D28.
@@ -2279,12 +2279,12 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 
 - Poi il secondo giro di review sulla 6166, da capo, dopo il checkpoint.
 
-> **Commit di H** (developer, verificati dal coordinatore): `aa9c62291` fix, `c58e72368` docs, `97259ce7f` journal; `~3` = `af5591991`, albero `ddfb5a782`.
+> **Commit di H** (developer, verificati dal coordinatore): `8bd5bcb73` fix, `fb429555d` docs, `247cbea3a` journal; `~3` = `199b0f8fd`, albero `ddfb5a782`.
 > - Le correzioni ai messaggi, chieste da L: «every file keeps its tick» in C1, l'oggetto di C2 `docs(import): one by one keeps each file's tick`, e in C3 il gate in più del fix di `SearchSelect`.
 
 ## 18. La voce 8: «scrivendo CSV il primo risultato è Generic CSV» (2026-10-06), analisi senza codice
 
-**La nota del developer** (testuale, dalle verifiche sul server nightly `049d36c8d`, senza G, tramite il coordinatore): «sui file uplodati si, quelli già analizzati mostrano solo il plugin già usato!».
+**La nota del developer** (testuale, dalle verifiche sul server nightly `64772ce4f`, senza G, tramite il coordinatore): «sui file uplodati si, quelli già analizzati mostrano solo il plugin già usato!».
 
 ### 18.1 ✅ Dove e perché
 
@@ -2294,10 +2294,10 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 - **La causa verificata**:
   - `compatible_plugins` si calcola **una volta, al caricamento** (`save_uploaded_file`, `brim_provider.py:711`), col `can_parse` che ogni plugin ha in quel momento, e si salva nei metadati;
   - **non si ricalcola mai**: né all'analisi (`_move_file` cambia `status`, `processed_at` e `parsed_plugin_code`) né alla lettura (`:800` lo restituisce com'è salvato). L'unica eccezione sono i file combinati (`:1143`), già esclusa dal coordinatore;
-  - nessuna logica del frontend riduce i file analizzati al plugin usato: la colonna Plugin del nightly (`git show 049d36c8d`) è identica a quella attuale.
+  - nessuna logica del frontend riduce i file analizzati al plugin usato: la colonna Plugin del nightly (`git show 64772ce4f`) è identica a quella attuale.
   - Quindi «un file analizzato mostra solo il plugin già usato» vuol dire che, quando è stato caricato, solo quel plugin lo accettava.
 - **Il perché più probabile, da confermare**: i file analizzati sono stati caricati con una versione più vecchia.
-  - Fino al 28/09 (`9d9c26d0d`, il lettore di base col ripiego cp1252), il `can_parse` del Generic CSV apriva il file in UTF-8 stretto e dava `False` a ogni errore. Un export Windows-1252 o Latin-1, tipico di broker e banche europee e motivo della correzione `6ea71ea8d`, non riceveva il Generic CSV;
+  - Fino al 28/09 (`dbe2f7276`, il lettore di base col ripiego cp1252), il `can_parse` del Generic CSV apriva il file in UTF-8 stretto e dava `False` a ogni errore. Un export Windows-1252 o Latin-1, tipico di broker e banche europee e motivo della correzione `35db1061f`, non riceveva il Generic CSV;
   - lo stesso vale per XLSX e XLS, perché il generico legge solo `.csv` (voluto);
   - i file caricati sul nightly invece ricevono il generico: prima di G, qualunque CSV con una prima riga leggibile;
   - i campioni sintetici sono UTF-8 e non lo mostrano: il vecchio generico rifiutava solo i 2 CSV Latin-1 di Danske.
@@ -2318,7 +2318,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
   2. i file cp1252 caricati **prima del 28/09** non elencano il generico, anche quando con G potrebbe leggerli (cioè hanno `date` e `type`);
   3. **il più serio per l'alpha**: un plugin arrivato **dopo** il caricamento non viene mai offerto per quel file. E siccome `setPluginFor` (frontend) e `collect_members` (server) leggono proprio `compatible_plugins`, un export Danske caricato prima del plugin Danske **non entra mai in un set**: bisogna ricaricarlo.
 
-### 18.4 ✅ Opzioni per la correzione — decise: la voce 8 è il piano Step5 (ririlevazione dei plugin, `b0abeb07d`)
+### 18.4 ✅ Opzioni per la correzione — decise: la voce 8 è il piano Step5 (ririlevazione dei plugin, `e3f53e3cc`)
 
 | Opzione | Cosa | Superfici e costo |
 |---|---|---|
@@ -2333,7 +2333,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 
 ### 19.1 ✅ La corsia di review, da capo
 
-- Codice: HEAD `97259ce7f` (H committato; c'è anche il piano, modificato). `front build --debug`; il server dice `v1.1.0-473-g97259ce7f-dirty`, dove `-dirty` è solo il piano.
+- Codice: HEAD `247cbea3a` (H committato; c'è anche il piano, modificato). `front build --debug`; il server dice `v1.1.0-473-g97259ce7f-dirty`, dove `-dirty` è solo il piano.
 - Data-dir `/tmp/librefolio-r2-l-review`: un `test --test-port 6166 --data-dir /tmp/librefolio-r2-l-review db populate --force --clean` (autorizzato solo lì; i file passano da 14 a 0), poi gli utenti e `init-settings` come nel primo giro.
 - Server: `dev.py server --test --host 127.0.0.1 --port 6166 --data-dir /tmp/librefolio-r2-l-review --no-reload --no-scheduler`; ascolta solo su `127.0.0.1:6166`, login 200.
 - File sintetici: gli stessi del primo giro (§17.1), in `/tmp/librefolio-r2-l-review-files/`.
@@ -2365,7 +2365,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
   - `auto_discover` (`:112`) non ha lock e imposta `_discovery_done` solo alla fine. Il secondo thread salta i moduli che il primo ha già messo in `sys.modules` (prima di `exec_module`), dichiara finita la scoperta e scorre `_providers` mentre il primo sta ancora registrando i plugin.
 - **Le conseguenze**: dopo ogni riavvio del server, il primo caricamento di più file può dare 500 su un file. Peggio, un thread può vedere un catalogo **parziale** e salvare un `compatible_plugins` incompleto, che non si ricalcola più (§18).
 - **Perché i test non l'hanno visto**: nei test il catalogo è già caldo prima di ogni concorrenza.
-- `provider_registry.py` è comune (FX, asset, BRIM; ultima modifica `d54d74189`, 10/09); `dev_release2` è identico.
+- `provider_registry.py` è comune (FX, asset, BRIM; ultima modifica `4922a080e`, 10/09); `dev_release2` è identico.
 - **Proposta**:
   - un `threading.RLock` di classe attorno alla scoperta, con doppio controllo di `_discovery_done`;
   - scorrere una copia (`list(cls._providers.items())`) in `get_compatible_plugins`, `auto_detect_plugin` e `list_plugin_info`;
@@ -2376,7 +2376,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 
 **V2 — «+-16.36%» nel «Period P&L»: un difetto vero, fuori dal perimetro di L, anche su `dev_release2`.**
 - `KpiSection.svelte`: `({pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayVsPrevTotalPct}%)`. Il segno segue il delta in denaro (+91,31 €), ma la percentuale è relativa al totale precedente: quando quel totale è negativo la percentuale è negativa, e il risultato è «+» seguito da «-16.36».
-- Il file è identico su `dev_release2` (ultima modifica `53219bc00`, 30/09), quindi aggiornare la baseline non lo risolve. Va al coordinatore, che sa se un ramo non ancora integrato lo corregge.
+- Il file è identico su `dev_release2` (ultima modifica `6f5ab544e`, 30/09), quindi aggiornare la baseline non lo risolve. Va al coordinatore, che sa se un ramo non ancora integrato lo corregge.
 - C'è anche una domanda di senso: una percentuale su una base negativa o zero ha significato?
 
 ### 19.4 ⏸ Il secondo giro si ferma qui
@@ -2433,7 +2433,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 > | **Avvio a freddo, da capo a fondo** (`/tmp/libreFolio_l_v1_coldstart_uploads.sh`): server di test sulla 6156 appena avviato, nessuna chiamata BRIM prima, poi 6 upload in parallelo come fa il wizard | 3 avvii su 3: **6 × 200**, ogni `compatible_plugins` completo e giusto, 0 righe `dictionary changed size` nel log |
 > | `api brim` (per ultimo) / `check-orphans` | `73 passed` / pulito |
 > | `black --check` e `ruff check` sui due file | puliti |
-> | `dev.py lint` | 1 errore **non di L**: C901 in `pac_allocator/normalize.py:461` (`ac18ce097`, 05/10, arrivato con D). I miei file sono puliti |
+> | `dev.py lint` | 1 errore **non di L**: C901 in `pac_allocator/normalize.py:461` (`ccd444993`, 05/10, arrivato con D). I miei file sono puliti |
 >
 > - I server degli avvii a freddo li ho avviati in shell async collegate e fermati con `stop_bash`, senza `kill`. Dopo ogni avvio, la porta 6156 era libera.
 > - **La doc** (docs-writer, solo EN): `developer/architecture/patterns/registry_pattern.md`, un passo 5 «Thread-safe» nel processo di scoperta. `mkdocs build` strict ok; `check-links` col solo D28.
@@ -2446,8 +2446,8 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 
 ### 19.8 ✅ Il secondo giro riparte da capo (2026-10-06)
 
-- Codice: HEAD `172b8e616` (V1 committato); il server dice `v1.1.0-476-g172b8e616-dirty`, dove `-dirty` sono il piano e il piano del passo 5.
-- Il frontend non è cambiato dopo l'ultima build (`git diff 97259ce7f HEAD -- frontend/` è vuoto; build delle 14:44, con H).
+- Codice: HEAD `1447351c0` (V1 committato); il server dice `v1.1.0-476-g172b8e616-dirty`, dove `-dirty` sono il piano e il piano del passo 5.
+- Il frontend non è cambiato dopo l'ultima build (`git diff 247cbea3a HEAD -- frontend/` è vuoto; build delle 14:44, con H).
 - Data-dir di review: un `populate --force --clean` (autorizzato solo lì; da 3 file a 0), poi gli utenti e `init-settings`.
 - Server su `127.0.0.1:6166`, login 200, **0 chiamate BRIM** prima della review: il catalogo è freddo, come nel caso del 500.
 
@@ -2537,7 +2537,7 @@ Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui prop
 
 **Gate**: `tx-unit`, `front check`, `front build --debug`, `tx-import-report-set` a 1 e a 4 worker (col `--clean`), gli altri E2E di import, `component-unit`, `mkdocs build` strict e `check-links`.
 
-> **Permessi** (coordinatore, 2026-10-06): il `--clean` sulla 6156 prima di ogni giro E2E vale per R5, per la voce 8 e per la robustezza dell'upload, fino alla prossima integrazione. **Integrazione**: H, V1 e R5 entrano insieme in `dev_release2` subito dopo il checkpoint di R5. Il developer fonde il target (oggi `6addaba05`) nel ramo di L, L valida la revisione combinata, poi fast-forward e CHANGELOG (la riga V1, la riga R5 e una frase per H nella voce Danske).
+> **Permessi** (coordinatore, 2026-10-06): il `--clean` sulla 6156 prima di ogni giro E2E vale per R5, per la voce 8 e per la robustezza dell'upload, fino alla prossima integrazione. **Integrazione**: H, V1 e R5 entrano insieme in `dev_release2` subito dopo il checkpoint di R5. Il developer fonde il target (oggi `81a1fe750`) nel ramo di L, L valida la revisione combinata, poi fast-forward e CHANGELOG (la riga V1, la riga R5 e una frase per H nella voce Danske).
 
 > **Note implementazione — R5 (2026-10-06)**:
 > - **Il rosso** (test-author, in `tx-import-report-set.spec.ts`):
@@ -2567,20 +2567,20 @@ Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui prop
 
 ### 20.1 ✅ R5 — pronta per il checkpoint (2026-10-06)
 
-> **Commit di V1** (developer, verificati dal coordinatore): `104641cb1` fix, `2ef332763` docs, `172b8e616` journal; `~3` = `97259ce7f`, albero `f24ff6802`.
+> **Commit di V1** (developer, verificati dal coordinatore): `d9d86600c` fix, `29a91a0aa` docs, `1447351c0` journal; `~3` = `247cbea3a`, albero `f24ff6802`.
 >
 > **Il piano della voce 8** (opzione A, nella 1.2, solo analisi): [plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md](plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md), mandato al coordinatore il 2026-10-06.
 
-> **Commit di R5** (developer, verificati dal coordinatore): `c069bd064` fix, `ac142cb9d` docs, `b360b7b4b` journal; albero `01cec86fb`. Il corpo di C2 è stato corretto prima del commit: «no reading command (Read as, Read alone, Remove from the set)» e «keeps its tick and loses its plugin».
+> **Commit di R5** (developer, verificati dal coordinatore): `8c3f46858` fix, `b869ba1f6` docs, `91fcb272a` journal; albero `01cec86fb`. Il corpo di C2 è stato corretto prima del commit: «no reading command (Read as, Read alone, Remove from the set)» e «keeps its tick and loses its plugin».
 
 ## 21. Integrazione di H, V1 e R5: il treno 1 (2026-10-06)
 
-- **Il treno** (deciso dal coordinatore perché K aspettava con una revisione unita mai validata): `/tmp/libreFolio_order_train1.sh` fonde D in K, poi K in L. Il merge di L è `eba9e8bf1` (genitori `b360b7b4b` + `998ce67d4`, albero `a3569b83e` uguale alla simulazione). Nessun percorso in comune con H, V1 e R5; i cataloghi i18n si fondono a tre vie (4508 = 4505 + 3 del treno, nessuna chiave di L).
+- **Il treno** (deciso dal coordinatore perché K aspettava con una revisione unita mai validata): `/tmp/libreFolio_order_train1.sh` fonde D in K, poi K in L. Il merge di L è `f45a1df5c` (genitori `91fcb272a` + `4e99cdb9e`, albero `a3569b83e` uguale alla simulazione). Nessun percorso in comune con H, V1 e R5; i cataloghi i18n si fondono a tre vie (4508 = 4505 + 3 del treno, nessuna chiave di L).
 - **La validazione della revisione unita** (corsia 6156, un comando per volta):
 
 | Verifica | Esito |
 |---|---|
-| i18n a tre vie (base `af5591991`) | ok: niente mancante, in più o cambiato |
+| i18n a tre vie (base `199b0f8fd`) | ok: niente mancante, in più o cambiato |
 | `api sync`, `front build --debug`, `mkdocs build` | ok |
 | `front check` / `i18n audit` | **0/0** / completo, 4508 |
 | `tx-unit` / `component-unit` | `627` / `2276 passed` (101 file), exit 0 |
@@ -2594,7 +2594,7 @@ Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui prop
   - il riavvio ha svuotato `/tmp`: la data-dir della corsia (ricreata con un `populate --force --clean` completo, solo lì), gli script e i log;
   - il log di `component-unit` è andato perso: l'exit era 0, letto a schermo prima della pausa, e l'archivio del runner tiene solo i log pytest. Per questo non si può dire se l'errore non gestito di `ChartSignalsSection.test.ts`, visto da K con exit 1, fosse presente anche qui;
   - da allora gli script e i log dei giri stanno nei file di sessione (`files/train1-validation*`).
-- **Il riallineamento**: `dev_release2` = `a7d0b37ec` (il treno D, K, L, M, N più il CHANGELOG), e il ramo di L coincide con lui.
+- **Il riallineamento**: `dev_release2` = `9e4e90675` (il treno D, K, L, M, N più il CHANGELOG), e il ramo di L coincide con lui.
 - **Il CHANGELOG** del coordinatore contiene, testuali, la frase H + R5 nella voce Danske («None of these commands ticks or unticks a file…») e la riga 🐛 di V1.
 
 ## 22. Le decisioni rimandate dopo l'integrazione (2026-10-06)
@@ -2622,8 +2622,8 @@ Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui prop
   - ✅ **Decisa il 2026-10-06** (developer, testuale): «Fermarsi con un avviso: spunta tutto il set o togli la spunta». Il bottone e R6 sono fatti in [plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md](plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md).
 - **Ordine** (coordinatore): voce 8 con F1 → robustezza dell'upload, F2–F4 (con 422, già deciso) → il bottone tolto più R6. Tre checkpoint, ognuno con le sue righe 🐛.
 
-## Chiusura (verifica del 2026-10-09 su `3cceb4f90`)
+## Chiusura (verifica del 2026-10-09 su `f545b67e3`)
 
 > **Note implementazione**:
-> - Tutto il lavoro di questo piano è in `dev_release2`. I commit del codice sono `b271faaa2`, `b70e9ecce`, `75579a13b`, `fda716b46`, `791db7fee`, `8c3271235`, `9336c0e9b`, `1a3ba20f2`, `cdb8b3301`, `15c91d42a`, `aa9c62291` e `5df39167a`, più quelli della doc e del journal citati nelle sezioni.
+> - Tutto il lavoro di questo piano è in `dev_release2`. I commit del codice sono `9293307fd`, `555b44d15`, `920d04a18`, `872f6bcc0`, `d10166df4`, `6f4e68867`, `b23259a4e`, `76dd9d264`, `9a0645f8b`, `b24cb4e1f`, `8bd5bcb73` e `e93a35c22`, più quelli della doc e del journal citati nelle sezioni.
 > - **Rinviati**: A17 in `Phase_0/38_postReleaseBacklog/README.md`, voce L1. Gli altri rinvii e quelli risolti dopo sono nel piano principale, §12.

@@ -7,7 +7,7 @@
 > Poi A fa da **revisore** di E-26: lo schema della risposta di registrazione e `RegisterCard` sono file di A.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-legendary-winner` · **Branch**: `e-alfy-a-account-e-accessi`
-**HEAD di partenza (da verificare)**: il coordinatore ha committato la tua sezione di piano rimasta sporca («H-61 entrato; la fixture di G; A-62 col segnale», righe ~8840-8867 del piano) e ha fuso `dev_release2` (`2879ae3e4`) nel tuo ramo: lo SHA esatto è nel messaggio d'avvio. `npm ci` fatto per Linux.
+**HEAD di partenza (da verificare)**: il coordinatore ha committato la tua sezione di piano rimasta sporca («H-61 entrato; la fixture di G; A-62 col segnale», righe ~8840-8867 del piano) e ha fuso `dev_release2` (`85fda260e`) nel tuo ramo: lo SHA esatto è nel messaggio d'avvio. `npm ci` fatto per Linux.
 **Corsia**: porta `6185`, cartella dati `/tmp/librefolio-r13-a`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/02_accounts/plan-phase01Accounts.prompt.md`: A-62 (righe ~8739-8800) e la tua sezione ~8840-8867. Backlog A-62 ~5172-5180.
 

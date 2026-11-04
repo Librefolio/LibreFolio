@@ -44,10 +44,10 @@ ordered layers that use one another.")
 - **`utils/` holds leaf functions only: they never import services.** Anything that needs FX, assets or other
   services belongs to a service layer, such as `financial_math/` ([[decisions/financial-math-one-home]]). The rule is
   in `.github/instructions/backend.instructions.md`, right after the «Financial Math — One Home» section (commit
-  `45691452a`).
+  `a65eff5d8`).
 - This is also why P put the average cost in a *service* layer and not in `utils/financial/`: it calls the FX service
   ([[decisions/financial-math-single-average-cost]], «Placement»).
-- At `5d0585595` the code already follows the rule, with one exception: the `utils` modules import only other
+- At `9f63eec22` the code already follows the rule, with one exception: the `utils` modules import only other
   `utils` modules, except `decimal_utils.py`, whose truncation to the database precision imports `db.models`
   (`FxRate`, `PriceHistory`). And `fx.py` still imports `clear_cache` lazily in three places, "to avoid a utils→services
   import cycle", although it already imports `get_ttl_cache` from `cache_utils` at the top and `cache_utils` imports no
@@ -55,7 +55,7 @@ ordered layers that use one another.")
 
 ### BU1 — delivered (2026-10-12, train 50)
 
-- **One commit**, `346b7e292` ("refactor(utils): group utils into typed folders"), merged with train 50 (`bdc078efc`):
+- **One commit**, `71a3d9e46` ("refactor(utils): group utils into typed folders"), merged with train 50 (`0af65b270`):
   `utils/asset/{sector,geo,identifier,translation}.py`, `utils/fx/currency.py`, `utils/runtime/{version,network,cache}.py`.
   `datetime_utils`, `json_utils` and `decimal_utils` stay at the root; no `_utils` suffix inside the folders; the three
   new `__init__.py` hold only a docstring, and the root's docstring states the leaf rule and the map. The developer
@@ -73,7 +73,7 @@ ordered layers that use one another.")
 
 ### BU2 — delivered (2026-10-12, train 53)
 
-- **One commit**, `8dae5cc6e` ("refactor(db): move DB precision out of utils"), merged with train 53 (`f0f3de0d9`):
+- **One commit**, `c8dda3958` ("refactor(db): move DB precision out of utils"), merged with train 53 (`cc8453e79`):
   `get_model_column_precision`, `truncate_to_db_precision`, `truncate_priceHistory` and `truncate_fx_rate` moved
   unchanged from `utils/decimal_utils.py` to the new `backend/app/db/precision.py`, next to the models they read.
   `decimal_utils.py` keeps only `parse_decimal_value` and no longer imports `db.models`, SQLModel or SQLAlchemy, so

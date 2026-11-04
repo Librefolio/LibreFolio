@@ -18,7 +18,7 @@ Skill di riferimento per chi esegue: `brim-plugin`.
 > `broker_etoro.py:70` definisce
 > `FEE_TYPES = ("withdraw fee", "withdrawal conversion fee", "conversion fee")`, mentre
 > `SKIP_TYPES` contiene ora solo `overnight fee`, `overnight refund`, `sdrt`.
-> Commit `ebba209c5` *«feat(brim): refine CA and eToro imports»*. Il gate G-ETORO chiedeva un
+> Commit `d31797b75` *«feat(brim): refine CA and eToro imports»*. Il gate G-ETORO chiedeva un
 > export reale con una fee non-zero: **è arrivato**.
 >
 > Tutto ciò che segue è la **storia del problema**, conservata per il ragionamento sul doppio
@@ -111,7 +111,7 @@ il raccordo in asset_source precede il trasloco P4-1.
 
 ## Analisi per task — 2026-09-07
 
-Baseline `a9138140`; rischi, dipendenze e DoD in [06_piano_sprint.md](06_piano_sprint.md).
+Baseline `9d8b5c54`; rischi, dipendenze e DoD in [06_piano_sprint.md](06_piano_sprint.md).
 
 | ID | Esito | Sprint |
 |---|---|---|

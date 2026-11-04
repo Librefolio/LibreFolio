@@ -3,7 +3,7 @@
 > **Stato**: ✅ approvato dal developer il 24/09/2026 (Q-C0-F): «ho letto il piano e guardato le ascii
 > mi paiono coerenti, quello che avevamo pianificato in origine, hai il mio via libera, ovviamente poi
 > faremo la review». Le decisioni sulle domande di §8 sono in §8.1.1.
-> **Data**: 2026-09-24 · **Baseline**: `f1047f766` · **Workstream**: D (allocatore PAC)
+> **Data**: 2026-09-24 · **Baseline**: `9df0b7b14` · **Workstream**: D (allocatore PAC)
 > **Piano padre**: [`plan-phase00PacRound5PostMerge.prompt.md`](plan-phase00PacRound5PostMerge.prompt.md), Passo C0
 > **Target approvato**: [`../plan-phase00PacRebalancerUiTarget.prompt.md`](../plan-phase00PacRebalancerUiTarget.prompt.md)
 > **Wire misurato**: `backend/app/schemas/pac_allocator.py`, `backend/app/schemas/portfolio.py`, `backend/app/schemas/tools.py`

@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `385238e85` (fast-forward confermato dal coordinator; `dev_release2` = `ace3fd8ac`, solo `TODO_FUTURI.md` in più) |
+| **Baseline** | `5c50065a1` (fast-forward confermato dal coordinator; `dev_release2` = `49ed7dccc`, solo `TODO_FUTURI.md` in più) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
 | **Copia di prod** | **non autorizzata**: va chiesta ogni volta (coordinator, 06/10). Di default dati sintetici, per esempio un asset di test con un nome di 58 caratteri. Quella dell'analisi è stata fatta senza permesso, poi cancellata (vedi 16.0) |
 | **Vincolo** | in `assets/[id]/+page.svelte` modifiche minime; il nuovo in componenti a parte (la famiglia Risk lavora sui componenti di rischio del dettaglio) |
@@ -145,7 +145,7 @@ Oggi:
    solo dati sintetici.
 5. **Coordinator (06/10, 11:07)**: «Confermato, parti». Checkpoint diviso:
    - il primo dopo le voci 1 e 3, piccole e indipendenti, così entrano subito in `dev_release2`;
-   - la voce 2 col suo checkpoint, compreso il `merge-file` contro `f6b7273f8`;
+   - la voce 2 col suo checkpoint, compreso il `merge-file` contro `c4718e8a0`;
    - il test che protegge la copia di `assetScope` deve nominare nel messaggio d'errore il file da allineare;
    - 2b nel backlog di fine round.
 
@@ -175,7 +175,7 @@ Oggi:
 | 1 | `src/htmlInterpolation.gate.test.ts` | il gate XSS dello step 13 deve conoscere il nuovo helper, se riceve HTML d'etichetta |
 | 2 | nuovi `components/assets/AssetBrowseNav.svelte`, `components/assets/AssetBrowseOrder.svelte`, `lib/stores/assets/assetBrowseContext.svelte.ts` | nuovi |
 | 2 | `assets/[id]/+page.svelte` | solo import e una riga nell'intestazione (`:2681-2685`) |
-| 2 | `assets/+page.svelte` | **la riscrive la famiglia Risk**: al massimo tre righe (import, `AssetBrowseOrder`, `browseSegment`), fuori dalle zone di Risk (`:205-487`, `:1258-1480`); `git merge-file` contro `f6b7273f8` prima del checkpoint, codice d'uscita salvato |
+| 2 | `assets/+page.svelte` | **la riscrive la famiglia Risk**: al massimo tre righe (import, `AssetBrowseOrder`, `browseSegment`), fuori dalle zone di Risk (`:205-487`, `:1258-1480`); `git merge-file` contro `c4718e8a0` prima del checkpoint, codice d'uscita salvato |
 | 2 | `AssetTable.svelte`, `table/DataTable.svelte`, `stores/app/navigationStore.ts` | condivisi, solo aggiunte; nessun altro ramo li tocca oggi. Su `DataTable` più avanti F aggiunge le opzioni di `navigateToRowId`: i test di K stanno in `DataTable.rowOrder.test.ts` |
 | 2 | i18n: `assetDetail.browse.{previous,next,position}` ×4 con `dev.py i18n add` | in aggiunta |
 | 2 | doc utente `mkdocs_src/docs/user/assets/detail/` (EN, docs-writer) | debito di traduzione dichiarato |
@@ -255,7 +255,7 @@ Oggi:
   > - **`routes/(app)/assets/+page.svelte` la cambia molto la famiglia Risk** (+340/−229 righe: import, script `:205-487`,
   >   template `:1258-1480`). Si tocca il meno possibile, poche righe al massimo; l'ordine va pubblicato da dentro
   >   `AssetTable` e dalla griglia. Prima del checkpoint, `git merge-file` contro la versione della famiglia
-  >   (`f6b7273f8`), salvando subito il codice d'uscita;
+  >   (`c4718e8a0`), salvando subito il codice d'uscita;
   > - `DataTable.svelte`: la callback `onRowOrderChange` va bene, solo aggiunte. Più avanti F aggiungerà le opzioni di
   >   `navigateToRowId`. I test di K vanno in un file separato (`DataTable.rowOrder.test.ts`), non in coda a
   >   `DataTable.test.ts`;
@@ -329,8 +329,8 @@ Oggi:
   > - 🔄 Condivisione: niente più «sul mio server» nei messaggi suggeriti; gli stessi hashtag (`#LibreFolio
   >   #OpenSource #SelfHosted #PortfolioTracker #PersonalFinance`) su tutti i social e in tutte le lingue.
 - [x] **16.3 Voce 2** (2b nel backlog, decisione del developer) — test rossi, store, componente, callback, doc. Commit
-  `feat(ui): browse assets from the detail page`. ✅ 2026-10-06 (iniziata alle 14:05, base `56c718c23`; `dev_release2`
-  = `c77c7f09e`, solo il CHANGELOG in più).
+  `feat(ui): browse assets from the detail page`. ✅ 2026-10-06 (iniziata alle 14:05, base `3daf831dd`; `dev_release2`
+  = `5cc2c1a74`, solo il CHANGELOG in più).
   > **Progetto definitivo** (dopo le decisioni e i vincoli del coordinator):
   > - `components/assets/assetBrowse.ts`, modulo puro, solo in memoria. Niente `sessionStorage`: conta da dove si è
   >   entrati, non cosa resta dopo un ricaricamento. Contiene:
@@ -403,7 +403,7 @@ Oggi:
   > - **regressioni** (`/tmp/libreFolio_k16_2_reg_*.log`): `asset-mobile-layout` 14/14, `asset-detail` 29/29,
   >   `asset-list` 28/28, `asset-name-xss` 2/2, `toolbar-width-sweep` 15/15, `core-unit` 3001/3001 (106 file),
   >   `component-unit` 2265/2265 (100 file), `front check` 0/0, `check-orphans` pulito (97 spec, 291 unit);
-  > - **`git merge-file` contro la punta di A, `001bebf12`** (14:36, contiene `f6b7273f8`; base `9b5291c25`; codici
+  > - **`git merge-file` contro la punta di A, `abe23546b`** (14:36, contiene `c4718e8a0`; base `a6ede2c0e`; codici
   >   in `/tmp/libreFolio_k16_2_mergefile_001bebf12/exit_codes.txt`):
   >   - **rc=0 su tutti i 12 file modificati**, compresi quelli che A cambia: lista, 4 cataloghi i18n,
   >     `_frontend_utility.py`;
@@ -434,7 +434,7 @@ Oggi:
   >
   > **Segnalazioni per il backlog, non di K**:
   > - `mkdocs check-links` rosso per un'ancora già presente, `user/assets/detail/chart/#rolling-return`
-  >   (`[id]/+page.svelte`, commit `e3af27ff3`): l'ancora esiste solo in `chart.en.md`;
+  >   (`[id]/+page.svelte`, commit `fe8e57d3c`): l'ancora esiste solo in `chart.en.md`;
   > - la pagina utente della lista dice che la ricerca trova anche ISIN, ticker e broker, ma il codice cerca solo nel
   >   nome;
   > - il cambio di tab del dettaglio ricostruisce l'URL da `$page.url` (`[id]/+page.svelte:2666`), quindi rimette anche
@@ -458,7 +458,7 @@ Oggi:
   >   - E2E `asset-browse` **8/8** (`…_e2e_green3.log`);
   >   - regressioni (`/tmp/libreFolio_k16_2_reg2_*.log`): `asset-detail` 29/29, `asset-mobile-layout` 14/14,
   >     `component-unit` 2268/2268;
-  > - **merge-file** rifatto contro la punta di A, sempre `001bebf12` (`exit_codes.txt`): **rc=0 su tutti i 14 file
+  > - **merge-file** rifatto contro la punta di A, sempre `abe23546b` (`exit_codes.txt`): **rc=0 su tutti i 14 file
   >   modificati**, comprese le 2 pagine di doc, di cui A cambia `user/assets/index.en.md`. Nessun file nuovo in
   >   comune, nessun marcatore di conflitto nella lista unita.
   >
@@ -491,6 +491,6 @@ L'ordine è dalla voce più piccola e sicura alla più larga: la 2 è l'unica ch
 
 ## Seguito
 
-- La validazione del treno (`998ce67d4`) ha trovato un difetto di TreeSelect: lavoro differito non annullato quando il
+- La validazione del treno (`4e99cdb9e`) ha trovato un difetto di TreeSelect: lavoro differito non annullato quando il
   componente viene distrutto, più il `document` globale.
 - Ha un round a sé: [`plan-phase00TaxonomySelectStep16Round1-TreeSelectTeardown.prompt.md`](plan-phase00TaxonomySelectStep16Round1-TreeSelectTeardown.prompt.md).

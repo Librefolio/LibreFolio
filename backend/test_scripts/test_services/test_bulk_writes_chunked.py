@@ -1,7 +1,7 @@
 """MF-SEC9a (E's review of R13-SEC9) — the bulk writes of rates and prices run in chunks SQLite can parse, under a cap,
 and a failure never echoes its error.
 
-The defect, on HEAD 04955c498. SQLite parses ``a OR b OR c …`` as a chain one level deeper per term and refuses a chain
+The defect, on HEAD fbbf55b63. SQLite parses ``a OR b OR c …`` as a chain one level deeper per term and refuses a chain
 of a thousand («Expression tree is too large (maximum depth 1000)»). Four statements had one OR term per item:
 
 - ``fx/storage.upsert_rates_bulk`` read the stored keys of every rate in ONE statement: from about 1 000 rates it raised
@@ -15,7 +15,7 @@ of a thousand («Expression tree is too large (maximum depth 1000)»). Four stat
 
 None of these routes had a cap, and their failures echoed ``str(e)``: an SQL error names the schema.
 
-MF-SEC9e, on HEAD 79d4ca239: ``bulk_delete_prices`` read its counts with one awaited ``COUNT`` per range — 10 000 at the
+MF-SEC9e, on HEAD 117c6d7f0: ``bulk_delete_prices`` read its counts with one awaited ``COUNT`` per range — 10 000 at the
 cap —, an asset's count the sum over its item's ranges (a row in two overlapping ranges counted twice) and overwritten
 item by item (an asset named by two items answered the last item's count in both results); an empty request built a
 response without ``success_count``, a ``ValidationError``, and ``DELETE /assets/prices`` answered 500.
@@ -60,7 +60,7 @@ The cases of 2-4 also run at 500 and 501 OR terms, the edge of one chunk. The ba
 ``test_barrier_this_sqlite_refuses_one_or_of_1500_terms``, proves the SQLite these tests run on answers one OR of 500
 terms and refuses one of 1 500: without it a build with a higher limit would let the import-sized cases pass untested.
 
-Red on HEAD 79d4ca239 (MF-SEC9e):
+Red on HEAD 117c6d7f0 (MF-SEC9e):
 
 - ``test_bulk_delete_prices_counts_a_row_in_two_ranges_once`` (every case): one COUNT per range, summed — 9, 12, 2 for
   7, 10, 1 rows deleted;
@@ -71,17 +71,17 @@ Red on HEAD 79d4ca239 (MF-SEC9e):
 - ``test_delete_prices_route_of_nothing_answers_200``: 500;
 - ``test_bulk_delete_prices_reads_its_counts_per_chunk_not_per_range`` (both cases): 2 000 SELECTs, one per range.
 
-Green on HEAD 79d4ca239 too (guards): ``test_guard_bulk_delete_prices_inclusive_bounds_and_adjacent_ranges`` and
+Green on HEAD 117c6d7f0 too (guards): ``test_guard_bulk_delete_prices_inclusive_bounds_and_adjacent_ranges`` and
 ``test_guard_bulk_delete_prices_disjoint_ranges_match_a_brute_force_reference`` (every seed) — without a shared day or
 an asset named twice, a COUNT per range summed is exact; they hold the merging to inclusive ends, an end defaulting to
 the start, adjacent ranges losing or doubling no day, ranges out of order, counts summed across chunks.
 
-Red on HEAD d63558abb (the chunks in, the matching still a scan):
+Red on HEAD 255c56d40 (the chunks in, the matching still a scan):
 ``test_delete_rates_bulk_matching_is_bisection_not_a_scan`` (both cases): every deletion compared with every date of its
 pair (``start <= day <= end``: 4 000 - k comparisons for the k-th single day), the budget of 88 000 passed within its
 first 25 deletions of 2 000 — at least N × D = 4 000 000 comparisons for the whole call.
 
-Red on HEAD 04955c498:
+Red on HEAD fbbf55b63:
 
 - ``test_chunks_*`` (every case): no ``utils/sql_chunks.py``;
 - ``test_upsert_rates_bulk_stores_every_rate_of_an_import[1500-import-sized]``,
@@ -97,7 +97,7 @@ Red on HEAD 04955c498:
 Green before and after (guards): the barrier; the cases of 2-4 at 500 and 501 OR terms (under SQLite's limit);
 ``test_guard_fx_upsert_route_stores_1500_rates`` (the route upserts one rate at a time, so an import of any size passed);
 ``test_guard_exactly_10000_items_pass``; ``test_guard_post_prices_value_error_keeps_its_domain_message``;
-``test_guard_delete_rates_bulk_matches_a_brute_force_scan`` (every seed: the scan of d63558abb is the reference's own
+``test_guard_delete_rates_bulk_matches_a_brute_force_scan`` (every seed: the scan of 255c56d40 is the reference's own
 algorithm — the guard is there for the bisection, whose ends and empty slices a scan never had to get right).
 
 Isolation: PURE — no lane database, no server, no network. Each test that stores anything has its own in-memory SQLite
@@ -339,7 +339,7 @@ async def test_upsert_rates_bulk_stores_every_rate_of_an_import(session, count):
     """``upsert_rates_bulk`` with ``count`` rates, two pairs of three inverted: every rate stored at its value, each
     answered ``inserted``; called again with new values, each answered ``updated`` and every value replaced.
 
-    Red on HEAD 04955c498 at 1 500: ``OperationalError`` «Expression tree is too large» (one OR of every rate's key).
+    Red on HEAD fbbf55b63 at 1 500: ``OperationalError`` «Expression tree is too large» (one OR of every rate's key).
     """
     print_section(f"MF-SEC9a: upsert_rates_bulk, {count} rates")
     rows, expected = _upsert_rows(count, again=False)
@@ -381,7 +381,7 @@ async def test_delete_rates_bulk_counts_each_deletion_of_an_import(session, sing
     GBP/USD has rates, one of a pair without any rate. Each deletion answers its exact counts — 1, 10, 5, 0, 0 —, a
     message only where it found nothing; every other rate stays stored, GBP/USD whole.
 
-    Red on HEAD 04955c498 at 1 504: ``OperationalError`` «Expression tree is too large» (one OR of every deletion).
+    Red on HEAD fbbf55b63 at 1 504: ``OperationalError`` «Expression tree is too large» (one OR of every deletion).
     """
     terms = singles + 4
     print_section(f"MF-SEC9a: delete_rates_bulk, {terms} deletions")
@@ -486,7 +486,7 @@ async def test_delete_rates_bulk_matching_is_bisection_not_a_scan(session, span)
     compared at least once — the counter sees the matching, else «at most 88 000» would hold for a matching it cannot
     see. The counts stay exact.
 
-    Red on HEAD d63558abb: each deletion scans every date of its pair (``start <= day <= end``, one or two comparisons
+    Red on HEAD 255c56d40: each deletion scans every date of its pair (``start <= day <= end``, one or two comparisons
     per date), the budget passed within the first 25 deletions.
     """
     print_section(f"MF-SEC9a LOW-1: delete_rates_bulk, {STEP_DELETIONS} deletions over {STEP_DATES} dates of one pair")
@@ -593,7 +593,7 @@ async def test_guard_delete_rates_bulk_matches_a_brute_force_scan(session, seed)
     an end before the start counts 0, a pair without rates 0 — with ``deleted_count`` equal to it and a message only
     where it is 0; the rates deleted are exactly the union the scan finds, by id; every other rate stays stored.
 
-    Green on HEAD d63558abb too: its scan is the reference's algorithm. A guard for the bisection: its inclusive end, its
+    Green on HEAD 255c56d40 too: its scan is the reference's algorithm. A guard for the bisection: its inclusive end, its
     first and last day, and its empty slices are what a scan never had to get right.
     """
     rng = random.Random(seed)
@@ -649,7 +649,7 @@ async def test_bulk_delete_prices_deletes_every_range_of_an_import(session, sing
     of asset B (days 4k to 4k + 2): ``total_deleted`` is ``singles + 3 × triples``, A's count ``singles``, B's
     ``3 × triples``; every other price stays stored, those of a third asset C all of them.
 
-    Red on HEAD 04955c498 at 1 500 ranges: ``OperationalError`` «Expression tree is too large» (one DELETE ORing every
+    Red on HEAD fbbf55b63 at 1 500 ranges: ``OperationalError`` «Expression tree is too large» (one DELETE ORing every
     range).
     """
     terms = singles + triples
@@ -689,7 +689,7 @@ async def test_stored_rates_reads_every_rate_matching_1500_conditions(session):
     """``_stored_rates(session, conditions)`` with 1 500 single-day conditions on EUR/USD — every other day of 3 000 —
     answers exactly those 1 500 rates: none of the other days, none of GBP/USD's on the same days.
 
-    Red on HEAD 04955c498: no ``_stored_rates`` in ``fx/sync.py`` (the read was one OR inside
+    Red on HEAD fbbf55b63: no ``_stored_rates`` in ``fx/sync.py`` (the read was one OR inside
     ``ensure_rates_multi_source``: the case below shows what that cost).
     """
     print_section("MF-SEC9a: fx/sync._stored_rates, 1 500 conditions")
@@ -740,7 +740,7 @@ async def test_sync_change_detection_holds_over_1035_pairs(session, monkeypatch)
     another, AED/EUR not at all. ``total_changed`` is 2 (the new one and the different one), and afterwards every pair
     holds the fetched rate.
 
-    Red on HEAD 04955c498: the one OR of 1 035 pairs is refused, caught as «table may not exist», and every fetched rate
+    Red on HEAD fbbf55b63: the one OR of 1 035 pairs is refused, caught as «table may not exist», and every fetched rate
     counted as a change: ``total_changed`` 45.
     """
     print_section("MF-SEC9a: ensure_rates_multi_source, 46 currencies (1 035 pairs)")
@@ -777,7 +777,7 @@ async def test_fx_delete_route_answers_1500_separate_days(session):
     as USD/EUR — the way the FX page sends separate days: 200, each deletion EUR/USD on its day with 1 existing and 1
     deleted, ``total_deleted`` 1 500, no error; the 1 500 other days stay stored.
 
-    Red on HEAD 04955c498: 500 (``delete_rates_bulk`` refused by SQLite, the SQL echoed in the detail).
+    Red on HEAD fbbf55b63: 500 (``delete_rates_bulk`` refused by SQLite, the SQL echoed in the detail).
     """
     print_section("MF-SEC9a: DELETE /fx/currencies/rate, 1 500 separate days")
     await _seed_fx(session, [(_day(offset), "EUR", "USD", Decimal("1.1")) for offset in range(2 * IMPORT_SIZED)])
@@ -805,7 +805,7 @@ async def test_guard_fx_upsert_route_stores_1500_rates(session):
     """``POST /fx/currencies/rate`` with 1 500 rates, two pairs of three inverted: 200, each answered ``inserted`` with
     its pair in storage order and its day, and every rate stored at its value.
 
-    Green on HEAD 04955c498 too: the route upserts one rate at a time, so an import of any size passed (slowly).
+    Green on HEAD fbbf55b63 too: the route upserts one rate at a time, so an import of any size passed (slowly).
     """
     print_section("MF-SEC9a guard: POST /fx/currencies/rate, 1 500 rates")
     rows, expected = _upsert_rows(IMPORT_SIZED, again=False)
@@ -940,7 +940,7 @@ async def test_more_than_10000_items_refused_before_any_write(monkeypatch, arran
     every asset (two assets of 5 001, each under the cap alone) — answer 422 ``bulk_too_many_items``, ``max_items``
     10 000, ``items`` the count; the service is never called and the session never touched.
 
-    Red on HEAD 04955c498: no cap; the service was called with every item.
+    Red on HEAD fbbf55b63: no cap; the service was called with every item.
     """
     route = arrange(monkeypatch)
     print_section(f"MF-SEC9a: {route.items} items refused")
@@ -967,7 +967,7 @@ async def test_guard_exactly_10000_items_pass(monkeypatch, arrange):
     """Exactly 10 000 items pass the cap: every item reaches the service — once per rate for the FX upsert, in one call
     otherwise — and the route answers each.
 
-    Green on HEAD 04955c498 too: the edge the cap must keep open.
+    Green on HEAD fbbf55b63 too: the edge the cap must keep open.
     """
     route = arrange(monkeypatch)
     print_section(f"MF-SEC9a guard: {route.items} items pass")
@@ -1093,7 +1093,7 @@ async def test_a_failure_never_echoes_its_error(monkeypatch, arrange, module):
     500, or 200 / 400 with the item's error text naming the item — and nothing it gives the caller holds the SQL; the
     error itself is logged, with its exception.
 
-    Red on HEAD 04955c498: the detail or the error text was ``str(e)``, the SQL echoed to the caller.
+    Red on HEAD fbbf55b63: the detail or the error text was ``str(e)``, the SQL echoed to the caller.
     """
     call, status, names = arrange(monkeypatch)
     log = _RecordingLogger()
@@ -1124,7 +1124,7 @@ async def test_guard_post_prices_value_error_keeps_its_domain_message(monkeypatc
     with its own message.
 
     A currency mismatch is no ``ValueError`` of a manual upsert since X-R71: it answers 422 ``price_currency_mismatch``
-    (``api prices-currency-coherence``). Green on HEAD 04955c498 too: only the 500 lost its echo.
+    (``api prices-currency-coherence``). Green on HEAD fbbf55b63 too: only the 500 lost its echo.
     """
     print_section("MF-SEC9a guard: POST /assets/prices, a domain error")
     message = "Too many digits in the prices of asset 1: 1 value(s): 1990-01-01 (close)"
@@ -1231,7 +1231,7 @@ async def test_bulk_delete_prices_counts_a_row_in_two_ranges_once(session, spans
     [d5, d5] —, A and B priced on d0 to d14: A's ``deleted_count`` and ``total_deleted`` are the rows deleted, each once
     (7; 10; 1); every other price of A and all of B's kept.
 
-    Red on HEAD 79d4ca239: one COUNT per range, summed — a row in two ranges counted twice (9; 12; 2) while the DELETE
+    Red on HEAD 117c6d7f0: one COUNT per range, summed — a row in two ranges counted twice (9; 12; 2) while the DELETE
     removed it once, ``deleted_count`` above ``total_deleted``.
     """
     print_section(f"MF-SEC9e: bulk_delete_prices, one asset's ranges {spans}")
@@ -1261,7 +1261,7 @@ async def test_bulk_delete_prices_counts_an_asset_over_every_item_naming_it(sess
     and B priced on d0 to d14: both results of A answer A's rows over both items, each once (5 = 3 + 2; 7), B's its 1;
     ``total_deleted`` their sum over the distinct assets (6; 8); the rows gone exactly those.
 
-    Red on HEAD 79d4ca239: the per-asset count overwritten item by item, both results of A answering the LAST item's
+    Red on HEAD 117c6d7f0: the per-asset count overwritten item by item, both results of A answering the LAST item's
     count (2; 4), the counts no longer adding up to ``total_deleted``.
     """
     print_section(f"MF-SEC9e: bulk_delete_prices, asset A in two items {first} and {second}")
@@ -1284,7 +1284,7 @@ async def test_bulk_delete_prices_of_nothing_answers_an_empty_response(session):
     """``bulk_delete_prices([])`` answers a valid empty response — no result, ``success_count`` 0, ``total_deleted`` 0, no
     error — and deletes nothing.
 
-    Red on HEAD 79d4ca239: it built ``FABulkDeleteResponse(deleted_count=0, results=[])`` — no ``success_count``, no
+    Red on HEAD 117c6d7f0: it built ``FABulkDeleteResponse(deleted_count=0, results=[])`` — no ``success_count``, no
     ``total_deleted``, a field the model forbids —: ``ValidationError``.
     """
     print_section("MF-SEC9e: bulk_delete_prices of nothing")
@@ -1307,7 +1307,7 @@ async def test_delete_prices_route_of_nothing_answers_200(session):
     """``DELETE /assets/prices`` with no item, its coroutine called directly on the private database: the empty response,
     valid against the route's ``response_model`` (200); nothing deleted.
 
-    Red on HEAD 79d4ca239: the service's ``ValidationError`` caught by the route, 500 «Internal error while deleting
+    Red on HEAD 117c6d7f0: the service's ``ValidationError`` caught by the route, 500 «Internal error while deleting
     prices».
     """
     print_section("MF-SEC9e: DELETE /assets/prices with no item")
@@ -1340,7 +1340,7 @@ async def test_bulk_delete_prices_reads_its_counts_per_chunk_not_per_range(sessi
     counted as the engine hands them to the driver: a step count, not a time. Barrier: a SELECT and a DELETE are seen —
     the counter sees the call. The counts and the rows are the brute-force reference's; a fifth asset keeps its prices.
 
-    Red on HEAD 79d4ca239: 2 000 SELECTs, one awaited COUNT per range — 10 000 at the cap.
+    Red on HEAD 117c6d7f0: 2 000 SELECTs, one awaited COUNT per range — 10 000 at the cap.
     """
     print_section(f"MF-SEC9e: bulk_delete_prices, {STATEMENT_ASSETS * STATEMENT_RANGES_PER_ASSET} ranges of {length + 1} day(s), statements sent")
     asset_ids = await _assets(session, STATEMENT_ASSETS + 1)
@@ -1365,7 +1365,7 @@ async def test_guard_bulk_delete_prices_inclusive_bounds_and_adjacent_ranges(ses
     — 2, each range its day alone; B [d0, d2] and [d3, d4], adjacent — 5; C [d20, d25] and [d10, d12], out of order — 9;
     D, without prices, [d0, d5] — 0. ``total_deleted`` 16, every other price kept, as the brute-force reference says.
 
-    Green on HEAD 79d4ca239 too: without a shared day or an asset named twice, one COUNT per range summed is exact. A
+    Green on HEAD 117c6d7f0 too: without a shared day or an asset named twice, one COUNT per range summed is exact. A
     guard for the merging: inclusive ends, an end defaulting to the start, adjacent ranges losing or doubling no day,
     ranges given out of order.
     """
@@ -1444,7 +1444,7 @@ async def test_guard_bulk_delete_prices_disjoint_ranges_match_a_brute_force_refe
     asset, adjacent and separate ranges sent out of order, an asset without prices, more intervals than one chunk —:
     counts, ``total_deleted`` and rows kept as the brute-force reference (``_assert_deleted_as_the_reference``).
 
-    Green on HEAD 79d4ca239 too: without a shared day or an asset named twice, one COUNT per range summed is exact. A
+    Green on HEAD 117c6d7f0 too: without a shared day or an asset named twice, one COUNT per range summed is exact. A
     guard for the merging and for the counts summed across chunks.
     """
     rng = random.Random(seed)
@@ -1471,7 +1471,7 @@ async def test_bulk_delete_prices_matches_a_brute_force_reference(session, seed)
     chunk —: each result its asset's distinct rows deleted, the counts of the distinct assets adding up to
     ``total_deleted``, every other row kept, as the brute-force reference (``_assert_deleted_as_the_reference``).
 
-    Red on HEAD 79d4ca239 (every seed): rows in two ranges counted twice, and each asset answered its last item's count.
+    Red on HEAD 117c6d7f0 (every seed): rows in two ranges counted twice, and each asset answered its last item's count.
     """
     rng = random.Random(seed)
     asset_ids = await _assets(session, PRICED_ASSETS + 1)

@@ -31,7 +31,7 @@ tagliato».
 
 ## Consequences — today's code does not follow the verdict everywhere
 
-Checked at `b4acfb250`: the «cut» tracking error and information ratio are still in the contracts (`schemas/risk.py`)
+Checked at `a7424a4fa`: the «cut» tracking error and information ratio are still in the contracts (`schemas/risk.py`)
 and on the legacy Asset Detail panel ([[features/F-113]]); the «deferred» optimization exists as a plugin
 (`portfolio_optimization`, through riskfolio-lib), with its own open item A6 on [[features/F-110]]. Read the table as
 the September plan; where later work kept a tool, the binding list is [[concepts/risk-binding-decisions]].

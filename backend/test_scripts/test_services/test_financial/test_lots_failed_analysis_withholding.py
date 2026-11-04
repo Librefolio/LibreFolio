@@ -34,11 +34,11 @@ so none is given — as Yield on Cost already withholds its number when the same
   short one, names the GIVING leg, never the lower id of the pair (S4).
 - DEGRADED and COMPLETE analyses are unchanged (S5, S6).
 
-TODAY (base ``2f4ef68e6``) a FAILED analysis returns every section, filled with the figures of a replay it calls
+TODAY (base ``7814d25fe``) a FAILED analysis returns every section, filled with the figures of a replay it calls
 unreliable, and every issue of those sections; its failure issues carry ``transaction_id``, ``lot_id``, ``broker_id``,
 ``related_transaction_id`` (and ``missing_quantity``) only; a transfer issue names the departure event's
 ``transaction_id`` — the lower id of a same-day pair, or the earlier-dated leg. Each red says what it read today in its
-docstring. Y-30's reds read, today (base ``7dbd46aa6``), ValueError: ``'MARKET_PRICE_HISTORY' is not a valid
+docstring. Y-30's reds read, today (base ``b6651cfa1``), ValueError: ``'MARKET_PRICE_HISTORY' is not a valid
 LotAnalysisType`` — the analysis is asked for by its string, so the rest of the file collects.
 
 Every test owns its rows: users, brokers and assets carry a uuid4 (``_scope_boundary_books.py``), written into the test's

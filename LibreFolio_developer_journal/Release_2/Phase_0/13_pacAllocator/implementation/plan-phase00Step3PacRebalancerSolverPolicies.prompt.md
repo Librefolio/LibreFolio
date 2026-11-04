@@ -10,7 +10,7 @@ capacity/runtime. Vedi §16.
 > - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
 > - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
 >   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
-> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+> - P1 `analyze` rimosso il 2026-09-21 (`704ba66a3`).
 >
 > L'avanzamento è nella tabella del [README](README.md) e nel
 > [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
@@ -357,7 +357,7 @@ services pac-planner-capacity
 - [ ] 14. Review matematica e resource lifecycle.
 
 > **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
-> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti,
+> (`894236b11`). Le caselle restano come sono: questa nota dice dove sono finiti i punti,
 > senza spuntarli. Il lavoro fatto è registrato negli Stage 1–5 del §16 (tutti del 18/09) e
 > nel Passo F del [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md).
 > - **1–5. Vincoli, compilatore, MIQP, cascata MIQCP e PAC `proportional`.** Fatti:
@@ -370,7 +370,7 @@ services pac-planner-capacity
 >   [README](README.md)). Il contratto ha già le due policy (`schemas/pac_allocator.py:647`,
 >   `:652`). `SellIrreducibilityCheck.closure_kind` cita ancora `"exhaustive_oracle"`
 >   (`:1406`), che dal 28/09 vive solo nei test: va rivisto lì.
-> - **10. Prova.** `proof.py`, Stage 4 (§16.13). Dal 28/09 (`b48b3cec9`) il servizio considera
+> - **10. Prova.** `proof.py`, Stage 4 (§16.13). Dal 28/09 (`83188aff7`) il servizio considera
 >   prova soltanto lo stato di SCIP.
 > - **12. Annullamento e pulizia.** Scadenze e annullamento li gestisce la piattaforma Tool. La
 >   riserva dopo il solver è `_POST_ENGINE_RESERVE_MS` (`tool_plugins/pac_allocator.py:79`).
@@ -748,7 +748,7 @@ test (almeno `test_pac_planner_oracle.py`) verdi sotto test-author.
 > invariata, selettore runner `services pac-planner-oracle` verde via
 > `dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-d`, `git diff --check`
 > pulito, `git status --porcelain` mostra solo i path attesi, HEAD invariato
-> a `75309672edac4c91f3cc85bddfe9f8344bea406d`.
+> a `5c9a44efbd1ca04b71922c24f0593db3c4d15b9b`.
 >
 > **⚠️ Fuori pista**: (1) research empirica confermata — una view PAC
 > `proportional` `primary` **può** essere esaustivamente infeasible: un
@@ -764,7 +764,7 @@ test (almeno `test_pac_planner_oracle.py`) verdi sotto test-author.
 > con un test di regressione invece di lasciarlo non verificato, non
 > toccato in `oracle.py` (frozen per questo stage). (3) preesistente,
 > non collegato: `scripts/test_runner/_backend_services.py` fallisce già
-> `black --check` all'HEAD `75309672e` sulla entry `tools-lifecycle`
+> `black --check` all'HEAD `5c9a44efb` sulla entry `tools-lifecycle`
 > (stringa multi-riga concatenata implicitamente, ~150 righe di distanza
 > dalla registrazione `pac-planner-oracle`) — confermato riproducendo
 > `black --check` sulla revisione HEAD isolata prima di qualunque modifica
@@ -813,7 +813,7 @@ test (almeno `test_pac_planner_oracle.py`) verdi sotto test-author.
 > pac-planner-policies` verde via `dev.py test --test-port 6153 --data-dir
 > /tmp/librefolio-r2-d`, `dev.py test check-orphans` verde (213 test backend
 > registrati e raggiungibili), `git diff --check` pulito, HEAD invariato a
-> `75309672edac4c91f3cc85bddfe9f8344bea406d`, 0 staged.
+> `5c9a44efbd1ca04b71922c24f0593db3c4d15b9b`, 0 staged.
 >
 > **⚠️ Fuori pista**: (1) **bug reale trovato e corretto** in `compiler.py`:
 > avevo copiato dai file fratelli l'import `pyscipopt` sotto `TYPE_CHECKING`
@@ -1066,7 +1066,7 @@ test (almeno `test_pac_planner_oracle.py`) verdi sotto test-author.
 > insieme (324 baseline + 5 + 12, nessuna regressione), entrambi i selettori
 > runner verdi in lane 6153, `check-orphans` verde (214 file backend
 > registrati e raggiungibili), `git diff --check` pulito, HEAD invariato a
-> `75309672edac4c91f3cc85bddfe9f8344bea406d`, 0 staged.
+> `5c9a44efbd1ca04b71922c24f0593db3c4d15b9b`, 0 staged.
 >
 > **⚠️ Fuori pista**: tre trappole PySCIPOpt confermate empiricamente
 > (pyscipopt 6.2.1 / SCIP 10.0, non prese dalla doc) e codificate nel
@@ -1207,7 +1207,7 @@ test (almeno `test_pac_planner_oracle.py`) verdi sotto test-author.
 > (`plan-phase00Step3Stage4ProofSemantics.prompt.md`,
 > `plan-phase00Step3Stage5ReportProjection.prompt.md`) perché questo piano era
 > fra i 10 path staged sotto freeze e non poteva essere modificato. Col commit
-> `9229085e9` il freeze è caduto e i due file sono stati ripiegati qui e
+> `ae503f7e1` il freeze è caduto e i due file sono stati ripiegati qui e
 > cancellati: un documento, una cronologia. **Nessun errore è stato
 > ripulito nella fusione** — le conclusioni sbagliate restano scritte accanto
 > a quelle giuste, altrimenti averle annotate non serviva a niente.

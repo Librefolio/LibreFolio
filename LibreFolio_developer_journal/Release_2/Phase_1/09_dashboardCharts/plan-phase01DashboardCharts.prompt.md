@@ -1,9 +1,9 @@
 # Piano — fase 01, 09: Y · Cruscotto e grafici (1.3.0)
 
-> **Stato al 19/10 sera** (HEAD `15603fe69`): tutti i lotti di Y sono entrati in `dev_release2` tranne **Y4a** (fermo:
+> **Stato al 19/10 sera** (HEAD `6cf1db5b4`): tutti i lotti di Y sono entrati in `dev_release2` tranne **Y4a** (fermo:
 > il coordinatore ha portato al developer «non nella 1.3, oppure una finestra notturna», 16/10 20:21) e **Y13**
-> (parcheggiato fino alla risposta del developer a Y13-1). L'ultimo ingresso è Y-N65 (merge `5cb47395f`, CHANGELOG
-> `b1e7a2dd5`, 19/10). Lotto per lotto, con i commit: §4, «Stato dei lotti». La ripresa dopo la pausa generale del
+> (parcheggiato fino alla risposta del developer a Y13-1). L'ultimo ingresso è Y-N65 (merge `cdc43debe`, CHANGELOG
+> `1409e9074`, 19/10). Lotto per lotto, con i commit: §4, «Stato dei lotti». La ripresa dopo la pausa generale del
 > 19/10 sera (la corsia da ripopolare, le note in coda) è nella sezione «19/10 sera · Pausa generale»; il prossimo
 > lavoro, Z-29d, nella sezione «20/10 · Z-29d», in fondo. Dal 19/10 valgono le
 > regole nuove del coordinatore: nessuna decisione di prodotto da Y (ogni scelta diventa una domanda, con le opzioni e
@@ -11,7 +11,7 @@
 >
 > - **Workstream Y** · worktree `LibreFolio-worktrees/e-alfy-redesigned-spork` · ramo `e-alfy-y-cruscotto-e-grafici`
 >   (rinominato dall'app all'avvio; prima `e-alfy-redesigned-spork`).
-> - **Base di partenza**: `1e9e567f79488cfb5630f3c05e1bd2727bf856d7` (avanzamento veloce del coordinatore dal `23f6578f3`
+> - **Base di partenza**: `89b12e6a4ebea73c41db010cf474397282d52c10` (avanzamento veloce del coordinatore dal `9acf0f77e`
 >   dell'analisi: Designer Lab, chiusura di R, la 1.2.1 di sicurezza; nessun file del perimetro di Y).
 > - **Corsia**: `--test-port 6189 --data-dir /tmp/librefolio-r13-y`, con
 >   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta; mai 6040 né
@@ -96,17 +96,17 @@ Nessun annuncio aperto sul file; T lo converte più avanti, nell'ondata W5.
 4. Galleria filtrata del checkpoint, dopo la fine della finestra, nella corsia:
    `scripts/visual_review/gallery_snapshot.sh <etichetta> --checkout <worktree> --port 6189 --data-dir
    /tmp/librefolio-r13-y -- -f "Dashboard|Brokers" --workers 6`.
-   - **Il riferimento, dal 19/10, è il trio del 18/10**: `g-r3-prima-ba8e06763-full`, `g-r3-dopo-cd686f445-full` e
-     `g-r3-dopo2-cd686f445-full`. Le maschere e la stabilità di `g-final3__r1__vs__r2`, citate qui fino al 19/10,
+   - **Il riferimento, dal 19/10, è il trio del 18/10**: `g-r3-prima-80a1ca0e0-full`, `g-r3-dopo-574c23cf0-full` e
+     `g-r3-dopo2-574c23cf0-full`. Le maschere e la stabilità di `g-final3__r1__vs__r2`, citate qui fino al 19/10,
      sono state cancellate per liberare il disco.
-   - Il confronto: `--common-only --ignore-masks $W/diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445/masks
-     --stability $W/diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445/stability.json`.
+   - Il confronto: `--common-only --ignore-masks $W/diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-574c23cf0/masks
+     --stability $W/diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-574c23cf0/stability.json`.
    - Un diff di pixel vuole un riferimento preso lo stesso giorno del candidato; il trio serve all'occhio.
    - Rumore noto, classi e scatti instabili: `scripts/visual_review/README.md`, sezione «Known gallery behaviour
-     (18/10/2026, the reference trio)», in `dev_release2` da `ccc2a4141` (19/10).
+     (18/10/2026, the reference trio)», in `dev_release2` da `8c6e984ee` (19/10).
    - Le altre citazioni di `g-final3` in questo piano sono la cronaca di quei giorni, e restano.
    > **Nota 20/10**: righe aggiornate su richiesta del programma colori (19/10, via il coordinatore). Sezione del README
-   > letta da `ccc2a4141` con `git show`; uguale in `dev_release2` `a820bd4dd`.
+   > letta da `8c6e984ee` con `git show`; uguale in `dev_release2` `7c28cad3b`.
 
 Per Y2: annuncio al coordinatore quando ci arrivo. Il lotto C di R ha portato `DataTable` sui token `--lf-cmp-*`, e la
 E2E del Lab legge il token della sua intestazione.
@@ -131,7 +131,7 @@ E2E del Lab legge il token della sua intestazione.
 - **50 · Difetto 5 del PAC (Y7): prima la cura generale delle tabelle sul telefono (C-38).** Il layout del PAC da
   telefono si decide dopo, se serve, insieme ad altre note del developer.
 
-## 1. Stato reale (verificato sul codice a `23f6578f3`; identico a `1e9e567f7` nel perimetro)
+## 1. Stato reale (verificato sul codice a `9acf0f77e`; identico a `89b12e6a4` nel perimetro)
 
 - Lotti A–D di R in `dev_release2`: `lib/theme/{chartTheme,chartPalettes,chartColorScales,themeMode,colorAlpha}.ts`,
   `--lf-cmp-*` in `lib/theme/components/*.css`.
@@ -171,7 +171,7 @@ E2E del Lab legge il token della sua intestazione.
 | C-85 | ✗ | nessun componente comune | Y11, se c'è spazio, dopo il developer |
 | U8 | ✗ | inventario del 43 (R17, W7, W8, P4, P5, V11; `LotCustodyModal:236`; dichiarazioni) | Y12 a/b; b dopo CP-13 di J |
 | FE9, FE10, FE11 | ✗ | — | Y13, per ultimi |
-| Y-4 (G-12, dal coordinatore, 15/10) | ✗ | `charts/SignalTreeSelect.test.ts:16-17` e `:306-310`: i commenti descrivono `selectIndicatorFromTree` della galleria che espande la famiglia con un clic e clicca l'opzione; da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Solo testo | Y4 (FE2), passando dal file |
+| Y-4 (G-12, dal coordinatore, 15/10) | ✗ | `charts/SignalTreeSelect.test.ts:16-17` e `:306-310`: i commenti descrivono `selectIndicatorFromTree` della galleria che espande la famiglia con un clic e clicca l'opzione; da G-9 (`a837a41fe`) la galleria sceglie l'indicatore da tastiera. Solo testo | Y4 (FE2), passando dal file |
 
 Questa tabella è lo stato **all'analisi** del 15/10. Lo stato di oggi di ogni lotto, con il commit d'ingresso: §4, «Stato
 dei lotti».
@@ -205,7 +205,7 @@ dei lotti».
 
 Ognuno si chiude con un handoff `FROZEN`; commit e merge li fa il coordinatore.
 
-### Y1 — `GrowthChart` tagliato sul posto (FE6a) [autorizzato, via del 15/10; entrato in `dev_release2` il 15/10, `badec1465`]
+### Y1 — `GrowthChart` tagliato sul posto (FE6a) [autorizzato, via del 15/10; entrato in `dev_release2` il 15/10, `d2e2b7763`]
 
 Forma (D-Y3): il componente tiene props, stato, `$derived`, effetti, ciclo di vita di ECharts (render, aggiornamento
 parziale, opzione completa, zoom, scala delle candele) e template. Escono, in moduli puri accanto:
@@ -239,9 +239,9 @@ Passi:
 Fatto quando: oracoli invariati e verdi; `--check` pulito con la riga `~split`; galleria identica salvo il rumore noto;
 handoff `FROZEN` con il messaggio di commit proposto.
 
-### Y2 — `DataTable` tagliata sul posto [autorizzato; forma approvata e taglio annunciato il 15/10; entrato in `dev_release2` il 15/10, `c747a74c3`]
+### Y2 — `DataTable` tagliata sul posto [autorizzato; forma approvata e taglio annunciato il 15/10; entrato in `dev_release2` il 15/10, `c0dc85fbb`]
 
-**Stato verificato a `cf8101f29`** (il file non è cambiato dalla base `1e9e567f7`):
+**Stato verificato a `b28f13de2`** (il file non è cambiato dalla base `89b12e6a4`):
 - `components/table/DataTable.svelte`, 2 431 righe: script 13–960, template 961–1559, `<style>` 1560–2431. Lo stile
   ha 154 regole e 155 letture `var(--lf-cmp-*)`, e nessun letterale: R (lotto C) li ha portati in `table.css`.
 - Cricchetto: m1 4, le classi dell'interruttore `editable-checkbox` (righe 1387 e 1393: `bg-emerald-500`,
@@ -392,7 +392,7 @@ E2E (`--workers 2`, una alla volta, con lo slot):
 Galleria, con lo slot del programma colori: `-f "Dashboard|Tools|Files|Transactions|Brokers|Import report sets|FX|Assets|Risk Analysis"`.
 Sono i 10 gruppi su 16 che contengono tabelle. Il confronto si fa con l'ultimo riferimento completo, con le opzioni
 del Y1. Note del programma colori (15/10): `--workers 6` finché non entra C-94; contro `g-final3-r1`, più vecchio di
-G-10 (`b4533a949`), cambiano per conto loro `media/asset-picker-modal`, `files/static-tab` e `files/static-grid`
+G-10 (`44d353f62`), cambiano per conto loro `media/asset-picker-modal`, `files/static-tab` e `files/static-grid`
 (ordine degli avatar), da segnalare come «G-10». Quando entra T, G rifà il riferimento per tutti.
 
 Fatto quando:
@@ -406,9 +406,9 @@ Fatto quando:
 
 C-38 e C-62 dopo, in Y7, su `th-actions` e `resize-handle`, che restano facili da trovare.
 
-### Y8 — correzioni dei grafici [autorizzato, 15/10 18:36; entrato in `dev_release2` il 15/10, `160562b56`]
+### Y8 — correzioni dei grafici [autorizzato, 15/10 18:36; entrato in `dev_release2` il 15/10, `b2830c7ed`]
 
-Ogni voce è verificata a `e424e8740`.
+Ogni voce è verificata a `b855e61d3`.
 
 | Voce | Stato verificato | Correzione | Test rosso (file già registrato) |
 |---|---|---|---|
@@ -431,9 +431,9 @@ Passi:
 5. Documentazione, se cambia un contratto: l'asse sotto zoom in `charts.md`; tabelle della devWiki.
 6. Checkpoint FROZEN.
 
-### Y7 — tabelle sul telefono e ridimensionamento [via del coordinatore e dei colori, 15/10 20:52–21:22; entrato in `dev_release2` il 16/10, `a613a217c`]
+### Y7 — tabelle sul telefono e ridimensionamento [via del coordinatore e dei colori, 15/10 20:52–21:22; entrato in `dev_release2` il 16/10, `352f70d7c`]
 
-Base: `f98c20f1b` (`dev_release2` dopo l'ingresso di Y8). Decisioni D-Y17 e D-Y18 in §0.3. Verificato sul codice dopo
+Base: `8b34601ff` (`dev_release2` dopo l'ingresso di Y8). Decisioni D-Y17 e D-Y18 in §0.3. Verificato sul codice dopo
 il taglio di Y2.
 
 | Voce | Stato verificato | Correzione | Prova |
@@ -466,40 +466,40 @@ Passi:
 6. Checkpoint FROZEN, con il filtro regex della galleria mobile d'ingresso, che si fa nello slot dei colori dopo G-13
    ed è confrontata con il riferimento di G-13.
 
-### Stato dei lotti (19/10, base `ede7adf75`)
+### Stato dei lotti (19/10, base `de0823b81`)
 
 Ogni ingresso è il merge in `dev_release2` (numero del treno nel registro del [README della fase](../README.md)), verificato
 antenato della base il 19/10. I titoli ⏳ del §7 sono il registro del momento: lo stato di oggi è questa tabella.
 
 | Lotto | Contenuto | Stato | Ingresso (treno) | Dettagli |
 |---|---|---|---|---|
-| Y1 | taglio di `GrowthChart` (FE6a), B10 | ✅ 15/10 | `badec1465` (36) | §4 «Y1», §7 |
-| Y2 | taglio di `DataTable`, `~split` dichiarato | ✅ 15/10 | `c747a74c3` (45) | §4 «Y2», §7 |
-| Y8 | I-01, I-03 (Y-1), 47-1, O-16, 48-1 | ✅ 15/10 | `160562b56` (57) | §4 «Y8», §7 |
-| Y7 | C-38 e difetti 2 e 5 del PAC (D-Y17), C-62 (D-Y18) | ✅ 16/10 | `a613a217c` (76) | §4 «Y7», §7 |
-| Y4b | FE2b, il rischio in `lib/features/risk/` | ✅ 16/10 | `08efa5ac3` (81) | §7 «Y4b» |
-| Y3 | FE6b, la dashboard in `lib/features/dashboard/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y3» |
-| Y9 | K-15, C-34 (con la guardia), C-15, K-13 | ✅ 16/10 | `4447814ed` (104) | §7 «Y9», «C-34» |
-| Y10 | 54-1, Y-6, decisione 49 | ✅ 16/10 | `4447814ed` (104) | §7 «Y10» |
-| Y5 | FE7, broker e lotti in `lib/features/brokers/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y5» |
-| Y6 | FE3, i file in `lib/features/files/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y6» |
-| Y12a | U8 senza campi nuovi: W7, le dichiarazioni, `LotCustodyModal` | ✅ 16/10 | `0c79932a7` (130) | «Y12a» |
-| Y11 | C-85, `pageBusy` (decisione 48, N55): passi 1–4b, poi il lotto `assets` | ✅ 16–17/10 | `0c79932a7` (130), `d32d0f3d9` (191) | «Y11» |
-| Y12b | U8 con i campi di J e MF: P19; R17, W8, P4; V11 e P5 | ✅ 16–17/10 | `23f71e739` (140), `1565b6bbb` (202), `d4ecfb692` (255) | «Y12b», «R17 · W8 · P4» |
+| Y1 | taglio di `GrowthChart` (FE6a), B10 | ✅ 15/10 | `d2e2b7763` (36) | §4 «Y1», §7 |
+| Y2 | taglio di `DataTable`, `~split` dichiarato | ✅ 15/10 | `c0dc85fbb` (45) | §4 «Y2», §7 |
+| Y8 | I-01, I-03 (Y-1), 47-1, O-16, 48-1 | ✅ 15/10 | `b2830c7ed` (57) | §4 «Y8», §7 |
+| Y7 | C-38 e difetti 2 e 5 del PAC (D-Y17), C-62 (D-Y18) | ✅ 16/10 | `352f70d7c` (76) | §4 «Y7», §7 |
+| Y4b | FE2b, il rischio in `lib/features/risk/` | ✅ 16/10 | `0e140cf8e` (81) | §7 «Y4b» |
+| Y3 | FE6b, la dashboard in `lib/features/dashboard/` | ✅ 16/10 | `07b095fef` (104) | §7 «Y3» |
+| Y9 | K-15, C-34 (con la guardia), C-15, K-13 | ✅ 16/10 | `07b095fef` (104) | §7 «Y9», «C-34» |
+| Y10 | 54-1, Y-6, decisione 49 | ✅ 16/10 | `07b095fef` (104) | §7 «Y10» |
+| Y5 | FE7, broker e lotti in `lib/features/brokers/` | ✅ 16/10 | `07b095fef` (104) | §7 «Y5» |
+| Y6 | FE3, i file in `lib/features/files/` | ✅ 16/10 | `07b095fef` (104) | §7 «Y6» |
+| Y12a | U8 senza campi nuovi: W7, le dichiarazioni, `LotCustodyModal` | ✅ 16/10 | `d4202021d` (130) | «Y12a» |
+| Y11 | C-85, `pageBusy` (decisione 48, N55): passi 1–4b, poi il lotto `assets` | ✅ 16–17/10 | `d4202021d` (130), `33040d454` (191) | «Y11» |
+| Y12b | U8 con i campi di J e MF: P19; R17, W8, P4; V11 e P5 | ✅ 16–17/10 | `b71ba8b60` (140), `d7b84ebac` (202), `62a7e8c40` (255) | «Y12b», «R17 · W8 · P4» |
 | Y4a | FE2a, i segnali in `lib/features/signals/` | ⏸ fermo | — | «Y4a · analisi aggiornata»: per il developer, «non nella 1.3, oppure una finestra notturna» (16/10 20:21) |
 | Y13 | FE9–FE11 | ⏸ parcheggiato | — | «Y13»: fino alla risposta del developer a Y13-1 (dopo il tag?) |
-| Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ✅ 19/10 | `5cb47395f` | «19/10 · Y-N65», «Il lotto Y-N65» (passo 7) |
-| Z-29d-0 | `AssetComparisonSignal._basePoint`: la base in % del confronto dal punto iniettato (per Z-29b e Z-29d) | ✅ committato 20/10, entra col treno 2 | `bccf05cbb` (giornale `c19d808fe`) | «20/10 · Z-29d», «Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0» |
+| Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ✅ 19/10 | `cdc43debe` | «19/10 · Y-N65», «Il lotto Y-N65» (passo 7) |
+| Z-29d-0 | `AssetComparisonSignal._basePoint`: la base in % del confronto dal punto iniettato (per Z-29b e Z-29d) | ✅ committato 20/10, entra col treno 2 | `02ea4ffef` (giornale `ef93c6e50`) | «20/10 · Z-29d», «Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0» |
 | Z-29d | il dialogo chiede la serie allineata del bersaglio | ⏸ aspetta Z-29a in dev e Z-29b sulla base | — | «20/10 · Z-29d» |
-| Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ✅ committato 20/10, entra col treno 2 | `252ddefbd` (giornale `a91ff36cd`) | «20/10 · Y-38» |
-| Y-39 | la scheda e la sua anteprima: una funzione dei segnali, l'anteprima sul grafico del dettaglio (rivisto con F-1) | ⏳ via 20/10 13:16. Y-39a ✅ in dev (treno 6, `89e8b2e61`). Y-39b: cura fatta il 21/10, prove leggere e prova a mano verdi; aspetta lo slot E2E | — | «20/10 · La scheda e l'anteprima», «20/10 · Y-39 rivisto e Y-40», «20/10 · Il lotto Y-39» |
+| Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ✅ committato 20/10, entra col treno 2 | `41c4a8a39` (giornale `f8b05bfa7`) | «20/10 · Y-38» |
+| Y-39 | la scheda e la sua anteprima: una funzione dei segnali, l'anteprima sul grafico del dettaglio (rivisto con F-1) | ⏳ via 20/10 13:16. Y-39a ✅ in dev (treno 6, `e44422ed0`). Y-39b: cura fatta il 21/10, prove leggere e prova a mano verdi; aspetta lo slot E2E | — | «20/10 · La scheda e l'anteprima», «20/10 · Y-39 rivisto e Y-40», «20/10 · Il lotto Y-39» |
 | Y-40 | le tre viste: assoluto, percentuale, rendimento mobile (barra, scheda, impostazioni, dettaglio), anche sui cambi (V-9) | ⏸ nella 1.3, dopo Z-29s; V-1…V-8 (a) | — | «20/10 · Y-39 rivisto e Y-40», «20/10 · Il lotto Y-39» (decisioni) |
 
 Fuori dai lotti:
 - **Le voci Y-N** della mia sezione del backlog: ognuna ✅ porta il suo commit d'ingresso (rimesse in pari il 19/10). Aperte,
   tutte in attesa del developer: Y-7 (dopo Y4a), Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35; più Y-36 e Y-37 (19/10, minime).
-- **Lavori per altri, fatti da Y**: la metà del pannello di J-12 (`46b5fbc0e`, treno 280), X-R59 lotti A e B (`f317e3a9f`,
-  330), J-53 (`fb6d58d17`, 338), Y-30 (`ede7adf75`, 19/10, dopo il sì del developer a N89).
+- **Lavori per altri, fatti da Y**: la metà del pannello di J-12 (`20005dc94`, treno 280), X-R59 lotti A e B (`d2f489be8`,
+  330), J-53 (`c6f44c54d`, 338), Y-30 (`de0823b81`, 19/10, dopo il sì del developer a N89).
 
 ## 5. Test e specialisti
 
@@ -635,11 +635,11 @@ Fuori dai lotti:
 
 ### Y1 — commit e aggiornamento di base ✅ (2026-10-15, 14:40–14:45)
 
-> **Note implementazione**: committati dal coordinatore `495fe0eae` (`refactor(dashboard): cut GrowthChart into
-> modules`) e `374dcca8a` (journal). Aggiornamento di base con `f46a93ffd` (H CP6, X FE5b, E1): unico conflitto
+> **Note implementazione**: committati dal coordinatore `21310bc52` (`refactor(dashboard): cut GrowthChart into
+> modules`) e `27d219f10` (journal). Aggiornamento di base con `99096768a` (H CP6, X FE5b, E1): unico conflitto
 > `frontend/src/themeRoles.baseline.tsv`, come previsto; `theme-roles.mjs --resolve` ha tenuto le due righe `~split`
 > (AssetModal e GrowthChart), `--check` pulito, nessun caso R-8; `git add` del solo baseline; merge committato dal
-> coordinatore in `ceb0e09a3`. Nessuno dei 104 file fusi in automatico tocca le cartelle di Y.
+> coordinatore in `407738882`. Nessuno dei 104 file fusi in automatico tocca le cartelle di Y.
 >
 > **Sull'albero unito**: `npm run check` → 1 errore in `features/instance/components/InstanceBlockedPage.svelte` (H),
 > perché il client API generato era di prima della merge; dopo `dev.py api sync` (solo file ignorati) **0/0**. Vitest
@@ -650,12 +650,12 @@ Fuori dai lotti:
 
 ### Y1 — galleria filtrata, cancello d'ingresso ✅ (2026-10-15, 14:44–15:12)
 
-> **Note implementazione**: slot del programma colori; `gallery_snapshot.sh y1-fe6a-ceb0e09a3` sulla corsia 6189,
+> **Note implementazione**: slot del programma colori; `gallery_snapshot.sh y1-fe6a-407738882` sulla corsia 6189,
 > `-f "Dashboard|Brokers" --workers 6`, carico della macchina 45–65. 882 PNG, 55 test passati, 4 rossi di timeout
 > sotto carico (desktop `main dashboard`: `waitForLoadState` 20 s nella prima ondata; mobile `growth P&L submodes`:
 > click sul pulsante delle candele, in attesa che sia stabile; mobile `allocation charts`: stesso errore su un pannello
 > che Y1 non tocca; mobile `fifo lots panel`: «frame still moving», instabilità nota). `live_price_check` exit 0.
-> Confronto con `g-final3-r1` (commit `2338aaf79`, 09:14; `--common-only`, maschere e stabilità di
+> Confronto con `g-final3-r1` (commit `2ddbf77f7`, 09:14; `--common-only`, maschere e stabilità di
 > `g-final3__r1__vs__r2`): 762 identiche, 120 cambiate — 79 low, 29 medium (passi del wizard d'import, fifo-lots), 7
 > unstable (`import-nway-compare`), 5 stable minime (`import-modal`, rumore noto; due fifo-lots da 10 px, Δ1;
 > `import-bulk-staging` 5 px, Δ1). **GrowthChart**: 46 scatti presi, 3 cambiati (`main-pct` ×2 e `growth-pnl-candles`
@@ -664,12 +664,12 @@ Fuori dai lotti:
 > coordinatore il rilancio isolato dei due test a `--workers 2`.
 >
 > **Riprese isolate** (via del coordinatore, stesso slot; `--no-populate --workers 2`, `nice -n 10`):
-> `y1-fe6a-ceb0e09a3-retry-desktop-main` (`--desktop-only -f "main dashboard - all languages and themes"`): 1 test
-> verde in 1,3 min, 24 PNG, **24/24 identiche** a `g-final3-r1`. `y1-fe6a-ceb0e09a3-retry-mobile-growth`
+> `y1-fe6a-407738882-retry-desktop-main` (`--desktop-only -f "main dashboard - all languages and themes"`): 1 test
+> verde in 1,3 min, 24 PNG, **24/24 identiche** a `g-final3-r1`. `y1-fe6a-407738882-retry-mobile-growth`
 > (`--mobile-only -f "dashboard growth P&L submodes - all languages and themes"`): 1 test verde in 1,4 min, 24 PNG,
 > 23 identiche e 1 cambiata, `mobile/en/light/dashboard/growth-pnl-candles`: 4 px, Δ 4, bbox `[1035, 1979, 1042,
 > 1983]`, lo stesso scarto della prima run. Lo stesso scarto, nella stessa area, compare già nei confronti di
-> `g-final3-r1` con `g-final3-candR` (`87b7c34b8`) e `g-final3-candL` (`c0556a240`): due antenati della HEAD senza il
+> `g-final3-r1` con `g-final3-candR` (`7995ae765`) e `g-final3-candL` (`a50f089fc`): due antenati della HEAD senza il
 > taglio. È una variazione mobile già esistente, non di Y1. Copertura completa del grafico: 96 scatti (48 per
 > piattaforma). Restano senza ripresa i rossi mobile di `allocation charts` e `fifo lots panel`, componenti che Y1 non
 > tocca. `dirty_files: 1` nei `meta.json` è questo piano, fuori dalla build.
@@ -679,13 +679,13 @@ Fuori dai lotti:
 
 ### Y1 — ingresso in `dev_release2` ✅ (2026-10-15)
 
-> **Note implementazione**: il coordinatore ha committato il journal (`cf8101f29`) e ha fuso Y1 in `dev_release2`:
-> `badec1465`, merge di `cf8101f29` sopra `8fc44558c`. Sull'albero unito il controllo dei colori è pulito.
+> **Note implementazione**: il coordinatore ha committato il journal (`b28f13de2`) e ha fuso Y1 in `dev_release2`:
+> `d2e2b7763`, merge di `b28f13de2` sopra `98e940802`. Sull'albero unito il controllo dei colori è pulito.
 
 ### Y2 — preparazione e piano del taglio ✅ (2026-10-15, 15:12–15:21, sola lettura)
 
 > **Note implementazione**: piano scritto in §4, Y2, senza toccare `DataTable.svelte`. Cosa ho verificato a
-> `cf8101f29`:
+> `b28f13de2`:
 > - **Il file**: invariato dalla base; stile senza letterali (155 letture `--lf-cmp-*`); m1 4 alle righe 1387 e 1393.
 > - **Il gate dei token** (regole a–e): ignora la sezione commentata di `table.css`. Il taglio chiede solo che i figli
 >   importino `table.css` (b) e che ogni definizione resti letta (c).
@@ -727,7 +727,7 @@ Fuori dai lotti:
 > - **Impalcatura d'oro**: `test-author` ha scritto `components/table/DataTable.golden.test.ts`, 878 righe, non
 >   tracciato, da non committare; una copia sta nella cartella di sessione. 28 stati (tutti i rami dei tre blocchi che
 >   si spostano, con l'elenco di quelli non raggiunti e del perché) registrati in `/tmp/librefolio-r13-y/datatable-golden`
->   sul codice di `cf8101f29`.
+>   sul codice di `b28f13de2`.
 >   - Registrazione: `LF_GOLDEN=record nice -n 10 node_modules/.bin/vitest run src/lib/components/table/DataTable.golden.test.ts`,
 >     28 verdi.
 >   - Confronto sullo stesso codice: 28 verdi, quindi il confronto è deterministico.
@@ -742,7 +742,7 @@ Fuori dai lotti:
 >   `css-tree` del `node_modules` locale. Prova a vuoto sul file invariato: 159 voci identiche su 159, nessun avviso,
 >   ordine tenuto.
 > - **Script del taglio**: `y2_cut_datatable.py`, nella cartella di sessione. Controlla ogni marcatore e ogni riga
->   attesa prima di scrivere, e non scrive nulla se il file non è quello di `cf8101f29`. A vuoto: padre 1 751 righe,
+>   attesa prima di scrivere, e non scrive nulla se il file non è quello di `b28f13de2`. A vuoto: padre 1 751 righe,
 >   intestazione 336, cella 454.
 >
 > **Fuori pista**:
@@ -879,14 +879,14 @@ Fuori dai lotti:
 > - **Dove cade.** L'unico errore di ogni test è il controllo di chiusura della spec (`files-uploader.spec.ts:233`,
 >   «Only the declared synthetic GET contracts may be requested»), su due `GET /api/v1/system/instance`. I corpi dei
 >   test, tabella dei file compresa, sono passati.
-> - **Da dove viene la richiesta.** Dallo store `features/instance/instanceConfig.svelte.ts` di H (`2069c75cd`, entrato
+> - **Da dove viene la richiesta.** Dallo store `features/instance/instanceConfig.svelte.ts` di H (`49212c1f2`, entrato
 >   con CP6), che la fa a ogni caricamento di pagina, mentre la spec dichiara un insieme chiuso di contratti GET.
 > - **Anche `dev_release2` è rosso.** Lì la spec e la richiesta sono identiche.
 > - **Decisione del coordinatore**: lo corregge con H. Y non tocca la spec, e per Y2 non è un cancello.
 
 ### Y2 — checkpoint 🧊 FROZEN (2026-10-15, 16:45)
 
-> **Note implementazione**: base `cf8101f29`; `dev_release2` è a `dae4de4fa`. Albero: 10 file modificati e 2 nuovi.
+> **Note implementazione**: base `b28f13de2`; `dev_release2` è a `ff75660ad`. Albero: 10 file modificati e 2 nuovi.
 > - Codice: `DataTable.svelte` (2 431 → 1 751 righe); `DataTableColumnHeader.svelte` (329, dopo Prettier) e
 >   `DataTableCellContent.svelte` (454), nuovi.
 > - Test: `htmlSink.gate.test.ts` e `DataTable.test.ts`.
@@ -904,13 +904,13 @@ Fuori dai lotti:
 ### Y2 — commit e aggiornamento di base ✅ (2026-10-15, 16:42–16:48)
 
 > **Note implementazione**:
-> - **Commit del coordinatore**: `fbee8506d` (`refactor(table): split DataTable header and cells`) e `491cf3a4c`
+> - **Commit del coordinatore**: `2c0213152` (`refactor(table): split DataTable header and cells`) e `678390f37`
 >   (journal).
-> - **Aggiornamento di base**: con `dev_release2` a `dae4de4fa`, che porta FE8a di W. L'unico conflitto è stato
+> - **Aggiornamento di base**: con `dev_release2` a `ff75660ad`, che porta FE8a di W. L'unico conflitto è stato
 >   `frontend/src/themeRoles.baseline.tsv`.
 >   - `--resolve` ha fatto vincere il lato più stretto, e `--check` è pulito, senza il caso R-8.
 >   - Restano tutte e 6 le righe `~split`, le 3 di Y e le 3 di FE8a, più l'`~accept` D3 di `themeStore.ts`.
->   - `git add` del solo baseline. Merge committato dal coordinatore: `2ffedf004`.
+>   - `git add` del solo baseline. Merge committato dal coordinatore: `6055acaec`.
 > - **File uniti da Git, controllati**:
 >   - `htmlSink.gate.test.ts`: le due voci di Y più quella di W (`TxBulkBanners`), nessuna persa;
 >   - backlog: la sezione Y è identica;
@@ -926,7 +926,7 @@ Fuori dai lotti:
 
 > **Note implementazione**:
 > - **Scatto**: slot del programma colori, concesso mentre T-8 era in scrittura.
->   `gallery_snapshot.sh y2-dt-2ffedf004 … -- -f "Transactions|Assets|FX|Files|Risk Analysis" --desktop-only --workers 6`,
+>   `gallery_snapshot.sh y2-dt-6055acaec … -- -f "Transactions|Assets|FX|Files|Risk Analysis" --desktop-only --workers 6`,
 >   cioè i 57 test dei cinque gruppi più un test di Onboarding e uno di Import report sets, i cui titoli contengono
 >   quelle parole.
 >   - Esito: 59 verdi e 10 rossi, 600 PNG, in 16 minuti.
@@ -956,7 +956,7 @@ Fuori dai lotti:
 
 ### Y2 — E2E sulla revisione unita ✅ (2026-10-15, 17:39–17:45)
 
-> **Note implementazione**: slot pesante 2, dopo E1b di W. Sulla revisione `2ffedf004`, che porta FE8a, con
+> **Note implementazione**: slot pesante 2, dopo E1b di W. Sulla revisione `6055acaec`, che porta FE8a, con
 > `/tmp/libreFolio_y2_e2e_merged.sh`: `--workers 2`, `nice -n 10`, una spec alla volta.
 > - `front-transaction transactions-table`: 25 verdi.
 > - `front-transaction transactions-modals`: 25 verdi.
@@ -968,7 +968,7 @@ Fuori dai lotti:
 
 > **Note implementazione**:
 > - **Ripresa**: slot del programma colori, a carico basso, dopo la validazione di T-8.
->   `gallery_snapshot.sh y2-dt-2ffedf004-retry … -- --desktop-only --workers 2 -f "<i 10 titoli>"`: **10 verdi su 10**,
+>   `gallery_snapshot.sh y2-dt-6055acaec-retry … -- --desktop-only --workers 2 -f "<i 10 titoli>"`: **10 verdi su 10**,
 >   96 PNG, in 4,7 minuti, con il carico medio fra 31 e 38. Il verdetto «ambiente» del triage è confermato.
 > - **Confronto** con `g-final3-r1`, stesse opzioni: 75 identiche, 21 cambiate in 7 scatti, e tutti e 7 cambiano anche
 >   nel rumore `r1` contro `r2`.
@@ -988,8 +988,8 @@ Fuori dai lotti:
 
 ### Y3 e Y4 — analisi ✅ (2026-10-15, 18:10–18:20, sola lettura)
 
-> **Note implementazione**: analisi breve mandata al coordinatore. Base `c747a74c3`, letta dal worktree portato a
-> `695e6ad12`, stesso codice. Script e dati nella cartella di sessione: `libreFolio_y34_graph.py` (grafo degli import)
+> **Note implementazione**: analisi breve mandata al coordinatore. Base `c0dc85fbb`, letta dal worktree portato a
+> `5306be938`, stesso codice. Script e dati nella cartella di sessione: `libreFolio_y34_graph.py` (grafo degli import)
 > e `libreFolio_y34_literals.py` (percorsi fuori dagli import).
 >
 > | Lotto | Da → a | File | Import esterni |
@@ -1031,8 +1031,8 @@ Fuori dai lotti:
 ### Y8 — avvio e rossi ✅ (2026-10-15, 18:36–19:00 circa)
 
 > **Note implementazione**:
-> - **Base**: `e424e8740`, il merge senza conflitti di `dev_release2` (`bcd680868`: W E1b, J CP-4, E2 e decisioni) sul
->   mio commit di journal `33620fb7e`.
+> - **Base**: `b855e61d3`, il merge senza conflitti di `dev_release2` (`0f2e18fa7`: W E1b, J CP-4, E2 e decisioni) sul
+>   mio commit di journal `eea9a6022`.
 > - **Verifica**: le cinque voci sono state verificate sul codice di oggi; righe e correzioni sono in §4 Y8.
 > - **48-1**: ho chiesto l'ok direttamente a J, che ha risposto: «ok for 48-1, make it yourself in Y8: line 299 …
 >   nothing else», senza modifiche aperte né previste sul file.
@@ -1048,7 +1048,7 @@ Fuori dai lotti:
 > - Regola 5: i testi ICU devono differire fra le lingue, e i miei differiscono. Lo controlla il gate
 >   `catalogIcuLocale.test.ts`.
 >
-> **Esito dei rossi**: `test-author` li ha confermati tutti rossi sul codice di `e424e8740`, uno per voce, e ha
+> **Esito dei rossi**: `test-author` li ha confermati tutti rossi sul codice di `b855e61d3`, uno per voce, e ha
 > corretto due miei numeri: 365 punti a 800 px danno `interval` 33, e la finestra di prova è di 34 punti. Per
 > la regola 6 il caso che discrimina è 1.0004, non 1.0000001: `Intl.PluralRules` arrotonda a 3 decimali.
 
@@ -1134,8 +1134,8 @@ Fuori dai lotti:
 > sanitized keys» è rosso sulla base, non per Y8.
 > - Il reperto: `email.problems.SMTP_FROM_INVALID` contiene «<» nelle quattro lingue («…such as LibreFolio
 >   <noreply@example.com>»).
-> - La chiave viene da `b33654f22` (E, «feat(email): add admin status and test email», 15/10 15:25), antenato di
->   `e424e8740` e già in `dev_release2`. Il mio diff i18n tocca solo `brokers/`.
+> - La chiave viene da `fbee21a83` (E, «feat(email): add admin status and test email», 15/10 15:25), antenato di
+>   `b855e61d3` e già in `dev_release2`. Il mio diff i18n tocca solo `brokers/`.
 > - Il gate legge il catalogo, quindi il rosso è deterministico, non instabile. Lo segnalo al coordinatore e non tocco
 >   la chiave: il file è di E.
 
@@ -1174,17 +1174,17 @@ Fuori dai lotti:
 >   anche sotto i 24 px per punto, quindi un periodo lungo su desktop perdeva le etichette nello stesso modo.
 > - **48-1**: la riga di `AiExportMenu.svelte` è di J, e il suo ok è scritto: «ok for 48-1, make it yourself in Y8:
 >   line 299 … nothing else». Il coordinatore ha approvato anche il `sync-button`.
-> - **Stato**: HEAD `e424e8740`, nessun server, porta 6189 libera, `git diff --check` pulito. Il coordinatore fa il
+> - **Stato**: HEAD `b855e61d3`, nessun server, porta 6189 libera, `git diff --check` pulito. Il coordinatore fa il
 >   checkpoint e poi il merge di `dev_release2`, che porta anche la correzione di E per `htmlInterpolation`
->   (`be7de95b6`).
+>   (`2621200a0`).
 > - **Dopo**: le 8 E2E sulla revisione unita, con lo slot 2 dopo X; poi la galleria d'ingresso, chiesta dal
 >   coordinatore al coordinatore dei colori.
 
 ### Y8 — commit, merge di `dev_release2` e prove sulla revisione unita ✅ (2026-10-15, 20:19–20:31)
 
 > **Note implementazione**:
-> - **Commit del coordinatore**: `a25d09a69` fix(charts) e `df817a3a8` docs(journal).
-> - **Merge**: il coordinatore ha aperto il merge di `dev_release2` (`b4597efad`). Due conflitti, entrambi aggiunte
+> - **Commit del coordinatore**: `c57a762ff` fix(charts) e `3fdb6f31f` docs(journal).
+> - **Merge**: il coordinatore ha aperto il merge di `dev_release2` (`c0929bf28`). Due conflitti, entrambi aggiunte
 >   allo stesso punto:
 >   - `CHANGELOG.md`: le 2 righe della base, poi le 3 di Y8 in fondo a «🐛 Fixed»;
 >   - `devWiki/log.md`: la voce di B, poi quella di Y8.
@@ -1193,11 +1193,11 @@ Fuori dai lotti:
 >   lato in sezioni diverse.
 > - **Sovrapposizioni di senso**: nessuna. Nessun file della base tocca le superfici di Y8, e nessuno legge le chiavi
 >   tolte.
-> - **Commit del merge**: `e587be8ce`, genitori `df817a3a8` e `b4597efad`, worktree pulito.
+> - **Commit del merge**: `55b3c129e`, genitori `3fdb6f31f` e `c0929bf28`, worktree pulito.
 > - **Prove sulla revisione unita**, una alla volta, `api sync` e svelte-check solo con il carico sotto 70:
 >   - `api sync`: nessun cambio tracciato;
 >   - svelte-check: 0 errori, 0 avvisi;
->   - `htmlInterpolation` 26/26, verde grazie a `be7de95b6` di E;
+>   - `htmlInterpolation` 26/26, verde grazie a `2621200a0` di E;
 >   - gli altri 16 file Vitest di Y8 tutti verdi, con gli stessi conteggi di prima;
 >   - `theme-roles --check` pulito; `i18n check` verde (4517 chiavi, strict).
 >
@@ -1215,7 +1215,7 @@ Fuori dai lotti:
 ### Y8 — E2E nello slot 2 ✅ (2026-10-15, 20:33–21:20, con due pause del coordinatore)
 
 > **Note implementazione**:
-> - **Slot pesante 2** dal coordinatore (20:32), sulla revisione `e587be8ce`. Script `/tmp/libreFolio_y8_e2e.sh`: una
+> - **Slot pesante 2** dal coordinatore (20:32), sulla revisione `55b3c129e`. Script `/tmp/libreFolio_y8_e2e.sh`: una
 >   spec alla volta, `--workers 2`, `nice -n 10`, ci si ferma se la porta 6189 è occupata. Log in
 >   `files/y8_e2e_NN_*.log` della sessione.
 > - **01 `front-portfolio dashboard`: 27/27 verdi** (4,2 min). Prima, il build del test server: 449 s, perché il carico
@@ -1233,7 +1233,7 @@ Fuori dai lotti:
 > «33 per un anno di giorni a 800 px, 90 o più su un telefono», e anche su desktop. Nel log una voce di correzione in
 > coda; la voce di Y8 resta com'era.
 
-> **Esito**, revisione `e587be8ce`, `--workers 2`, `nice -n 10`, una spec alla volta:
+> **Esito**, revisione `55b3c129e`, `--workers 2`, `nice -n 10`, una spec alla volta:
 >
 > | # | Spec | Esito |
 > |---|---|---|
@@ -1257,7 +1257,7 @@ Fuori dai lotti:
 >   il poller. Senza zoom, il suo codice su quella pagina dà opzioni dell'asse identiche a prima.
 > - **Da soli passano**: con `--workers 1` sono 4/4 (09). Nella spec intera a `--workers 2` falliscono.
 > - **Verdetto: «assunzione»** (tabella §8 della skill), riprodotto da Z (coordinatore, 21:22). Il test cambia il mock
->   a 105 senza aspettare che il primo poll abbia letto 100. Dopo `74d028ec6` di Z, che ha riscritto il ciclo vivo
+>   a 105 senza aspettare che il primo poll abbia letto 100. Dopo `3bcc81d8a` di Z, che ha riscritto il ciclo vivo
 >   alle 15:46, ogni poll parte da un timer. Sotto carico il primo poll scatta dopo il cambio del mock: legge 105 senza
 >   un valore precedente, e la prima lettura dal vivo è `neutral` per costruzione. Il prodotto è corretto.
 > - **Correzione**: Z, in un lotto piccolo di soli test. La spec aspetterà `100.00` prima di cambiare il prezzo.
@@ -1294,8 +1294,8 @@ Fuori dai lotti:
 
 ### Y8 — ingresso ✅ (2026-10-15, ~21:25)
 
-> **Note implementazione**: Y8 è entrato in `dev_release2` = `160562b56`, con i registri in `f98c20f1b`. Le righe del
-> CHANGELOG c'erano già dal commit di Y8. Il coordinatore ha portato il worktree a `f98c20f1b` con un avanzamento
+> **Note implementazione**: Y8 è entrato in `dev_release2` = `b2830c7ed`, con i registri in `8b34601ff`. Le righe del
+> CHANGELOG c'erano già dal commit di Y8. Il coordinatore ha portato il worktree a `8b34601ff` con un avanzamento
 > veloce; restava fuori solo la mia modifica al piano, con il verdetto di Z sui 3 rossi. La galleria d'ingresso di Y8
 > resta dentro G-13: G manderà gli scatti di Dashboard, Brokers, Assets e FX da rivedere.
 
@@ -1306,7 +1306,7 @@ Fuori dai lotti:
 >   - Le condizioni dei colori: `theme-roles --check` pulito nell'handoff, e la riga `~split` di `DataTable` invariata.
 >   - La galleria d'ingresso è solo mobile, nel loro slot dopo G-13, e confrontata con il riferimento di G-13.
 >   - G-13 aspetta l'ingresso di T: se slitta a domani, slitta anche questa galleria.
-> - **Base**: `f98c20f1b`. Lo slot pesante si richiede per le E2E di Y7.
+> - **Base**: `8b34601ff`. Lo slot pesante si richiede per le E2E di Y7.
 > - **Rossi**: `test-author` in background. Scrive due spec nuove in `frontend/e2e/layout/`, senza lanciarle:
 >   - telefono, D-Y17: la tabella delle transazioni a 390 px;
 >   - ridimensionamento su una tabella `layout-auto`, D-Y18.
@@ -1387,7 +1387,7 @@ Fuori dai lotti:
 >     puliti;
 >   - il registro `front-utility` contiene `datatable-mobile` e `datatable-resize`, con la propria spec e
 >     `in_all` vero.
-> - **Rossi visti** sul codice di oggi (`f98c20f1b` più i `data-testid`), nello slot 2 dalle 22:20, `--workers 2`,
+> - **Rossi visti** sul codice di oggi (`8b34601ff` più i `data-testid`), nello slot 2 dalle 22:20, `--workers 2`,
 >   `nice -n 10`. Il log è nella cartella di sessione, `files/y7_red_01_datatable-mobile.log`.
 >   - `front-utility datatable-mobile`: 3 rossi e 3 verdi, come atteso:
 >     - ✘ Transazioni, la selezione esce con la tabella (`:323`);
@@ -1500,7 +1500,7 @@ Fuori dai lotti:
 ### Y7 — checkpoint 🧊 FROZEN (2026-10-15, 23:35)
 
 > **Note implementazione**:
-> - **Stato**: HEAD `f98c20f1b`, nessun server, porta 6189 libera; slot 2 da liberare con l'handoff.
+> - **Stato**: HEAD `8b34601ff`, nessun server, porta 6189 libera; slot 2 da liberare con l'handoff.
 > - **Controlli puliti**: `theme-roles --check` (la riga `~split` di `DataTable` non cambia), Prettier,
 >   `git diff --check`.
 > - **Nel messaggio al coordinatore**: le righe del CHANGELOG (non scritte nel file, per la sua regola) e il filtro
@@ -1509,8 +1509,8 @@ Fuori dai lotti:
 ### Y7 — commit e revisione combinata con T+DV ✅ (2026-10-15, 23:34–23:48)
 
 > **Note implementazione**:
-> - **Commit del coordinatore**: `ca681b4f9` (codice) e `8d4719c21` (journal). Merge di `dev_release2` (`4ef2fc199`,
->   che contiene T+DV) in `94a8b4a7e`, senza conflitti: backlog e `_frontend_utility.py` si sono uniti da soli.
+> - **Commit del coordinatore**: `a8d6088bd` (codice) e `032b833ac` (journal). Merge di `dev_release2` (`394d0ad45`,
+>   che contiene T+DV) in `95afa67db`, senza conflitti: backlog e `_frontend_utility.py` si sono uniti da soli.
 > - **Prove sulla revisione combinata**, una alla volta, `nice`, carico sotto 70, tutte finite prima della finestra
 >   di G-13 (00:00–01:15):
 >   - `api sync`: nessun cambio tracciato;
@@ -1534,7 +1534,7 @@ Fuori dai lotti:
 >   - Y3 dopo TD-1 e TD-1b, che toccano `GrowthChart.svelte`, `growthChartSeries.ts`, `GrowthChart.test.ts` e
 >     `KpiSection.svelte` (verso le 01:30);
 >   - Y9 dopo gli spostamenti, perché modifica circa 35 file di grafici e va fatto sui percorsi definitivi.
-> - **Y4b su `94a8b4a7e`**: 103 file vanno in `frontend/src/lib/features/risk/`, che oggi non esiste. Forma piatta
+> - **Y4b su `95afa67db`**: 103 file vanno in `frontend/src/lib/features/risk/`, che oggi non esiste. Forma piatta
 >   (D-Y13), nessuna collisione di nomi:
 >   - 47 da `components/risk/`, 4 da `lib/risk/` e 6 da `stores/risk/` alla radice;
 >   - 46 in `levels/`, `levels/l1/` e `levels/l4/`.
@@ -1689,14 +1689,14 @@ Fuori dai lotti:
 
 ### Ingresso di T+DV (2026-10-16, ~00:00, informazione del coordinatore)
 
-> **Note implementazione**: T+DV è entrato in `dev_release2` (`a0915bef9`).
+> **Note implementazione**: T+DV è entrato in `dev_release2` (`3d1314c2c`).
 > - Nei file di Y ha toccato `components/risk/stressBucketLabel.ts` (DV-6), che è nel lotto di Y4b.
 > - Ha cambiato `e2e/portfolio/dashboard.spec.ts` e `privacy-masking.spec.ts`, e ha aggiunto
 >   `e2e/fixtures/headerKeyboardFocus.ts`: per il focus da tastiera nell'intestazione si usa quello, non `focus()`.
 > - Al prossimo checkpoint il coordinatore aggiorna la base; dopo serve `api sync` (`SectorListResponse`).
 > - Y3, Y4b, Y9 e Y10 sono sbloccati, nel mio ordine dopo Y7. Per Y10 vale la nota su TD-3.
 >
-> **Decisione notturna, da rivedere**: Y4b si applica solo su una base che contiene `a0915bef9`, cioè dopo
+> **Decisione notturna, da rivedere**: Y4b si applica solo su una base che contiene `3d1314c2c`, cioè dopo
 > l'ingresso di Y7 e l'aggiornamento della base. Così lo spostamento parte dal `stressBucketLabel.ts` di DV-6, invece
 > di unire un file modificato su un file spostato.
 
@@ -1824,7 +1824,7 @@ Fuori dai lotti:
 > - `designer-lab.md` e `CHART_PATH_RE` li aggiorna L. Il baseline si scrive con lo strumento.
 > - Y5 entra dopo le 03:20, dopo il lotto di T che porta `LotCustodyModal`.
 > - **Strumento della prova**: `files/theme_totals.mjs` stampa i totali m1/m2 dell'albero e del baseline, con
->   `scanTree`, `readBaseline` e `totalsOf` esportati da `theme-roles.mjs`. Su `94a8b4a7e`:
+>   `scanTree`, `readBaseline` e `totalsOf` esportati da `theme-roles.mjs`. Su `95afa67db`:
 >   `{"tree":{"m1":11026,"m2":83},"baseline":{"m1":11026,"m2":83},"treeFiles":284,"baselineFiles":284}`. Si lancia
 >   prima e dopo ogni spostamento: Y4b, Y3, Y5 e Y6.
 > - **Y6**: il coordinatore aspetta la risposta dei colori su `htmlSink.gate.test.ts:70`.
@@ -1841,17 +1841,17 @@ Fuori dai lotti:
 
 ### Y7 — galleria mobile d'ingresso, preparazione ✅ (2026-10-16, 00:41–00:55; si lancia nello slot dopo G-13)
 
-> **Note implementazione**: il riferimento di G-13 è `a2c1c39f4` (coordinatore, 00:41), cioè lo snapshot
+> **Note implementazione**: il riferimento di G-13 è `c85ecd330` (coordinatore, 00:41), cioè lo snapshot
 > `g-ref13-r1`: alle 00:43 era ancora in corsa (partito alle 00:02), e il suo `meta.json` arriva alla fine.
-> - **Confronto scelto**: leggere il diff con l'attribuzione, senza un ramo temporaneo. `a2c1c39f4` è antenato della
->   base `4ef2fc199`. Fra i due, nel frontend cambiano solo `providerProbe.ts`, `resolveProviderError.ts` e l'i18n
+> - **Confronto scelto**: leggere il diff con l'attribuzione, senza un ramo temporaneo. `c85ecd330` è antenato della
+>   base `394d0ad45`. Fra i due, nel frontend cambiano solo `providerProbe.ts`, `resolveProviderError.ts` e l'i18n
 >   degli asset (X-RL: errori dei fornitori) e una riga di `FilesTable.test.ts` (H CP-U1); `gallery.spec.ts` è
 >   identica. Nel backend, H CP-U1 cambia `services/files/static_uploads.py` (le righe dei file statici) e X-RL i
 >   fornitori FX e asset. Quindi una differenza nelle schermate filtrate è di Y7, salvo le righe delle liste dei file,
 >   che possono venire da H CP-U1. E5a, W-B20, W3-a e J CP-16 non sono in nessuna delle due revisioni.
 > - **Desktop invariato per costruzione**: senza trascinamento `columnMinWidth()` rende `column.minWidth || 60`, come
 >   prima, e la galleria parte senza larghezze salvate. Il cancello resta solo mobile.
-> - **Filtro**, verificato su `HEAD` e su `a2c1c39f4`, con 11 test su 139 in entrambe le revisioni:
+> - **Filtro**, verificato su `HEAD` e su `c85ecd330`, con 11 test su 139 in entrambe le revisioni:
 >   `PAC allocator steps|transaction list|dashboard transactions tab|(dashboard|broker) (positions tab|fifo lots panel)|Asset list table|FX list table|static resources tab|broker reports tab`.
 >   `dev.py` lo passa a Playwright così com'è (`-g`, lista di argomenti, niente shell).
 > - **Script**: `/tmp/libreFolio_y7_gallery.sh`.
@@ -1877,7 +1877,7 @@ Fuori dai lotti:
 >   rossi per il carico. Ho fermato la mia alle 00:57:38.
 > - Fino a lì aveva fatto solo la build debug del frontend (svelte-check e vite build), finita. Niente populate,
 >   backend o Playwright, e nessun processo rimasto. La 6189 è libera.
-> - Lo snapshot vuoto `y7-tables-94a8b4a7e-mobile` l'ho tolto, perché lo script non riusa un'etichetta esistente.
+> - Lo snapshot vuoto `y7-tables-95afa67db-mobile` l'ho tolto, perché lo script non riusa un'etichetta esistente.
 >   La build log è in `files/gallery_y7_aborted_build.log`.
 > - Il coordinatore ne è informato, con la sovrapposizione all'inizio della r2.
 > - **Da qui**: niente cicli d'avvio automatici. La galleria parte solo al via esplicito del coordinatore, verso
@@ -1928,10 +1928,10 @@ Fuori dai lotti:
 ### Y7 — galleria mobile d'ingresso ✅ (2026-10-16, 01:33–01:48; via del coordinatore alle 01:33)
 
 > **Note implementazione**: `bash /tmp/libreFolio_y7_gallery.sh` sulla corsia 6189: snapshot
-> `y7-tables-94a8b4a7e-mobile`, `--mobile-only`, `--workers 2` e `nice`. 11 test su 11 verdi in 5,8 minuti, 272 PNG.
+> `y7-tables-95afa67db-mobile`, `--mobile-only`, `--workers 2` e `nice`. 11 test su 11 verdi in 5,8 minuti, 272 PNG.
 > Il carico era fra 41 e 57, con altre due corsie e una build di un altro worktree in corsa.
-> - **Diff** contro `g-ref13-r1` (`a2c1c39f4`), `--common-only` e `--stability` di `g-final3`, report in
->   `diffs/g-ref13-r1__vs__y7-tables-94a8b4a7e-mobile/`. 174 immagini cambiate e 98 identiche; nessuna cambia di
+> - **Diff** contro `g-ref13-r1` (`c85ecd330`), `--common-only` e `--stability` di `g-final3`, report in
+>   `diffs/g-ref13-r1__vs__y7-tables-95afa67db-mobile/`. 174 immagini cambiate e 98 identiche; nessuna cambia di
 >   dimensione o manca; il massimo è lo 0,6%.
 > - **Attribuzione, tutto a Y7 (D-Y17)**, guardando a occhio sei composizioni:
 >   1. l'intestazione «Actions» non è più fissata al bordo destro. Al suo posto c'è l'intestazione della colonna sotto:
@@ -1945,22 +1945,22 @@ Fuori dai lotti:
 >   della run fermata alle 00:57 quindi non ha fatto risparmiare tempo: avevo detto il contrario al coordinatore e l'ho
 >   corretto nell'handoff.
 > - **Ingresso**: `theme-roles --check` alle 01:48 dice «0 files dropped». Handoff al coordinatore alle 01:48. Entra
->   solo il committato (`ca681b4f9` e `8d4719c21`): il piano, i rossi di Y9 e Y10 e `_frontend_portfolio.py` restano
+>   solo il committato (`a8d6088bd` e `032b833ac`): il piano, i rossi di Y9 e Y10 e `_frontend_portfolio.py` restano
 >   fuori.
 > - **Da riferire al developer**, con il riepilogo di D-Y17: la tinta delle righe sulla cella di selezione, sui
 >   telefoni.
 
 ### Y7 — ingresso ✅ (2026-10-16, 01:49)
 
-> **Note implementazione**: il treno 76 l'ha portato in `dev_release2` con il merge `a613a217c`, con le mie due righe 🐛
+> **Note implementazione**: il treno 76 l'ha portato in `dev_release2` con il merge `352f70d7c`, con le mie due righe 🐛
 > nel CHANGELOG. La tinta delle righe sulla cella di selezione va nella lista di domattina del developer.
-> Il coordinatore ha aggiornato la mia base: merge `c7dea8be6`, HEAD `f068a2f5f`. C'era un conflitto di sola aggiunta
+> Il coordinatore ha aggiornato la mia base: merge `1f5abed67`, HEAD `f1ffff5db`. C'era un conflitto di sola aggiunta
 > in `LibreFolio_devWiki/log.md`, e i miei file aperti non sono stati toccati.
 
 ### Y4b — FE2b, il rischio in `lib/features/risk/` ⏳ (2026-10-16, dalle 01:50; via del coordinatore alle 01:49)
 
 > **Note implementazione**:
-> 1. **Base**: HEAD `f068a2f5f`, che contiene T+DV (`a0915bef9`, DV-6 su `stressBucketLabel.ts`). `api sync` senza
+> 1. **Base**: HEAD `f1ffff5db`, che contiene T+DV (`3d1314c2c`, DV-6 su `stressBucketLabel.ts`). `api sync` senza
 >    cambi tracciati.
 > 2. **Il runner messo da parte** (passo nuovo). `_frontend_portfolio.py` aveva anche le registrazioni dei rossi di Y9
 >    e Y10, che non entrano con Y4b. Ho salvato la copia (`files/_frontend_portfolio.y9y10.py`) e la patch
@@ -2008,7 +2008,7 @@ Fuori dai lotti:
 > - **Le tre pagine `sources/` della devWiki** («Source files»: `RiskLevelsPanel.svelte`, `riskAnalysisHelpers.ts`,
 >   `riskStore.svelte.ts`) le ho aggiornate al percorso nuovo, anche se gli script lasciavano fuori `sources/`. Il
 >   motivo: `check_source_paths.py` chiede che ogni percorso di quelle tabelle esista, e c'è un precedente (il
->   refactor `27a29af09`). Le cronache in prosa restano com'erano.
+>   refactor `7290753af`). Le cronache in prosa restano com'erano.
 > - **Il runner riportato a HEAD per il checkpoint**, con le registrazioni dei rossi rimesse dopo, invece di uno stage
 >   parziale da parte del coordinatore.
 >
@@ -2038,9 +2038,9 @@ Fuori dai lotti:
 
 ### Y4b — commit e revisione combinata ⏳ (2026-10-16, 02:26–)
 
-> **Note implementazione**: il coordinatore ha salvato Y4b in `51aff4a12`, 152 file (103 rinomine e 49 modifiche), e il
-> journal in `26cdfb3ec`. Poi ha aggiornato la base: merge pulito di `dev_release2` (`57802d827`, con DV TD-1),
-> HEAD `9295febe9`, con `_frontend_utility.py` fuso da solo e `theme-roles --check` pulito.
+> **Note implementazione**: il coordinatore ha salvato Y4b in `7aec1899a`, 152 file (103 rinomine e 49 modifiche), e il
+> journal in `20d7ba743`. Poi ha aggiornato la base: merge pulito di `dev_release2` (`7138a8261`, con DV TD-1),
+> HEAD `ec414f4d4`, con `_frontend_utility.py` fuso da solo e `theme-roles --check` pulito.
 > - **Prove leggere sulla revisione combinata** (`/tmp/libreFolio_y4b_entry_light.sh`, una alla volta con `nice`, ognuna
 >   dopo il carico sotto 70), tutte verdi:
 >   - `api sync`, senza cambi tracciati;
@@ -2060,7 +2060,7 @@ Fuori dai lotti:
 >     `chartTheme`. `files/y9_k13_apply.py` aggiunge la riga d'import dopo quella di `echarts`, ed è già previsto;
 >   - a secco sulla base nuova: 18 chiamate in 17 file.
 >   - L'aggiunta a `chartTheme.ts` va in fondo al file, una zona che DV non tocca.
-> - **E2E** (slot 2, `9295febe9`): `front-portfolio risk` 38 su 38 (02:33–02:43, build compresa), `front-portfolio
+> - **E2E** (slot 2, `ec414f4d4`): `front-portfolio risk` 38 su 38 (02:33–02:43, build compresa), `front-portfolio
 >   risk-lab` 44 su 44 (02:43–02:48). La 6189 è libera. Handoff d'ingresso al coordinatore alle 02:48.
 > - **Registrazioni dei rossi** rimesse dopo le E2E, come da ok del coordinatore: `files/y9y10_runner_reapply.py
 >   --apply`, +40 −2. `check-orphans` è pulito con gli 8 rossi registrati; ruff dà 28 avvisi come HEAD. Non sono
@@ -2093,7 +2093,7 @@ Fuori dai lotti:
 
 ### Y4b — ingresso ✅ (2026-10-16, 02:52)
 
-> **Note implementazione**: il treno 81 l'ha portato in `dev_release2` con il merge `08efa5ac3`. FE2b è chiuso: il
+> **Note implementazione**: il treno 81 l'ha portato in `dev_release2` con il merge `0e140cf8e`. FE2b è chiuso: il
 > rischio è in `lib/features/risk/`. Resta Y4a (FE2a, i segnali), dopo FE4 e FE5a di X. Y3 parte dopo l'ingresso del
 > lotto di T, verso le 03:20, al messaggio del coordinatore. Il passo 2 di Y9 l'ho proposto per subito, perché Y3 è
 > fermo, e aspetto il via.
@@ -2147,7 +2147,7 @@ Fuori dai lotti:
 > 4. con lo slot, le E2E dei grafici e una galleria filtrata sui grafici con bandiere;
 > 5. le righe CHANGELOG nell'handoff d'ingresso.
 
-### Y9 — passo 2, seconda parte ⏳ (2026-10-16, dalle 03:08; prima parte salvata in `dae8b4442` e `7e3c88e5e`)
+### Y9 — passo 2, seconda parte ⏳ (2026-10-16, dalle 03:08; prima parte salvata in `dfd0a6fb5` e `a8e1a01e3`)
 
 > **Note implementazione**:
 > - **Il carico del font** (condizione 2 del coordinatore).
@@ -2178,7 +2178,7 @@ Fuori dai lotti:
 > differenza.
 >
 > **Checkpoint Y9-2** (03:32, chiesto dal coordinatore per aggiornare la base prima di Y3; il lotto di T è entrato in
-> `503dce683`):
+> `077a78abb`):
 > - **Entrano**:
 >   - `chartFont.ts`, con il carico del font, ed `echartsTooltipHelpers.ts`, con il ridisegno;
 >   - la documentazione di `docs-writer`: `charts.md` («Chart Text and Tooltips», con le sezioni sul font, sull'HTML dei
@@ -2199,8 +2199,8 @@ Fuori dai lotti:
 >   - Prettier sui due file di codice;
 >   - `mkdocs build` stretto: 3068 URL relativi risolti. `check-links`: 96 link validi;
 >   - `git diff --check` pulito.
-> - **Salvato**: il coordinatore ha committato `26978e101` (codice e documentazione) e `8c762a10f` (journal). Poi ha
->   aggiornato la base: merge pulito di `dev_release2` (`503dce683`, con il lotto di T e TD-3), HEAD `a1e4e5448`, con
+> - **Salvato**: il coordinatore ha committato `c25fdd3f5` (codice e documentazione) e `3c45578aa` (journal). Poi ha
+>   aggiornato la base: merge pulito di `dev_release2` (`077a78abb`, con il lotto di T e TD-3), HEAD `37f15731d`, con
 >   `security.md` fuso da solo.
 
 ### Y9 — passo 2, i test di `test-author` ✅ (2026-10-16, 03:09–03:35; non ancora committati, sono il checkpoint Y9-3)
@@ -2229,7 +2229,7 @@ Fuori dai lotti:
 ### Y3 — FE6b, la dashboard in `lib/features/dashboard/` ⏳ (2026-10-16, dalle 03:33; via del coordinatore)
 
 > **Note implementazione**:
-> 1. **Base**: HEAD `a1e4e5448`, con il lotto di T e `AllocationPanel.svelte` nella forma finale. `api sync` non cambia
+> 1. **Base**: HEAD `37f15731d`, con il lotto di T e `AllocationPanel.svelte` nella forma finale. `api sync` non cambia
 >    file tracciati.
 > 2. **Il runner messo da parte**, come per Y4b: la registrazione non committata di `chartFont.load.test.ts` (Y9-3) è
 >    salvata in `files/_frontend_portfolio.y9-3.py` e `files/y9-3_runner.patch`, e `_frontend_portfolio.py` è tornato a
@@ -2268,7 +2268,7 @@ Fuori dai lotti:
 >     il test costruisce il percorso con un template, `` new URL(`../dashboard/${file}`, import.meta.url) ``, che lo
 >     script non riconosce. L'ho corretto a mano in `../../features/dashboard/${file}`. Era l'unico template di quella
 >     forma nel frontend: ho controllato anche quelli del rischio.
->   - 2 rossi in `timeSeriesAggregationGolden.test.ts`, che non vengono da Y3 ma da **Y8** (`a25d09a69`, I-01). Il
+>   - 2 rossi in `timeSeriesAggregationGolden.test.ts`, che non vengono da Y3 ma da **Y8** (`c57a762ff`, I-01). Il
 >     verdetto è **difetto**: Y8 ha cambiato di proposito la somma con i punti mancanti e non ha ricatturato il corpus
 >     golden, e nelle prove di Y8 mancava `asset-unit`. Il test è rosso sul target dal treno di Y8. È nel backlog come
 >     Y-11, e lo segnalo al coordinatore con il rimedio.
@@ -2286,8 +2286,8 @@ Fuori dai lotti:
 >   in `chartFlagFont.test.ts`;
 > - i 2 rossi di Y10, ora in `features/dashboard/`;
 > - il piano e il backlog, che vanno nel commit del journal.
-> - **Salvato**: `ce828e9c1` (67 file: 35 rinomine e 32 modifiche) e `0eefb51df` (journal). Poi il merge di
->   `dev_release2` (`d0efca910`, con CP7b-1 e CP-6), pulito: HEAD `ee8b4edad`, `theme-roles --check` pulito. La riga
+> - **Salvato**: `76392f7ee` (67 file: 35 rinomine e 32 modifiche) e `4709721cd` (journal). Poi il merge di
+>   `dev_release2` (`a42af7e28`, con CP7b-1 e CP-6), pulito: HEAD `7007a9ee4`, `theme-roles --check` pulito. La riga
 >   `~split` l'ha girata il coordinatore ai colori. Le E2E di Y3 vanno nello slot 2, dopo quelle di A, verso le 04:30.
 
 ### Y-11 — il corpus golden dopo I-01 ⏳ (2026-10-16, dalle 03:56; via del coordinatore)
@@ -2322,7 +2322,7 @@ Fuori dai lotti:
 >
 > **Checkpoint Y-11**: il JSON del corpus e `timeSeriesAggregationGolden.test.ts`; il backlog (Y-11 ✅) e il piano
 > vanno nel journal.
-> - **Salvato**: `4c1f2fee6` (test) e `c27c34619` (journal). Y-11 entra con Y3 e Y9, dopo le E2E.
+> - **Salvato**: `5da9ec649` (test) e `3fc853f94` (journal). Y-11 entra con Y3 e Y9, dopo le E2E.
 
 ### Y9-3 — test e guardie ✅ (2026-10-16, 03:57–04:08; checkpoint mandato alle 04:08)
 
@@ -2353,7 +2353,7 @@ Fuori dai lotti:
 >   `privacy-masking`, `yield-on-cost-real`, `broker-filter-label` e `broker-icons`.
 > - **04:44, nessun via allo slot.** Le 7 spec principali chiedono circa 34 minuti e non stanno più prima delle 05:00.
 >   Ho chiesto al coordinatore di spostarle dopo la galleria di X (mia preferenza), oppure di lanciare subito solo
->   `dashboard`. HEAD `fd77a13ee`: Y9-3 è committato in `fd77a13ee`.
+>   `dashboard`. HEAD `dee1cf7f5`: Y9-3 è committato in `dee1cf7f5`.
 
 ### Y10 — E2E rossa scritta ✅ (2026-10-16, 04:12–04:44; `test-author`, niente lanciato)
 
@@ -2376,7 +2376,7 @@ Fuori dai lotti:
 >   - se Y10 è completo, verde e committato, una sola corsa per Y3, Y9 e Y10;
 >   - altrimenti Y10 va salvato come patch fuori dal repo, e la corsa gira sulla HEAD committata.
 >   Dalle 05:30 alle 06:45 la macchina è ferma: nessuna prova, si scrive soltanto.
-> - **C-34**: la correzione di W a `TransactionBulkModal` è in `dev_release2` (`60917185c`), non ancora nella mia base.
+> - **C-34**: la correzione di W a `TransactionBulkModal` è in `dev_release2` (`2de6634b7`), non ancora nella mia base.
 >   La voce dell'elenco ammesso in `escapeHtml.single.test.ts` si toglie insieme all'aggiornamento della base che porta
 >   quel commit: tolta adesso, il test diventerebbe rosso, perché nel mio albero la copia c'è ancora.
 
@@ -2430,13 +2430,13 @@ Fuori dai lotti:
 > **Checkpoint Y10** (mandato alle 05:03): 12 percorsi, cioè i 3 componenti, le 4 sorgenti i18n, i 2 Vitest, l'E2E e il
 > runner, più il piano per il journal. L'E2E `allocation-negative-cash` non è mai stata lanciata: è nella corsa unica
 > di Y3, Y9 e Y10, all'ora che darà il coordinatore.
-> - **Salvato**: `1bb8dc990` (`fix(dashboard)`) e `036d957c0` (journal). Poi il merge di `dev_release2` (`2f637d7cb`)
->   senza conflitti: HEAD `4cffd9586`, worktree pulito, verificato. La base contiene `60917185c` (C-34 di W).
+> - **Salvato**: `71f5ba86d` (`fix(dashboard)`) e `aa0b32382` (journal). Poi il merge di `dev_release2` (`c4752cde3`)
+>   senza conflitti: HEAD `d8d9cef51`, worktree pulito, verificato. La base contiene `2de6634b7` (C-34 di W).
 
 ### C-34 — la guardia senza l'eccezione temporanea ⏳ (2026-10-16, 05:03; non committata)
 
 > **Note implementazione**: in `TransactionBulkModal.svelte` la copia dell'escaper non c'è più (0 occorrenze dopo
-> `60917185c`). Ho tolto la voce dall'elenco ammesso di `escapeHtml.single.test.ts`, che ora ha una sola eccezione,
+> `2de6634b7`). Ho tolto la voce dall'elenco ammesso di `escapeHtml.single.test.ts`, che ora ha una sola eccezione,
 > `inlineMath.ts`. La sezione «Why it is red today» è diventata «Why it was red before C-34» e racconta le due copie,
 > tolte da Y9 e da W. Prettier ha anche rimandato a capo una catena, che sfuggiva perché il file era non tracciato al
 > controllo di Y9-1. La guardia dà 6 verdi su 6 (05:04, prima della fermata delle 05:25).
@@ -2447,17 +2447,17 @@ Fuori dai lotti:
 > - **Documentazione aggiornata** (`docs-writer`, scrivendo e basta, 05:05–05:09): in `charts.md`, «Tooltip HTML» e la
 >   riga della guardia nella tabella, e in `security.md`, il terzo punto di «Output Escaping». Ora c'è una sola
 >   eccezione, `inlineMath.ts`, e resta la regola per cui un'eccezione che non ha più una copia fa fallire la guardia.
-> - **05:07, aggiornamento della base** con il secondo lotto di T (`72e66d1a6`). Delle 27 modifiche di `dev_release2`
->   (`git diff HEAD...72e66d1a6`), l'unico file in comune è il baseline dei colori, il conflitto previsto, da risolvere
+> - **05:07, aggiornamento della base** con il secondo lotto di T (`7aefcc13a`). Delle 27 modifiche di `dev_release2`
+>   (`git diff HEAD...7aefcc13a`), l'unico file in comune è il baseline dei colori, il conflitto previsto, da risolvere
 >   solo con `theme-roles.mjs --resolve`. Ho chiesto al coordinatore di aprire il merge prima delle 05:25.
-> - **05:09, merge risolto** (MERGE_HEAD `72e66d1a6` su `4cffd9586`, aperto dal coordinatore): `theme-roles.mjs --resolve`,
+> - **05:09, merge risolto** (MERGE_HEAD `7aefcc13a` su `d8d9cef51`, aperto dal coordinatore): `theme-roles.mjs --resolve`,
 >   poi `--check` pulito. Il baseline fuso ha le 11 righe di Y3 in `features/dashboard/` e non ha le righe che T ha
 >   tolto. In stage solo il baseline; il commit di merge lo fa il coordinatore.
 > - **La regola dei colori sulle classi miste** (`-lf-` mai su un elemento che ha già classi di tavolozza). La scansione
 >   delle righe aggiunte nei `.svelte` dai lotti di stanotte (Y8, Y7, Y4b, Y3, Y9, Y10) e del worktree trova 0 elementi
 >   misti, e 0 anche nei file dove ho toccato classi, guardati come sono oggi. Lo script è
 >   `/tmp/libreFolio_mixed_scan.py`; non vede le direttive `class:` né gli attributi su più righe.
-> - **Merge committato** dal coordinatore: `47c03681a` (genitori `4cffd9586` e `72e66d1a6`), verificato. La riga
+> - **Merge committato** dal coordinatore: `f679eb1cf` (genitori `d8d9cef51` e `7aefcc13a`), verificato. La riga
 >   `~split` di `GrowthChart`, l'unica con `lib/components/dashboard/`, resta perché è un registro storico.
 > - **Guardia C-34 sulla revisione fusa**: 6 verdi su 6 (05:10). Anche con il secondo lotto di T dentro, nessun escaper
 >   nuovo fuori dall'elenco.
@@ -2470,7 +2470,7 @@ Fuori dai lotti:
 > **Note implementazione**: via alle 05:12 per Y5 e poi Y6, solo scrittura. Commit separati, in sequenza: Y5 committato
 > subito, poi Y6 sopra, perché i due lotti hanno file in comune (il baseline, `ImportWizardModal.svelte`,
 > `files/+page.svelte`, alcune pagine della devWiki). Scelta del coordinatore, prima opzione.
-> 1. **Base**: `47c03681a`. Totali prima: 9701/64, 244 file.
+> 1. **Base**: `f679eb1cf`. Totali prima: 9701/64, 244 file.
 > 2. **Spostamento** (`files/y5_move.py --apply`): 42 file. `components/brokers/**` va in `features/brokers/`, con
 >    `lots/`; `lotsAnalysisStore` (con il test) in `features/brokers/lots/`; `BrokerIcon` (con il test) in
 >    `components/ui/display/`. 52 specificatori riscritti in 28 file.
@@ -2485,7 +2485,7 @@ Fuori dai lotti:
 >   `developer/frontend/index.md`, che si corregge in Y6 per tutti e due gli spostamenti.
 > - **Checkpoint**: 143 percorsi (`files/y5_stage_code.txt`), mandato alle 05:17. Le prove leggere vengono dopo le
 >   06:45.
-> - **Committato**: `6f7ac70ce` (42 rinomine e 59 modifiche), HEAD `6f7ac70ce`.
+> - **Committato**: `53e6d7773` (42 rinomine e 59 modifiche), HEAD `53e6d7773`.
 
 ### Y6 — FE3, i file in `lib/features/files/` ✅ applicato (2026-10-16, 05:17–05:20; sopra Y5 committato)
 
@@ -2507,7 +2507,7 @@ Fuori dai lotti:
 >   ordine alfabetico. Nessun'altra riga era vecchia. `designer-lab.md` (`:550` e `:1220`) cita ancora i percorsi
 >   vecchi dei broker: è di L, e lo segnalo al coordinatore.
 > - **Checkpoint Y6**: 30 percorsi (`files/y6_stage_code.txt`), mandato alle 05:22. Fuori: il lotto C-34 e il piano.
-> - **Committato**: `aec49a9cb` (7 rinomine e 16 modifiche), HEAD `aec49a9cb`. La nota su `designer-lab.md` l'ha girata il
+> - **Committato**: `a73af926d` (7 rinomine e 16 modifiche), HEAD `a73af926d`. La nota su `designer-lab.md` l'ha girata il
 >   coordinatore ai colori. Fuori restano solo il lotto C-34 e il piano.
 
 ### Dopo le 06:45 — prove leggere su tutto, poi la corsa E2E unica ⏳ (preparato alle 05:25, niente lanciato)
@@ -2531,7 +2531,7 @@ Fuori dai lotti:
 >   - Se Y5 o Y6 non passano le prove leggere, li correggo con un commit sopra, oppure li toglie il coordinatore prima
 >     dell'ingresso.
 
-### Y12a — U8, analisi in sola lettura ✅ (2026-10-16, 05:25–05:30; agente `explore`, durante la fermata; HEAD `aec49a9cb`)
+### Y12a — U8, analisi in sola lettura ✅ (2026-10-16, 05:25–05:30; agente `explore`, durante la fermata; HEAD `a73af926d`)
 
 > **Note implementazione**. Le fonti: l'inventario del 43 (righe R17, V11, W7, W8, P4 e P5, e la riga U8 a `:538`), il
 > backlog (T-U8 a `:672-675`, J-1 a `:3457-3465`) e il piano di J (`05_numbersAnalysis`; CP-13 «U8 lato backend per Y»
@@ -2600,7 +2600,7 @@ Fuori dai lotti:
 >
 > Se servirà una galleria più avanti, il riferimento sarà il candidato dei colori di oggi (06:10–06:50).
 
-### Prove leggere dopo il blocco dei colori ✅ (2026-10-16, 06:48–07:08; HEAD `aec49a9cb`, con il lotto C-34 nel worktree)
+### Prove leggere dopo il blocco dei colori ✅ (2026-10-16, 06:48–07:08; HEAD `a73af926d`, con il lotto C-34 nel worktree)
 
 > **Note implementazione**. Lo script è `/tmp/libreFolio_after0645_light.sh`: una prova alla volta, con `nice`, e solo se
 > il carico è sotto 70; il log di ogni prova è in `/tmp/libreFolio_0645_<prova>.log`. Copre Y3, Y9, Y-11, Y10, Y5 e Y6,
@@ -2628,7 +2628,7 @@ Fuori dai lotti:
 >
 > Poi viene l'handoff del lotto C-34, e dopo il suo commit la corsa E2E unica: `DEADLINE=0850`, slot 1, dopo W.
 
-### Corsa E2E unica per Y3, Y9, Y10, Y5 e Y6 (2026-10-16, dalle 07:20; HEAD `be90b30e0`, che è la fusione con dev `1d37087f8`, DV compreso)
+### Corsa E2E unica per Y3, Y9, Y10, Y5 e Y6 (2026-10-16, dalle 07:20; HEAD `45a2577e7`, che è la fusione con dev `cb6263ca8`, DV compreso)
 
 > **Note implementazione**.
 > - **Prima della corsa**:
@@ -2675,7 +2675,7 @@ Fuori dai lotti:
 >   Restano solo elencati `:205-206` (ora `:213-214`) e `:33/:35`. La coda del test a `:582` (era `:573`) non gira da
 >   luglio: è **Y-12** nel backlog, e il coordinatore porta al developer la decisione sulla funzione.
 >
-> **Esito della corsa unica** (07:20:02–08:09:58, HEAD `be90b30e0`). Ogni spec da sola, `--workers 2`; in ogni riga i
+> **Esito della corsa unica** (07:20:02–08:09:58, HEAD `45a2577e7`). Ogni spec da sola, `--workers 2`; in ogni riga i
 > test verdi su quelli girati.
 >
 > | Lotto | Spec |
@@ -2704,11 +2704,11 @@ Fuori dai lotti:
 ### Ultima base prima dell'ingresso e prove leggere ✅ (2026-10-16, 08:22–08:32)
 
 > **Note implementazione**.
-> - **I commit**: il coordinatore ha salvato la correzione dello spec (`43eea2b9b`) e il journal (`c38fd7f78`).
-> - **La fusione**: dev `c94254695`, con dentro il terzo lotto di T, CP-10a di J, W-B32, B39, B44 e il CHANGELOG.
+> - **I commit**: il coordinatore ha salvato la correzione dello spec (`7be84e739`) e il journal (`472ccd073`).
+> - **La fusione**: dev `faac6763c`, con dentro il terzo lotto di T, CP-10a di J, W-B32, B39, B44 e il CHANGELOG.
 >   - L'unico conflitto, nel baseline, l'ho risolto con `--resolve`; `--check` pulito (baseline +3/−14). Ho messo in
->     stage solo il baseline, e il commit della fusione l'ha fatto il coordinatore: `b84903df8`, con genitori
->     `c38fd7f78` e `c94254695`.
+>     stage solo il baseline, e il commit della fusione l'ha fatto il coordinatore: `21b40c6d2`, con genitori
+>     `472ccd073` e `faac6763c`.
 >   - **Ho controllato i file fusi**: nessun riferimento nuovo alle cartelle vecchie, niente che finisca dentro di esse,
 >     nessun file mio toccato. I due runner fusi da soli compilano e tengono i miei percorsi.
 >   - `api/v1/brokers.py` cambiava l'API.
@@ -2721,7 +2721,7 @@ Fuori dai lotti:
 
 ## Y12a — U8, la parte che si fa senza campi nuovi (via del coordinatore, 2026-10-16 08:33)
 
-Base: HEAD `d5c3c3ae3`, cioè la punta di `dev_release2` dopo il treno 104, quello dell'ingresso di Y. Ordine dato dal
+Base: HEAD `c91f132e3`, cioè la punta di `dev_release2` dopo il treno 104, quello dell'ingresso di Y. Ordine dato dal
 coordinatore: W7, poi le dichiarazioni, poi `LotCustodyModal`, ma solo dopo un accordo con J (diff mandato prima di
 scrivere). Prove leggere con carico sotto 50; ogni passo si chiude con un checkpoint FROZEN.
 
@@ -2775,7 +2775,7 @@ scrivere). Prove leggere con carico sotto 50; ogni passo si chiude con un checkp
 >     `api sync`, poi da capo.
 >   - `/tmp` è stato svuotato dal riavvio delle 10:03, e con lui gli script di stanotte. Da ora gli script stanno nella
 >     cartella della sessione (`files/scripts/`).
-> - **Prove leggere su HEAD `d5c3c3ae3` più il lotto** (10:41–10:55, carico sotto 50; script
+> - **Prove leggere su HEAD `c91f132e3` più il lotto** (10:41–10:55, carico sotto 50; script
 >   `files/scripts/w7_light.sh`, log in `files/logs/`): `api sync` senza cambiamenti tracciati fuori dal lotto;
 >   svelte-check 0/0; `allocation-unit` 192/192; `core-unit` 6 266/6 266 in 178 file; `component-unit` 4 029/4 029 in
 >   154 file, con `ExposureTable.test.ts`; `git diff --check` pulito; 6189 libera.
@@ -2919,7 +2919,7 @@ scrivere). Prove leggere con carico sotto 50; ogni passo si chiude con un checkp
   - **In Y12b**: `requiredRecovery` di `levelHelpers.ts:356-360` sparisce; le due righe leggono i due campi.
 - **Ordine**: Y12a così com'è, poi Y-12, poi Y11. Y12b dopo, quando ci sono il campo di J e CP-13.
 
-### Prove leggere dei passi 2 e 3 ✅ (2026-10-16, 11:49–11:57; HEAD `93c39a11c` con i due passi nel worktree)
+### Prove leggere dei passi 2 e 3 ✅ (2026-10-16, 11:49–11:57; HEAD `e93f9fb06` con i due passi nel worktree)
 
 > **Note implementazione**. Script `files/scripts/y12a_light.sh`, una prova alla volta, carico sotto 50; log in
 > `files/logs/y12a_*.log`.
@@ -2941,7 +2941,7 @@ scrivere). Prove leggere con carico sotto 50; ogni passo si chiude con un checkp
 
 ## Y11 — il contratto di `pageBusy` (P3, decisione 48) ✅ approvato (2026-10-16, 12:20 e 12:35; nessun codice)
 
-Fonti: le decisioni del developer delle 11:19, e un'indagine `explore` sul codice di oggi (HEAD `9c42584e7`). Il codice
+Fonti: le decisioni del developer delle 11:19, e un'indagine `explore` sul codice di oggi (HEAD `5f47c1a05`). Il codice
 viene dopo Y-12. Il coordinatore chiede ai colori i file delle loro aree (T, DV, BK, AF, TR) e mi gira la risposta
 prima che io cominci.
 
@@ -3068,7 +3068,7 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
   2. dopo la corsa E2E di Y-12, il layout (`onNavigate`), File e Dashboard, script e pulsanti, e lo script del pannello
      dei lotti;
   3. gli altri pulsanti, a ogni ingresso dei colori.
-- **Una regola nuova della skill** (`a317392d4`): `text-lf-primary` più `placeholder:text-lf-placeholder` su un input
+- **Una regola nuova della skill** (`42d595074`): `text-lf-primary` più `placeholder:text-lf-placeholder` su un input
   `-lf-`. Y11 non tocca campi.
 
 ### Le spec toccate (le adatta `test-author`)
@@ -3104,7 +3104,7 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 >   - Ogni coppia ha un solo bottone premuto (`aria-pressed`), e dopo ogni clic il grafico si ridisegna: lo prova il
 >     contatore di rendering, `chartRenders`.
 > - **Correzione al mio brief**: in Rendimento il valore di partenza è **Abs**, non % (`LotComparisonChart.svelte:168`;
->   `returnUnit` è nato in `01b4132bb` già su `'abs'`). Niente finisce in localStorage.
+>   `returnUnit` è nato in `2a69e9d32` già su `'abs'`). Niente finisce in localStorage.
 > - **Il lotto si sceglie per stato**: `dt-row-checkbox-{rowId}` e `data-selected` di `DataTable.svelte:1098-1149`, non per
 >   classe CSS.
 > - **Non si è potuto**: leggere l'opzione di ECharts e provare che l'asse parte da 0. Questo grafico non espone
@@ -3199,7 +3199,7 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 
 ### ⏸️ Pausa del developer (2026-10-16, 13:2x) — FROZEN
 
-- **HEAD**: `3bf871f4f` (il journal di Y-12). Nessuna fusione aperta.
+- **HEAD**: `c6e81d173` (il journal di Y-12). Nessuna fusione aperta.
 - **File sporchi, tutti di Y11 e da committare insieme**:
   - modificati: `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte`,
     `frontend/src/lib/features/risk/riskPanelController.svelte.ts`, `frontend/src/routes/(app)/+layout.svelte`,
@@ -3217,21 +3217,21 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 - **14:14, ripresa dopo la pausa** (via del coordinatore):
   - `check-orphans` verde: tutti i file registrati e raggiungibili, `page-busy.spec.ts` compreso;
   - lo slot E2E 2 è verso le 15:10, per 30 minuti; lo script è `files/scripts/y11_e2e.sh`;
-  - AF è entrato (`bfd33a0f5`): i pulsanti di `fx/+page.svelte`, `fx/[pair]/+page.svelte` e `assets/+page.svelte` sono
+  - AF è entrato (`3a36bca01`): i pulsanti di `fx/+page.svelte`, `fx/[pair]/+page.svelte` e `assets/+page.svelte` sono
     liberi dopo l'allineamento della base, che il coordinatore fa al prossimo checkpoint;
   - Z-13b non tocca più `refreshVersion`; Z-15 (il ricaricamento dei pannelli dopo un aggiornamento dei prezzi) si
     decide dopo Y11.
 
-### Passo 2 · E2E ✅ (2026-10-16, slot 2, 15:10–15:43; HEAD `94e5e146e`, la fusione con dev `b51bb3663`)
+### Passo 2 · E2E ✅ (2026-10-16, slot 2, 15:10–15:43; HEAD `5da4ed8c4`, la fusione con dev `34e742ae4`)
 
 > **Note implementazione**.
-> - **I commit**: il passo 2 l'ha salvato il coordinatore (`ec018afdf` feat, `77ae9bcd7` journal). Poi la fusione con dev
->   `b51bb3663` (AF, IM, DV, H, W), con commit `94e5e146e`.
+> - **I commit**: il passo 2 l'ha salvato il coordinatore (`7fc594f8d` feat, `14405a2b9` journal). Poi la fusione con dev
+>   `34e742ae4` (AF, IM, DV, H, W), con commit `5da4ed8c4`.
 >   - L'unico conflitto, nel backlog (Y-13 contro la nuova sezione MF), l'ho risolto tenendo i due lati.
 >   - `dashboard/+page.svelte` si è fuso da solo con DV: il pulsante ha i ruoli di DV e i miei attributi.
 > - **Le prove leggere sulla revisione fusa**: verdi, tranne **C4 `bg-white/90`**. Quel rosso viene da dev: le ultime
 >   occorrenze le hanno tolte IM e DV, senza togliere la regola da `app.css`. L'ho segnalato; i colori l'hanno corretto
->   su dev in `1c7b9def2`.
+>   su dev in `e87bf5083`.
 > - **La E2E**, una spec alla volta, `--workers 2`, script `files/scripts/y11_e2e.sh`, `DEADLINE=1545`:
 >   `front-portfolio page-busy` **5/5** (prima corsa); `dashboard` 27/27; `dashboard-cache` 6/6; `front-utility files`
 >   29/29; `front-broker detail` 38/38. In tutto **105/105**.
@@ -3241,7 +3241,7 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 
 ### Passo 3 · le pagine di AF e DV (2026-10-16, dalle 15:45) — prove leggere verdi, E2E da fare
 
-> **Note implementazione** (base `94e5e146e`, che contiene già gli ingressi di AF e DV).
+> **Note implementazione** (base `5da4ed8c4`, che contiene già gli ingressi di AF e DV).
 > - **AF**, con le patch preparate in `files/patches/` e provate a secco sulla stessa revisione:
 >   - **lista FX**: gettoni sul primo caricamento (catalogo, coppie e cambi), Aggiorna, periodo, impostazioni che vanno
 >     al backend, nuovo tentativo dei segnali, e il ricaricamento dopo la creazione di una coppia.
@@ -3280,7 +3280,7 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 >   svelte-check 0/0; `theme-roles` pulito; store 76; risk-controller 102; risk-levels 498; allocation 192; component
 >   4 044 (i Vitest degli strumenti compresi); `check-orphans` pulito; `git diff --check` pulito; 6189 libera.
 >   - `core-unit` fa 6 412/6 413: l'unico rosso è il C4 `bg-white/90` ereditato da dev. La correzione dei colori
->     (`1c7b9def2`) non è ancora nella mia base.
+>     (`e87bf5083`) non è ancora nella mia base.
 > - **Checkpoint**: 11 file (+143/−87), elencati in `files/y11s3_stage_code.txt`, più il piano. La E2E del passo 3 è
 >   `files/scripts/y11s3_e2e.sh`, circa 45 minuti:
 >   - prima le spec adattate: dashboard-cache, risk, risk-real, asset-detail;
@@ -3290,8 +3290,8 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 ### Passo 3 · checkpoint e seconda fusione (2026-10-16, 16:04–16:31)
 
 > **Note implementazione**.
-> - **I commit**: il passo 3 l'ha salvato il coordinatore, `e843be00c` (11 file) ed `ec2235b00` (journal). Poi la
->   fusione con dev `e9b4ac6b0`, che porta C4 dei colori, Z5, Z-13 e Z-13b di Z, P17 di H, B36b di W e IW.
+> - **I commit**: il passo 3 l'ha salvato il coordinatore, `76b862c79` (11 file) ed `446e1044e` (journal). Poi la
+>   fusione con dev `edd0336ff`, che porta C4 dei colori, Z5, Z-13 e Z-13b di Z, P17 di H, B36b di W e IW.
 > - **I due conflitti**, risolti tenendo i due lati:
 >   - `dashboard/+page.svelte`: ha litigato solo l'import (`registerPortfolioMutationListener` di Z, `pageBusy` mio).
 >     `reloadAfterPriceCatchUp()` di Z chiama `loadAll()` senza gettone, come vuole P3;
@@ -3311,9 +3311,9 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 >   risk-controller 102; risk-levels 498; core **6 472/6 472** (il C4 se n'è andato con la fusione); component 4 044.
 > - **Da dire a Z**: durante il ricaricamento di sfondo la radice della Dashboard è `aria-busy="true"`. P3 riguarda solo
 >   il pulsante, e la radice è di DV: è solo una segnalazione.
-- **16:31**: commit della fusione `8268f65ec` (genitori `ec2235b00` ed `e9b4ac6b0`). La riga di Prettier e il test P3
+- **16:31**: commit della fusione `da5af8b4c` (genitori `446e1044e` ed `edd0336ff`). La riga di Prettier e il test P3
   restano per il prossimo checkpoint. Lo slot E2E del passo 3 è verso le 17:10–17:15.
-- **Patch pronte per le aree che entrano dopo**, provate a secco su `8268f65ec` e salvate in `files/patches/`:
+- **Patch pronte per le aree che entrano dopo**, provate a secco su `da5af8b4c` e salvate in `files/patches/`:
   - `y11_brokers_list.py` e `y11_broker_detail.py` (BK). Il ricaricamento di sfondo di Z-13 (`reloadAfterPriceCatchUp`)
     e `onsynced` del rischio restano senza gettone;
   - `y11_transactions.py` (TR). I filtri sono lato client (W28), quindi senza gettone;
@@ -3326,7 +3326,7 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
   - **Al passo 4**: `test-author` estende il test P3 di `page-busy.spec.ts` alla pagina del broker, con lo stesso
     aggiornamento simulato. Durante il ricaricamento di sfondo `broker-refresh` resta `data-busy="false"`.
 
-### Passo 3 · E2E (slot 1, dalle 17:01, scadenza 17:50; HEAD `8268f65ec` più il test P3 e la riga di Prettier) — ✅ 17:44 (155/156, un rosso da sovraccarico da riconfermare)
+### Passo 3 · E2E (slot 1, dalle 17:01, scadenza 17:50; HEAD `da5af8b4c` più il test P3 e la riga di Prettier) — ✅ 17:44 (155/156, un rosso da sovraccarico da riconfermare)
 
 > **Note implementazione** (`files/scripts/y11s3_e2e.sh`, riepilogo in `files/logs/y11s3_e2e_summary.log`).
 > - `front-portfolio page-busy` **6/6**: il test P3 è verde alla prima corsa, cioè l'aggiornamento dei prezzi non fa
@@ -3368,12 +3368,12 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 
 ### Passo 4 · preparazione (17:46–17:52, sola lettura; nessun file del repo toccato)
 
-- **17:46, coordinatore**: BK è in dev (`939e4998a`), quindi il passo 4 è sbloccato da quel lato.
+- **17:46, coordinatore**: BK è in dev (`9d315f9c9`), quindi il passo 4 è sbloccato da quel lato.
   - **Ordine**: al suo via, prima `prettier --check` e CHECKPOINT READY, poi la corsa di conferma di `dashboard-cache` da
     sola, che apre lo slot E2E del passo 4.
 - **Base**:
-  - `939e4998a` è già un antenato di `8268f65ec`, e anche TR (`e402d3b87`, 14:57, arrivato con `e9b4ac6b0`). Le patch
-    BK e TR provate a secco su `8268f65ec` valgono ancora;
+  - `9d315f9c9` è già un antenato di `da5af8b4c`, e anche TR (`980475174`, 14:57, arrivato con `edd0336ff`). Le patch
+    BK e TR provate a secco su `da5af8b4c` valgono ancora;
   - si applicano **dopo** il commit del checkpoint e l'eventuale aggiornamento della base, perché file del broker
     sporchi bloccherebbero la fusione;
   - per TR serve il via del coordinatore per `transactions/+page.svelte`, che è un'area colori.
@@ -3404,13 +3404,13 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
   4. `risk`, `privacy-masking`, `yield-on-cost-real`, `data-quality-real`, `toolbar-width-sweep`, `default-currency` e
      `price-refresh`.
   - Circa 60 minuti in tutto, 68 con TR: la guardia della scadenza salta la coda, da recuperare in uno slot successivo.
-- **18:00, conferma di `dashboard-cache`**: da sola, con `--workers 2`, su `8268f65ec` più i tre file del checkpoint.
+- **18:00, conferma di `dashboard-cache`**: da sola, con `--workers 2`, su `da5af8b4c` più i tre file del checkpoint.
   - **6/6 in 36 s**, con il carico da 70 a 41; `:420` è verde.
   - Il verdetto sul rosso delle 17:21 è confermato: lentezza da sovraccarico.
-- **Checkpoint**: il coordinatore ha committato `3324a9f59` (test P3 e riflusso della Dashboard) e `d99f7987d` (journal).
-  HEAD è `d99f7987d`, con l'albero pulito.
+- **Checkpoint**: il coordinatore ha committato `65b336cb4` (test P3 e riflusso della Dashboard) e `606abaa31` (journal).
+  HEAD è `606abaa31`, con l'albero pulito.
 
-### Passo 4 · BK e TR (dalle 18:02, su `d99f7987d`) — ✅ codice e prove leggere 18:29; E2E da fare
+### Passo 4 · BK e TR (dalle 18:02, su `606abaa31`) — ✅ codice e prove leggere 18:29; E2E da fare
 
 > **Note implementazione**.
 > - **Via del coordinatore**:
@@ -3484,7 +3484,7 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 >   - Y-15: il `title="Refresh"` di `brokers-refresh` è scritto in inglese nel codice. Il coordinatore chiede di
 >     proporre la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli altri pulsanti «Aggiorna»; sceglie
 >     il developer.
-> - **Conflitti previsti**: nessuno. Dev è a `5609b16d7`, 97 commit avanti, e non tocca i miei percorsi. Nel BACKLOG le
+> - **Conflitti previsti**: nessuno. Dev è a `4016ba518`, 97 commit avanti, e non tocca i miei percorsi. Nel BACKLOG le
 >   sue modifiche finiscono intorno alla riga 4 297, mentre la sezione Y comincia alla 4 439.
 > - **Script E2E** `files/scripts/y11s4_e2e.sh`, rivisto: la conferma di `dashboard-cache` è già fatta e TR è applicato.
 >   L'ordine è `page-busy`, `front-broker detail` e `list`, `transactions-table`, `tx-broker-icon-hydration`,
@@ -3500,11 +3500,11 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 >     ricarica la scheda Rischio. Basta, al più, un collegamento alla sezione della Dashboard;
 >   - lato sviluppatori manca una pagina sullo schema `pageBusy`: dove va `track`, mai dentro le funzioni di
 >     caricamento, e niente gettoni sui ricaricamenti di sfondo.
-- **Checkpoint del passo 4**: il coordinatore ha committato `fba7b036d` (feat) ed `e24ef7a2f` (journal); HEAD
-  `e24ef7a2f`, con l'albero pulito. Un'unica E2E per il passo 4 e il 4b nello slot 1, verso le 20:00, per 60 minuti. Se
+- **Checkpoint del passo 4**: il coordinatore ha committato `58ac99512` (feat) ed `cf89031e1` (journal); HEAD
+  `cf89031e1`, con l'albero pulito. Un'unica E2E per il passo 4 e il 4b nello slot 1, verso le 20:00, per 60 minuti. Se
   le prove leggere del 4b non sono verdi per quell'ora, la corsa copre solo il passo 4.
 
-### Passo 4b · `pageBusy.join` (N55, dalle 18:32, su `e24ef7a2f`) — ✅ codice, test e prove leggere 18:54; E2E verso le 20:00
+### Passo 4b · `pageBusy.join` (N55, dalle 18:32, su `cf89031e1`) — ✅ codice, test e prove leggere 18:54; E2E verso le 20:00
 
 > **Note implementazione**.
 > - **Decisione N55 del coordinatore**, da rivedere con il developer: l'opzione 1. Le richieste che un pannello fa da
@@ -3578,7 +3578,7 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 ### Y-15 · proposta della parola per i pulsanti «Aggiorna» (per il developer; 16/10 18:38)
 
 Il coordinatore chiede di proporre la parola, «Refresh» o «Reload», nelle quattro lingue, per tutti i pulsanti
-«Aggiorna» delle pagine; la scelta spetta al developer. Inventario fatto in sola lettura su `e24ef7a2f`; i valori
+«Aggiorna» delle pagine; la scelta spetta al developer. Inventario fatto in sola lettura su `cf89031e1`; i valori
 vengono dal catalogo generato alle 18:27.
 
 | Pagina | Pulsante (`data-testid`) | Chiave di oggi | EN | IT | FR | ES |
@@ -3617,7 +3617,7 @@ vengono dal catalogo generato alle 18:27.
 - Dopo la scelta: un `$_()` sulla chiave scelta per gli undici pulsanti, Y-15 compreso, con le chiavi nelle quattro
   lingue (skill `devpy-i18n`). Le spec E2E usano i `data-testid`, quindi i testi non le toccano.
 
-### Y12b · sbloccato: CP-13a di J è in dev (`0452e592c`; messaggio di J delle 18:39)
+### Y12b · sbloccato: CP-13a di J è in dev (`cb3b2e32d`; messaggio di J delle 18:39)
 
 - **Campo nuovo** `maximum_drawdown_trough_to_peak_ratio` (`number | null`, ≥ 0) in `RiskDrawdownOutput`
   (`drawdown_summary`) e in `RiskAssetSetDrawdownItem` (`asset_set_drawdown`).
@@ -3642,12 +3642,12 @@ vengono dal catalogo generato alle 18:27.
     `L1HowMuchItHurts.svelte` già sbagliate: ora sono 152-155 e 182-183;
   - il commento in `levelHelpers.ts:137-141` dice che il ripiego per settore è «l'unico avviso» con
     `degrades_result=false`, e non è più vero.
-- **Conflitti previsti all'aggiornamento della base**: la fusione `0452e592c` tocca solo il BACKLOG fra i miei file,
+- **Conflitti previsti all'aggiornamento della base**: la fusione `cb3b2e32d` tocca solo il BACKLOG fra i miei file,
   nella sezione di J.
 
-### Passo 4 + 4b · E2E (slot 1, dalle 18:55, scadenza 20:00; HEAD `1c3f6a432`) — ✅ 19:30, 180/180
+### Passo 4 + 4b · E2E (slot 1, dalle 18:55, scadenza 20:00; HEAD `0f96f6827`) — ✅ 19:30, 180/180
 
-- Il coordinatore ha committato il 4b: `7f0a07b9d` (feat) e `1c3f6a432` (journal).
+- Il coordinatore ha committato il 4b: `0fe6b8884` (feat) e `0f96f6827` (journal).
   - N55 e Y-18 vanno nella revisione con il developer, e anche Y-15 con la proposta «Refresh / Aggiorna…».
 - Script: `files/scripts/y11s4_e2e.sh` con `DEADLINE=2000`. Riepilogo in `files/logs/y11s4_e2e_summary.log`.
 
@@ -3675,9 +3675,9 @@ vengono dal catalogo generato alle 18:27.
 >     refreshing», la pagina dei broker e una pagina per sviluppatori su `pageBusy`.
 > - **Revisione con il developer**: N55, Y-18 e Y-15.
 
-### Aggiornamento della base: fusione con dev `967ddbda4` (aperta dal coordinatore alle 19:30; HEAD `aec08170f`)
+### Aggiornamento della base: fusione con dev `ca3e64b58` (aperta dal coordinatore alle 19:30; HEAD `662fa740e`)
 
-- Il journal con l'E2E dei passi 4 e 4b è committato: `aec08170f`.
+- Il journal con l'E2E dei passi 4 e 4b è committato: `662fa740e`.
 - La fusione porta CP-13a (J), C-97a, X-R28, O-20 di X, H-12/21, il lotto 9 di AF e DV.
 - **Un conflitto, `routes/(app)/assets/+page.svelte`**: il mio Y11 contro O-20 di X. Con O-20 la pagina non
   sincronizza più da sola dopo una creazione: `AssetModal` sincronizza, e la pagina mostra lo spinner sulla scheda.
@@ -3715,15 +3715,15 @@ vengono dal catalogo generato alle 18:27.
 - **Per `assets/[id]`**: la fusione porta lo split della pagina di dettaglio fatto da X, con i componenti in
   `components/assets/detail/` (per esempio `AssetDetailToolbarActions.svelte` e `AssetDetailHeader.svelte`). Prima di
   scrivere la patch chiedo al coordinatore se FE5c e il 9b sono entrambi entrati.
-- **19:57**: il coordinatore ha committato la fusione (`ceb182ad4`), e **Y è entrato in dev** con `0c79932a7` (corsa
+- **19:57**: il coordinatore ha committato la fusione (`61e766239`), e **Y è entrato in dev** con `d4202021d` (corsa
   130: Y12a, Y-12 e Y11 dal passo 1 al 4b).
   - `assets/[id]`: FE5c e il 9b sono entrati, ma X sta lavorando a C-66 sullo stesso file. Quindi prima Y12b; poi
     `assets/[id]`, con `onmerged`, appena C-66 entra (me lo dice il coordinatore).
 
-### Y12b · P19, i guadagni di recupero dal backend (dalle 19:58, su `ceb182ad4`) — ✅ codice, test e prove leggere 20:12; E2E da fare
+### Y12b · P19, i guadagni di recupero dal backend (dalle 19:58, su `61e766239`) — ✅ codice, test e prove leggere 20:12; E2E da fare
 
 > **Note implementazione**.
-> - **Ambito di oggi: solo P19**, con CP-13a di J (`0452e592c`) già nella base.
+> - **Ambito di oggi: solo P19**, con CP-13a di J (`cb3b2e32d`) già nella base.
 >   - R17, W8, P4, P5 e V11 aspettano il resto di CP-13 di J, e P5 anche CP-7: nessuno di questi campi è nel client
 >     generato.
 > - **Cosa cambia** (`features/risk/levels/levelHelpers.ts`; patch `files/patches/y12b_levelHelpers.py`, provata a
@@ -3789,7 +3789,7 @@ vengono dal catalogo generato alle 18:27.
 >     | 310 | `DOC_PATHS` l.117, `TAIL_DOCS` l.127 | 103, 113 |
 >     | 119 | `riskAnalysisHelpers.ts:280`, «used at l.340» | 282; usato alle righe 321 e 342 |
 > - **E2E da chiedere**: `front-portfolio risk`, circa 5 minuti. Copre la stub aggiornata e la riga del recupero.
-- **20:16, checkpoint di Y12b**: il coordinatore ha committato `c3d0a7fa7` (feat) e `f1f2b9390` (journal).
+- **20:16, checkpoint di Y12b**: il coordinatore ha committato `11f594fc5` (feat) e `cbccc8979` (journal).
   - E2E `front-portfolio risk`, circa 5 minuti, nel primo slot libero dopo le 20:45, su sua conferma.
   - Vanno nella revisione con il developer: «null: la riga non compare, non "—"».
   - La domanda sul resto di CP-13 (R17, W8, P4, P5 e V11) è passata a J.
@@ -3799,7 +3799,7 @@ vengono dal catalogo generato alle 18:27.
     `ExposureTreemap`, P4 in `PerformanceChart`, P5 e V11 nei grafici dei lotti. Y-17, cioè `aria-pressed` su
     `PositionsPanel`, invece li tocca, e aspetta l'ingresso dei colori.
 
-### Y4a · analisi aggiornata (16/10 20:17–20:22, sola lettura, nessun file toccato; HEAD `f1f2b9390`)
+### Y4a · analisi aggiornata (16/10 20:17–20:22, sola lettura, nessun file toccato; HEAD `cbccc8979`)
 
 > **Note implementazione**. L'ha chiesta il coordinatore (opzione 1). FE4 e FE5a di X **non** sono entrati: oggi non
 > esistono né `features/fx` né `features/assets`; sono entrati solo FE5b e FE5c.
@@ -3872,7 +3872,7 @@ vengono dal catalogo generato alle 18:27.
   - X non ha rami FE4 o FE5a aperti, quindi la prima condizione è soddisfatta.
   - Alle 20:45 `front-portfolio risk` per Y12b, poi l'ingresso in dev.
 
-### Y12b · E2E `front-portfolio risk` (dalle 20:45 alle 20:51; HEAD `f1f2b9390`) — 37/38, un rosso non dovuto a Y12b
+### Y12b · E2E `front-portfolio risk` (dalle 20:45 alle 20:51; HEAD `cbccc8979`) — 37/38, un rosso non dovuto a Y12b
 
 > **Note implementazione** (script `files/scripts/y12b_e2e.sh`, avviato da solo alle 20:45 con il controllo del
 > carico; log in `files/logs/y12b_e2e_risk.log`).
@@ -3886,7 +3886,7 @@ vengono dal catalogo generato alle 18:27.
 >       c'è;
 >     - nello screenshot preso dopo il timeout il tooltip invece è **aperto**, con il testo giusto («Average annual
 >       return …»);
->     - `Tooltip.svelte` non è cambiato dall'ultima corsa verde (`1c3f6a432`), e il suo `data-testid` è sempre alla
+>     - `Tooltip.svelte` non è cambiato dall'ultima corsa verde (`0f96f6827`), e il suo `data-testid` è sempre alla
 >       riga 433.
 >   - **Di nuovo da solo, 3 volte su 3 verde** (dalle 20:53 alle 20:59, da 9 a 11 s ciascuna, con il filtro
 >     «title is the short name»).
@@ -3925,19 +3925,19 @@ vengono dal catalogo generato alle 18:27.
     - **Verdetto: lentezza sotto carico.** Subito dopo l'apertura del replay storico il thread principale resta
       occupato per più di 3 s; non è un difetto di Y12b. Al coordinatore ho proposto una terza corsa sotto carico 50,
       oppure l'ingresso subito, con Y-21.
-- **21:19, coordinatore**: il W6-d di DV è entrato (`3805bf2ca`), e `PositionsPanel.svelte` ed `ExposureTable.svelte`
+- **21:19, coordinatore**: il W6-d di DV è entrato (`a316a0a58`), e `PositionsPanel.svelte` ed `ExposureTable.svelte`
   sono di nuovo liberi.
   - DV ha chiuso la mia **Y-17**: `aria-pressed` sui 4 pulsanti Holdings/Performance e Table/Map di `PositionsPanel`.
-    È segnata ✅ nel BACKLOG con `3805bf2ca`, e va nel prossimo checkpoint.
-  - `3805bf2ca` non è ancora nella mia base: lo porterà il prossimo aggiornamento.
+    È segnata ✅ nel BACKLOG con `a316a0a58`, e va nel prossimo checkpoint.
+  - `a316a0a58` non è ancora nella mia base: lo porterà il prossimo aggiornamento.
   - Il test N55 sulla vista Performance del broker legge ancora `contribution-table`. Potrà leggere `aria-pressed`
     dopo l'aggiornamento della base, ma non serve.
-- **21:20, coordinatore**: opzione 2. Y12b è entrato con la correzione: `8acf41fdf` (test) e `684560cd3` (journal, che
+- **21:20, coordinatore**: opzione 2. Y12b è entrato con la correzione: `ded586a94` (test) e `9a9346fe0` (journal, che
   contiene solo il piano). Y-21 va nel BACKLOG, scritta alle 21:21 e da portare nel prossimo checkpoint.
   - Prossimo: `assets/[id]` dopo il lotto A di Z; nel frattempo Y-14, oppure un'altra voce lontana dalle pagine degli
     asset.
 
-### Y-14 · «Aggiorna» della lista dei broker ricalcola anche le schede (dalle 21:22, su `684560cd3`) — ✅ rosso e verde 21:43, prove leggere 22:05
+### Y-14 · «Aggiorna» della lista dei broker ricalcola anche le schede (dalle 21:22, su `9a9346fe0`) — ✅ rosso e verde 21:43, prove leggere 22:05
 
 > **Note implementazione**.
 > - **Decisione** (coordinatore, 21:2x): il rimedio è «forzare», come nella Dashboard e nella pagina del broker.
@@ -3987,9 +3987,9 @@ vengono dal catalogo generato alle 18:27.
 >   - svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
 >   - core 6 830/6 830;
 >   - `git diff --check` pulito; la porta 6189 è libera.
-> - **BACKLOG**: Y-14 ✅ nel checkpoint di Y-14. Nello stesso checkpoint vanno anche Y-17 ✅ (`3805bf2ca`), Y-21 e la nota
+> - **BACKLOG**: Y-14 ✅ nel checkpoint di Y-14. Nello stesso checkpoint vanno anche Y-17 ✅ (`a316a0a58`), Y-21 e la nota
 >   sul W6-d.
-- **22:06, Y-14 entrato** (corsa 144, con una riga 🐛 nel CHANGELOG): `daa2001ea` (fix) e `7c36f2129` (journal).
+- **22:06, Y-14 entrato** (corsa 144, con una riga 🐛 nel CHANGELOG): `4cab3ddcf` (fix) e `2118d5104` (journal).
   `assets/[id]` aspetta il lotto A di Z.
 
 ### MF-P · contratti dei campi per il resto di Y12b (22:06–22:12, sola lettura)
@@ -4067,7 +4067,7 @@ vengono dal catalogo generato alle 18:27.
     `lib/utils/assetPriceDerived.ts:193-196` (`computePeriodDelta`, lista degli asset) e in
     `routes/(app)/fx/+page.svelte:236-240`, area di X. Gliel'ho risposto.
 
-### Y-19 · la durata della caduta peggiore segue la fonte della profondità (via del coordinatore 22:11, su `7c36f2129`) — ✅ 22:31
+### Y-19 · la durata della caduta peggiore segue la fonte della profondità (via del coordinatore 22:11, su `2118d5104`) — ✅ 22:31
 
 > **Note implementazione**.
 > - **Analisi**: nello schema le due durate sono `int` obbligatori e ≥ 0, e il riepilogo controlla la coerenza fra
@@ -4096,16 +4096,16 @@ vengono dal catalogo generato alle 18:27.
 >   - Prettier pulito; svelte-check 0 errori e 0 avvisi; core 6 830/6 830; `git diff --check` pulito; la porta 6189 è
 >     libera.
 > - Nel BACKLOG Y-19 è ✅. Nessuna E2E, perché le stub sono valide e il comportamento resta quello.
-- **22:2x, revisione del lotto B di Z** (sola lettura, con `git show 1b46178bd`), sui due casi «reload in background»
+- **22:2x, revisione del lotto B di Z** (sola lettura, con `git show 97a046fec`), sui due casi «reload in background»
   di `page-busy.spec.ts`:
   - durante la richiesta trattenuta la radice della Dashboard deve essere `data-busy="false"` (Z-18);
   - l'arrivo del ricaricamento si legge con `countReports` e `landedAllBut`, gli strumenti della spec;
   - `holds` esiste nel test.
   - Ho risposto **OK**, senza modifiche. Il lotto B di Z è entrato. `assets/[id]` diventa mio quando entra il lotto A.
-- **22:32**: Y-19 committato (`9fd2dcdc0` fix e `54cce7263` journal) ed entrato in dev. Il via per Y-20 è arrivato
+- **22:32**: Y-19 committato (`9ec3e07a4` fix e `e4da8c6a4` journal) ed entrato in dev. Il via per Y-20 è arrivato
   mentre Z lavora al lotto A.
 
-### Y-20 · `risk-lab.md`: numeri di riga scaduti (dalle 22:33, su `54cce7263`) — ✅ 22:47
+### Y-20 · `risk-lab.md`: numeri di riga scaduti (dalle 22:33, su `e4da8c6a4`) — ✅ 22:47
 
 > **Note implementazione**.
 > - **`docs-writer`** (dalle 22:33) aggiorna i sei riferimenti della tabella in «Y12b» (righe 119 e 302–310 della
@@ -4134,7 +4134,7 @@ vengono dal catalogo generato alle 18:27.
 >   nella tabella degli host). Ho chiesto a `docs-writer` di aggiornare anche gli 11 numeri della tabella degli host e
 >   del punto «No owned broker», già verificati. Non si va oltre.
 > - **Terzo giro** (fino alle 22:47): gli 11 numeri della tabella degli host e del punto «No owned broker».
->   - Ciascuno è stato confrontato con la stessa riga di `eee56b42a`, quando la pagina fu scritta: punta allo stesso
+>   - Ciascuno è stato confrontato con la stessa riga di `074815a60`, quando la pagina fu scritta: punta allo stesso
 >     codice, solo spostato (di 1, 31 o 32 righe).
 >   - Ora la pagina dà una riga sola per ogni fatto (`:718` sia nel punto sia nella tabella).
 >   - `check-links` verde, 97 link validi; `brokerStore.ts:262` era già giusto.
@@ -4161,7 +4161,7 @@ vengono dal catalogo generato alle 18:27.
   2. la pagina per sviluppatori su `pageBusy`;
   3. l'analisi di Y13.
 
-### Y-21 e Y-5 · scadenze del test L4 e commento di `headerTooltip` (via del coordinatore 22:50, su `bf1b802d7`)
+### Y-21 e Y-5 · scadenze del test L4 e commento di `headerTooltip` (via del coordinatore 22:50, su `af9e6e10b`)
 
 > **Note implementazione** (in corso).
 > - **Y-21** (`test-author`, dalle 22:50 alle 22:55, `risk-analysis.spec.ts`, +9/−4):
@@ -4196,7 +4196,7 @@ vengono dal catalogo generato alle 18:27.
 >   ricaricamento dopo l'aggiornamento dei prezzi «lascia stare `syncLoading`, lo spinner del pulsante Refresh»; da Y11
 >   il pulsante gira su `pageBusy.busy`. Il file l'ha toccato per ultimo Z: ho chiesto al coordinatore se la correggo io
 >   nello stesso checkpoint.
-> - **La frase di `domain-state.md`**: il coordinatore ha detto «correggila tu». Ma il lotto B di Z (`1b46178bd`, già in
+> - **La frase di `domain-state.md`**: il coordinatore ha detto «correggila tu». Ma il lotto B di Z (`97a046fec`, già in
 >   dev) aveva riscritto proprio quel passo 5 (riga 121 in dev): «Nor is it tracked by `pageBusy` … so the button
 >   neither waits nor spins for it», più Z-18.
 >   - La mia copia è quella precedente, quindi non la tocco: avrei solo un conflitto. Il testo giusto arriva con il
@@ -4204,7 +4204,7 @@ vengono dal catalogo generato alle 18:27.
 >   - La riga aggiunta da `docs-writer` è nella sezione del bus, lontana dal passo 5, e dice la stessa cosa.
 >   - L'ho detto al coordinatore.
 
-### Y13 · FE9–FE11, analisi (16/10 23:10–23:20, sola lettura; HEAD `bf1b802d7`)
+### Y13 · FE9–FE11, analisi (16/10 23:10–23:20, sola lettura; HEAD `af9e6e10b`)
 
 > **Note implementazione**. Script `files/y13_inventory.py`: per ogni file di `lib/utils` e `lib/stores`, chi lo importa
 > e da quali domini; le inversioni di livello; il censimento dei suffissi. Log in `files/logs/y13_inventory.log`,
@@ -4272,7 +4272,7 @@ vengono dal catalogo generato alle 18:27.
 >     Se W riscrive i percorsi nelle pagine, la cambia in dev; le mie aggiunte nello stesso file sono alla riga 20 e
 >     dalla 454, quindi la fusione va da sola.
 >   - Detto al coordinatore.
-> - **⚠️ Fuori pista: la mia sezione `#page-busy` contraddiceva Z-18** (lotto B di Z, `1b46178bd`, già in dev). Il
+> - **⚠️ Fuori pista: la mia sezione `#page-busy` contraddiceva Z-18** (lotto B di Z, `97a046fec`, già in dev). Il
 >   ricaricamento dopo un recupero dei prezzi ora gira con `loadAll(false, false, {background: true})`, e la radice
 >   `dashboard-page` resta `false`. Corrette due frasi della mia sezione, che non è committata:
 >   - la radice segue i flag di caricamento della pagina, non i gettoni. Dopo un recupero dei prezzi restano entrambi
@@ -4289,7 +4289,7 @@ vengono dal catalogo generato alle 18:27.
 >     `user/dashboard/index.en.md#coming-back-and-refreshing`, i ritocchi di `brokers/index.en.md:86` e la tabella
 >     delle occorrenze per Y-15;
 >   - `files/scripts/y11_docrefs.py` (`capture`/`check`) e `docrefs_anchor.json`. Sono i 48 riferimenti a righe della
->     mia sezione, tutti giusti su `bf1b802d7`. Dopo l'aggiornamento della base, `check` dice quali si sono spostati e
+>     mia sezione, tutti giusti su `af9e6e10b`. Dopo l'aggiornamento della base, `check` dice quali si sono spostati e
 >     dove; servirà perché Z-B e FE8b toccano Dashboard, broker e transazioni.
 > - **Contratto MF per R17 e W8** (23:18): controllato sul codice.
 >   - W8 coincide con le chiavi della treemap (`ExposureTreemap.svelte:371-374`): prima il broker, poi
@@ -4300,15 +4300,15 @@ vengono dal catalogo generato alle 18:27.
 >   - I rossi si scrivono dopo lo SHA di MF e lo slot del coordinatore, perché stanotte la Dashboard è ferma. Risposta
 >     mandata a MF.
 
-### Y-21 · E2E `front-portfolio risk` (slot 2, 23:25–23:37; HEAD `bf1b802d7` più Y-21, Y-5 e la documentazione) — 36/38
+### Y-21 · E2E `front-portfolio risk` (slot 2, 23:25–23:37; HEAD `af9e6e10b` più Y-21, Y-5 e la documentazione) — 36/38
 
 > **Note implementazione**. Comando: `bash files/scripts/y21_e2e.sh`, cioè
 > `nice -n 10 … dev.py test --test-port 6189 --data-dir /tmp/librefolio-r13-y --workers 2 front-portfolio risk`. Il
 > carico era 57 alla partenza. Log in `files/logs/y21_e2e_risk.log`; gli artefatti dei rossi sono stati copiati subito
 > in `files/logs/y21_reds/`.
 > - **Il bersaglio di Y-21 è verde**: L4 D377 (`:2815`) in 11,7 s, dentro il budget nuovo di 90 s.
-> - **⚠️ Fuori pista: due rossi in test che non ho toccato**, del benchmark di L3 (commit `2f54c9c0b` dell'01/10 e
->   `28f201737` del 07/10). Tutti e due «Test timeout of 30000ms exceeded»:
+> - **⚠️ Fuori pista: due rossi in test che non ho toccato**, del benchmark di L3 (commit `dcdfb0f8f` dell'01/10 e
+>   `d574358ce` del 07/10). Tutti e due «Test timeout of 30000ms exceeded»:
 >   - D378, `:3993`, «a move of the period asks the engine again…» (37,6 s). Si ferma in `moveToOneYear`: il
 >     `data-active` di `date-preset-1y` non arriva a `true` prima della fine del budget. La fotografia della pagina
 >     mostra però il clic avvenuto: l'intervallo è 2025-10-16 → 2026-10-16, e Refresh è disabilitato mentre arriva il
@@ -4379,7 +4379,7 @@ vengono dal catalogo generato alle 18:27.
 >   - La documentazione: la build del sito fatta dentro la corsa E2E delle 23:31 comprende le due frasi corrette. Ha 0
 >     WARNING ed è finita in 92,8 s, quindi la build stretta passa. L'ancora `domain-state.md#how-a-page-uses-the-cache`
 >     esiste.
-> - **Ordine nuovo del coordinatore** (23:50; T è entrato in dev con `9016f47c3`, che tocca la stessa spec):
+> - **Ordine nuovo del coordinatore** (23:50; T è entrato in dev con `3680c4010`, che tocca la stessa spec):
 >   1. checkpoint FROZEN;
 >   2. il coordinatore committa e fonde dev nel mio ramo;
 >   3. la nuova corsa nello slot 2, sulla revisione combinata, che prova anche i colori di T.
@@ -4390,12 +4390,12 @@ vengono dal catalogo generato alle 18:27.
 >   - `domain-state.md`: dev cambia la 121 (Z-B), io la 84.
 >   - Nella sostanza, i test di T nel blocco ricevono anche loro i 90 s.
 
-### Y-21 · seconda corsa, sulla revisione combinata (slot 2, 23:50–00:03; HEAD `a49a86a7b`) — 36/38, ✅ per Y-21
+### Y-21 · seconda corsa, sulla revisione combinata (slot 2, 23:50–00:03; HEAD `e1c57bd5f`) — 36/38, ✅ per Y-21
 
 > **Note implementazione**.
-> - **Il checkpoint di Y-21** l'ha committato il coordinatore: `92e04271d` (spec), `0025383b4` (documentazione),
->   `dc68fc64b` (journal).
-> - **La fusione** con dev `c91bd41b2` è `a49a86a7b`, pulita. L'ho verificata con `files/scripts/y21_after_merge.sh`:
+> - **Il checkpoint di Y-21** l'ha committato il coordinatore: `05f1b7778` (spec), `ce4ad63f6` (documentazione),
+>   `2b2bd3ae0` (journal).
+> - **La fusione** con dev `e50f85b5f` è `e1c57bd5f`, pulita. L'ho verificata con `files/scripts/y21_after_merge.sh`:
 >   i genitori, `api sync` a rc 0, il budget a `:1920`, `L4_OFFER_DEADLINE_MS` a `:2802`, `roleBackground()` di T a
 >   `:3527`.
 > - **Corsa**: `files/scripts/y21_e2e_rerun.sh`. Il carico era 94 alla partenza e 115 durante la build. Risultato
@@ -4424,7 +4424,7 @@ vengono dal catalogo generato alle 18:27.
 >   - Sono solo numeri dentro codice in linea, quindi nessun link cambia.
 > - **Y-21 ✅** nel backlog, **Y-22** aperto.
 
-### Y-22 · traccia di `:2871` da solo (slot 2, dalle 00:08 del 17/10; HEAD `a49a86a7b`, Y-21 entrato in dev `149157025`)
+### Y-22 · traccia di `:2871` da solo (slot 2, dalle 00:08 del 17/10; HEAD `e1c57bd5f`, Y-21 entrato in dev `0c86b22f0`)
 
 > **Note implementazione**.
 > - Il runner non ha `--grep`, quindi lancio Playwright direttamente, con `files/scripts/y22_trace.sh`:
@@ -4465,7 +4465,7 @@ vengono dal catalogo generato alle 18:27.
 >   - Il test rosso era finito a 24,2 s; con 10 s in più resta dentro i 90 s, quindi un rosso dice ancora il suo nome.
 >   - **Verifica**: `files/scripts/y22_verify3736.sh`, il test da solo (ora `:3748`), ×4, 2 lavoratori, carico 55:
 >     **4/4** in 11–20 s. Log in `files/logs/y22_verify3736.log`.
-> - **Y-23**, un rosso mio trovato da A in dev (coordinatore, 00:15). `ec018afdf` (Y11 passo 2) importa `onNavigate`
+> - **Y-23**, un rosso mio trovato da A in dev (coordinatore, 00:15). `7fc594f8d` (Y11 passo 2) importa `onNavigate`
 >   in `(app)/+layout.svelte`, ma i mock locali di `$app/navigation` in `layout.gate.test.ts` e
 >   `layout.authGate.test.ts`, che sono di H, non lo esportano.
 >   - **Rosso riprodotto**: `front-utility onboarding-component-unit` 20 rossi (9 + 11), tutti «No "onNavigate" export
@@ -4480,9 +4480,9 @@ vengono dal catalogo generato alle 18:27.
 >   e sui due test; `git diff --check` pulito.
 > - **Y-22 ✅, Y-23 ✅** nel backlog. Checkpoint di seguito mandato al coordinatore.
 
-## Y11 — il lotto `assets`: `assets/[id]`, `onmerged`, «Reload All» di Correlation (analisi 17/10, 00:35–00:50; HEAD `d7f3a49c3`)
+## Y11 — il lotto `assets`: `assets/[id]`, `onmerged`, «Reload All» di Correlation (analisi 17/10, 00:35–00:50; HEAD `572b58058`)
 
-> **Base**: HEAD `d7f3a49c3` = dev, pulito, con dentro il lotto A di Z, A7b e FE8b. `api sync` a rc 0.
+> **Base**: HEAD `572b58058` = dev, pulito, con dentro il lotto A di Z, A7b e FE8b. `api sync` a rc 0.
 > `y11_docrefs.py check`: 46/48. Si spostano `files/+page.svelte` 784→783 e `assets/+page.svelte` 1642→1644; li
 > correggo alla fine del lotto, perché `assets/+page.svelte` cambia ancora.
 
@@ -4606,7 +4606,7 @@ vengono dal catalogo generato alle 18:27.
 >   - **N64** (decisione notturna, da rivedere con N55): `setPrimaryMode` → `asset-mode`, e
 >     `setCalendarPreset`/`setCalendarCustom` → `asset-calendar-window`. Sono già nelle 23 sostituzioni.
 > - **Slot breve per i rossi**: slot 2, dopo H (al suo via). Script `files/scripts/y11a_reds.sh`.
-> - **I rossi** (slot 1, 01:27–01:37; HEAD `d7f3a49c3` senza codice; carico 40–49): `files/scripts/y11a_reds.sh`, cioè
+> - **I rossi** (slot 1, 01:27–01:37; HEAD `572b58058` senza codice; carico 40–49): `files/scripts/y11a_reds.sh`, cioè
 >   `front-portfolio page-busy`, 16 test. Risultato: **4 rossi, i casi nuovi a–d, e 12 verdi**, quelli di prima.
 >   - Tutti e quattro per la ragione giusta: «…publishes no data-busy: it does not follow the big requests of its page
 >     (Y11)», con `Received string: ""`.
@@ -4661,13 +4661,13 @@ vengono dal catalogo generato alle 18:27.
 >   - `y11_docrefs.py` ora tiene 69 riferimenti, ricatturati e controllati a occhio
 >     (`files/logs/y11_docrefs_capture3.log`).
 >   - Solo codice in linea, nessun link nuovo. Il WARNING della build va controllato nel log dello slot lungo.
-> - **Ordine nuovo del coordinatore** (01:54). DV è entrato in dev `323c61b73` con i neutri di tutti i grafici: 25 file in
+> - **Ordine nuovo del coordinatore** (01:54). DV è entrato in dev `1bd4c0e61` con i neutri di tutti i grafici: 25 file in
 >   `components/charts/`, `features/dashboard/`, `CorrelationHeatmap`, `features/brokers/lots/`, più `chartTheme.ts` e
 >   `roleColors.ts`. Quindi la corsa lunga deve provare la revisione **combinata**:
 >   1. checkpoint FROZEN subito, con il lotto com'è;
 >   2. commit e fusione con dev;
 >   3. la corsa lunga, nello slot 2 dopo X.
->   - **Checkpoint mandato alle 01:5x**: 10 percorsi, nessuno toccato da dev dopo `d7f3a49c3`. Le liste per lo stage
+>   - **Checkpoint mandato alle 01:5x**: 10 percorsi, nessuno toccato da dev dopo `572b58058`. Le liste per lo stage
 >     sono `files/y11a_stage_{feat,tests,docs,journal}.txt`.
 >   - La documentazione era già fatta e verificata: va nel checkpoint come commit a parte. Lasciarla non committata
 >     avrebbe rischiato di fermare la fusione, perché `app-state.md` cambia spesso in dev.
@@ -4678,16 +4678,16 @@ vengono dal catalogo generato alle 18:27.
 ### Lotto `assets` · committato e base aggiornata (17/10, 01:56–01:59)
 
 > **Note implementazione**.
-> - **Commit del coordinatore**: `37bfeebb9` (feat), `fcd435668` (tests), `e42d1d75d` (docs), `1cfbd913e` (journal).
-> - **Fusione** con dev `323c61b73`, che contiene DV con i neutri di tutti i grafici: **`2cd430a5e`**, pulita.
+> - **Commit del coordinatore**: `d9bcd1b35` (feat), `1cd594b84` (tests), `54521d24d` (docs), `131880be8` (journal).
+> - **Fusione** con dev `1bd4c0e61`, che contiene DV con i neutri di tutti i grafici: **`82c6292ee`**, pulita.
 > - Verifiche con `files/scripts/y21_after_merge.sh`:
->   - i genitori `1cfbd913e` e `323c61b73`;
+>   - i genitori `131880be8` e `1bd4c0e61`;
 >   - `api sync` a rc 0;
 >   - `y11_docrefs.py check` **69/69 invariati**: DV non sposta nessuna riga citata.
 > - **Prove leggere sulla revisione combinata** (carico 31): svelte-check 0/0
 >   (`files/logs/y11a_front-check_merged.log`); `theme-roles --check` pulito.
 > - **Poi**: la corsa lunga `files/scripts/y11a_e2e.sh`, nello slot 2 dopo X, al via del coordinatore.
-> - **Corsa lunga avviata e poi fermata** (slot 2, 02:04–02:2x, su `2cd430a5e`): `files/scripts/y11a_e2e.sh`.
+> - **Corsa lunga avviata e poi fermata** (slot 2, 02:04–02:2x, su `82c6292ee`): `files/scripts/y11a_e2e.sh`.
 >   - Il coordinatore l'ha fermata alle 02:2x: la galleria dei colori gira fino alle 03:30 circa e il carico era a 159–170,
 >     quindi i timeout da carico andrebbero solo rifatti.
 >   - Arrivata fin qui: **`page-busy` 16/16 verdi** (2,4 min), compresi i 4 casi nuovi a–d; `asset-detail` partito, 3
@@ -4696,12 +4696,12 @@ vengono dal catalogo generato alle 18:27.
 >   - **Ripresa dopo le 03:30**, prima in coda, con `files/scripts/y11a_e2e2.sh`: da `asset-detail` in poi, senza
 >     `page-busy`, già verde su questa revisione.
 
-## R17 · W8 · P4 — analisi lato frontend (17/10, 02:00–02:30; sola lettura; HEAD `2cd430a5e`, MF-P in dev `536501541`)
+## R17 · W8 · P4 — analisi lato frontend (17/10, 02:00–02:30; sola lettura; HEAD `82c6292ee`, MF-P in dev `d7557b79e`)
 
 Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo completo, in inglese, è in
 `files/r17_w8_analysis.md` della sessione.
 
-- **Backend** (MF-P, `f191dfbf9`, solo backend; nessun file frontend cambiato in dev). In `PortfolioSummary`, tutte
+- **Backend** (MF-P, `8b5b8b096`, solo backend; nessun file frontend cambiato in dev). In `PortfolioSummary`, tutte
   frazioni:
   - `timing_effect_percent` = MWRR cumulativo − TWRR, null se manca uno dei due;
   - `pnl_change_1d` (Currency): il P&L totale da **D−1 di calendario** a D, null per un portafoglio nato in D;
@@ -4733,8 +4733,8 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
     - `fees_taxes` è positivo e si mostra come costo.
     - In dev entro la mattina del 17/10; MF manda lo SHA.
     - Le componenti si cablano solo quando la fusione di MF è nella mia base, così non spariscono nel frattempo.
-- **Colori**: i 4 file sono già sui ruoli (KpiSection `a694d8fb2`, ExposureTreemap `38e17c2a5` DV B4, PositionsPanel
-  `45f582eeb`, PerformanceChart `38e17c2a5`). Cambiano solo gli script, più una prop nel template di PositionsPanel.
+- **Colori**: i 4 file sono già sui ruoli (KpiSection `9229524dd`, ExposureTreemap `5bdb18bcd` DV B4, PositionsPanel
+  `3de4b8d5e`, PerformanceChart `5bdb18bcd`). Cambiano solo gli script, più una prop nel template di PositionsPanel.
   **Prima di scrivere lo dico al coordinatore**, che avvisa i colori, anche per la cifra delle KPI nella galleria.
 - **Test** (`test-author`, rossi prima):
   - `KpiSection.test.ts`: una `history` i cui ultimi due punti darebbero cifre diverse dai campi; i null;
@@ -4753,8 +4753,8 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
   4. le prove leggere;
   5. lo slot breve.
   - Costo: 2,5–3 ore con P4.
-> - **Correzione** (coordinatore, 02:18): MF-P **è già** nella mia base. Verificato: `536501541` è antenato di
->   `2cd430a5e`, e il client generato ha `pnl_change_1d*`, `timing_effect_percent`, `holding_groups` e
+> - **Correzione** (coordinatore, 02:18): MF-P **è già** nella mia base. Verificato: `d7557b79e` è antenato di
+>   `82c6292ee`, e il client generato ha `pnl_change_1d*`, `timing_effect_percent`, `holding_groups` e
 >   `HoldingGroupGainLoss`. Prima l'avevo creduto più tardo. Quindi niente aggiornamento della base per R17/W8: i rossi
 >   Vitest si scrivono subito, **solo file di test**; il codice dopo la corsa lunga, perché la build deve restare quella
 >   del lotto `assets`.
@@ -4779,7 +4779,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >     «—».
 >   - Per la regola 12 (`test-author.agent.md:242`) un'istantanea non si tocca a mano. Mandate al coordinatore, per il
 >     developer: (a) una cattura nuova, poi `normalize-dashboard-fixture`; (b) derivare i campi con le funzioni del
->     backend, come `a26051686`; (c) «—» fino ad (a).
+>     backend, come `72f361a10`; (c) «—» fino ad (a).
 >   - Propongo (a), e (c) nel frattempo. Il codice va avanti comunque, perché cambia solo la galleria.
 > - **I rossi** restano da lanciare con il carico sotto 50 (alle 02:45 era 88).
 > - **Decisione sulla fixture** (coordinatore, 02:46): **(c) fino ad (a)**. È fra le domande del developer, e i colori
@@ -4826,7 +4826,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   - Il grafo non è aggiornato: graphify non c'è in questo worktree.
 > - **Nel worktree, non committato**: i 3 file di test di R17/W8 (i rossi), da non committare prima del loro codice
 >   per non portare 15 rossi in dev; il journal; la devWiki.
-> - **MF-P4b entrato in dev** (`d93de2899`, commit `5e30d875e`, solo backend; coordinatore, 03:40). I 4 campi sono in
+> - **MF-P4b entrato in dev** (`0f5077d17`, commit `4d008bac7`, solo backend; coordinatore, 03:40). I 4 campi sono in
 >   `AssetPeriodContribution`: frazioni arrotondate a 4 decimali, null con un inizio 0 o null, `fees_taxes` positivo.
 >   Arrivano nella mia base con l'aggiornamento dopo il lotto `assets`. Quindi **le componenti di P4 entrano nello
 >   stesso lotto di R17/W8**.
@@ -4840,7 +4840,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >       chiamanti.
 >   - `test-author`, un agente nuovo: il precedente, `59152098`, non era più disponibile. Scrive i casi rossi delle componenti, più i 4 campi nelle fixture
 >     `EUR_ASSET`/`CHF_ASSET`, così i casi esistenti stampano lo stesso a un decimale.
-> - **Previsione della fusione per l'aggiornamento della base**, verificata dal merge-base `323c61b73`:
+> - **Previsione della fusione per l'aggiornamento della base**, verificata dal merge-base `1bd4c0e61`:
 >   - fra i miei percorsi non committati, dev ha cambiato solo `LibreFolio_devWiki/log.md`: un'aggiunta di 5 righe
 >     dopo la 3702, mentre la mia è in coda, dopo la 3715. Non sono adiacenti, quindi la fusione è pulita;
 >   - il mio piano, `index.md`, i 3 file di test e i 4 file di prodotto non sono cambiati in dev. Il «differs» del
@@ -4875,7 +4875,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   l'avviso al coordinatore per i file DV e il suo via; `r17w8_apply.py --apply`; i verdi Vitest dei 3 file;
 >   svelte-check, `theme-roles --check` e Prettier; lo slot breve.
 
-### Lotto `assets` · corsa lunga sulla revisione combinata ✅ (slot 2, 04:31–04:47; HEAD `2cd430a5e`; carico 24–35)
+### Lotto `assets` · corsa lunga sulla revisione combinata ✅ (slot 2, 04:31–04:47; HEAD `82c6292ee`; carico 24–35)
 
 > **Note implementazione**.
 > - **Comando**: `files/scripts/y11a_e2e2.sh`, la ripresa dopo il blocco della galleria. Sequenziale, `--workers 2`,
@@ -4889,19 +4889,19 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   - `risk` 38/38.
 >   - Con `page-busy` 16/16 della prima corsa (02:04, stessa revisione), fanno **201/201**.
 >   - Log in `files/logs/y11a_e2e2_*.log` e `y11a_e2e_front-portfolio_page-busy.log`.
-> - **Documentazione**: il sito della prima corsa comprende `e42d1d75d`: 0 WARNING, costruito in 155,9 s.
+> - **Documentazione**: il sito della prima corsa comprende `54521d24d`: 0 WARNING, costruito in 155,9 s.
 > - Porta 6189 libera, nessun processo rimasto.
-> - **Il lotto `assets` è pronto per l'ingresso**: `37bfeebb9`, `fcd435668`, `e42d1d75d`, `1cfbd913e`, più la fusione
->   `2cd430a5e`. Con questo **Y11 è completo nel codice**: tutte le pagine e la scheda Correlation. Restano per la
+> - **Il lotto `assets` è pronto per l'ingresso**: `d9bcd1b35`, `1cd594b84`, `54521d24d`, `131880be8`, più la fusione
+>   `82c6292ee`. Con questo **Y11 è completo nel codice**: tutte le pagine e la scheda Correlation. Restano per la
 >   chiusura le righe del CHANGELOG e la documentazione utente del kit (`files/y11_closing/`), che aspettano la parola di
 >   Y-15 dal developer.
 
-## R17 · W8 · P4 — implementazione (17/10, dalle 04:48; HEAD `d32d0f3d9`, il lotto `assets` entrato, MF-P4b dentro)
+## R17 · W8 · P4 — implementazione (17/10, dalle 04:48; HEAD `33040d454`, il lotto `assets` entrato, MF-P4b dentro)
 
 > **Note implementazione**.
-> - **Base**: `d32d0f3d9` = dev, con dentro il lotto `assets` (`aa95cc86d` journal, `1e93d8046` wiki) e MF-P4b.
+> - **Base**: `33040d454` = dev, con dentro il lotto `assets` (`fac917524` journal, `c33c570f8` wiki) e MF-P4b.
 >   - `api sync` a rc 0: il client ha i 4 campi `period_*_percent`;
->   - i 4 file di prodotto non sono cambiati da `2cd430a5e`;
+>   - i 4 file di prodotto non sono cambiati da `82c6292ee`;
 >   - la prova a secco dà ancora 27 sostituzioni; `y11_docrefs.py` 69/69;
 >   - svelte-check prima del codice 0/0, con i 3 test trattenuti.
 > - **Via dei colori** sui 4 file DV (coordinatore, 04:5x).
@@ -4949,10 +4949,10 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > - **Backlog**: T-U8 («il frontend solo di presentazione») sta nella sezione T, che non è mia. Lo segnalo al
 >   coordinatore: con Y12a e questo lotto restano solo V11 e P5, che aspettano MF-E e il CP-7b di J.
 > - **E2E breve verde** (05:11–05:25): `dashboard` 27/27, `privacy-masking` 18/18, `front-broker detail` 38/38. **Entrato**:
->   `9d40a1df0`, `879cfc9d7`, `f24096f01` → dev `1565b6bbb`; CHANGELOG `a3662b3ef` con le mie due righe 🐛. T-U8 lo
+>   `67884e69c`, `9623b56f1`, `89880b095` → dev `d7b84ebac`; CHANGELOG `9606a90f7` con le mie due righe 🐛. T-U8 lo
 >   riconcilia il coordinatore.
 
-## Coda del mattino del 17/10: Y-16, Y-2, Y-13, Y-8 (dalle 05:30; HEAD `a3662b3ef`)
+## Coda del mattino del 17/10: Y-16, Y-2, Y-13, Y-8 (dalle 05:30; HEAD `9606a90f7`)
 
 ### Y-16 · la vista Candele salvata si carica per una dipendenza involontaria — opzione A approvata (05:4x)
 
@@ -4983,7 +4983,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 
 ### Y-13 · ✅ già chiuso da T
 
-> `4a7ba1d7e` (16/10): `brokers-detail.spec.ts:392-419` usa `data-selected`. Aggiunta la ✅ nella mia sezione del backlog
+> `764ae4fab` (16/10): `brokers-detail.spec.ts:392-419` usa `data-selected`. Aggiunta la ✅ nella mia sezione del backlog
 > (via del coordinatore, 05:4x).
 
 ### Y-2 · il buco nella cascata settimanale — analisi e rosso (dalle 05:45)
@@ -5043,7 +5043,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   - Porta 6189 libera. Log in `files/logs/y16_e2e_*.log`.
 > - **Backlog**: Y-16 ✅ (opzione A; la correzione vera è Y-24) e Y-2 ✅.
 
-### Y13 · lista degli spostamenti FE9–FE11 (06:10–06:20, sola lettura; HEAD `abf8391fb`)
+### Y13 · lista degli spostamenti FE9–FE11 (06:10–06:20, sola lettura; HEAD `61eb3cb36`)
 
 > **Note implementazione**. Script `files/y13_movelist.py` → `files/y13_movelist.md` (cartella di sessione), mandata al
 > coordinatore. Rispetto all'analisi del 16/10, FE8b di W ha già chiuso 3 inversioni e 12 archi.
@@ -5074,7 +5074,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > - test unitario obbligatorio: costruzione in chiaro, ricostruzione in scuro, un passo di zoom → il payload porta i
 >   colori scuri, o nessun colore. Nessuna classe di colore cambiata; `theme-roles --check` pulito; prima il rosso.
 >
-> **Stato reale** (verificato su `abf8391fb`):
+> **Stato reale** (verificato su `61eb3cb36`):
 > - `lineChartHelpers.ts:590` `updateArrowRotations(chart)`: `getOption()` (copia profonda di tutta l'opzione), poi per ogni
 >   marcatore `arrow` di un `markPoint` due `convertToPixel`, poi `setOption({series: option.series}, false)`: riscrive
 >   tutte le serie, dati e colori compresi. Senza frecce non riscrive niente, ma la copia la fa comunque.
@@ -5171,10 +5171,10 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > **Passo 5, in corso**: devWiki (`concepts/echarts-chart-gotchas`: una riga nella tabella, quattro nei file sorgente; la
 > riga dell'indice; una voce del log; `check_source_paths.py`: 7 mancanti, 12 occorrenze, nessuna della mia pagina, tutte
 > di altre pagine), backlog Y-8 ✅, `docs-writer` su `charts.md`. Slot 2 per l'E2E (coordinatore, 06:58), dopo
-> l'avanzamento rapido del mio HEAD a dev `952c68cd5` (38 commit, nessuna sovrapposizione con i miei file).
+> l'avanzamento rapido del mio HEAD a dev `4ac8018f6` (38 commit, nessuna sovrapposizione con i miei file).
 >
 > **Passo 5 ✅, documentazione, devWiki, backlog ed E2E** (06:58–07:10):
-> - **E2E** (slot 2, `files/scripts/y8_e2e.sh`, HEAD `952c68cd5` più i miei file; carico a 5 minuti 22): `front-asset
+> - **E2E** (slot 2, `files/scripts/y8_e2e.sh`, HEAD `4ac8018f6` più i miei file; carico a 5 minuti 22): `front-asset
 >   asset-detail` **35/35** (2,7 minuti), `front-fx fx-detail` **17/17** (1,0 minuto). Porta 6189 libera alle 07:08.
 > - **`docs-writer`** (`028c525a`): `developer/frontend/components/charts.md`, un punto nuovo **«Arrow markers»** dopo
 >   «Zoom», nella sezione «Responsive Date Axis»: le frecce si riallineano nell'assestamento che ridistanzia le etichette,
@@ -5238,13 +5238,13 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >
 > Handoff al coordinatore con le liste da committare. Nessun server, porta 6189 libera, `git diff --check` pulito.
 
-## Dopo Y-8: J-44 (annullata, poi revisione) e Y-25 (dalle 07:40; HEAD `039af67bb`)
+## Dopo Y-8: J-44 (annullata, poi revisione) e Y-25 (dalle 07:40; HEAD `ca37f5ead`)
 
 ### J-44 · revisione a posteriori del commit di J ✅ (07:45–07:55)
 
 > **Note implementazione**. Il coordinatore mi aveva passato J-44 (07:40), poi l'ha annullata: J l'aveva già fatta, nel
-> suo checkpoint F5 (messaggi incrociati). Nessun file toccato da me. Revisione in sola lettura di `824b27437` («fix(charts):
-> no tooltip Δ% from a zero start», in dev `b6b615c3d`), via `git show`:
+> suo checkpoint F5 (messaggi incrociati). Nessun file toccato da me. Revisione in sola lettura di `0820950c4` («fix(charts):
+> no tooltip Δ% from a zero start», in dev `a4667defe`), via `git show`:
 > - ✅ `changePct` esportato da `MeasureSignal.ts` (file dichiarato dal gate della matematica finanziaria): la regola ha una
 >   copia sola. `buildDeltaHtml` la usa; `—` (U+2014, lo stesso glyph del righello) solo nella vista assoluta; colore dal
 >   segno di Δabs e vista percentuale invariati, come dichiarato. Nessun ciclo: `MeasureSignal.ts` nomina
@@ -5263,7 +5263,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 
 > **Via del coordinatore** (07:4x): «Y-25 if it's cheap».
 >
-> **Stato reale** (HEAD `039af67bb`; i 9 commit nuovi di dev non toccano questi file):
+> **Stato reale** (HEAD `ca37f5ead`; i 9 commit nuovi di dev non toccano questi file):
 > - ogni chiamata copia tutta l'opzione con `getOption()`, anche su un grafico **senza frecce** (quasi tutti: le frecce
 >   vengono solo dai segnali con `markerStart`/`markerEnd: 'arrow'` e dalla freccia finale del righello);
 > - riscrive tutte le serie appena trova una freccia, anche se nessun angolo è cambiato;
@@ -5333,7 +5333,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >
 > **Slot E2E chiesto** (08:2x, `files/scripts/y25_e2e.sh`: `asset-detail`, `asset-mobile-layout`, `asset-list`, `fx-detail`,
 > `risk`); il coordinatore lo mette in coda dopo F, A, MF e B-31. **`docs-writer`** (`adeb1b4e`) riscrive il punto «Arrow
-> markers» di `charts.md`. **Backlog**: Y-25 ✅, Y-26 nuova, e la ✅ di Y-12 che mancava (`6ac6ead12`, 16/10).
+> markers» di `charts.md`. **Backlog**: Y-25 ✅, Y-26 nuova, e la ✅ di Y-12 che mancava (`f37bc9959`, 16/10).
 
 ### Y-3 e Y-4 · via del coordinatore, mentre Y-25 aspetta lo slot (08:3x)
 
@@ -5345,7 +5345,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   (`${t('dashboard.totalPnl')}`), che resta un colpo grazie a `pnlColor`. Nessun `t(` porta valori con importi.
 > - **Rumore zero**: la modifica è solo di test (la forma, il commento e un controllo sintetico attraverso `scanLine`).
 >
-> **Y-4**: da G-9 (`c635da129`, entrato con `1470bd693`) `selectIndicatorFromTree` della galleria apre il menu con ↓ sul
+> **Y-4**: da G-9 (`cd99d0e05`, entrato con `a837a41fe`) `selectIndicatorFromTree` della galleria apre il menu con ↓ sul
 > pulsante, aspetta il fuoco della casella di ricerca e un `aria-activedescendant`, apre una famiglia chiusa con → dopo
 > averla raggiunta (`walkIndicatorTreeTo`), arriva all'opzione e conferma con Invio. I commenti di
 > `SignalTreeSelect.test.ts` (`:16-17`, `:306-310`) descrivono ancora i clic. Solo il testo dei commenti; lo spostamento di
@@ -5379,7 +5379,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   drives it…») ora è falso: `test-author` propone di cambiarlo; è una stringa, non un commento, e
 >   `BACKLOG_POST_1.2.md:2370` (sezione G) la cita. Lo porto al coordinatore.
 
-### X-R53 · revisione a posteriori (dev `78708660f`, commit `d38077ed4`), sola lettura (08:40–08:45)
+### X-R53 · revisione a posteriori (dev `24305083a`, commit `1a73ea988`), sola lettura (08:40–08:45)
 
 > **Note implementazione**. Le colonne Δ 1D…5Y di Asset e FX dal backend (`/period-changes`), in uno stato loro con un
 > contatore di versione; `fetchAllPriceData` (asset) e `fetchAllPairData` (FX) = `Promise.all` di prezzi e periodi.
@@ -5412,20 +5412,20 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > **Y-4**: titolo rinominato come proposto da `test-author` («selects an item on click, its collapsed family clicked open
 > first: …»), 28/28; `BACKLOG_POST_1.2.md:2370` (sezione G) lo allinea il coordinatore.
 >
-> **Y-25, E2E ✅** (slot 2, `files/scripts/y25_e2e.sh`, 08:35–08:54, HEAD `039af67bb` più i miei file; carico a 5 minuti 42,5
+> **Y-25, E2E ✅** (slot 2, `files/scripts/y25_e2e.sh`, 08:35–08:54, HEAD `ca37f5ead` più i miei file; carico a 5 minuti 42,5
 > alla partenza, poi fino a 95 a un minuto per le altre sessioni): `front-asset asset-detail` **35/35** (2,7 minuti),
 > `asset-mobile-layout` **21/21** (1,9), `asset-list` **30/30** (2,6), `front-fx fx-detail` **17/17** (1,0), `front-portfolio
 > risk` **38/38** (2,7). 141/141. Porta 6189 libera alle 08:54.
 >
 > ### Y-25 + Y-3 + Y-4 — checkpoint 🧊 FROZEN (08:5x)
 >
-> 15 file tracciati, nessuno nuovo; `git diff --check` pulito; nessun server. Dev `547545b8e` (55 commit avanti) tocca solo
+> 15 file tracciati, nessuno nuovo; `git diff --check` pulito; nessun server. Dev `6b7afa8b2` (55 commit avanti) tocca solo
 > `log.md` della devWiki (aggiunte in fondo: unione) e il backlog in altre sezioni (H, X, J, Z, B, E, MF).
 >
-> **Entrato**: 5 commit (punta `164a08220`), dev `73443c6db` (`log.md` della devWiki unito), niente CHANGELOG. HEAD avanzato a
-> `73443c6db`.
+> **Entrato**: 5 commit (punta `754091d45`), dev `acad94499` (`log.md` della devWiki unito), niente CHANGELOG. HEAD avanzato a
+> `acad94499`.
 
-## Y-27 · `DataTable` pota le preferenze delle colonne assenti — il rimedio (a) di X-R53 (dalle 08:55; HEAD `73443c6db`)
+## Y-27 · `DataTable` pota le preferenze delle colonne assenti — il rimedio (a) di X-R53 (dalle 08:55; HEAD `acad94499`)
 
 > **Via del coordinatore** (08:55): lotto a parte, rosso prima, con il suo checkpoint; se un test fissa la potatura come
 > voluta, va detto prima di cambiarlo (nessuno la fissa: sopra).
@@ -5505,31 +5505,31 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > - Backlog: Y-27 ✅ (commit al checkpoint).
 > - **Slot E2E** chiesto (`files/scripts/y27_e2e.sh`); in coda dopo E e J (coordinatore, 09:3x).
 >
-> **Passo 5, E2E** (slot, `files/scripts/y27_e2e.sh`, 10:01–10:19, HEAD `73443c6db` più i miei file; carico a 5 minuti 24,6 alla
+> **Passo 5, E2E** (slot, `files/scripts/y27_e2e.sh`, 10:01–10:19, HEAD `acad94499` più i miei file; carico a 5 minuti 24,6 alla
 > partenza, poi fino a 100 a un minuto per le altre sessioni): `front-fx fx-list` **13/13**, `front-portfolio privacy-masking`
 > **18/18**, `risk-lab` **44/44**, `front-asset asset-detail` **35/35**, `front-asset asset-list` **30/31**. Porta 6189 libera
 > alle 10:19.
 >
 > **⚠️ Fuori pista: il rosso di `asset-list.spec.ts:1084`, non di Y-27** («sync all over a period whose prices are all filled
-> backward does not warn», C-66, `32c64bbd9`, 16/10). Triage:
+> backward does not warn», C-66, `5c4d1c2c3`, 16/10). Triage:
 > - È una **precondizione** del test, non un'asserzione: nel periodo da oggi+7 a oggi+14 giorni nessun asset con un fornitore
 >   mostra un prezzo («0 stored of 0 shown» per tutti). Il test chiede `POST /assets/prices/query` su un periodo **futuro** e
 >   si aspetta prezzi portati avanti.
-> - Lo stesso test era **verde alle 08:43** (corsa di Y-25, stesso giorno, quindi stesso periodo) su `039af67bb`.
-> - In mezzo è entrato **X-R55** (`a71d23e7e`, «fix(prices): ceiling on query date ranges», fuso in dev alle 08:30 con
->   `ab7711f04`): `price_query.py` taglia ogni intervallo a `latest_range_end()`, cioè domani, e un elemento che **comincia**
->   dopo riceve un risultato vuoto. `a71d23e7e` non è antenato di `039af67bb`, lo è di `73443c6db`.
+> - Lo stesso test era **verde alle 08:43** (corsa di Y-25, stesso giorno, quindi stesso periodo) su `ca37f5ead`.
+> - In mezzo è entrato **X-R55** (`9768cd52a`, «fix(prices): ceiling on query date ranges», fuso in dev alle 08:30 con
+>   `994f3bae0`): `price_query.py` taglia ogni intervallo a `latest_range_end()`, cioè domani, e un elemento che **comincia**
+>   dopo riceve un risultato vuoto. `9768cd52a` non è antenato di `ca37f5ead`, lo è di `acad94499`.
 > - Quindi un conflitto di contratto fra X-R55 e il test di C-66: rosso deterministico su dev per chiunque. Y-27 tocca solo la
 >   tabella del frontend e non può cambiare ciò che restituisce l'API. Nessuna ripetizione: non è un timeout, la causa si
 >   legge nel codice. Diventa **Y-28** nel backlog, da instradare dal coordinatore (X-R55 o il proprietario di C-66).
 >
-> **Entrato**: `8e3c58ccc`, `51ba3bc2e`, `2aa8a0753` → dev `542c0e8b5`; l'unione di `log.md` sistemata dal coordinatore in
-> `e9cd5d6ef`; niente CHANGELOG (la potatura nasceva con X-R53, non rilasciato); Y-28 passato a X. HEAD avanzato a
-> `bab5a8fb9`.
+> **Entrato**: `c5f30139a`, `679bf5b76`, `05f3809b9` → dev `3e926ccf4`; l'unione di `log.md` sistemata dal coordinatore in
+> `7356b635f`; niente CHANGELOG (la potatura nasceva con X-R53, non rilasciato); Y-28 passato a X. HEAD avanzato a
+> `d261e09e1`.
 
-## Y12b, il resto · V11 e P5 — analisi (10:25–10:40, sola lettura; HEAD `bab5a8fb9`)
+## Y12b, il resto · V11 e P5 — analisi (10:25–10:40, sola lettura; HEAD `d261e09e1`)
 
-> **Perché adesso**: MF-E1 è in dev (`e43dfae68`, dopo CP-7b di J): `LotTimelineEventSchema.opening_value` c'è (piano MF,
+> **Perché adesso**: MF-E1 è in dev (`393fcf577`, dopo CP-7b di J): `LotTimelineEventSchema.opening_value` c'è (piano MF,
 > `:1423`; nel client generato: «For the event that opens a lot (BUY, ADJUSTMENT_IN): the lot's original cost …, in the
 > currency of unit_price. None on every other kind and when the conversion is missing»).
 >
@@ -5603,7 +5603,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > «what-if», gli aggregati dei lotti scelti dall'utente (D-MF6(b)); poche parole per riga, `git diff --check` pulito.
 > **Slot E2E** `front-broker detail`: in coda (coordinatore, 10:47).
 >
-> **Passo 4 ✅, E2E** (slot, `files/scripts/v11p5_e2e.sh`, 10:52–10:58, HEAD `bab5a8fb9` più i miei file; carico a 5 minuti 40):
+> **Passo 4 ✅, E2E** (slot, `files/scripts/v11p5_e2e.sh`, 10:52–10:58, HEAD `d261e09e1` più i miei file; carico a 5 minuti 40):
 > `front-broker detail` **38/38** (2,1 minuti). Porta 6189 libera alle 10:58.
 >
 > ### V11 + P5 — checkpoint 🧊 FROZEN (10:5x)
@@ -5611,9 +5611,9 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > 11 file tracciati, nessuno nuovo; `git diff --check` pulito; nessun server. T-U8 (sezione T) lo riconcilia il coordinatore:
 > con V11 e P5 il suo inventario è chiuso.
 >
-> **Entrato**: `10345abac` + `c97b0c5ee` → dev `d4ecfb692`; HEAD avanzato. T-U8 lo riconcilia il coordinatore nella sezione T.
+> **Entrato**: `7a09e621d` + `d36adf976` → dev `62a7e8c40`; HEAD avanzato. T-U8 lo riconcilia il coordinatore nella sezione T.
 
-## Y-29 · il gate delle eccezioni: un segnalino «annualizza» per voce (dalle 11:00; HEAD `d4ecfb692`)
+## Y-29 · il gate delle eccezioni: un segnalino «annualizza» per voce (dalle 11:00; HEAD `62a7e8c40`)
 
 > **Via del coordinatore** (10:59): rossi prima, prove leggere; dopo, mi passa lavoro da un'altra sezione mentre le voci del
 > developer aspettano.
@@ -5657,7 +5657,7 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >
 > ### Y-29 — checkpoint 🧊 FROZEN (11:1x)
 
-## J-12, la metà del pannello (N81, opzione A) — analisi (dalle 11:20; HEAD `ce2452615`, sola lettura)
+## J-12, la metà del pannello (N81, opzione A) — analisi (dalle 11:20; HEAD `3b87cf7ea`, sola lettura)
 
 Dal coordinatore (dalla sezione di J). **Metà di J**: con `FAILED` la risposta dei lotti tiene stato, issue, metadati,
 prezzi e righe WAC; tornano vuote le sezioni derivate dai lotti (lotti, Gantt, eventi, custodia, valore, rendimento,
@@ -5790,7 +5790,7 @@ Documentazione (`docs-writer`): `lots-analysis.md:121` e la pagina utente. Check
 >   `front-broker broker-unit` **7 file / 70** (il file nuovo registrato); `gate-i18n-catalog` **176**; `gate-i18n-usage`
 >   **195**; svelte-check **0/0**.
 > - **⚠️ Fuori pista**: il primo svelte-check dava 2 errori in `features/legal/` (A9: `InstanceConfigResponse.legal`): il
->   client generato del worktree (ignorato, 10:52) era più vecchio del fast-forward a `ce2452615`. `dev.py api sync`
+>   client generato del worktree (ignorato, 10:52) era più vecchio del fast-forward a `3b87cf7ea`. `dev.py api sync`
 >   (scrive solo file ignorati) → 0/0. Non è del lotto.
 > - In corso: `docs-writer` (`lots-analysis.md:121`, `positions.en.md` «When the panel warns you», senza timbro) e il
 >   `test-author` per l'E2E in `brokers-detail.spec.ts` (scritto ora, lanciato dopo la metà di J in dev).
@@ -5838,10 +5838,10 @@ Documentazione (`docs-writer`): `lots-analysis.md:121` e la pagina utente. Check
 >   righe e le bloccanti tornano al banner senza broker); poi lo slot `front-broker detail` per l'E2E, prima della consegna
 >   finale.
 >
-> **Coordinatore (12:39)**: J-12 metà del pannello committata (`23aa2110f`, `0bb91c384`, `0c7afb49f`); entra con la metà di
+> **Coordinatore (12:39)**: J-12 metà del pannello committata (`b8e3bfc11`, `d3accb592`, `43095c00a`); entra con la metà di
 > J o dopo, poi lo slot `front-broker detail`; il testo 🔄 del CHANGELOG salvato.
 
-## X-R59, il passaggio del frontend — analisi (12:39–12:5x; HEAD `0c7afb49f`, sola lettura)
+## X-R59, il passaggio del frontend — analisi (12:39–12:5x; HEAD `43095c00a`, sola lettura)
 
 Dal coordinatore (12:39), tolta dalla coda di X (X tiene X-R60, X-R58 e la divisione in lotti delle period-changes). Il
 passaggio sostituisce `computeDerivedPriceState()` (le card degli asset), `displayFxDelta()` (`FxTable`, `FxCard`,
@@ -5850,7 +5850,7 @@ live (`POST /prices/current?range_start=`). Note di X da includere: `range_start
 prezzo finale 0 (MF corregge la regola della casa). Da non toccare senza dirlo: le regioni di Z (`assets/+page.svelte`
 ~742-760, `fxStoreRegistry.ts` ~429-453) e `periodChanges.ts` (X-R60).
 
-**Il contratto** (MF, `a8de6b584` «feat(prices): whole-range change from the server», sopra `46bbbb1e3`, già nel mio HEAD;
+**Il contratto** (MF, `b3b593da1` «feat(prices): whole-range change from the server», sopra `9981ed279`, già nel mio HEAD;
 non in dev; decisione N80). Il piano di MF non è nel commit: valgono codice, schemi e documenti.
 - `POST /assets/prices/period-changes` e `POST /fx/currencies/period-changes`: ogni voce accetta `range_start` (≥
   1900-01-01, ≤ `as_of`, al più 5 giorni distinti per richiesta come `as_of`, 422 `period_changes_too_many_days`); ogni
@@ -5923,10 +5923,10 @@ finale) nel mio HEAD.
 > `rangeDeltaByAssetId` / `rangeDeltasByPair`, provati in un file nuovo (`periodChanges.rangeChange.test.ts`) per non
 > toccare `periodChanges.test.ts`, aperto da X-R60; `computeDerivedPriceState` senza Δ; `displayFxDelta` non più esportata.
 >
-> **J-12, l'E2E sulla revisione combinata ✅** (12:53–13:04). Il coordinatore: J-12 completa in dev (metà di J `4195fa857`
-> + `fc8ab50ca`, la mia `0c7afb49f` → dev `46b5fbc0e`; il `log.md` riunito e la riga 🔄 del CHANGELOG combinata in
-> `4e11fabec`). Parcheggiati i miei 3 file sporchi (`files/patches/xr59_park_1254.patch`, 144 righe; il test-author di X-R59
-> in pausa, nessun file scritto), fast-forward a `4e11fabec`, patch riapplicata pulita. Slot `front-broker detail`
+> **J-12, l'E2E sulla revisione combinata ✅** (12:53–13:04). Il coordinatore: J-12 completa in dev (metà di J `9d61f38b3`
+> + `73d7e8d70`, la mia `43095c00a` → dev `20005dc94`; il `log.md` riunito e la riga 🔄 del CHANGELOG combinata in
+> `6bf596033`). Parcheggiati i miei 3 file sporchi (`files/patches/xr59_park_1254.patch`, 144 righe; il test-author di X-R59
+> in pausa, nessun file scritto), fast-forward a `6bf596033`, patch riapplicata pulita. Slot `front-broker detail`
 > (`files/scripts/j12_e2e.sh`, guardia del carico a 5 minuti: 36.76): **40/40** (2,3 min), J12-1 e J12-2 compresi, nessun
 > ritentativo; porta 6189 libera.
 >
@@ -5951,16 +5951,16 @@ finale) nel mio HEAD.
 > **83/83**, Prettier pulito. Due copie di `ratioToPercent` finché `periodChanges.ts` non la riesporta (lotto A, dopo
 > X-R60). Il resto del lotto A aspetta X-R60 e l'ingresso di X-R59 di MF.
 
-## X-R59, lotto B — la pagina dell'asset (dalle 13:21; HEAD `c4fe7cfb1`)
+## X-R59, lotto B — la pagina dell'asset (dalle 13:21; HEAD `b9b6fee95`)
 
-> **Coordinatore (13:20)**: checkpoint del lotto A sul mio ramo, non per dev (`c18deef09` test e modulo, `c4fe7cfb1` diario);
+> **Coordinatore (13:20)**: checkpoint del lotto A sul mio ramo, non per dev (`46d204fa2` test e modulo, `b9b6fee95` diario);
 > dev entrerà nel ramo con X-R60 e X-R59 di MF. Dice a X di non spostare `ratioToPercent`.
 >
 > **Coordinatore (13:21)**: mentre il lotto A aspetta, **i rossi del lotto B**. Contratto (MF): `/prices/current?range_start=
 > &target_currency=` con `range_change`; un cambio mancante dà una variazione nulla; un riferimento prima del 1900 è
 > tagliato. Rossi Vitest per `assetDetailLive` e la Δ derivata della pagina, con risposte finte (nessuna dipendenza dal
 > client generato); commit a un confine di passo. Se avanza tempo prima degli ingressi: **Y-31** (minima).
-> - Il ramo di MF (`f252acb4a`) non ha ancora `target_currency` su `/current`: vale il contratto del coordinatore; i test
+> - Il ramo di MF (`2c3e4d452`) non ha ancora `target_currency` su `/current`: vale il contratto del coordinatore; i test
 >   usano risposte finte. Le istantanee «copilot checkpoint» di altre sessioni non le leggo.
 >
 > **Contratto del lotto B** (proposto, da fissare nei rossi): `AssetDetailLiveInput.rangeStart?` (facoltativo: le fixture
@@ -5989,10 +5989,10 @@ finale) nel mio HEAD.
 >
 > ### Lotto B rossi — checkpoint 🧊 FROZEN (13:4x)
 >
-> **Coordinatore (13:36)**: rossi del lotto B committati (`d4a31ef29`, solo il ramo). Y-31: sì allo spostamento di
+> **Coordinatore (13:36)**: rossi del lotto B committati (`06e142b06`, solo il ramo). Y-31: sì allo spostamento di
 > `resolveUiLocale` in `uiLocaleRule.ts` (riesportato) e a `data-state` su `LotWacPriceChart`.
 
-## Y-31 · la regola M-18 ricopiata in una spec, e due stati non pubblicati — versione minima (13:21–13:56; HEAD `d4a31ef29`)
+## Y-31 · la regola M-18 ricopiata in una spec, e due stati non pubblicati — versione minima (13:21–13:56; HEAD `06e142b06`)
 
 > - **Rossi** (`test-author` `b73cf952`, quello di J-12): `uiLocale.test.ts` +2 (il modulo della regola non importa nulla,
 >   letto col compilatore TypeScript, con un controllo che lo scanner trovi l'import di `./language` in `uiLocale.ts`;
@@ -6012,16 +6012,16 @@ finale) nel mio HEAD.
 > - **Resta, da girare a W**: il segno durevole della riga di `?highlight=` (pagina delle transazioni).
 >
 > **Coordinatore (13:5x)**: X-R59 di MF (con SEC9-1, lo 0 finale, D1 `target_currency` su `/prices/current`) e X-R60 sono in
-> dev (`482343eb3`): dopo il commit di Y-31, dev entra nel mio ramo per i lotti A e B.
+> dev (`b284dd624`): dopo il commit di Y-31, dev entra nel mio ramo per i lotti A e B.
 >
 > ### Y-31 — checkpoint 🧊 FROZEN (13:5x)
 
-## X-R59, la cura dei lotti A e B (dalle 13:57; HEAD `44873e1d1`)
+## X-R59, la cura dei lotti A e B (dalle 13:57; HEAD `2877ff16f`)
 
 > **Coordinatore (13:56–13:57)**: X-R64 di X entra per primo oggi e avvolge gli invii dei due fetcher (e di
 > `livePriceService.fetchCurrentPrices`) in `sendBulkBatches`: nei fetcher tocco solo il costruttore delle voci
-> (`range_start`) e il lettore del risultato (`range_change`). Y-31 committata (`bb9ed5800`) ed entrata in dev come pick
-> (`8aa8a821e`); dev entrata nel mio ramo (`44873e1d1`): X-R59 di MF (con SEC9-1, lo 0 finale, D1) e X-R60. Il segno della
+> (`range_start`) e il lettore del risultato (`range_change`). Y-31 committata (`d8d018660`) ed entrata in dev come pick
+> (`8550bc3a8`); dev entrata nel mio ramo (`2877ff16f`): X-R59 di MF (con SEC9-1, lo 0 finale, D1) e X-R60. Il segno della
 > riga di `?highlight=` va a W.
 >
 > - `dev.py api sync` (file ignorati): il client ha `range_change`, `range_start` e `target_currency`.
@@ -6118,9 +6118,9 @@ finale) nel mio HEAD.
 >   `files/scripts/xr59_pagebusy_refs.py` (sottostringhe esatte, una per riga, altrimenti si ferma), verificati riga per riga
 >   sul codice (`files/logs/xr59_pagebusy_refs_verify.log`). La frase sul `join` della Δ la scrive `docs-writer` `e7c6c482`.
 >
-> **Checkpoint e merge (17/10, 15:10–15:20)**. Committati dal coordinatore `53fea97f7` (codice e doc), `ef005d68e`
-> (test), `8c8025677` (giornale); `app-state.md` escluso, parcheggiato in `files/patches/xr59_app-state.patch` (dev
-> l'aveva cambiato: sporco avrebbe fermato la merge). Merge di dev `79d4ca239` (X-R64) aperta dal coordinatore: un solo
+> **Checkpoint e merge (17/10, 15:10–15:20)**. Committati dal coordinatore `13b8714fb` (codice e doc), `54a48eac0`
+> (test), `e05872932` (giornale); `app-state.md` escluso, parcheggiato in `files/patches/xr59_app-state.patch` (dev
+> l'aveva cambiato: sporco avrebbe fermato la merge). Merge di dev `117c6d7f0` (X-R64) aperta dal coordinatore: un solo
 > conflitto, `periodChanges.ts`. Risolto tenendo le righe di X (l'import di `sendBulkBatches`, l'invio a lotti con
 > `inBatches`, l'unione delle risposte) e le mie nel builder (`range_start`) e nel mapper (`range_change`), col terzo
 > parametro `rangeStart` e i due paragrafi dell'intestazione; nessun `ratioToPercent` doppio. Uniti da soli e riletti:
@@ -6137,7 +6137,7 @@ finale) nel mio HEAD.
 >   rilancia la Δ (`fx/[pair]/+page.svelte:324`) prima dell'`$effect` che apre `fx-detail-orientation` (`:735-753`);
 >   uno scambio della stessa coppia non la richiede (l'inverso si legge sul posto). Aggiunto alla frase del limite.
 >
-> **E2E sulla revisione fusa `3fda937e0` ✅ (17/10, 15:19–16:05; slot del coordinatore fino alle 16:15, corsia 6189,
+> **E2E sulla revisione fusa `1660793db` ✅ (17/10, 15:19–16:05; slot del coordinatore fino alle 16:15, corsia 6189,
 > `--workers 2`; `files/scripts/xr59_e2e.sh`, log `files/logs/xr59_e2e_*.log`)**: **244/245**.
 >
 > | Spec | Esito | Cosa copre |
@@ -6168,7 +6168,7 @@ finale) nel mio HEAD.
 >
 > **Ingresso di X-R59 (17/10, 16:08–16:22)**. All'ingresso dei lotti A e B si è messo in mezzo X-R58 di X: i toast per una
 > richiesta troppo grande sulle liste, con E2E nuove (`asset-list` +1, `fx-list` +3). Il coordinatore ha aperto la merge
-> di dev `15ae6f61e` nel mio worktree.
+> di dev `4eae5115a` nel mio worktree.
 > - **⚠️ Fuori pista**: nelle due spec le due sezioni nuove (la mia X-R59 e la X-R58 di X), entrambe aggiunte in fondo,
 >   git le aveva intrecciate sulle righe comuni (`configure`, `beforeEach`, le chiusure). Ricostruite con
 >   `files/scripts/xr58_rebuild.py`: la parte unita (uguale a quella di dev: la mia più gli import di X), poi la sezione
@@ -6177,13 +6177,13 @@ finale) nel mio HEAD.
 >   rispetto a dev solo il lotto A).
 > - Prove: `api sync` (serviva: svelte-check dava 1 errore in `UsersTab.svelte:174`, il campo `cancel_setup` di A-51 col
 >   client vecchio), svelte-check 0/0, Prettier e `tsc` delle E2E puliti, Vitest 581/581 in 9 file (con `bulkRefusal`);
->   E2E `asset-list` 38/38 e `fx-list` 25/25 (16:13–16:21). Entrato: dev `f317e3a9f` (merge `0e995b428`), CHANGELOG 🔄
->   `763d94b87`.
+>   E2E `asset-list` 38/38 e `fx-list` 25/25 (16:13–16:21). Entrato: dev `d2f489be8` (merge `37236aacf`), CHANGELOG 🔄
+>   `95292da86`.
 
 ## J-53 · Il banner dei lotti: ogni fondo orfano con il suo importo e la sua data (17/10)
 
 Voce di J (analisi di J-36), titolare Y per decisione del coordinatore; cura decisa: una riga per issue per i codici senza
-lotto, nessun totale dal backend (valute diverse, date perse). Base `763d94b87`.
+lotto, nessun totale dal backend (valute diverse, date perse). Base `95292da86`.
 
 **Stato reale.** `buildIssueGroups` (`lotDataQualityHelpers.ts:83`) raggruppa per codice e tiene i parametri della prima
 issue; i chip vengono dai `lot_id` visibili. Il backend mette `lot_id: null` su ogni issue senza lotto
@@ -6239,12 +6239,12 @@ lotto restano una riga (i parametri della prima) più i chip. Perché non righe 
 4. ✅ 17/10 — **E2E** (`files/scripts/j53_e2e.sh`, corsia 6189, 16:53–17:08, prima spec dopo il carico a 5 minuti sotto
    50): `front-portfolio data-quality-real` 3/3, `data-quality-legacy` 1/1, `front-broker detail` 40/40. Porta libera.
 5. ⏳ CHECKPOINT READY al coordinatore, con la riga 🐛 del CHANGELOG; la riga J-53 del backlog la chiude lui.
-> **J-53 entrato** (17/10, 17:11): dev `fb6d58d17` (`c37c2bb1e`); CHANGELOG 🐛 e la riga J-53 chiusa in `38be2102b`. J
+> **J-53 entrato** (17/10, 17:11): dev `c6f44c54d` (`4ac639ff3`); CHANGELOG 🐛 e la riga J-53 chiusa in `217d38540`. J
 > rilegge `lots_analysis_service.md` dopo, su richiesta del coordinatore.
 
 ## Y-33 · `asset-detail.spec.ts`: la navigazione a freddo sotto carico (17/10)
 
-Voce mia (slot E2E di X-R59); review di X. Base `38be2102b`.
+Voce mia (slot E2E di X-R59); review di X. Base `217d38540`.
 - **Il difetto**: `goToSeededAssetDetail()` (`frontend/e2e/assets/asset-detail.spec.ts:107-114`, 28 chiamate) clicca la card
   di Apple e dà 10 s alla radice `asset-detail-page`. Al picco di carico dopo la build un contesto nuovo importa a freddo il
   bundle della pagina: «edit button opens asset modal» (`:240`) è caduto ancora sulla lista; da solo, verde in 4,1 s.
@@ -6265,14 +6265,14 @@ Voce mia (slot E2E di X-R59); review di X. Base `38be2102b`.
 2. ✅ 17/10 — **E2E** (`files/scripts/y33_e2e.sh`, slot del coordinatore dalle 17:32, dopo B; partita alle 17:33 col carico
    a 5 minuti sotto 50): `front-asset asset-detail` **39/39** in 3,5 min, fine alle 17:42. Porta 6189 libera.
 3. ⏳ CHECKPOINT READY al coordinatore (la spec e il giornale); review di X. Y-33 ✅ nel backlog.
-> **Y-33 entrato** (17/10, 17:43): dev `c5b347a46` (`dc6e8aba7`); review di X dopo.
+> **Y-33 entrato** (17/10, 17:43): dev `55753d807` (`12f00b5de`); review di X dopo.
 
 ## Y-24 · Candele e contributo: dopo un errore, al più tre nuove richieste (17/10)
 
 Proposta di Y (la voce più utile senza decisioni della sezione), via del coordinatore alle 17:47: «at most 3 automatic
 retries at 2/4/8 s, reset on a scope change or a Refresh; no UI change». La parte UX (l'indicatore e lo stato d'errore
 delle candele) resta con Y-18, al developer. Nessun'altra worktree ha le due pagine, `GrowthChart`, `PositionsPanel` o
-`stores/portfolio/` (coordinatore). Base `c5b347a46`.
+`stores/portfolio/` (coordinatore). Base `55753d807`.
 
 **Stato reale (verificato).** Quattro caricatori pigri fanno lo stesso giro: Dashboard (runes) `loadPnlCandles`
 (`dashboard/+page.svelte:676-687`) e `loadContribution` (`:637-665`); pagina del broker (legacy: `export let data`, `$:`)
@@ -6348,13 +6348,13 @@ orologio letto: lo stato «scaduto» viene dal timer.
    (`files/scripts/y24_brokerrefs.py`, istantanea → oggi): 9 nei backtick in `app-state.md` e `risk-lab.md`, più
    `(l.751)`/`(l.753)` → `(l.759)`/`(l.761)` a mano in `risk-lab.md:265`; tutti verificati sul codice.
 7. ⏳ CHECKPOINT READY con la riga 🐛 del CHANGELOG; Y-24 ✅ nel backlog (la parte del giro), il resto con Y-18.
-> **Y-24 entrato** (17/10, 19:48): dev `ad5104c4f` (prove combinate verdi sull'albero fuso), CHANGELOG `c1bdc380b`.
+> **Y-24 entrato** (17/10, 19:48): dev `81970e873` (prove combinate verdi sull'albero fuso), CHANGELOG `4a7690482`.
 > Review a posteriori fatte nel frattempo: C-97c-3 parte DV (OK, una nota su una copia di formato in 5 componenti) e J-21
 > lato renderer (OK, una nota: le sequenze di un output con molti `null` non hanno tetto; J la verifica con un rosso).
 
 ## Y-34 · `brokers-detail.spec.ts`: il pannello dei lotti sotto carico, più la nota di X su Y-33 (17/10)
 
-Voce di gate I, via del coordinatore; review di X. Base `ab74aafbf`.
+Voce di gate I, via del coordinatore; review di X. Base `0c866ff73`.
 - **Il difetto**: 12 test di `brokers-detail.spec.ts` aspettano 5 s `lots-analysis-panel` dopo «analizza i lotti» (`:314`,
   `:327`, `:355`, `:364`, `:380`, `:407`, `:431`, `:458`, `:497`, `:532`, `:555`, `:610`); `:355` è caduto una volta col
   carico vicino a 90. L'azione scrive `?asset=<id>` nell'URL, la pagina lo legge in un `$:` e monta il pannello sotto
@@ -6382,13 +6382,13 @@ Voce di gate I, via del coordinatore; review di X. Base `ab74aafbf`.
 2. ✅ 17/10 — **E2E** (slot 20:02–20:08, `files/scripts/y34_e2e.sh`): `front-broker detail` **40/40**, `front-asset
    asset-detail` filtrato su «direction» **5/5** (i 4 flash e un test veloce). Porta 6189 libera. Il coordinatore approva i 60 s
    sul describe `Asset Detail Page` e il residuo di `dashboard-cache.spec.ts:295` nella riga di Y-34.
-3. ✅ 17/10 — CHECKPOINT READY (solo test e giornale, nessuna riga del CHANGELOG). Entrata in dev `7dbd46aa6` (`69b2fe74e` +
-   `2abcb35d9`); X rivede a posteriori il parametro `assetId` di `expectLotsPanelOpen`.
+3. ✅ 17/10 — CHECKPOINT READY (solo test e giornale, nessuna riga del CHANGELOG). Entrata in dev `b6651cfa1` (`1e989354e` +
+   `f75d99006`); X rivede a posteriori il parametro `assetId` di `expectLotsPanelOpen`.
 
 ## Y-30 · Con `FAILED` il grafico prezzo/WAC ritrova la linea del prezzo (17/10)
 
 Voce del mio settore, nata «per J»: il coordinatore (20:11) la passa a Y, backend compreso, perché J è occupato e
-`lots_analysis_service.py` e gli schemi dei lotti non sono aperti altrove; J rivede la parte backend. Base `7dbd46aa6`.
+`lots_analysis_service.py` e gli schemi dei lotti non sono aperti altrove; J rivede la parte backend. Base `b6651cfa1`.
 Analisi inviata alle 20:2x; via del coordinatore alle 20:3x.
 
 **Decisioni** (coordinatore, 20:3x).
@@ -6500,12 +6500,12 @@ diventa un aiuto puro di `lotWacPriceChartHelpers.ts`, una data un punto; il gra
 6. ✅ 17/10 — **CHECKPOINT READY** al coordinatore (~21:5x): riga 🐛, nota per la 🔄 di J-12, J revisore del backend;
    l'eccezione di S7 per J, la trappola della corsia, Y-35 (il `PRICE_HISTORY` senza lettori) nella mia sezione. FROZEN.
 7. ✅ 19/10 — **Ingresso**: dopo il sì del developer a N89 («la linea del prezzo deve continuare anche dopo l'ultima
-   vendita»), il coordinatore fa entrare Y-30 in `dev_release2` con il merge `ede7adf75` (conflitto solo sul log della
+   vendita»), il coordinatore fa entrare Y-30 in `dev_release2` con il merge `de0823b81` (conflitto solo sul log della
    devWiki, risolto da lui tenendo le righe di tutte e due le parti).
 
 ## 19/10 · Ripartenza: contabilità e analisi (Y-30 dopo l'ultima vendita, N65)
 
-Base `ede7adf75`, worktree pulito. Fonte: le risposte del developer al resoconto, file del coordinatore
+Base `de0823b81`, worktree pulito. Fonte: le risposte del developer al resoconto, file del coordinatore
 `risposte-resoconto-20261019.md`, §4 e §6. **Regole nuove del coordinatore, da ora**: nessuna decisione di prodotto da
 Y (ogni scelta che cambia ciò che l'utente vede, i numeri o i dati diventa una domanda, con le opzioni e un consiglio);
 si implementa solo col suo via esplicito; niente carichi pesanti senza uno slot. Questa sezione è in sola lettura: nessun
@@ -6516,7 +6516,7 @@ codice, nessun test lanciato, nessun server.
 - **Piano**: la testata «Stato al 19/10»; i titoli di Y1, Y2 e Y7 nel §4 con il commit d'ingresso (Y7 diceva ancora «in
   corso»); nel §4 la tabella «Stato dei lotti» al posto di «Y3–Y13 — da avviare»; nel §2 un rimando a quella tabella.
 - **Backlog, sezione Y** (26 sostituzioni in 24 voci, ognuna limitata alla sua voce, `files/scripts/y19_backlog_proofs.py`):
-  - Y-3 e Y-4 ✅: fatte il 17/10 da `test-author` (`034f0f13a`, `1130d2eff`), entrate con `73443c6db` (treno 237), ma
+  - Y-3 e Y-4 ✅: fatte il 17/10 da `test-author` (`9e9b47185`, `7d0fc6c4d`), entrate con `acad94499` (treno 237), ma
     non marcate. Verificate nel codice di oggi: `I18N_CALL` con `\bt\(`; il titolo del caso a clic di
     `SignalTreeSelect.test.ts` non nomina più l'aiuto della galleria;
   - il commit d'ingresso su 22 voci ✅ che non lo citavano: 14 senza alcun commit (Y-1, Y-5, Y-8, Y-14, Y-16, Y-19,
@@ -6525,7 +6525,7 @@ codice, nessun test lanciato, nessun server.
   - aperte, tutte in attesa del developer: Y-7 (dopo Y4a), Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35.
 - **Prove**: i 48 commit citati nella sezione e quelli della tabella sono antenati della base
   (`git merge-base --is-ancestor`). Gli ingressi vengono dal registro dei treni del [README della fase](../README.md)
-  (fino al treno 370) e da `git log` per Y-34 (`7dbd46aa6`) e Y-30 (`ede7adf75`), che il registro non ha ancora. Per un
+  (fino al treno 370) e da `git log` per Y-34 (`b6651cfa1`) e Y-30 (`de0823b81`), che il registro non ha ancora. Per un
   commit di contenuto, il primo commit della linea di `dev_release2` che lo contiene (`files/scripts/y19_entry_merge.sh`).
 - `git diff --check` pulito; un solo `## MF ·` nel backlog.
 
@@ -6548,7 +6548,7 @@ codice, nessun test lanciato, nessun server.
     BUY 10 il 10/1/2026, vendita di tutto il 15/1, nessun riacquisto, letto fino al 20/1. Ha un punto per ogni giorno
     fino al 20/1: 100 fino al 14, 110 dal 15, stimati. 8/8;
   - A1 (`test_lots_market_price_history.py`): ultima vendita il 13/3, punti fino al 16/3. 213/213.
-- **Codice invariato** da `6db475ac9`: dopo, nei file della linea, solo `81a927681` (il banner dei lotti) e `279764d88`
+- **Codice invariato** da `fd9682ed0`: dopo, nei file della linea, solo `b51fe28f7` (il banner dei lotti) e `c7170932f`
   (una riga di enum in `schemas/portfolio.py`).
 - **Non coperto**: nessun test nel browser fissa il tratto dopo l'ultima vendita (J12-1 legge `data-price-line` con
   `FAILED`). Un caso E2E piccolo è possibile, se il developer lo vuole.
@@ -6609,7 +6609,7 @@ piccola, senza toccare un componente condiviso né aprire sotto-decisioni. Se in
 abbia sempre due giorni diversi (la sua proposta), allora (b), con (b1) il messaggio e (b2) il salto.
 
 **Il programma colori.** `DateRangePicker.svelte`, con `CalendarMonth.svelte`, era nell'ondata **W1-c di T** (`ui/date`):
-da 73 classi legacy a 0, `a5c7714ca` (16/10, 03:31), chiusa. Da allora nessun commit di colore sul file, e non è nel
+da 73 classi legacy a 0, `9247e2542` (16/10, 03:31), chiusa. Da allora nessun commit di colore sul file, e non è nel
 registro del cricchetto: oggi non è in un lotto aperto. (a) non lo tocca; (b) sì, solo nel comportamento, con l'aspetto
 disabilitato che c'è già: un avviso a T, tramite il coordinatore.
 
@@ -6621,9 +6621,9 @@ disabilitato che c'è già: un avviso a T, tramite il coordinatore.
 Prettier, `theme-roles --check`; le due pagine utente in inglese (il debito di traduzione resta visibile); checkpoint
 FROZEN.
 
-## 19/10 · Revisione a posteriori di J-21 bis (`def1d5259`, in dev `539371064`), sola lettura
+## 19/10 · Revisione a posteriori di J-21 bis (`d4cfde8b5`, in dev `e537abd1b`), sola lettura
 
-Via del coordinatore alle 11:28, sulla base `41fbfe3ea` (il giornale del 19/10 committato). Nessun test lanciato: lettura
+Via del coordinatore alle 11:28, sulla base `84d9b7941` (il giornale del 19/10 committato). Nessun test lanciato: lettura
 del commit, del codice di oggi, dei chiamanti, dei plugin e della documentazione.
 
 **Cosa fa.** `MAX_LINE_RUNS = 30` in `charts/signals/backendRenderer.ts`. In `renderScalarSeries` una linea senza regioni
@@ -6680,10 +6680,10 @@ Il rischio latente, nessuna azione per la 1.3:
 **Per dopo la 1.3**: J-56 (il gradino nel secchio del taglio) e J-59 stanno nella sezione di J del backlog, ma sono per Y
 (FE2): li prendo io quando il coordinatore li assegna. Non tocco la sezione di J.
 
-## 19/10 · Revisione di J-48 (`ab4be3daa`, ramo di J), sola lettura
+## 19/10 · Revisione di J-48 (`4ecc00463`, ramo di J), sola lettura
 
-Richiesta del coordinatore alle 12:35, sulla base `88fdf4517`. Letti gli oggetti git dal mio worktree, non il worktree di
-J. Nessun test lanciato. J-48 è su `5da188c15`, che contiene Y-30 (`ede7adf75`). Dalla base comune, nei file dei lotti
+Richiesta del coordinatore alle 12:35, sulla base `1a54a8d74`. Letti gli oggetti git dal mio worktree, non il worktree di
+J. Nessun test lanciato. J-48 è su `57e09437a`, che contiene Y-30 (`de0823b81`). Dalla base comune, nei file dei lotti
 c'è solo J-48, e il mio ramo differisce solo nel giornale: nessun conflitto atteso.
 
 **Cosa fa.** Una gamba di trasferimento il cui partner sta presso un broker fuori dall'ambito si legge come una rettifica
@@ -6760,7 +6760,7 @@ l'icona che fa capire che non ci puoi andare sopra». Alla domanda del coordinat
 selettori?») ha risposto: in tutti i selettori di intervallo dell'app, sapendo che il filtro per data delle tabelle non
 potrà più avere un giorno solo.
 
-Base `918c2ce39`; `dev_release2` è a `84c1bcba1`, 36 commit avanti. Nei file del lotto, in quei commit, c'è solo X-R16
+Base `c7d7e86b0`; `dev_release2` è a `830d9c90a`, 36 commit avanti. Nei file del lotto, in quei commit, c'è solo X-R16
 sulle pagine di dettaglio di asset e cambi. Nessun codice, nessun test lanciato.
 
 ### Dove nasce oggi un intervallo di un giorno
@@ -6846,13 +6846,13 @@ In nessuno serve codice: il comportamento viene dal componente condiviso.
 - **Il nucleo del lotto**: `ui/date/DateRangePicker.svelte`, `ui/date/CalendarMonth.svelte`, `charts/MeasurePanel.svelte`
   e i loro test.
   - Invariati in `dev_release2` dalla mia base.
-  - Programma colori: `ui/date` era la W1-c di T, chiusa (`a5c7714ca`). `charts/` è l'area di DV, integrata fino a B4. Il
+  - Programma colori: `ui/date` era la W1-c di T, chiusa (`9247e2542`). `charts/` è l'area di DV, integrata fino a B4. Il
     lotto non porta colori nuovi; basta un avviso a T e a DV, tramite il coordinatore.
   - Lavoro committato su questi file negli altri rami: nessuno. Quello non committato non lo vedo: lo conferma il
     coordinatore.
 - **Solo con N65-5 (b)**, il cursore sul grafico: `charts/PriceChartFull.svelte` (oggi `cursor-crosshair` in modalità
   misura, `:1152`), `routes/(app)/assets/[id]/+page.svelte` e `routes/(app)/fx/[pair]/+page.svelte`. Le due pagine le ha
-  toccate X-R16 (`299393b19`, già in dev) e sono vicine al lavoro di X e di Z-29.
+  toccate X-R16 (`77cb0c3a0`, già in dev) e sono vicine al lavoro di X e di Z-29.
 - I 10 usi: nessuna modifica.
 - **Documentazione** (`docs-writer`, solo inglese):
   - per sviluppatori: `developer/frontend/components/core-ui/datePickers.md`, `developer/frontend/components/charts.md`
@@ -6912,7 +6912,7 @@ N65-5 (b) da 1 a 2 ore in più.
 ### Il lotto Y-N65 (via del coordinatore, 19/10 15:01)
 
 **Decisioni del developer**: tutti i consigli, cioè N65-2 (a), N65-3 (a), N65-4 (a), N65-5 (b), N65-6 (a). Giornale
-committato in `156c1411d`. Prima i rossi (`test-author`), **scritti senza lanciare nulla** finché il coordinatore non
+committato in `f842cf995`. Prima i rossi (`test-author`), **scritti senza lanciare nulla** finché il coordinatore non
 aggiorna la base (dopo il cancello della fusione delle migrazioni; al suo «fermati» mi fermo). Dopo l'aggiornamento la
 corsia 6189 si ripopola con `--force --clean`: la migrazione 011 non esiste più. Le note per T e DV («nessun colore
 nuovo») le manda il coordinatore. Le pagine `assets/[id]` e `fx/[pair]` oggi non le ha aperte nessuno; se Z-29 parte
@@ -6945,7 +6945,7 @@ prima, l'ordine lo decide il coordinatore.
      `data-measure-hover="blocked" | "free"` sul contenitore;
    - fuori dalla modalità misura il grafico non chiama `setCursorStyle`;
    - le pagine non cambiano: le loro funzioni freccia restituiscono già il valore di `updatePendingEnd`
-     (`assets/[id]/+page.svelte:2525`, `fx/[pair]/+page.svelte:1544`, numeri alla base `bb676c44c`).
+     (`assets/[id]/+page.svelte:2525`, `fx/[pair]/+page.svelte:1544`, numeri alla base `102f81be2`).
 5. **Gli intervalli di un giorno già salvati** restano come sono: nessun codice.
 
 **N65-7, il mirino** (deciso dal developer alle 15:11, (b): «si se puoi, io non sapevo manco fosse stato fatto, non l'ho
@@ -6972,7 +6972,7 @@ mirino non si vedeva quasi mai. Lo rende vero la stessa chiamata del punto 4, co
    > `disabledDates`. E il tipo `onMeasureHover` dei due grafici va allargato da `=> void`.
 2. ✅ 19/10 — Dopo l'aggiornamento della base: ripopolare la corsia; i rossi lanciati e visti rossi, col carico sotto 50.
    > **Note implementazione** (19/10, 15:43–15:50):
-   > - base `bb676c44c` (fusione di `156c1411d` e dev `cc3c3af15`), i 5 file non committati intatti;
+   > - base `102f81be2` (fusione di `f842cf995` e dev `3b0664d12`), i 5 file non committati intatti;
    > - la fusione tocca solo `assets/[id]` e `fx/[pair]` (X-R16, l'isolamento dei segnali); le funzioni freccia di
    >   `onMeasureHover` sono invariate, solo spostate a `:2525` e `:1544`;
    > - `dev.py test --test-port 6189 --data-dir /tmp/librefolio-r13-y db populate --force --clean`: riuscito in 12 s.
@@ -7122,14 +7122,14 @@ mirino non si vedeva quasi mai. Lo rende vero la stessa chiamata del punto 4, co
    >   `docs(journal): Y-N65 plan, Y-36, Y-37, devWiki`;
    > - due righe del CHANGELOG nel messaggio, una 🔄 e una 🐛.
    >
-   > Conflitti previsti con dev `ccc2a4141`, solo nei file condivisi del giornale:
+   > Conflitti previsti con dev `8c6e984ee`, solo nei file condivisi del giornale:
    > - `LibreFolio_devWiki/index.md`: A-CL1 ha aggiunto righe in cima alla tabella dei problemi e al registro, dove
    >   vanno le mie. Si tengono tutte;
    > - `LibreFolio_devWiki/log.md`: tutti e due aggiungono in fondo. Si tengono tutti e due;
    > - il backlog: nessun pezzo dentro la mia sezione.
-7. ✅ 19/10 — **Ingresso**. Il coordinatore ha committato `298be1611` (`fix(web)`, 17 percorsi) e `15603fe69` (il
-   giornale, 8 percorsi), che ho verificato contro le liste. Revisione automatica pulita; merge `5cb47395f` in
-   `dev_release2`, CHANGELOG `b1e7a2dd5` con le mie due righe (🔄 e 🐛); gate leggero del coordinatore: Vitest
+7. ✅ 19/10 — **Ingresso**. Il coordinatore ha committato `88fb1950d` (`fix(web)`, 17 percorsi) e `6cf1db5b4` (il
+   giornale, 8 percorsi), che ho verificato contro le liste. Revisione automatica pulita; merge `cdc43debe` in
+   `dev_release2`, CHANGELOG `1409e9074` con le mie due righe (🔄 e 🐛); gate leggero del coordinatore: Vitest
    236/236 su 6 file, `front check` 0/0.
    > **Note implementazione**: i conflitti della devWiki (`index.md`, `log.md`) li ha risolti il coordinatore
    > sommando le due parti, con A-CL1. Verificato in sola lettura alle 17:15: i miei commit sono antenati di dev, le mie
@@ -7141,7 +7141,7 @@ mirino non si vedeva quasi mai. Lo rende vero la stessa chiamata del punto 4, co
 Il developer spegne la macchina, e `/tmp` verrà ripulito. Stato scritto alle 18:1x, senza comandi git.
 
 - **Nulla in corsa**: nessun test, sonda o server; la porta 6189 è libera (18:14).
-- **Il worktree**: HEAD `15603fe69`, non ancora portato al merge di dev (`5cb47395f`, poi `b1e7a2dd5`). L'unico file
+- **Il worktree**: HEAD `6cf1db5b4`, non ancora portato al merge di dev (`cdc43debe`, poi `1409e9074`). L'unico file
   sporco è questo piano (la contabilità di Y-N65 e questa sezione): va nel prossimo checkpoint.
 - **La corsia non sopravvive**: `/tmp/librefolio-r13-y` sparisce con `/tmp`. Alla ripresa, prima di qualunque run e col
   carico sotto 50: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6189
@@ -7155,18 +7155,18 @@ Il developer spegne la macchina, e `/tmp` verrà ripulito. Stato scritto alle 18
 1. **Le maschere della galleria** (nota del programma colori, 19/10 17:02). Il punto 4 delle verifiche del taglio di
    `GrowthChart` (§4; oggi righe 95–99), l'unica procedura che le usa, cita `g-final3-r1`, con maschere e stabilità di
    `g-final3__r1__vs__r2`: sono state cancellate per liberare il disco. Il riferimento di oggi è il trio del 18/10,
-   `g-r3-prima-ba8e06763-full`, `g-r3-dopo-cd686f445-full` e `g-r3-dopo2-cd686f445-full`, con maschere e stabilità da
-   `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`. Lo descrive `scripts/visual_review/README.md`, sezione
+   `g-r3-prima-80a1ca0e0-full`, `g-r3-dopo-574c23cf0-full` e `g-r3-dopo2-574c23cf0-full`, con maschere e stabilità da
+   `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-574c23cf0`. Lo descrive `scripts/visual_review/README.md`, sezione
    «Known gallery behaviour»: è in dev, non ancora nella mia base, da rileggere dopo l'aggiornamento. Tutte le altre
    citazioni di `g-final3` (gli esiti di Y1 e Y2, la galleria mobile di Y7, la nota sul giorno UTC) sono la storia
    delle corse fatte: restano. Il coordinatore, 20/10: le maschere chiedono una pausa di tutta la macchina, quindi
    più avanti. La nota resta in coda.
    - ✅ 20/10, al checkpoint di Y-39a: il testo del punto 4 è aggiornato (§4, ora righe 96–109), con la sezione del
-     README letta da `ccc2a4141`. Resta per la pausa della macchina solo la corsa della galleria, quando servirà.
+     README letta da `8c6e984ee`. Resta per la pausa della macchina solo la corsa della galleria, quando servirà.
 2. **Il numero del treno di Y-N65** nella tabella «Stato dei lotti»: da leggere nel README della fase, dopo
    l'aggiornamento della base.
    - ✅ 20/10: il README della fase non numera più i treni dopo il 112 (16/10). Il riferimento resta il merge
-     `5cb47395f`.
+     `cdc43debe`.
 3. **Aperti, invariati**: nel backlog Y-7, Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35, Y-36, Y-37 (in attesa del
    developer, o minimi); fermi Y4a e Y13 (Y13-1); dopo la 1.3, se assegnati, J-56 e J-59.
 
@@ -7176,10 +7176,10 @@ Il developer spegne la macchina, e `/tmp` verrà ripulito. Stato scritto alle 18
 > Nel frattempo prepara l'analisi di Z-29d (file, rischi, ordine dei passi), senza scrivere codice. Niente corse
 > pesanti.»
 >
-> - **Base del worktree**: `15603fe69`; sporco solo questo piano.
-> - **Codice letto**: quello di `dev_release2` `ecc7ac667`. Per il contratto di Z-29a, il ramo di Z `6510fe169`: commit,
+> - **Base del worktree**: `6cf1db5b4`; sporco solo questo piano.
+> - **Codice letto**: quello di `dev_release2` `d61270a14`. Per il contratto di Z-29a, il ramo di Z `fb0795cfb`: commit,
 >   letti in sola lettura con `git show`.
-> - **Nessuna corsa** e nessun comando che cambia qualcosa. I numeri di riga sono di `ecc7ac667`.
+> - **Nessuna corsa** e nessun comando che cambia qualcosa. I numeri di riga sono di `d61270a14`.
 
 **Cos'è Z-29d.** Viene dal piano di Z, sezioni «piano breve del lotto intero» e «il contratto rivisto» (19/10
 15:25–15:35):
@@ -7193,7 +7193,7 @@ Il developer spegne la macchina, e `/tmp` verrà ripulito. Stato scritto alle 18
 ### Lo stato reale (20/10)
 
 **Le dipendenze.**
-- **Z-29a e Z-29r, committati sul ramo di Z** (`37c3ec3ee`; checkpoint del 19/10 17:15, revisori MF e X), non ancora
+- **Z-29a e Z-29r, committati sul ramo di Z** (`c8e06a143`; checkpoint del 19/10 17:15, revisori MF e X), non ancora
   in `dev_release2`:
   - Z-29a è il backend dei prezzi: `key`, `max_points`, `resolution` e `sample_like` nella richiesta; `resolution` e
     `sample_bounds` nella risposta;
@@ -7506,7 +7506,7 @@ Ogni lotto si chiude con un checkpoint FROZEN.
    - `npm run check`: 0 errori e 0 avvisi;
    - Prettier `--check` sui 3 file, `theme-roles --check` e `git diff --check`: puliti.
    - Log: `files/logs/z29d0_*`.
-5. ✅ 20/10 — CHECKPOINT READY, poi FROZEN. Committato dal coordinatore: `bccf05cbb` (codice) e `c19d808fe` (giornale);
+5. ✅ 20/10 — CHECKPOINT READY, poi FROZEN. Committato dal coordinatore: `02ea4ffef` (codice) e `ef93c6e50` (giornale);
    entra in `dev_release2` col treno 2.
 
 **Le risposte del developer su Z-29d** (20/10, mattina, dal coordinatore). Valgono per il lotto del dialogo.
@@ -7548,7 +7548,7 @@ Ogni lotto si chiude con un checkpoint FROZEN.
 > Il coordinatore: «Usa il componente di scorrimento che il progetto ha già, e fai prima un'analisi breve […]. Se è
 > piccolo e non tocca i file di Z-29b, puoi farlo dopo Z-29d-0.»
 >
-> - **Base:** `15603fe69`, uguale a `dev_release2` su questi file.
+> - **Base:** `6cf1db5b4`, uguale a `dev_release2` su questi file.
 > - **ID:** Y-38, libero.
 
 **Dove sta.** `lib/components/charts/ChartSignalsSection.svelte`, ramo `configuredAssets` (`:675-722`).
@@ -7604,7 +7604,7 @@ CHANGELOG, una riga 🔄.
 **Ordine**: dopo il commit di Z-29d-0. Prima i rossi (`test-author`), poi la cura, le prove leggere e il checkpoint.
 
 > **Decisione** (coordinatore, 20/10 09:35): **(a)**, scorrono anche le righe della tendina, «come nel resto del
-> progetto». Z-29d-0 committato (`bccf05cbb`, giornale `c19d808fe`). **Via a Y-38**: prima i rossi.
+> progetto». Z-29d-0 committato (`02ea4ffef`, giornale `ef93c6e50`). **Via a Y-38**: prima i rossi.
 
 **Il lotto Y-38.**
 1. ✅ 20/10 — Rossi (`test-author` `87d78b6d`, in sottofondo), describe «ChartSignalsSection — the asset-comparison
@@ -7632,8 +7632,8 @@ CHANGELOG, una riga 🔄.
    - **La galleria**: col movimento ridotto lo scorrimento non parte. Nello scatto del dettaglio con un confronto
      (`gallery.spec.ts:5389`) un nome lungo finisce tagliato netto, senza i «…».
    - **Doc**: nessuna pagina descrive il selettore.
-4. ✅ 20/10 — CHECKPOINT READY, con una riga 🔄 nel CHANGELOG. Committato dal coordinatore: `252ddefbd` (codice) e
-   `a91ff36cd` (giornale); entra in `dev_release2` col treno 2, insieme a Z-29d-0.
+4. ✅ 20/10 — CHECKPOINT READY, con una riga 🔄 nel CHANGELOG. Committato dal coordinatore: `41c4a8a39` (codice) e
+   `f8b05bfa7` (giornale); entra in `dev_release2` col treno 2, insieme a Z-29d-0.
 
 ## 20/10 · La scheda e l'anteprima: due componenti? Analisi della fusione (sola lettura)
 
@@ -7641,7 +7641,7 @@ CHANGELOG, una riga 🔄.
 > componenti diversi? Trova dove si sono separati, cosa ha in più ognuno e quanto costa fonderli in un componente
 > solo, "il meglio dei due". Senza codice: mandami l'analisi.»
 >
-> - **Base:** `c19d808fe`.
+> - **Base:** `ef93c6e50`.
 > - **Metodo:** il codice di oggi e la storia di git, in sola lettura.
 
 **Sì, si sono separati, su due livelli.**
@@ -7649,18 +7649,18 @@ CHANGELOG, una riga 🔄.
 1. **Il grafico.**
    - Le schede (`AssetCard`, `FxCard`) disegnano con `PriceChartCompact.svelte`: 42 righe sopra un `LineChart`
      compatto.
-   - L'anteprima è nata sullo stesso componente: `4f3ee08b5`, 9/3 11:20, «preview chart». L'intestazione di
+   - L'anteprima è nata sullo stesso componente: `a7cf3d528`, 9/3 11:20, «preview chart». L'intestazione di
      `PriceChartCompact` lo dice ancora: «Used by FxCard, AssetCard, ChartSettingsModal preview».
-   - Sette ore dopo, `5487096df` (9/3 18:15: MACD su due assi, le bande, il selettore delle coppie) la porta su un
+   - Sette ore dopo, `bfc6bdaf9` (9/3 18:15: MACD su due assi, le bande, il selettore delle coppie) la porta su un
      `LineChart` diretto e non compatto, con il suo interruttore Abs/%. Sposta anche la conversione in % nel dialogo
      (`previewDataAbs`, il «Problema 1» del suo piano).
-   - Il 10/3 `e57408376` toglie l'import. Da allora sono due grafici.
+   - Il 10/3 `a39a48115` toglie l'import. Da allora sono due grafici.
 2. **I segnali: tre copie della stessa logica.** Per ogni segnale locale: crea l'istanza, inietta i dati del
    confronto o del cambio, poi `renderMulti`; e i risultati del backend.
-   - `getRenderedSignals` della pagina dei cambi (`fx/+page.svelte:692`, dal 9/3, `099d252de`);
-   - `getRenderedSignals` della pagina Asset (`assets/+page.svelte:1276`, dal 4/4, `2c1ab6e24`, la «parità della
+   - `getRenderedSignals` della pagina dei cambi (`fx/+page.svelte:692`, dal 9/3, `3d49fa251`);
+   - `getRenderedSignals` della pagina Asset (`assets/+page.svelte:1276`, dal 4/4, `3f022fac7`, la «parità della
      lista Asset»);
-   - `renderLocalPreview` del dialogo (`ChartSettingsModal.svelte:287`, dal 23/7, `5b9dddb45`, insieme ai segnali del
+   - `renderLocalPreview` del dialogo (`ChartSettingsModal.svelte:287`, dal 23/7, `0d60124ff`, insieme ai segnali del
      backend).
    - Anche `resolveGlobalBackendPreview`, cioè i segnali del backend dal vivo sulla curva sintetica, è scritta due
      volte. Le due copie sono uguali, salvo il dominio.
@@ -7680,7 +7680,7 @@ CHANGELOG, una riga 🔄.
   - gli stati dei segnali del backend: da applicare, serve un asset vero, non disponibile;
   - il suo interruttore Abs/%, 140 px, le righe degli assi secondari;
   - **il colore per la linea di base.** Il grafico non compatto lo applica, quello compatto mai: `LineChart.svelte:450`,
-    `colorByBaseline && !compact`, dal 3/3 (`0a551f1cb`, prima che l'anteprima esistesse). Così l'opzione «colora per
+    `colorByBaseline && !compact`, dal 3/3 (`f3ba32613`, prima che l'anteprima esistesse). Così l'opzione «colora per
     la linea di base» si vede nell'anteprima e non sulle schede. È la differenza più visibile.
 - **Uguale nelle due**: `normalizeToPercentage` sul primo punto disegnato. Dopo Z-29b deve passare a F (n3, D-Z29d-4).
 
@@ -7755,7 +7755,7 @@ CHANGELOG, una riga 🔄.
 > Chiede: il costo lato server, la lista dei cambi, dove si salva la vista, l'ordine con Z-29b e la stima, le domande.
 > F-2 lo chiede lui al developer; F-3 si risolve da sé; `fx/+page.svelte` lo chiede lui a X.
 >
-> - **Base:** `c19d808fe`, scritta come bozza mentre Y-38 era in consegna; copiata qui dopo il suo commit (`a91ff36cd`).
+> - **Base:** `ef93c6e50`, scritta come bozza mentre Y-38 era in consegna; copiata qui dopo il suo commit (`f8b05bfa7`).
 > - **Metodo:** il codice di oggi, in sola lettura; nessuna corsa.
 
 ### Lo stato di oggi
@@ -7929,7 +7929,7 @@ dettaglio).
 > nome, icona e tipo. Così le pagine di dettaglio potranno adottarla più avanti. N64, il suo prossimo lotto, tocca solo
 > le richieste dei segnali del backend nei dettagli: nessun conflitto.
 >
-> - **Base:** `a91ff36cd`. dev `6e1761121` è 173 commit avanti, con Z-29a dentro. Sulle superfici di Y-39 cambia solo
+> - **Base:** `f8b05bfa7`. dev `283259261` è 173 commit avanti, con Z-29a dentro. Sulle superfici di Y-39 cambia solo
 >   l'avvio di ECharts (`chartInitOptions` di `chartPixelRatio.ts`) in `LineChart`, `PriceChartFull` e
 >   `CandlestickChart`; pagine, schede, modale e `lib/charts/` sono uguali.
 
@@ -8092,8 +8092,8 @@ toccherà con FE4), ma separato: niente conflitti con X.
      - `front_utility_unit`: `chartSignalRendering.test.ts` dopo `chartPageSignals.test.ts` (`:47`), e
        `src/signalRendering.gate.test.ts` dopo `src/instanceProfile.gate.test.ts` (`:144`);
      - `front_component_unit`: `ChartSettingsModal.test.ts` dopo `ChartSignalsSection.test.ts` (`:355`).
-4b. ✅ 21/10 · La rifinitura dei rossi e le prove leggere sulla base fusa (HEAD `e64e9df0f`, merge di `dev_release2`
-   `208199bf6`; Linux, carico 3-10):
+4b. ✅ 21/10 · La rifinitura dei rossi e le prove leggere sulla base fusa (HEAD `9199fdbf6`, merge di `dev_release2`
+   `84ccb8116`; Linux, carico 3-10):
    > **Note implementazione**:
    > - Le parole della fase rossa sono sparite dai quattro file di test. Cambiate solo parole, titoli e import:
    >   asserzioni e numero dei test uguali (375).
@@ -8124,7 +8124,7 @@ toccherà con FE4), ma separato: niente conflitti con X.
    >   di Y-39a.
 5. ✅ 21/10 · Lo slot E2E (coordinatore, 12:44-14:00), Chromium 1228 sulla macchina (`~/.cache/ms-playwright/chromium-1228`).
    > **Note implementazione**: corsia 6189 + `/tmp/librefolio-r13-y`, popolata da zero (`db populate --force --clean`, rc 0,
-   > 10 s); ogni spec dentro `flock /tmp/librefolio-heavy.lock`, `--workers 2`, `nice`, uno alla volta, HEAD `e64e9df0f`,
+   > 10 s); ogni spec dentro `flock /tmp/librefolio-heavy.lock`, `--workers 2`, `nice`, uno alla volta, HEAD `9199fdbf6`,
    > carico 3,9-5,1. Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6189
    > --data-dir /tmp/librefolio-r13-y --workers 2 <categoria> <spec>`.
    > - `front-fx fx-settings`: **3/3** (8,4 s di test; 4 min 19 s con la build di debug e l'avvio), guardia d'allargamento
@@ -8136,7 +8136,7 @@ toccherà con FE4), ma separato: niente conflitti con X.
 6. ✅ 21/10 · CHECKPOINT READY (dopo l'E2E). Da lì Z-29b può partire su `assets/+page.svelte`.
 
 ### I passi di Y-39b
-1. ✅ 21/10 · I rossi (HEAD `89e8b2e61`, `api sync` fatto):
+1. ✅ 21/10 · I rossi (HEAD `e44422ed0`, `api sync` fatto):
    - `LineChart.test.ts`: nuovo `describe` «a compact chart colours its line by its baseline…» (9 casi): la base tratteggiata sul
      compatto, la base = primo punto dei dati in ingresso (8 anni di giorni, disegnati a settimane), `baselineValue`, la base 0 in
      percentuale, verde/rosso chiari, scuri e ridisegno al cambio tema, due guardie (colorByBaseline spento; la base del grafico
@@ -8178,7 +8178,7 @@ toccherà con FE4), ma separato: niente conflitti con X.
    - la modale di una scheda: anteprima di 220 px, senza selettori sul grafico, nei due temi;
    - schede della lista, cambiando tema senza ricaricare: pixel del canvas nei colori scuri (`#4ade80`/`#f87171`) e zero nei chiari
      dopo il passaggio al buio; di nuovo chiari e zero scuri tornando al chiaro (la cache non tiene colori vecchi).
-5. ✅ 21/10 · Slot E2E (coordinatore), corsia 6189 + `/tmp/librefolio-r13-y`, HEAD `89e8b2e61` + il lotto; ogni spec in `flock`,
+5. ✅ 21/10 · Slot E2E (coordinatore), corsia 6189 + `/tmp/librefolio-r13-y`, HEAD `e44422ed0` + il lotto; ogni spec in `flock`,
    `nice`, `--workers 2`, `LC_ALL=en_US.UTF-8`, una alla volta.
    > **Note implementazione**: comando `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6189
    > --data-dir /tmp/librefolio-r13-y --workers 2 <categoria> <spec>`.
@@ -8197,7 +8197,7 @@ toccherà con FE4), ma separato: niente conflitti con X.
 
 ## 21/10 notte · Il lotto Y-40 (asset) e il test di `OtherPeriodEffectsTable` (ondata 3)
 
-> **Base:** `2879ae3e4` (= `dev_release2`, treno 7), `api sync` fatto. Brief: `ondata3/kickoff-Y.md`. Le pagine di dettaglio
+> **Base:** `85fda260e` (= `dev_release2`, treno 7), `api sync` fatto. Brief: `ondata3/kickoff-Y.md`. Le pagine di dettaglio
 > sono di X (Y-42): qui solo il contratto della vista d'apertura, che X legge dopo il commit.
 
 ### Il contratto (V-1…V-8 tutti (a))
@@ -8326,7 +8326,7 @@ toccherà con FE4), ma separato: niente conflitti con X.
 
 ### Y-40, parte cambi (22/10, ondata 3, passo 2)
 
-> **Base:** `71e615cf8` (merge di Z-29fx in Y, genitori `816a4b6c1` = Y-40 asset e `46455857a` = Z-29fx), `api sync` fatto.
+> **Base:** `f59e1b43a` (merge di Z-29fx in Y, genitori `8021bf5a9` = Y-40 asset e `c57e9f2b0` = Z-29fx), `api sync` fatto.
 > Regole di file: `assets/+page.svelte` e `reducedPriceQuery.ts` sono di Z (Z-29d): non toccati; la richiesta dei cambi
 > in un file mio, `lib/utils/reducedFxQuery.ts`. Le pagine di dettaglio restano di X.
 
@@ -8372,7 +8372,7 @@ toccherà con FE4), ma separato: niente conflitti con X.
 9. ✅ 22/10 · Slot (in `flock`): build di debug rc 0 (`ondata3/y40fx-build.log`); `front-fx fx-list` **27/27** (1,0 min);
    `front-fx fx-settings` **3/3** (la modale è cambiata). Log `ondata3/y40fx-e2e-{fx-list,fx-settings}.log`. Porta libera.
 10. ✅ 22/10 · CHECKPOINT READY (cambi).
-11. ✅ 22/10 · Due richieste di X (il dettaglio dell'asset legge ora la vista della lista, `b64c3f4c6` sul ramo di X):
+11. ✅ 22/10 · Due richieste di X (il dettaglio dell'asset legge ora la vista della lista, `2bb8299f3` sul ramo di X):
     `charts.md` (`#primary-views`): il paragrafo del dettaglio dice ora quello che fa (si apre nella vista della scheda e
     la salva, con la stessa finestra della lista: rimessa la frase tolta il 21/10); nello store il commento di
     `setItemPrimaryView`: ricostruisce l'override dalla copia dello store e perde ciò che una pagina scrive nelle sue
@@ -8381,7 +8381,7 @@ toccherà con FE4), ma separato: niente conflitti con X.
 
 ## 22/10 · Y-41 e #49 — analisi delle quattro superfici (ondata 4, sola lettura e prova a mano)
 
-> **Base:** `6f816aad8` (il checkpoint 0, `data-testid="asset-card-settings"`, sopra `c042f2481`). `api sync` fatto. Prova a mano
+> **Base:** `df6db2316` (il checkpoint 0, `data-testid="asset-card-settings"`, sopra `295a09c86`). `api sync` fatto. Prova a mano
 > sulla corsia 6189: build di debug in `flock` (`ondata4/y-y41-build.log`), server avviato dopo, fermato, porta libera.
 > **Metodo della prova:** nel browser ho scritto le impostazioni di due schede nel `localStorage`
 > (`lf_2_chartSettingsStore`): la scheda EUR-USD con un confronto con Apple (asset 1) e con la coppia EUR-GBP, la scheda di
@@ -8493,7 +8493,7 @@ base della percentuale o le date del confronto.
    `front-asset asset-list` (la scheda con una coppia ha la linea al primo caricamento). Il fixture nuovo `e2e/fixtures/chartComparisons.ts` scrive
    le impostazioni nel browser (nessun dato condiviso).
    > **⚠️ Fuori pista**: i rossi delle E2E non sono stati lanciati prima della cura (una build e tre spec in coda nel lucchetto per un rosso
-   > già misurato): lo stato rosso è la prova a mano del 22/10 (arancio 0, magenta 0 sul sorgente di `6f816aad8`, `ondata4/y-y41-build.log`) e i
+   > già misurato): lo stato rosso è la prova a mano del 22/10 (arancio 0, magenta 0 sul sorgente di `df6db2316`, `ondata4/y-y41-build.log`) e i
    > 7+1 rossi di unità.
 6. ✅ 22/10 · Prove leggere: Vitest a gruppi di 3 file, **12 file, 420/420** (`comparisonSeries`, `FxCard` ×2, `AssetCard`, `AssetTable`,
    `ChartSettingsModal`, `chartSignalRendering`, `chartPageSignals`, `reducedPriceQuery`, `signalRendering.gate`, `themeRoles.gate`,
@@ -8508,7 +8508,7 @@ base della percentuale o le date del confronto.
 
 ## 22/10 · #49 — il tooltip su «Valore Iniziale» e «Valore Finale», e la frase in it/fr/es (ondata 4)
 
-> **Base:** `5333837b7` (Y-41 committato dal coordinatore). Discussione #49, promessa a un utente il 17/10.
+> **Base:** `70bac0a91` (Y-41 committato dal coordinatore). Discussione #49, promessa a un utente il 17/10.
 1. ✅ 22/10 · Il rosso: `ContributionTable.test.ts`, nuovo `describe` «the tooltips of Start Value and End Value (#49)» (3 casi: le due colonne restano
    nascoste di default; il tooltip della colonna è quello del catalogo, `dashboard.startValueTooltip` / `endValueTooltip`, letto in lingua d'interfaccia, mai
    scritto nel test). Le colonne si mostrano con gli override salvati della tabella (uno `localStorage` in memoria: il jsdom di qui non lo ha).
@@ -8529,7 +8529,7 @@ base della percentuale o le date del confronto.
 
 ## 23/10 · Ondata 5 (Y5-1 · Y5-F1…F4 · Y5-2 · riga B5)
 
-> **Base:** `1fd80c481` (= `dev_release2`, treni 9 e 10), `api sync` fatto. Brief: `ondata5/kickoff-Y.md`. Corsia 6189, `/tmp/librefolio-r13-y`.
+> **Base:** `61a6c828b` (= `dev_release2`, treni 9 e 10), `api sync` fatto. Brief: `ondata5/kickoff-Y.md`. Corsia 6189, `/tmp/librefolio-r13-y`.
 > **I treni:** Y5-1, F1-F4 e la riga di B5 sono nell'11a (tranne B5: 11b); Y5-2 nell'11b.
 
 ### Y5-1 · Z-14b + Z-15 — la ricarica silenziosa dopo un recupero dei prezzi (PARTI SUBITO, treno 11a)
@@ -8609,7 +8609,7 @@ Z-13, Z-18, Z-14): si **estende**, non si crea.
 
 **Passi** (aggiornati dopo ciascuno): 1 helper puri + rossi · 2 grafico a linee `PositionsReturnChart` · 3 selettori di riga in `ExposureTable` + cablaggio in `PositionsPanel` · 4 la pagina: «Dettaglio lotto» sostituisce la vista, «← Portafoglio», cronologia · 5 la scheda «Asset» di `AllocationPanel` (torta + storia) con i colori per rango · 6 i18n (4 lingue) e doc `user/dashboard/positions.en.md` · 7 collegamento ai dati veri dopo il merge, E2E · 8 consegna.
 
-**Avanzamento Y5-2 (24/10, sera).** Passi 1-8 ✅; consegnato al coordinatore (HEAD 49d018565).
+**Avanzamento Y5-2 (24/10, sera).** Passi 1-8 ✅; consegnato al coordinatore (HEAD 2bdfeee91).
 1. ✅ `positionsSeries.ts` (tipi del contratto di J, linee Abs / base 100, linea del portafoglio, chiavi della selezione, rango dei colori per peso): `positionsSeries.test.ts` **51/51** (rosso = modulo assente).
 2. ✅ `PositionsReturnChart.svelte` (linee su asse temporale, legenda con accendi/spegni, Abs / %, linea di riferimento 0 / 100, posizione chiusa che finisce al suo giorno): **34/34**.
 3. ✅ `ExposureTable.svelte` con i selettori di riga (prop `selectable`, `selectedKeys`, `onSelectionChange` nell'ordine della tabella) **35/35**; `PositionsPanel.svelte` col grafico sotto la tabella Portafoglio, vista Abs/% ricordata, chiamata `onRequestPositionsSeries` una volta per cambio di selezione: **24/24**.
@@ -8617,7 +8617,7 @@ Z-13, Z-18, Z-14): si **estende**, non si crea.
    > **⚠️ Fuori pista**: il file della pagina non era nell'elenco dei miei (lo dico al coordinatore). Un mio errore di tipo: `history.back()` coincideva con la variabile locale `history` della pagina → `window.history.back()`.
 5. ✅ Scheda «Per Asset» in `AllocationPanel` (pie + storia, colori per rango): `AllocationPieChart` modo `asset` (4 casi), `AllocationHistoryChart` dimensione `asset` (3), pannello (8). Il contratto-sorgente di `allocationRings.test.ts` ha preso il rango dentro `sameTypeSet`.
 6. ✅ i18n in 4 lingue (`dashboard.positionsChart.*`, `assetAllocation`, `backToPortfolio`); doc `positions.en.md` e `charts.en.md` (sezione «By Asset»). Mini-lotto a parte: il filtro valuta di `AssetPickerPanel` non ha più la voce vuota (3 casi, 2 rossi).
-7. ✅ (24/10, dopo il merge di J `49d018565` e di MF `1b1b28c2a`) **Dati veri.** `positionsSeries.ts` ora deriva i tipi dal client generato (`z.infer<typeof schemas.PositionsSeriesResponse>` ecc.; i campi opzionali e le unioni con array passano da `safeString`/`safeDecimal`); l'eccezione `@financial-math-exception` dice che è lo spostamento di un numero del backend, non un calcolo nuovo. Nuovo `positionsSeriesController.ts` (una sola copia per Dashboard e pagina del broker): costruisce la richiesta con lo stesso ambito del report (broker, periodo, valuta), tiene solo la risposta più recente, non richiede due volte lo stesso ambito, richiede di nuovo quando cambiano ambito o `refreshVersion`, dopo un errore richiede al tick o al cambio di ambito successivo. `positionsSeriesController.test.ts` **11/11**. La pagina del broker (`brokers/[id]`, scheda Posizioni) passa ora `portfolioHistory` e il controllore (prima mostrava le caselle senza caricare nulla). `AllocationPanel`: tolti i `as any` su `allocation_by_asset` e `allocationHistory.asset`, ora tipizzati dal client. `front check` 0/0; Vitest `features/dashboard` + `components/charts` + `components/ui/select` **2379/2379**.
+7. ✅ (24/10, dopo il merge di J `2bdfeee91` e di MF `b9c285994`) **Dati veri.** `positionsSeries.ts` ora deriva i tipi dal client generato (`z.infer<typeof schemas.PositionsSeriesResponse>` ecc.; i campi opzionali e le unioni con array passano da `safeString`/`safeDecimal`); l'eccezione `@financial-math-exception` dice che è lo spostamento di un numero del backend, non un calcolo nuovo. Nuovo `positionsSeriesController.ts` (una sola copia per Dashboard e pagina del broker): costruisce la richiesta con lo stesso ambito del report (broker, periodo, valuta), tiene solo la risposta più recente, non richiede due volte lo stesso ambito, richiede di nuovo quando cambiano ambito o `refreshVersion`, dopo un errore richiede al tick o al cambio di ambito successivo. `positionsSeriesController.test.ts` **11/11**. La pagina del broker (`brokers/[id]`, scheda Posizioni) passa ora `portfolioHistory` e il controllore (prima mostrava le caselle senza caricare nulla). `AllocationPanel`: tolti i `as any` su `allocation_by_asset` e `allocationHistory.asset`, ora tipizzati dal client. `front check` 0/0; Vitest `features/dashboard` + `components/charts` + `components/ui/select` **2379/2379**.
    > **Nota implementazione**: l'ambito del controllore è un oggetto `{brokerIds, start, end, currency, ready, version}`; la pagina del broker (non-runes) lo calcola con `$:` e chiama `sync`, la Dashboard con `$effect` + `untrack`.
 8. ✅ (24/10) E2E sul dato vero (test-author): `dashboard.spec.ts` +2 test (linee delle posizioni su dati veri con cambio periodo/valuta e errore 500; «Per Asset» con pie, storia e persistenza dopo reload), `brokers-detail.spec.ts` +1 (scheda Posizioni: `broker_ids:[id]`, linea disegnata). `front-portfolio dashboard` 32/32 due volte; `front-broker detail` verde; `front-portfolio all` rosso solo per `chart-safety-unit` (vedi sotto), il resto verde.
    > **⚠️ Fuori pista (1)**: il primo giro del test sulla pagina del broker è uscito rosso: la pagina è in modalità legacy e non seguiva i campi `$state` letti da un getter del controllore → il controllore è diventato uno store Svelte (`subscribe`), le pagine leggono `$positionsSeriesCtl`.
@@ -8645,7 +8645,7 @@ Z-13, Z-18, Z-14): si **estende**, non si crea.
 3. ✅ (25/10) **Anno breve nei grafici dei lotti** (`lotWacPriceChartHelpers.ts` `isoDateToUtcMs`/`utcMsToIsoDate`, `lotGanttChartHelpers.ts` `parseDateToUtcMs`, `LotComparisonChart.svelte` titolo del tooltip): ora `utcMs`, e `utcMsToIsoDate` riempie l'anno a quattro cifre. Quattro casi rossi prima (anno 24, 1 e 99; data sola e timestamp), verdi dopo; gruppo `features/brokers` 904/904, `core-unit` 10 706/10 706, `front check` 0/0.
    > **Nota**: restano `Date.UTC` con lo stesso difetto fuori dal mio ambito: `transactions/import/importReportSets.ts` (due), `ImportWizardModal.svelte:3713`, `utils/periodChanges.ts`, `utils/rangeChange.ts`, `stores/core/TimeSeriesStore.ts`, `utils/core/parseTypedDate.ts` (il campo data digitato!), `utils/core/dateArrowStep.ts` (due). Segnalati al coordinatore.
 
-**Avanzamento Y5-3, passo 4: il cablaggio sul report a gradini (26/10).** Base: unione `316074fd7` (MF `01e180028`); `api sync` fatto (il client generato ha `through`, `range`, `mwrr_line`, niente `mwrr_*` nei punti).
+**Avanzamento Y5-3, passo 4: il cablaggio sul report a gradini (26/10).** Base: unione `b9101bbf2` (MF `8ed3b7985`); `api sync` fatto (il client generato ha `through`, `range`, `mwrr_line`, niente `mwrr_*` nei punti).
 - ✅ **Tipi** (`portfolioStore.svelte.ts`): `through` sui punti di storia, broker e candele; `PortfolioRange`, `PortfolioMwrrLinePoint`; tolti i campi `mwrr_*` della storia.
 - ✅ **GrowthChart** (plug and play): gli input della pipeline vengono dall'adattatore (`buildAggregationInputs`); `growthChartData.ts` ha perso i quattro mapper giornalieri (ora sono l'oracolo congelato della prova di parità in `growthStepInputs.test.ts`). Nuove props `range` e `mwrrLine`, passate dalla Dashboard e dalla pagina del broker.
   - Risoluzione giornaliera = i tratti, disegnati con `step: 'end'`; il P&L cambia segno alla data dopo (`splitBySign(points, stepped)`); la linea MWRR è unita fra i punti veri (`connectNulls`, niente `step`), con valori solo nei giorni di `mwrr_line`.
@@ -8659,13 +8659,13 @@ Z-13, Z-18, Z-14): si **estende**, non si crea.
   > **Resta rosso uno solo**: `core-unit`, 4 casi di `dashboardReportFixture.test.ts`: `e2e/dashboard-report.json` (cattura vera) non ha `through`/`range`. Va rigenerato intero e rinormalizzato, non rattoppato (regola 8): lo decide il coordinatore. Lo legge anche `gallery.spec.ts`.
 
 **Avanzamento Y5-3, passi 5 e 6 (26/10).**
-- ✅ **Passo 5, #48** (committato `36eaffa4d`): dopo l'unione di J, `PositionSeriesPoint` ha `through` e la risposta `range`. `positionLine` dà un punto per tratto più la chiusura all'ultimo `through`, linea `stepped`; `lineOnDay(line, day)` dà il punto che tiene il giorno; `PositionsReturnChart` disegna `step: 'end'` e il suo tooltip elenca, per ogni linea disegnata, quello che dice nel giorno puntato (`snap: false` più `updateAxisPointer`). `PositionsReturnChart.steps.test.ts` (6). E2E dashboard 32/32 (due rossi al primo giro, di carico: l'app non arrivava in 15 e 30 s, rilanciato senza modifiche); gallery `main dashboard` desktop 1/1.
+- ✅ **Passo 5, #48** (committato `545fb8ddd`): dopo l'unione di J, `PositionSeriesPoint` ha `through` e la risposta `range`. `positionLine` dà un punto per tratto più la chiusura all'ultimo `through`, linea `stepped`; `lineOnDay(line, day)` dà il punto che tiene il giorno; `PositionsReturnChart` disegna `step: 'end'` e il suo tooltip elenca, per ogni linea disegnata, quello che dice nel giorno puntato (`snap: false` più `updateAxisPointer`). `PositionsReturnChart.steps.test.ts` (6). E2E dashboard 32/32 (due rossi al primo giro, di carico: l'app non arrivava in 15 e 30 s, rilanciato senza modifiche); gallery `main dashboard` desktop 1/1.
 - ✅ **Passo 6, i lotti**: `lotStepRows.ts` (giorni testimone di più storie, `expandAtDays` per serie, `withBucketEnds`; 15 casi con parità sul giorno per giorno) e `components/charts/stepTooltip.ts` (`paramsAtDay`: i parametri del tooltip di ECharts riscritti sul giorno puntato; 7 casi). `LotComparisonChart` e `LotWacPriceChart` prendono `range`, espandono le storie nei giorni testimone e disegnano le linee con `step: 'end'` a risoluzione giornaliera; il pannello passa `range` di ciascuna risposta (`asObject(response.range)`). Il resto dei due grafici (somme per data, cascata di risoluzione, zoom, marcatori, bolle) non è stato toccato. `LotComparisonChart.steps.test.ts` (6) e `LotWacPriceChart.steps.test.ts` (6), con il controllo di mutazione: spenti `step` e il giorno puntato, i casi nuovi diventano rossi.
   > **Nota**: le serie `value_history`, `return_history`, `market_price_history`, `broker_wac_history` e `cumulative_wac_history` sono quelle di J; `price_history` e `performance_history` non le legge nessun grafico.
 
 ## 28/10 · Ondata 6 (Y: cruscotto, liste e banner) — checkpoint 1
 
-Base `32674edb8`. Corsia 6211, `/tmp/librefolio-r13-o6-y`. Brief: `salvataggi-worktrees-20261021/ondata6/kickoff-Y.md`.
+Base `bc1d4c06c`. Corsia 6211, `/tmp/librefolio-r13-o6-y`. Brief: `salvataggi-worktrees-20261021/ondata6/kickoff-Y.md`.
 
 ### FB-7 — «tutta la storia» parte dal primo movimento vero (non dal 2000)
 
@@ -8691,19 +8691,19 @@ Le 33 chiamate di `resolveDateSentinel`, una per una:
 
 ## 28/10 · Ondata 6 — checkpoint 2 (Y6-4 · J-61 · W-B95 · TC-6)
 
-Base: `c0edda2af` (checkpoint 1 `a8c68dac4` + X6-1 di X).
+Base: `0b0d4798f` (checkpoint 1 `bba29ae64` + X6-1 di X).
 
 - ✅ (28/10) **Y6-4 (Y-18)**: `GrowthChart` ha la prop `pnlCandlesLoading`; con Candele attive, richieste e nessuna candela arrivata, copre il grafico con uno scheletro (`growth-pnl-candles-loading`, come quello della storia). Dashboard e pagina del broker la passano.
   > **Note implementazione**: nuovo test `GrowthChart.candlesLoading.test.ts` (5 casi: 2 rossi prima, 3 guardie: nessun indicatore a candele ferme, con le candele già arrivate, fuori dal sottomodo Candele). Lo stato d'errore delle candele (la parte «resta per il developer» di Y-18) non è toccato.
 - ✅ (28/10) **Ramo morto** (segnalato da W2): tolto da `brokers/[id]/+page.svelte` il blocco `broker.total_value_base_currency` (il backend non lo valorizza mai) e l'import `safeCurrency`. La chiave `common.totalValue` non ha più usi nel codice: la lascio ai cataloghi (decisione al coordinatore).
 - ✅ (28/10) **J-61**: l'avviso «troppe lacune» non c'è più. `renderBackendSignalResult` non aggiunge note alle `warnings` (nessuna pagina le legge); resta il suffisso «(gaps joined)» nel nome della linea. Chiave `signals.gapsJoined.warning` tolta dai 4 cataloghi (`i18n remove`), commento di `MAX_LINE_RUNS` corretto. Test di `backendRendererSegments.test.ts` aggiornati: 6 rossi prima, 40/40 dopo; gruppo `charts/signals` 338/338. J-59 scartata (nulla da fare). Né la guida né il CHANGELOG nominano l'avviso: nulla da ritoccare.
 - ✅ (28/10) **W-B95**: la pagina Files traduce l'esito dell'anteprima con `resolveParseFailureMessage` (stessa funzione del wizard); `getFilePreviewError` non ha più chiamanti ed è tolta. `FilePreviewModal` pubblica `file-preview-error`. E2E `files.spec.ts` «a preview the server refuses with a code…»: rosso prima (il messaggio inglese del server compariva), verde dopo.
-- ✅ (28/10) **TC-6**: **già fatto** in A5b (`2b0715532`, 15/10): `currentLanguage.init()` segue `locale` finché nessuna lingua è scelta. `language.test.ts` 7/7 verde; nessun lavoro.
+- ✅ (28/10) **TC-6**: **già fatto** in A5b (`adf8c6f5e`, 15/10): `currentLanguage.init()` segue `locale` finché nessuna lingua è scelta. `language.test.ts` 7/7 verde; nessun lavoro.
 - ✅ (28/10) **Prove del checkpoint 2**: Vitest `features/dashboard`, `charts/signals`, `features/files`, `utils/files`, `parseFailure`, `stores/app`: 68 file / 1839; `front check` 0/0; `front-utility files` 30/30; `front-portfolio dashboard` 33/33; `front-broker detail` 39/41 al primo giro con la macchina a carico 30–40 (un click della scheda che non apre la pagina in 10 s, un login oltre 30 s), poi i due da soli 2/2; `i18n check` stretto; `check-orphans` verde.
 
 ## 28/10 · Ondata 6 · Y2 — sistema dei grafici (checkpoint 1: FB-1, FB-2, FB-9, FB-8, FB-5, FB-4)
 
-Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `32674edb8`, corsia 6225.
+Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `bc1d4c06c`, corsia 6225.
 
 | Lotto | Cosa | Stato |
 |---|---|---|
@@ -8716,7 +8716,7 @@ Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `326
 
 > **Note implementazione**: il giorno della settimana viene da `Intl` (`weekday: 'short'`): tradotto senza chiavi nuove. Una stringa che non è un giorno `YYYY-MM-DD` resta com'è (un conteggio o un anno nell'intestazione di `LineChart` non diventano giorni: lo ha mostrato il guard di `LineChart.test.ts`).
 > **Note implementazione**: l'aggancio ai giorni rilancia `updateAxisPointer` con il valore del giorno più vicino (mezzogiorno è il punto di svolta), all'altezza del mouse; il secondo evento porta una mezzanotte e chiude il giro. Il tooltip continua a leggere il giorno puntato (`pointedDay`).
-> **⚠️ Fuori pista**: il worktree era a `f4a5e6e0a`, non a `32674edb8` (l'app aveva tagliato dalla versione spinta); il coordinatore l'ha portato avanti.
+> **⚠️ Fuori pista**: il worktree era a `a99aee28f`, non a `bc1d4c06c` (l'app aveva tagliato dalla versione spinta); il coordinatore l'ha portato avanti.
 > **⚠️ Fuori pista**: FB-9 è risolto in `SearchSelect.svelte` (il segnaposto), non in `ChartSignalsSection.svelte`: nessun conflitto con FB-11 di X.
 > **Note implementazione**: `attachDaySnap` si può richiamare sulla stessa istanza (`AllocationHistoryChart` lo fa a ogni disegno): l'ascoltatore del mouse è uno solo, il gestore del puntatore viene sostituito, mai impilato (test dedicato). I tre test nuovi sono registrati in `scripts/test_runner/_frontend_utility.py` (`check-orphans` verde, 680 test).
 > **Note implementazione**: verificato a mano nel browser sul server di prova (porta 6225): col mouse a x=524 il tooltip dice «16 Sept 2026 (Wed)» e la linea del puntatore sta sul 16 settembre (x=527); la rotella zooma il grafico «Return of the positions». FB-5 verificato solo con Vitest (jsdom), non su un telefono.
@@ -8724,7 +8724,7 @@ Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `326
 
 ## 28/10 · Ondata 6 · Y2 — checkpoint 2: FB-10 (pannello di scelta dell'asset) e `ViewModeToggle`
 
-Base: `8537f3a99` (checkpoint 1 committato). Ordine deciso dal coordinatore: FB-6 aspetta Y6-4 di Y, FB-3 dopo; qui FB-10 e `ViewModeToggle`.
+Base: `b714c0f6b` (checkpoint 1 committato). Ordine deciso dal coordinatore: FB-6 aspetta Y6-4 di Y, FB-3 dopo; qui FB-10 e `ViewModeToggle`.
 
 | Lotto | Cosa | Stato |
 |---|---|---|
@@ -8751,7 +8751,7 @@ Rossi visti dal coordinatore a 2 worker: `fx-list` 3/38 (`:67`, `:210`, `:1021`)
 
 ## 28/10 sera · Ondata 6 · Y2 — checkpoint 3: FB-6 (badge Weekly/Monthly su 26 anni) e livello annuale
 
-Base `03ecb80b0` (checkpoint 1 e 2 committati, ramo di Y unito con Y6-4).
+Base `22d2bde5d` (checkpoint 1 e 2 committati, ramo di Y unito con Y6-4).
 
 **Riproduzione, in ordine delle due ipotesi del kickoff**
 - **Ipotesi 1 (la densità conta gli step e non i giorni)**: letta nel codice (`countBuckets` conta le date degli ingressi: gli step più i giorni-testimone) e provata. Su una storia di 26 anni con **uno step al giorno** (la forma di una storia vera: 263 step in un anno nel campione `dashboard-report.json`) il badge **compare**, sia nel componente (`GrowthChart.steps.test.ts`, grafico finto di 1200 px: Weekly) sia nel browser vero con la rotella e la larghezza reale (`dashboard-growth-long-history.spec.ts`, report servito: Weekly o Monthly). **Non riprodotto con quei dati.**
@@ -8763,7 +8763,7 @@ Base `03ecb80b0` (checkpoint 1 e 2 committati, ramo di Y unito con Y6-4).
 
 ## 28/10 notte · Ondata 6 · Y2 — checkpoint 4: FB-3 (forma delle linee), `files/+page.svelte`, MF-C2 lato frontend
 
-Base `fc0c0cbb1` (X e MF uniti nel ramo; `api sync` e `front check` verdi prima di partire).
+Base `adb8c59ad` (X e MF uniti nel ramo; `api sync` e `front check` verdi prima di partire).
 
 ### FB-3 — la forma delle linee (✅ 28/10)
 
@@ -8818,7 +8818,7 @@ Il developer vuole che la issue GitHub #63 («Portfolio Growth»: cursore sul 25
 
 ## 28/10 · Ondata 6 — checkpoint 3a (day snap · common.totalValue · Y6-1)
 
-Base: `19c9928ae` (checkpoint 2 `0f7709fc6` + checkpoint 1 di Y2 `8537f3a99`).
+Base: `d65dc2933` (checkpoint 2 `71448d93f` + checkpoint 1 di Y2 `b714c0f6b`).
 
 - ✅ (28/10) **`attachDaySnap` nel grafico di crescita** (richiesta di Y2): `GrowthChart.svelte` chiama `attachDaySnap(zoomInstance)` dopo il suo `updateAxisPointer`. Nuovo `GrowthChart.daySnap.test.ts` (2 casi: il puntatore a metà fra due giorni è riportato sul giorno più vicino, 1 rosso prima; già su un giorno non si tocca).
 - ✅ (28/10) **`common.totalValue`** tolta dai 4 cataloghi (nessun uso dopo la tolta del ramo morto del broker).
@@ -8834,7 +8834,7 @@ Base: `19c9928ae` (checkpoint 2 `0f7709fc6` + checkpoint 1 di Y2 `8537f3a99`).
 
 ## 29/10 · Ondata 6 — checkpoint 3b (FB-12 · FB-13)
 
-Base: `21016b21e` (checkpoint 3a `37c7aa68b` + X). `front check` sul ramo unito: 0/0.
+Base: `0693570c4` (checkpoint 3a `87abf554f` + X). `front check` sul ramo unito: 0/0.
 
 - ✅ (29/10) **FB-13, asset venduti dentro il periodo nella tabella Portfolio.** Il report non ha bisogno di campi nuovi: i venduti sono le posizioni di `positions_contribution` con `is_fully_sold`. `ExposureTable` ha la prop `soldPositions`: righe **dopo** le aperte, **in corsivo**, senza valore/peso/rendimento (la colonna YOC dice «—»), una per posizione che non sia aperta presso lo stesso broker, con spunta e azioni (vedi asset, analizza lotti). La spunta fa disegnare la loro linea nel grafico (la chiave è quella di una posizione aperta). `PositionsPanel` chiede la contribution anche con la vista Portfolio/Table.
   > **Nota**: la contribution è la seconda richiesta che il developer trova lenta (FB-14, MF): finché non è unificata, la vista Portfolio ne paga il costo. Nessun campo mancante nel backend.
@@ -8850,7 +8850,7 @@ Base: `21016b21e` (checkpoint 3a `37c7aa68b` + X). `front check` sul ramo unito:
 
 ## 31/10 · Ondata 6 · Y2-CMP — l'asse unione dei confronti (checkpoint 6)
 
-Decisione del developer (30/10): «anche nel confronto la data parte dal giorno più vecchio tra i 2, ovviamente il grafico non si deve rompere se il segnale dopo parte molto più avanti». Base: `80b2cd98f` (X cp5 già unito: «Tutto» dal primo prezzo salvato, `min`, `firstSeriesDates`).
+Decisione del developer (30/10): «anche nel confronto la data parte dal giorno più vecchio tra i 2, ovviamente il grafico non si deve rompere se il segnale dopo parte molto più avanti». Base: `4d7444740` (X cp5 già unito: «Tutto» dal primo prezzo salvato, `min`, `firstSeriesDates`).
 
 **Perché spariva il 1985–2010.** Due filtri tagliavano i giorni del confronto ai soli giorni del principale: `AssetComparisonSignal.computePoints` (e il fantasma delle conversioni, `FxPairSignal` allo stesso modo) e l'asse a categorie di `PriceChartFull`, fatto dei soli giorni del principale. In più la pagina chiedeva il confronto da `dateStart` del principale.
 
@@ -8869,7 +8869,7 @@ Decisione del developer (30/10): «anche nel confronto la data parte dal giorno 
 > **Note implementazione**: test rossi prima per l'helper (`extendToOverlayDays`) e il componente; i test dei segnali sono stati scritti prima del codice ma non lanciati rossi (prova di sensibilità: con la forma «sulle schede» rimessa, i test dell'asse unione diventano rossi).
 ## 30/10 · Ondata 6 — checkpoint 4 (FB-12b · FB-15 · Y6-6)
 
-Base: `2b5dcd2e0` (checkpoint 3b).
+Base: `7326f5e55` (checkpoint 3b).
 
 - ✅ (30/10) **FB-12b (decisione del developer del 30/10).** Anche nella Dashboard il dettaglio dei lotti si apre **sotto** le posizioni, come già nel broker: il pannello delle posizioni e il suo grafico restano; si chiude con la ✕ del pannello o con il «indietro» del browser (passo di storia, invariato). Tolti il bottone «← Portfolio» (`positions-back-to-portfolio`) e la chiave `dashboard.backToPortfolio` dai 4 cataloghi. L'E2E «the lot detail replaces the portfolio view» è riscritto («opens below … the chart stays»); i tre helper `backToPortfolio` di `dashboard-cache`, `data-quality-real` e `data-quality-legacy` cliccano `lots-analysis-panel-close`.
   > **Resta da fare (Y6-5, docs-writer):** `mkdocs_src/docs/user/dashboard/positions.en.md:123` dice ancora che nella Dashboard il pannello *sostituisce* la vista, con il bottone **← Portfolio**.
@@ -8880,7 +8880,7 @@ Base: `2b5dcd2e0` (checkpoint 3b).
 
 ## 30/10 · Ondata 6 — checkpoint 5 (Y6-2 · Y6-3 · Y6-5)
 
-Base: `12968859e` (checkpoint 4 `38b714b64` + W2 `1258109bf` + X `12968859e`).
+Base: `229747147` (checkpoint 4 `74dde14a6` + W2 `9d40bcd14` + X `229747147`).
 
 - ✅ (30/10) **Y6-2 (W-B76).** La riga della pagina Transazioni aperta con `?highlight=<id>` conserva, dopo la pulsazione di 1,4 s, un segno: `data-highlighted="true"` sulla riga (fino al prossimo highlight o alla fine della pagina) e una barra sulla sua prima cella, con la variabile del ruolo `--lf-checked` come la pulsazione. E2E nuovo in `transactions-table.spec.ts`: la riga ha il segno dopo che la classe della pulsazione è sparita, ed è una sola.
   > **⚠️ Fuori pista**: l'E2E l'ho scritto con la cura (nessun rosso eseguito in browser).
@@ -8894,10 +8894,10 @@ Base: `12968859e` (checkpoint 4 `38b714b64` + W2 `1258109bf` + X `12968859e`).
 
 ## 31/10 · Ondata 6 — checkpoint 6 (Y-9 · triage dei rossi del gate del treno 12)
 
-Base: `10db26d63` (checkpoint 5 `a2d42e46f` + W con H6-1).
+Base: `098856b8d` (checkpoint 5 `149d85d5a` + W con H6-1).
 
 - ✅ (31/10) **Y-9, il PAC da telefono.** Nuova misura `e2e/pac-phone-layout.spec.ts` (registrata come `front-utility pac-phone-layout`): a 375 px, sulla bozza della galleria, di quanti pixel scorrono di lato la pagina e ogni tabella dei passi **Targets** e **Review**. **Rosso misurato**: la tabella del passo Targets sporgeva di **221 px**, quella di Review di **109 px** (la pagina no). Cura sotto i 768 px (il punto di rottura della `DataTable`, `MediaQuery` di `svelte/reactivity`): Targets — colonna «Distribuzione» nascosta per impostazione predefinita (decorativa, una pressione in «Colonne» la riporta), asset da 160 a 80, target da 140/128 a 96/84, colonna delle azioni da 64 a 44 px; Review — «Passo» da 140 a 84, «Riepilogo» da 200 a 110, azioni a 44 px, e nella tabella dei dati di calcolo «Tipo» e «Origine» nascoste per impostazione predefinita, «Voce» e «Valore» più strette. **Verde**: 2/2 (nessuna sporgenza). Gli scatti non li ho guardati.
-  > **⚠️ Fuori pista**: `galleryPac.ts:401` cercava la lista del tipo d'ordine **dentro** il blocco; dopo H6-1 (`SimpleSelect` ha il suo portale sul `body`, `04fb1bb62`) la lista non è più lì e la bozza non si costruiva. Una riga: ora la cerca nella pagina. Gli stessi locatori annidati ci sono ancora in `email-send-link.spec.ts:414` (`send-link-email-language-dropdown`), `gallery.spec.ts:4236` (`report-set-read-as-dropdown`) e `plugin-settings.spec.ts:398` (`plugin-setting-select-dropdown`): da controllare da chi li possiede.
+  > **⚠️ Fuori pista**: `galleryPac.ts:401` cercava la lista del tipo d'ordine **dentro** il blocco; dopo H6-1 (`SimpleSelect` ha il suo portale sul `body`, `82cd4cfad`) la lista non è più lì e la bozza non si costruiva. Una riga: ora la cerca nella pagina. Gli stessi locatori annidati ci sono ancora in `email-send-link.spec.ts:414` (`send-link-email-language-dropdown`), `gallery.spec.ts:4236` (`report-set-read-as-dropdown`) e `plugin-settings.spec.ts:398` (`plugin-setting-select-dropdown`): da controllare da chi li possiede.
 - ✅ (31/10) **Rossi del gate del treno 12 (triage).**
   1. `privacy-masking.spec.ts` (16): leggeva `summary.holdings` da `GET /brokers/{id}/summary`, che MF-L ha tolto. Ora le posizioni aperte vengono dal report del portafoglio (come W2 in `brokers-detail`). **18/18**. Stesso difetto in `layout/toolbar-width-sweep.spec.ts` (non nel gate perché il giro si fermava prima): corretto allo stesso modo, **24/24**.
   2. `lazy-report-retry.spec.ts` (Y-24): **due cause diverse**. (a) I due casi sul contributo («nessun contributo chiesto prima che si scelga Performance») erano rossi per **FB-13**: da quando la tabella Portfolio mostra i venduti nel periodo, il pannello chiede il contributo appena si apre in Portfolio × Tabella. È voluto: i casi ora partono con le posizioni aperte in Holdings × **Mappa** (che non lo chiede), con la preferenza dell'utente scritta prima del caricamento; il resto della prova (4 richieste al massimo, Refresh) è invariato. (b) Il caso «leaving Candles and coming back» era rosso per un **mio difetto di Y6-4**: lo scheletro di caricamento delle candele copriva i pulsanti dei sottomodi e ne prendeva i clic, quindi mentre le candele si caricano non si poteva lasciare Candele. Ora `pointer-events-none` (test unitario nuovo). **7/7**.
@@ -8905,7 +8905,7 @@ Base: `10db26d63` (checkpoint 5 `a2d42e46f` + W con H6-1).
 
 ## 3/11 · Ondata 6 — checkpoint 7 (T1 · «Analizza lotto»)
 
-Base: `898bc9d15` (`dev_release2`, con MF6-3 e FB-14).
+Base: `8e70ec493` (`dev_release2`, con MF6-3 e FB-14).
 
 - ✅ (3/11) **«Analizza lotto» sotto la lista, con scorrimento.** Verificato: `LotsAnalysisPanel` è usato solo da Dashboard (`?asset=` sotto `PositionsPanel`) e pagina del broker (sotto la lista): nessuna seconda pagina. Lo scorrimento a inizio sezione esiste già nel componente (`scrollPanelIntoViewWhenStable`: aspetta il rettangolo stabile, poi `scrollIntoView({block:'start'})`), quindi nessuna modifica al prodotto. Fissato con due E2E: `dashboard.spec.ts` («opening the lot detail scrolls to the start of its section, on the same page») e `brokers-detail.spec.ts` (stesso titolo, accanto a «Analyze Lots»). Verificano: stesso percorso dell'URL, la lista resta, la cima del pannello è in vista (top tra -2 e 120 px), senza attese a tempo.
   > **Note implementazione**: i due E2E sono scritti sopra un comportamento già esistente, quindi non c'è un rosso prima.
@@ -8914,7 +8914,7 @@ Base: `898bc9d15` (`dev_release2`, con MF6-3 e FB-14).
 
 ### 3/11 · Y6-7 consegna 1 — il controllore dei dati condiviso (checkpoint 8, in corso)
 
-Base: cp7 (`58d822c61`). Forma confermata dal coordinatore: un negozio Svelte con `subscribe` (la pagina del broker è ancora Svelte 4), funzioni pure in `portfolioDataScope.ts`, ingressi come letture.
+Base: cp7 (`bebe1a7a6`). Forma confermata dal coordinatore: un negozio Svelte con `subscribe` (la pagina del broker è ancora Svelte 4), funzioni pure in `portfolioDataScope.ts`, ingressi come letture.
 
 - ✅ **Specifica e modulo.** `features/portfolio-view/portfolioDataScope.ts` (+test, 9): l'ambito `PortfolioScope`, `scopeKey`, le tre domande `mainReportCall`/`contributionCall`/`pnlCandlesCall` (stessi broker, periodo e valuta: FB-14, un giro solo del motore). `portfolioData.ts` (+test, 33 con le serie): `loadAll` (cache subito, `background` Z-18, ultima richiesta vince, sessione e pagina), `loadContribution` (fresca / aggiornata / sottofondo, tentativi 2-4-8 s di Y-24), `loadPnlCandles`, `hydrateFromCache`, `syncPositions` (serie e Rolling), `dispose`. Registrati in `_frontend_utility.py`.
 - ✅ **`fullShare` (MF6-3).** `ReportOptions.fullShare` entra nella chiave di cache (`|fullshare`) e nel corpo (`apply_ownership_share: false`) solo se acceso; stessa cosa per la serie delle posizioni (`PositionsSeriesScope.fullShare`). Rosso provato togliendo la correzione dallo store.

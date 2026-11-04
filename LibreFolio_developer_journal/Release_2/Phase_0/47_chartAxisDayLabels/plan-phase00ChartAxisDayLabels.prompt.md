@@ -3,9 +3,9 @@
 > **Stato**: ✅ consegnato il 2026-10-12 col checkpoint (§9, passo 8), in attesa dell'integrazione.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`). È la prima voce della coda di I dopo M-16: una regressione che il developer ha segnalato durante le verifiche sul server, più la voce 1 del coordinatore (le serie ferme della P&L a linee).
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `bdc078efc`. Il coordinatore riallinea al target (`d33fca26f`, treno 52) al checkpoint; nei treni 51–52 non c'è niente di I.
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `0af65b270`. Il coordinatore riallinea al target (`7da9438c4`, treno 52) al checkpoint; nei treni 51–52 non c'è niente di I.
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`, un comando alla volta. Mai le porte 6040 e 6041, mai la galleria.
-> - **Origine**: (A) viene da `2d22130bd` (I, 17/09), che ha introdotto `frontend/src/lib/components/charts/responsiveXAxis.ts`; la voce 1 dalle linee dei broker di `8ed7a0f0d` (18/09). Entrambi sono nuovi nella 1.2.
+> - **Origine**: (A) viene da `f4d209b11` (I, 17/09), che ha introdotto `frontend/src/lib/components/charts/responsiveXAxis.ts`; la voce 1 dalle linee dei broker di `a1e6fce55` (18/09). Entrambi sono nuovi nella 1.2.
 
 ## 0. Autorizzazione (2026-10-12)
 
@@ -275,14 +275,14 @@ Proposta per la riga 🔄: «Line charts label their time axis by the gap betwee
   > **Note implementazione**:
   > - `BACKLOG_POST_1.2.md`, sezione I: la voce **47-1**, bassa e preesistente, in fondo all'elenco. Nell'intro della sezione la nomina la riga sui numeri di riga. Nel backlog «Q3» diventa «47-1», come le voci 32-1…32-5 della sezione Q, così non si confonde con quella sezione.
   > - Prima di scriverla, I ha verificato il meccanismo nel codice e con una prova SSR (`files/xaxis_evidence/libreFolio_i_xaxis_q3zoom.{cjs,log}` nella sessione):
-  >   - in compatto l'`interval` degli assi category si calcola su tutti i punti (`responsiveXAxis.ts:149`, da `2d22130bd` del 17/09);
+  >   - in compatto l'`interval` degli assi category si calcola su tutti i punti (`responsiveXAxis.ts:149`, da `f4d209b11` del 17/09);
   >   - i gestori del `dataZoom` dei tre grafici category (`CandlestickChart.svelte:249`, `LineChart.svelte:358`, `PriceChartFull.svelte:579`) non lo ricalcolano sulla finestra visibile;
   >   - un anno giornaliero a 800 px, con spazio per 12 etichette, ne mostra 12 senza zoom, 7 con metà periodo, 4 con un quinto, e su una finestra di 33 punti solo i due bordi;
   >   - gli assi time non ne soffrono, perché ECharts rifà i tick sulla finestra.
   > - La coda di I dopo questo lotto, come da coordinatore: la rifinitura UI (con M-20, i pulsanti di copia su `http://`), poi M-18. Il CHANGELOG localizzato è passato a T.
 - [x] **8. Checkpoint** (2026-10-12).
   > **Note implementazione**:
-  > - Base `bdc078efc`, niente in stage, porta 6157 libera. Al checkpoint il target è `bd14ec61d` (treno 58), non più `d33fca26f`:
+  > - Base `0af65b270`, niente in stage, porta 6157 libera. Al checkpoint il target è `dbd9fccfc` (treno 58), non più `7da9438c4`:
   >   - dei 166 file che cambiano fra la base e il target, l'unico in comune col lotto è `BACKLOG_POST_1.2.md`, toccato fuori dalla sezione I. La fusione a tre vie (`git merge-file -p`, sola lettura) non ha conflitti, e la 47-1 resta in fondo alla sezione I;
   >   - i file che importano `responsiveXAxis` sono gli stessi nove in base e nel target. I due ritocchi del target a `dashboard/+page.svelte` aggiungono `refreshVersion += 1` dopo la sincronizzazione dei cambi e dei prezzi: va a `LotsAnalysisPanel` e a `RiskLevelsPanel`, non a GrowthChart. I grafici dei lotti rifanno la policy a ogni disegno, quindi il refresh li ridisegna col formatter di C3.
   > - La partizione, coi blob per stadio ricalcolati con `git hash-object` sulle istantanee:

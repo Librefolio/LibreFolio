@@ -5,7 +5,7 @@ What changed. ``PortfolioService.get_positions_contribution`` (``backend/app/ser
 
 * MF-A3 — a row fully sold in the period whose closed rule (``closed_position_annualized``) gives no value and whose
   flight in the period (first opening clamped to ``date_from`` → last close) is under 30 days now shows None
-  (``closed_flight_too_short``). HEAD ``f33d91b4f`` fell back to the period's general rule, which spreads ten days held
+  (``closed_flight_too_short``). HEAD ``8ebdb3857`` fell back to the period's general rule, which spreads ten days held
   over the whole year.
 
 (MF-A11, the open row's ``left_base``, was reverted by MF before landing — the numbers did not confirm it — so
@@ -22,7 +22,7 @@ Tests (period 2025-01-01 → 2025-12-31, one EUR stock, the table read in EUR):
   no unit was sold, the closed rule has no base, the flight is long enough, so the general rule stands — the row's P&L
   on its start value 1 100, over the period: −0.091138, on HEAD as on the tree.
 
-Red on HEAD ``f33d91b4f`` (the backend of that commit extracted with ``git archive``, this file copied into it), the
+Red on HEAD ``8ebdb3857`` (the backend of that commit extracted with ``git archive``, this file copied into it), the
 exact messages:
 
 - ``test_ten_days_held_in_the_period_is_not_annualized``: «annualized_return 0.100288 for a position held 10 days in

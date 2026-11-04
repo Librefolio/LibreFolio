@@ -6,7 +6,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 
 **Modello**: Sonnet (**MF rivede** X5-2). **Giorni**: 6-8 (X5-1 1,5-2; X5-2 1-1,5; X5-3 1,5-2; X5-4 1-1,5; X5-F1 1; revisioni ~1).
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-cuddly-engine` · **Branch**: `e-alfy-x-plugin-asset-e-ricerca`
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro; già fast-forward).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro; già fast-forward).
 **Corsia**: porta `6191`, cartella dati `/tmp/librefolio-r13-x`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md` (sezione nuova «Ondata 5»; CP12 al piano 03 :643). Backlog: C-65a ~232, W-B2 ~6493, X-R69 ~6279, Z-35 ~8886, Z-32 ~8838, N68/X-R48b ~6133; `PROSSIMI_LAVORI.md` per le decisioni; decisione N68: `plan-phase01Release13.prompt.md:1412`. Skill: `asset-plugin`, `tool-plugin`, `design-system`.
 

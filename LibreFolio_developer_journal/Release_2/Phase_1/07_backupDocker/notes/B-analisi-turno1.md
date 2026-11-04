@@ -4,7 +4,7 @@
 > il `.lfbk` v1 con una password casuale, la password cifrata con `pyrage`, i due file in un `.tar`. Le varianti (a) e
 > (b) qui sotto cadono. Il contratto nuovo è `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-contratto-L3.md`.
 
-Sessione figlia B, Opus. Worktree `e-alfy-miniature-telegram`, HEAD `c042f2481` = `dev_release2` (verificato), albero
+Sessione figlia B, Opus. Worktree `e-alfy-miniature-telegram`, HEAD `295a09c86` = `dev_release2` (verificato), albero
 pulito. **Nessun file del repo toccato.** Solo letture, più una prova di `cryptography` in una cartella temporanea
 (risultati in §1.4).
 

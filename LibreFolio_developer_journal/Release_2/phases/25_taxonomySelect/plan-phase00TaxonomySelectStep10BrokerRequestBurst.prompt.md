@@ -9,7 +9,7 @@
 | | |
 |---|---|
 | **Worktree** | `LibreFolio-worktrees/e-alfy-improved-memory`, branch `e-alfy-k-tassonomia-e-select` |
-| **Baseline** | `822cdba3e` (C2 committato: `df3bbcf6e`, `e997cda34`, `822cdba3e`) |
+| **Baseline** | `3d4f561f4` (C2 committato: `2faa2994a`, `9b9d015b9`, `3d4f561f4`) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`: solo `dev.py test` |
 | **Lane copia di prod** | `--port 6165 --data-dir /tmp/librefolio-r2-k-prodcopy`: solo la misura dal vivo, con la copia rinfrescata dalla snapshot delle 09:15 (sha `5c0a681bc4e4b59c`) |
 | **File di K in esclusiva** | `stores/reference/brokerStore.ts`, `components/brokers/BrokerIcon.svelte`, `components/ui/display/BrokerBadge.svelte` (per decisione D-C3-2 gli ultimi due non si toccano) |
@@ -47,7 +47,7 @@ server spento.
 5. Il `finally` toglie la promessa in volo nello stesso tick del bump, e l'effect successivo trova la
    strada libera. La frequenza è una richiesta per latenza.
 
-Origine: `460f2a18a` (30/06), presente in `v1.1.0`. I quattro file coinvolti sono identici fra `main`
+Origine: `0cdefa3f4` (30/06), presente in `v1.1.0`. I quattro file coinvolti sono identici fra `main`
 e HEAD.
 
 ## Cura (decisioni D-C3-1 e D-C3-2)
@@ -71,7 +71,7 @@ e per generazione della cache**.
   - U1, U2, U4 ed E1 rossi, più i controlli U3 ed E2.
   - Registrazioni nel runner solo in aggiunta.
   - DoD: rossi per la ragione giusta (GET ripetuto) sul codice attuale; controlli verdi.
-  > **Note implementazione** (HEAD `822cdba3e`, codice di prodotto intatto):
+  > **Note implementazione** (HEAD `3d4f561f4`, codice di prodotto intatto):
   > - Store, nel file nuovo `brokerStoreIconHydration.test.ts` (in `core-unit` subito dopo
   >   `brokerStore.test.ts`, così la sua promessa «nessuna rete» resta intatta): **3 rossi, 15 verdi**.
   >   - U1 ✘ «called 1 times, but got 2»;

@@ -11,7 +11,7 @@ other day CARRIED or MISSING.
 Built both directly from ``PriceObservation`` lists and through ``build_asset_price_series`` (whose filters — a
 ``None`` close, a split-linked row, an ADJUSTMENT, a zero quantity, a zero amount — decide what is an observation).
 
-On HEAD ``445386f80`` the property does not exist: every test fails naming it.
+On HEAD ``3424bc0db`` the property does not exist: every test fails naming it.
 """
 
 from __future__ import annotations

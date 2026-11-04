@@ -14,7 +14,7 @@ prima parte può diventare un `BACKLOG_POST_1.3`.
 ## Esito del filtro del 22/10 (developer)
 
 Il 22/10 il developer ha riletto ogni voce con una sessione dedicata. Lo stato è stato verificato su git
-(`dev_release2` = `e2d3b8a51`), sul CHANGELOG, sul backlog e sul codice, non sul testo di questo file. Ogni voce sotto
+(`dev_release2` = `a092417e5`), sul CHANGELOG, sul backlog e sul codice, non sul testo di questo file. Ogni voce sotto
 ha la sua riga **Esito 22/10**. Le voci fatte hanno ✅; quelle tolte sono barrate, con il motivo.
 
 **Le ondate** (parole del developer): l'**ondata 4** è quella in pianificazione adesso; l'**ondata 5** raccoglie il
@@ -106,7 +106,7 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
 
 #### ✅ K3a · La sicurezza dei dati del Bulk e del Form
 
-- **Esito 22/10**: ✅ fatta, nel treno 7 del 21/10 (`bc01226f4`, merge `d07959985`), insieme a #58. Le domande di
+- **Esito 22/10**: ✅ fatta, nel treno 7 del 21/10 (`69bac8088`, merge `0e1d2f172`), insieme a #58. Le domande di
   W sono state decise dal developer: PC5 diviso, valori nel dominio, K-3b nel lotto.
 
 
@@ -170,7 +170,7 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
   4](04_importTransactions/plan-phase01ImportTransactions.prompt.md);
   nel backlog [«W-B86 · Gli altri plugin BRIM col principio …» e «W-B87 · Plugin che saltano in silenzio righe con un
   effetto economico»](../Phase_0/BACKLOG_POST_1.2.md).
-- **Esito 22/10**: ✅ la parte della 1.3 (treno 7, `fcf39fab0`, merge `065cfa49e`).
+- **Esito 22/10**: ✅ la parte della 1.3 (treno 7, `377047f86`, merge `02e6be47d`).
   - **I plugin in beta** (W-B86) e **l'import vero delle righe con effetto economico** (W-B87): non abbiamo report
     affidabili, quindi si fanno **quando il plugin esce dalla beta**. Resta una regola, non un lotto.
   - **Ondata 4, a W** (lotto piccolo): la regola va scritta, con i livelli di avviso, nella skill `brim-plugin`
@@ -250,7 +250,7 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
   assetGrouping,assetIdentifiers}`) in `lib/features/assets/`. Solo rinomina e import; i tagli FE5b e FE5c sono già
   fatti. Y4a (i segnali di Y) aspetta FE4 e FE5a.
 - **Stato**: ❌ non iniziato. Aspetta il lotto A dei colori: 12 file degli asset erano ancora nella baseline (X, su
-  `f69f613ab`). Del resto di CP8 sono fatte O-8, O-20, K-16 e O-9; K-20 è nello sprint; K-19 viene dopo la lista di
+  `01ee8cdb4`). Del resto di CP8 sono fatte O-8, O-20, K-16 e O-9; K-20 è nello sprint; K-19 viene dopo la lista di
   Rischio (developer, 06/10).
 - **Dove**: [piano 03, «4.2 Riordino frontend» e «Stato vero di CP5, CP6, CP7, CP8,
   CP12»](03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
@@ -348,7 +348,7 @@ le pubblica solo il developer, quando esce la 1.3.
 
 | Issue | Esito 22/10 |
 |---|---|
-| #58 · asset cambiato nel Bulk che non si salva | ✅ risolta nel treno 7 (`bc01226f4`, CHANGELOG `[Unreleased]`). Il developer ha già risposto «la chiudiamo all'uscita della 1.3» |
+| #58 · asset cambiato nel Bulk che non si salva | ✅ risolta nel treno 7 (`69bac8088`, CHANGELOG `[Unreleased]`). Il developer ha già risposto «la chiudiamo all'uscita della 1.3» |
 | #43 · 6 cifre al massimo (crypto) | ✅ risolta: C-97 nel backlog, CHANGELOG `[Unreleased]` («Crypto quantities and prices keep their decimals»). CoinGecko, suggerito qui, è C-98 nel backlog: dopo la 1.3 |
 | #47 · prezzo unitario invece dell'importo | 1.3, ondata 5 (sotto, sezione #47) |
 | #48 · grafico delle posizioni sovrapposte | 1.3, ondata 5 (sotto, sezione #48) |
@@ -556,7 +556,7 @@ la posizione non c'era all'inizio o era chiusa alla fine; il Valore Iniziale è 
 C-91 del backlog: collaudare gli import di Interactive Brokers e Fineco su report veri).
 
 **Esito 22/10.**
-- ✅ **Fineco fuori dalla beta**: treno 7 (`a7c6db19f`, W-B92). Le commissioni non sono più contate due volte, e la
+- ✅ **Fineco fuori dalla beta**: treno 7 (`f67ce0771`, W-B92). Le commissioni non sono più contate due volte, e la
   guida usa le schermate dell'utente.
 - **I due task** (oggi non ci sono né la frase in it/fr/es né il tooltip, verificato): 1.3, **ondata 4**, a Y.
   Questa volta **tutte e quattro le lingue subito**, per non perderle: la frase in `positions.{it,fr,es}.md` e il

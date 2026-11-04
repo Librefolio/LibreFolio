@@ -4,7 +4,7 @@
 
 **Modello**: Sonnet.
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-cuddly-engine` · **Branch**: `e-alfy-x-plugin-asset-e-ricerca`
-**HEAD di partenza (da verificare)**: `c042f2481` (fast-forward dal coordinatore da `71813a40c`).
+**HEAD di partenza (da verificare)**: `295a09c86` (fast-forward dal coordinatore da `915a63b62`).
 **Corsia**: porta `6191`, cartella dati `/tmp/librefolio-r13-x`.
 **Piano e backlog**: X-N64b/c/d nel backlog `Phase_0/BACKLOG_POST_1.2.md:6061-6076`; il tuo piano `03_pluginsAssets/plan-phase01PluginsAssets.prompt.md`, sezione «N64 — la cache dei risultati dei segnali». Y-41: backlog `:9907-9915`. #50: `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md`, sezione «#50», «Decisione del developer (18/10)» ed «Esito 22/10» (i task sono scritti lì, uno per uno).
 

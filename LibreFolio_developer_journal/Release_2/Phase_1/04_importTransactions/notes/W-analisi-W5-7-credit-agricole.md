@@ -1,4 +1,4 @@
-# W5-7 · Crédit Agricole sui report set — analisi (W, 24/10/2026, base `4a2ec35db`)
+# W5-7 · Crédit Agricole sui report set — analisi (W, 24/10/2026, base `5b7d3f874`)
 
 Solo analisi: nessun codice, nessun test scritto. Decide il developer.
 

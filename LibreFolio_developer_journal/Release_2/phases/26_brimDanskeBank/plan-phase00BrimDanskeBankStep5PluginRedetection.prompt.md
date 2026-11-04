@@ -1,10 +1,10 @@
 # Piano — fase 00, Danske Bank, passo 5: rilevare di nuovo i plugin dei file (voce 8, opzione A)
 
-> **Stato**: ✅ chiuso e integrato: `b0abeb07d` (fix(brim): re-detect plugins, lock sidecar writes), con la doc in `2b1a9d79f` (verifica del 2026-10-09 su `3cceb4f90`). Rinviato: `get_file_path` sull'event loop, in `Phase_0/38_postReleaseBacklog/README.md`, voce L5.
-> - Al checkpoint: ✅ approvato (2026-10-06): via del developer, portato dal coordinatore, con i requisiti in §0. Base del codice: `a7d0b37ec` (il treno 1, con H, V1 e R5).
+> **Stato**: ✅ chiuso e integrato: `e3f53e3cc` (fix(brim): re-detect plugins, lock sidecar writes), con la doc in `97758e5a6` (verifica del 2026-10-09 su `f545b67e3`). Rinviato: `get_file_path` sull'event loop, in `Phase_0/38_postReleaseBacklog/README.md`, voce L5.
+> - Al checkpoint: ✅ approvato (2026-10-06): via del developer, portato dal coordinatore, con i requisiti in §0. Base del codice: `9e4e90675` (il treno 1, con H, V1 e R5).
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md), §18 (analisi della voce 8) e §19.5 (scelta del developer).
-> - Workstream L, issue #26. Ramo `e-alfy-l-danske-bank`, base `172b8e616` (V1).
+> - Workstream L, issue #26. Ramo `e-alfy-l-danske-bank`, base `1447351c0` (V1).
 
 ## 0. Decisioni
 
@@ -23,7 +23,7 @@
 - **F1 dentro la voce 8** (coordinatore): due combine concorrenti dello stesso set creano oggi due file combinati (§19.10 del passo 4). Lo stesso lock per broker copre il riuso e il salvataggio in `combine_set`, col rosso «due combine in parallelo → un solo combinato».
 - **Ordine** (coordinatore): voce 8 con F1 → robustezza dell'upload, F2–F4 → il bottone «Escludi» tolto più R6. Un checkpoint per volta, piccolo.
 
-## 1. Stato verificato (2026-10-06, sul codice a `172b8e616`)
+## 1. Stato verificato (2026-10-06, sul codice a `1447351c0`)
 
 - `compatible_plugins` si calcola **una volta**, in `save_uploaded_file` (`brim_provider.py:711`, `get_compatible_plugins`), e si salva nel sidecar JSON. Nessuno lo ricalcola: né `_move_file`, né la lettura (`_build_file_info_from_metadata`, `:759`, che lo restituisce com'è a `:800`). L'unica scrittura diversa è quella dei file combinati (`:1143`, `[plugin_code]`).
 - **Chi lo legge**:
@@ -138,7 +138,7 @@ Nessuna modifica a schemi, API pubbliche, i18n o frontend.
 
 ### 8.0 ✅ Il piano aggiornato dopo il via (2026-10-06)
 
-- Base `a7d0b37ec`, dopo il treno 1 (H, V1 e R5 integrati); ramo di L allineato e pulito.
+- Base `9e4e90675`, dopo il treno 1 (H, V1 e R5 integrati); ramo di L allineato e pulito.
 - Aggiornati §0 (il via testuale, la concessione su `brokers.py`, il lock fra processi, F1, l'ordine), §2.4–2.8, §3, §4, §5 (chiusi), §6 (la riga di F1) e §7.
 - Prossimo passo: i rossi (test-author), poi la cura, i gate e il checkpoint.
 
@@ -169,7 +169,7 @@ Nessuna modifica a schemi, API pubbliche, i18n o frontend.
 > - `brokers.py` (concessioni del coordinatore; righe del codice finale): `asyncio.to_thread` per `_get_brim_file_with_access` (`:136`, ex `:135`), la lista (`:689`, ex `:687`), `delete_file` (`:765`) e `save_parse_result` (`:976`). Queste ultime due chiamate stavano sull'event loop, e col lock di F1 potevano fermarlo (§8.3).
 > - Un test esistente adattato dal test-author: `test_legacy_sidecar_reads_with_defaults`. La sua premessa (un sidecar legacy elenca il generico) è contraddetta per scelta dalla voce 8; ora confronta con il registro di oggi.
 >
-> | Verifica (corsia 6156, base `ebf4752e2`) | Esito |
+> | Verifica (corsia 6156, base `cc78550c1`) | Esito |
 > |---|---|
 > | `services brim-parse-race` / `brim-report-sets` | `42` / `259 passed` (con la guardia 1.1.0 di §8.3) |
 > | `services brim-parse-pool` / `brim-provider-base` / `provider-registry-misc` / `brim-gap-fix` / `brim-versioning` | `8` / `34` / `13` / `99` / `5 passed` |
@@ -204,7 +204,7 @@ Nessuna modifica a schemi, API pubbliche, i18n o frontend.
 > | `test check-orphans` | pulito |
 > | `mkdocs build` | exit 0 |
 > | `mkdocs check-links` | exit 1 per **il solo** `user/assets/detail/chart/#rolling-return` (manca in it/fr/es): la D28 già accettata, presente uguale alla validazione del merge di G, fuori dal diff di L |
-> | scanner di privacy contro `ebf4752e2` | 1738 righe aggiunte, 0 collisioni |
+> | scanner di privacy contro `cc78550c1` | 1738 righe aggiunte, 0 collisioni |
 > | `git diff --check` | pulito; nessun file non tracciato |
 > | `lsof -nP -iTCP:6156 -sTCP:LISTEN` | porta libera |
 >
@@ -212,7 +212,7 @@ Nessuna modifica a schemi, API pubbliche, i18n o frontend.
 
 ### 8.5 ✅ Committata e validata (2026-10-06)
 
-> **Commit di L8** (developer, script del coordinatore, corpi scritti da L): `b0abeb07d` fix, `2b1a9d79f` docs, `b6ac553fc` journal; sopra la punta di K `7dd5e47e7`, albero `3bdccc7a9`. Prima del commit L ha corretto i corpi proposti: due frasi false (l'event loop «mai» fermo; il lock descritto anche nella pagina di architettura) e un corpo incompleto (C3).
+> **Commit di L8** (developer, script del coordinatore, corpi scritti da L): `e3f53e3cc` fix, `97758e5a6` docs, `8910c2c05` journal; sopra la punta di K `27589625d`, albero `3bdccc7a9`. Prima del commit L ha corretto i corpi proposti: due frasi false (l'event loop «mai» fermo; il lock descritto anche nella pagina di architettura) e un corpo incompleto (C3).
 >
 > **Validazione sulla base nuova** (corsia 6156, un comando per volta, log nella sessione, in `files/l8-post/`): `api brim` 76, `services brim-parse-race` 42, `brim-report-sets` 259 passed; `check-orphans` pulito; porta libera, albero pulito. La catena di K non porta migrazioni.
 >

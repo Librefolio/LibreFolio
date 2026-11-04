@@ -14,7 +14,7 @@
 
 ## Regole
 
-- Le righe di codice sono quelle del 09/10: le voci dei figli su `3cceb4f90`, le voci C- sull'albero del treno 25.
+- Le righe di codice sono quelle del 09/10: le voci dei figli su `f545b67e3`, le voci C- sull'albero del treno 25.
   Prima di lavorare una voce, si riverifica.
 - Una voce non si cancella: si chiude con data, commit e una nota. Una voce che parte apre un piano in
   `Phase_0/<NN_area>/` e qui riceve il link.
@@ -132,7 +132,7 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
 - **O-12 · `importWizard.assetsCount` senza plurale** — basso. `ImportWizardModal.svelte:4678` e il catalogo («{n}
   unique assets, {m} need resolution»). Origine: 29, S21.
   - ✅ **Chiusa il 15/10** con `fix(ui): translate data editor, plural counts, FX hint` (W, lotto K1 della 1.3; in
-    `dev_release2` con `d915c869f`): plurale ICU in `importWizard.assetsCount`.
+    `dev_release2` con `0a5b05666`): plurale ICU in `importWizard.assetsCount`.
 - **O-13 · IWR-001 cerca il badge per classe CSS** — minimo. `frontend/e2e/transactions/tx-import-resolution.spec.ts:331`
   usa `[class*="amber"]`, mentre l'aggancio `import-wizard-unresolved-count` esiste. Origine: 29, S21.
 - **O-14 · Riga booleana `scheduler_enabled` senza `data-testid`** — minimo.
@@ -158,7 +158,7 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
 - **O-19 · Catene FX: chiave `leg_rates` senza provider ed estremi invertiti** — da misurare.
   `backend/app/services/fx.py:820`, `:893`, `:680-716`: la chiave non ha il provider e gli estremi possono essere
   invertiti; serve un test di caratterizzazione. Origine: 11, §9.
-- ✅ **O-20 · Doppia sync alla creazione di un asset dalla pagina Asset** (chiusa 16/10: X `2b0be1d05`, entrata `967ddbda4`) — basso. `AssetModal.svelte:1451-1462` più
+- ✅ **O-20 · Doppia sync alla creazione di un asset dalla pagina Asset** (chiusa 16/10: X `d86fc9b9c`, entrata `ca3e64b58`) — basso. `AssetModal.svelte:1451-1462` più
   `assets/+page.svelte:1828-1833`. Origine: 11, Round 1 §2.
 
 ## L · Import e upload
@@ -182,13 +182,13 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
 - **L5 · `get_file_path` sull'event loop** — basso. `backend/app/api/v1/brokers.py:693`, `:765`: solo `:863` usa
   `asyncio.to_thread`.
   - ✅ **Chiusa il 15/10** con `fix: per-row access refusals, BRIM storage cleanup` (W, lotto I1 della 1.3; in
-    `dev_release2` con `dc7e4e48e`).
+    `dev_release2` con `0e314caf6`).
     - Anteprima e download risolvono il percorso del file BRIM in un thread (`asyncio.to_thread`).
     - Cancello puro `utils gate-event-loop-io`.
 - **L6 · Il nome salvato nel rifiuto del plugin** — basso. `brim_provider.py:1169` mostra il nome salvato, non
   quello originale.
   - ✅ **Chiusa il 15/10** con `fix(brim): coded DEGIRO/Generic CSV refusals` (W, lotto K2a della 1.3; in
-    `dev_release2` con `62c964242`): il 400 del parse nomina il plugin col suo nome e il file col nome caricato.
+    `dev_release2` con `2055f257a`): il 400 del parse nomina il plugin col suo nome e il file col nome caricato.
 - **L7 · Un plugin di set scelto a mano per un file che non legge** — basso. `importReportSets.ts:131-139` contro
   `brim_report_sets.py:134`.
 - **L8 · Il ripiego `auto` → CSV generico** — basso. `brokers.py:861-875`. La doc dice ora che il Generic CSV non è
@@ -210,7 +210,7 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
 
 Origine: [25_taxonomySelect](../../phases/25_taxonomySelect/README.md), archiviata il 09/10 (treno 26). K-1…K-4 vengono
 dallo [step 23](../../phases/25_taxonomySelect/plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md),
-K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefisso sono sotto `frontend/src`.
+K-5…K-26 dalla verifica d'archivio di K su `249f5a9aa`; i percorsi senza prefisso sono sotto `frontend/src`.
 
 - ✅ **K-1 · Riparazione delle coppie di tipi non di coppia** — basso, solo se servisse. Il Bulk mostrava due cloni
   dello stesso tipo come una coppia, ma il payload scarta il `link_uuid` dei tipi non di coppia
@@ -330,7 +330,7 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
   `WacPreviewSection.svelte:571-585` riconosce solo `add`, `reduce` e `add_at_wac`: una riga `split_rescale`
   (`portfolio_service.py:230-236`) mostra «Diluizione», e `add_at_wac` non esiste più dal #32.
 - ✅ **P-3 · Contributo per posizione: dividendi e costi senza cambio esclusi senza segnale** — chiusa il 12/10 da F
-  (B14 di I, `c04e44ff5`, treno 42): i flussi dei contributi e quelli del riepilogo vengono dalle stesse righe della
+  (B14 di I, `df5db60d0`, treno 42): i flussi dei contributi e quelli del riepilogo vengono dalle stesse righe della
   cassa nativa, e le coppie mancanti arrivano all'utente dal riepilogo, nel banner dei dati. Lo schema dei contributi
   resta senza un canale suo. Era: basso.
   `portfolio_service.py:1794-1805` salta il movimento senza registrare la coppia, e `PositionsContribution`
@@ -339,7 +339,7 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
   (`schemas/settings.py:426-432`) controlla il fuso solo se il server ha il database IANA, e `tzdata` non è nel
   `Pipfile` (`Dockerfile:72`, `:86-88`).
 - ✅ **P-5 · Layer `financial_math`: migrare `roi_utils` e `valuation_utils`** — chiusa il 12/10 da T-1 (T,
-  `1cc9cd8f5`, treno 45): `roi_utils` è `financial_math/returns.py`, `valuation_utils` è `financial_math/valuation.py`,
+  `775a3dd41`, treno 45): `roi_utils` è `financial_math/returns.py`, `valuation_utils` è `financial_math/valuation.py`,
   senza shim, e con loro gli altri motori. Era: basso, refactor; la decisione D1 del developer («poi in futuro
   fattorizziamo le altre»), scritta in `financial_math/__init__.py:8-10`.
 - **P-6 · Grafo del wiki: aggiornamento rinviato dal #32** — knowledge base; **rinviata a dopo la 1.2** dal developer il
@@ -387,7 +387,7 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
 - **I-07 · `tsc` degli E2E, 2 errori** — basso. `tsc -p tsconfig.e2e.json` segnala `onboarding-tour.spec.ts:863` e
   `types/files.ts:9` (mancano i `paths`).
   - Riverificata il 10/10 (M, lotto 12; il coordinatore nel checkout principale): sempre gli stessi 2 errori. Il
-    TS2322 di `:863` c'è dal 14/09 (`580bd504f`): `placement` riceve `unknown`. Il TS2307 di `files.ts:9` resta anche
+    TS2322 di `:863` c'è dal 14/09 (`ce718ca49`): `placement` riceve `unknown`. Il TS2307 di `files.ts:9` resta anche
     col client generato presente, quindi non dipende dalla worktree: sono proprio i `paths`. Nessun gate li vede,
     perché Playwright non controlla i tipi e `front check` non guarda `e2e/`. Con la cura, il controllo dei tipi
     degli E2E va fra i gate.
@@ -400,10 +400,10 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   - l'àncora `#rolling-return`, che c'è solo in inglese (D28; l'allineamento è nella 27);
   - dal treno 25: `admin/cli_tools` (N-7), `user/files/index` (anteprima PDF), `user/connection-security`, la gallery
     e il suo indice con la sezione Security (M, lotto 8); Sharpe e Sortino, la cui formula del tasso privo di rischio
-    esiste solo in inglese (Q) — ✅ chiusa: in it/fr/es la formula porta `^{1/f}` da `647475999` (lotto 11 di M,
+    esiste solo in inglese (Q) — ✅ chiusa: in it/fr/es la formula porta `^{1/f}` da `842c78fc3` (lotto 11 di M,
     treno 29), verificato il 10/10 (Risk e coordinatore);
   - dal treno 27: `user/tools/index` e `user/tools/pac-allocator/index`, nel nav ma solo EN (D) — ✅ chiuse: it/fr/es
-    esistono da `647475999` (lotto 11 di M, treno 29), dopo l'ultima modifica EN `29103f95b` (verificato l'11/10, D e
+    esistono da `842c78fc3` (lotto 11 di M, treno 29), dopo l'ultima modifica EN `c6af1ffd3` (verificato l'11/10, D e
     coordinatore); restano solo le due etichette del pulsante di ritorno in it e fr, nella scansione 5.4 di M;
     `user/transactions/form`
     e `user/dashboard/index` (Q, S23); `developer/dev_workflow` (N);
@@ -431,7 +431,7 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   ripetuta; l'import ignora `source` (le righe dei provider tornano manuali e poi raddoppiano) e `currency` (un
   backup preso prima di un cambio di valuta torna rietichettato); il selettore della data disabilita le date già
   usate (`DataEditor.svelte:151-161`). Origine: AssetEvents.
-  - 15/10, nella 1.3 (W, E0, `d226bc69e`): ✅ **a** (due righe sono doppioni solo con la stessa data e lo stesso tipo) e
+  - 15/10, nella 1.3 (W, E0, `f0a5feaa9`): ✅ **a** (due righe sono doppioni solo con la stessa data e lo stesso tipo) e
     ✅ **d** (il selettore blocca solo i giorni con un evento dello stesso tipo). La **b** (`source`) è la W-B16 del
     backlog post-1.2, la **c** (`currency`) va nel lotto E1b, dopo le decisioni 20–23.
 - **I-12 · guardie server degli eventi** — basso-medio. `DELETE /assets/events?ids=…` non è limitato all'asset
@@ -455,7 +455,7 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   (`brim_provider.py:1203-1222`) cancella i file ma lascia le cartelle in uploaded, parsed e failed; con
   `AUTOINCREMENT` gli id non tornano, quindi le cartelle vuote si accumulano, innocue (I, 08/10).
   - ✅ **Chiusa il 15/10** con `fix: per-row access refusals, BRIM storage cleanup` (W, lotto I1 della 1.3; in
-    `dev_release2` con `dc7e4e48e`): la cancellazione del broker toglie le cartelle di stato vuote e il suo lock (C-79
+    `dev_release2` con `0e314caf6`): la cancellazione del broker toglie le cartelle di stato vuote e il suo lock (C-79
     nel backlog post 1.2).
 - **C-4 · Stato dei plugin BRIM (Stable/Beta/Alpha) solo nella doc** — basso. Sta in `providers_list.md` (per esempio
   `:9`, `:29`), nelle card dell'indice e nell'avviso della pagina utente; nessun attributo nel codice lo tiene
@@ -466,7 +466,7 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-6 · eToro: dividendi `KER/EUR` etichettati EUR** — basso, serve un export reale. L'importo è nella valuta del
   conto, mentre la valuta viene dal ticker `SYMBOL/CURRENCY` (`broker_etoro.py:143`; Q, 08/10). La voce eToro di
   [04_brim_import.md](../09_feedbackJobs/04_brim_import.md) chiede lo stesso export.
-- **C-7 · Doc BRIM da allineare** — fatta da S il 09/10 (checkpoint 2, `94271713b`); ✅ **chiusa nel treno 30**, con l'ingresso di
+- **C-7 · Doc BRIM da allineare** — fatta da S il 09/10 (checkpoint 2, `9f20b8119`); ✅ **chiusa nel treno 30**, con l'ingresso di
   S in `dev_release2`. Era: basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
   Fineco sono in inglese (`broker_fineco.py:279-297`), e sbaglia anche la docstring del modulo (`:7-8`); la riga eToro
   di `providers_list.md:9` è da precisare (Q, 08/10).
@@ -656,15 +656,15 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   trattiene lo shutdown di uvicorn (connessioni aperte del browser, lavori del lifespan) e se lo stesso succede con
   `docker stop`, che dopo 10 s manda SIGKILL e salta gli hook di chiusura.
 - ✅ **C-50 · L'AI Export di un Asset espone il nome interno `portfolio_weight_ratio`** — chiusa l'11/10 da T
-  (`dd0a8d497`, treno 39): il renderer passa `field` e `missing_fields` per i nomi pubblici; il payload resta canonico,
-  quindi nessuna versione nuova. Era: basso, da valutare per la 1.2 (T, sonda di B3b, 11/10). Nella tabella `portfolio_role.unavailable` di `asset.position_scope` (da `ea0558b3c`) il
+  (`d584a7aa1`, treno 39): il renderer passa `field` e `missing_fields` per i nomi pubblici; il payload resta canonico,
+  quindi nessuna versione nuova. Era: basso, da valutare per la 1.2 (T, sonda di B3b, 11/10). Nella tabella `portfolio_role.unavailable` di `asset.position_scope` (da `d5227e4ef`) il
   campo esce col nome interno invece di quello pubblico (`PUBLIC_RATIO_FIELD_NAMES` in `snapshotDataRenderer.ts`), e il
   controllo pubblico della sonda fallisce appena una gamba non ha valore corrente.
 - **C-51 · I dati sintetici scrivono la vecchia forma di `classification_params`** — basso (T, 11/10).
   `populate_mock_data.py:793-881`: l'AI Export degli Asset sintetici 4–8 risponde 503 su `asset.identity`. Tocca le
   sonde e gli scatti futuri dell'AI Export (C-41), non gli utenti.
 - **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo (T, 11/10).
-- ✅ **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — chiusa il 12/10 da T (`876d2b430`,
+- ✅ **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — chiusa il 12/10 da T (`323c5ff13`,
   treno 47): `reconciled` è vero sotto `CONVERSION_DUST` in valore assoluto, e il residuo resta esatto; le due
   riconciliazioni passano alla v2 (+1 rispetto alla 1.1, regola del developer). Era: basso, preesistente (I, F-4, 12/10).
   `portfolio_financial.py:490` e `broker_financial.py:435` provano `residual_amount == Decimal("0")` su un residuo non

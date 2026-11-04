@@ -1,15 +1,15 @@
 # Performance charts — Proventi: dividendo oro ed etichette dell'asse X (Candele e Proventi)
 
 **Stato:** ✅ **COMPLETATO E INTEGRATO**. Completato il 2026-10-08. Lotto approvato dal developer il 2026-10-07 (via
-coordinator, 17:37), in corso dal 2026-10-07 18:10. Commit del developer il 2026-10-08 alle 12:18, su `9ea2d519b`:
-`bc08101d6` (codice, test e cataloghi), `835c65d7d` (docs) e `e379cff59` (giornale). Poi il merge della punta del treno
-12, `ffa72cc2b`, nel ramo: `56483392c`, alle 12:54; le note del merge in `ffda8fc84` (13:01). In `dev_release2` col
-treno 13: fast-forward a `ffda8fc84`, poi il merge di K, `c001c0968`. Verificato e archiviato il 2026-10-09 in
+coordinator, 17:37), in corso dal 2026-10-07 18:10. Commit del developer il 2026-10-08 alle 12:18, su `3aec9438d`:
+`844b32810` (codice, test e cataloghi), `3b51fbe2d` (docs) e `fd1e77516` (giornale). Poi il merge della punta del treno
+12, `d9c068c99`, nel ramo: `a4a651e29`, alle 12:54; le note del merge in `f718d16a5` (13:01). In `dev_release2` col
+treno 13: fast-forward a `f718d16a5`, poi il merge di K, `8175788c2`. Verificato e archiviato il 2026-10-09 in
 `Release_2/phases/20_performanceCharts/`.
 *Storia dello stato:* «L'integrazione in `dev_release2` è nel treno 13» (2026-10-08).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
-**Baseline:** HEAD = `dev_release2` = `9ea2d519b`, la punta del treno 9, dopo il fast-forward segnalato dal
+**Baseline:** HEAD = `dev_release2` = `3aec9438d`, la punta del treno 9, dopo il fast-forward segnalato dal
 coordinator. Albero pulito, `6157` e `6167` libere, rimisurato alle 18:08.
 **Lane:** suite `6157` + `/tmp/librefolio-r2-i`, solo `dev.py test …`; review `6167` (prima `front build`; dati di
 test, nessuna copia di prod senza chiedere al developer). Un comando alla volta.
@@ -82,7 +82,7 @@ Il resto resta com'era: test rossi dal test-author, poi il codice, poi le docs d
 | P7b | M‴ e k su una riga di 14,3 px: test rossi, correzione e contratto, gate, schermate a 1920 e 2560 | ✅ 2026-10-08 |
 | P8 | Docs (docs-writer): un punto in `charts.en.md` `#pnl-width` | ✅ 2026-10-08 11:58 |
 | P9 | Pulizia, CHECKPOINT READY, FROZEN | ✅ 2026-10-08 12:03 |
-| P10 | Merge del treno 12 (`ffa72cc2b`) nel ramo: i 4 cataloghi in unione, solo loro in stage, gate sulla revisione unita, MERGE RESOLVED | ✅ 2026-10-08 12:37 (merge `56483392c`, 12:54) |
+| P10 | Merge del treno 12 (`d9c068c99`) nel ramo: i 4 cataloghi in unione, solo loro in stage, gate sulla revisione unita, MERGE RESOLVED | ✅ 2026-10-08 12:37 (merge `a4a651e29`, 12:54) |
 | P11 | Le note del merge in questo piano, in un commit a parte; pulizia di `/tmp`; checkpoint piccolo, FROZEN | ✅ 2026-10-08 12:55 |
 
 ## 1. Colori
@@ -365,7 +365,7 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
 
 ## Registro
 
-- 18:08 — P0 chiuso. Baseline `9ea2d519b` = `dev_release2`, pulito, porte libere.
+- 18:08 — P0 chiuso. Baseline `3aec9438d` = `dev_release2`, pulito, porte libere.
 - 18:10 — Il piano è scritto.
 - 18:25 — P1 chiuso. «Seguito» aggiunto nell'intestazione del piano del round 4. Il brief è al coordinator, non
   bloccante: i default di §3, l'oro e il suo contrasto, il punto per le docs.
@@ -480,7 +480,7 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   (`/tmp/libreFolio_i_p6_front_check2.log`). `GrowthChart.test.ts` rilanciato dopo la correzione: 127 su 127.
 
 > **⚠️ Fuori pista** (P6): la costruzione completa dell'asse a categorie scriveva `rotate: 0` prima di
-> `...ladderAxis.axisLabel`, un default nato con `69cba356f`. Ora `ladderAxisOption` porta sempre `rotate`, quindi
+> `...ladderAxis.axisLabel`, un default nato con `ad46dfce8`. Ora `ladderAxisOption` porta sempre `rotate`, quindi
 > il default è morto e TypeScript lo segnala. L'ho tolto e al suo posto c'è un commento di una riga: la rotazione
 > la decide sempre il piano. Nessun test fissava quel letterale. `AllocationHistoryChart.svelte:764` ha la stessa
 > forma, ma la sua politica d'asse non porta `rotate`: non è toccato.
@@ -502,7 +502,7 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   - `front-broker detail` (§6 diceva un nome di selettore sbagliato, ora corretto): **33 su 33** (1,3 min,
     `/tmp/libreFolio_i_p6_e2e_broker_detail.log`). Dopo il run la porta 6157 è libera.
   - `prettier --check` sugli 11 file del frontend toccati: puliti (`/tmp/libreFolio_i_p6_prettier.log`).
-    `git diff --check`: pulito. HEAD resta `9ea2d519b`.
+    `git diff --check`: pulito. HEAD resta `3aec9438d`.
   - `dev.py i18n audit`: 4154 chiavi, tutte complete, 0 inutilizzate (`/tmp/libreFolio_i_p6_i18n_audit.log`). I 3
     «non verificati» e la famiglia del backend senza chiavi stanno in namespace che questo lotto non tocca.
   - Il digest `[S7]` del verde:
@@ -717,7 +717,7 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   > **⚠️ Fuori pista**: il codice ha corretto due frasi del brief di §8.
   > - **«Solo le candele molto fitte saltano qualche etichetta» non è assoluto.** Se nessuna larghezza passa la
   >   regola dei 4,5 px, `availableCandleWidths` offre comunque il gradino minimo dei Proventi, `1S`
-  >   (`GrowthChart.svelte:486`, da `e7773a143` del 22/09). Con barre così strette anche i Proventi si diradano.
+  >   (`GrowthChart.svelte:486`, da `9c1b6a3ff` del 22/09). Con barre così strette anche i Proventi si diradano.
   >   - Succede su un telefono (grafico di circa 279 px) da 14 anni di calendario in su, e a 1440 da 28.
   >   - Il ripiego è preesistente e coerente con la regola: si dirada solo dove nemmeno ruotate le etichette ci
   >     stanno.
@@ -745,10 +745,10 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   > - Le porte 6157 e 6167 sono libere: `lsof -nP -iTCP:<porta> -sTCP:LISTEN` non stampa niente. `git diff --check`
   >   è pulito.
   > - **Previsione dei conflitti.**
-  >   - `dev_release2` è avanzato a `58fc35174`, 41 commit con i treni 10 e 11; la base comune resta `9ea2d519b`.
+  >   - `dev_release2` è avanzato a `4527b58ea`, 41 commit con i treni 10 e 11; la base comune resta `3aec9438d`.
   >   - L'unica sovrapposizione sono i 4 cataloghi. Il conflitto è testuale, un pezzo per file, in coda a
   >     `dashboard` dopo `allocationGeneric`: le mie `pnlAxisQuarter` e `pnlAxisWithYear` contro le
-  >     `unrealizedAssetEffect`, `unrealizedFxEffect` e `unrealizedUnsplit` di Risk (`2d8914be4`).
+  >     `unrealizedAssetEffect`, `unrealizedFxEffect` e `unrealizedUnsplit` di Risk (`5eb18b01b`).
   >   - La soluzione è l'unione, con la virgola. Simulata in `/tmp` con `git merge-file -p`: JSON valido, 4162 chiavi
   >     (le 4160 del target più le mie 2), niente perso e nessun valore cambiato.
   >   - Dei moduli importati dai miei file, il target tocca solo `$lib/i18n`.
@@ -771,18 +771,18 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   > - C3: `docs(journal): income colors and axis labels`. Io avevo proposto
   >   `docs(journal): record income colors and axis labels batch`, 57 caratteri.
   > - La regola, per i prossimi messaggi: oggetto di al massimo 50 caratteri, righe del corpo di al massimo 72.
-- 2026-10-08 12:18 ✅ **I commit del developer**, su `9ea2d519b`: `bc08101d6` (C1), `835c65d7d` (C2) e `e379cff59`
+- 2026-10-08 12:18 ✅ **I commit del developer**, su `3aec9438d`: `844b32810` (C1), `3b51fbe2d` (C2) e `fd1e77516`
   (C3), con l'albero uguale a quello rivisto. Nello stesso lotto il treno 12 (K19 e L34) è entrato in `dev_release2`.
-  Poi il developer ha avviato il merge della punta del treno 12, `ffa72cc2b`, nel mio ramo, e l'ha lasciato aperto sui
+  Poi il developer ha avviato il merge della punta del treno 12, `d9c068c99`, nel mio ramo, e l'ha lasciato aperto sui
   4 cataloghi.
 - 2026-10-08 12:37 ✅ **P10: il merge del treno 12 nel ramo, MERGE RESOLVED.**
   > **Note implementazione**:
-  > - **Lo stato.** HEAD `e379cff59`, MERGE_HEAD `ffa72cc2b`, base comune `9ea2d519b`.
+  > - **Lo stato.** HEAD `fd1e77516`, MERGE_HEAD `d9c068c99`, base comune `3aec9438d`.
   >   - In conflitto solo i 4 cataloghi, un pezzo per file in coda a `dashboard`, dopo `allocationGeneric`: quello
   >     previsto in P9.
   >   - Gli altri 176 percorsi del target (32 aggiunti, 2 cancellati, 142 modificati) li ha fusi Git da solo.
   > - **La soluzione: l'unione, prima le mie.** In ogni catalogo vengono prima `pnlAxisQuarter` e `pnlAxisWithYear`,
-  >   con la virgola, poi le tre `unrealized*` di Risk (`2d8914be4`).
+  >   con la virgola, poi le tre `unrealized*` di Risk (`5eb18b01b`).
   >   - Il perché: rispetto a `dev_release2` è un inserimento puro di 2 righe. Nessuna riga altrui cambia, e la sua
   >     blame resta di chi l'ha scritta. L'unica riga che non appartiene a nessuno dei due genitori è la mia
   >     `pnlAxisWithYear`, con la virgola.
@@ -819,7 +819,7 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   >   - Nell'audit restano i 3 «non verificati» e la famiglia backend di prima.
   >   - Non lanciati, perché fuori dalla lista del coordinator: le suite backend (il mio delta è solo frontend),
   >     `check-orphans`, il `prettier --check` dei cataloghi, `mkdocs build` e `check-links`.
-  > - **Il database della corsia.** Il treno 12 non porta migrazioni nuove: `298ed96f3` (L) modifica `001_initial.py`
+  > - **Il database della corsia.** Il treno 12 non porta migrazioni nuove: `28e3b2719` (L) modifica `001_initial.py`
   >   sul posto, e il pacchetto `backend/app/db/post_migration/` corregge all'avvio i database esistenti.
   >   - Il DB della corsia (Alembic `004`, senza AUTOINCREMENT) è stato convertito al primo avvio del server
   >     dell'E2E, alle 12:30. Il log della corsia, `/tmp/librefolio-r2-i/logs/librefolio.log`, dice «Orphan broker
@@ -837,8 +837,8 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   >   `merge(charts): dev_release2 into I for train 13`, 47 caratteri, ASCII, righe del corpo di al massimo 68.
   >
   > **⚠️ Fuori pista**:
-  > - **4164 chiavi, non 4162.** La previsione di P9, fatta su `58fc35174`, non poteva contare le 2 chiavi
-  >   `auth.serverUnreachable.*` di K (`93fd33702`), arrivate col treno 12. Stanno fuori dal pezzo in conflitto: le
+  > - **4164 chiavi, non 4162.** La previsione di P9, fatta su `4527b58ea`, non poteva contare le 2 chiavi
+  >   `auth.serverUnreachable.*` di K (`e6174d56a`), arrivate col treno 12. Stanno fuori dal pezzo in conflitto: le
   >   ha fuse Git da solo.
   > - **Due frasi dell'handoff da correggere.**
   >   - «È lo stesso ordine della simulazione del checkpoint (`git merge-file --union`)»: non è verificabile. Lo
@@ -852,7 +852,7 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   solo nei 4 cataloghi: nessun marcatore, nessuna riga persa da nessuna delle due parti, JSON validi, 4164 chiavi per
   lingua. Il messaggio va bene: il file dello script, `/tmp/libreFolio_commits/i_merge_t12.txt`, è identico al mio.
   Lo script `/tmp/libreFolio_i_merge_t12.sh`, provato su un clone, lo lancia il developer.
-- 2026-10-08 12:54 ✅ **Il merge è committato: `56483392c`.** Genitori `e379cff59` e `ffa72cc2b`, albero
+- 2026-10-08 12:54 ✅ **Il merge è committato: `a4a651e29`.** Genitori `fd1e77516` e `d9c068c99`, albero
   `08b4960930eb`, messaggio identico byte per byte a quello proposto, worktree pulito.
 - 2026-10-08 12:55 ✅ **P11: queste note, la pulizia, il checkpoint piccolo.**
   > **Note implementazione**:

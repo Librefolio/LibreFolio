@@ -7,14 +7,14 @@
 
 | | |
 |---|---|
-| **Baseline** | `d318311df` (C3 committato: `7000f8d02`, `d318311df`) |
+| **Baseline** | `cf02915cb` (C3 committato: `66df32355`, `cf02915cb`) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k` |
 | **File di K in esclusiva** | `utils/transactions/bulkDisplay.ts` (+ test), `TransactionBulkModal.svelte` (solo per questo), `e2e/transactions/tx-wac-bulk.spec.ts`, `e2e/transactions/tx-wac-formmodal.spec.ts` |
 | **Condivisi, solo in aggiunta** | `scripts/test_runner/_frontend_transaction.py` (registrazione dell'eventuale spec nuova) |
 
 ## Il difetto
 
-- `createBulkDateComparator` (`bulkDisplay.ts:62-80`, da `ef722b552`) ordina i gruppi visibili per data
+- `createBulkDateComparator` (`bulkDisplay.ts:62-80`, da `c8a77dda3`) ordina i gruppi visibili per data
   minima, poi per data massima, poi per `txId`, e infine per `compareText(a.tempId, b.tempId)`.
 - Una riga nuova non ha `txId` (vale `MAX_SAFE_INTEGER`), e il suo `tempId` è un UUID casuale
   (`generateUUID()`). Quindi due righe nuove della stessa data escono in ordine casuale.
@@ -73,7 +73,7 @@ uno di questi punti:
 - [x] **11.0 Analisi e piano** — ✅ 2026-09-25, questo file, con il rimando dallo step 10.
 - [x] **11.1 Test** (test-author) — ✅ 2026-09-25: rosso prima il comparatore; FM7 e i WB per contenuto; una
   verifica del cablaggio nella UI.
-  > **Note implementazione** (HEAD `d318311df`, prodotto intatto):
+  > **Note implementazione** (HEAD `cf02915cb`, prodotto intatto):
   > - `bulkDisplay.test.ts`: U1 ✘ «expected ['a-second','z-first'] to deeply equal
   >   ['z-first','a-second']»; U2a–e verdi; il test che c'era già è intatto. In tutto 1 rosso e 14 verdi.
   > - `tx-bulk-row-order.spec.ts` (nuova, registrata in `_frontend_transaction.py`):
@@ -197,8 +197,8 @@ uno di questi punti:
 
 - [x] **11.5 Allineamento a `dev_release2`** — ✅ 2026-09-28 (deciso dal developer, dopo il commit di C4)
   > **Note implementazione**:
-  > - Merge lanciato dal developer con lo script del coordinator: **`41f02b1ee`**, genitori
-  >   `b0f8ce97f` e `ea30d5ccf`, albero `8f680660` identico alla simulazione. K non ha toccato Git.
+  > - Merge lanciato dal developer con lo script del coordinator: **`4d366b3f4`**, genitori
+  >   `d416d6868` e `953f8ab71`, albero `8f680660` identico alla simulazione. K non ha toccato Git.
   > - Commit a parte, in `import-wizard.md`, dentro la sezione della guida di J (righe 362–366): il
   >   punto «The duplicate-recheck bounce» ora cita la condizione di C2
   >   (`changedGroups.length > 0`, dopo `tx.import.duplicates.changed`). Messaggio:

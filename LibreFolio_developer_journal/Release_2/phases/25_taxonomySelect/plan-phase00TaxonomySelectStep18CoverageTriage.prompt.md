@@ -5,8 +5,8 @@
 
 | | |
 |---|---|
-| **Baseline** | `d07412899` (ff da `3fdae5b16`, confermato dal coordinator alle 16:34) |
-| **Run della coverage** | `d07412899`, corsia 6150, `--workers 2`, carico 30–50, 13:05 → 15:58. Prove in `/tmp/libreFolio_triage_20261007/`. |
+| **Baseline** | `5f3509536` (ff da `c890a10b3`, confermato dal coordinator alle 16:34) |
+| **Run della coverage** | `5f3509536`, corsia 6150, `--workers 2`, carico 30–50, 13:05 → 15:58. Prove in `/tmp/libreFolio_triage_20261007/`. |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`. Sonde sulla 6165, con la data-dir della corsia. |
 | **Metodo** | skill `test-triage`: prima i log, poi i rilanci da soli. Per ogni rosso un verdetto fra assumption, defect, shared state, environment e slowness. Test corretti dal test-author. Davanti a un difetto di prodotto ci si ferma e lo si riferisce al coordinator. |
 | **Fuori perimetro** | `ai-export-panel.spec.ts:19`: lo corregge N (la toolbar si impila apposta dal 30/09). Rossi dell'import a L; cambi e contratto AI Export a N; lingua dopo il welcome a O. |
@@ -42,7 +42,7 @@
 ### `multi-user`: assumption
 
 - `getByText(brokerName)` su tutta la pagina trova il titolo della card (`h3`) e il toast di creazione «Broker "{name}"
-  created.», che esiste dal 09/09 (`ef722b552`). Entrambi sono legittimi.
+  created.», che esiste dal 09/09 (`c8a77dda3`). Entrambi sono legittimi.
 - Lo stesso schema c'è a `:72`, nel secondo test del blocco seriale.
 
 ### FE-SP-C1: difetto del prodotto, più un'assumption del test

@@ -8,7 +8,7 @@
 
 ## 0. In breve
 
-- **Base verificata:** HEAD = `d9aec01936fe7207f1fa118558ce36dcafc90748` = baseline del kickoff, worktree pulito.
+- **Base verificata:** HEAD = `9a9f60dd865d4c544c1b53f0c373040f418efd6f` = baseline del kickoff, worktree pulito.
   R (lotti A e B) e L **non** sono nella baseline (`merge-base --is-ancestor`): niente `lib/theme/`, niente gate della
   meta, niente Designer Lab. Ne tengo conto nell'ordine dei passi.
 - **Architettura:** ruoli `--lf-<gruppo>-<nome>` in `lib/theme/tokens.css` (chiaro su `:root, html.light`, scuro su
@@ -39,11 +39,11 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-expert-barnacle` |
 | Branch | `e-alfy-t-tokens-theme` (rinominato dall'app su richiesta di avvio; era `e-alfy-expert-barnacle`) |
-| HEAD | `d9aec01936fe7207f1fa118558ce36dcafc90748` = baseline ✅ (worktree pulito) |
-| Destinazione | `dev_release2` (locale ora a `410e68ee2`: un commit di documenti del coordinatore dopo la baseline) |
+| HEAD | `9a9f60dd865d4c544c1b53f0c373040f418efd6f` = baseline ✅ (worktree pulito) |
+| Destinazione | `dev_release2` (locale ora a `477a80a41`: un commit di documenti del coordinatore dopo la baseline) |
 | Corsia | porta **6155**, dati **`/tmp/librefolio-r2-t`**; non usata (finestra di quiete) |
 | Ambiente | `node_modules` assente (atteso); graphify assente (atteso): lette direttamente le pagine wiki F-007, F-098, `domains/layout-settings` |
-| Fuori baseline | R lotto A `d80b9e0cd`, lotto B `75c45d923` (branch `e-alfy-r-fattorizzazione-colori`), L `6e967202e` (branch `e-alfy-designer-lab`): letti solo come oggetti git, in sola lettura |
+| Fuori baseline | R lotto A `e75139f3e`, lotto B `08c38e262` (branch `e-alfy-r-fattorizzazione-colori`), L `5a5597a70` (branch `e-alfy-designer-lab`): letti solo come oggetti git, in sola lettura |
 
 Wiki: F-007 dice ancora che i grafici seguono il tema con «store reattivi» (sono `MutationObserver`, drift già noto);
 F-098 lega la meta `theme-color` alla barra laterale. Nient'altro di rilevante sui colori.

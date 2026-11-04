@@ -1,10 +1,10 @@
 # Audit della matematica finanziaria — 16/10/2026
 
-Audit in sola lettura su `dev_release2`, HEAD `3d5ee174d`. Non ho lanciato test, server o build.
+Audit in sola lettura su `dev_release2`, HEAD `356a91059`. Non ho lanciato test, server o build.
 
-**Attenzione:** alle 11:17, mentre l'audit era in corso, il treno 107 ha unito **J CP-7a** (`4f9e94420`).
+**Attenzione:** alle 11:17, mentre l'audit era in corso, il treno 107 ha unito **J CP-7a** (`e29ecca10`).
 Ho riletto sulla nuova HEAD i file che ha toccato: `lots/*`, `fifo/engine.py`, `returns.py`,
-`portfolio_service.py` e `brokers/summary.py`. Tutti i numeri di riga sotto si riferiscono a `3d5ee174d`.
+`portfolio_service.py` e `brokers/summary.py`. Tutti i numeri di riga sotto si riferiscono a `356a91059`.
 
 Regole usate come metro: decisione 10 di `copilot-instructions.md`, `financial-math.instructions.md`,
 `backend.instructions.md` («Financial Math — One Home»), la pagina sviluppatori `financial_math.md`, e le pagine

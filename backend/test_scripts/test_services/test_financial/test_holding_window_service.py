@@ -10,7 +10,7 @@ TRANSFER) replayed FIFO:
   closed-position window (first opening → last close).
 
 Since MF-H both come from ``financial_math.holding_window``, where the ADJUSTMENT linked to a SPLIT asset event
-rescales every open lot and keeps their dates. Before MF-H (HEAD 45ae068cc) ``portfolio_service._oldest_open_lot_date``
+rescales every open lot and keeps their dates. Before MF-H (HEAD a8d2486ae) ``portfolio_service._oldest_open_lot_date``
 read that ADJUSTMENT as any other: a forward split's +q opened a lot dated at the split, a reverse split's −q consumed
 the oldest lots.
 
@@ -40,7 +40,7 @@ Green on HEAD and after:
 
 MF-A7 — ``holding_window.oldest_open_lot_date`` sets aside the oldest lots that together hold the dust threshold
 (0.00001) or less, the residual a sale leaves, as ``closed_position_window`` and the rows already count it as not held.
-Before it (HEAD 5726486bc) the first open lot counted whatever its quantity. TestDustResidual, every amount at 100 a
+Before it (HEAD 20ef5b9c0) the first open lot counted whatever its quantity. TestDustResidual, every amount at 100 a
 unit so that no sale realizes anything, the close 120:
 
 - red on HEAD: BUY 10 for 1000 (BUY_DAY), SELL 9.999999 for 999.9999 (MIDDLE_DAY), BUY 5 for 500 (LATE_DAY) — the
@@ -55,7 +55,7 @@ unit so that no sale realizes anything, the close 120:
 
 MF-A10 — ``holding_window.quantity_moves`` scales each quantity by the owner's share of the broker
 (``native_cash.effective_share``), and both callers pass it: the windows read the engine's quantity, the one the rows
-test against the dust threshold (``daily_state``: ``tx.quantity × share``). Before it (HEAD ab74aafbf) they read the raw
+test against the dust threshold (``daily_state``: ``tx.quantity × share``). Before it (HEAD 0c866ff73) they read the raw
 quantity: on a broker owned at s < 1 a residual in (dust, dust / s] was dust for the row and an open lot for the window.
 TestCoOwnedBrokerShare, a broker the user owns at 50 % (``share_percentage`` 0.5, a fraction), SELL 9.999988 of 10:
 0.000012 left, 0.000006 for the owner:
@@ -573,7 +573,7 @@ async def _sold_down(session: AsyncSession, keep_alive: list[object], label: str
 
 class TestCoOwnedBrokerShare:
     """A broker the user owns at 50 %: the engine counts half of every quantity (``daily_state``: ``tx.quantity × share``),
-    and so do the windows since MF-A10. HEAD ab74aafbf read the raw quantity: a residual of 0.000012 — 0.000006 for the
+    and so do the windows since MF-A10. HEAD 0c866ff73 read the raw quantity: a residual of 0.000012 — 0.000006 for the
     owner — was dust for the row and an open lot for the window."""
 
     @pytest.mark.asyncio
@@ -700,7 +700,7 @@ class TestAContributionWithoutAnEndDateStopsAtToday:
     with ``date_to=None``, every row of the broker, the future ones too: a SELL dated after today consumed, in the FIFO that
     gives ``oldest_open_lot_date``, a lot still open today. No production caller leaves the date out (``get_report`` always
     passes one), so the defect was latent; the tests below are the only way to reach it. Read on 22/10/2026 (base
-    ``534c280c6``).
+    ``b5983a8ea``).
     """
 
     @staticmethod

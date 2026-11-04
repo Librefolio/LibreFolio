@@ -8,7 +8,7 @@
 |---|---|
 | Worktree | `LibreFolio-worktrees/e-alfy-solid-couscous` |
 | Branch | `e-alfy-risk-g-allocation-colors` ⚠️ rinominato dal runtime (era `e-alfy-solid-couscous`) |
-| Baseline | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` ✅ verificata |
+| Baseline | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` ✅ verificata |
 | Lane | porta `6246` · data dir `backend/data/test-risk-g` |
 | Autorizzazione | coordinatore, 18 Set 2026 — delega permanente del developer |
 
@@ -53,7 +53,7 @@
 
 ### Passo 0 — Apertura
 
-> **Note implementazione**: verificata la baseline (`cc33120e…`, coincide), letti mandato,
+> **Note implementazione**: verificata la baseline (`3a4431d5…`, coincide), letti mandato,
 > `README.md` §2.7/§2.8, Q12, D71, D72, D84, istruzioni frontend e la pagina wiki
 > `problems/shared-component-option-changed-globally.md`. Analisi consegnata e autorizzata.
 
@@ -318,7 +318,7 @@ Backend: **nessuna modifica** (`git diff --stat backend/` vuoto).
    `mkdocs_src/docs/static/icons/asset-types/{commodity,real-estate}.png` risultano `??`
    nel mio albero. **Non li ho creati**: hanno il timestamp del seeding e sono
    **byte-identici** (sha256) ai corrispondenti in `frontend/static/`, che sono **tracciati
-   dal commit di baseline `cc33120eb`**. Il mirror della documentazione ne traccia **10 su
+   dal commit di baseline `3a4431d5a`**. Il mirror della documentazione ne traccia **10 su
    12**: i due tipi nuovi non sono nel mirror committato. Non li metto in stage — non sono
    miei. Ma quando B fonderà, la documentazione resterà **senza icona** per `COMMODITY` e
    `REAL_ESTATE`, e **nessun cancello lo rileva**: sono risorse statiche, non collegamenti,
@@ -413,7 +413,7 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test \
   --test-port 6246 --data-dir backend/data/test-risk-g front-portfolio dashboard
 → 7 passed (16.3s)                                     [zero skipped]
 
-git diff --stat cc33120eb -- frontend/src/lib/utils/assetTypes.ts  → vuoto
+git diff --stat 3a4431d5a -- frontend/src/lib/utils/assetTypes.ts  → vuoto
 grep -c 'primaryAssetType|__K2_PRIMARY' assetTypes.ts              → 0
 git diff --check                                                   → pulito
 git diff --stat backend/                                           → vuoto

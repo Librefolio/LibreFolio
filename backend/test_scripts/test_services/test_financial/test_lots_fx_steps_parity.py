@@ -26,7 +26,7 @@ green today and after: the BUY's lot has a value point worth something on each o
 THE PARITY BATTERY (PARITY: green today and after the cure — the guarantee). Each case runs the analysis twice in one
 session, every ``LotAnalysisType`` requested: A as it is; B with ``lots_analysis_service.FxRateResolver`` and
 ``lots_analysis_service.collect_fx_needs`` replaced by the LEGACY copies below (today's code, copied verbatim from HEAD
-2879ae3e4, asking ``convert_bulk`` for one unit per need), undone before the comparison. Today A is B; after the cure B is
+85fda260e, asking ``convert_bulk`` for one unit per need), undone before the comparison. Today A is B; after the cure B is
 today's computation. The two answers dump to the same JSON (``model_dump(mode="json")``) but for
 ``calculation_metadata.generated_at``; a difference is reported by its first path. Not vacuous: ``_assert_not_vacuous``, the
 book's own ``check`` on its whole window in its first scope, and — for every book with a foreign currency — B must have
@@ -54,7 +54,7 @@ Users, brokers and assets carry a uuid4 (``_scope_boundary_books.py``). FX pairs
 test's transaction and comes back with the rollback — then the test's rates are written. No sleep, no wall clock, no fixed
 position in a collection.
 
-TODAY (HEAD ``2879ae3e4``): the two reds fail on their assertion; every PARITY and resolver case is green.
+TODAY (HEAD ``85fda260e``): the two reds fail on their assertion; every PARITY and resolver case is green.
 
 J5-5 (D-P4 cure B, contract MF-P4b §1.3): the seven histories are STEPS (``date`` .. ``through``) and the service reads the market
 price only on the days it can change on (``price_candidate_days``: an observation, a rate step — ``FxRateResolver.rate_change_days``
@@ -148,7 +148,7 @@ async def session():
 
 
 # --------------------------------------------------------------------------- #
-# LEGACY — today's FxRateResolver and collect_fx_needs, verbatim from HEAD 2879ae3e4
+# LEGACY — today's FxRateResolver and collect_fx_needs, verbatim from HEAD 85fda260e
 # (backend/app/services/financial_math/lots/conversions.py). The reference of the parity battery.
 # --------------------------------------------------------------------------- #
 

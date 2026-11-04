@@ -5,8 +5,8 @@ utente e record dei commit), chiesto dal coordinator alle 01:26, chiuso alle 02:
 degli SHA. Il via è del developer, inoltrato dal coordinator alle
 22:17 (A + 2A e le 3 raccomandazioni). Il coordinator ha confermato il fast-forward e ha scritto «Puoi
 scrivere».
-**Baseline:** `4d09ac2ac` su `e-alfy-allocatore-pac`, cioè il treno 19 di `dev_release2` in
-fast-forward. Il codice del PAC è identico a `70d02cd8e`, su cui è stata fatta l'analisi. Verificata
+**Baseline:** `a1cf58c42` su `e-alfy-allocatore-pac`, cioè il treno 19 di `dev_release2` in
+fast-forward. Il codice del PAC è identico a `bd7c656bf`, su cui è stata fatta l'analisi. Verificata
 alle 22:38: albero pulito, stage vuoto, porta 6151 libera. Carico 20.33 / 20.85 / 22.78.
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacFxConversionFix.prompt.md`.
 Il coordinator aveva scritto `13_pacAllocator/plan-…`, ma i piani d'esecuzione stanno in
@@ -602,7 +602,7 @@ Un comando per volta, in quest'ordine:
 
 > **Note implementazione**:
 > - Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py`, più
->   `test --test-port 6151 --data-dir /tmp/librefolio-r2-d` per le suite. Base `4d09ac2ac`.
+>   `test --test-port 6151 --data-dir /tmp/librefolio-r2-d` per le suite. Base `a1cf58c42`.
 >
 >   | Comando | Ora, carico | Esito |
 >   |---|---|---|
@@ -655,7 +655,7 @@ Un comando per volta, in quest'ordine:
 
 - Nota datata nel dossier (§1.4).
 - README:
-  - riga 13: gli SHA di R7, `dbedcc822` · `f374f1e5b`, merge `9f06df702`;
+  - riga 13: gli SHA di R7, `0b0896b83` · `645b054bb`, merge `df1d9b343`;
   - riga 15: questo piano.
 
 > ✅ **2026-10-09 01:22.**
@@ -665,8 +665,8 @@ Un comando per volta, in quest'ordine:
 >   afterwards.»), in inglese come il dossier. Dice dove vale «structurally impossible» (cicli fra
 >   due valute) e dove no (triangoli), e rimanda a questo piano per la 2A e per l'elenco dei piani
 >   archiviati che ripetono l'affermazione.
-> - README, riga 13: ✅, con gli SHA di R7 (`dbedcc822` `fix(pac)`, `f374f1e5b` journal) e la merge
->   `9f06df702` con `c9a602f74`, rivalidata con 8 gate su 8 verdi.
+> - README, riga 13: ✅, con gli SHA di R7 (`0b0896b83` `fix(pac)`, `645b054bb` journal) e la merge
+>   `df1d9b343` con `4ec2add93`, rivalidata con 8 gate su 8 verdi.
 > - README, riga 15: questo piano, eseguito prima della riga 14; stato «in attesa degli SHA».
 >
 > **⚠️ Fuori pista**: il §1.4 cita il Fork 2 a `:60-66`; il paragrafo è a `:59-65`. La nota sta
@@ -712,7 +712,7 @@ Un comando per volta, in quest'ordine:
 >
 > **Note implementazione**:
 > - `git diff --check` pulito; il piano, non tracciato, senza spazi finali né tab. Stage vuoto,
->   `HEAD` ancora `4d09ac2ac`.
+>   `HEAD` ancora `a1cf58c42`.
 > - Inventario: 26 file modificati (+1115/−62) e questo piano, non tracciato. Nessun
 >   file generato fra i modificati: `openapi.json`, `tool-contracts.openapi.json`,
 >   `generated-tools.ts`, `tool-contract-map.generated.ts`, `frontend/build/` e `.testLog/` sono
@@ -733,7 +733,7 @@ Un comando per volta, in quest'ordine:
 >
 >   Log: `/tmp/libreFolio_pacfx_s8_*.log`. Nessun test fissa più le impronte vecchie
 >   (`4f061103`, `be2bb19d`).
-> - Previsione dei conflitti: `dev_release2` è ora `3af9aac63` (treno 20), discendente di `HEAD`.
+> - Previsione dei conflitti: `dev_release2` è ora `46d1c4ed6` (treno 20), discendente di `HEAD`.
 >   Tocca 21 file (Risk L1, pagine FX, journal), nessuno dei miei 27: nessuna sovrapposizione,
 >   né di testo né di significato.
 > - Ancora del CHANGELOG verificata: «…and every exchange appears in the plan.» è a
@@ -814,9 +814,9 @@ Chiesto dal coordinator alle 01:26, dopo il CHECKPOINT READY. Poi di nuovo FROZE
 >   `ledger.py:35-42`); ora è «the amount received from a conversion». In più «≈ 0.00» → «≈ −0.00»:
 >   −0.0022 a due cifre è −0.00, la forma che G3 vieta (`format.test.ts:30`).
 > - `check-links` rosso, preesistente e fuori perimetro: `user/assets/detail/chart/#rolling-return`,
->   da `frontend/src/routes/(app)/assets/[id]/+page.svelte:3012`, commit `e3af27ff3` del 2026-10-01.
+>   da `frontend/src/routes/(app)/assets/[id]/+page.svelte:3012`, commit `fe8e57d3c` del 2026-10-01.
 >   L'ancora c'è in `chart.en.md:22`, mentre `chart.{it,fr,es}.md` non hanno ancora la sezione
->   Rolling Return: è debito di traduzione. Né il mio diff né il treno 20 (`3af9aac63`) toccano questi
+>   Rolling Return: è debito di traduzione. Né il mio diff né il treno 20 (`46d1c4ed6`) toccano questi
 >   file. Lo segnalo al coordinator e non lo correggo.
 > - Rischio residuo, misurato; non è una regressione.
 >   - Lo spread predefinito è 0 (`frontend/src/lib/features/tools/pac-allocator/planner/defaults.ts:13`)

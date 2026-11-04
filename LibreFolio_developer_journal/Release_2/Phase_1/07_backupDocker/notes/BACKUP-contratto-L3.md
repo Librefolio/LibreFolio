@@ -12,7 +12,7 @@
 > - `BACKUP-decisioni-20261022.md` §10: il formato, deciso dal developer il 22/10 pomeriggio;
 > - `PIANO-ondata4.md`, domande 4-8: approvate con le raccomandazioni.
 >
-> Il codice di riferimento è `dev_release2` = `c042f2481`.
+> Il codice di riferimento è `dev_release2` = `295a09c86`.
 >
 > **Chi fa cosa**:
 > - il prodotto scrive il lato istanza: B fa la busta, il job e la CLI; H fa la rotta di ripristino e il modo (lotto H-62);
@@ -155,7 +155,7 @@ Con gli stessi tre membri il `.tar` è identico byte per byte, e i vettori lo ve
 
 #### 3.5.1 L'intestazione del `.lfbk` e la formula del `check` (R2 ⇄ prodotto)
 
-**Riferimento**: `backend/app/services/platform/instance_backup/envelope.py` a `c042f2481`, cioè `_HEADER`,
+**Riferimento**: `backend/app/services/platform/instance_backup/envelope.py` a `295a09c86`, cioè `_HEADER`,
 `_check_supported`, `_derive` e `unlock`. **Il formato non cambia** con L3.
 
 L'intestazione è di **52 byte, big-endian**, in `struct` `>4sBBBBB16s16sI7s`:

@@ -27,7 +27,7 @@ re-points all of them at a different entity.
 The E2E trigger was a test helper (`populate --force` deleted the database but not the report folders), but the
 mechanism exists in production: delete the newest broker, create another.
 
-## Solution (train 12, merge `637c5d105`)
+## Solution (train 12, merge `78b285bdc`)
 
 The developer rejected a local workaround ("b2") and asked for a fix at the root:
 

@@ -1,19 +1,19 @@
 # 28_fxDashboardSync — i lotti del workstream N (06/10 – 09/10)
 
 > **Stato (09/10): FINITA, archiviata.** Ogni piano è fatto e integrato in `dev_release2`, verificato su
-> `3cceb4f90` con `git merge-base --is-ancestor`. I residui ancora veri sul codice di oggi sono rinviati in
+> `f545b67e3` con `git merge-base --is-ancestor`. I residui ancora veri sul codice di oggi sono rinviati in
 > `Phase_0/38_postReleaseBacklog/README.md`, voci N-1 … N-9 (elenco sotto). Il nome della cartella viene dal primo
 > lotto; poi il workstream N ha raccolto qui tutti i lotti successivi, uno per piano.
 
 | Piano | Data | Lotto | Stato | Commit | Treno |
 |---|---|---|---|---|---|
-| [`plan-phase00FxDashboardSync.prompt.md`](plan-phase00FxDashboardSync.prompt.md) | 06/10 | FX nella Dashboard: sync dal banner (date mancanti ±7 giorni), storia completa alla creazione della coppia, solo le valute capo delle rotte nel menu, segno del KPI giornaliero | ✅ | `5c1b52612`, `f7134bb7f`, `929887ad8`, `b4bddc411` | sul ramo il 06/10 alle 17:44, prima del treno 2 |
-| [`plan-phase00FxDashboardSyncStep2PageCache.prompt.md`](plan-phase00FxDashboardSyncStep2PageCache.prompt.md) | 06/10 – 07/10 | Cache della Dashboard: stale-while-revalidate (fase 1); tab Rischio sui soli broker posseduti (lotto 2); i rossi della coverage del 07/10 (AI Export dopo i broker, test FX) | ✅ fase 1 e lotti; fase 2 rinviata (N-1) | `cd1d42fb6`, `a3d2fbc3c`, `8baf74f29`; `af154d84d`; `3a83ad9c7`, `49d4ec8e0`, `c958f857c`; `a1a0a0b87`, `6a6429db7`, `bc3dc7bdb`, `fdb877bcc`, `9d1af831c` | 8; 8; 9; 10 |
-| [`plan-phase00CoverageCombineRace.prompt.md`](plan-phase00CoverageCombineRace.prompt.md) | 08/10 | Il combine della coverage riceve la cartella, una cartella per run, il combine fallito rende rossa la passata, le parti vuote | ✅ | `751f496b3`, `230b2695d`, `029e00906`, `fc76cefa1` | 13 |
-| [`plan-phase00DataQualityBannersNavCount.prompt.md`](plan-phase00DataQualityBannersNavCount.prompt.md) | 08/10 | Rosso del banner: il conteggio dei link `navigate_asset` limitato alla sua riga | ✅ | `ce892dd7c`, `5157b6762` | 15 |
-| [`plan-phase00DefaultDisplayCurrency.prompt.md`](plan-phase00DefaultDisplayCurrency.prompt.md) | 08/10 | Le pagine partono dalla Default Currency dell'utente, non da quella dell'istanza | ✅ | `51d1a64db`, `4c214bc16`, `9ca9078cc` | 18 |
-| [`plan-phase00FxAddPairNavigationWait.prompt.md`](plan-phase00FxAddPairNavigationWait.prompt.md) | 08/10 | Rosso di `fx-add-pair`: l'attesa della pagina FX via `goToFxPage` | ✅ | `49d6f5324`, `55019a641` | 19 |
-| [`plan-phase00DbPathArgument.prompt.md`](plan-phase00DbPathArgument.prompt.md) | 09/10 | `dev.py db … [path]` rispetta il path; `db check` funziona | ✅ | `964f3427d`, `7ef4ea287`, `faa2b2120`, `0c953f841` | 23 |
+| [`plan-phase00FxDashboardSync.prompt.md`](plan-phase00FxDashboardSync.prompt.md) | 06/10 | FX nella Dashboard: sync dal banner (date mancanti ±7 giorni), storia completa alla creazione della coppia, solo le valute capo delle rotte nel menu, segno del KPI giornaliero | ✅ | `2c58e7c9b`, `fe3b5a182`, `23439016f`, `366b4399e` | sul ramo il 06/10 alle 17:44, prima del treno 2 |
+| [`plan-phase00FxDashboardSyncStep2PageCache.prompt.md`](plan-phase00FxDashboardSyncStep2PageCache.prompt.md) | 06/10 – 07/10 | Cache della Dashboard: stale-while-revalidate (fase 1); tab Rischio sui soli broker posseduti (lotto 2); i rossi della coverage del 07/10 (AI Export dopo i broker, test FX) | ✅ fase 1 e lotti; fase 2 rinviata (N-1) | `e47e57e04`, `ea907e029`, `34a7b5982`; `65dd92bcf`; `0e346c2f1`, `358d703b8`, `e68b8d811`; `a1c193a14`, `9c4a8b92f`, `031b03016`, `b2cf0d7a9`, `cda8e75aa` | 8; 8; 9; 10 |
+| [`plan-phase00CoverageCombineRace.prompt.md`](plan-phase00CoverageCombineRace.prompt.md) | 08/10 | Il combine della coverage riceve la cartella, una cartella per run, il combine fallito rende rossa la passata, le parti vuote | ✅ | `25fb153b6`, `6b60effff`, `8cb610289`, `b77825ea9` | 13 |
+| [`plan-phase00DataQualityBannersNavCount.prompt.md`](plan-phase00DataQualityBannersNavCount.prompt.md) | 08/10 | Rosso del banner: il conteggio dei link `navigate_asset` limitato alla sua riga | ✅ | `742e4848c`, `41e093c83` | 15 |
+| [`plan-phase00DefaultDisplayCurrency.prompt.md`](plan-phase00DefaultDisplayCurrency.prompt.md) | 08/10 | Le pagine partono dalla Default Currency dell'utente, non da quella dell'istanza | ✅ | `19748fbe0`, `1be30c313`, `b8c4fcbda` | 18 |
+| [`plan-phase00FxAddPairNavigationWait.prompt.md`](plan-phase00FxAddPairNavigationWait.prompt.md) | 08/10 | Rosso di `fx-add-pair`: l'attesa della pagina FX via `goToFxPage` | ✅ | `1f7aa3b32`, `b61aa068e` | 19 |
+| [`plan-phase00DbPathArgument.prompt.md`](plan-phase00DbPathArgument.prompt.md) | 09/10 | `dev.py db … [path]` rispetta il path; `db check` funziona | ✅ | `049d51963`, `d948e309a`, `469f6eae5`, `37f1dfc1d` | 23 |
 
 ## Residui rinviati (`Phase_0/38_postReleaseBacklog/README.md`)
 

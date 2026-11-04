@@ -2,11 +2,11 @@
 
 > ⚠️ **23/09 — questo piano prosegue in [`F-laboratorio-postmerge.md`](F-laboratorio-postmerge.md).**
 > La tabella «Stato dei passi» qui sotto è ferma al 18/09 e non è stata riscritta (09 §2.7): il passo 4
-> è stato fatto da S5 (`6b8c69bfc`), il passo 2 da A (`daa03c0f2`), i passi 3 e 6 proseguono nel piano nuovo.
+> è stato fatto da S5 (`dfef7bf08`), il passo 2 da A (`1b0032eae`), i passi 3 e 6 proseguono nel piano nuovo.
 >
 > **Mandato**: `implementation_2/S5-asset-global.md` · **Round 2, fase 2**
 > **Worktree**: `e-alfy-super-dollop` · **Branch**: `e-alfy-risk-asset-global-lab`
-> **Baseline**: `7d75a9c6c283af4bccf11f6bf380ffaa701d53eb` (verificata, `api sync` già eseguito)
+> **Baseline**: `44dd7779db5856e547a3c93d06ee7bad6b1da9ae` (verificata, `api sync` già eseguito)
 > **Corsia**: `--test-port 6157` · `--data-dir /tmp/librefolio-r2-s5`
 
 ## La regola che governa tutto
@@ -23,7 +23,7 @@
 | 0 | Analisi (consegna 1) | ✅ | 2026-09-18 |
 | 1 | Ricollocare la heatmap fuori dal legacy | ✅ | 2026-09-18 |
 | — | 🚦 **Cancello**: il coordinatore guarda la superficie nel browser | ✅ superato nei fatti: la review del laboratorio col developer, 24/09 (F-3, `F-laboratorio-postmerge.md`) (allineamento 09/10) | — |
-| 2 | Smontare `RiskAnalysisPanel` da `AssetSetRiskPanel` | ✅ `daa03c0f2` (A, 21/09) (allineamento 09/10) | — |
+| 2 | Smontare `RiskAnalysisPanel` da `AssetSetRiskPanel` | ✅ `1b0032eae` (A, 21/09) (allineamento 09/10) | — |
 | 3 | Colonna gratuita: correlazione media con il resto dell'insieme | ⏳ **mai costruita** (D54) → README della cartella, buchi (allineamento 09/10) | — |
 | 4 | `L4Replay` con `showMoney={false}` — **mai `L4Shock`** | ✅ in altra forma: la sezione del replay del laboratorio (`AssetSetReplaySection.svelte`), senza importi (allineamento 09/10) | — |
 | 5 | ~~Nuova chiave i18n «fuori scopo» × 4 lingue~~ | ❌ **decaduto**: la chiave esiste già, il difetto è altrove e non è mio — vedi §R1 | 2026-09-18 |
@@ -167,7 +167,7 @@ E `svelte-check` verde dice che **compila**, non che **renderizza**: la definizi
 
 ### 🔴 B1 — Due autorizzazioni riferite a codice che nel mio ramo non esiste
 
-Misurato sul mio albero a `7d75a9c6c`, con `git status --porcelain` a **0 righe**:
+Misurato sul mio albero a `44dd7779d`, con `git status --porcelain` a **0 righe**:
 
 ```
 grep -c showMoney frontend/src/lib/components/risk/levels/l4/L4Replay.svelte   → 0
@@ -249,7 +249,7 @@ http://localhost:6167/assets?tab=correlation        (e2e_test_user / E2eTestPass
 
 pid in ascolto : 41897
 cwd            : …/e-alfy-super-dollop        ← il mio albero
-HEAD           : 7d75a9c6c
+HEAD           : 44dd7779d
 porcelain      : 3 righe (2 nel bundle + 1 journal)
 ```
 
@@ -558,7 +558,7 @@ di `svelte-check`. Sarebbe passato ogni cancello e la pagina avrebbe reso **il n
 
 ### Passo 1d — l'allarme piantato, disinnescato come chiedeva ✅
 
-`riskStore.test.ts:102` conteneva un allarme **deliberato**, piantato a `bf34f3a0a`:
+`riskStore.test.ts:102` conteneva un allarme **deliberato**, piantato a `ffb204c62`:
 
 ```js
 // This assertion is deliberately the wrong-looking one. It goes red the day the
@@ -572,7 +572,7 @@ di `svelte-check`. Sarebbe passato ogni cancello e la pagina avrebbe reso **il n
 sono **la negazione l'una dell'altra sugli stessi ingressi**. Se il campo non fosse atterrato,
 `.not.toBe` sarebbe fallita.
 
-Eseguito: rinomina · commento sostituito · **`bf34f3a0a` citato** · e **una seconda asserzione** che
+Eseguito: rinomina · commento sostituito · **`ffb204c62` citato** · e **una seconda asserzione** che
 il commento originale temeva davvero (*«the unsliced portfolio, served under a sliced heading»*) ma
 che l'istruzione non nominava: una fetta non deve ricevere la chiave del **portafoglio intero**.
 Rimosso anche il `as unknown as` che esisteva **solo** perché il tipo non aveva il campo.
@@ -773,9 +773,9 @@ N è stato riaperto per seminare un fattore comune.
 
 ---
 
-# Risveglio — passi ①②③④ sulla revisione fusa `8dc9be198`
+# Risveglio — passi ①②③④ sulla revisione fusa `b436c893c`
 
-> Baseline verificata prima di scrivere: `git rev-parse HEAD` = `8dc9be1989e34341e3fa6c17e6d2dc5105a89475` ✅,
+> Baseline verificata prima di scrivere: `git rev-parse HEAD` = `b436c893ce68f512438d152b321d8a06a3d7f50c` ✅,
 > albero pulito, porta `6167` libera. Sei mandati su sei dentro.
 
 ## ① `api sync` — fatto, e il codice d'uscita non è la prova
@@ -922,10 +922,10 @@ Un **a-capo mangiato**, con 4 spazi spuri. Tracciato:
 
 | commit | stato |
 |---|---|
-| `bf34f3a0a` | **pulito** |
-| `6aba9e48d` (S1) | **già mangiato** |
-| `ff8769520` (S2) | ancora mangiato |
-| merge `8dc9be198` | ancora mangiato |
+| `ffb204c62` | **pulito** |
+| `0dbaa2d9d` (S1) | **già mangiato** |
+| `edcafad65` (S2) | ancora mangiato |
+| merge `b436c893c` | ancora mangiato |
 
 **Ha attraversato due commit e un merge a sei, invisibile**, perché:
 - è **TypeScript valido** → nessun compilatore protesta;

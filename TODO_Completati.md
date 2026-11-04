@@ -88,7 +88,7 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 - Chiusa la voce di `TODO_FUTURI.md` «L'audit i18n non può dire "inutilizzata" su un terzo del catalogo» (S4, 21/09): un'interpolazione al primo segmento (`risk.${prefix}.${code}`) faceva risultare «usata» ogni chiave del namespace, un terzo del catalogo.
 - S2 (R1-R7): l'audit legge le unioni tipizzate dei prefissi, anche con un solo membro (R3), così `risk.*` è verificabile. S12 (R8-R12): i prefissi legacy che non si possono risolvere rendono le chiavi «non verificate», non «usate».
-- Le 4 chiavi morte della voce sono tolte: `risk.simulation.regimeTruncated` (S7c) e `risk.levels.l3.{beta,sharpe,sortino}Help` (`f55b2e42a`).
+- Le 4 chiavi morte della voce sono tolte: `risk.simulation.regimeTruncated` (S7c) e `risk.levels.l3.{beta,sharpe,sortino}Help` (`4632658f7`).
 - Al 09/10 `./dev.py i18n audit` dà 4215 chiavi, 0 morte e 3 non verificate, con lo stesso insieme di chiavi nelle 4 lingue.
 - I residui sono nel backlog dopo la 1.2: `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/README.md`, voci O-1…O-18.
 
@@ -97,7 +97,7 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 ## 🆔 Gli id degli asset (e delle altre tabelle) non si riusano più ✅
 
 **Data completamento:** 8 Ottobre 2026
-**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` (workstream L); commit `6b66ee306`, `298ed96f3` e `b0740c901`, merge `637c5d105` (treno 12)
+**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` (workstream L); commit `2c00c9934`, `28e3b2719` e `3fdaa8a44`, merge `78b285bdc` (treno 12)
 
 ### Risultato
 
@@ -502,7 +502,7 @@ Il flag `supports_events` sulla base class `AssetSourceProvider` non è mai stat
 **Status**: ✅ COMPLETATO — anche oltre lo scope richiesto
 
 ### Completato
-Il TODO chiedeva solo pagine developer-facing. Trovato invece un lavoro completo (commit `b3729df4 feat(fx): enhance provider testing and expand documentation`):
+Il TODO chiedeva solo pagine developer-facing. Trovato invece un lavoro completo (commit `54fe0abd feat(fx): enhance provider testing and expand documentation`):
 - `mkdocs_src/docs/developer/backend/fx/providers/{ecb,fed,boe,snb,index}.md` — pagine dev dedicate per provider
 - `mkdocs_src/docs/user/fx/providers/{ecb,fed,boe,snb,index}.{en,it,fr,es}.md` — **pagine anche user-facing, in tutte le 4 lingue** (non richiesto esplicitamente dal TODO, ma coerente con lo spirito)
 - `docs_url` di ogni provider (`backend/app/services/fx_providers/{ecb,fed,boe,snb}.py`) punta già alla pagina specifica (es. `ecb.py:60`: `"/mkdocs/user/fx/providers/ecb/"`), non alla pagina generica — verificato

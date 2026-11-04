@@ -1,8 +1,8 @@
 # Performance charts — bugfix: gli eventi degli asset nell'editor dei dati
 
 **Stato:** ✅ **COMPLETATO E INTEGRATO**. Lotto chiuso il 2026-10-08 alle 20:32 (FROZEN). Commit del developer il
-2026-10-08 alle 22:16: `fba7edf07` (backend e i suoi test), `e0b2077d2` (frontend e i suoi test), `c160bd34c` (doc) e
-`994347f55` (questo giornale). In `dev_release2` col treno 19, merge `5423c334f`. I limiti residui hanno una voce di
+2026-10-08 alle 22:16: `f34455486` (backend e i suoi test), `0dd4ce670` (frontend e i suoi test), `10a985273` (doc) e
+`bd7f57441` (questo giornale). In `dev_release2` col treno 19, merge `fbc95f3f9`. I limiti residui hanno una voce di
 backlog (I-09…I-12, «Limiti residui»). Verificato e archiviato il 2026-10-09 in
 `Release_2/phases/20_performanceCharts/`. Reperti di Q (onda 2), verifiche chieste dal coordinator alle 17:42
 («verifiche prima, e la correzione solo dei reperti confermati»). Decisioni del developer relayate alle 17:58 (testo
@@ -10,7 +10,7 @@ sotto).
 *Storia dello stato:* IN CORSO (2026-10-08, dalle 17:42).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
-**Baseline:** HEAD = `108a2adf5` (treno 17), albero pulito, rimisurato prima di scrivere questo piano.
+**Baseline:** HEAD = `03c943f53` (treno 17), albero pulito, rimisurato prima di scrivere questo piano.
 **Lane:** suite `6157` (+ `6167` se serve) e `/tmp/librefolio-r2-i`, solo `dev.py test …`, un comando alla volta.
 Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`.
 
@@ -58,7 +58,7 @@ i18n nuova e nessuna registrazione nuova nel runner (i test vanno in file già r
 
 > **Note implementazione (E2/E3)**: due test-author in parallelo, su file distinti. Ho letto i diff interi
 > prima di lanciarli. Poi ho eseguito i rossi io, sulla 6157, uno alla volta, prima di qualsiasi edit di prodotto
-> (HEAD `108a2adf5`):
+> (HEAD `03c943f53`):
 >
 > | Selettore | Esito | Perché rosso (motivo giusto) |
 > |---|---|---|
@@ -189,8 +189,8 @@ i18n nuova e nessuna registrazione nuova nel runner (i test vanno in file già r
 >   (cataloghi, runner, CHANGELOG, nav); `openapi.json` e `generated.ts` sono ignorati da Git.
 > - Porte 6157 e 6167 libere (`lsof` vuoto).
 > - Privacy: nel delta e nel piano l'unico riscontro è il nome del ramo, già presente in 7 file del journal committati.
-> - Target: `dev_release2` è a `70d02cd8e`, 17 commit oltre la mia base `108a2adf5`. L'unico file in comune è
->   `AssetDataEditorSection.svelte`, toccato da `65c1e40e6` di K (`count` → `n` nei due messaggi di cancellazione).
+> - Target: `dev_release2` è a `bd7c656bf`, 17 commit oltre la mia base `03c943f53`. L'unico file in comune è
+>   `AssetDataEditorSection.svelte`, toccato da `888ac066c` di K (`count` → `n` nei due messaggi di cancellazione).
 >   Fusione a tre vie simulata con `git merge-file` su copie in `/tmp`: nessun conflitto, entrambe le parti presenti
 >   (`dbEventId` e `importMatchKeys` miei, `n:` di K alle righe 414 e 422). Copie cancellate dopo.
 > - Commit proposti, 4, nei file `/tmp/libreFolio_commit_i_ev_{1,2,3,4}.txt` (oggetto ≤ 50, ASCII, righe ≤ 72): backend
@@ -200,7 +200,7 @@ i18n nuova e nessuna registrazione nuova nel runner (i test vanno in file già r
 
 Tutti e quattro **confermati**, tutti già usciti nella v1.1.0. La prova rossa arriva in E2/E3; qui la prova nel codice.
 
-| # | Reperto | Esito | Prova nel codice (righe di `108a2adf5`) |
+| # | Reperto | Esito | Prova nel codice (righe di `03c943f53`) |
 |---|---|---|---|
 | F1 | Cambiare il *Type* salva un evento nuovo e lascia il vecchio | **Confermato** | Il payload dell'editor (`AssetDataEditorSection.svelte:353–361`) è `{date, type, value, notes}`, senza id. `_upsert_asset_events` (`price_store.py:272–343`) cancella per chiave `(asset, date, type, provider)` e reinserisce: col tipo nuovo la chiave cambia, quindi la riga vecchia resta. |
 | F2 | La modifica cancella e reinserisce: con una transazione collegata urta la FK `RESTRICT` | **Confermato** | FK `RESTRICT` su `Transaction.asset_event_id` (`models.py:832–840`), `PRAGMA foreign_keys=ON`. Una modifica a chiave invariata è DELETE + INSERT → `IntegrityError`; l'endpoint (`assets.py:1048–1050`) mappa a 400 solo `EVENT_CURRENCY_MISMATCH`, il resto è **500**. Un evento non collegato cambia id a ogni modifica. |
@@ -318,7 +318,7 @@ Uno alla volta, sulla 6157:
 
 ## Definizione di fatto
 
-- F1, F2, F3, S1, S2, S5 corretti, ognuno con un test che era rosso su `108a2adf5` ed è verde dopo.
+- F1, F2, F3, S1, S2, S5 corretti, ognuno con un test che era rosso su `03c943f53` ed è verde dopo.
 - F4: il commento descrive il comportamento vero.
 - Il test della decisione 3 documenta l'effetto sul calcolo.
 - Gate verdi, oppure rossi noti fuori dal mio perimetro, con la prova.
@@ -358,7 +358,7 @@ Uno alla volta, sulla 6157:
     successivi nelle stesse date vanno in 500.
   - Dalla UI lo raggiunge un CSV scritto a mano: l'import confronta i tipi alla lettera e il salvataggio li manda così
     come sono.
-  - A `108a2adf5` era uguale (`type=evt_type`, grezzo).
+  - A `03c943f53` era uguale (`type=evt_type`, grezzo).
   - Prova: probe su SQLite in memoria, senza file, server o corsia, con lo script cancellato dopo l'uso. La scrittura
     riesce, la lettura ORM solleva `LookupError` e la riga grezza contiene `dividend`.
   - Correzione possibile, fuori da questo lotto: un validatore sul `type` che normalizza in maiuscolo e rifiuta i
@@ -366,7 +366,7 @@ Uno alla volta, sulla 6157:
   - Le mie note di sessione dicevano «500 al flush»: era impreciso, e il probe l'ha corretto.
 - **Una riga nuova senza id si fonde in silenzio con un evento salvato.** Se finisce sulla chiave di un evento manuale
   che l'elemento non modifica, `_upsert_asset_events` aggiorna quell'evento sul posto. Dalla UI ci si arriva con un
-  import seguito da un cambio di tipo: la tabella mostra due righe, e dopo il ricaricamento ce n'è una. A `108a2adf5` il
+  import seguito da un cambio di tipo: la tabella mostra due righe, e dopo il ricaricamento ce n'è una. A `03c943f53` il
   risultato visibile era lo stesso (lì per DELETE+INSERT), quindi non è una regressione. Backlog: un controllo dei
   doppioni di chiave lato client, prima dell'invio.
 - **Le modifiche partono prima delle cancellazioni.** Nello stesso salvataggio, spostare un evento sulla chiave di uno

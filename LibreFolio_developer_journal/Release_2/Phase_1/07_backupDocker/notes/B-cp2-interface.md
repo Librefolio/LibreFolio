@@ -2,7 +2,7 @@
 
 Contract: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-contratto-L3.md` (AGREED; read §2, §3, §4, §7, §8, §9).
 Vectors: `backend/test_scripts/fixtures/backup_l3/` (`vectors.json` + 10 `.tar` + 2 test identities; generator
-`generate_vectors.py` shows exactly how the files are built). Base HEAD `5b71e0666`.
+`generate_vectors.py` shows exactly how the files are built). Base HEAD `77e28a330`.
 
 ## 1. `backend/app/config/backup.py`
 

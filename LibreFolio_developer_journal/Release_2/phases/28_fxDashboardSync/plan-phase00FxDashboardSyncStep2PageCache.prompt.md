@@ -1,23 +1,23 @@
 # Piano — N / step 2: cache del frontend tra le pagine (Dashboard: Performance, lotti, Rischio)
 
 > Perimetro nuovo chiesto dal developer il 06/10 e assegnato dal coordinator. Analisi §1–§6; decisioni E1–E7 del
-> developer; **fase 1 implementata il 06/10** (via del coordinator alle 22:44) sul ramo a `593293b78`: passi in §7.
+> developer; **fase 1 implementata il 06/10** (via del coordinator alle 22:44) sul ramo a `0b8362785`: passi in §7.
 > La parte di `RiskLevelsPanel.svelte` (allora di A, passo 24) è stata fatta col lotto 2: passo 10 (07/10).
 >
-> **Stato (09/10, allineato da N su `3cceb4f90`): FINITO e archiviato.** Tutti i passi di §7 sono fatti e
+> **Stato (09/10, allineato da N su `f545b67e3`): FINITO e archiviato.** Tutti i passi di §7 sono fatti e
 > integrati; il resto del principio generale (§3.1-quater, fase 2) non è mai partito ed è rinviato:
 > `Phase_0/38_postReleaseBacklog/README.md`, voce N-1. Commit:
-> - fase 1 (passi 1-9): `cd1d42fb6` (feat), `a3d2fbc3c` (doc), `8baf74f29` (journal), treno 8;
-> - validazione del treno 8: `af154d84d` (`risk-lab.spec.ts`, i preset dei broker seguono la cache), treno 8;
-> - lotto 2 (passo 10): `3a83ad9c7`, `49d4ec8e0`, `c958f857c`, treno 9;
-> - rossi della coverage del 07/10 (passo 11): `a1a0a0b87`, `6a6429db7`, `bc3dc7bdb`, `fdb877bcc`, `9d1af831c`,
+> - fase 1 (passi 1-9): `e47e57e04` (feat), `ea907e029` (doc), `34a7b5982` (journal), treno 8;
+> - validazione del treno 8: `65dd92bcf` (`risk-lab.spec.ts`, i preset dei broker seguono la cache), treno 8;
+> - lotto 2 (passo 10): `0e346c2f1`, `358d703b8`, `e68b8d811`, treno 9;
+> - rossi della coverage del 07/10 (passo 11): `a1c193a14`, `9c4a8b92f`, `031b03016`, `b2cf0d7a9`, `cda8e75aa`,
 >   treno 10.
 >
 > Segue lo step 1 ([`plan-phase00FxDashboardSync.prompt.md`](plan-phase00FxDashboardSync.prompt.md)).
 
 | | |
 |---|---|
-| **Baseline** | analisi su `a7d0b37ec`; **riverificata su `ebf4752e2`** (06/10, con la famiglia Risk integrata). Le conclusioni non cambiano; righe di `riskStore` e della lista asset aggiornate |
+| **Baseline** | analisi su `9e4e90675`; **riverificata su `cc78550c1`** (06/10, con la famiglia Risk integrata). Le conclusioni non cambiano; righe di `riskStore` e della lista asset aggiornate |
 | **Lane** | test `--test-port 6159 --data-dir /tmp/librefolio-r2-n`; server di review `127.0.0.1:6169`, avviato per le sonde e poi spento |
 | **Dati** | sintetici: il DB di test della lane, utente `e2e_test_user` |
 | **Sonde** | `/tmp/libreFolio_n_cache_probe.mjs`, `_scope_probe.mjs`, `_redraw_probe.mjs`, `_rows.mjs`, con il Playwright bloccato di `frontend/node_modules`. Esiti in `/tmp/libreFolio_n_cache_probe_*.json/.log` |
@@ -79,7 +79,7 @@ sembra un ricalcolo. L'ho solo misurato; correggerlo sarebbe un passo a parte (E
 
 ---
 
-## 1. Stato attuale verificato (HEAD `a7d0b37ec`)
+## 1. Stato attuale verificato (HEAD `9e4e90675`)
 
 ### 1.1 Le cache
 
@@ -91,7 +91,7 @@ sembra un ricalcolo. L'ho solo misurato; correggerlo sarebbe un passo a parte (E
 - `invalidate()` svuota tutto (`:328-334`) ed è registrato sia sul reset di sessione sia sul listener di mutazione
   (`:336-337`).
 
-**`riskStore`** (`frontend/src/lib/stores/risk/riskStore.svelte.ts`, righe su `ebf4752e2`):
+**`riskStore`** (`frontend/src/lib/stores/risk/riskStore.svelte.ts`, righe su `cc78550c1`):
 
 - Le cache: `queryCache`, il catalogo, il catalogo degli scenari (`:23-27`) e, nuova con la famiglia Risk, la cache
   dei verdetti di idoneità `queryEligibility` (`:32-33`, `:195-…`).
@@ -251,7 +251,7 @@ Restano già coperte le altre scritture:
   mostrare**. È il modello che la lista broker usa già (`brokers/+page.svelte:380`,
   `{#if loading && brokers.length === 0 …}`).
 
-**Inventario (verificato su `593293b78`): come si comporta oggi ogni area**
+**Inventario (verificato su `0b8362785`): come si comporta oggi ogni area**
 
 | Area | Cache di oggi | Cosa vede l'utente quando la cache si invalida o torna sulla pagina | Con il principio |
 |---|---|---|---|
@@ -521,7 +521,7 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
 
 - **Conflitti da verificare col coordinator:**
   - `dashboard/+page.svelte` (chi altro ci lavora?);
-  - `riskStore`/`riskPanelController`: la famiglia Risk è già in `ebf4752e2`, quindi niente conflitto testuale con
+  - `riskStore`/`riskPanelController`: la famiglia Risk è già in `cc78550c1`, quindi niente conflitto testuale con
     un ramo aperto. Le modifiche toccano però il suo codice appena integrato (cataloghi, contatore di versione):
     meglio avvisarla;
   - `brokers/[id]/+page.svelte`;
@@ -540,7 +540,7 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
 
 ## 7. Passi ordinati (fase 1: via del coordinator il 06/10, 22:44)
 
-0. Rileggere HEAD (`593293b78`); perimetro: i 22 percorsi del §6 più `create-edit.en.md`. **Da non toccare**
+0. Rileggere HEAD (`0b8362785`); perimetro: i 22 percorsi del §6 più `create-edit.en.md`. **Da non toccare**
    (lavoro aperto di A): `e2e/portfolio/dashboard.spec.ts`, `GrowthChart` (+ test), `growthLadderBuckets`, i 4
    cataloghi i18n, `user/dashboard/charts.en.md`.
 1. ✅ (06/10) Allineare il piano a E1 (§3.1-ter): questo passo.
@@ -818,7 +818,7 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
 
 10. ✅ (07/10) **Lotto 2**: tab Rischio solo sui broker posseduti, le due righe di `RiskLevelsPanel`, i commenti
     superati. Via del developer alle 13:10 («avviamoli adesso, sfruttiamo il tempo della coverage»); base
-    `d07412899` (fast-forward delle 13:25).
+    `5f3509536` (fast-forward delle 13:25).
 
     > **Decisione del developer** (07/10, testuale): «Solo i broker posseduti, come il resto della Dashboard».
     >
@@ -871,7 +871,7 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
     >   - corretto il commento sul live price (`:1135-1154`).
     > - `dashboard-cache.spec.ts`: caso nuovo (`:507-565`), con tre letture dell'insieme posseduto.
     > - `risk-lab.spec.ts`: solo commenti. Il test-author ha corretto anche due falsi vecchi in `holdLivePricePoll`:
-    >   il trigger è l'insieme degli id, e `runGuarded` era già stato corretto il 25/09 in `b02f49727`.
+    >   il trigger è l'insieme degli id, e `runGuarded` era già stato corretto il 25/09 in `0180cf5d3`.
     >
     > **Rosso 2** (`front-portfolio risk`, produzione invariata, carico 38): 9 falliti, 29 verdi, ed esattamente
     > i previsti:
@@ -922,8 +922,8 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
     > scartano le risposte in volo. Ancora presenti il 09/10: rinviati, `Phase_0/38_postReleaseBacklog/README.md`,
     > voce N-5.
 
-11. ✅ (07/10) **Due rossi della coverage completa** (`d07412899`, carico 30–50, 2 worker), assegnati dal
-    coordinator alle 16:08. Base `c958f857c`. Metodo: `test-triage`; i test li scrive il test-author; i difetti di
+11. ✅ (07/10) **Due rossi della coverage completa** (`5f3509536`, carico 30–50, 2 worker), assegnati dal
+    coordinator alle 16:08. Base `e68b8d811`. Metodo: `test-triage`; i test li scrive il test-author; i difetti di
     prodotto si dicono al coordinator prima di correggerli.
 
     > Log della coverage letti in `/tmp/libreFolio_triage_20261007/`: il checkout principale non si legge.
@@ -959,14 +959,14 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
     >   `brokerIds: activeBrokerIds`, che resta `undefined` finché i broker posseduti non sono noti.
     > - Un export fatto in quella finestra parte senza `broker_ids`, e il backend lo allarga a tutti i broker
     >   accessibili (F2).
-    > - Esisteva già dal 07/2026 (`c51e9930c`, `18225592e`); l'asserzione F2 dello spec è del 03/09 (`2572b2403`).
+    > - Esisteva già dal 07/2026 (`98d01dddd`, `4f132a1e6`); l'asserzione F2 dello spec è del 03/09 (`7a820698e`).
     >   Il carico l'ha esposto: sulla 6159, a carico 28, 3/3 verdi.
     > - Cura proposta (`!canAsk` nel `disabled` e nel `handleAiExport`) e test nuovo, rosso prima: **in attesa
     >   del via** del coordinator.
     >
     > **3. Nello stesso log, non assegnato: `ai-export-panel.spec.ts:19`, verdetto «assumption».**
     > - Fallisce in modo deterministico sulla 6159: Δy = 36, AI Export sopra Refresh.
-    > - `3e5313d3e` (30/09) ha alzato `denseRow` della Dashboard da 810 a 950, e a 1280×720 il prodotto impila
+    > - `51de5dc75` (30/09) ha alzato `denseRow` della Dashboard da 810 a 950, e a 1280×720 il prodotto impila
     >   apposta; lo spec di agosto afferma ancora la stessa riga.
     > - Proposta inviata; decide il coordinator.
     >
@@ -1113,7 +1113,7 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
 ## 8-bis. Decisione a margine: la fusione degli asset (06/10, 22:41)
 
 Nata dalla domanda del developer su «Fondere due asset». Storia: piano «Identità dell'asset», decisione D9, commit
-`0e07359b4` dell'08/08/2026.
+`9d6de0cf6` dell'08/08/2026.
 
 > «no è sufficiente lasciarlo in asset global, io me ne ero anche scordato, nella guida spieghiamo che serve in
 > caso ci si acccorge in un secondo momento che lo stesso asset era stato creato 2 volte ma con nomi lievemente

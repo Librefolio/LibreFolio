@@ -2,10 +2,10 @@
 
 > Workstream P, lavoro per la 1.2. Coordinator: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`. Approvato dal
 > developer: «Mi pare una mancanza che andrebbe risolta, non mi sembra difficiel, facciamola in 1.2». Reperto di Q
-> (onda 3). Base: treno 21, `9b2acdd5d`. Corsia `--test-port 6161 --data-dir /tmp/librefolio-r2-p`.
+> (onda 3). Base: treno 21, `2726dec9a`. Corsia `--test-port 6161 --data-dir /tmp/librefolio-r2-p`.
 >
-> Stato: **chiuso e archiviato** (09/10). Commit `84d9e3360` (`fix(settings): validate bulk global settings`), in
-> `dev_release2` col treno 23 (merge `30b18b0e2`); riga del CHANGELOG `[1.2.0]` sotto 🐛 Fixed (`CHANGELOG.md:206`).
+> Stato: **chiuso e archiviato** (09/10). Commit `58972c8b9` (`fix(settings): validate bulk global settings`), in
+> `dev_release2` col treno 23 (merge `b6907261f`); riga del CHANGELOG `[1.2.0]` sotto 🐛 Fixed (`CHANGELOG.md:206`).
 > Un residuo rinviato, in §7.
 
 ## 1. Stato verificato (09/10)
@@ -147,11 +147,11 @@ che manda sempre il fuso, diventerebbe insalvabile su quelle installazioni.
 
   `api sync` OK, con modifiche solo nei file generati e ignorati. Il frontend non cambia.
 - **S5** ✅ (09/10) — Checkpoint al coordinator con la riga per il CHANGELOG (§5, sotto 🐛 Fixed), poi FROZEN.
-  > **Integrazione**: commit `84d9e3360`, entrato col treno 23 (merge `30b18b0e2`, punta `1ead733f2`).
+  > **Integrazione**: commit `58972c8b9`, entrato col treno 23 (merge `b6907261f`, punta `aca87aec4`).
 
 ## 7. Verifica d'archivio (09/10)
 
-> Chiesta dal coordinator, sul codice di `dev_release2` @ `3cceb4f90` (treno 24b), in sola lettura.
+> Chiesta dal coordinator, sul codice di `dev_release2` @ `f545b67e3` (treno 24b), in sola lettura.
 
 - Codice come in S3:
   - `SettingConstraint` (`schemas/settings.py:361`), `GLOBAL_SETTINGS_CONSTRAINTS` (`:372`) e

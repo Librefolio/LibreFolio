@@ -1,6 +1,6 @@
 # Note della designer — Review colori LibreFolio
 
-> Versione analizzata: **v1.2** (branch `dev_release2`, commit `27228466cb`). Schermate catturate il **2026-10-14**.
+> Versione analizzata: **v1.2** (branch `dev_release2`, commit `666d237010`). Schermate catturate il **2026-10-14**.
 > Questo è il file di lavoro della designer: scrivere nei campi **✏️**. Gli sviluppatori lo leggono
 > per preparare i token colore e le correzioni. La sintesi tecnica è in `../reports/00_SINTESI.md`.
 

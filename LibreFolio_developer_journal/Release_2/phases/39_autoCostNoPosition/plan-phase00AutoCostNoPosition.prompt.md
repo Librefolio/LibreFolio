@@ -14,11 +14,11 @@
 > l'avviso che già esiste; se l'utente entra nel campo e ne esce senza scrivere, accetta lo 0 in modo esplicito; si
 > riusa il flusso del costo mancante, senza inventarne uno nuovo. **Superato** dalla decisione finale di §10.
 >
-> Base: `dev_release2` @ `586a4f0ea` (treno 25), HEAD verificato uguale, worktree pulito. Corsia `--test-port 6161
+> Base: `dev_release2` @ `249f5a9aa` (treno 25), HEAD verificato uguale, worktree pulito. Corsia `--test-port 6161
 > --data-dir /tmp/librefolio-r2-p`, mai usata: nessun test e nessun server. Cataloghi i18n, `ImportWizardModal` e
 > `TransactionBulkModal` sono di **S**.
 
-## 1. Stato verificato su `586a4f0ea`
+## 1. Stato verificato su `249f5a9aa`
 
 Il treno 25 non tocca i file backend coinvolti. Le righe citate in P-1 valgono ancora.
 
@@ -51,7 +51,7 @@ Il treno 25 non tocca i file backend coinvolti. Le righe citate in P-1 valgono a
     (`_append_cost_basis_issue`, `:948-966`): codice `costBasisRequired`, campo `cost_basis_override`, params
     `{type}`;
   - qualunque issue blocca: `committed=False` (`finalize_response`, `:1013-1029`);
-  - la regola esiste dal `0c4ff3e4e` (02/06). Due test lo dicono nei commenti (`test_tx_balance_walk.py:286`,
+  - la regola esiste dal `6a83459f4` (02/06). Due test lo dicono nei commenti (`test_tx_balance_walk.py:286`,
     `tx-delete.spec.ts:340`), ma **nessun test verifica il codice `costBasisRequired`**.
 - **Form**:
   - con ADJUSTMENT in Manuale e il campo vuoto compare un avviso ambra sotto il campo:
@@ -84,11 +84,11 @@ Il treno 25 non tocca i file backend coinvolti. Le righe citate in P-1 valgono a
 
 ### 1.4 Tre testi descrivono il comportamento di prima di giugno
 
-Dicono «lotto a costo zero, con un avviso», ma dal `0c4ff3e4e` il codice rifiuta la riga:
+Dicono «lotto a costo zero, con un avviso», ma dal `6a83459f4` il codice rifiuta la riga:
 - la chiave `warningAdjustment`: «No cost basis set — lot will be created with zero cost…». È nata il 15/05
-  (`5e552ad9e`), prima della regola;
+  (`d3b1241c6`), prima della regola;
 - la doc utente `user/transactions/form.en.md:39`: «An Adjustment without a cost basis creates its lot at zero cost,
-  and the form warns you». È stata riscritta l'08/10 (`1c2f88d67`);
+  and the form warns you». È stata riscritta l'08/10 (`69d9d0d81`);
 - la doc developer `developer/frontend/components/features/transaction-form.md:198-199`.
 
 Probabilmente è da qui che viene il «come avviene ora» della decisione.

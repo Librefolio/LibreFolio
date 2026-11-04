@@ -1,15 +1,15 @@
 # Group B - Manual review corrections, Round 1
 
-**Date:** 2026-09-09. **Status:** ✅ complete. Merged as `d9e8f6d3`; combined
+**Date:** 2026-09-09. **Status:** ✅ complete. Merged as `983b38cc`; combined
 automated acceptance and final developer UI review completed 2026-09-10.
 Previous: [B SP04-SP05 execution plan](plan-phase00FeedbackContractsRunes.prompt.md).
-Source: merge `d9e8f6d3bcb59080ea10f8849015ee3336b55818`, with parents
-`74bfd9cf021af885abfb136c4e4f08b6a526f87a` and
-`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`; the post-review compact-toast
+Source: merge `983b38cc4cda10faf7ab527d678996865f01fa11`, with parents
+`c3b039038606bb5df0a3cfc7d380195c029768e4` and
+`63cfb55d18297b71bd6d70dc8a6d97143c95fb68`; the post-review compact-toast
 delta remains for the developer's next manual commit.
-**Aligned (workstream O, 2026-10-09):** that delta was committed as `00c469c3f`
+**Aligned (workstream O, 2026-10-09):** that delta was committed as `dde31b4e2`
 ("fix(fx): compact creation sync feedback", 2026-09-10) and entered
-`dev_release2` with merge `514582a47`. The duplicate creation sync noted in
+`dev_release2` with merge `4b28bcc31`. The duplicate creation sync noted in
 section 2 is deferred: rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce
 «Doppia sync alla creazione di un asset dalla pagina Asset».
 
@@ -220,17 +220,17 @@ does not authorize copying E's diff or granting a runtime lease.
 
 Integration policy from master06 section14: one complete package at a time
 returns to dev_release2, with Git history operations performed by the developer.
-The developer checkpointed B at `74bfd9cf`, then started the merge from E/runtime
-integration commit `916f12bd`. The five textual overlaps were reconciled
+The developer checkpointed B at `c3b03903`, then started the merge from E/runtime
+integration commit `63cfb55d`. The five textual overlaps were reconciled
 semantically without replacing whole files or applying global ours/theirs.
-Combined evidence is recorded below; old `4a73f5f6+B` results remain historical.
+Combined evidence is recorded below; old `41a4f23f+B` results remain historical.
 
 ## 5.1 Historical checkpoint before updating the base - 2026-09-10
 
 The developer created B checkpoint
-`74bfd9cf021af885abfb136c4e4f08b6a526f87a` from the package below, then
+`c3b039038606bb5df0a3cfc7d380195c029768e4` from the package below, then
 started the merge from
-`916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`. The inventory remains the
+`63cfb55d18297b71bd6d70dc8a6d97143c95fb68`. The inventory remains the
 pre-merge handoff record; the agent did not create either commit.
 
 Checkpoint inventory:
@@ -257,7 +257,7 @@ test uploads/reports/logs, MkDocs site/vendor cache, runner cache/campaign and
 platform `.DS_Store` files. Generated API artifacts must be regenerated from
 the combined contracts after integration, never merged by hand.
 
-### Six direct overlaps with `916f12bd`
+### Six direct overlaps with `63cfb55d`
 
 | File | Reconciliation required after developer merge |
 |---|---|
@@ -275,8 +275,8 @@ Additional semantic dependencies without textual overlap:
   to be rerun;
 - all AssetModal tests must be evaluated against E's integrated component,
   not treated as certified by the old B build;
-- previous B00-B09 green results remain valid evidence for `4a73f5f6+B`, not
-  for `916f12bd+B`.
+- previous B00-B09 green results remain valid evidence for `41a4f23f+B`, not
+  for `63cfb55d+B`.
 
 Combined validation uses only the B lane:
 `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test

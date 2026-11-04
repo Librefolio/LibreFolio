@@ -1,6 +1,6 @@
 # `dev.py db … [path]`: l'argomento `path` è ignorato. Facciamolo funzionare davvero
 
-> Lotto di N, 09/10, per la 1.2. Coordinator: c8328a01. Base `9b2acdd5d` (treno 21), worktree pulito. Corsia
+> Lotto di N, 09/10, per la 1.2. Coordinator: c8328a01. Base `2726dec9a` (treno 21), worktree pulito. Corsia
 > 6159/6169, `/tmp/librefolio-r2-n`.
 > Decisione del developer: «facciamolo funzionare davvero!».
 > **Stato: analisi (sola lettura).** La scrittura parte dopo il via del coordinator e dopo il checkpoint
@@ -179,7 +179,7 @@ Non tocco `service_exposure` (è di Q) né `docker_advanced`.
 
 1. ✅ (09/10) Analisi, sola lettura: questo documento.
 2. ✅ (09/10 11:46) **Via del developer**: «Sì, tutte le raccomandazioni di N», quindi D1-D6 come proposti.
-   - Base avanzata al treno 22, `da8d7a10b`, col lotto di L dentro. Da L ci sono `config.py` (`SESSION_COOKIE_SECURE`)
+   - Base avanzata al treno 22, `945593520`, col lotto di L dentro. Da L ci sono `config.py` (`SESSION_COOKIE_SECURE`)
      e `dev.py` (`_ensure_shared_jwt_secret`): nessuna riga mia toccata, i comandi `db` si sono solo spostati di 11
      righe (`:446-510`, parser `:2362-2385`). `dev.py` ora è mio.
    - Concessi:
@@ -223,7 +223,7 @@ Non tocco `service_exposure` (è di Q) né `docker_advanced`.
      `docker compose stop librefolio` e poi `run --rm`; link a `docker_advanced.md#docker-exec`.
    - `mkdocs build` in modalità strict: exit 0, nessun avviso.
    - `check-links`: exit 1 per **un link già rotto prima**, `user/assets/detail/chart/#rolling-return`, usato da
-     `assets/[id]/+page.svelte:3012`: l'ancora manca nelle pagine it/fr/es. Viene dal commit `1c2f88d67`; nessun
+     `assets/[id]/+page.svelte:3012`: l'ancora manca nelle pagine it/fr/es. Viene dal commit `69d9d0d81`; nessun
      file di questo lotto.
    > **Fuori perimetro, per il backlog** (segnalati dal docs-writer, letti nel codice e non provati):
    > - la nota in cima a `cli_tools.en.md:7` dice che i comandi del database funzionano con `exec`, ma `upgrade` e
@@ -235,8 +235,8 @@ Non tocco `service_exposure` (è di Q) né `docker_advanced`.
 7. ✅ (09/10) Checkpoint: 4 commit proposti in `/tmp/libreFolio_commits/libreFolio_commit_n_dbpath_C1..C4.txt`.
    Liste in `n_dbpath_paths_C1..C4.txt`, blob in `n_dbpath_blobs.txt`, albero in `n_dbpath_final_tree.txt`. Stato:
    FROZEN.
-   > **Integrato** (allineamento del 09/10): `964f3427d` (`dev.py`, test, registrazione), `7ef4ea287` (doc admin),
-   > `faa2b2120` (le due righe `.github`), `0c953f841` (questo piano), treno 23 (`103ac1ab1`). La riga di CHANGELOG
+   > **Integrato** (allineamento del 09/10): `049d51963` (`dev.py`, test, registrazione), `d948e309a` (doc admin),
+   > `469f6eae5` (le due righe `.github`), `37f1dfc1d` (questo piano), treno 23 (`229972b91`). La riga di CHANGELOG
    > (🐛 Fixed) l'ha scritta il coordinator.
 
 **Fatto quando**:

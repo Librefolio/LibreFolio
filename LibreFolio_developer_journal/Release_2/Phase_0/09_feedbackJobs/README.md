@@ -4,13 +4,13 @@ Backlog del prossimo round di sviluppo. Ogni file è un'area; i task dentro hann
 dettagli implementativi e rimandi al codice/ai piani. Creato il 07/09/2026 dalla revisione
 di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit 08.
 
-> **Cosa resta aperto** (verifica Q del 2026-10-09, base `3cceb4f90`). Tutte le altre voci di questa cartella sono fatte, con i riferimenti nella sezione «Stato verificato sul codice — 2026-10-09».
+> **Cosa resta aperto** (verifica Q del 2026-10-09, base `f545b67e3`). Tutte le altre voci di questa cartella sono fatte, con i riferimenti nella sezione «Stato verificato sul codice — 2026-10-09».
 > - **P4-7, ciclo di vita delle cache dei prezzi nel frontend.** `frontend/src/lib/stores/assetPriceStoreRegistry.ts:30` è una `Map` senza limite né eviction. `removeAssetPriceStore` (`:64`) non viene mai chiamata fuori dal file, e niente la aggancia al reset di sessione. Peso medio. [00](00_backlog_strutturale_P4.md), [06](06_piano_sprint.md) SP10.
-> - **P4-9, conversione dei test specchio** (DBT-D di I). `2e4c8589f` (28/09) ha chiuso i rossi e il file è verde, ma i 7 specchi ri-pinnati di `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` leggono ancora il sorgente invece di eseguire le funzioni (35 `readFileSync` nel file). Peso basso. [00](00_backlog_strutturale_P4.md).
+> - **P4-9, conversione dei test specchio** (DBT-D di I). `dcf79a9a2` (28/09) ha chiuso i rossi e il file è verde, ma i 7 specchi ri-pinnati di `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` leggono ancora il sorgente invece di eseguire le funzioni (35 `readFileSync` nel file). Peso basso. [00](00_backlog_strutturale_P4.md).
 > - **P4-10, i sei siti di Risk fuori dal canale di mascheramento.** Vanno riverificati dopo il Round 2 della privacy: in `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` `riskAnalysisHelpers.ts` risulta `masked`. Peso basso. [00](00_backlog_strutturale_P4.md).
 > - **R2, `VERSION` stantio**, difetto di design. `backend/app/utils/version.py:36-39` legge `VERSION` prima di `git describe`, e la build Docker lo lascia nella radice (`dev.py:1628-1637`): un server di sviluppo avviato dopo una build mostra una versione congelata. Manca la decisione: leggerlo solo senza `.git/`, o cancellarlo dopo la build. Peso medio. [08](08_review_visiva_20260922.md) R2.
 >   ✅ **Chiusa il 15/10** nella 1.3 (H, CP5a): in un checkout vince `git describe`, `VERSION` vale solo senza `.git`
->   (`9deb0ea08`; [backlog post-1.2](../BACKLOG_POST_1.2.md), sezione 09).
+>   (`cf4ce0e71`; [backlog post-1.2](../BACKLOG_POST_1.2.md), sezione 09).
 > - **§2.4, guardiano del catalogo finto.** È un debito dichiarato, non verificato nel codice. Peso basso. [09](09_reperti_analisi_statica_20260922.md) §2.4.
 > - **SP14, il Rebalancer** (`invest_only`, `invest_and_sell`, verifier SELL). Non è implementato (`backend/app/services/tool_plugins/pac_allocator.py:10-14`): è il prossimo lavoro di D, in `13_pacAllocator`.
 > - **SP15, `SensitiveValue`.** È sospeso dal 21/09: [Round 1 di `24_privacyGlobal`](../../phases/24_privacyGlobal/plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md), passo 5.
@@ -19,15 +19,15 @@ di TODO_FUTURI.md (classificazione con l'utente) + gli 8 P4 ereditati dall'audit
 
 | File | Area | Contenuto |
 |------|------|-----------|
-| [00_backlog_strutturale_P4.md](00_backlog_strutturale_P4.md) | Debito strutturale | ✅ P4-1…P4-6 nel target; P4-8 non misurabile come task atomico; P4-11 chiuso (`804bc9903`). **Aperti P4-7** (registry senza eviction né reset di sessione), **P4-9** (conversione dei test specchio) e **P4-10** (da riverificare). Marker `TODO(P2-refactor)`: **21** (verifica del 09/10) |
-| [01_ux_dashboard.md](01_ux_dashboard.md) | UX & dashboard | ✅ U1–U9 tutti nel target, U2 compreso (`b66e93003`, piano `24_privacyGlobal`) · verifica del 09/10 |
-| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | ✅ G1a, G1b, G1c e G3 (backend e UI Asset) nel target (merge I `2c382824d`, treno 23) · verifica del 09/10 |
+| [00_backlog_strutturale_P4.md](00_backlog_strutturale_P4.md) | Debito strutturale | ✅ P4-1…P4-6 nel target; P4-8 non misurabile come task atomico; P4-11 chiuso (`8fa118ba4`). **Aperti P4-7** (registry senza eviction né reset di sessione), **P4-9** (conversione dei test specchio) e **P4-10** (da riverificare). Marker `TODO(P2-refactor)`: **21** (verifica del 09/10) |
+| [01_ux_dashboard.md](01_ux_dashboard.md) | UX & dashboard | ✅ U1–U9 tutti nel target, U2 compreso (`9d9613471`, piano `24_privacyGlobal`) · verifica del 09/10 |
+| [02_grafici_avanzati.md](02_grafici_avanzati.md) | Grafici | ✅ G1a, G1b, G1c e G3 (backend e UI Asset) nel target (merge I `b39512ae1`, treno 23) · verifica del 09/10 |
 | [03_asset_dati_classificazione.md](03_asset_dati_classificazione.md) | Asset & dati | ✅ Settori bond e import CSV distribuzioni integrati e revisionati |
 | [04_brim_import.md](04_brim_import.md) | BRIM & import | ✅ eToro fee, refactor CA/helper maturity e delete-asset links integrati e revisionati |
 | [05_pac_allocation_tool.md](05_pac_allocation_tool.md) | Tool platform | ✅ Tool platform e planner PAC 1.0.0 nel target (SCIP via PySCIPOpt `==6.2.1`); **Rebalancer non implementato** (`tool_plugins/pac_allocator.py:10-14`), prossimo lavoro di D in `13_pacAllocator` · verifica del 09/10 |
 | [06_piano_sprint.md](06_piano_sprint.md) | Analysis and sprint plan | Current-code evidence, 16 sprints, parallel-work dependency map, shared-resource ownership and developer UI review gates |
-| [07_feedback_import_critici.md](07_feedback_import_critici.md) | Urgent import/UX/update feedback | ✅ E1-E9 plus U1/U4/U5/U7/U9 integrati in `dev_release2` (`ef722b552`) |
-| [08_review_visiva_20260922.md](08_review_visiva_20260922.md) | Review visiva end-to-end in produzione | 21 voci (R1–R21; il «20» era un errore di conteggio), verificate su `e4a46e9e0`, con cause, owner proposti e screenshot. Al 09/10 sono tutte chiuse o non-difetti, **tranne R2** (design di `VERSION`) |
+| [07_feedback_import_critici.md](07_feedback_import_critici.md) | Urgent import/UX/update feedback | ✅ E1-E9 plus U1/U4/U5/U7/U9 integrati in `dev_release2` (`c8a77dda3`) |
+| [08_review_visiva_20260922.md](08_review_visiva_20260922.md) | Review visiva end-to-end in produzione | 21 voci (R1–R21; il «20» era un errore di conteggio), verificate su `7e6f16327`, con cause, owner proposti e screenshot. Al 09/10 sono tutte chiuse o non-difetti, **tranne R2** (design di `VERSION`) |
 | [09_reperti_analisi_statica_20260922.md](09_reperti_analisi_statica_20260922.md) | Reperti del round di analisi statica | Difetti, debito e 16 reperti di metodo; §9 registra le rettifiche che la review d'uso ha imposto all'analisi statica. Al 09/10 i difetti sono riparati o chiusi (la §1.4 per AI Export non è un difetto, per decisione del developer del 09/10); **§2.4** è un debito aperto |
 
 ## Glossario degli alias — leggilo prima della tabella
@@ -61,21 +61,21 @@ l'altro.
 
 ## Stato verificato sul codice — 2026-10-09
 
-Questa tabella prevale su quella del 21/09 qui sotto, che resta come storico. È stata rimisurata sul codice (verifica Q del 2026-10-09, base `3cceb4f90`). Gli SHA citati sono tutti antenati della base (`git merge-base --is-ancestor`); i rami I, J e D del 21/09 sono stati integrati.
+Questa tabella prevale su quella del 21/09 qui sotto, che resta come storico. È stata rimisurata sul codice (verifica Q del 2026-10-09, base `f545b67e3`). Gli SHA citati sono tutti antenati della base (`git merge-base --is-ancestor`); i rami I, J e D del 21/09 sono stati integrati.
 
 | Sprint | Stato al 09/10 |
 |---|---|
-| SP01–SP05 | ✅ Nel target: E (`ef722b552`), F (`e50d66408`, `cc57b6a38`; piano archiviato in `Release_2/phases/17_assetDataOperations/`), B (`514582a47`). |
-| SP06 | ✅ U3 (`74afcebce`) e G3 nel target: backend `d4b3deb2f`, UI Asset `51cb7b677` (`priceChartHelpers.ts` `ASSET_CALENDAR_ROLLING_RETURN`). G1c nel target (`2d22130bd`, `c4595922e`). |
-| SP07 | ✅ G1a e G1b nel target (`8ed7a0f0d`, `eba37ba41`; merge I `2c382824d`, treno 23). |
-| SP08 | ✅ Come il 21/09 (`3c85866dd`). |
-| SP09 | ✅ Come il 21/09 (`ebba209c5`); `FEE_TYPES` è a `broker_etoro.py:71`. |
+| SP01–SP05 | ✅ Nel target: E (`c8a77dda3`), F (`904fddc6e`, `aa30eac00`; piano archiviato in `Release_2/phases/17_assetDataOperations/`), B (`4b28bcc31`). |
+| SP06 | ✅ U3 (`cff0f0a11`) e G3 nel target: backend `1b20d4e2a`, UI Asset `2cefc285a` (`priceChartHelpers.ts` `ASSET_CALENDAR_ROLLING_RETURN`). G1c nel target (`f4d209b11`, `7f7f31304`). |
+| SP07 | ✅ G1a e G1b nel target (`a1e6fce55`, `30ef5a345`; merge I `b39512ae1`, treno 23). |
+| SP08 | ✅ Come il 21/09 (`36fc57005`). |
+| SP09 | ✅ Come il 21/09 (`d31797b75`); `FEE_TYPES` è a `broker_etoro.py:71`. |
 | SP10 | 🟡 **P4-7 aperto**: vedi «Cosa resta aperto». La riga del 21/09 diceva che `CachePanel.svelte` espone il registry, ma non è vero: il pannello mostra solo le cache del backend. |
-| SP11 | ✅ Nel target, Round 7 compreso (`1982c254b`). In `21_onboarding` resta aperta la review manuale delle correzioni C7 (decisione del developer, 09/10). |
-| SP12 | ✅ Come il 21/09 (`570beb386`). |
-| SP13–SP14 | 🟡 Il planner PAC 1.0.0 è nel target: `b82e59ffa`, UI `0210f9848`, SCIP via PySCIPOpt `==6.2.1`. **Il Rebalancer non è implementato** (`tool_plugins/pac_allocator.py:10-14`): lavoro di D in `13_pacAllocator`. |
-| SP15 | ✅ U2 nel target (`b66e93003`, `176f19707`, `64d78e244`; piano `24_privacyGlobal`), per dispositivo come deciso il 21/09. `SensitiveValue` è sospeso. |
-| SP16 | ✅ Come il 21/09 (`846aefb24`). |
+| SP11 | ✅ Nel target, Round 7 compreso (`18bc11a4f`). In `21_onboarding` resta aperta la review manuale delle correzioni C7 (decisione del developer, 09/10). |
+| SP12 | ✅ Come il 21/09 (`2217fa366`). |
+| SP13–SP14 | 🟡 Il planner PAC 1.0.0 è nel target: `704ba66a3`, UI `502877358`, SCIP via PySCIPOpt `==6.2.1`. **Il Rebalancer non è implementato** (`tool_plugins/pac_allocator.py:10-14`): lavoro di D in `13_pacAllocator`. |
+| SP15 | ✅ U2 nel target (`9d9613471`, `0ca72f743`, `865509a12`; piano `24_privacyGlobal`), per dispositivo come deciso il 21/09. `SensitiveValue` è sospeso. |
+| SP16 | ✅ Come il 21/09 (`103317ab2`). |
 
 ## Stato esecutivo riconciliato — 2026-09-21
 
@@ -83,24 +83,24 @@ Questa tabella prevale sulle note cronologiche più sotto, che restano come stor
 checkpoint intermedi.
 
 **Come è stata prodotta, perché la prossima sia falsificabile:** rimisurata contro il codice
-il 21/09 (target `c75cf9150`), non copiata dalla revisione precedente. Ogni riga porta lo SHA
+il 21/09 (target `7ee3620fb`), non copiata dalla revisione precedente. Ogni riga porta lo SHA
 o il `file:riga` che la sostiene; gli otto SHA più caricati sono stati verificati uno per uno
 contro `git log`. Dove la misura non è stata possibile la riga lo dice, invece di tacere.
 
 | Sprint | Stato persistito |
 |---|---|
-| SP01–SP03 | ✅ Integrati e revisionati: E (`ef722b552`) + F (`e50d66408`, `cc57b6a38`). |
-| SP04–SP05 | ✅ Contratti, matrice segnali e Runes integrati tramite B (`514582a47`). |
-| SP06 | ✅ **Chiuso come lavoro, non come integrazione.** YOC/U3 nel target (`74afcebce`); G3 backend nel target (`d4b3deb2f`, `signal_plugins/calendar_rolling_return.py`); G3 UI Asset (`I60`) e G1c **fatti sul ramo I** (`51cb7b677`, `7df7ccbab`, `2d22130bd`, `d5e834de4`). Nulla di aperto: resta solo il rientro. |
-| SP07 | 🟡 **Implementato sul ramo I, non nel target.** G1a/G1b in `8ed7a0f0d` più i fix `eba37ba41`, `ef7cce61c`, `69d0d27c6`, `70e87ac3a`. La dicitura «I20–I50 non iniziati» del 14/09 è **superata**. |
-| SP08 | ✅ Asset pricing refactor integrato con K (`3c85866dd`, combined `b72475f0e`): P4-1, P4-4 e S6 6.4 chiusi. |
-| SP09 | ✅ G integrato, developer-accepted e archiviato (`ebba209c5`, docs `4949b2f4c`). |
-| SP10 | 🟡 **Parziale, non «differito».** `frontend/src/lib/stores/assetPriceStoreRegistry.ts` esiste nel target (`75783b1c6`) e `CachePanel.svelte` lo espone; **non è dimostrata** l'eviction né l'aggancio completo al reset di sessione. È l'unico task del round con lavoro reale residuo oltre a U2. |
-| SP11 | ✅ **Nel target** dal merge `3913fe217` (19/09), più i fix `35f0bb484` e `38d44b717`. Resta fuori il solo `1982c254b` (stall dell'ancora a 3s) sul ramo J. |
-| SP12 | ✅ Piattaforma Tool integrata (`570beb386`). |
-| SP13–SP14 | 🟡 **Planner v2 funzionante sul ramo D** (`b82e59ffa`): `operation="plan"` produce un risultato reale end-to-end, prototipo P1 in corso di rimozione. Nel target c'è solo la piattaforma Tool. Fuori perimetro e non iniziati: SELL, policy del rebalancer, registrazione Tool, frontend operativo PAC (T2). Gate G-PAC aperto sul campionamento a scala. |
+| SP01–SP03 | ✅ Integrati e revisionati: E (`c8a77dda3`) + F (`904fddc6e`, `aa30eac00`). |
+| SP04–SP05 | ✅ Contratti, matrice segnali e Runes integrati tramite B (`4b28bcc31`). |
+| SP06 | ✅ **Chiuso come lavoro, non come integrazione.** YOC/U3 nel target (`cff0f0a11`); G3 backend nel target (`1b20d4e2a`, `signal_plugins/calendar_rolling_return.py`); G3 UI Asset (`I60`) e G1c **fatti sul ramo I** (`2cefc285a`, `f3c83ce89`, `f4d209b11`, `f1f0da870`). Nulla di aperto: resta solo il rientro. |
+| SP07 | 🟡 **Implementato sul ramo I, non nel target.** G1a/G1b in `a1e6fce55` più i fix `30ef5a345`, `72d16b9ab`, `4c470eedf`, `583a8d677`. La dicitura «I20–I50 non iniziati» del 14/09 è **superata**. |
+| SP08 | ✅ Asset pricing refactor integrato con K (`36fc57005`, combined `d84728cc7`): P4-1, P4-4 e S6 6.4 chiusi. |
+| SP09 | ✅ G integrato, developer-accepted e archiviato (`d31797b75`, docs `8f189e267`). |
+| SP10 | 🟡 **Parziale, non «differito».** `frontend/src/lib/stores/assetPriceStoreRegistry.ts` esiste nel target (`11cca5dd2`) e `CachePanel.svelte` lo espone; **non è dimostrata** l'eviction né l'aggancio completo al reset di sessione. È l'unico task del round con lavoro reale residuo oltre a U2. |
+| SP11 | ✅ **Nel target** dal merge `67ee437a0` (19/09), più i fix `4ed93c835` e `61168aa1f`. Resta fuori il solo `18bc11a4f` (stall dell'ancora a 3s) sul ramo J. |
+| SP12 | ✅ Piattaforma Tool integrata (`2217fa366`). |
+| SP13–SP14 | 🟡 **Planner v2 funzionante sul ramo D** (`704ba66a3`): `operation="plan"` produce un risultato reale end-to-end, prototipo P1 in corso di rimozione. Nel target c'è solo la piattaforma Tool. Fuori perimetro e non iniziati: SELL, policy del rebalancer, registrazione Tool, frontend operativo PAC (T2). Gate G-PAC aperto sul campionamento a scala. |
 | SP15 | 🔵 **In analisi, non più «attende».** Il blocco dichiarato il 14/09 era su SP07+SP11+SP14: SP11 è nel target, SP07 esiste sul ramo I. L'analisi U2 (inventario, contratto di mascheramento, primitive) è autorizzata e in corso su J. **Decisione di prodotto presa il 21/09: preferenza privacy locale per dispositivo**, nessuna colonna server, nessuna migrazione Alembic — quindi U2 non tocca il backend e non ha superfici condivise con D. L'implementazione degli adapter resta dipendente dal rientro di I e D. |
-| SP16 | ✅ Refactor `execute_batch` integrato con L (`846aefb24`, combined `ed0f4ff30`); full backend e docs verdi. |
+| SP16 | ✅ Refactor `execute_batch` integrato con L (`103317ab2`, combined `7cf3e490e`); full backend e docs verdi. |
 
 ### Il residuo vero — 2026-09-21
 
@@ -123,7 +123,7 @@ Tutto il resto è **scritto**. La distinzione che conta non è più «fatto / da
 > ⚠️ **`B1` non è bloccato e non lo è dal 10/09.** La scheda in
 > [04_brim_import.md](04_brim_import.md) descrive ancora `SKIP_TYPES` che scarta le fee: il
 > codice attuale le mette in `FEE_TYPES` (`backend/app/services/brim_providers/broker_etoro.py:71`,
-> commit `ebba209c5`). Il gate G-ETORO chiedeva un export reale **che è arrivato**. La scheda
+> commit `d31797b75`). Il gate G-ETORO chiedeva un export reale **che è arrivato**. La scheda
 > va letta come storia del problema, non come stato.
 
 
@@ -141,7 +141,7 @@ UI changes and an operational developer walkthrough/feedback round afterward.
 ## Workstream H completion - 2026-09-11
 
 U3 Yield on Cost is ✅ **IMPLEMENTED, VERIFIED, DEVELOPER-ACCEPTED AND INTEGRATED** in
-checkpoint `74afcebce`, with the final renderer follow-up integrated at `f092a194b`; see the
+checkpoint `cff0f0a11`, with the final renderer follow-up integrated at `a01fbbcd5`; see the
 [dedicated H implementation](../../phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
 The final contract uses non-negative gross asset-linked DIVIDEND/INTEREST
 transactions, broker-scoped D-1 eligibility, split/FX provenance and residual
@@ -194,7 +194,7 @@ integration are separate states.
 ## Group E completion - 2026-09-09
 
 The final reviewed 109-file E package, including the Round 5 GHCR fix found by
-independent review, was committed and integrated into `dev_release2` as `ef722b552`. Canonical
+independent review, was committed and integrated into `dev_release2` as `c8a77dda3`. Canonical
 status lives in [07](07_feedback_import_critici.md); portable execution evidence
 lives in [14_feedbackImportUrgent](../../phases/14_feedbackImportUrgent/manifest-integrazione-E.md).
 U2 privacy,
@@ -204,7 +204,7 @@ U3 YOC, U8 onboarding and the deferred multicurrency proposals remain open.
 
 [Contracts and Runes - SP04-SP05](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md)
 and its [manual-review correction round](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md)
-were integrated into `dev_release2` through `514582a47`. Scope remains P4-5,
+were integrated into `dev_release2` through `4b28bcc31`. Scope remains P4-5,
 P4-6/S6 6.7, S6 6.2 and S6 6.11 plus the approved review corrections. Combined
 static, unit, API and targeted E2E gates were green on isolated lane `6151` +
 `/tmp/librefolio-r2-b`; manual corrections are included. Runtime ownership follows the current section 14
@@ -215,7 +215,7 @@ integration policy, not the older execution lease.
 [SP06 G3/G1c and SP07 G1a/G1b](../../phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)
 have a durable final product contract, ASCII v2 storyboards, file ownership and
 dependency-safe XL phase split. I10 signal-only calendar-return backend is integrated
-(`d4b3deb2f`/`d54d74189`). H/YOC is integrated before I. I60 Asset UI is implemented
+(`1b20d4e2a`/`4922a080e`). H/YOC is integrated before I. I60 Asset UI is implemented
 and automatically validated on branch I; its developer-approved UX follow-up is active.
 I20–I50 and G1c remain unimplemented.
 
@@ -225,14 +225,14 @@ I20–I50 and G1c remain unimplemented.
 rounds are implemented and automatically verified. The developer accepted the
 final Welcome, Core, contextual and Import-guide UX in
 [Round 6](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md).
-Checkpoint J `580bd504f` is integrated into clean combined D baseline
-`e38a521f0`; that baseline is not yet integrated into target `dev_release2`.
+Checkpoint J `ce718ca49` is integrated into clean combined D baseline
+`71b37e4bf`; that baseline is not yet integrated into target `dev_release2`.
 
 ## PAC/Rebalancer prototype checkpoint - 2026-09-14
 
 The separate PAC and Portfolio Rebalancer P1 Tools, shared multi-service plugin,
 source-copy workflows and automated evidence are preserved in checkpoint D
-`d66f8e58e`. Manual review rejected the analysis-only product contract: the next
+`01bfae580`. Manual review rejected the analysis-only product contract: the next
 iteration requires a newly approved high-level design for Broker routing, funding,
 FX and executable discrete allocation. Collaborative redesign is active; no
 replacement implementation plan or solver was approved at that 2026-09-14

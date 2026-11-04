@@ -1,13 +1,13 @@
 # PAC & Rebalancer — piano implementativo maestro
 
 **Stato:** IN IMPLEMENTATION — G3/G5 OPEN.
-**Baseline esecutiva:** `941834237696f32bbabfde62a08e070e4b23758e`.
+**Baseline esecutiva:** `ab1e8da6b679ed153cdc3eb8c1e57593ac442ab3`.
 **Branch di authoring:** `e-alfy-allocatore-pac`.
 **Lane:** porta `6153`, data dir `/tmp/librefolio-r2-d`, venv condiviso
 `LibreFolio-SAUMUTtc`.
 **Autorizzazione prodotto:** ricevuta dal developer il 2026-09-16 dopo il
-checkpoint planning `888f99a6c8641e063c979b4b315eb65367de7e4a`.
-**Dependency checkpoint:** `941834237696f32bbabfde62a08e070e4b23758e`
+checkpoint planning `15f4246142130ca7696b7d217ed12f40035a5aa9`.
+**Dependency checkpoint:** `ab1e8da6b679ed153cdc3eb8c1e57593ac442ab3`
 (`build(deps): add PySCIPOpt solver`).
 
 > ⚠️ **Nota 2026-09-24 (round 5).** Lane, selector e simboli P1 citati in questo piano
@@ -15,7 +15,7 @@ checkpoint planning `888f99a6c8641e063c979b4b315eb65367de7e4a`.
 > - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
 > - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
 >   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
-> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+> - P1 `analyze` rimosso il 2026-09-21 (`704ba66a3`).
 >
 > L'avanzamento è nella tabella del [README](README.md) e nel
 > [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
@@ -55,7 +55,7 @@ Subpiani:
 > overhead end-to-end addizionale. Nessun nuovo probe lungo né cardinalità
 > pubblica finché Group C non definisce deadline/memory policy piattaforma.
 
-> **Note implementazione 2026-09-16**: baseline `941834237696f32bbabfde62a08e070e4b23758e`
+> **Note implementazione 2026-09-16**: baseline `ab1e8da6b679ed153cdc3eb8c1e57593ac442ab3`
 > verificata pulita; porta `6153` libera. Il dependency checkpoint contiene
 > PySCIPOpt `6.2.1`, SCIP `10.0.2`, NumPy `2.5.3`, SciPy `1.18.1` e highspy
 > `1.15.1`. Smoke developer MIQCP: `x=3`, epigrafo quadratico `z=0`, status
@@ -108,7 +108,7 @@ soltanto sulla lease registrata. I comandi runtime non vengono parallelizzati.
 > P1 `services pac-analyze`: `97/97` verdi, lane `6153` serializzata.
 > Chiarimenti documentation-only, format e rerun completati; checkpoint
 > selettivo verificato dal coordinator:
-> `22cb18d1d60c8b1197627e6e8eff9cb55f001d3e`. Nessun export package
+> `3cfed2b030a72ec0b8232144d12b4e5b0b630c1e`. Nessun export package
 > anticipato.
 
 > **Note implementazione exact input 2026-09-16**: la slice production

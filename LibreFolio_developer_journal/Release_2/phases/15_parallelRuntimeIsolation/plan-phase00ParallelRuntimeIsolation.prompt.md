@@ -1,9 +1,9 @@
 # Runtime isolati per sviluppo e test paralleli
 
 **Avvio:** 2026-09-09. **Owner:** coordinatore Release 2.
-**Baseline:** `ef722b552433028c051ccb1207c84f1072e51bb7`
+**Baseline:** `c8a77dda370e985fc8fe259f1232ef8a760c2f54`
 (`dev_release2`).
-**Commit consegnato:** `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`
+**Commit consegnato:** `63cfb55d18297b71bd6d70dc8a6d97143c95fb68`
 (`feat(dev): isolate test runtime lanes`, 2026-09-10).
 **Mandato:** rendere porta e data directory esplicitamente configurabili per
 `./dev.py server` e `./dev.py test`, mantenendo invariati i default. Aggiornare
@@ -11,7 +11,7 @@ istruzioni/skill, validare due lane realmente indipendenti e poi sbloccare B/C/D
 **Vincolo Git:** il dev crea il commit dedicato; l'agente non esegue commit,
 push, rebase o reset.
 
-> **Stato (09/10, verificato da N su `3cceb4f90`): FINITO, archiviato in
+> **Stato (09/10, verificato da N su `f545b67e3`): FINITO, archiviato in
 > `Release_2/phases/`.** Il contratto regge nel codice di oggi:
 > - `server --port --data-dir` (`dev.py:2388-2389`) e `test --test-port
 >   --data-dir` (`scripts/test_runner/_cli.py:523`, `:532`);
@@ -140,10 +140,10 @@ push, rebase o reset.
 > definitivi solo dopo che il dev crea il commit e comunica lo SHA.
 >
 > **Note handoff (2026-09-10):** commit verificato su `dev_release2`, checkout
-> pulito. B/C/D sono ancora sulla baseline `4a73f5f6` con delta locali non
+> pulito. B/C/D sono ancora sulla baseline `41a4f23f` con delta locali non
 > committati: hanno ricevuto l'ordine di congelare un checkpoint, proporre il
 > messaggio di commit e censire i conflitti. Nessun agente esegue operazioni
-> Git mutanti. Dopo i checkpoint manuali del dev incorporeranno `916f12bd` e
+> Git mutanti. Dopo i checkpoint manuali del dev incorporeranno `63cfb55d` e
 > attiveranno rispettivamente le lane 6151/B, 6152/C e 6153/D.
 >
 > **⚠️ Fuori pista (2026-09-10):** il primo avvio D ha mostrato che Pipenv

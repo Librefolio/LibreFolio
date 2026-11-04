@@ -1,7 +1,7 @@
 # Piano D — Compattazione del contratto PAC 1.0.0, prima dell'integrazione
 
-**Stato:** ✅ chiuso il 2026-10-05. Committato in `ac18ce097` e `9e4140376`, unito con `dev_release2` in `68483ddda`, gate finali verdi (§12, S10). Il via era la decisione a) del coordinator, data dopo il checkpoint `946095d58`.
-**Baseline:** `946095d58` su `e-alfy-allocatore-pac`, cioè `0900f11fa` fix(pac) più `946095d58` docs(journal).
+**Stato:** ✅ chiuso il 2026-10-05. Committato in `ccd444993` e `e734cfc59`, unito con `dev_release2` in `63ef4279b`, gate finali verdi (§12, S10). Il via era la decisione a) del coordinator, data dopo il checkpoint `4835524f1`.
+**Baseline:** `4835524f1` su `e-alfy-allocatore-pac`, cioè `43a4ae0d2` fix(pac) più `4835524f1` docs(journal).
 Verificata il 2026-10-05 alle 10:30: albero pulito, stage vuoto, porte 6151 e 6161 libere.
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacContractCompaction.prompt.md`
 ← Precedente: [`plan-phase00PacRound5PostMerge.prompt.md`](plan-phase00PacRound5PostMerge.prompt.md) (R14.8).
@@ -404,7 +404,7 @@ Tutti con questo prefisso, un comando per volta:
 ## 12. Avanzamento
 
 - ✅ **S0 — 2026-10-05.** Piano scritto, link in avanti in Round5PostMerge, riga 11 nel README.
-  > **Note implementazione**: sopralluogo di sola lettura alla baseline `946095d58`, con 0 file
+  > **Note implementazione**: sopralluogo di sola lettura alla baseline `4835524f1`, con 0 file
   > modificati. Le righe delle §2–§6 sono verificate con `grep`/`sed` sul codice, il 2026-10-05.
   > Una seconda passata, prima di S1, ha trovato 3 siti in più: la richiesta JSON nel test
   > dell'evaluator (`:488-539`), il secondo conteggio 79 (`test_pac_planner_normalize.py:953-954`) e
@@ -617,7 +617,7 @@ Tutti con questo prefisso, un comando per volta:
   > - **Gate**:
   >   - `front check`: 3 errori e 41 warning in 4 file, tutti fuori PAC (`BrokerSharingPanel` 27,
   >     `GlobalSettingsTab` 14, `TransactionFormModal.test.ts` 2, `ToolExecutionMetrics` 1, di C,
-  >     `8e7259ecc`). Zero in `pac-allocator`; prima di S5 erano 37 (`s5_front_check.log`);
+  >     `91070f6bd`). Zero in `pac-allocator`; prima di S5 erano 37 (`s5_front_check.log`);
   >   - `front-utility component-unit`: 97 file, 2223/2223 (`s5_component_unit.log`);
   >   - controllo positivo, `component-unit "buildRequest:"`: 1 file, 7 passati e 2216 saltati. È la
   >     spec di S1, prima rossa (`s5_component_unit_request.log`);
@@ -747,7 +747,7 @@ Tutti con questo prefisso, un comando per volta:
   > - **Esclusi, tutti ignorati da git** (`git check-ignore -v`): i 5 generati di `frontend/src/lib/api/`,
   >   `frontend/build` (di produzione, da S8), `mkdocs_src/site`, `__pycache__`, i log in `/tmp`, il DB
   >   della corsia.
-  > - **Previsione dei conflitti** (sola lettura): da `dd538d650` `dev_release2` (`c8daff33f`) cambia 97
+  > - **Previsione dei conflitti** (sola lettura): da `de84ff5ef` `dev_release2` (`29bdc37fe`) cambia 97
   >   file. In comune con la slice ci sono solo i 4 cataloghi i18n. `git merge-file` su copie temporanee:
   >   0 conflitti, JSON valido, parità a 4498 chiavi, e le 4 chiavi restano tolte.
   > - **Messaggi di commit proposti**: `/tmp/libreFolio_commit_d_slice_code.txt` e
@@ -762,11 +762,11 @@ Tutti con questo prefisso, un comando per volta:
   > **Note implementazione**:
   > - **Commit e merge**, lanciati dal developer con lo script del coordinator
   >   (`/tmp/libreFolio_ORDER_0510_d_slice.sh`):
-  >   - `ac18ce097` refactor(pac) e `9e4140376` docs(journal), albero `9b644227c`;
-  >   - merge `68483ddda`, genitori `9e4140376` e `c8daff33f`, albero `ac51b11ab` come simulato.
+  >   - `ccd444993` refactor(pac) e `e734cfc59` docs(journal), albero `9b644227c`;
+  >   - merge `63ef4279b`, genitori `e734cfc59` e `29bdc37fe`, albero `ac51b11ab` come simulato.
   >
-  >   Verificato in sola lettura: worktree pulito, `c8daff33f` antenato di HEAD.
-  > - **Verifica del merge** (`/tmp/libreFolio_d_int/verify_merge.py`). Dalla base `dd538d650` il mio
+  >   Verificato in sola lettura: worktree pulito, `29bdc37fe` antenato di HEAD.
+  > - **Verifica del merge** (`/tmp/libreFolio_d_int/verify_merge.py`). Dalla base `de84ff5ef` il mio
   >   lato cambia 162 file, `dev_release2` 97. In comune ce ne sono 5, uniti da soli: i 4 cataloghi i18n
   >   e `scripts/test_runner/_backend_services.py`.
   >   - Cataloghi: 4498 chiavi per lingua, lo stesso insieme nelle 4, nessuna modifica dei due lati
@@ -779,7 +779,7 @@ Tutti con questo prefisso, un comando per volta:
   >     `portfolio_allocation_source.py` legge `FxRate` dal DB. Arriva al PAC solo attraverso il report
   >     del portafoglio, coperto da `api portfolio`;
   >   - `brim.py` e `brokers.py` cambiano solo l'OpenAPI generale;
-  >   - il runner aspetta l'avvio del backend condiviso fino a 300 s (`9db350102`).
+  >   - il runner aspetta l'avvio del backend condiviso fino a 300 s (`7c974f7e2`).
   > - **Build**, nella corsia, un comando per volta:
   >   - `api sync`, rc=0. I contratti Tool non cambiano: `tool-contracts.openapi.json` `f636854eda8d`,
   >     `generated-tools.ts` `4a788406f7b7`, `tool-contract-map.generated.ts` `81f2e4ba27a6`. Cambiano
@@ -812,7 +812,7 @@ Tutti con questo prefisso, un comando per volta:
   >     (22 → 34), entrambi nella lista `core-unit` (`_frontend_utility.py:55`, `:62`). Gli altri due
   >     file della lista che hanno cambiato, `OnboardingCoachmark.test.ts` e `TransactionFormModal.test.ts`,
   >     hanno gli stessi casi di prima (84 e 13). Nessun file PAC della lista è cambiato dopo S8;
-  >   - la chiave in più è `importWizard.reportSet.gapFix.stepTitle`, di `9336c0e9b` «feat(import): align
+  >   - la chiave in più è `importWizard.reportSet.gapFix.stepTitle`, di `b23259a4e` «feat(import): align
   >     imports with bank truth». La usa un `titleKey` relativo (`ImportWizardModal.svelte:143`), che
   >     l'audit non risolve: è un falso positivo. Quel file è uguale su `dev_release2` e sul merge.
   > - **6151 libera** a fine script: `lsof -nP -iTCP:6151 -sTCP:LISTEN` → rc=1.
@@ -823,7 +823,7 @@ Tutti con questo prefisso, un comando per volta:
   > - **Avviso SSL di MathJax** durante la build: viene dall'ambiente, come in S4, S8 e R14.
   > - **Le pagine utente e il CHANGELOG dicono ancora «nessuna interfaccia».** L'ho visto preparando la
   >   riga di CHANGELOG. La UI PAC non è su `dev_release2` (`PacPlannerTool.svelte` manca in
-  >   `c8daff33f`): la porta per la prima volta il fast-forward. Diventano false:
+  >   `29bdc37fe`): la porta per la prima volta il fast-forward. Diventano false:
   >   - `CHANGELOG.md:18`, «Its interactive interface is not ready yet»;
   >   - `user/tools/pac-allocator/index.en.md`: `:3`, `:12-25`, `:27-42` (card non cliccabile e
   >     `Backend/API 2.0.0 · UI 2.0.0`, oggi `1.0.0`), `:58`, `:89`, `:104`;
@@ -834,12 +834,12 @@ Tutti con questo prefisso, un comando per volta:
   >   checkpoint, senza toccarle: non è fra i passi autorizzati.
   >
   > **Handoff finale**:
-  > - **Stato**: HEAD `68483ddda` più il commit di journal di questo passo. `dev_release2` (`c8daff33f`)
+  > - **Stato**: HEAD `63ef4279b` più il commit di journal di questo passo. `dev_release2` (`29bdc37fe`)
   >   è già contenuto: l'integrazione è un fast-forward, più la riga di CHANGELOG del coordinator.
   > - **Consegnato**: il contratto PAC `1.0.0` compatto (§1–§3). La UI spedisce il pacchetto compatto
   >   e legge la richiesta risolta; 4 chiavi `tools.pacAllocator.*` tolte. Il compute usa solo il
   >   pacchetto.
-  > - **Inventario**: la slice è in `ac18ce097` (27 percorsi di codice e test) e `9e4140376` (5 di
+  > - **Inventario**: la slice è in `ccd444993` (27 percorsi di codice e test) e `e734cfc59` (5 di
   >   journal). Questo passo tocca 2 file di journal: questo piano e la riga 11 del README.
   > - **`handoff-pac-D.md` §0 resta valida**: dopo l'`api sync` sul merge i tre file dei contratti Tool
   >   hanno gli stessi hash, quindi fingerprint `4f061103…` e generazione `f636854e…` non cambiano.
@@ -918,14 +918,14 @@ Tutti con questo prefisso, un comando per volta:
   >
   > **⚠️ Fuori pista**:
   > - **`tools/index.en.md:17-19` mancava** nella lista del mio checkpoint S10. Viene dallo stesso commit
-  >   di `:49`, `154182295`.
+  >   di `:49`, `aab74f191`.
   > - **Ho ritrattato la segnalazione su `tools/index.en.md:110`**: la frase è vera, come sopra.
   > - **Strict build rosso al primo giro.** Il link `../../settings/preferences.md#privacy-mode` funziona
   >   in EN. Ma la pagina PAC, che esiste solo in EN, ricade anche in it/fr/es, e lì le pagine
-  >   `preferences` non hanno la sezione sulla privacy: sono tradotte al `757aac84a`, l'EN è al
-  >   `b643afb31`. Con i link senza ancora la build è verde. Il debito resta alla prossima traduzione.
+  >   `preferences` non hanno la sezione sulla privacy: sono tradotte al `c5c45f686`, l'EN è al
+  >   `10d255b2b`. Con i link senza ancora la build è verde. Il debito resta alla prossima traduzione.
   > - **«Copy FX rates» non è un pulsante.** `steps/SourceCopyDialog.svelte`, 134 righe, è orfano dal mio
-  >   `6f29ec1cf`: lì `AssetsStep` e `FxStep` hanno smesso di importarlo (in `0210f9848` lo importavano).
+  >   `ffe03f7fc`: lì `AssetsStep` e `FxStep` hanno smesso di importarlo (in `502877358` lo importavano).
   >   Va nel backlog delle cose senza consumatori.
   > - **Due chiavi i18n dicono ancora «Not in 2.0.0»**: `brokerEditor.notIn200` e `fx.notInVersion`.
   >   Sono già nel backlog delle chiavi inutilizzate del coordinator.

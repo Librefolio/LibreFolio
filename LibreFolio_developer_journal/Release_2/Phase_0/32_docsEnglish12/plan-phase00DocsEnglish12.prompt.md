@@ -1,14 +1,14 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono stati integrati, col treno 20. La pagina sulla sicurezza della connessione e gli IP Tailscale (S20, `5980ab86f`) sono entrati col treno 24 (merge di Q `e994979f9`). S21 e S22 (`d614daed9`, `1fdcaef38`) sono entrati col treno 25 (merge `c0e9e4928`), S23 (`664fe9687`) col treno 27 (merge `befbb67cf`). Piano chiuso il 2026-10-10 (S24): vedi «Chiusura» qui sotto.** L'analisi (§1-§2, §4) è stata scritta il
-> 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
-> developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
+> **Stato: Q1 (`f1d446a4e`), Q2 (`88833f6f9`), S12 (`706133cb7`), S13 (`b18787f4c`), l'onda 1 del feedback (`074815a60`, fusa col treno 14 in `429dda90c`) e l'onda 2 (`69d9d0d81`, entrata col treno 17 = `03c943f53`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`cc33206c9`, `dev_release2` = `a1cf58c42`). Anche i seguiti del treno 19 (S19) sono stati integrati, col treno 20. La pagina sulla sicurezza della connessione e gli IP Tailscale (S20, `bc9ccb552`) sono entrati col treno 24 (merge di Q `c76ba5b7c`). S21 e S22 (`b33c6ffe7`, `1f9d7005d`) sono entrati col treno 25 (merge `dcb1be0fa`), S23 (`7fbed02ac`) col treno 27 (merge `bf28a557e`). Piano chiuso il 2026-10-10 (S24): vedi «Chiusura» qui sotto.** L'analisi (§1-§2, §4) è stata scritta il
+> 2026-10-07 in plan mode su `4ec2add93`, leggendo la punta `5f3509536` con `git show`. Poi il
+> developer ha fatto il fast-forward del ramo: HEAD = `5f3509536`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
 > `translation_debt_baseline.txt`, `app_doc_links.tsv`, i report dei 9 audit).
 >
-> **Chiusura** (2026-10-10, base `d59762e0a`). In questa cartella non resta niente di aperto:
-> - **Traduzioni IT/FR/ES:** fatte nel lotto 11 di M, entrato col treno 29 (`e32f47133`): 303 traduzioni con la pipeline, il glossario, `check-links` senza eccezioni e `#rolling-return` chiuso (coordinatore, 10/10). Il secondo giro di M, sulle pagine di S, è in corso. Piano: [plan-phase00TranslationRound12.prompt.md](../27_releaseImages/plan-phase00TranslationRound12.prompt.md). Per lo storico: il dry-run del 08/10 contava 131 pagine (S18), e il `translate-validate` del 09/10 2126 errori e 72 file mancanti (S23).
-> - **Screenshot:** gli 8 segnaposto dei portali dei broker (Trading212, Coinbase, …) restano TODO nascosti, per decisione del developer (S18); sono una voce del backlog `38_postReleaseBacklog`. Il segnaposto `security/connection-indicator` l'ha chiuso M con `dbf4263e9`.
+> **Chiusura** (2026-10-10, base `641ae3239`). In questa cartella non resta niente di aperto:
+> - **Traduzioni IT/FR/ES:** fatte nel lotto 11 di M, entrato col treno 29 (`99117e505`): 303 traduzioni con la pipeline, il glossario, `check-links` senza eccezioni e `#rolling-return` chiuso (coordinatore, 10/10). Il secondo giro di M, sulle pagine di S, è in corso. Piano: [plan-phase00TranslationRound12.prompt.md](../27_releaseImages/plan-phase00TranslationRound12.prompt.md). Per lo storico: il dry-run del 08/10 contava 131 pagine (S18), e il `translate-validate` del 09/10 2126 errori e 72 file mancanti (S23).
+> - **Screenshot:** gli 8 segnaposto dei portali dei broker (Trading212, Coinbase, …) restano TODO nascosti, per decisione del developer (S18); sono una voce del backlog `38_postReleaseBacklog`. Il segnaposto `security/connection-indicator` l'ha chiuso M con `e9e76aece`.
 > - L'avviso Docker è stato tolto in S19; l'ancora `#session-cookie-secure` non serve (coordinatore, S20).
 >
 > **Autorizzazione del developer**, inoltrata dal coordinatore (07/10): «Piano approvato dal developer,
@@ -78,7 +78,7 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-ideal-garbanzo` |
 | Ramo | `e-alfy-q-doc-inglese-1-2` (rinominato dall'app) |
-| HEAD | `d07412899` = `dev_release2` (treno 8), worktree pulito |
+| HEAD | `5f3509536` = `dev_release2` (treno 8), worktree pulito |
 | Confronto | `v1.1.0` = `c44aa4053` (2026-09-07); 809 commit; 205 file in `mkdocs_src/docs` |
 | Coordinatore | `c8328a01-f208-4ade-a352-0486d1f14de2` |
 | Ambiente | `.env`, `node_modules` e `graphify-out/graph.json` assenti, come previsto. La wiki è stata letta pagina per pagina (`sources/mkdocs-audit-2026-08-05`, `sources/kb-03-documentation`) |
@@ -136,7 +136,7 @@ Metodo:
 | `risk-metrics/data-quality:141` 🟡 | Lo stato *calculation failed* | CHANGELOG «A failure inside a risk calculation…» |
 | `user/assets/correlation` 🟡 | Il tono dell'avviso unico (info o ambra) e i badge. Il ritentativo, fino a 3 volte. Il periodo comune a livello di scheda (da verificare) | `riskPanelController` (punta) |
 | `risk-metrics/historical-replay`, `hypothetical-shock` 🟡? | Le colonne della tabella (da verificare) | `L4WhatIf` |
-| `bollinger-bands`, `donchian-channels` 🟡 (facoltativo) | Il riempimento della banda tra una sessione e l'altra | commit `840bdbc0d` |
+| `bollinger-bands`, `donchian-channels` 🟡 (facoltativo) | Il riempimento della banda tra una sessione e l'altra | commit `9cb2ea172` |
 | `user/settings/about` ⛔🟡 | Una sezione «Support LibreFolio»: caffè, social, Copy and go, hashtag, nulla pubblicato in automatico. Le *Tool diagnostics* dentro *Plugin diagnostics*. Nel controllo degli aggiornamenti, il rimando alla regola dell'immagine sul registry | `AboutTab.svelte:313,554-581`, `ToolAboutPanel.svelte:339`, `DonationPopupModal.svelte:71` |
 | `community/contribute` 🟡 | Le azioni di supporto nell'app e il popup | idem |
 | `index.en.md` (home) e `user/index` ⛔ | Tools e PAC allocator. L'header che si nasconde durante lo scorrimento | `Sidebar.svelte:41`, `Header.svelte:33-50` |
@@ -289,7 +289,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
 
 ### Q1
 
-- **S0** ✅ 2026-10-07 — Piano nel journal, HEAD `d07412899` verificato, nomi degli screenshot inviati al coordinatore.
+- **S0** ✅ 2026-10-07 — Piano nel journal, HEAD `5f3509536` verificato, nomi degli screenshot inviati al coordinatore.
   > **Note implementazione**:
   > - Mandati al coordinatore i 39 nomi di §2.1.
   > - Baseline dei gate, presa prima di ogni modifica alla doc:
@@ -471,7 +471,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - segnaposto: tutti i 39 nomi nelle pagine attese, più quello di `gallery/index`, formato corretto;
   >   - stile ok: emoji nei titoli H1-H3 nuovi, riga vuota dopo le admonition;
   >   - `git diff --check` pulito.
-  > - **Etichette:** verificate dai `docs-writer` sull'`en.json` della punta `d07412899`, che contiene già l'audit i18n di O (treno 8). Q le ha ricontrollate a campione: PAC, privacy, update check.
+  > - **Etichette:** verificate dai `docs-writer` sull'`en.json` della punta `5f3509536`, che contiene già l'audit i18n di O (treno 8). Q le ha ricontrollate a campione: PAC, privacy, update check.
   > - **Debito di traduzione** (`… mkdocs translate --dry-run`, senza scritture): 93 pagine × 3 lingue = 279 lavori, circa 8,6 M token.
   >   - (A) 13 pagine allineate prima di Q e ora stale. Di queste, `gallery/{desktop,mobile,index}` hanno solo commenti e `scheduled-investment` solo ancore.
   >   - (B) 27 pagine già stale o mai tradotte prima di Q.
@@ -482,11 +482,11 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >     - aggiungere le ancore esplicite di `scheduled-investment`, `create-edit` (`#provider-data-comparison`, `#one-instrument-several-codes`), `files/index#uploaded-by` e `dashboard/charts#allocation-type-rings` anche in IT/FR/ES;
   >     - tradurre la gallery solo dopo le immagini di M.
   >   - `translate-validate` non l'ho lanciato: il dry-run basta per misurare il debito, e il giro strutturale si fa dopo la pipeline.
-  > - **Corsia e server:** HEAD = `dev_release2` = `d07412899`, la punta non si è mossa. Nessun server avviato: `lsof -nP -iTCP:6162 -sTCP:LISTEN` → exit 1, nessun listener. `site/` è ignorato da git.
+  > - **Corsia e server:** HEAD = `dev_release2` = `5f3509536`, la punta non si è mossa. Nessun server avviato: `lsof -nP -iTCP:6162 -sTCP:LISTEN` → exit 1, nessun listener. `site/` è ignorato da git.
 
 ### Q2 (dopo Q1, solo con il via libera)
 
-> **Via a Q2** (coordinatore, 07/10 15:09, approvato dal developer): Q1 committato in `dfcbc0003`, albero verificato, worktree pulito.
+> **Via a Q2** (coordinatore, 07/10 15:09, approvato dal developer): Q1 committato in `f1d446a4e`, albero verificato, worktree pulito.
 >
 > **Decisioni** (07/10, 15:08 e 15:09):
 > - **Stamp:** nessuno, nemmeno per le pagine che cambiano solo per commenti o ancore. Le ancore di `scheduled-investment` arriveranno in IT, FR ed ES con l'allineamento delle traduzioni.
@@ -542,7 +542,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - Segnaposto identici byte per byte a HEAD.
   >
   > **⚠️ Fuori pista**:
-  > - Tolto anche un terzo `---`, quello prima del blocco `<style>`: si vedeva come riga orizzontale dentro FX Rates, tra due `###`. Viene dal riordino della v0.9.0 (`3622c2c03`).
+  > - Tolto anche un terzo `---`, quello prima del blocco `<style>`: si vedeva come riga orizzontale dentro FX Rates, tra due `###`. Viene dal riordino della v0.9.0 (`9bb39ebbd`).
   > - Ora ogni `##` ha esattamente un `---` davanti e nessun `###` ne ha uno.
   > - Gli stessi difetti restano nelle traduzioni IT/FR/ES della gallery: 15 container senza `mobile` per ogni mobile tradotta e 3 separatori per pagina. È debito di traduzione meccanico, non toccato.
 - **S8** ✅ 2026-10-07 — Errori nella doc developer, compresi quelli precedenti alla 1.1 (§1.3), nei lotti H, I, J1, J2.
@@ -636,7 +636,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - `git diff --check` pulito;
   >   - nessun `file:///` rimasto, tranne in `release-pipeline.md` (M).
   > - **Diff**: +2530/−742 su 48 file, più `developer/backend/risk/architecture.md` (787 righe) e `developer/frontend/onboarding.md` (484 righe). Nav: Risk Engine, Onboarding Guides, «Live Ticker» → «Live Prices».
-  > - **Base**: HEAD `dfcbc0003` (Q1), `dev_release2` = `d07412899` invariata. Nessun server avviato: porta 6162 libera (`lsof` exit 1).
+  > - **Base**: HEAD `f1d446a4e` (Q1), `dev_release2` = `5f3509536` invariata. Nessun server avviato: porta 6162 libera (`lsof` exit 1).
   > - **Debito di traduzione Q2**:
   >   - nessuno per le pagine developer, che sono solo EN e senza titoli tradotti nella nav;
   >   - la gallery EN cambia ancora, ed era già stale da Q1; le traduzioni della gallery hanno gli stessi 15 container senza `mobile` e gli stessi 3 separatori, un debito meccanico.
@@ -648,7 +648,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
 
 ### Dopo il treno 9
 
-- **S12** ✅ 2026-10-07 — Ancora `#risk-tab` in `user/brokers/index.en.md` (base `9ea2d519b`, che contiene il treno 9 con N).
+- **S12** ✅ 2026-10-07 — Ancora `#risk-tab` in `user/brokers/index.en.md` (base `3aec9438d`, che contiene il treno 9 con N).
   > **Note implementazione**:
   > - Il link della voce Risk (`:38`) ora punta a `../dashboard/index.md#risk-tab`, testo «Dashboard Risk Tab». Tolto il commento `<!-- TODO(anchor): #risk-tab, after N -->`.
   > - L'ancora c'è nella pagina EN di N (`user/dashboard/index.en.md:41`, `## 🛡️ Risk Tab {: #risk-tab }`). Non c'è ancora nelle IT/FR/ES, ma il link sta solo nella pagina EN dei broker, le cui traduzioni non lo contengono: le build tradotte non lo validano.
@@ -657,7 +657,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - I 40 segnaposto aspettano gli scenari di M: oggi 0/40 nomi sono in `gallery.spec.ts`.
   >   - `#coming-back-and-refreshing` c'è ancora (`dashboard/index.en.md:80`).
   >   - Le pagine solo-EN (`developer/backend/risk/architecture.md`, `user/assets/correlation.en.md`) restano senza `#risk-tab`: lì l'ancora romperebbe le build IT/FR/ES finché le traduzioni della Dashboard non la contengono.
-  > - **Riferimenti alle immagini** ricontrollati dopo `c80508be8` (riparazione degli scenari di M): tutti prodotti. I 6 `dashboard/allocation-*` risultano «mancanti» per il mio script solo perché lo spec li costruisce con un template (`${shot}-now`, `${shot}-history`, `gallery.spec.ts:691-699`).
+  > - **Riferimenti alle immagini** ricontrollati dopo `22cad9ded` (riparazione degli scenari di M): tutti prodotti. I 6 `dashboard/allocation-*` risultano «mancanti» per il mio script solo perché lo spec li costruisce con un template (`${shot}-now`, `${shot}-history`, `gallery.spec.ts:691-699`).
   > - **Gate** `/tmp/libreFolio_q_gate.sh q3anchor`:
   >   - `mkdocs build` strict: exit 0, 0 WARNING/ERROR; l'ancora è validata (`validation.anchors: warn` + `--strict`);
   >   - `check-links`: solo il link rotto della baseline (`chart/#rolling-return` IT/FR/ES);
@@ -665,20 +665,20 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - `git diff --check` pulito.
   >   - Nessun server: `build` e `check-links` sono statici, non serve la porta 6162.
 
-- **S13** ✅ 2026-10-07 — Limiti della simulazione allineati a `resource_limit` con rimedio (base `9d79c2dbe`, treno 10; entra nel treno 11 con Risk).
+- **S13** ✅ 2026-10-07 — Limiti della simulazione allineati a `resource_limit` con rimedio (base `4842662a1`, treno 10; entra nel treno 11 con Risk).
   > **Fonti**:
-  > - backend nella base: `b72d22ab1` (`_REMEDY_BY_METRIC`, `_resource_limit`, `_refuse_oversized_scope`, `MAX_SIMULATION_ASSETS = 100`);
-  > - frasi EN dal ramo di Risk, lette con `git show 3fd9fed9a:frontend/src/lib/i18n/en.json` (`risk.errors.resource_limit_*`) e `…/errorDisplayCode.ts`, senza aprire il suo worktree.
+  > - backend nella base: `087bf1bb4` (`_REMEDY_BY_METRIC`, `_resource_limit`, `_refuse_oversized_scope`, `MAX_SIMULATION_ASSETS = 100`);
+  > - frasi EN dal ramo di Risk, lette con `git show 5d9cf2379:frontend/src/lib/i18n/en.json` (`risk.errors.resource_limit_*`) e `…/errorDisplayCode.ts`, senza aprire il suo worktree.
   >
   > **Note implementazione** (`docs-writer`, verificato da Q):
   > - **`simulation-modes.en.md` `#limits`:**
   >   - i righi «Sequence too large» e «Size» sono diventati una riga per rimedio: Path budgets → `paths_or_horizon`, Sequence too large (Sobol) → `horizon_or_sampling`, History too long (bootstrap: più di 5 000 osservazioni o osservazioni × titoli oltre 250 000) → `period`, Too many holdings (oltre 100) → `positions`;
-  >   - ogni frase «On screen» è identica byte per byte alla chiave di `3fd9fed9a`;
+  >   - ogni frase «On screen» è identica byte per byte alla chiave di `5d9cf2379`;
   >   - invariati, e riverificati: Too little history, Block longer than the history (`invalid_parameters`, `simulation.py:446-457`) e Path count (`invalid_parameters`);
   >   - il paragrafo dei codici dice che ogni limite di dimensione risponde `resource_limit`, che il rimedio sceglie la frase, e che la frase generica resta per un rimedio ignoto;
   >   - il paragrafo delle dimensioni ha conti ricontrollati da Q: 8 192 × 2 442 = 20 004 864; 8 192 × 365 × 67 = 200 335 360 (66 titoli = 197 345 280); 250 000 / 50 = 5 000, / 100 = 2 500; 58 × 365 = 21 170;
   >   - aggiunto che oltre 100 titoli non serve nessuna impostazione, che i titoli esclusi non contano (`data-quality.md#exclusions`) e che i limiti si incontrano uno alla volta.
-  > - **`developer/backend/risk/architecture.md`: TOLTA DAL CHECKPOINT** (coordinatore, 08/10 10:17). Alle 17:55 del 07/10 la pagina era stata assegnata a Risk, che l'ha già aggiornata sul suo ramo (`9590a3763`, treno 11): due versioni delle stesse righe avrebbero creato un conflitto certo.
+  > - **`developer/backend/risk/architecture.md`: TOLTA DAL CHECKPOINT** (coordinatore, 08/10 10:17). Alle 17:55 del 07/10 la pagina era stata assegnata a Risk, che l'ha già aggiornata sul suo ramo (`54dc2c683`, treno 11): due versioni delle stesse righe avrebbero creato un conflitto certo.
   >   - Ripristino: file riscritto da `git show HEAD:<path>`, senza `git checkout --`; `git diff -- <path>` vuoto.
   >   - La mia versione resta per confronto in `files/risk_architecture.q4mine.md` della sessione.
   >   - Rispetto alla mia, alla versione di Risk mancano cinque cose minori, inviate al coordinatore e non corrette:
@@ -702,7 +702,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
 
 ### Feedback del developer
 
-- **S14** ✅ 2026-10-08 — Primo giro di feedback diretto del developer, su base `ffa72cc2b` (treno 12).
+- **S14** ✅ 2026-10-08 — Primo giro di feedback diretto del developer, su base `d9c068c99` (treno 12).
   > **Feedback** (developer, 08/10 12:22): «riguardo a mkdocs serve, sei l'unica quindi la puoi usare»; «tools: fino a opening tool come capitolo va bene quello che viene dopo è da manuale dev se fosse, qui è la sezione utente, deve essere semplice, e la parte del documentation and language mi pare errata, visto che quando poi avviamo la traduzione ci saranno le guide in tutte le linghe»; «riguardo a pac, non farei una tabella con gli step, ma per ogni step una sezione, così compare anche nella tabella dei contenuti, e per formule e numeri cercherei di usare latex». Il coordinatore ha confermato la precedenza (12:25).
   >
   > **Note implementazione** (2 `docs-writer`, verificato da Q):
@@ -817,14 +817,14 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - `brim_plugin_guide` e `providers_list` restano esclusi: O ci ha appena committato, per il treno 14.
   > - **Onda 3**: le pagine admin. Restano i comandi; gli interni vanno nelle pagine dev.
   >
-  > **⚠️ Fuori pista: treno 13** (`374381e27`, 13:14, non ancora nella base `ffa72cc2b`). Ha cambiato 5 pagine di Q:
+  > **⚠️ Fuori pista: treno 13** (`10d50254b`, 13:14, non ancora nella base `d9c068c99`). Ha cambiato 5 pagine di Q:
   > - `danske-bank`: 5 segnaposto diventano immagini; «a **Deposit** or a **Withdrawal**»;
   > - `how-to`: 3 immagini, tra cui `brokers/import-report-set-file-menu`, che è nuova;
   > - `files/index` e `transactions/index`: 1 immagine ciascuna (M, G3);
   > - `dashboard/charts`: il punto «How the periods are labelled» di I.
   > - Anche il codice dei grafici è cambiato (`GrowthChart.svelte`, `growthLadderAxis.ts`): etichette dell'asse per periodo, e i dividendi nelle barre Income ora sono **oro** (erano ciano). Nessuna pagina EN nomina quel colore.
   >
-  > Per regola del coordinatore, i writer partono dalla versione del treno 13 (`git show 374381e27:<percorso>`) e la portano nelle riscritture. Il punto di I va nel manuale dev, con i fatti intatti.
+  > Per regola del coordinatore, i writer partono dalla versione del treno 13 (`git show 10d50254b:<percorso>`) e la portano nelle riscritture. Il punto di I va nel manuale dev, con i fatti intatti.
   >
   > Conflitti attesi quando il target sarà fuso nel ramo di Q, dopo il checkpoint: `danske-bank.en.md`, `how-to.en.md` e `charts.en.md`. Risoluzione semantica: tenere la versione di Q, che contiene già il treno 13, e verificarlo.
   >
@@ -856,7 +856,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - **Correzioni dal codice:** le etichette delle tab sono **By Type**, **By Sector** e **Geographic**; **Now** e **History** sono pulsanti a icona; via «All series start at 0%», perché il ROI non parte forzato da 0; il banner si chiama **MWRR chart unavailable**.
   >   - Del punto di I resta una frase («Axis labels»).
   > - **`developer/frontend/components/charts.md`**: da 1414 a 2576 parole, solo fatti nuovi.
-  >   - Il punto di I c'è per intero: etichette dei periodi, rotazione tutto o niente, diradamento contato dall'ultima, chiavi `dashboard.pnlAxisQuarter` e `dashboard.pnlAxisWithYear`. È verificato su `git show 374381e27:` di `growthLadderAxis.ts` e `GrowthChart.svelte`.
+  >   - Il punto di I c'è per intero: etichette dei periodi, rotazione tutto o niente, diradamento contato dall'ultima, chiavi `dashboard.pnlAxisQuarter` e `dashboard.pnlAxisWithYear`. È verificato su `git show 10d50254b:` di `growthLadderAxis.ts` e `GrowthChart.svelte`.
   >   - Anche: le regole delle larghezze e delle candele su più giorni, la legenda e le fonti di Income, i dettagli delle torte, il ridisegno in privacy.
   >   - Corretta una riga superata: anche l'ultimo periodo può essere sbiadito, non solo il primo.
   >   - Il colore dei dividendi non è nominato in nessuna delle due pagine.
@@ -995,12 +995,12 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Privacy:** sulle 2589 righe aggiunte, nessun IBAN, email, numero lungo né segreto.
   > - **Chiusura della corsia:** anteprima spenta, porte 6162 e 6042 libere. Rimossi il profilo Chrome temporaneo, le PNG di M (`/tmp/librefolio-q-gallery-drop`) e il sito copiato. Gli script `/tmp/libreFolio_q_preview_rebuild.sh` e `/tmp/libreFolio_q_preview_server.py` restano per l'onda 2.
   > - **Checkpoint:** 31 file tracciati modificati e 3 nuovi; nessuna traduzione toccata; `git diff --check` pulito. Messaggio proposto in `/tmp/libreFolio_commit_fb.txt`. Stato FROZEN.
-  > - **Commit del developer:** `eee56b42a` («docs: simplify user pages, move internals to dev»), 34 file, sopra `ffa72cc2b`.
+  > - **Commit del developer:** `074815a60` («docs: simplify user pages, move internals to dev»), 34 file, sopra `d9c068c99`.
   >   - Il coordinatore ha verificato l'albero e la risoluzione dei 3 conflitti col treno 13: vale la versione di Q.
-  >   - Poi il developer ha fuso il treno 14 nel ramo di Q: `cbfce2475` (genitori `eee56b42a` e `9eb01c756`). La base ora contiene i treni 13 e 14.
+  >   - Poi il developer ha fuso il treno 14 nel ramo di Q: `429dda90c` (genitori `074815a60` e `311fbd6e9`). La base ora contiene i treni 13 e 14.
   >   - L'onda 1 entra in `dev_release2` col treno 15, dopo la coverage.
 
-- **S17** ✅ 2026-10-08 — Onda 2 della semplificazione, su base `cbfce2475`.
+- **S17** ✅ 2026-10-08 — Onda 2 della semplificazione, su base `429dda90c`.
   > **Via libera del coordinatore** (15:48), nella stessa sessione col developer:
   > - le pagine di P e di L sono comprese; per `user/ai-export/**` vale `ai-development.instructions.md`;
   > - `mkdocs.yml`, `static/extra.css` e `home-custom.css` restano di Q;
@@ -1017,7 +1017,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >
   > Il brief elenca anche le pagine vietate: quelle riservate a M, le pagine dev di P, `brim_plugin_guide.md` e `providers_list.md`. Niente anteprima live: la build strict la fa Q dopo i writer.
   >
-  > **Gruppi** (8 `docs-writer`, file disgiunti; parole sulla base `cbfce2475`):
+  > **Gruppi** (8 `docs-writer`, file disgiunti; parole sulla base `429dda90c`):
   > - **A, dashboard di P:** `kpi-cards` (1784) e `positions` (2164).
   > - **B, AI Export di P:** `ai-export/{index,portfolio,broker,fx,asset}` (3591).
   > - **C, onboarding e impostazioni:** `getting-started` (1555), `settings/preferences` (1880), `pwa` (694), `misc/image-crop` (498).
@@ -1030,7 +1030,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >
   > **Risposte del coordinatore** (15:53):
   > - **Pagine dev e di teoria di P** (`wac.md`, sezione sul costo di `fifo_lot_engine.md`, `data-quality-banner.md`, teoria): **restano di P**, che sta discutendo col developer la regola `MISSING_COST_BASIS` (#32). I writer elencano nel report i fatti che spetterebbero lì, e il coordinatore li gira a P.
-  > - **`user/brokers/sharing.en.md` è libera.** La riga `:76` era stata concessa a N il 07/10 per la tab Rischio sui broker posseduti, lavoro entrato con `49d4ec8e0`. Aggiunta al gruppo G1, con un messaggio al writer, e allo scope `--w2` del gate.
+  > - **`user/brokers/sharing.en.md` è libera.** La riga `:76` era stata concessa a N il 07/10 per la tab Rischio sui broker posseduti, lavoro entrato con `358d703b8`. Aggiunta al gruppo G1, con un messaggio al writer, e allo scope `--w2` del gate.
   >
   > **M** (16:00): ha rimesso in `/tmp/librefolio-q-gallery-drop/desktop/en/{light,dark}` le stesse 102 PNG del primo deposito: assets 5, dashboard 17, brokers 12, files 3, settings 1, transactions 1; per fx, onboarding e ai-export nessuno scatto, quindi ricade sulle Pages. Il prossimo deposito arriva dopo le 17 con la verifica del G5: gli scatti `onboarding/*` e la guardia offline della gallery su assets, fx e brokers.
   >
@@ -1051,7 +1051,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - al writer G1: `brokers/index.en.md:~79` dice «exact sampling», che non vale più.
   >   - ✅ (16:25) Fatti:
   >     - `ai_export_probe_workflow.md:134-138`: la directory risolve A#, B# e F#, mentre L# è il `lot_ref` del backend, letto sul posto (`ai_export_runtime.py:342-345`, `payloads/portfolio_broker.py:444-447,721-735`, `asset_core.py:533-551`);
-  >     - `ai_export_snapshot.md:72-76`: il runtime precedente è stato rimosso prima del rilascio, e lo schema V1 è il primo rilasciato (`AI_EXPORT_SCHEMA_VERSION = 1`, `ai_export_runtime.py:25-29`; storia git `2544a3e36` → `7992471b6`).
+  >     - `ai_export_snapshot.md:72-76`: il runtime precedente è stato rimosso prima del rilascio, e lo schema V1 è il primo rilasciato (`AI_EXPORT_SCHEMA_VERSION = 1`, `ai_export_runtime.py:25-29`; storia git `c9e783563` → `23151a19b`).
   >
   > **Note implementazione, gruppo F (provider)** (16:30):
   > - **Lunghezze:** `providers/index` da 649 a 765 parole (le card restano identiche), `borsa-italiana` da 1125 a 771, `css-scraper` da 484 a 564, `justetf` da 344 a 320, `yahoo-finance` da 145 a 247, `scheduled-investment` da 524 a 768 (con il LaTeX e un esempio in pannello), `fx/providers/index` da 655 a 717, `fx/detail/provider` da 404 a 412. Le pagine corte crescono perché mancavano «What It Offers» e «Limits».
@@ -1181,7 +1181,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - Altro seguito: `core-ui/datePickers.md` (L12, L45) citava ancora `CashTransactionModal` fra gli utenti di `SingleDatePicker`. È aggiunto allo scope `--w2`.
   >
   > **Coordinatore** (16:48):
-  > - **L'onda 1 è in `dev_release2`:** treno 15 `23b839fb2`, con il merge di Q `ceeb31a2c`. Il worktree di Q non viene avanzato mentre l'onda 2 è in corso; il treno 15 sarà fuso nel ramo di Q al checkpoint dell'onda 2.
+  > - **L'onda 1 è in `dev_release2`:** treno 15 `2d4118267`, con il merge di Q `f0edc2d3f`. Il worktree di Q non viene avanzato mentre l'onda 2 è in corso; il treno 15 sarà fuso nel ramo di Q al checkpoint dell'onda 2.
   > - **Elenco degli accessi:** reperto verificato (`brokers.py:422` è l'unico `as_user_id="all"`). Lo porta il coordinatore al developer. Le frasi «share button shows who has access» di `brokers/index` e `brokers/sharing` restano come sono finché il developer non decide.
   >   - **Decisione del developer** (17:05, via il coordinatore): «mi pare che fosse una cosa voluta, serve per permettere, quando si condivide il broker di vedere a chi condividerlo, e nel caso scrivergli. poi le persone che condividono un istanza tra loro non sono estranee, basta che almeno siano autenticate». Il codice non cambia. La docstring e il commento «For superuser» vanno nel backlog del coordinatore, e Q non li tocca.
   >   - **Doc aggiornata da Q:** `brokers/index.en.md:43` e `brokers/sharing.en.md:81` dicono che ogni utente autenticato dell'istanza vede chi ha accesso a qualunque broker. Niente «e-mail» nelle pagine utente: la UI mostra username e avatar, non le e-mail (nessun `.email` in `components/brokers`). `users_and_brokers.md:67-74`: scelta voluta, e l'API restituisce anche l'e-mail.
@@ -1227,7 +1227,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Gate `w2d`:** build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 88 percorsi, segnaposto, stile e `git diff --check` verdi.
   > - **Chiusura della corsia:** anteprima spenta, porte 6162 e 6042 libere. Rimosse le PNG di M (`/tmp/librefolio-q-gallery-drop`), il sito copiato e i file temporanei.
   > - **Checkpoint:** 87 file tracciati modificati e 1 nuovo (`developer/backend/brim/credit_agricole.md`); nessuna traduzione toccata. Messaggio proposto in `/tmp/libreFolio_commit_w2.txt`. Stato FROZEN.
-  > - **Commit:** `1c2f88d67` sopra `cbfce2475`, verificato dal coordinatore. È entrato col treno 17: `dev_release2` = `108a2adf5`, merge di Q `66628a1f8`. Lo script ha portato il worktree di Q a `108a2adf5`.
+  > - **Commit:** `69d9d0d81` sopra `429dda90c`, verificato dal coordinatore. È entrato col treno 17: `dev_release2` = `03c943f53`, merge di Q `1c9d2a8cd`. Lo script ha portato il worktree di Q a `03c943f53`.
   > - **Reperti dell'onda 2:** verificati dal coordinatore e assegnati dal developer.
   >   - K: avatar e numero dei messaggi degli eventi;
   >   - P: Timing effect;
@@ -1239,12 +1239,12 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - I tooltip dei livelli di dettaglio in `en.json` («buckets up to 30/14/7 days») valevano solo per i prezzi, mentre gli indicatori arrivano a 84/28/14. **Corretto da O nel treno 19** (`aiExport.detailLevelHelp.*`).
   >   - `.github/instructions/frontend-ai-export.instructions.md` descrive un flusso `ClipboardItem`, ma il codice usa `writeText` con un fallback.
 
-- **S18** ✅ 2026-10-08 — Onda 3: le pagine admin, su base `108a2adf5` (treno 17). Chiusa con l'approvazione del developer alle 21:22: «chiudi l'onda 3 e sistemiamo gli effetti del treno 18, ma non avviamo ancora le traduzioni». Checkpoint pronto, FROZEN.
+- **S18** ✅ 2026-10-08 — Onda 3: le pagine admin, su base `03c943f53` (treno 17). Chiusa con l'approvazione del developer alle 21:22: «chiudi l'onda 3 e sistemiamo gli effetti del treno 18, ma non avviamo ancora le traduzioni». Checkpoint pronto, FROZEN.
   > **Via libera** (coordinatore 17:44 e 17:50, con l'approvazione del developer «Sì, Q parte con l'onda 3 dopo il treno 17»). Nessuna pagina riservata a M, né di P o di L. `mkdocs.yml` e i CSS restano di Q.
   >
   > **Brief:** al file di sessione `files/simplify_brief.md` si aggiunge la sezione «Wave 3 — admin pages». Comandi, variabili, `.env`, percorsi, porte, tag delle immagini e snippet restano sulla pagina, verificati nel codice. Gli interni di implementazione vanno nel manuale dev. Script lunghi, configurazioni complete e varianti avanzate stanno in pannelli espandibili.
   >
-  > **Gruppi** (4 `docs-writer`, parole sulla base `108a2adf5`; tutte le pagine hanno traduzioni IT/FR/ES):
+  > **Gruppi** (4 `docs-writer`, parole sulla base `03c943f53`; tutte le pagine hanno traduzioni IT/FR/ES):
   > - **A:** `admin/service_exposure` (5165): il tutorial Tailscale, livelli 1-4. Si ristruttura soprattutto, con gli script in pannelli.
   > - **B:** `admin/docker_advanced` (2985) e `user/installation` (1761), con destinazioni `architecture/overview.md` e `dev_workflow.en.md`. Ancore da tenere: `#post-migration-fixes`, `#image-variants-full-and-light`, `#updating`.
   > - **C:** `admin/settings` (1386), `admin/configuration` (967) e `admin/index` (642), con destinazioni `architecture/settings.md`, `settings_cache.md`, `security.md` e `backend/scheduler.md`. Ancore: `#market-data-scheduler`, `#server-caches`, `#update-notifications`.
@@ -1327,7 +1327,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - `JWT_SECRET`;
   >   - i fix post-migrazione rimandano a `cli_tools.md#post-migration-fixes`.
   > - **Verifica obbligatoria (reperto di L):** `./dev.py docker exec db upgrade` non funziona mai, per due motivi.
-  >   - Il primo: `dev.py` non parte nel container. Importa `scripts.test_runner` (`dev.py:2350`), poi `__init__.py:45`, poi `_common.py:21`, e quindi `backend.test_scripts`, escluso da `.dockerignore:30` (f32e460ca, nella 1.1.0). Verificato anche da Q.
+  >   - Il primo: `dev.py` non parte nel container. Importa `scripts.test_runner` (`dev.py:2350`), poi `__init__.py:45`, poi `_common.py:21`, e quindi `backend.test_scripts`, escluso da `.dockerignore:30` (3b48e25b4, nella 1.1.0). Verificato anche da Q.
   >   - Il secondo: la guardia «server running» (`cli_base.py:338-375`) rifiuta il comando, perché il server occupa la porta.
   >   - La procedura giusta è non fare niente: le migrazioni si applicano all'avvio (`main.py:287`), e un fallimento ferma il server (`:216-218`).
   >   - La doc ha un avviso «Not available with the current image» (`#docker-exec`).
@@ -1430,7 +1430,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >     - L: eToro;
   >     - P: posizioni;
   >     - D: indice tools.
-  > - **Treno 18** (`70d02cd8e`, con M, P, K e N; in doc ha cambiato solo la gallery), da riportare in EN:
+  > - **Treno 18** (`bd7c656bf`, con M, P, K e N; in doc ha cambiato solo la gallery), da riportare in EN:
   >   - ❌ `assets/correlation.en.md:153`, riservata a M: «instance's default currency» è sbagliato. Il pannello usa `$defaultDisplayCurrency` (`assets/+page.svelte:1618`). Chiesto al coordinatore chi la corregge.
   >   - 🟡 `kpi-cards`: la card Returns mostra «—» quando TWRR o MWRR mancano, e lo stesso vale per il Timing effect (`KpiSection.svelte`, P).
   >   - 🟡 `preferences:12`: la Default Currency ora è anche la valuta da cui si aprono Dashboard, broker, Correlation e AI Export FX (N).
@@ -1465,7 +1465,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > **Note implementazione, checkpoint** (21:25):
   > - **Approvazione del developer** (21:22): chiudere l'onda 3 con gli effetti del treno 18. Niente traduzioni per ora: non ne è stata avviata nessuna, solo il dry-run, e nessun file IT/FR/ES è cambiato.
   > - **Server:** l'anteprima (`q-preview-6162d`) è fermata. `lsof -nP -iTCP:6162 -sTCP:LISTEN` e `lsof -nP -iTCP:6042 -sTCP:LISTEN` non trovano processi in ascolto (rc 1).
-  > - **Delta:** 22 file tracciati modificati, nessun file nuovo, con HEAD `108a2adf5` e target `dev_release2` = `70d02cd8e` (treno 18). Nessuna sovrapposizione con i 43 path cambiati dal target dopo la base: merge testuale pulito.
+  > - **Delta:** 22 file tracciati modificati, nessun file nuovo, con HEAD `03c943f53` e target `dev_release2` = `bd7c656bf` (treno 18). Nessuna sovrapposizione con i 43 path cambiati dal target dopo la base: merge testuale pulito.
   > - **Privacy:** 1412 righe aggiunte, nessun percorso personale, e-mail o segreto. `JWT_SECRET=paste-the-generated-value-here` e `tskey-auth-...` sono segnaposto. Gli IP sono privati d'esempio; i due IP Tailscale della sezione MagicDNS erano già pubblicati dalla v1.1.0 in tutte e 4 le lingue (in S20 si sostituiscono con indirizzi d'esempio).
   > - **`git diff --check`:** pulito.
   > - **Commit proposto:** `/tmp/libreFolio_commit_w3.txt`, «docs: simplify wave 3 admin pages, fix from code».
@@ -1474,13 +1474,13 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - **sempre dopo il treno 19:** confrontare le pagine EN con i testi cambiati da O;
   >   - **traduzioni:** quando le decide il developer.
 
-- **S19** ✅ 2026-10-08 — Seguiti del treno 19, su base `4d09ac2ac`. Il treno contiene l'onda 3 (`22d80282a`, merge `bd60dbdaf`), L (Docker), O (FX e i18n), I (eventi) e N. HEAD e worktree sono verificati: `4d09ac2ac` = `dev_release2`, worktree pulito, `22d80282a` antenato. Checkpoint pronto, FROZEN.
+- **S19** ✅ 2026-10-08 — Seguiti del treno 19, su base `a1cf58c42`. Il treno contiene l'onda 3 (`cc33206c9`, merge `c59774e95`), L (Docker), O (FX e i18n), I (eventi) e N. HEAD e worktree sono verificati: `a1cf58c42` = `dev_release2`, worktree pulito, `cc33206c9` antenato. Checkpoint pronto, FROZEN.
   > **Via libera** (coordinatore, 22:17):
   > - i seguiti di L: l'avviso `docker_advanced#docker-exec`, `cli_tools.en.md:8,78` e `dev_workflow.en.md:143-144`;
   > - poi il confronto tra i testi cambiati da O e le pagine EN, e la pagina `data-editor` di I.
   > - Niente pagine riservate a M, niente `getting-started` né `preferences`. Anteprima solo sulla 6162, perché sulla 6150 girano i gate del treno 19.
   >
-  > **Note implementazione, L** (il codice di `cdde3bc4d`):
+  > **Note implementazione, L** (il codice di `c61a90883`):
   > - **Comportamento nel container:** `dev.py` registra un gruppo di comandi solo se esistono le directory da cui dipende (`_has()`). `test`, `i18n`, `mkdocs translate` e `translate-validate` restano elencati, ma rispondono «'…' is not available in this installation: … is not part of it» ed escono con 2. `user`, `db` e `info` funzionano. L'`HEALTHCHECK` sonda la 6040. La card Forgot Password ora mostra `# Docker` e `# Manual install` (`ForgotPasswordCard.svelte:41-46`).
   > - **`admin/docker_advanced.en.md`:** l'avviso «Not available with the current image» diventa una nota: nell'immagine funzionano `user`, `db` e `info`, mentre i comandi di sviluppo sono elencati ma «not available in this installation».
   > - **`admin/cli_tools.en.md`:**
@@ -1489,7 +1489,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **`developer/dev_workflow.en.md#docker-test-mode`:** al posto del blocco «`dev.py` cannot start», `test` non fa parte dell'immagine (`_has()`, uscita 2, `./dev.py test utils dev-cli-image`). Resta l'ostacolo di `server --test`, perché manca Node.
   > - **`developer/architecture/overview.md#docker-image`:** aggiunti i comandi non disponibili e la porta 6040 dell'`HEALTHCHECK`.
   >
-  > **Note implementazione, O** (`bc700c8e8`; `en.json` fra `70d02cd8e` e `4d09ac2ac`: 6 valori cambiati, 32 chiavi nuove, nessuna rimossa):
+  > **Note implementazione, O** (`a6e903143`; `en.json` fra `bd7c656bf` e `a1cf58c42`: 6 valori cambiati, 32 chiavi nuove, nessuna rimossa):
   > - **`aiExport.detailLevelHelp.*`:** le pagine utente non citano i bucket. Le tabelle di `ai_export_sampling.md:68-104` hanno già K 30/14/7 per i prezzi e 84/28/14 per gli indicatori più lenti, coerenti col nuovo aiuto: nessuna modifica.
   > - **Avvisi dei report set, ora «Parse»:** la doc diceva già **Parse** (`how-to.en.md:83`, `danske-bank.en.md:49`): nessuna modifica.
   > - **Le 32 chiavi nuove:** sono stringhe che prima erano scritte fisse nel codice (errori CSV, messaggi FX), con lo stesso significato. La pagina `fx/detail/data-editor` diceva già che un tasso zero, negativo o vuoto viene saltato (`:45`).
@@ -1501,19 +1501,19 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - **`developer/backend/fx/architecture.md:61-64` era sbagliata:** diceva «drives only the countdown… not the request». Corretta: 120 s fissi solo per la sync della coppia nuova e per la Dashboard, mentre le finestre di sync usano il campo.
   >   - Aggiunta la regola in `core-ui/modals.md` (Sync modals), e una riga in `user/fx/sync.en.md`: con *Request timed out*, alzare **Timeout** e usare **Retry N failed**.
   >
-  > **Note implementazione, I** (`5423c334f`): `user/assets/detail/data-editor.en.md` ha nuove regole: modificare un evento ne cambia anche il tipo; un tipo doppio nella stessa data viene rifiutato; l'import aggiorna o salta righe. È coerente con `events.en.md:39` (gli eventi del provider sono di sola lettura e un import non li cambia) e con `create-edit.en.md:108-115` (il backup al cambio di valuta). Nessuna modifica.
+  > **Note implementazione, I** (`fbc95f3f9`): `user/assets/detail/data-editor.en.md` ha nuove regole: modificare un evento ne cambia anche il tipo; un tipo doppio nella stessa data viene rifiutato; l'import aggiorna o salta righe. È coerente con `events.en.md:39` (gli eventi del provider sono di sola lettura e un import non li cambia) e con `create-edit.en.md:108-115` (il backup al cambio di valuta). Nessuna modifica.
   >
   > **Note implementazione, checkpoint** (circa 22:40):
   > - **Cancello `t19a`:** `Q_GATE_ARGS=--t19` (nuova modalità di `q_gate.py`). Build strict exit 0, 0 WARNING/ERROR; `check-links` con 89 validi e il solo link rotto di base; scope 10 path, segnaposto, stile e `git diff --check` verdi. Self-check su 212 pagine EN/dev, 0 problemi.
-  > - **Delta:** 10 file tracciati modificati, nessun file nuovo. HEAD = target = `4d09ac2ac`, quindi nessuna divergenza. Nessuna pagina riservata a M, né `getting-started` o `preferences`; nessuna traduzione.
+  > - **Delta:** 10 file tracciati modificati, nessun file nuovo. HEAD = target = `a1cf58c42`, quindi nessuna divergenza. Nessuna pagina riservata a M, né `getting-started` o `preferences`; nessuna traduzione.
   > - **Privacy:** 60 righe aggiunte, nessun percorso personale, e-mail o segreto.
   > - **Server:** nessuno avviato in questo giro; 6162 e 6042 libere (`lsof` rc 1).
   > - **Commit proposto:** `/tmp/libreFolio_commit_t19.txt`, «docs: align EN docs with train 19».
   > - **Fuori pista:** in coda a S18 erano rimaste 4 righe di S17 (un «In attesa della review» superato e due reperti AI Export). Le ho riportate in S17, annotando che il primo reperto l'ha corretto O nel treno 19.
   > - **Nota per L, non bloccante:** la card mostra la forma host `./dev.py user reset …` senza `pipenv run`. Fuori da `pipenv shell` fallisce con `ModuleNotFoundError` (`host_installation.en.md:71`). La doc lo spiega.
-  > - **Esito:** commit `ef1397227`, entrato col treno 20 (merge di Q `3af9aac63`).
+  > - **Esito:** commit `7e47dc0e7`, entrato col treno 20 (merge di Q `46d1c4ed6`).
 
-- **S20** ✅ 2026-10-09 — Pagina per l'indicatore di sicurezza della connessione (L), più gli IP Tailscale, su base `9b2acdd5d` (treno 21). HEAD = `dev_release2`, worktree pulito. Checkpoint pronto, FROZEN.
+- **S20** ✅ 2026-10-09 — Pagina per l'indicatore di sicurezza della connessione (L), più gli IP Tailscale, su base `2726dec9a` (treno 21). HEAD = `dev_release2`, worktree pulito. Checkpoint pronto, FROZEN.
   > **Incarico** (coordinatore, 10:40, approvato dal developer). Le parole del developer: «una notifica … che se cliccato rimanda a una pagina di doc che spiega i vari problemi e suggerisce, per avere la sicurezza massima, di seguire la guida per esporre il servizio in modo sicuro e di accedere passando per l'url anche in rete locale».
   > - **I quattro livelli:** verde pieno (HTTPS o localhost); verde «VPN» (HTTP verso Tailscale: 100.64/10, `*.ts.net`, `fd7a:115c:a1e0::/48`); verde non pieno (HTTP in LAN, oppure segnali discordi come lo split DNS); rosso (HTTP da internet).
   > - **Il server** comunica lo schema e la classe della sorgente, mai l'IP, e se il proxy non è fidato (`FORWARDED_ALLOW_IPS`). `SESSION_COOKIE_SECURE=auto|always|never` lo documenta L in `admin/configuration`.
@@ -1613,11 +1613,11 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - il caso incerto ha ora un motivo che inizia con *Unclear* nei dettagli;
   >   - in «not secure», il pallino rosso su telefono.
   >   - Nessun «tooltip» resta nella pagina.
-  > - **Cancello `cs4`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con il solo link rotto di base; scope 7 path, segnaposto, stile e `diff --check` verdi. Self-check su 212 pagine, 0 problemi. Nessuna sovrapposizione col target `1ead733f2`. 6162 e 6042 libere.
+  > - **Cancello `cs4`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con il solo link rotto di base; scope 7 path, segnaposto, stile e `diff --check` verdi. Self-check su 212 pagine, 0 problemi. Nessuna sovrapposizione col target `aca87aec4`. 6162 e 6042 libere.
   > - **Integrazione:** S20 entra col treno 24, insieme al piano 36 di L (indicatore). Il coordinatore ha verificato che il merge simulato sul treno 23 è pulito.
-  > - **Esito:** commit `5980ab86f` («docs: connection security page, Tailscale examples»), entrato col treno 24 (merge di Q `e994979f9`) insieme al piano 36 di L.
+  > - **Esito:** commit `bc9ccb552` («docs: connection security page, Tailscale examples»), entrato col treno 24 (merge di Q `c76ba5b7c`) insieme al piano 36 di L.
 
-- **S21** ✅ 2026-10-09 — Verifica e archiviazione dei piani completati, su base `3cceb4f90` (treno 24b). HEAD = `dev_release2`, worktree pulito, verificati.
+- **S21** ✅ 2026-10-09 — Verifica e archiviazione dei piani completati, su base `f545b67e3` (treno 24b). HEAD = `dev_release2`, worktree pulito, verificati.
   > **Incarico** (coordinatore, 13:55). Le parole del developer: «verificare, degli stati completati, che i piani siano allineati, in caso contrario allinearli e poi usando la skill plan-archive spostarli ordinatamente in LibreFolio_developer_journal/Release_2/phases … verificare come le cose stanno nel codice e se ci sono incongruenze, cose mancanti per davvero (non piani cambiati e quindi punti diventati obsoleti) di segnarcelo per affrontarlo poi», e «archivia solo le cose davvero finite, non quelle parziali, ed evita di fare mezza cartella sopra e mezza cartella sotto».
   > - **Cartelle assegnate:**
   >   - `32_docsEnglish12`: la mia, resta attiva fino alle traduzioni, si allinea soltanto;
@@ -1634,7 +1634,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **`32_docsEnglish12` allineata:**
   >   - S16 portato a ✅, perché le onde 2 e 3 sono S17 e S18;
   >   - in S18, «In attesa della risposta» sostituito con la risposta del developer;
-  >   - le note di S20 non sono più «in corso», e c'è l'esito (`5980ab86f`, treno 24, merge `e994979f9`);
+  >   - le note di S20 non sono più «in corso», e c'è l'esito (`bc9ccb552`, treno 24, merge `c76ba5b7c`);
   >   - in cima, il blocco «Cosa resta aperto»: traduzioni, segnaposto `security/connection-indicator`, 8 portali dei broker come TODO nascosti.
   >   - Segnaposto EN rimasti alla punta: 9 (1 più 8 portali). M ha consegnato tutti gli altri scenari.
   > - **Verifica sul codice:** affidata a 5 sottoagenti `explore` in sola lettura, uno per `21_onboarding`, uno per `16_toolPlatform` con `17_assetDataOperations`, e tre per `09_feedbackJobs` (00-05, 06, 07-09).
@@ -1651,15 +1651,15 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Classificazione e azioni:**
   >   - **`17_assetDataOperations`: FINITA.** Allineate le 4 caselle non spuntate e lo stato. Spostata con `mv` in `Release_2/phases/17_assetDataOperations/`, con 1 link riscritto e 0 rotti. Aggiornati i 3 link in ingresso dalla 09.
   >   - **`16_toolPlatform`: resta.** Tutto il lavoro di C è chiuso o superato: lo step 6 è chiuso da D (renderer `registry.ts:241-245`), il §3 è superato dal round di capacità di D. Ma la §0 di `handoff-pac-D.md` è il contratto vivo di D (`13_pacAllocator` attiva, più di 20 link), quindi si archivia insieme alla 13. Allineati stato, caselle e manifest.
-  >   - **`21_onboarding`: resta**, per decisione del developer. In cima al piano principale ci sono gli aperti: la review C7 e le 6 voci del dossier §6 più `tools.hub`. In Round 8, note sulle chiavi morte (`08b885d43`), un Fuori pista sul titolo (`0aac5ef1e`) e l'aperto dello step 7; nel dossier, i punti superati.
-  >   - **`09_feedbackJobs`: resta attiva.** README con «Cosa resta aperto» in cima e la sezione «Stato verificato sul codice — 2026-10-09»; 43 modifiche di stato (celle, note e titoli) in README, 00, 01, 02, 05, 06, 07, 08 e 09, conservando lo storico, più 23 link: 3 da 03 e 04 verso `phases/17_…`, e 20 verso gli archivi di N, L e O, cioè `15_parallelRuntimeIsolation` (1), `14_feedbackImportUrgent` (7), `18_brimTargeted` (2) e `11_feedbackContractsRunes` (10). Trovati per nome di cartella, perché le righe del coordinatore si riferivano a `3cceb4f90`. Quei 20 qui risultano rotti finché il treno non porta gli spostamenti. Il link `06_piano_sprint.md:41` va a `phases/15_…`: risulta rotto finché il treno non porta lo spostamento di N.
+  >   - **`21_onboarding`: resta**, per decisione del developer. In cima al piano principale ci sono gli aperti: la review C7 e le 6 voci del dossier §6 più `tools.hub`. In Round 8, note sulle chiavi morte (`15a52c0a5`), un Fuori pista sul titolo (`d27fe6660`) e l'aperto dello step 7; nel dossier, i punti superati.
+  >   - **`09_feedbackJobs`: resta attiva.** README con «Cosa resta aperto» in cima e la sezione «Stato verificato sul codice — 2026-10-09»; 43 modifiche di stato (celle, note e titoli) in README, 00, 01, 02, 05, 06, 07, 08 e 09, conservando lo storico, più 23 link: 3 da 03 e 04 verso `phases/17_…`, e 20 verso gli archivi di N, L e O, cioè `15_parallelRuntimeIsolation` (1), `14_feedbackImportUrgent` (7), `18_brimTargeted` (2) e `11_feedbackContractsRunes` (10). Trovati per nome di cartella, perché le righe del coordinatore si riferivano a `f545b67e3`. Quei 20 qui risultano rotti finché il treno non porta gli spostamenti. Il link `06_piano_sprint.md:41` va a `phases/15_…`: risulta rotto finché il treno non porta lo spostamento di N.
   >   - **`32_docsEnglish12`: resta attiva** fino alle traduzioni.
   > - **Buchi veri, tutti tracciati nelle cartelle attive:**
   >   - 21: catalogo TS e registry Python, re-trigger di versione, fascia 641–1023 px, reset CLI, telemetria, `tools.hub`;
   >   - 09: P4-7, R2 `VERSION`, §1.4 AI Export, P4-9, P4-10, §2.4.
   > - **Link in ingresso da sistemare fuori dalle mie cartelle:** solo `Phase_0/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md:41`, che va a `../../phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md`.
   > - **Checkpoint:** manifest con i blob e commit «docs(journal): archive 17, align active plans». Stato FROZEN.
-- **S21b** ✅ 2026-10-09 — Riapertura del checkpoint S21, già verificato dal coordinator (19 percorsi, albero `3fd22c6e34a6`), per i link di P nella 09 e per le due note di I su P4-9 e P4-11. In pausa su richiesta del coordinator fino alle 15:22; alla ripresa base invariata (`3cceb4f90`, 19 percorsi).
+- **S21b** ✅ 2026-10-09 — Riapertura del checkpoint S21, già verificato dal coordinator (19 percorsi, albero `3fd22c6e34a6`), per i link di P nella 09 e per le due note di I su P4-9 e P4-11. In pausa su richiesta del coordinator fino alle 15:22; alla ripresa base invariata (`f545b67e3`, 19 percorsi).
   > **Note implementazione:**
   > - **Link di P.** Ho riscritto 5 link della 09 verso `../../phases/<cartella>/`, trovati per nome di cartella e con il conteggio atteso:
   >   - `22_assetPricingRefactor`: 3 (`00:49`, `00:52`, `06:177`);
@@ -1670,14 +1670,14 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - In 00: la voce della tabella, la nota «Stato al 2026-10-09» e la sezione §P4-9. La sezione ora dice cosa resta, tiene le due trappole (valgono anche per la conversione) e sposta i fatti del 22/09 in «Storico».
   >   - Nel blocco del comando, `npx vitest` è diventato `node_modules/.bin/vitest`, come vuole la regola del progetto.
   >   - Nel README: la voce di «Cosa resta aperto» e la cella dell'indice.
-  >   - I fatti: `2e4c8589f` (28/09) ha chiuso i rossi, da 11 su 159 test a 144 verdi. Restano i 7 specchi ri-pinnati, e il file ha 35 `readFileSync`. I 145/145 di oggi sono la misura di I, citata come sua.
+  >   - I fatti: `dcf79a9a2` (28/09) ha chiuso i rossi, da 11 su 159 test a 144 verdi. Restano i 7 specchi ri-pinnati, e il file ha 35 `readFileSync`. I 145/145 di oggi sono la misura di I, citata come sua.
   > - **P4-11, chiuso, con le righe di oggi.**
-  >   - `fmtCurrency` è a `GrowthChart.svelte:2156`, mascherata alla definizione da `804bc9903`.
+  >   - `fmtCurrency` è a `GrowthChart.svelte:2156`, mascherata alla definizione da `8fa118ba4`.
   >   - La custodiscono il gate (`moneyRenderSites.test.ts:193-196`, lista `residual` vuota a `:281`) e il pin `GrowthChart.test.ts:1080`.
   >   - In testa a §P4-11, una riga avverte che i numeri dell'analisi sono del 22/09.
   > - **08, tre celle:**
-  >   - `:831` «privacy e valuta, secondo sito»: chiuso da `176f19707` (24/09). L'asse di `LotComparisonChart.svelte:258` delega a `formatAxisCurrency` (`lotComparisonChartHelpers.ts:120`), che maschera solo le cifre e lascia valuta e segno.
-  >   - `:833` «P4-11, secondo grafico»: fatto da `804bc9903`. Oggi `shortMoney` `:166` e `axisTickAmount` `:183` mascherano le cifre.
+  >   - `:831` «privacy e valuta, secondo sito»: chiuso da `0ca72f743` (24/09). L'asse di `LotComparisonChart.svelte:258` delega a `formatAxisCurrency` (`lotComparisonChartHelpers.ts:120`), che maschera solo le cifre e lascia valuta e segno.
+  >   - `:833` «P4-11, secondo grafico»: fatto da `8fa118ba4`. Oggi `shortMoney` `:166` e `axisTickAmount` `:183` mascherano le cifre.
   >   - `:852`: accanto a «12 falliti su 162 (P4-9)», la chiusura del 28/09.
   >
   > **⚠️ Fuori pista:**
@@ -1730,8 +1730,8 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - `06:283`, S6 6.2 «Parziale»: i due campi sono in sola lettura (`schemas/fx.py:430-451`);
   > - `06:288`, S6 6.11 «Aperto»: nei 7 file della 6.11 non resta nessun `assert`.
   >
-  > Le ho allineate, con l'integrazione `514582a47`.
-- **S23** ✅ 2026-10-09 — Ultime pagine EN prima del giro di traduzione (coordinator, su richiesta del developer). Base `586a4f0ea` (treno 25), worktree pulita, verificato. Ogni voce è riverificata sul codice di `586a4f0ea`; scrive il docs-writer, solo in inglese, senza stamp.
+  > Le ho allineate, con l'integrazione `4b28bcc31`.
+- **S23** ✅ 2026-10-09 — Ultime pagine EN prima del giro di traduzione (coordinator, su richiesta del developer). Base `249f5a9aa` (treno 25), worktree pulita, verificato. Ogni voce è riverificata sul codice di `249f5a9aa`; scrive il docs-writer, solo in inglese, senza stamp.
   > **Passi:**
   > 1. ✅ 2026-10-09 Costo con il campo vuoto (docs-writer A): `user/transactions/form.en.md` e `developer/frontend/components/features/transaction-form.md`.
   >    - Fatti: in Manuale un TRANSFER o un ADJUSTMENT positivo senza costo riceve `costBasisRequired` (`transaction_service.py:157-165`, `transaction_batch_stages.py:878-966`), e qualunque issue annulla il batch (`:1013-1027`, rollback in `api/v1/transactions.py:151-180`). In Auto, se il broker non ha altre transazioni dell'asset fino a quella data, il WAC vale 0 (`portfolio_service.py:180-185`) e si scrive come costo (`transaction_service.py:1000-1003`): è la decisione del developer del 09/10.
@@ -1776,20 +1776,20 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > 6. ✅ 2026-10-09 O-3, facoltativa, scritta da Q (non sono pagine MkDocs): nei 3 esempi il metodo inesistente `ensure_started()` diventa il pattern reale dei test API, una fixture di modulo `test_server()` con `with _TestingServerManager() as server_manager:` e `start_server()` (`backend/test_scripts/test_server_helper.py:294`, `:396-401`; lo stesso pattern in 51 file di `test_api`, per esempio `test_asset_prices_export.py:614-620`), ricevuta dai test come argomento.
   >    - File: `.github/instructions/backend-testing.instructions.md:105-114`, `.github/skills/devpy-tools/testing-backend/SKILL.md:102-112`, `LibreFolio_developer_journal/knowledge_base/06_testing_backend.md:130-145`.
   >    - La voce O-3 nel README del 38 (`:94`) è del coordinatore: la chiude lui.
-  > 7. ✅ 2026-10-09 Segnaposto `security/connection-indicator` tolto da «Cosa resta aperto»: chiuso da M con `dbf4263e9` (il file `user/connection-security.en.md:15` ha l'immagine).
+  > 7. ✅ 2026-10-09 Segnaposto `security/connection-indicator` tolto da «Cosa resta aperto»: chiuso da M con `e9e76aece` (il file `user/connection-security.en.md:15` ha l'immagine).
   > 8. ✅ 2026-10-09 Gate, su 18 percorsi (nessuna traduzione, nessun file di codice):
   >    - `mkdocs build`: rc 0, zero WARNING o ERROR (`/tmp/libreFolio_q_build_s23.log`);
   >    - `check-links`: 90 validi, rotto solo `#rolling-return` come nella baseline, più 3 ancore in eccezione (`/tmp/libreFolio_q_checklinks_s23.log`);
   >    - i diagrammi Mermaid nuovi (`registries.md`, `core-infrastructure.md`, `test-walkthrough/index.md`) li ho controllati a mano: il build non li valida, perché si disegnano nel browser;
   >    - `translate-validate`, solo per il debito: 2126 errori e 72 file mancanti in tutto (`/tmp/libreFolio_q_tv_s23.log`). Delle pagine toccate hanno traduzioni solo `user/transactions/form` (12 errori), `user/dashboard/index` (39) e `admin/docker_advanced` (72): vanno al giro di traduzione, senza stamp;
   >    - `git diff --check` pulito, privacy pulita, nessun server, 6162 libera.
-- **S24** ✅ 2026-10-10 — Chiusura del piano (coordinator, su richiesta del developer prima della 1.2). Base `d59762e0a`, worktree pulita, verificato.
+- **S24** ✅ 2026-10-10 — Chiusura del piano (coordinator, su richiesta del developer prima della 1.2). Base `641ae3239`, worktree pulita, verificato.
   > **Note implementazione:**
-  > - **Verifica:** nel piano non resta nessun passo aperto: S1–S23 sono ✅ e committati, l'ultimo è S23 (`664fe9687`, treno 27). Restavano solo le due voci di «Cosa resta aperto», che sono fuori dal compito della 32:
+  > - **Verifica:** nel piano non resta nessun passo aperto: S1–S23 sono ✅ e committati, l'ultimo è S23 (`7fbed02ac`, treno 27). Restavano solo le due voci di «Cosa resta aperto», che sono fuori dal compito della 32:
   >   - le traduzioni IT/FR/ES: Q non traduce, e il giro lo decide il developer;
   >   - gli 8 screenshot dei portali dei broker, TODO nascosti per decisione del developer.
   >
-  >   Le traduzioni le ha fatte M nel lotto 11 (treno 29, `e32f47133`); gli screenshot dei portali sono una voce del backlog 38, che scrive il coordinatore. Il piano è FINITO.
+  >   Le traduzioni le ha fatte M nel lotto 11 (treno 29, `99117e505`); gli screenshot dei portali sono una voce del backlog 38, che scrive il coordinatore. Il piano è FINITO.
   > - **Posto:** il piano resta in `Phase_0/32_docsEnglish12/`, per la regola del developer del 10/10: «non voglio archiviare i loro plan in LibreFolio_developer_journal/Release_2/Phase_0/ voglio solo archiviare le chat».
   > - **16_toolPlatform:** le due note (`:7`, `:269`), testo nei miei file dalla S21, dicevano che le traduzioni erano tracciate nella 32. Ora rimandano al piano delle traduzioni di M ([plan-phase00TranslationRound12.prompt.md](../27_releaseImages/plan-phase00TranslationRound12.prompt.md)).
   > - **Sessione** rinominata «Q - doc 1.2 e review onboarding», su richiesta del developer: Q resta per la review manuale C7 della 21.

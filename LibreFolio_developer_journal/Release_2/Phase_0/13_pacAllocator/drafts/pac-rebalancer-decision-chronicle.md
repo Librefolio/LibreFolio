@@ -33,8 +33,8 @@ corrections, and three read-only mathematical/rubber-duck reviews. It is intende
 later historian ingestion, but it is not itself a devWiki filing.
 
 - **Baselines:** historical integration evidence was gathered at
-  `e38a521f068c2d1b8d743775e90711fec1326fb3`; current implementation baseline is
-  planning checkpoint `202e4056f2b915c055eeb8436eae765023201918`.
+  `71b37e4bf0cb127f4735794ec72704475cd2e9fe`; current implementation baseline is
+  planning checkpoint `e7910164c4c908b7c6315b7aa344c1e3f3001ba6`.
 - **Current product status:** **planning-only for the post-rejection operational PAC/Rebalancer design**. The repository contains preserved P1 and Round 2–4 prototype work, but the final `plan` contract, operational solver, funding/transfer planner, Broker routing, fee/tax-reserve-aware cash model, and order output described here are not evidenced as implemented.
 - **Current corrected design:** product flow and UI are developer-approved. Final
   normalization uses `order_instruction_kind = whole_quantity | monetary_amount`,
@@ -87,7 +87,7 @@ The same dated planning record separated quantity granularity from monetary gran
 
 **Historical prototype.** The P1 core was implemented as a pure Decimal pipeline: schema → normalize → evaluate → report. It used opaque row identity, separate instrument identity, native cash and contribution vectors, explicit valuation FX, exact target totals, and honest states `ready`, `needs_input`, `invalid`, and `unsupported`. It deliberately emitted `trade_feasibility="not_evaluated"` and `optimization="not_run"`, because it did not solve trades.
 
-The checkpoint records the P1 commit `cf1dd37974b2191877093e641cf00f261a241d20`, its integration with the runtime at `d018e8a677289b9bc38e65b437a86e1f2684caa7`, and later alignment work. The path history also records a Tool-platform merge into the PAC branch on 2026-09-10. The backlog page identifies the generic platform checkpoint as `570beb386` and marks the platform integrated, while still treating solver, Broker routing, and the accepted product UI as open.
+The checkpoint records the P1 commit `cbce2b5c46ace8b79c4d7fdc612232a12b062f93`, its integration with the runtime at `7e6d0709c2dca5bc2c85472ba51d1198978885d8`, and later alignment work. The path history also records a Tool-platform merge into the PAC branch on 2026-09-10. The backlog page identifies the generic platform checkpoint as `2217fa366` and marks the platform integrated, while still treating solver, Broker routing, and the accepted product UI as open.
 
 **Valid evidence, limited to P1.** On the combined revision, 816 schema tests and 194 service/evaluator tests passed; targeted Ruff and Black checks passed. Those results establish the initial-state evaluator and import boundary, not Tool codec integration, generated-client behavior, order feasibility, or a solver.
 
@@ -95,7 +95,7 @@ The checkpoint records the P1 commit `cf1dd37974b2191877093e641cf00f261a241d20`,
 
 ### 2026-09-11 to 2026-09-12 — Round 2 prototype and rejection
 
-**Historical prototype.** Round 2 evolved the unreleased PAC `1.0.0` in place. It added funding-first layout, Broker-owned cash copying, portfolio-backed Asset candidates, manual fallbacks, source facts locked read-only, separate target and purchase-grid controls, arbitrary positive quote bases, contribution `monetary_step`, Asset lifecycle handling, exact Decimal display, and desktop/mobile coverage. The implementation checkpoint was `8504f05280d9ff15485b6f8c07fb2b93ab45e1b5`.
+**Historical prototype.** Round 2 evolved the unreleased PAC `1.0.0` in place. It added funding-first layout, Broker-owned cash copying, portfolio-backed Asset candidates, manual fallbacks, source facts locked read-only, separate target and purchase-grid controls, arbitrary positive quote bases, contribution `monetary_step`, Asset lifecycle handling, exact Decimal display, and desktop/mobile coverage. The implementation checkpoint was `dfa2bd2740a6ac682ae2534c6de612cecf2379c2`.
 
 **Why the developer rejected the Round 2 UI.** The Round 2 plan header says the plan was approved, but the Round 3 plan explicitly says the subsequent manual review was rejected. These statements are compatible only if “approved” is read as approval to pursue the plan, not final product acceptance. The rejected UI still had:
 
@@ -113,7 +113,7 @@ The rejection was therefore product/UX feedback despite substantial automated co
 
 ### 2026-09-12 to 2026-09-14 — Round 3 refinement, still not accepted
 
-**Historical prototype.** Round 3 replaced the cash mode selector with immediate OWNER Broker cards, made contributions start as `[]`, compacted typography and controls, normalized Asset-scope colors, added currency flags, and made valuation FX contextual and explicitly copied. Its rollback-safe checkpoint was `afca689dd81cdcfc28664c6328fc74ec51c806da`.
+**Historical prototype.** Round 3 replaced the cash mode selector with immediate OWNER Broker cards, made contributions start as `[]`, compacted typography and controls, normalized Asset-scope colors, added currency flags, and made valuation FX contextual and explicitly copied. Its rollback-safe checkpoint was `ea1b30dd73d11f66815f964599ccf1c53481880f`.
 
 The Round 3 plan header again says “approved by the developer,” while the opening of the Round 4 plan says the Round 3 review confirmed functional progress but rejected the UI. The safest factual reading is that work/checkpoint authorization and final product acceptance were different gates; final acceptance was not obtained.
 
@@ -130,7 +130,7 @@ Round 4 lists the remaining product problems: ambiguous current-price presentati
 
 The platform kept shared backend versions `1.0.0`, independent UI SemVer, catalog v2, and isolated compute. PAC P1 returned theoretical monetary shares of selected cash and contributions. Rebalancer P1 aggregated current holdings by canonical `instrument_key` and returned current value/weight, target, and gap. Separate routes and renderers shared focused funding, FX, target, and diagnostics components.
 
-The preserved Round 4 prototype commit is `d66f8e58e74532776445506717bb4bf02aff91fd`.
+The preserved Round 4 prototype commit is `01bfae580487d2c02332980584f5fcd0f3152123`.
 
 **Why the developer rejected Round 4.** The current backlog/status page says Round 4 completed implementation and automatic gates, but the manual review found the result theoretically descriptive rather than operationally useful. It could analyze or allocate ideal money and show gaps, but it did not answer the actual execution questions:
 
@@ -153,9 +153,9 @@ Round 4 depended on shared ToolHub, i18n, CHANGELOG, generated-client, runner, a
 An independent integration review then found onboarding route-settlement races unrelated to the PAC mathematics: a reactive redirect could race the awaited load; later revisions also risked duplicate terminal Welcome navigation and tested the wrong ownership seam. The integration introduced an explicit ownership coordinator, acquired ownership before load, sampled route state after the awaited load, released in `finally`, kept Welcome terminal navigation page-owned, and added regressions. The final focused onboarding suite reached 371/371 tests on 12 files.
 
 The integration baseline at that stage was
-`e38a521f068c2d1b8d743775e90711fec1326fb3`, dated 2026-09-15 in Git history.
+`71b37e4bf0cb127f4735794ec72704475cd2e9fe`, dated 2026-09-15 in Git history.
 It integrates guided onboarding and contains the preserved Round 4 prototype
-history. The later planning checkpoint `202e4056...` does not evidence that the
+history. The later planning checkpoint `e7910164...` does not evidence that the
 operational redesign was implemented.
 
 ### 2026-09-15 — Independent mathematical audit and final design consolidation
@@ -848,8 +848,8 @@ dependency/probe remain separate open gates.
 ### Confirmed current facts
 
 - Implementation/planning checkpoint baseline:
-  `202e4056f2b915c055eeb8436eae765023201918`, parent
-  `e38a521f068c2d1b8d743775e90711fec1326fb3`.
+  `e7910164c4c908b7c6315b7aa344c1e3f3001ba6`, parent
+  `71b37e4bf0cb127f4735794ec72704475cd2e9fe`.
 - The checkpoint preserves the approved Round 6/7 planning bundle and integrates
   onboarding/shared work.
 - The current [end-to-end design](pac-rebalancer-end-to-end-design.md) is normative;
@@ -1049,13 +1049,13 @@ Historical automatic green gates cannot substitute for them.
 
 ### Path-scoped Git chronology
 
-- `a9138140afa14c19cff101c8b28d97d77245a1e8` — earliest permitted backlog snapshot, 2026-09-07.
-- `cf1dd37974b2191877093e641cf00f261a241d20` — P1 initial-state core checkpoint, 2026-09-10.
-- `8504f05280d9ff15485b6f8c07fb2b93ab45e1b5` — Round 2 portfolio-backed flow checkpoint, 2026-09-12.
-- `afca689dd81cdcfc28664c6328fc74ec51c806da` — Round 3 UI checkpoint, 2026-09-14.
-- `d66f8e58e74532776445506717bb4bf02aff91fd` — preserved Round 4 prototype, 2026-09-14.
-- `e38a521f068c2d1b8d743775e90711fec1326fb3` — parent baseline and onboarding integration, 2026-09-15.
-- `202e4056f2b915c055eeb8436eae765023201918` — planning checkpoint and current implementation baseline, 2026-09-15.
+- `9d8b5c54f8e8fcdebaaf4f1e17c48e3f1544203c` — earliest permitted backlog snapshot, 2026-09-07.
+- `cbce2b5c46ace8b79c4d7fdc612232a12b062f93` — P1 initial-state core checkpoint, 2026-09-10.
+- `dfa2bd2740a6ac682ae2534c6de612cecf2379c2` — Round 2 portfolio-backed flow checkpoint, 2026-09-12.
+- `ea1b30dd73d11f66815f964599ccf1c53481880f` — Round 3 UI checkpoint, 2026-09-14.
+- `01bfae580487d2c02332980584f5fcd0f3152123` — preserved Round 4 prototype, 2026-09-14.
+- `71b37e4bf0cb127f4735794ec72704475cd2e9fe` — parent baseline and onboarding integration, 2026-09-15.
+- `e7910164c4c908b7c6315b7aa344c1e3f3001ba6` — planning checkpoint and current implementation baseline, 2026-09-15.
 
 ## Content checksum
 

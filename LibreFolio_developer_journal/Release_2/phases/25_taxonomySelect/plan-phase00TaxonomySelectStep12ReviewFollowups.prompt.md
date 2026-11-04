@@ -8,7 +8,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `4ce1dc35f` (= `dev_release2`, dopo il fast-forward su `fb7701968` e il CHANGELOG del coordinator) |
+| **Baseline** | `5040e6c3c` (= `dev_release2`, dopo il fast-forward su `045578639` e il CHANGELOG del coordinator) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`; `front build --debug` prima della prima suite che avvia il backend |
 | **File di K** | c: `files/+page.svelte`, `tools/+page.svelte`, `tools/[tool_code]/+page.svelte`, `(app)/+layout.svelte`, `e2e/layout/document-title.spec.ts`, `(app)/layout.gate.test.ts`; a: `transactions/+page.svelte`; b: `app.css`, `app.html`, `static/offline.html`, `static/fonts/**`, `scripts/update_js_cache.py`, `TransactionsTable.svelte` (solo `:1100`), devWiki `problems/flag-emoji-windows.md` |
 | **Condivisi, solo in aggiunta** | `scripts/test_runner/_frontend_utility.py`, `scripts/test_runner/_frontend_transaction.py` |
@@ -55,7 +55,7 @@
 - [x] **12.0 Piano nel journal** — ✅ 2026-09-29: questo file, con il rimando dallo step 11.
 - [x] **12.1 c** — ✅ 2026-09-29: test rossi (guardia, `document-title.spec.ts`), codice, gate, commit c.
   > **Note implementazione**:
-  > - **Rossi prima** (test-author, HEAD `4ce1dc35f`):
+  > - **Rossi prima** (test-author, HEAD `5040e6c3c`):
   >   - guardia nuova `src/routes/documentTitle.guard.test.ts`, 5 test, allow-list vuota: 1 rosso, che elenca esattamente
   >     `(app)/+layout.svelte:63` (`document.title =`), `files/+page.svelte:692`, `tools/+page.svelte:7` e
   >     `tools/[tool_code]/+page.svelte:10`;
@@ -111,7 +111,7 @@
   > - La corsa rossa sul codice originale fa da mutante «senza cura».
   >
   > **Fuori pista (preesistente, per il backlog)**: clonando insieme **due righe singole dello stesso tipo**, il workspace
-  > dà loro un `link_uuid` condiviso (`TransactionBulkModal.svelte:412`, da `8268a44bb`, 05/06), e l'editor le mostra come
+  > dà loro un `link_uuid` condiviso (`TransactionBulkModal.svelte:412`, da `dd0213c58`, 05/06), e l'editor le mostra come
   > una coppia (1a e 1b). La condizione controlla solo «2 righe, stesso tipo», non che siano davvero legate tra loro.
   > Rimedio probabile: condividere l'uuid solo se una delle due righe ha l'altra come `related_transaction_id`. E2 clona un
   > DEPOSIT e un WITHDRAWAL proprio per evitarlo.
@@ -256,7 +256,7 @@ tornando da lì alla Dashboard dalla barra laterale.
   `TestConsumerScopedFailure::test_an_unattributed_resource_stays_fatal_for_every_consumer[required_for0]` esegue
   l'aggiornamento reale, con la rete, sulle cartelle vere di `frontend/static`.
 - **Clonazione di due righe singole dello stesso tipo**: ricevono un `link_uuid` condiviso
-  (`TransactionBulkModal.svelte:412`, da `8268a44bb`) e l'editor le mostra come una coppia.
+  (`TransactionBulkModal.svelte:412`, da `dd0213c58`) e l'editor le mostra come una coppia.
 - **«Riprova» della scheda Correlazione**: già girato a Risk dal coordinator.
 
 ## Voci di CHANGELOG proposte

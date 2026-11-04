@@ -1,10 +1,10 @@
 # Testlist manuale — ondata 5 (release 1.3.0)
 
-Fonti: `RECAP-ondata5.md` e i commit dei rami dell'ondata sopra `94672e66c` (50 commit senza unioni, deduplicati), più i 58 commit senza unioni tra `48bd230d1` e `8f7282ff6`. Letta il 27/10/2026.
+Fonti: `RECAP-ondata5.md` e i commit dei rami dell'ondata sopra `037b1c9ef` (50 commit senza unioni, deduplicati), più i 58 commit senza unioni tra `48bd230d1` e `befd4e3fe`. Letta il 27/10/2026.
 
 **Come si usa.** Spunta `- [ ]` quando la prova è passata. Se non passa, scrivi sotto la voce cosa hai visto. Ogni voce ha un codice del lotto, passi brevi e **Atteso**.
 
-**Stato (aggiornato dal coordinatore a ogni lotto committato):** ✅ pronta, 27/10/2026, commit `8f7282ff6` (il candidato del treno 11). Il gate è verde: API del backend tutto e all-frontend 9/9, alle 16:27, a macchina tranquilla. Fuori da questa lista restano solo i treni 9 e 10 (§9).
+**Stato (aggiornato dal coordinatore a ogni lotto committato):** ✅ pronta, 27/10/2026, commit `befd4e3fe` (il candidato del treno 11). Il gate è verde: API del backend tutto e all-frontend 9/9, alle 16:27, a macchina tranquilla. Fuori da questa lista restano solo i treni 9 e 10 (§9).
 
 ## Dove e quando si prova
 
@@ -14,7 +14,7 @@ Fonti: `RECAP-ondata5.md` e i commit dei rami dell'ondata sopra `94672e66c` (50 
 |---|---|
 | Cartella | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/gate-coord` |
 | Branch | `train11b` |
-| Commit da provare | `8f7282ff6` (unione `test(instance-key)` in `train11b`) |
+| Commit da provare | `befd4e3fe` (unione `test(instance-key)` in `train11b`) |
 | Ambiente Python | `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` (lo stesso venv del checkout principale) |
 
 **Comandi, una volta per sessione di prova** (un terminale per il server, uno per i comandi):
@@ -358,7 +358,7 @@ La crea il coordinatore con la skill `real-data-copy` (da produzione, a server s
   1. Importa `revolut-invest-export.csv`. Cerca la riga **TSLA STOCK SPLIT** (0,16431924).
   2. Importa `/tmp/t212-split.csv` (§0.2).
   3. Importa il campione `trading212-export.csv` (ha uno split **inverso**, una **Stock distribution** e un **Transfer out**).
-  - **Atteso:** Revolut: lo split diventa **una** transazione **Adjustment** in entrata di **0,16431924** azioni TSLA, a costo **0**, con la descrizione «STOCK SPLIT: TSLA». Non è più nell'avviso «non importato». Trading 212 (file di prova): le due righe «close/open» diventano **un** Adjustment di **+20** azioni (30 − 10), costo 0. Campione T212: lo split inverso (meno azioni dopo) e la **Stock distribution** restano nell'avviso ambra. Nel passo di revisione del wizard una nota dice quante righe sembrano split. Nel Bulk compare il banner «N righe potrebbero essere split» con ticker, azioni aggiunte, data e rapporto; «Crea l'evento SPLIT e collega» apre il mini-modale già su SPLIT con il rapporto compilato; collegata la riga, il banner la toglie (W5-2b, `e208b3417`). Nel campione Revolut vero lo split TSLA è la prima riga del ticker: lì il rapporto non si legge e l'avviso di arrotondamento non compare.
+  - **Atteso:** Revolut: lo split diventa **una** transazione **Adjustment** in entrata di **0,16431924** azioni TSLA, a costo **0**, con la descrizione «STOCK SPLIT: TSLA». Non è più nell'avviso «non importato». Trading 212 (file di prova): le due righe «close/open» diventano **un** Adjustment di **+20** azioni (30 − 10), costo 0. Campione T212: lo split inverso (meno azioni dopo) e la **Stock distribution** restano nell'avviso ambra. Nel passo di revisione del wizard una nota dice quante righe sembrano split. Nel Bulk compare il banner «N righe potrebbero essere split» con ticker, azioni aggiunte, data e rapporto; «Crea l'evento SPLIT e collega» apre il mini-modale già su SPLIT con il rapporto compilato; collegata la riga, il banner la toglie (W5-2b, `0a6fbdf4b`). Nel campione Revolut vero lo split TSLA è la prima riga del ticker: lì il rapporto non si legge e l'avviso di arrotondamento non compare.
 
 - [ ] **V-37b — «⚡ Validate now» controlla tutte le celle prima del server**
   1. **Transactions › Add Transaction**, tipo **Buy**. Non compilare nulla e premi **⚡ Validate now**.
@@ -393,7 +393,7 @@ La crea il coordinatore con la skill `real-data-copy` (da produzione, a server s
   2. **Settings › Plugins › Broker imports**, carta del CSV generico: cambia **Day and month order** da giorno-prima a **mese-prima**. Salva.
   3. Torna all'elenco dei file importati.
   4. Rifai il parse del file e guarda le due date.
-  - **Atteso:** al punto 1 `03/04/2025` è il **3 aprile** e `25/12/2025` il 25 dicembre. Al punto 3 il file già letto mostra il banner **«parse da rifare»** (è stato letto con l'ordine vecchio). Al punto 4 `03/04/2025` diventa il **4 marzo**, `25/12/2025` resta il 25 dicembre (13 non è un mese, quindi ripiega su giorno-prima). Le date ISO (`2025-04-03`) e quelle con il mese a lettere non cambiano mai. Non esiste un'opzione «automatica». L'impostazione è personale: un altro utente continua a leggere giorno-prima (W5-8, `c69a47546`).
+  - **Atteso:** al punto 1 `03/04/2025` è il **3 aprile** e `25/12/2025` il 25 dicembre. Al punto 3 il file già letto mostra il banner **«parse da rifare»** (è stato letto con l'ordine vecchio). Al punto 4 `03/04/2025` diventa il **4 marzo**, `25/12/2025` resta il 25 dicembre (13 non è un mese, quindi ripiega su giorno-prima). Le date ISO (`2025-04-03`) e quelle con il mese a lettere non cambiano mai. Non esiste un'opzione «automatica». L'impostazione è personale: un altro utente continua a leggere giorno-prima (W5-8, `7c01cb79e`).
 
 ---
 
@@ -570,7 +570,7 @@ La crea il coordinatore con la skill `real-data-copy` (da produzione, a server s
 | W-B88 (data operazione di ogni plugin, 87 guardie) | Nessun cambio visibile: sono test su righe con due date diverse. |
 | X5-4a / X5-4b (contratto dei campi BRIM, impostazioni dei plugin tool) | Nessun tool o plugin BRIM le dichiara oggi: non c'è niente da vedere. Resta solo la prova «nessun gruppo Tools» (§5). |
 | X-Q1…Q3, S1 (prezzi letti per osservazione) | Stesse risposte di prima, solo meno conversioni (3 650 → 2 608): coperto da test. |
-| R1 (serie di rischio dalle osservazioni), J5-3, MF5-5, P4 e `d8cb1852c` (motore) | Numeri identici: 202–220 report senza differenze, suite financial-math e roi-fifo-utils. L'effetto visibile (velocità, memoria) è nella voce MF-P1c + P4. |
+| R1 (serie di rischio dalle osservazioni), J5-3, MF5-5, P4 e `8f8f1bd4c` (motore) | Numeri identici: 202–220 report senza differenze, suite financial-math e roi-fifo-utils. L'effetto visibile (velocità, memoria) è nella voce MF-P1c + P4. |
 | #48 lato server (J5-1, J5-2, MF5-1b) | Si vede solo tramite Y5-2. |
 | M-1, M-2 (immagini Docker arm64 e firma) | Girano su GitHub a ogni rilascio. Il comando di verifica è nella guida Docker avanzata. |
 | H5-3 (istanza chiusa finché il titolare non è assegnato), B5-1b (`--recover owner`), B5-1c/d/e (link `/setup` salvo, ripristino con la funzione vera di A), A5-2 (casi di sicurezza: `EMAIL_TAKEN`, un crash a metà, token piantati) | Servono errori forzati: li copre la suite `backup-owner-real` e i test di A/H. Il caso felice è nelle voci B5-1. |
@@ -593,7 +593,7 @@ La crea il coordinatore con la skill `real-data-copy` (da produzione, a server s
 |---|---|---|
 | **Treni 9 e 10** | — | checklist da preparare quando fai la push |
 
-Tutti gli altri lotti dell'ondata 5 sono nel candidato `8f7282ff6` e hanno la loro voce, o stanno nella tabella «Non si prova a mano». Sono usciti da questa tabella: MF-P1d, W5-2c, W5-6, W5-8, B5-1f e B5-1g (voci già nel §4, §2 e §7); A5-3 e H5-5 (nessuna voce); la conferma della nuova email del titolare e B5-1i (ora voci A5-1b + H5-4 e B5-1j); MF-P4b e D-P4 (fatti: voci nel §4, §6 e §7).
+Tutti gli altri lotti dell'ondata 5 sono nel candidato `befd4e3fe` e hanno la loro voce, o stanno nella tabella «Non si prova a mano». Sono usciti da questa tabella: MF-P1d, W5-2c, W5-6, W5-8, B5-1f e B5-1g (voci già nel §4, §2 e §7); A5-3 e H5-5 (nessuna voce); la conferma della nuova email del titolare e B5-1i (ora voci A5-1b + H5-4 e B5-1j); MF-P4b e D-P4 (fatti: voci nel §4, §6 e §7).
 
 ---
 

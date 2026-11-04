@@ -4,7 +4,7 @@
 
 **Piano padre:** [plan-phase00Onboarding.prompt.md](plan-phase00Onboarding.prompt.md).
 
-**Baseline Git:** `4a9ae876e4599b5fdec5ade512b65b9c31a584a5`, più il delta
+**Baseline Git:** `b451104361df9394ba4fcfef20f85e173dc54281`, più il delta
 shared-onboarding già verificato e ancora non committato nello stesso worktree.
 
 **Feedback developer:** review del primo tour, 2026-09-11.

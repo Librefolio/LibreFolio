@@ -1,7 +1,7 @@
 # Plan — PAC/Rebalancer: removal of the remaining P1 residue
 
-> **Predecessor**: `plan-phase00PacRebalancerRemediation.prompt.md` (commit `c7e25da93`).
-> **Baseline**: `b82e59ffa` — *refactor(pac): drop P1 prototype, wire planner v2* (33 files,
+> **Predecessor**: `plan-phase00PacRebalancerRemediation.prompt.md` (commit `9c2b6a221`).
+> **Baseline**: `704ba66a3` — *refactor(pac): drop P1 prototype, wire planner v2* (33 files,
 > +193 / −11 877). That commit removed the P1 **tool wiring**; this plan removes the P1
 > **code** that the wiring left behind.
 > **Lane**: test port `6152`, data dir `/tmp/librefolio-r2-d`.
@@ -11,7 +11,7 @@
 
 ## 1. Why this plan exists, and what the previous one got wrong
 
-`b82e59ffa` deleted the P1 `analyze` services, their UI and their tests. It did **not**
+`704ba66a3` deleted the P1 `analyze` services, their UI and their tests. It did **not**
 delete the P1 arithmetic, dataclasses and schemas, because those are intertwined with the
 v2 exact domain inside the same files.
 
@@ -65,7 +65,7 @@ external roots        269
 ORPHANS                83
 
    76 / 346   schemas/pac_allocator.py      lines 17..521   (v2 frontier: 534)
-    6 /  14   normalize.py                  lines 85..90    (residue of b82e59ffa)
+    6 /  14   normalize.py                  lines 85..90    (residue of 704ba66a3)
     1 / 106   models.py                     line 264        (RebalancerPolicy)
     0 / 110   evaluator.py                  none — the 6 P1 symbols have a test
 ```
@@ -103,7 +103,7 @@ Return threshold: `svelte-check` = **3 errors**, not 0 and not 5.
 ### Step 2 — `normalize.py`, six constants
 
 `_FIXED_DECIMAL`, `_DATE`, `_CURRENCY`, `_MAX_DECIMAL_DIGITS`, `_MAX_QUOTE_BASE`, `_Path`
-(lines 85..90). Materials of `_Normalizer`, removed in `b82e59ffa` — **residue of my own
+(lines 85..90). Materials of `_Normalizer`, removed in `704ba66a3` — **residue of my own
 edit**, not of the prototype. `ruff` and `py_compile` pass happily on orphan constants.
 
 ### Step 3 — `evaluator.py` + its two tests (ATOMIC)
@@ -281,7 +281,7 @@ rather than my reachability analysis saying so.
 
 ### `pac-analyze` registered twice, pointing at deleted files
 
-`b82e59ffa` deleted `test_pac_analyze.py` and `test_pac_analyze_schemas.py` but left both
+`704ba66a3` deleted `test_pac_analyze.py` and `test_pac_analyze_schemas.py` but left both
 of their runner registrations alive:
 
 ```
@@ -487,7 +487,7 @@ D             3 timestamps with a constant, never-measured +1; one asserting it 
 Three reasons it lands on the new datum specifically:
 
 - **The part of a measurement that goes unmeasured is the part the countermeasure adds**,
-  because it is the newest and nobody treats it as data yet. `d569b866d` was measured by
+  because it is the newest and nobody treats it as data yet. `85d07da48` was measured by
   three parties all day; the clock never, by anyone.
 - **A new countermeasure has no known failure mode**, so there is nothing to recognise. A
   datum becomes reliable only after someone has seen how it breaks.
@@ -516,7 +516,7 @@ message*, where they had invented it.
 
 ---
 
-## 9. Re-validation on the combined revision `d569b866d`
+## 9. Re-validation on the combined revision `85d07da48`
 
 > **Written before executing.** A prediction registered before the measurement is a test;
 > the same observation made afterwards is an explanation. What follows was committed to
@@ -525,8 +525,8 @@ message*, where they had invented it.
 Merge verified first, with the gate that diagnosed the hazard rather than a new one:
 
 ```
-git merge-base --is-ancestor d7c75d953 HEAD     before: false   after: TRUE
-HEAD    d569b866d      HEAD^1 ef321160f (mine)      HEAD^2 d7c75d953 (target)
+git merge-base --is-ancestor db4501a9f HEAD     before: false   after: TRUE
+HEAD    85d07da48      HEAD^1 06b6a173e (mine)      HEAD^2 db4501a9f (target)
 files brought by the merge        14      predicted 14       OK
 intersection with my 42        EMPTY      predicted empty    OK
 ```

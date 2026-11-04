@@ -6,7 +6,7 @@
 
 **Modello**: Sonnet.
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-redesigned-spork` · **Branch**: `e-alfy-y-cruscotto-e-grafici`
-**HEAD di partenza (da verificare)**: `c042f2481` (fast-forward dal coordinatore da `5e5c6b64a`).
+**HEAD di partenza (da verificare)**: `295a09c86` (fast-forward dal coordinatore da `9623491df`).
 **Corsia**: porta `6189`, cartella dati `/tmp/librefolio-r13-y`.
 **Piano e backlog**: Y-41 nel backlog `Phase_0/BACKLOG_POST_1.2.md:9907-9915` e nel tuo piano `09_dashboardCharts/plan-phase01DashboardCharts.prompt.md`, «20/10 · Il lotto Y-39» (~7902-8020, Y-41 alla ~8015).
 

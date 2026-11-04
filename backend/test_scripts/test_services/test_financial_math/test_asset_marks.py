@@ -14,7 +14,7 @@ Module under test: ``backend/app/services/financial_math/portfolio/daily_state.p
   ``fx_rate_map[(ccy, target, day)]`` and is None without a rate or outside those days, even for an amount already in
   the target currency.
 
-Red on HEAD ``f33d91b4f``: the whole file fails at collection, ``ImportError: cannot import name 'AssetMarks' from
+Red on HEAD ``8ebdb3857``: the whole file fails at collection, ``ImportError: cannot import name 'AssetMarks' from
 'backend.app.services.financial_math.portfolio.daily_state'`` — new API. ``TestTheValuationReadsTheOneRule`` asserts
 values that HEAD's inline ``_market_value_for`` gave too (its arithmetic is unchanged); on the tree it locks that the
 valuation and the reader are one rule.

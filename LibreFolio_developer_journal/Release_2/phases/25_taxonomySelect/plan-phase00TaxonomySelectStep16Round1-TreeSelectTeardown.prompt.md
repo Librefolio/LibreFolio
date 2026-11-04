@@ -1,12 +1,12 @@
 # Piano — K / step 16, round 1: TreeSelect annulla il lavoro differito quando viene distrutto
 
-> Difetto trovato durante la validazione del treno (`998ce67d4`), nella `component-unit` dello step 16
+> Difetto trovato durante la validazione del treno (`4e99cdb9e`), nella `component-unit` dello step 16
 > ([`plan-phase00TaxonomySelectStep16AssetDetailUx.prompt.md`](plan-phase00TaxonomySelectStep16AssetDetailUx.prompt.md)).
 > È un checkpoint a sé, prima dello step 17.
 
 | | |
 |---|---|
-| **Baseline** | `a7d0b37ec` (riallineamento del coordinator, 06/10), worktree pulito |
+| **Baseline** | `9e4e90675` (riallineamento del coordinator, 06/10), worktree pulito |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
 | **Autorizzazione** | coordinator, 06/10: «Cura di `TreeSelect` approvata, ma DOPO il riallineamento: […] rosso col test-author in `TreeSelect.test.ts`, la cura in `TreeSelect.svelte` (handle annullati alla distruzione, elemento cercato nel contenitore del dropdown), `component-unit` ripetuta; un checkpoint a sé.» Poi: «riallineati […] K: la cura di `TreeSelect` (rosso, poi cura, poi `component-unit`), checkpoint a sé». |
 | **Superfici** | `frontend/src/lib/components/ui/select/TreeSelect.svelte` e `TreeSelect.test.ts`. Nessun altro ramo li tocca. |
@@ -14,7 +14,7 @@
 
 ## Il difetto (triage con la skill test-triage)
 
-- **Sintomo**: `front-utility component-unit` su `998ce67d4` passa 2276/2276 ma esce con codice 1, per un'eccezione
+- **Sintomo**: `front-utility component-unit` su `4e99cdb9e` passa 2276/2276 ma esce con codice 1, per un'eccezione
   non gestita.
   - L'eccezione è «ReferenceError: document is not defined», attribuita a `ChartSignalsSection.test.ts`.
   - È intermittente sotto carico: 0 casi su 5 col file da solo, 0 su 3 con la lista completa.
@@ -27,7 +27,7 @@
   - Se l'ambiente di test rimuove `document` prima che partano, il callback lancia l'eccezione.
   - Nel browser è innocuo, perché `document` esiste sempre.
   - Lo stesso codice è identico su `dev_release2`, quindi il problema c'è anche lì.
-- **Verdetto: difetto** del prodotto, introdotto da K in `4041ffa98` («two-level type select»).
+- **Verdetto: difetto** del prodotto, introdotto da K in `b4a929971` («two-level type select»).
 
 ## La cura
 

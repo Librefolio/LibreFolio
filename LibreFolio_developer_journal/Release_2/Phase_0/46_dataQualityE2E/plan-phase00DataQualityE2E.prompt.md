@@ -13,7 +13,7 @@
 > - Doc dev `data-quality-banner.md` aggiornata da V via docs-writer, in inglese, nello stesso lotto.
 > - In `KpiSection.svelte` solo l'attributo a `:304`: I la tocca con M-18 (`:252-268`).
 >
-> **Base**: portata in fast-forward a `f0f3de0d9` (treno 53, con BU2: troncamento in `backend/app/db/precision.py`).
+> **Base**: portata in fast-forward a `cc8453e79` (treno 53, con BU2: troncamento in `backend/app/db/precision.py`).
 > Avanzamento in §9.
 
 ## 0. Contesto
@@ -22,7 +22,7 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-ideal-system` |
 | Branch | `e-alfy-v-test-e2e-qualita-dati` (rinominato dall'app su sua richiesta; HEAD invariato) |
-| HEAD | analisi su `784b357661a6a456d91d1fd22e88af38da7fefcf` (treno 51); lavoro su `f0f3de0d9d80644b9886bc6817d442f9a47ec0a2` (treno 53, fast-forward del coordinatore, nessuno dei file di questo piano toccato) |
+| HEAD | analisi su `393a1ee35471ac265fd7b6f393b42c9efcfea622` (treno 51); lavoro su `cc8453e7927a90c07a1387f3eaec79e1385bf806` (treno 53, fast-forward del coordinatore, nessuno dei file di questo piano toccato) |
 | Corsia | porta `6175`, dati `/tmp/librefolio-r2-v-dq` |
 | Coordinatore | `c8328a01-f208-4ade-a352-0486d1f14de2` |
 | Wiki | `graph.json` assente (previsto). Lette: `problems/zero-purchase-cost-foreign-asset-paid-in-report-currency`, `decisions/financial-math-single-average-cost`, `sources/phase00-fx-dashboard-sync-2026-10`, backlog 38 P-10 |
@@ -344,7 +344,7 @@ Spec separato: `frontend/e2e/portfolio/data-quality-legacy.spec.ts`.
   > - Il primo Vitest è fallito prima di raccogliere i test: «Failed to resolve import "./generated"». In una worktree
   >   nuova il client generato manca; il runner lo rigenera da sé (`_ensure_frontend_build`). Corretto con `api sync`,
   >   nessun file tracciato toccato.
-  > - Il coordinatore ha portato la base a `f0f3de0d9` durante il passo; nessuno dei file del piano era toccato.
+  > - Il coordinatore ha portato la base a `cc8453e79` durante il passo; nessuno dei file del piano era toccato.
 - ✅ **Passo 2** (12/10): i due attributi.
   > **Note implementazione**:
   > - `DataTable.svelte:1249-1255`: `data-column-id={column.id}`; prettier ha spezzato il `<td>` su più righe.
@@ -520,7 +520,7 @@ Spec separato: `frontend/e2e/portfolio/data-quality-legacy.spec.ts`.
 
 ## 10. Checkpoint (12/10) — FROZEN
 
-- **Base**: HEAD `f0f3de0d9` (treno 53), uguale al target del coordinatore. Nessun commit, nessuno staging.
+- **Base**: HEAD `cc8453e79` (treno 53), uguale al target del coordinatore. Nessun commit, nessuno staging.
 - **Delta**: 7 file tracciati modificati, 4 nuovi.
 
   | File | Cosa |
@@ -558,8 +558,8 @@ Spec separato: `frontend/e2e/portfolio/data-quality-legacy.spec.ts`.
 
 ## 11. Lotto 2: V-1, V-7, V-5, V-6 (12/10)
 
-> **Mandato** (coordinatore, 12/10, dopo il treno 56 `e7d698c4d`, che contiene il lotto 1: `15bfcf1e8`, `2f0b06346`,
-> `b44b28f3d`), «nello spirito della decisione D2 del developer»:
+> **Mandato** (coordinatore, 12/10, dopo il treno 56 `d81bb4965`, che contiene il lotto 1: `f7c59b815`, `63e33bb03`,
+> `2afdd7d9b`), «nello spirito della decisione D2 del developer»:
 > 1. V-1 come D2: prima il rosso, poi la cura;
 > 2. V-7: `dashboard-broker-filter-label` su un account usa-e-getta;
 > 3. V-5 e V-6.
@@ -569,7 +569,7 @@ Spec separato: `frontend/e2e/portfolio/data-quality-legacy.spec.ts`.
 >
 > L'autorizzazione di V-1 è un'estensione della D2 decisa dal coordinatore, non una nuova parola del developer.
 
-### 11.1 Stato verificato (HEAD `e7d698c4d`, worktree pulita)
+### 11.1 Stato verificato (HEAD `d81bb4965`, worktree pulita)
 
 - **V-1**: `frontend/src/routes/(app)/dashboard/+page.svelte:436-463`, ramo `sync_asset_prices` di
   `handleBannerAction`. Dopo la risposta del sync: i toast, poi `invalidate()` (`:456`) e `await loadAll(true)`;
@@ -704,7 +704,7 @@ Le prove sono anche nelle voci di §11.3.
 ## 12. Lavoro 3 (12/10): V-9 e V-10, isolamento degli E2E, lacune della 1.2
 
 > **Mandato** (coordinatore, 12/10, su richiesta del developer: «riusciamo a riassegnargli qualcosa?»). Base: il mio
-> ramo con il lotto 2 committato (`a0722f755`, `4e710a1f9`, `6f5a3bcff`, `d09fb30c0`). Corsia 6175, un checkpoint
+> ramo con il lotto 2 committato (`c8d955c86`, `fc7440524`, `fb0d477a8`, `fe56d4c95`). Corsia 6175, un checkpoint
 > FROZEN per passo.
 > 1. V-9 e V-10;
 > 2. isolamento degli E2E, la classe di V-7: prima un rapporto con le priorità, poi la cura dei casi peggiori con
@@ -713,7 +713,7 @@ Le prove sono anche nelle voci di §11.3.
 >
 > V-3 e V-8 restano nel backlog: li porta il coordinatore al developer.
 
-### 12.1 Passo 1, stato verificato (HEAD `d09fb30c0`)
+### 12.1 Passo 1, stato verificato (HEAD `fe56d4c95`)
 
 - **V-9**, in `mkdocs_src/docs/developer/frontend/data-quality-banner.md`:
   - `:49` dice «First 3 issues are visible; an expand button appears when there are more», ma il banner raggruppato
@@ -794,7 +794,7 @@ Le prove sono anche nelle voci di §11.3.
   > - V-12: il titolo `grouped` nomina solo la Dashboard, ma lo usano anche tre pannelli del Rischio;
   > - V-13: commenti del backend che dicono ancora «valued at cost».
 
-> Checkpoint del passo 1 committato dal coordinatore sul mio ramo: `8994100b4`, `973ca3961`, `f3608a385` (12/10).
+> Checkpoint del passo 1 committato dal coordinatore sul mio ramo: `e8e1d1362`, `091892da4`, `62ce78966` (12/10).
 
 ### 12.3 Passo 2: isolamento degli E2E, rapporto e mandato
 
@@ -1036,15 +1036,15 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   >   V-17. Nel giro consolidato non succede: lì il runner popola e il setup salta.
   > - Backlog V-20 per le attese di 3 s. Possibile concausa del rallentamento: bcrypt nell'event loop (V-16).
 
-> Checkpoint 2a committato dal coordinatore: `e6333930c`, `495fb9e86`, `6d62171e3`, `262515898`. Treno 64 integrato:
-> `dev_release2` = `0afac8e14`, e il mio ramo è stato portato lì in fast-forward (12/10). Nessuno dei 50 commit del
+> Checkpoint 2a committato dal coordinatore: `e356b7de6`, `bd4268f4f`, `16360529a`, `c449ff536`. Treno 64 integrato:
+> `dev_release2` = `bb1696929`, e il mio ramo è stato portato lì in fast-forward (12/10). Nessuno dei 50 commit del
 > treno tocca i file della 2b, le fixture o `auth.py`.
 
 ### 12.6 Passo 2b: mandato e avanzamento
 
 **Decisioni del coordinatore** (12/10):
 - **Gate di `front-utility` con i 6 rossi**: accettato per la 2a. V-19 va a I, nel lotto di rifinitura UI: nasce da
-  `7c66234a7`, «Exportar IA» → «Exportación IA», e il termine resta. V-20 lo faccio io, nella 2b, con attese su uno
+  `6f0648408`, «Exportar IA» → «Exportación IA», e il termine resta. V-20 lo faccio io, nella 2b, con attese su uno
   stato pubblicato. V-17 resta nel backlog: `_frontend_utility.py` ora è di T.
 - **IWR-009 e `tx-clone:549`**: entrano nella 2b (A7b, A7c).
 - **V-16 (bcrypt nell'event loop)**: nella 1.2, da me dopo la 2b. `backend/app/api/v1/auth.py`, le tre chiamate
@@ -1152,9 +1152,9 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   > V-16; l'`open` di `uploads.serve_file` gira già in `asyncio.to_thread`. La rassegna non scende nei servizi.
   > `user_service.reset_password` (`:205`, solo CLI) resta com'è.
 
-> Checkpoint V-16 committato dal coordinatore sul mio ramo: `a9e0fe4d9`, `0d6aee67c`, `3aabf0916`. È un commit
+> Checkpoint V-16 committato dal coordinatore sul mio ramo: `9d6357d87`, `8d9687ca9`, `7d6e2e04e`. È un commit
 > parziale: solo i 5 file, verificati blob per blob, mentre gli spec della 2b restano sporchi e intatti. Treno 66:
-> `dev_release2` = `b91d6d902`. Il mio ramo resta a `3aabf0916`, perché la worktree ha la 2b in corso. I treni 65 e 66
+> `dev_release2` = `331cc6474`. Il mio ramo resta a `7d6e2e04e`, perché la worktree ha la 2b in corso. I treni 65 e 66
 > toccano solo wiki, CHANGELOG, la pipeline delle traduzioni e V-16 (12/10).
 
 ### 12.8 Passo 2b, avanzamento (dopo V-16)
@@ -1413,7 +1413,7 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   - **La risposta di validate**: `accessDenied` («EDITOR required for broker 2»), `wac_results: null`. Su DEGIRO
     `e2e_test_user` è solo VIEWER, e `compute_wac_and_fx_issues` (`transaction_batch_stages.py:833`) non propone costi
     per un batch con errori. Quindi `empty` è giusto, e il banner lo spiega.
-  - **Perché passava**: dal 14/08 (`9a254f812`) WB5 esige `ready`. Da allora passava solo clonando una coppia lasciata
+  - **Perché passava**: dal 14/08 (`e46d6feec`) WB5 esige `ready`. Da allora passava solo clonando una coppia lasciata
     da altri test: per esempio quella IB→Directa che WB4, prima di lui nello stesso file, committa e non cancella.
     Oppure gli avanzi di `tx-commit-all-types`, che la cura di A4 ora pulisce.
   - **Esiti per modalità**: da solo fallisce sempre; nel gate a 4 worker parte insieme a WB4 e fallisce; in sequenza
@@ -1457,8 +1457,8 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   - il gate di utility è girato con le cure di V-20 già nella worktree: `auth`, `app-start-auth` e `files` sono verdi
     anche nel giro consolidato.
 
-> Checkpoint 2b committato dal coordinatore: 7 commit da `1b1e58fd0` a `3d7635efb`. Poi il ramo è stato portato sul
-> target `b1c8f22df`: ora sono a **`bb2519108`**, pulito (12/10). La base nuova contiene il CP1 di M-18 (numeri nella
+> Checkpoint 2b committato dal coordinatore: 7 commit da `a275fb99a` a `c5ff5b5c2`. Poi il ramo è stato portato sul
+> target `cc3a92c2e`: ora sono a **`ecbf43a97`**, pulito (12/10). La base nuova contiene il CP1 di M-18 (numeri nella
 > lingua della UI) e i treni 65-70. Decisioni del coordinatore:
 > - V-22 va nelle domande per lo sviluppatore, e non lo tocco;
 > - V-21 e V-23 restano dopo la 1.2; il T1 di V-21 lo decide lo sviluppatore.
@@ -1476,7 +1476,7 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
     delle card;
   - lacuna 1: `g1-risk-real`. Un E2E con il `/risk/query` vero fino allo schermo, L1 (VaR, CVaR) e una cifra L4, con
     la risposta validata dallo schema Zod generato.
-- ✅ **Convalida della revisione combinata** (12/10, 21:18-21:50, `bb2519108`). 15 spec su 14 chiavi, `--fresh-run
+- ✅ **Convalida della revisione combinata** (12/10, 21:18-21:50, `ecbf43a97`). 15 spec su 14 chiavi, `--fresh-run
   --workers 4`, una alla volta. Load average da 23 a 178 su 10 core, per la coverage sulla 6176.
   - **Esito**: tutto verde.
     - Transazioni: `tx-commit-all-types` 19, `transactions-modals` 19, `tx-wac-formmodal` 10, `tx-wac-unit-toggle` 4,
@@ -1508,7 +1508,7 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   - ogni risposta `/risk/*` è validata dallo schema Zod.
 
   È registrato in `_frontend_portfolio.py`, e aspetta la corsia.
-- **Decisioni del coordinatore sulla convalida** (12/10). La 2b entra nel treno 72 (`bb2519108`) insieme al lotto 48
+- **Decisioni del coordinatore sulla convalida** (12/10). La 2b entra nel treno 72 (`ecbf43a97`) insieme al lotto 48
   di I.
   - Gli avanzi di `files` si curano nel checkpoint delle lacune 2 e 1, con un commit a parte. L'agente è
     `b-files-leak`. Il broker e il file BRIM di `:886` vanno in `try/finally` con `deleteOwnedBrokerAndFiles`; gli
@@ -1789,8 +1789,8 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   - `git diff --check` pulito;
   - `check-orphans` pulito, con 117 spec, nell'ultimo giro di g3.
 
-> Lacune committate dal coordinatore: `eb269ecde`, `be3e1ed60`, `56830fc79`, `ec488a296`. Poi il ramo è stato portato
-> sul treno 73: ora sono a **`247a9b9bd`**, con merge pulito; `_frontend_utility.py` e il backlog si sono fusi da soli
+> Lacune committate dal coordinatore: `6a5721755`, `3f88755d9`, `f73ff8aa8`, `291d2f7d9`. Poi il ramo è stato portato
+> sul treno 73: ora sono a **`97c8c23fa`**, con merge pulito; `_frontend_utility.py` e il backlog si sono fusi da soli
 > (12/10). La base nuova contiene:
 > - U-2: i cataloghi in `frontend/src/lib/i18n/base/`; `src/lib/i18n/<lang>.json` è generato e in sola lettura;
 > - il lotto 48 di I: clipboard, `BrokerIcon`, la modale del broker sbagliato, il pannello della sicurezza e la cura
@@ -1891,7 +1891,7 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   > **⚠️ Fuori pista: due rossi fuori dal delta.**
   > - **`layout/app-start-auth.spec.ts:263`** («a 401 in the middle of a session…»): rosso nel giro intero e anche da
   >   solo, a 1 worker; verde a 4.
-  >   - Il test non chiama `logout()`, e da `d60937c08` app, API e layout non sono cambiati in modo rilevante.
+  >   - Il test non chiama `logout()`, e da `f7bea54e4` app, API e layout non sono cambiati in modo rilevante.
   >   - Dopo `clearCookies`, la pagina va a `/?redirect=%2Fassets` (+120 ms e +676 ms) prima che la navigazione arrivi
   >     a `/brokers`.
   >   - Ipotesi: «assunzione». Una richiesta di `/assets` è partita prima della pulizia dei cookie ma è rimasta nella
@@ -1989,11 +1989,11 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   - Poi la mia cura di una riga in `removeRow`.
   - Le prove: a 1 e a 4 worker, più `front-transaction all` a 4 worker nei gate.
   - Va in un **commit a parte**, `fix(transactions): …`.
-- ✅ **Da quando c'è il difetto**: dalla **1.1.0** (`837a8f2c7`, 07/09), quindi è uscito. In quel tag ci sono già tutti i
+- ✅ **Da quando c'è il difetto**: dalla **1.1.0** (`aabd8f126`, 07/09), quindi è uscito. In quel tag ci sono già tutti i
   pezzi:
-  - `removeRow` filtra solo `tempId` (`:815-817`), ed è invariato dalla migrazione PendingOp (`96d8d0a4d`, 11/05);
+  - `removeRow` filtra solo `tempId` (`:815-817`), ed è invariato dalla migrazione PendingOp (`170e1bddb`, 11/05);
   - `addDualRowFromForm` crea la partner nascosta, `toOp.pairedWith = fromOp.tempId` (`:2339`); `-S` fa risalire la riga
-    a `8268a44bb`, del 05/06;
+    a `dd0213c58`, del 05/06;
   - `resolveOps` salta le partner (`:1011`);
   - `serializeOps` serializza tutte le op (`:503`), e `requestClose` (`:517`) apre la conferma.
 
@@ -2123,11 +2123,11 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
 
 ### 12.11 Lotto «rossi da carico della run di R»: V-28, V-27 e due budget (13/10)
 
-**Base**: `273b188ea`, treno 82, verificata con `git rev-parse HEAD`; worktree pulita. Il coordinatore ha integrato il
-checkpoint precedente: C1 `9f8ac58d5` … C7 `452978f2e`. La riga 🐛 di V-29 nel CHANGELOG è `ed8fc5cd7`, portata da M.
+**Base**: `a8f882310`, treno 82, verificata con `git rev-parse HEAD`; worktree pulita. Il coordinatore ha integrato il
+checkpoint precedente: C1 `fc4257174` … C7 `8172c1dd8`. La riga 🐛 di V-29 nel CHANGELOG è `9b4d56a1a`, portata da M.
 
 **Fonti**:
-- il rapporto di R, `38_postReleaseBacklog/report-R-full-run-coverage-20261012.md`, §3.2–3.5, sulla base `a5653f9ef`
+- il rapporto di R, `38_postReleaseBacklog/report-R-full-run-coverage-20261012.md`, §3.2–3.5, sulla base `78101574b`
   (treno 68);
 - le pagine devWiki `problems/jscoverage-teardown-spends-the-test-budget` e
   `problems/login-returns-before-the-app-has-started`.
@@ -2149,8 +2149,8 @@ Lo sviluppatore non ha chiesto codice di prodotto: se una cura lo richiede, STOP
      d'ambiente e poi tolto. Prima della cura il rosso «Tearing down "jsCoverage" exceeded the test timeout»; dopo, il
      verde. Dopo il via, una categoria con `--coverage js` sotto carico, come chiede il coordinatore.
 2. **V-27: `login()` ritorna appena sparisce il form** (9 rossi nella run di R).
-   - **I 9 rossi della run di R sono già curati sul posto.** La base di R, `a5653f9ef`, non conteneva né V-20
-     (`d60937c08`, verificato con `merge-base --is-ancestor`) né V-26.
+   - **I 9 rossi della run di R sono già curati sul posto.** La base di R, `78101574b`, non conteneva né V-20
+     (`f7bea54e4`, verificato con `merge-base --is-ancestor`) né V-26.
      - Oggi `auth.spec.ts` usa `expectLandedOnDashboard` ed `expectLandedOnWelcome`, con 15 s per l'URL e 10 s per la
        pagina; R ha visto la versione vecchia, con `toHaveURL(/.*dashboard.*/)` e i 3 s di default.
      - `setupAiExportPage` aspetta l'arrivo da V-26.
@@ -2247,7 +2247,7 @@ Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget)
   - La formulazione della pagina devWiki la gira a W.
 - ✅ **Doc di V-28, skill e instructions**, mie:
   - `SKILL.md` `:128`: il timeout passa da «15s per test» a 30 s per test, più i 3 s di `expect`. Verificato: 30 s nel
-    config dal febbraio 2026 (`809667083`). «15 s» non era un'altra soglia; `waitForSettled` ha 15 s di default, ma la
+    config dal febbraio 2026 (`d288ec473`). «15 s» non era un'altra soglia; `waitForSettled` ha 15 s di default, ma la
     frase diceva «per test».
   - `SKILL.md` §«JS/Svelte Coverage during E2E»: la pipeline istanbul vera, cioè build strumentata (`COVERAGE_INSTRUMENT`,
     sentinella), `window.__coverage__`, un JSON per test in `coverage-js/e2e-raw/`, il budget del fixture (V-28),
@@ -2312,8 +2312,8 @@ Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget)
   - In `frontend/e2e/transactions` non resta nessuna attesa breve di `tx-table` subito dopo una navigazione.
 - ✅ **I quattro budget di test** (`v28-budgets`): `transactions-table`, `tx-wac` e `tx-wac-mode` passano da 20 a 45 s,
   `tx-wac-fx` da 25 a 60 s, con un commento.
-  - Il blame: ogni valore è stato scritto alla nascita dello spec e mai toccato (`4ce8e7f17`, `7526fd448`,
-    `4e5e500c0`).
+  - Il blame: ogni valore è stato scritto alla nascita dello spec e mai toccato (`de7db6072`, `7b57acb41`,
+    `684581e90`).
   - Solo `transactions-table` dava una ragione («read-view tests, no complex modal flows»). Descrive la durata attesa,
     non uno scopo diverso, quindi il cambio è legittimo, e il commento è stato sostituito.
   - Le durate peggiori di questi spec nella run di R, sotto carico, erano 13,7–15,7 s.
@@ -2325,7 +2325,7 @@ Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget)
     prova a 4 worker.
 - ✅ **I sei budget di test** (`v28-budgets`): `tx-broker-access` e `tx-tooltips` passano da 15 a 45 s, `tx-paired-edit`
   da 20 a 45 s, `tx-clone`, `tx-delete` e `tx-picker-pagination` da 25 a 45 s. I test già a 60 s restano dove sono.
-  - Il blame: valori scritti alla nascita degli spec, a maggio (`aacce7952`, `a6b3a8bb2`, `56a0383b5`), senza
+  - Il blame: valori scritti alla nascita degli spec, a maggio (`b93093bb7`, `7e16a911b`, `19ca79be4`), senza
     commento.
   - prettier, tsc (solo i 2 errori già presenti) e `git diff --check` puliti.
   - Sotto osservazione nella prova a 4 worker, il gruppo a 30 s: `tx-bulk-operations`, `tx-bulk-promote-exec`,
@@ -2352,7 +2352,7 @@ Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget)
   - `js-coverage-report.js:35`, che dice «17k lines» (ora sono 23 002);
   - `coverage_analysis.py` e `src/__tests__/component.ts:17`;
   - `runner_architecture.md:433-453`, `:716` e `:732`, di M;
-  - la devWiki `problems/svelte-template-branches-not-instrumented.md`, contraddetta da `2e104b919`.
+  - la devWiki `problems/svelte-template-branches-not-instrumented.md`, contraddetta da `4e719107e`.
 - ✅ **Le ultime correzioni di commento della definizione di fatto di V-28**:
   - `coverage-model.md` «Cleaning»: il wipe è giustificato dai contatori legati alla build, con un link alla sezione.
     `mkdocs build` strict e `check-links` sono puliti.
@@ -2372,7 +2372,7 @@ Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget)
   - La regola: `login()` nel caso peggiore (70 s), più la scadenza più lunga fra le attese del test, più il resto a
     passo sotto carico.
   - Il blame: nessun valore era basso per una ragione diversa. Due header dichiarano già «a red must end on its own
-    assertion» (`d60937c08`, `93fd33702`); il terzo era aritmetica fatta prima dell'attesa d'arrivo (`e8d8f9216`).
+    assertion» (`f7bea54e4`, `e6174d56a`); il terzo era aritmetica fatta prima dell'attesa d'arrivo (`a978e37ca`).
   - **Non cambiati, con ragione**: 76 file hanno un budget sotto il caso peggiore di `login()`.
     - V-27 non allunga l'attesa: la sposta dentro `login()` dai passi successivi, che prima la pagavano allo stesso
       modo.
@@ -2398,7 +2398,7 @@ Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget)
   «Shared backend ignored SIGTERM for 5s», a fine di alcune invocazioni, è ambientale: la porta è sempre libera dopo.
   > **⚠️ Fuori pista: `front-fx`.** Ci sono due scritture vecchie, del 30-31/08, fuori da questo lotto:
   > - **`fx-destructive`** dichiara di usare coppie fuori dal seed, ma **EUR/PLN ed EUR/SEK ci sono dal 13/03**
-  >   (`a3a9ead52`), come gambe ECB delle catene GBP/PLN e SEK/USD. Lo spec le cancella, coi loro 2 × 276 tassi, e la
+  >   (`c6245282d`), come gambe ECB delle catene GBP/PLN e SEK/USD. Lo spec le cancella, coi loro 2 × 276 tassi, e la
   >   rete di ripopolamento è spenta sopra 1 worker.
   > - **`fx-sync-mock`** dice «writes nothing», ma lascia 372 tassi MOCKFX su EUR/ILS, MYR, PHP e TWD. Le route sono
   >   al seed.
@@ -2481,7 +2481,7 @@ Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget)
 
 ### 12.12 Due rossi della stessa classe: `fx-detail:923` e `setLanguage` (13/10)
 
-Base `50886d1ca` (treno 88), portata in fast-forward dal coordinatore. Skill `test-triage`.
+Base `e38b8b1cd` (treno 88), portata in fast-forward dal coordinatore. Skill `test-triage`.
 
 #### `fx/fx-detail.spec.ts:923` «aesthetics panel toggles visibility»
 
@@ -2564,7 +2564,7 @@ Base `50886d1ca` (treno 88), portata in fast-forward dal coordinatore. Skill `te
 
 ### 12.13 T4 di `transactions-modals`: l'ordine delle colonne del bulk editor (13/10)
 
-Base `ef666fdee` (treno 93), portata in fast-forward dal coordinatore; worktree pulita, i commit del §12.12 sono
+Base `d5873f5d3` (treno 93), portata in fast-forward dal coordinatore; worktree pulita, i commit del §12.12 sono
 nel treno 92.
 
 - **La decisione del developer** (domanda 12, via coordinatore, 13/10): nel bulk editor la colonna «Costo di carico»
@@ -2574,7 +2574,7 @@ nel treno 92.
   come falso positivo da riscrivere.
 - **Il mandato**: riscrivere T4 perché verifichi quest'ordine, via test-author. Prima il rosso, per esempio invertendo
   l'ordine atteso, poi il verde. `transactions-modals` a 1 e a 4 worker. Nel backlog, le righe V-21 e T4.
-- **Lo stato verificato** (lettura del codice, base `ef666fdee`):
+- **Lo stato verificato** (lettura del codice, base `d5873f5d3`):
   - `TransactionBulkModal.svelte`: `cost_basis_override` a `:1827`, `asset_event_id` a `:1890`. Entrambe hanno
     `hiddenByDefault: false`, quindi sono **visibili di default**: il commento di T4 («both columns are hidden by
     default») è superato;
@@ -2592,7 +2592,7 @@ nel treno 92.
   3. il verde; `transactions-modals` a 1 e a 4 worker, `--fresh-run`, col controllo del DB dopo ogni giro;
   4. il backlog, V-21 e T4; il checkpoint.
 - ✅ **T1 (domanda 8), spiegata meglio** (13/10): il developer l'ha chiesto, e la spiegazione è andata al coordinatore.
-  - Ricontrollato sulla base `ef666fdee` e sul DB del seed: T1 sceglie il primo broker e il primo asset per posizione.
+  - Ricontrollato sulla base `d5873f5d3` e sul DB del seed: T1 sceglie il primo broker e il primo asset per posizione.
     Il primo broker, Charles Schwab (EDITOR, 0 transazioni, niente scoperto), non ha cassa, e il server rifiuta il BUY
     con `BALANCE_CASH_NEGATIVE` (`transaction_service.py:419`). Dopo il click di salvataggio il test non asserisce
     niente.
@@ -2647,7 +2647,7 @@ nel treno 92.
 
 ### 12.14 T1 di `transactions-modals`: il salvataggio e il rifiuto (13/10)
 
-Base `917ef437f`: i due commit di T4 (`d763657ca`, `917ef437f`) sono sul ramo, ed entrano nel treno 94.
+Base `60edde4fd`: i due commit di T4 (`3e0885f39`, `60edde4fd`) sono sul ramo, ed entrano nel treno 94.
 
 - **La decisione del developer** (domanda 8, testuale): «C: entrambi, due test».
 - **Il mandato** del coordinatore:
@@ -2659,7 +2659,7 @@ Base `917ef437f`: i due commit di T4 (`d763657ca`, `917ef437f`) sono sul ramo, e
   4. I test li scrive test-author, con selettori `data-testid` e senza testo tradotto.
   5. Se T1b mostra che il messaggio all'utente manca o è sbagliato (un difetto di prodotto): STOP e messaggio, senza
      toccare l'app.
-- **Lo stato verificato** (lettura del codice, base `917ef437f`):
+- **Lo stato verificato** (lettura del codice, base `60edde4fd`):
   - **Il codice sul filo** è `balanceCashNegative`: è il valore di `TXValidationCode.BALANCE_CASH_NEGATIVE`
     (`backend/app/schemas/transactions.py:758`), sollevato da `transaction_service.py:419-430` con i parametri
     `brokerId`, `currency`, `balance` e `date`.
@@ -2787,7 +2787,7 @@ Base `917ef437f`: i due commit di T4 (`d763657ca`, `917ef437f`) sono sul ramo, e
 
 ### 12.15 V-37: analisi del «valid» accanto a un errore del form (13/10, senza codice)
 
-Base `917ef437f`. Sola lettura del codice: niente test né server.
+Base `60edde4fd`. Sola lettura del codice: niente test né server.
 
 **La citazione del developer:** «diciamo che è un caso limite in effetti, la soluzione migliore sarebbe nel form di
 disattivare il validate finchè tutti i campi obbligatori non ci sono e non sono validi con le regole di scrittura. Però
@@ -2992,7 +2992,7 @@ una data futura o illeggibile e si esce dal campo; poi Apply. Il pacchetto appli
 
 ### 12.16 Lotto V-37, il minimo più 1b: implementazione (13/10)
 
-Base `7e4f2c3d1`, cioè il journal di V-37 committato dal coordinatore. Corsia 6175, un comando alla volta.
+Base `6328d4b47`, cioè il journal di V-37 committato dal coordinatore. Corsia 6175, un comando alla volta.
 
 - **La decisione del developer** (testuale, via coordinatore): «Il minimo ora, più la data se la sonda la conferma; il
   pre-step completo dopo la 1.2 (Consigliato)». La sonda di 1b ha confermato la data: un BUY si salva in silenzio con la
@@ -3093,11 +3093,11 @@ Base `7e4f2c3d1`, cioè il journal di V-37 committato dal coordinatore. Corsia 6
       fa solo il form.
 - ✅ **Passo 5: le righe 🐛 del CHANGELOG**, proposte al coordinatore che le scrive. Le origini, verificate con
   `git merge-base --is-ancestor`:
-  - **la data**: `52b48fd83` (27/08), antenato di `v1.1.0`. Il picker tiene a schermo il testo rifiutato, e il cancello
+  - **la data**: `e67974a3c` (27/08), antenato di `v1.1.0`. Il picker tiene a schermo il testo rifiutato, e il cancello
     di Apply è identico nella v1.1.0 (`:2107`): «Present since v1.1.0»;
-  - **il «valid»**: `isFreshlyValid` nasce in `8268a44bb` (05/06), antenato di `v1.1.0`. Nella v1.1.0
+  - **il «valid»**: `isFreshlyValid` nasce in `dd0213c58` (05/06), antenato di `v1.1.0`. Nella v1.1.0
     `hasSignViolation = qtySignHint.bad || cashSignResult.bad` bloccava Apply, mentre il giro automatico mandava la
-    quantità corretta da `applySign`: «Present since v1.1.0». `ExactQuantityInput` (`75309672e`, 18/09) è solo della
+    quantità corretta da `applySign`: «Present since v1.1.0». `ExactQuantityInput` (`5c9a44efb`, 18/09) è solo della
     1.2, ma il difetto c'era già.
 - ✅ **Passo 6: il backlog**:
   - V-37: il minimo e 1b ✅, V-37b aperto dopo la 1.2;

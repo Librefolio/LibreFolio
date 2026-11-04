@@ -24,7 +24,7 @@ centuries back costs the days of its rate changes, never a calendar of every day
   (MF5-1) the engine builds no quiet day at all (segments, ``StateSegment.state_on`` for a reader): the test counts
   ``state_on`` calls (none during ``build()``) and ``DailyPortfolioState`` constructions (one per computed day, those
   from ``date_from`` on being the segment starts); D4 and D6 lying inside a segment keeps it from passing vacuously.
-- ``TestRateCalendarsStartAtTheReplayStart`` — RED on HEAD 999f1899e (MF-PAV-L1): a recording wrapper of
+- ``TestRateCalendarsStartAtTheReplayStart`` — RED on HEAD a4316d9a0 (MF-PAV-L1): a recording wrapper of
   ``DailyStateBuilder._reading_calendar`` (the candidate days only) sees the valuation calendar of the USD stock start on
   1900-01-01 (days from 1899-12-31) and the one of the USD cash in transit since 1890-01-02 start on 1900-01-01; after L1
   they start at the replay start 1890-01-01 (days from 1889-12-31, the day before the first movement) and at the transit's
@@ -304,7 +304,7 @@ class TestTheFloor:
 class TestNoQuietDayBeforeDateFrom:
     @pytest.mark.parametrize("date_from", [pytest.param(D2, id="quiet-date_from"), pytest.param(D3, id="rate-change-date_from")])
     def test_no_state_is_carried_before_date_from(self, monkeypatch, date_from):
-        """A quiet day before ``date_from`` is skipped, not carried. HEAD 94e170ae1 carried every quiet day from 1890-01-01
+        """A quiet day before ``date_from`` is skipped, not carried. HEAD d15ed5aa2 carried every quiet day from 1890-01-01
         on through ``replace`` — about 49 000 calls. Since P4 (MF5-1) the engine builds no quiet day at all: it keeps one
         ``StateSegment`` per computed day from ``date_from`` on, and a reader builds a quiet day through
         ``StateSegment.state_on``. So during ``build()``: no ``state_on`` call; one ``DailyPortfolioState`` constructed per

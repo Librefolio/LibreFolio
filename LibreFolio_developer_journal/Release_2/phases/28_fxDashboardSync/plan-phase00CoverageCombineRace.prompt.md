@@ -1,7 +1,7 @@
 # Piano — N / `coverage combine` delle passate parallele (corsa sui file di coverage tardivi)
 
 > Lotto assegnato dal coordinator l'08/10 alle 10:53, su decisione del developer («diamo a N analisi e fix»).
-> Prima l'analisi, poi il codice. Base `58fc35174` (pulita).
+> Prima l'analisi, poi il codice. Base `4527b58ea` (pulita).
 >
 > Riferimenti: il piano dello step 2
 > ([`plan-phase00FxDashboardSyncStep2PageCache.prompt.md`](plan-phase00FxDashboardSyncStep2PageCache.prompt.md)).
@@ -14,7 +14,7 @@
 
 ---
 
-## 1. Il difetto osservato (coverage completa del 07/10, `d07412899`, 2 worker)
+## 1. Il difetto osservato (coverage completa del 07/10, `5f3509536`, 2 worker)
 
 - Passata parallela da **111** unità: verde, poi `❌ coverage combine failed: Couldn't combine from non-existent path
   '…/.coverage_data/parts/.coverage.w1.Laptop di sviluppo (2).pid10917.Xm9GZYYx'`.
@@ -122,7 +122,7 @@ successo.
 
 **Fuori perimetro, per il backlog**: `_cli.py:971` ignora l'esito del combine. Una run con coverage persa dovrebbe
 dirlo nel verdetto finale. → **Superato** (09/10): concesso dal coordinator nello stesso lotto e fatto
-(`_cli.py:971`, `:996`, commit `751f496b3`).
+(`_cli.py:971`, `:996`, commit `25fb153b6`).
 
 ## 4. Test, rosso prima (test-author)
 
@@ -276,8 +276,8 @@ Niente `_common.py`: il suo `coverage combine --keep` (`:324-333`) è già a car
    > `n_combine_paths_C1..C4.txt`, i blob in `n_combine_blobs.txt` e l'albero finale in `n_combine_final_tree.txt`.
    > Stato: FROZEN.
    >
-   > **Integrato** (allineamento del 09/10): `751f496b3` (runner e test), `230b2695d` (doc del runner), `029e00906`
-   > (devWiki), `fc76cefa1` (questo piano), treno 13 (`f5a132924`). Le due dichiarazioni del checkpoint sono ancora
+   > **Integrato** (allineamento del 09/10): `25fb153b6` (runner e test), `6b60effff` (doc del runner), `8cb610289`
+   > (devWiki), `b77825ea9` (questo piano), treno 13 (`5ab1eae93`). Le due dichiarazioni del checkpoint sono ancora
    > vere sul codice del 09/10 e sono rinviate in `Phase_0/38_postReleaseBacklog/README.md`:
    > - il riepilogo generico quando fallisce solo il combine (`scripts/test_runner/_cli.py:1200`, `:1317`): voce N-2;
    > - una parte illeggibile per sempre rende rosse anche le passate successive della stessa run: voce N-3.

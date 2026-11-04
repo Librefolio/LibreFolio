@@ -44,7 +44,7 @@ deduced. The gap only decides when the question is asked.
 
 ## What the code does today
 
-- `splitRowCharges.ts` (shipped in `d1e04b2b8`, 12/08/2026; the plan's first form, `splitRowAmount`, had two fixed
+- `splitRowCharges.ts` (shipped in `441457341`, 12/08/2026; the plan's first form, `splitRowAmount`, had two fixed
   legs): the user lists the charges they can name, and the trade leg is the remainder. The user can only move money
   **between** legs, never into or out of the import. On a purchase the trade leg is smaller than the row; on a sale
   the credit is already net, so the trade leg is larger.

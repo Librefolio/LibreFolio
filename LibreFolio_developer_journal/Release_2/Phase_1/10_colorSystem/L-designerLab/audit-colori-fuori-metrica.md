@@ -5,7 +5,7 @@
 > tutti.» Il motivo: `DataTable` coi vecchi colori, per 583 token di componente ancora letterali che il conteggio
 > m1/m2 non vedeva.
 >
-> Sola lettura: nessun codice cambiato, nessun server, nessun E2E. Base: `5b916aa28`. Comandi sotto `nice`.
+> Sola lettura: nessun codice cambiato, nessun server, nessun E2E. Base: `69934073b`. Comandi sotto `nice`.
 > Metodo e limiti: §6.
 
 ## In breve
@@ -48,7 +48,7 @@
   - `app.html` e `frontend/static/**`;
   - ogni `var(--x)`, perché non è un letterale;
   - i colori che non sono nel sorgente: librerie, browser, tema di Tailwind.
-- **A `5b916aa28`,** confermati:
+- **A `69934073b`,** confermati:
   - m1 **697**;
   - m2 **2**: `#1b4334` ×2 in `stores/app/themeStore.ts`, la meta `theme-color`, copia di `--lf-brand`;
   - token di componente **583** (16 + 81 + 239 + 247; 581 letterali, nessuno legge un `--lf-`).

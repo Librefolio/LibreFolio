@@ -1,7 +1,7 @@
 # S2 — L2 «Sono diversificato come credo?» — piano vivo
 
 > **Corsia**: `--test-port 6154` · `--data-dir /tmp/librefolio-r2-s2`
-> **Branch**: `e-alfy-risk-l2-diversification` · **Baseline**: `7d75a9c6c`
+> **Branch**: `e-alfy-risk-l2-diversification` · **Baseline**: `44dd7779d`
 > **Briefing**: `implementation_2/S2-livello-2.md` · **Vincoli**: `implementation_2/_comune.md`
 > **Contratto primitive**: `implementation_2/PRIMITIVE.md`
 

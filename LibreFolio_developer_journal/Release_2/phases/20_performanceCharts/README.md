@@ -1,7 +1,7 @@
 # 20_performanceCharts — grafici di performance (SP06 G3/G1c, SP07 G1a/G1b)
 
 > Archiviata da `Phase_0/20_performanceCharts/` il 2026-10-09, con un `mv` normale, dal workstream I. Ogni piano è
-> stato riallineato al codice di `dev_release2` a `3cceb4f90`; il registro della verifica è in fondo al piano del
+> stato riallineato al codice di `dev_release2` a `f545b67e3`; il registro della verifica è in fondo al piano del
 > round 4.
 
 Il workstream I ha consegnato quattro grafici:
@@ -15,12 +15,12 @@ Poi sono venuti il round 4, con le correzioni della review d'uso del 22/09, e qu
 
 | File | Descrizione | Stato |
 |---|---|---|
-| `plan-phase00PerformanceCharts.prompt.md` | Piano madre: contratto §3, fasi I10–I90, debiti (§6.0.11), seguiti (§6.0.20) | ✅ Contratto integrato in fast-forward (`22b82e3fb`); I60 accettata il 2026-09-22 |
-| `plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md` | Round 4 (I90): review d'uso post-merge del 22/09, S1–S12, D1–D28; registro della verifica d'archivio | ✅ Integrato il 2026-10-02 (`975a115ae`) |
-| `plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md` | I marcatori degli eventi spariscono con «Tutti» e i prezzi in cache | ✅ Treno 9 (`0a2359573`), 2026-10-07 |
-| `plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md` | Proventi: dividendo oro, etichette per periodo sull'asse X di Candele e Proventi | ✅ Treno 13 (`ffda8fc84`, poi `c001c0968`), 2026-10-08 |
-| `plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md` | Eventi degli asset nell'editor: modifica sul posto per id, cambio di tipo, alias `value` → `amount` nell'import CSV | ✅ Treno 19 (`5423c334f`), 2026-10-08 |
-| `plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md` | Voce 10: il gate HTML controlla che i cataloghi si leggano come testo | ✅ Treno 23 (`2c382824d`), 2026-10-09 |
+| `plan-phase00PerformanceCharts.prompt.md` | Piano madre: contratto §3, fasi I10–I90, debiti (§6.0.11), seguiti (§6.0.20) | ✅ Contratto integrato in fast-forward (`e6c59e996`); I60 accettata il 2026-09-22 |
+| `plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md` | Round 4 (I90): review d'uso post-merge del 22/09, S1–S12, D1–D28; registro della verifica d'archivio | ✅ Integrato il 2026-10-02 (`94312819f`) |
+| `plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md` | I marcatori degli eventi spariscono con «Tutti» e i prezzi in cache | ✅ Treno 9 (`6702ec8bb`), 2026-10-07 |
+| `plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md` | Proventi: dividendo oro, etichette per periodo sull'asse X di Candele e Proventi | ✅ Treno 13 (`f718d16a5`, poi `8175788c2`), 2026-10-08 |
+| `plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md` | Eventi degli asset nell'editor: modifica sul posto per id, cambio di tipo, alias `value` → `amount` nell'import CSV | ✅ Treno 19 (`fbc95f3f9`), 2026-10-08 |
+| `plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md` | Voce 10: il gate HTML controlla che i cataloghi si leggano come testo | ✅ Treno 23 (`b39512ae1`), 2026-10-09 |
 
 **Residui tracciati** in `Phase_0/38_postReleaseBacklog/README.md`:
 
@@ -33,4 +33,4 @@ Poi sono venuti il round 4, con le correzioni della review d'uso del 22/09, e qu
 - da I-09 a I-12: i limiti residui degli eventi degli asset.
 
 Un debito ha una casa diversa: DBT-D, la conversione dei test specchio, sta in P4-9
-(`Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md`). I suoi 12 rossi sono chiusi da `2e4c8589f` (2026-09-28).
+(`Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md`). I suoi 12 rossi sono chiusi da `dcf79a9a2` (2026-09-28).

@@ -27,7 +27,7 @@ description is the merge of the two sides' texts.
 
 ## Solution
 
-Commit `305b80202` (2026-10-09, plan 37 §9, for every plugin): an incoming DEPOSIT or WITHDRAWAL also looks at the saved
+Commit `69bf64f4b` (2026-10-09, plan 37 §9, for every plugin): an incoming DEPOSIT or WITHDRAWAL also looks at the saved
 `CASH_TRANSFER` and `FX_CONVERSION` legs (`_MERGED_LEG_TYPES`) with the same sign, date and amount. On a merged leg the
 description matches when it *contains* the incoming one — merged texts are joined with a newline — and the match is
 then **«probable»**. A «possible» duplicate stays selected for import by default, so it would still have doubled the

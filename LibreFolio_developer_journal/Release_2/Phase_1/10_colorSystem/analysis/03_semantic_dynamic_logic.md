@@ -1,6 +1,6 @@
 # 03 — Semantic & dynamic color logic (TS / Svelte script)
 
-> Snapshot: `dev_release2` @ `6d0b1266c` (v1.2), 2026-10-14. Read-only. Paths relative to `frontend/src/`.
+> Snapshot: `dev_release2` @ `885f7e91e` (v1.2), 2026-10-14. Read-only. Paths relative to `frontend/src/`.
 > Coverage: targeted greps for `Record<…, string>` color maps, sign ternaries, color pickers and core helpers. **Not exhaustive**: not every `class:` directive / `style=` binding was checked; `features/onboarding`, `ai-export`, `changelog`, `update-check` only partially. Caller counts = files referencing the helper (tests excluded).
 > ⚠️ In dark mode many of the `dark:text-*` classes listed here are overridden by `app.css` (see report 01 §6.0) — the *rendered* dark color may differ from the one written.
 

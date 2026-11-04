@@ -5,7 +5,7 @@
 >
 > - Worktree `LibreFolio-worktrees/e-alfy-miniature-telegram`; ramo `e-alfy-b-backup-e-docker` (rinominato dall'app
 >   all'avvio, prima `e-alfy-miniature-telegram`).
-> - Base dell'analisi `ee5d81a6f`; base di B0 `23f6578f3` (avanzamento veloce del coordinatore, con i lotti A–D di R).
+> - Base dell'analisi `b62c4f482`; base di B0 `9acf0f77e` (avanzamento veloce del coordinatore, con i lotti A–D di R).
 > - Corsia: porta 6187, data-dir `/tmp/librefolio-r13-b`.
 > - Grafo della devWiki assente, come previsto: lette le pagine committate `entities/backup-router`, `features/F-073`,
 >   `domains/infrastructure`, `decisions/single-docker-image`, `concepts/single-migration-strategy`,
@@ -13,7 +13,7 @@
 >   `problems/db-path-argument-ignored-by-alembic`.
 > - Fonti: specifica del fondatore (righe 17, 41, 49-62, più la 82 sull'SMTP), piano generale §3-§10, decisioni 12, 18 e
 >   35, backlog (H-3, M-1, sezione B), piano di H (§3.3, §3.7, §4-§7, CP3), piano di X (§4.4-§4.5), piano di A (A3,
->   A4b), codice di `ee5d81a6f` più CP5a (`9deb0ea08`, letto con `git show`), documentazione di Litestream v0.5.
+>   A4b), codice di `b62c4f482` più CP5a (`cf4ce0e71`, letto con `git show`), documentazione di Litestream v0.5.
 > - Il piano entra nel journal al primo checkpoint (B0), come piano 07.
 
 ## 0. In breve
@@ -56,7 +56,7 @@
 | DB | `foreign_keys=ON`, WAL, `busy_timeout` 30 s a ogni connessione | `db/session.py:52-54` |
 | Migrazioni all'avvio | `ensure_database_exists()` lancia `alembic upgrade head` in un sottoprocesso se il DB è indietro, ed esce con `sys.exit(1)` se fallisce; poi i fix post-migrazione, a turno fra i worker con un lock | `main.py:99-219` (`:213`, `:217`), `:222-239`, `:287-290`; `db/post_migration/__init__.py` |
 | Alembic su un'altra copia | funziona solo `-x sqlalchemy.url=…`: `get_settings()` ricalcola `DATABASE_URL` | `alembic/env.py:19-37`; wiki `db-path-argument-ignored-by-alembic` |
-| Revisione head | `alembic_head_revision()` in cache, da CP5a: in `dev_release2`, non nella mia base | `9deb0ea08:backend/app/services/platform/readiness.py` |
+| Revisione head | `alembic_head_revision()` in cache, da CP5a: in `dev_release2`, non nella mia base | `cf4ce0e71:backend/app/services/platform/readiness.py` |
 | Avvio | lifespan: audit, segnali, Tool, `ensure_data_dirs` (`:271`), scenari, avatar, DB (`:287`), post-migrazione (`:290`), impostazioni (`:293`), prewarm, festività, scheduler (`:307`) | `main.py:242-333` |
 | Più worker | `dev.py server --workers N`; il server di test ne usa più d'uno; leader dello scheduler = PID più basso | `dev.py:143-157`; `scripts/test_runner/_server.py`; `scheduler/leader.py` |
 | Docker | un solo processo (`CMD uvicorn …`, niente `--workers`), PID 1 dopo `exec gosu`; `restart: unless-stopped` in tutti e due i compose; healthcheck su `/system/health`; nessuno `stop_grace_period` (10 s) | `Dockerfile:150-159`; `entrypoint.sh`; `docker-compose.yml:44`; `docker-compose.prod.yml:22` |
@@ -505,17 +505,17 @@ navigazione (testo proposto). **Migrazioni: nessuna.**
 
 | Lotto | Contenuto | Dipende da | Stato (19/10) |
 |---|---|---|---|
-| **B0** | divisione C2 di `backup.py` (rinomina, poi taglio; `api schema` identico, rotte identiche); facoltativa la rinomina di `backup_service.py` | via del coordinatore; E1 di W | ✅ in dev `629d63306` (15/10 19:06) |
-| **B1** | backup dell'istanza, backend e CLI, zip senza cifratura: `config/backup.py`, `paths`, `manifest`, `snapshot`, `archive`, `jobs`, endpoint dei job, `dev.py backup create|inspect`, `.env.example` | B0 per gli endpoint (servizio e CLI no) | ✅ in dev `629d63306` (15/10 19:06), con B1-fix |
-| **B2** | caricamento e prova su copia: estrazione con i controlli, decisione sulla revisione, migrazione della copia, controlli, report, archivi a mano, `restore --dry-run` | base con CP5a | ✅ B2a e B2b, in dev `5441b96ed` (16/10 02:48) |
-| **B3** | ripristino definitivo: conferma, backup automatico, `apply.py` (lock, giornale, scambio, ritorno indietro), `restart.py`, stato e annullamento, sessioni, `restore` a server spento; `security-review` di metà percorso | CP2b di H, o le due righe | ✅ in dev `0cd910a7e` (16/10 21:35) |
-| **B4** | password e chiave: `envelope.py`, regola della chiave, `decrypt`, contratto H-3; la ricifratura quando c'è il CP10 di X (altrimenti B4b) | `cryptography` | ✅ in dev `339a59142` (17/10 03:28); B4b in dev `c7dd3934a` (17/10 04:50) |
-| **B5** | scheda Backup: feature, riga nel registro, i18n, Vitest, E2E, galleria, `api sync` | B1-B3 (B4 per il campo della password); `npm ci`; via per la riga di A | ✅ B5a con `629d63306`, B5b e B5c con `0cd910a7e`, lo scatto `settings/backup-ready` con `ab2ddf86e`; ⏳ lo scatto di B5b, passato ai colori (17/10) |
-| **B6** | guida e doc | con B5, o subito dopo | ✅ B6a con `629d63306`, B6a-bis con `0cd910a7e`, la doc dell'archivio sicuro con B4; ⏳ la doc di Docker e Litestream (B7d) |
+| **B0** | divisione C2 di `backup.py` (rinomina, poi taglio; `api schema` identico, rotte identiche); facoltativa la rinomina di `backup_service.py` | via del coordinatore; E1 di W | ✅ in dev `47816493e` (15/10 19:06) |
+| **B1** | backup dell'istanza, backend e CLI, zip senza cifratura: `config/backup.py`, `paths`, `manifest`, `snapshot`, `archive`, `jobs`, endpoint dei job, `dev.py backup create|inspect`, `.env.example` | B0 per gli endpoint (servizio e CLI no) | ✅ in dev `47816493e` (15/10 19:06), con B1-fix |
+| **B2** | caricamento e prova su copia: estrazione con i controlli, decisione sulla revisione, migrazione della copia, controlli, report, archivi a mano, `restore --dry-run` | base con CP5a | ✅ B2a e B2b, in dev `8c4b1da7e` (16/10 02:48) |
+| **B3** | ripristino definitivo: conferma, backup automatico, `apply.py` (lock, giornale, scambio, ritorno indietro), `restart.py`, stato e annullamento, sessioni, `restore` a server spento; `security-review` di metà percorso | CP2b di H, o le due righe | ✅ in dev `1d9709ec4` (16/10 21:35) |
+| **B4** | password e chiave: `envelope.py`, regola della chiave, `decrypt`, contratto H-3; la ricifratura quando c'è il CP10 di X (altrimenti B4b) | `cryptography` | ✅ in dev `4fc5187f4` (17/10 03:28); B4b in dev `1db2d6415` (17/10 04:50) |
+| **B5** | scheda Backup: feature, riga nel registro, i18n, Vitest, E2E, galleria, `api sync` | B1-B3 (B4 per il campo della password); `npm ci`; via per la riga di A | ✅ B5a con `47816493e`, B5b e B5c con `1d9709ec4`, lo scatto `settings/backup-ready` con `1cf926658`; ⏳ lo scatto di B5b, passato ai colori (17/10) |
+| **B6** | guida e doc | con B5, o subito dopo | ✅ B6a con `47816493e`, B6a-bis con `1d9709ec4`, la doc dell'archivio sicuro con B4; ⏳ la doc di Docker e Litestream (B7d) |
 | **B7** | Litestream: immagine, avviatore, variabili, compose, doc, prove Docker, spike della replica | CP7a di H; daemon Docker acceso | 🧊 analisi ✅ (17/10 08:55); lo spike B7a approvato ma non girato (Docker spento); B7b–B7d aspettano le risposte D1–D10 del developer |
-| **B8** | token del pannello | B1; può entrare in B3 | ✅ in dev `56d3d3182` (15/10 20:23) |
+| **B8** | token del pannello | B1; può entrare in B3 | ✅ in dev `fe3fed78e` (15/10 20:23) |
 | **B9** | M-1, arm64 | facoltativo | ⏳ non iniziato |
-| **BZ** | revisione di sicurezza finale e handoff | tutto | parte 1 ✅ (17/10, F1–F5 → B-35…B-39, i record in dev `279c1bc1c`); parte 2 dopo B7 e B9 |
+| **BZ** | revisione di sicurezza finale e handoff | tutto | parte 1 ✅ (17/10, F1–F5 → B-35…B-39, i record in dev `e2d763959`); parte 2 dopo B7 e B9 |
 
 La colonna «Stato» è del 19/10, con ogni merge verificato in `dev_release2`. Le voci B-n hanno il loro stato nella
 sezione B del backlog; il lavoro di ogni lotto è nel §13.
@@ -641,8 +641,8 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > **Autorizzazione del developer, alla lettera** (15/10, ~11:08), inoltrata dal coordinatore: «riguardo b ed e sei tu
 > il coordinatore, a meno che non devo qualcosa in particolare, e allora aggiornami, avviali tu.»
 >
-> - **Base**: worktree portato a `23f6578f3` con un avanzamento veloce (contiene i lotti A–D di R). Verificato: HEAD
->   `23f6578f3ee2ea8f26f55d672d0593c5c67d5c20`, ramo `e-alfy-b-backup-e-docker`, pulito.
+> - **Base**: worktree portato a `9acf0f77e` con un avanzamento veloce (contiene i lotti A–D di R). Verificato: HEAD
+>   `9acf0f77e554a53ebea76b97877982cf61bab65a`, ramo `e-alfy-b-backup-e-docker`, pulito.
 > - **Autorizzati**: B0 (subito, prima di E1 di W: nessun ramo in attesa tocca `backup.py` o `backup_service.py`) e
 >   B1 (backup dell'istanza, backend e CLI, zip senza cifratura). Le righe di `dev.py` e del catalogo del runner le
 >   scrivo io, solo in aggiunta, e le elenco nell'handoff.
@@ -668,7 +668,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   immagini e i container creati, con nomi riconoscibili (`librefolio:b-…`); mai quelli degli altri.
 > - **Checkpoint**: FROZEN a fine B0 e a fine B1.
 
-### B0 — divisione di `api/v1/backup.py` (C2) e rinomina di `backup_service.py` (D-B8) (2026-10-15, 11:35-13:20) — ✅ committato alle 13:36, in dev `629d63306`
+### B0 — divisione di `api/v1/backup.py` (C2) e rinomina di `backup_service.py` (D-B8) (2026-10-15, 11:35-13:20) — ✅ committato alle 13:36, in dev `47816493e`
 
 > **Disegno**, in tre commit:
 >
@@ -770,7 +770,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > **Fuori pista**: alle 13:20 il coordinatore apre la finestra delle dipendenze (`cryptography`): niente comandi
 > Python fino al suo avviso.
 
-### B1 — backup dell'istanza, backend e CLI — la bozza e il passo 1 (2026-10-15, fino alle 12:55) ✅ — B1 committato alle 14:14 (`e35388306`), in dev `629d63306`
+### B1 — backup dell'istanza, backend e CLI — la bozza e il passo 1 (2026-10-15, fino alle 12:55) ✅ — B1 committato alle 14:14 (`955ce8cc8`), in dev `47816493e`
 
 > **Metodo**: per non mescolare B1 con il checkpoint di B0, la bozza sta in una copia dell'albero di B0 in `/tmp`
 > (`/tmp/librefolio-r13-b-b1/tree`), mai nel worktree. Entra nel worktree dopo il commit di B0, poi test-author scrive i
@@ -841,10 +841,10 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > journal (questo piano, la sezione B del backlog). Il lavoro di B1 nel worktree (file nuovi non tracciati, tre voci nei
 > cataloghi `_backend_services.py` e `_backend_utils.py`) non fa parte di B0.
 >
-> **Committato dal coordinatore** (13:36) nei 4 commit proposti: `bc1a01141` (R), `73b138b9b` (C), `256a78b36` (S),
-> `be6206c0d` (journal). Il lavoro di B1 è rimasto fuori, nel worktree. `all-backend` non serve: lo fa il coordinatore
+> **Committato dal coordinatore** (13:36) nei 4 commit proposti: `7560123e3` (R), `600633f3e` (C), `7bca5cf33` (S),
+> `38e413b64` (journal). Il lavoro di B1 è rimasto fuori, nel worktree. `all-backend` non serve: lo fa il coordinatore
 > all'ingresso. Nella stessa ora la finestra delle dipendenze ha portato `cryptography` 50.0.2 in `dev_release2`
-> (`dc9a5d232`; nel lock cambia anche `pycparser`, 3.0 → 3.11): B4 non aspetta più la dipendenza, solo il punto 38.
+> (`e910074cc`; nel lock cambia anche `pycparser`, 3.0 → 3.11): B4 non aspetta più la dipendenza, solo il punto 38.
 >
 > **Regole di carico nuove** (coordinatore, 13:36): per la mia corsia solo test di un singolo file (pytest o Vitest),
 > uno alla volta, con `nice -n 10`; build, svelte-check, `mkdocs build` ed E2E su richiesta; le prove pesanti le assegna
@@ -854,7 +854,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 > **Note implementazione**:
 >
-> - HEAD `be6206c0d` verificato; il lavoro di B1 intatto.
+> - HEAD `38e413b64` verificato; il lavoro di B1 intatto.
 > - Dalla copia in `/tmp`, dopo un confronto riga per riga (solo le differenze di B1): `backup/instance.py` (le 4 rotte
 >   nuove al posto dei segnaposto), la docstring di `backup/__init__.py`, la docstring dei prezzi in `backup/exports.py`
 >   (B-3), il gruppo `backup` in `dev.py` (un import, una chiamata, due righe dell'aiuto sotto «💾  Backup»), la stringa
@@ -906,8 +906,8 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 > Handoff inviato con l'elenco dei file, le prove e il testo proposto per il CHANGELOG.
 >
-> **Committato dal coordinatore** (14:14): `e35388306` (`feat(backup): …`, con la nota BREAKING CHANGE sui 4
-> segnaposto) e `d37736d05` (journal e devWiki). HEAD verificato `d37736d05`, worktree pulito.
+> **Committato dal coordinatore** (14:14): `955ce8cc8` (`feat(backup): …`, con la nota BREAKING CHANGE sui 4
+> segnaposto) e `8e7d22262` (journal e devWiki). HEAD verificato `8e7d22262`, worktree pulito.
 >
 > **Ingresso**: B0+B1 entrano dopo H, E1, X e A5. Prima il coordinatore aggiorna la base, poi io valido la revisione
 > combinata; conflitti attesi nei cataloghi del runner e in `test_dev_cli_image.py`, insieme al CP7a di H. Il CHANGELOG
@@ -1073,7 +1073,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - dopo il blocco di «📦 Simple Backup»: «The copy also takes `backups/`, with every archive `backup create` wrote
 >   there: delete the old ones first, or leave the folder out.»
 
-### B5a — scheda Backup, solo scaricamento (2026-10-15, dalle 14:25) — componente ✅; la riga del registro con `b7a4d35e6` (17:04)
+### B5a — scheda Backup, solo scaricamento (2026-10-15, dalle 14:25) — componente ✅; la riga del registro con `5afddf802` (17:04)
 
 > **Disegno**:
 >
@@ -1258,12 +1258,12 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >
 > Fuori: i file generati e ignorati (client API, catalogo i18n, `mkdocs_src/site/`), `.testLog/` e i log in `/tmp`.
 
-> **Committato dal coordinatore** (16:13): `2d3480b4b` (fix), `68d382586` (doc), `3bd729c38` (scheda), `89a486ec5`
+> **Committato dal coordinatore** (16:13): `3c8c6b9ac` (fix), `fa4f1da66` (doc), `d358c5f28` (scheda), `1bb2f23c0`
 > (journal).
 
 ### Aggiornamento di base — merge di `dev_release2` (2026-10-15, 16:13-16:26) ✅
 
-> **Merge aperto dal coordinatore**: HEAD `89a486ec5`, `MERGE_HEAD` `9c82a731e`. La base porta H CP6, X FE5b, E1, Y1,
+> **Merge aperto dal coordinatore**: HEAD `1bb2f23c0`, `MERGE_HEAD` `0e5ccb474`. La base porta H CP6, X FE5b, E1, Y1,
 > A5, i lotti di H (CP7a, C-96, filtro del log, G-10), Z1 e i commit del programma colori.
 >
 > **6 conflitti, risolti tenendo i due lati** (script con un'asserzione per blocco):
@@ -1285,7 +1285,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > **Verifiche prima dello stage**: nessun marcatore; i file Python compilano; il registro del runner si carica senza
 > nomi doppi; `diff --cached --check` pulito; stage dei soli 6 file.
 >
-> **Merge committato dal coordinatore**: `dfd1c1ea2`, genitori `89a486ec5` e `9c82a731e`.
+> **Merge committato dal coordinatore**: `dadcc32ef`, genitori `1bb2f23c0` e `0e5ccb474`.
 >
 > **Cancelli sulla revisione combinata** (16:18-16:26, corsia 6187, `nice -n 10`, uno alla volta), tutti verdi:
 >
@@ -1369,11 +1369,11 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - la scheda di backup sulla pagina di blocco, quando `backup_available` è vero (frontend di H);
 > - B2, B4, B7 come da decisioni.
 
-> **Committati dal coordinatore** (17:04): `b7a4d35e6` (scheda), `f43d5de89` (CP6), `e1858d277` (journal).
+> **Committati dal coordinatore** (17:04): `5afddf802` (scheda), `f150d98d2` (CP6), `9c93f4061` (journal).
 
-### Base `a22400f1e` e decisioni 38–39 (2026-10-15, dalle 17:04)
+### Base `f0a4ecf80` e decisioni 38–39 (2026-10-15, dalle 17:04)
 
-> **Base aggiornata dal coordinatore**: merge di `dev_release2` (`d22eb6f43`) senza conflitti, HEAD `a22400f1e`.
+> **Base aggiornata dal coordinatore**: merge di `dev_release2` (`6f9123d5c`) senza conflitti, HEAD `f0a4ecf80`.
 > Entrano W (eventi e conversione), J (C-94: il server di prova fa la build prima del timeout) e i colori.
 >
 > **Prove sulla revisione combinata** (17:05-17:14, `nice -n 10`, uno alla volta), tutte verdi:
@@ -1416,7 +1416,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > colori che il coordinatore dichiara. Nello slot: l'E2E, poi knip. La galleria la chiede il coordinatore ai colori,
 > dopo Y2. La scheda sulla pagina di blocco il coordinatore la propone ad H.
 
-### B8 — il token del pannello (via del coordinatore, 2026-10-15 alle 17:15) — messo da parte alle 17:22, continua sotto; in dev `56d3d3182`
+### B8 — il token del pannello (via del coordinatore, 2026-10-15 alle 17:15) — messo da parte alle 17:22, continua sotto; in dev `fe3fed78e`
 
 > **Via**: «B8: via». Le rotte del pannello vanno in `ALLOWED_WHEN_BLOCKED`: un'istanza bloccata, per esempio per un
 > mancato pagamento, e chi ospita che restituisce i dati al cliente. Le rotte sono autenticate dal token, non da una
@@ -1451,7 +1451,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   dell'admin dal pannello 404; cancellazione 204; token corto 503; file illeggibile 503).
 >
 > **⚠️ Fuori pista — B8 messo da parte per lo slot** (17:22): alle 17:21 il coordinatore dà lo slot pesante 1
-> sulla revisione `a22400f1e`.
+> sulla revisione `f0a4ecf80`.
 >
 > - Per provare esattamente quella revisione, i 9 file di B8 vanno in
 >   `~/.copilot/session-state/5618ecee-…/files/b8-wip/`, con `MANIFEST.sha256`, `MODIFIED.txt` e `NEW.txt`.
@@ -1490,7 +1490,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - Rumore d'ambiente, non del prodotto: a ogni corsa la cache statica non scarica MathJax da jsDelivr (certificato SSL)
 >   e tiene la copia in cache.
 
-> **Committato dal coordinatore** (17:52): `d7b57002a` (test E2E) e `c24466527` (journal). **⚠️ Fuori pista — orario
+> **Committato dal coordinatore** (17:52): `0f4d17cc5` (test E2E) e `ecf558851` (journal). **⚠️ Fuori pista — orario
 > sbagliato**: nel journal e nell'handoff avevo scritto che lo slot si era liberato «alle 18:20». È andato dalle 17:21
 > alle 17:51: lo dicono i log (knip 17:23, `check-orphans` 17:50). Il titolo è corretto qui sopra.
 
@@ -1524,9 +1524,9 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - Il test puro `services app-lifecycle` fissa solo l'ordine relativo dei passi di oggi e i nomi unici. I miei due
 >   vincoli vanno in una funzione di test mia. H manda il nome del file e lo SHA quando CP2b entra.
 
-### Aggiornamento di base — merge di `dev_release2` `9c8ee20c3` (2026-10-15, 17:52-17:55) ✅
+### Aggiornamento di base — merge di `dev_release2` `3690a6652` (2026-10-15, 17:52-17:55) ✅
 
-> **Merge aperto dal coordinatore**: HEAD `c24466527`, `MERGE_HEAD` `9c8ee20c3`. La base porta H (fatturazione e rotte
+> **Merge aperto dal coordinatore**: HEAD `ecf558851`, `MERGE_HEAD` `3690a6652`. La base porta H (fatturazione e rotte
 > dei link), A6a, Z7a, J e il banner del Lab.
 >
 > **6 file in conflitto**, risolti tenendo i due lati:
@@ -1551,9 +1551,9 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >    esplicitamente `LIBREFOLIO_BILLING_URL` invece di darlo per assente.
 >
 > Verifiche: nessun marcatore; compilazione; ruff e black puliti; `diff --cached --check` pulito; stage dei soli 6 file.
-> **Merge committato dal coordinatore**: `25cd742cf`, genitori `c24466527` e `9c8ee20c3`.
+> **Merge committato dal coordinatore**: `5b5654e0c`, genitori `ecf558851` e `3690a6652`.
 >
-> **Prove sulla revisione combinata `25cd742cf`** (17:56-18:09, corsia 6187, `nice -n 10`, una alla volta), tutte
+> **Prove sulla revisione combinata `5b5654e0c`** (17:56-18:09, corsia 6187, `nice -n 10`, una alla volta), tutte
 > verdi:
 >
 > - `api sync` 0; `front check` 0 errori e 0 avvisi;
@@ -1567,16 +1567,16 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > la riga in `index.md` e la voce in `log.md`. `check_source_paths` torna ai 5 percorsi mancanti di prima, tutti in
 > altre pagine. Una prima stesura citava `build/index.html`, che non esiste nel repo.
 >
-> **B8 dopo il merge**: le copie messe da parte sono su `a22400f1e`, quindi B8 si rimette come patch
+> **B8 dopo il merge**: le copie messe da parte sono su `f0a4ecf80`, quindi B8 si rimette come patch
 > (`files/b8-wip/b8.patch`, 9 file, 502 righe), non come copia, che cancellerebbe il merge. I 9 file di riserva sono
 > controllati col manifest.
 
 ### Ingresso — journal e `all-backend` (2026-10-15, 18:10-18:37) ✅
 
-> - **Journal committato dal coordinatore**: `23d284d3b`. La simulazione dell'ingresso sopra `dev_release2` attuale
->   (`695e6ad12`, con Y2) è pulita.
+> - **Journal committato dal coordinatore**: `2f3248929`. La simulazione dell'ingresso sopra `dev_release2` attuale
+>   (`5306be938`, con Y2) è pulita.
 > - **Slot pesante 1 a B per `all-backend`** prima dell'ingresso: `--workers 2`, `nice -n 10`, corsia 6187, revisione
->   `23d284d3b`. Dopo tocca a E. B8 si rimette dopo `all-backend`, non durante.
+>   `2f3248929`. Dopo tocca a E. B8 si rimette dopo `all-backend`, non durante.
 > - Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py test --test-port 6187
 >   --data-dir /tmp/librefolio-r13-b --workers 2 all-backend`, dalle 18:10:16 alle 18:36:24 (26 minuti, carico
 >   iniziale 44); log in `/tmp/libreFolio_b_all_backend.log`.
@@ -1591,17 +1591,17 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 > **⚠️ Fuori pista — B8 rimesso, poi di nuovo da parte** (18:37-18:40):
 >
-> - Dopo `all-backend`, B8 rimesso come patch (`git apply --reject` di `files/b8-wip/b8.patch` su `23d284d3b`): 8
+> - Dopo `all-backend`, B8 rimesso come patch (`git apply --reject` di `files/b8-wip/b8.patch` su `2f3248929`): 8
 >   file su 9 entrano con un offset; un frammento respinto, la docstring di `instance_block.py`, che il merge
->   `9c8ee20c3` aveva riscritto (link di H, anteprima di A6a). Riscritto a mano sul testo nuovo: «the full backup of an
+>   `3690a6652` aveva riscritto (link di H, anteprima di A6a). Riscritto a mano sul testo nuovo: «the full backup of an
 >   administrator or of the hosting panel … the panel's routes want its token, not a session». Ruff pulito.
-> - Poi il fermo del coordinatore: in `dev_release2` (`bcd680868`) è entrato E2, e l'ingresso di B ha 4 conflitti
+> - Poi il fermo del coordinatore: in `dev_release2` (`0f2e18fa7`) è entrato E2, e l'ingresso di B ha 4 conflitti
 >   (`settingsTabs.ts`, `settingsTabs.test.ts`, `_frontend_utility.py`, `LibreFolio_devWiki/log.md`). Prima di B8
 >   serve un merge di base.
-> - **B8 di nuovo da parte**, come patch sulla revisione attuale: `files/b8-wip/b8-on-23d284d3b.patch` (9 file, 526
->   righe, con la docstring già fusa) e `MANIFEST-23d284d3b.sha256`. Tolto con `git apply -R` (prima `--check`), poi
+> - **B8 di nuovo da parte**, come patch sulla revisione attuale: `files/b8-wip/b8-on-2f3248929.patch` (9 file, 526
+>   righe, con la docstring già fusa) e `MANIFEST-2f3248929.sha256`. Tolto con `git apply -R` (prima `--check`), poi
 >   verificato: nel worktree resta solo il piano; la patch rientra pulita su HEAD (`git apply --check`);
->   `git diff --check` pulito. La vecchia `b8.patch` (su `a22400f1e`) resta come storia.
+>   `git diff --check` pulito. La vecchia `b8.patch` (su `f0a4ecf80`) resta come storia.
 >
 > **I passi del coordinatore**:
 >
@@ -1616,10 +1616,10 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >    `front check`, `check-orphans`, poi l'E2E `front-utility backup` da sola (una scheda in più nella barra).
 > 4. Poi B8 dalla patch, i suoi test e il FROZEN.
 
-### Aggiornamento di base — merge di `dev_release2` `bcd680868`, con E2 (2026-10-15, 18:42-19:05) ✅ — committato
+### Aggiornamento di base — merge di `dev_release2` `0f2e18fa7`, con E2 (2026-10-15, 18:42-19:05) ✅ — committato
 
-> - **Piano committato dal coordinatore**: `ddf0c4035` (`docs(journal): all-backend green, B4 notes`). Merge aperto
->   da lui: `MERGE_HEAD` `bcd680868`, con E2 (la scheda Email) e W (il salvataggio degli eventi).
+> - **Piano committato dal coordinatore**: `a535d42b3` (`docs(journal): all-backend green, B4 notes`). Merge aperto
+>   da lui: `MERGE_HEAD` `0f2e18fa7`, con E2 (la scheda Email) e W (il salvataggio degli eventi).
 > - **Correzione della 38**, dal developer (coordinatore, 18:40): «come formato facciamo lfbk, mi piace di più».
 >   Nel piano passano a `.lfbk` il §3.1, il §3.3, il D-B1 e la nota della 38; `dev.py backup decrypt`, test e doc
 >   quando arriva B4.
@@ -1657,13 +1657,13 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   - prettier, ruff, black e `git diff --check` puliti;
 >   - `git add` dei soli 4 file.
 >
-> **⚠️ Fuori pista — `page.tabs.test.ts` rosso sul mio ramo da `b7a4d35e6`** (il caso previsto da E-6):
+> **⚠️ Fuori pista — `page.tabs.test.ts` rosso sul mio ramo da `5afddf802`** (il caso previsto da E-6):
 >
 > - Il test carica il registro vero con `importOriginal`, quindi tutti i corpi di scheda. E ha aggiunto il mock di
 >   `EmailSettingsTab`; quello di `BackupTab` non c'era.
 > - Senza il mock il file non si carica: la catena `BackupDownloadCard` → `formatDateTime` → `stores/app/language.ts`
 >   chiede `DEFAULT_LOCALE` al mock parziale di `$lib/i18n`.
-> - Il rosso è mio, non del merge: è nato con la riga della scheda (`b7a4d35e6`), che avevo validato solo con Vitest
+> - Il rosso è mio, non del merge: è nato con la riga della scheda (`5afddf802`), che avevo validato solo con Vitest
 >   `settingsTabs`. Il merge non tocca né la catena del backup né questo test.
 > - Cura: una riga, `vi.mock('$lib/features/backup/BackupTab.svelte', …)` dopo quella di E (il modello di E-6). **Non
 >   è nell'indice**: il coordinatore decide se va nel merge o in un commit a parte.
@@ -1682,12 +1682,12 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >
 > **Committato dal coordinatore** (18:54):
 >
-> - il merge `b1f5b0fd1` (genitori `ddf0c4035` e `bcd680868`), con dentro la riga di `page.tabs.test.ts`: per lui è
+> - il merge `e7e9bd380` (genitori `a535d42b3` e `0f2e18fa7`), con dentro la riga di `page.tabs.test.ts`: per lui è
 >   una correzione di significato del merge;
-> - il piano in `ef61f0e7f`;
+> - il piano in `b44ecd08e`;
 > - togliere `adminOnly` va bene: le liste per contesto di E fissano la stessa cosa.
 >
-> **Prove sulla revisione combinata `ef61f0e7f`** (18:55-19:05, `nice -n 10`, una alla volta; log in
+> **Prove sulla revisione combinata `b44ecd08e`** (18:55-19:05, `nice -n 10`, una alla volta; log in
 > `/tmp/libreFolio_b_post_b1f5_*.log`):
 >
 > - Vitest `settingsTabs` 20/20 e `page.tabs` 18/18.
@@ -1697,13 +1697,13 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - E2E `front-utility backup` 5/5 (FBKP-001…004), con la scheda Email nella barra; 4 min 30 s, avvio della corsia
 >   compreso (carico 37).
 > - `front-utility core-unit` (slot 1): 5 046 passati e 1 rosso, quello noto: `htmlInterpolation.gate`, perché
->   `email.problems.SMTP_FROM_INVALID` contiene `<` nei 4 cataloghi. La correzione di E (`be7de95b6`) è fuori dalla mia
+>   `email.problems.SMTP_FROM_INVALID` contiene `<` nei 4 cataloghi. La correzione di E (`2621200a0`) è fuori dalla mia
 >   base. File: 154 su 155.
 > - Porta 6187 libera; in `.jobs` solo `.lock`; worktree pulito. Slot 1 liberato alle 19:05 (dopo B tocca a J).
 >
-> **B è entrato** (coordinatore, dopo le 19:05): `dev_release2` = `629d63306`, il merge di `ef61f0e7f`. Il CHANGELOG lo
+> **B è entrato** (coordinatore, dopo le 19:05): `dev_release2` = `47816493e`, il merge di `b44ecd08e`. Il CHANGELOG lo
 > scrive lui: in Added «Instance backup…», e fra le ⚠️ «the four placeholder backup endpoints are removed». Il mio HEAD
-> non si sposta: B8 va sopra `ef61f0e7f`, e la base la aggiorna lui al checkpoint di B8.
+> non si sposta: B8 va sopra `b44ecd08e`, e la base la aggiorna lui al checkpoint di B8.
 >
 > **Ordine dopo B8**, dal coordinatore:
 >
@@ -1714,12 +1714,12 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > 5. B4, il backup «sicuro» `.lfbk`;
 > 6. B7, Litestream, dopo CP7b di H e con il developer fuori dalla VPN.
 
-### B8 — il token del pannello, rimesso sopra `ef61f0e7f` (2026-10-15, 19:06-20:11) ✅ — 🧊 FROZEN
+### B8 — il token del pannello, rimesso sopra `b44ecd08e` (2026-10-15, 19:06-20:11) ✅ — 🧊 FROZEN
 
-> - **Rimesso**: `git apply` di `files/b8-wip/b8-on-23d284d3b.patch`, controllato prima con `--check`. Gli 8 file
->   escluso `.env.example` sono identici al manifest `MANIFEST-23d284d3b.sha256`. `.env.example` differisce solo per la
+> - **Rimesso**: `git apply` di `files/b8-wip/b8-on-2f3248929.patch`, controllato prima con `--check`. Gli 8 file
+>   escluso `.env.example` sono identici al manifest `MANIFEST-2f3248929.sha256`. `.env.example` differisce solo per la
 >   riga di E entrata col merge (`# Docs: mkdocs_src → admin/email.md`), fuori dal frammento di B8.
-> - **OpenAPI**: `api sync`, poi confronto con quello di `ef61f0e7f` salvato prima
+> - **OpenAPI**: `api sync`, poi confronto con quello di `b44ecd08e` salvato prima
 >   (`/tmp/libreFolio_b_openapi_pre_b8_ef61f0e7f.json`):
 >   - in più solo i 3 percorsi del pannello (4 operazioni, ciascuna con `BackupPanelToken`) e lo schema di sicurezza
 >     `BackupPanelToken`;
@@ -1769,7 +1769,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   - PANEL-015/016/017: i job di un'altra origine (`ui`, `cli`, `pre-restore`) e gli id sconosciuti come «non
 >     esiste»; il job in corso con 409.
 >   - PANEL-018: gli errori d'avvio.
->   - PANEL-019: le rotte dell'admin con le chiamate di prima di B8, verificate su `ef61f0e7f`.
+>   - PANEL-019: le rotte dell'admin con le chiamate di prima di B8, verificate su `b44ecd08e`.
 >   - PANEL-020: l'OpenAPI.
 > - **`test_instance_block.py`** (di H), in aggiunta nella sezione «(a) … the full backup»:
 >   - `origin` facoltativo nel servizio finto (default `ui`);
@@ -1851,12 +1851,12 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   `PUT …/panel/jobs`) risponde 405, e l'OpenAPI elenca le rotte comunque. Il «404 come se non ci fossero» vale per le
 >   4 operazioni servite. Nessun effetto sulla sicurezza: il codice è pubblico.
 
-### Base `10697e618`, prove d'ingresso e decisioni 40–43 (2026-10-15, 20:12-20:25) ✅
+### Base `c543a9941`, prove d'ingresso e decisioni 40–43 (2026-10-15, 20:12-20:25) ✅
 
-> - **B8 committato dal coordinatore**: `663e858f1` (`feat(backup): panel token for instance backups`) e `1f8385c0d`
+> - **B8 committato dal coordinatore**: `198112da1` (`feat(backup): panel token for instance backups`) e `c5dcfa722`
 >   (journal). Il testo del CHANGELOG va bene. La precondizione nuova nel test di H gliela comunica il coordinatore
 >   all'ingresso.
-> - **Base aggiornata da lui**: merge di `dev_release2` `b4597efad`, senza conflitti; HEAD `10697e618`. Dentro ci sono
+> - **Base aggiornata da lui**: merge di `dev_release2` `c0929bf28`, senza conflitti; HEAD `c543a9941`. Dentro ci sono
 >   CP2b di H (i passi d'avvio in `lifecycle.py`), N2 di W, L, le decisioni e i registri. Dei file di B8 cambia solo
 >   `.env.example`, con la sezione di Z sullo spegnimento: H non ha toccato `instance_block.py` dopo B8, e le 21 voci
 >   restano intere.
@@ -1897,7 +1897,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   17:18, prima delle righe «Decisione» del treno 45 (17:40-18:10), che le danno decise.
 > - **Prossimo**: lo scatto `settings/backup-ready`, con la checklist di G. Lo slot della galleria lo chiede il
 >   coordinatore; il doppio lancio lo farà probabilmente la coppia G-13, come per Users ed Email.
-> - **B8 entrato** (coordinatore): `dev_release2` = `56d3d3182`; CHANGELOG in `6102d5097`. Le 41–43 seguono le righe
+> - **B8 entrato** (coordinatore): `dev_release2` = `fe3fed78e`; CHANGELOG in `def31b127`. Le 41–43 seguono le righe
 >   «Decisione» del file: il suo messaggio era arrivato in ritardo dalla coda. Il pulsante del pannello per il link di
 >   reset è di B: **B-10** nel backlog, non per la 1.3 se non resta tempo. La precondizione nuova in
 >   `test_instance_block.py` la comunica lui ad H. **Ordine**: lo scatto, poi B2, poi B3 (con i passi in
@@ -1943,7 +1943,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 ### B2 — prova su copia: analisi aggiornata alle decisioni 40–43 (2026-10-15, 20:35) — via alle 20:50
 
-> **Stato reale** (base `10697e618`, letto sul codice):
+> **Stato reale** (base `c543a9941`, letto sul codice):
 >
 > - `alembic_head_revision()` sta in `services/platform/readiness.py:38`. Con CP2b, `ensure_database_exists()` sta in
 >   `services/platform/database_bootstrap.py`: lancia `alembic -c backend/alembic.ini upgrade head` in un
@@ -2008,7 +2008,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   il controllo in `auth.py` è di A, va dichiarato e la forma va concordata con A, accanto al controllo `sv`.
 >
 > **Il suo messaggio delle 20:44** («H entra prima di te … `billing_url`, link di reset, anteprima di A6a») è vecchio,
-> arrivato in ritardo dalla coda: `9c8ee20c3`, con quelle tre cose, è nel mio HEAD dalle 17:52. Nessuna azione.
+> arrivato in ritardo dalla coda: `3690a6652`, con quelle tre cose, è nel mio HEAD dalle 17:52. Nessuna azione.
 
 ### B2a — libreria e CLI della prova su copia (2026-10-15, 20:50-21:47) ✅
 
@@ -2292,11 +2292,11 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Da fare**: i test in `test_backup_jobs.py` con test-author, dopo B2b; lo SHA a Z quando il coordinatore committa.
 >   `restore_jobs._a_check_runs` può usare `_lock_held`: lo unisco quando test-author ha finito con `restore_jobs.py`.
 
-### Aggiornamento di base — merge di `dev_release2` `84a18fb4c` (2026-10-15, 23:20-23:35) ✅ — committato dal coordinatore: `abb81e702`
+### Aggiornamento di base — merge di `dev_release2` `8f6aa2f9d` (2026-10-15, 23:20-23:35) ✅ — committato dal coordinatore: `1be851df3`
 
-> - **B2 committato dal coordinatore**: `80b8f8c39` (B2a), `22c116679` (B2b), `6a7fae5bf` (doc), `e3a9d2251` (journal).
->   `backup_in_progress()` è in `22c116679`: lo SHA è mandato a Z.
-> - **Merge aperto da lui**, `MERGE_HEAD` `84a18fb4c`, con X CP10 (le impostazioni dei plugin, `007_plugin_settings`)
+> - **B2 committato dal coordinatore**: `ec9f54768` (B2a), `89d6bc8cd` (B2b), `d284df817` (doc), `9f1663dd5` (journal).
+>   `backup_in_progress()` è in `89d6bc8cd`: lo SHA è mandato a Z.
+> - **Merge aperto da lui**, `MERGE_HEAD` `8f6aa2f9d`, con X CP10 (le impostazioni dei plugin, `007_plugin_settings`)
 >   e altro. **Un conflitto**, in `hosting_providers.en.md`: tutti e due avevano aggiunto una riga alla tabella del
 >   profilo. Tenute tutte e due, prima quella di X; «three things» corretto in **four**, perché ognuno era passato da
 >   due a tre. In stage solo quel file.
@@ -2396,10 +2396,10 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - un supervisore assente (la UI lo dice: B5b);
 > - il riavvio della corsia nei test: mai un vero SIGTERM.
 
-### Merge `abb81e702` committato; via per B3 e decisione sulle sessioni (2026-10-15, 23:45) — B3 continua sotto; in dev `0cd910a7e`
+### Merge `1be851df3` committato; via per B3 e decisione sulle sessioni (2026-10-15, 23:45) — B3 continua sotto; in dev `1d9709ec4`
 
-> - **Coordinatore**: merge della base committato, `abb81e702`, con la mia risoluzione e la correzione dei due test
->   (`OLDER` fissato a `005_accounts_invites`); journal di B3 in `f0b76e81d`; worktree pulito.
+> - **Coordinatore**: merge della base committato, `1be851df3`, con la mia risoluzione e la correzione dei due test
+>   (`OLDER` fissato a `005_accounts_invites`); journal di B3 in `40233a675`; worktree pulito.
 > - **Rifinitura `rows_changed`: sì**, nel prossimo checkpoint con il suo test. Applicata (23:49): in `staging._report`
 >   e nell'elenco «Changed by the upgrade» di `backup_cli._print_stage_report` la regola è
 >   `(rows.before or 0) != (rows.after or 0)`. Ruff e black puliti. Tocca due test registrati
@@ -2466,11 +2466,11 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   (`_suites.run_all_backend_tests`, nessun glob) e non fa il controllo degli orfani: i file di B3 non registrati non
 >   entrano nella run d'ingresso di B2.
 
-### Checkpoint `rows_changed` committato; la formula delle sessioni (2026-10-16, 00:17) — B3 continua sotto; in dev `0cd910a7e`
+### Checkpoint `rows_changed` committato; la formula delle sessioni (2026-10-16, 00:17) — B3 continua sotto; in dev `1d9709ec4`
 
-> - **Coordinatore**: `484b75231` `fix(backup): rows_changed ignores tables created or dropped empty` e `94a95284d`
->   (journal). HEAD verificato `94a95284d`; fuori, non tracciati, solo i due file nuovi di B3. `all-backend` verso le
->   01:35 su `94a95284d`: lo annuncia lui.
+> - **Coordinatore**: `fe77844ad` `fix(backup): rows_changed ignores tables created or dropped empty` e `cedff94fb`
+>   (journal). HEAD verificato `cedff94fb`; fuori, non tracciati, solo i due file nuovi di B3. `all-backend` verso le
+>   01:35 su `cedff94fb`: lo annuncia lui.
 > - **Decisione notturna, da rivedere col developer — la formula delle sessioni dopo un ripristino** (40, forma (a)): al
 >   commit, per ogni account,
 >
@@ -2533,7 +2533,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   rinomine, lock nel `finally`, `flock` bloccante e rilettura, OpenAPI, segnale dopo la risposta). Registrazione dei
 >   quattro file pronta in `files/b3-wip/register_b3.py` (ancore verificate).
 > - **Messaggio vecchio dalla coda** (arrivato alle 01:07): la checklist di G per lo scatto `settings/backup-ready`,
->   «seguila mentre scrivi». Lo scatto è già scritto e committato (`a675d2eb2`) e G-13 l'ha girato due volte, verde.
+>   «seguila mentre scrivi». Lo scatto è già scritto e committato (`798432b13`) e G-13 l'ha girato due volte, verde.
 >   Riletto contro la checklist: rotta prima della navigazione, `login`, `forEachLanguageAndTheme`,
 >   `navigateTo('/settings?tab=backup')`, `aria-selected`, `waitForSettled`, `extendScreenToBlock` e `restoreTallScreen`,
 >   corpo tipizzato, date assolute, nessun backup vero. Diverso solo il titolo del test (`backup ready (admin) - …`); il
@@ -2547,7 +2547,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Terzo messaggio vecchio** (01:09; del 15/10, prima di CP2b): `main.py` congelato fino a CP2b, il passo di B3 come
 >   una riga in `STARTUP_STEPS` dopo il suo ingresso. CP2b è nella mia base (`app_lifespan.py`), e la bozza aggiunge
 >   proprio una riga per passo lì. Nessuna azione. **Quarto** (01:09): il rosso di E2 in `core-unit`
->   (`htmlInterpolation.gate`), corretto in `be7de95b6`: riguarda il merge di base del 15/10 (18:42-19:05), già
+>   (`htmlInterpolation.gate`), corretto in `2621200a0`: riguarda il merge di base del 15/10 (18:42-19:05), già
 >   committato. Nessuna azione.
 > - **Quinto** (01:10; del 15/10, ~19:30): CP2b entrato; i due passi di B3 in `STARTUP_STEPS` di `app_lifespan.py`,
 >   «fissali con `assert_in_relative_order` nel test `services app-lifecycle`». L'ordine è fissato in
@@ -2556,7 +2556,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   copia locale di 6 righe, perché importare `test_app_lifecycle` tira dentro `backend.app.main`, e
 >   `configure_logging()` scrive `logs/` nella cartella dati configurata. Da dichiarare all'handoff; se il coordinatore
 >   vuole anche la riga nel file di H, è un'aggiunta di una riga.
-> - **Sesto** (01:10; del 15/10, ~21:00): lo scatto entrato da solo (`ab2ddf86e`), «continua con B2a». Passato: B2 è
+> - **Sesto** (01:10; del 15/10, ~21:00): lo scatto entrato da solo (`1cf926658`), «continua con B2a». Passato: B2 è
 >   committato. Nessuna azione.
 > - **Regola della notte** (coordinatore, 01:10): le decisioni del developer vanno al coordinatore in 3-4 righe, con la
 >   proposta per prima, e il punto va in pausa; le scelte tecniche nel mio perimetro le decido io, come «Decisione
@@ -2606,9 +2606,9 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   nell'aiuto).
 > - **01:44, contrordine**: «fai entrare B2 da solo» (Z2b aspetta `backup_in_progress()`). I messaggi si sono incrociati.
 >   **B3 salvato fuori dal repo** (`files/b3-applied/`, 19 file con `MANIFEST.txt`, uguali byte per byte) e **worktree
->   riportato a `94a95284d`**: i 13 file tracciati riscritti con `git show HEAD:<file>`, i 6 nuovi tolti (salvati). Solo
+>   riportato a `cedff94fb`**: i 13 file tracciati riscritti con `git show HEAD:<file>`, i 6 nuovi tolti (salvati). Solo
 >   il piano resta modificato. Nessun comando git che scrive.
-> - **01:48, `all-backend`** nello slot pesante 1: `--workers 2`, `nice -n 10`, corsia 6187, revisione `94a95284d`; log
+> - **01:48, `all-backend`** nello slot pesante 1: `--workers 2`, `nice -n 10`, corsia 6187, revisione `cedff94fb`; log
 >   `/tmp/libreFolio_b_all_backend_94a95.log`.
 > - **Durante la run, nella copia salvata** (niente nel worktree):
 >   - ruff: ordine degli import in `apply.py` (vero); `cmd_restore` troppo complessa (13 > 10) → divisa in
@@ -2630,11 +2630,11 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   Dipende da H (`derive_key_from`, lettura della chiave generata). Tre punti per la lista di domattina: il costo di
 >   scrypt (`2^17`, 128 MiB, raccomandato), la password (almeno 12 caratteri, due volte), lo zip in chiaro per un attimo
 >   sul disco durante la creazione (accettato, raccomandato).
-> - **Sequenza dopo il via**: `all-backend` di B2 su `94a95284d`; poi nel worktree il codice di B3 (`apply.py`,
+> - **Sequenza dopo il via**: `all-backend` di B2 su `cedff94fb`; poi nel worktree il codice di B3 (`apply.py`,
 >   `restart.py`, le modifiche in `paths`, `restore_jobs`, schemi, API, CLI, `app_lifespan` con le due righe dichiarate),
 >   la registrazione dei quattro file, i due test registrati che B3 rompe, il verde mirato, `api sync`, `front check`, la
 >   doc (docs-writer).
-> - **`all-backend` di B2 su `94a95284d`** (slot pesante 1, 01:48:55-02:30:00, 41 min, `--workers 2`, `nice -n 10`,
+> - **`all-backend` di B2 su `cedff94fb`** (slot pesante 1, 01:48:55-02:30:00, 41 min, `--workers 2`, `nice -n 10`,
 >   corsia 6187; log `/tmp/libreFolio_b_all_backend_94a95.log`): **verde**, 7/7 categorie, **18 359 passati, 29 saltati,
 >   0 falliti**:
 >   - 4 passate parallele (147, 47, 11 e 65 unità, 2 worker): 16 180 passati e 4 saltati;
@@ -2644,11 +2644,11 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **B3 rimesso** (02:31, `restore_b3.sh`: 19 file uguali alla copia salvata). Nel worktree: ruff pulito sui file di B3
 >   (i 43 rilievi di `dev.py` sono già in HEAD); black segnala solo righe già in HEAD (`dev.py`, i due `print_info` dei
 >   cataloghi); `check-orphans`: tutti i 335 file del backend registrati e raggiungibili.
-> - **02:33, aggiornamento di base per l'ingresso di B2**: il coordinatore committa il piano (`e05ccd1b4`) e chiede il
+> - **02:33, aggiornamento di base per l'ingresso di B2**: il coordinatore committa il piano (`ecde683cd`) e chiede il
 >   worktree pulito per un merge con 4 conflitti di doc (contro Z4, Z3, A6d). B3 di nuovo fuori: questa volta come
 >   **patch** dei 13 file tracciati (`files/b3-wip/b3-tracked.patch`, 885 righe) più i 6 file nuovi della copia salvata,
->   perché dopo il merge una copia dei file sovrascriverebbe le sue modifiche. Worktree pulito su `e05ccd1b4`.
-> - **Merge di base `db384eaf5`** (aperto dal coordinatore alle 02:34; Z3, Z4, A6d e altro): 4 file di doc in
+>   perché dopo il merge una copia dei file sovrascriverebbe le sue modifiche. Worktree pulito su `ecde683cd`.
+> - **Merge di base `9fe0e69b1`** (aperto dal coordinatore alle 02:34; Z3, Z4, A6d e altro): 4 file di doc in
 >   conflitto, 7 blocchi, risolti spostando le righe dei due lati (`files/b3-wip`, script in Python), in stage solo quei 4:
 >   - `configuration.en.md`: le nostre due righe (`BACKUP_DOWNLOAD_TOKEN`, `BACKUP_MAX_UPLOAD_MB`) poi `WAKE_TOKEN` di Z;
 >     in «Secrets» la frase di Z senza numero (richiesta del coordinatore); nella tabella dei segreti
@@ -2665,18 +2665,18 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Prove sulla revisione combinata** (02:35-02:43, `/tmp/libreFolio_b_mergedb3.sh`, una alla volta, `nice`, carico
 >   sotto 70): `api backup-restore` 114, `services backup-staging` 118, `services config-env-example` 36, `mkdocs build`
 >   stretta con 0 avvisi, `check-links` 96 validi, `check-orphans` 342 file del backend tutti raggiungibili. Porta libera.
-> - **Merge `db384eaf5` committato dal coordinatore**: `cc439f696`. Dentro c'è anche CP-15 di J (`fd41a0996`):
+> - **Merge `9fe0e69b1` committato dal coordinatore**: `5a87afaeb`. Dentro c'è anche CP-15 di J (`5403e203d`):
 >   `financial_math/ledger_totals.py` (`CONTROL_TOTALS_VERSION = 1`, `ControlTotals` con `to_json()`/`from_json()`,
 >   `compute_control_totals(session)`), da usare quando il lotto arriva a manifest e controllo (TODO(CP-15) dell'e2e).
-> - **Secondo merge, `a2f658097`** (A6d e A6e entrati nel frattempo; aperto dal coordinatore alle 02:44, B3 ancora
+> - **Secondo merge, `7a8db7f40`** (A6d e A6e entrati nel frattempo; aperto dal coordinatore alle 02:44, B3 ancora
 >   fuori): un conflitto, `security.md`, «Private Endpoints». Tenute la frase di A sulle impostazioni globali (lette da
 >   ogni utente con una sessione, scritte solo da un admin; la pagina di login legge `/system/instance`), quella di Z sui
 >   due tipi di rotta con un token proprio e la nostra sul pannello, presa alla lettera dal nostro lato. In stage solo
 >   quel file. Fusi da soli e cambiati dai due lati: `cli_tools`, `configuration`, `hosting_providers` (le modifiche di
 >   A), il backlog, un `print_info` di `_backend_services.py` riformattato: niente di B. `mkdocs build` stretta 0
 >   avvisi, `check-links` 96 validi (02:45-02:48).
-> - **✅ B2 entrato in `dev_release2`** (treno 82, merge `5441b96ed`), con la riga ✨ nel CHANGELOG. Il secondo merge di
->   base è committato dal coordinatore: `62004e530`.
+> - **✅ B2 entrato in `dev_release2`** (treno 82, merge `8c4b1da7e`), con la riga ✨ nel CHANGELOG. Il secondo merge di
+>   base è committato dal coordinatore: `5113b65de`.
 > - **B3 rimesso come patch** (02:50): `git apply --reject` di `files/b3-wip/b3-tracked.patch` sui 13 file tracciati,
 >   nessun `.rej`; i 6 file nuovi dalla copia salvata. I 10 file tracciati non toccati dai merge e i 6 nuovi sono uguali
 >   alla copia salvata; nei 3 cataloghi del runner le voci di B3 sono sopra quelle portate dai merge (`system-wake`,
@@ -2824,7 +2824,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   presa da `dev_release2`, non gira fuori dal repo (calcola i percorsi dalla sua posizione): gira al prossimo
 >   aggiornamento di base. Ruff e black puliti.
 > - **`all-backend` di B3** (slot pesante 1, 04:37:16-05:14:59, 37 min 44 s, `--workers 2`, `nice -n 10`, corsia 6187,
->   HEAD `62004e530` più B3; log `/tmp/libreFolio_b_all_backend_b3.log`): **6/7 categorie verdi**. Nell'API un solo
+>   HEAD `5113b65de` più B3; log `/tmp/libreFolio_b_all_backend_b3.log`): **6/7 categorie verdi**. Nell'API un solo
 >   rosso, deterministico e nostro: `test_backup_api.py::test_the_backup_router_registers_its_routes_in_order`
 >   (BACKUP-001, il pin dell'ordine delle rotte `/backup` di C2), che elenca ancora le 15 rotte di prima delle 4 nuove
 >   di `restore.py`. Passate parallele: 4 809 + 5 974, 75 + 2 852, 953 + 782, 1 067 (+1 rosso) + 807; DB 19/19. Porta
@@ -2846,15 +2846,15 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   segnaposto tolti (BACKUP-010) non si scontrano con i percorsi nuovi.
 > - **Prossimo**: dopo le 06:45 `api backup`, poi l'handoff FROZEN.
 
-### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — superato: B4 riparte dall'analisi delle 22:36, in dev `339a59142`
+### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — superato: B4 riparte dall'analisi delle 22:36, in dev `4fc5187f4`
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
 > nei file della sessione (`b4-contract.md`).
 >
-> - **In base** (`62004e530`): `cryptography` 50.0.2; le funzioni di X per la copia (`count_unreadable_secrets`,
+> - **In base** (`5113b65de`): `cryptography` 50.0.2; le funzioni di X per la copia (`count_unreadable_secrets`,
 >   `rekey_plugin_secrets`). Lo scopo persistito della chiave d'istanza è uno solo, `plugins.settings.v1`: il
 >   `key_id` di ogni riga di X fa già da valore di controllo H-3, nella copia non c'è altro da scrivere.
-> - **Manca ancora in `dev_release2`** (`2c485d3d4`, 03:56): `derive_key_from` di H (annunciata con CP7b) e una lettura
+> - **Manca ancora in `dev_release2`** (`77a315d36`, 03:56): `derive_key_from` di H (annunciata con CP7b) e una lettura
 >   pubblica della chiave generata. Quindi **B4a** (busta, creazione e ripristino con password, `decrypt`, conteggio dei
 >   segreti illeggibili nel report) non dipende da nessuno; **B4b** (la chiave nell'archivio e la ricifratura) aspetta
 >   le due funzioni di H.
@@ -2867,9 +2867,9 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 ### B3 committato; B-13 e B6a-bis approvati (2026-10-16, 05:19-05:30) — fermo della macchina 05:30-06:45
 
-> - **B3 committato dal coordinatore** come checkpoint intermedio (non è un ingresso): `5f1543e81`
->   `feat(backup): apply checked restore at next start` (20 file), `2c2c8fc3e` `docs(backup): restore an archive,
->   follow or cancel it` (5), `887a24123` `docs(journal): B3 restore, security review, backlog B` (2). HEAD `887a24123`,
+> - **B3 committato dal coordinatore** come checkpoint intermedio (non è un ingresso): `ed2568e4d`
+>   `feat(backup): apply checked restore at next start` (20 file), `917a7fb17` `docs(backup): restore an archive,
+>   follow or cancel it` (5), `28bf10946` `docs(journal): B3 restore, security review, backlog B` (2). HEAD `28bf10946`,
 >   worktree pulito. Il testo del CHANGELOG lo tiene il coordinatore per l'ingresso; le decisioni notturne (sessioni,
 >   P7, P11, `restore_in_use`, il lock) sono nella lista del developer.
 > - **B-13 approvato com'è analizzato** (`files/b13-analysis.md` della sessione): `changed` è un avviso, mai un
@@ -2922,8 +2922,8 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 ### B-13 — i totali di controllo del registro nel backup (2026-10-16, 07:00-08:40) ✅ — 🧊 FROZEN
 
-> - **Via del coordinatore** (05:25, poi 07:00 dopo il commit di B6a-bis: `2c917e3aa` docs, `ccc92b5a2` journal, HEAD
->   `ccc92b5a2`): `changed` è un avviso, mai un rifiuto; il manifest resta v1; commit separati da B3.
+> - **Via del coordinatore** (05:25, poi 07:00 dopo il commit di B6a-bis: `6d48ba405` docs, `a1116fa09` journal, HEAD
+>   `a1116fa09`): `changed` è un avviso, mai un rifiuto; il manifest resta v1; commit separati da B3.
 > - **Contratto** (`files/b13-contract.md` della sessione): `instance_backup/totals.py` con `ledger_totals_of(database)`
 >   (la funzione di J su un motore dedicato in sola lettura, `aiosqlite` con `?mode=ro` come la `describe_database` di
 >   B1, mai il DB vivo, mai un'eccezione) e `compare_totals(recorded, current)` (`same`, `changed` con al più 20 righe di
@@ -2986,9 +2986,9 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Verifiche della doc** (08:31-08:34): `mkdocs build` stretta 0 avvisi, `check-links` 96, `utils gate-docs-links` 63.
 > - **Backlog**: B-13 chiusa ✅.
 
-### B5b — la scheda del ripristino (2026-10-16, dalle 08:35) — continua sotto; in dev `0cd910a7e`
+### B5b — la scheda del ripristino (2026-10-16, dalle 08:35) — continua sotto; in dev `1d9709ec4`
 
-> - **B-13 committato** dal coordinatore: `c374313c0` feat, `36bccad06` docs, `1ca7a52c6` journal (HEAD); entra con B3.
+> - **B-13 committato** dal coordinatore: `61a4c5f63` feat, `44c104c94` docs, `fac2009a0` journal (HEAD); entra con B3.
 > - **Via per B5** (coordinatore, 08:35): le tre raccomandazioni di P8, ognuna «da rivedere» e facile da cambiare;
 >   markup nuovo solo con i ruoli `-lf-`, nessun elemento misto; `BackupDownloadCard` resta dov'è, senza props
 >   obbligatorie (lo monta H nella pagina di blocco); prima i Vitest, prove leggere con carico sotto 50.
@@ -3037,7 +3037,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 ### Decisioni del developer su P7, P8 e P12 (2026-10-16, 11:11-11:25)
 
-> - **P11 committato** dal coordinatore: `51fa21b59` fix, `4ec25ade0` journal (HEAD). La doc sugli account in attesa di
+> - **P11 committato** dal coordinatore: `c7dba0245` fix, `e28a7a981` journal (HEAD). La doc sugli account in attesa di
 >   verifica resta com'è: spiega il comportamento reale.
 > - **P7** («se l'app è bloccata, che ripristino avvierei? Il ripristino resta bloccato anche lui finché non pagano, da UI
 >   e da API»): un ripristino confermato prima del blocco **non si applica** finché l'istanza è bloccata, aspetta lo
@@ -3119,11 +3119,11 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 ### B5b — rosso, allineamento al design system, codice, verde (2026-10-16, 12:28-13:25) ✅ — continua dopo la pausa
 
-> - **P7 committato** dal coordinatore: `e895fcd97` fix, `b63a00864` docs, `9686942c6` journal (HEAD). Approvata la
+> - **P7 committato** dal coordinatore: `b307efb4c` fix, `340bc6621` docs, `510b551e7` journal (HEAD). Approvata la
 >   scelta su `pending` (`other_data_directory` vince); l'aggiunta al CHANGELOG di B3 («never applied while the instance
 >   is blocked») la tiene il coordinatore.
-> - **Skill nuova `design-system`** (decisione D-T29, `6e569084a` in `dev_release2`, arriva al prossimo aggiornamento di
->   base): letta con `git show 6e569084a:…` (copia in `files/design-system-SKILL.md` della sessione), non dai file del
+> - **Skill nuova `design-system`** (decisione D-T29, `16ea52b26` in `dev_release2`, arriva al prossimo aggiornamento di
+>   base): letta con `git show 16ea52b26:…` (copia in `files/design-system-SKILL.md` della sessione), non dai file del
 >   checkout principale. Vale subito per i componenti nuovi di B5b. Le bozze erano già solo ruoli `-lf-` (nessuna
 >   palette, nessun esadecimale, nessun `dark:`, testo primario sulla radice, ogni bordo col suo ruolo); corretti
 >   (`files/b5b-wip/align_design_system.py`):
@@ -3208,7 +3208,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 ### ⏸️ PAUSA del developer (2026-10-16, 13:25-14:14) — ripresa
 
-> - HEAD `9686942c6`, nessun merge aperto, porta 6187 libera, nessun mio comando in corso. Ai due specialisti in corsa
+> - HEAD `510b551e7`, nessun merge aperto, porta 6187 libera, nessun mio comando in corso. Ai due specialisti in corsa
 >   (test-author `817f0858`, `docs-writer` `1a89fad1`) chiesto di finire la modifica in corso e fermarsi.
 > - **Sporchi** (tutti di B5b, niente da committare a metà): `BackupDownloadCard.svelte`, `BackupTab.svelte`,
 >   `backupApi.ts`, `backupApi.test.ts`, i cinque moduli nuovi e i cinque test nuovi di `features/backup/`, i quattro
@@ -3229,17 +3229,17 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   - a H (tramite il coordinatore): `RestoreCard` è un componente suo, montato solo in `BackupTab`, mai dentro
 >     `BackupDownloadCard`; la pagina di blocco, che monta `BackupDownloadCard`, resta solo con crea, scarica, cancella
 >     (P7). B5b tocca `BackupDownloadCard` solo nelle classi;
->   - regola C-99 del developer (`b171c058e`): fino al riordino del manuale admin alla fine della 1.3, una variabile
+>   - regola C-99 del developer (`fa474ad3a`): fino al riordino del manuale admin alla fine della 1.3, una variabile
 >     nuova si spiega per intero nella pagina della sua funzione e ha una sola riga, con il link, in
 >     `configuration.md` (vale per B7, Litestream);
->   - regola dei colori (T `a317392d4`): un `<input>` di testo, una `<textarea>` o una `<select>` con classi `-lf-`
+>   - regola dei colori (T `42d595074`): un `<input>` di testo, una `<textarea>` o una `<select>` con classi `-lf-`
 >     nomina da sé `text-lf-primary`, e `placeholder:text-lf-placeholder` se ha un segnaposto. B5b la rispetta già (il
 >     campo della parola ha tutti e due; il selettore del file è `type="file"` e `hidden`); vale per i campi di B4.
 
 ### ▶️ Ripresa (2026-10-16, 14:14-14:50) — B5b: i due fix, i controlli, l'handoff ✅ — 🧊 FROZEN
 
 > - Via del coordinatore («the developer has resumed»): i due fix dei rilievi del `docs-writer`, prima i rossi, poi i
->   controlli e l'handoff di B5b; prove leggere con carico sotto 50. HEAD `9686942c6` e worktree come alla pausa.
+>   controlli e l'handoff di B5b; prove leggere con carico sotto 50. HEAD `510b551e7` e worktree come alla pausa.
 > - Il test-author `817f0858` scrive i casi disegnati; intanto i controlli della doc (non leggono i file dei test).
 > - **Doc** (14:14-14:20, `b_docs.sh`): `mkdocs build` stretta 0 avvisi, `check-links` 96, `utils gate-docs-links` 63;
 >   porta libera.
@@ -3295,7 +3295,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 ### B5c — l'esito di un ripristino senza sessione (biglietto monouso) e B-17 (2026-10-16, 15:02-18:22) ✅ — 🧊 FROZEN
 
-> - **B5b committato** dal coordinatore: `1e2f6374a` feat (19 percorsi), `2efb36ffb` docs, `de4d0e293` journal (HEAD).
+> - **B5b committato** dal coordinatore: `f440254d5` feat (19 percorsi), `9838fd8aa` docs, `983b7ccee` journal (HEAD).
 >   **Il developer ha scelto (A)**, il biglietto monouso: lotto B5c dopo B5b, con B-17. E2E e galleria di B5b in coda
 >   per uno slot.
 > - **Analisi** (intera in `files/b5c-analysis.md` della sessione):
@@ -3461,7 +3461,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   (`outcome.py`, `test_backup_outcome.py`). Fuori: `frontend/e2e/settings/backup.spec.ts`, che il test-author dell'E2E
 >   sta scrivendo (entra con il suo slot). Restano rossi due casi di `api backup-restore-apply`, finché entra la riga di H
 >   in `ALLOWED_WHEN_BLOCKED` (`instance_block.py`) e il suo pin (`test_instance_block.py`).
-> - **B5c committato** dal coordinatore: `9137e1ef8` feat, `b699be101` docs, `57564d321` journal (HEAD). La descrizione
+> - **B5c committato** dal coordinatore: `9ec2c41a4` feat, `17a8697c7` docs, `067d17081` journal (HEAD). La descrizione
 >   di `logging-access-filter` con `/ticket` resta.
 > - **18:29, le righe di H, scritte da me e riviste da H** (coordinatore): `instance_block.py` (l'import di
 >   `restore as backup_restore`; la voce `backup_restore.get_restore_outcome` dopo quelle del pannello, con un commento;
@@ -3483,12 +3483,12 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   (FBKP-001, 001b, 002, 003, 004 di B5a; FBKP-101…107 del ripristino, FBKP-102 con l'incolla vero compreso), la build
 >   del frontend fatta prima (`--build-only`). La cartella dati della corsia pulita dopo: in `.restore/` nessuno stato,
 >   nessun biglietto, nessuna copia, nessun caricamento, solo i file di lock vuoti. Porta libera.
-> - **Committato** dal coordinatore: `465c27939` feat (le righe di H), `78023380c` test (l'E2E del ripristino),
->   `283466abb` journal.
+> - **Committato** dal coordinatore: `ce03c9162` feat (le righe di H), `2e03f0619` test (l'E2E del ripristino),
+>   `0f690b4ba` journal.
 
-### Aggiornamento di base — merge di `dev_release2` `0c79932a7` (2026-10-16, 19:57-20:30) ✅ — 🧊 FROZEN; committato dal coordinatore: `92a190efa`
+### Aggiornamento di base — merge di `dev_release2` `d4202021d` (2026-10-16, 19:57-20:30) ✅ — 🧊 FROZEN; committato dal coordinatore: `e431b7a99`
 
-> - Merge aperto dal coordinatore nel mio worktree (HEAD `283466abb`, MERGE_HEAD `0c79932a7`, base comune `62004e530`;
+> - Merge aperto dal coordinatore nel mio worktree (HEAD `0f690b4ba`, MERGE_HEAD `d4202021d`, base comune `5113b65de`;
 >   oltre 446 commit: C-97a, H-12/21, MF, Y, X, i colori; non ancora P18 di A). Sei conflitti, risolti per somma; in
 >   staging solo quei sei (`git add` dei sei percorsi); nessun file fuori conflitto toccato.
 >   - `backend/app/services/platform/app_lifespan.py`: da me `restore-commit`, da H `plugin-secrets-check` (H-15),
@@ -3532,19 +3532,19 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   stretta 0 avvisi, `check-links` 97, `utils gate-docs-links` 63. Porta libera. Diff in staging pulito (`--check`).
 > - **⚠️ Fuori pista** (20:24): un `sed -i ''` per segnare chiusa questa sezione ha svuotato il piano (0 byte, uscita 1;
 >   probabilmente il `sed` di macOS su un carattere multibyte del modello, che lascia il file vuoto). Toccava solo questo
->   piano, fuori staging; l'indice ne aveva la versione committata (`283466abb`, identica a HEAD). Ripreso senza
+>   piano, fuori staging; l'indice ne aveva la versione committata (`0f690b4ba`, identica a HEAD). Ripreso senza
 >   scritture di git: `git show :<piano>` copiato nella cartella della sessione e sul file (3477 righe, uguale
 >   all'indice), poi questa sezione riscritta con lo strumento di modifica. Da ora niente `sed -i` su testo con caratteri
 >   non ASCII: lo strumento di modifica o Python.
 > - **20:30, handoff del merge** al coordinatore, 🧊 FROZEN: lui crea il commit del merge; fuori staging solo questo
 >   piano; poi lo slot di `all-backend` prima dell'ingresso.
-> - **Committato** dal coordinatore: `92a190efa` (il merge), `618fe8be4` (questo piano). L'ordine dei passi lo passa lui
+> - **Committato** dal coordinatore: `e431b7a99` (il merge), `b86c2477a` (questo piano). L'ordine dei passi lo passa lui
 >   a H; B-14 nel prossimo checkpoint, d'accordo.
 
-### Secondo aggiornamento di base — merge di `dev_release2` `979d0a151` (2026-10-16, 20:26-20:39) ✅ — committato dal coordinatore: `4e866cead`
+### Secondo aggiornamento di base — merge di `dev_release2` `69d613d52` (2026-10-16, 20:26-20:39) ✅ — committato dal coordinatore: `d0ebfb98d`
 
 > - Nel frattempo in `dev_release2` sono entrati A (P18/A-27, la migrazione 009 e F02) e W-B53 (il passo
->   `brim-parse-pool`). Merge aperto dal coordinatore (HEAD `618fe8be4`, MERGE_HEAD `979d0a151`, base `0c79932a7`).
+>   `brim-parse-pool`). Merge aperto dal coordinatore (HEAD `b86c2477a`, MERGE_HEAD `69d613d52`, base `d4202021d`).
 >   Tre conflitti, risolti per somma, in staging solo quei tre.
 >   - `app_lifespan.py`: il conflitto non era il passo di W (git l'ha messo da solo dopo `market-holidays` e prima di
 >     `scheduler`, come chiedeva il coordinatore), ma **`admin-bootstrap` di A (F02)**, anche lui subito dopo
@@ -3601,20 +3601,20 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **20:39, handoff del merge** al coordinatore, 🧊 FROZEN: in staging i tre conflitti più, per N57, il pin
 >   (`test_backup_apply.py`) e la frase corretta di `security.md` (file già in conflitto); fuori staging solo questo
 >   piano.
-> - **Committato** dal coordinatore: `4e866cead` (il merge), `cd06f240b` (questo piano); poi un merge pulito di `dev`
->   `27994759a` (J-24, MF C/I2, A-25, il giornale di Z): HEAD **`dbc2324d5`**, pulito. Il caso limite del link di setup va
+> - **Committato** dal coordinatore: `d0ebfb98d` (il merge), `a36afd032` (questo piano); poi un merge pulito di `dev`
+>   `4a62135ee` (J-24, MF C/I2, A-25, il giornale di Z): HEAD **`f3a463e37`**, pulito. Il caso limite del link di setup va
 >   nel backlog di A, tramite il coordinatore.
 
-### `all-backend` su `dbc2324d5`, il CHANGELOG, H-17 e il checkpoint di doc (2026-10-16, 20:49-22:32) ✅ — 🧊 FROZEN
+### `all-backend` su `f3a463e37`, il CHANGELOG, H-17 e il checkpoint di doc (2026-10-16, 20:49-22:32) ✅ — 🧊 FROZEN
 
 > - **Slot 1** (il coordinatore, 20:49; fine prevista 21:40, poi «lascialo finire»: nessuno aspettava lo slot prima delle
->   22): `all-backend --workers 2` su **`dbc2324d5`** con l'albero pulito, nella mia corsia (6187,
+>   22): `all-backend --workers 2` su **`f3a463e37`** con l'albero pulito, nella mia corsia (6187,
 >   `/tmp/librefolio-r13-b`), `files/scripts/b_allbackend.sh`. Dalle 20:50 alle 21:35, **45 minuti 09 secondi: 7 su 7**
 >   (External, DB, Services, Utils, Schema, API, E2E), uscita 0. Le tre passate parallele: 6386 + 6628, 94 + 3089,
 >   365 + 1468 superati, nessun fallimento; la costruzione dei prerequisiti 280 s col carico a ~80. Le 7 righe «❌» del log
 >   sono messaggi stampati dai test External sui percorsi d'errore (`MOCKFX_FAIL: simulated provider failure…`), non
 >   fallimenti. Istantanea del DB `00_archive/test-db_20261016_213506.tar.xz`. Porta libera.
->   - Durante la corsa nessuna modifica all'albero (la corsa doveva provare esattamente `dbc2324d5`): le note di questo
+>   - Durante la corsa nessuna modifica all'albero (la corsa doveva provare esattamente `f3a463e37`): le note di questo
 >     piano tenute in `files/next-checkpoint/journal-notes.md` della sessione e riportate qui dopo.
 > - **Checkpoint di doc** (21:36, `files/next-checkpoint/apply_b14_docs.py`, provato a secco prima su copie):
 >   - **B-14** in `admin/backup_restore.en.md`: «Make a Backup», la pagina di blocco ora ha la stessa scheda, **Keep a
@@ -3628,7 +3628,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >     N57), rinumerata: 21 passi, gli stessi del codice e nello stesso ordine (confrontati con `STARTUP_STEPS`).
 >   - Pagine solo in inglese: nessun debito di traduzione.
 > - Controlli della doc: fermati prima di partire (carico ~100) per farli una volta sola, dopo anche H-17 (sotto).
-> - **B è entrato in `dev`** (coordinatore, 21:45): merge **`0cd910a7e`** (treno 141: B3, P7, B5b, B5c, B-17, N53, N57;
+> - **B è entrato in `dev`** (coordinatore, 21:45): merge **`1d9709ec4`** (treno 141: B3, P7, B5b, B5c, B-17, N53, N57;
 >   64 file), nessun conflitto. **CHANGELOG**: mandato il blocco finale in inglese (`files/next-checkpoint/
 >   changelog-block.md` della sessione): in `✨ Added` sostituisce il punto di B2 («Check a backup before restoring it»)
 >   con «Restore an instance backup» (la prova su copia, la conferma con la parola, il riavvio, l'esito, `--dry-run` e il
@@ -3651,12 +3651,12 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   `hasattr` coglie solo il vecchio nome; mettere nella tabella un valore di prova e verificare che la funzione lo segua
 >   chiuderebbe anche un 500 scritto a mano.
 > - **22:32, handoff del checkpoint** al coordinatore, 🧊 FROZEN: 7 file tracciati, nessuno nuovo.
-> - **Committato** dal coordinatore: `fix(backup)` H-17, `docs(backup)`, `docs(journal)`; HEAD `e3a96d9da`. La nota del
+> - **Committato** dal coordinatore: `fix(backup)` H-17, `docs(backup)`, `docs(journal)`; HEAD `7d93199a4`. La nota del
 >   test-author (un valore di prova nella tabella di H, la funzione che lo segue): **sì**, nel prossimo lotto.
 
-### Terzo aggiornamento di base — merge di `dev_release2` `cd617824e` (2026-10-16, 22:32-23:04) ✅ — committato dal coordinatore: `6c72f0efe`
+### Terzo aggiornamento di base — merge di `dev_release2` `3865f8e3e` (2026-10-16, 22:32-23:04) ✅ — committato dal coordinatore: `6ef2fb15b`
 
-> - Merge aperto dal coordinatore (HEAD `e3a96d9da`, MERGE_HEAD `cd617824e`): la decisione 47 di W aggiunge il passo
+> - Merge aperto dal coordinatore (HEAD `7d93199a4`, MERGE_HEAD `3865f8e3e`): la decisione 47 di W aggiunge il passo
 >   `lone-transfer-legs` (dopo `post-migration-fixes`, prima di `global-settings`) e la sua voce nella lista numerata di
 >   `developer/architecture/overview.md`, dove io avevo appena messo i miei tre passi: un conflitto, solo quello.
 > - **Risolto con uno script** (non a mano): la lista dei passi nell'ordine di `STARTUP_STEPS` del codice unito (22
@@ -3670,7 +3670,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   --check` pulito, nessun file non risolto.
 > - **23:04, handoff del merge** al coordinatore: in staging, oltre al merge, solo `overview.md`. Fuori staging resta
 >   questo piano; i file dei test di B4 che i test-author stanno scrivendo non vanno nel commit del merge.
-> - **Committato** dal coordinatore: `6c72f0efe` (solo l'indice; genitori `e3a96d9da` e `cd617824e`). H-17 e la doc sono
+> - **Committato** dal coordinatore: `6ef2fb15b` (solo l'indice; genitori `7d93199a4` e `3865f8e3e`). H-17 e la doc sono
 >   entrati in dev. Via a B4: rossi, poi codice.
 > - **Prossimo lotto: B4** (password e chiave dell'archivio; P12 deciso: scrypt `n = 2^15`, la password con le regole e
 >   l'indicatore della registrazione, almeno 12 caratteri), prima l'analisi; più il test della nota di H-17. B7 e B9
@@ -3937,7 +3937,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > Sola lettura, nessun codice. Il contratto intero è nella cartella della sessione (`files/b4-contract.md`: §2-§6
 > aggiornati a P12, §9 nuovo); qui il riassunto.
 
-**Stato reale** (HEAD `e3a96d9da` + merge aperto di `cd617824e`):
+**Stato reale** (HEAD `7d93199a4` + merge aperto di `3865f8e3e`):
 
 - H: `derive_key_from(key, purpose, length)` **è in base** (`instance_key.py:85`). La sua docstring dice «l'archivio
   lascia fuori la chiave»: vero solo per gli archivi in chiaro di oggi. L'analisi H-3 di H dice già «solo un archivio
@@ -4072,12 +4072,12 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
   vecchia dell'admin si ricifra anche un archivio in chiaro, per esempio all'uscita dal cloud se il pannello consegna la
   sua chiave.
 
-### B4 committato; validazione combinata su `33275d9a6` e gli E2E FBKP-108/109 (2026-10-17, 02:07-03:27) ✅ — 🧊 FROZEN, checkpoint pronto
+### B4 committato; validazione combinata su `45eef19ac` e gli E2E FBKP-108/109 (2026-10-17, 02:07-03:27) ✅ — 🧊 FROZEN, checkpoint pronto
 
 > **Il coordinatore (02:07)**:
 >
-> - B4 è committato in tre commit: `df1f0d52c` (codice, test, runner), `0ff310355` (doc), `97037bb2e` (journal);
-> - base aggiornata: merge pulito di dev `b1b4960c4`, HEAD **`33275d9a6`**;
+> - B4 è committato in tre commit: `a7c407c59` (codice, test, runner), `79255aa3e` (doc), `f4f910dcc` (journal);
+> - base aggiornata: merge pulito di dev `f35e8ef01`, HEAD **`45eef19ac`**;
 > - la riga in più di H (`test_instance_block.py:821`, solo la firma) l'ha controllata lui: OK;
 > - A7b-2 (il gestore globale del 422 senza `input`, `api/validation_errors.py`) entra in dev dopo il suo
 >   `all-backend`. Copre anche le rotte di B; `NoInputEchoRoute` resta, A-37 lo toglie più avanti;
@@ -4094,7 +4094,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > `stores/transactions/**`, né `_frontend_transaction.py` e `_frontend_utility.py`. Controllato in sola lettura: B4 non
 > tocca quei percorsi, e nessun file di B importa da quelle cartelle.
 >
-> **HEAD verificata (02:12)**: `33275d9a6`, pulita.
+> **HEAD verificata (02:12)**: `45eef19ac`, pulita.
 >
 > **⚠️ Fuori pista: FBKP-108/109 non esistono.** La spec si ferma a FBKP-107. L'analisi li nominava per la chiusura
 > (passo 7), e nel mio handoff li avevo dati per «non eseguiti», come se ci fossero. Corretto col coordinatore (02:15).
@@ -4165,7 +4165,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   controlla comunque, la finestra dura millisecondi, e se le opzioni falliscono l'errore ha il suo messaggio. Lasciato
 >   così.
 >
-> **B-21 nel backlog (coordinatore, 02:50; da H, H-27 in dev `bfdc1f72c`)**. `profile_default()` solleva
+> **B-21 nel backlog (coordinatore, 02:50; da H, H-27 in dev `8c489753c`)**. `profile_default()` solleva
 > `ProfileDefaultError` (un `TypeError`) su una tabella sbagliata. Le due rotte di `restore.py` prendono solo
 > `BackupConfigError`, e sono le sole che chiamano `backup_max_upload_mb()`:
 >
@@ -4175,7 +4175,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >
 > Da fare dopo l'ingresso di H-27 nel ramo. Il test di guardia H-17 usa `123`, un intero: compatibile.
 >
-> **Metà leggera, tutta verde (02:28-03:06)**, su `33275d9a6`, un passo alla volta a carico < 50 (con lunghe attese:
+> **Metà leggera, tutta verde (02:28-03:06)**, su `45eef19ac`, un passo alla volta a carico < 50 (con lunghe attese:
 > carico fino a 181):
 >
 > - `api sync`;
@@ -4231,14 +4231,14 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 > **Il coordinatore (03:08 e 03:10)**:
 >
-> - la revisione di E su B4 (R13-SEC4, piano 08 in dev `110125350`) non trova niente sopra la soglia, e la crittografia
+> - la revisione di E su B4 (R13-SEC4, piano 08 in dev `db1093a7d`) non trova niente sopra la soglia, e la crittografia
 >   è solida. Quattro note per un lotto B4b subito dopo l'ingresso di B4, prima di B-21;
 > - J (J-27): `ledger_totals._as_amount` (la casa) accetta solo testo decimale semplice. Così `_plain` e `_PLAIN_AMOUNT`
 >   di `totals.py` ripetono lo stesso controllo, e la scelta è di B.
 >
 > Il nome «B4b» è del coordinatore. Il B4b dell'analisi (la chiave dentro l'archivio) è confluito in B4.
 >
-> **Verifica sul codice, in sola lettura (HEAD `33275d9a6`)**. Le note reggono tutte:
+> **Verifica sul codice, in sola lettura (HEAD `45eef19ac`)**. Le note reggono tutte:
 >
 > 1. **Chiaro lasciato da un crash.** La pulizia gira solo quando parte un nuovo controllo (`restore_jobs.prune`,
 >    chiamata solo da `start_check`) o un nuovo backup (`remove_expired_jobs`, chiamata solo da `_prepare`). Fra i passi
@@ -4268,8 +4268,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >      ogni lettura dall'archivio si ferma a `INSTANCE_KEY_MAX_BYTES` (4096) → **B-26**: rifiutarlo già all'esportazione,
 >      con l'avviso `instance_key_unusable`.
 >
-> **J-27 → B-22, deciso.** J-27 è già nella base di B: `7336722ad` «fix(ledger-totals): read only plain decimal
-> amounts», entrato con `e221a0544`. La regola è identica: `_EXACT.prec` = 60, la stessa di `-?[0-9]{1,60}(\.[0-9]{1,60})?`
+> **J-27 → B-22, deciso.** J-27 è già nella base di B: `4bb97aa49` «fix(ledger-totals): read only plain decimal
+> amounts», entrato con `8042271e1`. La regola è identica: `_EXACT.prec` = 60, la stessa di `-?[0-9]{1,60}(\.[0-9]{1,60})?`
 > di B. `from_json` rifiuta con un `ValueError` anche tutto il resto che `_plain` controllava (righe che non sono una
 > lista, una riga che non è un oggetto, un importo che non è una stringa). `compare_totals` lo traduce già in `absent`.
 > L'unico motivo di `_plain` era il pericolo dell'esponente espanso prima della casa, e ora la casa lo evita da sé.
@@ -4280,9 +4280,9 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Lotto B4b proposto** (dopo l'ingresso di B4 e il riallineamento alla punta, prima di B-21): B-23 (il più
 > importante), B-24, B-25, B-26 e B-22. Prima l'analisi, poi i rossi.
 >
-> **B4 entrato (coordinatore, 03:28)**: dev `339a59142`, con `8b56f4a62` (FBKP-108/109) e `4d16d583e` (journal); il
-> blocco del CHANGELOG (3 ✨ + 3 🔒) in `0a45e45de`. La mia HEAD è portata in avanti a **`0a45e45de`**, pulita. Dentro
-> ci sono anche H-27 (`bfdc1f72c`) e J-27 (`7336722ad`).
+> **B4 entrato (coordinatore, 03:28)**: dev `4fc5187f4`, con `5b0cc3919` (FBKP-108/109) e `e6c8e9495` (journal); il
+> blocco del CHANGELOG (3 ✨ + 3 🔒) in `6df5413ba`. La mia HEAD è portata in avanti a **`6df5413ba`**, pulita. Dentro
+> ci sono anche H-27 (`8c489753c`) e J-27 (`4bb97aa49`).
 >
 > **Analisi B4b (03:30-03:45), in sola lettura**:
 >
@@ -4569,8 +4569,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-27 — l'avviso di un ripristino riuscito: analisi (2026-10-17, 04:55-05:05) — chiuso, non da fare (P8)
 
-> **B4b entrato (coordinatore, 04:55)**: commit `964ecf434`, `70d515552` e `b3d4a81db`; dev `c7dd3934a`; il CHANGELOG
-> (3 🔒 e 1 🐛) in `8b15a6c6c`. La mia HEAD è portata in avanti a **`8b15a6c6c`**, pulita. Il via è per B-27 (N67),
+> **B4b entrato (coordinatore, 04:55)**: commit `38b9997bb`, `977b537a1` e `08db4ff1d`; dev `1db2d6415`; il CHANGELOG
+> (3 🔒 e 1 🐛) in `d70dc34f9`. La mia HEAD è portata in avanti a **`d70dc34f9`**, pulita. Il via è per B-27 (N67),
 > analisi prima.
 >
 > **Nel backlog anche B-28** (coordinatore, 04:50: la nota di E dalla revisione di B3, che lui chiamava «B-19»; quell'ID
@@ -4614,9 +4614,9 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Deciso (coordinatore, 05:00)**: N67 ritirato, **P8 resta**. B-27 è chiuso come «non da fare, P8» (nel backlog con
 > ✅ e la nota) e va nell'elenco del developer solo come nota. Si procede con (a), l'analisi di B-28.
 
-### B-28 — i trigger del DB caricato durante il controllo (2026-10-17, 05:00-05:50) ✅ — entrato in dev `01f36e79d`
+### B-28 — i trigger del DB caricato durante il controllo (2026-10-17, 05:00-05:50) ✅ — entrato in dev `641f8714f`
 
-> Sola lettura, HEAD `8b15a6c6c` pulita.
+> Sola lettura, HEAD `d70dc34f9` pulita.
 >
 > **Stato reale**:
 >
@@ -4754,8 +4754,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-29 — un totale della copia che J non rilegge (2026-10-17, 05:50-06:10) ✅ — 🧊 FROZEN, checkpoint pronto
 
-> **B-28 entrato (coordinatore, 05:49)**: commit `9403ecda0`, `fe1183750` e `910e185b6`; dev `01f36e79d`; il CHANGELOG
-> 🔒 in `1c2bac918`. HEAD portata in avanti a **`1c2bac918`**, pulita. Il via è per **B-29**: prima il rosso, poi
+> **B-28 entrato (coordinatore, 05:49)**: commit `63e4f3ee7`, `b2cf98449` e `d881bdb06`; dev `641f8714f`; il CHANGELOG
+> 🔒 in `9464ea750`. HEAD portata in avanti a **`9464ea750`**, pulita. Il via è per **B-29**: prima il rosso, poi
 > `current` letto dentro un `try` che risponde `unreadable`, con run leggeri nella corsia. Poi **B-16** (l'overlay che
 > aspetta per sempre dopo «Restore and restart»), salvo una decisione del developer, altrimenti **B-9**. Un checkpoint
 > per lotto.
@@ -4798,8 +4798,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-16 — l'overlay che aspetta per sempre (2026-10-17, 06:10-06:35) ✅ — 🧊 FROZEN, checkpoint pronto
 
-> **B-29 entrato (coordinatore, 06:09)**: il fix è `c96861834`; dev `006773c99`; nessuna riga nel CHANGELOG. HEAD
-> portata in avanti a **`abf8391fb`**, pulita. Via all'analisi di B-16.
+> **B-29 entrato (coordinatore, 06:09)**: il fix è `ad729f63b`; dev `3164cf31e`; nessuna riga nel CHANGELOG. HEAD
+> portata in avanti a **`61eb3cb36`**, pulita. Via all'analisi di B-16.
 >
 > **Stato reale** (`restoreFlow.svelte.ts`, `RestartOverlay.svelte`):
 >
@@ -4882,13 +4882,13 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Back to Backup** (che porta a **Restart now and restore** e **Cancel the restore**). Build rigorosa exit 0,
 > check-links valido, `gate-docs-links` 63.
 >
-> **Backlog**: B-16 chiuso con ✅. Aggiunti gli SHA ai chiusi di oggi: B-21..B-26 `964ecf434`, B-28 `9403ecda0`, B-29
-> `c96861834`.
+> **Backlog**: B-16 chiuso con ✅. Aggiunti gli SHA ai chiusi di oggi: B-21..B-26 `38b9997bb`, B-28 `63e4f3ee7`, B-29
+> `ad729f63b`.
 
-### B-9 — il token del pannello fra i controlli della configurazione (2026-10-17, 06:35-07:36) — ✅ entrato in dev `997dc7ecf`
+### B-9 — il token del pannello fra i controlli della configurazione (2026-10-17, 06:35-07:36) — ✅ entrato in dev `17207cacd`
 
-> **B-16 entrato (coordinatore, 06:33)**: dev `3896cb6b3`, il CHANGELOG 🐛 in `47405701f`. HEAD portata in avanti a
-> **`47405701f`**, pulita. Via all'analisi di B-9.
+> **B-16 entrato (coordinatore, 06:33)**: dev `7976d82a2`, il CHANGELOG 🐛 in `a6cd8b9b5`. HEAD portata in avanti a
+> **`a6cd8b9b5`**, pulita. Via all'analisi di B-9.
 >
 > Due note di A:
 >
@@ -4969,15 +4969,15 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > (b) la clausola «`backup.checks.*` per quelli di B» nella riga `i18n_key` della tabella di H, **nello stesso lotto
 > B-9**, non dopo.
 >
-> **H-37 entrato (06:47)**: dev `b37e926af`. Due note di H da includere in B-9:
+> **H-37 entrato (06:47)**: dev `564f50635`. Due note di H da includere in B-9:
 >
 > 1. in `test_backup_restore.py`, blocco (e), le etichette «B-21, RED until the routes catch it» sono vecchie;
 > 2. la docstring di `backup_max_upload_mb()` («else `0`, the self-hosted default») vale ora solo per `selfhosted`: con
 >    un altro profilo, una voce mancante → `ProfileDefaultError`.
 >
-> HEAD era antenata di `b37e926af`, e i miei 5 file sporchi non erano toccati da `47405701f..b37e926af`. Ho chiesto un
+> HEAD era antenata di `564f50635`, e i miei 5 file sporchi non erano toccati da `a6cd8b9b5..564f50635`. Ho chiesto un
 > fast-forward subito: il selettore in `_backend_services.py`, la nota 1, la riga del backlog e `security.md` cadono
-> tutti in file cambiati in dev. **Coordinatore (06:51)**: ff a **`c8ea9ddd4`** (oltre `b37e926af`: MF SEC7-2 e il
+> tutti in file cambiati in dev. **Coordinatore (06:51)**: ff a **`33df8ba40`** (oltre `564f50635`: MF SEC7-2 e il
 > changelog); file sporchi intatti; B-9 resta un commit solo. Approvata anche la correzione di `configuration.en.md`
 > l.202-204: «work the same way» dopo «the server stops at startup» fa credere che ogni `_FILE` elencato fermi l'avvio
 > (trovata dal docs-writer).
@@ -5006,7 +5006,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   `#backup-config-checks` in fondo a «Secure Backups», (b) la clausola `i18n_key` più una frase dopo la tabella
 >   dell'ordine, (c) il paragrafo «never at startup» del token in «Secrets from Files», che B-9 rende falso, (d) una
 >   clausola nelle righe di H-37 su `upload_limit_mb`.
-> - **Codice pronto** in `b9-wip/apply_b9.py`, provato a secco su `c8ea9ddd4`: `checks.py`; in `config_audit.py`
+> - **Codice pronto** in `b9-wip/apply_b9.py`, provato a secco su `33df8ba40`: `checks.py`; in `config_audit.py`
 >   l'import in ordine ruff (dopo `client_address`) e la riga prima del commento di E; la docstring di
 >   `backup_max_upload_mb()` (nota 2 di H); le chiavi nei 4 cataloghi. Il selettore è in `b9-wip/apply_runner.py`.
 > - ✅ **Giro 2 dei test** (TA-B): 57 istanze. Il test di registrazione dice «prima dei controlli dell'email»; gli
@@ -5053,9 +5053,9 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >
 > **Commit e merge con A8a+N70+E-13** (07:12-07:36):
 >
-> - 07:12: il coordinatore committa B-9 (`b35581e5b`). Contro il ramo A8a+N70+E-13 confligge in 4 file; A entra prima.
+> - 07:12: il coordinatore committa B-9 (`08ab0980e`). Contro il ramo A8a+N70+E-13 confligge in 4 file; A entra prima.
 >   Intanto, fino al merge: albero pulito, B-30 solo in analisi (sezione «B-30» qui sotto).
-> - 07:22: A8a+N70+E-13 è entrato (dev `45f9c5406`), e il coordinatore apre nel mio worktree il merge di dev nel mio ramo.
+> - 07:22: A8a+N70+E-13 è entrato (dev `88cab7bb3`), e il coordinatore apre nel mio worktree il merge di dev nel mio ramo.
 > - Risoluzione, tenendo entrambi i lati, nell'ordine vero di `CONFIG_CHECKS`: piattaforma, **B**, **A**, E.
 >   - `config_audit.py`: `*BACKUP_CONFIG_CHECKS` dopo `check_log_level`, poi `*ACCOUNTS_CONFIG_CHECKS` di A, poi quelli
 >     di E. È l'ordine che il test di A sulla tupla intera
@@ -5084,7 +5084,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   test di A), `backup-checks` 57, `email-checks` 87, `accounts-checks` 76; `mkdocs build` strict OK (124 s),
 >   `check-links` OK, `utils gate-docs-links` 63. Porta libera; `git diff --cached --check` pulito; ho messo in stage
 >   solo le 4 risoluzioni.
-> - **Entrato**: merge `0f3f72961` → dev `997dc7ecf`, CHANGELOG ✨ `94fb9be08`; HEAD portata in avanti a `94fb9be08`.
+> - **Entrato**: merge `3d52a46c0` → dev `17207cacd`, CHANGELOG ✨ `e4ec5f5c6`; HEAD portata in avanti a `e4ec5f5c6`.
 > - **Congelamento** (coordinatore): `frontend/e2e/settings/backup.spec.ts` resta fermo fino all'ingresso di A8b.
 >   A cambia il controllo del membro e il clic a `:263/:276` (il nuovo percorso della scheda); lo rivedo al
 >   checkpoint di A.
@@ -5132,7 +5132,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > Nessun cambiamento del frontend: `backupFailureCode` legge `detail.code` qualunque sia lo stato, e le due schede
 > hanno già le frasi di `backup_no_space` e `stage_failed`. Le guardie lo fissano.
 >
-> **Codice pronto** in `b30-wip/apply_b30.py` (18 operazioni in 5 file), provato a secco su `94fb9be08`. Le copie
+> **Codice pronto** in `b30-wip/apply_b30.py` (18 operazioni in 5 file), provato a secco su `e4ec5f5c6`. Le copie
 > patchate, scritte nei file della sessione, passano ruff (ordine degli import compreso) e black, letti da stdin col
 > percorso vero del repo: il worktree resta intatto finché i rossi non hanno girato.
 >
@@ -5202,8 +5202,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-31 — conferma, annullamento e riavvio: un codice e un messaggio (2026-10-17, 08:01-08:46) — ✅ 🧊 FROZEN (checkpoint delle 08:46)
 
-> **B-30 entrato** (coordinatore, 08:01): commit con la punta `116df6800`, dev `af9b7f482`, CHANGELOG 🐛 `f4dab3db7`;
-> HEAD portata in avanti a **`f4dab3db7`**, pulita. **Via a B-31** come annotato: un 500 con un codice e un messaggio
+> **B-30 entrato** (coordinatore, 08:01): commit con la punta `ae8cce938`, dev `03240f7cb`, CHANGELOG 🐛 `7e0b30590`;
+> HEAD portata in avanti a **`7e0b30590`**, pulita. **Via a B-31** come annotato: un 500 con un codice e un messaggio
 > suo per conferma, annullamento e riavvio (3 chiavi × 4, `ERROR_KEYS`, l'elenco §5 di `restoreI18n`), 507 alla
 > conferma. Niente classi di colore; `backup.spec.ts` resta fermo per A8b.
 >
@@ -5236,7 +5236,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - TA-S: `test_backup_apply.py` (`cancel_restore` con la copia che non si toglie);
 >   - TA-F: `restoreI18n.test.ts` §5 e `restoreFlow.test.ts`.
 > - **Codice pronto** in `b31-wip/apply_b31.py` (alle 08:05): 9 operazioni in 3 file, più 4 cataloghi. Provato a secco
->   su `f4dab3db7`; le copie passano ruff, black e prettier.
+>   su `7e0b30590`; le copie passano ruff, black e prettier.
 > - ✅ **Rossi scritti**:
 >   - TA-F, 3 + 4 casi: `restoreI18n` §5 con i 3 codi (rossi); `restoreFlow`, blocco «B-31», con conferma 500, conferma
 >     507 (guardia), annullamento 500 e riavvio 500 (rossi sulla chiave: oggi «unexpected»);
@@ -5297,8 +5297,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-19 — `backup decrypt` lanciato da root (2026-10-17, 08:47-09:23) — ✅ 🧊 FROZEN (checkpoint delle 09:23)
 
-> **B-31 entrato** (coordinatore, 08:47): dev `997c358f5`, CHANGELOG 🐛 `547545b8e`; HEAD portata in avanti a
-> **`547545b8e`**, pulita. Prossimi: **B-19** (piccolo, prima il rosso), poi l'**analisi di B7**. B-32, B-18 e B-20
+> **B-31 entrato** (coordinatore, 08:47): dev `de4fb606d`, CHANGELOG 🐛 `6b7afa8b2`; HEAD portata in avanti a
+> **`6b7afa8b2`**, pulita. Prossimi: **B-19** (piccolo, prima il rosso), poi l'**analisi di B7**. B-32, B-18 e B-20
 > restano nel backlog; la galleria di B5b passa alla squadra dei colori.
 >
 > **Stato reale**: ogni comando di `dev.py backup` che usa la cartella dei dati passa al suo proprietario quando parte
@@ -5342,7 +5342,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - ✅ **Codice** (09:06): `apply_b19.py`, 5 operazioni in `scripts/backup_cli.py`; ruff (C901 compreso) e black puliti.
 > - ✅ **Verdi** (09:06-09:07): `utils backup-cli-secure` 66, `utils backup-cli` 102, `utils backup-cli-restore` 77.
 > - ✅ **Doc** (09:08-09:12): `mkdocs build` strict OK (92 s), `check-links` OK, `utils gate-docs-links` 63.
-> - **Revisione del cambio di A8b a `backup.spec.ts`** (dev `6e2b2c8b7`, letto con `git diff`; chiesta dal
+> - **Revisione del cambio di A8b a `backup.spec.ts`** (dev `e7d4a4162`, letto con `git diff`; chiesta dal
 >   coordinatore): corretto.
 >   - FBKP-001a (membro): la presenza passa a `settings-tab-administration`, e restano le assenze di
 >     `settings-tab-admin`, `settings-tab-backup` e `backup-tab`;
@@ -5357,7 +5357,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B7 — Litestream: analisi (2026-10-17, 08:50-08:55) — 🧊 inviata al coordinatore, prima del codice
 
-> **Stato reale** (HEAD `547545b8e`), confrontato con §3.13 e §3.16:
+> **Stato reale** (HEAD `6b7afa8b2`), confrontato con §3.13 e §3.16:
 >
 > - **Litestream** non c'è in nessun file. `.env.example:297` ha la sezione «Backup and Litestream» con le sole
 >   variabili del backup.
@@ -5460,8 +5460,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-32 — dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile (2026-10-17, 09:25-10:29) — ✅ 🧊 FROZEN (checkpoint delle 10:29)
 
-> **B-19 entrato** (coordinatore, 09:25): dev `e96158e9b`, CHANGELOG 🐛 `67dd18676`; HEAD portata in avanti a
-> **`67dd18676`**, pulita, con A8b dentro. La revisione di `backup.spec.ts` di A8b è presa per buona. Ordine: B-32 →
+> **B-19 entrato** (coordinatore, 09:25): dev `7a475674e`, CHANGELOG 🐛 `e403d4a91`; HEAD portata in avanti a
+> **`e403d4a91`**, pulita, con A8b dentro. La revisione di `backup.spec.ts` di A8b è presa per buona. Ordine: B-32 →
 > B-18 → B-20, ognuno col suo checkpoint. Lo spike B7a passa **alla mattina, col developer presente**: Docker non lo
 > avvio io.
 >
@@ -5594,8 +5594,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-18 — `restore --instance-key-file`: i segreti di un archivio in chiaro con la chiave vecchia (2026-10-17, 10:29-10:51) — ✅ 🧊 FROZEN (checkpoint delle 10:51)
 
-> **B-32 entrato** (coordinatore, 10:29): dev `7af21a5c1` (commit `ca1343d6d`), CHANGELOG 🐛 `d11ac04d3`. HEAD portata
-> in avanti a **`d11ac04d3`**, pulita. Via a B-18 con D1 e D2 come decisi; solo run leggeri, revisione di H al
+> **B-32 entrato** (coordinatore, 10:29): dev `4226cef79` (commit `32e709684`), CHANGELOG 🐛 `a9defe2e5`. HEAD portata
+> in avanti a **`a9defe2e5`**, pulita. Via a B-18 con D1 e D2 come decisi; solo run leggeri, revisione di H al
 > checkpoint.
 >
 > **Stato reale** (lettura, 09:45-10:35):
@@ -5682,7 +5682,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-20 — knip e `RESTORE_TICKET_HEADER` (2026-10-17, 10:50-10:54) — ✅ 🧊 FROZEN (checkpoint delle 10:54)
 
-> **B-18 committato** (coordinatore, 10:50): `7b1911fd6`, albero pulito, merge-tree con dev pulito. Il testo del
+> **B-18 committato** (coordinatore, 10:50): `94ed7904e`, albero pulito, merge-tree con dev pulito. Il testo del
 > CHANGELOG è salvato; l'entrata aspetta la revisione di H. Via a B-20.
 >
 > **Stato reale**:
@@ -5705,19 +5705,19 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 ### BZ, parte 1 — revisione di sicurezza di ciò che è consegnato (2026-10-17, 10:55-11:58) — ✅ inviata al coordinatore, sola lettura
 
 > **Coordinatore** (10:53):
-> - B-20 committato, `7b13e4d43`, sopra B-18 `7b1911fd6`; entrano insieme dopo la revisione di H su B-18.
+> - B-20 committato, `693f474f5`, sopra B-18 `94ed7904e`; entrano insieme dopo la revisione di H su B-18.
 > - Ora la **parte 1 di BZ**, in sola lettura: le superfici di backup e ripristino consegnate in dev (B-9, B-16, B-19,
 >   B-28…B-32) e B-18/B-20 sul mio ramo, cioè rotte, CLI da root, biglietti, staging, lettura degli archivi, segreti.
 > - Le scoperte vanno nella mia sezione del backlog come voci B nuove, ognuna con gravità e cura proposta. **Niente
 >   codice prima del suo OK.** La parte 2 (la consegna finale) viene alla fine, dopo B7 e B9.
 >
-> Base: HEAD `7b13e4d43`, albero pulito. Superficie: circa 6800 righe:
+> Base: HEAD `693f474f5`, albero pulito. Superficie: circa 6800 righe:
 > - `instance_backup/*.py` e `api/v1/backup/*.py`;
 > - `scripts/backup_cli.py`;
 > - `instance_key.py` e `plugin_settings/crypto.py`, solo come consumatore.
 > Delegata all'agente `security-review`.
 >
-> - **B-18 e B-20 entrati** (coordinatore, 10:56): dev `5c4d7456a`, CHANGELOG ✨ `582cfb6b0`; HEAD portata in avanti.
+> - **B-18 e B-20 entrati** (coordinatore, 10:56): dev `f038c75e6`, CHANGELOG ✨ `3e1df9db4`; HEAD portata in avanti.
 >   La revisione di H su B-18 è OK, con un LOW-1 e due appunti della doc, registrati come **B-34**.
 > - **⚠️ Fuori pista — l'agente non parte (10:56)**: la sua richiesta portava con sé il contesto della sessione,
 >   243 035 token contro un limite di 128 000. Nessuna lettura è stata fatta. Riprovo dopo la compattazione del contesto.
@@ -5860,7 +5860,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - la voce nella mappa di `test_config_audit.py`;
 >   - `developer/architecture/settings.md` l.79-84: inoltrato al coordinatore.
 > - **Backlog**: B-35 ✅, B-40 ✅ (le righe di B in «What It Lists»).
-> - **Merge di dev in B-35** (coordinatore, 12:36): dev `9e8f6e8dc` dentro `32739feaa`, con 3 conflitti di doc
+> - **Merge di dev in B-35** (coordinatore, 12:36): dev `7d70723d9` dentro `fa2b6088d`, con 3 conflitti di doc
 >   risolti tenendo entrambe le parti:
 >   - `configuration.en.md`, la riga `LIBREFOLIO_PROFILE`: quella di dev più la mia frase, verificata contro la base
 >     (stage 1);
@@ -5868,12 +5868,12 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >     fuso;
 >   - `security.md`, la riga `i18n_key`: il 4 → 7 di dev più il mio nine → thirteen.
 >   Cancelli sulla revisione combinata (12:37-12:42): `services config-audit` 204, `backup-checks` 93, `mkdocs build`
->   strict (123 s), `check-links`, gate 63. Merge `d7efb5805` → dev `9fafc79b5`; CHANGELOG 🔒 dentro.
+>   strict (123 s), `check-links`, gate 63. Merge `ee94a5266` → dev `a17b08230`; CHANGELOG 🔒 dentro.
 
 ### B-39 — formule nei CSV esportati, con un ritorno esatto (2026-10-17, 12:43-13:09) — ✅ 🧊 FROZEN (checkpoint delle 13:09)
 
-> **B-35 entrato** (coordinatore, 12:43): merge `d7efb5805` → dev `9fafc79b5`, CHANGELOG 🔒; HEAD portata in avanti
-> a `e3ef5c9a6`. Via a B-39.
+> **B-35 entrato** (coordinatore, 12:43): merge `ee94a5266` → dev `a17b08230`, CHANGELOG 🔒; HEAD portata in avanti
+> a `c8206eb1f`. Via a B-39.
 >
 > **Stato reale** (12:44-12:52):
 > - `series_export.stream_rows_as_csv` scrive le celle così come sono: un testo che comincia con `=` diventa una
@@ -5934,7 +5934,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-36 + B-37 — nomi quotati e `trusted_schema` spento anche nelle correzioni e nell'upgrade (2026-10-17, 13:09-13:33) — ✅ 🧊 FROZEN (checkpoint delle 13:33)
 
-> **B-39 entrato** (coordinatore, 13:09): `c8fc32bfa` → dev `25d00f192`, CHANGELOG 🔒 `bbfb76e38`; HEAD portata in
+> **B-39 entrato** (coordinatore, 13:09): `012d6b99a` → dev `e7f6d51c1`, CHANGELOG 🔒 `6cb22655a`; HEAD portata in
 > avanti. Via a B-36 + B-37; rivede H.
 > - Permesso di scrittura (11:59) su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette e
 >   per `trusted_schema=OFF`.
@@ -5988,7 +5988,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-38 — i file dei segreti letti da root: regolari, mai attraverso un link nella cartella dei dati (2026-10-17, 13:36-13:58) — ✅ 🧊 FROZEN (checkpoint delle 13:58)
 
-> **B-36/B-37 entrati** (coordinatore, 13:39): `2eff9e623` più il merge `05d1dc76a` → dev `d1976bca8`. Un conflitto
+> **B-36/B-37 entrati** (coordinatore, 13:39): `eb0602ad9` più il merge `28e60de74` → dev `25e4a06bb`. Un conflitto
 > nella desc del runner `post-migration` (Z-28), risolto dal coordinatore tenendo entrambe le frasi. HEAD portata in
 > avanti.
 >
@@ -6039,7 +6039,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-34 — la causa giusta quando l'istanza non ha ancora una chiave, e le frasi della doc (2026-10-17, 14:00-14:10) — ✅ 🧊 FROZEN (checkpoint delle 14:10)
 
-> **B-38 entrato** (coordinatore, 14:00): `1ed071c2f` → dev `c2a09b960`, CHANGELOG 🔒 `9b02120a7`; HEAD portata in
+> **B-38 entrato** (coordinatore, 14:00): `051d0c1ff` → dev `2d2a5bc7c`, CHANGELOG 🔒 `11202d3d5`; HEAD portata in
 > avanti. La correzione di `security.md` l.706-708 e il residuo H-47 vanno ad H. Via a B-34.
 >
 > - **LOW-1 di H**:
@@ -6081,7 +6081,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-41 + B-42 — l'esito anonimo controlla il biglietto prima dello stato, e un file del biglietto rotto si registra una volta (2026-10-17, 14:10-14:56) — ✅ 🧊 FROZEN (checkpoint delle 14:56)
 
-> **B-34 entrato** (coordinatore, 14:10): `731337a5a` → dev `202849800`; HEAD portata in avanti. Via a B-41 nella 1.3
+> **B-34 entrato** (coordinatore, 14:10): `6ceb20504` → dev `2bab9fbe9`; HEAD portata in avanti. Via a B-41 nella 1.3
 > («cheap: check the ticket before reading the state»). Dopo, se B-33 e B7 aspettano ancora il developer, il
 > coordinatore trova lavoro in un'altra sezione.
 >
@@ -6293,12 +6293,12 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Decisioni** (coordinatore, 15:58): **GO** dopo l'ingresso di X-R71. La frase di H si corregge nella doc di B-43, e H
 > la rivede. B-44 nello stesso checkpoint.
 >
-> **X-R71 entrato** (coordinatore, 16:01): combinato verde su `f0645ff98`, dev `1c7937984`, CHANGELOG 🐛 `e9746b959`;
+> **X-R71 entrato** (coordinatore, 16:01): combinato verde su `ea4620198`, dev `3cc5b2184`, CHANGELOG 🐛 `3c3a6eef8`;
 > HEAD portata in avanti. Nel merge, il conflitto della desc del runner con MF-SEC9e risolto dal coordinatore: il testo
 > di dev più la mia clausola sulla guardia del `ValueError`.
 >
 > - **Codice pronto**: `b43-wip/apply_b43.py` (2 operazioni in `staging.py`) e `apply_b44.py` (la docstring di `env.py`).
->   ruff e black puliti sulle copie emesse; si applicano su `e9746b959`.
+>   ruff e black puliti sulle copie emesse; si applicano su `3c3a6eef8`.
 > - **Rossi in scrittura** (TA-B43): `services backup-staging` (indice, colonna generata, CHECK; guardie: un CHECK su
 >   `abs`, nessun nome di funzione nei log) e `utils backup-cli-restore` (nessun traceback). Doc (DW-B43): la frase di H,
 >   le cause di `database_damaged`, il punto di B-44.
@@ -6449,8 +6449,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   `git diff --check` pulito; porta libera.
 > - 🧊 **FROZEN for base update** (18:05): il frontend è finito. Il backend (`providers.py`) aspetta il merge di dev con
 >   X-R74, che fa il coordinatore.
-> - **Base aggiornata** (coordinatore, 18:04): il mio checkpoint `5cbc60844` più il diario, fino a `73627df26`; dev
->   `1eeb297b2` entrato pulito, `087db9be5`. Porta X-R74 (`providers.py`: quattro 500 generici).
+> - **Base aggiornata** (coordinatore, 18:04): il mio checkpoint `72be80b09` più il diario, fino a `0137ec616`; dev
+>   `1d8bbf2da` entrato pulito, `9395b7255`. Porta X-R74 (`providers.py`: quattro 500 generici).
 > - ✅ **Patch del backend applicata** (18:05:18): `apply_xr75_be.py`, 3 operazioni in `providers.py`, ricontrollata dopo
 >   X-R74 (che non tocca i punti della patch). ruff e black puliti; `import backend.app.main` riuscito.
 > - ✅ **`api sync`** (18:10, nessun file tracciato cambiato: il client generato è ignorato da git) e **`front check`**
@@ -6472,7 +6472,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Assegnazione** (coordinatore, 18:31): «W-B64 + W-B65 as one small lot», dalla sezione di W (BACKLOG l.5660 e
 > l.5668; piano 04, «C-97b — i decimali in input: la cura»). Prima l'analisi; W rivede. Corsia 6187.
 >
-> **Analisi** (18:31-18:47, sola lettura, base `870d519bd`; `files/wb64-65-analysis.md`):
+> **Analisi** (18:31-18:47, sola lettura, base `aea92d078`; `files/wb64-65-analysis.md`):
 > - **W-B64**:
 >   - le tre quantità del Form (`TxFormSingleSection.svelte` ×2, `TxFormPairSection.svelte`) hanno
 >     `maxIntegerDigits={12}`, mentre il backend ne prende 15 (N63, `db/precision.py`);
@@ -6512,7 +6512,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - Il Bulk, per ultimo: `fieldsFromTx` e `applyFormPayload` (per ultima cosa) passano quantità e cassa da
 >   `magnitudeForRule`; con D3, un suggerimento WAC `null` toglie la chiave invece di scriverla.
 >
-> - **Patch pronte** (`files/wb64-65-wip/`, tutte `--check` OK su `870d519bd`; le copie emesse passano prettier):
+> - **Patch pronte** (`files/wb64-65-wip/`, tutte `--check` OK su `aea92d078`; le copie emesse passano prettier):
 >   - `apply_wb64.py`: 9 operazioni in 5 file (l'aiuto, i due campi, le tre quantità del Form);
 >   - `apply_wb65_helper.py`: 2 operazioni in `txPayloadHelpers.ts`;
 >   - `apply_wb65_bulk.py`: 3 operazioni in `TransactionBulkModal.svelte`, 5 con `--with-d3`. Da applicare dopo W-B70,
@@ -6546,7 +6546,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   `front check` **0/0** (`wb64_front_check.log`); `tsc -p tsconfig.e2e.json` **0 errori** (`wb65_tsc_e2e.log`).
 > - ⏳ **Rosso E2E**: slot chiesto (19:2x), `files/scripts/wb65_slot.sh red`: i 3 W-B65 e la guardia C-97b, col Bulk
 >   ancora senza patch. Atteso: 3 falliti e 1 passato.
-> - **W-B70 entrato, base aggiornata** (coordinatore, 19:23): avanzamento rapido `870d519bd` → `c9ebc1102`; i miei 13 file
+> - **W-B70 entrato, base aggiornata** (coordinatore, 19:23): avanzamento rapido `aea92d078` → `4b4b5d935`; i miei 13 file
 >   sporchi intatti, nessuna sovrapposizione. W-B70 cambia il Bulk solo in `mergeAllSuggestions` e negli import: lontano
 >   dalle mie righe. `api sync` (exit 0, nessun file tracciato cambiato); `apply_wb65_bulk.py --with-d3 --check` OK sulla
 >   base nuova. **GO** del coordinatore per il rosso E2E, dietro il cancello del carico a 5 minuti (19:2x).
@@ -6597,9 +6597,9 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - un BLOB in un posto di valuta fa lanciare a `_as_text` un `TypeError`, non un `sqlite3.Error` (provato,
 >     `files/e19b-wip/probe_audit.py`): il controllo finirebbe;
 >   - nel log, la classe e `sqlite_errorname`, mai il testo (un UTF-8 non valido lo cita).
-> - **Entrato nel ramo** (coordinatore, 19:59): `2b3c9e8d7` (fix) e `26e17c167` (diario); dev `fe42c9a2f` unito nel mio
->   ramo: **`597b2867c`**, pulito, senza conflitti; le 2 righe del CHANGELOG al loro posto.
-> - ⏳ **Revisione combinata** su `597b2867c`, prima dell'ingresso in dev (coordinatore, 19:59):
+> - **Entrato nel ramo** (coordinatore, 19:59): `e43b6ef12` (fix) e `3d7150b2d` (diario); dev `e00b93381` unito nel mio
+>   ramo: **`1fef05057`**, pulito, senza conflitti; le 2 righe del CHANGELOG al loro posto.
+> - ⏳ **Revisione combinata** su `1fef05057`, prima dell'ingresso in dev (coordinatore, 19:59):
 >   - ✅ `api sync` (exit 0, nessun file tracciato cambiato) e `front check` **0/0** (20:00-20:01, carico 12);
 >   - ✅ Vitest sui 5 file **519/519** (20:01; `b_vitest_wb64_65_combined.log`);
 >   - ✅ E2E (20:01-20:07, carico a 5 minuti 16-18; ricostruzione compresa): tutto `tx-bulk-operations` **14 passati**,
@@ -6642,7 +6642,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - in modifica, le gambe prima, senza `replace`, poi la sola coppia con `replace`; senza gambe, una richiesta;
 >   - in creazione, una richiesta semplice come prima;
 >   - `sameSession()` dopo ogni richiesta; `finishFxPairCreation` una volta sola, dopo l'ultima.
-> - **W-B64/65 entrato in dev** (coordinatore, 20:08): `cde76dc54`. Il mio worktree resta a `597b2867c` fino al
+> - **W-B64/65 entrato in dev** (coordinatore, 20:08): `04a408377`. Il mio worktree resta a `1fef05057` fino al
 >   checkpoint di X-R79, perché il backlog è aperto qui.
 > - ✅ **Rossi scritti** (TA-XR79, 20:03-20:15), 8 casi in un `describe` nuovo, più due commenti del file allineati:
 >   - 6 rossi: l'ordine delle due richieste, con due gambe e con una (l'altra già configurata); le gambe rifiutate (503,
@@ -6670,7 +6670,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-49 — un testo non UTF-8 nei dati di un backup: la verifica lo rifiuta (2026-10-17, 20:2x-21:26) — ✅ 🧊 FROZEN (checkpoint delle 21:26)
 
-> **Assegnazione** (coordinatore, 20:2x, dopo l'ingresso di X-R79 in dev `6f11a6790`): B-49, analisi e decisione mia
+> **Assegnazione** (coordinatore, 20:2x, dopo l'ingresso di X-R79 in dev `817726288`): B-49, analisi e decisione mia
 > («rifiutare alla verifica, `database_damaged`, nulla applicato, o avvisare come E-19b1?»; il coordinatore tende a
 > rifiutare). Prima provare in processo che le letture del server falliscono dopo il ripristino, e misurare il costo
 > della scansione su un archivio grande, come per l'audit di E. Poi B-15 + B-8.
@@ -6756,7 +6756,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   `backup-staging` nel runner non nomina B-49 (file condiviso, non assegnato).
 > - File della sonda (`/tmp/lf_b49_probe`, 488 MB) cancellati.
 > - 🧊 **CHECKPOINT READY** (21:26): 7 file tracciati, nessun file nuovo; FROZEN.
-> - **Entrato in dev** (coordinatore, 21:34): `709dfb1e4`, dopo l'unione di dev nel mio ramo (`74c08dafe`; conflitto
+> - **Entrato in dev** (coordinatore, 21:34): `6d3489591`, dopo l'unione di dev nel mio ramo (`43cf06492`; conflitto
 >   solo nel backlog, X-R79 contro X-R80 di X, tenuti entrambi). Sull'albero unito il coordinatore ha fatto girare
 >   `backup-staging` 202, `restore-non-iso-warning` 46, `api backup-restore` 161, `api backup-restore-apply` 215: verdi.
 > - ✅ **Coda** (coordinatore, 21:34; H-52 entrato, `security.md` libero; 21:34-21:37):
@@ -6770,7 +6770,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 ### B-15 + B-8 — rossi scritti, poi il fermo e il parcheggio (2026-10-17, 21:27 → 2026-10-19, 11:10) — ⏸️ parcheggiati; ripresi il 19/10 alle 11:42 (sezione «la ripresa»)
 
 > **Contratto** (21:27, nei file della sessione, `b15-b8-contract.md`), poi il via del coordinatore dopo l'ingresso
-> del seguito di B-49 in dev `739bf08e0` (21:40): «GO for B-15 + B-8, reds first, per your contract».
+> del seguito di B-49 in dev `0e28434bf` (21:40): «GO for B-15 + B-8, reds first, per your contract».
 >
 > - **B-15**: il 413 di un proxy (corpo non JSON) diventa `proxy_too_large`, in 4 lingue, con il suo caso in
 >   `restoreFlow.test.ts`.
@@ -6785,8 +6785,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - **⚠️ Fuori pista — il fermo del developer**: congelato subito, senza test, server, Git o agenti nuovi; i due
 >   test-author già partiti lasciati finire. Al coordinatore una riga con lo stato.
 > - **Parcheggio** (19/10, fase 1 della ripartenza, fino alle 11:10): i 10 file modificati (7 di test, 3 di doc)
->   salvati in `files/parked/b15-b8-reds-docs-on-739bf08e0.patch` (+856/−13), con un `README.md` e 5 domande per
->   il developer; tolti dal worktree con `git apply -R`; la patch rientra pulita su `739bf08e0` (`git apply
+>   salvati in `files/parked/b15-b8-reds-docs-on-0e28434bf.patch` (+856/−13), con un `README.md` e 5 domande per
+>   il developer; tolti dal worktree con `git apply -R`; la patch rientra pulita su `0e28434bf` (`git apply
 >   --check`); `git status --porcelain` vuoto.
 > - **Stato**: ⏸️. Le 5 domande le porta il coordinatore al developer; si riprende solo col suo via.
 
@@ -6798,7 +6798,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >
 > - **Fase 1, pulizia** (fino alle 11:10): B-15 + B-8 parcheggiati (sezione sopra). Risposto con il percorso
 >   della patch, `git status --porcelain` vuoto e FROZEN.
-> - **Fase 2, contabilità**, sulla base `ede7adf75` (avanzamento veloce del coordinatore; HEAD verificato,
+> - **Fase 2, contabilità**, sulla base `de0823b81` (avanzamento veloce del coordinatore; HEAD verificato,
 >   pulito):
 >   - §7: la colonna «Stato (19/10)», con ogni merge verificato in `dev_release2`;
 >   - §13: le 85 sezioni in ordine d'inizio, con la nota in alto. Al loro posto la bozza di B1 (dopo
@@ -6806,7 +6806,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >     dell'accordo con H) e il blocco del 17/10, che andava dal più nuovo al più vecchio;
 >   - 16 intestazioni che dicevano un lavoro aperto ora portano l'esito;
 >   - backlog, sezione B: 32 righe «In dev» col merge d'ingresso; la riga «Fatto» di B-36; B-4 e B-5 chiuse,
->     perché le aveva già fatte H nel lotto «b-doc-notes» (`d7eb9c5f3`, in dev `0ecc5ed27`); B-8 e B-15
+>     perché le aveva già fatte H nel lotto «b-doc-notes» (`a82bbde7e`, in dev `46ffd23de`); B-8 e B-15
 >     «⏸️ Parcheggiata»; nella riga di B-49, la frase su `security.md` (il paragrafo l'ho aggiunto io dopo
 >     H-52).
 > - **Prove**: gli script (`bookkeeping-1910/` nei file della sessione) verificano ogni voce e ogni sezione
@@ -6828,7 +6828,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > Codice e controlli leggeri subito, con carico sotto 50; le suite pesanti e gli E2E dopo le 14:00, nello slot del
 > coordinatore. La domanda 5 del README era solo informativa (l'E2E `createBackup`).
 >
-> - ✅ **Patch riapplicata** (11:43): HEAD `ca9dbe9e5` (la contabilità committata), pulito. Fra `739bf08e0` e HEAD
+> - ✅ **Patch riapplicata** (11:43): HEAD `94d771da9` (la contabilità committata), pulito. Fra `0e28434bf` e HEAD
 >   cambiano 121 file, nessuno dei percorsi del lotto (backup, i18n, E2E delle impostazioni, le tre doc):
 >   `git apply --check` pulito, poi `git apply` (10 file, +856/−13, sha256 `a7999e36631fa781…` come al parcheggio).
 >   Le due patch di prodotto (`apply_b8_be.py`, `apply_b15_b8_fe.py`) passano `--check` sulla base nuova.
@@ -6938,18 +6938,18 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### N74 di W — revisione: Fineco tiene solo le righe regolate, il batch arriva a domani (2026-10-19, 16:05-16:38) — ✅ 🧊 FROZEN
 
-> **Richiesta** (coordinatore, 16:05): revisione di **N74 di W**, commit `8a86011ce` sul ramo
-> `e-alfy-w-import-e-transazioni`, fuso con dev in `a68a26a75`. Da verificare: che «oggi» e «domani» vengano dal
+> **Richiesta** (coordinatore, 16:05): revisione di **N74 di W**, commit `417176e1b` sul ramo
+> `e-alfy-w-import-e-transazioni`, fuso con dev in `61f7c5e27`. Da verificare: che «oggi» e «domani» vengano dal
 > server, mai dal browser; che una riga esclusa porti con sé FEE e premio, senza cassa orfana; che la nota non sia un
 > avviso (ambra contro blu); che il cambio di versione dei due plugin faccia proporre la rilettura; le date del batch
-> contro `range-ceiling` (N83) e J-49. Solo lettura e test leggeri, carico sotto 50. La mia base: `8cc416905`.
+> contro `range-ceiling` (N83) e J-49. Solo lettura e test leggeri, carico sotto 50. La mia base: `f185f8e65`.
 >
 > **Metodo**:
 >
-> - `a68a26a75` non è nella mia base: letto con `git show` e `git grep` (28 file, +980/−150). Il merge tocca uno solo
+> - `61f7c5e27` non è nella mia base: letto con `git show` e `git grep` (28 file, +980/−150). Il merge tocca uno solo
 >   dei file di N74, `assets/architecture.md`, dal lato di dev. Migrazioni e `backend/app/db` uguali alla mia base.
 > - Corsia ripopolata come chiesto: `db populate --force --clean` (16:13, exit 0, 22 s).
-> - Test leggeri dall'albero di `a68a26a75`, estratto con `git archive` nella cartella di sessione (`review-n74/tree`,
+> - Test leggeri dall'albero di `61f7c5e27`, estratto con `git archive` nella cartella di sessione (`review-n74/tree`,
 >   fuori da git): `node_modules` in copia APFS di quelli del mio worktree (`cp -c`), poi `svelte-kit sync` e
 >   `api sync` nell'albero. Script `files/scripts/n74_review.sh`, un passo alla volta, carico fra 17 e 48.
 > - **⚠️ Fuori pista**: il primo Vitest falliva prima di raccogliere (mancava `.svelte-kit/tsconfig.json`, e Vite non
@@ -7029,7 +7029,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - R4, fuori da N74: `scripts/test_runner/_frontend_transaction.py` non passa ruff (4 PLC0415) né black già sulla mia
 >   base. `scripts/` è fuori dal cancello di `dev.py lint`.
 >
-> **Prove**, tutte sull'albero di `a68a26a75`, verdi:
+> **Prove**, tutte sull'albero di `61f7c5e27`, verdi:
 >
 > - Vitest `BrimNoticeList`, `resolveValidationMessage.decimals`, `ParseDetailModal`: 3 file, 65 test;
 > - `utils datetime` 44; `external brim-providers` 750 (1 saltato); `external brim-danske-bank` 325;
@@ -7052,7 +7052,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > al livello di log di H-60); nessun dato personale. Poi il lotto aggiornato sul ramo, con i rossi e un checkpoint
 > nuovo.
 >
-> - ✅ **Base**: HEAD `05dc41906` (la revisione di N74 committata alle 16:38), pulito; B-15 + B-8 (`0b8037b75`) è sul
+> - ✅ **Base**: HEAD `52b72bec7` (la revisione di N74 committata alle 16:38), pulito; B-15 + B-8 (`07f0b6313`) è sul
 >   ramo, non ancora in dev.
 > - ✅ **Lettura** (16:38-16:41):
 >   - la card non nomina mai il job: per un `backup_busy` mostra solo «Another backup is running: try again when it
@@ -7127,7 +7127,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-50 + B-51 — analisi (2026-10-19, 17:17-17:22) — 🧊 inviata al coordinatore, prima del codice
 
-> **Richiesta** (coordinatore, 17:17, dopo il commit di B-8 `a3e0f4c8e` + `ae59f158a`): niente in coda per B, quindi
+> **Richiesta** (coordinatore, 17:17, dopo il commit di B-8 `3606b4c14` + `33f0c13d3`): niente in coda per B, quindi
 > un'analisi breve di B-50 (il 500 vicino) e di B-51 (la colonna «⚠️» conta anche le note blu). Sola lettura.
 >
 > **B-50, misurato** con due sonde pure in una cartella temporanea, tolta alla fine (`files/b50-analysis/`):
@@ -7279,11 +7279,11 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-8, rifinitura — il job che la scheda segue già da sé non si adotta (2026-10-19 18:10 → 2026-10-20 09:05) — ✅ 🧊 FROZEN (checkpoint delle 09:05)
 
-> **Coordinatore** (18:10): B-8 committato, `adedb0c9c` (`fix(backup): secure start never follows another backup`) e
-> `bc913e487` (il giornale); la memoria dell'adozione in `sessionStorage` va bene. «Il caso limite: sì alla
+> **Coordinatore** (18:10): B-8 committato, `b2fc85365` (`fix(backup): secure start never follows another backup`) e
+> `ba63118a5` (il giornale); la memoria dell'adozione in `sessionStorage` va bene. «Il caso limite: sì alla
 > rifinitura, decisione mia, perché è nello spirito della tabella («si segue solo il proprio»): non adottare un job
 > che la scheda sta già seguendo da sé. Commit a parte con un rosso, piccolo, prima di B-50.» B-15 + B-8 entra in dev
-> fino a `bc913e487`, con un gate; la rifinitura dopo.
+> fino a `ba63118a5`, con un gate; la rifinitura dopo.
 >
 > - **Avviso di A** (coordinatore, 18:09): per N69, A cambia la barriera di FBKP-001 in `e2e/settings/backup.spec.ts`
 >   (riga 264). Un utente normale non vede più «Amministrazione»: la barriera diventa «About visible, administration
@@ -7304,7 +7304,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - **⏸️ PAUSA GENERALE del developer** (coordinatore, 18:12): la macchina si spegne e /tmp verrà ripulito. Fermare
 >   corse e server, mettere per iscritto lo stato, niente git. **Stato al fermo (18:16):**
 >   - porta 6187 libera; nessuna corsa né server della corsia attivi;
->   - HEAD `bc913e487`; **sporchi 3 file**: questo piano, `security.md`, `backup_restore.en.md` (le doc della
+>   - HEAD `ba63118a5`; **sporchi 3 file**: questo piano, `security.md`, `backup_restore.en.md` (le doc della
 >     rifinitura). Codice di prodotto intatto: la rifinitura non è applicata;
 >   - **TA-B8-OWN fermato a metà**: gli ho chiesto di non scrivere più. Alle 18:15 `backupJob.test.ts` era ancora
 >     pulito. Domani controllare `git status`: se ha scritto un gruppo parziale, completarlo o rifarlo, mai lanciarlo
@@ -7315,7 +7315,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   2. Il rosso: `files/scripts/b_vitest.sh red-b8-own src/lib/features/backup/backupJob.test.ts`. Atteso: le due
 >      righe nuove falliscono perché il job viene adottato (la fine cifrata non è offerta); il resto verde.
 >   3. La cura: `python3 files/b15-b8-wip/apply_b8_own.py <worktree>` (1 operazione; `--check` era OK su
->      `bc913e487`).
+>      `ba63118a5`).
 >   4. I verdi: Vitest dell'intera feature `backup`, prettier sui 2 file, `front check` (prima `api sync` se il client
 >      è più vecchio della base), le doc (`files/scripts/b_docs.sh`).
 >   5. Il checkpoint: commit a parte (`fix(backup): a tab's own backup is never adopted`), più il giornale.
@@ -7329,7 +7329,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - **▶️ Ripresa del 20/10** (coordinatore, 08:47): il riavvio ha svuotato /tmp; le corse leggere sulla corsia 6187
 >   solo con il carico a 1 minuto sotto 50. Ordine: i rossi della rifinitura, la cura e il checkpoint, poi B-50. Il
 >   gate di B-15 + B-8 su `dev_release2` lo lancia il coordinatore nella sua corsia.
->   - ✅ Verificato (08:47): HEAD `bc913e487`, gli stessi 3 file sporchi, porta libera, carico 27. I file di sessione
+>   - ✅ Verificato (08:47): HEAD `ba63118a5`, gli stessi 3 file sporchi, porta libera, carico 27. I file di sessione
 >     ci sono tutti; `apply_b8_own.py --check` OK. La corsia in /tmp non c'è più: per i Vitest e le doc non serve.
 >   - Il test-author di ieri non esiste più: ne lancio uno nuovo con lo stesso brief.
 > - ✅ **Rossi** (TA-B8-OWN-2, 08:50-09:00, sola scrittura; solo `backupJob.test.ts`):
@@ -7358,8 +7358,8 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-50 — uno stato illeggibile di un job o di un controllo è «non trovato», mai un 500 (2026-10-20, 09:06-09:57) — ✅ 🧊 FROZEN (checkpoint delle 09:57)
 
-> **Coordinatore** (09:06): rifinitura committata, `43face16e` (`fix(backup): a tab's own backup is never adopted`) e
-> `9a7d4a2ea` (il giornale), albero pulito, in dev con il prossimo treno. «Il perimetro di B-50: approvo la tua
+> **Coordinatore** (09:06): rifinitura committata, `3db520d07` (`fix(backup): a tab's own backup is never adopted`) e
+> `e3eb14ae2` (il giornale), albero pulito, in dev con il prossimo treno. «Il perimetro di B-50: approvo la tua
 > proposta»: anche lo `state.json` che è una cartella e quello senza permessi di lettura sono «illeggibili», quindi
 > 404; gli altri `OSError`, transitori, restano un 500 che la scheda riprova. Via: prima i rossi, poi la cura, poi il
 > checkpoint; corse leggere solo con il carico a 1 minuto sotto 50.
@@ -7370,7 +7370,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >     mie asserzioni restano identiche. Non aprire quel file finché E non ha finito (B-50 non lo tocca);
 >   - una domanda di E, per **dopo** B-50: il ripristino a mano (`#by-hand`) non passa dal controllo dell'archivio;
 >     serve un controllo di tutto il DB vivo? Rispondere con una proposta quando ci arrivo.
-> - ✅ **Base** (09:07): HEAD `9a7d4a2ea`, albero pulito, carico 18.
+> - ✅ **Base** (09:07): HEAD `e3eb14ae2`, albero pulito, carico 18.
 > - ✅ **Contratto** (`files/b50-contract.md`, aggiornato 09:08):
 >   - backup: `from_json` alza `ValueError` per un documento che non è un oggetto; nuova
 >     `BackupJobUnreadableError`, sottoclasse di `BackupJobNotFoundError`, per uno stato illeggibile (`ValueError`,
@@ -7387,7 +7387,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   al contratto (`from_json` rifiuta una data senza fuso orario come illeggibile) e ai rossi di TA-B50-JOBS. Un
 >   `created_at` senza fuso orario da solo non blocca nulla nella sonda.
 > - **Cura pronta, non applicata**: `files/b50-wip/apply_b50.py`, 6 operazioni in `jobs.py` e `restore_jobs.py`
->   (`--check` OK su `9a7d4a2ea`).
+>   (`--check` OK su `e3eb14ae2`).
 > - ✅ **Doc** (09:11): `security.md`, dopo «A read of a job…», un paragrafo: uno stato illeggibile non è un job, per
 >   la lettura e per la pulizia; il 404, l'avviso con l'id e la classe, mai il contenuto; gli altri errori del disco
 >   restano un 500 che la scheda riprova; un controllo del ripristino illeggibile è `restore_stage_not_found`.
@@ -7451,7 +7451,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >     (`_prune_unrecorded` pulisce caricamenti e copie, mai `checks/`);
 >   - **B-55** (domanda 2), da decidere: nel ripristino un `OSError` transitorio è «nessun controllo», e la scheda
 >     dimentica il controllo che segue (`restoreFlow.svelte.ts:593-597`) invece di riprovare come per un 500.
-> - ✅ **Backlog**: B-50 chiusa; B-53, B-54 e B-55 nuove. Solo la sezione B: dev (`701054da9`) ha cambiato il backlog
+> - ✅ **Backlog**: B-50 chiusa; B-53, B-54 e B-55 nuove. Solo la sezione B: dev (`ad869d2ea`) ha cambiato il backlog
 >   dopo la mia base, ma nessuna sua modifica cade nella sezione B.
 > - ✅ **Checkpoint** (09:57), 🧊 FROZEN. Commit proposti:
 >   - `fix(backup): unreadable job state is not found (B-50)`: `jobs.py`, `restore_jobs.py`, i 3 file di test,
@@ -7477,14 +7477,14 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B-53 + B-54 + B-55 — un lettore unico per gli stati e i report del ripristino; la regola di B-50 nel ripristino (2026-10-20, 10:10-11:13) — ✅ 🧊 FROZEN (checkpoint delle 11:13)
 
-> **Coordinatore** (10:10): «Ho fatto il checkpoint: `b9c14953f` (B-50) e `13570ad2a` (il giornale), albero pulito.
+> **Coordinatore** (10:10): «Ho fatto il checkpoint: `72e336383` (B-50) e `73dce7c7f` (il giornale), albero pulito.
 > Le suite `api` del backup le metto nel mio gate d'ingresso. I residui: B-53: sì, l'aiuto unico per aprire in
 > lettura; chiude il descrittore perso e il 500 di `read_report`. B-54: sì. B-55: sì, la stessa regola dei job. Il
 > ripristino tratta come «nessun controllo» solo `IsADirectoryError`, `PermissionError` e il contenuto illeggibile;
 > gli altri `OSError`, quelli transitori, restano un errore che la scheda riprova. Fai i tre in un lotto solo: prima i
 > rossi, poi la cura, poi il checkpoint.»
 >
-> - **Base**: HEAD `13570ad2a`, albero pulito.
+> - **Base**: HEAD `73dce7c7f`, albero pulito.
 > - ✅ **Sonde** (10:12-10:18, `files/b55-analysis/`):
 >   - uno stato di controllo con le date senza fuso: `_checks` lo legge, `read_check` lo restituisce, `prune` alza
 >     `TypeError` (lo stesso difetto curato da B-50 per i job): ogni nuovo controllo è un 500 `stage_failed`;
@@ -7526,7 +7526,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >     e il pipeline non le creerebbe mai. Lo dico al coordinatore.
 > - ✅ **(b) B-56 nel backlog** (10:30): «Un controllo a richiesta del DB vivo», dopo la 1.3.
 > - ✅ **Cura pronta** (10:34): `files/b53-wip/apply_b53.py`, 13 operazioni in 5 file (`paths.py`, `restore_jobs.py`,
->   `staging.py`, `apply.py`, `outcome.py`); `--check` OK su `13570ad2a`; applicata a una copia nella cartella di
+>   `staging.py`, `apply.py`, `outcome.py`); `--check` OK su `73dce7c7f`; applicata a una copia nella cartella di
 >   sessione, compila, `ruff` e `black` puliti con la configurazione del repo. Il pezzo dei job (`--jobs`) aspetta la
 >   risposta.
 > - ✅ **Doc di sicurezza** (10:38, `security.md`): il paragrafo di B-50 diviso in due; il secondo dice la regola del
@@ -7593,7 +7593,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   due sezioni («Check an Archive» e «Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)), come fa già il
 >   resto della pagina. Build di nuovo verde alle 11:11.
 > - ✅ **Backlog**: B-53, B-54 e B-55 chiuse; B-56 nuova. Solo la sezione B.
-> - ✅ **Conflitti con dev** (`f73514a77`): `staging.py` (dev cambia una docstring verso la riga 800, io gli import e
+> - ✅ **Conflitti con dev** (`1feacc35e`): `staging.py` (dev cambia una docstring verso la riga 800, io gli import e
 >   `read_report`), `security.md` (dev da riga 1510 in poi, io alla 1077) e il backlog (nessuna modifica di dev nella
 >   sezione B): nessuna sovrapposizione.
 > - ✅ **Checkpoint** (11:13), 🧊 FROZEN. Commit proposti:
@@ -7606,7 +7606,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Fonti**: decisioni `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md` §10 (il formato: `.lfbk` v1 con password casuale,
 > password cifrata con `age` via `pyrage`, i due file in un `.tar`) e il contratto **CONCORDATO** il 22/10 con il
 > coordinatore cloud, `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-contratto-L3.md`. La rotta di ripristino del pannello e il modo «ripristino
-> in corso» sono di H (H-62), sullo stesso contratto. Base: `c97c96dd6` (`pyrage==1.4.0` nel lock).
+> in corso» sono di H (H-62), sullo stesso contratto. Base: `a7237f95d` (`pyrage==1.4.0` nel lock).
 >
 > **⚠️ Fuori pista — il formato** (22/10): la prima analisi metteva a confronto `.lfbk` v2 e `age` v1 scritto da noi
 > (`salvataggi-worktrees-20261021/ondata4/B-analisi-turno1.md`). Il developer ha scelto una terza via, senza
@@ -7802,7 +7802,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ## Ondata 5 (23/10/2026) — treno 11a
 
-> Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-B.md`. Base `1fd80c481` (= `dev_release2`, treni 9 e 10).
+> Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-B.md`. Base `61a6c828b` (= `dev_release2`, treni 9 e 10).
 > Lotti: **B5-2** (`backup pending --json` e `--recover <scelta>`, richiesta formale del cloud per `lfc istanza recupera`),
 > **M-1** (immagine arm64), **B5-1** (ripristino con la scelta del titolare, su Opus, dopo la firma di A).
 
@@ -7976,7 +7976,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 #### B5-1e — i seguiti dopo l'unione con A ✅ 2026-10-24
 
-> Dopo l'unione del ramo di A (`e49afe27c`): la funzione vera, la modale vera, l'hash di A.
+> Dopo l'unione del ramo di A (`b26e95e31`): la funzione vera, la modale vera, l'hash di A.
 > **Note implementazione**:
 > - Modale: la `OwnerChoiceModal.svelte` di A ha le stesse prop (`open`, `ownerEmail`, `users`, `onConfirm`, `onCancel`, `busy`) e gli
 >   stessi `data-testid` della mia finta; `RestoreReportModal` la usa com'è, con `import {type OwnerCandidate}`.
@@ -7998,7 +7998,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 #### B5-1f — l'E2E con il server vero ✅ 2026-10-24
 
-> Dopo l'unione di H (`f1382724b`): lo step `restore-owner` gira all'avvio. Nuovo E2E `e2e backup-roundtrip-owner`
+> Dopo l'unione di H (`a81b19145`): lo step `restore-owner` gira all'avvio. Nuovo E2E `e2e backup-roundtrip-owner`
 > (`test_backup_roundtrip_owner.py`, 5 test, «pure», figli uvicorn su socket Unix, profilo `managed`, posta spenta).
 > **Note implementazione**:
 > - Primo admin del bersaglio senza toccare il DB: il primo avvio crea l'admin iniziale (admin-bootstrap), il test legge il link di
@@ -8014,7 +8014,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - Ripristino da CLI senza titolare: stato `committed` senza `owner_*`, nessun account col flag, nessun account chiuso.
 > - Un managed in modalità test vuole `LIBREFOLIO_TEST_LANE_ID` di 16–128 caratteri (H-46); il dominio di prova non può essere `.test`.
 
-#### B5-1g — le correzioni della revisione di sicurezza di A su `3a3c357d7` ✅ 2026-10-24
+#### B5-1g — le correzioni della revisione di sicurezza di A su `052226e00` ✅ 2026-10-24
 
 > **Note implementazione** (rossi dal `test-author`, poi la cura; 5 punti su 6, il sesto era già giusto):
 > 1. Errore passeggero: `owner._assign_with_retries` riprova fino a `_ATTEMPTS = 4` volte, `_RETRY_PAUSE_SECONDS = 1.0`, solo se SQLite dice
@@ -8041,7 +8041,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B5-1i — Gate train 11: `owner-email-change` red in B (triage, no code change) — 2026-10-24
 
-> **Note implementazione**: triage only, nothing changed in the code. The red `test_owner_email_change.py::test_after_a_restore_with_the_variable_changed_the_link_issued_at_the_start_is_alive` comes from B5-1g point 2 (`a4d727e4a`): `apply._clear_owner_flag` clears `users.is_instance_owner` in the restore's commit, so A's owner sync finds no flagged owner, `_heal` looks for an account holding `LIBREFOLIO_ADMIN_EMAIL` (none) and issues no `email_change` link. Proof: with that one line disabled the suite is 50 passed (file restored afterwards, tree clean). Verdict: **design conflict** between A's security review (clear the flag) and A's test OWN-083 (the flag survives). Not changed: product decision for the developer; two options in the checkpoint. `backup-owner-real` 6 passed, `restore-owner-guard` 46 passed on `/tmp/librefolio-r13-c6`.
+> **Note implementazione**: triage only, nothing changed in the code. The red `test_owner_email_change.py::test_after_a_restore_with_the_variable_changed_the_link_issued_at_the_start_is_alive` comes from B5-1g point 2 (`a57819dbe`): `apply._clear_owner_flag` clears `users.is_instance_owner` in the restore's commit, so A's owner sync finds no flagged owner, `_heal` looks for an account holding `LIBREFOLIO_ADMIN_EMAIL` (none) and issues no `email_change` link. Proof: with that one line disabled the suite is 50 passed (file restored afterwards, tree clean). Verdict: **design conflict** between A's security review (clear the flag) and A's test OWN-083 (the flag survives). Not changed: product decision for the developer; two options in the checkpoint. `backup-owner-real` 6 passed, `restore-owner-guard` 46 passed on `/tmp/librefolio-r13-c6`.
 
 ### B5-1j — Owner of a restore from the command line or the hosting panel (managed) — 2026-10-26
 
@@ -8051,7 +8051,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### B5-1k — Superseded by A5-7 — 2026-10-26
 
-> **Note implementazione**: the delete-and-hand-over design (analysis `ondata5/B-5-1k-analisi-troppi-utenti.md`) was written, tested and verified, then superseded by the developer's decision: users over `LIBREFOLIO_MAX_USERS` are deactivated, not deleted, by one mechanism in A's domain (A5-7: the administrator chooses at the first sign-in), after a restore as after a plan change. A restore therefore refuses nothing for too many users. The whole work (40 files) is archived in the local branch `archive/b5-1k-delete-design` (`d06994afe`); only the removal of the «arrives with a later change» sentences about `user reassign-owner` (`backup_cli.py`, `backup_restore.en.md`, `cli_backup.en.md`) stays.
+> **Note implementazione**: the delete-and-hand-over design (analysis `ondata5/B-5-1k-analisi-troppi-utenti.md`) was written, tested and verified, then superseded by the developer's decision: users over `LIBREFOLIO_MAX_USERS` are deactivated, not deleted, by one mechanism in A's domain (A5-7: the administrator chooses at the first sign-in), after a restore as after a plan change. A restore therefore refuses nothing for too many users. The whole work (40 files) is archived in the local branch `archive/b5-1k-delete-design` (`a7a89c374`); only the removal of the «arrives with a later change» sentences about `user reassign-owner` (`backup_cli.py`, `backup_restore.en.md`, `cli_backup.en.md`) stays.
 
 ### B5-1k2 — A restore warns about too many users, refuses nothing — 2026-10-26
 
@@ -8065,4 +8065,4 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **⚠️ Fuori pista**: (1) the risk accepted by the developer: no check on recipients or instance key (a sealed backup carries no instance key and the instance never sees the recipients), so whoever can write in the provider's store of copies could fabricate a copy that passes: said in the docs for the host; (2) a test of B5-1k2 now allows the new `owner_marks` key; (3) H should link to `#owner-kept` from `hosting_panel_backups.en.md` (not touched).
 > **Results** (lane `/tmp/librefolio-r13-b51l`): services backup-owner-kept 71, backup-users-limit 29, backup-staging 266, backup-owner 133, owner-assignment 39, restore-guard 25, backup-apply 501; utils backup-cli-owner-kept 7, cli-restore 169, cli-recover 200, cli 106; api backup-owner-kept 6, kept-app 2, owner-channels 10, users-limit 13, users-limit-panel 3, backup-restore 167, restore-interrupted 34, panel-restore 136, backup-restore-apply 303; e2e backup-roundtrip-owner 7; mkdocs build and check-links (97) passed; ruff and orphans clean.
 
-> **B5-1k2 — E2E (2026-10-26, after A5-7 was merged, `b16029c90`)**: `backend/test_scripts/test_e2e/test_backup_roundtrip_over_limit.py`, suite `e2e backup-roundtrip-over-limit` (8 tests, real servers). A backup of 5 active accounts restored on an instance that accepts 3: the check warns, the confirmation is 202 (from the app, self-hosted and managed, and from the command line), nothing is deleted (6 accounts, 8 brokers, the ledger totals equal the source's); after the start a normal route answers `423 user_limit_exceeded` to the administrator and to a plain user, the choice screen's API lists the accounts (the owner `protected` on managed; keeping everyone but the owner is `422 PROTECTED_MISSING`), the full-backup route stays open to the administrator; after `POST /users/over-limit/resolve` the kept accounts work, the others get `ACCOUNT_DISABLED`, and still nothing is deleted. Passed: 8 in 48 s.
+> **B5-1k2 — E2E (2026-10-26, after A5-7 was merged, `7128eae2b`)**: `backend/test_scripts/test_e2e/test_backup_roundtrip_over_limit.py`, suite `e2e backup-roundtrip-over-limit` (8 tests, real servers). A backup of 5 active accounts restored on an instance that accepts 3: the check warns, the confirmation is 202 (from the app, self-hosted and managed, and from the command line), nothing is deleted (6 accounts, 8 brokers, the ledger totals equal the source's); after the start a normal route answers `423 user_limit_exceeded` to the administrator and to a plain user, the choice screen's API lists the accounts (the owner `protected` on managed; keeping everyone but the owner is `422 PROTECTED_MISSING`), the full-backup route stays open to the administrator; after `POST /users/over-limit/resolve` the kept accounts work, the others get `ACCOUNT_DISABLED`, and still nothing is deleted. Passed: 8 in 48 s.

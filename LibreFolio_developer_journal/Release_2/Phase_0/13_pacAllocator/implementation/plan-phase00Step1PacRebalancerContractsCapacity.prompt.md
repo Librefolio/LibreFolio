@@ -10,7 +10,7 @@ G5 OPEN.
 > - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
 > - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
 >   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
-> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+> - P1 `analyze` rimosso il 2026-09-21 (`704ba66a3`).
 >
 > L'avanzamento è nella tabella del [README](README.md) e nel
 > [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
@@ -403,7 +403,7 @@ Gli agenti non installano, non creano venv e non modificano lock.
 **✅ Completato 2026-09-16.**
 
 > **Note implementazione**: dependency checkpoint
-> `941834237696f32bbabfde62a08e070e4b23758e` verificato dal coordinator.
+> `ab1e8da6b679ed153cdc3eb8c1e57593ac442ab3` verificato dal coordinator.
 > Versioni: PySCIPOpt `6.2.1`, SCIP `10.0.2`, NumPy `2.5.3`, SciPy `1.18.1`,
 > highspy `1.15.1`. Smoke developer: import e MIQCP epigrafo convesso
 > `x=3`, `z=0`, status `optimal`, un thread, seed fisso. Hash:
@@ -687,7 +687,7 @@ Dopo ogni step aggiornare immediatamente questo file con data, nota,
 evidenza e fuori-pista.
 
 > **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
-> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
+> (`894236b11`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
 > aperti, senza spuntarli.
 > - **4. JSON Schema e TypeScript.** Fatto, ma non come previsto qui. Lo schema e i codec li
 >   genera la piattaforma Tool con `dev.py api sync` ([handoff §0.2](../../16_toolPlatform/handoff-pac-D.md)),
@@ -699,7 +699,7 @@ evidenza e fuori-pista.
 >   misura». Resta fuori dal round.
 > - **9. Probe bulk 4×2 e congelamento.**
 >   - Versioni, codici e fingerprint sono congelati a `1.0.0` con la compattazione
->     (`ac18ce097`, handoff §0).
+>     (`ccd444993`, handoff §0).
 >   - Il compute con più richieste nello stesso blocco è provato nei test API
 >     (`test_pac_planner_tool_api.py:311`, `:338`, `:387`, `:425`).
 >   - La probe di capacità con 4 richieste pesanti e 2 worker, con tempi e memoria misurati,
@@ -715,7 +715,7 @@ evidenza e fuori-pista.
 >   - Le fixture PAC esistono. Quella del Rebalancer
 >     (`rebalancer_plan_request.medium.v2.json`) esiste, ma il Rebalancer non è ancora
 >     implementato.
->   - Il P1 `analyze` è stato rimosso il 21/09 (`b82e59ffa`). La rimozione dei resti è la
+>   - Il P1 `analyze` è stato rimosso il 21/09 (`704ba66a3`). La rimozione dei resti è la
 >     riga 13 del [README](README.md).
 >   - La lane `6153` è storica.
 
@@ -863,7 +863,7 @@ evidenza e fuori-pista.
 > restano invariati.
 
 > **Note implementazione — evidenza correzione:** baseline verificata
-> `509929ab3e151e796fe5807cb6db77b8fb4480fb`, staged/unmerged `0/0`. I sei
+> `37bd8e993f1f2c6a0e27d43e720f26fe032d52b2`, staged/unmerged `0/0`. I sei
 > fixture passano import, strict validate/dump/revalidate; il request medium
 > corretto misura `21625/13690/117382 B`
 > (`source/emitted/headroom-emitted`). Gli altri cinque file fixture non sono
@@ -941,7 +941,7 @@ evidenza e fuori-pista.
 > **Stato correzione:** `MICRO-GATE PASS — SELECTIVE CHECKPOINT READY`.
 
 > **⚠️ Fuori pista — redesign FX/funding/conversion 2026-09-17:** dopo il
-> commit `958527e0` il developer ha sostituito l'intero modello FX a route
+> commit `5090e6d6` il developer ha sostituito l'intero modello FX a route
 > (`PlannerValuationRateInput`/`PlannerFxQuoteInput`/`PlannerFxRouteInput`,
 > capability `currency`/`fx_mode`) con un modello a mappa canonica globale,
 > attraverso una sequenza di decisioni prodotto successive (multi-source BUY,

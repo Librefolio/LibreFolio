@@ -34,7 +34,7 @@ carried a null cost.
 
 ## Solution
 
-Commit `d7c148564` (train 28), on the developer's choice «3 facendo chiedere il costo anche col promote» ("ask for the
+Commit `1076fa994` (train 28), on the developer's choice «3 facendo chiedere il costo anche col promote» ("ask for the
 cost on a promote too"):
 
 - `_check_result_create_cost_basis` checks the promoted creations like any other creation — only Auto rows stay

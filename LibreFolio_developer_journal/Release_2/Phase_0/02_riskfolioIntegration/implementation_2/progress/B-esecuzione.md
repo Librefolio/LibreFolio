@@ -2,7 +2,7 @@
 
 > Piano vivo. Aggiornato **dopo ogni passo**, non a fine mandato.
 > Worktree `e-alfy-automatic-meme` · ramo `e-alfy-risk-errors-as-codes`
-> Baseline `032b86959f783aec6ef784ff565027947435c71d` (= attesa `032b86959`) ✅
+> Baseline `e38ae23000cbc9cc1e752a5e79f152be7447814c` (= attesa `e38ae2300`) ✅
 > Corsia **6173** · `/tmp/librefolio-r3-b`
 
 ---
@@ -48,7 +48,7 @@
 > (`pac-allocator/PortfolioRebalancerTool` 20 · `pac-allocator/PacAllocatorTool` 15 ·
 > `tools/registry` 6). I due che il briefing nominava in più — `DateRangePicker` e
 > `ai-export/promptRenderer` — **sono verdi qui**. Plausibile che li abbia riparati la
-> baseline su cui sto (`e-alfy-risk-asset-global-lab`, diversa da `f829cd76b`): **non l'ho
+> baseline su cui sto (`e-alfy-risk-asset-global-lab`, diversa da `9f4618c6e`): **non l'ho
 > verificato**, quindi lo riporto come misura, non come spiegazione.
 
 > **⚠️ Fuori pista — Ⓠ colpisce, e più a fondo di com'era scritto.**

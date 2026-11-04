@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-potential-sniffle`
 **Branch**: `e-alfy-z-sospensione-e-risveglio`
-**HEAD di partenza (da verificare)**: `208199bf6` (= `dev_release2`; il tuo ramo è stato portato avanti in fast-forward da `5bbadda95`: non hai commit tuoi fuori da dev).
+**HEAD di partenza (da verificare)**: `84ccb8116` (= `dev_release2`; il tuo ramo è stato portato avanti in fast-forward da `fa20c7ba0`: non hai commit tuoi fuori da dev).
 **Corsia**: porta `6186`, cartella dati `/tmp/librefolio-r13-z`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md`. Leggi solo: «Z-29b e Z-29s — analisi breve aggiornata» (riga ~6913) e «Z-29s-a — i segnali ridotti dal backend, la metà backend: lavoro» (riga ~6974). Le bozze di codice sono nella cartella di sessione: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/copilot-enel/session-state/d401e062-12ee-4187-8b37-dcabd6841c89/files/z29s-draft/`.
 

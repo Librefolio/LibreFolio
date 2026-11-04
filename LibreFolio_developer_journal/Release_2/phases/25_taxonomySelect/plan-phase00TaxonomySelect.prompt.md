@@ -11,7 +11,7 @@
 |---|---|
 | **Workstream** | K — tassonomia e select |
 | **Worktree** | `LibreFolio-worktrees/e-alfy-improved-memory`, branch `e-alfy-k-tassonomia-e-select` |
-| **Baseline** | `f1047f766` su `dev_release2` |
+| **Baseline** | `9df0b7b14` su `dev_release2` |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k` — **solo** `dev.py test …` |
 | **Lane copia prod** | `--port 6165 --data-dir /tmp/librefolio-r2-k-prodcopy` — server, verifiche, review; **mai** un `dev.py test …` |
 | **Autorizzato** | piano approvato dal developer il 2026-09-24 (plan mode della sessione K) |
@@ -105,7 +105,7 @@
   > scritti durante l'attesa di `npm ci` (niente `git stash`: muta l'albero). Sostituita da
   > **mutazioni mirate**: ogni correzione viene disattivata a mano, i suoi test devono diventare
   > rossi, poi il file viene ripristinato e verificato identico. Per `SignalTreeSelect` la baseline
-  > vera c'è: il file era ancora quello di `f1047f766` (hash blob identico) quando T0 è girato.
+  > vera c'è: il file era ancora quello di `9df0b7b14` (hash blob identico) quando T0 è girato.
 
 - [x] **2. R18 — il confronto aspetta il chooser e non ripete la domanda** — ✅ 2026-09-24
   - test rosso prima (T8, T9 via test-author), poi in `AssetModal.svelte`:
@@ -221,7 +221,7 @@
   > confermare in review. Il test-author di T0 segnala comportamenti di `SignalTreeSelect` che
   > sembrano difetti (frecce che fanno il giro, Spazio che scrive uno spazio nella ricerca, focus che
   > cade su `<body>` dopo Esc) e che **non** ha fissato: la copia li conserva, per invarianza.
-  > **Evidenza 4b** (2026-09-24): T0 sul `SignalTreeSelect` **originale** (blob = `f1047f766`) →
+  > **Evidenza 4b** (2026-09-24): T0 sul `SignalTreeSelect` **originale** (blob = `9df0b7b14`) →
   > **28/28 verdi**; `SignalTreeSelect` riscritto come adattatore (≈50 righe: `SignalOptionContent`
   > come snippet, prefisso `signal-tree`, testi `signals.selector.*`) → T0 **28/28** senza ritocchi +
   > `ChartSignalsSection.test.ts` 13/13. Mutazioni su `TreeSelect`: primo gruppo non più aperto da
@@ -241,7 +241,7 @@
   > E2E: `front-asset asset-modal` 17/17 (T11 compreso), `front-asset asset-list` 28/28 (T12 compreso).
   > **Fuori pista**: `chartCoreHelpers.test.ts` (dentro `asset-unit`) dà 12 rossi, tutti su
   > `GrowthChart.svelte` (di I): il test confronta il testo del componente con blocchi letterali.
-  > `GrowthChart.svelte` e il test sono identici al byte a `f1047f766` → rosso preesistente, non K.
+  > `GrowthChart.svelte` e il test sono identici al byte a `9df0b7b14` → rosso preesistente, non K.
   > Segnalato al coordinator. Commenti corretti su indicazione dei due agenti:
   > `ASSET_TYPE_MENU_ORDER` (una famiglia sparsa fa smettere lo schermo di seguire l'array),
   > intestazione di `SearchSelect` (non «fuzzy»), `optionFilter` (tutte e 30 le descrizioni citano CSV,
@@ -388,10 +388,10 @@
   > 1. Dopo «crea asset» allo step 6, «Importa» riporta allo step 5.
   >    - Causa: `handleImport` rifà il controllo dei duplicati, `refreshDuplicateReport` azzera le
   >      scelte fatte allo step 5, e basta un qualunque gruppo fra file per riaprire lo step.
-  >    - Origine: `ef722b552` (09/09), che non è in `main`.
+  >    - Origine: `c8a77dda3` (09/09), che non è in `main`.
   > 2. Il custode di un gruppo fra file viene preselezionato anche quando collide col DB, e il clic
   >    sul badge «⚠ Probabile dup» apre il confronto fra file invece di quello col DB.
-  >    - Origine: `62516170c` e `81853ae81` (agosto), presenti in `v1.1.0`.
+  >    - Origine: `4b50aa0ae` e `88a2e7ae4` (agosto), presenti in `v1.1.0`.
   >    - Provato sui dati: la Tassa Xtrackers del 03/08 dello screenshot è la transazione #2, già
   >      nel DB.
   >
@@ -403,7 +403,7 @@
   >
   > **Fuori pista**: il developer ha chiesto se il lavoro sui segnali in numpy fosse sopravvissuto ai
   > merge. Verificato: M1–M6 del workstream A di Risk (18/09) sono in `dev_release2` tramite
-  > `50d33b146`, e i plugin rolling non sono più cambiati da allora. Nessun messaggio a Risk.
+  > `975877a14`, e i plugin rolling non sono più cambiati da allora. Nessun messaggio a Risk.
 
 ---
 

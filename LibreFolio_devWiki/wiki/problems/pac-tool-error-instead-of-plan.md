@@ -40,13 +40,13 @@ fail-closed by design — but in each case the engine had produced something its
   (Q-C0-7, the developer: «il codice invalid è la scelta giusta»).
 - **R13**: the guard was shown unnecessary — the posted-unit variable's bounds already contain the true rounded value —
   and removed with the code it left unused (option A, chosen by the developer on 2026-10-02; a probe against the oracle
-  agreed). The plugin now logs the frames of an engine failure (R13.5; since `b3843e2f8` the callers too, never the
+  agreed). The plugin now logs the frames of an engine failure (R13.5; since `08d4112b1` the callers too, never the
   message). Test: `test_manual_conversion_reaching_an_exact_credit_tie_still_plans`. Since 2026-10-09 credits round
   down ([[decisions/pac-rounding-against-the-plan]]), so an exact half unit no longer needs a tie rule.
-- **R10**: the last objective row is marked `unfinished` (option α; `8fa96ac28`). Tests:
+- **R10**: the last objective row is marked `unfinished` (option α; `3b4f3809b`). Tests:
   `test_an_unfinished_tie_stage_marks_the_last_objective_row_unfinished`,
   `test_unfinished_tie_stage_reaches_the_wire_as_an_unfinished_objective_row`.
-- **The gap**: `_published_gap` takes the exact difference of the two **printed** decimals (`8fa96ac28`); tests
+- **The gap**: `_published_gap` takes the exact difference of the two **printed** decimals (`3b4f3809b`); tests
   `test_published_absolute_gap_*`.
 
 ## Prevention

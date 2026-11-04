@@ -11,7 +11,7 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fuzzy-robot` |
 | Branch | `e-alfy-designer-lab` (rinominato dall'app; era `e-alfy-fuzzy-robot`) |
-| Base | `dev_release2` @ `b631308d5ef5482a8ffdc2878a4459fcf6909827`. Il worktree è nato su `6d0b126` (`origin/dev_release2`); il coordinatore l'ha portato avanti con `merge --ff-only` su autorizzazione del developer |
+| Base | `dev_release2` @ `44623e084145c4cf759e04a0e9fa5200f172fa5f`. Il worktree è nato su `885f7e9` (`origin/dev_release2`); il coordinatore l'ha portato avanti con `merge --ff-only` su autorizzazione del developer |
 | Corsia | porta **6152**, dati **`/tmp/librefolio-r2-l`** |
 | Coordinatore | sessione `aec04834-1532-4d86-9e3f-f942e82aca89` |
 | Autorizzazione | il developer ha approvato questo piano nella sessione L (approvazione del piano dell'app), 14/10/2026 |
@@ -34,7 +34,7 @@ N1–N4) e file condivisi assegnati a L; parte in modalità interattiva».
 | N2 | Superfici condivise assegnate a L | ✅ ① registrazione nel runner, tramite `test-author`, solo aggiunte; ② una riga in `mkdocs.yml` e la pagina developer, tramite `docs-writer`; ③ la skill `designer-lab-apply`; ④ **solo** l'esclusione delle cartelle del Lab in `scripts/visual_review/color_inventory.py`; ⑤ `js-coverage-report.js` facoltativo |
 | N3 | DoD del passo 5 | ✅ senza applicazione reale all'app |
 | N4 | Neutralità della gallery | ✅ gallery **completa** con Lab spento e acceso, alla fine; **avvisare il coordinatore prima** di lanciarla, per non sovrapporsi a G e R. Le esecuzioni filtrate (`-f` per nome, viewport) le lancia L; la CLI non filtra per lingua |
-| §5.2 | Modifica per occorrenza la cui regola non è caricata | ✅ **decisione del developer** (14/10 sera, testuale: «va bene fare così se si modifica qualcosa che non c'è è corretto non si veda»). **Nessuna ricaduta sul valore**: finché nessuna regola caricata ha selettore e proprietà dell'occorrenza, la modifica non si vede, ma finisce nell'export. Il pulsante «estendi a tutto il colore» non è richiesto. Progetto aggiornato dal coordinatore in `dev_release2` @ `898aea974` (§5.2, §5.5, nuovo §5.6). Il flusso di riferimento è a due schede: Lab in una, app nell'altra, aggiornamento con `storage` |
+| §5.2 | Modifica per occorrenza la cui regola non è caricata | ✅ **decisione del developer** (14/10 sera, testuale: «va bene fare così se si modifica qualcosa che non c'è è corretto non si veda»). **Nessuna ricaduta sul valore**: finché nessuna regola caricata ha selettore e proprietà dell'occorrenza, la modifica non si vede, ma finisce nell'export. Il pulsante «estendi a tutto il colore» non è richiesto. Progetto aggiornato dal coordinatore in `dev_release2` @ `85ad3fb68` (§5.2, §5.5, nuovo §5.6). Il flusso di riferimento è a due schede: Lab in una, app nell'altra, aggiornamento con `storage` |
 
 Vincoli aggiunti dal coordinatore (14/10):
 - R creerà `frontend/src/lib/theme/**` (`themed()`, `components/*.css` con `--lf-cmp-*` su `:root`): lo scanner deve
@@ -42,7 +42,7 @@ Vincoli aggiunti dal coordinatore (14/10):
 - Snapshot e rumore del 14/10 sono per ora in `~/LibreFolio_visual_review/`. Il coordinatore comunicherà il nuovo
   percorso quando la cartella di lavoro sarà spostata.
 
-## Analisi (14/10/2026, sul codice di `b631308`)
+## Analisi (14/10/2026, sul codice di `44623e0`)
 
 ### Claim del progetto verificati
 
@@ -52,7 +52,7 @@ Vincoli aggiunti dal coordinatore (14/10):
 | Esiste una build di debug | ✅ | `package.json` `build:debug`; `dev.py:643`; `src/lib/debug.ts` |
 | Il frontend conosce il commit | ✅ | `define.__APP_VERSION__`, dichiarato in `src/lib/version.ts:9` |
 | ECharts senza modulo centrale | ✅ | 29 file di import (25 non di test), tutti da `'echarts'`: un solo prototipo |
-| 1.821 colori scritti a mano | ✅ | hex 1.610 + funzioni 211; `frontend/src` è identico tra `6d0b126` e `b631308` |
+| 1.821 colori scritti a mano | ✅ | hex 1.610 + funzioni 211; `frontend/src` è identico tra `885f7e9` e `44623e0` |
 | Ripartizione per zona | ⚠️ | non riproducibile: `color_inventory.py` non classifica le zone |
 | 17 grafici ridisegnano a qualunque cambio di classe | ❌ parziale | 12 sì; ScatterChart:82, CorrelationHeatmap:296, ExposureBars:44 ed ExposureMaps:96 assegnano solo `dark` a un `$state`; SemiDonutChart non ha osservatore; OtherPeriodEffectsTable:208 non è un osservatore del tema |
 | Le classi Tailwind leggono variabili | ⏳ | riverifica nello spike, sul CSS compilato |
@@ -307,7 +307,7 @@ Richiesta del developer tramite il coordinatore. **Non si riprende senza «RIPRE
 
 | Voce | Valore |
 |---|---|
-| HEAD | `b631308d5ef5482a8ffdc2878a4459fcf6909827`, uguale alla base |
+| HEAD | `44623e084145c4cf759e04a0e9fa5200f172fa5f`, uguale alla base |
 | `git status --porcelain` | **12 righe**: 6 file tracciati modificati, 6 percorsi nuovi. Niente commit, stage o stash |
 | Corsia | nessun server, porta 6152 libera; DB in `/tmp/librefolio-r2-l` lasciato com'è |
 | Sotto-agenti | `test-author` e `docs-writer` fermati con un messaggio di stop; entrambi `idle`, nessun comando in corso |
@@ -333,7 +333,7 @@ cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fuz
 ```
 
 Atteso:
-- HEAD uguale alla base comunicata dal coordinatore (oggi `b631308`). Se la base è avanzata, prima il fast-forward del coordinatore;
+- HEAD uguale alla base comunicata dal coordinatore (oggi `44623e0`). Se la base è avanzata, prima il fast-forward del coordinatore;
 - 12 righe;
 - `color.test.ts` verde, cioè la tolleranza è confermata.
 
@@ -356,7 +356,7 @@ Atteso:
 
 ## ▶️ Ripresa del 14/10/2026 sera
 
-«RIPRENDI» del coordinatore alle 19:29. Stato verificato: HEAD `b631308`, 12 righe di `git status`, porta 6152 libera.
+«RIPRENDI» del coordinatore alle 19:29. Stato verificato: HEAD `44623e0`, 12 righe di `git status`, porta 6152 libera.
 Il Mac si è riavviato alle 19:10, durante la pausa, e `/tmp` è stato svuotato: **la cartella dati della corsia
 `/tmp/librefolio-r2-l` non esiste più**. Le evidenze erano già negli artefatti di sessione. Prima del primo comando
 sulla corsia: `db populate --force --clean` sulla 6152 e `/tmp/librefolio-r2-l` (pre-approvato dal coordinatore).
@@ -446,8 +446,8 @@ HEAD atteso: quello del commit del coordinatore dopo il checkpoint, con la base 
 Righe di `git status` attese: solo i due file di test esclusi, se il coordinatore ha committato tutto il resto.
 ## ▶️ Checkpoint committato e via al passo 5b (14/10/2026, 19:56)
 
-- **Commit del coordinatore:** checkpoint `6e967202e` (`feat(frontend): add debug-only Designer Lab`, 33 file, padre `b631308d5`), poi merge di `dev_release2` (`2dca0105c`).
-  **HEAD `150f2716a91c64c558bef2e61de45bacb9b4d5a9`**, verificato.
+- **Commit del coordinatore:** checkpoint `5a5597a70` (`feat(frontend): add debug-only Designer Lab`, 33 file, padre `44623e084`), poi merge di `dev_release2` (`4cf2d6f65`).
+  **HEAD `4beec1e2e7e98db67e35fda4e94be60cc838fbd9`**, verificato.
 - **Il merge porta:**
   - il progetto aggiornato (§5.2 decisione, §5.5 flusso a due schede, nuovo §5.6 selettore);
   - le nuove regole Git: solo il coordinatore committa e fa i merge, i figli mai;
@@ -805,11 +805,11 @@ La prova avviene con `transition: none` iniettata, per non leggere un valore a m
 ## ✅ Checkpoint 2 committato (14/10/2026, 22:58)
 
 - **Commit del coordinatore:**
-  - `87ceceede` `feat(frontend): add Designer Lab element picker and tests`: 54 file, padre `150f2716a`;
-  - `bb87b0ab7`, merge di `dev_release2` (`afea11fe2`). Porta solo documenti: lo spostamento del programma colori in `Phase_1/10_colorSystem`, il materiale della designer, i piani della 1.3, `meta.json` del toolkit. Niente in `frontend/`, runner, MkDocs o `.github`;
-  - `93bf8c98a`, questo piano spostato qui.
+  - `d18c56ece` `feat(frontend): add Designer Lab element picker and tests`: 54 file, padre `4beec1e2e`;
+  - `f1ca29614`, merge di `dev_release2` (`0315c526e`). Porta solo documenti: lo spostamento del programma colori in `Phase_1/10_colorSystem`, il materiale della designer, i piani della 1.3, `meta.json` del toolkit. Niente in `frontend/`, runner, MkDocs o `.github`;
+  - `afce0a72e`, questo piano spostato qui.
 
-  **HEAD `93bf8c98a6669072b0d53b68864b3123904ed86c`**, worktree pulito, verificato. Il controllo a campione del coordinatore dà unit del Lab 15 file e 394 test verdi.
+  **HEAD `afce0a72e46f02add24b279c07c208893c9f1d1b`**, worktree pulito, verificato. Il controllo a campione del coordinatore dà unit del Lab 15 file e 394 test verdi.
 - **Link dopo lo spostamento:**
   - riga 6 del piano: `../../BACKLOG_POST_1.2.md` → `../../../Phase_0/BACKLOG_POST_1.2.md`;
   - sezione L del backlog: 9 link da `55_colorSystem/…` → `../Phase_1/10_colorSystem/…`;
@@ -831,7 +831,7 @@ La prova avviene con `transition: none` iniettata, per non leggere un valore a m
 
 ## ✅ Validazione del fuso con X (15/10/2026, 10:18–10:25)
 
-- **Base:** merge `6991ac085` di `dev_release2` = `2338aaf79` (X), sopra `eb79f7127` (i miei file di journal, committati dal coordinatore). Merge pulito, albero uguale alla simulazione. FROZEN fino al via del coordinatore delle 10:16, dopo la misura r2 di G.
+- **Base:** merge `5ff3cd240` di `dev_release2` = `2ddbf77f7` (X), sopra `18954df40` (i miei file di journal, committati dal coordinatore). Merge pulito, albero uguale alla simulazione. FROZEN fino al via del coordinatore delle 10:16, dopo la misura r2 di G.
 - **Controllo di sola lettura alle 09:03–09:12:**
   - il merge porta 984 file e nessun file del Lab;
   - fra i condivisi: `runner_architecture.md` cambia solo in prosa (riga e totali di L intatti); `_frontend_common.py` cambia gli utenti di test (solo `e2e_test_admin` è amministratore, mentre i test del Lab usano l'utente normale);
@@ -871,7 +871,7 @@ La prova avviene con `transition: none` iniettata, per non leggere un valore a m
     - 1 `brim-report-sets`: il nome casuale dell'account demo;
     - 1 `detail-signals-macd` mobile it chiaro: menu degli indicatori ancora aperto, un problema di tempi della gallery, girato a G.
   - **Il Lab chiuso è neutro.**
-- **Fuso con R:** `eeeb467f4`, padri `c0556a240` e `ed9fb6996`; R è entrato in `dev_release2` (lotti A–D, `sw.js`, documenti). 133 file, nessuno del Lab.
+- **Fuso con R:** `1aa16bfb5`, padri `a50f089fc` e `eec4d7496`; R è entrato in `dev_release2` (lotti A–D, `sw.js`, documenti). 133 file, nessuno del Lab.
   - R ha creato `lib/theme/**`: tabelle dei grafici `chartTheme.ts`, `chartPalettes.ts`, `chartColorScales.ts`, `drawnColors.ts`; token di componente `--lf-cmp-*` in `components/{table,media,files,dialogs}.css` su `:root`; `themeMode.ts` come unico lettore del tema.
   - Tre gate nuovi (`themeModeReads`, `themeComponentTokens`, `themeColorMeta`): esentano i percorsi del Lab (decisione D7 di R).
 - **Validazione** (`/tmp/libreFolio_L8_validate.sh`, 11:49–11:55, copia negli artefatti):
@@ -930,9 +930,9 @@ La prova avviene con `transition: none` iniettata, per non leggere un valore a m
 
 ## ✅ L-10 — Ruoli di T nel Lab (15/10/2026)
 
-**Base:** `9d57aa4c0`; L è già in `dev_release2`, perché il coordinatore ha committato `9d57aa4c0` col mio messaggio e il target è avanzato fin lì.
+**Base:** `59317034a`; L è già in `dev_release2`, perché il coordinatore ha committato `59317034a` col mio messaggio e il target è avanzato fin lì.
 
-**Via del coordinatore** (12:22, testuale): «L-10 approvata, con un suo checkpoint, sulla base di `9d57aa4c0`:
+**Via del coordinatore** (12:22, testuale): «L-10 approvata, con un suo checkpoint, sulla base di `59317034a`:
 - il conteggio delle classi `*-lf-*`;
 - `tw_custom_re` in Python, con la parità prima e dopo;
 - le `--color-lf-*`».
@@ -1040,7 +1040,7 @@ Fuori ambito: le coppie di contrasto sui ruoli `--lf-*`, perché il pannello leg
 
 **⏸️ Pausa Python (15/10, 13:12).** Il coordinatore ha fermato tutti i comandi Python (`dev.py`, `pipenv run …`, `mkdocs`) per circa 10 minuti: il developer installa `cryptography` nell'ambiente condiviso. Nel mio lane non c'era niente in corso e la porta 6152 era libera, come ho confermato al coordinatore. Gli E2E, la build di release e le prove della corsia ripartono alla «ripresa».
 
-**Previsione dei conflitti con la nuova base `9f3b141a8`** (G e 1.2.1; il coordinatore la aggiorna al checkpoint). Letta con `git diff --name-only 9d57aa4c0 9f3b141a8`, sola lettura, 30 file:
+**Previsione dei conflitti con la nuova base `acf4f8375`** (G e 1.2.1; il coordinatore la aggiorna al checkpoint). Letta con `git diff --name-only 59317034a acf4f8375`, sola lettura, 30 file:
 - **unico file in comune: `BACKLOG_POST_1.2.md`**, con hunk lontani. La base cambia dalla riga 2039 in poi; i miei sono alle righe 1898–1943, nella sezione L;
 - per il resto la base porta file di G (`frontend/e2e/gallery.spec.ts`, `frontend/e2e/fixtures/gallery*`), `scripts/test_runner/_backend_utils.py`, `scripts/visual_review/{README.md, live_price_check.py}`, autenticazione e file della 1.2.1, e il journal;
 - nessun file in `frontend/src`, `frontend/scripts`, `frontend/e2e/designer-lab` o MkDocs developer;
@@ -1101,7 +1101,7 @@ Fuori ambito: le coppie di contrasto sui ruoli `--lf-*`, perché il pannello leg
 > **Type-check degli E2E del Lab (13:5x).** Il `tsconfig` del progetto esclude `e2e/**` e Playwright transpila senza controllare i tipi, quindi nessun gate li controlla. Prova una tantum: `tsc -p` con una config temporanea in `/tmp` che estende `frontend/tsconfig.json`, include `e2e/designer-lab/*.ts` e usa `typeRoots` assoluto. Risultato: exit 0, **0 errori**, compresi gli import (fixture, `global-setup`, tipi del Lab).
 > **⚠️ Fuori pista:** il primo tentativo ha dato 25 errori «Cannot find module 'node:…'» perché `types: ["node"]` si risolve dalla cartella della config (`/tmp`). Con `typeRoots` assoluto sono spariti. Config temporanea cancellata.
 
-**✅ Passo 6 — Validazione finale nello slot (15/10, 15:22–15:33).** Via del coordinatore alle 15:21 («lo slot pesante è tuo per chiudere L-10»). Prima del via: HEAD `9d57aa4c0`, 22 righe di stato, porta 6152 libera, carico 26, nessun sorgente cambiato dopo le run di `test-author`.
+**✅ Passo 6 — Validazione finale nello slot (15/10, 15:22–15:33).** Via del coordinatore alle 15:21 («lo slot pesante è tuo per chiudere L-10»). Prima del via: HEAD `59317034a`, 22 righe di stato, porta 6152 libera, carico 26, nessun sorgente cambiato dopo le run di `test-author`.
 Comando: `/tmp/libreFolio_L10_validate.sh slot`, tutto in sequenza nella corsia 6152. Log in `/tmp/libreFolio_L10/val-slot/` e copia negli artefatti di sessione (`files/L-validate-2026-10-15/L10/`).
 
 | Passo | Esito |
@@ -1127,13 +1127,13 @@ Comando: `/tmp/libreFolio_L10_validate.sh slot`, tutto in sequenza nella corsia 
 > - `tw_custom_re`: parità identica prima (`custom` 764) e dopo (912);
 > - `--color-lf-*`: **45** definizioni, tutte `inline` con `alias_of`; nessuna in «Variabili dell'app».
 >
-> **Base `badec1465` (Y1), sola lettura:** 132 file. **In comune solo `BACKLOG_POST_1.2.md`**, con hunk lontani (base dalla riga 2039 in poi, miei 1898–1943). Superfici del Lab non toccate. Dipendenze semantiche controllate:
+> **Base `d2e2b7763` (Y1), sola lettura:** 132 file. **In comune solo `BACKLOG_POST_1.2.md`**, con hunk lontani (base dalla riga 2039 in poi, miei 1898–1943). Superfici del Lab non toccate. Dipendenze semantiche controllate:
 > - Y1 divide `GrowthChart.svelte` in `growthChart{Data,Series,Tooltip}.ts`, ma `data-testid="growth-chart"` e `attachChartReady` restano, e i colori vengono da `lib/theme/chart*` come prima. Gli E2E L3 e neutral ricavano tutto a runtime.
 > - `package.json` e lock cambiano solo la versione: niente `npm ci`.
 >
 > Dopo l'aggiornamento della base conviene comunque un giro `front-designer-lab all` sul fuso.
 
-**✅ Validazione del fuso `fb2526cc4` (15/10, 15:59–16:08).** Il coordinatore ha committato L-10 in `a6f29298e`: padre `9d57aa4c0`, gli stessi 22 file. Poi ha fuso `dev_release2` (`7adda8a3c`: H, A5, Y1 e i suoi registri) in `fb2526cc4`, senza conflitti.
+**✅ Validazione del fuso `2dfafb1c8` (15/10, 15:59–16:08).** Il coordinatore ha committato L-10 in `4fb8558e2`: padre `59317034a`, gli stessi 22 file. Poi ha fuso `dev_release2` (`b2c806ce9`: H, A5, Y1 e i suoi registri) in `2dfafb1c8`, senza conflitti.
 - Il fuso non tocca superfici del Lab: cambia solo la versione in `package.json` e nel lock.
 - Porta la migrazione 006 e 11 file di API.
 
@@ -1162,7 +1162,7 @@ Prima del giro: HEAD verificato, albero pulito, porta libera. Comando: `/tmp/lib
 
 ## ✅ Indirizzo del Lab nel banner di `dev.py` (15/10/2026)
 
-**Base:** `dae4de4fa`; durante il lavoro `d22eb6f43`, con un fast-forward del coordinatore che porta C-94 di J: `--build-only` e un ritorno anticipato in `cmd_server`, prima della lista. Ho riletto `cmd_server` sulla versione nuova prima di modificarlo. La 1.3 dà via libera sul blocco «Available endpoints».
+**Base:** `ff75660ad`; durante il lavoro `6f9123d5c`, con un fast-forward del coordinatore che porta C-94 di J: `--build-only` e un ritorno anticipato in `cmd_server`, prima della lista. Ho riletto `cmd_server` sulla versione nuova prima di modificarlo. La 1.3 dà via libera sul blocco «Available endpoints».
 
 **Richiesta del developer** (testuale, 16:48): «puoi fare che in dev.py quando si avvia il server, viene mostrato anche il path per il design lab? similmente a quanto facciamo per le pagine delle api? ovviamente solo se è stato compilato, quindi in debug mode».
 
@@ -1255,7 +1255,7 @@ Ordine: ora il cursore dell'alfa, con i test unitari, senza run pesanti. Dopo l'
 
 ## ✅ Cursore dell'opacità nell'editor (giro 3, D2) — 15/10/2026
 
-**Base:** `a4d1884b4`, dopo il fast-forward del coordinatore; albero pulito.
+**Base:** `8b324c9e7`, dopo il fast-forward del coordinatore; albero pulito.
 
 **Fatti verificati prima del progetto:**
 - I valori con alfa dei ruoli sono `color-mix(in oklab, X p%, transparent)`: il fondale `--lf-surface-overlay` (`tokens.css:76`), le ombre di T, `--lf-selected`. `parseColor` rifiuta `color-mix`, quindi oggi l'editor li dà per non validi: «Applica» è spento e i cursori L/C/H non compaiono.
@@ -1388,7 +1388,7 @@ Ordine: ora il cursore dell'alfa, con i test unitari, senza run pesanti. Dopo l'
 > Nel worktree ora c'è la build di release: la rifà in debug il primo `server --test` della corsia.
 > **Da fare al via:** `front-designer-lab live` con `test-author` sugli E2E nuovi, poi `/tmp/libreFolio_alpha_validate.sh post` (`all` a 1 worker, `e2e` a 4, `check-orphans`, porta).
 
-**✅ Passo 6 — slot del checkpoint (15/10, 19:07–19:22).** Via del coordinatore alle 19:07. Prima della run: HEAD `a4d1884b4`, 13 righe di stato, porta libera, nessun processo nella corsia, nel worktree la build di release.
+**✅ Passo 6 — slot del checkpoint (15/10, 19:07–19:22).** Via del coordinatore alle 19:07. Prima della run: HEAD `8b324c9e7`, 13 righe di stato, porta libera, nessun processo nella corsia, nel worktree la build di release.
 > **⚠️ Fuori pista:** il `test-author` degli E2E non esisteva più, perché l'id era scaduto. Ho eseguito `live` io: era verde al primo giro, quindi non è servita una riparazione né un nuovo agente.
 
 | Passo | Comando (corsia `--test-port 6152 --data-dir /tmp/librefolio-r2-l --fresh-run`) | Esito |
@@ -1408,7 +1408,7 @@ Con la parte statica delle 18:29–18:32 (unit 548, check 0/0, gate 168, `theme-
 >
 > **Backlog:** nuova voce **L-16**, «Giro 3 della designer nel Lab»: ruoli di T-8 dopo l'ingresso di T, livello `category` dopo DV. L-15 annota la decisione D3.
 
-**✅ Passo 7 — validazione del fuso `47e33997b` (15/10, 19:25–19:35).** Commit del coordinatore `7af0922c0`, «feat(designer-lab): add opacity slider to editor»: 14 file, gli stessi del mio delta. Merge pulito di `dev_release2` (`7c39f0666`), che si è fuso da solo solo nel backlog.
+**✅ Passo 7 — validazione del fuso `1fe7cb585` (15/10, 19:25–19:35).** Commit del coordinatore `6e79989b6`, «feat(designer-lab): add opacity slider to editor»: 14 file, gli stessi del mio delta. Merge pulito di `dev_release2` (`91a670085`), che si è fuso da solo solo nel backlog.
 - Il target porta 199 file: 53 in `frontend/src`, 9 di API (email, utenti, backup). Nessuno è una superficie del Lab.
 - Comando: `/tmp/libreFolio_alpha_merged.sh`, nella corsia 6152, nell'ordine del coordinatore. Log in `/tmp/libreFolio_alpha/val-merged/` e negli artefatti (`alpha-val-merged/`).
 
@@ -1427,10 +1427,10 @@ Con la parte statica delle 18:29–18:32 (unit 548, check 0/0, gate 168, `theme-
 
 > **Note implementazione:** i ruoli con mix trasparente nel catalogo fuso sono `--lf-selected` e `--lf-surface-overlay`; le ombre di T arriveranno con T-8. Il test E2E del mix li trova a runtime, senza nominarli.
 
-## ✅ L-16 — Giro 3 nel Lab: ruoli di T-8/T-8b e livello `category` (15–16/10/2026, notte; validato il 16/10 alle 03:50 su `e44383f13`)
+## ✅ L-16 — Giro 3 nel Lab: ruoli di T-8/T-8b e livello `category` (15–16/10/2026, notte; validato il 16/10 alle 03:50 su `122b36400`)
 
-**Entrata nel target:** il cursore dell'opacità è in `dev_release2` con `c96a62268` (merge di `f37f805fc`).
-**Base:** `a0915bef9` (T e DV entrati), raggiunta con un fast-forward del coordinatore; albero pulito, porta libera. Nessun file del Lab è cambiato dopo il mio ingresso.
+**Entrata nel target:** il cursore dell'opacità è in `dev_release2` con `8fc1a07f3` (merge di `3dabda55b`).
+**Base:** `3d1314c2c` (T e DV entrati), raggiunta con un fast-forward del coordinatore; albero pulito, porta libera. Nessun file del Lab è cambiato dopo il mio ingresso.
 **Via del coordinatore (22:51):** «Via a L-16» — prima un'analisi breve con file e prove; «per stanotte basta il mio OK». Le prove pesanti si fanno al suo via, perché G-13 chiederà una finestra quieta. Obiettivo della notte, dal developer: finire la migrazione dei colori.
 
 **Analisi (sola lettura, 22:5x–23:0x).** Prove leggere: scanner, inventario e parità sul nuovo albero; lo script `/tmp/libreFolio_L16_roles.mjs`, che confronta con `ROLE_CLASS_RE` di T. File in `/tmp/libreFolio_L16/`.
@@ -1645,9 +1645,9 @@ Con la parte statica delle 18:29–18:32 (unit 548, check 0/0, gate 168, `theme-
 
 Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
 
-**✅ Passo 5b — checkpoint intermedio, richiesto dal coordinatore (16/10, 02:06):** «TD-1 è nel target (`57802d827`) […] Mandami il checkpoint di L-16 così com'è, FROZEN». Dopo vengono il suo commit e il merge di base; poi tocca a me la sostituzione, le prove leggere e un piccolo checkpoint; lo slot pesante dopo T, verso le 03:20.
+**✅ Passo 5b — checkpoint intermedio, richiesto dal coordinatore (16/10, 02:06):** «TD-1 è nel target (`7138a8261`) […] Mandami il checkpoint di L-16 così com'è, FROZEN». Dopo vengono il suo commit e il merge di base; poi tocca a me la sostituzione, le prove leggere e un piccolo checkpoint; lo slot pesante dopo T, verso le 03:20.
 - **Prove leggere (02:07):** Vitest del Lab più `chartCategories.test.ts`: 21 file, **708/708**, quindi le 3 righe scritte nella finestra sono verdi. Prettier pulito su `scripts/designer-lab`, `lib/dev/designer-lab`, `routes/designer-lab`, `e2e/designer-lab`. Alle 02:10: ruff e black puliti su `color_inventory.py`, `theme-roles --check` pulito, `git diff --check` pulito, porta 6152 libera (`lsof` exit 1). Stato: 24 file tracciati modificati e 3 nuovi. **FROZEN** per il commit del coordinatore.
-- **Previsione di conflitto verso `57802d827`:**
+- **Previsione di conflitto verso `7138a8261`:**
   - dei miei file, il target cambia solo `BACKLOG_POST_1.2.md`, in altre sezioni (T, DV, H, A, W, J, Z, B, E, Y), mentre io ho toccato solo L (righe 1950–1960): nessuna sovrapposizione;
   - `chartCategories.ts` di TD-1: `categoryLines()` sulla versione del target dà ancora 54 righe e 27 categorie (11 tipi, 14 settori, 2 contenitori), solo spostate di una riga (39…177 → 40…178);
   - `lookupKey` è identico alla mia copia (`key.replace(/[\s_]/g, '').toUpperCase()`), quindi sostituirla non cambia il comportamento;
@@ -1656,8 +1656,8 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
 
 **✅ Passo 6 — dopo il merge di base con TD-1 (16/10, 02:13–02:28).**
 > **Merge di base del coordinatore (16/10, 02:13):**
-> - checkpoint `4cc601e57`, «feat(designer-lab): category layer and C4 signal», con i 27 path;
-> - merge `0b229ef95`, con padri `4cc601e57` e `57802d827`;
+> - checkpoint `55afe1b3f`, «feat(designer-lab): category layer and C4 signal», con i 27 path;
+> - merge `a6c1754a4`, con padri `55afe1b3f` e `7138a8261`;
 > - il backlog si è fuso da solo; worktree pulito, `--check` pulito.
 >
 > **Verifica (02:14):** HEAD e padri come annunciati, 0 righe di stato.
@@ -1668,7 +1668,7 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
 > - Il gate degli import del Lab regola solo chi importa il Lab, non cosa il Lab importa.
 > - `chartCategories.ts` non importa niente del Lab.
 >
-> **⚠️ Fuori pista — anche TD-1b è nella base** (`ada4742b7`, «PAC bars by category, live broker colours (TD-1, TD-1b)»):
+> **⚠️ Fuori pista — anche TD-1b è nella base** (`c8ebfcfb8`, «PAC bars by category, live broker colours (TD-1, TD-1b)»):
 > - `GROWTH_BROKER_PALETTE` non esiste più: `growthBrokerColor()` (`chartPalettes.ts:32`) legge `categoryColor('type', CATEGORY_SEQUENCE[i mod 8], dark)` a ogni costruzione delle serie (`growthChartSeries.ts:115`), e `GrowthChart.svelte:954` ascolta C4;
 > - anche `ExposureBars.svelte`, il risultato del PAC, legge `chartRoles` e ascolta C4.
 >
@@ -1725,7 +1725,7 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
 
 **✅ Passo 7 — slot pesante (16/10, 03:26–03:50, al via del coordinatore), corsia 6152, un passo alla volta:** script `/tmp/libreFolio_L16_validate.sh`, `pre` con `API_SYNC=1`.
 > **Base merge del coordinatore (03:24):**
-> - `e44383f13`, con padri `88ef51358` e il target `8850ad002`;
+> - `122b36400`, con padri `a7c919fc1` e il target `aa2bfc6c2`;
 > - entrati: Y4b (il rischio in `features/risk/`, a radice piatta), H CP-U2, A6d/e, X CP11b, Z7b, B2;
 > - nessun cambio sui miei path; Y3 e Y5 non ancora entrati.
 >
@@ -1733,7 +1733,7 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
 > - `lib/risk`, `stores/risk` e `components/risk` non esistono più.
 > - L'unico file di `features/risk` con colori, senza «chart» nel nome e senza `echarts`, è `levels/L1HowMuchItHurts.svelte`. Prima stava in `components/risk/levels/`: senza la riga `features/risk` del 23:5x avrebbe cambiato livello, e con la riga resta un file di grafico.
 >
-> **Via del coordinatore (03:25):** «Via allo slot pesante, adesso: valida `e44383f13`».
+> **Via del coordinatore (03:25):** «Via allo slot pesante, adesso: valida `122b36400`».
 >
 > **✅ `pre` (03:26–03:31):**
 >
@@ -1753,7 +1753,7 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
 > Porta libera, HEAD invariata.
 >
 > **⚠️ Fuori pista — svelte-check rosso, 1 errore, difetto mio di L-16:**
-> - `scan-colors.mjs:775`, `Property 'line' does not exist on type 'object'`: `FileScan.literals` è tipato `object[]` in JSDoc, e la mia riga del passo 2 leggeva `lit.line` senza cast. Al checkpoint `4cc601e57` svelte-check non era stato eseguito.
+> - `scan-colors.mjs:775`, `Property 'line' does not exist on type 'object'`: `FileScan.literals` è tipato `object[]` in JSDoc, e la mia riga del passo 2 leggeva `lit.line` senza cast. Al checkpoint `55afe1b3f` svelte-check non era stato eseguito.
 > - **Correzione di una riga:** `categoryAt?.get(/** @type {{line: number}} */ (lit).line)`, lo stesso schema di cast già usato nel file.
 > - **Dopo (03:33):**
 >   - svelte-check: **0 errori, 0 warning**;
@@ -1774,7 +1774,7 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
 >
 > **✅ `release` (03:48–03:50):** `npm run build` exit 0. In `build/` zero file con il marcatore `lf-designer-lab`, il catalogo, l'indice dei test id, `parseTransparentMix`, `categoryOverrides` o `__lfDesignerLab`. Il ramo C3 di DV è sparito con il minificatore.
 > - Nel worktree resta la build di release (`.build-debug` assente); il runner rifà quella di debug al prossimo E2E.
-> - Porta 6152 libera dopo ogni fase (`lsof` exit 1); HEAD `e44383f13` invariata dall'inizio alla fine.
+> - Porta 6152 libera dopo ogni fase (`lsof` exit 1); HEAD `122b36400` invariata dall'inizio alla fine.
 >
 > **Backlog:** L-16 ✅ validato; nuova voce **L-18**, togliere i vecchi percorsi `components/` di `CHART_PATH_RE` dopo Y3 e Y5. Y4b è già entrato.
 
@@ -1787,7 +1787,7 @@ Le quattro fasi previste:
 > **Nota sui numeri attesi:** `custom` è salito a 1500, non 1375, perché il target ha aggiunto classi (T, Y4b e gli altri); la parità resta identica.
 
 **✅ Passo 8 — checkpoint (16/10, 03:5x):** handoff al coordinatore, FROZEN, con le righe «dove guardarlo». Delta: `scan-colors.mjs` (la correzione di una riga), questo piano, la sezione L del backlog.
-> **Commit del coordinatore** `fca2e06eb` (3 file). **Merge di base per l'ingresso** `995bb25bd`, con padri `fca2e06eb` e il target `d0efca910`, che porta il lotto di T (i 3 ruoli `-on-inverse` di Q10), H CP7b-1 e J CP-6. Nessun cambio sui miei path; `ChartRole` invariato, quindi nulla da toccare nell'E2E.
+> **Commit del coordinatore** `06117993b` (3 file). **Merge di base per l'ingresso** `c3a8927a5`, con padri `06117993b` e il target `a42af7e28`, che porta il lotto di T (i 3 ruoli `-on-inverse` di Q10), H CP7b-1 e J CP-6. Nessun cambio sui miei path; `ChartRole` invariato, quindi nulla da toccare nell'E2E.
 >
 > **Controllo leggero sotto `nice -n 10` (03:54–03:55, script `/tmp/libreFolio_L16_light_995.sh`):**
 >
@@ -1801,11 +1801,11 @@ Le quattro fasi previste:
 >
 > I conteggi si spostano per il lotto di T (`custom` 1500 → 1931, `tw` 10270 → 9520). Porta libera, HEAD invariata. Niente E2E e niente build, come chiesto.
 
-> **Ingresso nel target (03:56):** `2c485d3d4`, merge di `d8a69ab62`; l'albero coincide. Verificato in sola lettura: worktree portato a `2c485d3d4`, pulito, porta libera.
+> **Ingresso nel target (03:56):** `77a315d36`, merge di `81ae96d5b`; l'albero coincide. Verificato in sola lettura: worktree portato a `77a315d36`, pulito, porta libera.
 
 ## ✅ L-18 — Togliere i vecchi percorsi `components/` dei grafici (16/10/2026, mattina; prove leggere verdi alle 08:46)
 
-**Richiesta del coordinatore (08:34):** «Y è entrato (`d5c3c3ae3`): Y3, Y5 e Y6 hanno spostato dashboard, broker e file. […] Piccolo lotto, adesso: L-18 più la doc.»
+**Richiesta del coordinatore (08:34):** «Y è entrato (`c91f132e3`): Y3, Y5 e Y6 hanno spostato dashboard, broker e file. […] Piccolo lotto, adesso: L-18 più la doc.»
 1. In `CHART_PATH_RE` togliere `components/dashboard`, `components/risk` e `components/brokers/lots`; `components/charts` e `charts` restano. Test di `test-author`.
 2. In `designer-lab.md` la frase dei percorsi dice solo i nuovi. L'esempio JSON passa al percorso vero di `BrokerImportFilesModal.svelte`, da verificare.
 3. Facoltative: le costanti estetiche di `pickView.test.ts` e `scanColors.test.ts`.
@@ -1813,7 +1813,7 @@ Le quattro fasi previste:
 Prove leggere: unitari del Lab, `--check`, parità dello scanner, MkDocs strict e `check-links`. Niente E2E: il catalogo non cambia.
 
 **✅ Passo 1 — verifica e regex (08:35–08:40).**
-- **Base:** HEAD `d5c3c3ae3`, pulita, con L-16 (`2c485d3d4`) dentro; porta libera.
+- **Base:** HEAD `c91f132e3`, pulita, con L-16 (`77a315d36`) dentro; porta libera.
 - **Cartelle:** `components/dashboard`, `risk`, `brokers` e `files` non esistono più; `components/charts` ha 70 file. I percorsi veri sono `features/dashboard/GrowthChart.svelte`, `features/risk/CorrelationHeatmap.svelte` (radice piatta), `features/brokers/lots/LotsAnalysisPanel.svelte` e `features/brokers/BrokerImportFilesModal.svelte`.
 - **Regex** (`scan-colors.mjs:193`): ora è `\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$`, e il commento di transizione è tolto.
   - `components\/charts` è assorbito da `charts`; resta perché la doc lo nomina, ed era così anche prima di L-16.
@@ -1864,16 +1864,16 @@ Prove leggere: unitari del Lab, `--check`, parità dello scanner, MkDocs strict 
 | MkDocs strict | 0 warning, 0 errori |
 | `check-links` | **97** link validi |
 
-Porta 6152 libera; HEAD `d5c3c3ae3` invariata.
+Porta 6152 libera; HEAD `c91f132e3` invariata.
 
 > **⚠️ Fuori pista — STOP del developer, subito dopo le prove (08:4x):** «il developer chiede di fermare tutti i sotto-agenti. Smetti subito L-18». Le prove erano già finite verdi. Ho fermato tutto e lasciato il worktree com'era, con 6 file non committati; nessun processo, i due sotto-agenti inattivi. Poi FROZEN.
 >
 > **Ripresa (10:21):** «Riprendi L-18, adesso. Il developer ha riavviato la macchina, quindi `/tmp` è vuota. Scrivi nel piano la nota delle prove leggere che avevi già fatto […] e chiudi L-18 nel backlog.»
 > - **Verifica (10:22):**
->   - HEAD `d5c3c3ae3` e gli stessi 6 file;
+>   - HEAD `c91f132e3` e gli stessi 6 file;
 >   - `mtime` di tutti prima dell'inizio delle prove (08:38–08:44:34 contro 08:44:41), quindi le prove valgono per questo albero;
 >   - `git diff --check` pulito, porta libera, nessun processo nella corsia.
-> - **Previsione verso il target `eb4040cd1`, che porta il quarto lotto di T:**
+> - **Previsione verso il target `53b408a03`, che porta il quarto lotto di T:**
 >   - HEAD è un suo antenato;
 >   - il target non tocca nessuno dei miei 6 file né il resto del Lab;
 >   - `LoadingSpinner.svelte:60` ha ancora `border-color: #374151;`, quindi l'esempio JSON resta vero;
@@ -1886,7 +1886,7 @@ Porta 6152 libera; HEAD `d5c3c3ae3` invariata.
 
 **Richiesta del coordinatore (11:10):** «TR sta migrando `/transactions`. `e2e/designer-lab/designer-lab-picker.spec.ts`, nel test «dark-theme pick of a text-gray-500 element», fissa come soggetto il sottotitolo di `routes/(app)/transactions/+page.svelte:738`, un `text-gray-500` rimappato da `app.css`. Quando TR lo migra, il test perde il soggetto. […] rendi il test indipendente dalla migrazione. […] Scegli tu la strada più robusta. […] Solo test-author su quel file, solo prove leggere, poi la run E2E del Lab nella coda pesante. Mandami prima il piano breve.»
 
-**Analisi (11:11–11:20, sola lettura).** Base: HEAD `6e569084a`, pulita, con dentro L-18 (`f96043473`); porta libera.
+**Analisi (11:11–11:20, sola lettura).** Base: HEAD `16ea52b26`, pulita, con dentro L-18 (`00a84c72f`); porta libera.
 - **Il test** (`designer-lab-picker.spec.ts:419–441`): login, `/transactions`, tema scuro, precondizione `toHaveClass(text-gray-500)` sul sottotitolo, poi la scelta con Alt+Shift+D. Controlla tema e ambito scuri, `data-kind="var"`, il badge `lab-picked-dark-override` e una prima variabile qualunque.
 - **Il contratto vero:**
   - il badge vale `winner.important && /html\.dark/` sul selettore (`pickView.ts:261`);
@@ -1974,7 +1974,7 @@ Porta 6152 libera; HEAD `d5c3c3ae3` invariata.
 > **Slot pesante (coordinatore, 12:04):** «La 1.3 ci presta il suo slot 1 appena finisce l'`all-backend` di A, verso le 12:10–12:20, fino alle 13:15. Lo usate tu e poi G-18. […] Resta sotto i 25 minuti […] Script e log nella tua cartella di sessione, non in `/tmp`.»
 > - Lo script è ora nei file della sessione, `L-20-2026-10-16/libreFolio_L20_run.sh`, e i log stanno accanto (`run-light/`, `run-heavy/`). Le copie in `/tmp` sono cancellate.
 > - Controllo del tempo: il blocco a 4 worker, circa 3 minuti, parte solo entro i 1200 s dall'inizio. Così la run resta sotto i 25 minuti.
-> - Pronto alle 12:05: HEAD `6e569084a`, 3 file nello stato, porta libera. Aspetto il via.
+> - Pronto alle 12:05: HEAD `16ea52b26`, 3 file nello stato, porta libera. Aspetto il via.
 > - **Cambio (12:12):** «lo slot 1 prestato dalla 1.3 va a IM […] Tu parti nella nostra corsia subito dopo AF, verso le 12:45: ti mando il via. Il piano resta lo stesso».
 > - **Ritardo (12:45):** AF rilancia 6 spec prima di entrare, perché X aspetta quell'ingresso; ha tempo fino alle 13:10. «Tu parti subito dopo, verso le 13:10: ti mando il via.»
 
@@ -1999,12 +1999,12 @@ Porta 6152 libera; HEAD `d5c3c3ae3` invariata.
 >
 > - **Il test nuovo è passato, non saltato:** `designer-lab-picker.spec.ts:535`, 833 ms da solo e 3,2 s a 4 worker. La ricerca nel CSSOM ha quindi trovato un override, e l'Element tab ha mostrato badge, `var` e la variabile esatta.
 > - I 9 minuti e mezzo del passo `picker` sono quasi tutti costruzione: la build di debug (al posto della build di release delle 03:50) e la doc (197 s), con il carico 80–96. 479 s in tutto, poi il populate del runner e i test.
-> - Durata totale **13 minuti**, sotto i 25; nessun passo dopo le 13:30. Nel worktree resta la build di debug; HEAD `6e569084a` invariata, 3 file nello stato.
+> - Durata totale **13 minuti**, sotto i 25; nessun passo dopo le 13:30. Nel worktree resta la build di debug; HEAD `16ea52b26` invariata, 3 file nello stato.
 > - Fine annunciata alle 13:18.
 
 **✅ Passo 4 — checkpoint (16/10, 13:2x):** L-20 ✅ nel backlog, handoff FROZEN.
 
-> **Ingresso nel target (13:20):** `460529690`, commit `d2e4ae947`. Verificato in sola lettura: worktree portato lì, pulito, porta libera.
+> **Ingresso nel target (13:20):** `a10e65f90`, commit `29d26b1de`. Verificato in sola lettura: worktree portato lì, pulito, porta libera.
 
 ## ✅ Audit dei colori fuori metrica (16/10/2026, notte, sola lettura)
 
@@ -2013,7 +2013,7 @@ Porta 6152 libera; HEAD `d5c3c3ae3` invariata.
 - **Vincoli:** solo comandi leggeri, sotto `nice` se il carico supera 50; nessun server, nessun E2E. Poi checkpoint solo docs, rapporto più piano, e FROZEN.
 
 **✅ Passo 1 — perimetro delle metriche (21:53–21:58).**
-- HEAD `5b916aa28`, pulita; porta libera; carico 45/110/115.
+- HEAD `69934073b`, pulita; porta libera; carico 45/110/115.
 - Dal codice di `scripts/theme/theme-roles.mjs`:
   - si misurano solo `src/**/*.{svelte,ts,js}` di produzione, commenti tolti;
   - m2 esclude `lib/theme/**` e le `LITERAL_EXCEPTIONS`;
@@ -2048,4 +2048,4 @@ Porta 6152 libera; HEAD `d5c3c3ae3` invariata.
 - **6 domande per il developer,** nessuna bloccante per stanotte.
 
 **✅ Passo 4 — checkpoint (16/10, 22:2x):** solo docs (rapporto, piano, sezione L del backlog con L-21 e L-22), FROZEN.
-> **⚠️ Fuori pista, regola Git mia infranta e annullata (22:16):** per far passare `git diff --check` anche sul file nuovo, l'ho segnato con `git add -N` e poi tolto dall'indice con `git reset -q -- <file>`. Il mio ruolo non ammette né la messa in stage né `git reset`. Effetto nullo: indice vuoto (`git diff --cached` senza file), HEAD `5b916aa28` invariata, il file di nuovo `??`. Per i file nuovi uso d'ora in poi un controllo senza Git (`grep` degli spazi finali), che qui dà 0. Segnalato al coordinatore nel checkpoint.
+> **⚠️ Fuori pista, regola Git mia infranta e annullata (22:16):** per far passare `git diff --check` anche sul file nuovo, l'ho segnato con `git add -N` e poi tolto dall'indice con `git reset -q -- <file>`. Il mio ruolo non ammette né la messa in stage né `git reset`. Effetto nullo: indice vuoto (`git diff --cached` senza file), HEAD `69934073b` invariata, il file di nuovo `??`. Per i file nuovi uso d'ora in poi un controllo senza Git (`grep` degli spazi finali), che qui dà 0. Segnalato al coordinatore nel checkpoint.

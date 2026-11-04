@@ -318,7 +318,7 @@ Il GBM è l'alternativa «da manuale», più liscia, che sottostima le code.
 
 ## Test delle palette (D71) — la garanzia regge per coincidenza
 
-Reperto 🟡 di **I** (24/09), file della famiglia Risk (`420b90ebd`, 18/09).
+Reperto 🟡 di **I** (24/09), file della famiglia Risk (`db819e4bd`, 18/09).
 
 - `colors.test.ts`, `allocationHierarchy.test.ts` — e anche il mio `allocationRings.test.ts` —
   dichiarano di misurare le palette «reali», ma controllano **una propria copia**: nessuno legge il
@@ -335,7 +335,7 @@ Reperto 🟡 di **I** (24/09), file della famiglia Risk (`420b90ebd`, 18/09).
 ## Esito delle schede — allineamento 09/10/2026
 
 Le schede erano **candidati da provare insieme** al developer, non verdetti. Esito, verificato sul codice di
-`3cceb4f90`:
+`f545b67e3`:
 
 | # | candidato | esito |
 |---|---|---|

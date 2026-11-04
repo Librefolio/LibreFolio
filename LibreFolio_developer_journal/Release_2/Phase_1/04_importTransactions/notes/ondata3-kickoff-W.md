@@ -2,7 +2,7 @@
 
 > **A cosa serve (per il developer).** È una decisione tua rimasta in sospeso da giorni perché mancava l'analisi di W insieme a MF. La domanda era tua: «in una rettifica in uscita, che PMC dovremmo segnare? Se esce, è come fosse una vendita: modifica le quantità, non il PMC». Il PMC non cambia già oggi; la scelta vera è **a che valore escono le unità** (e quindi cosa succede a realizzato, capitale e rendimento del giorno). Esempio da completare con numeri: 10 azioni comprate a 50 (PMC 50), oggi valgono 80, ne regali 2 a tuo fratello: escono a 50 (costo), a 80 (mercato) o «spariscono» (correzione di quantità)? Il documento che scrivi te lo porto domattina, con una raccomandazione.
 
-**Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fluffy-meme` · **Branch**: `e-alfy-w-import-e-transazioni` (HEAD `fcf39fab0`, già tutto in `dev_release2`; il coordinatore lo porta in fast-forward a `2879ae3e4`).
+**Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fluffy-meme` · **Branch**: `e-alfy-w-import-e-transazioni` (HEAD `377047f86`, già tutto in `dev_release2`; il coordinatore lo porta in fast-forward a `85fda260e`).
 **Nessuna corsia necessaria** (solo lettura). Se vuoi verificare un numero con il codice, usa un pytest o uno script **su dati di test**, mai sui dati reali.
 
 ## Fonti

@@ -21,7 +21,7 @@ Isolation: PURE with respect to the lane — a private SQLite file under ``tmp_p
 NullPool, disposed at teardown), no lane database, no server, no network. The report, WAC and engine blob caches are
 emptied before and after each test.
 
-RED on HEAD 5dc68b650, by absence: ``PortfolioSummary`` has no ``allocation_by_asset`` and
+RED on HEAD ebc5c87a8, by absence: ``PortfolioSummary`` has no ``allocation_by_asset`` and
 ``AllocationHistoryDimensions`` no ``asset`` (``AttributeError`` on the report's response).
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).

@@ -1,6 +1,6 @@
 # N78-1 · A che valore esce un'unità in una rettifica in uscita
 
-Workstream W, 21-22/10/2026. Solo analisi: nessun codice cambiato. Base `2879ae3e4` (`dev_release2`, treno 7).
+Workstream W, 21-22/10/2026. Solo analisi: nessun codice cambiato. Base `85fda260e` (`dev_release2`, treno 7).
 Fatti di partenza: la preparazione di MF (piano 11, «N78-1 con W — preparazione»); qui sono riletti sul codice e completati
 con il lato utente (Form, Bulk, import).
 

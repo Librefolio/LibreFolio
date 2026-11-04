@@ -6,15 +6,15 @@
 
 ## 1. Provenienza
 
-- Baseline letta e implementata: `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`.
+- Baseline letta e implementata: `41a4f23ff70189a4ad827d272a368fbf2359464d`.
 - Checkpoint D creato dal dev:
-  `cf1dd37974b2191877093e641cf00f261a241d20`.
+  `cbce2b5c46ace8b79c4d7fdc612232a12b062f93`.
 - Commit runtime incorporato manualmente:
-  `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`.
+  `63cfb55d18297b71bd6d70dc8a6d97143c95fb68`.
 - HEAD combinato:
-  `d018e8a677289b9bc38e65b437a86e1f2684caa7`.
-- Merge-base: `4a73f5f6`.
-- Commit intermedi runtime: `ef722b55`, `916f12bd`.
+  `7e6d0709c2dca5bc2c85472ba51d1198978885d8`.
+- Merge-base: `41a4f23f`.
+- Commit intermedi runtime: `c8a77dda`, `63cfb55d`.
 - Worktree D isolato: `e-alfy-friendly-dollop`.
 - Nessun accesso a portfolio/export personali.
 - Nessuna dipendenza o solver installato.
@@ -119,7 +119,7 @@ contro HEAD mostra cambi semantici solo nei due test, non nei file production fo
 - Residui cercati: `__pycache__`, `*.pyc`, `.pytest_cache`, `.coverage*`.
 - Residui trovati nelle directory P1: nessuno.
 - `backend/data/test/sqlite/app.db`: assente.
-- Overlap path D contro `4a73f5f6..916f12bd`: nessuno.
+- Overlap path D contro `41a4f23f..63cfb55d`: nessuno.
 - Blob dei cinque file tracked D: identici tra baseline e runtime.
 - Directory `13_pacAllocator` assente nel runtime: nessun conflitto di path.
 

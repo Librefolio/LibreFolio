@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `ffa72cc2b` = `dev_release2` (treno 12: lo step 19 di K, `93fd33702` `53a6b2213` `f6f2355cc` `04cd0dfdf`, merge `d4ca2b101`) |
+| **Baseline** | `d9c068c99` = `dev_release2` (treno 12: lo step 19 di K, `e6174d56a` `00854daf6` `d82d9c4d6` `42cce9026`, merge `56b7b7d06`) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`; sonde sulla 6165 |
 | **Coordinator** | «prima i rossi col test-author, dentro la modale e nel wizard dell'import, poi la cura» (08/10, 12:18) |
 
@@ -60,9 +60,9 @@
 
 ## Passi
 
-- [x] 20.1 Base `ffa72cc2b`, pulita; i 4 commit dello step 19 sono in HEAD; il piano è nel repo. ✅ 2026-10-08.
+- [x] 20.1 Base `d9c068c99`, pulita; i 4 commit dello step 19 sono in HEAD; il piano è nel repo. ✅ 2026-10-08.
   > I 4 cataloghi i18n differiscono dal manifesto 19 solo alla punta, per le modifiche del treno successive. Al commit
-  > `93fd33702` i blob coincidono, e alla punta la chiave `auth.serverUnreachable` c'è.
+  > `e6174d56a` i blob coincidono, e alla punta la chiave `auth.serverUnreachable` c'è.
 - [x] 20.2 Rosso (test-author): i due test sopra. ✅ 2026-10-08.
   > **Note implementazione**:
   > - **Decisione del coordinator** (08/10 12:2x, testuale): «Va bene così: il test di componente

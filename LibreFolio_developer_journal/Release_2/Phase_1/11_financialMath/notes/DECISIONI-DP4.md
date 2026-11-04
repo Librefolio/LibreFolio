@@ -1,6 +1,6 @@
 # D-P4 — perché una data sbagliata fa disegnare 740 000 punti, e come toglierlo
 
-MF, 24/10/2026. Analisi senza codice. Base del codice: `e-alfy-mf-matematica-finanziaria` a `270e85a55`, con la cura
+MF, 24/10/2026. Analisi senza codice. Base del codice: `e-alfy-mf-matematica-finanziaria` a `3964ee744`, con la cura
 MF-P1d in verifica. Misure su copie del DB di prova, mai sui dati veri.
 
 ## In breve
@@ -40,7 +40,7 @@ flowchart LR
 
 **Che cosa fa ogni pezzo:**
 
-| Pezzo | File e riga (`270e85a55`) | Punti con un refuso all'anno 1 |
+| Pezzo | File e riga (`3964ee744`) | Punti con un refuso all'anno 1 |
 |---|---|---|
 | Motore | `financial_math/portfolio/daily_state.py:737` (`_segments`) | **398 segmenti**: lo stato esiste solo nei giorni che cambiano |
 | Serie giornaliera degli stati | `financial_math/portfolio/models.py:371` (`DailyStates`) | Nessuno in memoria: un giorno fermo si costruisce solo quando qualcuno lo legge |

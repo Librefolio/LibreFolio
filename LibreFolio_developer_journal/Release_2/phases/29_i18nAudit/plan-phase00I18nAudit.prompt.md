@@ -1,21 +1,21 @@
 # Phase 0 — 29 · Audit i18n: chiavi inutilizzate, doppioni, plurali, strumento
 
 > **Stato: ✅ CHIUSO (workstream O), 2026-10-09.** Tutti i lotti, S0-S21, sono fatti e integrati in
-> `dev_release2`. Verificati sul codice di `3cceb4f90` (treno 24b) il 2026-10-09 (S22). Archiviato in
+> `dev_release2`. Verificati sul codice di `f545b67e3` (treno 24b) il 2026-10-09 (S22). Archiviato in
 > `Release_2/phases/29_i18nAudit/` lo stesso giorno. Nulla resta aperto: i rinvii sono elencati in S22,
 > ciascuno con dove è tracciato.
 >
 > | Lotti | Commit | Ingresso in `dev_release2` |
 > |---|---|---|
-> | S0-S10, primo turno | `8730ca823` · `08b885d43` · `2b86cc175` · `6f10f33c5` · `a8bac445d` | con la catena di N (`ff436d703`), treno 8 (`d07412899`) |
-> | S7b, S7c, S7a-bis, S7-ter, S8b, S11, S7-bis, S12-S14: secondo turno | `f5981cfec` · `ad40cf013` · `6f728a541` · `1e2b08804` | merge `ed1795d51`, treno 9 |
-> | S15, fix di sicurezza, e triage S16 | `95293ab51` · `1cad0d628` | merge `ed1795d51`, treno 9 |
-> | S17, cambio lingua senza rimontaggio | `d297ca481` · `1c20b254f` · `56e0970c9` | merge `4c51f42b8`, treno 10 |
-> | S18-S19, todo del bulk e testo PAC | `a312797bf` · `2a8b18aad` · `be2954522` · `ec0a698cc` | merge `5d9e9af01`, treno 14 |
-> | S20, reperti di Q | `0cc4a5077` · `d7767f2ea` · `5c9635d73` · `dd87e1669` | merge `bc700c8e8`, treno 19 |
-> | S21, login, scheduler, conteggio dell'import | `8368a49a1` · `4925ab430` · `13545be54` | merge `616acb5b7`, treno 22 |
+> | S0-S10, primo turno | `1eccf1a08` · `15a52c0a5` · `447194f14` · `9fe3c1cea` · `7b35b0fea` | con la catena di N (`ba5eb1e1d`), treno 8 (`5f3509536`) |
+> | S7b, S7c, S7a-bis, S7-ter, S8b, S11, S7-bis, S12-S14: secondo turno | `f62d933b5` · `eb112484a` · `ae1e2e6ce` · `ce59fce79` | merge `e231d1f28`, treno 9 |
+> | S15, fix di sicurezza, e triage S16 | `64d7a4a01` · `eafe96b0e` | merge `e231d1f28`, treno 9 |
+> | S17, cambio lingua senza rimontaggio | `69664b4c2` · `4f4012d66` · `7c2760124` | merge `a02b5cc08`, treno 10 |
+> | S18-S19, todo del bulk e testo PAC | `6c027bf9f` · `98220ac76` · `efa9f5184` · `ad26d0a43` | merge `b6462ecb4`, treno 14 |
+> | S20, reperti di Q | `a033474d2` · `8e9789e5e` · `c8ba76824` · `074480751` | merge `a6e903143`, treno 19 |
+> | S21, login, scheduler, conteggio dell'import | `2290b6efb` · `62933ca0f` · `38d7d6627` | merge `41f5f48f3`, treno 22 |
 >
-> L'analisi (§1-§10, Appendici) è stata scritta il 2026-10-06 su `9f06df702` in plan mode, ed è entrata
+> L'analisi (§1-§10, Appendici) è stata scritta il 2026-10-06 su `df1d9b343` in plan mode, ed è entrata
 > nel journal al passo S0. Script, log e tabelle dell'analisi sono in `files/` della sessione O
 > (`analyze_keys.py`, `resolve_prefix.py`, `classify.py`, `dups.py`, `icu_collisions.js`,
 > `prototype_rules.py`, `plural_sites.py`, `classification.json`, `dup_groups.json`).
@@ -42,7 +42,7 @@
 > aggiunte, per registrare i test nuovi.
 >
 > **Decisioni del secondo turno** (dal coordinatore, 2026-10-07, approvate dal developer):
-> - via a S7b e S7c dopo il fast-forward a `d07412899`, con C5 e il miglioramento dello strumento ancora
+> - via a S7b e S7c dopo il fast-forward a `5f3509536`, con C5 e il miglioramento dello strumento ancora
 >   aperto; O è l'unico a scrivere nei cataloghi fino alla chiusura;
 > - `AgeLabel.svelte` si toglie adesso con le sue 5 chiavi, come `WeightBars.svelte`;
 > - si tolgono le 3 `planner.problems.*` trovate dal prototipo (S7a-bis);
@@ -65,8 +65,8 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-supreme-spoon` |
 | Ramo | `e-alfy-o-audit-i18n` (rinominato dall'app) |
-| HEAD dell'analisi | `9f06df7020fa…` (treno 6), dopo il fast-forward del developer |
-| Bersaglio attuale | `dev_release2` = `bae2515bd` (treno 7, lotto di L). Verificato in sola lettura: cambia testo semplice di 3 chiavi (`reportSet.exclude` tolta, `reportSet.partlySelectedBlocks` nuova, `reportSet.incompleteBlocks` con la coda nuova), nessun ICU; 171 righe di sorgente cambiate, **0** riferimenti alle 354 chiavi classificate qui. L'analisi resta valida. |
+| HEAD dell'analisi | `df1d9b34349e…` (treno 6), dopo il fast-forward del developer |
+| Bersaglio attuale | `dev_release2` = `e68b6facb` (treno 7, lotto di L). Verificato in sola lettura: cambia testo semplice di 3 chiavi (`reportSet.exclude` tolta, `reportSet.partlySelectedBlocks` nuova, `reportSet.incompleteBlocks` con la coda nuova), nessun ICU; 171 righe di sorgente cambiate, **0** riferimenti alle 354 chiavi classificate qui. L'analisi resta valida. |
 | Corsia | `--test-port 6160 --data-dir /tmp/librefolio-r2-o`; server di review su 6170 |
 | Coordinatore | `c8328a01-f208-4ade-a352-0486d1f14de2` |
 | Ambiente | `node_modules` assente (vitest, Prettier e svelte-check richiedono `npm ci`, da autorizzare); `.env` assente; `graphify-out/graph.json` assente → pagine della devWiki lette direttamente |
@@ -77,7 +77,7 @@ tradotto); la skill `devpy-i18n` (namespace protetti, Accepted Duplicates).
 
 ## 1. Stato verificato sul codice
 
-| Misura | Kickoff | Verificato a `9f06df702` |
+| Misura | Kickoff | Verificato a `df1d9b343` |
 |---|---|---|
 | Chiavi per lingua | 4356 | **4356**, stesso insieme nelle 4 lingue, tutte tradotte; i 4 file sono in forma canonica (`indent=2`, `ensure_ascii=False`): una rimozione con `dev.py i18n remove` dà diff minimi |
 | «Probabilmente inutilizzate» | 250 | **250** |
@@ -144,7 +144,7 @@ Per namespace (dinamica / morta / dubbia): `tools` 43/110/0 · `aiExport` 34/0/0
   (sostituite da `armedAtNextTrigger` e `replayNextTrigger`, `OnboardingReplaySection.svelte:108-117`);
 - **9** `brokers.lots.*`: doppioni delle `dashboard.*` che il codice usa davvero, o resti del FIFO v3;
 - **7** `dashboard.{costsTooltip,gains,holdings,losses,realized,sharedScale,unallocated}`: resti del refactor
-  `13052a006`;
+  `d2cf5287d`;
 - **13** senza alcun riferimento (elenco in A.2).
 
 **Le 8 dubbie**:
@@ -394,7 +394,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
 | Documentazione | skill `devpy-i18n/SKILL.md`; `mkdocs_src/docs/developer/frontend/i18n.md` (docs-writer, solo EN: vi compaiono opzioni che lo strumento non ha, `--format table`, `--output report.xlsx`); facoltativa `developer/frontend/components/features/settings.md:61` (cita ancora `nextImport` e `replayReady`); `wiki-file` |
 
 **Conflitti previsti:**
-- **L**: integrato nel treno 7 (`bae2515bd`), impatto zero sulla classificazione. Il developer porta il
+- **L**: integrato nel treno 7 (`e68b6facb`), impatto zero sulla classificazione. Il developer porta il
   ramo alla punta prima del codice, quindi nessun conflitto sui cataloghi. Le chiavi `gapFix.*` della
   mitigazione C stanno nel blocco `importWizard.reportSet`, ma in punti lontani da quelli che ha
   cambiato L.
@@ -427,9 +427,9 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
 
 - **S0** ✅ 2026-10-07 — Copio questo piano nel journal; HEAD alla punta; rilancio `i18n audit` e lo confronto con §1-§2.
   > **Note implementazione**:
-  > - il developer ha portato il ramo a `bae2515bd` (treno 7, lotto di L); il piano è entrato nel journal;
+  > - il developer ha portato il ramo a `e68b6facb` (treno 7, lotto di L); il piano è entrato nel journal;
   > - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py i18n audit --duplicates`
-  >   (`/tmp/libreFolio_o_s0_audit.log`), poi il confronto con l'analisi su `9f06df702`:
+  >   (`/tmp/libreFolio_o_s0_audit.log`), poi il confronto con l'analisi su `df1d9b343`:
   >   - stesse **250** morte e stesse **86** non verificate, chiave per chiave;
   >   - 4356 chiavi, 108 prefissi;
   >   - 426 gruppi di doppioni, con la stessa ripartizione;
@@ -499,7 +499,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > **⚠️ Fuori pista**:
   > - **2 errori della mia classificazione**, trovati dallo strumento corretto.
   >   `aiExport.additionalData.reason.{fifoDetail,performanceContext}` erano fra le dinamiche, ma il
-  >   backend non le emette più dal commit `c9f840680` (2026-08-05, «remove legacy runtime»):
+  >   backend non le emette più dal commit `371d29997` (2026-08-05, «remove legacy runtime»):
   >   `ai_export/analyses/catalog.py` usa solo `deeperTechnical`, `positionContext` e
   >   `directExposure`. Sono morte e vanno in S7a.
   > - **`risk.params.process`** è una morta nuova nel namespace di A: va con
@@ -566,9 +566,9 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > `git diff --stat`: 39 righe aggiunte e 831 tolte, sui 4 file.
 - **S7b** ✅ 2026-10-07 (dopo N) — 9 `brokers.lots.*` e 7 `dashboard.*`, ricontrollate sulla base dopo N;
   insieme a C5 e alla voce `dashboard.holdings`/`dashboard.positions` della skill.
-  > **Note implementazione**: base `d07412899` (A13 e N integrati), fast-forward fatto dal developer
+  > **Note implementazione**: base `5f3509536` (A13 e N integrati), fast-forward fatto dal developer
   > alle 13:25. Prima di scrivere, l'audit sulla punta (copia in `/tmp/libreFolio_o_tip`) ha dato le
-  > stesse 18 morte e le stesse 78 non verificate di `a8bac445d`: A13 e N non hanno cambiato chiavi né
+  > stesse 18 morte e le stesse 78 non verificate di `7b35b0fea`: A13 e N non hanno cambiato chiavi né
   > riferimenti. Le 16 chiavi sono tolte nel lotto unico qui sotto (S7-bis).
 - **S7c** ✅ 2026-10-07 (dopo A) — `risk.simulation.regimeTruncated` e `risk.params.process`.
   > **Note implementazione**: sono 2 e non 3, come il kickoff contava. Le 19 `risk.*` non verificate
@@ -577,7 +577,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > (S12).
 - **S7a-bis** ✅ 2026-10-07 — `tools.pacAllocator.planner.problems.{asOfMissing,priceDateAfterReference,priceDateMissing}`.
   > **Note implementazione**: le ha trovate il prototipo di R8. Non ci sono produttori nel frontend né
-  > nel backend, e sono uscite dal codice con `6f29ec1cf`. Approvate dal developer (13:25).
+  > nel backend, e sono uscite dal codice con `ffe03f7fc`. Approvate dal developer (13:25).
 - **S8b** ✅ 2026-10-07 (dopo N) — Condensazione C5.
   > **Note implementazione**: 6 gruppi identici nelle 4 lingue. Chiamanti:
   > - `LotCustodyModal.svelte:298,302,314,340,345,350`: da `brokers.lots.modal.X` a `brokers.lots.X`;
@@ -692,7 +692,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - **Esiti**:
   >   - gate **195/195** (`/tmp/libreFolio_o_r2_gate_final.log`);
   >   - audit sulla punta attuale: **0 morte, 4 non verificate** (erano 78), 1 fantasma, 📦 vuota;
-  >   - sulla copia di `d07412899` la sezione 📦 elenca le 5 `planner.age.*` (→ dead) e i 3 orfani
+  >   - sulla copia di `5f3509536` la sezione 📦 elenca le 5 `planner.age.*` (→ dead) e i 3 orfani
   >     (`/tmp/libreFolio_o_r9_tip_probe.log`);
   >   - sull'albero reale R9 trova 2 orfani in 0,37 s, e R10 salta 3 client generati;
   >   - l'audit completo con i doppioni dura 12,8 s;
@@ -713,7 +713,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   - `transactions.fields.cash_code`: viva, dal percorso di validazione `cash.code`
   >     (`resolveValidationMessage.ts:123`); `Currency.code` è un campo Pydantic, non un letterale;
   >   - `onboarding.settings.groups.contextual`: **morta in fatto**. Il gruppo `contextual` di
-  >     `OnboardingReplaySection.svelte` è stato sostituito in `580bd504f` (14/09). Decisione del
+  >     `OnboardingReplaySection.svelte` è stato sostituito in `ce718ca49` (14/09). Decisione del
   >     developer (14:20): «Sì, toglierla» → S7-ter.
 - **S7-ter** ✅ 2026-10-07 — `onboarding.settings.groups.contextual` tolta.
   > **Note implementazione**:
@@ -750,7 +750,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   - `check_source_paths.py`: 0 percorsi mancanti nelle mie pagine (63 già mancanti altrove);
   >   - graphify `--update` ancora rinviato, perché `graph.json` manca nel worktree.
 - **S14** ✅ 2026-10-07 — Gate e checkpoint del secondo turno.
-  > **Note implementazione**: un comando per volta sulla 6160 con `/tmp/librefolio-r2-o`, base `d07412899`.
+  > **Note implementazione**: un comando per volta sulla 6160 con `/tmp/librefolio-r2-o`, base `5f3509536`.
   >
   > | Comando | Esito | Log |
   > |---|---|---|
@@ -773,15 +773,15 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - Non sono girati gli E2E: C5 cambia solo chiavi con valori identici nelle 4 lingue, e la resa
   >   non cambia.
   >
-  > **Integrazione** (annotata in S22): `f5981cfec` · `ad40cf013` · `6f728a541` · `1e2b08804`, merge
-  > `ed1795d51`, nel treno 9.
+  > **Integrazione** (annotata in S22): `f62d933b5` · `eb112484a` · `ae1e2e6ce` · `ce59fce79`, merge
+  > `e231d1f28`, nel treno 9.
 - **S15** ✅ 2026-10-07 — Lotto a parte, non i18n: `GET /api/v1/system/plugin-diagnostics` richiede il
   login. Trovato da Q, verificato dal coordinatore. Decisione del developer: «Sì, correggilo con O nella
-  1.2». Base `1e2b08804`.
+  1.2». Base `ce59fce79`.
   > **Note implementazione** (verifica prima del codice):
   > - `system.py:192-202`: `get_plugin_diagnostics()` non ha `Depends(get_current_user)`, che invece c'è
   >   su `container-image-status` (`:205-211`). Restituisce il testo delle eccezioni d'import dei plugin,
-  >   quindi può esporre percorsi interni. C'è dalla 1.1.0 (`81853ae81`).
+  >   quindi può esporre percorsi interni. C'è dalla 1.1.0 (`88a2e7ae4`).
   > - L'unico chiamante è `AboutTab.svelte:133`, nelle impostazioni, da utente loggato, con
   >   `.catch(() => [])`; anche l'E2E `settings.spec.ts:556` è loggato.
   > - `developer/architecture/security.md:84-95` già non elenca l'endpoint fra i pubblici: è il codice a
@@ -819,11 +819,11 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - la descrizione di `api system` nel runner («parse_pipfile, deps») è vecchia;
   > - il runner ha creato `frontend/build/`, che è ignorato.
   >
-  > **Integrazione** (annotata in S22): `95293ab51` · `1cad0d628`, merge `ed1795d51`, nel treno 9.
+  > **Integrazione** (annotata in S22): `64d7a4a01` · `eafe96b0e`, merge `e231d1f28`, nel treno 9.
 - **S16** ✅ 2026-10-07 — Triage del rosso di coverage `auth.spec.ts:312` («3a: completing welcome…»),
   chiesto dal coordinatore dopo il fix di sicurezza.
   > **Prove**:
-  > - run completa 13:05-15:58 su `d07412899`, 2 worker, carico 30-50: a `:338` per 3 s
+  > - run completa 13:05-15:58 su `5f3509536`, 2 worker, carico 30-50: a `:338` per 3 s
   >   `<html lang="en" data-i18n-ready="true">` ×10 (`/tmp/libreFolio_triage_20261007/logs/front-utility__e2e-desktop.log:198-226`).
   > - Ipotesi della skill `test-triage`, nell'ordine:
   >   - forma: no, non c'è niente di posizionale e `it` non c'è da nessuna parte (la POST porta `en`);
@@ -867,9 +867,9 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > primo dizionario, commento corretto ed E2E rosso prima; 3a non si tocca → S17.
   >
   > **Chiuso** (allineato in S22): il triage era il mandato, e si è concluso col verdetto e la decisione;
-  > la correzione è S17. La riga del journal è entrata con `1cad0d628`.
-- **S17** ✅ 2026-10-07 — Correzione: un cambio lingua non rimonta più l'app. Base `1cad0d628`, sopra il
-  checkpoint di sicurezza (`95293ab51` · `1cad0d628`, verificato con i blob). Checkpoint a parte.
+  > la correzione è S17. La riga del journal è entrata con `eafe96b0e`.
+- **S17** ✅ 2026-10-07 — Correzione: un cambio lingua non rimonta più l'app. Base `eafe96b0e`, sopra il
+  checkpoint di sicurezza (`64d7a4a01` · `eafe96b0e`, verificato con i blob). Checkpoint a parte.
   > **Note implementazione**:
   > - **test-author**, rosso prima del fix:
   >   - nuovo E2E `3c: a Welcome language whose catalogue arrives late survives the load…` in
@@ -910,10 +910,10 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - `initI18n()` nello script di `(app)/+layout.svelte` resta: ora gira solo quando il gruppo
   >   `(app)` si crea davvero, e legge la lingua salvata. Non l'ho toccato, è fuori dall'approvazione.
   >
-  > **Integrazione** (annotata in S22): `d297ca481` · `1c20b254f` · `56e0970c9`, merge `4c51f42b8`, nel
+  > **Integrazione** (annotata in S22): `69664b4c2` · `4f4012d66` · `7c2760124`, merge `a02b5cc08`, nel
   > treno 10.
 - **S18** ✅ 2026-10-08 — Analisi, senza codice: i todo del bulk non sono tradotti
-  (`TransactionBulkModal.svelte:3171`, trovato da M nella gallery). Base `ffa72cc2b`, pulita.
+  (`TransactionBulkModal.svelte:3171`, trovato da M nella gallery). Base `d9c068c99`, pulita.
   > **Origine**: due fonti arrivano al bulk da `onImportBatch` (`:2303-2306`).
   > - I `field_todos` del parse (`BRIMFieldTodo`, `schemas/brim.py:695-711`): `reason_code` stabile,
   >   `message` di ripiego, `context` «per l'i18n». `importMerge.ts:100` li copia in `ImportTodo` con il
@@ -957,7 +957,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >
   > Decisione del developer (12:30): «A+B, e derived_quantity in italiano nel plugin» → S19.
 - **S19** ✅ 2026-10-08 — Todo tradotti anche nel bulk: risolutore unico, chiave `corporate_action`,
-  `derived_quantity` in italiano, una riga nella guida BRIM. Base `ffa72cc2b`.
+  `derived_quantity` in italiano, una riga nella guida BRIM. Base `d9c068c99`.
   > **Note implementazione** (verifica prima del codice):
   > - copertura delle 2 copie locali: `ParseDetailModal.test.ts` copre la regola in entrambe le metà
   >   (registra `importWizard.brimNotice.probe_localized_blocker`), quindi la sua copia si sostituisce;
@@ -1027,11 +1027,11 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - **`svelte-check` dal test-author.** I 2 errori in `KpiSection.svelte` che aveva visto venivano da un
   >   client generato vecchio; il rebuild li ha tolti, e il mio `front check` è a 0.
   >
-  > **Integrazione**: `a312797bf` · `2a8b18aad` · `be2954522` · `ec0a698cc`, merge `5d9e9af01`, nel treno
-  > 14 (`dev_release2` = `9eb01c756`).
+  > **Integrazione**: `6c027bf9f` · `98220ac76` · `efa9f5184` · `ad26d0a43`, merge `b6462ecb4`, nel treno
+  > 14 (`dev_release2` = `311fbd6e9`).
 - **S20** ✅ 2026-10-08 — Sei reperti di Q, approvati dal developer («Affidali tutti e tre a O, prima della
-  1.2», più tre testi): analisi breve, poi correzione, test rossi prima dove ha senso. Base `108a2adf5`
-  (treno 17: solo doc e CHANGELOG rispetto a `cf4248bd9`).
+  1.2», più tre testi): analisi breve, poi correzione, test rossi prima dove ha senso. Base `03c943f53`
+  (treno 17: solo doc e CHANGELOG rispetto a `dd2c41bd2`).
   > **Analisi**, confermato / non confermato:
   > 1. **Stringhe FX in inglese: confermato.**
   >    - In `fx/[pair]/+page.svelte`: `:1120` e `:1184` («Sync failed: …»), `:838` (ripiego «Failed to
@@ -1084,7 +1084,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >    sviluppatori (`ai_export_sampling.md`) concorda col codice. L'E2E `ai-export-panel.spec.ts:194`
   >    fissa il testo inglese attuale e va aggiornato.
   >
-  > **Note implementazione** (2026-10-08, base `108a2adf5`):
+  > **Note implementazione** (2026-10-08, base `03c943f53`):
   > - **Rossi prima, dal test-author.**
   >   - 5 nel backend, in `services provider-contracts`: l'URL d'aiuto di Borsa e la copertura «20+» di
   >     BOE nelle 4 lingue (log del 18:27: 5 falliti, 15 passati).
@@ -1160,7 +1160,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - `utils gate-i18n-usage`: 195 ✅;
   > - `i18n audit`: 4198 chiavi per lingua, complete, 0 morte. Le 3 non verificate sono preesistenti:
   >   `chartSettings.params.{amplitude,histogramScale}` e `transactions.fields.cash_code`;
-  > - cataloghi contro `108a2adf5`: +32 chiavi, stesso insieme nelle 4 lingue, 3 valori cambiati
+  > - cataloghi contro `03c943f53`: +32 chiavi, stesso insieme nelle 4 lingue, 3 valori cambiati
   >   (`detailLevelHelp`), forma canonica;
   > - controlli statici:
   >   - `front check`: 0 errori, 0 avvisi;
@@ -1177,7 +1177,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >     accanto a `import-wizard-parse`, che è disattivato da `!step2CanParse` (`:338`, `:5280`) e ha
   >     l'etichetta `importWizard.parse` («Parse ({n})»).
   >   - `common.continue` è il pulsante dei passi successivi (`:5323` e seguenti).
-  >   - Le chiavi vengono da `8c3271235` (01/10), `955148dfb` (07/10) e `38dd5d1b4` (08/10); nessuna è
+  >   - Le chiavi vengono da `6f4e68867` (01/10), `0c58d90e5` (07/10) e `9561f74b7` (08/10); nessuna è
   >     in `v1.1.0`.
   > - **Cambia solo il nome del pulsante**, in 12 stringhe, con `dev.py i18n update`
   >   (`/tmp/libreFolio_o_s20_parse_button.py`).
@@ -1195,15 +1195,15 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   - `front-utility core-unit`: 117 file, 3435 ✅;
   >   - `front-transaction tx-import-report-set`: 32 ✅. I 32 saltati sono la divisione per progetto
   >     (`@mobile` solo su mobile); R3, R4, R6-E1 e U1, i test dell'avviso, sono verdi;
-  >   - cataloghi contro `108a2adf5`: +32 chiavi e 6 valori cambiati (3 `detailLevelHelp` e i 3 avvisi),
+  >   - cataloghi contro `03c943f53`: +32 chiavi e 6 valori cambiati (3 `detailLevelHelp` e i 3 avvisi),
   >     forma canonica.
   > - **Backlog per il test-author.** Il titolo di U1 (`tx-import-report-set.spec.ts:2863`) dice «block
   >   Continue», mentre il test controlla `import-wizard-parse`. Non l'ho toccato.
   >
-  > **Integrazione**: `0cc4a5077` · `d7767f2ea` · `5c9635d73` · `dd87e1669`, merge `bc700c8e8`, nel treno
+  > **Integrazione**: `a033474d2` · `8e9789e5e` · `c8ba76824` · `074480751`, merge `a6e903143`, nel treno
   > 19.
 - **S21** ✅ 2026-10-09 — Tre reperti, dalla lista approvata dal developer («anche 5 se si può è meglio,
-  idem per 6 e 7»; «13 è un typo che correggerei volentieri»; il 7 va a K). Base `9b2acdd5d` (treno 21).
+  idem per 6 e 7»; «13 è un typo che correggerei volentieri»; il 7 va a K). Base `2726dec9a` (treno 21).
   > **Analisi**, punto per punto, tutto confermato:
   > - **5 · Errori di login in inglese.** `stores/app/auth.ts:123-134` mette nello stato una frase inglese
   >   già composta, e `LoginCard.svelte:58` la mostra così com'è.
@@ -1270,7 +1270,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   horaire, ES planificador e zona horaria.
   > - **13.** Tolto `{step4UnresolvedCount}` prima del messaggio. `importWizard.unresolvedCount` ora è un
   >   plurale ICU, con testi diversi nelle 4 lingue.
-  > - **Cataloghi contro `9b2acdd5d`**: +4 chiavi, 3 valori cambiati, stesso insieme nelle 4 lingue, forma
+  > - **Cataloghi contro `2726dec9a`**: +4 chiavi, 3 valori cambiati, stesso insieme nelle 4 lingue, forma
   >   canonica; tutto con `dev.py i18n` (`/tmp/libreFolio_o_s21_i18n.sh`).
   > - **Doc**, dal docs-writer, solo in inglese:
   >   - `developer/architecture/settings.md:95` ora cita la chiave del nome;
@@ -1286,7 +1286,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - **Gli errori di rete restano in inglese**: il testo di axios, «Network Error» o il timeout, si vede
   >   com'è, secondo il contratto approvato. Se si vuole, c'è `auth.serverUnreachable`: da backlog.
   > - **`check-links`, visto dal docs-writer**, esce con 1 per un problema preesistente: l'àncora
-  >   `#rolling-return` di `user/assets/detail/chart` c'è solo in inglese (`1c2f88d67`), mentre
+  >   `#rolling-return` di `user/assets/detail/chart` c'è solo in inglese (`69d9d0d81`), mentre
   >   `assets/[id]/+page.svelte:3012` la cerca in tutte le lingue. Non è mio.
   > - **Non toccati**:
   >   - `importWizard.assetsCount`, lo stesso difetto di plurale;
@@ -1308,11 +1308,11 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - doc: `mkdocs build` strict ✅;
   > - porte 6160 e 6170 libere.
   >
-  > **Integrazione** (annotata in S22): `8368a49a1` · `4925ab430` · `13545be54`, merge `616acb5b7`, nel
+  > **Integrazione** (annotata in S22): `2290b6efb` · `62933ca0f` · `38d7d6627`, merge `41f5f48f3`, nel
   > treno 22.
 - **S22** ✅ 2026-10-09 — Verifica finale sul codice e archivio, chiesti dal developer: «verificare,
   degli stati completati, che i piani siano allineati […] archivia solo le cose davvero finite». Base
-  `3cceb4f90` (treno 24b).
+  `f545b67e3` (treno 24b).
   > **Verifica sul codice di oggi**, in sola lettura (`/tmp/libreFolio_o_arch_verify.py`): tutti i
   > risultati promessi ci sono ancora.
   > - Strumento: i test sono esclusi (`scripts/i18n_usage.py`, `is_test_source`). `i18n audit` dà 4215
@@ -1335,7 +1335,7 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - gli SHA del secondo turno, di S15, di S17 e di S21.
   >
   > **Superato, non è un buco.** Il login rivelava gli account disattivati (fuori pista di S21). L'ha
-  > chiuso `3392c4f05` (piano 36): la password si controlla per prima, e un account disattivato riceve
+  > chiuso `12106dbd3` (piano 36): la password si controlla per prima, e un account disattivato riceve
   > 403 `ACCOUNT_DISABLED`. Il piano 36 ha esteso il contratto di S21 con `auth.accountDisabled`
   > (`frontend/src/lib/stores/app/auth.ts:138-139`).
   >
@@ -1344,9 +1344,9 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - S2 (R3, l'unione tipizzata anche con un solo membro) e S12 (i prefissi legacy declassati a «non
   >   verificati») fanno ciò che chiedeva la sua «riparazione».
   > - Delle sue 4 morte, `risk.simulation.regimeTruncated` l'ha tolta S7c, e
-  >   `risk.levels.l3.{beta,sharpe,sortino}Help` le ha tolte `f55b2e42a`.
+  >   `risk.levels.l3.{beta,sharpe,sortino}Help` le ha tolte `4632658f7`.
   >
-  > **Rinvii**, tutti ancora aperti sul codice di `3cceb4f90`. Rinviato:
+  > **Rinvii**, tutti ancora aperti sul codice di `f545b67e3`. Rinviato:
   > `Phase_0/38_postReleaseBacklog/README.md`, voci:
   > - §2.4, decisione 7: «Famiglia i18n fantasma `tools.allocation.constraints.`»;
   > - secondo turno: «File morti per knip: `onboardingTourSurfaces.svelte.ts` ed `EditBuffer.ts`»;
@@ -1454,7 +1454,7 @@ Le prove sono `file:riga` nel sorgente non di test. Per il dettaglio chiave per 
 | Meccanismo / motivo | Prova | Chiavi | N | Origine nell'audit |
 |---|---|---|---|---|
 | backlog PAC di D (decisione (a)), nessun lettore | `PacRound5PostMerge:3159; P1FinalRemoval:33` | `tools.pacAllocator.planner.{add,restore,restoreCopied}`, `tools.pacAllocator.planner.assetEditor.{addCategory,categoryId,categoryLabel,class,classHint,compositionModifiedHelp,dimension,exposureAdd,exposures,idDuplicate,idMissing,idTooLong,manualId,manualIdPlaceholder,neverByName,overHundred,priceDate,priceModifiedHelp,title,unclassified,weight}`, `tools.pacAllocator.planner.assets.{compositionModifiedHelp,copyClassifications,copyPrices,noAutoPrice,noExposures,priceModifiedHelp}`, `tools.pacAllocator.planner.brokerCopy.currencies`, `tools.pacAllocator.planner.brokerEditor.{feeRule,localCash,notIn200,origin,stepRule}`, `tools.pacAllocator.planner.brokers.{conversions,fee,funding,localCash,localHere,stepAmount}`, `tools.pacAllocator.planner.copy.alreadyInDraft`, `tools.pacAllocator.planner.copyNotice.when`, `tools.pacAllocator.planner.distribution.change`, `tools.pacAllocator.planner.fx.{addFrom,addTo,copy,limitsHelp,notInVersion,notStored,openFxPage,pairsHint,remove}`, `tools.pacAllocator.planner.result.allocationHint`, `tools.pacAllocator.planner.result.assets.{final,target}`, `tools.pacAllocator.planner.result.exposures.public`, `tools.pacAllocator.planner.result.kpi.{fundingReachable,shortfallParts,shortfallPartsNoRounding}`, `tools.pacAllocator.planner.result.outcomes.{incumbent_found,infeasible_proven,no_incumbent,no_op}`, `tools.pacAllocator.planner.result.plan.{funding,fxTitle,privacyHint,sequence}`, `tools.pacAllocator.planner.result.proof.{decimalVerified,exactValue,infeasible,notProven,optimal,ordinal,tieBreak,tieBreakClosed}`, `tools.pacAllocator.planner.result.proof.sources.solver_status`, `tools.pacAllocator.planner.result.states.noIncumbent.rejected`, `tools.pacAllocator.planner.review.{exposureDimension,exposureRows,exposuresHelp,factsAll,factsChanged,factsLabel,fx,intro,noFx,noOrders}`, `tools.pacAllocator.planner.review.kind.exposures`, `tools.pacAllocator.planner.route.{capHint,fee,noPrice,none,priorityHint,ready}`, `tools.pacAllocator.planner.routing.{capRule,next,previous,unitRule}`, `tools.pacAllocator.planner.scenario.{asOf,noValues}`, `tools.pacAllocator.planner.strategy.{fromContract,noParameters}`, `tools.pacAllocator.planner.summary.{date,pairs}`, `tools.pacAllocator.planner.targets.control` | 107 | morta per l'audit, non verificata |
-| dashboard: resti di refactor (Exposure/Contribution → Holdings/Performance) | `git -S: 13052a006` | `dashboard.{costsTooltip,gains,holdings,losses,realized,sharedScale,unallocated}` | 7 | morta per l'audit |
+| dashboard: resti di refactor (Exposure/Contribution → Holdings/Performance) | `git -S: d2cf5287d` | `dashboard.{costsTooltip,gains,holdings,losses,realized,sharedScale,unallocated}` | 7 | morta per l'audit |
 | le 3 tools.* di D, senza riferimenti | `P1FinalRemoval S8 Fuori pista` | `tools.{contractVersion,implementationVersion,open}` | 3 | morta per l'audit |
 | lotti: doppioni delle dashboard.* o resti FIFO v3 | `OtherPeriodEffectsTable/PerformanceChart usano 'dashboard.*'` | `brokers.lots.{allLots,buyDate,categoryCost,categoryIncome,categoryOther,dateRange,otherReconciliationResidual,unallocatedCosts,unallocatedIncome}` | 9 | morta per l'audit |
 | nessun riferimento (letterale, famiglia, backend) | `grep frontend/src, backend/app` | `assetDetail.fxPairCreatedSynced`, `assets.lastPrice`, `brokers.{forceDelete,quota}`, `changelog.copied`, `chartSettings.tooltips.currencyPair`, `dataQuality.{hideDetails,showDetails}`, `files.{loadFailed,uploadFailed}`, `importWizard.{parseError,parsing}`, `signals.visual.zones` | 13 | morta per l'audit, non verificata |

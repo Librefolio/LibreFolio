@@ -7,7 +7,7 @@
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), lotto **I-M30**, strada **(b)**, il ricalcolo
 >   deterministico. Il developer è via per la notte e ha delegato al coordinatore. **Origine**: M, negli scatti della
 >   galleria la storia dell'allocazione (stack al 100 %) non arriva in cima, in Tipo, Settore e Geografia.
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base **`24a960283`** (treno 97); worktree pulito, porta
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base **`4fdf1c947`** (treno 97); worktree pulito, porta
 >   6157 libera.
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con
 >   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta, **1 worker**.
@@ -31,7 +31,7 @@ Il coordinatore: «Analisi chiarissima. Il developer è via per la notte e mi ha
 quello che si può decidere senza di lui. **Via al lotto I-M30, strada (b), il ricalcolo deterministico.** La domanda
 sulla storia di git resta al developer, domattina.
 
-**Cartella `Phase_0/54_galleryFixtureShares/`**; il 52 e il 53 sono presi. Base: la tua worktree, a `24a960283`.
+**Cartella `Phase_0/54_galleryFixtureShares/`**; il 52 e il 53 sono presi. Base: la tua worktree, a `4fdf1c947`.
 
 1. **Prima i rossi**, via test-author:
    - il Vitest in `dashboardReportFixture.test.ts` (somma 100 per giorno e per dimensione; YoC = gross/WAC);
@@ -77,7 +77,7 @@ sulla storia di git resta al developer, domattina.
 
 ### 1.3 La provenienza
 
-- Lo script (`17adbe0f4`) e la prima fixture normalizzata (`3e33372c6`) sono antenati di `v1.1.0`
+- Lo script (`f412683a1`) e la prima fixture normalizzata (`b0590d8fe`) sono antenati di `v1.1.0`
   (`git merge-base --is-ancestor`): la galleria della 1.1 era già sbagliata.
 - L'app non è mai stata toccata: **niente riga nel CHANGELOG**.
 
@@ -164,7 +164,7 @@ sulla storia di git resta al developer, domattina.
 
 ### Passo 0 — Base e piano ✅ 2026-10-13
 
-> **Note implementazione**: HEAD `24a9602830282390f7b8831a1550ac61312989d4`, 0 file sporchi, porta 6157 libera. Le
+> **Note implementazione**: HEAD `4fdf1c947371b09ab3e3a7dcce613fafb3598cbc`, 0 file sporchi, porta 6157 libera. Le
 > cartelle 43-53 esistono, la 54 era libera. Letti lo script, il Vitest di guardia, il runner, `dev.py`, lo schema, le
 > formule.
 
@@ -281,9 +281,9 @@ sulla storia di git resta al developer, domattina.
 >
 > **⚠️ Fuori pista**: **la via C dice sì, ed è esatta**. La pubblicazione, in sola lettura sui riferimenti remoti
 > locali (ultimo fetch); il repository è pubblico:
-> - la fixture di HEAD prima della cura, cioè la ricattura `c80508be8` del 7/10, è su `origin/dev` e
+> - la fixture di HEAD prima della cura, cioè la ricattura `22cad9ded` del 7/10, è su `origin/dev` e
 >   `origin/dev_release2`;
-> - `origin/main` e il tag `v1.1.0` hanno la cattura precedente, quella di `3e33372c6` ritoccata in `16fb90c90`, con
+> - `origin/main` e il tag `v1.1.0` hanno la cattura precedente, quella di `b0590d8fe` ritoccata in `a4d85f8e3`, con
 >   un altro fattore. Lo stesso `_scale` la rende esposta alle stesse vie per costruzione, ma non l'ho misurata;
 > - questo lotto non crea le vie A, B e C e non le chiude: gli importi non cambiano (Passo 4).
 >
@@ -357,7 +357,7 @@ sulla storia di git resta al developer, domattina.
 > - **La privacy**: la scansione di percorsi, email e chiavi sulle righe aggiunte, sui file nuovi e sui messaggi non
 >   trova niente. Il controllo delle fughe su messaggi, manifest e prove è pulito (`_leak_bundle.log`), e così
 >   `proseclass` sul piano e sulle righe nuove del backlog.
-> - **Il target** `a3e3298df` (treno 98) è 8 commit avanti, con HEAD come base comune. Dei 7 percorsi cambia solo il
+> - **Il target** `3be27c99a` (treno 98) è 8 commit avanti, con HEAD come base comune. Dei 7 percorsi cambia solo il
 >   backlog, in un'altra sezione: la fusione a tre vie, simulata in /tmp con `git merge-file`, è pulita.
 >   `frontend/e2e/gallery.spec.ts` cambia nel target, ma nessuna riga tocca la fixture o l'allocazione.
 > - **Lo stato finale**: `git diff --check` pulito, niente in stage, porta 6157 libera.

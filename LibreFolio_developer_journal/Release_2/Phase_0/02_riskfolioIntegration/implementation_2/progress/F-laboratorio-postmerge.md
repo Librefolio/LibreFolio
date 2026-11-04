@@ -4,7 +4,7 @@
 > ⚠️ **Non** le fasi `F1`/`F2` della campagna rischio (`F1-esecuzione.md`, `F2-esecuzione.md` in questa cartella): omonimia, non parentela.
 > **Mandato**: messaggi del coordinatore Release 2 del 23/09 (`c8328a01…`) · fogli `09_feedbackJobs/08_review_visiva_20260922.md` e `09_reperti_analisi_statica_20260922.md`
 > **Worktree**: `e-alfy-super-dollop` · **Branch**: `e-alfy-risk-asset-global-lab`
-> **Baseline**: `f1047f766cce67db888be81432a1544909601187` (verificata 23/09 10:36:58, fast-forward da `e4a46e9e0`)
+> **Baseline**: `9df0b7b14a714b38e186fce9ec11c662d5d2a79d` (verificata 23/09 10:36:58, fast-forward da `7e6f16327`)
 > **Lane**: suite `--test-port 6154 --data-dir /tmp/librefolio-r2-f` (solo `dev.py test …`) · copia prod `--port 6164 --data-dir /tmp/librefolio-r2-f-prodcopy`
 > **Piano precedente**: [`S5-esecuzione.md`](S5-esecuzione.md) (round 2) — questo lo prosegue.
 > **Approvazione**: piano (rev. 2) approvato nella chat di F il 23/09, senza testo; letto come approvazione del developer, con le raccomandazioni D1–D10 accolte salvo diversa indicazione. D9-(a) richiede in più l'assenso di A.
@@ -26,7 +26,7 @@
 | F-4 | colonna ρ̄ (dopo F-3) | ⏳ **mai costruita** (D54) → README della cartella, buchi (allineamento 09/10) | — |
 | F-5 | devWiki R2-101 | ✅ 3 pagine nuove + 3 aggiornate | 2026-09-23 |
 | F-6 | chiusura `risk-lab` | ↪ superato: `risk-lab.spec.ts` è proseguito nei piani successivi di F (F-L1, F-L3); J non è mai esistito (allineamento 09/10) | — |
-| F-7 | handoff e `FROZEN` | ✅ guida committata, `73ba9f08e` · `b26ca6e29` (allineamento 09/10) | — |
+| F-7 | handoff e `FROZEN` | ✅ guida committata, `425e44be2` · `a82f200c5` (allineamento 09/10) | — |
 
 ---
 
@@ -38,11 +38,11 @@
 | 09 §9.1 «nota d'uso» | falso a metà: `mkdocs_src/docs/user/assets/index.en.md:30` lega già Abs/% alla griglia; manca «è globale, sopravvive al cambio di tab» | non di F → D7 |
 | **09 §1.6 / §9.2** | 🔴 la §9.2 è vera per `currencyFormat.ts:41`, **non** per il cammino del laboratorio: `L4Replay:13`, `L4Shock:11`, `L1HowMuchItHurts:8` importano il formattatore di `riskAnalysisHelpers`, che sotto privacy restituisce `•••` **al posto dell'intera stringa** (`:160`). **Eseguito**: `npx vitest run src/lib/components/risk/riskAnalysisHelpers.test.ts -t "with global privacy on"` → `Test Files 1 passed (1)`, 7 test, `.toBe(PRIVACY_PLACEHOLDER)`. Classificato **difetto** dal coordinatore (viola «la privacy nasconde il numero, non la valuta»): **lo ripara J** | D4 decisa → F. Pin OFF subito (F-1b); variante ON **dopo J** (§3.1) |
 | **09 §2.1** | ❌ **falso**: 6/6 e 11/11 sul ramo di A, corsia `6170`, 21/09 (`A-esecuzione.md:488,622`, `S2-esecuzione.md:318`). La rev. 1 di questo piano lo dava «confermato»: accettazione del brief, non misura | il coordinatore corregge il foglio; F-1 misura la **deriva da un verde noto** |
-| 09 §2.3.2 | `risk.assetSet.panelTitle`: introdotta da F (`f2ad97dd4`), orfanata da A (`daa03c0f2`) | D6 decisa → F a fine round, non prima |
+| 09 §2.3.2 | `risk.assetSet.panelTitle`: introdotta da F (`9ea2726ce`), orfanata da A (`1b0032eae`) | D6 decisa → F a fine round, non prima |
 | 09 §2.4 | il guardiano riusabile è in `risk-lab.spec.ts` (test del catalogo + `MOCK_ALGORITHM_VERSION`) | preservarlo in F-6 |
 | 09 §2.6 | `L4Replay:47` / `L4Shock:46` → **Risk** | non toccati |
 | 09 §3.11 / **§3.12** | la variante ON asserisce sull'**output reso**, niente in comune con `SAFE_CALL` di J | vincolo di TL-C1b |
-| 08 R1 `lastedDays` | → **A** (introdotta in `032b86959`); `risk-lab` non la asserisce | — |
+| 08 R1 `lastedDays` | → **A** (introdotta in `e38ae2300`); `risk-lab` non la asserisce | — |
 | 08 §8.4 | replay: valutazione congiunta Risk (`L4Replay`) + F (montaggio, frase d'audit per scope) | F-3 |
 
 ## 2. Reperti nuovi dell'analisi del 23/09
@@ -54,11 +54,11 @@
 - ✅ **N5** — smentita la previsione di interferenza dell'onboarding: il popolatore rende terminali gli utenti E2E (`backend/test_scripts/test_db/populate_mock_data.py`, `_grandfather_onboarding_for_test_users`).
 - 🧭 **Errori di F in quest'analisi, in chiaro**: il «confermato» sul §2.1 · la procedura della copia che leggeva il main checkout, non segnalata · **il 22/09 `onsynced` dichiarato «chiuso»** rispondendo a *«il cablaggio è orfano?»* invece che a *«la capacità è raggiungibile?»* — la forma esatta di R2-132, un giorno dopo la sua registrazione · tre sonde sbagliate verso il rosso (deriva dei testid, registrazione dei test, forma `export const`), denunciatesi da sole.
 
-## 3. `risk-lab` — ricognizione su `f1047f766`
+## 3. `risk-lab` — ricognizione su `9df0b7b14`
 
-**Composizione**: 2057 righe · 1 `describe` · 11 test. Per `git blame` sulla riga del titolo: **6 di F** (`f2ad97dd4`) · **5 di A** (`032b86959`). Il test del denaro è **al 73% di A** (41 righe di F su 152).
+**Composizione**: 2057 righe · 1 `describe` · 11 test. Per `git blame` sulla riga del titolo: **6 di F** (`9ea2726ce`) · **5 di A** (`e38ae2300`). Il test del denaro è **al 73% di A** (41 righe di F su 152).
 
-**Verde noto**: 11/11 sul ramo di A il 21/09. Delta sulle sue dipendenze da allora (`git log 032b86959..f1047f766`): privacy di J (`b66e93003`, `9a6dd2015`, `0a1d98eaf`), banner beta (`c57fc7ef2`), grafici (`2d22130bd`), merge `7fd660846` / `d59051977`.
+**Verde noto**: 11/11 sul ramo di A il 21/09. Delta sulle sue dipendenze da allora (`git log e38ae2300..9df0b7b14`): privacy di J (`9d9613471`, `b4c078097`, `019cb18c4`), banner beta (`1405d2764`), grafici (`f4d209b11`), merge `ad29c6d3a` / `66d3855df`.
 
 **Distanza statica — zero su tre assi**:
 
@@ -239,7 +239,7 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test \
 15:57:20 → 15:59:35 · exit 0 · Running 11 tests using 1 worker · 11 passed (17.1s)
 ```
 
-> **Note implementazione**: prima della corsa `HEAD f1047f766`, spec `sha256 480b5e4381af5f7e`
+> **Note implementazione**: prima della corsa `HEAD 9df0b7b14`, spec `sha256 480b5e4381af5f7e`
 > (intatto), `generated.ts a085da1c8dac55f9`, `6154` libera. Nel log: `6154` ×3, `6041` ×0; data-dir
 > `/tmp/librefolio-r2-f`. Dopo: `6154` e `6164` libere, nessun processo residuo della lane, `git status`
 > invariato (solo i due file del journal). Lo snapshot del DB di test finisce in `.testLog/00_archive/`,
@@ -416,8 +416,8 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > `check_source_paths.py` sulle 6 pagine: 0 mancanti su 66; il resto del wiki ha 60 mancanti in 56 pagine **non toccate**.
 > Verificato da me: solo file sotto `LibreFolio_devWiki/`, nessuna credenziale. graphify assente nel worktree → aggiornamento del grafo rinviato.
 >
-> **Tre smentite del historian, verificate da me**: (1) `032b86959` non tocca il backend: `asset_set_kpi.py` nasce in
-> `d3afb92b6` (P) — **errore del mio brief**; (2) **11 composti, non 12** — errore mio di lettura del mio log, e il 12 era
+> **Tre smentite del historian, verificate da me**: (1) `e38ae2300` non tocca il backend: `asset_set_kpi.py` nasce in
+> `a0a7e5ae4` (P) — **errore del mio brief**; (2) **11 composti, non 12** — errore mio di lettura del mio log, e il 12 era
 > già arrivato a Risk; (3) la corsa d'identità di R2-66 è **irraggiungibile** per lettura (il layout `(app)` rende solo
 > dopo l'autenticazione): la causa raggiungibile dello stesso sintomo è il polling qui sopra. **R2-66 aveva la
 > riparazione giusta e la diagnosi sbagliata**: la re-richiesta cura l'effetto, qualunque sia la causa.
@@ -433,7 +433,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 | # | reperto | verifica | esito |
 |---|---|---|---|
 | 1 | «By name» ordina per id | ✅ `original` teneva `[...output.asset_ids]`, e la richiesta canonicalizza crescente; **il mio test 6 fissava lo scollamento** (*«the original ordering is the payload order, ascending by id»*) | **riparato**: helper puro `nameOrder` (collatore, pareggi per id); modo rinominato `original` → `name` (testid `risk-correlation-ordering-name`); chiave i18n `risk.assetSet.ordering.name` aggiunta via `dev.py i18n` ×4 (`2 1` per file). Vale anche su `L2Diversification` (Risk), stesso componente |
-| 2 | colori invertiti heatmap/coppie | ✅ heatmap −1 rosso / +1 blu (`16ff0eb57`, citata come «già giusta» da 05 §8); la **mia** lista faceva il contrario **e la sua docstring giurava il contrario** | **riparato** allineando la lista alla heatmap (valore e badge). La polarità è una scelta estetica → **al developer in F-3**: invertirla è una riga nel `visualMap`, e sposta anche la Dashboard |
+| 2 | colori invertiti heatmap/coppie | ✅ heatmap −1 rosso / +1 blu (`e3b443c94`, citata come «già giusta» da 05 §8); la **mia** lista faceva il contrario **e la sua docstring giurava il contrario** | **riparato** allineando la lista alla heatmap (valore e badge). La polarità è una scelta estetica → **al developer in F-3**: invertirla è una riga nel `visualMap`, e sposta anche la Dashboard |
 | 3 | il replay offre un sostituto che non esiste | ✅ *«Leave it out, or give it a stand-in»*, ma c'è solo `risk-replay-exclude`; `proxyAssets: []` fisso in `L4Replay:101` | **di Risk** (componente e chiave `risk.levels.l4.replayNeedsChoice`), visibile su ogni pagina che monta L4 → riportato |
 | 4 | teoria della correlazione contro il codice | ✅ la pagina dice «minimo per coppia»; `pairwise_correlation_matrix` restituisce **un** conteggio per tutta la matrice e il plugin marca **tutte** le celle insieme — contraddice anche il riquadro della pagina stessa | **a `docs-writer`**, solo `.en.md`, senza `translate-stamp` (il debito di traduzione deve restare visibile) |
 
@@ -488,7 +488,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > front format --check ✅ · vitest 8 path ⇒ Test Files 8 passed (8) · 278 test
 > front-portfolio risk-lab 17:33:54→17:35:45 · exit 0 · 16 passed (16 dichiarati) · 6154/6164 libere dopo
 > check-orphans exit 1 — 5 orfani, TUTTI di J (privacyStore, privacyStoreSsr, currencyFormat, maskable,
->   moneyRenderSites; b66e93003 / 9a6dd2015), 0 menzioni all'HEAD con controllo positivo → rosso GIÀ sul target
+>   moneyRenderSites; 9d9613471 / b4c078097), 0 menzioni all'HEAD con controllo positivo → rosso GIÀ sul target
 > ```
 >
 > **Reperto 4 chiuso** (secondo passaggio di `docs-writer`): `correlation.en.md` +10/−8 cumulativo, `data-quality.en.md`
@@ -576,7 +576,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 ## F-3 — preparazione della review, 2026-09-23 18:00
 
 > **Coordinate del server di review** (`files/review_coordinates.sh 6164 files/F3_server_review.log`):
-> `http://localhost:6164/assets?tab=correlation` · HEAD `f1047f766` · albero **non committato**: 26 modificati + 6 nuovi,
+> `http://localhost:6164/assets?tab=correlation` · HEAD `9df0b7b14` · albero **non committato**: 26 modificati + 6 nuovi,
 > quelli del lotto, nessun altro · listener con `cwd` = questo worktree · `db_path` = la copia · versione
 > `v1.1.0-228-gf1047f766-dirty` · bundle: nessun sorgente più nuovo di `index.html`, costruito = servito
 > (`f7952064bf75a441`), 6 chunk contengono `risk-sync-button` · `generated.ts a085da1c8dac55f9` (= baseline).
@@ -995,7 +995,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 >   (`551edffdc`). Le asserzioni sul canvas rimaste sono tutte in `risk-lab.spec.ts` e passano a F-6. All'integrazione
 >   entrano F e Risk uno dopo l'altro; i cancelli si girano dopo entrambi.
 > - **Pagina utente** della correlazione: esiste nel ramo di A, `mkdocs_src/docs/user/assets/correlation.en.md`
->   (`e2327e9a3`, `b67b8ba79`). A entra prima di F, quindi l'icona può puntare lì.
+>   (`68d97a1e5`, `4bd0a10f5`). A entra prima di F, quindi l'icona può puntare lì.
 > - **K**: l'API della select dei tipi (`ui/select/TreeSelect.svelte`) la chiede il coordinatore. Nel ramo di F si
 >   progetta sulla select di oggi; il passaggio a quella di K si fa all'integrazione.
 > - `risk.analytics.correlation.description`: la riscrive F con `dev.py i18n` × 4. Il namespace è di Risk, che il
@@ -1012,7 +1012,7 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 > check-orphans → exit 1 · 5 orfani, lista identica al 23/09, tutti di J · già rossi sul target
 > mkdocs build (10:39:56, 0 WARNING) + check-links (80 = 80): nessun sorgente mkdocs cambiato dopo il build
 > ```
-> **Target**: `dev_release2` = `2a23b7ad3`, quattro commit di journal e istruzioni avanti all'HEAD `f1047f766`, su 4
+> **Target**: `dev_release2` = `7e461e9e1`, quattro commit di journal e istruzioni avanti all'HEAD `9df0b7b14`, su 4
 > percorsi, **nessuno** dei 32 di questo ramo.
 >
 > **⚠️ Fuori pista**: la lista degli 8 path vitest del 23/09 non era stata scritta. L'ho ricostruita dal codice, e ora
@@ -1023,8 +1023,8 @@ vitest, 7 path ⇒ Test Files 7 passed (7) · 260 test
 
 ### Checkpoint committato — 2026-09-24, 11:49 (dal developer, con lo script con guardie del coordinatore)
 
-> `025b30222` → `7f06df51d` → `6e6061c33` → `553a20991` → `7227898d2` → `46ee7258c` → `c10e75f14` → `dc29a3089`
-> su `f1047f766` · `git diff --shortstat f1047f766..HEAD` = **32 file, +3236/−159**, come atteso · albero pulito.
+> `c2a172839` → `b620d8e9a` → `e7b991ac2` → `c1e409fd7` → `505f741b0` → `c8a0019c0` → `8d2681af6` → `593c2ecff`
+> su `9df0b7b14` · `git diff --shortstat 9df0b7b14..HEAD` = **32 file, +3236/−159**, come atteso · albero pulito.
 >
 > **⚠️ Fuori pista, tutti presi prima del commit**:
 > - **Di F, preso dal coordinatore**: i miei comandi `git add` non avevano `-C`. Lanciati dal checkout principale, dove
@@ -1474,7 +1474,7 @@ riceve un «+» con ricerca e scelta multipla.
    lettura sulla copia (`sqlite/app.db` con `immutable=1`, solo id, tipo e conteggi): alcuni asset [id tolti] non hanno
    **nessuna riga** in `price_history`, tutti gli altri arrivano all'ultimo giorno della copia. Nessuna regola nel frontend: domanda sul contratto inviata
    a Risk (sessione «Risk management analysis»), coordinatore in copia. **Decisione del developer, relayata dal
-   coordinatore**: il backend di Risk si collega adesso nel ramo di F. Quindi checkpoint, merge Risk → F a `14c334d85`,
+   coordinatore**: il backend di Risk si collega adesso nel ramo di F. Quindi checkpoint, merge Risk → F a `9914e2523`,
    e solo dopo il collegamento del «+» agli stati di idoneità.
 8. **Colore della cella scelta: il verde si confonde col blu.** Decisione (`ask_user`): **contorno neutro**. ✅ Nero
    `#0f172a` con alone bianco sul tema chiaro, bianco con alone `rgba(2,6,23,0.95)` sul tema scuro
@@ -1485,7 +1485,7 @@ riceve un «+» con ricerca e scelta multipla.
 > ⚠️ **Fuori pista**
 > - Una modifica a metà del modulo di selezione (tipi di ammissibilità e rimozione di `ownedAssetIds`) è stata
 >   **annullata** prima del checkpoint. Da sola rompeva la compilazione, e la forma dei tipi va presa dal contratto vero
->   di Risk, dopo il merge. Il modulo differisce da `dc29a3089` solo per le aggiunte di V1–V3.
+>   di Risk, dopo il merge. Il modulo differisce da `593c2ecff` solo per le aggiunte di V1–V3.
 > - Guida di onboarding: l'anchor `asset.page.filters` non esiste sul tab Correlazione. Se la guida della pagina asset
 >   parte da lì, quel passo va in stallo (`OnboardingOverlayHost`, `stalledStepId`). Rischio residuo, da segnalare nel
 >   passaggio di consegne.
@@ -1507,10 +1507,10 @@ Log in `/tmp/libreFolio_f3b/ckpt2_*.log`.
 ### Checkpoint 2 committato e merge Risk → F · 2026-09-24, 15:47–16:01
 
 > Il developer ha committato i 7 gruppi con lo script del coordinatore (`/tmp/libreFolio_commit_f_ckpt2.sh`):
-> `947e01994` → `10e14bc90` → `a7b0fd1e4` → `a01a39337` → `abcf21860` → `d5457d89b` → `b97360b32`. Poi il merge
-> **`2c02ff070`** (genitori `b97360b32` + `14c334d85`, albero `2415bf854`, identico alla simulazione del coordinatore):
+> `84cbccac8` → `d18ec285c` → `8d49c4eac` → `8dbafe446` → `7d5a77439` → `e6f672f17` → `751416b8d`. Poi il merge
+> **`288998c72`** (genitori `751416b8d` + `9914e2523`, albero `2415bf854`, identico alla simulazione del coordinatore):
 > nessun conflitto, Git ha fuso da sé i 4 cataloghi e `_frontend_portfolio.py`, voci diverse. Verificato qui:
-> HEAD = `2c02ff070`, albero pulito, `backend/` identico byte per byte a `14c334d85`.
+> HEAD = `288998c72`, albero pulito, `backend/` identico byte per byte a `9914e2523`.
 >
 > **Contratto dell'engine di idoneità**, dalla sessione di Risk (15:48), salvato fuori dal repo in
 > `files/Risk_eligibility_contract_20260924.md`: `POST /api/v1/risk/eligibility`, `asset_ids` da 1 a 500 (mai vuoto),
@@ -1526,7 +1526,7 @@ Log in `/tmp/libreFolio_f3b/ckpt2_*.log`.
 > miei» = posizioni aperte a `dateEnd`, non `held_by_me`. Il caso «preset broker» di `risk-lab` è ora l'unica copertura
 > rimasta (Risk ha tolto il vecchio test in `551edffdc`): F-6 deve tenerlo.
 
-### Validazione della revisione combinata `2c02ff070` · 2026-09-24, dalle 16:05 (una suite alla volta)
+### Validazione della revisione combinata `288998c72` · 2026-09-24, dalle 16:05 (una suite alla volta)
 
 | # | Cancello | Esito |
 |---|---|---|
@@ -1616,7 +1616,7 @@ Log in `/tmp/libreFolio_f3b/ckpt2_*.log`.
 >   (`risk-asset-add-blocked`) con 🔒 e i motivi; `data-level` e `data-reasons` su ogni riga.
 > - **Tolto** `LabCheckMenu.svelte` (non ha più chiamanti).
 > - **Registrato** `eligibility.test.ts` in `scripts/test_runner/_frontend_utility.py`: riga additiva accanto a
->   `assetSetSelection.test.ts`, come per `syncTargets.test.ts` in `7f06df51d`. È un file condiviso: va segnalato.
+>   `assetSetSelection.test.ts`, come per `syncTargets.test.ts` in `b620d8e9a`. È un file condiviso: va segnalato.
 > - **i18n ×4 via `dev.py i18n`**:
 >   - +11: `risk.eligibility.reasons.{no_prices,too_few_quotes,missing_fx,starts_late,stale_at_end}`,
 >     `risk.eligibility.levels.{ineligible,warning}`, `risk.assetSet.picker.notAnalysable`,
@@ -1659,7 +1659,7 @@ Log in `/tmp/libreFolio_f3b/ckpt2_*.log`.
 **Domanda del developer**: il filtro fra asset posseduti ora e non più posseduti, cioè il «declassamento» nei tre
 pannelli della griglia (`assetScope`, oggi su `tx_count_own`). Nel perimetro registrato alle 12:40 è **di F**, se il
 backend di Risk arriva prima del checkpoint finale: è arrivato col merge (`held_by_me` e `held_by_others` su
-`FAinfoResponse`). **Non ancora fatto.** Limite noto: in `14c334d85` `held_by_me` usa la soglia 1e-9, quindi un residuo
+`FAinfoResponse`). **Non ancora fatto.** Limite noto: in `9914e2523` `held_by_me` usa la soglia 1e-9, quindi un residuo
 di rimborso conta come posseduto; la soglia 1e-5 arriva col checkpoint C di Risk.
 
 **Prove**: prettier pulito su `risk/`; `front check` con i sorgenti puliti (restano il pavimento e i 23 errori di
@@ -1672,14 +1672,14 @@ e non c'è più `risk-selected-asset-verdict`.
 **Decisione del developer (ask_user)**: «Fallo adesso, dopo questi ritocchi».
 
 > **Note implementazione** (`assets/+page.svelte`, di cui F è l'unico scrittore in questo giro):
-> - `AssetInfo` porta `held_by_me` e `held_by_others`, mappati in `loadAssets` da `FAinfoResponse` (Risk, `14c334d85`).
+> - `AssetInfo` porta `held_by_me` e `held_by_others`, mappati in `loadAssets` da `FAinfoResponse` (Risk, `9914e2523`).
 > - `assetScope`: `held_by_me` → `own`; altrimenti `held_by_others` → `others`; altrimenti `analysis`. È la regola del
 >   tempo ② di Risk: chi non possiede più un asset scende fra «degli altri utenti» se qualcuno lo detiene adesso,
 >   altrimenti fra «osservati». `tx_count_own` non decide più.
 > - Frasi sotto i titoli dei pannelli, nelle 4 lingue via `dev.py i18n update` (`assets.panels.{own,others,analysis}Hint`):
 >   «Posseduti ora in broker di cui sei owner», «Posseduti ora solo da altri utenti», «Oggi non li possiede nessuno — mai
 >   acquistati o già venduti, tenuti d'occhio».
-> - Limite noto: in `14c334d85` `held_by_me` usa la soglia 1e-9, quindi un residuo di rimborso conta come posseduto; la
+> - Limite noto: in `9914e2523` `held_by_me` usa la soglia 1e-9, quindi un residuo di rimborso conta come posseduto; la
 >   soglia 1e-5 arriva col checkpoint C di Risk, al merge F → Risk.
 >
 > **Prova mirata** (6154, 16:59–17:01):
@@ -1714,7 +1714,7 @@ e non c'è più `risk-selected-asset-verdict`.
 > un lotto vuoto: il passo ora è `Math.max(1, Math.floor(size) || 1)`, con il suo caso. `vitest` sui 2 file → **115
 > verdi**.
 >
-> **Cancelli sulla revisione di lavoro** (dopo `2c02ff070`), uno per volta:
+> **Cancelli sulla revisione di lavoro** (dopo `288998c72`), uno per volta:
 > ```
 > front check    · svelte-check 3 errori + 41 avvisi negli stessi 4 file del pavimento · 0 in risk/ e assets/ · formato pulito
 > vitest         · 15 percorsi (i 14 del checkpoint + eligibility.test.ts) ⇒ Test Files 15 passed (15) · 547 test
@@ -1798,7 +1798,7 @@ pannelli del laboratorio** e **(2) F-6**, perché Risk non erediti test rossi.
 > ⚠️ **Fuori pista — `check-links` rosso sulle due ancore dell'indice**
 > - `dev.py mkdocs check-links` esce 1: 82 validi (+1, il replay), 3 known-broken, **2 rotti**:
 >   `#how-much-can-it-hurt` e `#am-i-paid-for-the-risk`, «resolves in English but is missing in: it, fr, es».
-> - Causa: `index.en.md` è stato riscritto il 18/09 (`b35a8581e`) con le quattro domande e i loro id; `index.{it,fr,es}.md`
+> - Causa: `index.en.md` è stato riscritto il 18/09 (`79846975c`) con le quattro domande e i loro id; `index.{it,fr,es}.md`
 >   hanno ancora i titoli vecchi, quindi è debito di traduzione.
 > - `MKDOCS_ANCHOR_EXCEPTIONS` «può solo accorciarsi», e la traduzione parte solo su richiesta del developer.
 > - Proposto al coordinatore: l'indice senza ancora (valido in 4 lingue, 83 validi, 0 rotti), oppure la traduzione
@@ -1836,7 +1836,7 @@ pannelli del laboratorio** e **(2) F-6**, perché Risk non erediti test rossi.
 ## ⏸️ PAUSA chiesta dal coordinatore per conto del developer · 2026-09-24, 18:36
 
 **Stato esatto**
-- HEAD `2c02ff070` (merge Risk → F). Stage vuoto.
+- HEAD `288998c72` (merge Risk → F). Stage vuoto.
 - **18 percorsi**:
   - **16 modificati**: il piano, `asset-list.spec.ts`, `risk-lab.spec.ts`, `AssetSetComparisonLevels.svelte`,
     `AssetSetReplaySection.svelte`, `AssetSetRiskPanel.svelte`, `LabAssetPicker.svelte`, `assetSetSelection.test.ts`,
@@ -1879,7 +1879,7 @@ descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli compl
 > - Il Mac si è riavviato alle 08:58 e `/tmp` è stato svuotato: non ci sono più `/tmp/librefolio-r2-f`, `-prodcopy` e i
 >   log `/tmp/libreFolio_f3b/*` e `/tmp/libreFolio_f6_*`. La snapshot è tornata in `/tmp/librefolio-r2-prod-snapshot`,
 >   identica a quella del 23/09.
-> - Verificato qui: 6154 e 6164 libere (`lsof` exit 1), HEAD `2c02ff070`, 18 percorsi, stage vuoto, `node_modules` e la
+> - Verificato qui: 6154 e 6164 libere (`lsof` exit 1), HEAD `288998c72`, 18 percorsi, stage vuoto, `node_modules` e la
 >   cache mathjax presenti.
 > - La corsia 6154 riparte da una cartella vuota: il runner popola da sé quando serve.
 > - **Decisioni del coordinatore sui tre reperti di test-author, tutti prima del checkpoint**:
@@ -2000,8 +2000,8 @@ descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli compl
 
 > **Icona del tipo nel «+»** («ETF obbligazionario» mostra `etf.png`). Il developer pensava che l'icona giusta fosse di
 > Risk. Verificato nella storia committata: l'icona composta dei sottotipi (`etf-bond.png`, `etf-stock.png`, …,
-> generate da `scripts/compose_asset_type_icons.py`) sta nel ramo di **K** (`e-alfy-k-tassonomia-e-select`, `822cdba3e`).
-> Lì `PNG_MAP` mappa `ETF_BOND` → `etf-bond`. K **non** è in `14c334d85` di Risk. Il laboratorio usa sempre
+> generate da `scripts/compose_asset_type_icons.py`) sta nel ramo di **K** (`e-alfy-k-tassonomia-e-select`, `3d4f561f4`).
+> Lì `PNG_MAP` mappa `ETF_BOND` → `etf-bond`. K **non** è in `9914e2523` di Risk. Il laboratorio usa sempre
 > `getAssetTypeIconUrl`, quindi prende l'icona composta da solo all'integrazione di K: nessuna modifica nel ramo di F.
 
 > ⚠️ **Fuori pista — la 6164 spenta durante la review (10:10:12)**
@@ -2059,23 +2059,23 @@ descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli compl
 
 ## Checkpoint 3 — prima di `dev_release2` → F e di F → Risk · 2026-09-25, 12:30
 
-> - **Base**: HEAD `2c02ff070` (merge Risk → F), stage vuoto.
+> - **Base**: HEAD `288998c72` (merge Risk → F), stage vuoto.
 > - **Delta: 31 percorsi**, cioè 24 modificati e 7 nuovi. Gruppi disgiunti C1–C8 in
 >   `/tmp/libreFolio_commits/f-ckpt3-groups.txt` (31 = 31), messaggi in `f-ckpt3-C1..C8.txt` (oggetto ≤ 50, righe ≤ 72).
 > - **i18n**: +11 −3 ~4 per catalogo, 3463 chiavi, insiemi identici. Tre delle chiavi riformulate sono **fuori da
 >   `risk.*`** (`assets.panels.{own,others,analysis}Hint`, le frasi del declassamento), quindi le arbitra il coordinatore.
 > - **Nessun segreto** nelle righe aggiunte né nei file nuovi; nessun DB, log o CSV nel delta.
-> - **Conflitti previsti con `dev_release2`** (`f45f0fb4d`, merge-base `f1047f766`), sovrapposizione di file:
+> - **Conflitti previsti con `dev_release2`** (`923c072e5`, merge-base `9df0b7b14`), sovrapposizione di file:
 >   - i 4 cataloghi: `dev_release2` tocca 17 chiavi, F 76, **nessuna in comune**; possibile solo un conflitto di righe
 >     vicine (`dev_release2` tocca 2 chiavi `risk.assetSet`), da risolvere sommando;
 >   - `_frontend_portfolio.py`: `dev_release2` aggiunge `privacy-masking` (funzione e registrazione) vicino alla `desc`
 >     di `risk-lab`: si sommano;
 >   - `_frontend_utility.py`: da verificare nella simulazione del coordinatore.
 
-## `dev_release2` → F: validazione della revisione combinata `5010fe815` · 2026-09-25, dalle 12:42
+## `dev_release2` → F: validazione della revisione combinata `490f92b5f` · 2026-09-25, dalle 12:42
 
-> - Checkpoint 3 committato (`aa5be214d` → … → `e2794cd08`, 8 commit, 31 file, +3153/−675). Merge **`5010fe815`**:
->   genitori `e2794cd08` + `e6187d6ab`, albero `29fff93f` identico alla simulazione, pulito.
+> - Checkpoint 3 committato (`b853f8e25` → … → `526513db8`, 8 commit, 31 file, +3153/−675). Merge **`490f92b5f`**:
+>   genitori `526513db8` + `3bc1656f5`, albero `29fff93f` identico alla simulazione, pulito.
 > - `api sync` exit 0, nessun file tracciato cambiato: `dev_release2` non tocca API né schemi.
 > - Cancelli fuori corsia:
 >   ```
@@ -2115,16 +2115,16 @@ descrizione del runner, copertura di `risk-reload-button`). Poi i cancelli compl
 >   risk-asset-detail  ·  2 ⇒ 2  (fine 12:58:58)
 >   asset-list         · 28 ⇒ 28 (fine 13:00:21)
 >   ```
-> - **Validazione di `5010fe815` completa, tutta verde** (con il `front check` al pavimento noto del target).
+> - **Validazione di `490f92b5f` completa, tutta verde** (con il `front check` al pavimento noto del target).
 >
 > ## ⏸️ PAUSA (13:01, il developer spegne la macchina)
-> - HEAD `5010fe815`. L'unico percorso sporco è questo piano, da mettere in un commit di journal (via del coordinatore).
+> - HEAD `490f92b5f`. L'unico percorso sporco è questo piano, da mettere in un commit di journal (via del coordinatore).
 > - Niente è a metà: la validazione è chiusa. Nessun test-author al lavoro; 6154 e 6164 libere.
 > - **Alla ripartenza**: il commit di journal del piano (script del coordinatore), poi F → Risk con Risk.
 
 ## Giro UI rischio, coordinato da Risk · analisi · 2026-09-29, 10:38–11:00 (FROZEN, niente codice prima del via)
 
-**Coordinate**: worktree `e-alfy-super-dollop`, ramo `e-alfy-risk-asset-global-lab`, HEAD **`ffe41c5ba`** = punta di Risk
+**Coordinate**: worktree `e-alfy-super-dollop`, ramo `e-alfy-risk-asset-global-lab`, HEAD **`30866c47e`** = punta di Risk
 = base comune dichiarata (✅ coincide), albero pulito; corsie 6154 (suite) e 6164 (copia); coordinatore del giro: Risk
 (`0000738d-…`), con l'arbitrato del coordinatore (`c8328a01-…`) per i file fuori famiglia.
 
@@ -2379,7 +2379,7 @@ sopra. Posizione e testo del pulsante del periodo comune si decidono subito dopo
 > inglese. Dalla soglia di Risk, un prezzo riportato conta solo oltre i **7 giorni di calendario**, e la nota è la frase
 > tradotta `risk.warnings.data_quality_stale_prices`.
 > - **Rinviata a dopo l'aggiornamento della base**: l'ancora da linkare, `data-quality.en.md#staleness-threshold`, non è
->   in `ffe41c5ba` (grep: 0), perché sta nel checkpoint di Risk non ancora committato.
+>   in `30866c47e` (grep: 0), perché sta nel checkpoint di Risk non ancora committato.
 > - La scriverà docs-writer, con `mkdocs build` e `check-links`. I due file di `financial-theory` li ha aggiornati Risk:
 >   se servisse toccarli, prima glielo dico.
 > - Per il codice non cambia niente: il nuovo motivo `no_price_source` arriva come avviso con la sua chiave.
@@ -2461,7 +2461,7 @@ sopra. Posizione e testo del pulsante del periodo comune si decidono subito dopo
 ## ✅ Review del developer sul giro UI rischio · 2026-09-30, 10:05
 
 > Dopo l'aggiornamento notturno dell'app (sessione interrotta), il coordinatore chiede di verificare e mandare il
-> checkpoint. Verificato: HEAD `ffe41c5ba`, stage vuoto, **22 percorsi**; `+page.svelte` alle 23:04:41 e il piano alle
+> checkpoint. Verificato: HEAD `30866c47e`, stage vuoto, **22 percorsi**; `+page.svelte` alle 23:04:41 e il piano alle
 > 23:13:11, come atteso; nessun sotto-agente al lavoro.
 >
 > **Il developer (ask_user), alla lettera**: «stavo proprio ora scrivendoti la review, è perfetto, lo adoro ed è
@@ -2487,7 +2487,7 @@ sopra. Posizione e testo del pulsante del periodo comune si decidono subito dopo
 
 ## Checkpoint 4 — giro UI rischio di F, verso Risk · 2026-09-30, 10:15
 
-> - **Base**: HEAD `ffe41c5ba`, stage vuoto. **22 percorsi**: 16 modificati e 6 nuovi.
+> - **Base**: HEAD `30866c47e`, stage vuoto. **22 percorsi**: 16 modificati e 6 nuovi.
 > - **Gruppi** in `/tmp/libreFolio_commits/f-ckpt4-groups.txt`, messaggi in `f-ckpt4-C1..C8.txt` (ASCII, oggetto ≤ 50,
 >   righe ≤ 72). L'ordine tiene compilabile ogni commit intermedio: il modulo della matrice (C1) viene prima della
 >   correlazione (C4), `AssetChip` (C3) prima del pannello (C6), le chiavi (C5) prima della striscia (C6).
@@ -2498,13 +2498,13 @@ sopra. Posizione e testo del pulsante del periodo comune si decidono subito dopo
 
 ## Dopo il checkpoint 4 · commit, riallineamento e prossimo componente · 2026-09-30, 10:13–10:40
 
-> **Commit** (developer, 10:18): `d613d443d` … `506d17f18`, 8 commit C1–C8. Verificato in sola lettura
+> **Commit** (developer, 10:18): `5c03a3629` … `e3759cf35`, 8 commit C1–C8. Verificato in sola lettura
 > (`/tmp/libreFolio_f4/verify_ckpt4.sh`): ogni commit ha il messaggio e i file del suo gruppo; il digest del contenuto è
 > `88ff8368…`, lo stesso consegnato; 22 file, +2851/−154. **PASS.**
 >
 > **Riallineamento**:
-> - fusione F → Risk `881941e44`, validata da Risk tutta verde, `risk-lab` 22 compreso;
-> - fast-forward di F su `881941e44` (coordinatore, 10:36). Verificato: HEAD `881941e44`, `506d17f18` suo antenato, albero
+> - fusione F → Risk `747a56610`, validata da Risk tutta verde, `risk-lab` 22 compreso;
+> - fast-forward di F su `747a56610` (coordinatore, 10:36). Verificato: HEAD `747a56610`, `e3759cf35` suo antenato, albero
 >   pulito, 6154 e 6164 libere.
 > - La base contiene `dev_release2` (i seguiti di K), le novità di Risk sul «parziale» (soglia dei 7 giorni), le funzioni per
 >   l'avviso di A e il checkpoint 4.
@@ -2534,7 +2534,7 @@ sopra. Posizione e testo del pulsante del periodo comune si decidono subito dopo
 Risk. I passi dell'interfaccia del replay (From/To, preset, periodo comune) si riscrivono dopo l'F3 di Risk, sul suo
 handoff. La pagina è solo inglese, quindi nessun debito di traduzione né timbro.
 
-**Fatti verificati sulla base `881941e44`**
+**Fatti verificati sulla base `747a56610`**
 - **Soglia**: `STALE_PRICE_THRESHOLD_DAYS = 7` (`data_quality_thresholds.py:14`), applicata ai prezzi e ai cambi
   riportati in `series_preparation.py:320` e `:323`. Un valore riportato diventa vecchio solo **oltre 7 giorni di
   calendario**; più giovane non degrada niente, ma il suo rendimento zero entra comunque nel campione. È definita in
@@ -2603,6 +2603,6 @@ handoff. La pagina è solo inglese, quindi nessun debito di traduzione né timbr
 > - ⚠️ **Fuori pista — la build riscrive un file tracciato**: `frontend/static/sw.js`, solo il timbro di build
 >   (`// build: 450af3dd` → `3e7bd439`). Non toccato, escluso dal checkpoint, riferito al coordinatore.
 
-> ➡️ **Seguito**: la guida è committata (`73ba9f08e`, `b26ca6e29`, alle 11:03). Il lavoro sul prossimo componente, L1° «Quanto
+> ➡️ **Seguito**: la guida è committata (`425e44be2`, `a82f200c5`, alle 11:03). Il lavoro sul prossimo componente, L1° «Quanto
 > ha fatto male ciascuno?», approvato dal developer, prosegue nel piano
 > [F-L1-confronto-perdite.md](F-L1-confronto-perdite.md).

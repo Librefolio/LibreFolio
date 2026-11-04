@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | **S3 — livello 3** (round 2, fase 2) — l'unico full-stack |
 | Worktree | `e-alfy-jubilant-winner` · ramo `e-alfy-s3-livello-3` |
-| Baseline | `7d75a9c6c283af4bccf11f6bf380ffaa701d53eb` ✅ verificata — **identica a `e-alfy-risk-management-replan`** |
+| Baseline | `44dd7779db5856e547a3c93d06ee7bad6b1da9ae` ✅ verificata — **identica a `e-alfy-risk-management-replan`** |
 | Corsia | porta **6155** · data dir **`/tmp/librefolio-r2-s3`** |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 

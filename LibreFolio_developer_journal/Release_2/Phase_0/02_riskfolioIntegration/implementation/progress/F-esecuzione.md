@@ -4,7 +4,7 @@
 |---|---|
 | **Mandato** | [`../F-frontend-laboratorio.md`](../F-frontend-laboratorio.md) — brief in sola lettura |
 | **Worktree** | `e-alfy-super-dollop` · branch `e-alfy-risk-asset-global-lab` |
-| **Baseline** | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` ✅ |
+| **Baseline** | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` ✅ |
 | **Lane** | porta `6245` · data dir `backend/data/test-risk-f` |
 | **Autorizzazione** | coordinatore, sotto delega permanente del developer |
 
@@ -578,7 +578,7 @@ più il numero di `check-links` che mi era stato richiesto due volte.
 > è «24 e ogni link deve far salire il numero», **parte rosso**. Io ho aggiunto **zero**
 > `DocsLink`: lo slug `correlation` non esiste in tutto l'albero docs.
 
-**Stato**: `FROZEN`. HEAD invariato a `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD invariato a `3a4431d5`, niente in stage.
 **Coda di riapertura** (invariata, più una): (1) `data-asset-order` + permutazione;
 (2) invariante di tipo nel test 4; (3) `sections` di K3; (4) retarget di test 1 su
 `risk-replay-audit`; **(5) adozione delle primitive — solo quando saranno nel mio ramo.**
@@ -656,7 +656,7 @@ verificata (`grep "BREAK"` → nessun residuo).
 | `front-portfolio risk-lab` | **5 passed, 1 failed** — il rosso è il test 1 (denaro), **per progetto** fino a K9 |
 | `front-utility core-unit` | **2063/2063**, 82 file |
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 **Coda residua**: `sections` di K3; retarget del test 1 su `risk-replay-audit` dopo K9;
 adozione delle primitive **quando saranno nel mio ramo**.
 
@@ -672,7 +672,7 @@ adozione delle primitive **quando saranno nel mio ramo**.
 | **Slug** | `financial-theory/technical-analysis/risk-metrics/correlation/` — **esiste**, nel worktree di I |
 | **Proprietario** | **F** |
 | **Quando** | dopo l'integrazione di I, **mai prima** |
-| **Perché non ora** | nella baseline `cc33120eb` lo slug **non risolve**: il link farebbe **scendere** il conteggio di `check-links` invece di alzarlo, cioè romperebbe il cancello che K7 esiste per far salire |
+| **Perché non ora** | nella baseline `3a4431d5a` lo slug **non risolve**: il link farebbe **scendere** il conteggio di `check-links` invece di alzarlo, cioè romperebbe il cancello che K7 esiste per far salire |
 
 > Il coordinatore ha verificato: I ha costruito **21 pagine** (`correlation`, `concentration`,
 > `risk-contribution`, `data-quality`, `observed-annualization`, `historical-replay`,
@@ -709,7 +709,7 @@ stava in un contratto che non dichiarava il proprio mondo. Regola che ne esce:
 > fabbricare un messaggio su misura. I verdi autorevoli restano comunque i due **non
 > filtrati**: `2063/2063` e la suite E2E completa.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -761,7 +761,7 @@ più la funzione `front_portfolio_risk_lab` (`:83-90`), che termina con:
     return _run_playwright("portfolio/risk-lab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 ```
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -823,7 +823,7 @@ dell'ordinamento) → poi **`5 passed, 1 failed`** in **quattro** corse successi
 13,0s · 13,6s · 18,0s · 41,9s. Nessuna è un'astensione: **nessun `0ms`, nessuno `skipped`**.
 Lo spec è **812 righe**, non 708 — la differenza sono le riparazioni D100 di test 4 e 6.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -869,7 +869,7 @@ Ho modificato **i deliverable di entrambi** mentre erano inattivi:
 **Precondizione che adotto**: ogni futuro `write_agent` a uno dei due **apre con il delta** —
 righe, test riscritti, attributi di prodotto aggiunti — nello stesso messaggio.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -920,7 +920,7 @@ modifica non esercita il percorso che la distingue.
 **Richiesta**: il cancello di B includa `front-portfolio risk-lab` e lo spec di merge,
 oppure rieseguo io `risk-lab` dopo l'integrazione.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -975,7 +975,7 @@ col gemello all'indice 1 `clusterOrder` restituiva **l'identità**, quindi l'ass
 sarebbe stata un **falso rosso**. Gemello spostato all'indice 3 e **premessa fissata da un
 test unitario permanente per ogni N=4…8** (2062 → **2063**).
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -1035,7 +1035,7 @@ E il precedente non è «un precedente»: **è lo stesso blocco, già disambigua
 ⚠️ *Onestà epistemica*: è evidenza **strutturale** (vicinato identico), non lettura del
 calcolo. Chi esegue il rename confermi sul servizio che popola il campo.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -1064,7 +1064,7 @@ esattamente dei 360 caratteri di cui è cresciuto il `desc`** (1672→2032, 1517
 Quindi **nulla fuori dal `desc` è cambiato** — più forte del confronto fra stringhe che
 avevo fatto prima.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -1109,7 +1109,7 @@ che nulla di visibile cambi nel test.
 > `observations`) per rincorrere una funzionalità che non c'è. **Va legato alla condizione
 > che lo attiva**, come il debito del `DocsLink`.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage.
 
 ---
 
@@ -1181,8 +1181,8 @@ mio** (`grep -c` sui miei file: **0**).
 ### ✅ La scelta di B non è una scelta: è forzata dalla disponibilità
 
 ```
-cc33120e:frontend/e2e/assets/asset-merge.spec.ts:137  getByTestId('asset-merge-target-select')   ✅ nella baseline
-cc33120e:frontend/e2e/portfolio/risk-lab.spec.ts      fatal: exists on disk, but not in cc33120e  🔴 solo mio
+3a4431d5:frontend/e2e/assets/asset-merge.spec.ts:137  getByTestId('asset-merge-target-select')   ✅ nella baseline
+3a4431d5:frontend/e2e/portfolio/risk-lab.spec.ts      fatal: exists on disk, but not in 3a4431d5  🔴 solo mio
 ```
 
 - **`front-asset asset-merge` → B può e deve**: è nella sua baseline, usa `getByTestId` su
@@ -1194,14 +1194,14 @@ cc33120e:frontend/e2e/portfolio/risk-lab.spec.ts      fatal: exists on disk, but
 Non è «l'una o l'altra»: **`asset-merge` rileva il difetto, `risk-lab` prova che la mia
 superficie sopravvive.** Due domande diverse, due proprietari diversi.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage, `6245` libera, quattro gate su
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage, `6245` libera, quattro gate su
 quattro sull'albero finale.
 
 ---
 
 ## Passo 31 — «il lavoro di tutti esiste solo nei worktree»: metà vero · 2026-09-18 02:5x
 
-Il coordinatore misura **il ramo di N** fermo a `cc33120eb` e ne inferisce che *nessuno
+Il coordinatore misura **il ramo di N** fermo a `3a4431d5a` e ne inferisce che *nessuno
 degli undici mandati ha committato* e che *il lavoro di tutti esiste solo nei worktree*.
 
 ### ✅ Prima metà — confermata, ma **misurata invece che inferita**
@@ -1210,7 +1210,7 @@ degli undici mandati ha committato* e che *il lavoro di tutti esiste solo nei wo
 git branch -v --format='%(objectname:short)  %(refname:short)'
 ```
 
-**Undici rami su `cc33120eb`**, e sono esattamente i nostri: `risk-management-replan`
+**Undici rami su `3a4431d5a`**, e sono esattamente i nostri: `risk-management-replan`
 (coordinatore) · `risk-oracle-math-migration` (A) · `risk-taxonomy-benchmark` (B) ·
 `risk-c-portfolio-slicing` (C) · `risk-primitives-cards` (D) · `vigilant-adventure` (E) ·
 `risk-asset-global-lab` (**io**) · `risk-g-allocation-colors` (G) · `h-monte-carlo` (H) ·
@@ -1233,7 +1233,7 @@ E la prova che chiude la questione:
 
 ```
 git cat-file -e ee08426f5:frontend/e2e/portfolio/risk-lab.spec.ts   → ✅ esiste, 812 righe
-git cat-file -e cc33120e:frontend/e2e/portfolio/risk-lab.spec.ts    → fatal: exists on disk, but not in cc33120e
+git cat-file -e 3a4431d5:frontend/e2e/portfolio/risk-lab.spec.ts    → fatal: exists on disk, but not in 3a4431d5
 ```
 
 **Lo stesso file, nello stesso momento**: assente dal ramo, **presente nell'object store**.
@@ -1261,7 +1261,7 @@ sessione; il coordinatore ha l'ID di sessione di N e lo trova in un comando
 ⚠️ Non ho **misurato** i checkpoint di N: non conosco il suo ID. Provo il meccanismo, non
 il caso singolo.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage, `6245` libera.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage, `6245` libera.
 
 ---
 
@@ -1330,4 +1330,4 @@ di due) → appartiene alla riassegnazione K5 di quel test, cioè a **E**.
 `getByTestId('risk-asset-add-select-trigger')` sostituisce `.locator('[role="combobox"]')`
 in `ensureSelectionAtLeast` (`:428-436`) — **e ora so perché torna disponibile**.
 
-**Stato**: `FROZEN`. HEAD `cc33120e`, niente in stage, `6245` libera.
+**Stato**: `FROZEN`. HEAD `3a4431d5`, niente in stage, `6245` libera.

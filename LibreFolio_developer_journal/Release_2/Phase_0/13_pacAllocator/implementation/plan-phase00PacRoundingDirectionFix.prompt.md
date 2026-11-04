@@ -1,14 +1,14 @@
 # Piano D — Arrotondamento del PAC sempre contro il piano
 
 **Stato:** ✅ chiuso il 2026-10-09. Iniziato alle 12:03, CHECKPOINT READY alle 16:59, poi i commit
-`96283eaa5` `fix(pac)`, `85b2a3125` `docs(pac)` e `9a6974eff` journal; merge `b81b92fd1` nel treno 26
-(`dev_release2` = `083ed26dc`). Il S10 chiude il debito di formato lasciato al S8, con uno
+`8dfab5dc1` `fix(pac)`, `0c5e5f27d` `docs(pac)` e `ff9921fa5` journal; merge `18a10e98e` nel treno 26
+(`dev_release2` = `fef0203ca`). Il S10 chiude il debito di formato lasciato al S8, con uno
 `style(pac)` a sé. Il via è del developer, inoltrato dal coordinator:
 regola (a) su tutte e 7 le famiglie arrotondate, banda esplicita del validatore, top-up mantenuti come
 rete, (e) nel backlog. Sul n. 15 il developer ha scelto «B1: banda + tasso peggiorativo dentro la banda
 (Consigliato)». Un solo checkpoint per (a) e B1; il S10 ha il suo.
-**Baseline:** `9b2acdd5d` su `e-alfy-allocatore-pac`, cioè `dev_release2` col treno 21 (merge
-`95fb05f17` della riga 15, poi `docs(changelog)`). Verificata alle 11:41, 11:50, 11:53, 11:57 e 12:03:
+**Baseline:** `2726dec9a` su `e-alfy-allocatore-pac`, cioè `dev_release2` col treno 21 (merge
+`7bc510660` della riga 15, poi `docs(changelog)`). Verificata alle 11:41, 11:50, 11:53, 11:57 e 12:03:
 albero pulito, stage vuoto, porta 6151 libera. Carico alle 12:03: 14.26 / 18.47 / 21.83.
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRoundingDirectionFix.prompt.md`.
 Il coordinator ha scritto `13_pacAllocator/plan-…`, ma i piani d'esecuzione stanno in
@@ -277,7 +277,7 @@ Esclusi dai commit: `openapi.json`, `tool-contracts.openapi.json`, `tool-contrac
 
 ### S0 — Piano e README ✅ 2026-10-09
 
-> **Nota implementazione**: piano scritto alle 12:03 su `9b2acdd5d`, nel formato della riga 15.
+> **Nota implementazione**: piano scritto alle 12:03 su `2726dec9a`, nel formato della riga 15.
 
 > **⚠️ Fuori pista** (12:39): rileggendo `constraints.py:505-516` e `evaluator.py:765-786` prima di S1,
 > lo script `p2_routes.py` del kit risulta sbagliato: finanziava ogni rotta con la sua conversione,
@@ -286,7 +286,7 @@ Esclusi dai commit: `openapi.json`, `tool-contracts.openapi.json`, `tool-contrac
 
 | Comando | Ora, carico | Esito | Log |
 |---|---|---|---|
-| `git log -1`, `git status --porcelain`, `lsof -nP -iTCP:6151 -sTCP:LISTEN` | 12:03, 14.26 / 18.47 / 21.83 | `9b2acdd5d`, 0 righe, porta libera | — |
+| `git log -1`, `git status --porcelain`, `lsof -nP -iTCP:6151 -sTCP:LISTEN` | 12:03, 14.26 / 18.47 / 21.83 | `2726dec9a`, 0 righe, porta libera | — |
 
 ### S1 — Rossi col test-author ✅ 2026-10-09
 
@@ -556,7 +556,7 @@ README.
 >   uses as *effective*.»
 > - Il link rotto c'era già e non è di D: `user/assets/detail/chart/#rolling-return`, da
 >   `frontend/src/routes/(app)/assets/[id]/+page.svelte:3012`. L'ancora `{: #rolling-return }` c'è in
->   `chart.en.md:22`, ma manca nelle pagine it/fr/es. I due file sono intatti a `9b2acdd5d`
+>   `chart.en.md:22`, ma manca nelle pagine it/fr/es. I due file sono intatti a `2726dec9a`
 >   (`git status` vuoto), quindi non lo correggo: lo segnalo al coordinator.
 
 ### S8 — Gate della corsia ✅ 2026-10-09
@@ -565,7 +565,7 @@ README.
 `check-orphans` → `lint`; poi `lsof -nP -iTCP:6151 -sTCP:LISTEN`.
 
 > **Nota implementazione**: script sequenziale `/tmp/libreFolio_pacround_s8_gates.sh`, un comando per
-> volta, sulla base `9b2acdd5d`. Riassunto in `/tmp/libreFolio_pacround_s8_summary.txt`, log in
+> volta, sulla base `2726dec9a`. Riassunto in `/tmp/libreFolio_pacround_s8_summary.txt`, log in
 > `/tmp/libreFolio_pacround_s8_*.log`. Il carico della macchina era alto, fra 24 e 129.
 >
 > | Comando | Ora, durata | Esito |
@@ -626,16 +626,16 @@ README.
 
 ### S10 — Chiusura: SHA e debito di formato ✅ 2026-10-09
 
-Via del coordinator alle 18:15, base `083ed26dc` (treno 26). Due commit in un solo checkpoint:
+Via del coordinator alle 18:15, base `fef0203ca` (treno 26). Due commit in un solo checkpoint:
 `style(pac)` passa `black` sul solo `test_pac_planner_schemas.py`; `docs(journal)` chiude la riga 16
 con gli SHA.
 
 > **Nota implementazione** (18:17–18:19, carico alle 18:19: 45.02 / 38.90 / 26.24):
-> - Base verificata: `HEAD` `083ed26dc`, albero pulito, stage vuoto, porta 6151 libera.
+> - Base verificata: `HEAD` `fef0203ca`, albero pulito, stage vuoto, porta 6151 libera.
 > - `black --check --diff` sul file dà gli stessi due blocchi del S8, `@@ -2028,18 +2028,11 @@` e
 >   `@@ -3925,17 +3918,11 @@`, con corpo identico a `/tmp/libreFolio_pacround_s8_schemas_wt.diff`.
 >   Sono due comprehension su più righe che `black` riporta su una, dentro le 300 colonne di
->   `pyproject.toml`. Secondo `git blame`, le 15 righe tolte vengono tutte da `ac18ce097` (riga 11).
+>   `pyproject.toml`. Secondo `git blame`, le 15 righe tolte vengono tutte da `ccd444993` (riga 11).
 > - `black` sul solo file (26.5.1, configurazione del progetto). Delta: 1 file, +2 −15, AST identico a
 >   `HEAD`; `black --check`, `ruff check` e `git diff --check` puliti.
 > - `schemas pac-planner` sulla 6151: 552 passati, come al S4 (`/tmp/libreFolio_pacclose_schemas.log`).

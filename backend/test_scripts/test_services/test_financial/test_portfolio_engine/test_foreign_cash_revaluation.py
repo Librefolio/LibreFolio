@@ -1,6 +1,6 @@
 """Tests for lot 41 step F — foreign cash revalued on every rate-change day.
 
-The defect (portfolio_engine before step F, @ 251067435). The builder booked each cash
+The defect (portfolio_engine before step F, @ c90f1a9fb). The builder booked each cash
 movement at the rate of its own date and never looked at it again: 1000 USD deposited at
 0.90 stayed 900 EUR of cash however the dollar moved, while the same dollars once spent on
 a security were valued at the day's rate. Foreign cash showed no exchange-rate gain or

@@ -17,12 +17,12 @@ Fonti:
 |---|---|
 | **Workstream** | J — privacy e onboarding |
 | **Worktree** | `e-alfy-literate-lamp`, branch `e-alfy-onboarding-foundation` |
-| **Baseline** | `f1047f766` (`fix(db): widen enum columns to VARCHAR(32)`), verificata 2026-09-23 10:33, albero pulito |
+| **Baseline** | `9df0b7b14` (`fix(db): widen enum columns to VARCHAR(32)`), verificata 2026-09-23 10:33, albero pulito |
 | **Lane copia prod** | porta `6168`, `/tmp/librefolio-r2-j-onboarding-prodcopy`, **solo dalla snapshot** `/tmp/librefolio-r2-prod-snapshot` |
 | **Lane suite** | porta `6158`, `/tmp/librefolio-r2-j-onboarding` — **solo** `dev.py test …` |
 | **Coordinator** | `c8328a01-f208-4ade-a352-0486d1f14de2` |
-| **Checkpoint** | C0 `2a5927c48` · C1 `176f19707` · C2 `64d78e244` · C3 `59cb80103` · C4 `5e7ae336e` (onboarding) — C2 e C3 con la storia locale riscritta il 2026-09-24 (passo 7, *Fuori pista*) · C5 `503351f0f` (passi 9-10) · C6 `1466a76d6` + `1c8d12957` + `8347f8d6c` (passi 12-15) · C7 `3eb340822` (registrazione del passo 11) |
-| **Stato** | ✅ **COMPLETATO il 2026-09-24** (registrazione finale 2026-09-25); integrato in `dev_release2` col merge `2bbaa8db2` (2026-09-25 10:35, `merge(onboarding): dev_release2 into J for integration`). Verificato e archiviato il 2026-10-09 |
+| **Checkpoint** | C0 `7d9055d39` · C1 `0ca72f743` · C2 `865509a12` · C3 `2af611213` · C4 `6ad5c4d4b` (onboarding) — C2 e C3 con la storia locale riscritta il 2026-09-24 (passo 7, *Fuori pista*) · C5 `4671c0272` (passi 9-10) · C6 `b629b789a` + `6407bd453` + `f1a651cdd` (passi 12-15) · C7 `82f789551` (registrazione del passo 11) |
+| **Stato** | ✅ **COMPLETATO il 2026-09-24** (registrazione finale 2026-09-25); integrato in `dev_release2` col merge `94f3636ab` (2026-09-25 10:35, `merge(onboarding): dev_release2 into J for integration`). Verificato e archiviato il 2026-10-09 |
 
 **Autorizzazione developer verbatim, 2026-09-23:** `Plan approved! Exited plan mode.`
 
@@ -121,7 +121,7 @@ Con questo integrato, I tocca soltanto le sue 4 voci (da **cancellare**: una rig
 non è più un hit) e le due liste letterali `residual` / `unmasked`.
 
 > **⚠️ Fuori pista — perimetro modificato dal coordinator, 2026-09-23.** (1) Il gate-prep è il
-> **checkpoint C0, da solo**: il primo commit dopo `f1047f766`, con dentro soltanto
+> **checkpoint C0, da solo**: il primo commit dopo `9df0b7b14`, con dentro soltanto
 > `moneyRenderSites.test.ts` e le righe di registrazione nel runner; I lo riceve con un merge del
 > **commit** C0, non della punta del ramo. I file del journal restano fuori da C0. (2) La
 > registrazione dei 5 test privacy orfani nel runner è **a carico mio**, dentro C0: se la facesse
@@ -177,7 +177,7 @@ non è più un hit) e le due liste letterali `residual` / `unmasked`.
 > `features/tools/registry.test.ts` (7), entrambi già nell'elenco a `HEAD`, nessuno dei due importa
 > un file di C0. Causa misurata: il client generato di questa worktree è del **22/09 00:02**
 > (ignorato da git, `generated.ts` sha `f2d51864cd7b`) e non contiene né
-> `RiskAssetSetVarCvarOutput` (backend `d3afb92b6`, 0 occorrenze) né il contratto
+> `RiskAssetSetVarCvarOutput` (backend `a0a7e5ae4`, 0 occorrenze) né il contratto
 > `pac_allocator 2.0.0` (0 occorrenze in `tool-contract-map.generated.ts`) — gli errori lo dicono
 > alla lettera: *«the compiled pac_allocator 2.0.0 contract must be generated»*, e `schema`
 > `undefined` in `riskOutput`. È la trappola dell'artefatto derivato scaduto (09 §3.1). Rimedio:
@@ -187,7 +187,7 @@ non è più un hit) e le due liste letterali `residual` / `unmasked`.
 > exit 2 da argparse, prima della raccolta: nessun test, nessun DB, nessuna porta. Il verbose è già
 > il default (`-q` lo spegne).
 
-> **Note implementazione — C0 committato `2a5927c48` (genitore `f1047f766`), 2026-09-24 10:02.**
+> **Note implementazione — C0 committato `7d9055d39` (genitore `9df0b7b14`), 2026-09-24 10:02.**
 > Poi `dev.py api sync` con l'OK del coordinator: exit 0, nessuna porta aperta (6158/6168 libere
 > dopo), `git status` **identico** prima e dopo (confronto con `cmp`), tre file ignorati
 > rigenerati (`generated.ts` `f2d51864cd7b` → `a085da1c8dac`). `RiskAssetSetVarCvarOutput`: 0 → 6
@@ -523,7 +523,7 @@ scope reattivo che costruisce l'`option` — le etichette d'asse non si ridiping
 (limite §3.4 del Round 1). J non tocca le righe di I nel registro.
 
 > **Note implementazione.** Lettura **in sola lettura** della worktree di I
-> (`git -C …/e-alfy-crispy-pancake diff`, HEAD `2a5927c48`, solo `GrowthChart.svelte`,
+> (`git -C …/e-alfy-crispy-pancake diff`, HEAD `7d9055d39`, solo `GrowthChart.svelte`,
 > `PerformanceChart.svelte`, `moneyRenderSites.test.ts`): **eccezione esplicita del coordinator**
 > alla regola del mio agente (*«never read another child's worktree»*), per un compito del piano
 > approvato; nessuna scrittura, copia del diff in `/tmp` rimossa dopo la lettura. Per ciò che il
@@ -615,7 +615,7 @@ sviluppatore.
 > | `translate-validate` su `preferences` | exit 1: debito reale (sezione nuova, più la sezione onboarding mai tradotta). Nessuno stamp |
 >
 > **⚠️ Fuori pista — Growth e Performance non sono citati.** In questo albero i loro assi e
-> tooltip sono ancora in chiaro: la correzione è il commit di I (`804bc9903`), non ancora nel
+> tooltip sono ancora in chiaro: la correzione è il commit di I (`8fa118ba4`), non ancora nel
 > target. La sezione utente non ne parla, così non afferma nulla di falso; quando entra, due voci
 > da aggiungere (asse e tooltip di Crescita tranne il modo %, etichette e asse di Performance).
 >
@@ -625,7 +625,7 @@ sviluppatore.
 > `formatCurrencyAmountPlain` senza `sensitivity`, quindi mascherato — gli eventi sono pubblici) e in
 > `transactions/wac/WacPreviewSection.svelte` (costo unitario e WAC progressivo mascherati: sono
 > prezzi unitari, pubblici per D5′-c); **etichette non tradotte** di `PrivacyToggle.svelte:13`
-> («Hide amounts» / «Show amounts», mie, `b66e93003`), la stessa forma di `ThemeToggle` e di altri
+> («Hide amounts» / «Show amounts», mie, `9d9613471`), la stessa forma di `ThemeToggle` e di altri
 > controlli dell'header; `isPrivacyPersisted()` non letto da nessun componente, quindi nessun
 > avviso se il browser rifiuta di salvare; due frasi false nelle doc (`developer/frontend/index.md`:
 > «fully embraces runes», ma tre file sono legacy; `user/dashboard/index.en.md`: tre schede, sono
@@ -661,8 +661,8 @@ Runbook sotto, sulla copia prod rinfrescata dalla snapshot.
 > difetto di privacy aperto in questo round; resta l'integrazione di Crescita e Performance (commit di I).
 >
 > **Verifica d'archivio (2026-10-09):** l'integrazione che restava è avvenuta. Il commit di I è
-> `804bc9903` (2026-09-24 14:18, `fix(privacy): mask growth and performance amounts`), entrato in
-> `dev_release2` con il Round 4 di I (2026-10-02, punta `975a115ae`). Oggi l'elenco `residual` del gate
+> `8fa118ba4` (2026-09-24 14:18, `fix(privacy): mask growth and performance amounts`), entrato in
+> `dev_release2` con il Round 4 di I (2026-10-02, punta `94312819f`). Oggi l'elenco `residual` del gate
 > è vuoto (`frontend/src/lib/utils/privacy/moneyRenderSites.test.ts:281-283`) e la riga P&L del
 > tooltip di Crescita è registrata `masked` (`:193-197`). Il debito di precisione del gate su
 > `PerformanceChart` (due rami `maskable` sulla stessa riga, `axisTickAmount` non visto) è rinviato:
@@ -671,14 +671,14 @@ Runbook sotto, sulla copia prod rinfrescata dalla snapshot.
 
 ## Round 2b — checkpoint C6 (assegnato dal coordinator, 2026-09-24 16:07)
 
-Base: C5 committato, A `cc20b8288` e B `503351f0f`. Perimetro verificato dal coordinator: J unico
+Base: C5 committato, A `43c128ed2` e B `4671c0272`. Perimetro verificato dal coordinator: J unico
 scrittore di `ui/PrivacyToggle.svelte`, `ui/ThemeToggle.svelte`, `transactions/TransactionsTable.svelte`,
 `transactions/wac/WacPreviewSection.svelte` e dei test nuovi; `AssetTable.svelte` **non** si tocca
 (K lo modifica nel suo ramo). Dopo C6 viene il passo 11.
 
 ### Passo 12 — Etichette dei pulsanti dell'header in i18n — **Stato: ✅ completato il 2026-09-24**
 
-> **Commit (verifica d'archivio 2026-10-09):** `1466a76d6` (2026-09-24 17:21,
+> **Commit (verifica d'archivio 2026-10-09):** `b629b789a` (2026-09-24 17:21,
 > `feat(i18n): translate the header toggles`).
 
 > **Note implementazione.** Nessuna chiave dell'header esisteva da riusare (cercate per valore e per
@@ -703,7 +703,7 @@ scrittore di `ui/PrivacyToggle.svelte`, `ui/ThemeToggle.svelte`, `transactions/T
 
 ### Passo 13 — Sovra-mascheratura in Transazioni e anteprima WAC — **Stato: ✅ completato il 2026-09-24**
 
-> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (2026-09-24 17:21,
+> **Commit (verifica d'archivio 2026-10-09):** `6407bd453` (2026-09-24 17:21,
 > `fix(privacy): keep unit values visible`), insieme ai passi 14 e 15.
 
 Regola del developer (D5′-c): un valore **unitario** (prezzo, WAC, costo unitario) è `public`, un
@@ -742,7 +742,7 @@ di modifica resta leggibile (D7).
 
 ### Passo 14 — Test della marcatura `public` di `AssetTable` — **Stato: ✅ completato il 2026-09-24**
 
-> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (vedi passo 13).
+> **Commit (verifica d'archivio 2026-10-09):** `6407bd453` (vedi passo 13).
 
 Solo il file di test: `AssetTable.svelte` non si tocca. Il prezzo di mercato è `public`, e oggi nessun
 test lo protegge (il gate non riesamina una marcatura `public`).
@@ -758,8 +758,8 @@ test lo protegge (il gate non riesamina una marcatura `public`).
 
 ### Passo 15 — Frase «fully embraces runes» (facoltativo) — **Stato: ✅ completato il 2026-09-24**
 
-> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (vedi passo 13), che corregge
-> `mkdocs_src/docs/developer/frontend/index.md`; registrazione dei passi 12-15 in `8347f8d6c`.
+> **Commit (verifica d'archivio 2026-10-09):** `6407bd453` (vedi passo 13), che corregge
+> `mkdocs_src/docs/developer/frontend/index.md`; registrazione dei passi 12-15 in `f1a651cdd`.
 
 > **Note implementazione.** Misurato compilando ogni componente con Svelte 5.48.0 (`metadata.runes`): **34 su
 > 253** componenti di `frontend/src` (esclusi `__tests__`) sono in modalità legacy, fra cui il layout

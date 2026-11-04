@@ -2,7 +2,7 @@
 
 > **Fase 1 · fondamenta.** Gira insieme a F2 e a nient'altro.
 > **Sessione**: N `e-alfy-risk-n-backend-acquisizioni` (riuso)
-> **Baseline**: `2ec19b8f0` — **verificala prima di leggere oltre**
+> **Baseline**: `b9d004255` — **verificala prima di leggere oltre**
 > **Corsia**: `--test-port 6151` · `--data-dir /tmp/librefolio-r2-f1`
 
 ---

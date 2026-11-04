@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | [`../B-tassonomia-e-benchmark.md`](../B-tassonomia-e-benchmark.md) — 🚫 sola lettura |
 | Branch | `e-alfy-risk-taxonomy-benchmark` |
-| Baseline | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` ✅ verificata |
+| Baseline | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` ✅ verificata |
 | Lane | porta `6241` · data dir `backend/data/test-risk-b` |
 | Autorizzazione | coordinatore, sotto delega generale del developer (*«Work autonomously and make good decisions»*) |
 
@@ -257,7 +257,7 @@
   > `mkdocs_src/docs/static/icons/asset-types/{commodity,real-estate}.png` esistono su
   > disco, sono **byte-identiche** a quelle del frontend, **non sono ignorate da git** e
   > **non le ho create io**. Le gemelle nel frontend sono tracciate e arrivano da
-  > **`cc33120eb`**, cioè dal commit di baseline della campagna: qualcuno le ha preparate
+  > **`3a4431d5a`**, cioè dal commit di baseline della campagna: qualcuno le ha preparate
   > per questo mandato e ha dimenticato il `git add` sul lato documentazione.
   > **Conseguenza operativa**: al checkpoint un `git add -A` se le porterebbe dentro senza
   > che nessuno se ne accorga (65 KB + 54 KB di binari). Non le tocco — `mkdocs_src/` non è
@@ -463,7 +463,7 @@
 
 | Comando | Esito |
 |---|---|
-| `git rev-parse HEAD` | `cc33120e…` ✅ coincide con la baseline |
+| `git rev-parse HEAD` | `3a4431d5…` ✅ coincide con la baseline |
 | `… api sync` | ✅ exit 0 — `generated.ts` creato, 1 tool contract |
 | `… test --test-port 6241 --data-dir backend/data/test-risk-b services risk-all` | 🔴 **1 failed, 137 passed** (28.1s) — rosso **voluto**, identico su 2 esecuzioni |
 | `… test --test-port 6241 --data-dir backend/data/test-risk-b front-asset asset-unit` | 🔴 **2 failed, 248 passed** · file: 1 failed, 15 passed — rosso **voluto**, identico su 3 esecuzioni |
@@ -548,7 +548,7 @@ Log: `/tmp/libreFolio_B_falsify3{,b}.log`, `/tmp/libreFolio_B_f3_*.log`.
 > falsi positivi del verde di F20/F32/F33, applicata **alla falsificazione stessa**:
 > anche la prova che una rete funziona ha bisogno della prova di essere stata eseguita.
 
-> **⚠️ Fuori pista — F38, una pastiglia mia mai dichiarata.** Alla baseline `cc33120eb`
+> **⚠️ Fuori pista — F38, una pastiglia mia mai dichiarata.** Alla baseline `3a4431d5a`
 > `LIQUIDITY` aveva **solo** `PNG_MAP` (+ `liquidity.png`, 78 KB, su disco) e l'etichetta
 > i18n nelle quattro lingue. **`BADGE_CLASS_MAP.LIQUIDITY` (verde) è mia**, e non
 > compare fra le pastiglie che avevo dichiarato al coordinatore — avevo nominato solo
@@ -582,7 +582,7 @@ Log: `/tmp/libreFolio_B_falsify3{,b}.log`, `/tmp/libreFolio_B_f3_*.log`.
 > **Note implementazione.** La mia correzione F30 inoltrava `testId={testid}` a `SearchSelect`
 > **senza togliere l'id al wrapper**: due elementi annidati con `data-testid="asset-select"`,
 > cioè una violazione di strict mode per ogni spec che lo risolve senza `.first()`.
-> Verificato sul codice, non sull'elenco ricevuto: la baseline `cc33120eb:AssetSelect.svelte:123`
+> Verificato sul codice, non sull'elenco ricevuto: la baseline `3a4431d5a:AssetSelect.svelte:123`
 > ha il wrapper **e nessun inoltro** (`git show … | grep testId` → nulla), quindi l'inoltro è mio.
 > `SearchSelect.svelte:357` rende `data-testid={testId}` **nudo**, non suffissato.
 >
@@ -655,8 +655,8 @@ inclusa quella con `AssetSelect` a baseline.
 
 **Conclusione: né `AssetModal.svelte` né `AssetSelect.svelte` causano questi rossi.**
 Nessuno dei due spec è nel mio diff; entrambi sono stati toccati l'ultima volta da
-`916f12bdd feat(dev): isolate test runtime lanes`, e `tx-import-asset-inspector.spec.ts`
-è nato il giorno prima (`ef722b552`, 2026-09-09).
+`63cfb55d1 feat(dev): isolate test runtime lanes`, e `tx-import-asset-inspector.spec.ts`
+è nato il giorno prima (`c8a77dda3`, 2026-09-09).
 
 ### Il meccanismo, per quanto ho potuto vederlo
 
@@ -843,7 +843,7 @@ consumatore di **K3**, con `sections=[{key:'benchmark'}]`, e il suo id è copert
 
 ## Passo 21 — conferma esterna di F40/F41, e la forma esatta del debito
 
-✅ chiuso · misura eseguita dal coordinatore su `e-alfy-ideal-eureka`, HEAD `cc33120eb`,
+✅ chiuso · misura eseguita dal coordinatore su `e-alfy-ideal-eureka`, HEAD `3a4431d5a`,
 `git status --short frontend/ backend/ scripts/` **vuoto**, corsia 6250, DB ripopolato
 
 Restava una cosa che **non potevo misurare io**: il comportamento dei due rossi sulla

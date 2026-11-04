@@ -1,11 +1,11 @@
 # Piano — fase 00, Danske Bank, passo 7: via il bottone «Escludi dall'import», e R6 (il set spuntato solo in parte)
 
-> **Stato**: ✅ chiuso e integrato: `955148dfb` (fix(import): untick sets, block partly ticked ones), con il journal in `9ff440e34` (verifica del 2026-10-09 su `3cceb4f90`). «Continue is disabled» (§8) l'ha corretto O nel treno 19.
+> **Stato**: ✅ chiuso e integrato: `0c58d90e5` (fix(import): untick sets, block partly ticked ones), con il journal in `2fcb01607` (verifica del 2026-10-09 su `f545b67e3`). «Continue is disabled» (§8) l'ha corretto O nel treno 19.
 > - Al checkpoint: ✅ pronta per il checkpoint (2026-10-06, §8.5). Via del coordinatore, con la decisione del developer su R6 (§0).
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md), §22 (le decisioni rimandate: il bottone e R6); [plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md](plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md) (F2, il passo prima).
 > - Segue: [plan-phase00BrimDanskeBankStep8MobileCard.prompt.md](plan-phase00BrimDanskeBankStep8MobileCard.prompt.md) — la card su mobile (intestazione e timeline), 2026-10-08.
-> - Workstream L, issue #26. Ramo `e-alfy-l-danske-bank`, base `2a90c1395` (F2); al checkpoint lo script porta L su `dev_release2` = `c9a602f74` (il treno 5: `2a90c1395` più il commit del CHANGELOG), poi committa.
+> - Workstream L, issue #26. Ramo `e-alfy-l-danske-bank`, base `772bd268e` (F2); al checkpoint lo script porta L su `dev_release2` = `4ec2add93` (il treno 5: `772bd268e` più il commit del CHANGELOG), poi committa.
 
 ## 0. Decisioni
 
@@ -20,7 +20,7 @@
   - CHANGELOG: al checkpoint, la frase per la voce Danske, confermata sul codice; proposta «A set ticked only in part waits: tick it whole or untick it.»;
   - rossi prima, col test-author.
 
-## 1. Stato verificato (2026-10-06, sul codice a `2a90c1395`)
+## 1. Stato verificato (2026-10-06, sul codice a `772bd268e`)
 
 - **Il bottone**: `ReportSetCard.svelte` — il commento d'intestazione («…or exclude the set from this import»), la prop `onExclude` (tipo e destrutturazione), `blocks` (`selection !== 'none' && status !== 'complete'`, usato solo dal bottone), il bottone `report-set-exclude`. `ImportWizardModal.svelte` — `excludeSet` e `onExclude={() => excludeSet(set)}`.
 - **R6**:
@@ -68,7 +68,7 @@ L'EN usa «select/deselect» come l'etichetta della casella («Select the whole 
 ## 6. CHANGELOG
 
 - La frase per la voce Danske, **confermata sul codice** il 2026-10-06 (`setBlocksAnalysis` vero per 'some' → `blockingSets` → `step2CanParse` falso → **Parse** disattivato; la casella da 'some' toglie la spunta a tutto il set, il secondo clic lo spunta intero): «A set ticked only in part waits: **Parse** stays disabled until you tick the whole set or untick it.» Rispetto alla proposta nomina il bottone che resta disattivato.
-- Il bottone non è mai uscito in una versione e il CHANGELOG non lo nomina (verificato su `c9a602f74`): nessuna riga per toglierlo.
+- Il bottone non è mai uscito in una versione e il CHANGELOG non lo nomina (verificato su `4ec2add93`): nessuna riga per toglierlo.
 
 ## 7. Gate e definizione di fatto
 

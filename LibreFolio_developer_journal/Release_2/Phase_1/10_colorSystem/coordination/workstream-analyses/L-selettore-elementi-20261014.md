@@ -1,7 +1,7 @@
 # L — Selettore di elementi (ispettore): analisi di implementazione (14/10/2026, sera)
 
 > Bozza di lavoro di L, negli artefatti di sessione. Va nel piano del repo come **passo 5b** solo dopo il via.
-> Base: codice del Lab al checkpoint dei passi 0–5 (HEAD `b631308` + modifiche non committate).
+> Base: codice del Lab al checkpoint dei passi 0–5 (HEAD `44623e0` + modifiche non committate).
 
 ## Richiesta del developer (testuale)
 

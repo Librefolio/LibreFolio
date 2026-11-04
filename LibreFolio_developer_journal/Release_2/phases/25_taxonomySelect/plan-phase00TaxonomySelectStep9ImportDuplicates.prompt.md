@@ -9,7 +9,7 @@
 | | |
 |---|---|
 | **Worktree** | `LibreFolio-worktrees/e-alfy-improved-memory`, branch `e-alfy-k-tassonomia-e-select` |
-| **Baseline** | `dc575dc05` (su `f1047f766`) |
+| **Baseline** | `634d668af` (su `9df0b7b14`) |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k` — l'unica usata qui |
 | **Copia prod** | non serve e non si tocca; se servisse, va rinfrescata dallo snapshot |
 | **File di K in esclusiva** | `ImportWizardModal.svelte` (senza ancore `guideAnchor`/`onboardingGuide` di J), `importDuplicateResolver.ts`, `importDedup.ts`, `importTypes.ts`, `importMerge.ts` |
@@ -24,13 +24,13 @@
 - Il primario conserva lo stato DB («⚠ Probabile dup»), ma `openBadgeCompare` apre per primo il
   confronto del gruppo, cioè file contro file.
 - Lo stesso incrocio c'è con l'editor in sospeso: `markPendingBulkDuplicates` non azzera `dupGroupKey`.
-- Origine: `62516170c` e `81853ae81` (agosto), presenti in `v1.1.0`.
+- Origine: `4b50aa0ae` e `88a2e7ae4` (agosto), presenti in `v1.1.0`.
 
 **Reperto 1: dopo un cambio di risoluzione allo step 6, «Importa» riporta allo step 5.**
 - `resolveAsset` segna il ricontrollo come da rifare. `handleImport` lo rifà, e `refreshDuplicateReport`
   azzera le scelte del resolver.
 - Poi basta un qualunque gruppo fra file per tornare allo step 5, senza messaggio.
-- Origine: `ef722b552` (09/09), non in `main`.
+- Origine: `c8a77dda3` (09/09), non in `main`.
 
 ## Rimedio
 
@@ -185,7 +185,7 @@
   - Codice: `carryResolverChoices`, `refreshDuplicateReport`, `handleImport`, i18n ×4.
   - Test: poi U5 ed E4.
   - DoD: U5, E3 ed E4 verdi, mutazioni rosse, E4-05 verde senza ritocchi.
-  > **Note implementazione** (2026-09-24, rossi prima del codice, HEAD `78d324873`): test-author ha
+  > **Note implementazione** (2026-09-24, rossi prima del codice, HEAD `ea6824c29`): test-author ha
   > scritto U5, E3 ed E4 contro il codice attuale.
   > - U5 (`importDuplicateResolver.test.ts`), 11 casi: **11 falliti, 33 passati**. Tutti falliscono con
   >   `TypeError: carryResolverChoices is not a function`; i test che c'erano già passano.
@@ -261,7 +261,7 @@
   >   - M15, regola dei verdetti non collegata nel componente → E6;
   >   - M16, evento rinominato → E4 ed E6.
   > - **Baseline** (`/tmp/libreFolio_k_iw_baseline_c2.sh`): i due file di prodotto riportati a HEAD
-  >   `78d324873`, build, run, ripristino identico. Risultato: E1, E2 ed E5 ✓; E3 ✘ per il ritorno allo
+  >   `ea6824c29`, build, run, ripristino identico. Risultato: E1, E2 ed E5 ✓; E3 ✘ per il ritorno allo
   >   step 5; E4 ✘ su toast ed evento; E6 ✘ su «going back is announced with a warning toast».
   > - **Gate** nella lane 6155 (`/tmp/libreFolio_k_iw_gates_c2.sh`), **interrotti alle 18:40 dalla
   >   PAUSA** chiesta dal coordinator:
@@ -273,7 +273,7 @@
   >   - `tx-brim-import` interrotto a metà.
   >
   > **Stato alla PAUSA** (2026-09-24 18:45):
-  > - HEAD `78d324873`, stage vuoto, 11 percorsi modificati, nessun file nuovo.
+  > - HEAD `ea6824c29`, stage vuoto, 11 percorsi modificati, nessun file nuovo.
   > - Porte 6155 e 6165 libere, nessun processo della lane acceso.
   > - Mancano, in ordine:
   >   1. i gate restanti, uno alla volta con `dev.py test --test-port 6155 --data-dir
@@ -313,7 +313,7 @@
   >   | `tx-ca-contract` | 10/12, CAC-011 e CAC-012 ✘ |
   >   | `tx-import-asset-inspector` | 4/5, E2-001 ✘ |
   >
-  > - Confronto con HEAD `78d324873` (`/tmp/libreFolio_k_iw_baseline_c2b.sh`): i due file di prodotto
+  > - Confronto con HEAD `ea6824c29` (`/tmp/libreFolio_k_iw_baseline_c2b.sh`): i due file di prodotto
   >   di C2 riportati a HEAD, build, run, ripristino identico verificato con SHA-256, poi di nuovo
   >   l'inspector sul codice C2.
   >   - **T1, CAC-011, CAC-012 ed E2-001 falliscono anche su HEAD, e negli stessi punti**:
@@ -359,14 +359,14 @@
   > - Debito di traduzione dichiarato: `how-to` it/fr/es, cioè la nota Duplicates (due punti) e una
   >   frase di «Duplicates Against Your Database».
   > - **Aggiornamento del 2026-09-28**: il testo sostitutivo per J l'ha applicato K stesso, dopo
-  >   l'allineamento a `dev_release2`, in un commit a parte (`759ba7748`).
+  >   l'allineamento a `dev_release2`, in un commit a parte (`f7b348101`).
 
 - [x] **9.5 C6 — due campi morti del custode** — ✅ 2026-09-28 (via del coordinator per il principio
   del developer del 25/09: il codice di prodotto senza uso, dentro il perimetro, si toglie)
   > **Attribuzione, dalla storia di git e senza nessun test rosso di mezzo**:
   > - `MergedTx.dupKeeperIndex` e `dupKeeperFileName` li leggeva il «salta al custode» (`canJump`,
   >   `jumpToDuplicateKeeper`, il tooltip `pendingDuplicateJump`).
-  > - `81853ae81` (03/08, «N-way dedup») l'ha sostituito con il confronto N-way (`openBadgeCompare`) e
+  > - `88a2e7ae4` (03/08, «N-way dedup») l'ha sostituito con il confronto N-way (`openBadgeCompare`) e
   >   ha lasciato le scritture: 8 scritture, 0 letture. La chiave i18n era già sparita.
   > - È l'avanzo di una funzione tolta, non un difetto.
   >

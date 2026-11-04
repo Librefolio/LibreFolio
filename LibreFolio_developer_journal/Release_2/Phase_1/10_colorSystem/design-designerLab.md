@@ -1,6 +1,6 @@
 # Progetto — «Designer Lab»: pagina nascosta per regolare i colori dal vivo (solo build di debug)
 
-> Progetto del coordinatore, 14/10/2026. Base: `dev_release2` @ `27228466c` (v1.2). Approvato per l'avvio dal developer
+> Progetto del coordinatore, 14/10/2026. Base: `dev_release2` @ `666d23701` (v1.2). Approvato per l'avvio dal developer
 > lo stesso giorno: workstream **L** (piano di dettaglio del figlio in `L-designerLab/`).
 > Completa e precisa le fasi A e C di [`plan-phase00ColorSystemThemeLab.prompt.md`](plan-phase00ColorSystemThemeLab.prompt.md).
 > Il Lab funziona **già sul codice di oggi** (per valore di colore) e, dopo il passaggio ai token, anche per ruolo.

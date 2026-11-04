@@ -1,10 +1,10 @@
 # Piano — fase 00, 34, passo 2: l'ultimo amministratore attivo
 
-> **Stato**: ✅ chiuso e integrato nel treno 22 (merge `47c56581b`): `2fb8b8502`, `11be06988`, `c529b3147`, `696105587` (verifica del 2026-10-09 su `3cceb4f90`, §7.8).
+> **Stato**: ✅ chiuso e integrato nel treno 22 (merge `eb15f6ed9`): `a531b99f7`, `680cd268d`, `d7ca0fada`, `ee42551ac` (verifica del 2026-10-09 su `f545b67e3`, §7.8).
 > - Al checkpoint: ✅ pronto per il checkpoint (2026-10-09), FROZEN dopo l'handoff. Il developer ha deciso tutto (§0.1); le aggiunte del lotto sono il cookie `Secure`, il setup E2E e le configurazioni morte (§7.3–§7.6).
 >
 > - Viene da: [plan-phase00AccountAndIdReuse.prompt.md](plan-phase00AccountAndIdReuse.prompt.md), la cancellazione dell'account e il rifiuto dell'unico amministratore.
-> - Workstream L. Base `9b2acdd5d` (treno 21). Corsia 6156/6166, `/tmp/librefolio-r2-l`.
+> - Workstream L. Base `2726dec9a` (treno 21). Corsia 6156/6166, `/tmp/librefolio-r2-l`.
 
 ## 0. Il mandato
 
@@ -53,7 +53,7 @@
   - `admin/service_exposure` è di Q: le righe per i livelli 3 e 4 le mando a lui, e le inserisce lui.
 - Il coordinatore conferma: i test sul DB temporaneo isolato, nessun runner, nessun catalogo. Al checkpoint le righe del CHANGELOG; `demote`, `deactivate` e la cancellazione erano già nella v1.1.0.
 
-## 1. Stato verificato (2026-10-09, sul codice a `9b2acdd5d`)
+## 1. Stato verificato (2026-10-09, sul codice a `2726dec9a`)
 
 - **`set_user_admin`** (`user_service.py:245-279`): controlla solo «già admin» e «non admin». **`set_user_active`** (`:215-242`) non controlla niente.
 - **Chi li chiama**: solo la CLI, `scripts/user_cli.py`. `demote` e `promote` passano da `cmd_set_admin` (`:164-177`), `deactivate` e `activate` da `cmd_set_user_active` (`:147-161`).
@@ -124,7 +124,7 @@ Nessun file del runner, nessun catalogo i18n. I messaggi della CLI e il `detail`
 
 ### 7.0 ✅ L'analisi (2026-10-09)
 
-> **Note implementazione**: §1–§3. La base `9b2acdd5d` è verificata e pulita.
+> **Note implementazione**: §1–§3. La base `2726dec9a` è verificata e pulita.
 
 ### 7.1 ✅ Gli stub e i rossi (2026-10-09)
 
@@ -319,15 +319,15 @@ I messaggi e i percorsi sono in `/tmp/libreFolio_commits/l-34s2-c{1..4}.{msg,pat
 ### 7.8 ✅ Integrazione e verifica finale (2026-10-09)
 
 > **Note implementazione**:
-> - **I commit**, integrati nel treno 22 (merge `47c56581b`, 2026-10-09):
->   - `2fb8b8502` fix(users): keep one active administrator;
->   - `11be06988` fix(auth): Secure cookie, active admin on delete;
->   - `c529b3147` fix(cli): exit status, shared JWT secret;
->   - `696105587` docs(journal): plan 34 step 2, last admin.
-> - **Verifica** su `3cceb4f90`:
+> - **I commit**, integrati nel treno 22 (merge `eb15f6ed9`, 2026-10-09):
+>   - `a531b99f7` fix(users): keep one active administrator;
+>   - `680cd268d` fix(auth): Secure cookie, active admin on delete;
+>   - `d7ca0fada` fix(cli): exit status, shared JWT secret;
+>   - `ee42551ac` docs(journal): plan 34 step 2, last admin.
+> - **Verifica** su `f545b67e3`:
 >   - le guardie in `user_service.py:223`, `:239` e `:262`;
 >   - `session_cookie_secure` in `auth.py`;
 >   - la tolleranza di `_ensure_test_users` (`_frontend_common.py`).
->   - Il piano 36 ha poi riordinato il login (`3392c4f05`) senza toccare queste guardie.
+>   - Il piano 36 ha poi riordinato il login (`12106dbd3`) senza toccare queste guardie.
 > - **Rinviato**: gli utenti E2E alice…eve creati amministratori da `create-superuser` (`scripts/test_runner/_frontend_common.py:192`), in `Phase_0/38_postReleaseBacklog/README.md`, voce L12.
 > - **Classificazione: FINITA.** L'unico residuo è la voce L12. Archiviata insieme al piano principale.

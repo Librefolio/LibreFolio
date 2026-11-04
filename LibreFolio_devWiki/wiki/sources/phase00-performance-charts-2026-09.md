@@ -22,10 +22,10 @@ related:
 Workstream I delivered four charts: a rolling N-calendar-day return on Asset detail (SP06 **G3**), an Income chart
 of signed dividends and interest (SP06 **G1c**), a cumulative P&L mode in the Dashboard's Growth chart with one
 additive line per broker (SP07 **G1a**) and synthetic P&L candles for the whole portfolio (SP07 **G1b**). Main
-contract integrated at `22b82e3fb` (accepted 2026-09-22); Round 4 — 28 decisions from the 2026-09-22 usage
-review — on 2026-10-02 (`975a115ae`); then four follow-ups: events on a price-cache hit (`0a2359573`, 10-07), income
-colours and axis labels (`ffda8fc84`, `c001c0968`, 10-08), the asset-event editor (merged in `5423c334f`, 10-08) and
-raw translations in tooltip HTML (`2c382824d`, 10-09). The two largest plans run to ~5 700 and ~6 700 lines; they
+contract integrated at `e6c59e996` (accepted 2026-09-22); Round 4 — 28 decisions from the 2026-09-22 usage
+review — on 2026-10-02 (`94312819f`); then four follow-ups: events on a price-cache hit (`6702ec8bb`, 10-07), income
+colours and axis labels (`f718d16a5`, `8175788c2`, 10-08), the asset-event editor (merged in `fbc95f3f9`, 10-08) and
+raw translations in tooltip HTML (`b39512ae1`, 10-09). The two largest plans run to ~5 700 and ~6 700 lines; they
 were read through their status headers, decisions and closing checks.
 
 ## Key takeaways
@@ -52,7 +52,7 @@ were read through their status headers, decisions and closing checks.
 I-01 `aggregateSumSeries` propagates "missing" wrongly · I-02 `aggregateEnvelope` exported and unused · I-03 the `%`
 toggle stays pressed while disabled · I-04 candle resolution of `PriceChartFull` · I-06 `npx` in the test runner ·
 I-07 two `tsc` errors in E2E specs · I-08 MkDocs translation debt (anchors, the YOC theory page) · **I-09 an
-unvalidated event `type` makes later reads fail with 500 (verified at `586a4f0ea`)** · I-10 editor robustness ·
+unvalidated event `type` makes later reads fail with 500 (verified at `249f5a9aa`)** · I-10 editor robustness ·
 I-11 limits of the events CSV round-trip · I-12 event delete not scoped to the asset. (I-05 comes from
 [[sources/phase00-privacy-global-2026-09]].)
 

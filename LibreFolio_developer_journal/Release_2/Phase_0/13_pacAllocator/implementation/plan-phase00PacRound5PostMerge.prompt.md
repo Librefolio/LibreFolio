@@ -1,8 +1,8 @@
 # Piano D — Round 5 post-merge: UI PAC v2 nella build, poi review di dettaglio
 
 **Stato:** APPROVATO dal developer il 24/09/2026 (uscita dal plan mode in autopilot); in esecuzione. I gate umani (delta ASCII, test list, runbook, STOP) restano fermate esplicite anche in autopilot.
-**Chiusura (2026-10-05):** round chiuso e integrato in `dev_release2`. Codice `6f29ec1cf` e `0900f11fa`, journal `30d235b4d` e `946095d58`, merge `111b0bbd0`; compattazione del contratto `ac18ce097`, journal `9e4140376`, merge `68483ddda`; pagine utente `a568d6f45`, journal `7038c2224`; poi il CHANGELOG del coordinatore (`d9aad0ec9`). Le voci ⏳ rimaste sono chiuse con una nota datata; quelle ancora aperte (R3, R5, R7, R9, R10) hanno una destinazione nella chiusura della tabella dello STOP. Ordine approvato il 05/10: questa chiusura del journal → slice di robustezza del solver → rimozione finale del P1 → analisi del Rebalancer.
-**Baseline:** `f1047f766` (`dev_release2`), albero pulito, branch `e-alfy-allocatore-pac` — verificati il 23/09 e di nuovo il 24/09, prima del Passo 0.
+**Chiusura (2026-10-05):** round chiuso e integrato in `dev_release2`. Codice `ffe03f7fc` e `43a4ae0d2`, journal `3eecdd70f` e `4835524f1`, merge `29d16bf0c`; compattazione del contratto `ccd444993`, journal `e734cfc59`, merge `63ef4279b`; pagine utente `299fce5f3`, journal `894236b11`; poi il CHANGELOG del coordinatore (`168b81823`). Le voci ⏳ rimaste sono chiuse con una nota datata; quelle ancora aperte (R3, R5, R7, R9, R10) hanno una destinazione nella chiusura della tabella dello STOP. Ordine approvato il 05/10: questa chiusura del journal → slice di robustezza del solver → rimozione finale del P1 → analisi del Rebalancer.
+**Baseline:** `9df0b7b14` (`dev_release2`), albero pulito, branch `e-alfy-allocatore-pac` — verificati il 23/09 e di nuovo il 24/09, prima del Passo 0.
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md`
 (copia del piano di sessione approvato).
 → Delta C0: [`plan-phase00PacRound5-C0UiDelta.prompt.md`](plan-phase00PacRound5-C0UiDelta.prompt.md).
@@ -71,7 +71,7 @@ per la review di dettaglio di UI e matematica, fatta in questa chat.
 | D2 | Card con la descrizione del prototipo P1 | `tools.pacAllocator.description` a `{en,it,fr,es}.json:3635`. `presentation.ts:28` `metadataText`: vince l'i18n. | Decisione (e) chiusa dal coordinator: tocca a D. |
 | D2b | Anche il testo backend è impreciso | `tool_plugins/pac_allocator.py:98` dice «whole-unit purchases». Ma `monetary_amount` è supportato: `normalize.py:553-568`, `constraints.py:167-172`, `planner_report.py:764` (`MonetaryAmountInstruction`). | La descrizione **non** entra nel fingerprint (`tools/schema.py:227`: solo schemi input/output più operazioni), quindi nessun bump di contratto. |
 | D3 | Contratto PAC «disatteso» (§9.5) | `16_toolPlatform/handoff-pac-D.md` (304 righe) promette `1.0.0`, `analyze`, `PacAnalyzeInput`, timeout 5 s, `compute(parameters, context)`, `uiContractVersion: 1`, lane 6153, selector `pac-analyze`/`pac-tool`. | La realtà: `2.0.0`, `plan`, `ToolService` con `compute(tool_code, parameters, context)`. Timeout: coda 5000, engine 30000, job 45000, soft 44000, cleanup 5000, request 59000, client 65000; riserva post-engine 2000. Registrazione: `defineToolRenderer(code, version, {componentKey, uiVersion, load})` (`registry.ts:25-29,126`). Selector reali: `services pac-planner-{core,evaluator,oracle,policies,solver,proof,wire-numbers,report,service}`, `schemas pac-planner`, `api tools`, `front-utility core-unit`/`component-unit`. |
-| D3b | Stessi documenti D ancora non allineati | UiTarget §20.20 `:2336` «Privacy oscura importi, quantità, costi, **percentuali** e valori grafici». Step 5 §10 `:408-409` idem. Step 5 header `:3`, §12 `:437-439` (lane 6153, fixture sintetica). Step 6 header e selector `:109-120` (`pac-tool`, `pac-planner-capacity`, selector inesistenti). `implementation/README.md` header «READY FOR PLANNING CHECKPOINT», baseline `b0a410b8`. | La decisione (c) del 22/09 dice che percentuali e prezzi **non** sono patrimonio. Le stringhe `1.0.0` negli ASCII (`UiTarget:209,230,277,390,1285,1355,1753,1781`) sono illustrative. |
+| D3b | Stessi documenti D ancora non allineati | UiTarget §20.20 `:2336` «Privacy oscura importi, quantità, costi, **percentuali** e valori grafici». Step 5 §10 `:408-409` idem. Step 5 header `:3`, §12 `:437-439` (lane 6153, fixture sintetica). Step 6 header e selector `:109-120` (`pac-tool`, `pac-planner-capacity`, selector inesistenti). `implementation/README.md` header «READY FOR PLANNING CHECKPOINT», baseline `b8d70cee`. | La decisione (c) del 22/09 dice che percentuali e prezzi **non** sono patrimonio. Le stringhe `1.0.0` negli ASCII (`UiTarget:209,230,277,390,1285,1355,1753,1781`) sono illustrative. |
 | D3c | Puntatori nei record del coordinator | `05_…:22`, `06_…:637`, `manifest-integrazione-C.md:233`, `plan-phase00ToolPlatform.prompt.md:16,173` | Sono **solo link** a handoff-pac-D. Correggendo la radice restano validi. Unica parte datata: il diagramma di `plan-phase00ToolPlatform.prompt.md:161-171` (`:162` «PacAnalyzeInput reale», `:168` «componente P1 D») → lo **propongo** al coordinator, non lo edito. |
 | D4 | Pagina utente MkDocs | `user/tools/pac-allocator/index.en.md` `:3`, `:14-21`, `:104` «No interface yet»; `:61` «whole units» | Esiste solo EN: nessun debito di traduzione. Quando la UI entra va fatto un ritocco puntuale; la riscrittura completa dopo la review. |
 
@@ -102,15 +102,15 @@ per la review di dettaglio di UI e matematica, fatta in questa chat.
   → grafici PAC-local con ECharts diretto, come fanno gli altri componenti.
 - Il request PAC prende la cassa **per broker × valuta** (`PlannerExistingCashInput`, schemi `:579`),
   quindi la copia è 1:1. L'aggregazione per valuta la fa il planner: **zero somme nel frontend**.
-- **La UI P1 è intatta nella storia**, a `b82e59ffa^`.
-  - **Storia:** cinque commit, dal 10 al 14/09: `1fd395a10` → `8273335ff` → `8504f0528` → `afca689dd` → `d66f8e58e`.
-  - **Cosa è stato cancellato in `b82e59ffa`:**
+- **La UI P1 è intatta nella storia**, a `704ba66a3^`.
+  - **Storia:** cinque commit, dal 10 al 14/09: `bf5d31890` → `0261fe73e` → `dfa2bd274` → `ea1b30dd7` → `01bfae580`.
+  - **Cosa è stato cancellato in `704ba66a3`:**
     - 16 file UI, ≈ 3 665 righe;
     - 2 file Vitest, ≈ 1 982 righe;
     - 2 spec E2E, ≈ 1 083 righe.
   - **Non è andata persa nel merge.** L'ho tolta io, su decisione del developer del 21/09 («togli p1 e poi lavora su v2»).
   - **Perché non basta sistemare gli import:** è tipizzata sul contratto `1.0.0`/`analyze`,
-    `ToolInput<'pac_allocator','1.0.0'>` (`editorTypes.ts:4`, a `b82e59ffa^`), che non esiste più.
+    `ToolInput<'pac_allocator','1.0.0'>` (`editorTypes.ts:4`, a `704ba66a3^`), che non esiste più.
     Il registro rifiuta un renderer senza contratto corrispondente (`registry.ts:162`).
   - **Cosa si riusa lo decide la UiTarget approvata:** §2 `:70-84` e §20.22 `:2426-2440`.
     - *Riusa pattern:*
@@ -335,23 +335,23 @@ per la review di dettaglio di UI e matematica, fatta in questa chat.
 Copiare questo piano nella destinazione. Aggiungere i link reciproci con `SolverBudget` e una riga nel
 `README.md` di `implementation/`. *Gate:* `git diff --check`.
 
-> **Note implementazione** (2026-09-24): HEAD verificato `f1047f766`, albero pulito prima di
+> **Note implementazione** (2026-09-24): HEAD verificato `9df0b7b14`, albero pulito prima di
 > iniziare. Piano di sessione copiato qui con lo stato passato ad APPROVATO. Link avanti aggiunto
 > in testa a `plan-phase00PacSolverBudget.prompt.md` (`> **Successor**`), link indietro qui.
 > Nel `README.md` di `implementation/` c'è una nuova tabella «Piani successivi
-> all'integrazione» con quattro righe: Remediation `c7e25da93`, P1ResidueRemoval
-> `b82e59ffa`…`154182295`, SolverBudget `a7cd01b07`/`3e513fea2`, Round5. Gli SHA sono stati
+> all'integrazione» con quattro righe: Remediation `9c2b6a221`, P1ResidueRemoval
+> `704ba66a3`…`aab74f191`, SolverBudget `d4ccbe38d`/`75940eac9`, Round5. Gli SHA sono stati
 > verificati con `git log`. `git diff --check` è pulito sui tracciati; sul file nuovo è stato
 > controllato con `git diff --no-index --check`, che non segnala errori di spazi.
 >
 > **⚠️ Fuori pista**: nessuno. L'header del README («READY FOR PLANNING CHECKPOINT», baseline
-> `b0a410b8…`) è rimasto com'era, perché è nel perimetro di A2.
+> `b8d70cee…`) è rimasto com'era, perché è nel perimetro di A2.
 
 ### Passo A — Allineamento documenti (PRIMA; zero codice prodotto) ✅ 2026-09-24
 
 - **A1 `handoff-pac-D.md`** (assegnato dal coordinator per §9.5):
   - banner datato «contratto superato: vale §0»;
-  - nuova **§0 «Contratto effettivo al `f1047f766`»**, con i valori reali di D3: simboli, versioni,
+  - nuova **§0 «Contratto effettivo al `9df0b7b14`»**, con i valori reali di D3: simboli, versioni,
     operazione, firma di `compute`, timeout, registrazione del renderer, codegen, selector, lane, DoD;
   - marcatore `⚠️ superato → §0` su §1–§7. Il testo storico **non si cancella**.
 - **A2 documenti D in `13_pacAllocator/`:**
@@ -366,7 +366,7 @@ Copiare questo piano nella destinazione. Aggiungere i link reciproci con `Solver
   diagramma di `plan-phase00ToolPlatform.prompt.md:161-171`.
   - Le righe datate sono due: `:162` «PacAnalyzeInput reale» e `:168` «componente P1 D».
     Proposta: `PacPlannerRequest reale (2.0.0, plan)` … `host C + renderer PAC v2 D (Round 5)`,
-    con una nota datata sulla rimozione del P1 in `b82e59ffa`.
+    con una nota datata sulla rimozione del P1 in `704ba66a3`.
   - `:173` («Nessuna registry vuota … può chiudere questo passo») resta vera: quel passo di C si
     chiude soltanto quando D registra il renderer v2.
 
@@ -378,7 +378,7 @@ nei doc live di D restituisce solo occorrenze dentro blocchi marcati «superato/
 > **A1.** `handoff-pac-D.md` ha:
 > - un banner datato;
 > - la nuova **§0**, con sei sottosezioni: backend, codegen, renderer, selector, lane, DoD.
->   Ogni valore è letto dal codice al `f1047f766` con `file:riga`, e le righe citate sono
+>   Ogni valore è letto dal codice al `9df0b7b14` con `file:riga`, e le righe citate sono
 >   state ricontrollate una per una (sei intervalli corretti prima della consegna);
 > - un marcatore `⚠️ Superato → §0.x` in testa a ciascuna delle §1–§7. Il testo storico è intatto.
 >
@@ -475,7 +475,7 @@ nei doc live di D restituisce solo occorrenze dentro blocchi marcati «superato/
 ### Passo C — UI PAC v2.0.0 nella build ✅ 2026-09-24 (verificato sulla copia di prod, vedi Passo E)
 
 **Base di partenza: la UI P1 nella storia, non il foglio bianco.** Ogni componente che la
-UiTarget §20.22 classifica «riusa» riparte da `git show b82e59ffa^:<path>`. I tipi vengono
+UiTarget §20.22 classifica «riusa» riparte da `git show 704ba66a3^:<path>`. I tipi vengono
 riscritti sul contratto 2.0.0 e gli importi passano dall'adapter privacy (C7). Nessun ripristino
 in blocco: un file P1 torna solo se la UiTarget lo classifica riusabile. Tutto ciò che la v2 ha e
 il P1 non aveva è nuovo:
@@ -1234,16 +1234,16 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 ### Passo F — SCIP unico motore in produzione (D-X1, X2, QX1-a, QX1-b) ~~⏳ in esecuzione~~ ✅ chiuso il 2026-10-05
 
 > **Chiusura (2026-10-05)**: F0–F6 ✅ fra il 25 e il 29/09; F7 riassegnato a K il 29/09. Commit:
-> `856c2193f` (F0, documenti), `f92e5560b` (X2, minimo della commissione), `6061affd7` (QX1-a,
-> tetto esatto della commissione), `b48b3cec9` (lo stato di SCIP è l'unica prova), merge
-> `d32f27c24` (J, A e K), `f6d7a955d` (QX1-b, arrotondamenti). Da allora SCIP è l'unico motore in
+> `15e657c83` (F0, documenti), `148515efb` (X2, minimo della commissione), `6129d7f23` (QX1-a,
+> tetto esatto della commissione), `83188aff7` (lo stato di SCIP è l'unica prova), merge
+> `6e9b3023f` (J, A e K), `e2929dc5d` (QX1-b, arrotondamenti). Da allora SCIP è l'unico motore in
 > produzione; l'oracolo esaustivo resta solo nei test.
 
 > Stato al 24/09 sera: la decisione, i difetti e le prove sono registrati; **nessun file di codice
 > è stato toccato**. Il developer ha chiesto di fermarsi.
 >
 > Stato al 25/09 mattina:
-> - ✅ checkpoint committato, HEAD `0210f9848` (§8);
+> - ✅ checkpoint committato, HEAD `502877358` (§8);
 > - ✅ testo di correzione dei tre master inviato al coordinator. Nel 05 il passaggio superato va
 >   da `:242` a `:246`: anche «SCIP è candidato additivo approvato, non ancora installato o
 >   provato» non vale più;
@@ -1252,16 +1252,16 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 > - ✅ QX1-b deciso: il piano esce con la nota di quanto aggiungere per gli arrotondamenti, entro
 >   `N` unità minime per cassa (§2). X3 respinta. Il lavoro diventa il passo **F2c**, ed è un
 >   commit in più.
-> - ✅ commit 1 (F0) e 2 (X2) committati alle 11:25: `856c2193f` → `f92e5560b` (§8). Si prosegue
+> - ✅ commit 1 (F0) e 2 (X2) committati alle 11:25: `15e657c83` → `148515efb` (§8). Si prosegue
 >   con QX1-a.
-> - ✅ commit 3 (QX1-a) committato alle 11:58: `6061affd7`, 5 file, +315/−69, sopra `f92e5560b`
+> - ✅ commit 3 (QX1-a) committato alle 11:58: `6129d7f23`, 5 file, +315/−69, sopra `148515efb`
 >   (§8).
 > - ⏸️ **Pausa alle 12:59**: il developer spegne la macchina. **Il commit 4 (X1/D-X1) non è
 >   iniziato**: nessun file di codice o di test toccato, nessun test-author al lavoro. Porte 6151 e
 >   6161 libere. L'unico file sporco è questo piano.
 >
 >   Alla ripartenza:
->   1. verificare HEAD `6061affd7`, che l'unico file sporco sia questo piano, lo stage vuoto e le
+>   1. verificare HEAD `6129d7f23`, che l'unico file sporco sia questo piano, lo stage vuoto e le
 >      porte libere (`lsof`). `/tmp` si svuota al riavvio; la cartella della lane
 >      `/tmp/librefolio-r2-d` la ricrea il runner;
 >   2. inventario in sola lettura di ciò che D-X1 rende obsoleto, con la test-triage prima di
@@ -1277,7 +1277,7 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 >      - SCIP infeasible → `ready_infeasible` + `completed`;
 >   5. poi F1 → F2 → F3 → F5.
 > - ▶️ **Ripresa il 28/09** (coordinator), dopo il riavvio del Mac:
->   1. ✅ verifica (10:20): HEAD `6061affd7`, unico file sporco questo piano (+39/−3), stage vuoto,
+>   1. ✅ verifica (10:20): HEAD `6129d7f23`, unico file sporco questo piano (+39/−3), stage vuoto,
 >      `git diff --check` pulito, porte 6151 e 6161 libere;
 >   2. ✅ inventario in sola lettura, con la test-triage: la tabella è in F4, «Inventario D-X1»;
 >   3. ✅ misura del `Checkpoint`: la tabella è in F4, «Misura del Checkpoint»;
@@ -1311,15 +1311,15 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 >      > `_forced_min_scenario_view()` del blocco «Item 7»: resta anche quando quel blocco si pulisce.
 >   6. ✅ F1 → F2 → F3 → F5 (28/09, note nei passi), con il lotto di test di F4 e i gate: in F4,
 >      «Lotto del commit 4». F6 viene dopo il commit.
->   7. ✅ commit 4 committato dal developer alle 12:51: `b48b3cec9`, 31 file, sopra `6061affd7`
+>   7. ✅ commit 4 committato dal developer alle 12:51: `83188aff7`, 31 file, sopra `6129d7f23`
 >      (§8).
 >   8. ✅ allineamento a `dev_release2`, deciso dal developer per subito dopo il commit 4 e prima
->      del commit 5. Merge `d32f27c24` alle 13:51, genitori `b48b3cec9` e `7c61dd924` (J, A, K e
+>      del commit 5. Merge `6e9b3023f` alle 13:51, genitori `83188aff7` e `9a0e4ff18` (J, A, K e
 >      il CHANGELOG di K), albero `b5f2dda8`.
 >      - Nessun conflitto. In comune ci sono solo i 4 cataloghi (unione esatta, 4102 chiavi) e
 >        `moneyRenderSites.test.ts`.
 >      - Nessuna migrazione e nessuna dipendenza nuova; i file Python di D sono identici a
->        `b48b3cec9`.
+>        `83188aff7`.
 >      - Dal target entra `AssetType.CROWDFUND_REAL_ESTATE`. Per il PAC è un codice come gli altri:
 >        `plannerAssetClass` abbassa solo le maiuscole, `PlannerCode` lo accetta, e nessun ramo
 >        del PAC elenca i tipi.
@@ -1347,14 +1347,14 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 >      > - `api portfolio`: 51 passed e 1 failed,
 >      >   `test_report_allocation_source_authenticated_contract` (`test_portfolio_api.py:593`,
 >      >   assert a `:767`). Il pin sulle chiavi di primo livello di `/report`, scritto l'11/09 da
->      >   `8273335ff`, non conta le 6 sezioni opzionali che il P&L (`8ed7a0f0d`, 18/09) ha aggiunto
+>      >   `0261fe73e`, non conta le 6 sezioni opzionali che il P&L (`a1e6fce55`, 18/09) ha aggiunto
 >      >   a `PortfolioReportResponse`, serializzate a `null`. Test, schema e rotta sono identici
->      >   fra `f1047f766` e `7c61dd924`, quindi il rosso c'è anche lì. Una sonda pura
+>      >   fra `9df0b7b14` e `9a0e4ff18`, quindi il rosso c'è anche lì. Una sonda pura
 >      >   (`/tmp/libreFolio_d_legacy_pins_probe.py`) mostra che i pin annidati su sorgente, asset e
 >      >   quote coincidono con lo schema di oggi. È il test che la S10 di I sistema («riattiva i
 >      >   pin annidati di `:593`»): D non lo tocca.
 >      > - black su `test_portfolio_api.py`: 8 blocchi da riformattare (`:1675-2314`), gli stessi 8
->      >   a `f1047f766`. Vengono dal PAC v1 (per esempio `0088748a8`, 18/09), non dal checkpoint.
+>      >   a `9df0b7b14`. Vengono dal PAC v1 (per esempio `b461a6b02`, 18/09), non dal checkpoint.
 >      >   Il file è condiviso con I, quindi non lo riformatto ora. Gli altri 28 file sono puliti.
 >   9. ✅ il coordinator accetta il gate (28/09). Le sue risposte:
 >      - **le 168 chiavi del P1 restano**, per decisione (a) del developer: «Le chiavi verranno
@@ -1445,7 +1445,7 @@ Ordine, con i documenti prima del codice (regola del developer):
   > - **Dossier** (in inglese): nota in testa, più una riga in §5.5 e in §6.4.
   >   - §6.4 sosteneva «mai falsa infeasibility»: X2 lo smentisce.
   >   - DBT-5 si chiude col Passo F.
-  > - **README di `implementation/`:** blocco del 25/09 (`0210f9848`).
+  > - **README di `implementation/`:** blocco del 25/09 (`502877358`).
   > - **Step3:** una nota in avanti in §16.3 e in «Difetto A». Il «5b» del piano è quella cura:
   >   SCIP fuori dal percorso quando decide l'oracolo.
   > - **Nome della fonte di prova nuova: `solver_status`.** È scelto qui per coerenza fra i
@@ -1455,11 +1455,11 @@ Ordine, con i documenti prima del codice (regola del developer):
   > - **Master condivisi:** il testo del mattino e l'aggiunta su QX1-b sono al coordinator, che
   >   li applica.
   >   - I tre testi su D-X1 sono applicati e committati su `dev_release2`. Verificato in sola
-  >     lettura, con `git show`, a `3aa33ff78`: 05:249, 06:750, guida:1201. Il link del 05 a
+  >     lettura, con `git show`, a `7aaaf0aca`: 05:249, 06:750, guida:1201. Il link del 05 a
   >     questo piano resta sospeso finché il ramo non è integrato: sta nel journal, che MkDocs non
   >     costruisce, e il coordinator lo accetta.
   >   - Le aggiunte su QX1-b per gli stessi tre punti sono committate dal coordinator su
-  >     `dev_release2`: `268fe835d` «docs(journal): record the QX1-b rounding rule», 25/09 alle
+  >     `dev_release2`: `c56a90d3c` «docs(journal): record the QX1-b rounding rule», 25/09 alle
   >     11:31; 3 file, +11/−5. Verificato in sola lettura con `git show --stat`.
   > - Evidenza: `git diff --check` pulito; 9 file di documenti, nessun file di codice.
   >
@@ -1495,7 +1495,7 @@ Ordine, con i documenti prima del codice (regola del developer):
   > - `SellIrreducibilityCheck.closure_kind` resta com'è, per R8 (inventario in F4).
   >
   > **⚠️ Fuori pista**: black sull'intero file ha tolto 117 righe vuote che c'erano già in HEAD,
-  > avanzate dalla rimozione di P1 (`ef321160f`). Sono solo spazi. Lo stesso in `models.py`, dove
+  > avanzate dalla rimozione di P1 (`06b6a173e`). Sono solo spazi. Lo stesso in `models.py`, dove
   > cambiava un commento: 46 righe vuote.
 - **F2 — motore.** ✅ 2026-09-28
   - `planner.py` usa solo SCIP.
@@ -1670,7 +1670,7 @@ Ordine, con i documenti prima del codice (regola del developer):
     (`proof.floatingFinished` riscritto e `states.noIncumbent.rejected`), se non resta un altro
     rifiuto che lo usi.
 
-  **Disegno del commit 5** (28/09, analisi in sola lettura sul codice di `d32f27c24`), in ordine:
+  **Disegno del commit 5** (28/09, analisi in sola lettura sul codice di `6e9b3023f`), in ordine:
   1. **Classificatore** (`evaluator.py`, tipo in `models.py`):
      `rounding_top_ups(scenario, evaluation)` restituisce una tupla di
      `ExactRoundingTopUp(broker_id, currency, amount, rounded_postings, valuation_amount)`,
@@ -2152,7 +2152,7 @@ Ordine, con i documenti prima del codice (regola del developer):
   - Copia rinfrescata prima della review.
 
   > **Note implementazione** (2026-09-29):
-  > - Identità: a HEAD `f6d7a955d` i 22 blob coincidono con `/tmp/libreFolio_commits/d-f5-qx1b.sha8`
+  > - Identità: a HEAD `e2929dc5d` i 22 blob coincidono con `/tmp/libreFolio_commits/d-f5-qx1b.sha8`
   >   (`/tmp/libreFolio_d_f6_head_sha8.log`).
   > - `front build --debug`: rc 0 in 1 min 12 s, 10:15:47 → 10:17:00
   >   (`/tmp/libreFolio_d_f6_front_build.log`). Il build ha rigenerato il client: `openapi.json`
@@ -2275,7 +2275,7 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
 >     backend (R11.12). Il tetto predefinito `1000000000` non c'è più dal 30/09 (R8.5): il tetto
 >     è facoltativo (`NoOrderCap`), e vuoto vuol dire nessun limite oltre alle risorse. Della
 >     voce 13 resta quindi da rimisurare solo la riserva `_POST_ENGINE_RESERVE_MS`.
->   - R6: `freshness` è uscita dal contratto con la compattazione (`ac18ce097`). `buffer = 0` e il
+>   - R6: `freshness` è uscita dal contratto con la compattazione (`ccd444993`). `buffer = 0` e il
 >     deployment omesso non li ho ricontrollati uno per uno.
 >   - R8: vedi la chiusura del §4.
 > - **R3**: la review matematica di QX1-b chiesta da MathematicalCore §22 **non si è fatta** come
@@ -2315,8 +2315,8 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
 ### Iterazione UI col developer — passi 1 (Scenario) e 2 (Liquidità) ~~⏳ 2026-09-29, in attesa del suo feedback~~ ✅ chiuso il 2026-10-05
 
 > **Chiusura (2026-10-05)**: il feedback è arrivato lo stesso giorno ed è il Round 2. I giri UI
-> sono continuati fino al Round 14 e sono stati consegnati nel commit `6f29ec1cf` (journal
-> `30d235b4d`, merge `111b0bbd0`).
+> sono continuati fino al Round 14 e sono stati consegnati nel commit `ffe03f7fc` (journal
+> `3eecdd70f`, merge `29d16bf0c`).
 
 Il developer guarda la 6161 e scrive direttamente a D. Chiede di migliorare la UI dei passi 1 e 2, **senza test automatici**, e di fargliela vedere subito.
 
@@ -2394,7 +2394,7 @@ Il developer guarda la 6161 e scrive direttamente a D. Chiede di migliorare la U
 
 > **Chiusura (2026-10-05)**: modifiche fatte il 29/09. La risposta del developer è la decisione
 > sulla data di riferimento (opzione 2, sotto), che apre il Round 3; sul resto, vedi «R3.6, esito»
-> nel Round 4. Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
+> nel Round 4. Consegnato nel commit `ffe03f7fc` (journal `3eecdd70f`).
 
 **Cosa ha chiesto:**
 - Scenario: le spiegazioni non a schermo, ma in un `Tooltip` dietro un'icona «?»;
@@ -2511,7 +2511,7 @@ Il developer guarda la 6161 e scrive direttamente a D. Chiede di migliorare la U
 #### Round 3 — data automatica e rilettura prima di «Calcola» ~~⏳ 2026-09-29, in attesa del feedback del developer~~ ✅ chiuso il 2026-10-05
 
 > **Chiusura (2026-10-05)**: R3.1–R3.5 ✅ il 29/09; R3.6 chiuso con l'esito registrato nel Round 4.
-> Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
+> Consegnato nel commit `ffe03f7fc` (journal `3eecdd70f`).
 
 Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, contratto `2.0.0` e client generato restano invariati.
 
@@ -2585,7 +2585,7 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
   > **⚠️ Fuori pista** (2026-09-29):
   > - **Tre politiche scelte senza chiedere**, da confermare col feedback: un errore di rilettura blocca e offre le tre scelte; «Importo da usare» non si adegua da solo a un saldo cambiato; un fatto non trovato tiene il valore copiato ed è elencato.
   > - **«Cambiato» senza la data.** `samePrice` confronta anche la data, che per un prezzo copiato cambia ogni giorno: contarla avrebbe dato «1 prezzo aggiornato» a valore identico. Per il conteggio ho aggiunto `sameQuote`, che la ignora.
-  > - **Nessuno spec E2E del planner** nel ramo: `e2e/tools/allocation-tool-fixtures.ts` viene dal prototipo del Round 4 (`d66f8e58e`) e nessuno spec la importa. La lettura in più non rompe quindi nessuno spec esistente; la fixture orfana va attribuita con la test-triage nel debito di test.
+  > - **Nessuno spec E2E del planner** nel ramo: `e2e/tools/allocation-tool-fixtures.ts` viene dal prototipo del Round 4 (`01bfae580`) e nessuno spec la importa. La lettura in più non rompe quindi nessuno spec esistente; la fixture orfana va attribuita con la test-triage nel debito di test.
   >
   > **Debito di test**, in aggiunta:
   > - `refreshPlan`: solo fatti copiati e non modificati; `null` senza niente da leggere;
@@ -2658,7 +2658,7 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
   - **Limite dichiarato**: un ordine può essere pagato in parte con cassa nella valuta dell'asset e in parte convertendo. In modalità automatica si assume che il Broker lo sappia fare; se non lo fa, serve un cambio del calcolo, da portare alla review R1/R3.
   - Il coordinatore è stato avvisato il 30/09 (contratto, `api sync` in lista d'integrazione).
   > **Chiusura (2026-10-05)**: R4.9 è stato consegnato come R11.12, nel Round 11 (contratto,
-  > UI e test; commit `6f29ec1cf`). Una differenza dal disegno qui sopra, decisa dal developer il
+  > UI e test; commit `ffe03f7fc`). Una differenza dal disegno qui sopra, decisa dal developer il
   > 01/10: in modalità automatica la conversione non sta dentro la riga dell'ordine, perché il calcolo
   > non assegna una conversione a un singolo ordine. C'è invece un riquadro col totale per coppia di
   > valute nel gruppo «Ordini su {Broker}», più un badge sugli ordini in quella valuta.
@@ -3160,7 +3160,7 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
   > - svelte-check (`svelte_check_r99.log`): 5477 file, solo i 3 errori noti fuori perimetro (`TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics.svelte` ×1), 41 avvisi come prima, 0 avvisi del planner.
   > - Build: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build --debug` → rc=0 (`build9.log`), `start.CbSeCkiu.js`, `app.-gH496nM.js`. La sincronizzazione dei tipi API della build non cambia file tracciati.
   > - 6161, senza riavvio (serve `frontend/build` dal disco; il backend non cambia in questo giro): PID 16131 in ascolto, `/api/v1/system/health` 200, `/api/v1/tools/catalog` senza auth 401, `/tools/pac_allocator` 200 con `start.CbSeCkiu.js`. Nei chunk ci sono i testid nuovi (`pac-planner-exposures-maps`, `-result-toggle-all`, `-exposures-scale`, `-ledger-row`, `-proof-tie-break`). 6151 libera.
-  > - Stato: HEAD `f6d7a955d`, 72 percorsi modificati, stage vuoto, `git diff --check` pulito. Resta il feedback del developer sul Round 9, chiesto dopo questa nota.
+  > - Stato: HEAD `e2929dc5d`, 72 percorsi modificati, stage vuoto, `git diff --check` pulito. Resta il feedback del developer sul Round 9, chiesto dopo questa nota.
   > **⚠️ Fuori pista**:
   > - `dev.py i18n audit` segna morte 86 chiavi del planner, ma 8 sono **falsi positivi**: `brokers.{feeMax,feeMin,feeZero,fundingChipHelp,stepUnits}` e `units.shares`, scritte per intero in `modeText.ts` dentro `tr(…)` (una funzione passata come parametro, che l'audit non riconosce); `strategy.{l2Help,priorityHelp}`, chiavi relative nei campi `key:` di `StrategyStep.svelte:38/43`. Tutte e 8 sono vive: da non togliere a fine round. Al contrario, `restore` e `restoreCopied` stanno fra le «non verificate» dell'audit (famiglia larga `${PLANNER_KEY}.${…}`), ma sono davvero senza uso. Lo strumento è condiviso e fuori perimetro: lo segnalo al coordinatore nel handoff, senza toccarlo.
   > - Il primo giro di `unused_r99.py` dava 80: la corrispondenza relativa tra apici considerava usate anche le chiavi di un solo segmento (`'add'` compare ovunque come letterale). Ora vale solo per i percorsi con almeno un punto: 81, più le 5 a mano.
@@ -3168,12 +3168,12 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
   >   - comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py server --test --host 127.0.0.1 --port 6161 --data-dir /tmp/librefolio-r2-d-prodcopy --no-scheduler --no-reload`;
   >   - shellId `srv6161r9`, log `/tmp/libreFolio_d_f6/server_review_r9.log`;
   >   - PID 58751 (`dev.py server`), 58844 (uvicorn in ascolto).
-  >   Verifiche: health 200 dopo ~4 s, `/api/v1/tools/catalog` senza auth 401, scheduler spento, la pagina serve `start.CbSeCkiu.js`/`app.-gH496nM.js` (il build di R9.9), 6151 libera. HEAD `f6d7a955d`, 72 percorsi, stage vuoto: nulla perso. Il server di F sulla 6164 non l'ho toccato. Poiché è staccato, al handoff va fermato in modo esplicito: `stop_bash srv6161r9`, poi `lsof`. Se resta in ascolto, SIGTERM a 58844, dopo aver verificato che il padre sia il mio `dev.py server`.
+  >   Verifiche: health 200 dopo ~4 s, `/api/v1/tools/catalog` senza auth 401, scheduler spento, la pagina serve `start.CbSeCkiu.js`/`app.-gH496nM.js` (il build di R9.9), 6151 libera. HEAD `e2929dc5d`, 72 percorsi, stage vuoto: nulla perso. Il server di F sulla 6164 non l'ho toccato. Poiché è staccato, al handoff va fermato in modo esplicito: `stop_bash srv6161r9`, poi `lsof`. Se resta in ascolto, SIGTERM a 58844, dopo aver verificato che il padre sia il mio `dev.py server`.
 
 #### Round 10 — Obiettivi bilanciabili, Strategia in due righe, L2 con formula, colonne dell'Allocazione, KPI e riquadro del calcolo, colonne ridimensionabili, «≈» delle percentuali, Composizione nel Rivedi, salto alla Prova, barra dei tempi ~~⏳ 2026-10-01~~ ✅ chiuso il 2026-10-05
 
 > **Chiusura (2026-10-05)**: R10.0–R10.11 ✅ il 01/10. La risposta del developer all'`ask_user` di
-> R10.11 apre il Round 11. Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
+> R10.11 apre il Round 11. Consegnato nel commit `ffe03f7fc` (journal `3eecdd70f`).
 
 > Nota sugli ID: i finding `R1`…`R10` della tabella di `:2243-2252` non sono i passi di questo giro, che si chiamano `R10.x`.
 
@@ -3268,7 +3268,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
 #### Round 11 — R4.9 (conversione per Broker), titolo della Route, L2 con min ed elenco, Rivedi senza Composizione, badge nell'intestazione, ordine dei valori, marquee, esposizioni «ideale vs reale», colonne spostabili e nascondibili, barra dei tempi interattiva, Prova a card ~~⏳ 2026-10-01~~ ✅ chiuso il 2026-10-05
 
 > **Chiusura (2026-10-05)**: R11.0–R11.11 e R11.13 ✅ il 01/10 (il developer ha risposto «ottimo»);
-> R11.12 chiuso con la nota in fondo al passo. Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
+> R11.12 chiuso con la nota in fondo al passo. Consegnato nel commit `ffe03f7fc` (journal `3eecdd70f`).
 
 **Feedback del developer** (risposta all'`ask_user` del Round 10, 01/10), in sostanza:
 1. Broker: manca ancora il modo di dire come il Broker gestisce le conversioni. Il riepilogo dice solo «Conversione di valuta — Converti prima di comprare, al tasso del passo FX meno lo spread». È R4.9, e lo vuole adesso.
@@ -3381,10 +3381,10 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   > **Chiusura (2026-10-05)**: R11.12 è completo.
   > - Test backend con `conversion_mode` in `test_pac_planner_schemas.py`,
   >   `test_pac_planner_normalize.py`, `test_pac_planner_evaluator.py`, `test_pac_planner_planner.py`
-  >   e `test_pac_planner_report.py`, già nel commit `6f29ec1cf`.
+  >   e `test_pac_planner_report.py`, già nel commit `ffe03f7fc`.
   > - Il campo vive in `PlannerBrokerInput.conversion_mode` (`backend/app/schemas/pac_allocator.py:431`).
   > - Il test frontend della richiesta, `planner/request.test.ts`, è entrato con la compattazione
-  >   (`ac18ce097`).
+  >   (`ccd444993`).
   > - `api pac-planner-tool` verde: 6 su 6 nei gate R14.8 sulla revisione unita (05/10), 7 su 7
   >   dopo la compattazione.
 - R11.13 ✅ 2026-10-01 — i18n, build, feedback (`ask_user`).
@@ -3402,7 +3402,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
 #### Round 12 — Route: Asset quotato in una valuta in cui il Broker non ha una modalità d'ordine ~~⏳ 2026-10-01~~ ✅ chiuso il 2026-10-05
 
 > **Chiusura (2026-10-05)**: R12.1–R12.2 ✅ il 01/10. Il developer ha risposto al Round 12 insieme
-> al feedback che apre il Round 13. Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
+> al feedback che apre il Round 13. Consegnato nel commit `ffe03f7fc` (journal `3eecdd70f`).
 
 **Feedback del developer** (01/10, dopo l'«ottimo» sul Round 11): Broker directa con conversione manuale, poi un Asset «test» (ETF) aggiunto a mano e quotato in una valuta diversa da EUR. Al passo Route la card dell'Asset dice «Il Broker non ha alcuna modalità d'ordine nella valuta del prezzo di questo Asset», e il banner blocca Continua («1 problema da correggere prima di continuare: Route · test · directa · …»). Non capisce l'errore, «visto che semplicemente tra i passi da fare mi verrà detto di convertire».
 
@@ -3682,14 +3682,14 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   >   - `api portfolio` 51/1, poi 52/0 dopo la correzione del Fuori pista 1; `api pac-planner-tool` 6/0;
   >   - `front-utility core-unit`: 100 file e 2833 test, poi 2840 con i casi L2; `front-utility component-unit`: 87 file e 2126 test;
   >   - prettier e ruff puliti; per black vedi il Fuori pista 3.
-  > **⚠️ Fuori pista 1**: `test_report_allocation_source_authenticated_contract` (`test_portfolio_api.py:767`) era già rosso sulla baseline. Contava 7 sezioni del report, che dal 18/09 sono 13 (`d5e834de4` e `8ed7a0f0d`, di un altro workstream). Ora confronta le chiavi con `PortfolioReportResponse.model_fields` e chiede `None` per le sezioni non richieste. Il file è condiviso: se un altro ramo l'ha già corretto, all'integrazione va tenuta una versione sola. Segnalato nell'handoff.
+  > **⚠️ Fuori pista 1**: `test_report_allocation_source_authenticated_contract` (`test_portfolio_api.py:767`) era già rosso sulla baseline. Contava 7 sezioni del report, che dal 18/09 sono 13 (`f1f0da870` e `a1e6fce55`, di un altro workstream). Ora confronta le chiavi con `PortfolioReportResponse.model_fields` e chiede `None` per le sezioni non richieste. Il file è condiviso: se un altro ramo l'ha già corretto, all'integrazione va tenuta una versione sola. Segnalato nell'handoff.
   > **⚠️ Fuori pista 2**: test-author ha trovato che in L2 il «≈» valeva solo per i rapporti inesatti, perché `formatPlannerL2` usava `exactDisplay`. Ora usa `exactMoneyDisplay(value, SOLVER_COUNT_DIGITS)` (`format.ts:202-208`): 2 decimali e regola A anche per `finite_decimal`. I casi, in `format.test.ts:390-440`:
   >   - 12.345 → ≈12,35; 12.5 → senza «≈»;
   >   - 1/4 → senza «≈»; 1/3 → ≈0,33;
   >   - `0.124999999999999999999` → ≈0,12: come numero JavaScript varrebbe 0,125, che darebbe 0,13;
   >   - `formatSolverNumber` in EUR² → «≈»;
   >   - privacy ON → `≈••• EUR²`.
-  > **⚠️ Fuori pista 3**: `black --check` fallisce su `test_portfolio_api.py` già a HEAD. Sono 8 blocchi (righe ≈1666–2305) del commit D `0088748a8` del 18/09, lontani dalle righe toccate. Non l'ho riformattato perché il file è condiviso: è debito D, da chiudere dopo l'integrazione. Segnalato nell'handoff.
+  > **⚠️ Fuori pista 3**: `black --check` fallisce su `test_portfolio_api.py` già a HEAD. Sono 8 blocchi (righe ≈1666–2305) del commit D `b461a6b02` del 18/09, lontani dalle righe toccate. Non l'ho riformattato perché il file è condiviso: è debito D, da chiudere dopo l'integrazione. Segnalato nell'handoff.
 - R14.5 ✅ 2026-10-02 — i18n, svelte-check, `front build --debug`, riavvio della 6161, feedback (`ask_user`) con la risposta sul ribilanciamento.
   > **Note implementazione (2026-10-02)**:
   > - i18n: nessuna chiave nuova dopo R14.1 (`brokerEditor.notYetSupported`) e R14.2 (`fx.spreadHint`).
@@ -3718,17 +3718,17 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
 - R14.7 ✅ 2026-10-02 — Preparazione al merge di `dev_release2`, unica modifica sbloccata dal coordinator: tolto il mio pezzo del test sulle sezioni del report.
   > **⚠️ Fuori pista**: doppia correzione in `test_portfolio_api.py`; vale quella di `dev_release2`.
   > - Il coordinator ha simulato il merge con `merge-tree`, senza toccare l'indice. Ha trovato un solo conflitto: il test sulle sezioni di `/portfolio/report` (`:767-780`), che avevo reso dinamico con `PortfolioReportResponse.model_fields`.
-  > - `dev_release2` ha già `1b3a20fb0` (28/09, «pin all 13 report top-level keys»), con le 13 chiavi fissate a mano di proposito. Vale quella, che arriva col merge.
+  > - `dev_release2` ha già `02c2216d7` (28/09, «pin all 13 report top-level keys»), con le 13 chiavi fissate a mano di proposito. Vale quella, che arriva col merge.
   > - Ho riportato le righe al testo di HEAD con l'edit tool. Prova:
   >   - `diff` fra HEAD e il file sulle righe 1–1737 → vuoto;
   >   - l'unico hunk rimasto è `:1741`: `source_revision="1.0.0"` in `_empty_planner_source_response`, che resta;
   >   - `ast.parse` OK; stesse 2542 righe di HEAD.
   > - Fino al merge il test torna allo stato del commit 5. `api portfolio` si rilancia dopo il merge, nella lane 6151, contro la versione di `dev_release2`.
 - R14.8 ✅ 2026-10-05 (aperto 2026-10-02) — Gate sulla revisione unita (punto 3 del coordinator) e §0 di `handoff-pac-D.md`.
-  > **Base**: il developer ha fatto i commit `6f29ec1cf` feat(pac) e `30d235b4d` docs(journal), poi il merge
-  > `111b0bbd0` (genitori `30d235b4d` + `dd538d650`, albero `ea9479db`, uguale alla simulazione del coordinator).
+  > **Base**: il developer ha fatto i commit `ffe03f7fc` feat(pac) e `3eecdd70f` docs(journal), poi il merge
+  > `29d16bf0c` (genitori `3eecdd70f` + `de84ff5ef`, albero `ea9479db`, uguale alla simulazione del coordinator).
   > Worktree pulito, stage vuoto, 6151 e 6161 libere.
-  > **Sovrapposizioni semantiche controllate prima dei gate** (diff `30d235b4d..111b0bbd0`, log
+  > **Sovrapposizioni semantiche controllate prima dei gate** (diff `3eecdd70f..29d16bf0c`, log
   > `/tmp/libreFolio_d_r14/merge_shared_helpers.diff`):
   > - motore PAC, `schemas/pac_allocator.py` e piattaforma Tool: nessun file toccato dal merge;
   > - `portfolio_engine.py` e `portfolio_service.py` cambiano: alimentano `allocation-source`, quindi i gate
@@ -3741,7 +3741,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   > **Fatto**:
   > - `api sync` rc=0 (`/tmp/libreFolio_d_r14m/01_api_sync.log`): fingerprint `bd84ef14…` e generazione
   >   `bb77549b…` invariati; i file generati sono ignorati, `git status` mostra solo il piano.
-  > - `handoff-pac-D.md` §0 riscritta come misura al `111b0bbd0`: versione `1.0.0`, righe citate rimisurate,
+  > - `handoff-pac-D.md` §0 riscritta come misura al `29d16bf0c`: versione `1.0.0`, righe citate rimisurate,
   >   fingerprint `bd84ef14…`. Corretti anche i fatti superati: il renderer è registrato e restituisce `ready`;
   >   `api pac-planner-tool` esiste; `component-unit` ha 4 test PAC; aggiunto `document-title`. La nota in testa
   >   spiega «stesso numero, contratto diverso» (P1 `1.0.0`/`analyze` contro planner `1.0.0`/`plan`).
@@ -3797,7 +3797,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   >   perché sono storia.
   > - Gate ripresi con `/tmp/libreFolio_d_r14m/gates_resume.sh` (riassunto in `gates_resume.summary`), da
   >   `api portfolio` in giù; `front build` di produzione per ultimo.
-  > - **Esiti 2026-10-05, revisione unita `111b0bbd0`, corsia 6151, un comando per volta** (log `gate_*.log`
+  > - **Esiti 2026-10-05, revisione unita `29d16bf0c`, corsia 6151, un comando per volta** (log `gate_*.log`
   >   nella stessa cartella):
   >
   >   | Gate | Esito |
@@ -3818,7 +3818,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   >   Porte 6151/6161 libere a fine catena (`lsof` vuoto).
   >
   >   > **⚠️ Fuori pista — conflitto semantico senza conflitto Git.** I 2 rossi di `core-unit` vengono dai gate
-  >   > nuovi di K, «K step 13, item 0» (`53219bc00 fix(security): escape user text in HTML sinks`, arrivati col
+  >   > nuovi di K, «K step 13, item 0» (`6f5ab544e fix(security): escape user text in HTML sinks`, arrivati col
   >   > merge; prima del merge non c'erano sul nostro lato). Scandiscono tutto `src` e colpiscono due file PAC:
   >   > - `htmlInterpolation.gate.test.ts`: `TargetsStep.svelte:62`, `${BAR_CLASS[totalState]}` dentro l'HTML
   >   >   costruito a mano. È una lettura per chiave calcolata, che il gate vuole «escaped or reported»; la sua
@@ -3848,7 +3848,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   >
   >   6151 libera a fine catena (`lsof` vuoto). Il pavimento passa a 0/0 con il prossimo merge di `dev_release2`.
   >
-  > **→ Seguito (2026-10-05):** checkpoint `0900f11fa` fix(pac) + `946095d58` docs(journal). La slice di
+  > **→ Seguito (2026-10-05):** checkpoint `43a4ae0d2` fix(pac) + `4835524f1` docs(journal). La slice di
   > compattazione del contratto 1.0.0 (decisione a del coordinator) prosegue in
   > [`plan-phase00PacContractCompaction.prompt.md`](plan-phase00PacContractCompaction.prompt.md).
 
@@ -3875,7 +3875,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
    e le 680 chiavi `tools.pacAllocator.*` P1.
 9. Sankey/ribbon dei flussi e rifinitura mobile fine della serie D (rinviati da Q1).
 
-> **Chiusura (2026-10-05)**, dopo l'integrazione in `dev_release2` (`7038c2224`). Dove sono
+> **Chiusura (2026-10-05)**, dopo l'integrazione in `dev_release2` (`894236b11`). Dove sono
 > finite le voci, con l'ordine deciso dal developer il 05/10: journal → robustezza del solver →
 > rimozione finale del P1 → analisi del Rebalancer.
 > - **1–3** (Rebalancer, una policy alla volta, margine e `g`) → analisi del Rebalancer, che parte
@@ -3887,12 +3887,12 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
 >   macchina, limite di 30 s, caso realistico: quando 2 Broker offrono gli stessi Asset con
 >   commissioni diverse, la prova arriva fino a 12 Asset; con 3 Broker fino a 8.
 > - **5** e **6**: invariate (superata e rinviata).
-> - **7**: le pagine MkDocs del PAC sono fatte in S11 (`a568d6f45`), con la versione 1.0.0. Gli E2E
+> - **7**: le pagine MkDocs del PAC sono fatte in S11 (`299fce5f3`), con la versione 1.0.0. Gli E2E
 >   del PAC si fanno dopo il Rebalancer, insieme ai suoi, sfruttando le parti comuni. Nella stessa
 >   analisi entra un E2E backend del motore: compone la richiesta del tool solo con gli altri
 >   endpoint (portafoglio, asset, prezzi, FX), a monte della UI, sul modello di
 >   `backend/test_scripts/test_e2e/test_search_to_prices.py`.
-> - **8**: le «680 chiavi» erano una stima. La scansione del 05/10 su `7038c2224` ne conta 285:
+> - **8**: le «680 chiavi» erano una stima. La scansione del 05/10 su `894236b11` ne conta 285:
 >   261 senza uso, più 24 che restano senza uso quando si toglie anche il codice di copia v2 morto
 >   (estensione (b), approvata). Fra le 261 ci sono tutte le 28 `tools.portfolioRebalancer.*`. Le
 >   altre 104 chiavi del planner senza uso vanno nel backlog del coordinatore. La rimozione finale del
@@ -3982,8 +3982,8 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   > 5. `feat(pac): planner v2 tool UI` — `planner/`, registro, i18n, voce del gate J (69 file).
   >
   > **25/09 alle 09:33 — committati** dal developer con lo script guardato del coordinator, in fila
-  > su `f1047f766`:
-  > - `4cd2cda56` (17 file) → `93704e3da` (2) → `f401f5e1b` (16) → `a6e2926f3` (2) → `0210f9848` (69);
+  > su `9df0b7b14`:
+  > - `962bb64a4` (17 file) → `c6aa7dfb4` (2) → `84de030bc` (16) → `77ff93b1a` (2) → `502877358` (69);
   > - 106 file, +16363/−261, albero pulito;
   > - il coordinator ha verificato che ogni commit contiene esattamente la sua lista e che i
   >   messaggi sono identici ai file.
@@ -3999,24 +3999,24 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   > `constraints.py`, e il coordinator mette in stage per percorso.
   >
   > **25/09 alle 11:25 — committati** dal developer con lo script guardato del coordinator
-  > (`/tmp/libreFolio_commit_d_f12.sh`), in fila su `0210f9848`:
-  > - `856c2193f` (8 file) → `f92e5560b` (5);
+  > (`/tmp/libreFolio_commit_d_f12.sh`), in fila su `502877358`:
+  > - `15e657c83` (8 file) → `148515efb` (5);
   > - 13 file, +570/−45, albero pulito;
   > - il coordinator ha verificato liste e messaggi, come per il checkpoint.
   >
   > **25/09 — Passo F, commit 3** (handoff al coordinator; messaggio e lista in
   > `/tmp/libreFolio_commits/d-f3-*`, copia in `files/passo-f-commits/` della sessione):
   > 3. `fix(pac): model the solver fee cap exactly` — QX1-a: `constraints.py`, `compiler.py`, i
-  >    due file di test e questo piano (5 file), sopra `f92e5560b`.
+  >    due file di test e questo piano (5 file), sopra `148515efb`.
   >
   > **25/09 alle 11:58 — committato** dal developer con lo script guardato del coordinator
-  > (`/tmp/libreFolio_commit_d_f3.sh`): `6061affd7`, 5 file, +315/−69. Lo SHA l'ho letto con
+  > (`/tmp/libreFolio_commit_d_f3.sh`): `6129d7f23`, 5 file, +315/−69. Lo SHA l'ho letto con
   > `git log`. Dopo il commit l'albero è pulito, e gli sha256 dei 5 file sono quelli verificati dal
   > coordinator.
   >
   > **28/09 — Passo F, commit 4** (handoff al coordinator; messaggio e lista in
   > `/tmp/libreFolio_commits/d-f4-*`, copia in `files/passo-f-commits/` della sessione):
-  > 4. `fix(pac): make SCIP status the only proof` — D-X1, sopra `6061affd7`: 31 file, cioè 29
+  > 4. `fix(pac): make SCIP status the only proof` — D-X1, sopra `6129d7f23`: 31 file, cioè 29
   >    modificati (questo piano compreso), 1 cancellato (`oracle.py`) e 1 nuovo
   >    (`_pac_exhaustive_oracle.py`). Backend, test e fixture, voce condivisa del runner (6 testi),
   >    UI e i18n.
@@ -4024,13 +4024,13 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   >    prova è cambiato e il fingerprint lega il client.
   >
   > **28/09 alle 12:51 — committato** dal developer con lo script guardato del coordinator
-  > (`/tmp/libreFolio_commit_d_f4.sh`): `b48b3cec9`, 31 file, sopra `6061affd7`. Il coordinator ha
+  > (`/tmp/libreFolio_commit_d_f4.sh`): `83188aff7`, 31 file, sopra `6129d7f23`. Il coordinator ha
   > verificato la lista e il messaggio. Git legge `oracle.py` → `_pac_exhaustive_oracle.py` come
   > una rinomina, quindi il suo script conta i file con `--no-renames`. Dopo il commit l'albero è
   > pulito.
   >
   > **28/09 alle 13:51 — merge di allineamento** `dev_release2` → D, lanciato dal developer con lo
-  > script del coordinator: `d32f27c24`, genitori `b48b3cec9` e `7c61dd924`, nessun conflitto. Il
+  > script del coordinator: `6e9b3023f`, genitori `83188aff7` e `9a0e4ff18`, nessun conflitto. Il
   > gate sulla nuova base è nel Passo F, punto 8 della ripresa del 28/09.
 - CHANGELOG `[Unreleased]` (**superato il 25/09**, vedi la nota sotto):
   - `✨ Added` — «PAC allocator: interactive planner in Tools»;

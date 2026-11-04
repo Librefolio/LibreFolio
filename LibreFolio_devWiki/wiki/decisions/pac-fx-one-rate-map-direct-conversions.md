@@ -24,7 +24,7 @@ currency.
 
 ## Decision
 
-**The developer's redesign of 2026-09-17** (Step 1, «redesign FX/funding/conversion», implemented in `0088748a8` on
+**The developer's redesign of 2026-09-17** (Step 1, «redesign FX/funding/conversion», implemented in `b461a6b02` on
 2026-09-18) replaced the route model with one canonical map, through a sequence of product decisions:
 
 - **One unordered map** `fx_rates`, keyed `"AAA/BBB"`, and **one spread** for the whole scenario, `fx_spread_rate`
@@ -44,7 +44,7 @@ currency.
 ## Rates must agree
 
 A map of pairwise rates does not rule out a triangle that creates money: real data mixes the latest rates of
-different dates and sources, and the spread defaults to zero. Since the FX fix of 2026-10-09 (`bffc634b0`) the
+different dates and sources, and the spread defaults to zero. Since the FX fix of 2026-10-09 (`ed4b803fe`) the
 normalizer refuses a buy conversion whose path through the valuation currency beats the direct rate
 (`validate_fx_coherence`, `allocation.fx_rate_inconsistent`), and since the rounding fix the same day a band of
 ten-decimal storage error is tolerated and the conversion is planned at the triangle (B1) —

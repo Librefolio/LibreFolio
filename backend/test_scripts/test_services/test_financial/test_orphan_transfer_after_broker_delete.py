@@ -61,7 +61,7 @@ of case 1, and the lots and the Dashboard read LOTS and DASHBOARD. An empty pool
 P-1 (9/10): compute_wac_iterative gives 0 in the asset currency (portfolio_service.py:185-190) and
 Auto writes it, `if wac_result.wac:` being true for a Currency of amount 0 (_write_auto_cost,
 auto_cost.py:141) — BR-U-079 in test_broker_service.py. A leg that has a cost basis keeps it (case 1);
-a split of the pair writes no cost (BR-U-076). Measured at 063e5b7cf (2026-10-15), before N1b-1:
+a split of the pair writes no cost (BR-U-076). Measured at 19259c941 (2026-10-15), before N1b-1:
                          before N1b-1: the orphan         an ADJUSTMENT +4 left without cost basis
                          TRANSFER                         (what a split leaves; the post-migration
                                                           fix too: OPTION A below)

@@ -1,6 +1,6 @@
 """MF-K3 (workstream MF, wave 6) — the Dashboard's TWRR and simple ROI: one rule for the card and the line.
 
-Module under test: ``backend/app/services/financial_math/returns.py``. New in the working tree (HEAD ``f33d91b4f`` has
+Module under test: ``backend/app/services/financial_math/returns.py``. New in the working tree (HEAD ``8ebdb3857`` has
 none of them):
 
 * ``PeriodTWRRPoint`` and ``period_twrr_series(navs, flows)``: at every snapshot after the first the cumulative TWRR
@@ -14,7 +14,7 @@ none of them):
   day's deposit included (the rebase leaves it out, being inside the first NAV);
 * ``annualizes(days)``: the floor of ``cumulative_to_annualized`` as a predicate.
 
-Red on HEAD ``f33d91b4f``: the whole file fails at collection, ``ImportError: cannot import name 'PeriodTWRRPoint' from
+Red on HEAD ``8ebdb3857``: the whole file fails at collection, ``ImportError: cannot import name 'PeriodTWRRPoint' from
 'backend.app.services.financial_math.returns'`` — new API. ``TestHeadSeriesForReference`` states what HEAD's
 ``calculate_twrr_series`` gave on the same book (a flat number on the emptied day), the reason for the change.
 

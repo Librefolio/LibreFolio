@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-congenial-potato`
 **Branch**: `e-alfy-dv-colori-dei-grafici`
-**HEAD di partenza (da verificare)**: `89e8b2e61` (fast-forward fatto dal coordinatore).
+**HEAD di partenza (da verificare)**: `e44422ed0` (fast-forward fatto dal coordinatore).
 **Corsia**: porta `6188`, cartella dati `/tmp/librefolio-r13-c2`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/README.md`, `plan-phase00ColorSystemThemeLab.prompt.md` (D-T27 ~165, D-T28 ~177, DV-10 ~309), `DV-chartColors/plan-phase00ChartColors.prompt.md` (condizioni su `LineChart` ~2032, ~2247), backlog `Phase_0/BACKLOG_POST_1.2.md` DV-10 (~3309), DV-11 (~3331), DV-12 (~3342).
 **Regole**: skill `design-system` e `theme-roles`. Solo ruoli, mai `dark:` su un ruolo, nessun colore scritto a mano fuori da `tokens.css`.

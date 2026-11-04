@@ -68,12 +68,12 @@
 
 ## Dati di riferimento
 
-- **Commit dell'analisi:** `6d0b1266c`, con `frontend/src` identico a `27228466c`.
+- **Commit dell'analisi:** `885f7e91e`, con `frontend/src` identico a `666d23701`.
 - **Snapshot della gallery** (fuori dal repo, nella cartella di lavoro del toolkit):
   - `baseline-r1` (2.816 PNG) e `baseline-r2` del 14/10, **cancellati il 19/10** per liberare disco; il rumore di allora
     resta misurato in [`G-galleryDeterminism/evidence/stability-2026-10-14.md`](G-galleryDeterminism/evidence/stability-2026-10-14.md);
-  - **il riferimento attuale** è il trio del 18/10, `g-r3-prima-ba8e06763-full`, `g-r3-dopo-cd686f445-full` e
-    `g-r3-dopo2-cd686f445-full`, con maschere e stabilità da `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`
+  - **il riferimento attuale** è il trio del 18/10, `g-r3-prima-80a1ca0e0-full`, `g-r3-dopo-574c23cf0-full` e
+    `g-r3-dopo2-574c23cf0-full`, con maschere e stabilità da `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-574c23cf0`
     (vedi `scripts/visual_review/README.md`, «Known gallery behaviour»).
 - **Pacchetto inviato alla designer il 14/10:** `LibreFolio_review_colori_v1.2.zip`, solo italiano, con 177 schermate
   in chiaro e scuro, desktop e mobile.

@@ -4,7 +4,7 @@
  *
  * RED until X-R45b-ui.
  *
- * Subject. X-R45b (backend 292d7e55e): the allocation source skips a saved FX rate of 0 or not finite and quotes the
+ * Subject. X-R45b (backend fa330c6c4): the allocation source skips a saved FX rate of 0 or not finite and quotes the
  * previous valid one, with the warning `allocation.saved_fx_skipped` (pair, skipped_date, used_date). With no valid
  * rate at all the quote has none, with `allocation.saved_fx_invalid`. The FX step reads the stored rates of the pairs
  * it needs when it opens (`onMount` → `FxRateReader.read`), but the read drops the source's issues. A card then shows

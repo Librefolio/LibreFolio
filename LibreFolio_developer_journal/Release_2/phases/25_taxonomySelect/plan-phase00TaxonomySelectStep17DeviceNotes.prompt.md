@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `e6f1bee25`, treno 2 (`dev_release2` `ebf4752e2` con la famiglia Risk, più i commit del round 1 `2575aeaf2` e `a86f4a41b`); validata il 06/10 (vedi «Validazione del treno 2») |
+| **Baseline** | `6f4550663`, treno 2 (`dev_release2` `cc78550c1` con la famiglia Risk, più i commit del round 1 `6dfe06560` e `4a12bf738`); validata il 06/10 (vedi «Validazione del treno 2») |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
 | **Dati** | solo sintetici (i mock della corsia); nessuna copia di prod |
 | **Triage** | coordinator, 06/10, testuale qui sotto |
@@ -114,7 +114,7 @@ Sonde sulla corsia 6155 col DB dei mock, in Chromium e WebKit (Playwright locale
   ramo attivo li tocca.
 - `assetTypes.ts`: la famiglia Risk cambia solo il commento di `:61-62`.
 
-## Validazione del treno 2 (`e6f1bee25`, 06/10 21:15–21:45)
+## Validazione del treno 2 (`6f4550663`, 06/10 21:15–21:45)
 
 Corsia 6155, un comando per volta, prima di toccare la voce 15.
 
@@ -129,7 +129,7 @@ Corsia 6155, un comando per volta, prima di toccare la voce 15.
 - **`component-unit`**: exit 0, 108 file, 2721/2721, nessun errore non gestito.
 - **`core-unit`**: exit 0, 113 file, 3336/3336.
 - **E2E**: `select` 17/17, `asset-modal` 17/17, `asset-detail` 29/29, `asset-browse` 8/8, `asset-list` 28/28.
-- La sovrapposizione di `assetScope` è chiusa dalla famiglia (`863834086`): `asset-browse` è verde sulla revisione
+- La sovrapposizione di `assetScope` è chiusa dalla famiglia (`5a4555adb`): `asset-browse` è verde sulla revisione
   combinata.
 - Log: `/tmp/libreFolio_k_t2_*.log`.
 
@@ -232,8 +232,8 @@ Corsia 6155, un comando per volta, prima di toccare la voce 15.
   > - Il test dell'helper va in `utils/__tests__/assetTypeTables.test.ts`, dove stanno i contratti di
   >   `assetTypeFamily`, e gira con `front-asset asset-unit`.
   >
-  > **Rivalidazione della voce 15** sulla base nuova `7dd5e47e7` (commit `fd583456f` e `7dd5e47e7` sopra la punta di F
-  > `717e0e417`), corsia 6155:
+  > **Rivalidazione della voce 15** sulla base nuova `27589625d` (commit `6a80215d0` e `27589625d` sopra la punta di F
+  > `32789a991`), corsia 6155:
   > - `front build --debug` ok e `front check` 0/0;
   > - vitest `AssetModal*` 66/66;
   > - E2E `asset-mobile-layout` 21/21 e `asset-modal` 17/17.

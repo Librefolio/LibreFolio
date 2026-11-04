@@ -92,13 +92,13 @@ surfaces, and it needs to answer what the asset-detail tab should show.
 ## Later development — measured 2026-09-23
 
 *"The frontend has **no guard at all**"* was true on 2026-09-05. It no longer is. On
-`f1047f766`:
+`9df0b7b14`:
 
 | guard | where | since | nature (09 §3.11) |
 |---|---|---|---|
-| `formatScopedCurrencyAmount` returns `—` for every scope that is not `portfolio`; the legacy `RiskAnalysisPanel.formatAmount` goes through it | `riskAnalysisHelpers.ts` | `bf34f3a0a`, 18/09 | money that exists and is silenced |
-| `AssetSetReplaySection` passes `showMoney={false}` to `L4Replay`, whose two money sites sit behind `!showMoney \|\| …` | `AssetSetReplaySection.svelte` | `6b8c69bfc`, 21/09 | money that exists and is silenced |
-| the L1°/L3° helpers take no currency parameter at all — nothing there computes, returns or accepts an amount | `assetSetLevels.ts` | `032b86959`, 21/09 | money that does not exist |
+| `formatScopedCurrencyAmount` returns `—` for every scope that is not `portfolio`; the legacy `RiskAnalysisPanel.formatAmount` goes through it | `riskAnalysisHelpers.ts` | `ffb204c62`, 18/09 | money that exists and is silenced |
+| `AssetSetReplaySection` passes `showMoney={false}` to `L4Replay`, whose two money sites sit behind `!showMoney \|\| …` | `AssetSetReplaySection.svelte` | `dfef7bf08`, 21/09 | money that exists and is silenced |
+| the L1°/L3° helpers take no currency parameter at all — nothing there computes, returns or accepts an amount | `assetSetLevels.ts` | `e38ae2300`, 21/09 | money that does not exist |
 
 *"The first is safe as long as a flag holds; the second has no flag to drop."*
 
@@ -106,18 +106,18 @@ surfaces, and it needs to answer what the asset-detail tab should show.
   well as `asset_set`. The asset-detail Risk tab mounts `RiskAnalysisPanel` with
   `scope.kind: 'asset'`, so it shows no euro either; the docstring cites D107 — *"an invented
   euro reads exactly like a measured one."*
-- The legacy panel no longer mounts on Asset Global (`daa03c0f2`, 21/09).
+- The legacy panel no longer mounts on Asset Global (`1b0032eae`, 21/09).
 - **The net still stubs money in** — `risk-lab.spec.ts` › *"prints no money, even when the API
   hands it some"*, now aimed at the historical replay — and it is **no longer red**: `risk-lab`
-  ran 11/11 green on `f1047f766` with the spec untouched (F-1, 23/09).
+  ran 11/11 green on `9df0b7b14` with the spec untouched (F-1, 23/09).
 
 ### New, 23/09 — under global privacy the net is blind
 
 > The privacy feature itself — mask at the formatter, the sign and the currency kept (D8, round 2) — is
 > [[decisions/privacy-mask-at-the-formatter]] / [[features/F-101]].
 >
-> **Update 2026-10-09 (historian, checked at `586a4f0ea`).** The repair this section waited for landed on
-> 2026-09-24 (`176f19707`, "keep currency and sign under the mask"): `formatCurrencyAmount` in
+> **Update 2026-10-09 (historian, checked at `249f5a9aa`).** The repair this section waited for landed on
+> 2026-09-24 (`0ca72f743`, "keep currency and sign under the mask"): `formatCurrencyAmount` in
 > `riskAnalysisHelpers.ts` now returns `maskCurrencyParts(…)`, so under privacy only the **number** becomes `•••` and
 > the symbol/code stay. The analysis below describes the state of 23/09. The money test still switches privacy off
 > through `privacy-toggle` (`risk-lab.spec.ts`); whether that pin is still needed is a decision for the Risk tests,
@@ -170,7 +170,7 @@ stubs the eligibility engine and waits for every chip's verdict before asserting
 | Role | Path |
 |------|------|
 | The panel under the rule — mounts the three sections | `frontend/src/lib/features/risk/AssetSetRiskPanel.svelte` |
-| Rendered the money unguarded on 2026-09-05; since `bf34f3a0a` through `formatScopedCurrencyAmount` | `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` |
+| Rendered the money unguarded on 2026-09-05; since `ffb204c62` through `formatScopedCurrencyAmount` | `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` |
 | Em dash for absent amounts; `formatScopedCurrencyAmount` (scope guard); `formatCurrencyAmount` (whole-string privacy mask) | `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` |
 | Pins the mask — `with global privacy on` | `frontend/src/lib/features/risk/riskAnalysisHelpers.test.ts` |
 | Passes `showMoney={false}` | `frontend/src/lib/features/risk/AssetSetReplaySection.svelte` |

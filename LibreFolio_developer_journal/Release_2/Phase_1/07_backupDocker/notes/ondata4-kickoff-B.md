@@ -4,7 +4,7 @@
 > _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-miniature-telegram` · **Branch**: `e-alfy-b-backup-e-docker`
-**HEAD di partenza (da verificare)**: `c042f2481` (= `dev_release2`; il coordinatore fa il fast-forward da `1fd559a26`, 309 commit dietro, e `npm ci` per Linux: i `node_modules` erano `darwin-arm64`).
+**HEAD di partenza (da verificare)**: `295a09c86` (= `dev_release2`; il coordinatore fa il fast-forward da `831930830`, 309 commit dietro, e `npm ci` per Linux: i `node_modules` erano `darwin-arm64`).
 **Corsia**: porta `6192`, cartella dati `/tmp/librefolio-r13-b`.
 **Piano**: il tuo, `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md` (apri una sezione nuova «L3 — la busta a chiave pubblica (ondata 4)»; non rileggere tutto: cerca «3.3», «3.14», «B3», «B4», «B5c», «B-18»). La proposta del pianificatore: `salvataggi-worktrees-20261021/ondata4/PIANO-backup-L3.md` (leggilo tutto, sono ~300 righe). Decisioni del developer: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md` (fonte di verità). _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
 **Modello**: Opus (crittografia e sicurezza).

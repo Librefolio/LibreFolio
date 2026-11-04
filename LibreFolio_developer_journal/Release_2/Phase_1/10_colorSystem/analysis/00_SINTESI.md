@@ -1,6 +1,6 @@
 # Review colori UI — Sintesi e indice (v1.2)
 
-> Snapshot: `dev_release2` @ `6d0b1266c`, 2026-10-14. Analisi **read-only**: nessun file del repository modificato.
+> Snapshot: `dev_release2` @ `885f7e91e`, 2026-10-14. Analisi **read-only**: nessun file del repository modificato.
 > Report di dettaglio (in inglese, con citazioni `file:line`) nella stessa cartella; inventario quantitativo in `00_inventory_summary.md`.
 
 | # | Report | Contenuto |

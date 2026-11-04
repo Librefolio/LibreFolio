@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-expert-barnacle`
 **Branch**: `e-alfy-t-tokens-theme`
-**HEAD di partenza (da verificare)**: `89e8b2e61` (fast-forward fatto dal coordinatore). Nel worktree c'è un file sporco tuo: il piano di T (`10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md`), copia in `salvataggi-worktrees-20261021/e-alfy-t-tokens-theme.tracked.diff`: **non toccarlo se non per aggiornarlo**.
+**HEAD di partenza (da verificare)**: `e44422ed0` (fast-forward fatto dal coordinatore). Nel worktree c'è un file sporco tuo: il piano di T (`10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md`), copia in `salvataggi-worktrees-20261021/e-alfy-t-tokens-theme.tracked.diff`: **non toccarlo se non per aggiornarlo**.
 **Corsia**: porta `6187`, cartella dati `/tmp/librefolio-r13-c1`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/README.md` e `plan-phase00ColorSystemThemeLab.prompt.md`: D-T27 (~165) e D-T28 (~177), la definizione del cancello (~82-90), il lotto interruttori (~202, ~256). `coordination/registro.md` (~2133, ~2435) per lo stato degli interruttori.
 **Regole**: skill `design-system` e `theme-roles` (leggile prima). Solo ruoli (`bg-lf-*`, `text-lf-*`, `border-lf-*`…), **mai `dark:` su un ruolo**, nessuna classe di palette nuova, nessun colore scritto a mano.

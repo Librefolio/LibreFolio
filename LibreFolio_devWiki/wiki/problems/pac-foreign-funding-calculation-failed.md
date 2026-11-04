@@ -34,7 +34,7 @@ where a funding source was in a currency different from the scenario's. Two diff
 
 ## Solution
 
-`bffc634b0` (2026-10-09, «exact FX residual, coherent cross rates»), with the contract kept at `1.0.0`:
+`ed4b803fe` (2026-10-09, «exact FX residual, coherent cross rates»), with the contract kept at `1.0.0`:
 
 - **A**: `PlannerLedgerRow.rounding_delta` becomes an `ExactNumber` — a finite decimal or an exact ratio
   (`ratio_to_exact_number()`); the schema fingerprint moved (`4f061103…` → `a999932e…`). The page shows such a
@@ -42,8 +42,8 @@ where a funding source was in a currency different from the scenario's. Two diff
 - **2A**: `validate_fx_coherence()` in the normalizer refuses a buy conversion when
   `r(c,q)·(1−s)·r(q,V) > r(c,V)`, with the new issue `allocation.fx_rate_inconsistent` (an `invalid` outcome; one
   i18n key in four languages).
-- `b3843e2f8` logs up to two caller frames of an engine failure — never its message — so the next one names its
-  origin; `f720f7879` tells the user that exchange rates must agree.
+- `08d4112b1` logs up to two caller frames of an engine failure — never its message — so the next one names its
+  origin; `8dfd66bfb` tells the user that exchange rates must agree.
 
 The developer accepted the plan on 2026-10-08 with one remark: «se l'inverso è un numero periodico, arrotondare alla
 prima untà valida per quella valuta, in eccesso o difetto, non credo sia corretto dire che non è più l'ottimo, al

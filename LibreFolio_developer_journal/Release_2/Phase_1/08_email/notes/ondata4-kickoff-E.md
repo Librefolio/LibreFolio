@@ -4,7 +4,7 @@
 
 **Modello**: Haiku (testi nei cataloghi; per un dubbio di contenuto chiedi al coordinatore).
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-stunning-fortnight` · **Branch**: `e-alfy-e-email`
-**HEAD di partenza (da verificare)**: `c042f2481` (fast-forward dal coordinatore da `8fdeab4d6`).
+**HEAD di partenza (da verificare)**: `295a09c86` (fast-forward dal coordinatore da `ea814c47a`).
 **Corsia**: porta `6182`, cartella dati `/tmp/librefolio-r13-e`.
 **Piano e contratto**: `08_email/plan-phase01Email.prompt.md` (sezione E-26); `salvataggi-worktrees-20261021/ondata3/E-26-contratto.md` §3 (i testi nelle 4 lingue) e §8 (le domande).
 

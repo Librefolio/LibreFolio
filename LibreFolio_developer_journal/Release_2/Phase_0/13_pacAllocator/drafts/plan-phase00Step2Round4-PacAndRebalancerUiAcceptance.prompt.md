@@ -40,8 +40,8 @@ short/leva, FIFO/WAC/fisco e Riskfolio.
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-friendly-dollop` |
 | Branch | `e-alfy-allocatore-pac` |
-| Rollback Round 3 | `afca689dd81cdcfc28664c6328fc74ec51c806da` |
-| Target contenuto | `e1f3fe177861d2b9b953b218f66ea7d4714ab405` |
+| Rollback Round 3 | `ea1b30dd73d11f66815f964599ccf1c53481880f` |
+| Target contenuto | `0ba3eff69e5190889267b9487f0ec60e17bbbd0d` |
 | Stato iniziale | clean; index e untracked vuoti |
 | Lane | porta `6153`, data `/tmp/librefolio-r2-d` |
 | Venv | `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
@@ -269,8 +269,8 @@ Risultato: valore/peso corrente aggregato + target + gap
 
 1. [x] **2026-09-14 — Gate 0 rollback-safe**
    > **Nota implementazione**: developer ha creato checkpoint Round 3
-   > `afca689dd81cdcfc28664c6328fc74ec51c806da`. Verificati status clean,
-   > target `e1f3fe177861d2b9b953b218f66ea7d4714ab405` contenuto e porta 6153
+   > `ea1b30dd73d11f66815f964599ccf1c53481880f`. Verificati status clean,
+   > target `0ba3eff69e5190889267b9487f0ec60e17bbbd0d` contenuto e porta 6153
    > libera. Writer lease e ordine integrazione ricevuti dal coordinatore.
    > **Evidenza**: `git rev-parse HEAD`, `git rev-parse dev_release2`,
    > `git merge-base --is-ancestor dev_release2 HEAD`, `git status --short`,
@@ -580,8 +580,8 @@ Risultato: valore/peso corrente aggregato + target + gap
     > dopo la correzione CHANGELOG/rimozione chiavi; nessun delta generated
     > tracciato, staging o listener sulla porta 6153.
     > **Evidenza integrazione J→D — Gate 1, 2026-09-14**: merge aperto su
-    > `HEAD d66f8e58e74532776445506717bb4bf02aff91fd` e
-    > `MERGE_HEAD 580bd504fd1d0d3b7b3ee2a8ac0407ef5187a476`;
+    > `HEAD 01bfae580487d2c02332980584f5fcd0f3152123` e
+    > `MERGE_HEAD ce718ca495473ae9c6844cd28819a43e092a515d`;
     > risolti semanticamente 13 conflitti, con 0 unmerged/unstaged/untracked
     > e 116 path staged. `git diff --cached --check` verde;
     > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py

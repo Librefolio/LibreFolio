@@ -1,7 +1,7 @@
 # Piano d'implementazione — U2 / SP15 privacy globale, Round 1: nucleo di mascheramento
 
 > **Origine.** Esegue i passi **1-5** di [`analysis-phase00PrivacyGlobal.md` §7.2](./analysis-phase00PrivacyGlobal.md)
-> (commit `d2355d341`). L'analisi è la fonte del contratto (§2), delle primitive (§3), del design
+> (commit `d597b37fb`). L'analisi è la fonte del contratto (§2), delle primitive (§3), del design
 > dello store (§4) e delle decisioni D1-D7 (§0). **Questo piano non ridecide**: dove diverge,
 > lo dichiara.
 
@@ -10,10 +10,10 @@
 | **Sprint** | SP15 — task **U2** |
 | **Workstream** | J — lane **6158**, data dir `/tmp/librefolio-r2-j-onboarding` |
 | **Worktree** | `e-alfy-literate-lamp`, branch `e-alfy-onboarding-foundation` |
-| **Baseline** | `d2355d341` (`docs(privacy): add U2 global privacy analysis`) |
+| **Baseline** | `d597b37fb` (`docs(privacy): add U2 global privacy analysis`) |
 | **Autorizzato** | passi 1-5; passo 3 a **3 siti su 4**; **passo 6 = toggle nell'header** (sostituisce i grafici) |
 | **Creato** | 2026-09-21 |
-| **Stato** | ✅ **COMPLETATO il 2026-09-22** — passi 1-4 e 6-8 fatti, passo 5 sospeso per decisione misurata (non un buco). Commit `b66e93003` (passi 1-4 e 6, 22/09 09:38), `9a6dd2015` (passo 7, 10:55), merge `d59051977` + `0a1d98eaf` (passo 8, 12:02-12:11); in `dev_release2` dal 22/09 (la punta `a97f573d8` delle 12:16 li contiene). Verificato e archiviato il 2026-10-09 |
+| **Stato** | ✅ **COMPLETATO il 2026-09-22** — passi 1-4 e 6-8 fatti, passo 5 sospeso per decisione misurata (non un buco). Commit `9d9613471` (passi 1-4 e 6, 22/09 09:38), `b4c078097` (passo 7, 10:55), merge `66d3855df` + `019cb18c4` (passo 8, 12:02-12:11); in `dev_release2` dal 22/09 (la punta `4857f9c87` delle 12:16 li contiene). Verificato e archiviato il 2026-10-09 |
 
 ---
 
@@ -218,9 +218,9 @@ passo 2 è falsa in modo non visibile.
 | 4 | `frontend/src/lib/components/brokers/lots/LotComparisonChart.svelte:245` | `formatAxisCurrency`, asse compatto (`€12K`) |
 | ~~3~~ | ~~`.../dashboard/GrowthChart.svelte:692`~~ | **residuo nominato** — I ci sta scrivendo |
 
-> **Superato (verifica d'archivio 2026-10-09).** Il residuo #3 l'ha chiuso I con `804bc9903`
+> **Superato (verifica d'archivio 2026-10-09).** Il residuo #3 l'ha chiuso I con `8fa118ba4`
 > (2026-09-24 14:18, `fix(privacy): mask growth and performance amounts`), entrato in `dev_release2`
-> con l'integrazione del Round 4 di I (2026-10-02, punta `975a115ae`): `fmtCurrency` è mascherato
+> con l'integrazione del Round 4 di I (2026-10-02, punta `94312819f`): `fmtCurrency` è mascherato
 > alla sua definizione. Oggi il gate registra quella riga come `masked`
 > (`frontend/src/lib/utils/privacy/moneyRenderSites.test.ts:193-197`) e l'elenco `residual` è vuoto
 > (`:281-283`).
@@ -412,7 +412,7 @@ copertura** — «61 su 61» conterebbe come coperto qualcosa che non esegue.
 > **Verifica d'archivio (2026-10-09): superato, non un buco.** Il passo resta non costruito per la
 > decisione misurata qui sotto (consumatori zero). Il Round 2 non l'ha riaperto, e oggi `SensitiveValue`
 > non esiste in `frontend/src`. Dei due residui citati, `GrowthChart.svelte:692` è stato chiuso al
-> formattatore da `804bc9903` (vedi passo 3); `MeasurePanel` resta fuori dal gate per scelta dichiarata.
+> formattatore da `8fa118ba4` (vedi passo 3); `MeasurePanel` resta fuori dal gate per scelta dichiarata.
 
 Primitiva di componente per il denaro che **non** passa dai formattatori (§3.3). Firma da §3.3;
 default `personal`; segnaposto a forma stabile.
@@ -476,7 +476,7 @@ il giorno in cui un sito la chiederà davvero.
 
 ### Passo 6 — Toggle nell'header — **Stato: ✅ fatto** — 2026-09-21 — *sostituisce i grafici*
 
-> **Commit (verifica d'archivio 2026-10-09):** `b66e93003` (2026-09-22 09:38,
+> **Commit (verifica d'archivio 2026-10-09):** `9d9613471` (2026-09-22 09:38,
 > `feat(privacy): mask amounts behind a global toggle`), insieme ai passi 1-4.
 
 **File**: `frontend/src/lib/components/layout/Header.svelte` (+ eventuale componente dedicato).
@@ -551,7 +551,7 @@ invocati **da ECharts**, fuori da ogni contesto reattivo: producono la stringa g
 
 ### Passo 7 — Gate anti-regressione §1.8 — **Stato: ✅ fatto** — 2026-09-21 — *autorizzato dal developer*
 
-> **Commit (verifica d'archivio 2026-10-09):** `9a6dd2015` (2026-09-22 10:55,
+> **Commit (verifica d'archivio 2026-10-09):** `b4c078097` (2026-09-22 10:55,
 > `test(privacy): gate unregistered money render sites`).
 
 Approvato nella forma delle tre righe: **enumera** i siti del sorgente che rendono denaro,
@@ -588,7 +588,7 @@ File: `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` — 5 test, verd
 > ragione, come richiesto: il gate non fallisce su di esso e non tace su di esso. Il file **non è
 > stato aperto in scrittura** — I ci sta lavorando. Registrato per path e riga, leggendolo soltanto.
 >
-> *Verifica d'archivio 2026-10-09:* residuo chiuso da `804bc9903` (vedi passo 3); oggi l'elenco
+> *Verifica d'archivio 2026-10-09:* residuo chiuso da `8fa118ba4` (vedi passo 3); oggi l'elenco
 > `residual` del gate è vuoto.
 
 > **Note implementazione**: fuori dal gate **per scelta dichiarata** — `MeasurePanel:257` e
@@ -654,11 +654,11 @@ File: `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` — 5 test, verd
 
 ### Passo 8 — Merge del target e coda post-merge — **Stato: ✅ fatto** — 2026-09-21
 
-> **Commit (verifica d'archivio 2026-10-09):** merge `d59051977` (2026-09-22 12:02), poi `0a1d98eaf`
+> **Commit (verifica d'archivio 2026-10-09):** merge `66d3855df` (2026-09-22 12:02), poi `019cb18c4`
 > (12:11, `test(privacy): realign money-render gate after target merge`). Le date «2026-09-21» dei
 > titoli sono quelle del lavoro; i commit sono del giorno dopo.
 
-Merge `d59051977` (`9a6dd2015` + `7fd660846`: D allocatore PAC, I grafici performance, Risk asset
+Merge `66d3855df` (`b4c078097` + `ad29c6d3a`: D allocatore PAC, I grafici performance, Risk asset
 global). Un solo conflitto, `riskAnalysisHelpers.test.ts:19–44`, risolto **additivamente** — il
 blocco conteneva solo import e setup di modulo, quindi nessun comportamento da arbitrare. Verificato
 per aritmetica (base 62 + 7 miei + 9 di Risk = **78 misurati**) e per sopravvivenza dei simboli.
@@ -720,7 +720,7 @@ diceva. **Avevo la misura e non l'ho applicata a me stesso.**
 | `themeStore:29` come `try/catch` | come si protegge | ❌ **falsa** — è una guardia `typeof`, `catch: 0` nel file |
 | «come fa già `themeStore`» | quando si legge | ❌ **falsa** — nessuna lettura di modulo, tutte pigre |
 
-Corrette nell'analisi prima del commit `d2355d341`. **Le ha trovate il tentativo di copiarle, non la
+Corrette nell'analisi prima del commit `d597b37fb`. **Le ha trovate il tentativo di copiarle, non la
 rilettura**: quattro giorni di revisioni non le avevano viste.
 
 ### Fuori pista 3 — Il verificatore aveva il difetto che cercava
@@ -990,7 +990,7 @@ dentro ⇒ `Test Files` dice N» l'ha preso al primo colpo. Con un path valido a
 **sparito in silenzio, exit 0**.
 
 **Stato altrui scaduto.** Ho riportato l'indice del merge come «211 M · 199 A · 30 R · 26 D» mentre
-il developer aveva già creato `d59051977`, che l'aveva consumato. Ero FROZEN e non avevo mosso
+il developer aveva già creato `66d3855df`, che l'aveva consumato. Ero FROZEN e non avevo mosso
 nulla — ed è il punto: *l'immobilità garantisce che non cambi io, non che non cambi il mondo*.
 Uno stato altrui va **riletto all'uso**, non trasportato dal momento in cui lo si è osservato.
 

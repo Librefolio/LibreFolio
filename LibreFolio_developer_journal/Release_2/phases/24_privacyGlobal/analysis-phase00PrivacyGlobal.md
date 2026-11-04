@@ -20,7 +20,7 @@
 | **Sprint** | SP15 — task **U2** |
 | **Fonte** | [`09_feedbackJobs/06_piano_sprint.md` §5 U2](../../Phase_0/09_feedbackJobs/06_piano_sprint.md) (riga 311) |
 | **Workstream** | J — lane 6158, worktree `e-alfy-literate-lamp` |
-| **Revisione di osservazione** | **`1982c254b`** salvo dove diversamente attribuito |
+| **Revisione di osservazione** | **`18bc11a4f`** salvo dove diversamente attribuito |
 | **Redatto** | 2026-09-01 |
 
 > ⚠️ **Nota sul path.** Il piano di lavoro proponeva `22_privacy/`, ma `22_assetPricingRefactor/` e
@@ -133,7 +133,7 @@ di lavoro non deve prescriverne su di essi; e la **riga di definizione**, perch�
 è un sito di chiamata. «Siti» = righe che contengono il simbolo **meno** le righe di `import`.
 Controllo negativo eseguito sul metodo (simbolo inesistente → 0).
 
-Misurato a `1982c254b` con quel metodo:
+Misurato a `18bc11a4f` con quel metodo:
 
 | simbolo | file | righe | import | **siti** | rende un **importo**? |
 |---|---|---|---|---|---|
@@ -214,7 +214,7 @@ Letto `lib/utils/currency/currencyFormat.ts` per intero:
 
 **Ma il docstring descrive l'intenzione, non l'uso.** Misurati i 61 siti di chiamata, la
 destinazione prevalente è un'altra: l'output viene **concatenato dentro stringhe HTML costruite a
-mano**, riconoscibili dal `</span>` che segue la chiamata. Esempi a `1982c254b`:
+mano**, riconoscibili dal `</span>` che segue la chiamata. Esempi a `18bc11a4f`:
 
 | sito | forma |
 |---|---|
@@ -246,8 +246,8 @@ grafici. È questa la ragione della taglia XL, e non «ci sono molte pagine».
 
 ### 1.4 — 🆕 Classe a sé: superfici che riproducono il valore **fuori dal DOM renderizzato**
 
-Misurato `document.body` in `frontend/src`, esclusi test ed E2E: **41 occorrenze** a `1982c254b`.
-Il coordinator ha misurato le stesse **41** su **`c75cf9150`**: il numero coincide, ma le due misure
+Misurato `document.body` in `frontend/src`, esclusi test ed E2E: **41 occorrenze** a `18bc11a4f`.
+Il coordinator ha misurato le stesse **41** su **`7ee3620fb`**: il numero coincide, ma le due misure
 restano attribuite ciascuna alla propria revisione.
 
 | sotto-classe | siti (`path:riga`) | perché è una superficie |
@@ -311,7 +311,7 @@ Meccanismo di invalidazione disponibile per i tooltip già aperti: `dispatchActi
 ### 1.6 — Il lato **non** sensibile, misurato
 
 Il piano classifica come non sensibili: quotazioni pubbliche, tassi FX, percentuali, rapporti, date,
-conteggi. Misurato a `1982c254b` **con il metodo canonico di §1.1** (non con il perimetro `*.svelte`
+conteggi. Misurato a `18bc11a4f` **con il metodo canonico di §1.1** (non con il perimetro `*.svelte`
 ritirato, che affliggeva anche questa tabella):
 
 | simbolo | file | siti | classificazione |
@@ -374,7 +374,7 @@ formattatore — non catturabile dove si decide la classe. Va nella checklist pe
 > Entrano come **voci aperte**, mai come assenze. *Un'assenza si legge «non c'è nulla da
 > proteggere»; una voce aperta «qui arriverà qualcosa da proteggere».*
 
-| workstream | superficie attesa | stato a `1982c254b` | azione |
+| workstream | superficie attesa | stato a `18bc11a4f` | azione |
 |---|---|---|---|
 | **I** (SP07) | candele sintetiche, nuove viste P&L | non presente in questo albero | da inventariare **dopo** il freeze di I |
 | **D** (SP14) | report Broker, tabelle allocatore/PAC | non presente in questo albero | da inventariare **dopo** il freeze di D |
@@ -385,7 +385,7 @@ non integrato a memoria — sulla revisione in cui quelle superfici esistono.
 ### 1.8 — 🔴 Falsi negativi: denaro che **non** passa dai due formattatori
 
 La regola meccanica di D5 — *«da quale formattatore esce?»* — ha un presupposto che va misurato e
-non ereditato: **sapere quanti formattatori esistono**. Misurato a `1982c254b`, non sono quattro.
+non ereditato: **sapere quanti formattatori esistono**. Misurato a `18bc11a4f`, non sono quattro.
 
 | # | sito | cosa rende | perché sfugge |
 |---|---|---|---|
@@ -649,7 +649,7 @@ Verificato contro il codice, perché la domanda è stata posta esplicitamente. L
 | *quando è sicuro dipingere?* | `appBootstrap.ready` — **e il gate esiste già**, non c'è nulla da aggiungere (§5.3) |
 | *quando idratare la preferenza?* | **non lì** |
 
-Tre ragioni misurate a `1982c254b`:
+Tre ragioni misurate a `18bc11a4f`:
 
 1. **`load()` è I/O di rete** — `appBootstrap.svelte.ts:70` esegue
    `Promise.allSettled([userSettings.load(), onboarding.load(), globalSettings.load()])`.
@@ -859,7 +859,7 @@ più la guardia reattiva a `:131`
 **Dominio della tesi, chiuso esplicitamente** — «non c'è flash» vale solo se quel layout è l'unico
 posto in cui si dipingono valori:
 
-| controllo | risultato a `1982c254b` |
+| controllo | risultato a `18bc11a4f` |
 |---|---|
 | layout totali in `routes/` | **2** — root e `(app)` |
 | pagine fuori dal gruppo `(app)` | **1** — `routes/+page.svelte` (login/landing) |
@@ -1059,32 +1059,32 @@ L'interfaccia deve dire questo confine, e il piano d'implementazione deve indica
 
 | misura | valore | revisione | comando |
 |---|---|---|---|
-| `formatCurrencyAmountPlain` | 19 file / **47 siti** | `1982c254b` | `grep -rn` su `frontend/src`, esclusi test e riga di definizione; siti = righe − import |
-| `formatCurrencyAmountHtml` | 7 file / **14 siti** | `1982c254b` | idem |
-| `formatCurrencyCodeHtml` | 4 file / **12 siti** | `1982c254b` | idem |
-| `formatCurrencyForTooltip` | 2 file / **4 siti** | `1982c254b` | idem |
-| file che rendono **importi** (`…Plain` ∪ `…Html`) | **25 file / 61 siti** | `1982c254b` | idem |
-| unione dei 4 simboli | **27 file** | `1982c254b` | idem |
-| ⚠️ *misura precedente, ritirata* | 17/61 · 7/21 · 3/12 · 1/3 | `1982c254b` | `grep -r` su **`*.svelte`** soltanto — perimetro che **escludeva i `.ts`**, cioè i `formatter` ECharts. Non riproducibile: vedi §1.1(b) |
-| `TweenedValue` / `CompactCashCell` | 3 / 3 file | `1982c254b` | idem |
-| `HtmlCell` / `{@html}` | 6 / 21 file | `1982c254b` | idem |
-| `formatPercent` / `formatQuantity` / `formatDate` | 5 / 5 / 13 file — **37 / 24 / 54 siti** | `1982c254b` | idem |
-| 🔴 **quinto formattatore di importi** | `risk/riskAnalysisHelpers.ts:130`, 1 consumatore | `1982c254b` | `Intl.NumberFormat({style:'currency'})`, **fuori** da `currencyFormat.ts` |
-| falsi negativi §1.8 (denaro fuori dal canale) | **6 siti**, di cui 1 input e 1 di giudizio | `1982c254b` | `style:'currency'` ∪ template literal con valuta ∪ formattatori locali non deleganti |
-| formattatori locali di valuta che **delegano** | 8 su 13 | `1982c254b` | presenza di `formatCurrencyAmountPlain\|Html` nel file |
-| controprova negativa §1.8 | `snapshotDataRenderer.ts:226` | `1982c254b` | usa `Intl…style:'currency'` ma **legge solo** `maximumFractionDigits` |
-| `formatPercent` ha un parametro semantico? | **no** — `{scale, signed, digits}` | `1982c254b` | firma a `formatPercent.ts:35`; proxy `signed` smentito da `FxTable:127` |
-| `document.body` (esclusi test ed E2E) | **41** | `1982c254b` | J |
-| `document.body` (esclusi test) | **41** | `c75cf9150` | coordinator |
-| componenti ECharts in produzione | **14** | `1982c254b` | esclusi `__tests__/harness/` |
-| grafici con tooltip nel body | **4** | `1982c254b` | `appendTo` / `appendToBody` |
-| grafici che l'hanno rimosso | **3** | `1982c254b` | bugfix documentati nel codice |
-| `dispatchAction` | 64 siti | `1982c254b` | invalidazione tooltip |
-| resetter di sessione in produzione | **22** | `1982c254b` | `registerClientSessionReset(`, esclusi test e definizione |
-| consumatori di `getUserStorage` | 9 file | `1982c254b` | — |
-| chiavi `localStorage` non per-utente | 3 | `1982c254b` | `librefolio-theme`, `librefolio-locale`, `global_settings` |
-| layout in `routes/` | 2 | `1982c254b` | root + `(app)` |
-| pagine fuori dal gruppo `(app)` | 1 | `1982c254b` | `routes/+page.svelte` |
+| `formatCurrencyAmountPlain` | 19 file / **47 siti** | `18bc11a4f` | `grep -rn` su `frontend/src`, esclusi test e riga di definizione; siti = righe − import |
+| `formatCurrencyAmountHtml` | 7 file / **14 siti** | `18bc11a4f` | idem |
+| `formatCurrencyCodeHtml` | 4 file / **12 siti** | `18bc11a4f` | idem |
+| `formatCurrencyForTooltip` | 2 file / **4 siti** | `18bc11a4f` | idem |
+| file che rendono **importi** (`…Plain` ∪ `…Html`) | **25 file / 61 siti** | `18bc11a4f` | idem |
+| unione dei 4 simboli | **27 file** | `18bc11a4f` | idem |
+| ⚠️ *misura precedente, ritirata* | 17/61 · 7/21 · 3/12 · 1/3 | `18bc11a4f` | `grep -r` su **`*.svelte`** soltanto — perimetro che **escludeva i `.ts`**, cioè i `formatter` ECharts. Non riproducibile: vedi §1.1(b) |
+| `TweenedValue` / `CompactCashCell` | 3 / 3 file | `18bc11a4f` | idem |
+| `HtmlCell` / `{@html}` | 6 / 21 file | `18bc11a4f` | idem |
+| `formatPercent` / `formatQuantity` / `formatDate` | 5 / 5 / 13 file — **37 / 24 / 54 siti** | `18bc11a4f` | idem |
+| 🔴 **quinto formattatore di importi** | `risk/riskAnalysisHelpers.ts:130`, 1 consumatore | `18bc11a4f` | `Intl.NumberFormat({style:'currency'})`, **fuori** da `currencyFormat.ts` |
+| falsi negativi §1.8 (denaro fuori dal canale) | **6 siti**, di cui 1 input e 1 di giudizio | `18bc11a4f` | `style:'currency'` ∪ template literal con valuta ∪ formattatori locali non deleganti |
+| formattatori locali di valuta che **delegano** | 8 su 13 | `18bc11a4f` | presenza di `formatCurrencyAmountPlain\|Html` nel file |
+| controprova negativa §1.8 | `snapshotDataRenderer.ts:226` | `18bc11a4f` | usa `Intl…style:'currency'` ma **legge solo** `maximumFractionDigits` |
+| `formatPercent` ha un parametro semantico? | **no** — `{scale, signed, digits}` | `18bc11a4f` | firma a `formatPercent.ts:35`; proxy `signed` smentito da `FxTable:127` |
+| `document.body` (esclusi test ed E2E) | **41** | `18bc11a4f` | J |
+| `document.body` (esclusi test) | **41** | `7ee3620fb` | coordinator |
+| componenti ECharts in produzione | **14** | `18bc11a4f` | esclusi `__tests__/harness/` |
+| grafici con tooltip nel body | **4** | `18bc11a4f` | `appendTo` / `appendToBody` |
+| grafici che l'hanno rimosso | **3** | `18bc11a4f` | bugfix documentati nel codice |
+| `dispatchAction` | 64 siti | `18bc11a4f` | invalidazione tooltip |
+| resetter di sessione in produzione | **22** | `18bc11a4f` | `registerClientSessionReset(`, esclusi test e definizione |
+| consumatori di `getUserStorage` | 9 file | `18bc11a4f` | — |
+| chiavi `localStorage` non per-utente | 3 | `18bc11a4f` | `librefolio-theme`, `librefolio-locale`, `global_settings` |
+| layout in `routes/` | 2 | `18bc11a4f` | root + `(app)` |
+| pagine fuori dal gruppo `(app)` | 1 | `18bc11a4f` | `routes/+page.svelte` |
 
 > **Nota sulle misure con perimetro.** Ogni riga di questa tabella vale **nel perimetro del comando
 > che l'ha prodotta**. Durante questa analisi una misura corretta su un perimetro sbagliato —

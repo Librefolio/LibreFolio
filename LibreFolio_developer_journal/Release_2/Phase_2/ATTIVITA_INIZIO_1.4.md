@@ -75,4 +75,4 @@ all'utente sta in [`../Phase_1/PROSSIMI_LAVORI.md`](../Phase_1/PROSSIMI_LAVORI.m
 1.4. Dettagli in [`TODO_FUTURI.md`](../../../TODO_FUTURI.md), «Rebalancer del PAC».
 
 **Cosa resta**: l'analisi del Rebalancer («riga 14»), gli E2E del PAC, il difetto 1 e l'opzione (e) del backlog di
-[`../Phase_0/13_pacAllocator/`](../Phase_0/13_pacAllocator/) (i difetti 2 e 5 e C-38 sono chiusi, `ca681b4f9`).
+[`../Phase_0/13_pacAllocator/`](../Phase_0/13_pacAllocator/) (i difetti 2 e 5 e C-38 sono chiusi, `a8d6088bd`).

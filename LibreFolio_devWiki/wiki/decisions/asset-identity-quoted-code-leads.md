@@ -61,8 +61,8 @@ against one of them landed on half the instrument, invisibly.
 - **Order of the steps**: `upload → select → analyze → assets → fix → duplicates → review` (`STEP_DEFS` in
   `ImportWizardModal.svelte`), plus the report-set gap step. `v1.1.0` already had `assets` before `fix`.
   The [1.1.0] CHANGELOG line «Wizard rework» lists *corrections* before *unify assets*, which does not match the code.
-- **Similarity** (`assetSimilarity.ts`): the first version (`0e07359b4`, 08/08) kept a list of neutral suffixes
-  (`NEUTRAL_SUFFIX_TOKENS`: `CUM`, `EX`, `ACC`, `DIST`, …). `d1e04b2b8` (12/08) replaced it with a structural rule,
+- **Similarity** (`assetSimilarity.ts`): the first version (`9d6de0cf6`, 08/08) kept a list of neutral suffixes
+  (`NEUTRAL_SUFFIX_TOKENS`: `CUM`, `EX`, `ACC`, `DIST`, …). `441457341` (12/08) replaced it with a structural rule,
   `onlyMinorTokenDiff`: at most two differing tokens, short and non-numeric, on an otherwise identical name. A list
   knew only the markers someone had thought of; the price of the rule is that `… ESG` against the plain fund name is
   *proposed*, one click on «Separate». A weak signal only ever proposes; it never merges on its own.
@@ -76,11 +76,11 @@ against one of them landed on half the instrument, invisibly.
   good asset yields both candidates side by side; the wizard offers **Merge** only when at least two candidates are
   `EXACT` or `HIGH` (`duplicateCandidates()`). The pickers (`AssetSelect`, `ImportAssetPicker`) search
   `identifier_other` too.
-- **Merge** (`POST /assets/merge`, `AssetMergeModal`, `0e07359b4`): the target always survives and the endpoint never
+- **Merge** (`POST /assets/merge`, `AssetMergeModal`, `9d6de0cf6`): the target always survives and the endpoint never
   picks it; `dry_run` returns the counts the dialog shows before anything is destroyed; the whole merge is one
   transaction. Two ordering traps were found by its tests: [[problems/asset-merge-cascade-deleted-the-migrated-events]].
 
-Everything above shipped in **1.1.0** (`0e07359b4` and `d1e04b2b8` are ancestors of `v1.1.0`), under the CHANGELOG
+Everything above shipped in **1.1.0** (`9d6de0cf6` and `441457341` are ancestors of `v1.1.0`), under the CHANGELOG
 section «🔁 Import flow & asset identity (post-beta)», line «Instrument unification inside the wizard».
 
 ## Consequences

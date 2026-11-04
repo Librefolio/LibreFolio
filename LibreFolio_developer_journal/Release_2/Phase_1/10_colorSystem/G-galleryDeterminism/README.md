@@ -14,7 +14,7 @@
 
 ## Il problema, misurato
 
-**Misura del 14/10/2026** (`27228466c`): due esecuzioni complete e identiche (`baseline-r1`, `baseline-r2`),
+**Misura del 14/10/2026** (`666d23701`): due esecuzioni complete e identiche (`baseline-r1`, `baseline-r2`),
 confrontate pixel per pixel con `scripts/visual_review/gallery_tool.py`.
 
 - **Immagini:** 2.077 identiche e 715 cambiate, di cui 404 sotto lo 0,1 % dei pixel.
@@ -36,7 +36,7 @@ confrontate pixel per pixel con `scripts/visual_review/gallery_tool.py`.
   - Tutti passati in un secondo tentativo isolato (`--no-populate --desktop-only -w 5`). **Non sono classificati:**
     vanno analizzati con la skill `test-triage` prima di chiamarli instabili.
 
-**Misura finale del 15/10/2026** (`2338aaf79`, `dev_release2` con il checkpoint 1 di G): due esecuzioni complete a 6
+**Misura finale del 15/10/2026** (`2ddbf77f7`, `dev_release2` con il checkpoint 1 di G): due esecuzioni complete a 6
 worker (`g-final3-r1`, `g-final3-r2`), entrambe pulite per `live_price_check`. Analisi per schermata:
 [`evidence/analysis-final-2026-10-15.md`](evidence/analysis-final-2026-10-15.md); numeri grezzi:
 [`evidence/stability-2026-10-15.md`](evidence/stability-2026-10-15.md).

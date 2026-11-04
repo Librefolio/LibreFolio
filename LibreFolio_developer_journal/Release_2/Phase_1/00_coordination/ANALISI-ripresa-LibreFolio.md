@@ -8,7 +8,7 @@ Orari = ora locale del Mac (UTC+2). SHA a 9 caratteri.
 
 ## 0. In breve
 
-1. **`dev_release2` = `b844f83f2`**, uguale a `origin/dev_release2` secondo il ref locale (non ho fatto fetch). Dentro ci sono 4 treni del 20/10 più G-28. **Il gate del treno 4 è tutto verde** (finito alle 15:04, dopo la morte del coordinatore perché lo script era staccato): all-backend 7/7, core-unit 9771, component-unit 5154, E2E mirati ok.
+1. **`dev_release2` = `b417fbd95`**, uguale a `origin/dev_release2` secondo il ref locale (non ho fatto fetch). Dentro ci sono 4 treni del 20/10 più G-28. **Il gate del treno 4 è tutto verde** (finito alle 15:04, dopo la morte del coordinatore perché lo script era staccato): all-backend 7/7, core-unit 9771, component-unit 5154, E2E mirati ok.
 2. Il coordinatore è morto alle **14:36 con un errore 403** (credenziali scadute) e **tutte** le sessioni figlie con lui. Gli ultimi ~10 messaggi dei figli non hanno mai avuto risposta, e due decisioni del developer delle 14:32 (TC-23 → (a), e la voce E-26) potrebbero non essere arrivate a destinazione.
 3. **Lavoro vero non in dev**: 4 commit su branch (A, E, H, J), 5 gruppi di file non committati (Y-39a: 11 file; Z-29s-a: 6; E: 9; J: 2; H CP2: 3 test non tracciati). Esiste un backup completo: `~/Documenti/EmaEnel20261020/LibreFolio_all.tar.gz` (25,9 GB, 20/10 17:26). Non ho verificato il contenuto.
 4. **Il REPORT è in parte vecchio**: B-51, J-57 v3, A-CL1, X-R45b-ui, `gate_b8` risultano "da fare" ma sono già in dev e verdi (§1).
@@ -23,15 +23,15 @@ Orari = ora locale del Mac (UTC+2). SHA a 9 caratteri.
 
 | Il REPORT dice | Realtà | Prova |
 |---|---|---|
-| A: "poi A-CL1 (analisi bug changelog)" | A-CL1 è **in dev** dal 19/10 | `c0cc8330b`, §51 |
-| W: "B-51 fatto, CHECKPOINT READY in attesa di commit" | **In dev** (treno 3). Worktree W pulito, 0 commit avanti | `00c5d9014` |
-| J: "J-57 v3 con `slot_part2.sh`" | J-57 è **in dev** (treno 2). J ora ha J-60 committato e L1b con GO | `706257542`, `cd44e6531` |
-| X: "X-R45b-ui, N61-form (cura non applicata)" | **In dev** (treno 1) | `08e23108a` |
-| E: "E-AI503, N62, E-20 (in lavorazione)" | E-AI503/E-20/E-24 **in dev** (treno 2), E-23 (treno 4) | `58846c7e1`, `4efc68bad` |
-| H: "H-60 (review)" | H-60 + H-60r **in dev** (treno 2), N70 + mappa guide (treno 3) | `e8c970379`, `6ba039f01` |
-| MF: "P1b decisione aperta" | **Deciso (A)**, in dev, sui dati reali **0 cambi** | `3b3e91e6d` |
+| A: "poi A-CL1 (analisi bug changelog)" | A-CL1 è **in dev** dal 19/10 | `2599dfccc`, §51 |
+| W: "B-51 fatto, CHECKPOINT READY in attesa di commit" | **In dev** (treno 3). Worktree W pulito, 0 commit avanti | `e309e6235` |
+| J: "J-57 v3 con `slot_part2.sh`" | J-57 è **in dev** (treno 2). J ora ha J-60 committato e L1b con GO | `cf4235997`, `e76c63ee1` |
+| X: "X-R45b-ui, N61-form (cura non applicata)" | **In dev** (treno 1) | `ffcee8a9b` |
+| E: "E-AI503, N62, E-20 (in lavorazione)" | E-AI503/E-20/E-24 **in dev** (treno 2), E-23 (treno 4) | `f9994ce28`, `dda7782db` |
+| H: "H-60 (review)" | H-60 + H-60r **in dev** (treno 2), N70 + mappa guide (treno 3) | `5446d05d7`, `d913ec6d1` |
+| MF: "P1b decisione aperta" | **Deciso (A)**, in dev, sui dati reali **0 cambi** | `998b11c26` |
 | "`gate_b8.sh` pronto, mai eseguito" | B-8 gate **verde** il 20/10; all-backend verde su ogni treno | `logs/allbackend-20261020.summary`, `gate-train1..4` |
-| Z-29a "campionamento" | Z-29a v3 **in dev**; Z-29a-f in dev (treno 4) | `746920b83`, `bbc668d02` |
+| Z-29a "campionamento" | Z-29a v3 **in dev**; Z-29a-f in dev (treno 4) | `68c166672`, `616803571` |
 | Elenco "decisioni aperte": Litestream a/b, E-AI503, E-23, MF-P1b, D-W85-3, TC-23, E-26 | **Chiuse o superate** (§5) | DB `ask_user` |
 | Backlog `Z-29`: "dopo la 1.3, analisi, Z-29a sospesa" | **Vecchio**: Z-29 è in 1.3 (N90 + 20/10) | `BACKLOG_POST_1.2.md:8155` |
 
@@ -42,30 +42,30 @@ Orari = ora locale del Mac (UTC+2). SHA a 9 caratteri.
 Stati: **DEV** = in `dev_release2` · **BR** = committato su un branch, non in dev · **WT** = nel worktree, non committato · **GO** = deciso e autorizzato, codice non iniziato · **AN** = solo analisi o domanda · **IDEA** = solo idea/dopo.
 Colonna "4 fonti": B=backlog, P=piani, D=decisioni/DB, G=git. `!` = manca in una fonte dove dovrebbe stare.
 
-### 2.1 DEV — entrati dopo il push del 19/10 (`ecc7ac667`)
+### 2.1 DEV — entrati dopo il push del 19/10 (`d61270a14`)
 
 | Treno | Lotti (merge) |
 |---|---|
-| 1 `701054da9` | Z-29a v3 + Z-29r (`746920b83`) · B-8 rifinitura (`7d597ed90`) · N69a (`3e82ed2e0`) · X-R45b-ui + N61-form (`08e23108a`) · L1a (`2a8e3f3f8`) |
-| 2 `f73514a77` | H-60 + H-60r (`e8c970379`) · E-AI503 + E-20 + E-24 (`58846c7e1`) · X wac-inf (`bb295763f`) · Z-29d-0 + Y-38 (`ba16706cb`) · B-50 (`4b592ca93`) · B-52 Fineco/Danske (`a79a223cd`) · MF-P1b (`3b3e91e6d`) · J-57 (`706257542`) · Z-32(d) backend (`5f2f8e056`) |
-| 3 `6e1761121` | Z-32(d) frontend (`ecbad6861`) · J-66 + §29 (`c4f037f62`) · W-B89 + B-51 (`00c5d9014`) · E-24.2 (`b56e46b37`) · B-53/54/55 (`414683c81`) · MF-E2 (`8d8d345e6`) · H-60 fix W-B37 + mappa guide + N70 (`6ba039f01`) · X P3 funzione a gradini + Z-39 (`cac0ab76e`) |
-| 4 `15fa228ef` | E-23 (`4efc68bad`) · Z-29a-f (`bbc668d02`) · J-67 (`89fd61c83`) · MF-E2b + P3 consumatore (`015094472`) · N69b (`1e711253a`) |
-| dopo | G: note N69 (`a820bd4dd`) · G-28 fixture sicurezza "ok" (`b844f83f2`) |
+| 1 `ad869d2ea` | Z-29a v3 + Z-29r (`68c166672`) · B-8 rifinitura (`02b87bb1d`) · N69a (`5e5bed597`) · X-R45b-ui + N61-form (`ffcee8a9b`) · L1a (`3d5fe75e1`) |
+| 2 `1feacc35e` | H-60 + H-60r (`5446d05d7`) · E-AI503 + E-20 + E-24 (`f9994ce28`) · X wac-inf (`c2e6bc09e`) · Z-29d-0 + Y-38 (`39abd27d9`) · B-50 (`1e21d0e53`) · B-52 Fineco/Danske (`d606ae4ba`) · MF-P1b (`998b11c26`) · J-57 (`cf4235997`) · Z-32(d) backend (`4da26592d`) |
+| 3 `283259261` | Z-32(d) frontend (`ba874fb50`) · J-66 + §29 (`6c6132538`) · W-B89 + B-51 (`e309e6235`) · E-24.2 (`7781b9cab`) · B-53/54/55 (`a792351fd`) · MF-E2 (`a357b7553`) · H-60 fix W-B37 + mappa guide + N70 (`d913ec6d1`) · X P3 funzione a gradini + Z-39 (`a45653fe2`) |
+| 4 `8fd43a901` | E-23 (`dda7782db`) · Z-29a-f (`616803571`) · J-67 (`bb6d852e7`) · MF-E2b + P3 consumatore (`44f268c94`) · N69b (`5ba3a3859`) |
+| dopo | G: note N69 (`7c28cad3b`) · G-28 fixture sicurezza "ok" (`b417fbd95`) |
 
 ### 2.2 BR — committati sul branch del figlio, **non in dev**
 
 | Lotto | WS | Commit | Stato | Chi lo aspetta |
 |---|---|---|---|---|
-| H-61 · funzione `admin_setup_status()` | A | `64b8b9fa3` feat, `bdb083782` doc, `50d1f29c6` journal (branch A; già fusi nel branch H) | verde: 310 test | H (per la rotta R1) |
-| H-61 · CP1 intermedio (L1: token per scopo, limite, log, tag "Hosting panel", controllo `platform.hosting_panel`, Q5 sospensione) | H | `e917659c9` + merge `f9f417bfa` | **rosso voluto**: `api panel-status` 20, `hosting-panel-routes` 4/15, `instance-block` 1, finché non c'è R1 | coordinatore (merge di dev in H), poi H scrive R1 |
-| J-60 · costo di carico negativo rifiutato | J | `cd44e6531` + `7321c8b9b` | verde, riga CHANGELOG 🐛 proposta | treno 5 |
-| E · scatto galleria `settings/email` (8 pagine, 4 lingue) | E | `b02611402` + `a7c7de18d` | solo doc, mkdocs strict ok | treno 5 |
+| H-61 · funzione `admin_setup_status()` | A | `3c13d5040` feat, `2c3a894b7` doc, `f242042b3` journal (branch A; già fusi nel branch H) | verde: 310 test | H (per la rotta R1) |
+| H-61 · CP1 intermedio (L1: token per scopo, limite, log, tag "Hosting panel", controllo `platform.hosting_panel`, Q5 sospensione) | H | `fb5bfb6d3` + merge `9feab18c5` | **rosso voluto**: `api panel-status` 20, `hosting-panel-routes` 4/15, `instance-block` 1, finché non c'è R1 | coordinatore (merge di dev in H), poi H scrive R1 |
+| J-60 · costo di carico negativo rifiutato | J | `e76c63ee1` + `89d754c28` | verde, riga CHANGELOG 🐛 proposta | treno 5 |
+| E · scatto galleria `settings/email` (8 pagine, 4 lingue) | E | `fb0af49cf` + `bf47d9fd0` | solo doc, mkdocs strict ok | treno 5 |
 
 ### 2.3 WT — nel worktree, **non committato** (il rischio più alto)
 
 | Lotto | Worktree / branch | Cosa c'è | Stato / cosa manca |
 |---|---|---|---|
-| **Y-39a** · modulo unico `chartSignalRendering.ts` per schede e anteprima | `e-alfy-redesigned-spork` (Y) | 11 file: 4 nuovi (modulo, test del modulo, `ChartSettingsModal.test.ts`, gate `signalRendering.gate.test.ts`) + 7 modificati (modale, due pagine, test, runner +3 righe, piano, backlog Y-41/Y-42) | Vitest 375/375 e 1044/1044, svelte-check 0/0. **E2E (~25 min) mai partita**: nessun log. Base `a91ff36cd`, 200 commit indietro; merge simulato con dev: 0 conflitti |
+| **Y-39a** · modulo unico `chartSignalRendering.ts` per schede e anteprima | `e-alfy-redesigned-spork` (Y) | 11 file: 4 nuovi (modulo, test del modulo, `ChartSettingsModal.test.ts`, gate `signalRendering.gate.test.ts`) + 7 modificati (modale, due pagine, test, runner +3 righe, piano, backlog Y-41/Y-42) | Vitest 375/375 e 1044/1044, svelte-check 0/0. **E2E (~25 min) mai partita**: nessun log. Base `f8b05bfa7`, 200 commit indietro; merge simulato con dev: 0 conflitti |
 | **Z-29s-a** · metà backend del campionamento dei segnali | `e-alfy-potential-sniffle` (Z) | 6 file: rossi in `test_assets_prices.py`, `test_price_query_sampling.py`, `test_signal_aggregation.py`, `timeSeriesAggregation.test.ts`, nuova tabella `signal_sampling_cases.v1.json`, piano | solo rossi scritti, nessun codice |
 | **E · voce X della galleria in it/fr/es + timbro** | `e-alfy-stunning-fortnight` (E) | 9 file, "CHECKPOINT READY" delle 14:36 | non committato. **`.translate-hashes.json` e BACKLOG sono cambiati anche in dev** → un merge con l'albero sporco non parte, e dopo il commit il JSON può confliggere |
 | J · journal J-70 + promemoria L1b/R1/CP-8-9 | `e-alfy-crispy-goggles` (J) | 2 file, messaggio già concordato `docs(journal): J-70, L1b R1 CP-8/9 memo` | da committare prima di aggiornare la base |
@@ -237,10 +237,10 @@ Regole: al massimo **3 sessioni attive**, **un solo lotto per sessione**, **un s
 
 ### Ondata 0 — mettere in sicurezza (coordinatore soltanto, nessun figlio)
 
-> **Stato al 21/10 ~11:35: ondata 0 FATTA** (approvata dal developer). Copia dei diff ✔, venv + corsia + primo giro leggero ✔, baseline Linux `all-backend` su `b844f83f2` **verde 7/7 in 25 min 42 s** ✔, `.claude/` nel git (`1a0586f0b`) ✔, treno 5 in dev (J-60, pezzo di A per H-61, E galleria) con gate leggero verde ✔, contabilità committata (`208199bf6`) ✔. `dev_release2` = `208199bf6`, **non pushato** (la push è tua). L'ondata 1 aspetta il tuo via.
+> **Stato al 21/10 ~11:35: ondata 0 FATTA** (approvata dal developer). Copia dei diff ✔, venv + corsia + primo giro leggero ✔, baseline Linux `all-backend` su `b417fbd95` **verde 7/7 in 25 min 42 s** ✔, `.claude/` nel git (`86a2d4ea4`) ✔, treno 5 in dev (J-60, pezzo di A per H-61, E galleria) con gate leggero verde ✔, contabilità committata (`84ccb8116`) ✔. `dev_release2` = `84ccb8116`, **non pushato** (la push è tua). L'ondata 1 aspetta il tuo via.
 1. **Copia di sicurezza leggera** del lavoro sporco: per ogni worktree sporco un `git diff` + elenco dei file non tracciati in una cartella di scratch. (Il tar da 25,9 GB c'è già; questa è la copia comoda da leggere.) Nessun file viene toccato.
 2. **Ambiente**: symlink del venv (§6); corsie con `db populate --force --clean`; **primo giro leggero**: `services admin-bootstrap` (310 test, senza server), `front check`, Vitest dei 4 file di Y-39a sulla copia di Y.
-3. **Baseline Linux**: `all-backend --fresh-run` su `b844f83f2`, da solo, con il carico sotto controllo. Serve a sapere se "verde sul Mac" è "verde qui".
+3. **Baseline Linux**: `all-backend --fresh-run` su `b417fbd95`, da solo, con il carico sotto controllo. Serve a sapere se "verde sul Mac" è "verde qui".
 4. **`.claude/` + `CLAUDE.md` nel git** (commit locale su `dev_release2`, escluso `settings.local.json`) *prima* di creare qualunque nuovo worktree o aggiornare una base. **Serve il tuo ok.**
 5. **Treno 5** (commit/merge locali, serve il tuo ok): J (commit del journal → J-60 entra) · E (commit del checkpoint traduzioni + le 2 già pronte) · A (pezzo H-61). Gate: `api sync`, `front check`, `i18n check`, `mkdocs build` stretto + `check-links`, Vitest dei file toccati. L'all-backend lo vale già il punto 3 + il giro del treno.
 6. **Contabilità** (1-2 ore, solo journal): ✅ alle voci già entrate; piano generale 1.3 aggiornato con Y-39/40, Z-29b/s/d/fx, H-61, backup; backlog Z-29 corretto; Y-41/Y-42/J-70 riportati in dev.

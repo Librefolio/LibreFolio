@@ -485,7 +485,7 @@ describe('AI Export prompt renderer', () => {
  * through `probeTranslation`, never written here. Each language is paired with the response language the UI derives
  * from it, so neither section may depend on that either.
  *
- * Today (base `4df888f78`) neither section exists and no catalogue has the key: AF-01, AF-02 and RI-01 to RI-03 are red,
+ * Today (base `b0de09a63`) neither section exists and no catalogue has the key: AF-01, AF-02 and RI-01 to RI-03 are red,
  * and so are three order pins of the suite above (the analysis order, the data-only order, the endings). AF-03 and RI-04
  * are guards, green today and after; so is the Export Data probe equivalence above, now in the four languages.
  *
@@ -497,7 +497,7 @@ describe('AI Export prompt renderer', () => {
  * analysis' answer_focus, which must not repeat what the analyses' Shared Verification Instructions already say. That
  * absence is no guard of its own: before the cure there is no constant to look for, so it would be green for the wrong
  * reason; it is asserted after the presence. RI-05 reads the constant by name from the module namespace, so that this file
- * compiles and runs before the cure. Today (base `badc30832`) the constant does not exist: RI-05 is red until E-24.2.
+ * compiles and runs before the cure. Today (base `7ed3f2ae9`) the constant does not exist: RI-05 is red until E-24.2.
  */
 describe('AI Export prompt renderer — every prompt closes on a trusted instruction to answer, not to restate the data (E-24)', () => {
     /** The one catalogue key of Reply Instructions: the sentence the AI replies with when the user adds no question. */

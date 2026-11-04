@@ -3,7 +3,7 @@ J-1, item 4 (workstream MF; the developer's go of 19/10): the orientation of a s
 ``financial_math/fx_rates.py::oriented_rate``. No value changes.
 
 ``fx_rates`` keeps each pair once, its codes in alphabetical order, with the rate of the first in the second. Four sites
-read such a rate from a source to a destination, and until J-1 each wrote the rule again (HEAD ``8eb783b0b``):
+read such a rate from a source to a destination, and until J-1 each wrote the rule again (HEAD ``47299b76f``):
 
 * ``fx/conversion.py::compute_chain_rate``, the step of a route: ``composite *= rate`` when ``fc < tc``, else
   ``composite *= Decimal("1") / rate``;
@@ -141,7 +141,7 @@ def _outcome(function, *args):
 
 
 # =============================================================================
-# HEAD 8eb783b0b, verbatim (docstrings aside)
+# HEAD 47299b76f, verbatim (docstrings aside)
 # =============================================================================
 
 

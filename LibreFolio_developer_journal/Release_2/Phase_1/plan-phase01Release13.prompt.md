@@ -497,7 +497,7 @@ Le rinomine pure non ne hanno bisogno.
 **Decisione del developer (14/10, riportata dal coordinatore colori)**: si va subito ai ruoli `--lf-*` e alle utility
 semantiche pubblicate dal workstream T dei colori. Le scale di Tailwind non vengono ritinte.
 
-**In vigore da T-1** (`2018fd853`, in `dev_release2` dal 14/10 alle 23:10 con `4e024dfe8`). Due gate in `core-unit`,
+**In vigore da T-1** (`7139acda5`, in `dev_release2` dal 14/10 alle 23:10 con `717579fdc`). Due gate in `core-unit`,
 `themeRoles` e `themeTokens`, fanno rispettare le regole:
 - **un file frontend nuovo nasce a zero**: nessuna classe di palette (`bg-white`, `text-gray-*`, `dark:bg-slate-*`…) né
   colori scritti a mano; solo le utility `*-lf-*` (sezione «Design System» di
@@ -603,10 +603,10 @@ nella tabella, col link. Così il lotto sposta pagine, non riscrive testo.
 
   | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
   |---|---|---|---|---|
-  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`ec0dc7ebd`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
-  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | ~~W, dal 15/10 alle 07:55~~ **chiuso: entrato il 15/10 alle 16:19 (`14d58cc61`)** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
-  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | ~~Y, FE6a, dal 15/10 alle 12:47~~ **chiuso: entrato il 15/10 alle 15:12 (`badec1465`)** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
-  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | ~~Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24~~ **chiuso: entrato il 15/10 alle 18:08 (`c747a74c3`)** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
+  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`e2653c2d1`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
+  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | ~~W, dal 15/10 alle 07:55~~ **chiuso: entrato il 15/10 alle 16:19 (`e81a7ba9a`)** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
+  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | ~~Y, FE6a, dal 15/10 alle 12:47~~ **chiuso: entrato il 15/10 alle 15:12 (`d2e2b7763`)** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
+  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | ~~Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24~~ **chiuso: entrato il 15/10 alle 18:08 (`c0dc85fbb`)** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
 
 ## 8. Traguardi, in ordine di dipendenza
 
@@ -712,7 +712,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > salire; tutto il riordino del piano 43, backend e frontend; piano in `Release_2/Phase_1`,
 > con le chiusure riportate anche in `Phase_0`; tutti e due i programmi integrano in
 > `dev_release2`; git locale al coordinatore, push al developer (regola del 14/10,
-> `cc7a94501`).
+> `89f29a4c1`).
 >
 > **Fuori pista**: il coordinatore colori ha corretto il calendario delle cartelle frontend
 > (il suo lotto A parte subito e tocca anche cambi, asset e transazioni); il §3 e il §7
@@ -720,12 +720,12 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### Sessioni iniziali avviate ✅ (2026-10-14)
 
-> **Note implementazione**: base della fase `459131eb8` (piano generale, README, sezioni H…Y del
+> **Note implementazione**: base della fase `b5317cb6e` (piano generale, README, sezioni H…Y del
 > backlog). Avviate in modo piano, agente `coordinated-workstream`, prima consegna = solo analisi:
 > H (`e-alfy-h-piattaforma`, 6181), A (`e-alfy-a-account-e-accessi`, 6182), X
 > (`e-alfy-x-plugin-asset-e-ricerca`, 6183), W (`e-alfy-w-import-e-transazioni`, 6184), J
 > (`e-alfy-j-numeri-e-analisi`, 6185), Z (`e-alfy-z-sospensione-e-risveglio`, 6186); l'app rinomina
-> i rami dal nome della sessione poco dopo la creazione. Ogni worktree è nato da `origin/dev_release2` (`6d0b1266c`) ed
+> i rami dal nome della sessione poco dopo la creazione. Ogni worktree è nato da `origin/dev_release2` (`885f7e91e`) ed
 > è stato portato alla base con `merge --ff-only`; verificati HEAD, pulizia e presenza del file
 > dell'agente e del piano.
 >
@@ -757,7 +757,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 ### Cancello dei colori sul rilascio (2026-10-14)
 
 > **Note implementazione**: il developer ha deciso che la 1.3 non esce con la conversione dei neutri e degli stati a
-> metà. Il coordinatore colori l'ha prima tradotta in «ondate W1–W4 di T» (`e41e0e2b1`), poi l'ha precisata: servono
+> metà. Il coordinatore colori l'ha prima tradotta in «ondate W1–W4 di T» (`a4a3d09f0`), poi l'ha precisata: servono
 > W1–W6, B2, B4 per neutri e guadagno/perdita, B5, e quindi tutti i lotti A–D di R. Per la W4 basta FE8a: le due
 > modali di FE8b passano dal B5. Aggiornati §1, §3, §4 (X, W, Y), §7, §8, §9.
 >
@@ -780,7 +780,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > sue), ha delegato al coordinatore: «vedi tu se aspettare che leggo tutto, o intanto grazie a queste riesci ad avviare
 > qualche lavoro». Partono solo i primi checkpoint, tutti di riordino puro e senza decisioni di prodotto aperte:
 > H CP1 (`platform/`, `files/`), X0 e CP1 (registri per famiglia), A1 (`accounts/`), W0 e W1 (transazioni e broker),
-> J-0 e CP-1 (PAC). Base portata a `c9bb8f257` (regole C1–C7 nel §6) con un fast-forward dei cinque worktree, puliti.
+> J-0 e CP-1 (PAC). Base portata a `3a7e76015` (regole C1–C7 nel §6) con un fast-forward dei cinque worktree, puliti.
 > Approvazione in modalità interattiva, con le parole del developer alla lettera e le risposte di coordinamento.
 > Z resta fermo: la sua prima parte dipende dalle decisioni 31 e 32.
 >
@@ -815,13 +815,13 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 > **Note implementazione**:
 > - checkpoint committati sui rami dei figli:
->   - J-0 (`faa8ce01b`);
->   - A1 (`b53dfd705`, `fc66f19c8`, validazione `29ee87484`);
->   - W CP1 (`9a44bdcec`, `64e3d0a7d`);
->   - H CP1 (`a52018fd7`, `7366c0355`).
+>   - J-0 (`f0309bfc6`);
+>   - A1 (`9966ec451`, `257f85a71`, validazione `b32b9f96e`);
+>   - W CP1 (`00c30943e`, `14346f254`);
+>   - H CP1 (`b3d1811b6`, `dddc4d522`).
 > - Ogni base misurata con `all-backend`: 12 965 passati, 28 saltati.
 > - Entra per primo A1, il primo validato sulla revisione combinata con `dev_release2` (T-1, T-2, G). Merge
->   `769cc31cb`, albero uguale alla simulazione, codice identico alla revisione validata.
+>   `ea1f73618`, albero uguale alla simulazione, codice identico alla revisione validata.
 > - H segue: l'aggiornamento di base è aperto con 6 conflitti d'import, che H risolve nel suo worktree.
 >
 > **Fuori pista**:
@@ -831,7 +831,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
 > - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
 >
-> **Aggiornamento (00:55)**: entra anche H CP1 (`6a605904c`). Prima l'aggiornamento di base con A1: H ha risolto 6
+> **Aggiornamento (00:55)**: entra anche H CP1 (`3cea9aaac`). Prima l'aggiornamento di base con A1: H ha risolto 6
 > conflitti d'import e rivalidato (`all-backend` uguale alla base). Il CP2 di H si divide:
 > - CP2a: pacchetto `config/`, letture d'ambiente e `api/v1/system/`, senza tagliare `main.py`;
 > - CP2b: il taglio di `main.py`, dopo il commit del coordinatore.
@@ -841,12 +841,12 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 ### Riordino del backend: sette lotti integrati ✅ (2026-10-15, 02:20)
 
 > **Note implementazione**: in `dev_release2`, nell'ordine:
-> - A1 (`769cc31cb`);
-> - H CP1 (`6a605904c`);
-> - A2, il frontend in `lib/features/` (`76e61889b`);
-> - W1 e W2, transazioni e broker per tema (`998fd2701`);
-> - H CP2a, il pacchetto `config/` con la guardia sulle letture d'ambiente (`60f8a35ce`);
-> - X CP1 e CP2a, registri per famiglia e `services/assets/` senza shim (`64a5a3fe7`).
+> - A1 (`ea1f73618`);
+> - H CP1 (`3cea9aaac`);
+> - A2, il frontend in `lib/features/` (`b569b4119`);
+> - W1 e W2, transazioni e broker per tema (`24776d89c`);
+> - H CP2a, il pacchetto `config/` con la guardia sulle letture d'ambiente (`434e5ea30`);
+> - X CP1 e CP2a, registri per famiglia e `services/assets/` senza shim (`ea666b511`).
 >
 > Ogni ingresso dopo un aggiornamento di base e la validazione della revisione combinata nel worktree del figlio:
 > - `all-backend` uguale alla base, più i test nuovi;
@@ -860,9 +860,9 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### W I1, integrità, integrato ✅ (2026-10-15, 03:01)
 
-> **Note implementazione**: `dc7e4e48e`, merge di `625e3dacc` su `ae998da78`. Il commit è creato con `git commit-tree`
+> **Note implementazione**: `0e314caf6`, merge di `15654bb88` su `aebf0a0e6`. Il commit è creato con `git commit-tree`
 > sull'albero della simulazione (`1153296e3`), così l'avviso al coordinatore colori porta già lo SHA; poi
-> `merge --ff-only`. Validazione di W sulla revisione combinata `123c21efc`:
+> `merge --ff-only`. Validazione di W sulla revisione combinata `01c2e99af`:
 > - `all-backend` 13 458 passed, 28 skipped, 0 failed;
 > - `api schema` cambia solo `asset_event_id` di `GET /api/v1/transactions`.
 >
@@ -872,13 +872,13 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### A3, schede di Settings e accesso, integrato ✅ (2026-10-15, 03:25)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `90491071d` (A3 `755eaa27d` e journal, base aggiornata con
-> W I1 in `d851c39bc`). Registro delle schede di Settings, O-15 (errori di login come chiavi di catalogo), K-17
+> **Note implementazione**: `dev_release2` avanza veloce a `332c30dec` (A3 `9d082e12d` e journal, base aggiornata con
+> W I1 in `282af050e`). Registro delle schede di Settings, O-15 (errori di login come chiavi di catalogo), K-17
 > (`PasswordInput` da tastiera, nome tradotto), L12 (`user_cli.py create-user`, `dev.py user create … --role`).
 > Validazione di A:
-> - revisione `35f1e0a16` completa: `all-backend` 13 440 passed, 28 skipped, 0 failed; E2E auth 29, settings 45,
+> - revisione `1d4cf6b42` completa: `all-backend` 13 440 passed, 28 skipped, 0 failed; E2E auth 29, settings 45,
 >   app-start-auth 3, onboarding-guides 24;
-> - revisione `d851c39bc` mirata dopo W I1: build e `front check` 0/0; core-unit 4 261, component-unit 3 192;
+> - revisione `282af050e` mirata dopo W I1: build e `front check` 0/0; core-unit 4 261, component-unit 3 192;
 >   `theme-roles` pulito; `check-orphans` 265 file backend; `dev-cli-image` 39, `gate-event-loop-io` 14; E2E auth
 >   29, settings 45, `tx-broker-access` 5.
 >
@@ -893,10 +893,10 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### H CP3, segreti e chiave d'istanza, integrato ✅ (2026-10-15, 03:50)
 
-> **Note implementazione**: `d08d9358f`, merge di `751bf9ab3` su `ed29f77c2`. Quattro commit di H: due correzioni in
-> commit separati (`8f9e8f018`, un segreto vuoto o di soli spazi vale come assente; `7640313a4`, una corsia di test
-> usa segreti suoi), poi CP3 (`54fd32def`: `env_secret()` con `*_FILE`, chiave d'istanza e `derive_key`, controlli
-> all'avvio, `.env.example` completo) e il journal. Aggiornamento di base `751bf9ab3` con X CP1/CP2a, W I1 e A3: due
+> **Note implementazione**: `089113ce0`, merge di `8aee21d76` su `6dc7eb25f`. Quattro commit di H: due correzioni in
+> commit separati (`76ad62b42`, un segreto vuoto o di soli spazi vale come assente; `4a0ba3b9d`, una corsia di test
+> usa segreti suoi), poi CP3 (`bb7559445`: `env_secret()` con `*_FILE`, chiave d'istanza e `derive_key`, controlli
+> all'avvio, `.env.example` completo) e il journal. Aggiornamento di base `8aee21d76` con X CP1/CP2a, W I1 e A3: due
 > conflitti additivi risolti da H (`main.py`, `test_dev_cli_image.py`). Validazione di H sulla revisione combinata:
 > `all-backend` 12 125 passed, 3 skipped, 0 failed; `api schema` invariato; `config-package` 475.
 >
@@ -906,14 +906,14 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### X CP2b, asset per tema e router per risorsa, integrato ✅ (2026-10-15, 04:00)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `92b42d796`. CP2b è `870c9956f` (124 file): rinomina pura
+> **Note implementazione**: `dev_release2` avanza veloce a `53e3cdd39`. CP2b è `250f9634c` (124 file): rinomina pura
 > `schemas/assets.py` → `schemas/assets/assets.py` (R099, l'unica coppia di git) e tagli nello stesso commit (§6,
 > opzione 1); `services/assets/core` → `base` + `core`, `price_store` → `price_store` + `currency_change` +
 > `event_store`, `api/v1/assets.py` → pacchetto per risorsa, schemi degli eventi in `schemas/assets/events.py`.
 > Controllo indipendente del coordinatore sull'AST: definizioni spostate identiche, salvo docstring, percorsi e 6
 > richiami a `EventStoreOperations`; 50 file con soli import, 8 rivisti a mano. Validazione di X: revisione
-> `eb245b624` (con W I1 e A3) `all-backend` 13 476 passed, 28 skipped, 0 failed; 139 rotte e `api schema`
-> identici; poi, sopra H CP3 (`92b42d796`), controllo leggero: guardia 485 (+10, i moduli nuovi), raccolta, schema
+> `3af8cc977` (con W I1 e A3) `all-backend` 13 476 passed, 28 skipped, 0 failed; 139 rotte e `api schema`
+> identici; poi, sopra H CP3 (`53e3cdd39`), controllo leggero: guardia 485 (+10, i moduli nuovi), raccolta, schema
 > e rotte identici.
 >
 > Gli eventi passano a W (lotto E1): moduli, contratti e righe che restano a X nel messaggio del coordinatore a W del
@@ -921,8 +921,8 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### W K1, chiarezza, integrato ✅ (2026-10-15, 04:10)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `d915c869f` (K1 `532a1fd9c`, base aggiornata con A3, H CP3
-> e X CP2b in `1d1c7e67d`). O-12 (plurale), C-89 (le due date del cambio), V-38 (i problemi di saldo sotto il loro
+> **Note implementazione**: `dev_release2` avanza veloce a `0a5b05666` (K1 `79bdf7e10`, base aggiornata con A3, H CP3
+> e X CP2b in `24cd228fd`). O-12 (plurale), C-89 (le due date del cambio), V-38 (i problemi di saldo sotto il loro
 > titolo), P-15 parte W e W-B8 (testi tradotti dell'editor dei dati). I-10 S3 chiusa senza codice, per decisione del
 > coordinatore: il contratto documentato permette di cancellare gli eventi automatici. Validazione di W sulla
 > revisione combinata: build 0/0, `i18n check` stretto, `core-unit` 4 266, `component-unit` 3 198, `tx-unit` 887,
@@ -934,7 +934,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### H, letture di `web_link_finder` in `config/`, integrato ✅ (2026-10-15, 04:25)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `9dda5ccd9` (lotto `fd873f366`, base aggiornata con X CP2b
+> **Note implementazione**: `dev_release2` avanza veloce a `abd0b9d0c` (lotto `3c27a9e31`, base aggiornata con X CP2b
 > e W K1). Le 7 letture d'ambiente di `services/assets/web_link_finder.py` passano in `config/plugins.py`, la sezione
 > di X, con la stessa semantica; la chiave API vale anche da `..._API_KEY_FILE`. La guardia `config-package` non ha più
 > eccezioni: nessun modulo di `backend/app` fuori da `config/` legge l'ambiente. Validazione di H: `all-backend` 12 185
@@ -943,10 +943,10 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### J CP-1, il PAC per tema, integrato ✅ (2026-10-15, 04:35)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `e1fbc801f`. CP-1A (rinomina) e CP-1B (taglio del PAC e
+> **Note implementazione**: `dev_release2` avanza veloce a `ab3b1dc71`. CP-1A (rinomina) e CP-1B (taglio del PAC e
 > guardia dei confini D-J18, allargata a `sqlmodel` e `backend.app.db`), poi quattro aggiornamenti di base. Sulla
-> revisione `b17f8fb85` (con W I1, A3, H CP3 e X CP2b) J ha fatto la prima run completa sulla combinazione X CP2b +
-> H CP3: `all-backend` 13 810 passed, 28 skipped, 0 failed; `openapi.json` identico. Sull'ultima base (`b8d604086`,
+> revisione `d11182f65` (con W I1, A3, H CP3 e X CP2b) J ha fatto la prima run completa sulla combinazione X CP2b +
+> H CP3: `all-backend` 13 810 passed, 28 skipped, 0 failed; `openapi.json` identico. Sull'ultima base (`e85f7c028`,
 > con W K1 e il lotto di H) un controllo leggero: guardia 567, raccolta +61, API identica.
 >
 > **Strumenti nuovi per i merge**, scritti da J: `patch_effect.py` (bersagli di `patch`/`monkeypatch` che nessuno
@@ -956,18 +956,18 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### W4 CP6, BRIM in `services/brim/`, integrato ✅ (2026-10-15, 04:45)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `155d9b050`. Rinomina pura `548a0688d` (C1): i 4 moduli
+> **Note implementazione**: `dev_release2` avanza veloce a `956a4ab6c`. Rinomina pura `1ff66e047` (C1): i 4 moduli
 > `brim_provider`, `brim_report_sets`, `brim_parse_pool`, `brim_gap_fix` in `services/brim/` (R098–R100), import nei 33
 > plugin, costanti del cancello `gate-event-loop-io`, `applyTo`, skill, doc e devWiki; U-B8 (passo «Capacity table»
-> tolto dalla guida). Validazione di W: `all-backend` 13 749 passed, 28 skipped, 0 failed sulla base `0229dbc6a`;
+> tolto dalla guida). Validazione di W: `all-backend` 13 749 passed, 28 skipped, 0 failed sulla base `25d82b931`;
 > sopra J CP-1 e il lotto di H, controllo leggero (guardia 567, raccolta identica file per file, API identica) e i
 > tre controlli statici del coordinatore puliti. Il taglio (CP7), W3 e W5–W6 aspettano un commit del coordinatore su
 > `brokers.py` e `uploads.py`; intanto W7 e K2.
 
 ### A4, migrazione 005 e token monouso, integrato ✅ (2026-10-15, 05:20)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `e476d2ed4` (A4 `75a8af5a7`, base aggiornata con H CP3,
-> X CP2b, W K1, il lotto di H, J CP-1 e W4 in `3ebf4c043`). Migrazione 005 (`005_accounts_invites`, dopo la 004):
+> **Note implementazione**: `dev_release2` avanza veloce a `a57229f36` (A4 `ab9d7cc15`, base aggiornata con H CP3,
+> X CP2b, W K1, il lotto di H, J CP-1 e W4 in `71a78a893`). Migrazione 005 (`005_accounts_invites`, dopo la 004):
 > tabella `account_tokens` (solo lo SHA-256, uno scopo per token, scadenza, consumo e revoca) e tre colonne di `users`
 > (`session_version`, `email_verified_at` a `NULL` senza riempimento, `last_seen_version`), con `ALTER TABLE` semplice:
 > un batch ricostruirebbe `users` e con `foreign_keys=ON` cancellerebbe a cascata. `token_service` con consumo atomico.
@@ -978,11 +978,11 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### X CP3, i cambi per tema, integrato ✅ (2026-10-15, 05:30)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `8000aba5a`. CP3 `b991d5e26` (PL4): `services/fx/fx.py` →
+> **Note implementazione**: `dev_release2` avanza veloce a `80b6ecf14`. CP3 `47da2d57f` (PL4): `services/fx/fx.py` →
 > `base`, `storage`, `conversion`, `sync`; `api/v1/fx.py` → `api/v1/fx/` (`providers`, `currencies`). Nessuna rinomina
 > a −M95 %. Controllo del coordinatore sull'AST: 32/32 e 20/20 definizioni identiche. Validazione di X: run completa
-> sulla revisione con J CP-1 e W4 (`d1ef3ddeb`): `all-backend` 13 875 passed, 28 skipped, 0 failed; rotte (139) e
-> `api schema` identici. Sopra A4 (`9a3ba752a`) controllo leggero: guardia 573, raccolta e schema identici.
+> sulla revisione con J CP-1 e W4 (`28e91d628`): `all-backend` 13 875 passed, 28 skipped, 0 failed; rotte (139) e
+> `api schema` identici. Sopra A4 (`b51e37472`) controllo leggero: guardia 573, raccolta e schema identici.
 >
 > **Decisioni del coordinatore**: CP3b = W-B9 (contratto e filtri sui fornitori a elenco statico; la BCE dal vivo
 > solo in `test_external`), W-B13, X-R5 (salvo `AssetModal` e le fixture di G, girate al coordinatore colori) e X-R7.
@@ -990,17 +990,17 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### W7, gli schemi delle transazioni come pacchetto, integrato ✅ (2026-10-15, 05:40)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `1cd7300f3`. Due commit, perché il nucleo resta sotto la
-> soglia di somiglianza di git: W7a `00a19bf72`, la rinomina pura (`R100`) di `schemas/transactions.py` in
-> `schemas/transactions/transactions.py`; W7b `e28aad42f`, il taglio in `batch`, `event_suggest`, `promotion` e
-> `type_metadata` (59/59 nomi identici al controllo del coordinatore). Validazione di W: revisione con A4 (`304e6d176`)
+> **Note implementazione**: `dev_release2` avanza veloce a `6e17be873`. Due commit, perché il nucleo resta sotto la
+> soglia di somiglianza di git: W7a `589e5f512`, la rinomina pura (`R100`) di `schemas/transactions.py` in
+> `schemas/transactions/transactions.py`; W7b `30847a9c0`, il taglio in `batch`, `event_suggest`, `promotion` e
+> `type_metadata` (59/59 nomi identici al controllo del coordinatore). Validazione di W: revisione con A4 (`fede4e738`)
 > `all-backend` 13 965 passed, 28 skipped, 0 failed, API identica; sopra X CP3 controllo leggero (guardia 578, raccolta
 > e schema identici). Poi K2a (codici dei rifiuti di DEGIRO e del Generic CSV, L6); K2b dopo un commit del
 > coordinatore su `brokers.py` e `uploads.py`.
 
 ### X CP3b, test dei cambi senza rete, integrato ✅ (2026-10-15, 06:00)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `63a1f675c` (CP3b `cea5ce859`). W-B9: il contratto e i
+> **Note implementazione**: `dev_release2` avanza veloce a `2eaed604f` (CP3b `507bc25ce`). W-B9: il contratto e i
 > filtri dei fornitori di cambi provati su FED e BOE, che hanno elenchi statici; la SNB va anch'essa in rete, quindi
 > resta con la BCE in `test_external` (scostamento motivato dalla decisione delle 05:20, che citava anche la SNB).
 > W-B13, X-R5 (percorsi vecchi in commenti e docstring, compresi una riga di A e 2 di `TODO_FUTURI.md`) e X-R7.
@@ -1009,7 +1009,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### J C-93, connessioni aiosqlite lasciate aperte, integrato ✅ (2026-10-15, 06:05)
 
-> **Note implementazione**: `c412f8dad`, merge di `3a03a1b2c` su `c81670354`. Causa trovata con la skill
+> **Note implementazione**: `72e4eb588`, merge di `45dd764ef` su `323389c72`. Causa trovata con la skill
 > `test-triage`: 7 test dell'AI Export lasciavano aperte connessioni aiosqlite, e un GC in un thread con un loop corrente
 > chiuso ne uccideva il thread di lavoro; pytest attribuiva l'avviso al test in corso, estraneo. Curato nei test.
 > Validazione di J sulla revisione con A4, X CP3 e W7: `services ai-export` 1 025, raccolta +4; prima `all-backend
@@ -1021,18 +1021,18 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### H CP4, `/system/instance` e area degli avvisi, integrato ✅ (2026-10-15, 06:10)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `1b3eb54c7`. Cinque commit di H: la rinomina pura
-> `api/v1/system.py` → `api/v1/system/__init__.py` (`c43ea0460`, R100), il taglio per risorsa (`27a29af09`, 16/16
+> **Note implementazione**: `dev_release2` avanza veloce a `5512afc8e`. Cinque commit di H: la rinomina pura
+> `api/v1/system.py` → `api/v1/system/__init__.py` (`2e3ce168d`, R100), il taglio per risorsa (`7290753af`, 16/16
 > definizioni identiche al controllo del coordinatore), l'endpoint pubblico `GET /api/v1/system/instance` con
-> `LIBREFOLIO_PROFILE` (`42af16d54`), lo store `instanceConfig`, il registro e l'area `InstanceNotices` nel layout
-> (`2069c75cd`), il journal. Validazione di H sulla revisione con J CP-1, W4 e A4: E2E 181 verdi (comprese le spec che
+> `LIBREFOLIO_PROFILE` (`d883a47d4`), lo store `instanceConfig`, il registro e l'area `InstanceNotices` nel layout
+> (`49212c1f2`), il journal. Validazione di H sulla revisione con J CP-1, W4 e A4: E2E 181 verdi (comprese le spec che
 > contano le richieste), `all-backend` 12 343 passed, 3 skipped, 0 failed; senza avvisi l'area non disegna niente, e
 > la galleria resta invariata. Sopra X CP3, W7, X CP3b e J C-93: controllo leggero (guardia 584, raccolta, `api
 > schema` con il solo endpoint nuovo, build e `core-unit`). CHANGELOG con l'endpoint; `LIBREFOLIO_PROFILE` con CP6.
 
 ### J G-8, il catalogo dei Tool sotto carico, integrato ✅ (2026-10-15, 06:30)
 
-> **Note implementazione**: `c75f08101`, merge di `47e0f9eec` su `6d67fdaac` (fix `6ce5ea180`). FastAPI risolve
+> **Note implementazione**: `fc97aea3c`, merge di `36a72fd79` su `c52070928` (fix `e26b0e9fb`). FastAPI risolve
 > `get_current_user` prima che l'endpoint sposti la scadenza, quindi il login del catalogo girava dentro la finestra
 > d'ingresso di 2 s: sotto carico 503. Le rotte senza corpo partono con il loro budget di 20 s; il compute tiene la
 > finestra. Rosso prima e verde dopo (`api tools` 12); `api schema` identico. Senza nuovo controllo di J: H CP4 non
@@ -1041,7 +1041,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### X CP4, gli schemi degli asset per tema, integrato ✅ (2026-10-15, 06:40)
 
-> **Note implementazione**: `7f4618494`, merge di `805f2f112` su `78043417` (CP4 `b31ae0fce`). `schemas/assets/assets.py`
+> **Note implementazione**: `7ab687bc8`, merge di `687d7abed` su `5c8da389` (CP4 `7bbdeaef4`). `schemas/assets/assets.py`
 > (1 001 righe, l'unico modulo di schemi di X sopra la soglia di C3) cede `metadata.py` e `scheduled_investment.py`;
 > via l'`__all__` che faceva da barile. Controllo del coordinatore sull'AST: 49/49 nomi identici. Validazione di X:
 > `all-backend` 13 972 passed, 28 skipped, 0 failed; `openapi.json` identico. Senza nuovo controllo di X: nessun file
@@ -1050,17 +1050,17 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### W K2a, rifiuti a codice e L6, integrato ✅ (2026-10-15, 06:50)
 
-> **Note implementazione**: `dev_release2` avanza veloce a `62c964242` (K2a `0eac8e1b6`, base aggiornata con J C-93,
-> H CP4, J G-8 e X CP4 in `388a20f65`). C-70 parte a: DEGIRO e il Generic CSV rifiutano con codici tradotti nel
+> **Note implementazione**: `dev_release2` avanza veloce a `2055f257a` (K2a `ca5bd0bb9`, base aggiornata con J C-93,
+> H CP4, J G-8 e X CP4 in `fc88d01e9`). C-70 parte a: DEGIRO e il Generic CSV rifiutano con codici tradotti nel
 > wizard (7 chiavi `importWizard.parseRefusal.*`); L6: il 400 del parse nomina plugin e file con i nomi visibili.
-> Validazione di W: `all-backend` 14 027 passed, 28 skipped, 0 failed sulla base `58be885a9`; sopra il fuso, controllo
+> Validazione di W: `all-backend` 14 027 passed, 28 skipped, 0 failed sulla base `50d9499fd`; sopra il fuso, controllo
 > leggero con le E2E `tx-import-broker-mismatch` e `tx-import-degiro` sul layout nuovo di H. CHANGELOG con due righe.
 > C-95 nuova (l'albero degli schemi nelle istruzioni). W prepara E1 in sola lettura; K2b, CP7, W3 e W5–W6 aspettano
 > un commit del coordinatore su `brokers.py` e `uploads.py`.
 
 ### A4b, versione di sessione, integrato ✅ (2026-10-15, 07:05)
 
-> **Note implementazione**: `dbf89cdd5`, merge di `3d6ecb2fe` su `e7cf1ae80` (A4b `3ac4114d5`, decisione D-A17). Il
+> **Note implementazione**: `0640cd9c1`, merge di `7fa6fa609` su `e956a798b` (A4b `68f9c9f80`, decisione D-A17). Il
 > JWT porta `sv`, la versione di sessione dell'account; un token senza `sv` vale 0, quindi l'aggiornamento non
 > disconnette nessuno. Il cambio della password alza la versione e riemette il cookie del dispositivo corrente; un
 > reset da CLI, una disattivazione o un declassamento la alzano. A-3 chiusa (bcrypt in un thread); la voce «🔑
@@ -1072,17 +1072,17 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### X J-5, il loop chiuso nel thread dei fornitori, integrato ✅ (2026-10-15, 07:20)
 
-> **Note implementazione**: `743fca514`, merge di `cb0bac88d` su `ee5d81a6f` (J-5 `7794e2fb0`). Una riga in
+> **Note implementazione**: `addc90a46`, merge di `770599f68` su `b62c4f482` (J-5 `9647ab4dc`). Una riga in
 > `services/assets/core.py`: `asyncio.set_event_loop(None)` prima di `loop.close()`, come `asyncio.Runner.close()`;
 > un test di test-author, rosso prima e verde dopo. Validazione di X: `all-backend` 14 003 passed, 29 skipped,
-> 0 failed sulla base `786f3e216` (lo skip in più è lo scraper CSS di Borsa Italiana a mercato chiuso). Senza nuovo
+> 0 failed sulla base `ff541961a` (lo skip in più è lo scraper CSS di Borsa Italiana a mercato chiuso). Senza nuovo
 > controllo di X: con W K2a e A4b condivide solo il backlog; controlli statici puliti. Niente CHANGELOG: non si
 > vede da fuori. Poi X-R8 (cache di 24 ore degli elenchi delle valute dei fornitori).
 
 ### B, Backup e Docker, avviata in sola analisi (2026-10-15, 07:10)
 
 > **Note implementazione**: sessione `5618ecee`, worktree `e-alfy-miniature-telegram`, corsia 6187 +
-> `/tmp/librefolio-r13-b`, base `ee5d81a6f` (fast-forward da `origin/dev_release2`, file dell'agente presente).
+> `/tmp/librefolio-r13-b`, base `b62c4f482` (fast-forward da `origin/dev_release2`, file dell'agente presente).
 > Condizione del §4 soddisfatta: segreti e configurazione di H sono in `dev_release2` dal CP3. Nodi affidati
 > all'analisi: i segreti nello zip (specifica F01, D-X2, note di H-3), dove vive il backup dell'istanza rispetto agli
 > export per asset di `backup.py`, l'aggancio all'avvio dopo il CP2b di H, le decisioni 6–9 del §10, come si prova
@@ -1090,13 +1090,13 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### H CP5a, prontezza e versione, integrato ✅ (2026-10-15, 07:30)
 
-> **Note implementazione**: `9deb0ea08`, merge di `5d1242ae5` su `4fdc0d9c5`. Commit di H: `e8ceda504`
+> **Note implementazione**: `cf4ce0e71`, merge di `7c90b7e23` su `04e57910a`. Commit di H: `40a7523cb`
 > (`GET /system/ready`: 200 se il DB risponde ed è alla head delle migrazioni, 503 altrimenti, un codice per
-> controllo; `/system/info` senza sessione risponde solo `app_version`, decisione 15), `6e78b8c96` (R2: in un checkout
+> controllo; `/system/info` senza sessione risponde solo `app_version`, decisione 15), `df0440715` (R2: in un checkout
 > vince `git describe`; prima di tutto `LF_APP_VERSION`, come in `vite.config.ts`; `pyproject.toml` a 0.0.0, metà di
-> C-84), `d80c0a091` (la head delle migrazioni si legge in un thread, non nel ciclo di eventi: correzione chiesta dal
-> coordinatore all'handoff), più i log. Base aggiornata con G-8, X CP4, W K2a e A4b in `cf6f08856`. Validazione di
-> H: `all-backend` 12 436 passed, 3 skipped, 0 failed sulla base `6d67fdaac`; sopra il fuso, controllo leggero
+> C-84), `2ed8e1433` (la head delle migrazioni si legge in un thread, non nel ciclo di eventi: correzione chiesta dal
+> coordinatore all'handoff), più i log. Base aggiornata con G-8, X CP4, W K2a e A4b in `f1a6d9375`. Validazione di
+> H: `all-backend` 12 436 passed, 3 skipped, 0 failed sulla base `c52070928`; sopra il fuso, controllo leggero
 > (`platform-readiness` 14, `api system` 116, `api auth` 60, `session-revocation` 3, `utils version` 51,
 > `config-package` 592, `config-env-example` 36, `check-orphans`, `mkdocs build` stretto, `check-links` 95; `api
 > schema` con le sole aggiunte di CP5a). X J-5 entrato nel frattempo tocca solo file di X: niente nuovo controllo.
@@ -1108,10 +1108,10 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### J-6, guardia di suite sulle connessioni aiosqlite, integrato ✅ (2026-10-15, 07:40)
 
-> **Note implementazione**: `e2cb55054`, merge di `e6016fca7` su `2c699f85c` (J-6 `b49a54645`). Una fixture
+> **Note implementazione**: `e43d689b2`, merge di `4a61dd2b2` su `15e62c3ff` (J-6 `c2bc37ef7`). Una fixture
 > autouse nel `conftest.py` condiviso: un test che lascia aperta una connessione aiosqlite creata da lui, nel thread
 > principale, va in ERROR al proprio teardown, con lo stack di creazione. Elenco delle eccezioni esplicito e vuoto;
-> self-test in `utils gate-aiosqlite-leak` (9). Base aggiornata dal coordinatore in `c7a2b050e`, con un conflitto nel
+> self-test in `utils gate-aiosqlite-leak` (9). Base aggiornata dal coordinatore in `1daf9bcb0`, con un conflitto nel
 > backlog (la chiusura di J-5 accanto a J-6) risolto tenendo le due righe. Validazione di J sul fuso: `all-backend
 > --workers 2` 14 199 passed, 29 skipped, 0 failed, nessun rapporto della guardia; raccolta +9, i soli self-test.
 > Senza nuovo controllo: dopo la validazione sono entrati solo la versione fissata nelle gallerie e i record. La
@@ -1122,10 +1122,10 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### W E0 committato, FE8a annunciato (2026-10-15, 07:55)
 
-> **Note implementazione**: E0 (`692fbae39`: eventi distinti per data e tipo nel CSV e nel selettore della data,
-> X-R9, W-B15), base aggiornata in `2bf015afa`; entra dopo la finestra della galleria. FE8a (tagli delle tre modali
+> **Note implementazione**: E0 (`167ba7e8c`: eventi distinti per data e tipo nel CSV e nel selettore della data,
+> X-R9, W-B15), base aggiornata in `942d14b20`; entra dopo la finestra della galleria. FE8a (tagli delle tre modali
 > delle transazioni) annunciato al coordinatore colori, che ha dato via libera: nessun loro annuncio aperto, T li
-> converte nell'ondata W4 sui pezzi già tagliati. Annuncio aperto nella tabella del §7 (`2c699f85c`).
+> converte nell'ondata W4 sui pezzi già tagliati. Annuncio aperto nella tabella del §7 (`15e62c3ff`).
 
 ### B, analisi consegnata; punti 38–43 per il developer (2026-10-15, 08:05)
 
@@ -1147,11 +1147,11 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### W E0, gli eventi per data e tipo, integrato ✅ (2026-10-15, 07:51)
 
-> **Note implementazione**: `d226bc69e`, merge di `2326624c1` su `989991f78` (E0 `692fbae39`). `CsvColumnDef.matchKey`:
+> **Note implementazione**: `f0a5feaa9`, merge di `00d97d1ab` su `0bb674c64` (E0 `167ba7e8c`). `CsvColumnDef.matchKey`:
 > nel CSV degli eventi due righe sono doppioni solo con la stessa data e lo stesso tipo (la riga 38 di
 > `EventDataImportModal.svelte`, di X, scritta da W col via del coordinatore); il selettore della data blocca solo i
 > giorni con un evento dello stesso tipo. Più i due test-id di X-R9 in `DataImportModal.svelte` e W-B15. Validazione
-> di W sul fuso `2bf015afa`: build, `core-unit` con la guardia dei colori, `component-unit`, E2E `asset-data-editor`,
+> di W sul fuso `942d14b20`: build, `core-unit` con la guardia dei colori, `component-unit`, E2E `asset-data-editor`,
 > `fx-csv-import`, `fx-editor`, `tx-bulk-operations`, `mkdocs build` stretto. Entrato prima della finestra della
 > galleria, su richiesta del coordinatore colori, così R, L e T non devono rifondere; dopo la validazione erano entrati
 > solo la guardia di J-6 e dei record, nessun file frontend. CHANGELOG con una riga; chiuse I-11 a e d (README del 38)
@@ -1178,10 +1178,10 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### X-R8, le valute dei fornitori dei cambi in cache, integrato ✅ (2026-10-15, 08:18)
 
-> **Note implementazione**: `173ba19e2`, merge di `849c98dda` su `1dac6b326` (X-R8 `1dfd4e657`). `services/fx/catalog.py`:
+> **Note implementazione**: `2ccbcda54`, merge di `eab00c5b9` su `ae2b9aca2` (X-R8 `5a5efbff9`). `services/fx/catalog.py`:
 > l'elenco delle valute di ogni fornitore resta 24 ore nella cache `fx_provider_currencies` (visibile nel pannello
 > delle cache); un fornitore che fallisce o supera i 5 s risponde con l'ultimo elenco noto, riprovato dopo 5 minuti.
-> API invariata. Validazione di X: `all-backend` 14 119 passed sulla base `4fdc0d9c5`; sul fuso `38b913df3` (con H
+> API invariata. Validazione di X: `all-backend` 14 119 passed sulla base `04e57910a`; sul fuso `f2f257bbb` (con H
 > CP5a, J-6, W E0) controllo leggero con la guardia di J-6 attiva: `fx-catalog` 8, `api fx-unit` 29, `api fx` 21,
 > `config-package` 593, `check-orphans`, `openapi.json` identico, `mkdocs build` stretto. Entrato prima delle 08:45:
 > dalle 08:45 alla fine delle gallerie r1 e r2 (verso le 10:15), che girano nel checkout principale, `dev_release2`
@@ -1192,14 +1192,14 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 ### E, Email, avviata in sola analisi; checkpoint sui rami dei figli (2026-10-15, 08:40)
 
 > **Note implementazione**: sessione `877410cd`, worktree `e-alfy-stunning-fortnight`, corsia 6188 +
-> `/tmp/librefolio-r13-e`, base `380a3e768`. Condizione del §4 soddisfatta: i token monouso di A4 sono in
-> `dev_release2`, e il contratto di inviti e reset è nel checkpoint A5a (`2d4708578`, sul ramo di A), che E legge con
+> `/tmp/librefolio-r13-e`, base `54cec8400`. Condizione del §4 soddisfatta: i token monouso di A4 sono in
+> `dev_release2`, e il contratto di inviti e reset è nel checkpoint A5a (`e274dd28f`, sul ramo di A), che E legge con
 > `git show`. Nodi affidati all'analisi: invio fuori dal ciclo di eventi, server SMTP finto per i test, link senza
 > `LIBREFOLIO_PUBLIC_URL`, enumerazione, limite di invii, lingua, avvisi di configurazione, blocco dell'istanza.
 >
-> Committati sui rami dei figli, non integrati: A5a (`7da2cd9a2`: migrazione 006, inviti, `registration_mode`, API
+> Committati sui rami dei figli, non integrati: A5a (`f640b4a62`: migrazione 006, inviti, `registration_mode`, API
 > admin, CLI; l'aggiornamento di base è aperto nel worktree di A con un conflitto in `test_system_api.py`, che risolve
-> A), W FE8a-1 (`8a62cea7f`: il form delle transazioni tagliato per sezione), X FE5b-1 (`37532d558`: `AssetModal` in sei
+> A), W FE8a-1 (`cddee78d9`: il form delle transazioni tagliato per sezione), X FE5b-1 (`dcdfb159a`: `AssetModal` in sei
 > pezzi). Entrano dopo la finestra della galleria, dopo R e L. Decisione su A-9: la corsia dei test toglie le quattro
 > variabili di account, come fa già con i segreti (in A5b). `billing_url` nella pagina di blocco: lotto piccolo di H
 > dopo l'ingresso di A5.
@@ -1209,13 +1209,13 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### Finestra della galleria, prima parte (2026-10-15, 08:45–10:20)
 
-> **Note implementazione**: `dev_release2` fermo a `2338aaf79` dalle 08:38 alle 10:16 (gallerie r1 e r2 del programma
+> **Note implementazione**: `dev_release2` fermo a `2ddbf77f7` dalle 08:38 alle 10:16 (gallerie r1 e r2 del programma
 > colori nel checkout principale; r1 rilanciata alle 09:15 con meno worker; tutte e due pulite). Nel frattempo, solo
 > commit sui rami dei figli:
-> - **H**: CP5b e CP6 (`87be1e2d8`…`0326a1d02`, base in `5b2b9061f`); scritti CP7a, C-96 e un filtro che maschera i
+> - **H**: CP5b e CP6 (`4aad9fcdb`…`e18dcdcc0`, base in `d6b57371d`); scritti CP7a, C-96 e un filtro che maschera i
 >   token nel log d'accesso di uvicorn (i link di A5b portano ora il token nel frammento). CP6 entrerà dal commit
->   `5b2b9061f`, validato con il worktree staccato lì; i tre lotti nuovi restano sul ramo finché non sono provati.
-> - **A**: A5a committato e base aggiornata (`8e049474e`, conflitto in `test_system_api.py` risolto da A); A5b in corso.
+>   `d6b57371d`, validato con il worktree staccato lì; i tre lotti nuovi restano sul ramo finché non sono provati.
+> - **A**: A5a committato e base aggiornata (`8d529f76e`, conflitto in `test_system_api.py` risolto da A); A5b in corso.
 > - **X**: FE5b-1, FE5b-2, X-R11a, X-R1 e X-R2 committati; il contratto del ripristino per B nel disegno del CP10
 >   (il `key_id` di ogni segreto fa da valore di controllo H-3: B non deve riscrivere niente).
 > - **W**: FE8a in tre pezzi committati (il Wizard prima delle prove); avviato N1: la cassa e le posizioni della pagina
@@ -1235,18 +1235,18 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### R in `dev_release2`, avvio di B, E e Y (2026-10-15, 11:10–11:30)
 
-> **Note implementazione**: il coordinatore colori ha fuso i lotti A–D di R (`8fd8e494b`, più `23f6578f3`: timbro di
+> **Note implementazione**: il coordinatore colori ha fuso i lotti A–D di R (`1011850a6`, più `9acf0f77e`: timbro di
 > `sw.js`); `dev_release2` fermo per loro dalle 11:17 alle 11:22. Sbloccati gli spostamenti di cartella legati ai lotti di
 > R (FE4 e FE5a di X, FE8 di W; FE2, FE3, FE6, FE7 e `DataTable` di Y). Coda dei lotti frontend: L, poi i nostri, poi T.
 > - **B ed E avviati** su delega del developer («riguardo b ed e sei tu il coordinatore, a meno che non devo qualcosa
->   in particolare, e allora aggiornami, avviali tu»), base `23f6578f3`. B: B0 (divisione di `api/v1/backup.py`, prima
+>   in particolare, e allora aggiornami, avviali tu»), base `9acf0f77e`. B: B0 (divisione di `api/v1/backup.py`, prima
 >   dell'E1 di W, che partirà dal pacchetto nuovo; D-B8, la rinomina `backup_service.py` → `series_export.py`) e B1;
 >   D-B7 e D-B9 come proposte, D-B10 dopo B7. E: E0 ed E1, con `links.py` spostato in E3 (aspetta il punto 45) e la
 >   registrazione in `config_audit.py` in E2 (il file ha modifiche in attesa sul ramo di H); l'aggancio a `cli_base.py`
 >   non serve più, lo copre C-96 di H; D-E1, D-E2, D-E4…D-E6, D-E8…D-E14 come proposte.
-> - **Y avviato** in sola analisi (sessione `17050e81`, corsia 6189), base `23f6578f3`: i tagli di `DataTable` e
+> - **Y avviato** in sola analisi (sessione `17050e81`, corsia 6189), base `9acf0f77e`: i tagli di `DataTable` e
 >   `GrowthChart` devono arrivare prima delle ondate W5 e W6 di T.
-> - **W**: committati la doc di N1b-2 (`3f42dda9d`) e il journal (`eb3bb0529`). W-B20 riscritta con i reperti di X:
+> - **W**: committati la doc di N1b-2 (`8850f4138`) e il journal (`b21417702`). W-B20 riscritta con i reperti di X:
 >   `delete_assets_bulk` è già atomico (un `UPDATE` vuoto prima del primo savepoint); il listener `begin` generale è
 >   scartato (`SQLITE_BUSY_SNAPSHOT`). Cura decisa: un aiuto mirato in `db/session.py`, lotto piccolo di W dopo N1.
 >   W-B22 e W-B23 (quadro delle correzioni post-migrazione) assegnate a W come N1b-3: W-B22 è legata a N1b-2, perché
@@ -1255,10 +1255,10 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 ### La 1.2.1 pubblicata e riportata in `dev_release2` (2026-10-15, 12:00–12:50)
 
 > **Note implementazione**: il developer ha deciso di pubblicare la 1.2.1 subito, separata dal restyle dei colori, con
-> una terza correzione: un `JWT_SECRET` di soli spazi non è più la chiave che firma le sessioni (`c73d5d56a`, test
-> `utils jwt-secret-blank` rosso 9/15 prima, verde 15/15 dopo). Ramo `hotfix-1.2.1` = `064fb4fc2` (9 commit su v1.2.0);
+> una terza correzione: un `JWT_SECRET` di soli spazi non è più la chiave che firma le sessioni (`185c72ab5`, test
+> `utils jwt-secret-blank` rosso 9/15 prima, verde 15/15 dopo). Ramo `hotfix-1.2.1` = `577592b0d` (9 commit su v1.2.0);
 > `main` avanzato e release v1.2.1 pubblicata dal developer alle 12:27 (pipeline `38720357465`). Nessuna advisory né CVE
-> (decisione del developer). Riportata in `dev_release2` con il merge `6c349f907`, preparato in un worktree a parte:
+> (decisione del developer). Riportata in `dev_release2` con il merge `a1d27756b`, preparato in un worktree a parte:
 > conflitti solo in `CHANGELOG.md` e `services/accounts/auth_service.py` (tenuta la versione 1.3: `env_secret()` di H
 > scarta già il segreto vuoto); il test del segreto adattato alla 1.3 dal test-author; prove sull'albero fuso: i 4 test
 > della 1.2.1 (23, 26, 36, 15), `config-package` 594, ruff pulito. Sbloccati il CP2b di H e i lotti CP7, W3 e W5–W6 di W.
@@ -1271,7 +1271,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 ### Y e Z avviati, decisioni 19–25 girate (2026-10-15, 12:40–12:50)
 
 > **Note implementazione**: su delega del developer («Sì: avvia tu Y (i due tagli) e Z (Z6a subito, Z1 quando decido il
-> 31)») approvati i piani di Y e Z, base `1e9e567f7`. Y: Y1 (taglio di `GrowthChart`, FE6a, annunciato e accettato dal
+> 31)») approvati i piani di Y e Z, base `89b12e6a4`. Y: Y1 (taglio di `GrowthChart`, FE6a, annunciato e accettato dal
 > coordinatore colori) e Y2 (`DataTable`, da annunciare); D-Y1…D-Y9 decise dal coordinatore; D-Y10…D-Y12 (C-85, 54-1,
 > difetto 5 del PAC) vanno nel file delle decisioni. Z: Z6a (prove su C-49); Z1 aspetta il punto 31. Decisioni del
 > developer girate alla lettera: 19 a X (scraper fuori dalla ricerca nel profilo gestito, assegnabili a mano con un
@@ -1285,34 +1285,34 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > gallerie del programma colori. Regole nuove: al massimo 3 suite pesanti sulla macchina, 2 della 1.3 e 1 del programma
 > colori, assegnate dai coordinatori; le categorie Vitest contano come pesanti; le corsie non in integrazione lanciano
 > solo test di file singoli. Finestra delle dipendenze (13:08–13:36): tutte le corsie ferme, il developer ha installato
-> `cryptography` (lock: + `cryptography 50.0.2`, `pycparser` 3.0 → 3.11), commit `dc9a5d232`.
-> Treni: 32 `dc9a5d232` (dipendenze); 33 H CP5b+CP6 (`83eaa5a28`, validato da H sulla revisione combinata:
+> `cryptography` (lock: + `cryptography 50.0.2`, `pycparser` 3.0 → 3.11), commit `e910074cc`.
+> Treni: 32 `e910074cc` (dipendenze); 33 H CP5b+CP6 (`260e3a137`, validato da H sulla revisione combinata:
 > `all-backend` 12 725, core-unit 4 407, component-unit 3 240, E2E auth/app-start-auth/settings); 34 X FE5b, X-R11a,
-> X-R1/R2, D-X4 (`ec0dc7ebd`, validato da X su `2fb577588`, che differisce solo per `Pipfile`; due rossi di
+> X-R1/R2, D-X4 (`e2653c2d1`, validato da X su `3682a7954`, che differisce solo per `Pipfile`; due rossi di
 > `asset-browse` da saturazione, la spec da sola 8/8; sull'albero H+X `npm run check` 0/0 dopo `api sync`); 35 E1
-> (`f46a93ffd`, validato nella corsia del coordinatore: email-* 516, config-package 639). Basi aggiornate e committate:
-> A (`246863005`), X (`2fb577588`), E (`fc99e9bfe`), W (`06459c1b3`), H riattaccato (`aa0e3a49a`); Y in corso.
-> Checkpoint committati: B0 (`be6206c0d`), B1 (`d37736d05`), E1 (`918e8d4f0`), W E1c (`87a034a89`), Y1 (`374dcca8a`).
+> (`99096768a`, validato nella corsia del coordinatore: email-* 516, config-package 639). Basi aggiornate e committate:
+> A (`c2bc5ee0d`), X (`3682a7954`), E (`b53a97860`), W (`894770a8a`), H riattaccato (`75df644dc`); Y in corso.
+> Checkpoint committati: B0 (`38e413b64`), B1 (`8e7d22262`), E1 (`bfb32bf29`), W E1c (`bf43ead2b`), Y1 (`27d219f10`).
 >
 > **⚠️ Fuori pista**: `--resolve` del cricchetto dei colori perde un `~accept` presente da un solo lato (R-8); ripetuto
 > l'`--accept` D3 di `themeStore.ts` nei merge di X e W, con l'ok del coordinatore colori (TC-7 di T per la cura).
 
 ### Treni 36–38 e decisioni 18–37 (2026-10-15, 15:00–15:55)
 
-> **Note implementazione**: entrati Y1 (`badec1465`, galleria filtrata contro `g-final3-r1` senza differenze dal
-> taglio, 96/96 scatti del grafico di crescita), A5 (`8bcb23502`, validato da A sulla revisione combinata con CP6 e E1)
-> e i quattro lotti di H (`744f5a0ee`: CP7a, C-96, filtro del log d'accesso, G-10, più la riparazione di
+> **Note implementazione**: entrati Y1 (`d2e2b7763`, galleria filtrata contro `g-final3-r1` senza differenze dal
+> taglio, 96/96 scatti del grafico di crescita), A5 (`9ef1f6123`, validato da A sulla revisione combinata con CP6 e E1)
+> e i quattro lotti di H (`f8b36d4de`: CP7a, C-96, filtro del log d'accesso, G-10, più la riparazione di
 > `test_instance_block.py`, rosso in `dev_release2` per un conflitto semantico CP6 × A5a). Prova Docker parziale: il
 > build si ferma a `pip install` per il proxy TLS della rete (H-11); `tzdata-legacy` e i compose verificati a parte; la
 > prova a runtime dell'immagine resta al developer, fuori dalla VPN, con gli script di H. Decisioni 18–35 scritte nel
-> file (`8fc44558c`); 37 girata ad A (lotto A6c); 36 in discussione (file comuni e personali, registrazione «su invito»
+> file (`98e940802`); 37 girata ad A (lotto A6c); 36 in discussione (file comuni e personali, registrazione «su invito»
 > di default). Avviati A6 (scheda Utenti; verifica dell'indirizzo con un nonce firmato al posto del CORS su
-> `/system/instance`) e Y2 (`DataTable`). Checkpoint committati: E2a (`c1d1c3c2d`), Z1 (`a6199d0e7`, base aggiornata
-> `4618a2116`).
+> `/system/instance`) e Y2 (`DataTable`). Checkpoint committati: E2a (`655d241e8`), Z1 (`07e71407b`, base aggiornata
+> `31791552d`).
 
 ### Treni 39–40, punto 46 (2026-10-15, 16:00–16:20)
 
-> **Note implementazione**: entrati Z1 (`9d2074b2b`) e W (`14d58cc61`: FE8a, N1, N1b-2/3, E1a, E1c). Punto 46
+> **Note implementazione**: entrati Z1 (`47ee29a34`) e W (`e81a7ba9a`: FE8a, N1, N1b-2/3, E1a, E1c). Punto 46
 > deciso dal developer: la correzione `orphan_pair_halves` entra; una metà senza costo resta «costo mancante». Verificato
 > poi sul codice che una metà ricevuta senza costo nasce solo da chiamate dirette all'API (il modulo e il Bulk, import
 > compresi, richiedono la modalità di costo: `cost_basis_pair` del TRANSFER ricevuto = `required_qty_pos`) o da dati
@@ -1334,7 +1334,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### Treno 41, decisioni 38–39 (2026-10-15, 16:40–16:55)
 
-> **Note implementazione**: entrato J (`2faa88a34`: C-94 e CP-2). `copilot-instructions.md` aggiornato con il testo di J
+> **Note implementazione**: entrato J (`52df1480d`: C-94 e CP-2). `copilot-instructions.md` aggiornato con il testo di J
 > sul build in primo piano (`--build-only`). Decisioni del developer: 38, «ok all'idea della busta» (`.lfbk`,
 > scelta dal developer alle 17:00 al posto di `.lfbackup`; scrypt + AES-256-GCM, solo `cryptography`; lo zip con password classico avrebbe richiesto `pyzipper`); 39, «così
 > l'utente sceglie se fare un backup in "chiaro" o un backup "sicuro" e nel messaggio gli viene detto la differenza».
@@ -1342,7 +1342,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### Treni 42–44, decisione 40, Z6b (2026-10-15, 17:15–17:40)
 
-> **Note implementazione**: entrati A6a (treno 42), H (`eacc34784`) e Z7a (`2ab8a3a43`). Decisione 40 del developer: le sessioni
+> **Note implementazione**: entrati A6a (treno 42), H (`db87623e4`) e Z7a (`758c881c8`). Decisione 40 del developer: le sessioni
 > si chiudono con l'ora del ripristino (non si rigenera `JWT_SECRET`), l'anteprima elenca gli admin del backup e blocca
 > se non ce n'è nessuno; nel cloud il recupero dell'admin passa da «password dimenticata» via email, nei casi gravi
 > dall'assistenza con `dev.py user reset-link`. Z6b autorizzato dal developer («Sì, Z parta con Z6b»).
@@ -1351,8 +1351,8 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### Treno 45, decisioni 36–46 scritte (2026-10-15, 17:40–18:10)
 
-> **Note implementazione**: entrato Y2 (`c747a74c3`), con la ripresa della galleria a carico basso (10 su 10; i 10 rossi
-> del primo giro erano carico). Il file delle decisioni è committato con le righe «Decisione» 36–46 (`a718e5281`); 47
+> **Note implementazione**: entrato Y2 (`c0dc85fbb`), con la ripresa della galleria a carico basso (10 su 10; i 10 rossi
+> del primo giro erano carico). Il file delle decisioni è committato con le righe «Decisione» 36–46 (`3a02cc91e`); 47
 > attende il «sì» del developer. 41: la copia di sicurezza prima del ripristino si cancella se il primo avvio va bene;
 > 42 respinta (solo backup di LibreFolio); 43 approvata; 44 approvata; 45: solo `LIBREFOLIO_PUBLIC_URL`, con il
 > controllo dal browser dell'admin tramite la sonda di A6a. `main.py` congelato per CP2b di H. Scatti nuovi di galleria
@@ -1360,8 +1360,8 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 ### Treni 48–49, gate i18n (2026-10-15, 18:30–19:00)
 
-> **Note implementazione**: entrati E2 (`755158aad`), la sua correzione (`be7de95b6`) e Z6b parte 1 (`000090aaf`).
-> Decisioni 48–50 del developer scritte (`bcd680868`); delega del developer sui lotti di Y («Sì, e d'ora in poi decidi tu
+> **Note implementazione**: entrati E2 (`570fd34e9`), la sua correzione (`2621200a0`) e Z6b parte 1 (`558aed788`).
+> Decisioni 48–50 del developer scritte (`0f2e18fa7`); delega del developer sui lotti di Y («Sì, e d'ora in poi decidi tu
 > l'avvio dei lotti di Y»).
 >
 > **⚠️ Fuori pista**: E2 è entrato senza `core-unit` e ha portato un rosso in `dev_release2`
@@ -1399,7 +1399,7 @@ lotti è nei piani dei figli e nel log di `dev_release2`.
 **Pulizia:**
 - ogni lavoro a metà è stato parcheggiato come patch nella cartella di sessione del figlio;
 - il giornale di ogni figlio è committato;
-- tutte le basi sono state aggiornate a `dev_release2` `ede7adf75`, che comprende Y-30;
+- tutte le basi sono state aggiornate a `dev_release2` `de0823b81`, che comprende Y-30;
 - contabilità: tabelle dei lotti e ✅ del backlog con la prova del commit, per tutti i figli; le voci di Phase_0
   chiuse dalla 1.3 sono in corso di marcatura.
 
@@ -1437,9 +1437,9 @@ figlie. Il lavoro è stato migrato su Linux e ripreso con un coordinatore Claude
 `BACKUP-pro-contro-20261021.md`.
 
 **Stato verificato su git (21/10):**
-- `dev_release2` conteneva i treni 1-4 del 20/10 e G-28 (`b844f83f2`); il gate del treno 4 è verde (all-backend 7/7,
+- `dev_release2` conteneva i treni 1-4 del 20/10 e G-28 (`b417fbd95`); il gate del treno 4 è verde (all-backend 7/7,
   core-unit 9771, component-unit 5154, E2E mirati).
-- Lavoro committato sui branch e non in dev: pezzo di A per H-61 (`64b8b9fa3`…), H-61 CP1 intermedio (`e917659c9`,
+- Lavoro committato sui branch e non in dev: pezzo di A per H-61 (`3c13d5040`…), H-61 CP1 intermedio (`fb5bfb6d3`,
   rosso voluto fino a R1), J-60, pagine di galleria di E.
 - Lavoro non committato nei worktree (copia di sicurezza dei diff: `salvataggi-worktrees-20261021/`): Y-39a (11 file),
   Z-29s-a (6), E (9, poi committati), J (2, poi committati), H CP2 (3 test non tracciati).
@@ -1450,12 +1450,12 @@ backup in discussione.
 
 **Ondata 0:**
 - venv: alias `LibreFolio-SAUMUTtc` → `LibreFolio-OqaCk-or` (nome Mac nei documenti, venv Linux);
-- `.claude/` e `CLAUDE.md` nel git (`1a0586f0b`), `settings.local.json` escluso;
-- treno 5: J-60 (`aa109e06b`), pezzo di A per H-61 (`ad4effcf9`), E galleria + traduzioni (`ae47dc812`), CHANGELOG
-  (`d1893f84b`). Gate leggero verde: `api sync` senza diff, `front check` 0/0, `i18n check`, `transaction-cost-basis-rule` 244,
+- `.claude/` e `CLAUDE.md` nel git (`86a2d4ea4`), `settings.local.json` escluso;
+- treno 5: J-60 (`a352b1507`), pezzo di A per H-61 (`5cd925f9a`), E galleria + traduzioni (`02e3f5380`), CHANGELOG
+  (`1f8a42b6d`). Gate leggero verde: `api sync` senza diff, `front check` 0/0, `i18n check`, `transaction-cost-basis-rule` 244,
   `admin-bootstrap` 310, `services transaction` 130, `api transactions-validate` 12, `core-unit` 9771, `mkdocs build` stretto e
   `check-links` ok;
-- baseline Linux: `all-backend --fresh-run --workers 2` su `b844f83f2` (worktree `gate-coord`, dopo `npm ci`), **7/7
+- baseline Linux: `all-backend --fresh-run --workers 2` su `b417fbd95` (worktree `gate-coord`, dopo `npm ci`), **7/7
   verde in 25 min 42 s** (nei campioni: carico 2-4, RAM disponibile oltre 3 GB). Il verde del Mac regge su Linux per il backend; E2E e galleria
   non ancora provati qui;
 - scoperto: i `node_modules` dei worktree sono quelli del Mac (darwin-arm64): serve `npm ci` in `frontend/` di ogni
@@ -1469,35 +1469,35 @@ hosting: L1, R1, L2), A-62, E-25, E-26 (b), TC-23 (a), L1b, P4. Ordine deciso: Y
 > erano già in `dev_release2` e verdi. I `node_modules` dei worktree erano inutilizzabili su Linux.
 
 **Ondata 1 e treno 6 ✅ (2026-10-21).** Tre sessioni, un lotto ciascuna, tutte verificate dal coordinatore rilanciando le loro prove:
-- Y-39a: `1b7b7331b` (E2E `fx-settings` 3/3, `fx-list` 25/25, `asset-list` 43/43);
-- H-61 checkpoint 1, R1: `75dd4aa38` (`api panel-status` 20, `hosting-panel-routes` 15, `instance-block` 62);
-- Z-29s-a: `7d077207d` (`signal-aggregation` 222, `price-query-sampling` 196, `api assets-price` 32); revisione di Y: nessun bloccante, osservazioni O1-O4 in Z-40.
-- Treno 6 in `dev_release2` = `861a38567` (fast-forward su un candidato provato nel worktree `gate-coord`): `all-backend` 7/7, `core-unit` 9835, `component-unit` 5162, E2E `asset-list` 43/43, `mkdocs build` stretto e `check-links` ok, `front check` 0/0.
+- Y-39a: `03e12676f` (E2E `fx-settings` 3/3, `fx-list` 25/25, `asset-list` 43/43);
+- H-61 checkpoint 1, R1: `56f1e147a` (`api panel-status` 20, `hosting-panel-routes` 15, `instance-block` 62);
+- Z-29s-a: `43d9d6df6` (`signal-aggregation` 222, `price-query-sampling` 196, `api assets-price` 32); revisione di Y: nessun bloccante, osservazioni O1-O4 in Z-40.
+- Treno 6 in `dev_release2` = `b766a5170` (fast-forward su un candidato provato nel worktree `gate-coord`): `all-backend` 7/7, `core-unit` 9835, `component-unit` 5162, E2E `asset-list` 43/43, `mkdocs build` stretto e `check-links` ok, `front check` 0/0.
 - **Test dipendenti dalla lingua del sistema**: su questa macchina (`LANG=it_IT.UTF-8`) 3 test di `OtherPeriodEffectsTable.test.ts` falliscono, identici su `dev_release2` senza il treno: il test costruisce l'importo con la lingua del sistema (virgola) e il componente stampa in inglese (punto). Si lanciano con `LC_ALL=en_US.UTF-8`; il test va corretto.
 
 **Ondata 2 e treno 7 ✅ (2026-10-21).** Coordinatore Opus, 7 sessioni figlie in parallelo (Y, Z, H, W-back, W-front, C1, C2), un comando pesante alla volta (`flock`); ogni consegna verificata rilanciando le prove prima del commit. Brief e log in `LibreFolio_prj/salvataggi-worktrees-20261021/ondata2/`.
-- Y-39b: `79965b736` + `ebe64831e` (colore in attesa letto alla costruzione); E2E `fx-settings` 3, `fx-list` 25, `asset-list` 43.
-- Z: O1 `0fdbb28a7` (decisione del developer: allineare; residuo R5, linea spezzata dove una sola serie ha un buco, accettato), Z-29b `686691e3d` + merge di Y `5ff6d40f5` + `62f03b204`; E2E `asset-list` 43.
-- H-61 CP2: `bf33e26de`; 319 casi rossi → verdi più 11 vettori; revisione di sicurezza indipendente: nessun alto/medio, tre bassi chiusi (margine fisso di potatura, symlink rifiutati, avviso su `PUBLIC_URL` con percorso).
-- W-back: Fineco `a7c6db19f` (soluzione B, numeri scalati, beta tolta ovunque, limiti noti: Rimborso con commissione, commissione > controvalore, valuta non EUR), W-B86/W-B87 `fcf39fab0` (`RowSkips`, 4 plugin stabili, avvisi minimi su 6 plugin beta).
-- W-front: K3a + #58 `bc01226f4` (decisioni del developer: PC5 diviso, valori nel dominio, K-3b nel lotto; asset e broker bloccati in modifica).
-- Colori: C1 `ce3bc869a` + `1778fd328`, C2 `6fc379b1b`; ratchet m1 590 → 243 sull'albero unito; marchi di `supportLinks.ts` accettati come eccezione.
-- Treno 7 in `dev_release2` = `9e3575452` (candidato `23d31392a` + correzione d'integrazione `KNOWN_COPIES`): `all-backend` 7/7, `core-unit` 9904, `component-unit` 5211, E2E `asset-list` 43, `fx-list` 25, `theme-roles` 24, `front-transaction all` 365 (32 saltati), `mkdocs build` stretto e `check-links`, `front check` 0/0, `i18n check`.
+- Y-39b: `d62602122` + `35bbd8d4f` (colore in attesa letto alla costruzione); E2E `fx-settings` 3, `fx-list` 25, `asset-list` 43.
+- Z: O1 `0c8bb973f` (decisione del developer: allineare; residuo R5, linea spezzata dove una sola serie ha un buco, accettato), Z-29b `daf8abb1f` + merge di Y `bce346b08` + `f136dc7c5`; E2E `asset-list` 43.
+- H-61 CP2: `5fb06f8f1`; 319 casi rossi → verdi più 11 vettori; revisione di sicurezza indipendente: nessun alto/medio, tre bassi chiusi (margine fisso di potatura, symlink rifiutati, avviso su `PUBLIC_URL` con percorso).
+- W-back: Fineco `f67ce0771` (soluzione B, numeri scalati, beta tolta ovunque, limiti noti: Rimborso con commissione, commissione > controvalore, valuta non EUR), W-B86/W-B87 `377047f86` (`RowSkips`, 4 plugin stabili, avvisi minimi su 6 plugin beta).
+- W-front: K3a + #58 `69bac8088` (decisioni del developer: PC5 diviso, valori nel dominio, K-3b nel lotto; asset e broker bloccati in modifica).
+- Colori: C1 `56342edf6` + `87fd605b2`, C2 `5445d8298`; ratchet m1 590 → 243 sull'albero unito; marchi di `supportLinks.ts` accettati come eccezione.
+- Treno 7 in `dev_release2` = `c3771f6e4` (candidato `e7e939d56` + correzione d'integrazione `KNOWN_COPIES`): `all-backend` 7/7, `core-unit` 9904, `component-unit` 5211, E2E `asset-list` 43, `fx-list` 25, `theme-roles` 24, `front-transaction all` 365 (32 saltati), `mkdocs build` stretto e `check-links`, `front check` 0/0, `i18n check`.
 
 **Ondata 3 e treno 8 ✅ (2026-10-22).** Coordinatore Opus, 10 lavori in parallelo (Y, Z, H, C1, C2, W come sessioni; E, A, J, X come sotto-agenti in background, perché sotto Remote Control l'app non apre sessioni nuove), lavoro notturno in autonomia, un comando pesante alla volta (`flock`); ogni consegna verificata rilanciando le prove prima del commit. Piano, brief, recap della notte e log in `LibreFolio_prj/salvataggi-worktrees-20261021/ondata3/`.
-- Y-40: asset `816a4b6c1`, cambi `5e5c6b64a`; X sul dettaglio `b64c3f4c6` (si apre nella vista della scheda, icona `CalendarSync`, decisione V-8b).
-- Z-29fx `46455857a` (stesso plugin del rendimento mobile per i cambi), Z-29d `9331a2dd0`.
-- H-55 v2 `a1f1cc5fb`, revisione di sicurezza indipendente (un medio: file caricati serviti come script) curata in `9e2e35782`; FSCH-004b `ad99d8791` (difetto vero: l'Esc premuto appena aperto un modale si perdeva).
-- E-25 `bb11f1479`, E-26 `5086e9244` (testi consigliati, da confermare dal developer); A-62 `bffca2884`, E-7 `5fa5cdeb9`.
-- J: TC-23 `2744d8d20`, L1b `c10bea915` (parità su 214 casi, −40% su un libro dal 1900), Q-G29-1 `dd9f8a78b`.
-- X: Y-42 `087769e44`, N64 `34b6d45c0`.
-- W: N78-1 `79068afe5` (decisioni del developer: in uscita nessun valore, anche per il TWRR; nessun codice di bonifica dati).
-- Colori: C1 `25f4cc6d0` (m1 243 → 174), C2 `1655edd9b`.
-- Gate del treno 8 sul candidato `23111e2f0`: primo giro con 11 rossi nati dall'incrocio dei lotti, tutti di test e nessun difetto del prodotto: RC-F04 (`request_index` di Z-29fx), `auth.test.ts` (testo di E-26), `fx-sync` C-66 (stato globale della corsia), `csp-collector` (cura R3), `price-refresh-reload` (g) (N64, decisione Q1), quattro E2E delle transazioni e `tooltip` (N78-1 e una gara di tempi). Curati dai proprietari sui loro rami e riprovati sul candidato.
-- Treno 8 in `dev_release2` = `3c09d3052` (candidato `f6456bcc4` + CHANGELOG): `api sync` senza diff, ratchet, `front check` 0/0, `i18n check`, `check-orphans`, `all-backend` (con RC-F04 riprovato), 15 929 Vitest, `all-frontend` più le riprove dei rossi, `mkdocs build` stretto e `check-links`. **Rosso noto**: `files.spec.ts:826` (ripiego CDN dei font CJK del visore PDF, bloccato dalla CSP), in attesa del lotto «file serviti da noi + hash» (H, ondata 4).
+- Y-40: asset `8021bf5a9`, cambi `9623491df`; X sul dettaglio `2bb8299f3` (si apre nella vista della scheda, icona `CalendarSync`, decisione V-8b).
+- Z-29fx `c57e9f2b0` (stesso plugin del rendimento mobile per i cambi), Z-29d `6a565840a`.
+- H-55 v2 `6250dd6f2`, revisione di sicurezza indipendente (un medio: file caricati serviti come script) curata in `cc630c70f`; FSCH-004b `ab3f1645a` (difetto vero: l'Esc premuto appena aperto un modale si perdeva).
+- E-25 `be4f3929c`, E-26 `aa1f923e7` (testi consigliati, da confermare dal developer); A-62 `6011ccbeb`, E-7 `1291fc0a3`.
+- J: TC-23 `e2c093e06`, L1b `593093032` (parità su 214 casi, −40% su un libro dal 1900), Q-G29-1 `34e153085`.
+- X: Y-42 `4c978e312`, N64 `02709d276`.
+- W: N78-1 `4bad3e4a3` (decisioni del developer: in uscita nessun valore, anche per il TWRR; nessun codice di bonifica dati).
+- Colori: C1 `d33abb0b8` (m1 243 → 174), C2 `eea87e5f9`.
+- Gate del treno 8 sul candidato `69ed80302`: primo giro con 11 rossi nati dall'incrocio dei lotti, tutti di test e nessun difetto del prodotto: RC-F04 (`request_index` di Z-29fx), `auth.test.ts` (testo di E-26), `fx-sync` C-66 (stato globale della corsia), `csp-collector` (cura R3), `price-refresh-reload` (g) (N64, decisione Q1), quattro E2E delle transazioni e `tooltip` (N78-1 e una gara di tempi). Curati dai proprietari sui loro rami e riprovati sul candidato.
+- Treno 8 in `dev_release2` = `6049158b1` (candidato `cb27b4011` + CHANGELOG): `api sync` senza diff, ratchet, `front check` 0/0, `i18n check`, `check-orphans`, `all-backend` (con RC-F04 riprovato), 15 929 Vitest, `all-frontend` più le riprove dei rossi, `mkdocs build` stretto e `check-links`. **Rosso noto**: `files.spec.ts:826` (ripiego CDN dei font CJK del visore PDF, bloccato dalla CSP), in attesa del lotto «file serviti da noi + hash» (H, ondata 4).
 
-**Ondate 4–5 e treni 9–11 ✅ (2026-10-22 → 2026-10-27).** Ondata 4 (MF, D, Y, Z, X, A, J, W, H) in `dev_release2` = `5172fbb7d` (treno 9) e, per la coda backup L3 + H-62 + contatori delle email, `e2c9803d2` (treno 10). Ondata 5 (MF, J, Z, Y, X, W, A, B, H) con D-P4 L4–L5 (niente pavimento del 1900) in `8f7282ff6` (treno 11). Il dettaglio è nei CHANGELOG dei treni e nelle carte del coordinatore, ora in [`00_coordination/`](00_coordination/README.md) (piani, recap, kickoff, controlli delle ondate 1–5, senza le parti del servizio gestito).
-> **Note implementazione**: base dell'ondata 6 = `32674edb8` (28/10: regola BRIM della data dell'ordine, `tzdata` nel Pipfile, J-39 e ribilanciatore del PAC nei TODO futuri); poi `fac4fc0d7` (annotazioni OCI su GHCR, test della chiave della cache CI).
+**Ondate 4–5 e treni 9–11 ✅ (2026-10-22 → 2026-10-27).** Ondata 4 (MF, D, Y, Z, X, A, J, W, H) in `dev_release2` = `8b0375db1` (treno 9) e, per la coda backup L3 + H-62 + contatori delle email, `96e8db455` (treno 10). Ondata 5 (MF, J, Z, Y, X, W, A, B, H) con D-P4 L4–L5 (niente pavimento del 1900) in `befd4e3fe` (treno 11). Il dettaglio è nei CHANGELOG dei treni e nelle carte del coordinatore, ora in [`00_coordination/`](00_coordination/README.md) (piani, recap, kickoff, controlli delle ondate 1–5, senza le parti del servizio gestito).
+> **Note implementazione**: base dell'ondata 6 = `bc1d4c06c` (28/10: regola BRIM della data dell'ordine, `tzdata` nel Pipfile, J-39 e ribilanciatore del PAC nei TODO futuri); poi `485796ce1` (annotazioni OCI su GHCR, test della chiave della cache CI).
 
 **Ondata 6 ⏳ (dal 2026-10-28).** Sei sessioni (W, MF, W2, X, Y, Y2) su rami `claude/o6-*`; tratto in autonomia la sera del 28/10. Piano operativo, decisioni del developer del 28/10 e del 30/10, lotti nuovi dalla testlist del server (FB-*), dalle richieste del cloud (CL-*) e dalla pulizia delle API (API-CLEAN): tenuti nelle carte del coordinatore, copiati in `00_coordination/` a fine ondata. Stato per sessione nel [README](README.md#stato-al-3010-ondata-6). Treno 12: non ancora costruito (manca J).
 > **Note implementazione (30/10)**: decisioni del developer del 30/10 fra cui: pagina unica Dashboard/broker con parametri (Y6-7); nella pagina del broker importi interi del conto (MF6-3); un saldo di cassa negativo, anche quello iniziale, solo con la spunta della leva (W6-12); date impossibili del CSV generico segnalate nel wizard (FB-18b); pre-configurazione del primo avvio `LIBREFOLIO_DEFAULT_CURRENCY` / `LIBREFOLIO_DEFAULT_TIMEZONE` (CL-13); test di non regressione della issue #63 su tutti i grafici (Y2-I63).

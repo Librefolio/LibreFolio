@@ -1,9 +1,9 @@
 # PAC Allocator — review dossier
 
-**For:** the developer, before reviewing merge `3913fe217`.
+**For:** the developer, before reviewing merge `67ee437a0`.
 **Author:** session D (`e-alfy-allocatore-pac`).
 **Status as of writing:** 2026-09-19 ~01:10. Branch merged into `dev_release2`; my
-four commits are `0088748a8`, `75309672e`, `9229085e9`, `c25c1e874`.
+four commits are `b461a6b02`, `5c9a44efb`, `ae503f7e1`, `41df8ac80`.
 
 > **Read §2 and §6 first.** §2 says which of the merged work is mine, and §6 says
 > where the model is narrower than reality. Everything else is detail.
@@ -89,7 +89,7 @@ rational arithmetic; the solver's own numbers never reach the wire.
 
 **Fork 2 — FX stopped being a routing problem.** The original model had directed
 FX routes with per-pair quotes, inversion flags and a per-broker `fx_mode`.
-`0088748a8` replaced it with one canonical unordered pair map
+`b461a6b02` replaced it with one canonical unordered pair map
 (`fx_rates: {"AAA/BBB": rate}`) plus a single scenario-level spread. That removed
 a whole class of arbitrage the old model made expressible — cycling cash through
 inconsistent rate directions — by making it structurally impossible rather than
@@ -120,17 +120,17 @@ The merge landed **three** workstreams. Only one is mine.
 | Workstream | Mine? | Owner |
 |---|---|---|
 | PAC allocator (exact core, solver, proof, projection, plan service) | **yes** | this session |
-| Exact-arithmetic transaction inputs | **yes** (`75309672e`) | this session |
-| `/portfolio/allocation-source` + FX/funding redesign | **yes** (`0088748a8`) | this session |
+| Exact-arithmetic transaction inputs | **yes** (`5c9a44efb`) | this session |
+| `/portfolio/allocation-source` + FX/funding redesign | **yes** (`b461a6b02`) | this session |
 | **Onboarding** (~37 files, `onboarding_service.py`, migration `003`, `/welcome`) | **no** | session J, `e-alfy-onboarding-foundation` |
 | **Tool platform** (executor, quotas, resource budgets) | **no** | `e-alfy-tool-platform-c-r2` |
-| **PAC + Rebalancer tool UI** (`PacAllocatorTool.svelte`, `PortfolioRebalancerTool.svelte`, `RebalanceHoldingEditor`, `RebalancerResultPanel`) | **no** | commit `d66f8e58e`, *"preserve Round 4 prototype"* |
+| **PAC + Rebalancer tool UI** (`PacAllocatorTool.svelte`, `PortfolioRebalancerTool.svelte`, `RebalanceHoldingEditor`, `RebalancerResultPanel`) | **no** | commit `01bfae580`, *"preserve Round 4 prototype"* |
 
 My four commits touch **zero lines** in any of those UI files.
 
 ### 2.1 The fact that shapes tonight
 
-**Nothing I built in `9229085e9` and `c25c1e874` is reachable from the running
+**Nothing I built in `ae503f7e1` and `41df8ac80` is reachable from the running
 application.**
 
 ```
@@ -174,7 +174,7 @@ I touched **no** onboarding file and **no** tool-platform file.
 
 ### 3.1 API surface
 
-One new endpoint, `0088748a8`:
+One new endpoint, `b461a6b02`:
 
 - `POST /api/v1/portfolio/allocation-source` — read-only. Returns a domain
   snapshot (assets, brokers, holdings, cash, prices, classifications, FX quotes)
@@ -219,7 +219,7 @@ My work adds no table and no column.
 
 ## 4. Frontend
 
-My only frontend work is `75309672e`:
+My only frontend work is `5c9a44efb`:
 
 - `ExactDecimalInput.svelte` (+313) — decimal input that never round-trips
   through a float.
@@ -530,7 +530,7 @@ These matter most: unreachable new code cannot hurt you, changed shared code can
 | R3 | Open the P&L / performance views. | Unchanged. |
 | R4 | Anything reading `schemas/portfolio.py`. | Unchanged. The +421 lines there are **new `PortfolioPlannerSource*` classes only** — no existing model was modified. |
 
-### 8.2 Exact-arithmetic transaction inputs *(mine, `75309672e`, genuinely clickable)*
+### 8.2 Exact-arithmetic transaction inputs *(mine, `5c9a44efb`, genuinely clickable)*
 
 The best review target of the night: cheap to test, obvious when wrong, and you
 can check it against a calculator.
@@ -548,7 +548,7 @@ can check it against a calculator.
 behaviour and edit-round-trip stability have unit coverage but little real-UI
 mileage.
 
-### 8.3 Allocation-source prefill *(mine, `0088748a8`)*
+### 8.3 Allocation-source prefill *(mine, `b461a6b02`)*
 
 | # | Do this | Correct result |
 |---|---|---|
@@ -584,7 +584,7 @@ exposure. What to check:
 
 Opening the **PAC tool or Portfolio Rebalancer in the UI** exercises the Round 4
 prototype over **P1 analyze** — not my v2 planner, and not my code. Judge that UI
-on its own terms; it belongs to `d66f8e58e`.
+on its own terms; it belongs to `01bfae580`.
 
 ---
 
@@ -630,5 +630,5 @@ exposure closure and provenance containment properties.
 ---
 
 *Prepared by session D. Every claim above was checked against the repository at
-`c25c1e874` rather than recalled; where I could not verify something I have said
+`41df8ac80` rather than recalled; where I could not verify something I have said
 so.*

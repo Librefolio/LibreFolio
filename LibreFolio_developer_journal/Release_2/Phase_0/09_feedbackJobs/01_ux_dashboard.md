@@ -10,7 +10,7 @@ Stato corrente e dettagli in [06_piano_sprint.md](06_piano_sprint.md). Il bug re
 > U3 YOC è ora integrato; U2 privacy resta aperto. U8 onboarding ha un checkpoint
 > Round 2 manualmente revisionato e un Round 3 pianificato ma non implementato.
 >
-> **Al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`): U2 è integrato (`b66e93003`, piano `24_privacyGlobal`). U8 è nel target fino al Round 8 (`21_onboarding`), dove resta aperta la review manuale delle correzioni C7. Vedi la tabella in fondo.
+> **Al 2026-10-09** (verifica Q del 2026-10-09, base `f545b67e3`): U2 è integrato (`9d9613471`, piano `24_privacyGlobal`). U8 è nel target fino al Round 8 (`21_onboarding`), dove resta aperta la review manuale delle correzioni C7. Vedi la tabella in fondo.
 
 ---
 
@@ -79,7 +79,7 @@ Regola comune G-UX-DESIGN/G-UX-REVIEW nel [piano](06_piano_sprint.md).
 **Complessità raffinata 2026-09-10**: M per metrica/fonti + S per colonna/docs · **Origine**: feedback @ExpectChaos (utente esterno)
 
 **Stato 2026-09-11:** ✅ **IMPLEMENTATO, VERIFICATO E ACCETTATO DAL DEVELOPER**
-nel checkpoint H `74afcebce`. Contratto finale, storyboard desktop/mobile,
+nel checkpoint H `cff0f0a11`. Contratto finale, storyboard desktop/mobile,
 correzioni review ed evidenze nel
 [piano H dedicato](../../phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
 
@@ -104,7 +104,7 @@ rendimento nel tempo, indipendente dalle fluttuazioni di mercato.
   via BRIM contano soltanto quando diventano Transaction asset-linked; non si
   divide il loro totale per il cost basis corrente. Ogni riga usa la propria
   quantita' D-1; split e FX riallineano unita' e valuta.
-- La baseline H `b22998f` contiene la shared FX identity F, L1 e fix
+- La baseline H `d3da992` contiene la shared FX identity F, L1 e fix
   `cost_basis_currency` con witness identity/L1. H deve riusare la funzione
   identica nella L2, senza seconda implementazione. Gate 0, implementazione e
   review sono complete.
@@ -324,19 +324,19 @@ con pin per interazioni, cleanup, reduced motion e assenza di salti di layout.
 
 ## Analisi per task — 2026-09-07
 
-Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
+Baseline `9d8b5c54`; superfici, dipendenze, rischi e DoD completi in
 [06_piano_sprint.md](06_piano_sprint.md).
 
 | ID | Esito | Sprint |
 |---|---|---|
 | U1 | ✅ Completato da E: stato/generazioni del probe e metadata concorrente. | SP01 |
-| U2 | ✅ Al 09/10 integrato (`b66e93003`, `176f19707`, `64d78e244`; piano `24_privacyGlobal`), per dispositivo e non per account, come deciso il 21/09; `SensitiveValue` sospeso. Storico: scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
-| U3 | ✅ [IMPLEMENTATO, VERIFICATO, DEVELOPER-ACCEPTED E INTEGRATO](../../phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), checkpoint H `74afcebce`, follow-up finale `f092a194b`. | SP06 |
+| U2 | ✅ Al 09/10 integrato (`9d9613471`, `0ca72f743`, `865509a12`; piano `24_privacyGlobal`), per dispositivo e non per account, come deciso il 21/09; `SensitiveValue` sospeso. Storico: scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
+| U3 | ✅ [IMPLEMENTATO, VERIFICATO, DEVELOPER-ACCEPTED E INTEGRATO](../../phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), checkpoint H `cff0f0a11`, follow-up finale `a01fbbcd5`. | SP06 |
 | U4 | ✅ Completato da E: colonna uploader ordinabile e filtro multi-selezione. | SP02 |
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |
 | U7 | ✅ Completato da E: supporto condiviso in DonationPopup/About e cinque social. | SP02 |
-| U8 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md), checkpoint J `580bd504f` integrato nel target `dev_release2` via `e38a521f0` (verificato 2026-09-21: ramo J a 0 avanti). Round 7 integrato (`1982c254b`, stallo dell'ancora segnalato dopo 3 s). Al 09/10 resta aperta in `21_onboarding` la review manuale delle correzioni C7 (Round 8). | SP11 |
+| U8 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md), checkpoint J `ce718ca49` integrato nel target `dev_release2` via `71b37e4bf` (verificato 2026-09-21: ramo J a 0 avanti). Round 7 integrato (`18bc11a4f`, stallo dell'ancora segnalato dopo 3 s). Al 09/10 resta aperta in `21_onboarding` la review manuale delle correzioni C7 (Round 8). | SP11 |
 | U9 | ✅ Completato da E: header auto-hide desktop/mobile con guardie lifecycle. | SP02 |
 
 La [mappa nel piano](06_piano_sprint.md) separa corsie indipendenti da file condivisi:

@@ -1,6 +1,6 @@
 # B · B5-1 — restore of an uploaded backup with the owner's choice: the interface the red tests pin (23/10/2026)
 
-Base: HEAD `acefd8c0d`. Sources: `ondata5/kickoff-B.md` item 3; A's signature
+Base: HEAD `f1f1cf138`. Sources: `ondata5/kickoff-B.md` item 3; A's signature
 (`side-session-notes/…/A5-2-firma-ripristino-titolare.md`, incl. «Requisito per B»). A's code is NOT in this branch:
 tests use a fake `assign_owner_and_send_reset` with A's signature. Panel restores (`panel_restore.py`, H) and the CLI are
 out of scope: they never ask nor apply an owner choice.

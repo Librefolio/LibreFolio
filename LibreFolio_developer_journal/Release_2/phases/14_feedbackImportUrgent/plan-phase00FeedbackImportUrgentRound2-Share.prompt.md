@@ -6,7 +6,7 @@
 **Authorization:** direct developer feedback while reviewing About. This is the
 approved U7 refinement; other R1 fixes remain unchanged.
 **State:** completed 2026-09-09; original TEST data restored, R2 build serving on port 6041.
-> **Note implementazione** (verifica di L del 2026-10-09 su `3cceb4f90`): ✅ tutti i passi sono completati il 2026-09-09 e integrati in `ef722b552`.
+> **Note implementazione** (verifica di L del 2026-10-09 su `f545b67e3`): ✅ tutti i passi sono completati il 2026-09-09 e integrati in `c8a77dda3`.
 
 ## Approved layout
 
@@ -90,7 +90,7 @@ new build. Update the operational checklist and notify the coordinator.
 > The old frontend backup was not restored.
 >
 > **Review runtime:** `http://127.0.0.1:6041`, PID `68600`, E worktree,
-> HEAD `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`.
+> HEAD `41a4f23ff70189a4ad827d272a368fbf2359464d`.
 > Served and on-disk `index.html` SHA256:
 > `ab8b1458c1a49f1b835b3958d745e83e5a44f5d30e7c58d30ed4837941d0a4b6`.
 > No scheduler/reloader, commits, staging, production access or C integration.

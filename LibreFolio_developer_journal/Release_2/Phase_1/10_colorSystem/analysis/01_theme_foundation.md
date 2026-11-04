@@ -1,6 +1,6 @@
 # 01 — Color foundation: tokens, theme, dark mode
 
-> Snapshot: branch `dev_release2` @ `6d0b1266c` (v1.2), 2026-10-14. Read-only analysis.
+> Snapshot: branch `dev_release2` @ `885f7e91e` (v1.2), 2026-10-14. Read-only analysis.
 > Paths relative to `frontend/`. Counts are grep estimates (see `00_inventory_summary.md` for the scripted, exact-regex numbers).
 
 ## TL;DR

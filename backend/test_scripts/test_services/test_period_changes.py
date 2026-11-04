@@ -34,7 +34,7 @@ compute in the browser today from the first and last point of the loaded series.
 ``range_start`` (the last one on or before it; ``reference_date`` is ``range_start`` itself), else the first value in
 ``(range_start, as_of]`` (``reference_date`` its date), else none (``reference_date`` null); the anchor is the value on
 ``as_of``, as for the periods; with a target currency the reference is converted at ``reference_date``'s rate. They use
-the same seeded rows as the periods — no new data. RED on HEAD (a275ec8af, 46bbbb1e3): the items refuse ``range_start``
+the same seeded rows as the periods — no new data. RED on HEAD (d369e0b49, 9981ed279): the items refuse ``range_start``
 (``extra_forbidden``) and the results have no ``range_change``; ``test_range_change_is_null_without_range_start`` is the
 one guard, green before and after.
 
@@ -42,13 +42,13 @@ one guard, green before and after.
 range_start)``, behind ``POST /assets/prices/current?range_start=…``, gives each current price its whole-range change.
 The anchor is the result's own ``value`` in its ``currency`` — a live quote that may not be stored —, the reference the
 period changes' rule up to the result's ``as_of_date``. The tests hand it ``FACurrentPriceItem``s built here (no provider)
-on the seeded histories. RED on HEAD 46bbbb1e3: the function does not exist (looked up on the module when called).
+on the seeded histories. RED on HEAD 9981ed279: the function does not exist (looked up on the module when called).
 
 Y's D1 — ``live_range_changes(..., target_currency)``, the page's converted view: both ends in the target, the reference
 at ``reference_date``'s rate, the quote at today's (the UTC date), in one ``convert_bulk`` batch; an end already in the
 target is not converted; a rate missing on either end leaves both changes null, ``reference_date`` set. The tests read the
 AMD/BDT rates already seeded — today's is the last one, backward-filled, the pair being this file's —, AMD/SZL's one rate,
-and AMD/MVR, this file's and never seeded. RED on HEAD f252acb4a: the keyword does not exist (TypeError).
+and AMD/MVR, this file's and never seeded. RED on HEAD 2c3e4d452: the keyword does not exist (TypeError).
 
 ``TestWrittenDownToZero`` — X's review, point 2 (decision on N80): a price written down to nothing is −100 %. A stored
 close of 0 on ``as_of`` (the ``written_off`` asset: positive closes from WRITE_OFF_FIRST, then a 0 on WRITE_OFF_DAY,
@@ -56,14 +56,14 @@ seeded by the ORM like every row here — ``FAPricePoint`` refuses a close ≤ 0
 period with a positive reference and ``range_change`` −reference / −1, natively and converted; a live quote of 0 gives the
 same through ``live_range_changes``. The asset is this file's and leaves with the others; its conversion reads the
 AMD/BDT rates already seeded. No FX case: a stored rate of 0 is a missing rate to ``convert_bulk`` (X-R38), so it never
-reaches the house as an anchor (the class says more). RED on HEAD f252acb4a: None where −1 is expected.
+reaches the house as an anchor (the class says more). RED on HEAD 2c3e4d452: None where −1 is expected.
 
 ``TestEarlyDays`` — X5-6 (D-P4 L4, developer decision): an ``as_of`` (or ``range_start``) may be any day of the calendar; the
 old floor of 1900-01-01 (R13-SEC8) is withdrawn. A period whose reference day (``as_of − days``) would fall before
 0001-01-01 has no reference: its change is null, never an ``OverflowError`` (a 500). The tests record the days the two
 services ASK for (the grouped price lookup, ``convert_bulk``) and require exactly the days the calendar has — ``as_of``, every
 reference that exists, ``range_start`` — on an asset id no row carries and on a pair nothing stores; the values themselves are
-``test_api/test_period_changes_api.py``'s, on prices and rates the test writes. RED on HEAD 6b02bc7f6: OverflowError.
+``test_api/test_period_changes_api.py``'s, on prices and rates the test writes. RED on HEAD 89cdc2e0e: OverflowError.
 """
 
 from __future__ import annotations
@@ -644,7 +644,7 @@ async def _price_row_count(asset_id: int) -> int:
 
 @pytest.mark.asyncio
 class TestAssetRangeChange:
-    """``range_change`` of an asset item: ``reference_date``, ``change_abs``, ``change_ratio``. RED on HEAD a275ec8af
+    """``range_change`` of an asset item: ``reference_date``, ``change_abs``, ``change_ratio``. RED on HEAD d369e0b49
     (the item refuses ``range_start``) except the first test, a guard."""
 
     async def test_range_change_is_null_without_range_start(self, seeded):
@@ -788,7 +788,7 @@ class TestAssetRangeChange:
 
 @pytest.mark.asyncio
 class TestFxRangeChange:
-    """``range_change`` of a pair: ``reference_date`` and the change in both orientations. RED on HEAD a275ec8af (the
+    """``range_change`` of a pair: ``reference_date`` and the change in both orientations. RED on HEAD d369e0b49 (the
     request refuses ``range_start``) except the first test, a guard."""
 
     async def test_range_change_is_null_without_range_start(self, seeded):
@@ -892,10 +892,10 @@ def _live(asset_id: int, as_of_date: date | None = SUNDAY, value: Decimal | None
 async def _live_changes(range_start: date, *items: FACurrentPriceItem, target_currency: str | None = None) -> list[tuple[date | None, Decimal | None, Decimal | None]]:
     """``live_range_changes`` on ``items``, as ``(reference_date, change_abs, change_ratio)`` per item, in item order.
 
-    The function is looked up on the module when called: it does not exist on HEAD 46bbbb1e3. The brief fixes what each
+    The function is looked up on the module when called: it does not exist on HEAD 9981ed279. The brief fixes what each
     result gets, not the container: a mapping by asset id (an asset it leaves out has no change — the route then fills an
     empty ``FARangeChange``) or a sequence in item order. ``target_currency`` (Y's D1) is passed only when given, so a
-    call without it is the one HEAD f252acb4a knows.
+    call without it is the one HEAD 2c3e4d452 knows.
     """
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         changes = await asset_period_changes.live_range_changes(session, list(items), range_start, **({} if target_currency is None else {"target_currency": target_currency}))
@@ -926,7 +926,7 @@ def _record_conversions(monkeypatch: pytest.MonkeyPatch) -> list[list[tuple[str,
 @pytest.mark.asyncio
 class TestLiveRangeChange:
     """``live_range_changes(session, results, range_start)``: the change from the period changes' reference to each
-    result's own price. RED on HEAD 46bbbb1e3: AttributeError, the function does not exist."""
+    result's own price. RED on HEAD 9981ed279: AttributeError, the function does not exist."""
 
     async def test_reference_carried_from_before_range_start(self, seeded):
         """Nothing stored on SATURDAY: the reference is Friday's 160 carried, ``reference_date`` SATURDAY; the anchor the
@@ -1043,7 +1043,7 @@ class TestLiveRangeChange:
         live 250 AMD at today's rate (the UTC date), which is the last AMD/BDT rate stored, backward-filled — the pair is
         this file's, its rates end in 1987. Both in ONE ``convert_bulk`` batch; the change the house's.
 
-        Red on HEAD f252acb4a: ``live_range_changes`` takes no ``target_currency`` (TypeError).
+        Red on HEAD 2c3e4d452: ``live_range_changes`` takes no ``target_currency`` (TypeError).
         """
         prices, rates = seeded.sparse_prices, seeded.target_rates
         assert last_on_or_before(rates, FRIDAY) != rates[SATURDAY] == Decimal("2"), "precondition: the rate moves between the price's day and range_start"
@@ -1067,7 +1067,7 @@ class TestLiveRangeChange:
         change the native one. A quote of 250 BDT over the AMD reference, in BDT: only the reference converted, at
         SATURDAY's rate — 320 —, so −70 and −0.21875 (natively, two currencies: no change).
 
-        Red on HEAD f252acb4a: no ``target_currency`` (TypeError).
+        Red on HEAD 2c3e4d452: no ``target_currency`` (TypeError).
         """
         asset_id = seeded.assets["sparse"]
         native = await _live_changes(SATURDAY, _live(asset_id))
@@ -1089,7 +1089,7 @@ class TestLiveRangeChange:
         on FOREIGN_RATE_DAY, after the reference's SATURDAY, so the quote converts (backward-filled to today) and the
         reference does not.
 
-        Red on HEAD f252acb4a: no ``target_currency`` (TypeError).
+        Red on HEAD 2c3e4d452: no ``target_currency`` (TypeError).
         """
         assert SATURDAY < FOREIGN_RATE_DAY, "precondition: AMD/SZL has no rate on or before SATURDAY"
         live = _live(seeded.assets["sparse"])
@@ -1103,7 +1103,7 @@ class TestLiveRangeChange:
         """The young asset's history starts inside the range: the reference is its first price, converted at the rate of
         ``reference_date`` — YOUNG_FIRST —, the quote at today's.
 
-        Red on HEAD f252acb4a: no ``target_currency`` (TypeError).
+        Red on HEAD 2c3e4d452: no ``target_currency`` (TypeError).
         """
         young, rates = seeded.young_prices, seeded.target_rates
         assert min(young) == YOUNG_FIRST > YOUNG_RANGE_START, "precondition: the history starts inside the range"
@@ -1123,7 +1123,7 @@ class TestLiveRangeChange:
 @pytest.mark.asyncio
 class TestWrittenDownToZero:
     """A stored close of 0 on ``as_of``, and a live quote of 0, over a positive reference: ``change_ratio`` −1 (−100 %)
-    and ``change_abs`` −reference, the house's rule for an anchor of 0. RED on HEAD f252acb4a: None where −1 is expected.
+    and ``change_abs`` −reference, the house's rule for an anchor of 0. RED on HEAD 2c3e4d452: None where −1 is expected.
 
     No FX case, and none can be written with stored rates alone: a rate of 0 never reaches the house as an anchor.
     ``convert_bulk`` reads only the rates ``usable_fx_rate_bounds()`` lets through (X-R38: 1E-10 ≤ rate < 1E+14), so a

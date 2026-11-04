@@ -1,7 +1,7 @@
 # A — Rischio Dashboard · piano vivo del giro UI rischio (Release 2)
 
 > **Segue** [`A-postmerge-esecuzione.md`](./A-postmerge-esecuzione.md) (livelli di Asset Global, integrati
-> in `dev_release2` a `f45f0fb4d`).
+> in `dev_release2` a `923c072e5`).
 > **Mandato**: A — il pannello rischio di **Dashboard e Broker Detail** (`levels/*`), insieme al developer.
 > **Coordina il giro**: Risk (sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca`). I checkpoint passano da lui.
 > **Schede della review**: [`../R5-tempo2-schede.md`](../R5-tempo2-schede.md) (di Risk).
@@ -68,13 +68,13 @@ liquidità, con i numeri invariati · badge come nel lab.
 > **⚠️ Fuori pista — avevo proposto come strada principale un calcolo nel frontend.** Per distinguere
 > permanente da occasionale avevo suggerito di dedurlo da `provider_code` dello store. Risk l'ha fermato:
 > è un calcolo, e i calcoli stanno nel backend. Ora la distinzione è il motivo `no_price_source` del
-> backend (`7840fa7df`); il frontend legge il codice e basta.
+> backend (`bddf13e53`); il frontend legge il codice e basta.
 
 ---
 
 ## Contratto concordato con Risk (29/09)
 
-**Già nel mio albero a `7840fa7df`** (commit del developer, avanzamento pulito):
+**Già nel mio albero a `bddf13e53`** (commit del developer, avanzamento pulito):
 - `excluded_weight` su `RiskContributionOutput` (`schemas/risk.py:829`) e `RiskReturnOutput` (`:868`):
   somma dei pesi degli asset senza serie. `cash_weight` **invariato**, resta il residuo a rendimento zero
   (liquidità + in transito + esclusi); la liquidità vera è `cash_weight − excluded_weight`.
@@ -99,7 +99,7 @@ liquidità, con i numeri invariati · badge come nel lab.
 
 ### Passo 0 — base e client · ✅ 29/09
 
-> **Note implementazione**: HEAD `7840fa7df` = punta di Risk, avanzamento pulito da `ffe41c5ba`, albero
+> **Note implementazione**: HEAD `bddf13e53` = punta di Risk, avanzamento pulito da `30866c47e`, albero
 > pulito. Contratto presente: `excluded_weight:` a `schemas/risk.py:829` e `:868`, `no_price_source` 8
 > occorrenze, la chiave i18n in 4 lingue. `api sync` → client 29/09 22:33, 6 occorrenze di
 > `excluded_weight` nel client, `git status` vuoto.
@@ -186,8 +186,8 @@ del manuale sull'avviso (`#exclusion-reasons`) e sui livelli L1, L3 e L4. Quella
 >   - E2E `front-portfolio risk` sulla 6153 → **13 passed**, nessuno skipped o fallito.
 
 > **⚠️ Fuori pista — 14 contro 13.** Sul merge validato il 25/09 erano 14; qui 13. **Non è una regressione**:
-> lo spec nella base ha 13 `test(` contro 14 (`git show f45f0fb4d:` / `HEAD:`). Uno l'ha tolto Risk,
-> `7d6c9a60c test(risk): drop the Asset Global broker test`. Misurato prima di attribuirlo.
+> lo spec nella base ha 13 `test(` contro 14 (`git show 923c072e5:` / `HEAD:`). Uno l'ha tolto Risk,
+> `8ca0ba5d4 test(risk): drop the Asset Global broker test`. Misurato prima di attribuirlo.
 
 ### Il badge — il componente e la mappa · 29/09
 
@@ -327,11 +327,11 @@ resta, altrimenti l'albero non compila):
 ### Passo 4 — sulla punta di Risk: L3 sul suo helper · ✅ 30/09
 
 > **Note implementazione**:
-> - **Avanzamento verificato da me** (dopo quello di Risk e del coordinator): HEAD `d618e80ed` = `91e91346c` (il
+> - **Avanzamento verificato da me** (dopo quello di Risk e del coordinator): HEAD `1d4ec0cee` = `681d646f2` (il
 >   checkpoint piccolo di Risk: `reason`, `assetIds`, `uncoveredWeight()` con la tolleranza `1e-9`, la riga 87 di
->   L2) + `d618e80ed` (suo journal). I miei 9 file: `shasum -a 256 -c` sugli hash presi prima del congelamento →
+>   L2) + `1d4ec0cee` (suo journal). I miei 9 file: `shasum -a 256 -c` sugli hash presi prima del congelamento →
 >   **9 OK**; la patch dei file tracciati è **identica byte per byte** (`cmp`). `api sync` non serve: il backend non
->   è cambiato da `7840fa7df` (client del 29/09 22:54).
+>   è cambiato da `bddf13e53` (client del 29/09 22:54).
 > - **L3 su `uncoveredWeight()`**: `L3RiskAdjusted.svelte` importa il helper di Risk; `cashShare`/`unpricedShare`
 >   valgono `null` se la divisione non si conosce, e allora **nessuna** delle due frasi: resta la nota di base.
 > - **Cancellati**, come concordato con Risk: `uncoveredShares()` e `cashWeight()` da `l3Helpers.ts` (−35 righe); dal
@@ -784,7 +784,7 @@ in stage i file interi.
 - i18n ×4: **solo aggiunte**, 4 chiavi (`risk.levels.l3.scatter.unpriced`, `risk.levels.notice.noPriceSourceTitle`,
   `risk.levels.notice.affected`, `risk.levels.l3.rows.kpi`);
 - questo piano (nuovo).
-- `L2Diversification.svelte` **non** cambia: è ancora quello del checkpoint di Risk (`91e91346c`).
+- `L2Diversification.svelte` **non** cambia: è ancora quello del checkpoint di Risk (`681d646f2`).
 
 **Prove sull'albero del checkpoint (01/10)**:
 - vitest su 7 file dei livelli → `Test Files 7 passed (7)` · **212**;
@@ -871,12 +871,12 @@ registrare in `risk-levels-unit` (`_frontend_portfolio.py:148`, `:292`): serve u
 confini (1 %, 0,1 %, «< 0.01%», zero, negativi), rossi prima del codice, scritti da test-author. Si fa subito dopo il
 commit del checkpoint 1.
 
-## 01/10 16:52 — checkpoint 1 committato come `2b9362618`; in arrivo la fusione della punta di Risk `a7f1dbea4`
+## 01/10 16:52 — checkpoint 1 committato come `2f3134b1e`; in arrivo la fusione della punta di Risk `f550edea9`
 - Albero pulito, nessuna fusione aperta (verificato in sola lettura).
 - **Pre-verifica della risoluzione di Risk** (`/tmp/libreFolio_a_runner_resolved.py`), fatta prima che la fusione si apra:
-  - rispetto alla sua parte (`a7f1dbea4`) cambia **solo** le due righe in conflitto (`:179`, `:324`);
-  - rispetto alla mia (`2b9362618`) aggiunge solo i suoi blocchi;
-  - la mia fusione a tre vie (base `d618e80ed`) trova **2 conflitti**, le stesse due righe;
+  - rispetto alla sua parte (`f550edea9`) cambia **solo** le due righe in conflitto (`:179`, `:324`);
+  - rispetto alla mia (`2f3134b1e`) aggiunge solo i suoi blocchi;
+  - la mia fusione a tre vie (base `1d4ec0cee`) trova **2 conflitti**, le stesse due righe;
   - nel contenuto: elenco di esecuzione e `tests=` con 5 file (i 3 di prima, `L2Diversification.test.ts`,
     `BenchmarkSelect.test.ts`); nella `desc` tutte le mie modifiche (26 pezzi a livello di carattere) più la sua frase
     sul selettore condiviso; «joined by a middle dot» non c'è più.
@@ -887,7 +887,7 @@ commit del checkpoint 1.
   delle quote; `SYMBOL_BY_ROLE` e V6.
 - **Nessuna modifica all'albero** finché la fusione non è aperta e chiusa.
 
-## 01/10 17:00-17:10 — la fusione di Risk `a7f1dbea4` nel mio `2b9362618`: risolta, validata, FROZEN
+## 01/10 17:00-17:10 — la fusione di Risk `f550edea9` nel mio `2f3134b1e`: risolta, validata, FROZEN
 - **Fusione aperta** dallo script del coordinator: un solo file in conflitto, `_frontend_portfolio.py`, con 2 regioni
   (`:179`, `:328`).
 - **Risoluzione**: `cp` del riferimento di Risk; `cmp` 0 sul file nell'albero e sul blob in stage; `py_compile` OK; in
@@ -919,7 +919,7 @@ commit del checkpoint 1.
   (prova a vuoto GUARDS_OK), messaggio ASCII `merge(risk): Risk's tip into A (shared benchmark, F's L3)` («°» tolto). Va
   al developer. **FROZEN fino allo SHA**; poi il piano e il prossimo giro.
 
-- **17:12 — fusione committata dal developer**: `738ddc064`, genitori `2b9362618` + `a7f1dbea4`, albero `01a6c2d67673` =
+- **17:12 — fusione committata dal developer**: `6edba54d2`, genitori `2f3134b1e` + `f550edea9`, albero `01a6c2d67673` =
   quello in stage, albero di lavoro pulito (verificato dal coordinator e da me). Non sono più congelato.
 
 ### Passo 8 (ripresa) — `L3Benchmark` sulla primitiva `BenchmarkSelect` · ✅ 01/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
@@ -928,7 +928,7 @@ commit del checkpoint 1.
 > - **B1–B4 riapplicati** sullo spec fuso con `git merge-file` (base = versione del checkpoint, full = versione con i
 >   B): fusione **pulita**, nessun marcatore. Le due righe di Risk restano (`:128` `30`, `:514`
 >   `horizon_observations`); prettier pulito; rispetto a HEAD `+371/−9`.
-> - **Rossi di nuovo, sul codice fuso di oggi** (`738ddc064`, prima di toccare `L3Benchmark`) → **5 failed**, sulle
+> - **Rossi di nuovo, sul codice fuso di oggi** (`6edba54d2`, prima di toccare `L3Benchmark`) → **5 failed**, sulle
 >   stesse clausole sostanziali del 01/10 mattina (trigger con il segnaposto, opzione posseduta assente, id morto
 >   pubblicato e mandato al server, `data-benchmark-state` assente). La base è cambiata con la fusione: rifare la prova
 >   non era formale.
@@ -1001,7 +1001,7 @@ commit del checkpoint 1.
   finta.
 - **Dopo il commit**: la regola delle quote (concessione per `shareFormat.test.ts` in `risk-levels-unit` già ricevuta:
   le due voci più una frase nella `desc`, «nothing else»; `check-orphans` fra i controlli).
-- **Checkpoint 2 committato** dal developer: `2f54c9c0b` (`feat(risk): shared benchmark picker in L3`).
+- **Checkpoint 2 committato** dal developer: `dcdfb0f8f` (`feat(risk): shared benchmark picker in L3`).
 
 ### Pulizia dei dati reali in `/tmp` · ✅ 02/10 12:55
 
@@ -1086,7 +1086,7 @@ commit del checkpoint 1.
 > **Note implementazione**:
 > - ⚠️ **Fuori pista — sessione interrotta il 02/10**: un errore di rete (DNS) ha fatto perdere la risposta di test-author.
 >   Alla ripresa (05/10, su richiesta del coordinator) ho verificato l'albero:
->   - HEAD `2f54c9c0b`, 8 percorsi; i 6 del checkpoint 3 hanno ancora i blob registrati;
+>   - HEAD `dcdfb0f8f`, 8 percorsi; i 6 del checkpoint 3 hanno ancora i blob registrati;
 >   - test-author aveva scritto **per intero**, prima dell'errore, i due file dei test (13:32 e 13:33 del 02/10): niente
 >     a metà. Non sapendo se avesse fatto le prove rosse, **le ho rifatte io**.
 > - **La corsia dopo la pulizia di `/tmp` di macOS** (05/10, 00:01): `app.db` c'era, ma `custom-uploads` era vuota (63
@@ -1157,29 +1157,29 @@ commit del checkpoint 1.
   scheda); i badge e la frase breve dell'avviso (aspettano `AssetChip` di F); V2 (tooltip dell'istogramma), V3 (aspetto
   delle card), V4 (ordinamenti della matrice, helper condiviso di F); `SYMBOL_BY_ROLE` e V6 (scatter, dopo il lavoro di F);
   la citazione vecchia `schemas/risk.py:1056` nei miei commenti.
-- **Checkpoint 3 committato** dal developer: `f8daa6e45` (`feat(risk): small shares never print as zero`).
+- **Checkpoint 3 committato** dal developer: `456e66cfc` (`feat(risk): small shares never print as zero`).
 
 ## La punta di Risk fusa nel mio ramo · 05/10 14:05
 
-> **Coordinator (05/10 14:05)**: fusione fatta dal developer, `f7046b59f`, genitori `f8daa6e45` + `1ac534552`, albero
+> **Coordinator (05/10 14:05)**: fusione fatta dal developer, `a8f05b86f`, genitori `456e66cfc` + `9619ccddd`, albero
 > `422f105e2` come simulato, albero di lavoro pulito. Porta i giri di F sul lab, F3 (il blocco del replay), la base di
 > Risk con `dev_release2` (K, i grafici di I, la correzione del pavimento di svelte-check, PR #30), D15 e
 > `mergeQualityIssues`. **Sbloccato.** Da fare: build e validazione della revisione combinata (`front check` deve essere
 > **0/0**), poi il blocco dei prezzi live in `risk-analysis.spec.ts` (`holdLivePricePoll`), poi il checkpoint a Risk.
 
 > **Verificato (05/10)**:
-> - HEAD `f7046b59f`, genitori e albero come detto; il primo genitore è il mio checkpoint 3.
+> - HEAD `a8f05b86f`, genitori e albero come detto; il primo genitore è il mio checkpoint 3.
 > - **Nei miei file la fusione porta**: `RiskLevelsPanel.svelte` +7/−… = il token concesso a Risk il 02/10
 >   (`replaySectionView(controller.replayResult)`), più il suo import e un paragrafo di documentazione; lo spec E2E
 >   (le parti del replay, di Risk); `l4/*` (di Risk).
 > - **Il backend** cambia solo nei servizi (`fx.py`, `portfolio_service.py`, `risk_plugins/{asset_set_comparison,stress}.py`,
 >   `signal_service.py`), non negli schemi né nell'API.
 
-### Passo 10 — validazione della revisione combinata `f7046b59f` · ✅ 05/10
+### Passo 10 — validazione della revisione combinata `a8f05b86f` · ✅ 05/10
 
 > **Note implementazione** (sulla 6153, un comando alla volta):
 > - `api sync` → riscrive solo il client ignorato da git; nessun file tracciato cambia (gli schemi e l'API del backend non
->   sono cambiati con la fusione: lo misura `git diff --stat f8daa6e45 HEAD -- backend/app/{schemas,api}`, vuoto);
+>   sono cambiati con la fusione: lo misura `git diff --stat 456e66cfc HEAD -- backend/app/{schemas,api}`, vuoto);
 > - `front build --debug` → OK;
 > - `mkdocs build` → exit 0, 0 righe `WARNING` (l'unico riquadro è l'avviso generico di Material su MkDocs 2.0);
 > - `front check` → **0 errori e 0 avvisi**: il pavimento di svelte-check corretto arriva con la base di `dev_release2`;
@@ -1192,7 +1192,7 @@ commit del checkpoint 1.
 > - ❌ **`check-links` → exit 1, un link rotto ereditato**: `user/assets/detail/chart/#rolling-return`, da
 >   `frontend/src/routes/(app)/assets/[id]/+page.svelte:3006`. L'ancora esiste solo nella pagina inglese
 >   (`chart.en.md:22`, `{: #rolling-return }`), non in it/fr/es. L'hanno introdotti insieme, link e ancora,
->   `e3af27ff3 feat(assets): add rolling-return guide link`, arrivato con la punta di Risk (base `dev_release2`). **Non è
+>   `fe8e57d3c feat(assets): add rolling-return guide link`, arrivato con la punta di Risk (base `dev_release2`). **Non è
 >   mio** (pagina dell'asset e documentazione utente): segnalato, non riparato.
 
 ### Passo 11 — i test del rischio non chiamano più fonti esterne · ✅ 05/10
@@ -1232,11 +1232,11 @@ commit del checkpoint 1.
   coordinator. **`holdFxProviderCatalog` accettato**: la prova «0 chiamate ai provider» lo richiede, e `/routes` resta
   libero. Il link rotto `#rolling-return` è confermato anche nel suo albero e passato come difetto di `dev_release2`.
   FROZEN fino agli SHA.
-- **Checkpoint 4 committato** dal developer: `528f6154d` (`test(risk): keep the risk E2E off live providers`).
+- **Checkpoint 4 committato** dal developer: `92a55095f` (`test(risk): keep the risk E2E off live providers`).
 
-### La punta di Risk `2e2d21e76` fusa nel mio ramo, validata · ✅ 05/10
+### La punta di Risk `3d9d01ee0` fusa nel mio ramo, validata · ✅ 05/10
 
-> **Coordinator (05/10 14:51)**: fusione `1629a27c5`, genitori `528f6154d` + `2e2d21e76` (il checkpoint 2 di Risk: le
+> **Coordinator (05/10 14:51)**: fusione `fad122e67`, genitori `92a55095f` + `3d9d01ee0` (il checkpoint 2 di Risk: le
 > anomalie dei dati per gli insiemi di asset), albero `aaa98f99b` come simulato, albero di lavoro pulito. Porta la modifica
 > di Risk a `service.py` e 4 chiavi i18n. Chiesta una validazione breve, poi il resoconto a Risk.
 
@@ -1310,7 +1310,7 @@ commit del checkpoint 1.
 > **Smistati a Risk**: il selettore del benchmark, l'impaginazione del replay, gli asset a +0,00 % (difetto del backend
 > dimostrato), lo storico D15 (tooltip padre-figli e colori scuri che sembrano sovrapposizioni), i margini del grafico di
 > crescita (di I, con la mia diagnosi) e il bucket 1M dell'income.
-> 📌 **Risk, 05/10 16:25**: la concessione di F su `scatterChartHelpers.ts` è finita; la sua modifica (`f6f11cb9c`, blob
+> 📌 **Risk, 05/10 16:25**: la concessione di F su `scatterChartHelpers.ts` è finita; la sua modifica (`46de4004e`, blob
 > `87a89684`) è nel mio ramo, uguale in A, Risk e F; nessun albero ha modifiche non committate allo scatter. **V6 e
 > `SYMBOL_BY_ROLE` sono sbloccati.** Le mie porte per lo scatter includono `scatterChartHelpers.test.ts` (di F) ed E2E
 > `risk-lab`. ⚠️ **Da chiarire**: ora Risk chiama la retta e il punto doppio «nuovo scopo sul file di I» e chiede
@@ -1375,7 +1375,7 @@ commit del checkpoint 1.
 >   tolleranza del D15, e «due» dove contava i suoi asset. L'esempio sul margine ora è dichiarato inventato.
 > - **La percentuale sulla banda del Crowdfunding non era una quota dei suoi dati**: era l'opacità dell'area (alfa
 >   `0x88`). L'ho riscritta lo stesso («circa metà»), perché si leggeva come una quota.
-> - **Piano**: le note delle copie del 30/09 (già in `2b9362618`, che solo questo ramo contiene) e del 05/10 restano
+> - **Piano**: le note delle copie del 30/09 (già in `2f3134b1e`, che solo questo ramo contiene) e del 05/10 restano
 >   senza hash e senza conteggi; tolti anche «due crowdfunding», «due posizioni», «la liquidità reale … è zero» e la
 >   dimensione delle copie. Resta il metodo: impronta presa, permessi, porta.
 > - ⚠️ **Fuori pista — le copie di confronto**: prima di modificare ho copiato i due file in `/tmp`, dove sono rimaste
@@ -1384,12 +1384,12 @@ commit del checkpoint 1.
 > - ⚠️ **Fuori pista — il vincolo Ⓕ c'era, ma non l'avevo applicato alle citazioni**: le risposte «testuali» del
 >   developer portavano le cifre che la UI gli mostrava. Da ora una citazione dalla UI sui dati veri passa dalla stessa
 >   regola delle mie note.
-> - Riscrivere la storia per `2b9362618` è una decisione del developer, via coordinator.
+> - Riscrivere la storia per `2f3134b1e` è una decisione del developer, via coordinator.
 
 ### Checkpoint 5 committato · ✅ 05/10
 
 - **16:55 — Risk ha verificato il checkpoint 5**: blob 11/11; i18n +3 chiavi per lingua; lo spec aggiunge soltanto.
-  Previsione di fusione pulita con la punta Risk=F `8cb564ace` e con `dev_release2`: si sovrappongono solo i 4
+  Previsione di fusione pulita con la punta Risk=F `adb99c760` e con `dev_release2`: si sovrappongono solo i 4
   cataloghi, con JSON valido. I miei due file vitest sull'albero congelato: 31 passed. `RiskMetricCard` lo usano ancora
   solo L1–L3.
 - **Lo scatter è mio** (Risk corregge il messaggio delle 16:25): `charts/ScatterChart.svelte` e `scatterChartHelpers.ts`
@@ -1416,12 +1416,12 @@ commit del checkpoint 1.
   4. **il benchmark posseduto** è un solo punto: quello dell'asset, grande quanto il peso, con lo stile del benchmark
      (arancione, a rombo). Il tooltip dice «Benchmark · in portafoglio, peso …». Se non lo possiedi, resta il rombo da
      solo, perché finalmente si applica `SYMBOL_BY_ROLE`;
-  5. **V6**: meno spazio vuoto a sinistra dello scatter, con la correzione del grafico di crescita (`cda9408d4`);
+  5. **V6**: meno spazio vuoto a sinistra dello scatter, con la correzione del grafico di crescita (`9c477f5c4`);
   6. **la riga di stato di L4** dice «Replay storico: Parziale» invece di «Stress test: Parziale».
 
   Nel lab cambiano solo il rombo del benchmark e il margine, perché lì il benchmark non è mai uno degli asset scelti.
 - **~17:35 — privacy** (sopra): Risk ha scansionato il checkpoint ricongelato, pulito; il coordinator l'ha ricontrollato.
-- **Committato** dal developer e verificato dal coordinator: `01bc97106` su `1629a27c5`, albero `b5b2fc3db`, 11 file,
+- **Committato** dal developer e verificato dal coordinator: `4a00cd600` su `fad122e67`, albero `b5b2fc3db`, 11 file,
   blob e messaggio uguali al registro, albero di lavoro pulito (verificato anche da me).
 - **Per il prossimo giro (Risk, solo un commento)**: il commento di `RiskLevelsPanel.svelte:173` dice «An on-demand
   answer discarded twice running». Va corretto in «discarded on every attempt», perché con il suo k3 (D374) il limite è
@@ -1468,7 +1468,7 @@ commit del checkpoint 1.
 > **Accordi presi prima del codice (05/10)**:
 > - **F**: lo scatter va bene per il lab, perché i suoi punti non portano mai `weight` né `detail`; il lab prende il rombo
 >   a misura fissa e il margine. Posso aggiungere test ai suoi due file dei grafici, lasciando come sono le asserzioni
->   della selezione (`f6f11cb9c`). **Concessione su `assetSetI18n.test.ts:194-233`** (il commento che cita la nota
+>   della selezione (`46de4004e`). **Concessione su `assetSetI18n.test.ts:194-233`** (il commento che cita la nota
 >   vecchia e il controllo positivo): il controllo passa a `risk.levels.l3.scatter.notes.line`, meglio se su tutte e 4
 >   le lingue con `LINE_WORDS[locale]`, e `risk.levels.l3.scatter.note` esce dai cataloghi **nello stesso cambiamento**.
 >   Lo faccio insieme ai test, dopo il via libera visivo, così nel frattempo non si accende nessun rosso.
@@ -1478,7 +1478,7 @@ commit del checkpoint 1.
 > - **Coordinator, per la copia**: lo snapshot che c'è, di cui prima si ricontrolla l'impronta. Cartella con `mkdir -m 700`
 >   e `umask 077` **prima** di copiare: niente file leggibili da altri, neanche per un minuto. Server solo su
 >   `127.0.0.1:6163`, log dentro la copia, cancellazione con la prova di `lsof +D` e `ls`, nessuna cifra nel journal.
->   Dopo la review, al prossimo checkpoint, si fonde k3 di Risk (`bb8d68ad2`).
+>   Dopo la review, al prossimo checkpoint, si fonde k3 di Risk (`68691a91a`).
 
 > **Note implementazione (codice, prima della review visiva)**:
 > - `RiskMetricCard`: nuova prop `docsHint` (il testo dell'ⓘ; senza, il titolo, quindi L1 e L2 non cambiano). Titolo e
@@ -1587,7 +1587,7 @@ commit del checkpoint 1.
 > - il rendimento per asset dell'analisi rischio viene **solo dai prezzi**: `get_prices_bulk`, poi i rendimenti semplici
 >   dei prezzi convertiti (`series_preparation.py:229`); cedole e dividendi incassati non entrano. È del backend, quindi
 >   va a Risk come proposta, con l'idea del developer (le rendite registrate, come lo YoC, e il prezzo come ripiego);
-> - il lab usa lo stesso `ScatterChart`, e la sua tabella (`78b9ba04f`) è nel mio ramo: non manca una fusione, la
+> - il lab usa lo stesso `ScatterChart`, e la sua tabella (`fa2897c98`) è nel mio ramo: non manca una fusione, la
 >   Dashboard non l'ha mai avuta.
 
 > **Chiusura della review 2**: server fermato, 6163 libera; **copia cancellata** con i log che conteneva (`lsof +D` vuoto
@@ -1618,7 +1618,7 @@ commit del checkpoint 1.
 ### Pausa · 05/10 18:45 — il developer stacca
 
 > **Coordinator**: fermarsi e salvare. La review sui suoi dati si rifà al suo rientro.
-> - **Stato**: HEAD `01bc97106` (checkpoint 5); 13 file sporchi, tutti miei o nelle concessioni: lo spec, `ScatterChart`,
+> - **Stato**: HEAD `4a00cd600` (checkpoint 5); 13 file sporchi, tutti miei o nelle concessioni: lo spec, `ScatterChart`,
 >   `scatterChartHelpers`, `L3RiskAdjusted`, `RiskLevelsPanel`, `l3Helpers`, `RiskCardGrid`, `RiskMetricCard`, i 4
 >   cataloghi e questo piano. Nessun commit.
 > - **Copia dei dati veri**: cancellata a fine review 2 e ricontrollata ora (`lsof +D` e `ls` → «No such file or
@@ -1642,14 +1642,14 @@ commit del checkpoint 1.
 >      contro il codice di prima. Concessioni già date:
 >      - `_frontend_portfolio.py`, per `L3RiskAdjusted.test.ts`, o per il file del componente condiviso: va riconfermato;
 >      - di F, `assetSetI18n.test.ts:194-233`, con `risk.levels.l3.scatter.note` tolta nello stesso cambiamento;
->   5. **il checkpoint**, con la fusione di k3 di Risk (`bb8d68ad2`);
+>   5. **il checkpoint**, con la fusione di k3 di Risk (`68691a91a`);
 >   6. **il giro dopo**: il tasso senza rischio modificabile, con l'analisi a Risk prima, perché lo store condiviso è suo.
 
 ### Ripresa · 06/10 09:25
 
 > **Coordinator**: riprendere dal codice del giro; quando è pronto, review del developer sulla copia dei suoi dati con la
 > stessa procedura, **avvisandolo prima di creare la copia**. Carico alto della macchina (~26, servizi di sistema).
-> **Verificato**: HEAD `01bc97106`, 13 file sporchi, nessuna modifica dopo le 18:43 del 05/10, stage vuoto, 6153 e 6163
+> **Verificato**: HEAD `4a00cd600`, 13 file sporchi, nessuna modifica dopo le 18:43 del 05/10, stage vuoto, 6153 e 6163
 > libere, impronta dello snapshot uguale a quella del coordinator.
 
 > **Durante la pausa (05/10 ~18:45)**:
@@ -1661,7 +1661,7 @@ commit del checkpoint 1.
 >   - **finché non siamo d'accordo non tocco i suoi file di L3**: `AssetSetRiskReturnSection.svelte` e il suo test,
 >     `AssetSetComparisonLevels.*`, `assetSetTable.ts`, `assetSetLevels.ts`, `assetSetI18n.test.ts` fuori da `:194-233`,
 >     `risk-lab.spec.ts`, `correlation.en.md`;
->   - il suo ultimo giro, `174c467df`, tocca solo il suo journal (verificato in sola lettura).
+>   - il suo ultimo giro, `3f18f8896`, tocca solo il suo journal (verificato in sola lettura).
 > - **A F, in coda per la sua sessione**: la retta passa per il benchmark quando c'è (`capitalMarketLineAnchor`), e nel
 >   lab non cambia niente. La sua guida, `correlation.en.md:113`, sulle pagine di portafoglio con benchmark diventa
 >   inesatta; il file è suo.
@@ -1690,7 +1690,7 @@ commit del checkpoint 1.
 >     - circa dieci asserzioni E2E contano le celle contro `selected.length`;
 >     - `DataTable.navigateToRowId()` cambia pagina ma scorre anche fino alla riga, quindi serve un percorso «solo
 >       pagina», e `table/` è condiviso.
-> - **Base**: la sua punta `174c467df` **non è nel mio ramo**. Dalla base comune `2e2d21e76` cambiano la sua sezione
+> - **Base**: la sua punta `3f18f8896` **non è nel mio ramo**. Dalla base comune `3d9d01ee0` cambiano la sua sezione
 >   (+91 righe), `assetSetLevels.ts` (+167), `AssetSetComparisonLevels.svelte`, `assetSetTable.ts` e i 4 cataloghi;
 >   porta anche k3 di Risk. Inoltre le mie 13 modifiche non committate, cataloghi compresi, impediscono la fusione.
 >   F non tocca più i suoi file di L3 fino al mio passo 1, e il suo giro 11 tocca solo il runner e il suo journal.
@@ -1748,7 +1748,7 @@ commit del checkpoint 1.
 >   - Nel run di `risk-lab` c'è **una** chiamata vera, `fx_providers.snb` «SNB dimensions loaded»: un GET all'API SNB
 >     (`snb.py:21`) dallo spec di F, che non trattiene il catalogo FX. Non viene dal mio cambiamento. Segnalato a F, con
 >     `holdFxProviderCatalog` come modello.
-> - **Previsione di fusione con la punta di F `174c467df`** (base comune `2e2d21e76`): dei file che toccano entrambi i
+> - **Previsione di fusione con la punta di F `3f18f8896`** (base comune `3d9d01ee0`): dei file che toccano entrambi i
 >   lati restano solo i 4 cataloghi. Simulati con `git merge-file`: **0 conflitti**, JSON valido, parità, 3544 chiavi,
 >   cioè l'unione dei due lati meno le chiavi tolte.
 
@@ -1764,8 +1764,8 @@ commit del checkpoint 1.
   cambiata, per un totale di 3536. L'errore era solo nel messaggio di consegna, perché dopo le 15 del primo lotto ne
   ho aggiunte 4.
 - **Committato e fuso** (verificato dal coordinator e da me):
-  - `fa18eace8` sopra `01bc97106`, albero `4e04ef68b`;
-  - poi la fusione `f6b7273f8`: genitori `fa18eace8` e la punta di F `cda8cba1c` (con il suo giro 11 e k3 di Risk),
+  - `1ff405f96` sopra `4a00cd600`, albero `4e04ef68b`;
+  - poi la fusione `c4718e8a0`: genitori `1ff405f96` e la punta di F `3260a6488` (con il suo giro 11 e k3 di Risk),
     albero `4822ee011`, uguale alla simulazione; albero di lavoro pulito.
   - La fusione porta 49 file: nessuno del backend (quindi niente `api sync`), 3 pagine del manuale e la frase di F nel
     runner (`_frontend_utility.py`).
@@ -2029,7 +2029,7 @@ commit del checkpoint 1.
 >   - `ComparisonParams` è `extra="forbid"` (`comparison.py:112`, `service.py:168-171`). Quindi
 >     `risk_free_annual_rate` e `target_annual_return` vanno nella richiesta di `L3Benchmark` solo nel giro che fonde
 >     k6;
->   - k5a è committato (`bc0e67533` … `2a4364724`, albero `d57703dca`), e k6 parte con (iii).
+>   - k5a è committato (`6e69169ce` … `72093513f`, albero `d57703dca`), e k6 parte con (iii).
 >
 > **Seconda passata (12:00–12:25)**, dopo il riavvio: il developer rientra e guarda.
 > - **Cosa vede**:
@@ -2137,7 +2137,7 @@ commit del checkpoint 1.
 >     `check-orphans` lo lancio dopo test-author, perché ora la corsia è sua. Le frasi di `desc` le ho scritte sui
 >     titoli dei casi già scritti, e le riallineo al resoconto finale se cambia qualcosa.
 >
-> **Risk, 13:44: k6 è dentro**. I commit sono `61eda42d8` `331b07b46` `4b296dff6`, albero `f80a7ef15`. Si fonde nel mio
+> **Risk, 13:44: k6 è dentro**. I commit sono `c3c615646` `67622e679` `97b90a937`, albero `f80a7ef15`. Si fonde nel mio
 > giro, dopo il checkpoint 7, ed è il coordinator a fondere: io non tocco Git. Contratto (ogni cifra è `number | null`):
 > - `asset_risk_return.items[].sharpe`/`.sortino`, sui rendimenti e sul fattore del punto stesso;
 > - `comparison.comparison_sharpe`/`.comparison_sortino` del benchmark, sulle stesse osservazioni di
@@ -2204,7 +2204,7 @@ commit del checkpoint 1.
 >   6. Nelle finestre di `risk` nessuna chiamata ai provider. In `risk-lab` c'è una chiamata SNB (12:09:35 UTC), il
 >      problema noto della spec del lab che il giro 12 di F risolve. **L'ho riletta io**, sui campi JSON del log.
 >
-> **Crash dell'app (~14:18) e ripresa**. Il coordinator ha trovato HEAD `f6b7273f8`, 24 percorsi in corso, niente in
+> **Crash dell'app (~14:18) e ripresa**. Il coordinator ha trovato HEAD `c4718e8a0`, 24 percorsi in corso, niente in
 > stage, nessuna porta occupata e nessun processo rimasto. L'ultimo comando prima del crash, la lettura dei due
 > commenti, era già finito. Ho ricontrollato io:
 > - 20 M + 4 nuovi, niente in stage;
@@ -2235,7 +2235,7 @@ commit del checkpoint 1.
 >
 >   Prettier è pulito. Sono solo commenti, quindi la prova E2E vale ancora; cambiano solo gli hash dei due file.
 > - **Export per F** in `/tmp/libreFolio_A_for_F/` (cartella `700`, file `600`):
->   - 6 patch (`git diff -- <file>` contro HEAD `f6b7273f8`, ognuna verificata con `git apply --check -R`);
+>   - 6 patch (`git diff -- <file>` contro HEAD `c4718e8a0`, ognuna verificata con `git apply --check -R`);
 >   - il file intero `AssetSetRiskReturnSection.svelte`;
 >   - `SHA256SUMS.txt`, con lo sha256 di ogni file nel worktree, il blob in HEAD e gli sha256 dell'export.
 > - **Bozza della consegna**:
@@ -2244,7 +2244,7 @@ commit del checkpoint 1.
 >   - privacy: nessuna percentuale, ISIN, importo o nome di fondo nelle righe aggiunte al journal.
 >
 > **F (14:28): review dei suoi 6 file APPROVATA per il checkpoint 7**:
-> - ha verificato l'export con un suo script (PASS): ogni patch, applicata al blob di `f6b7273f8`, dà lo sha dichiarato;
+> - ha verificato l'export con un suo script (PASS): ogni patch, applicata al blob di `c4718e8a0`, dà lo sha dichiarato;
 > - 01, l'involucro: Props, `tableRef`, righe e punti (D371), descrizione, 4 stati e periodo restano suoi; le capacità
 >   sono esplicite, e non passa nessun peso;
 > - 02: solo gli intervalli concessi;
@@ -2263,9 +2263,9 @@ commit del checkpoint 1.
 > - `ScatterChart.test.ts` 13.
 >
 > **Previsione dei conflitti**, misurata leggendo la storia committata (nessun worktree altrui):
-> - punta di Risk `4b296dff6` (k5a + k6): merge-base `bb8d68ad2`, 13 commit e 37 file. Si sovrappone ai miei percorsi
+> - punta di Risk `97b90a937` (k5a + k6): merge-base `68691a91a`, 13 commit e 37 file. Si sovrappone ai miei percorsi
 >   in `risk-analysis.spec.ts`, nei 4 cataloghi e in `_frontend_portfolio.py`;
-> - punta di F `9008b21c2` (giro 12): 2 file, si sovrappone in `risk-lab.spec.ts`.
+> - punta di F `75167ec33` (giro 12): 2 file, si sovrappone in `risk-lab.spec.ts`.
 >
 > **Simulazione a tre vie** (`git merge-file -p` su copie in `/tmp`; il repo non è stato toccato):
 > - 0 conflitti su tutti e 7 i file;
@@ -2279,8 +2279,8 @@ commit del checkpoint 1.
 > **Checkpoint 7 consegnato al coordinator** (06/10, ~14:35): `CHECKPOINT READY` con baseline, 24 percorsi e i loro
 > blob (`files/ckpt7-blobs.txt`), esclusioni, prova, previsione dei conflitti e messaggio proposto
 > (`/tmp/libreFolio_commit_ckpt7.txt`). Ho proposto un solo ORDINE: prima il commit del checkpoint 7, poi
-> `merge --no-ff` della punta di Risk `4b296dff6` (k5a + k6, che serve al passo successivo). Fondere anche la punta di F
-> `9008b21c2` lo decide il coordinator. **Stato: FROZEN.**
+> `merge --no-ff` della punta di Risk `97b90a937` (k5a + k6, che serve al passo successivo). Fondere anche la punta di F
+> `75167ec33` lo decide il coordinator. **Stato: FROZEN.**
 >
 > **Dopo la fusione** (passo 20): validare la revisione combinata (i miei cancelli più l'E2E `risk-lab`), poi
 > `api sync` e il lavoro di k6 elencato sopra (parametri su `L3Benchmark`, beta e correlazione per posizione da
@@ -2294,17 +2294,17 @@ commit del checkpoint 1.
 > - fondere F l'ha deciso lui: il mio ramo prende anche F, così F poi fa un fast-forward alla mia punta e adotta la
 >   tabella L3 nel lab;
 > - ORDINE lanciato dal developer e verificato:
->   - commit `f55b2e42a` (albero `6c30bc17b`);
->   - merge di Risk `22bba4494` (albero `eeab700b0`, k4 + k5a + k6);
->   - merge di F `001bebf12` (albero `8aefdd616`, giro 12).
+>   - commit `4632658f7` (albero `6c30bc17b`);
+>   - merge di Risk `943b3a49f` (albero `eeab700b0`, k4 + k5a + k6);
+>   - merge di F `abe23546b` (albero `8aefdd616`, giro 12).
 >
 >   Genitori, file e messaggi tornano con il registro, e il worktree è pulito.
 > - Da ora la riga di `risk-levels-component` nel runner non la tocco più: Risk ci aggiunge i suoi file di k5b. Se mi
 >   serve, passo dal coordinator.
 
-### Passo 20 — la revisione combinata `001bebf12`, validata · ✅ 06/10
+### Passo 20 — la revisione combinata `abe23546b`, validata · ✅ 06/10
 
-> **Verificato prima**: HEAD `001bebf12`, albero `8aefdd616`, genitori `22bba4494` + `9008b21c2`, 0 percorsi in
+> **Verificato prima**: HEAD `abe23546b`, albero `8aefdd616`, genitori `943b3a49f` + `75167ec33`, 0 percorsi in
 > corso. Le due fusioni portano 39 file: backend (`schemas/risk.py` e altri), 3 pagine di documentazione, 19 file
 > `frontend/src`, 2 spec e il runner.
 >
@@ -2456,7 +2456,7 @@ commit del checkpoint 1.
 > Le concessioni G5 e G6 vanno bene. Il checkpoint lo consegno con il registro (blob, percorsi, messaggio); la fusione
 > la simula il coordinator.
 >
-> **Blocchi di `risk-analysis.spec.ts` separati** (richiesta del coordinator, 15:37), contati su `001bebf12`:
+> **Blocchi di `risk-analysis.spec.ts` separati** (richiesta del coordinator, 15:37), contati su `abe23546b`:
 > - **miei**:
 >   - lo stub di `asset_risk_return` (`:514`) e quello di `comparison` (`:683-…`);
 >   - i test nuovi in coda al `describe` della tabella L3 (`:3136-3510`);
@@ -2484,7 +2484,7 @@ commit del checkpoint 1.
 > - `git apply --check` passa sul mio albero di lavoro (k6 più il lavoro in corso di test-author), quindi la fusione
 >   resta additiva.
 >
-> **F 13-A committato (15:53)**: punta di F `ef64d71e2`, base `001bebf12`, verificata dal coordinator. Contiene il
+> **F 13-A committato (15:53)**: punta di F `9b8bfaeac`, base `abe23546b`, verificata dal coordinator. Contiene il
 > selettore del benchmark dentro L3 del lab: 11 file, tra cui `AssetSetRiskPanel`, `AssetSetComparisonLevels` (+test),
 > un nuovo `RiskControllerHost.svelte`, 1 valore i18n × 4 e la guida.
 > - Lo fonde il mio ORDINE del checkpoint 8, insieme al k5b di Risk se arriva in tempo (Risk stima le 16:45).
@@ -2492,7 +2492,7 @@ commit del checkpoint 1.
 >   e `:5395`; il resto sono helper (`:2604`, `:2856-2890`) e altri test (`:5484-5518`). Se G7 diventa rosso, il flip
 >   nel mio commit resta lontano da quelle righe e dalle loro vicine.
 >
-> **Punte da fondere nel checkpoint 8** (coordinator, 16:14): Risk k5b `eda37b8de`; F `b7e70a949` (13-A + 13-B, compreso lo
+> **Punte da fondere nel checkpoint 8** (coordinator, 16:14): Risk k5b `eaefbf896`; F `40312c2a9` (13-A + 13-B, compreso lo
 > spostamento di `measureHeaderTitle` nei miei due file, che avevo approvato). La simulazione del coordinator contro il
 > mio lavoro in corso dà rc=0.
 
@@ -2544,24 +2544,24 @@ commit del checkpoint 1.
 >   - i 6 file di test e i 3 sorgenti mutati coincidono con gli sha del resoconto, senza residui;
 >   - 13 percorsi modificati, nessun file nuovo; `diff --check` pulito; 6153 libera;
 >   - i miei hunk nella spec sono `172-186`, `426-449`, `741`, `3180-3193` e `3379-3463`, lontani da quelli di Risk;
->   - la simulazione a tre vie contro le punte di F (`b7e70a949`) e di Risk (`eda37b8de`) dà 0 conflitti su tutte le
+>   - la simulazione a tre vie contro le punte di F (`40312c2a9`) e di Risk (`eaefbf896`) dà 0 conflitti su tutte le
 >     sovrapposizioni.
 >
 > **Checkpoint 8 consegnato al coordinator** (06/10, ~16:30): `CHECKPOINT READY` con il registro (13 percorsi, blob in
 > `files/ckpt8-blobs.txt`, hunk esatti della spec) e il messaggio proposto (`/tmp/libreFolio_commit_ckpt8.txt`). L'ORDINE
-> lo prepara il coordinator: il mio commit, poi la fusione di F `b7e70a949`, poi quella di Risk `eda37b8de`, tutto
+> lo prepara il coordinator: il mio commit, poi la fusione di F `40312c2a9`, poi quella di Risk `eaefbf896`, tutto
 > simulato. **Stato: FROZEN**. Dopo la fusione si valida la revisione combinata, e il prossimo giro parte con la
 > barriera di `:1717`.
 
 ### Checkpoint 8 committato, le punte di F e di Risk fuse · ✅ 06/10
 
-> **Coordinator (16:20)**, verificato: commit `d8abd2d27` (albero `d2798c4d0`); merge di F `62039e616` (albero
-> `05b92dc14`, 13-A + 13-B); merge di Risk `9ce2efaed` (albero `2d6a2d605`, k5b). Genitori, file e messaggi tornano con
+> **Coordinator (16:20)**, verificato: commit `6462a647f` (albero `d2798c4d0`); merge di F `cc180e0a4` (albero
+> `05b92dc14`, 13-A + 13-B); merge di Risk `dc18016d4` (albero `2d6a2d605`, k5b). Genitori, file e messaggi tornano con
 > il registro, e il worktree è pulito.
 
-### Passo 22 — la revisione combinata `9ce2efaed`, validata · ✅ 06/10
+### Passo 22 — la revisione combinata `dc18016d4`, validata · ✅ 06/10
 
-> **Verificato prima**: HEAD `9ce2efaed`, albero `2d6a2d605`, 0 percorsi in corso. Le fusioni portano 29 file, tra cui
+> **Verificato prima**: HEAD `dc18016d4`, albero `2d6a2d605`, 0 percorsi in corso. Le fusioni portano 29 file, tra cui
 > i test di F (`AssetSetComparisonLevels`, `AssetSetLossComparisonSection`) e di Risk (`L4WhatIf`, `TornadoChart`,
 > `scenarioHelpers`), e 3 pagine della documentazione.
 >
@@ -2680,7 +2680,7 @@ commit del checkpoint 1.
 ### Checkpoint 9 committato; STOP e ripresa · ✅ 06/10
 
 > **Coordinator (16:53)**: checkpoint 9 verificato; lo script del commit lo lancia il developer.
-> **Commit**: `1f7a13784`, albero `3cd7879dd` (quello atteso), worktree pulito.
+> **Commit**: `08bfbb54c`, albero `3cd7879dd` (quello atteso), worktree pulito.
 >
 > **F (17:24)**:
 > - **contraddizione nella documentazione** dovuta alla mia modifica della retta:
@@ -2696,7 +2696,7 @@ commit del checkpoint 1.
 > «FERMO».
 >
 > **RIPRESA (coordinator, 19:28, via del developer)**:
-> - SHA: F14 `28559e829` (albero `8648067fb`); fuori dalla famiglia, M `d0018a5a1` e N `1ae2a53c9`;
+> - SHA: F14 `5194c0065` (albero `8648067fb`); fuori dalla famiglia, M `58bf9cfec` e N `13956cb84`;
 > - via a, in ordine:
 >   1. il checkpoint 9 nel piano (questa sezione);
 >   2. in `benchmark-selection.en.md` **solo** il paragrafo «Where there is no line» (`:101`), con docs-writer, solo
@@ -2706,11 +2706,11 @@ commit del checkpoint 1.
 > - il mio prossimo checkpoint può fondere la punta di F14.
 >
 > **Verificato alla ripresa**:
-> - HEAD `1f7a13784`, 0 percorsi in corso, 6153 e 6163 libere;
+> - HEAD `08bfbb54c`, 0 percorsi in corso, 6153 e 6163 libere;
 > - il paragrafo `:101` sta dentro la mia sezione concessa `#the-risk-return-line` (`:79-107`);
 > - le pagine non hanno una data da aggiornare;
 > - F14 tocca 8 file, ma non questa pagina;
-> - la fase 2 di Risk non è ancora committata: la punta di Risk è ancora `9ce2efaed`.
+> - la fase 2 di Risk non è ancora committata: la punta di Risk è ancora `dc18016d4`.
 
 ### Passo 25 — il paragrafo della retta nel lab, nel manuale · ✅ 06/10
 
@@ -2743,12 +2743,12 @@ commit del checkpoint 1.
 > Carico alla ripresa: 32 di media su 1 minuto (74 su 5 minuti). I tempi d'ora in poi vanno annotati insieme al carico.
 >
 > **Checkpoint 10 consegnato al coordinator**: la pagina, `:101`, e il piano. Nello stesso ORDINE c'è la fusione della
-> punta di F14 `28559e829`. **Stato: FROZEN.** Poi viene l'analisi dei bucket di Income, solo lettura, senza codice.
+> punta di F14 `5194c0065`. **Stato: FROZEN.** Poi viene l'analisi dei bucket di Income, solo lettura, senza codice.
 
 ### Checkpoint 10 committato, F14 fuso; la revisione combinata validata · ✅ 06/10
 
-> **Commit** `ec7a69a57` (oggetto accorciato dal coordinator: «docs(risk): lab line goes through its benchmark»), merge
-> di F14 `1041c38fa`, albero `b72fdfee7` (quello atteso). Worktree pulito.
+> **Commit** `fc81b7da0` (oggetto accorciato dal coordinator: «docs(risk): lab line goes through its benchmark»), merge
+> di F14 `efa7646d7`, albero `b72fdfee7` (quello atteso). Worktree pulito.
 >
 > **Validazione** (corsia 6153, carico 10–25):
 > - `front build --debug` OK (82 s); `front check` 0/0;
@@ -2763,7 +2763,7 @@ commit del checkpoint 1.
 
 ### Passo 26 — analisi dei bucket di Income (solo lettura) · ✅ 06/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
-> **Mandato del coordinator (19:28)**: `GrowthChart.svelte` è mio da `9b57893ae`. Prima l'analisi, senza codice. Gli
+> **Mandato del coordinator (19:28)**: `GrowthChart.svelte` è mio da `6511fbb35`. Prima l'analisi, senza codice. Gli
 > appunti del developer (build `v1.1.0-436`):
 > 1. allineare i bucket al calendario (il mese dal 1°, la settimana dal lunedì): il bucket passato parziale è
 >    sbiadito, quello corrente vale pieno;
@@ -2823,10 +2823,10 @@ commit del checkpoint 1.
 > **Coordinator (20:03–20:07)**:
 > - la famiglia entra ora con quello che è committato; la review sui dati veri si fa sulla prossima build;
 > - ORDINI lanciati dal developer:
->   1. commit del journal `a79e3a820` («docs(journal): A, Income bucket analysis»);
->   2. merge del treno `dev_release2` `a7d0b37ec` → `fdbc8e7cc` (albero `91f120b48`, un solo conflitto risolto dal
+>   1. commit del journal `43d783597` («docs(journal): A, Income bucket analysis»);
+>   2. merge del treno `dev_release2` `9e4e90675` → `521b79545` (albero `91f120b48`, un solo conflitto risolto dal
 >      coordinator nel runner `_backend_api.py`);
->   3. i 4 commit della fase 2 di Risk, fusi → **`22ef9d091`** (albero `93004cd36`). Dentro ci sono il treno, F14 e la
+>   3. i 4 commit della fase 2 di Risk, fusi → **`54eee1fd4`** (albero `93004cd36`). Dentro ci sono il treno, F14 e la
 >      fase 2;
 > - **Income approvato dal developer** («riguardo i suggerimenti di A sono daccordo») con le raccomandazioni (a)–(e):
 >   - il calendario anche per le Candele;
@@ -2854,7 +2854,7 @@ commit del checkpoint 1.
 >     ibrida (flag o conteggi): senza la riga il caso passa, con la riga diventa rosso;
 >   - `assetBrowse.ts` ripristinato identico dopo ogni mutante (sha256 `0526abbe…`); 45/45 verdi.
 >
-> **Validazione della famiglia** (`22ef9d091` + `assetScope`, corsia 6153, carico 11–23):
+> **Validazione della famiglia** (`54eee1fd4` + `assetScope`, corsia 6153, carico 11–23):
 > - `front build --debug` OK; `front check` 0/0;
 > - vitest:
 >
@@ -2897,8 +2897,8 @@ commit del checkpoint 1.
 
 ### Checkpoint 11 committato, la famiglia in `dev_release2` · ✅ 06/10
 
-> **Coordinator (21:15)**: la famiglia è in `dev_release2` = `ebf4752e2`. Il checkpoint 11 è `863834086` (`assetScope`)
-> più `f1a34d973` (journal), e il mio ramo è riallineato a `ebf4752e2`.
+> **Coordinator (21:15)**: la famiglia è in `dev_release2` = `cc78550c1`. Il checkpoint 11 è `5a4555adb` (`assetScope`)
+> più `c044dea33` (journal), e il mio ramo è riallineato a `cc78550c1`.
 
 ### Passo 28 — i bucket di Income sul calendario · ✅ 06/10
 
@@ -3063,9 +3063,9 @@ commit del checkpoint 1.
 > - checkpoint 12 verificato (12/12 blob, privacy 0 su 1409 righe, runner accettato);
 > - il mio testo per il CHANGELOG è nella voce ✨ «P&L view in the Growth chart», al posto della frase vecchia,
 >   con la precisione su 1D;
-> - commit `8c7b0c0a7` (albero `b38fead44`), poi il merge con la punta di K `3fdae5b16` → **`ff1ee3bbc`** (albero
+> - commit `3f4d4e4dd` (albero `b38fead44`), poi il merge con la punta di K `c890a10b3` → **`d25729c49`** (albero
 >   `31d049224`), uguale alla simulazione;
-> - il developer ha già integrato il treno 4 (`dev_release2` = `c8380156e`, non ancora pushato): la mia
+> - il developer ha già integrato il treno 4 (`dev_release2` = `e54f8a1ec`, non ancora pushato): la mia
 >   rivalidazione è il cancello del push.
 >
 > **Rivalidazione** (6153, carico 14–30):
@@ -3249,8 +3249,8 @@ commit del checkpoint 1.
 > - `risk` 38/38, e 38/38 a 4 worker per due volte prima dell'import, che tocca solo il corpo dello stub;
 > - `check-orphans` pulito.
 >
-> **Bersaglio**: HEAD `ff1ee3bbc` è antenato di `dev_release2` (`bae2515bd`, 12 commit dopo) e di
-> `origin/dev_release2` (`c9a602f74`). Quei 12 commit non toccano nessuno dei miei 6 file, né `BenchmarkSelect`,
+> **Bersaglio**: HEAD `d25729c49` è antenato di `dev_release2` (`e68b6facb`, 12 commit dopo) e di
+> `origin/dev_release2` (`4ec2add93`). Quei 12 commit non toccano nessuno dei miei 6 file, né `BenchmarkSelect`,
 > `riskStore`, `riskPanelController` o `levels/`. La voce del CHANGELOG di Risk da aggiornare è identica sul bersaglio.
 >
 > **Privacy**: nelle 210 righe aggiunte al journal non ci sono cifre, nomi né impronte (lo scan trova solo un'intestazione
@@ -3269,8 +3269,8 @@ commit del checkpoint 1.
 
 ### Checkpoint 13 committato; la revisione validata · ✅ 07/10
 
-> **Coordinator (09:45)**: il developer ha committato il checkpoint 13 su `bae2515bd`: `28f201737` · `c38411dc9` ·
-> **`57cd39cc4`**, albero `32b0283be`, uguale alla sua prova.
+> **Coordinator (09:45)**: il developer ha committato il checkpoint 13 su `e68b6facb`: `d574358ce` · `b63b69c30` ·
+> **`980f06bce`**, albero `32b0283be`, uguale alla sua prova.
 >
 > **Verificato io**:
 > - la catena dei genitori;
@@ -3278,7 +3278,7 @@ commit del checkpoint 1.
 > - worktree pulito;
 > - i 6 blob uguali a `files/ckpt13-blobs.txt`.
 >
-> Tra `ff1ee3bbc` e HEAD non cambiano né i manifest delle dipendenze né `backend/app/api` o `schemas`: `api sync` non
+> Tra `d25729c49` e HEAD non cambiano né i manifest delle dipendenze né `backend/app/api` o `schemas`: `api sync` non
 > serve.
 >
 > **Rivalidazione** (6153, un comando per volta, 09:46–09:54; carico 8,7 su 10 core):
@@ -3306,12 +3306,12 @@ commit del checkpoint 1.
 
 ### Verifica dei bug trovati da Q, in sola lettura · ✅ 07/10
 
-> **Coordinator (15:08)**: Q, l'agente della doc inglese, legge il codice sulla punta `d07412899` e segnala due
+> **Coordinator (15:08)**: Q, l'agente della doc inglese, legge il codice sulla punta `5f3509536` e segnala due
 > possibili bug: il peso nella tabella dello shock e i limiti della simulazione. Verifica in sola lettura, senza
 > codice; per ogni punto: bug, voluto o non riproducibile, con file e riga.
 >
 > **Metodo**:
-> - i file citati sono identici tra il mio HEAD di allora (`57cd39cc4`) e `d07412899`;
+> - i file citati sono identici tra il mio HEAD di allora (`980f06bce`) e `5f3509536`;
 > - le prove a runtime sono chiamate dirette alle funzioni pure, con `/tmp/libreFolio_a_q_sim_probe.py`: niente DB,
 >   server o porta.
 >
@@ -3322,13 +3322,13 @@ commit del checkpoint 1.
 >   percentuale sotto «Weight». Con 3 azioni nella stessa classe la riga diceva «300,0%»;
 > - perché non se n'era accorto nessuno: le fixture di `scenarioHelpers.test.ts` (0,3/0,6/0,1) sembravano pesi, e
 >   gli stub E2E hanno un asset per bucket;
-> - origine: `1ef328670` (D376).
+> - origine: `dca70a696` (D376).
 >
 > **2a. Budget del motore → `invalid_parameters`: BUG**, incoerente con la regola del progetto.
 > - `simulation.py:245-254` manda ogni `SimulationResourceLimitError` su `INVALID_PARAMETERS`;
-> - nello stesso file, `:439-466` (`b42c15240`, 21/09) dichiara `RESOURCE_LIMIT` per il budget Sobol: «nothing is
+> - nello stesso file, `:439-466` (`8b29f8d1f`, 21/09) dichiara `RESOURCE_LIMIT` per il budget Sobol: «nothing is
 >   wrong with the parameters or with the data»;
-> - la mappatura è del 28/07 (`16ff0eb57`), quando `RESOURCE_LIMIT` esisteva già, e nessun test la fissa.
+> - la mappatura è del 28/07 (`e3b443c94`), quando `RESOURCE_LIMIT` esisteva già, e nessun test la fissa.
 >
 > **2b. 67 posizioni: CONFERMATO, misurato.**
 > - Ai default della UI (365 giorni, 8192 percorsi, `L4Simulation.svelte:48-49`) sono 2.990.080 celle per asset,
@@ -3363,7 +3363,7 @@ commit del checkpoint 1.
 > - nel journal, le note della verifica;
 > - per il CHANGELOG, verificare se D376 è mai uscito.
 >
-> **Base**: il fast-forward a `d07412899` è fatto alle 15:25; journal intatto (blob `b936da79a5d6`, verificato dal
+> **Base**: il fast-forward a `5f3509536` è fatto alle 15:25; journal intatto (blob `b936da79a5d6`, verificato dal
 > coordinator).
 >
 > **Codice** (`l4/scenarioHelpers.ts`):
@@ -3380,7 +3380,7 @@ commit del checkpoint 1.
 > - `risk-levels-unit`: 1 rosso su 376, atteso. È il caso k5b di `scenarioHelpers.test.ts:240-255`, che fissava i
 >   pesi vecchi letti da `asset_exposure_total`, senza impatti. Lo riscrive il test-author.
 >
-> **Gli stub E2E non cambiano**, misurato su `d07412899`:
+> **Gli stub E2E non cambiano**, misurato su `5f3509536`:
 > - `risk-analysis.spec.ts:1018` e `risk-mocks.ts:433` danno un impatto con `weight: 1` e un audit con
 >   `exposure: 1` sul bucket applicato: col fix fanno ancora 100% e 0%;
 > - `risk-mocks.ts` lo usano solo `risk-asset-detail` e `risk-benchmark-shared`, che non passano da `tornadoRows`.
@@ -3400,7 +3400,7 @@ commit del checkpoint 1.
 > **Il developer**: «No, va bene così: via con i test». Niente copia dei dati veri.
 >
 > **CHANGELOG**:
-> - D376 (`1ef328670`) non è in nessun tag; l'ultima release è `v1.1.0` (07/09). La voce della tabella è in
+> - D376 (`dca70a696`) non è in nessun tag; l'ultima release è `v1.1.0` (07/09). La voce della tabella è in
 >   `[Unreleased]` (`CHANGELOG.md:194`): il bug non è mai uscito, quindi **nessuna riga nuova**;
 > - quella voce dice «Each holding gets a row with its weight»: nello shock le righe sono le categorie, non le
 >   posizioni. Propongo una precisazione al coordinator.
@@ -3471,8 +3471,8 @@ commit del checkpoint 1.
 
 ## Chiusura — allineamento 09/10/2026 (scritta da Risk, proprietario della famiglia)
 
-- **Checkpoint 14 committato**: `889bc1434` (`fix(risk): shock bucket weight is its scope share`) · `371046e8d`
-  (`docs(journal): A, Q check and shock weight`). Entrato in `dev_release2` col treno 9 (`f8a419245`); verificato in
-  `3cceb4f90`.
+- **Checkpoint 14 committato**: `a8bc9f1d4` (`fix(risk): shock bucket weight is its scope share`) · `e0010ed2b`
+  (`docs(journal): A, Q check and shock weight`). Entrato in `dev_release2` col treno 9 (`046dd0489`); verificato in
+  `f545b67e3`.
 - **Resta aperto da questo piano**: V1 (i badge e la frase breve dell'avviso) e V2 (il tooltip dell'istogramma), nel
   README della cartella fra i buchi.

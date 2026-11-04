@@ -4,21 +4,21 @@
 > (project session `12a0954d-0fbe-42da-b687-979e798a50c6`).
 > Analisi consegnata il 07/10 (sola lettura). **Implementazione autorizzata dal developer il 07/10**, inoltrata dal
 > coordinator (testo e decisioni in [Decisioni prese e permessi](#decisioni-prese-e-permessi-0710-inoltrati-dal-coordinator)).
-> Stato: **chiuso e archiviato** (verifica d'archivio del 09/10, §9). P0–P12 completati; commit `de252a38a`, merge
-> dei treni 9 (`e0c40395c`) e 10 (`e655003d3`), chiavi i18n `2d8914be4`: in `dev_release2` col treno 11
-> (`58fc35174`). Seguiti: seed in §7 (`270a86312`, treno 15), card dei KPI in §8 (`65839b369`, treno 18),
-> validazione delle impostazioni nel [piano gemello](./plan-phase00SettingsBulkValidation.prompt.md) (`84d9e3360`,
+> Stato: **chiuso e archiviato** (verifica d'archivio del 09/10, §9). P0–P12 completati; commit `6f13e1ba4`, merge
+> dei treni 9 (`4bb551502`) e 10 (`d2d31eb04`), chiavi i18n `5eb18b01b`: in `dev_release2` col treno 11
+> (`4527b58ea`). Seguiti: seed in §7 (`46858ad67`, treno 15), card dei KPI in §8 (`8f51229a4`, treno 18),
+> validazione delle impostazioni nel [piano gemello](./plan-phase00SettingsBulkValidation.prompt.md) (`58972c8b9`,
 > treno 23). Avanzamento passo per passo in §6.5, merge in §6.5bis, residui rinviati in §9.
 >
 > Percorso: `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00WacUnification.prompt.md`
-> (archiviato il 09/10 da `Release_2/Phase_0/30_wacUnification/`; entrato nel repo con `de252a38a`). L'analisi è
+> (archiviato il 09/10 da `Release_2/Phase_0/30_wacUnification/`; entrato nel repo con `6f13e1ba4`). L'analisi è
 > stata scritta in plan mode nella cartella di sessione e copiata qui al passo 0.
 
 | | |
 |---|---|
 | **Worktree** | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-miniature-telegram` |
 | **Branch** | `e-alfy-p-costo-medio-unico-32` (rinominato via app da `e-alfy-miniature-telegram`, 07/10) |
-| **Baseline** | HEAD `d07412899cdd7c6afb382d2f9ea193562ba5c890` = `dev_release2` locale (treni 6–8), dopo il fast-forward del developer del 07/10 12:57, verificato. L'analisi era stata fatta da `c9a602f74` (`origin/dev_release2`) leggendo la punta con `git show dev_release2:<path>`; le righe citate valgono sulla punta |
+| **Baseline** | HEAD `5f350953642b1283a9b13578b0661628882de08a` = `dev_release2` locale (treni 6–8), dopo il fast-forward del developer del 07/10 12:57, verificato. L'analisi era stata fatta da `4ec2add93` (`origin/dev_release2`) leggendo la punta con `git show dev_release2:<path>`; le righe citate valgono sulla punta |
 | **Lane** | `--test-port 6161 --data-dir /tmp/librefolio-r2-p`; server di review, se approvato, `6171` (porte libere, verificato 07/10). Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6161 --data-dir /tmp/librefolio-r2-p …` |
 | **Dati** | solo sintetici. Mai porta 6040/6041, mai `--force`, mai copie di prod |
 | **Bootstrap** | `frontend/node_modules` **assente** (verificato) → `npm ci` solo con permesso del coordinator (serve per `component-unit`, `svelte-check`, `api sync`). `.env` assente: atteso. `graphify-out/graph.json` e `.graphify_python` assenti: atteso, wiki letto pagina per pagina |
@@ -702,14 +702,14 @@ Ogni passo aggiorna questo piano con ✅ e data, `Note implementazione` e `Fuori
 - **P0** ✅ (07/10) — Fast-forward del developer sulla punta; verificare HEAD = target; copiare il piano nel journal;
   corsia libera.
   > **Note implementazione**:
-  > - HEAD = `dev_release2` = `d07412899cdd7c6afb382d2f9ea193562ba5c890`, worktree pulito (`git rev-parse`,
+  > - HEAD = `dev_release2` = `5f350953642b1283a9b13578b0661628882de08a`, worktree pulito (`git rev-parse`,
   >   `git status --short` vuoto);
   > - `lsof -nP -iTCP:6161/6171 -sTCP:LISTEN` vuoto: porte libere;
   > - piano copiato da `plan.md` di sessione;
   > - aggiunte le sezioni «Decisioni prese e permessi» e «2bis. Contratto fissato prima di P1».
   >
   > **⚠️ Fuori pista**:
-  > - la prima verifica (12:3x) trovava ancora `c9a602f74`: mi sono fermato e l'ho segnalato al coordinator, che ha
+  > - la prima verifica (12:3x) trovava ancora `4ec2add93`: mi sono fermato e l'ho segnalato al coordinator, che ha
   >   confermato il fast-forward alle 12:57;
   > - `frontend/node_modules` assente: `npm ci` (permesso dato) solo quando servirà il frontend (P8–P10).
 - **P1** ✅ (07/10) — Test-author: rossi U/S/A e invarianti verdi (§5.1–5.2); registrazione nel runner (permesso).
@@ -1084,21 +1084,21 @@ Ogni passo aggiorna questo piano con ✅ e data, `Note implementazione` e `Fuori
   > - Derive più vecchie segnalate e lasciate: `domains/calculations.md`, `features/F-048.md`, le sezioni
   >   LAST_BUY_PRICE e TRANSACTION_IMPLIED.
   >
-  > **Stato**: P0–P12 chiusi. Commit `de252a38a` (senza il footer BREAKING CHANGE, per decisione del developer: va
+  > **Stato**: P0–P12 chiusi. Commit `6f13e1ba4` (senza il footer BREAKING CHANGE, per decisione del developer: va
   > nel CHANGELOG sotto ⚠️ Breaking changes). Le chiavi i18n di P9 sono entrate l'08/10, dopo i merge (§6.5bis).
 
 ### 6.5bis Merge con `dev_release2` (07–08/10)
 
 Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho messi in stage, senza commit.
 
-- **Treno 9** (MERGE_HEAD `9ea2d519b`, merge commit `e0c40395c`). 165 file in stage, 3 conflitti attesi, tutti risolti
+- **Treno 9** (MERGE_HEAD `3aec9438d`, merge commit `4bb551502`). 165 file in stage, 3 conflitti attesi, tutti risolti
   in aggiunta (script `/tmp/libreFolio_p_resolve_merge.py`, con controlli sulla forma di ogni blocco):
   - `developer/architecture/overview.md`: tenute la voce «Financial Math Layer» e le 3 voci del treno 9 (Risk Engine,
     Tool Plugins, Onboarding Guides);
   - `LibreFolio_devWiki/index.md`: due righe vicine, ognuna cambiata da una parte sola (verificato sulla base
-    `d07412899`), quindi la riga `ci-release-pipeline` del treno 9 e la riga `inline-wac-computation` di P;
-  - `LibreFolio_devWiki/log.md`: in ordine di commit, prima O seconda passata (`6f728a541`, 14:36), poi le 4 voci
-    di P (`de252a38a`, 16:33);
+    `5f3509536`), quindi la riga `ci-release-pipeline` del treno 9 e la riga `inline-wac-computation` di P;
+  - `LibreFolio_devWiki/log.md`: in ordine di commit, prima O seconda passata (`ae1e2e6ce`, 14:36), poi le 4 voci
+    di P (`6f13e1ba4`, 16:33);
   - verificato per ciascun file: rispetto a HEAD restano solo i cambi del treno 9, rispetto a MERGE_HEAD solo
     quelli di P;
   - rivisti i file fusi in automatico che toccano P (`test_brim_providers.py`, `fifo_lot_engine.md`,
@@ -1114,8 +1114,8 @@ Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho m
   - `check-links`: 1 rotto, il preesistente `#rolling-return`;
   - `i18n audit`: mancava solo `dataQuality.missingCostBasis`. L'audit non vede le chiavi usate nel codice frontend
     e assenti dai cataloghi, per questo le 3 `dashboard.*` non comparivano.
-- **Treno 10** (MERGE_HEAD `9d79c2dbe`, merge commit `e655003d3`). 32 file in stage, 1 conflitto, `log.md`, risolto
-  in aggiunta: prima le 4 voci di P (16:33), poi «A slow language switch tore the whole app down» (`1c20b254f`,
+- **Treno 10** (MERGE_HEAD `4842662a1`, merge commit `d2d31eb04`). 32 file in stage, 1 conflitto, `log.md`, risolto
+  in aggiunta: prima le 4 voci di P (16:33), poi «A slow language switch tore the whole app down» (`4f4012d66`,
   17:42), con lo script `/tmp/libreFolio_p_resolve_merge_t10.py`.
   - `index.md` si è fuso da solo con le righe di entrambi.
   - Il treno 10 non tocca codice di `backend/app`, manifest o i miei file del runner (solo `_backend_db.py`), e la
@@ -1123,8 +1123,8 @@ Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho m
   - Convalida mirata: `front build --debug` e `front check` OK; `core-unit` 116/116; `component-unit` 2835;
     `front-ai-export unit` 359; `utils all` 1215; `check-orphans` pulito.
 - Porte 6161 e 6171 libere dopo ogni giro.
-- **Chiavi i18n e integrazione** (08/10): le 4 chiavi di P9 sono il commit `2d8914be4`. Il treno 11 ha portato il
-  ramo in `dev_release2` in fast-forward, seguito da `58fc35174` (CHANGELOG del coordinator).
+- **Chiavi i18n e integrazione** (08/10): le 4 chiavi di P9 sono il commit `5eb18b01b`. Il treno 11 ha portato il
+  ramo in `dev_release2` in fast-forward, seguito da `4527b58ea` (CHANGELOG del coordinator).
 
 ### 6.6 Definizione di fatto
 
@@ -1192,8 +1192,8 @@ Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho m
   insieme al resto, nella run complessiva del coordinator, invece di aspettare la fine della coverage sulla 6150. Ha
   anche approvato gli scatti della gallery che cambiano un poco.
 
-**Integrazione** (08/10): commit `270a86312` (`test(seed): stake ETH as an auto-cost adjustment`), entrato col treno
-15 (merge `0f5092a0b`, punta `23b839fb2`). Controlli del treno, dal coordinator, sul seed nuovo: populate OK,
+**Integrazione** (08/10): commit `46858ad67` (`test(seed): stake ETH as an auto-cost adjustment`), entrato col treno
+15 (merge `a09789827`, punta `2d4118267`). Controlli del treno, dal coordinator, sul seed nuovo: populate OK,
 `api all` 806, E2E `dashboard` 27, `broker detail` 33, `tx-clone` 6, `tx-paired-edit` 4. Niente CHANGELOG: sono
 solo dati di test.
 
@@ -1224,13 +1224,13 @@ quando il backend non dava il valore (campi opzionali e nullable). Quindi:
 - `front-utility component-unit` 2862/2862; `front check` 0 errori, 0 warning; prettier pulito.
 - E2E: `front-portfolio privacy-masking` 18, `dashboard-cache` 6, `dashboard` 27.
 
-**Integrazione** (08/10): commit `65839b369` (`fix(dashboard): show missing returns as a dash`), entrato col treno 18
-(merge `c3fcf644f`). La riga del CHANGELOG l'ha scritta il coordinator (`CHANGELOG.md:155`).
+**Integrazione** (08/10): commit `8f51229a4` (`fix(dashboard): show missing returns as a dash`), entrato col treno 18
+(merge `3258de570`). La riga del CHANGELOG l'ha scritta il coordinator (`CHANGELOG.md:155`).
 
 ## 9. Verifica d'archivio e residui (09/10)
 
 > Chiesta dal coordinator: confrontare il piano con il codice di oggi e archiviare solo ciò che è finito. Base
-> `dev_release2` @ `3cceb4f90` (treno 24b), codice in sola lettura. Vale anche per il
+> `dev_release2` @ `f545b67e3` (treno 24b), codice in sola lettura. Vale anche per il
 > [piano gemello](./plan-phase00SettingsBulkValidation.prompt.md), che ha la sua sezione.
 
 **Verificato sul codice di oggi**:

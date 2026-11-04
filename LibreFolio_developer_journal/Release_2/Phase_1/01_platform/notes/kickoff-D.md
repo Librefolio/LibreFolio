@@ -6,7 +6,7 @@
 > versioni nuove bisogna dirlo esplicitamente. Risultato atteso: stessi dati e stessi numeri di oggi, librerie aggiornate.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-d-dipendenze` · **Branch**: `e-alfy-d-dipendenze` (nuovo, da `dev_release2`)
-**HEAD di partenza (da verificare)**: `c042f2481` + nel worktree il `Pipfile.lock` già aggiornato dal coordinatore (`pipenv update --dev`, non committato): FastAPI 0.159, Starlette 1.9, SQLAlchemy 2.1.6, SQLModel 0.0.48, Pydantic 2.14 e altri.
+**HEAD di partenza (da verificare)**: `295a09c86` + nel worktree il `Pipfile.lock` già aggiornato dal coordinatore (`pipenv update --dev`, non committato): FastAPI 0.159, Starlette 1.9, SQLAlchemy 2.1.6, SQLModel 0.0.48, Pydantic 2.14 e altri.
 **Venv: il TUO, separato** — `PIPENV_CUSTOM_VENV_NAME=LibreFolio-D` (già creato e sincronizzato con il lock nuovo). **Mai** usare `LibreFolio-SAUMUTtc` qui: è il venv condiviso delle altre 10 sessioni, con le versioni vecchie. Prefisso dei comandi: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-D pipenv run python dev.py test --test-port 6194 --data-dir /tmp/librefolio-r13-d …`
 **Corsia**: porta `6194`, cartella dati `/tmp/librefolio-r13-d`. `npm ci` fatto.
 **Modello**: Opus (tocca il significato delle date nel database: va fatto con cura).

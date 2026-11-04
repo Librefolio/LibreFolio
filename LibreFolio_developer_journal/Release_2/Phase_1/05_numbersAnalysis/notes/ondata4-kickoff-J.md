@@ -4,7 +4,7 @@
 
 **Modello**: Sonnet.
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-crispy-goggles` · **Branch**: `e-alfy-j-numeri-e-analisi`
-**HEAD di partenza (da verificare)**: `c042f2481` (fast-forward dal coordinatore da `0c9a07d9a`).
+**HEAD di partenza (da verificare)**: `295a09c86` (fast-forward dal coordinatore da `850b1b2b7`).
 **Corsia**: porta `6190`, cartella dati `/tmp/librefolio-r13-j`.
 **Piano e backlog**: J-68 nel backlog `Phase_0/BACKLOG_POST_1.2.md:7956-7969` e nel tuo piano `05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md` §10 «Gantt §29, punto 2»; J-71 backlog `:7985-7990` e piano §10 «Ondata 3 — TC-23 poi L1b», passo A2; R1 piano ~7384, ~7437-7456, ~9075-9096.
 

@@ -1,6 +1,6 @@
 """MF-D4 (workstream MF), the ledger half: a SPLIT asset event stored with an invalid ratio counts as missing, never raises.
 
-Measured before the cure (HEAD 4c767685f), on the ledger below with the SPLIT's ratio stored as 0, -2 or a value that
+Measured before the cure (HEAD 661257511), on the ledger below with the SPLIT's ratio stored as 0, -2 or a value that
 reads back as None (a stored ±inf: ``RealDecimal`` reads it as no value, W-B58):
 
 * ``PortfolioCalculationEngine.calculate`` raises ``ValueError("SPLIT AssetEvent … must have a positive finite ratio")``

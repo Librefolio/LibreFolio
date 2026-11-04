@@ -1,16 +1,16 @@
 # Piano — fase 00, 33: l'infrastruttura dei test E2E dell'import
 
-> **Stato**: ✅ chiuso e integrato nel treno 10: `860c934ac`, `abfcdf2be`, `ffdcacc2f`, `cc15441e6` (verifica del 2026-10-09 su `3cceb4f90`, §8). I difetti A e B di §1.1 li ha chiusi il piano 34; il backlog di §7 è rinviato in `Phase_0/38_postReleaseBacklog/README.md`, voce L11.
+> **Stato**: ✅ chiuso e integrato nel treno 10: `66eacc577`, `f7e439511`, `f50b435f7`, `ce40cb3eb` (verifica del 2026-10-09 su `f545b67e3`, §8). I difetti A e B di §1.1 li ha chiusi il piano 34; il backlog di §7 è rinviato in `Phase_0/38_postReleaseBacklog/README.md`, voce L11.
 > - Al checkpoint: ✅ approvato (2026-10-07), in esecuzione.
 >
 > - Mandato: coordinatore («Release 2 backlog analysis», `c8328a01-…`). D3 l'ha deciso lui: prima l'infrastruttura; i difetti A e B in un checkpoint a parte, dopo la decisione del developer.
-> - Workstream L. Ramo `e-alfy-l-danske-bank`, base `dfd6ed963` (DEGIRO committato, entra nel treno 9 per SHA).
+> - Workstream L. Ramo `e-alfy-l-danske-bank`, base `35c7f5687` (DEGIRO committato, entra nel treno 9 per SHA).
 > - Corsia 6156/6166, `--data-dir /tmp/librefolio-r2-l`, un comando alla volta. `--clean` concesso per tutto il lotto.
 > - Fuori perimetro finché il developer non decide A e B: `auth.py`, `user_service.py`, `brokers.py`, `broker_service.py`.
 
 ## 0. Il mandato
 
-1. **I rossi dell'import nella coverage** su `d07412899`:
+1. **I rossi dell'import nella coverage** su `5f3509536`:
    - `tx-brim-import` T1 (`:161`);
    - `tx-import-ca-contract` CAC-011 (`:438`) e CAC-012 (`:481`);
    - `tx-import-report-set` R1 (`:1229`) e A18 (`:1373`);
@@ -29,7 +29,7 @@
    I test li scrive il test-author, e sono rossi prima della correzione.
 4. **La verifica in produzione** è fatta nell'analisi (§1.1). Ha trovato due difetti, A e B: mi fermo prima di correggerli.
 
-## 1. Stato verificato (codice a `dfd6ed963`)
+## 1. Stato verificato (codice a `35c7f5687`)
 
 ### 1.1 La verifica in produzione — ⛔ STOP, al developer — ✅ risolta dal piano 34 (§8)
 
@@ -278,12 +278,12 @@ Elenco del test-author, file:riga sulla versione nuova:
 
 > **Note implementazione**:
 > - **I commit**, integrati nel treno 10 (2026-10-07):
->   - `860c934ac` test(db): populate --force resets broker reports;
->   - `abfcdf2be` test(e2e): import specs own their files;
->   - `ffdcacc2f` test(select): scope R13 scrape to provider class;
->   - `cc15441e6` docs(journal): plan 33, e2e import infra.
-> - **La verifica in produzione di §1.1** (difetti A e B) è diventata il piano 34 (`34_accountAndIdReuse/`): A con `6b66ee306`, B con gli id mai riusati e il fix all'avvio, `298ed96f3` (treno 12).
-> - **Verifica** su `3cceb4f90`: `populate --force` svuota `broker_reports` della propria data-dir (`reset_broker_reports`, `populate_mock_data.py:3323`); gli spec d'import cancellano i broker che creano (`afterEach`).
+>   - `66eacc577` test(db): populate --force resets broker reports;
+>   - `f7e439511` test(e2e): import specs own their files;
+>   - `f50b435f7` test(select): scope R13 scrape to provider class;
+>   - `ce40cb3eb` docs(journal): plan 33, e2e import infra.
+> - **La verifica in produzione di §1.1** (difetti A e B) è diventata il piano 34 (`34_accountAndIdReuse/`): A con `2c00c9934`, B con gli id mai riusati e il fix all'avvio, `28e3b2719` (treno 12).
+> - **Verifica** su `f545b67e3`: `populate --force` svuota `broker_reports` della propria data-dir (`reset_broker_reports`, `populate_mock_data.py:3323`); gli spec d'import cancellano i broker che creano (`afterEach`).
 > - **Il backlog di §7 è ancora aperto** sul codice. Per esempio:
 >   - le sonde su `formClose` in `tx-brim-import.spec.ts:67-69` e `tx-import-ca-contract.spec.ts:144-146`;
 >   - `waitForTimeout` in `tx-import-ca-contract.spec.ts:419` e `:439`;

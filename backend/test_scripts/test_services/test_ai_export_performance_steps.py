@@ -102,7 +102,7 @@ def expand(steps: list[Step]) -> list[Step]:
 
 
 def day_by_day_bucket_rows(history, buckets, *, currency_code: str) -> tuple[PerformanceBucketRow, ...]:
-    """``build_performance_bucket_rows`` at d96519b86, frozen here: one point for every day. The reference the steps are measured against."""
+    """``build_performance_bucket_rows`` at f7e7c3828, frozen here: one point for every day. The reference the steps are measured against."""
     ordered_history = tuple(sorted(history, key=lambda point: point.date))
     previous_close = None
     rows: list[PerformanceBucketRow] = []
@@ -157,7 +157,7 @@ def day_by_day_bucket_rows(history, buckets, *, currency_code: str) -> tuple[Per
 
 
 def day_by_day_average_nav(history, target_currency: str):
-    """``_average_nav``'s history branch at d96519b86, frozen here."""
+    """``_average_nav``'s history branch at f7e7c3828, frozen here."""
     values = tuple(point.nav_value.amount for point in history)
     return (Currency(code=target_currency, amount=sum(values, Decimal("0")) / Decimal(len(values))), "arithmetic_mean_of_available_daily_nav", len(values), history[0].date, history[-1].date)
 

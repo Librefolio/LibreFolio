@@ -50,7 +50,7 @@ the decision that made everything after it possible — and expensive.»
 
 Rounds 0–5 kept the tables in an unpublished `003_user_onboarding_progress` and edited it in place, because onboarding
 was never shipped (Round 2: «Non creare `004`»), and in Round 5 a developer correction removed every v1/v2
-compatibility layer for the same reason. On 2026-09-22 (`22fa0aed7`) the unpublished `003` files were
+compatibility layer for the same reason. On 2026-09-22 (`126cfc0b4`) the unpublished `003` files were
 consolidated into `004_release_1_2_0_schema.py`, which removed a fork that left a fresh database with two Alembic heads.
 That is the released-phase rule applied as written: an existing file is edited only while it was never shipped
 ([[concepts/single-migration-strategy]] keeps the older rule as history).

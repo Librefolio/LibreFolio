@@ -26,7 +26,7 @@ and the default answered for all of them.
 
 ## Solution
 
-`08b99c3ac` (2026-09-03, «fix: beta wave 2 collaudo + clean-audit P0/P1 backlog»), in the variant the developer chose:
+`f61d9707b` (2026-09-03, «fix: beta wave 2 collaudo + clean-audit P0/P1 backlog»), in the variant the developer chose:
 one helper, `get_effective_base_currency()` in `settings_service.py`, which resolves per-user → global → EUR, used by
 the portfolio engine (`financial_math/portfolio/engine.py` today), the lots analysis and the portfolio service, with tests on the chain and on the `target_currency=None` branch.
 

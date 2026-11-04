@@ -26,7 +26,7 @@
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-improved-funicular` |
 | Ramo | `e-alfy-im-settings-colors` |
-| HEAD | analisi su `8f2824046` (baseline del kickoff ✅); base portata dal coordinatore a **`6e569084a`** (fast-forward: target `b82e7765f` + skill D-T29 `c59e92dfb`), nessun file dell'area cambiato |
+| HEAD | analisi su `cdf74ef2a` (baseline del kickoff ✅); base portata dal coordinatore a **`16ea52b26`** (fast-forward: target `fa72b0ddf` + skill D-T29 `0dab6ac14`), nessun file dell'area cambiato |
 | Corsia | `--test-port 6159`, `--data-dir /tmp/librefolio-r2-im` |
 | Coordinatore | `aec04834-1532-4d86-9e3f-f942e82aca89` |
 | Fonti | skill `design-system` (D-T29) e `theme-roles` (regole 1–8), `tokens.css`, designer giro 2 (Q2–Q13, D-T17), blocchi W2-c/e/f del piano di T, devWiki `problems/tailwind4-same-property-utilities-sorted-by-name` |
@@ -99,11 +99,11 @@ Divisione per significato (letta a mano, non per famiglia di colore):
 
 ## 4. File dell'area aperti altrove (verificati in sola lettura, solo ref git)
 
-- Rami nominati con commit nell'area oltre HEAD: solo `e-alfy-h-piattaforma` (`9ddecbde0`), commit `c1ecdc389`
+- Rami nominati con commit nell'area oltre HEAD: solo `e-alfy-h-piattaforma` (`408871beb`), commit `0fff2f4cb`
   «About absence checks can fail» su `tabs/AboutTab.test.ts` (+31/−5, nessun selettore di classe). Nessun conflitto con
   IM-5, che tocca solo `AboutTab.svelte`.
 - E, `users/linkShareActions.ts` non committato: non letto (worktree altrui). Misura 0/0: nessun lotto IM lo tocca.
-- A (`356a01d4d`), Z (`a3e8e73f7`, già nel target), E (`44d4d7e8e`): nessun commit nell'area oltre HEAD.
+- A (`e01acf6ba`), Z (`1042990eb`, già nel target), E (`2cee39ef2`): nessun commit nell'area oltre HEAD.
 
 ## 5. Lotti (file disgiunti, ognuno validabile da solo)
 
@@ -250,13 +250,13 @@ a class you changed, every ternary you touched.
 | A2 · Test `GlobalSettingsTab.test.ts:937` (test-author) | ✅ 16/10 |
 | A3 · Lotti IM-1…IM-6 (sotto-agenti in parallelo; Donation all'OK di A) | ✅ 16/10 (Donation con l'OK di A, checkpoint 2) |
 | A4 · Rilettura dei diff e prove leggere | ✅ 16/10 |
-| A5 · Slot pesante | ✅ 16/10, 12:24–13:06 su `53b6dd352`: tutto verde |
-| A6 · `--update`, backlog IM-n, checkpoint | ✅ checkpoint 1 = `b5abcbdaa`, base merge `d95d6236c` |
-| A7 · Fotocamera, `DonationPopupModal`, C4 | ✅ checkpoint 2 = `8636a368f`, base merge `53b6dd352` |
+| A5 · Slot pesante | ✅ 16/10, 12:24–13:06 su `08de0a262`: tutto verde |
+| A6 · `--update`, backlog IM-n, checkpoint | ✅ checkpoint 1 = `4de16410a`, base merge `b3429f0c9` |
+| A7 · Fotocamera, `DonationPopupModal`, C4 | ✅ checkpoint 2 = `a345e454d`, base merge `08de0a262` |
 
 ### A0 · Analisi ✅ 16/10
 
-> **Note implementazione**: inventario con `--report` sul baseline `8f2824046` (m1 8.249, m2 54; area IM 22 file, m1
+> **Note implementazione**: inventario con `--report` sul baseline `cdf74ef2a` (m1 8.249, m2 54; area IM 22 file, m1
 > 1.048, m2 6, uguale al baseline riga per riga), classificazione a mano per significato (§1), catene (§2), test (§3),
 > rami aperti verificati solo con `git diff --name-status HEAD...<ramo>` (§4). Mandata al coordinatore alle ~10:58.
 >
@@ -270,7 +270,7 @@ a class you changed, every ternary you touched.
 > `@esbuild/darwin-arm64` presenti, worktree pulito.
 >
 > **⚠️ Fuori pista**:
-> - Il coordinatore ha portato il ramo a `6e569084a` (fast-forward con lo skill D-T29) dopo l'analisi: verificato,
+> - Il coordinatore ha portato il ramo a `16ea52b26` (fast-forward con lo skill D-T29) dopo l'analisi: verificato,
 >   nessun file dell'area, del baseline, di `tokens.css` o di `app.css` cambiato. Lo skill `design-system` diventa la
 >   fonte delle regole; conferma la mappatura e corregge un dettaglio: le icone di Q12 vanno su `text-lf-link` («accent
 >   icons»), non su `text-lf-focus`.
@@ -324,7 +324,7 @@ a class you changed, every ternary you touched.
 > - `node frontend/scripts/theme/theme-roles.mjs --check`: pulito, 19 file sotto il loro record;
 > - `vitest run src/themeRoles.gate.test.ts src/themeTokens.gate.test.ts`: 65/65;
 > - `prettier --check` sui 20 file: 5 file non conformi **introdotti** dalle nuove stringhe (conformi nella base,
->   verificato con `git show 6e569084a:… | prettier --check`) → `prettier --write` sui 5, poi tutti conformi;
+>   verificato con `git show 16ea52b26:… | prettier --check`) → `prettier --write` sui 5, poi tutti conformi;
 > - `git diff --check`: pulito;
 > - regola 8 (`im_rule8.mjs`) e colori solo `dark:` per elemento (`im_darkonly.mjs`, base contro lavoro): 0 casi;
 >   `dark_only_check.py` del coordinatore (per riga): 2 falsi positivi verificati (`class` su due righe nelle tendine
@@ -341,16 +341,16 @@ a class you changed, every ternary you touched.
 
 ### A6 · Checkpoint 1 ✅ 16/10
 
-> **Note implementazione**: il coordinatore ha committato i lotti IM-1…IM-6 (senza Donation) come **`b5abcbdaa`**
-> (23 file) e ha fatto la base merge con `e36e45f0d`, che porta i ruoli nuovi di T (`text-lf-on-overlay`,
-> `*-gain-soft`, `*-loss-soft`, `success-hover`, `info-hover`): **`d95d6236c`**, `--check` pulito, nessun `--resolve`.
+> **Note implementazione**: il coordinatore ha committato i lotti IM-1…IM-6 (senza Donation) come **`4de16410a`**
+> (23 file) e ha fatto la base merge con `fac24df08`, che porta i ruoli nuovi di T (`text-lf-on-overlay`,
+> `*-gain-soft`, `*-loss-soft`, `success-hover`, `info-hover`): **`b3429f0c9`**, `--check` pulito, nessun `--resolve`.
 > Dopo la merge, `api sync` rilanciato con carico 49,6 (esito 0, solo file ignorati).
 
 ### A7 · Fotocamera, `DonationPopupModal`, C4 ✅ 16/10
 
 > **Note implementazione**:
 > - `ProfileTab`: l'icona della fotocamera sul fondale passa da `text-white` a `text-lf-on-overlay` (ruolo provvisorio
->   di T, `f043c1b58`): 1 → 0 classi.
+>   di T, `ee00f754e`): 1 → 0 classi.
 > - `DonationPopupModal`, con l'OK di A (16/10, girato dal coordinatore: nessun lavoro di A aperto su quei file),
 >   seguendo la testata di `LoginCard`:
 >   - testata `bg-lf-brand`, logo `bg-lf-logo` al posto di `style="background:#fff"`, nome `text-lf-on-brand`;
@@ -380,13 +380,13 @@ a class you changed, every ternary you touched.
 > - Fra le 11:53 e le 11:57 la rete è caduta e il turno si è chiuso con errore. Le tre modifiche erano già su disco;
 >   ripreso alle 12:00 con lo stato verificato da `git status`.
 >
-> Il coordinatore l'ha committato come **`8636a368f`** (6 file; `app.css` controllato: solo le due regole morte) e ha
-> fatto la base merge con `be911db7e` (G-18, fix dello scanner di T): **`53b6dd352`**, `--check` pulito.
+> Il coordinatore l'ha committato come **`a345e454d`** (6 file; `app.css` controllato: solo le due regole morte) e ha
+> fatto la base merge con `eb0078e67` (G-18, fix dello scanner di T): **`08de0a262`**, `--check` pulito.
 
 ### A5 · Slot pesante ✅ 16/10
 
 > **Note implementazione**: slot 1 della 1.3, assegnato dal coordinatore alle 12:24 con taglio alle 13:15 e nessun
-> passo nuovo dopo le 13:08. HEAD `53b6dd352` pulito, corsia `--test-port 6159` + `--data-dir /tmp/librefolio-r2-im`,
+> passo nuovo dopo le 13:08. HEAD `08de0a262` pulito, corsia `--test-port 6159` + `--data-dir /tmp/librefolio-r2-im`,
 > in serie con lo script `im_heavy_slot.sh` della cartella di sessione (log completi in `heavy/`). Due Playwright
 > worker erano permessi con carico < 35: alla partenza di ogni E2E il carico era fra 44 e 150, quindi sempre 1 worker.
 >
@@ -417,7 +417,7 @@ a class you changed, every ternary you touched.
 
 ## Chiusura
 
-- **Area IM (16/10, dopo `8636a368f`):** m1 1.048 → **54**, m2 6 → **0**. Restano solo elementi lasciati di proposito,
+- **Area IM (16/10, dopo `a345e454d`):** m1 1.048 → **54**, m2 6 → **0**. Restano solo elementi lasciati di proposito,
   ognuno con la sua voce nel backlog:
   - `SettingToggle` 18: interruttore, lotto unico di T;
   - `supportLinks.ts` 14 e il bottone «copia» di `SocialShareModal` 1: marchi dei social (IM-5);

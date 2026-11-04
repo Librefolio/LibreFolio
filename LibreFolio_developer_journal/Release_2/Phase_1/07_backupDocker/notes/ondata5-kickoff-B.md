@@ -7,7 +7,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 **Modello**: **Sonnet**; **B5-1 con Opus** (tocca email e password di un account a partire da un file caricato); **M-1 (arm64) con un sotto-agente Haiku**, tu rivedi. Quando arrivi a B5-1: se la tua sessione non è già su Opus, chiudi il turno con «pronto per B5-1, serve Opus» e il coordinatore cambia il modello; fino ad allora fai B5-2 e M-1.
 **Giorni**: 2-3,5 (B5-1 1-1,5; B5-2 0,5-1; M-1 0,5-1 + CI). **Blocca il tag**: B5-1 e B5-2 sì (cloud); M-1 no.
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-miniature-telegram` · **Branch**: `e-alfy-b-backup-e-docker`
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro: il backup L3 e il ripristino del pannello sono già in dev).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro: il backup L3 e il ripristino del pannello sono già in dev).
 **Corsia**: porta `6192`, cartella dati `/tmp/librefolio-r13-b`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md` (sezione nuova «Ondata 5»; M-1: backlog ~1120). Decisioni del developer sul backup: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md` (fonte di verità). _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
 

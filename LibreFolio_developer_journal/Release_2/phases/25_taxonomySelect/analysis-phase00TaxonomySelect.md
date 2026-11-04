@@ -12,7 +12,7 @@
 |---|---|
 | **Workstream** | K — tassonomia e select |
 | **Branch** | `e-alfy-k-tassonomia-e-select` (rinominato dall'app; nato come `e-alfy-improved-memory`) |
-| **Baseline** | `f1047f766` (`fix(db): widen enum columns to VARCHAR(32)`) su `dev_release2` |
+| **Baseline** | `9df0b7b14` (`fix(db): widen enum columns to VARCHAR(32)`) su `dev_release2` |
 | **Lane** | suite `6155` + `/tmp/librefolio-r2-k` · copia prod `6165` + `/tmp/librefolio-r2-k-prodcopy` |
 | **Coordinator** | «Release 2 backlog analysis» (`c8328a01-…`) |
 | **Decisioni** | tutte prese dal developer (§2); piano approvato il 24/09 |

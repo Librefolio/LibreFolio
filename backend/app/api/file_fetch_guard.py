@@ -1,4 +1,4 @@
-"""The file routes refuse to be loaded as a script (lot H-55 v2, security review of a1f1cc5fb).
+"""The file routes refuse to be loaded as a script (lot H-55 v2, security review of 6250dd6f2).
 
 Owner: workstream H (platform). The Content-Security-Policy allows the scripts of the instance's own origin
 (``script-src 'self'``), and an uploaded file is served from that origin. A page that could put

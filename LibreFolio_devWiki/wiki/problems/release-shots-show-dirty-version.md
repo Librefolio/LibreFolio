@@ -32,20 +32,20 @@ The coordinator's diagnosis (2026-10-13), consistent with the code:
 
 Workstream M's batch 34 (train 80):
 
-- **One frozen version** (`741310647`): right after the checkout the workflow writes `LF_APP_VERSION` from `VERSION`,
+- **One frozen version** (`c1f087995`): right after the checkout the workflow writes `LF_APP_VERSION` from `VERSION`,
   and Vite shows it when it is set, asking git only otherwise.
 - **The tree checked**: four «[CHECK] Checkout after …» steps run `scripts/ci/warn_if_tree_changed.sh`, which warns
   when a step has changed tracked files.
-- **No needless rewrite**: the icons are redrawn only when the logo's hash changes (`428bf27d1`,
+- **No needless rewrite**: the icons are redrawn only when the logo's hash changes (`b79a40976`,
   `frontend/generated-icons.json`).
 - The image does not build the frontend: it copies `frontend/build/`, so it shows the version frozen at the build.
-- Tests: `test_release_image_contract.py` pins the version and a clean tree (`b816adc6c`).
+- Tests: `test_release_image_contract.py` pins the version and a clean tree (`3f93f9a06`).
 
 *Resolved in the code; to verify on the first nightly after the push.* Left in the backlog: M-25 (low) — a local
 `dev.py docker build` can reuse a frontend built for another version.
 
 *Verified on 2026-10-13* (the coordinator): the first pipeline after the push, run 77 on the merge of PR #42 into
-`main` (commit 1ee978788), reports `v1.1.0-1648-g1ee978788` — `git describe` of that merge — without `-dirty`.
+`main` (commit 2c8fc95ca), reports `v1.1.0-1648-g1ee978788` — `git describe` of that merge — without `-dirty`.
 The developer's question 11 is closed.
 
 ## Source files

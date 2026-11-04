@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-potential-sniffle`
 **Branch**: `e-alfy-z-sospensione-e-risveglio`
-**HEAD di partenza (da verificare)**: `89e8b2e61` (= `dev_release2`; Z-29s-a e Y-39a sono già in dev dal treno 6; fast-forward fatto dal coordinatore).
+**HEAD di partenza (da verificare)**: `e44422ed0` (= `dev_release2`; Z-29s-a e Y-39a sono già in dev dal treno 6; fast-forward fatto dal coordinatore).
 **Corsia**: porta `6186`, cartella dati `/tmp/librefolio-r13-z`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md`. Leggi solo: le note di MF n1–n3 (riga ~6502), «Z-29b e Z-29s — analisi breve aggiornata» (~6913), «Z-29b, il contratto della pagina» (~6931). Nel backlog `Phase_0/BACKLOG_POST_1.2.md` la voce Z-40 con le osservazioni O1–O4 della revisione di Y su Z-29s-a.
 

@@ -1,9 +1,9 @@
 # Ondata 4 — piano (22/10/2026) — APPROVATO dal developer il 22/10 pomeriggio
 
-> **Decisioni del developer sul piano (22/10, pomeriggio)**: il piano «torna»; valgono le raccomandazioni delle domande 1-13 (testi del 9 compresi). **Modelli per complessità, non tutti Opus**: Opus per H, B e MF (sicurezza, crittografia, revisione dei numeri); Sonnet per Y, X, W, A, J, Z; Haiku per E (testi nei cataloghi). Per Y-41/#50: il fork `justetf-scraping` ha ora la PR #49 senza conflitti (fix delle allocazioni: TER e fund size di nuovo letti); nel `Pipfile.lock` si sposta solo il suo riferimento (`c042f2481`): l'aggiornamento completo con `pipenv update` è stato provato e tolto, perché SQLModel 0.0.48 / SQLAlchemy 2.1 rifiutano le date senza fuso orario (57 rossi nel backend). È un lotto a parte, da decidere (**domanda 16**).
+> **Decisioni del developer sul piano (22/10, pomeriggio)**: il piano «torna»; valgono le raccomandazioni delle domande 1-13 (testi del 9 compresi). **Modelli per complessità, non tutti Opus**: Opus per H, B e MF (sicurezza, crittografia, revisione dei numeri); Sonnet per Y, X, W, A, J, Z; Haiku per E (testi nei cataloghi). Per Y-41/#50: il fork `justetf-scraping` ha ora la PR #49 senza conflitti (fix delle allocazioni: TER e fund size di nuovo letti); nel `Pipfile.lock` si sposta solo il suo riferimento (`295a09c86`): l'aggiornamento completo con `pipenv update` è stato provato e tolto, perché SQLModel 0.0.48 / SQLAlchemy 2.1 rifiutano le date senza fuso orario (57 rossi nel backend). È un lotto a parte, da decidere (**domanda 16**).
 
 
-Base: `dev_release2` = `e2d3b8a51` (treni 7 e 8, 80 commit non pushati). La 1.3 non esce prima di novembre.
+Base: `dev_release2` = `a092417e5` (treni 7 e 8, 80 commit non pushati). La 1.3 non esce prima di novembre.
 Fonte dei lavori: `BRIEF-ondata4.md` (coordinatore, 22/10). Tutto quanto segue è stato controllato sul codice di
 `dev_release2` il 22/10, in sola lettura; dove non ho potuto controllare lo dico.
 
@@ -185,16 +185,16 @@ sotto 8.
 
 | Sessione | Worktree | Branch | HEAD oggi | Da fare |
 |---|---|---|---|---|
-| H | `e-alfy-sturdy-memory` | `e-alfy-h-piattaforma` | `a0d7fb5a5` (13 dietro, pulito) | fast-forward a `e2d3b8a51` |
-| B | `e-alfy-miniature-telegram` | `e-alfy-b-backup-e-docker` | `1fd559a26` (**309 dietro**, 0 avanti, pulito) | fast-forward (possibile: 0 commit avanti); **`npm ci`** (i `node_modules` sono `darwin-arm64`) |
-| Y | `e-alfy-redesigned-spork` | `e-alfy-y-cruscotto-e-grafici` | `5e5c6b64a` (54 dietro) | fast-forward |
-| X | `e-alfy-cuddly-engine` | `e-alfy-x-plugin-asset-e-ricerca` | `71813a40c` (13 dietro) | fast-forward |
-| Z | `e-alfy-potential-sniffle` | `e-alfy-z-sospensione-e-risveglio` | `29deddba3` (11 dietro) | fast-forward |
-| W | `e-alfy-fluffy-meme` | `e-alfy-w-import-e-transazioni` | `fe9e48bee` (13 dietro) | fast-forward |
-| MF | `e-alfy-turbo-waddle` | `e-alfy-mf-matematica-finanziaria` | `d1f75a3df` (132 dietro, **1 file sporco**: il piano `11_financialMath/plan-phase01FinancialMath.prompt.md`) | commit del piano sporco, poi fast-forward; **`npm ci`** (`darwin-arm64`) |
-| E | `e-alfy-stunning-fortnight` | `e-alfy-e-email` | `8fdeab4d6` (13 dietro) | fast-forward |
-| A | `e-alfy-legendary-winner` | `e-alfy-a-account-e-accessi` | `e6738808f` (53 dietro) | fast-forward |
-| J | `e-alfy-crispy-goggles` | `e-alfy-j-numeri-e-analisi` | `0c9a07d9a` (53 dietro) | fast-forward |
+| H | `e-alfy-sturdy-memory` | `e-alfy-h-piattaforma` | `66a4b1cf1` (13 dietro, pulito) | fast-forward a `a092417e5` |
+| B | `e-alfy-miniature-telegram` | `e-alfy-b-backup-e-docker` | `831930830` (**309 dietro**, 0 avanti, pulito) | fast-forward (possibile: 0 commit avanti); **`npm ci`** (i `node_modules` sono `darwin-arm64`) |
+| Y | `e-alfy-redesigned-spork` | `e-alfy-y-cruscotto-e-grafici` | `9623491df` (54 dietro) | fast-forward |
+| X | `e-alfy-cuddly-engine` | `e-alfy-x-plugin-asset-e-ricerca` | `915a63b62` (13 dietro) | fast-forward |
+| Z | `e-alfy-potential-sniffle` | `e-alfy-z-sospensione-e-risveglio` | `b624004b9` (11 dietro) | fast-forward |
+| W | `e-alfy-fluffy-meme` | `e-alfy-w-import-e-transazioni` | `69693694a` (13 dietro) | fast-forward |
+| MF | `e-alfy-turbo-waddle` | `e-alfy-mf-matematica-finanziaria` | `cc56722a0` (132 dietro, **1 file sporco**: il piano `11_financialMath/plan-phase01FinancialMath.prompt.md`) | commit del piano sporco, poi fast-forward; **`npm ci`** (`darwin-arm64`) |
+| E | `e-alfy-stunning-fortnight` | `e-alfy-e-email` | `ea814c47a` (13 dietro) | fast-forward |
+| A | `e-alfy-legendary-winner` | `e-alfy-a-account-e-accessi` | `a375ededd` (53 dietro) | fast-forward |
+| J | `e-alfy-crispy-goggles` | `e-alfy-j-numeri-e-analisi` | `850b1b2b7` (53 dietro) | fast-forward |
 
 Corsie: H 6181, E 6182, W 6183, A 6185, Z 6186, Y 6189, J 6190, X 6191, **B 6192** (nuova), **MF 6193** (nuova); il gate
 usa 6180. Cartelle dati `/tmp/librefolio-r13-<lettera>`. Dopo ogni fast-forward: `api sync` nel worktree prima di

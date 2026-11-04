@@ -1,6 +1,6 @@
 # Security review — backup L3 + panel restore (H-62)
 
-Worktree `e-alfy-sturdy-memory`, branch `e-alfy-h-piattaforma`, HEAD `14cd6a91f`, diff against merge-base `c042f2481`.
+Worktree `e-alfy-sturdy-memory`, branch `e-alfy-h-piattaforma`, HEAD `81e5dcbb6`, diff against merge-base `295a09c86`.
 Read-only review. Paths are relative to `LibreFolio-worktrees/e-alfy-sturdy-memory/`.
 
 **Verdict: no HIGH or MEDIUM issue found.** The ticket-only scope, the order of the checks, the R1 redaction and the

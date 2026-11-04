@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-sturdy-memory`
 **Branch**: `e-alfy-h-piattaforma`
-**HEAD di partenza (da verificare)**: `89e8b2e61` (= `dev_release2`; il checkpoint 1 è in dev dal treno 6; fast-forward fatto dal coordinatore).
+**HEAD di partenza (da verificare)**: `e44422ed0` (= `dev_release2`; il checkpoint 1 è in dev dal treno 6; fast-forward fatto dal coordinatore).
 **Corsia**: porta `6181`, cartella dati `/tmp/librefolio-r13-h`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/01_platform/plan-phase01Platform.prompt.md`. Leggi solo: «Lotto H-61: Hosting panel» (riga ~9655, il contratto), «H-61, checkpoint 2 (L2, i biglietti firmati)» (~10124). Attenzione: «CP2» alle righe ~250/~701 è un'altra cosa (il taglio di `main.py`).
 **Bozze**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/copilot-enel/session-state/8490facf-9334-4a96-9821-4b3cd3679d4d/files/h61/`: `cp2_contract.md` (§7 aggiunte), `rules_cp2.md`, `analysis.md`, `dry2/tickets.py`, `dry2/ticket_registry.py`, `dry2/config_l2_additions.py`, `dry2/apply_access_l2.py`. Percorsi del Mac dentro: adattali, non lanciarli così.

@@ -71,7 +71,7 @@ graph TD
 No open problems in F-056, F-057 or F-058: they are implemented and correct. The FX conversion handles missing rates via `BackwardFillInfo` (returns the most recent prior rate with annotation). F-058 (TWRR/MWRR) is fully wired into the Dashboard via the unified `/portfolio/report` endpoint (see [[concepts/portfolio-report-unified]]). Open in the portfolio engine: a day on which only a security's exchange rate moves is not re-valued ([[problems/dirty-days-ignore-fx-only-moves]]).
 
 > *Corrected 2026-10-12:* the diagram and the «Source files» table placed the FIFO engine in
-> `transaction_service.py`. It was `services/fifo_lot_engine.py` from 2026-07-16 (`2a647c2f1`) and is
+> `transaction_service.py`. It was `services/fifo_lot_engine.py` from 2026-07-16 (`4ee089e93`) and is
 > `financial_math/fifo/` since 2026-10-12 ([[entities/fifo-lot-engine]]).
 
 ## What comes next

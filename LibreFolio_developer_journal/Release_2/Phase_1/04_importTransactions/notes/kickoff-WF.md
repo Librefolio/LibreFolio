@@ -2,10 +2,10 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/w-bulk-form` (nuovo, creato dal coordinatore)
 **Branch**: `e-alfy-w-bulk-e-form` (nuovo, da `dev_release2`)
-**HEAD di partenza (da verificare)**: `89e8b2e61`.
+**HEAD di partenza (da verificare)**: `e44422ed0`.
 **Corsia**: porta `6184`, cartella dati `/tmp/librefolio-r13-wf`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md`, sezione «K3a — sicurezza dei dati del Bulk e del Form» (righe ~6890-6938) e le decisioni D-K3-1…7 (~6867-6878, approvate il 17/10). `Phase_1/PROSSIMI_LAVORI.md` ~74-90.
-**Materiale parcheggiato**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/copilot-enel/session-state/e71e0e34-fd06-4b55-960d-41fe8b7764ec/files/parked/`: `k3a-reds-20261019.patch` (10 file, `git apply --check` pulito su `89e8b2e61`), `k3a_cure.py` (la cura, mai applicata), `k3a_light.sh`, `README.md`, hash e stato. Ignora i file `._*` del Mac. Percorsi del Mac negli script: adattali.
+**Materiale parcheggiato**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/copilot-enel/session-state/e71e0e34-fd06-4b55-960d-41fe8b7764ec/files/parked/`: `k3a-reds-20261019.patch` (10 file, `git apply --check` pulito su `e44422ed0`), `k3a_cure.py` (la cura, mai applicata), `k3a_light.sh`, `README.md`, hash e stato. Ignora i file `._*` del Mac. Percorsi del Mac negli script: adattali.
 **Un'altra sessione di W lavora in parallelo** sul backend (Fineco, avvisi dei plugin) in un altro worktree: tu non tocchi `backend/app/services/brim_providers/**`, `mkdocs_src/docs/user/transactions/import/**`, i cataloghi `importWizard`.
 
 ## Passo A — riproduzione della issue #58 (prima di tutto, è leggera)

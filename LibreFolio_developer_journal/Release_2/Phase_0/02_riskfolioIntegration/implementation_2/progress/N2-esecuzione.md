@@ -3,7 +3,7 @@
 > **Brief**: messaggio del coordinatore del 2026-09-18 (round 2, seguito di F1), nato da un
 > reperto di S2 sulla heatmap delle correlazioni di L2.
 > **Piano d'analisi**: artefatto di sessione, riassunto qui nei passi.
-> **Baseline**: `bafa4663b23afe1f92d0388424cb91c21c5e073f` — vedi passo 1.
+> **Baseline**: `1dbe977ff51e243f21921dd5c476171877be5c95` — vedi passo 1.
 > **Corsia**: porta **6151** · data dir **`/tmp/librefolio-r2-f1`**. Mai 6150 (server di review).
 
 ---
@@ -37,18 +37,18 @@ esatto** e **conserva la varianza**.
 
 ## Passo 1 — Baseline ✅ 2026-09-18
 
-Il kickoff chiedeva di portare l'albero a `7d75a9c6c`. **Non posso**: `checkout`, `reset`,
+Il kickoff chiedeva di portare l'albero a `44dd7779d`. **Non posso**: `checkout`, `reset`,
 `merge`, `rebase` sono fuori dalle mie regole. Riportato al coordinatore, che ha **deciso
 di non spostare niente** sulla base di questa prova:
 
 ```
-git merge-base --is-ancestor bafa4663b 7d75a9c6c   →  vero (7 commit indietro, nessuna divergenza)
-git diff --name-only bafa4663b 7d75a9c6c -- backend/   →  VUOTO
+git merge-base --is-ancestor 1dbe977ff 44dd7779d   →  vero (7 commit indietro, nessuna divergenza)
+git diff --name-only 1dbe977ff 44dd7779d -- backend/   →  VUOTO
 blob di populate_mock_data.py nei due commit        →  bc01b7397a064816… IDENTICO
 ```
 
 > **Note implementazione**: `git rev-parse HEAD` →
-> `bafa4663b23afe1f92d0388424cb91c21c5e073f`, albero pulito. I 7 commit mancanti sono docs
+> `1dbe977ff51e243f21921dd5c476171877be5c95`, albero pulito. I 7 commit mancanti sono docs
 > del giornale più frontend (`ScatterChart`, `RiskCardGrid`, `_frontend_utility.py`):
 > nessuno tocca il perimetro.
 
@@ -465,7 +465,7 @@ Gli zeri condivisi **gonfiano davvero** la correlazione e **decadono davvero** c
 finestra: il ragionamento del coordinatore sul meccanismo regge. Ma la condizione che lo
 produce — serie che finiscono presto o bucate — **è esattamente ciò che F1 ha riparato**
 (prima di F1 gli asset 4, 5, 17 avevano 0 o 1 punto prezzo). La spiegazione che resta in
-piedi è che la sua corsia `6167` stia misurando un DB **anteriore a `bafa4663b`**.
+piedi è che la sua corsia `6167` stia misurando un DB **anteriore a `1dbe977ff`**.
 
 **Previsione falsificabile consegnata**: se ripopola la sua corsia, il decadimento
 sparisce e i suoi numeri diventano i miei.

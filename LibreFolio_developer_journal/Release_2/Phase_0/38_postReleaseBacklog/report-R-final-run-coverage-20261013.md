@@ -2,13 +2,13 @@
 
 > Sessione **R**, sera del 13/10/2026. Solo misura e classificazione: nessun file di codice, test o configurazione
 > toccato. Corsia esclusiva `--test-port 6176 --data-dir /tmp/librefolio-r2-r-cov`. Rapporto della run precedente
-> (12/10, base `a5653f9ef`): `rapporto-R-run-completa-coverage.md`, nella stessa cartella.
+> (12/10, base `78101574b`): `rapporto-R-run-completa-coverage.md`, nella stessa cartella.
 
 ## 0. In breve
 
 | | |
 |---|---|
-| **Base** | `10e646f799777028386a24057aab22e68a0e423d` (`dev_release2`: treno 97 + CHANGELOG), verificata da `libreFolio_R_final_prep.sh` (HEAD, albero pulito, lock JS invariato, corsia libera) |
+| **Base** | `058b76dcf7986c17ec5c6e73b5ac3123d84e557c` (`dev_release2`: treno 97 + CHANGELOG), verificata da `libreFolio_R_final_prep.sh` (HEAD, albero pulito, lock JS invariato, corsia libera) |
 | **Comando** | `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc LIBREFOLIO_TEST_STARTUP_TIMEOUT=900 pipenv run python dev.py test --coverage --fresh-run --cov-clean-backend --cov-clean-backend-e2e --workers 2 --test-port 6176 --data-dir /tmp/librefolio-r2-r-cov all`, **un'invocazione sola** |
 | **Preparazione** | `front build --debug` + `mkdocs build` prima della run (21:35 → 21:37, 2 min): il backend condiviso è partito in pochi secondi |
 | **Durata** | 21:37:55 → 00:21:54 = **2 h 44 min** (il 12/10: 4 h 21 min) |
@@ -30,8 +30,8 @@ cure reggono a carico normale, non che reggono a carico 100.
 
 ### 1.1 Ambiente
 
-- Worktree portata in fast-forward dal coordinatore a `10e646f79`. `node_modules` è quello del 12/10: il lock JS è
-  invariato da `a5653f9ef` (in `package.json` sono cambiati solo gli script `pre*` del catalogo i18n), quindi niente
+- Worktree portata in fast-forward dal coordinatore a `058b76dcf`. `node_modules` è quello del 12/10: il lock JS è
+  invariato da `78101574b` (in `package.json` sono cambiati solo gli script `pre*` del catalogo i18n), quindi niente
   nuovo `npm ci`.
 - Venv `LibreFolio-SAUMUTtc` con `uvicorn[standard]` 0.52.4: uvloop 0.23.0 e httptools 0.9.0 importabili.
 - Data-dir della corsia azzerata prima della run. Mai `./dev.py` nudo, mai `npx`, una sola invocazione nella corsia.
@@ -228,7 +228,7 @@ Playwright).
 
 - run conclusa con rc = 0, watcher terminato da solo con il runner; **nessun server acceso, porta 6176 libera**,
   nessun processo della corsia;
-- worktree su `10e646f79`, **nessun file tracciato modificato** (`git status` vuoto);
+- worktree su `058b76dcf`, **nessun file tracciato modificato** (`git status` vuoto);
 - **raw JS cancellato** come concordato: `frontend/coverage-js/e2e-raw`, 18 GiB, dopo aver verificato che la copia
   congelata del `coverage-final.json` combinato fosse identica (`cmp`). Il volume dati è tornato a **31 GiB liberi**.
   Restano i report (`combined`, `e2e`, `unit`, `unit-combined`: 215 MB), `.coverage`, `.coverage_data`, `htmlcov*`:

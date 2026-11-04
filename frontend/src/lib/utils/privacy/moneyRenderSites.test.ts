@@ -317,7 +317,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         // because both branches sat on the same line, so the gate's coverage of
         // its most important site would have been lost to a line wrap, in silence.
         //
-        // The fixture reproduces `PerformanceChart.shortMoney` as of `f1047f766`, so the
+        // The fixture reproduces `PerformanceChart.shortMoney` as of `9df0b7b14`, so the
         // test no longer depends on a file owned by another workstream: masking that site
         // with `maskable(` puts the real line under SAFE_CALL, out of the scanner's reach,
         // and a positive control whose subject can disappear is not a control. The fixture

@@ -1,6 +1,6 @@
 # Rosso della run completa (treno 18): `fx-add-pair.spec.ts:40`, la pagina FX attesa per 3 s
 
-> Lotto di N, 08/10. Coordinator: c8328a01. Base `70d02cd8e` (treno 18), worktree pulito. Corsia 6159/6169,
+> Lotto di N, 08/10. Coordinator: c8328a01. Base `bd7c656bf` (treno 18), worktree pulito. Corsia 6159/6169,
 > `/tmp/librefolio-r2-n`. Fino alle 22 la 6150 ospita la run completa: solo giri leggeri.
 
 ## 1. Il rosso
@@ -59,5 +59,5 @@
    > completa, e la cura sostituisce l'orologio con la condizione vera (`test-triage` §2).
 4. ✅ (08/10) Checkpoint: 2 commit proposti in `/tmp/libreFolio_commits/libreFolio_commit_n_fxnav_C1..C2.txt`. Liste
    in `n_fxnav_paths_C1..C2.txt`, blob in `n_fxnav_blobs.txt`, albero in `n_fxnav_final_tree.txt`. Stato: FROZEN.
-   > **Integrato** (allineamento del 09/10): `49d6f5324` (helper e spec), `55019a641` (questo piano), treno 19
-   > (`f2409810b`). Nessun residuo.
+   > **Integrato** (allineamento del 09/10): `1f7aa3b32` (helper e spec), `b61aa068e` (questo piano), treno 19
+   > (`72fab34ef`). Nessun residuo.

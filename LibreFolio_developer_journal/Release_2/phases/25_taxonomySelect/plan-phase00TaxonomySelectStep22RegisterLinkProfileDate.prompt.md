@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Baseline** | `9b2acdd5d` = `dev_release2` (treno 21), pulita; lo step 21 (`be4283e5f`, `65c1e40e6`, `59e3f4bc6`) è in HEAD |
+| **Baseline** | `2726dec9a` = `dev_release2` (treno 21), pulita; lo step 21 (`c719a2f05`, `888ac066c`, `f1d25c1c2`) è in HEAD |
 | **Lane suite** | `--test-port 6155 --data-dir /tmp/librefolio-r2-k`, preambolo `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` |
 | **Ordine** | test rossi prima, via test-author, solo in file già registrati; poi la cura; poi gate e checkpoint. Il CHANGELOG lo scrive il coordinator. |
 | **Vincoli** | niente cataloghi: una chiave nuova si chiede a O tramite il coordinator. `scripts/test_runner/_frontend_utility.py` è aperto da M: non si tocca. |
@@ -116,7 +116,7 @@
 
 ## Passi
 
-- [x] 22.1 Base `9b2acdd5d` verificata pulita; codice letto; v1.1.0 verificato; piano nel repo. ✅ 2026-10-09.
+- [x] 22.1 Base `2726dec9a` verificata pulita; codice letto; v1.1.0 verificato; piano nel repo. ✅ 2026-10-09.
 - [x] 22.2 Rossi (test-author), nei tre file sopra, più lo store e FileGrid. ✅ 2026-10-09.
   > **Note implementazione** (punto 7, test-author):
   > - `LoginCard.test.ts`: un `describe` nuovo con 5 casi; lo store `globalSettings` è finto (uno store scrivibile e una

@@ -51,7 +51,7 @@ longer fail.
 - The **giving** leg of a TRANSFER (its receiver deleted) becomes an ADJUSTMENT-out **at the Auto cost of its own
   broker** — decision 47 of release 1.3 (16/10, workstream W on J's CP-16). Before it, as an ADJUSTMENT-out without a
   cost, the units it moved would have read as destroyed (P&L −20 instead of +80 in the test scenario), so it only lost
-  its link. J's CP-16 (`fifo/engine.py`, `335fb89cf`) makes a negative ADJUSTMENT that carries `cost_basis_override`
+  its link. J's CP-16 (`fifo/engine.py`, `4c94e8b32`) makes a negative ADJUSTMENT that carries `cost_basis_override`
   hand its units over at that per-unit cost (proceeds; an outflow for performance). W prices the leg with
   `_handover_cost()` (`auto_cost.py`): the average of its **own** broker up to its date without itself — not
   `_auto_cost_source`, which names the partner's broker for a TRANSFER still linked. Without a cost (a missing

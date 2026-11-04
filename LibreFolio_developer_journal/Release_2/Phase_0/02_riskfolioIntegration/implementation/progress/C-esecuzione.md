@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | [`../C-backend-affettamento-portafoglio.md`](../C-backend-affettamento-portafoglio.md) — sola lettura |
 | Branch | `e-alfy-risk-c-portfolio-slicing` ⚠️ rinominato dal runtime (era `e-alfy-crispy-journey`) |
-| Baseline | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` ✅ verificata |
+| Baseline | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` ✅ verificata |
 | Lane | porta `6242` · data dir `backend/data/test-risk-c` |
 | Autorizzazione | coordinatore, sotto delega permanente del developer |
 | Contratto in uscita | **K4** → E |

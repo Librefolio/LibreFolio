@@ -1977,7 +1977,7 @@ class TestTheTransferRowsOfASameDayMove:
 
     The replay keeps no IN_TRANSIT fragment for it (``transfer_date < arrival_date`` is false), so its only piece is the destination
     one, ``lot:{lot}/transfer:{pair}/to:{broker}``, which carries no source and no destination. The pair's brokers are in the
-    engine's classified TRANSFER events, which ``_build_transfer_rows`` did not read. Read on 21/10/2026 (base ``c042f2481``):
+    engine's classified TRANSFER events, which ``_build_transfer_rows`` did not read. Read on 21/10/2026 (base ``295a09c86``):
     the one row is a TRANSFER_ARRIVE at the destination broker with neither id, and no TRANSFER_DEPART at all.
     """
 
@@ -3718,7 +3718,7 @@ class TestTheMarketPriceLineOfALongOpenedLot:
 #   ADJUSTMENT-in with a cost); the rest of a BUY that covers a short and opens a long is long-leg. Both quantized as today.
 # * No SHORT lot in the scope: exactly today's calculate_twrr_series / calculate_simple_roi_series, bit for bit.
 #
-# Today (HEAD b87d5d957, read 20/10/2026) a short's fragment counts +q·p, as if owned; a day at cost with a short open has
+# Today (HEAD 1556e1d83, read 20/10/2026) a short's fragment counts +q·p, as if owned; a day at cost with a short open has
 # no point; the opening sale is no flow, so a line starts on the buy-back: the worked example reads ROI −100% and TWRR
 # −180% on its last day. Each docstring says what today's builder gives for its book.
 #
@@ -3968,7 +3968,7 @@ class TestShortPositionsInThePerformanceHistory:
         ROI 200 / 1 000 = 20%, TWRR (0 − 800 + 900) / 900 = 11.1111%. Merged into the long side, the carried +1 000 would leave
         no capital: ROI 0 on both days.
 
-        Today (HEAD b87d5d957, read 20/10/2026): no point on 5–6 Jan, and on 7 Jan ROI −100%, TWRR −188.8889%.
+        Today (HEAD 1556e1d83, read 20/10/2026): no point on 5–6 Jan, and on 7 Jan ROI −100%, TWRR −188.8889%.
         """
         days = _E2_JAN[:3]
         rows = [_tx(1, tx_type=TransactionType.SELL, tx_date=days[0], quantity=D("-10"), amount=D("1000")), _tx(2, tx_date=days[2], quantity=D("10"), amount=D("-800"))]
@@ -4000,7 +4000,7 @@ class TestShortPositionsInThePerformanceHistory:
         ROI 0, 10%, 20%; TWRR —, 10%, 22.2222% — the worked example with the ADJUSTMENT in place of the BUY. Counted on the
         long side, the 800 would join the capital: ROI 200 / 1 800 = 11.1111% on 7 Jan.
 
-        Today (HEAD b87d5d957, read 20/10/2026): no point on 5–6 Jan — the first flow is the ADJUSTMENT's — and on 7 Jan ROI
+        Today (HEAD 1556e1d83, read 20/10/2026): no point on 5–6 Jan — the first flow is the ADJUSTMENT's — and on 7 Jan ROI
         −100%, TWRR −180%.
         """
         days = _E2_JAN[:3]
@@ -4014,7 +4014,7 @@ class TestShortPositionsInThePerformanceHistory:
         ROI 0, 10%, (0 + 1 000) / 1 000 = 100%; TWRR —, 10%, 1.1 × (1 + 900 / 900) − 1 = 120%. A flow for the ADJUSTMENT would
         move the 7 Jan ROI off 100%; a debt left open (NAV −800) would read 20%.
 
-        Today (HEAD b87d5d957, read 20/10/2026): no point at all — no flow, the short's sale being none.
+        Today (HEAD 1556e1d83, read 20/10/2026): no point at all — no flow, the short's sale being none.
         """
         days = _E2_JAN[:3]
         figures = [(days[0], -1000, 1000, 1000, 0, 1000), (days[1], -900, 0, 900, 0, 0), (days[2], 0, 0, 0, 0, 0)]
@@ -4064,7 +4064,7 @@ class TestShortPositionsInThePerformanceHistory:
         (the long loses 50, the short gains 100), TWRR (−450 − 500 + 1 000) / 1 000 = 5%. The at-90 cases are what tells a
         capital that reads the moved flows from one still built from the snapshot days' alone (S1 5%, S2 5%).
 
-        Before MF-E2b (HEAD 2e23bd03c, option (a)) this test was ``test_a_flow_on_a_day_without_nav_is_left_out_of_the_capital_as_of_the_gain``,
+        Before MF-E2b (HEAD 91eb454e5, option (a)) this test was ``test_a_flow_on_a_day_without_nav_is_left_out_of_the_capital_as_of_the_gain``,
         flat only, expecting S1 −150% / −150% and S2 50% / 50% (the 6 Jan flows in neither). Today's values at 90: S1
         −145% / −145%, S2 55% / 55%.
         """
@@ -4174,7 +4174,7 @@ def _long_only_book(seed: int) -> dict:
     return {"rows": rows, "marks": marks, "at_cost_until": days[at_cost_days - 1] if at_cost_days else None, "rates": rates, "scope": scope}
 
 
-# Each seed's series (HEAD b87d5d957, read 20/10/2026; seeds 3, 4, 7, 10 and 47 moved by MF-E2b): one "ROI|TWRR" per day of
+# Each seed's series (HEAD 1556e1d83, read 20/10/2026; seeds 3, 4, 7, 10 and 47 moved by MF-E2b): one "ROI|TWRR" per day of
 # ``_PARITY_DAYS``, each the str() of the Decimal the builder returned, "-" for None.
 #
 # MF-E2b (developer's decision A, 20/10): each of seeds 3, 4, 7, 10 and 47 has a trade on a day without NAV after the first
@@ -4278,7 +4278,7 @@ class TestGapFlowsInThePerformanceHistory:
         (−500) or 5 sold at 100 (+500); X at 100 on 7 Jan (NAV 1 500 or 500). The 6 Jan flow counts on 7 Jan: ROI 0 on a
         capital of 1 500 or 500; TWRR (1 500 − 500 − 1 000) / 1 000 = 0, or (500 + 500 − 1 000) / 1 000 = 0.
 
-        Today (HEAD 2e23bd03c): the flow is dropped while its units are in the NAV — the BUY reads ROI +50% and TWRR +50%,
+        Today (HEAD 91eb454e5): the flow is dropped while its units are in the NAV — the BUY reads ROI +50% and TWRR +50%,
         the SELL −50% and −50% on 7 Jan.
         """
         days = _E2_JAN[:3]

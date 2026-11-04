@@ -1,4 +1,4 @@
-# DOC-2 — la ricerca della documentazione per lingua: analisi (H, 23/10/2026, base `1fd80c481`)
+# DOC-2 — la ricerca della documentazione per lingua: analisi (H, 23/10/2026, base `61a6c828b`)
 
 Solo lettura: nessun file toccato. Misure fatte sul sito costruito in `mkdocs_src/site/` e sul codice installato
 (`mkdocs-material 9.7.7`, `mkdocs-static-i18n 1.3.1`, `mkdocs 1.6.1`).

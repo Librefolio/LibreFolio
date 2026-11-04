@@ -8,12 +8,12 @@
 > - **TC-19 / TC-22**: due pagine della documentazione per sviluppatori allineate al codice (banner della qualità dei dati, tinte delle righe delle tabelle).
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-congenial-potato` · **Branch**: `e-alfy-dv-colori-dei-grafici`
-**HEAD di partenza (da verificare)**: `2879ae3e4` (fast-forward fatto dal coordinatore).
+**HEAD di partenza (da verificare)**: `85fda260e` (fast-forward fatto dal coordinatore).
 **Corsia**: porta `6188`, cartella dati `/tmp/librefolio-r13-c2`.
 **Backlog** (`LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md`): DV-11 ~3334, DV-12 ~3345, DV-13 ~3354, TC-19 ~3115, TC-21 ~3136, TC-22 ~3142.
 
 ## In quest'ordine (ognuno piccolo; checkpoint unico alla fine)
-1. **DV-11**: il livello `category` del Designer Lab diventa una vista dei ruoli `--lf-cat-*`, e `chartCategories.ts` legge i ruoli tramite `roleColors` (la copia doppia sparisce). `CATEGORY_ROLES_IN_TOKENS` è già acceso (`3dba7f894`). File in `lib/theme/**` e `src/lib/dev/designer-lab/**`.
+1. **DV-11**: il livello `category` del Designer Lab diventa una vista dei ruoli `--lf-cat-*`, e `chartCategories.ts` legge i ruoli tramite `roleColors` (la copia doppia sparisce). `CATEGORY_ROLES_IN_TOKENS` è già acceso (`42a6066be`). File in `lib/theme/**` e `src/lib/dev/designer-lab/**`.
 2. **TC-21**: `tr.row-deleted td` con opacità 0,55 fa vedere il contenuto sotto le colonne fisse di `DataTable`: sbiadire il contenuto, non lo sfondo. CSS del `DataTable` (fuori da `lib/theme`, ma nessun'altra sessione lo tocca: verificalo con `git -C <worktree> status` negli altri worktree prima di iniziare).
 3. **DV-12**: `e2e/portfolio/dashboard.spec.ts`, «Positions panel publishes its loading state through data-busy»: `goto('about:blank')` prima della rotta (con `test-author`).
 4. **DV-13**: `designer-lab-live.spec.ts` «export JSON, reset all, import back»: verifica se TC-20 l'ha già risolto; se sì, segna superato nel backlog; se no, due elementi con fonti di colore diverse.

@@ -3,7 +3,7 @@
 > **A cosa serve (per il developer).** Oggi le schede dei **cambi** chiedono la storia giorno per giorno: con anni di dati sono pesanti, e non sanno mostrare il rendimento mobile. Z-29fx fa per i cambi quello che Z-29b ha fatto per gli asset: il backend manda solo i punti che la scheda disegna (per esempio ~200 invece di ~1 800) e calcola il rendimento mobile, così Y-40 può offrire le tre viste anche nella lista cambi. Z-29d ridotto: l'anteprima del dialogo di confronto si ricarica per scheda con le serie ridotte invece di quelle giornaliere.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-potential-sniffle` · **Branch**: `e-alfy-z-sospensione-e-risveglio`
-**HEAD di partenza (da verificare)**: `2879ae3e4` (= `dev_release2`; fast-forward fatto dal coordinatore).
+**HEAD di partenza (da verificare)**: `85fda260e` (= `dev_release2`; fast-forward fatto dal coordinatore).
 **Corsia**: porta `6186`, cartella dati `/tmp/librefolio-r13-z`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md`: Z-29fx (righe ~6964-6969), Z-29d «ridotto» (~6927), le note di MF n1-n3 (~6502). Backlog Z-29 (~8207-8225), Z-40 (~8367-8390).
 

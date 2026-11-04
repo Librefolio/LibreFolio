@@ -1,7 +1,7 @@
 # Inventario: i «giorni in cui cambia qualcosa» — dove sono scritti, e la casa unica
 
-> Ondata 6, giorno 1 (28/10/2026), MF, **sola lettura**. Base letta: `f4a5e6e0a` (nessuna differenza di codice con
-> `32674edb8`). Origine: CHECK-ondata6 §«Quattro copie», regola 10 di `CLAUDE.md`. Piano:
+> Ondata 6, giorno 1 (28/10/2026), MF, **sola lettura**. Base letta: `a99aee28f` (nessuna differenza di codice con
+> `bc1d4c06c`). Origine: CHECK-ondata6 §«Quattro copie», regola 10 di `CLAUDE.md`. Piano:
 > [plan-phase01FinancialMath](plan-phase01FinancialMath.prompt.md), «Ondata 6». Compagno:
 > [analisi T-U1](analisi-T-U1-convert_bulk-20261028.md).
 

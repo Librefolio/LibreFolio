@@ -70,12 +70,12 @@ finale richiede quel catalogo e l'host AssetModal va coordinato con U1/U5. Un so
 
 ## Analisi per task — 2026-09-07
 
-Baseline `a9138140`; dettagli in [06_piano_sprint.md](06_piano_sprint.md).
+Baseline `9d8b5c54`; dettagli in [06_piano_sprint.md](06_piano_sprint.md).
 
 | ID | Stato, dipendenza e nota | Taglia | Sprint |
 |---|---|---|---|
 | A1 | ✅ Integrato e developer-reviewed con F: settori Corporate/Government lungo enum, API/UI e provider. [Piano](../../phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md). | S | SP03 |
 | A2 | ✅ Integrato e developer-reviewed con F: import CSV strict su editor condiviso, senza regressioni dated. [Piano](../../phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md). | M | SP03 |
 
-> **Aggiornamento 2026-09-11:** SP03 è integrato in `dev_release2` (`e50d66408`,
-> follow-up review `cc57b6a38`); le note sopra restano il contratto storico, non task aperti.
+> **Aggiornamento 2026-09-11:** SP03 è integrato in `dev_release2` (`904fddc6e`,
+> follow-up review `aa30eac00`); le note sopra restano il contratto storico, non task aperti.

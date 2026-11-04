@@ -4,7 +4,7 @@ Workstream J «Numeri e analisi», release 1.3: the service-level reds and guard
 ``lots_analysis_service.get_lots_analysis``. The engine option is pinned in ``test_financial_math/test_fifo_replay_until.py``;
 T8, the AI Export, beside the ``*.fifo_summary`` tests (``test_ai_export_portfolio_fifo_summary_in_transit.py``).
 
-TODAY (base ``497aaa07c``) ``LotsAnalysisService._load_transactions`` cuts the ledger at ``date_to``. A transfer in transit
+TODAY (base ``3cfa070bb``) ``LotsAnalysisService._load_transactions`` cuts the ledger at ``date_to``. A transfer in transit
 on that day (departure ≤ ``date_to`` < arrival) loses its arriving leg, the engine cannot pair the other one
 (``FifoLotEngine._resolve_transfer_pair``) and answers TRANSFER_PAIR_MISSING — FAILED — even over both brokers of the pair
 (``broker_ids`` None or [A, B]), where J-10's boundary reading does not apply: the partner sits INSIDE the scope. The

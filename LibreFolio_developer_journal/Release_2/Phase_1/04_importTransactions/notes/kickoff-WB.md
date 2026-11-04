@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fluffy-meme`
 **Branch**: `e-alfy-w-import-e-transazioni`
-**HEAD di partenza (da verificare)**: `89e8b2e61` (= `dev_release2`, fast-forward fatto dal coordinatore).
+**HEAD di partenza (da verificare)**: `e44422ed0` (= `dev_release2`, fast-forward fatto dal coordinatore).
 **Corsia**: porta `6183`, cartella dati `/tmp/librefolio-r13-wb`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md`. Leggi solo: «W-B85 · Noto in silenzio, ignoto con avviso: analisi» (righe ~7583-7733, con la tabella K/U/E ~7650 e l'aiuto `RowSkips` ~7688), la cura Danske (~7734-7788), B-52 Fineco (~7916-8010). `Phase_1/PROSSIMI_LAVORI.md` righe ~107-134 (W-B86/W-B87). Backlog `Phase_0/BACKLOG_POST_1.2.md` sezione W (~6048; voci W-B85…W-B91 ~6762-6825).
 **Un'altra sessione di W lavora in parallelo** sul frontend (K3a, #58) in un altro worktree: tu non tocchi `frontend/src/lib/features/transactions/**` né `frontend/e2e/transactions/**`.

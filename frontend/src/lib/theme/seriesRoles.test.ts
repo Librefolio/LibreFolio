@@ -117,7 +117,7 @@ const GETTER_LEAVES =
  * Callers that copy a getter once, each with what it costs and who can cure it. The list only shrinks: a caller that
  * stops copying must leave it.
  */
-// The LineChart pending-edit copy was cured by Y (`ebe64831e`): no known copy is left.
+// The LineChart pending-edit copy was cured by Y (`35bbd8d4f`): no known copy is left.
 const KNOWN_COPIES: Readonly<Record<string, string>> = {};
 
 describe('the callers — no production source copies a theme-dependent getter once, but the known ones', () => {

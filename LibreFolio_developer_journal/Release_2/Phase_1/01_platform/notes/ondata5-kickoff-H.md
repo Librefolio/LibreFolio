@@ -7,7 +7,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 **Modello**: Sonnet. **H5-1 con un sotto-agente Haiku** (tu rivedi). La documentazione la scrive l'agente `docs-writer` (solo inglese).
 **Giorni**: H5-1 0,25; H5-2 0,5; DOC-2 1 (da confermare); DOC-1 2-3 → **3,75-4,75**.
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-sturdy-memory` · **Branch**: `e-alfy-h-piattaforma`
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro; la coda di H, `panel_restore` e D7, è già in dev: base pulita).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro; la coda di H, `panel_restore` e D7, è già in dev: base pulita).
 **Corsia**: porta `6181`, cartella dati `/tmp/librefolio-r13-h`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/01_platform/plan-phase01Platform.prompt.md` (sezione nuova «Ondata 5»). X-R84: backlog ~6452. Skill: `devpy-mkdocs`, `devpy-i18n`.
 

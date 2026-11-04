@@ -1,8 +1,8 @@
 # Piano Phase 00 — BRIM mirato
 
 **Creato**: 2026-09-10
-**Stato**: ✅ chiuso (verifica del 2026-10-09 su `3cceb4f90`): consegnato in `ebba209c5` (feat(brim): refine CA and eToro imports), merge `5c2a711f3` (2026-09-10).
-**Baseline/target**: `8b99e0020c92a945daf0821ee0654a0a2a21efd0` (`dev_release2`)
+**Stato**: ✅ chiuso (verifica del 2026-10-09 su `f545b67e3`): consegnato in `d31797b75` (feat(brim): refine CA and eToro imports), merge `04cd2173a` (2026-09-10).
+**Baseline/target**: `ec9ae2afc66d36649f538bb05f56ffb51285939e` (`dev_release2`)
 **Workstream**: G — `e-alfy-brim-targeted-analysis`
 **Coordinator**: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`
 **Runtime lane**: porta `6155`, data dir assoluta `/tmp/librefolio-r2-g-brim`
@@ -211,7 +211,7 @@ Gate statici finali:
 - Documentazione EN esplicita l'assunzione.
 - Test/lint mirati verdi; server fermo e porta libera.
 
-## Chiusura (verifica del 2026-10-09 su `3cceb4f90`)
+## Chiusura (verifica del 2026-10-09 su `f545b67e3`)
 
 > **Note implementazione** (L, per la sessione G, che non esiste più):
 > - Gli 8 passi sono tutti ✅ (2026-09-10) e confermati sul codice:

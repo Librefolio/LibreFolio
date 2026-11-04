@@ -168,7 +168,7 @@ Nessun valore del developer, solo le regole che ne sono emerse.
 
 ## 7. Riferimenti nel codice LibreFolio
 
-I numeri di riga sono quelli del baseline `9eb01c756` e vanno ricontrollati.
+I numeri di riga sono quelli del baseline `311fbd6e9` e vanno ricontrollati.
 
 - **Guida e modelli BRIM**: `mkdocs_src/docs/developer/architecture/patterns/brim_plugin_guide.md`, la doc dev di Danske (report set titoli + cassa), la skill `brim-plugin`, `backend/app/services/brim_providers/`.
 - **Broker e cassa**: `models.py`, un pool di cassa per valuta (circa righe 522-553 e 757-775).
@@ -219,9 +219,9 @@ I numeri di riga sono quelli del baseline `9eb01c756` e vanno ricontrollati.
   - la documentazione con `docs-writer`, solo in inglese;
   - la skill `brim-plugin`.
 - **Baseline.**
-  - Il worktree è a `108a2adf5` (train 17), pulito.
+  - Il worktree è a `03c943f53` (train 17), pulito.
   - I file di terzi scaricati durante la ricerca sono stati spostati fuori dal worktree, nella cartella della sessione S.
-  - Ho chiesto al coordinatore di portarlo all'ultimo `dev_release2`, che all'ultimo controllo era `3af9aac63`.
+  - Ho chiesto al coordinatore di portarlo all'ultimo `dev_release2`, che all'ultimo controllo era `46d1c4ed6`.
 
 ## 10. Todo aperti
 

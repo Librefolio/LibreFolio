@@ -10,7 +10,7 @@
 READY; IMPLEMENTATION FROZEN ON PRODUCT-SHAPED PAYLOAD AND SCIP
 MIQP/MIQCP CAPACITY.
 **Implementation:** the developer authorized implementation from clean baseline
-`202e4056f2b915c055eeb8436eae765023201918`; the former PAC+Rebalancer
+`e7910164c4c908b7c6315b7aa344c1e3f3001ba6`; the former PAC+Rebalancer
 solver/capacity gate stopped all production/test work before Step 1. The developer
 has now frozen one shared fixed-reference `L2_fixed` solver core for PAC and
 Rebalancer and approved PySCIPOpt/SCIP as an additive candidate. The
@@ -91,8 +91,8 @@ real contradiction.
 |---|---|
 | Worktree | `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-friendly-dollop` |
 | Branch | `e-alfy-allocatore-pac` |
-| Audited HEAD | `e38a521f068c2d1b8d743775e90711fec1326fb3` |
-| Approved combined baseline | `e38a521f068c2d1b8d743775e90711fec1326fb3` |
+| Audited HEAD | `71b37e4bf0cb127f4735794ec72704475cd2e9fe` |
+| Approved combined baseline | `71b37e4bf0cb127f4735794ec72704475cd2e9fe` |
 | Target branch | `dev_release2` |
 | Coordinator session | `c8328a01-f208-4ade-a352-0486d1f14de2` |
 | Test port | `6153` |
@@ -102,7 +102,7 @@ real contradiction.
 ### 1.3 Two separate developer gates
 
 > **Historical gate sequence:** Gate P0 and Gate P1 below were subsequently
-> completed on checkpoint `202e4056f2b915c055eeb8436eae765023201918`.
+> completed on checkpoint `e7910164c4c908b7c6315b7aa344c1e3f3001ba6`.
 > Current production freeze comes from reopened Step 0, not missing start
 > authorization.
 
@@ -1666,7 +1666,7 @@ execution-budget miss or accepted objective not safely representable.
 
 - [!] Step 0 — **REOPENED FOR DOCUMENT CORRECTION / RUNTIME BLOCKED**
   > **Evidenza storica D23**: Gate P1 was recorded verbatim against clean baseline
-  > `202e4056f2b915c055eeb8436eae765023201918`. Read-only analysis derived the only
+  > `e7910164c4c908b7c6315b7aa344c1e3f3001ba6`. Read-only analysis derived the only
   > finite exact MILP square construction available to linear SciPy/HiGHS: common
   > integer lattice, absolute-gap bits and binary-product rows after the tier-1 face
   > is frozen. It cannot satisfy the approved numeric domain and `2.5 s` solver

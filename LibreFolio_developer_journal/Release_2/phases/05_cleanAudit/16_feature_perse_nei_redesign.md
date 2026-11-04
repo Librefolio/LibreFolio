@@ -80,7 +80,7 @@ Questa riga confronta il conteggio delle card broker con **se stesso**, calcolat
 
 ## Asse 2 — Capability sparite durante i redesign
 
-Ho incrociato `git log --diff-filter=D --name-only` sui file `.svelte` cancellati, `git log -S'<NomeComponente'` per isolare il commit che ha rimosso l'ultimo punto di chiamata di un componente, e lettura diretta dei messaggi di commit dei grandi redesign noti (`6c009e6b` dashboard, `095d5299`/`0a551f1c` riscrittura pagina FX, `1a734008`/`29898623` transazioni) più altri individuati per dimensione del diff.
+Ho incrociato `git log --diff-filter=D --name-only` sui file `.svelte` cancellati, `git log -S'<NomeComponente'` per isolare il commit che ha rimosso l'ultimo punto di chiamata di un componente, e lettura diretta dei messaggi di commit dei grandi redesign noti (`6c009e6b` dashboard, `3dafcf73`/`f3ba3261` riscrittura pagina FX, `1a734008`/`29898623` transazioni) più altri individuati per dimensione del diff.
 
 ### 🔴 B1 — La scorciatoia di cassa nella pagina broker, eliminata insieme al suo componente
 

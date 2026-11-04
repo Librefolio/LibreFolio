@@ -13,7 +13,7 @@ related:
 
 # Problem: the script came without the fonts it loads
 
-> Written from workstream M's note for the devWiki (batch 25, 2026-10-12), checked against the code at `b91d6d902`.
+> Written from workstream M's note for the devWiki (batch 25, 2026-10-12), checked against the code at `331cc6474`.
 
 ## Symptom
 
@@ -33,7 +33,7 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 
 ## Solution
 
-`92fb9c83e` («fix(docs): ship MathJax fonts with the docs»):
+`1cf99eb86` («fix(docs): ship MathJax fonts with the docs»):
 
 - **Companions** in `scripts/update_js_cache.py`: a cached `js` library lists the files it loads from beside itself.
   For MathJax the names come from the cached script's own text (`MathJax_[A-Za-z0-9-]+\.woff`, 22 files, 321 KB) and the
@@ -54,7 +54,7 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 - Check what a page draws, not that a file answers 200: the M-19 spec now also checks the font answers, the MJX faces
   and the absence of `typesetPromise` errors. It waited outside the repository until the shared runner file was free,
   since an unregistered spec turns `check-orphans` red; run once in M's lane, it passed, and a negative control without
-  the fonts went red on the font assertion. *Update (train 70)*: registered in M's batch 28 (`0fe5195e8`) as
+  the fonts went red on the font assertion. *Update (train 70)*: registered in M's batch 28 (`dbca267ff`) as
   `front-utility docs-offline-math`.
 - **Still open — M-22** (medium, after 1.2): Mermaid is imported only from jsDelivr (`mermaid.mjs`), with no local copy
   and no fallback, so without internet — as in the full image — 74 pages show their diagrams as code. The cure is

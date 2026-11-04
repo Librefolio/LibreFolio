@@ -4,7 +4,7 @@
 **Origine:** feedback diretto del dev delle 15:18, con screenshot/HTML TikTok.
 **Precedente:** [Round 3](plan-phase00FeedbackImportUrgentRound3-SocialFeedback.prompt.md).
 **Stato:** ✅ pronto tecnico 2026-09-09; dati originali ripristinati e R4 servita.
-> **Note implementazione** (verifica di L del 2026-10-09 su `3cceb4f90`): integrato in `ef722b552`.
+> **Note implementazione** (verifica di L del 2026-10-09 su `f545b67e3`): integrato in `c8a77dda3`.
 **Accettato dal dev:** badge e sottotesti confermati il 2026-09-09 alle 15:51.
 **Ultima richiesta:** ingresso diretto Crea Instagram, esito nella sezione 4.
 **Promozione dello stream:** condizionata dal dev a quest'ultima rifinitura;

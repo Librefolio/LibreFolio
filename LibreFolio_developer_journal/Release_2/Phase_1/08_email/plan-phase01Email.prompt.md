@@ -10,8 +10,8 @@
 | Worktree | `LibreFolio-worktrees/e-alfy-stunning-fortnight` |
 | Ramo | `e-alfy-e-email` |
 | Corsia | porta 6188, data-dir `/tmp/librefolio-r13-e` |
-| Base dell'analisi | `380a3e768` (15/10, 08:37) |
-| Base del primo via | `23f6578f3` (15/10, 11:23) |
+| Base dell'analisi | `54cec8400` (15/10, 08:37) |
+| Base del primo via | `9acf0f77e` (15/10, 11:23) |
 
 ## Autorizzazione (15/10/2026, ~11:08)
 
@@ -38,13 +38,13 @@ coordinatore ad A (A8 riuserà `rate_window.py`). Aspettano il developer: **punt
 - La pagina `/verify-email` legge `location.hash`, lo toglie con `replaceState` e ascolta `hashchange`, come le pagine
   di A.
 
-## 1. Stato reale (verificato sul codice a `380a3e768`, riverificato a `23f6578f3`)
+## 1. Stato reale (verificato sul codice a `54cec8400`, riverificato a `9acf0f77e`)
 
 - **Nessun codice email**: zero `smtplib`, `aiosmtp*`, `send_email` in `backend/`, `scripts/`, `frontend/src`, `dev.py`.
 - **Token di A4 (in base)**: `services/accounts/token_service.py` — `issue/inspect/consume/revoke_tokens`, flush senza
   commit; `DEFAULT_TTL`: invito 7 g, reset 30 min, setup 72 h, verifica 24 h. `AccountToken.email` (promemoria
   dell'invito); `users.email_verified_at` NULL sugli account di prima della 005.
-- **A5a** (`7da2cd9a2`, sul ramo di A): `registration_service.py` (`create_invite(..., email=)`, `register_user`,
+- **A5a** (`f640b4a62`, sul ramo di A): `registration_service.py` (`create_invite(..., email=)`, `register_user`,
   `public_link(path)`, `billing_link()`), `user_service.py` (`create_password_reset` ~r. 233, `complete_password_reset`
   ~r. 247, `update_user_status`), `config/accounts.py` (`public_url()`).
 - **`require_email_verification`**: segnaposto che nessuno legge (`schemas/settings.py:293-298`, `:550`;
@@ -192,12 +192,12 @@ i18n nuova `lib/i18n/email/` (prefisso `email`). Galleria con `page.route`.
 | Lotto | Contenuto | Dipende da | Stato |
 |---|---|---|---|
 | E0 | Questo piano, sezione E del backlog | via | ✅ (checkpoint E1) |
-| E1 | Configurazione, `.env.example` (sezione Email), `smtp`, `delivery`, `messages` e testi, `checks`, `rate_window`, SMTP finto, test, doc per sviluppatori | niente | ✅ dev `f46a93ffd` (15/10) |
-| E2 | `GET /email/status`, `POST /email/test`, router, `/system/instance.email`, `CONFIG_CHECKS`, scheda «Email», i18n, Vitest, E2E simulate, galleria, doc admin | A5a in base; H per `config_audit`; frontend dopo la finestra e L | ✅ dev `755158aad` (E2a ed E2b, 15/10), il cancello i18n `be7de95b6` |
-| E3 | `links.py`, `POST /email/links`, `POST /email/password-reset`, attivazione dell'admin | A5a in base, punto 45 | ✅ dev `8f908623b` (E3 ed E3s, 15/10), `e54ae96bb` (E3p, 15/10) |
-| E4 | modulo «password dimenticata», «Spedisci per email» | A5b e A6 in base | ✅ dev `73a68d95f` (E4a, 16/10), `56759b2c8` (E4b ed E4c, 16/10) |
-| E5 | verifica dell'email | punto 44, A5a+A5b in base | ✅ dev `e9a993e00` (E5a, 15/10), `dbe232723` (E5b, 16/10) |
-| E6 | doc finali, devWiki, `TODO_FUTURI`, testo per il CHANGELOG, `all-backend` + E2E, `security-review` | tutto | ✅ dev `56759b2c8` (16/10), il diario E6.10–E6.11 `30c2459e6` |
+| E1 | Configurazione, `.env.example` (sezione Email), `smtp`, `delivery`, `messages` e testi, `checks`, `rate_window`, SMTP finto, test, doc per sviluppatori | niente | ✅ dev `99096768a` (15/10) |
+| E2 | `GET /email/status`, `POST /email/test`, router, `/system/instance.email`, `CONFIG_CHECKS`, scheda «Email», i18n, Vitest, E2E simulate, galleria, doc admin | A5a in base; H per `config_audit`; frontend dopo la finestra e L | ✅ dev `570fd34e9` (E2a ed E2b, 15/10), il cancello i18n `2621200a0` |
+| E3 | `links.py`, `POST /email/links`, `POST /email/password-reset`, attivazione dell'admin | A5a in base, punto 45 | ✅ dev `6e87fe24f` (E3 ed E3s, 15/10), `63bbb9c55` (E3p, 15/10) |
+| E4 | modulo «password dimenticata», «Spedisci per email» | A5b e A6 in base | ✅ dev `6141b8e6a` (E4a, 16/10), `19d4d90d4` (E4b ed E4c, 16/10) |
+| E5 | verifica dell'email | punto 44, A5a+A5b in base | ✅ dev `20445f297` (E5a, 15/10), `3649d733b` (E5b, 16/10) |
+| E6 | doc finali, devWiki, `TODO_FUTURI`, testo per il CHANGELOG, `all-backend` + E2E, `security-review` | tutto | ✅ dev `19d4d90d4` (16/10), il diario E6.10–E6.11 `320185c22` |
 
 > Contabilità del 19/10: gli ingressi sono i merge di primo genitore di `dev_release2`. I lotti venuti dopo E6, da E-4
 > a E-21, si seguono nella sezione E del backlog.
@@ -237,7 +237,7 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 
 #### E0.0 — Via e base ✅ (2026-10-15)
 > **Note implementazione**: autorizzazione e perimetro come sopra (messaggio del coordinatore delle 11:23). HEAD
-> `23f6578f3` = base indicata dal coordinatore, worktree pulito, porta 6188 libera (`lsof` vuoto).
+> `9acf0f77e` = base indicata dal coordinatore, worktree pulito, porta 6188 libera (`lsof` vuoto).
 
 #### E0.1 — Piano nel journal ✅ (2026-10-15)
 > **Note implementazione**: questo file, dall'analisi consegnata alle 08:5x (testo intero nella cartella della sessione
@@ -378,19 +378,19 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 >   `all-backend`: non serve a un lotto che non tocca codice esistente, salvo le voci del runner; lo fa la validazione
 >   combinata.
 >
-> **⚠️ Fuori pista**: `dev_release2` è andato avanti a `13705dd05` mentre lavoravo; il coordinatore ha riscritto la
+> **⚠️ Fuori pista**: `dev_release2` è andato avanti a `90f467f52` mentre lavoravo; il coordinatore ha riscritto la
 > riga d'apertura della sezione E del backlog. Allineata la mia al suo testo, così all'aggiornamento di base resta da
 > unire solo la voce E-1.
 
 ### Checkpoint E1 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
-> - **Base**: HEAD `23f6578f3`; `dev_release2` locale a `13705dd05`.
+> - **Base**: HEAD `9acf0f77e`; `dev_release2` locale a `90f467f52`.
 > - **Delta**, non in stage: 21 file nuovi e 8 modificati. Nuovi: il servizio (`config/email.py`, `services/email/`
 >   con 5 moduli e 5 modelli, `utils/runtime/rate_window.py`), i test (5 file, il server finto), la pagina
 >   `developer/backend/email.md`, questo piano. Modificati: `.env.example` (sezione «Email»), `.github/instructions/
 >   backend.instructions.md` (3 righe), `developer/architecture/{settings,security}.md` e `developer/index.md` (un
 >   passaggio ciascuno), `_backend_services.py` e `_backend_utils.py` (voci nuove, in aggiunta), la sezione E del
 >   backlog.
-> - **Conflitti attesi con `13705dd05`**: la riga d'apertura della sezione E del backlog (allineata al testo del
+> - **Conflitti attesi con `90f467f52`**: la riga d'apertura della sezione E del backlog (allineata al testo del
 >   coordinatore); `_backend_utils.py`, blocchi vicini ma separati. Più avanti, con A5b: passaggi diversi di
 >   `settings.md` e `security.md`.
 > - **Commit proposti**: `feat(email): add optional SMTP email service core`; `docs(journal): E0-E1 email plan, E
@@ -408,17 +408,17 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 
 #### E1.8 — Aggiornamento di base, validazione combinata, test TLS ✅ (2026-10-15)
 > **Note implementazione**:
-> - Checkpoint committato dal coordinatore: `2534cbd97` (codice, test, doc, navigazione) e `1e2f4b2f3` (journal).
-> - Aggiornamento di base con `dev_release2` (`13705dd05`), aperto dal coordinatore nel mio worktree. Un conflitto,
+> - Checkpoint committato dal coordinatore: `06acee59f` (codice, test, doc, navigazione) e `0b2dd2cd0` (journal).
+> - Aggiornamento di base con `dev_release2` (`90f467f52`), aperto dal coordinatore nel mio worktree. Un conflitto,
 >   `BACKLOG_POST_1.2.md`: tenuto il file di `dev_release2` più la sola voce E-1 (controllato con un diff contro
 >   `MERGE_HEAD`), messo in stage solo lui. Controllati a mano i due fusi da soli: `_backend_utils.py` (le voci dei due
 >   lati, AST valido) e `mkdocs.yml` (la riga dell'email e quella del Designer Lab, in punti diversi). Merge del
->   coordinatore: `fc99e9bfe`.
+>   coordinatore: `b53a97860`.
 > - Validazione della revisione combinata, prima della pausa delle dipendenze (una alla volta, `nice -n 10`, log
 >   `/tmp/libreFolio_e1merge_*.log`): `utils rate-window` 26, `services email-config` 144, `email-messages` 245,
 >   `email-checks` 48, `email-delivery` 77 + 2 saltati, `config-package` 600, `config-env-example` 36, `utils
 >   gate-i18n-usage` 195, `check-orphans` ✅.
-> - Dopo la finestra delle dipendenze (`cryptography` 50.0.2, `dc9a5d232`), su `fc99e9bfe`: `services email-delivery`
+> - Dopo la finestra delle dipendenze (`cryptography` 50.0.2, `e910074cc`), su `b53a97860`: `services email-delivery`
 >   **79 passati, nessun saltato**; `EMD-017` (STARTTLS, poi autenticazione, poi invio) ed `EMD-018` (certificato non
 >   fidato → `TLS_FAILED`, nulla inviato) verdi. Log `/tmp/libreFolio_e1tls_email-delivery.log`. E-1 chiusa nel
 >   backlog.
@@ -426,7 +426,7 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 ### E2 — stato e email di prova per l'admin (la parte senza A5a)
 
 #### E2.0 — Via e ambiente ✅ (2026-10-15)
-> **Note implementazione**: commit di E1 `2534cbd97`, `1e2f4b2f3`, merge di base `fc99e9bfe`, journal `918e8d4f0`; E1
+> **Note implementazione**: commit di E1 `06acee59f`, `0b2dd2cd0`, merge di base `b53a97860`, journal `bfb32bf29`; E1
 > entra in `dev_release2` dopo CP6 di H. Via del coordinatore (13:37): «preparare E2 solo dove non serve A5a, con prove
 > leggere». Risposte alle mie tre domande (13:40):
 > - `npm ci` dal lock sì, poi `front build --debug` e `mkdocs build` una volta, con `nice -n 10`, uno alla volta;
@@ -583,7 +583,7 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 >   attiva (`<active.component>` in `routes/(app)/settings/+page.svelte`), quindi cambiare scheda e tornare rilegge.
 
 ### Checkpoint E2a 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
-> **Base**: HEAD `918e8d4f0` (E1 chiuso; `dev_release2` è a `f46a93ffd`, con E1, CP6 di H, FE5b di X e
+> **Base**: HEAD `bfb32bf29` (E1 chiuso; `dev_release2` è a `99096768a`, con E1, CP6 di H, FE5b di X e
 > `cryptography`). Delta: 12 file tracciati modificati, 17 nuovi.
 >
 > **Giro finale sull'albero di E2a** (corsia 6188, `/tmp/librefolio-r13-e`, uno alla volta, `nice -n 10`):
@@ -602,11 +602,11 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 ### E2b — registrazioni dopo la base con CP6, A5 e i colori
 
 #### E2b.0 — Base e via ✅ (2026-10-15)
-> **Note implementazione**: E2a committato dal coordinatore (`b33654f22`, `c1d1c3c2d`). Merge di base aperto dal
-> coordinatore (`dev_release2` `d22eb6f43`: CP6 di H, A5, W, J, i colori), un conflitto in
+> **Note implementazione**: E2a committato dal coordinatore (`fbee21a83`, `655d241e8`). Merge di base aperto dal
+> coordinatore (`dev_release2` `6f9123d5c`: CP6 di H, A5, W, J, i colori), un conflitto in
 > `scripts/test_runner/_frontend_utility.py` (lista Vitest di `core-unit`): uniti i due lati, le 7 righe di
 > `dev_release2` e poi le mie 2, nessun percorso doppio nuovo (310 + 3 = 313); in stage solo quel file. Merge
-> committato: `d42b4c32f`. Giro sulla revisione unita, tutto verde (vedi messaggio al coordinatore):
+> committato: `3a876169a`. Giro sulla revisione unita, tutto verde (vedi messaggio al coordinatore):
 > `utils rate-window` 26, `gate-i18n-usage` 195, `services email-*` 144/245/79/48/42, `config-package` 645,
 > `config-env-example` 36, `api email` 52, `check-orphans`, `api system` 117 (con il server condiviso: il prerequisito
 > ha ricostruito frontend e doc in 358 s; avviso esterno: lo scarico di MathJax da jsDelivr fallisce per SSL).
@@ -721,18 +721,18 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > coordinatore).
 
 ### Checkpoint E2b 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
-> **Base**: HEAD `d42b4c32f`. Delta: 34 file tracciati modificati, 1 nuovo (`e2e/settings/email-tab.spec.ts`).
+> **Base**: HEAD `3a876169a`. Delta: 34 file tracciati modificati, 1 nuovo (`e2e/settings/email-tab.spec.ts`).
 > Righe nei file altrui dichiarate nel messaggio di consegna. Resta di E2: far girare l'E2E e lo scatto della galleria
 > nello slot che assegna il coordinatore, poi la pagina admin può mostrare lo scatto.
 
-#### E2b.6 — Base `da3e06e1c` e tre correzioni ✅ (2026-10-15)
-> **Note implementazione**: E2b committato (`fab8e2d09`, `f4f995ce7`). Merge di base aperto dal coordinatore
-> (`dev_release2` `a718e5281`: A6a, H billing e link, Z7a, J, il banner del Lab), un conflitto in
+#### E2b.6 — Base `1e8dc3cf2` e tre correzioni ✅ (2026-10-15)
+> **Note implementazione**: E2b committato (`ab10049c3`, `1bc7a4d98`). Merge di base aperto dal coordinatore
+> (`dev_release2` `3a02cc91e`: A6a, H billing e link, Z7a, J, il banner del Lab), un conflitto in
 > `scripts/test_runner/_backend_services.py`: due funzioni nello stesso punto, tenute entrambe (`services_email_flows`,
 > poi `services_provider_cooldown`), nessun nome doppio (105 azioni); in stage solo quel file. Controllati i file fusi
 > da git: `billing_url` di H sta in `InstanceBlockResponse`, `/system/instance` resta `{profile, accounts, email}`;
 > `*EMAIL_CONFIG_CHECKS` resta l'ultima riga; `security.md`, `configuration.en.md`, CHANGELOG con i due lati.
-> Merge committato: `da3e06e1c`.
+> Merge committato: `1e8dc3cf2`.
 >
 > Le tre correzioni chieste dal coordinatore (dopo A6b di A):
 > 1. ordine della scheda Email **130** (110 è Users di A6b, 120 Backup di B): `settingsTabs.ts` e le due pagine
@@ -754,8 +754,8 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 ### E3 — le email con un link
 
 #### E3.0 — Via, decisioni e disegno ✅ (2026-10-15)
-> **Note implementazione**: E2 entrato in `dev_release2` (`755158aad`, CHANGELOG `6c427eb4e`); avanzamento veloce del
-> mio ramo a `6c427eb4e`. Via del coordinatore (18:28): «Via a E3–E5, nell'ordine del tuo piano, con le decisioni 44 e
+> **Note implementazione**: E2 entrato in `dev_release2` (`570fd34e9`, CHANGELOG `29fa2ca59`); avanzamento veloce del
+> mio ramo a `29fa2ca59`. Via del coordinatore (18:28): «Via a E3–E5, nell'ordine del tuo piano, con le decisioni 44 e
 > 45 e il contratto della sonda concordato con A. L'helper di A arriva con A6b, verso le 19:30–19:45: la parte della
 > scheda che lo usa falla dopo».
 >
@@ -907,15 +907,15 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > slot liberato subito.
 
 ### Checkpoint E3 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
-> **Base**: HEAD `7f735af7c`. Delta: 22 file tracciati modificati, 2 nuovi (`services/email/links.py`,
+> **Base**: HEAD `2108f62a2`. Delta: 22 file tracciati modificati, 2 nuovi (`services/email/links.py`,
 > `test_services/test_email_links.py`). Righe nei file altrui dichiarate nel messaggio di consegna. Restano di E3: la
 > verifica dell'indirizzo nella scheda Email con l'helper di A6b; l'email d'attivazione dell'admin iniziale dopo A7.
 
 ### E3 — revisione di sicurezza (cancello di rilascio)
 
 #### E3.5 — `security-review` sulle superfici nuove ✅ (2026-10-15), correzioni ✅, prove ✅ (2026-10-15, 21:20)
-> **Note implementazione**: E3 committato (`fd530372d`, `cf12cac9c`), base aggiornata dal coordinatore
-> (`cc4758dce`: CP2b di H, B, B8, W N2, Z6b parte 1). Giro leggero sulla base unita, tutto verde: `email-links` 71,
+> **Note implementazione**: E3 committato (`2dc3463f9`, `8fef0ebc4`), base aggiornata dal coordinatore
+> (`191c2337d`: CP2b di H, B, B8, W N2, Z6b parte 1). Giro leggero sulla base unita, tutto verde: `email-links` 71,
 > `email-flows` 104, `config-audit` 90, `api email` 154, `api system` 117, `api instance-block` 60, `check-orphans`.
 > Revisione di sicurezza chiesta dal coordinatore (agente `security-review`, sola lettura) su
 > `POST /email/password-reset`, `POST /email/links`, `links.py` e i limiti, con i tre punti già segnalati.
@@ -998,22 +998,22 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > - `ruff` e `black --check` puliti sui file di produzione e sui test; `black` segnala in `_backend_services.py` solo
 >   la riga lunga di A (già girata ad A dal coordinatore). `git diff --check` pulito, porta 6188 libera, nessun file
 >   nuovo né ignorato da escludere oltre ai log di `/tmp` e allo snapshot del DB nella cartella dei log del runner.
-> - **Non rieseguiti**: `api system` e `api instance-block`, verdi sulla revisione combinata `cc4758dce` prima delle
+> - **Non rieseguiti**: `api system` e `api instance-block`, verdi sulla revisione combinata `191c2337d` prima delle
 >   correzioni; il delta non tocca i loro percorsi (senza `LIBREFOLIO_PUBLIC_URL` `links_state` esce prima di
 >   `_usable_base`; su un'istanza bloccata le rotte email rispondono 423 dal middleware prima del gestore). Nessun
 >   catalogo i18n toccato → niente `core-unit`.
 
 ### Checkpoint E3s 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
-> **Base**: HEAD `cc4758dce`. Delta: 13 file tracciati modificati, nessuno nuovo. Codice: `services/email/{flows,
+> **Base**: HEAD `191c2337d`. Delta: 13 file tracciati modificati, nessuno nuovo. Codice: `services/email/{flows,
 > messages,links}.py`, `api/v1/email.py`. Test: `test_email_{flows,messages,links}.py`, `test_email_api.py`; runner
 > (solo descrizioni delle voci E): `_backend_api.py`, `_backend_services.py`. Doc EN: `admin/email.en.md` (senza
 > traduzioni), `developer/backend/email.md`. Questo piano. Resta aperta la sospensione di «password dimenticata»
 > (409 `FORGOT_PASSWORD_DISABLED`) fino al lotto di A sulla password attuale per cambiare l'email; la toglie E4.
 >
-> **Committato** dal coordinatore: `5608193b5` fix(email) e `734bb6706` docs(journal).
+> **Committato** dal coordinatore: `4a30ca41f` fix(email) e `1dfb70946` docs(journal).
 >
-> **Merge di base** (2026-10-15, 21:20): `dev_release2` `b09776a3d` (A6b, X CP10, J CP-4c, lo scatto di B), commit del
-> coordinatore `cd12482fc`. Un conflitto, `admin/configuration.en.md`: le righe di `LIBREFOLIO_PUBLIC_URL` riscritte da
+> **Merge di base** (2026-10-15, 21:20): `dev_release2` `6753029ee` (A6b, X CP10, J CP-4c, lo scatto di B), commit del
+> coordinatore `f979c1df2`. Un conflitto, `admin/configuration.en.md`: le righe di `LIBREFOLIO_PUBLIC_URL` riscritte da
 > A6b (dialoghi di Users, «Server address») + le mie frasi sulle email con un link; `LIBREFOLIO_BILLING_URL` di
 > `dev_release2`; la sezione Plugin Settings di X e le mie righe `email.links` unite da git, senza doppioni. Controllo
 > di significato: il filtro di mascheramento di X agisce solo sui segreti «in volo» di una chiamata di plugin, mai
@@ -1022,12 +1022,12 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > di corsia, spento a fine run), `check-orphans` ✅ (325 file backend, 428 unit, 128 E2E raggiungibili). Porta 6188
 > libera.
 >
-> **Entrato** in `dev_release2` = `8f908623b` (E3 + E3s); CHANGELOG `1d74e212e`. Ramo portato avanti a `1d74e212e`.
+> **Entrato** in `dev_release2` = `6e87fe24f` (E3 + E3s); CHANGELOG `796c22323`. Ramo portato avanti a `796c22323`.
 
 ### E3 — la sonda nella scheda Email (lotto E3p)
 
 Via del coordinatore alle 21:31, con la decisione 45 e il contratto della sonda concordato con A (A6b in base da
-`1d74e212e`).
+`796c22323`).
 
 #### E3.6 — Disegno ✅ (2026-10-15)
 > - **Quando**: solo con l'email `ready` e `links.ready`, sulla base di `/email/status.links.base` (la stessa delle
@@ -1099,18 +1099,18 @@ Via del coordinatore alle 21:31, con la decisione 45 e il contratto della sonda 
 >   5 248 test ✅ (log `/tmp/libreFolio_e3p_core_unit.log`), gate di markup, ICU e lingua compresi.
 
 ### Checkpoint E3p 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
-> **Base**: HEAD `1d74e212e`. Delta: 20 file tracciati modificati, 2 nuovi (`features/email/emailLinks.ts`,
+> **Base**: HEAD `796c22323`. Delta: 20 file tracciati modificati, 2 nuovi (`features/email/emailLinks.ts`,
 > `emailLinks.test.ts`). Righe condivise: `_frontend_utility.py` (una riga), `admin/configuration.en.md` (+1 −1);
 > `addressProbe.ts` di A riusato senza modifiche. Resta di E3: l'email d'attivazione dell'admin iniziale, dopo A7.
 >
-> **Entrato** in `dev_release2` = `e54ae96bb`; CHANGELOG `2415faf33`. Ramo a `2415faf33`.
+> **Entrato** in `dev_release2` = `63bbb9c55`; CHANGELOG `3709f6922`. Ramo a `3709f6922`.
 
 ### E5 — la verifica dell'email (decisione 44)
 
 Ordine del coordinatore (22:12): E4 aspetta A6e (password attuale per cambiare l'email, poi tolgo la sospensione);
 intanto E5, che non ne dipende. L'email d'attivazione dell'admin iniziale resta dopo A7.
 
-#### E5.0 — Analisi sul codice (2026-10-15, base `2415faf33`)
+#### E5.0 — Analisi sul codice (2026-10-15, base `3709f6922`)
 > **Stato reale**:
 > - Nessuna migrazione serve: la 005 di A ha già `users.email_verified_at` (NULL per gli account esistenti, «deciso
 >   nella logica»), lo scopo `email_verification` nel CHECK, 24 h e `/verify-email` in `token_service`; il testo
@@ -1218,12 +1218,12 @@ intanto E5, che non ne dipende. L'email d'attivazione dell'admin iniziale resta 
 >   5 415 test ✅ (`/tmp/libreFolio_e5a_core_unit.log`).
 
 ### Checkpoint E5a 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
-> **Base**: HEAD `2415faf33`. Delta: 17 file tracciati modificati, 11 nuovi (`services/email/verification.py`, due
+> **Base**: HEAD `3709f6922`. Delta: 17 file tracciati modificati, 11 nuovi (`services/email/verification.py`, due
 > file di test backend, `verificationApi.ts` e il suo test, `VerifyEmailCard` e `VerificationNotice` con i loro test,
 > `routes/verify-email/` con pagina e test). Righe condivise: i tre file del runner (solo voci mie), la riga E-7 del
 > backlog. Nessun file di A toccato: gli agganci sono il lotto E5b, dopo A6d e A6e.
 >
-> **Committato** dal coordinatore: `50fa84159` (feat) e `a77033a9e` (journal); base aggiornata a `89f54be21` (T+DV,
+> **Committato** dal coordinatore: `037431f16` (feat) e `1374a385a` (journal); base aggiornata a `e1da95ebb` (T+DV,
 > H CP-U1, X-RL, W F36). Verde sulla revisione unita: `api sync`, `front check` 0/0, `core-unit` 167 file / 5 658,
 > `theme-roles.mjs --check` pulito, `services email-verification` 115, `api email-verification` 48, Vitest 523.
 
@@ -1231,7 +1231,7 @@ intanto E5, che non ne dipende. L'email d'attivazione dell'admin iniziale resta 
 
 Ordine del coordinatore (23:30): E4a adesso, solo file miei, come E5a; gli agganci nei file di A in E4b, dopo A6e.
 
-#### E4.0 — Analisi (2026-10-15, base `89f54be21`)
+#### E4.0 — Analisi (2026-10-15, base `e1da95ebb`)
 > - Il lato servizio c'è già: `POST /email/links` (E3) e i testi `invite`/`password_reset`; «password dimenticata»
 >   (ammissione, limiti, lavoro) tenuta dalla 409. L'email di un account cambia solo da `PUT /auth/profile`: le rotte
 >   admin di `users.py` (stato e ruolo, inviti, link di reset, sessioni) non la toccano.
@@ -1290,7 +1290,7 @@ Ordine del coordinatore (23:30): E4a adesso, solo file miei, come E5a; gli aggan
 
 #### E5.3 — Agganci di E5b preparati fuori dal worktree ✅ (2026-10-16, notte)
 > **Note implementazione** (richiesta del coordinatore, 23:59, nessuna prova): in `/tmp/libreFolio_e5b/` (copia nella
-> cartella della sessione) la patch `e5b_hooks_A6d.patch` su A6d (`ce4acff6c`, 14 file: `registration_service`
+> cartella della sessione) la patch `e5b_hooks_A6d.patch` su A6d (`6ab4af97c`, 14 file: `registration_service`
 > con `user_usage` e la tenuta, `auth.py` login/register, `schemas/auth.py`, `user_service` che revoca i token di
 > verifica ai cambi di stato, `settings_service` + `api/v1/settings.py` con la 409, il commento di
 > `schemas/settings.py`, GSET-VAL-007 su `scheduler_enabled` e GSET-VAL-011 nuovo, `types/user.ts`,
@@ -1355,7 +1355,7 @@ Ordine del coordinatore (23:30): E4a adesso, solo file miei, come E5a; gli aggan
 > Una alla volta, `nice -n 10`, carico sotto 70.
 
 ### Checkpoint E4a 🧊 (2026-10-16) — FROZEN, in attesa del commit del coordinatore
-> **Base**: HEAD `89f54be21`. Codice: `messages.py` (`EMAIL_CHANGED`, `masked_address`, `build_email_changed`), i
+> **Base**: HEAD `e1da95ebb`. Codice: `messages.py` (`EMAIL_CHANGED`, `masked_address`, `build_email_changed`), i
 > testi `email_changed` × 4 del backend, `flows.py` (`email_changed_work`, `INSTANCE_FALLBACK`); frontend
 > `sendLinkApi.ts`, `forgotPasswordApi.ts`, `emailText.ts`, `SendLinkByEmail.svelte`, `ForgotPasswordEmailForm.svelte`;
 > i18n `email.sendLink.*`, `email.forgot.*` × 4. Test (EMM-034…038, EMF-043…052, SLA, FPA, ETX-11…14, SLE, FPF);
@@ -1390,7 +1390,7 @@ nell'escape di `frontend/scripts/fix-openapi-discriminators.mjs` più un pytest 
 >   condiviso (vuota se il parametro non ne ha): se il testo del componente arrivi a una proprietà dipende allora
 >   dall'ordine in cui il generatore visita gli endpoint (GET: no; POST con il corpo che lo contiene: sì).
 >
-> **Oggi** (HEAD `8915c1b85`, `openapi.json` e `generated.ts` di `api sync` delle 01:39): il client si legge con 0
+> **Oggi** (HEAD `c66b4b6c0`, `openapi.json` e `generated.ts` di `api sync` delle 01:39): il client si legge con 0
 > errori di sintassi, 0 template taggati, 0 sostituzioni. Il modello delle regole sul documento conta 3 627 punti
 > (1 449 tra virgolette, 63 template, 310 Handlebars, 1 805 JSDoc), nessuno con un carattere vietato; copre ogni testo
 > distinto del client (0 mancanti; 6 in più, i parametri ripetuti che il generatore raccoglie in una `const`).
@@ -1464,7 +1464,7 @@ nell'escape di `frontend/scripts/fix-openapi-discriminators.mjs` più un pytest 
 > `vite build`, e `front build` ignora l'uscita di `svelte-check`.
 
 #### E-5.3 — Prove ✅ (2026-10-16)
-> Sulla base `a2f658097` (A6d e A6e), arrivata con un fast-forward che non ha toccato i file di E-5. Una prova alla
+> Sulla base `7a8db7f40` (A6d e A6e), arrivata con un fast-forward che non ha toccato i file di E-5. Una prova alla
 > volta, con `nice -n 10` e il carico sotto 70.
 > - `schemas openapi-client-text`: 78 passati (`/tmp/libreFolio_e5_newbase.log`). Sul documento di oggi ci sono 4 447
 >   punti (2 606 JSDoc, 1 463 tra virgolette, 63 template, 315 Handlebars), 157 campi tipizzati con un componente e 49
@@ -1480,7 +1480,7 @@ nell'escape di `frontend/scripts/fix-openapi-discriminators.mjs` più un pytest 
 >   regola 4 esce con la tabella di 4 righe, lo span dei doppi backtick e il blockquote.
 
 ### Checkpoint E-5 🧊 (2026-10-16) — FROZEN, in attesa del commit del coordinatore
-> **Base**: HEAD `a2f658097`. I file:
+> **Base**: HEAD `7a8db7f40`. I file:
 > - nuovo `backend/test_scripts/test_schemas/test_openapi_client_text.py`;
 > - `scripts/test_runner/_backend_schemas.py`, 19 righe aggiunte;
 > - `mkdocs_src/docs/developer/api/overview.md`, la regola 4;
@@ -1490,14 +1490,14 @@ nell'escape di `frontend/scripts/fix-openapi-discriminators.mjs` più un pytest 
 > Nessun codice dell'applicazione, nessun file di A; `fix-openapi-discriminators.mjs` non è toccato. Le prove della
 > diagnosi stanno in `/tmp/libreFolio_e5_bt/`, con una copia nella cartella della sessione (`files/e5_bt/`).
 >
-> **Ingresso** (2026-10-16): E-5 è salvato in `43ad48952` e `fc418255b`, e la base è fusa in `c47d02a28` (con B2 e
+> **Ingresso** (2026-10-16): E-5 è salvato in `ff0e9e23d` e `7a8e3432d`, e la base è fusa in `60ca0237a` (con B2 e
 > Y4b).
 > - `schemas openapi-client-text`: 78 passati (`/tmp/libreFolio_e5_after_b2.log`). 4 478 punti, nessuno segnalato.
 > - I latenti passano da 49 a 52, con tre schemi nuovi di B2: `RestoreUpload`, `RestoreStageReport` e `RestoreStage`
 >   (`schemas/backup.py`). Hanno docstring su più righe con doppi backtick, la forma di E2b. Oggi si raggiungono solo
 >   come membri di unione e come risposte; un campo tipizzato direttamente con uno di loro romperebbe il client. Li ho
 >   segnalati al coordinatore, che decide se girarli a B.
-> - ✅ In `dev_release2` al treno 83 (merge `01598f9ad`). I tre latenti di B2 li gira a B il coordinatore.
+> - ✅ In `dev_release2` al treno 83 (merge `939dd745b`). I tre latenti di B2 li gira a B il coordinatore.
 
 ### E5b — gli agganci della verifica nei file di A (2026-10-16)
 
@@ -1505,7 +1505,7 @@ Via del coordinatore (02:58): A6d e A6e sono in `dev_release2`; prima chiudere E
 E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/libreFolio_e5b/README.md` (E5.3).
 
 #### E5b.0 — Base e patch ✅ (2026-10-16)
-> Base: HEAD `c47d02a28`, cioè E-5 più la fusione di `dev_release2` (`16cff5610`, con A6d, A6e, B2 e Y4b).
+> Base: HEAD `60ca0237a`, cioè E-5 più la fusione di `dev_release2` (`cd4729fd1`, con A6d, A6e, B2 e Y4b).
 >
 > Il controllo (`git apply --check`):
 > - le patch sui file di A (`e5b_hooks_A6d.patch`, poi `e5b_users_flag_optional.patch`) passano, con spostamenti di
@@ -1516,7 +1516,7 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 > Applicate in quattro invocazioni separate, solo nel worktree e mai nell'indice: le mie due, poi le due di A. Nessun
 > file `.rej` né `.orig`. Il risultato: 21 file di codice; `verification.py` riceve `holds_place` e `place_holders`.
 >
-> La revisione contro A6e: da `ce4acff6c`, dove le patch erano state preparate, A6e ha cambiato solo `update_profile`,
+> La revisione contro A6e: da `6ab4af97c`, dove le patch erano state preparate, A6e ha cambiato solo `update_profile`,
 > in tre file su 19 (`api/v1/auth.py`, `schemas/auth.py`, `user_service.py`). Lì aggiunge la password attuale per
 > cambiare l'email, `email_verified_at = None` e la fine delle altre sessioni. Nessun aggancio di E5b tocca
 > `update_profile`, e quelli che stanno negli stessi file (login, `register`, `update_user_status`, `set_user_active`)
@@ -1550,7 +1550,7 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 > - Vitest dei 6 file più `auth.test.ts`: 114 passati, 2 falliti (UVR-02).
 >
 > **⚠️ Fuori pista**:
-> - I 10 rossi del backend hanno una causa sola, `INVITE_REQUIRED`. Dal commit di A `683b4ff5b` («new instances
+> - I 10 rossi del backend hanno una causa sola, `INVITE_REQUIRED`. Dal commit di A `fbfbd526d` («new instances
 >   register by invitation», già dentro A6d) un'istanza nuova parte con `registration_mode = invite`, mentre i test
 >   preparati di notte, mai eseguiti, contavano su `open`. La cura è nei test: impostare `open` nei loro DB privati,
 >   senza `LIBREFOLIO_REGISTRATION`, che bloccherebbe la modalità.
@@ -1609,7 +1609,7 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 > - in «🔄 Changed», `LIBREFOLIO_MAX_USERS` che conta gli account in attesa con il link vivo, la riattivazione
 >   senza un posto nuovo e la revoca del link quando un account si attiva o con `user deactivate`.
 
-#### E5b.5 — Prove ✅ sulla base `c47d02a28` (2026-10-16, notte), E2E escluse
+#### E5b.5 — Prove ✅ sulla base `60ca0237a` (2026-10-16, notte), E2E escluse
 > Una alla volta, `nice -n 10`, carico sotto 70; gli script sono `/tmp/libreFolio_e5b_gates.sh` e `gates2.sh`.
 >
 > Backend, primo giro:
@@ -1698,7 +1698,7 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 > `api/v1/auth.py`, `schemas/auth.py` e `RegisterCard.svelte`, gli stessi file di tre agganci. Il checkpoint finale
 > arriva dopo il merge con A6c; questo intermedio serve perché il merge parta da un albero committato.
 >
-> **Base**: HEAD `c47d02a28`. Il delta: 48 file tracciati e 8 nuovi.
+> **Base**: HEAD `60ca0237a`. Il delta: 48 file tracciati e 8 nuovi.
 > - Il codice degli agganci: 18 file di A (10 del backend, `user_cli.py` compreso, e 8 del frontend) più `verification.py`.
 > - I test: gli 8 file nuovi; tre test di A adattati (`test_auth_api.py`, `test_users_admin_api.py`,
 >   `LoginCard.test.ts`) più `test_settings_api.py` dalla patch; il commento di `SettingControls.test.ts`.
@@ -1708,12 +1708,12 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 > - Il CHANGELOG.
 > - Questo piano.
 >
-> Salvato dal coordinatore: `2d954624e` (feat, 54 percorsi) e `98812863f` (journal). `CHANGELOG.md` è rimasto fuori:
+> Salvato dal coordinatore: `59b8d8079` (feat, 54 percorsi) e `83a4674bc` (journal). `CHANGELOG.md` è rimasto fuori:
 > lo scrive il coordinatore all'ingresso, con le mie due righe (Added e Changed), quindi l'ho riportato a HEAD.
 
 #### E5b.6 — Il merge con A6c ✅ (2026-10-16, 04:40–05:07)
-> Il coordinatore ha aperto il merge di `dev_release2` `1704cfcf7` (treno 90, A6c: le regole della password) sopra
-> `98812863f`.
+> Il coordinatore ha aperto il merge di `dev_release2` `7e4247284` (treno 90, A6c: le regole della password) sopra
+> `83a4674bc`.
 >
 > Tre conflitti, risolti tenendo entrambi i lati e messi in stage:
 > - `registrationErrors.ts`: `REFUSAL_KEYS` ha sia `PASSWORD_TOO_WEAK` (A6c) sia `EMAIL_VERIFICATION_UNAVAILABLE`
@@ -1741,11 +1741,11 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 > | guardia E-5 | 78 ✅ |
 > | `mkdocs build` stretto | 0 WARNING o ERROR ✅ |
 >
-> Commit di merge del coordinatore: `f33836892`. Il ramo `dev` era già andato avanti (`72e66d1a6`): il coordinatore
+> Commit di merge del coordinatore: `688febf6f`. Il ramo `dev` era già andato avanti (`7aefcc13a`): il coordinatore
 > aggiorna la base al prossimo checkpoint.
 
 #### E5b.7 — Revisione di sicurezza mirata ✅ scritta (2026-10-16), prove dopo le 06:45
-> Su richiesta del coordinatore, l'agente `security-review` ha letto, in sola lettura, `98812863f`: il nucleo di E5a
+> Su richiesta del coordinatore, l'agente `security-review` ha letto, in sola lettura, `83a4674bc`: il nucleo di E5a
 > e gli agganci di E5b.
 >
 > Nessun modo di aggirare la verifica: login e ogni altra rotta controllano `is_active` (`get_current_user`); il link
@@ -1895,8 +1895,8 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 
 ### Dopo E4b — analisi di E6 (2026-10-16, notte, sola lettura)
 
-Su invito del coordinatore (05:25), durante il fermo della macchina. Base `bf1586ddb`: E5b salvato in quattro commit
-(`207dfbafd`, `6d6965293`, `33da05e31`, `bf1586ddb`), prove dopo le 06:45. Il pacchetto di E4b resta in `/tmp` finché
+Su invito del coordinatore (05:25), durante il fermo della macchina. Base `ed4f19aa2`: E5b salvato in quattro commit
+(`371b07384`, `58302ac53`, `a75384d61`, `ed4f19aa2`), prove dopo le 06:45. Il pacchetto di E4b resta in `/tmp` finché
 le prove di E5b non sono verdi.
 
 #### Prima, E4b (dal pacchetto `/tmp/libreFolio_e4b/`, README aggiornato)
@@ -1975,7 +1975,7 @@ le prove di E5b non sono verdi.
 >   per scelta (P16, da rivedere).
 > - In `admin/email.en.md`, nelle sezioni «Emails with a Link» e nei `kind` di «Email sent» manca `admin_setup`.
 >
-> **Regola delle pagine admin (C-99 del developer, `b171c058e`; dal coordinatore, 16/10 12:11)**:
+> **Regola delle pagine admin (C-99 del developer, `fa474ad3a`; dal coordinatore, 16/10 12:11)**:
 > - Alla fine della 1.3 il coordinatore riorganizza il manuale admin, in un solo lotto di docs dopo i lotti cloud:
 >   - le variabili d'ambiente in una pagina per categoria, al posto di `admin/configuration.md`;
 >   - le funzioni del cloud sotto «Hosting for Others».
@@ -1991,7 +1991,7 @@ le prove di E5b non sono verdi.
 > sezione), nessuna sezione nuova.
 
 #### E5b.11 — Le prove leggere dopo il fermo ✅ (2026-10-16, 06:48–07:11)
-> Base `bf1586ddb`, con lo script `/tmp/libreFolio_e5b_final_checks.sh`: una prova alla volta, `nice -n 10`, carico
+> Base `ed4f19aa2`, con lo script `/tmp/libreFolio_e5b_final_checks.sh`: una prova alla volta, `nice -n 10`, carico
 > sotto 70. Tra `api registration` e `api users-admin` si è aspettato 5 minuti, con il carico tra 97 e 112.
 >
 > | Prova | Esito |
@@ -2014,19 +2014,19 @@ le prove di E5b non sono verdi.
 
 #### E5b.12 — E2E ✅ (2026-10-16, slot 2 del coordinatore, 07:59–08:01)
 > `dev.py test --test-port 6188 --data-dir /tmp/librefolio-r13-e --workers 2 front-utility email-verification` su
-> `bf1586ddb`: EVE-E-01…05, 5 passati in 56,6 s; il giro intero dalle 07:59:38 alle 08:01:29
+> `ed4f19aa2`: EVE-E-01…05, 5 passati in 56,6 s; il giro intero dalle 07:59:38 alle 08:01:29
 > (`/tmp/libreFolio_e5b_e2e.log`). La porta 6188 è libera dopo, e lo slot l'ho restituito alle 08:01. L'avviso SSL di
 > MathJax è esterno e innocuo.
 
 ### Checkpoint E5b, finale 🧊 (2026-10-16) — FROZEN, pronto per l'ingresso
-> **Base**: HEAD `bf1586ddb`, sopra il merge con A6c (`f33836892`). Il lotto è in quattro commit del coordinatore:
-> `2d954624e` e `98812863f` (il checkpoint intermedio), poi `207dfbafd`, `6d6965293`, `33da05e31` e `bf1586ddb`. Da
+> **Base**: HEAD `ed4f19aa2`, sopra il merge con A6c (`688febf6f`). Il lotto è in quattro commit del coordinatore:
+> `59b8d8079` e `83a4674bc` (il checkpoint intermedio), poi `371b07384`, `58302ac53`, `a75384d61` e `ed4f19aa2`. Da
 > salvare restano solo questo piano e il backlog (E-2, E-3 ed E-6 rimandate alla 1.4).
 >
 > **Prove sulla base**:
 > - leggere: E5b.11, tutte verdi;
 > - E2E: E5b.12, 5 su 5;
-> - prima del merge, sulla base `c47d02a28`: E5b.5;
+> - prima del merge, sulla base `60ca0237a`: E5b.5;
 > - dopo il merge con A6c: E5b.6.
 >
 > Il CHANGELOG lo scrive il coordinatore all'ingresso. Il testo gli arriva con l'handoff: le due righe di E5a ed E5b,
@@ -2034,15 +2034,15 @@ le prove di E5b non sono verdi.
 
 ### E4b — gli agganci nei file di A, la tenuta tolta, l'avviso al cambio d'email (2026-10-16)
 
-Via del coordinatore (08:30): E5b è entrato (treno 103, merge `dbe232723`), e il ramo è stato portato avanti fino a
-HEAD `44d4d7e8e`. Applico E4b, faccio le prove leggere con il carico sotto 50, poi l'handoff. E4b tocca `auth.py`
+Via del coordinatore (08:30): E5b è entrato (treno 103, merge `3649d733b`), e il ramo è stato portato avanti fino a
+HEAD `2cee39ef2`. Applico E4b, faccio le prove leggere con il carico sotto 50, poi l'handoff. E4b tocca `auth.py`
 (l'aggancio in `update_profile`), quindi l'ho detto prima al coordinatore. Il suo via (08:31): tutto subito; al
 prossimo aggiornamento della base la riga `Profile updated …` diventa quella di A (`email_changed=…`) e vanno tenuti
 tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.ts` e `i18n/auth`.
 
 #### E4b.0 — Applicazione ✅ (2026-10-16, 08:32)
 > Il pacchetto `/tmp/libreFolio_e4b/` è stato preparato di notte e ricontrollato stamattina; tutte le patch passano
-> `git apply --check` su `44d4d7e8e`. Applicate in sei invocazioni separate, solo nel worktree:
+> `git apply --check` su `2cee39ef2`. Applicate in sei invocazioni separate, solo nel worktree:
 > - `e4b_hooks_A.patch`: `ForgotPasswordCard.svelte` mostra il modulo quando `email.links` è vero, con il riquadro dei
 >   comandi sotto e `data-testid="forgot-email-unavailable"`; `linkShareActions.ts` registra «Spedisci per email»;
 > - `e4b_mine.patch`: la tenuta tolta del tutto (`FORGOT_PASSWORD_HELD`, il 409 `FORGOT_PASSWORD_DISABLED`), e i
@@ -2082,7 +2082,7 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 #### E4b.1 — Prove leggere ✅ (2026-10-16, fino alle 11:05; esiti sotto, in «E4b.3»)
 > Una alla volta, `nice -n 10`, carico sotto 50 (`/tmp/libreFolio_e4b_checks.sh`, poi `checks2.sh`).
 >
-> Prima del fermo, su `44d4d7e8e` più E4b:
+> Prima del fermo, su `2cee39ef2` più E4b:
 >
 > | Prova | Esito |
 > |---|---|
@@ -2107,7 +2107,7 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 
 #### E4b.2 — Revisione di sicurezza mirata ✅ fatta a mano (2026-10-16, 10:40)
 > L'agente `security-review` è fallito («400 The requested model is not supported», come per H). Come previsto dal
-> coordinatore in quel caso, l'ho fatta io, punto per punto e in sola lettura, su `44d4d7e8e` più E4b.
+> coordinatore in quel caso, l'ho fatta io, punto per punto e in sola lettura, su `2cee39ef2` più E4b.
 >
 > | # | Gravità | File | Righe | Vulnerabilità | Confidenza |
 > |---|---|---|---|---|---|
@@ -2156,7 +2156,7 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 > nessun `.svelte`.
 
 #### E4b.3 — Le prove leggere dopo la ripresa, la cura applicata ✅ (2026-10-16, 10:33–11:15)
-> Prima della cura, su `44d4d7e8e` più E4b (`checks2.sh`, una prova alla volta, `nice`, carico sotto 50):
+> Prima della cura, su `2cee39ef2` più E4b (`checks2.sh`, una prova alla volta, `nice`, carico sotto 50):
 >
 > | Prova | Esito |
 > |---|---|
@@ -2191,7 +2191,7 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 > | `tsc -p tsconfig.e2e.json` | solo i 2 errori di base, niente dalle spec di E4b |
 > | `prettier` sulle due spec | ✅ |
 >
-> **La skill nuova `design-system`** (D-T29, `6e569084a`): letta con `git show` dalla storia, non dal checkout
+> **La skill nuova `design-system`** (D-T29, `16ea52b26`): letta con `git show` dalla storia, non dal checkout
 > principale, che le regole del worktree escludono.
 > - Il markup di E4b la rispetta: in `ForgotPasswordCard` il riquadro d'avviso è quello di A, solo ruoli, con un
 >   `border` che nomina il suo ruolo, spostato sotto `{:else}` con una testid.
@@ -2231,7 +2231,7 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 > `themeRoles.gate`, `mkdocs build`). Poi un breve slot per rifare FPE-E, l'unica E2E che vede il ramo con l'email.
 
 #### E4b.5 — E2E, slot 2 del coordinatore ✅ (2026-10-16, 11:15–11:26)
-> Su `44d4d7e8e` più E4b, prima di P1: `files/tools/e4b_e2e_slot.sh`, `--workers 2`, una spec alla volta; i log stanno in
+> Su `2cee39ef2` più E4b, prima di P1: `files/tools/e4b_e2e_slot.sh`, `--workers 2`, una spec alla volta; i log stanno in
 > `files/logs/`.
 >
 > | Spec | Esito |
@@ -2300,7 +2300,7 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 > carico sotto 50. Allo slot resta così solo la spec.
 
 ### Checkpoint E4b 🧊 (2026-10-16, 12:3x) — FROZEN, pronto per l'ingresso
-> **Base**: HEAD `44d4d7e8e` (treno 103), mai mossa. Nel worktree, non committati: 35 file modificati e 5 nuovi, 40
+> **Base**: HEAD `2cee39ef2` (treno 103), mai mossa. Nel worktree, non committati: 35 file modificati e 5 nuovi, 40
 > percorsi in tre commit proposti al coordinatore (codice e test, docs, journal). `git diff --check` è pulito, e la
 > porta 6188 è libera.
 >
@@ -2323,11 +2323,11 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 >
 > **Il conflitto atteso** è con A7a, A7c e P18 in `auth.py::update_profile`: va tenuta ogni riga di A, con le mie
 > quattro aggiunte. Le istruzioni sono nell'handoff.
-> - Ho letto la punta di A (`4554a77f4`, fuori da `dev_release2`) solo dagli oggetti git: cambia la riga
+> - Ho letto la punta di A (`334972490`, fuori da `dev_release2`) solo dagli oggetti git: cambia la riga
 >   `Profile updated` e basta.
 > - Con P18 cambierà anche la riga `email_changes = …`, e le mie due righe di `old_email` vanno subito dopo la sua.
 > - Al merge con A7a va tolta da `developer/backend/email.md` (righe 276-279) la frase «Outside this module, workstream
->   A's `Profile updated` … write the account's address…». Diventa falsa con `bde624b38` di A («no email address in
+>   A's `Profile updated` … write the account's address…». Diventa falsa con `3b0380063` di A («no email address in
 >   profile logs»), che toglie l'indirizzo dalle due righe di log. Se non la tolgo al merge, la tolgo in E6.
 
 #### E4c — «Lo stesso indirizzo» secondo A (P18) ⏳ dopo l'ingresso di A7a/P18
@@ -2371,8 +2371,8 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 > - **le conferme di EMV**: un link mandato a una variante non A–Z si revoca;
 > - le docs: «stripped and case-folded» diventa «as `user_service.same_email()` compares them».
 >
-> **Preparazione** (16/10, 13:05, sola lettura su `b22747e52`):
-> - `same_email()` non c'è ancora nel ramo di A: la sua punta, `946285a91`, ha solo il contratto nel journal.
+> **Preparazione** (16/10, 13:05, sola lettura su `edb7f95c5`):
+> - `same_email()` non c'è ancora nel ramo di A: la sua punta, `57ab62bf1`, ha solo il contratto nel journal.
 > - Nessun ciclo d'import: `flows.py:25` e `verification.py:35` importano già `user_service`, e `user_service` non
 >   importa niente da `services/email`.
 > - I confronti da cambiare sono esattamente due:
@@ -2385,8 +2385,8 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 
 ### E6 — la chiusura, senza la galleria (2026-10-16)
 
-E4b è stato committato dal coordinatore (12:37) in tre commit: `a31738e00` (codice), `dfc7847fb` (docs) e
-`b22747e52` (journal). L'ingresso segue quest'ordine: H, Z5, A7a con P18, poi E4b. Quando A è entrato, il
+E4b è stato committato dal coordinatore (12:37) in tre commit: `57158f42b` (codice), `9470adae8` (docs) e
+`edb7f95c5` (journal). L'ingresso segue quest'ordine: H, Z5, A7a con P18, poi E4b. Quando A è entrato, il
 coordinatore aggiorna la mia base. Allora risolvo io il merge di `auth.py`, come scritto nell'handoff, e tolgo la
 frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 
@@ -2394,9 +2394,9 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 `configuration.en.md` e tutto ciò che non tocca i file di A.
 
 #### E6.0 — Via, perimetro e regola dei campi nativi ✅ (2026-10-16, 12:40)
-> **Base**: HEAD `b22747e52`, worktree pulito.
+> **Base**: HEAD `edb7f95c5`, worktree pulito.
 >
-> **Regola nuova dei colori** (T, `a317392d4`, dalla skill `design-system`): un `<input>`, `<select>` o `<textarea>`
+> **Regola nuova dei colori** (T, `42d595074`, dalla skill `design-system`): un `<input>`, `<select>` o `<textarea>`
 > con una classe `-lf-` scrive anche `text-lf-primary` e, se ha un segnaposto, `placeholder:text-lf-placeholder`.
 > Il cancello non la controlla; la regola descrive un difetto vero del tema scuro. I due campi nativi di E sono già in
 > regola:
@@ -2420,7 +2420,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > finale.
 
 #### E6.1 — Le sette righe di C-99 in `configuration.en.md` ✅ (2026-10-16, 12:47; build ✅, `check-links` ✅)
-> **La regola C-99** (developer, `b171c058e`): una variabile nuova si spiega per intero nella pagina della sua funzione;
+> **La regola C-99** (developer, `fa474ad3a`): una variabile nuova si spiega per intero nella pagina della sua funzione;
 > in `configuration.md` ha una riga sola nella tabella, con il link.
 >
 > **Le righe**: sette, in fondo alla tabella «Main Options», nell'ordine di `email.md#variables`: `HOST`, `TLS`,
@@ -2429,7 +2429,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >
 > **Nessun timbro di traduzione**: la pagina ha già un debito con la pipeline. L'MD5 nella cache
 > (`3be3e504…`, 10/10) non è quello di oggi (`16e96a45…`, prima delle mie righe), per il lavoro di più workstream, E
-> compresa (`6d6965293`, le docs di E5b): un timbro lo nasconderebbe. Le righe vanno in IT, FR ed ES con la pipeline,
+> compresa (`58302ac53`, le docs di E5b): un timbro lo nasconderebbe. Le righe vanno in IT, FR ed ES con la pipeline,
 > o col riordino del manuale admin di fine 1.3.
 
 #### E6.2 — `TODO_FUTURI` → `TODO_Completati` ✅ (2026-10-16, 12:50)
@@ -2452,7 +2452,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > dell'admin e sulla riga di comando resta com'era.
 >
 > **Traduzioni**: solo EN, senza timbro. La pagina ha già un debito: l'MD5 in cache (`db467242…`, 10/10) non è quello
-> di oggi, per `2b0715532` di A (le pagine dei link). IT, FR ed ES dicono ancora «non ancora disponibile» e non hanno
+> di oggi, per `adf8c6f5e` di A (le pagine dei link). IT, FR ed ES dicono ancora «non ancora disponibile» e non hanno
 > la frase di A6: la pipeline sistemerà tutte e due le cose.
 >
 > **Già a posto, verificato**: `admin/settings` nelle 4 lingue (riga *Require Email Verification*, da E5b). Nelle docs
@@ -2460,7 +2460,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 
 #### E6.4 — Il debito di traduzione delle pagine di E ✅ (2026-10-16, 12:56)
 > **Il metodo**: le pagine `.en.md` toccate dai 13 commit di E sulle docs (`git log --no-merges --grep=email`, da
-> `380a3e768`), più `configuration` e la FAQ di oggi. Per ognuna ho confrontato l'MD5 di oggi con la cache di Aphra
+> `54cec8400`), più `configuration` e la FAQ di oggi. Per ognuna ho confrontato l'MD5 di oggi con la cache di Aphra
 > (`mkdocs_src/aphra-pipeline/.translate-hashes.json`), senza `dev.py`. Il log è in
 > `files/logs/e6_translation_debt.txt`, nella cartella della sessione.
 >
@@ -2576,7 +2576,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 
 #### ⏸️ Pausa del developer (2026-10-16, 13:23) — FROZEN fino al via del coordinatore
 > **Stato**:
-> - HEAD `b22747e52`;
+> - HEAD `edb7f95c5`;
 > - nel worktree, non committati, 15 file modificati e 1 nuovo: il primo gruppo di E6, cioè E6.1, E6.2, E6.3, E6.6 ed
 >   E6.7, più questo piano.
 >
@@ -2636,8 +2636,8 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > Le prove del primo gruppo di E6 sono così complete.
 
 #### E6.8 — Il mini-lotto `SMTPUTF8`, per P18 di A ✅ (2026-10-16, 14:25–14:47)
-> Il primo gruppo di E6 è committato (14:2x): `75b8d5c9e` (correzione), `3480cbc53` (docs), `589c72cf7` (TODO e
-> devWiki) e `0e0c14868` (journal). La base è `0e0c14868`.
+> Il primo gruppo di E6 è committato (14:2x): `f8a9188b6` (correzione), `f38b44960` (docs), `2c3431635` (TODO e
+> devWiki) e `aef76bee1` (journal). La base è `aef76bee1`.
 >
 > **Perché serve** (la domanda di A, 13:2x): P18 rende l'email unica con l'indice su `lower(email)`, quindi i due test
 > «whatever the account» usano varianti non ASCII della stessa casella. Ma il finto SMTP non annuncia `SMTPUTF8`: con un
@@ -2660,7 +2660,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >   - `domains/email` nei `related:` di `decisions/link-tokens-in-the-url-fragment.md`;
 >   - una nota sotto «Impact» in `problems/generated-client-widens-nullable-scalar.md`, più `domains/email` nei
 >     `related:`;
->   - la riga del piano 08 in `raw/ingest-registry.md`, a `0e0c14868`.
+>   - la riga del piano 08 in `raw/ingest-registry.md`, a `aef76bee1`.
 >
 > **Le prove**, poi: `services email-delivery`, e ogni suite che usa il finto, perché l'EHLO cambia per tutte:
 > `services email-flows`, `services email-verification`, `api email`, `api email-verification`,
@@ -2704,12 +2704,12 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > Il finto cambia per tutte le sette suite che lo usano: verdi tutte e sette.
 >
 > **Committato dal coordinatore (15:02)**:
-> - `068d3396f`, il finto e i test;
-> - `25cf29e3c`, le docs;
-> - `d66d004ab`, la devWiki;
-> - `9d27245dd`, il journal.
+> - `a9af94995`, il finto e i test;
+> - `b00af3d70`, le docs;
+> - `d20100ae3`, la devWiki;
+> - `e4c69c318`, il journal.
 >
-> **Il finto è già in `dev_release2`** con un cherry-pick, `7d51c21af`, così A adatta i miei tre test in P18; le docs
+> **Il finto è già in `dev_release2`** con un cherry-pick, `0d0314e62`, così A adatta i miei tre test in P18; le docs
 > arrivano con il mio ramo. Ad A ho mandato lo SHA.
 >
 > **Da A (14:53)**: c'è un terzo test con lo stesso schema, EVA-016 (`test_email_verification_api.py:122`, il gemello
@@ -2724,8 +2724,8 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >
 > **Dopo**: E4c aspetta A7a e P18 nella mia base. Fino ad allora, solo lavoro fuori dai file di A.
 >
-> **La metà H di E4c, proposta al coordinatore (15:0x).** P17 di H è in `dev_release2` (`b1df87bd4`, commit
-> `22d6dc84e`), e `client_rate_key` (`services/platform/client_address.py:91`) è identico byte per byte a
+> **La metà H di E4c, proposta al coordinatore (15:0x).** P17 di H è in `dev_release2` (`b9e3fdbeb`, commit
+> `eeadfe170`), e `client_rate_key` (`services/platform/client_address.py:91`) è identico byte per byte a
 > `flows.address_key` (`flows.py:66`). Lo sostituisce senza cambiare nessuna chiave.
 >
 > **Se il coordinatore aggiorna la base ora**:
@@ -2738,8 +2738,8 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 
 #### E4c-H — La metà H di E4c, sul merge con `dev_release2` ✅ (2026-10-16, 15:11–16:33)
 > **Il via del coordinatore** (15:11): una casa sola per la chiave. Aggiorna la mia base con `dev_release2`, che
-> contiene P17 di H, e lascia il merge aperto (`git merge 26dda1a26`). HEAD è `9d27245dd`, MERGE_HEAD `26dda1a26`, la
-> base comune `44d4d7e8e`; 496 file portati dal merge.
+> contiene P17 di H, e lascia il merge aperto (`git merge b06f4a0f8`). HEAD è `e4c69c318`, MERGE_HEAD `b06f4a0f8`, la
+> base comune `2cee39ef2`; 496 file portati dal merge.
 >
 > **Il merge**:
 > - **Un solo conflitto**, in `admin/configuration.en.md`: le mie sette righe SMTP contro le due di Z5
@@ -2750,7 +2750,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >   - `api/v1/email.py`: `client_address(request)` di H alle righe 159 e 203, con il suo import, e nessuna traccia
 >     della tenuta tolta da E4b;
 >   - `api/v1/auth.py`: la riga di H in `register` (276) e le quattro aggiunte di E4b in `update_profile`;
->   - il finto e EMD-046…049: identici a HEAD, cioè il mio commit e il cherry-pick `7d51c21af`, senza doppioni;
+>   - il finto e EMD-046…049: identici a HEAD, cioè il mio commit e il cherry-pick `0d0314e62`, senza doppioni;
 >   - il runner: le registrazioni di E tutte presenti, insieme a `client-address` di H. Nel frontend cambiano solo i
 >     percorsi dei broker;
 >   - `admin/index`: la riga Email c'è ancora.
@@ -2840,7 +2840,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >
 > Alla fine la porta 6188 era libera.
 >
-> **Il merge committato dal coordinatore** (16:26): `57081a85e`, con genitori `9d27245dd` e `26dda1a26`. Poi i due
+> **Il merge committato dal coordinatore** (16:26): `8cac67773`, con genitori `e4c69c318` e `b06f4a0f8`. Poi i due
 > ritocchi rimandati:
 > - ~~`security.md`, il punto «Callers» di H~~: **tolto su correzione del coordinatore (16:4x)**. H lo riscrive in H-12
 >   («Their key follows the rule of `client_rate_key()`»), una frase vera prima e dopo il mio passaggio. Il file è
@@ -2854,7 +2854,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > `security.md` è di H, che lo riscrive in H-12.
 
 #### E6.9 — La revisione di sicurezza finale del dominio ✅ (2026-10-16, 16:36–17:0x)
-> Col via del coordinatore (16:35): in sola lettura, sulla base `d4c5121ad`, cioè E1–E6 più E4c-H. Questa volta
+> Col via del coordinatore (16:35): in sola lettura, sulla base `f2cb52cff`, cioè E1–E6 più E4c-H. Questa volta
 > l'agente `security-review` ha risposto. Il perimetro e il modello delle minacce sono quelli del lotto, e ho elencato
 > i compromessi già decisi perché non tornassero come reperti nuovi.
 >
@@ -2894,8 +2894,8 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > **Dopo E4c** resta una revisione delta: le due righe di `same_email`.
 
 #### E4c — La metà `same_email`, sul merge con A (P18, A-27, A7a) ✅ (2026-10-16, 20:01–20:29)
-> **Il via del coordinatore** (20:01): A è entrato in `dev_release2` (`68355911f`). Il mio aggiornamento della base è
-> aperto: HEAD `8949dd4af`, MERGE_HEAD `68355911f`, base comune `26dda1a26`, 410 file portati dal merge.
+> **Il via del coordinatore** (20:01): A è entrato in `dev_release2` (`e7d2daa94`). Il mio aggiornamento della base è
+> aperto: HEAD `bbe0518d7`, MERGE_HEAD `e7d2daa94`, base comune `b06f4a0f8`, 410 file portati dal merge.
 >
 > **I cinque conflitti**, risolti aggiungendo, e solo questi messi in stage:
 > - `backend/app/api/v1/auth.py`, in `update_profile`: la riga di A, `email_changes = … not
@@ -2991,7 +2991,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > `reset_client_address_cache`, che è per i test di proposito. Sono di H, e lo dico al coordinatore solo come
 > informazione.
 >
-> **Il merge committato dal coordinatore, solo l'indice** (20:30): `602c865a9`, con genitori `8949dd4af` e `68355911f`.
+> **Il merge committato dal coordinatore, solo l'indice** (20:30): `a0b5de9aa`, con genitori `bbe0518d7` e `e7d2daa94`.
 > I 12 file di E4c restano fuori, per il checkpoint.
 >
 > **La revisione di sicurezza delta di E4c** (a mano, perché sono due righe), ✅ nessun reperto:
@@ -3011,16 +3011,16 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >   validati e ripuliti da `EmailStr` quando sono stati scritti, oppure dalla riga del token, cioè l'indirizzo a cui il
 >   link è partito, preso dal database. Nessun valore grezzo di una richiesta arriva a questi confronti.
 >
-> **La simulazione del coordinatore** su `dev_release2` di adesso (`e5c80ad7c`, con A-25 e W-B53): due conflitti
+> **La simulazione del coordinatore** su `dev_release2` di adesso (`4463ac8f8`, con A-25 e W-B53): due conflitti
 > nelle docs, `admin/configuration.en.md` (la riga `LIBREFOLIO_BRIM_PREWARM` di W-B53) e `user/settings/profile.en.md`
 > (A-25). Dopo il checkpoint di E4c arriva un secondo piccolo aggiornamento della base, poi lo slot `all-backend`.
 >
-> **E4c committato dal coordinatore** (20:31): `8e7f2df65` (refactor), `6899bc34f` (docs) e `3fab58174` (journal).
+> **E4c committato dal coordinatore** (20:31): `aa7f66672` (refactor), `cb09d153e` (docs) e `68e1238c0` (journal).
 > Sul CHANGELOG il coordinatore dice che il testo di E4b è salvato, e che il link di setup per email va nella riga di
 > A7a e A7b.
 
 #### E6.10 — Il secondo aggiornamento della base, con A-25 e W-B53 ✅ (2026-10-16, 20:31–20:34)
-> **Il merge aperto dal coordinatore** (`git merge e5c80ad7c`): HEAD `3fab58174`, base comune `68355911f`, 35 file
+> **Il merge aperto dal coordinatore** (`git merge 4463ac8f8`): HEAD `68e1238c0`, base comune `e7d2daa94`, 35 file
 > portati dal merge, e i due conflitti che la sua simulazione aveva previsto, tutti e due nelle docs, risolti
 > aggiungendo:
 > - `admin/configuration.en.md`: la riga `LIBREFOLIO_BRIM_PREWARM` di W-B53, poi le mie sette righe SMTP, che restano
@@ -3041,11 +3041,11 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > **Dopo**: il coordinatore committa il merge, poi lo slot 2 per `all-backend` (`files/tools/e6_all_backend.sh`,
 > `--workers 2`, come gli altri workstream).
 >
-> **Il merge committato dal coordinatore, solo l'indice** (20:34): `9758eecbb`, con genitori `3fab58174` ed
-> `e5c80ad7c`.
+> **Il merge committato dal coordinatore, solo l'indice** (20:34): `9d6eafa35`, con genitori `68e1238c0` ed
+> `4463ac8f8`.
 
 #### E6.11 — `all-backend`, slot 2 del coordinatore ✅ (2026-10-16, 20:34–21:19)
-> Su HEAD `9758eecbb`: `files/tools/e6_all_backend.sh`, `--workers 2` (come gli altri workstream), `nice`, taglio alle
+> Su HEAD `9d6eafa35`: `files/tools/e6_all_backend.sh`, `--workers 2` (come gli altri workstream), `nice`, taglio alle
 > 21:30. Il log è `files/logs/e6_all_backend.log`, più i log per unità in `.testLog/`.
 >
 > **Esito: «ALL BACKEND TESTS PASSED»**, exit 0, 2 672 s. Tutte e sette le categorie sono verdi: external, db,
@@ -3072,8 +3072,8 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > - E-4, con l'ok di A.
 
 #### E6.12 — L'ingresso, il fast-forward, la build fuori dallo slot, l'E2E del dominio ed E-4 ✅ (2026-10-16, 21:20–22:06)
-> **E è entrato in `dev_release2`** (21:20): il merge `56759b2c8` porta dentro E4b, E6, E6.8, E4c-H, E6.9 ed E4c
-> (`devWiki/log.md` risolto per unione); il journal è `30c2459e6`. Il coordinatore ha aggiunto le tre righe salvate di
+> **E è entrato in `dev_release2`** (21:20): il merge `19d4d90d4` porta dentro E4b, E6, E6.8, E4c-H, E6.9 ed E4c
+> (`devWiki/log.md` risolto per unione); il journal è `320185c22`. Il coordinatore ha aggiunto le tre righe salvate di
 > E4b al CHANGELOG.
 >
 > **Il CHANGELOG** (domanda del coordinatore, 21:2x): per E6, E6.8 ed E4c-H nessuna riga in più. Ho riletto le righe
@@ -3083,7 +3083,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > - E4c-H non cambia nessuna chiave, e la parte visibile è nella riga di P17 di H;
 > - per E4c, il cambio di sole maiuscole sta nelle righe di P18 di A.
 >
-> **Il fast-forward** (21:2x): il coordinatore ha portato il mio ramo alla punta di dev, **`102fa9ec1`** (l'ingresso, Y12b
+> **Il fast-forward** (21:2x): il coordinatore ha portato il mio ramo alla punta di dev, **`b32934309`** (l'ingresso, Y12b
 > e i registri), perché l'E2E del dominio controlli dev.
 >
 > **La build fuori dallo slot**, la lezione di E4b.6: `dev.py server --test --build-only`, carico sotto 50,
@@ -3099,7 +3099,7 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > Prove: `ruff`, `black` e `api settings`.
 >
 > **L'E2E del dominio, come controllo su dev** (slot E2E del coordinatore, dopo Z, 21:47–22:02):
-> `files/tools/e6_e2e_slot.sh`, `--workers 2`, una spec alla volta, sulla punta di dev `102fa9ec1`. Nessuna
+> `files/tools/e6_e2e_slot.sh`, `--workers 2`, una spec alla volta, sulla punta di dev `b32934309`. Nessuna
 > ricostruzione del frontend.
 >
 > | Spec | Esito |
@@ -3145,7 +3145,7 @@ ancora in dev). Per `/verify-email`, però, quel 401 finisce nell'errore generic
 
 La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un lotto piccolo.
 
-#### E-10.0 — Analisi e disegno ✅ (2026-10-16, 22:10, base `56ed3587f`)
+#### E-10.0 — Analisi e disegno ✅ (2026-10-16, 22:10, base `7aa779643`)
 > **Lo stato**:
 > - la pagina (`routes/verify-email/+page.svelte`) fa `status = readLinkRefusal(error) ?? 'error'`;
 > - `VerifyEmailCard.svelte` mostra `VERIFY_PAGE_KEYS[status]`, il «riprova» solo per `'error'` e il ritorno al login
@@ -3221,7 +3221,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > | `check-links` | 97 ✅ |
 > | `git diff --check` | pulito ✅ |
 >
-> **E-10 committato** in tre commit, ed entrato in dev (`476da8470`). E-11 va ad H come proposta: un codice proprio nel
+> **E-10 committato** in tre commit, ed entrato in dev (`3fc8a5715`). E-11 va ad H come proposta: un codice proprio nel
 > rifiuto anonimo del blocco, così il frontend non legge `detail`.
 > - Sulla nota incrociata del coordinatore (riusare `auth.instanceBlocked`, come fa `registrationErrors.ts` di A): quella
 >   chiave non c'è né in dev né nel ramo di A che vedo, quindi è ancora in A7b. E-10 usa la sua chiave,
@@ -3230,15 +3230,15 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 ### R13-SEC — Revisione di sicurezza dei lotti della sera su auth e dati (2026-10-16, 23:05–)
 > **Il compito del coordinatore** (23:05): una revisione `security-review` in sola lettura, fatta sui diff di
 > `dev_release2`. I lotti:
-> - il ripristino di B: B3 (`22c116679`, caricamento e controllo), B5b (`5f1543e81`, applicato al prossimo avvio) e
->   B5c (`9137e1ef8`, l'esito con un biglietto monouso);
-> - P18 (`1fdeabaa4`) e A-27 (`cf6b03b8f`) di A;
-> - A7a (`a39b67944`), l'amministratore iniziale.
+> - il ripristino di B: B3 (`89d6bc8cd`, caricamento e controllo), B5b (`ed2568e4d`, applicato al prossimo avvio) e
+>   B5c (`9ec2c41a4`, l'esito con un biglietto monouso);
+> - P18 (`c67b01d93`) e A-27 (`c000ab387`) di A;
+> - A7a (`75978a7f8`), l'amministratore iniziale.
 >
 > Solo i reperti, con la gravità, al coordinatore, senza correzioni. Se non c'è niente sopra la soglia, lo scrivo qui e
 > basta.
 >
-> **La base**: `dev_release2` a `476da8470`, letto dagli oggetti git. Il mio ramo (`f788cc2eb`) non ha B5b e B5c.
+> **La base**: `dev_release2` a `3fc8a5715`, letto dagli oggetti git. Il mio ramo (`040b864c2`) non ha B5b e B5c.
 >
 > **⚠️ Fuori pista: la prima revisione, unica, ha superato il budget** («Request exceeds the model's prompt budget»: 280
 > mila token contro 128 mila), perché i lotti di B portano file di test da quasi 3 000 righe.
@@ -3246,7 +3246,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > - Ognuna legge solo il codice di produzione, a pezzi di al più 250 righe.
 >
 > **B3, caricamento e controllo del ripristino** (`security-review`, 23:07–23:18): **nessun reperto sopra la soglia.**
-> dev era già passato a `a621bf89e`. Nel perimetro è cambiato solo `config/backup.py`, dove il default dei 500 MB del
+> dev era già passato a `66839ec73`. Nel perimetro è cambiato solo `config/backup.py`, dove il default dei 500 MB del
 > profilo `managed` si è spostato in `ENVIRONMENT_PROFILE_DEFAULTS`, con lo stesso comportamento.
 >
 > Note sotto la soglia:
@@ -3276,7 +3276,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > errori, il blocco.
 
 > **B5b e B5c, applicazione e biglietto** (`security-review`, 23:07–23:19): **nessun reperto sopra la soglia.**
-> I file del perimetro sono uguali in `476da8470` e in `a621bf89e`.
+> I file del perimetro sono uguali in `3fc8a5715` e in `66839ec73`.
 >
 > Note sotto la soglia:
 > - **CSRF su `restart`** da un sottodominio fratello di un dominio condiviso, fuori dalla Public Suffix List: solo con
@@ -3299,7 +3299,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > solo in memoria nel client); la CLI.
 
 > **A, cioè P18, A-27 e A7a** (`security-review`, 23:07–23:20): **nessun reperto sopra la soglia.** I file del
-> perimetro sono uguali in `476da8470` e in `a621bf89e`.
+> perimetro sono uguali in `3fc8a5715` e in `66839ec73`.
 >
 > Note sotto la soglia:
 > 1. **MEDIUM, confidenza 5/10 (A7a): un amministratore iniziale disattivato si riattiva con il suo vecchio link di
@@ -3339,7 +3339,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > coordinatore, è scritto qui. Al coordinatore mando solo le note che chiedono un'azione (1, 2 e 5 per A, la 2 di B3
 > per B), come per la nota 3 di E6.9 che è diventata A-27.
 
-### R13-SEC2 — Revisione di sicurezza del resto di `ebe9eb346..dev_release2` (2026-10-16, 23:37 – 17/10, 00:05)
+### R13-SEC2 — Revisione di sicurezza del resto di `6d80129f7..dev_release2` (2026-10-16, 23:37 – 17/10, 00:05)
 > **Il compito del coordinatore** (23:3x): una revisione `security-review` in sola lettura, fatta sui diff, di ciò che è
 > entrato dall'ultimo push, fuori dai tre perimetri di R13-SEC. Senza correzioni; i reperti con gravità e confidenza a
 > lui; se non c'è niente, una riga qui. I lotti: C-97a/`RealDecimal` di W e il suo fix del costo automatico (input,
@@ -3347,18 +3347,18 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > in `LIBREFOLIO_SUPPORT_URL`) di X; H-21 e H-23 (runner, priorità bassa); J-27 (`ledger_totals`).
 >
 > **Mappa** (294 commit non di merge nell'intervallo):
-> - C-97a `5c4426e75` (= `bab52635d`, la stessa patch due volte) e D6 `0c3275057` (= `761786c9e`);
-> - il «fix del costo automatico» è **W-B30** `949da55f8`: un `null` esplicito toglie il costo manuale, ignorato in modo
+> - C-97a `2a3c1bd60` (= `3ba393915`, la stessa patch due volte) e D6 `ffaf1c5d9` (= `41f740315`);
+> - il «fix del costo automatico» è **W-B30** `fc8f47235`: un `null` esplicito toglie il costo manuale, ignorato in modo
 >   Auto (dal piano 04 di W);
-> - W-B53 `193412cdf`, più il cherry-pick `618d7208e` coi conflitti risolti da W: rivisto lo stato finale;
-> - X-R28 `8f3632d45`, C-66 `32c64bbd9`, P20 `62933bf46`, più il contesto CP13 sullo stesso percorso, non ancora rivisto
->   (`25d4c75c7`, `9c1161ff2`, `7d80a1098`);
-> - H-21 `74b420db8`, H-23 `9541c0667`;
-> - J-27 `7336722ad`, coi suoi chiamanti di B-13 (`c374313c0`, `instance_backup/totals.py`).
+> - W-B53 `e6cd72aec`, più il cherry-pick `b28a9342c` coi conflitti risolti da W: rivisto lo stato finale;
+> - X-R28 `728412ee5`, C-66 `5c4d1c2c3`, P20 `8ae8c3068`, più il contesto CP13 sullo stesso percorso, non ancora rivisto
+>   (`751e28b75`, `33eee1337`, `b5b032ab8`);
+> - H-21 `2458a1211`, H-23 `d3e12b630`;
+> - J-27 `4bb97aa49`, coi suoi chiamanti di B-13 (`61a4c5f63`, `instance_backup/totals.py`).
 >
 > **Quattro revisioni in parallelo** (la lezione di R13-SEC), solo codice di produzione, a pezzi di al più 250 righe:
 > W-1 (C-97a sulle transazioni, D6, W-B30), W-2 (C-97a su prezzi, eventi e somme), X, e J-27 con W-B53 e H. Durante
-> la revisione dev è passato a `4bf824362`: i file del perimetro sono identici.
+> la revisione dev è passato a `f76f7d0c7`: i file del perimetro sono identici.
 
 > **Reperto 1 — MEDIUM, confidenza 8/10, C-97a (W)**: trovato **da tutte e due** le revisioni di W, ognuna per conto suo.
 > - **La lettura**: `RealDecimal.process_result_value` (`db/real_decimal.py:53-62`) solleva un'eccezione per un REAL salvato
@@ -3481,12 +3481,12 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 >   sono `write-scoped`.
 
 > **Nell'intervallo ma fuori dalla lista, non rivisti** (al coordinatore, se li vuole):
-> - `77fbc8687` di W, l'elenco dei report senza broker (visibilità);
-> - `7ad5a8849` di W, gli update seguono la tabella dei tipi;
-> - `8f7e086e9`, H-17, il default del limite di caricamento;
-> - `465c27939` di H, l'esito del ripristino su un'istanza bloccata (`instance_block.py`);
-> - `aaff7df04` di X, le icone dei plugin nella scheda Plugin;
-> - `c85b7d8eb`, A-25, il cambio di sole maiuscole senza password (solo frontend, `emailCase.ts`).
+> - `3c1956ad6` di W, l'elenco dei report senza broker (visibilità);
+> - `78accc772` di W, gli update seguono la tabella dei tipi;
+> - `36b694e1f`, H-17, il default del limite di caricamento;
+> - `ce03c9162` di H, l'esito del ripristino su un'istanza bloccata (`instance_block.py`);
+> - `9b37a7399` di X, le icone dei plugin nella scheda Plugin;
+> - `0cc5b7006`, A-25, il cambio di sole maiuscole senza password (solo frontend, `emailCase.ts`).
 >
 > L'SSRF dello scraper CSS lo copre già F05 di X (piano 03, riga 657).
 
@@ -3506,24 +3506,24 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 
 ### R13-SEC3 — Revisione di sicurezza: la UI di P20, i sei commit rimasti, A7b (2026-10-17, 00:07–)
 > **Il compito del coordinatore** (00:0x), in sola lettura e nel formato di prima:
-> 1. la UI di P20 di X, `2c6fa9cfb`, con le regole della nota 11 di R13-SEC2. Il commit non è ancora in dev: sta sul ramo
->    di X `e-alfy-x-plugin-asset-e-ricerca`, un commit sopra `b3e2fae02`, e l'ho letto dagli oggetti git senza cambiare
+> 1. la UI di P20 di X, `f9bf2c29f`, con le regole della nota 11 di R13-SEC2. Il commit non è ancora in dev: sta sul ramo
+>    di X `e-alfy-x-plugin-asset-e-ricerca`, un commit sopra `37914f91c`, e l'ho letto dagli oggetti git senza cambiare
 >    ramo;
 > 2. i sei commit fuori lista di R13-SEC2;
 > 3. A7b, quando entra: lo SHA me lo dà lui.
 >
-> **La base**: il journal è committato (`d0be286e6`) ed entrato in dev; il mio ramo è portato a `6cadaf427`, pulito. dev
-> è a `149157025`.
+> **La base**: il journal è committato (`946b05be1`) ed entrato in dev; il mio ramo è portato a `79154f73b`, pulito. dev
+> è a `0c86b22f0`.
 >
 > **⚠️ Fuori pista: gli orari di R13-SEC2 erano sbagliati.** Avevo scritto «00:2x» quando non erano ancora le 00:05. Gli
 > orari veri, presi dai file della sessione, sono revisione 23:37–00:05 e prova 00:03; li ho corretti sopra.
 >
 > **Tre revisioni in parallelo** (00:07–00:15), sola lettura, nessuno snippet eseguito (carico 57–67):
 > - la UI di P20;
-> - i quattro commit di backend: W-B32 `77fbc8687`, P6 `7ad5a8849`, H-17 `8f7e086e9` e `465c27939`;
-> - le icone dei plugin `aaff7df04` e A-25 `c85b7d8eb`.
+> - i quattro commit di backend: W-B32 `3c1956ad6`, P6 `78accc772`, H-17 `36b694e1f` e `ce03c9162`;
+> - le icone dei plugin `9b37a7399` e A-25 `0cc5b7006`.
 
-> **UI di P20** (X, `2c6fa9cfb`): **nessun reperto sopra la soglia.** Le sei regole sono rispettate, la 2 con la nota 1.
+> **UI di P20** (X, `f9bf2c29f`): **nessun reperto sopra la soglia.** Le sei regole sono rispettate, la 2 con la nota 1.
 > - **Cosa esce**, sempre e solo con un clic:
 >   - l'oggetto, o il titolo GitHub, `LibreFolio: asset not found — <ricerca, al più 80 caratteri>`;
 >   - il corpo: la ricerca; una riga per provider con i soli codici (`N results`, `error <error_code>`, `error`,
@@ -3550,23 +3550,23 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 >    lunghezza sulla ricerca e sul corpo (URL lunghi, nessun effetto sulla sicurezza).
 
 > **I quattro commit di backend**: **nessun reperto sopra la soglia.**
-> - **W-B32** (`77fbc8687`): l'esposizione si restringe.
+> - **W-B32** (`3c1956ad6`): l'esposizione si restringe.
 >   - Un report senza broker lo vedono solo chi l'ha caricato e gli admin.
 >   - I `broker_ids` chiesti si intersecano coi ruoli di chi chiama.
 >   - Ogni rotta del file passa da `_get_brim_file_with_access`; il parse e la cancellazione chiedono EDITOR.
-> - **P6** (`7ad5a8849`):
+> - **P6** (`78accc772`):
 >   - ogni update si confronta con la fotografia della riga presa prima del batch, quindi nessun aggiramento in due passi;
 >   - i controlli leggono la riga fusa, dopo `preload_and_authorize`;
 >   - `cashNonzero` ripete solo il tipo; non si salva niente a metà;
 >   - nota: una riga già fuori dalla tabella dei tipi tiene il suo difetto finché non cambiano cassa, quantità o tipo.
 >     Voluto.
-> - **H-17** (`8f7e086e9`):
+> - **H-17** (`36b694e1f`):
 >   - il default self-hosted non cambia (0, cioè nessun limite, come prima); `managed` vale 500 MB;
 >   - un valore vuoto, negativo o illeggibile dà 503.
 >   - Nota per H: `profile_default` (`config/__init__.py:579`) restituisce il valore della tabella con `cast`, senza
 >     controllarne il tipo. Una voce `managed` tolta o messa a `None` vorrebbe dire «nessun limite». Può farlo solo il
 >     codice, e un test fissa i 500.
-> - **`465c27939`**:
+> - **`ce03c9162`**:
 >   - l'elenco dei permessi confronta la funzione della rotta, non il percorso (`instance_block.py:92`);
 >   - l'esito vuole il biglietto (256 bit, solo in un header, `compare_digest`), con lo stesso 404 per ogni rifiuto;
 >   - nessun cambio di stato, salvo la rimozione di un biglietto scaduto.
@@ -3574,7 +3574,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 >     meno per capire che è bloccata.
 
 > **Le icone dei plugin e A-25**: **nessun reperto sopra la soglia.**
-> - **Le icone** (`aaff7df04`):
+> - **Le icone** (`9b37a7399`):
 >   - l'icona è una costante nel sorgente del plugin: un URL di favicon remoto, o `generate_static_url`;
 >   - si mostra come `<img src>`, mai `{@html}`; l'icona della famiglia viene da una mappa statica di lucide;
 >   - nessuna lettura dal disco; sono le stesse costanti che pubblicano già `/assets/provider` e `/fx/providers`.
@@ -3584,7 +3584,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 >     - Le stesse icone si caricano già altrove, senza politica del referrer (`AssetSearchAutocomplete.svelte:456`).
 >     - La CSP ha `img-src … https:` ed è in sola segnalazione.
 >     - → domanda D-SEC3-1.
-> - **A-25** (`c85b7d8eb`):
+> - **A-25** (`0cc5b7006`):
 >   - il server decide da solo: `auth.py:389` confronta `request.email` con l'utente letto dal DB;
 >   - ogni cambio che non tocca solo le maiuscole chiede la password e la verifica, e il servizio ricontrolla
 >     (`user_service.py:499`);
@@ -3603,7 +3603,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 >   - Così l'IP di chi visita va a quei siti senza consenso: si pensi alla sentenza del LG München I del 2022 sui Google
 >     Fonts.
 >   - L'alternativa: le copie locali, come già per alcuni plugin con `generate_static_url` (M-7).
->   - Il caricamento c'era già (e la decisione su Schwab resta); Impostazioni › Plugin (`aaff7df04`) ne aggiunge uno.
+>   - Il caricamento c'era già (e la decisione su Schwab resta); Impostazioni › Plugin (`9b37a7399`) ne aggiunge uno.
 
 > **Stato**: (1) e (2) fatti, (3) A7b aspetta lo SHA. Al coordinatore:
 > - per X, le note 1–4;
@@ -3612,7 +3612,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > - la domanda D-SEC3-1.
 
 > **Smistamento del coordinatore** (per tracciare dove sono andate le note):
-> - **R13-SEC2** (insieme al commit `d0be286e6`, 00:0x):
+> - **R13-SEC2** (insieme al commit `946b05be1`, 00:0x):
 >   - W-B58 (il reperto 1) e W-B59 (il precaricamento) a W, con priorità, prima di C-97b;
 >   - X-R35 e X-R36, con le regole della UI di P20, a X;
 >   - la nota di `totals.py` a B, perché il file è suo;
@@ -3625,7 +3625,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 >
 > Il piano resta fuori dal commit fino ad A7b (il coordinatore è d'accordo), che arriva con il suo SHA.
 
-> **Punto 3, A7b** (`f99edbf6b` per il codice, `8513677f1` per le docs; in dev `3e5336a0a`; `security-review` in
+> **Punto 3, A7b** (`441fa7402` per il codice, `652b0bb76` per le docs; in dev `531889efc`; `security-review` in
 > background, 00:25–00:33): **nessun reperto sopra la soglia.**
 >
 > Note:
@@ -3668,7 +3668,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > - Dopo, **E-11**, quando A7b è entrato.
 > - E-7 ed E-8 restano nel backlog.
 >
-> Base: HEAD `6cadaf427`. Dev è a `3e5336a0a`, con A7b; non tocca i file dell'email.
+> Base: HEAD `79154f73b`. Dev è a `531889efc`, con A7b; non tocca i file dell'email.
 
 **Stato reale**
 - **Tre limiti per casella**, tutti con la chiave `strip().casefold()`:
@@ -3876,7 +3876,7 @@ Se arriva il via a (b) e (c):
 > `email-change-notice` (:1131) e il `print_info` della stessa funzione (:787), che diceva la stessa cosa e me l'ha
 > segnalato il historian.
 >
-> **X-R35** (coordinatore, 01:2x, entrato in dev `67668f5ce`: `env_url` rifiuta lo user info). La docstring di
+> **X-R35** (coordinatore, 01:2x, entrato in dev `32ec5efbc`: `env_url` rifiuta lo user info). La docstring di
 > `links._usable_base` diceva che `public_url()` «controlla solo lo schema»: ora elenca ciò che `env_url` rifiuta già
 > (spazi, schema, host, e da X-R35 lo user info) e ciò che il controllo aggiunge (`?`, `#`, una porta non valida).
 > - Il controllo delle credenziali **resta, e la docstring lo dice**: è una seconda guardia, perché la base apre ogni
@@ -3922,7 +3922,7 @@ Se arriva il via a (b) e (c):
 >   - la tabella dei tipi con la colonna Greeting;
 >   - i passi del flusso, la tabella «Testing» e i limiti noti (E-9 risolto, resta E-12).
 > - `developer/architecture/security.md`: la sola frase dell'avviso (:215).
-> - `user/settings/profile.en.md:42`: la riga è mia (E4b, `dfc7847fb`). Nessun timbro di traduzione: le versioni
+> - `user/settings/profile.en.md:42`: la riga è mia (E4b, `9470adae8`). Nessun timbro di traduzione: le versioni
 >   IT/FR/ES non hanno quel punto, quindi il debito è vero e resta.
 > - Il docs-writer ha corretto il brief in due punti:
 >   - la pagina di verifica mette lo username nel messaggio di successo del login, non nel campo;
@@ -3942,16 +3942,16 @@ Se arriva il via a (b) e (c):
 >
 > **Backlog**: E-9 ✅ (N62, 17/10; lo SHA dopo il commit) ed E-12 nuovo, basso (catch-all e Fastmail).
 >
-> **Conflitti previsti** con dev `67668f5ce`:
+> **Conflitti previsti** con dev `32ec5efbc`:
 > - `auth.py`: dev alle righe 294-297 (A7b), io a 381-382;
 > - `security.md`: dev a 170, 643, 808 e 995, io a 215;
 > - `BACKLOG`: gli hunk di dev sono fuori dalla sezione E;
 > - `devWiki/log.md`: due aggiunte in coda, da risolvere per unione.
 
 > **E-9 committato** (coordinatore, 01:34):
-> - `3dd23eaa4` (fix: codice, test, `auth.py`, `_backend_api.py` col `print_info`, approvato), `bb392de35` (docs),
->   `7fc549fea` (journal);
-> - base aggiornata: merge di dev `b36e3873f`, con A7b e X-R35, pulito; HEAD `169a9d798`.
+> - `83e0bafd5` (fix: codice, test, `auth.py`, `_backend_api.py` col `print_info`, approvato), `1a9deca1d` (docs),
+>   `b834dcd1f` (journal);
+> - base aggiornata: merge di dev `2d25d0a94`, con A7b e X-R35, pulito; HEAD `256e38016`.
 >
 > **Validazione combinata** ✅ (01:35–01:50, `files/tools/e9_combined.sh`, carico sotto 50, una alla volta):
 > - `services email-*`: 124, 329, 149, 127, 32, 74, 87, 144, 67;
@@ -3961,12 +3961,12 @@ Se arriva il via a (b) e (c):
 > - `mkdocs build` stretto con 0 avvisi; `check-links` 97;
 > - worktree pulito, porta libera.
 >
-> **E-9 entrato in dev** (`49c07a95a`; la riga 🔒 del CHANGELOG in `3a5ff5194`). `_usable_base` resta com'è (OK del
+> **E-9 entrato in dev** (`ae9680133`; la riga 🔒 del CHANGELOG in `d0a163747`). `_usable_base` resta com'è (OK del
 > coordinatore).
 
 ### E-11 — «Send the link again» su un'istanza bloccata
 
-#### E-11.0 — Analisi ✅ (2026-10-17, 01:15–01:25, in sola lettura su `dev_release2` `3e5336a0a`)
+#### E-11.0 — Analisi ✅ (2026-10-17, 01:15–01:25, in sola lettura su `dev_release2` `531889efc`)
 > **Il compito del coordinatore** (00:19): E-11 «dopo l'ingresso di A7b, perché A-13 cambia come `zodios-client` legge
 > il 401 di un'istanza bloccata. Prima verificare se A7b lo risolve già, poi chiuderlo o correggerlo sopra».
 
@@ -4004,7 +4004,7 @@ il testo inglese.
 - **Alternativa, di H**: un codice nel rifiuto anonimo del blocco. Sarebbe più pulita per tutte le rotte, ma la cura di
   E non ne ha bisogno e resta giusta anche se il codice arriva dopo.
 
-**Serve**: un aggiornamento di base con A7b prima del codice, per `auth.instanceBlocked`; il mio ramo è a `6cadaf427`.
+**Serve**: un aggiornamento di base con A7b prima del codice, per `auth.instanceBlocked`; il mio ramo è a `79154f73b`.
 
 **Peso**: minimo. Rossi (`test-author`):
 - EVA: il corpo del 401 è strutturato;
@@ -4018,7 +4018,7 @@ il testo inglese.
 - `mkdocs build` stretto.
 
 #### E-11.1 — Rossi ✅ (2026-10-17, 01:5x–02:07)
-> **Il via del coordinatore** (01:5x), sulla mia base `169a9d798`, che ha dentro A7b. Il `desc` di `email-verification`
+> **Il via del coordinatore** (01:5x), sulla mia base `256e38016`, che ha dentro A7b. Il `desc` di `email-verification`
 > nel catalogo condiviso (`_backend_api.py:1109`) va in questo lotto, col suo via; la nota su `instance_block.py`, che
 > non nomina `resend`, va ad H.
 >
@@ -4096,14 +4096,14 @@ il testo inglese.
 > **Checkpoint mandato al coordinatore** (02:5x). FROZEN.
 
 > **E-11 committato ed entrato** (coordinatore, 02:50):
-> - `18d945d2e` (fix), `f2b459ebe` (docs), `fdd4acc6d` (journal), in dev col merge `bca4bd6d3`;
-> - la riga 🐛 del CHANGELOG in `2818924b7`;
-> - il mio HEAD portato avanti con un fast-forward a `2818924b7`;
+> - `0dae86a1c` (fix), `1321fbc1b` (docs), `799357401` (journal), in dev col merge `9da99ad70`;
+> - la riga 🐛 del CHANGELOG in `bd229d1c6`;
+> - il mio HEAD portato avanti con un fast-forward a `bd229d1c6`;
 > - la nota su `security.md` è andata ad H.
 
 ### R13-SEC4 — Revisione di sicurezza di B4 (backup sicuri) e di A7b-2, prima dell'ingresso (2026-10-17, 02:51–)
 > **Il compito del coordinatore** (02:50): in sola lettura, nel formato di prima; i reperti a lui, nessuna correzione.
-> 1. **B4, i backup sicuri** (B, `6c72f0efe..97037bb2e`), **con priorità**:
+> 1. **B4, i backup sicuri** (B, `6ef2fb15b..f4f910dcc`), **con priorità**:
 >    - l'involucro `.lfbk`: scrypt più AES-256-GCM a blocchi, i limiti dell'intestazione, la malleabilità e il
 >      troncamento;
 >    - l'esportazione della chiave d'istanza: solo quando è generata, mai dall'ambiente;
@@ -4111,11 +4111,11 @@ il testo inglese.
 >    - `--password-file` e `--password-stdin`;
 >    - `NoInputEchoRoute` sulle rotte del backup;
 >    - `GET /backup/instance/options` su un'istanza bloccata.
-> 2. **A7b-2** (A, `ec73a49c1..f5a42a00e`): il ritiro dei link di setup e il gestore globale dei 422 senza `input`.
+> 2. **A7b-2** (A, `27f78aaff..0e4a7eaba`): il ritiro dei link di setup e il gestore globale dei 422 senza `input`.
 >
 > **Dove si legge**: dagli oggetti git, mai dal worktree di B, che le regole vietano.
 > - Fra la fine di ogni intervallo e la punta del ramo ci sono solo merge di dev, e i file in revisione sono identici.
-> - Quindi rivedo le punte, cioè ciò che entra: B4 a `33275d9a6`, A7b-2 a `c9cb27e4c`.
+> - Quindi rivedo le punte, cioè ciò che entra: B4 a `45eef19ac`, A7b-2 a `27bde7bf9`.
 >
 > **Tre revisioni in parallelo** (la lezione di R13-SEC: B4 è grande, 320 righe di involucro, 662 di staging e 879 di
 > CLI):
@@ -4216,7 +4216,7 @@ il testo inglese.
 > **Al coordinatore**: l'esito, le note per B (cripto 2–3, ripristino 1–4) e per A (1–4, 6), le domande del cloud
 > (cripto 2, A7b-2 nota 3) e la nota 7 per chi tiene i gestori. Nessuna correzione da parte mia.
 
-> **R13-SEC4 committato ed entrato** (coordinatore, 03:08; dev `110125350`; HEAD portato avanti con un fast-forward).
+> **R13-SEC4 committato ed entrato** (coordinatore, 03:08; dev `db1093a7d`; HEAD portato avanti con un fast-forward).
 > Lo smistamento:
 > - B (B4b): i resti dopo un crollo, l'avviso di `decrypt`, `getpass`, `autocomplete`;
 > - A: la corsa, la disattivazione, il `msg` del 422, l'admin in attesa;
@@ -4270,18 +4270,18 @@ processo):
 >
 > **Dopo**: in attesa degli SHA di R13-SEC5, verso le 04:00, a slot dopo il freeze finiti.
 >
-> **E-12 committato ed entrato** (coordinatore, 03:10; dev `dfb1fcafd`; HEAD portato avanti con un fast-forward).
+> **E-12 committato ed entrato** (coordinatore, 03:10; dev `8faa0574d`; HEAD portato avanti con un fast-forward).
 
 ### R13-SEC5 — Revisione di sicurezza: C-97b, X-R24/25, poi X-R38 (2026-10-17, 03:11–)
 > **Il compito del coordinatore** (03:10): sui lotti già committati nei loro rami, letti dagli oggetti git e mai dai
 > worktree:
-> 1. **C-97b** (W, `24aa1d69b` più `527306638` del journal): l'input decimale, `ExactDecimalInput`, la grandezza nel
+> 1. **C-97b** (W, `a8a08cf27` più `a6e7609ac` del journal): l'input decimale, `ExactDecimalInput`, la grandezza nel
 >    Bulk, la mini-modale degli eventi. Solo frontend.
-> 2. **X-R24/25** (X, `e22251856`): i provider di default della ricerca, senza quelli di test.
+> 2. **X-R24/25** (X, `5f80aa60b`): i provider di default della ricerca, senza quelli di test.
 >
 > X-R38, i limiti FX, viene quando X lo committa. Due revisioni in parallelo, una per lotto.
 >
-> **C-97b** (`24aa1d69b`, 03:11–03:21): **nessun reperto sopra la soglia.**
+> **C-97b** (`a8a08cf27`, 03:11–03:21): **nessun reperto sopra la soglia.**
 > - **Sano**:
 >   - il messaggio di `EVENT_TOO_MANY_DIGITS` usa solo `date` e `type`, validati, e la mini-modale lo mostra come testo;
 >   - il Form ha 10 decimali come la colonna `RealDecimal(22,10)`, e il payload nasce da stringhe esatte;
@@ -4298,7 +4298,7 @@ processo):
 >   - un incolla enorme fa calcolare `10n ** places` quando ci sono `min` e `max`;
 >   - il toast di successo mostra 2 decimali.
 
-> **X-R24/25** (`e22251856`, 03:11–03:15): **nessun reperto sopra la soglia.** Il commit restringe solo l'insieme di
+> **X-R24/25** (`5f80aa60b`, 03:11–03:15): **nessun reperto sopra la soglia.** Il commit restringe solo l'insieme di
 > default della ricerca.
 > - **Sano**:
 >   - l'insieme di default è uguale a `GET /assets/provider`;
@@ -4316,7 +4316,7 @@ processo):
 >      strada del provider nominato (`configured_provider` / `get_plugin`), non solo l'elenco e il default.
 >   3. Minima: `_default_search_codes` tratta un codice sconosciuto come permesso, mentre FX lo rifiuta. Qui è innocuo.
 >
-> **X-R38** (`80f5c65ff`, 03:44–03:58): **nessun reperto sopra la soglia nel diff.**
+> **X-R38** (`ecc550580`, 03:44–03:58): **nessun reperto sopra la soglia nel diff.**
 > - **Sano**:
 >   - **gli scrittori**: i quattro insert in `fx_rates` (`storage.py:165`, `sync.py:366, 773, 848`) passano tutti dalla
 >     normalizzazione e da `storable_fx_rate`, col controllo sul valore **invertito**, e il ripristino è solo per gli
@@ -4351,13 +4351,13 @@ processo):
 >      come J-27.
 >   5. **BOE e SNB**: `Decimal(str)` non prende `InvalidOperation`, quindi un valore ostile fa fallire il fetch di quel
 >      provider. È solo disponibilità.
->   6. A `80f5c65ff` il gestore globale dei 422 di A non c'è ancora: l'eco dell'`input` è solo il payload di chi
+>   6. A `ecc550580` il gestore globale dei 422 di A non c'è ancora: l'eco dell'`input` è solo il payload di chi
 >      chiama. Senza effetto.
 >
 > **R13-SEC5 chiusa**: nessun reperto sopra la soglia nei quattro lotti. Il punto fuori diff sulle scritture FX va al
 > coordinatore per la domanda D-SEC2-1.
 >
-> **R13-SEC5 committato ed entrato** (coordinatore, 03:58; dev `7d3012e3b`; HEAD portato avanti con un
+> **R13-SEC5 committato ed entrato** (coordinatore, 03:58; dev `b5d2dae47`; HEAD portato avanti con un
 > fast-forward). Le note sono andate a X; le scritture FX sono aggiunte alla domanda D-SEC2-1 del developer.
 
 ### E-8 — La lingua dell'invito spedito per email
@@ -4366,7 +4366,7 @@ processo):
 > **Il compito del coordinatore** (03:58): l'analisi di E-8 in sola lettura. Il codice viene dopo A8b, perché A
 > riordina le schede di Impostazioni. Prima arriva R13-SEC6 su A8a, appena A lo consegna.
 
-**Stato reale** (HEAD `7d3012e3b`)
+**Stato reale** (HEAD `b5d2dae47`)
 - **Il backend è pronto.**
   - `POST /email/links` accetta `language: "en" | "it" | "fr" | "es"`, solo per l'invito (`schemas/email.py:74`).
   - Senza lingua decide `default_language` dell'istanza; il reset va sempre nella lingua dell'account
@@ -4518,10 +4518,10 @@ non sposti il registro.
 > **Resta**: l'allineamento dei percorsi «Settings › Email» (26 punti), dopo A8b nella mia base.
 
 #### E-8.4 — I percorsi «Settings › Email» dopo A8b ✅ (analisi 08:57–09:05; applicato 09:12–09:2x)
-> **Il punto di partenza** (coordinatore, 08:56): la parte 1 è committata (punta `443eda316`), la base è `86e2b05a7`
-> (la mia più dev `73443c6db`, pulita). Lo slot E2E è in coda, e la parte 2 aspetta l'ingresso di A8b.
+> **Il punto di partenza** (coordinatore, 08:56): la parte 1 è committata (punta `a1f6d4cd7`), la base è `798257c9f`
+> (la mia più dev `acad94499`, pulita). Lo slot E2E è in coda, e la parte 2 aspetta l'ingresso di A8b.
 >
-> **A8b**, letto dagli oggetti git (`4fcf24e10`, punta del ramo di A `36ab58445`):
+> **A8b**, letto dagli oggetti git (`f8821b771`, punta del ramo di A `a02fcc0f6`):
 > - L'etichetta del gruppo è `settings.administration`: Administration, Amministrazione, Administration,
 >   Administración.
 > - I docs di A8b scrivono sempre «Settings › Administration › <scheda>»: Backup 45 volte, Email 10, Global e Users 2,
@@ -4553,8 +4553,8 @@ non sposti il registro.
 > **Il peso**: piccolo, una ventina di righe. Nessun file di traduzione dei docs, perché quelle pagine esistono solo
 > in inglese.
 
-> **Applicato** (09:12, sulla base `5bbc0622e`):
-> - **Il merge**: il coordinatore ha portato A8b (dev `6e2b2c8b7`) nel mio ramo, e ha tolto il congelamento di
+> **Applicato** (09:12, sulla base `4fa928733`):
+> - **Il merge**: il coordinatore ha portato A8b (dev `e7d4a4162`) nel mio ramo, e ha tolto il congelamento di
 >   `email-tab.spec.ts`. Il CHANGELOG lo ha allineato lui (i 3 punti).
 > - **Controllato dopo il merge automatico** (`email.en.md`, `users.en.md`, `security.md`, `email.md`, il catalogo):
 >   le frasi di E-8, E-13 ed E-14 sono intatte, e gli hunk di A8b toccano solo i percorsi.
@@ -4590,7 +4590,7 @@ non sposti il registro.
 
 #### E-8.5 — Due rossi Vitest in dev, dal gate G ✅ (2026-10-17, 10:31–10:41)
 > **Il compito del coordinatore** (10:31, urgente, prima di E-15 e di X-R44). Il gate G (`front-utility`, dev
-> `91f4de9cb`) è rosso in due file di E. Log: `…/928ffa97-…/files/logs/gate-g.log`.
+> `040b6f8dd`) è rosso in due file di E. Log: `…/928ffa97-…/files/logs/gate-g.log`.
 > 1. **`emailText.test.ts` ETX-14** (core-unit): si aspetta ancora `['to']` per `email.sendLink.sent`, che da E-8 nomina
 >    anche `{language}`.
 > 2. **`linkShareRegistration.test.ts`** (component-unit) non si carica: `No "DEFAULT_LOCALE" export is defined on the
@@ -4611,13 +4611,13 @@ non sposti il registro.
 >   `SendLinkByEmail.test.ts:73-76`, con `_` che resta un traduttore identità. Anche così nessun catalogo si carica,
 >   perché `i18n/index.ts` registra solo dei loader pigri.
 >
-> **La base**: chiesto al coordinatore l'avanzamento rapido a dev `91f4de9cb`. I 40 commit di dev non toccano
+> **La base**: chiesto al coordinatore l'avanzamento rapido a dev `040b6f8dd`. I 40 commit di dev non toccano
 > `features/email`, il barile delle select, `language.ts` né l'indice i18n.
 > - Per lasciarlo passare ho tolto dal backlog la mia riga E-15, non committata; è salvata in
 >   `files/e15_backlog_line.diff`.
 > - La riscrivo per la cura (1) dopo l'avanzamento. Fatto: riscritta in questo checkpoint.
-> - Il coordinatore ha avanzato il ramo a dev **`46bbbb1e3`** (10:35), tenendo sporco il piano 08. Verificato: da
->   `73decbb99` dev non tocca `features/email`, il barile, `language.ts`, l'indice i18n, `conftest.py` né `cli_base.py`.
+> - Il coordinatore ha avanzato il ramo a dev **`9981ed279`** (10:35), tenendo sporco il piano 08. Verificato: da
+>   `469d4d101` dev non tocca `features/email`, il barile, `language.ts`, l'indice i18n, `conftest.py` né `cli_base.py`.
 > - I rossi DataTable (Y-27) dello stesso log erano una corsa del gate: Y-27 è entrato a metà run, e sulla punta sono
 >   64/64 (coordinatore).
 >
@@ -4652,7 +4652,7 @@ non sposti il registro.
 ### E-15 — I limiti dei login accesi in silenzio nei run combinati (`email-verification` rosso solo in `all-backend`)
 
 #### E-15.0 — Triage ✅ (2026-10-17, 09:56–10:30; skill `test-triage`)
-> **Il compito del coordinatore** (09:56). Nell'`all-backend --workers 2` di W su `5ece98c29`, `email-verification` è
+> **Il compito del coordinatore** (09:56). Nell'`all-backend --workers 2` di W su `873568fd4`, `email-verification` è
 > rosso solo nel run combinato: 21 fallimenti nei servizi e 7 nelle API, tutti `EmailRateLimitedError` con
 > `retry_after` di circa 899 s. Da soli, le due unità passano (gate D e F). Log:
 > `…/e71e0e34-…/files/logs/allb_sec73_0855.log`.
@@ -4789,8 +4789,8 @@ non sposti il registro.
 >   ancore.
 
 ### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
-> **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
-> `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
+> **Il compito del coordinatore** (05:02): A8a, cioè il codice `97db030cd`, le docs `964208f80` e il merge di dev
+> `bb7febeee`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
 > - **i miei file**, che rivedo io;
 > - **la sicurezza** del limite, che va a un `security-review` in background: `login_throttle.py`, `security.py`,
 >   `checks.py`, `end_sessions` in SQL, le chiamate in `auth.py`.
@@ -4812,10 +4812,10 @@ non sposti il registro.
 >     `emailText.ts` con «il limite dei login falliti» fra i 429. Tutto vero contro il codice: `login_throttle` usa
 >     davvero `SlidingWindowLimiter`.
 >   - `admin/email.en.md`: la riga nella tabella dei limiti, col link `configuration.md` nello stile della pagina.
-> - **Il merge `125c19f0e` è pulito sui miei file**:
->   - fra la punta di dev e `125c19f0e` ci sono solo gli hunk di A8a;
+> - **Il merge `bb7febeee` è pulito sui miei file**:
+>   - fra la punta di dev e `bb7febeee` ci sono solo gli hunk di A8a;
 >   - E-9 (`mailbox_budget_key`, i costruttori senza username) ed E-11 (il 401 codificato, la docstring) sono intatti;
->   - dev non ha più toccato i miei file da `fd6886bb0`.
+>   - dev non ha più toccato i miei file da `3759677aa`.
 > - **I test**: i miei non sono stati toccati.
 >   - `conftest.py` spegne il limite per ogni processo di test (`setdefault`, quindi un valore esplicito vince ancora), e
 >     `dev.py` lo spegne solo nel ramo `--test` del server.
@@ -4834,7 +4834,7 @@ non sposti il registro.
 >
 > **⚠️ Fuori pista: l'agente `security-review` è fallito** prima di leggere qualsiasi cosa: «400 The requested model is
 > not supported», un errore dell'infrastruttura. Rilanciarlo avrebbe dato lo stesso errore. Il diff di sicurezza è
-> piccolo (circa 270 righe), quindi la revisione l'ho fatta io, in sola lettura dagli oggetti git a `125c19f0e`.
+> piccolo (circa 270 righe), quindi la revisione l'ho fatta io, in sola lettura dagli oggetti git a `bb7febeee`.
 >
 > **Reperto 1 — MEDIUM, confidenza 8/10: dietro un reverse proxy non configurato, 50 tentativi sbagliati di chiunque
 > bloccano il login di tutti.**
@@ -4907,7 +4907,7 @@ non sposti il registro.
 > - **`GET /security/checks`**: `require_admin`; rende id, gravità, chiave i18n e parametri. Il controllo del limite
 >   mette nei parametri solo il valore non valido della variabile, che non è un segreto.
 
-> **R13-SEC6 committato ed entrato** (coordinatore, 05:13; dev `3f664ae37`; HEAD portato avanti con un fast-forward).
+> **R13-SEC6 committato ed entrato** (coordinatore, 05:13; dev `743c7ef8e`; HEAD portato avanti con un fast-forward).
 > Lo smistamento:
 > - **A corregge dentro A8a**, decisione notturna **N70**: niente limite per indirizzo dietro un proxy non fidato, l'LRU
 >   che non sfratta le chiavi piene, la doc admin;
@@ -5018,8 +5018,8 @@ non sposti il registro.
 > `client_address(request)`. Così E-13 è una riga per chiamata.
 
 #### E-13.2 — Cura, test e documenti ✅ (2026-10-17, 06:55–07:12)
-> **La base** (coordinatore, 06:55): il mio ramo è avanzato a `da640e33a`, cioè A8a più N70 (`5225f4f05`) più dev
-> `c8ea9ddd4` (H-36, H-37, W-B60, SEC7-2…). I quattro file sporchi sono intatti.
+> **La base** (coordinatore, 06:55): il mio ramo è avanzato a `9c99383da`, cioè A8a più N70 (`4fc3c3600`) più dev
+> `33df8ba40` (H-36, H-37, W-B60, SEC7-2…). I quattro file sporchi sono intatti.
 >
 > **La cura**, una riga per chiamata, come il contratto di E-13.1:
 > - `api/v1/email.py`: forgot (`:160`) e resend (`:208`) passano `rate_limit_address(request)` al posto di
@@ -5092,8 +5092,8 @@ non sposti il registro.
 > `users-admin` e i servizi di A8a e di E) e `all-backend`.
 
 #### E-13.3 — Slot combinato ✅ (2026-10-17, 07:11–07:20)
-> **Il via del coordinatore** (07:11): E-13 è committato (`bfa2729e9` fix, `aad2a2bbf` docs, `39fad6fd3` journal).
-> La base è aggiornata a `8c9550ec6` = A8a + N70 + E-13 + dev `4c767685f` (H-37, X-R47, J-43/SEC7-1, MF…), pulita.
+> **Il via del coordinatore** (07:11): E-13 è committato (`7bba63681` fix, `538d96524` docs, `397f0d2af` journal).
+> La base è aggiornata a `8b624701e` = A8a + N70 + E-13 + dev `661257511` (H-37, X-R47, J-43/SEC7-1, MF…), pulita.
 > Lo slot 1 è mio, corsia 6188, una invocazione alla volta. A rivede intanto la riga di `/auth/register`.
 >
 > **Esito** (`files/tools/e13_combined.sh`, 07:13–07:20, carico 24; servizi e utils in-process, `db populate --force`
@@ -5235,26 +5235,26 @@ non sposti il registro.
 
 ### R13-SEC7 — Revisione di sicurezza di ciò che è entrato in dev dopo le mie revisioni (2026-10-17, 05:40–)
 > **Il compito del coordinatore** (05:3x), mentre aspetto H-36 e poi A8a più N70, cioè E-13, ed E-8 dopo A8b:
-> - in sola lettura, dagli oggetti git, su dev `1a937b93e`, solo in `backend/app/**`: rotte, parsing dell'input,
+> - in sola lettura, dagli oggetti git, su dev `1da1b3123`, solo in `backend/app/**`: rotte, parsing dell'input,
 >   autenticazione, filesystem, subprocess;
 > - nessuna esecuzione, nessuna corsia;
 > - se `security-review` fallisce ancora sull'infrastruttura, la revisione la faccio io.
 >
-> **L'intervallo**: `db506eb21..1a937b93e`, perché `db506eb21` è la base di R13-SEC2.
+> **L'intervallo**: `127299d5f..1da1b3123`, perché `127299d5f` è la base di R13-SEC2.
 > - 41 commit toccano `backend/app`.
 > - Esclusi:
->   - i lotti rivisti prima dell'ingresso: A7b `f99edbf6b` (SEC3), A7b-2 `53c064556` e `2a238cf0c` (SEC4), B4
->     `df1f0d52c` (SEC4), X-R24/25 `e22251856` e X-R38 `80f5c65ff` (SEC5);
->   - i miei: E-9 `3dd23eaa4`, E-11 `18d945d2e`;
->   - un commit di sola docstring, `ef3f29f52`.
-> - Restano **33 commit**, circa 9 400 righe di diff. I due più grandi, `539351fd9` per i segnali e `b6d45f026` per il
+>   - i lotti rivisti prima dell'ingresso: A7b `441fa7402` (SEC3), A7b-2 `870d0a2b8` e `cd24d8966` (SEC4), B4
+>     `a7c407c59` (SEC4), X-R24/25 `5f80aa60b` e X-R38 `ecc550580` (SEC5);
+>   - i miei: E-9 `83e0bafd5`, E-11 `0dae86a1c`;
+>   - un commit di sola docstring, `240d0b1d3`.
+> - Restano **33 commit**, circa 9 400 righe di diff. I due più grandi, `aef2d12cd` per i segnali e `3c7107a2e` per il
 >   rischio, sono spostamenti di codice per tema.
 >
 > **Tre revisioni in parallelo**:
-> - **A, piattaforma e file**: le pulizie all'avvio di B4b (`964ecf434`, cancellano file), il sito statico (H-28,
+> - **A, piattaforma e file**: le pulizie all'avvio di B4b (`38b9997bb`, cancellano file), il sito statico (H-28,
 >   H-29), H-33, H-32, H-27, X-R35, X-R37, gli aiuti tolti;
-> - **B, limiti numerici e provider**: W-B58 (`7a4fdf024`), da verificare **punto per punto** sul reperto di
->   R13-SEC2, più `de901f228`, `475bb9270`, X-R40, X-R50, X-R51, X-R52 e W-B59;
+> - **B, limiti numerici e provider**: W-B58 (`dc92f2b54`), da verificare **punto per punto** sul reperto di
+>   R13-SEC2, più `6deb644e9`, `f2d984163`, X-R40, X-R50, X-R51, X-R52 e W-B59;
 > - **C, refactor e conti**: il rischio, i segnali, il portafoglio, la matematica e l'AI Export. Il fuoco è
 >   sull'autorizzazione che deve sopravvivere agli spostamenti (grep sulle righe tolte e aggiunte), sul perimetro fra
 >   utenti e sui parametri nuovi.
@@ -5320,7 +5320,7 @@ non sposti il registro.
 >
 > **Reperto 2: l'orizzonte degli investimenti programmati non ha un tetto.**
 > - Le date dei periodi (`schemas/assets/scheduled_investment.py:121-141`) sono controllate solo nell'ordine.
->   `_accrual_days` (`scheduled_investment/plugin.py:168-211`, nuovo in `ec8a0b31e`) cammina un giorno alla volta, e
+>   `_accrual_days` (`scheduled_investment/plugin.py:168-211`, nuovo in `886c06cb6`) cammina un giorno alla volta, e
 >   l'interesse di mora COMPOUND è quadratico.
 > - **Lo sfruttamento**:
 >   - qualsiasi utente manda `POST /assets/provider/probe` (`providers.py:194`, una prova a vuoto) con un calendario
@@ -5383,14 +5383,14 @@ non sposti il registro.
 >   - `_decimal_fixed_point` che rifiuta o limita un esponente enorme anche in uscita.
 >
 > **Note**:
-> 1. **LOW, confidenza 9/10: id di altri utenti.** Il nuovo 409 `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` (`475bb9270`)
+> 1. **LOW, confidenza 9/10: id di altri utenti.** Il nuovo 409 `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` (`f2d984163`)
 >    rende `params.transaction_ids`, cioè ogni ADJUSTMENT senza costo collegato allo SPLIT, di **tutti** gli utenti,
 >    con il loro conteggio.
 >    - Va contro la regola del modulo stesso (`event_store.py:298`, «no transaction id: they may belong to other
 >      users»).
 >    - Chiunque può provocarlo su un asset globale, perché gli eventi sono modificabili da chiunque.
 >    - La direzione: solo gli id visibili più un conteggio dei nascosti, come fa `delete_events_bulk`.
-> 2. **`de901f228`, il costo Auto**: con due create dello stesso broker, asset, data e tipo senza `link_uuid`, la query
+> 2. **`6deb644e9`, il costo Auto**: con due create dello stesso broker, asset, data e tipo senza `link_uuid`, la query
 >    di ripiego trova la riga più recente per tutte e due. La più vecchia resta così con l'importo mandato dal client,
 >    non controllato: lo limita solo la guardia sul bind, e l'effetto resta sui broker di chi lo manda.
 >    - La direzione: ignorare l'importo in modo Auto, e abbinare le righe create per indice.
@@ -5411,7 +5411,7 @@ non sposti il registro.
 >
 > Nessuna correzione da parte mia.
 
-> **R13-SEC7 committato** (coordinatore, 05:57; il piano è in dev, da `132932198` a `d5126c19a`; i test di E-13
+> **R13-SEC7 committato** (coordinatore, 05:57; il piano è in dev, da `ec81be453` a `6e06bf896`; i test di E-13
 > restano fuori). Lo smistamento, e ogni lotto lo rivedo io al suo checkpoint:
 > - **SEC7-1** (l'intervallo delle date) va a **J**, con priorità massima: il taglio nel motore, nessuna modifica a
 >   `schemas/common.py` per ora;
@@ -5422,7 +5422,7 @@ non sposti il registro.
 > - **gli id di altri utenti nel 409**, LOW, vanno a **X** dentro X-R47; **l'`OverflowError` delle impostazioni dei
 >   plugin** va a X, dopo;
 > - **`profile_default` che fallisce chiuso** va a **H**, come H-37 dopo H-36;
-> - **il costo Auto** (`de901f228`) va nel backlog di W; **le righe vecchie non finite** sono già D-W63-1 e X-R45 per
+> - **il costo Auto** (`6deb644e9`) va nel backlog di W; **le righe vecchie non finite** sono già D-W63-1 e X-R45 per
 >   il developer; D-SEC2-1 è già nell'elenco.
 
 > **La forma di H-36 per E-13** (coordinatore, 06:11, note di H): `client_address.rate_limit_address(request)`, dove
@@ -5445,7 +5445,7 @@ non sposti il registro.
 > 4. **Le prove**: i rossi EVA-018, EMA-050 ed EVH-014 diventano verdi; le guardie restano verdi; poi le suite email,
 >    `api auth` e `api registration`, e mkdocs stretto.
 
-> **La revisione di X-R47 e del LOW di R13-SEC7** (`5f68a8db0`, 06:20, sola lettura): **sano, nessun reperto sopra la
+> **La revisione di X-R47 e del LOW di R13-SEC7** (`ad95e8699`, 06:20, sola lettura): **sano, nessun reperto sopra la
 > soglia.**
 > - Gli id visibili si filtrano con `BrokerUserAccess`, come `delete_events_bulk`; `hidden_transactions_count` conta
 >   gli altri, e il messaggio dà solo il totale.
@@ -5473,7 +5473,7 @@ non sposti il registro.
 > l'ingresso di A8a, N70 ed E-13. **L'allineamento del percorso va in E-8**, insieme al selettore della lingua (N69),
 > sulla base che contiene A8b.
 
-> **La revisione di R13-SEC7-2** (MF, `db5486ae9`, 06:47–06:55): **chiuso.**
+> **La revisione di R13-SEC7-2** (MF, `38e416b62`, 06:47–06:55): **chiuso.**
 > - **I limiti** stanno sui modelli che il plugin usa a ogni chiamata (probe, sync, storia): date fra il 1900 e il
 >   2200, al più 1 200 periodi, una durata di al più 36 525 giorni, una tolleranza di al più 36 525 giorni.
 > - **La finestra della mora** si ferma a `SCHEDULE_MAX_DATE`.
@@ -5485,7 +5485,7 @@ non sposti il registro.
 >   - il caso peggiore permesso, circa 250 ms, si può ripetere, perché il probe non ha un limite per utente;
 >   - i tassi illimitati finiscono in un overflow preso.
 
-> **La revisione di H-37** (`373cb53e6`, dopo l'ingresso in dev `b37e926af`): **sano.**
+> **La revisione di H-37** (`6178379b8`, dopo l'ingresso in dev `564f50635`): **sano.**
 > - Un profilo diverso da `selfhosted` che non elenca la variabile solleva `ProfileDefaultError`.
 > - L'unico lettore è il limite di upload, preso nella rotta del ripristino: 503 all'upload, `None` per la sola
 >   visualizzazione.
@@ -5498,7 +5498,7 @@ non sposti il registro.
 >   spenta (e un'informazione per il CSP in sola segnalazione); e una regola di revisione: un campo di sicurezza nuovo
 >   dichiara il suo valore managed nello stesso lotto.
 
-> **La revisione di X-R47b** (`1b6d65da7` = `8914eacf3~1`, 07:0x, sola lettura): **chiuso.**
+> **La revisione di X-R47b** (`adcd211d4` = `361cf3a5f~1`, 07:0x, sola lettura): **chiuso.**
 > - Senza chiamante, i dettagli del P-10 portano `transaction_ids: []` e `hidden_transactions_count` uguale al totale.
 >   La forma è sempre la stessa: nessun'altra chiave porta gli id nascosti, e il test lo fissa.
 > - La rotta passa `_current_user.id`: viene da `Depends(get_current_user)`, quindi c'è sempre. È l'unico chiamante di
@@ -5524,8 +5524,8 @@ non sposti il registro.
 >   - (c) i test, in entrambi gli ordini di registrazione;
 >   - (d) facoltativo, per H: il conteggio delle collisioni legacy nel controllo di sicurezza.
 
-> **La revisione di N70 a posteriori** (07:2x, sola lettura). I commit: A `b0d3d2d4f` (`rate_window.py`), `c11a98e18`
-> (`auth.py` e `login_throttle.py`) e `5225f4f05` (docs); H-36 `36cc0119d`. Sono entrati in dev con `440616c61`.
+> **La revisione di N70 a posteriori** (07:2x, sola lettura). I commit: A `0f82cadea` (`rate_window.py`), `58abd2e7c`
+> (`auth.py` e `login_throttle.py`) e `4fc3c3600` (docs); H-36 `ec1daad58`. Sono entrati in dev con `cafe7e645`.
 > **Nessun reperto sopra la soglia.**
 > - **Il codice è sano.**
 >   - `_evict_one` non sfratta mai la chiave nuova e termina sempre: oltre `max_keys` chiavi ce n'è sempre un'altra.
@@ -5569,7 +5569,7 @@ non sposti il registro.
 >   visitatori IPv6 condividono un conteggio per indirizzo: il DoS di R13-SEC6, solo per IPv6 e solo con l'esposizione
 >   diretta, senza reverse proxy. La proposta è una frase nei docs, da verificare su un host Linux.
 
-> **La revisione di X-R43 a posteriori** (`f69f8bdc5`, già in dev `3e7948446`; 07:5x, sola lettura): **chiusa, nessun
+> **La revisione di X-R43 a posteriori** (`d5ff61715`, già in dev `a0addb818`; 07:5x, sola lettura): **chiusa, nessun
 > reperto.**
 > - `validate_value` controlla gli interi con `abs ≤ 2^53−1` e i float con `isfinite`, quindi non solleva mai
 >   `OverflowError`. Il messaggio non porta il valore.
@@ -5581,22 +5581,22 @@ non sposti il registro.
 > - Dichiarazioni: `_check_bounds` gira **prima** della verifica del default. Serve, perché `validate_value` formatta i
 >   limiti con `:g`, e `format(2**1100, 'g')` alza `OverflowError` (verificato).
 
-> **E-14 è entrato** (coordinatore, 07:58): dev `70dccc16f`, CHANGELOG 🔒 `c2b4ec20e`. Il mio HEAD è avanzato a
-> `c2b4ec20e`. A: **OK**, 127/127 con il mio `rate_window.py`.
+> **E-14 è entrato** (coordinatore, 07:58): dev `f96b7b91f`, CHANGELOG 🔒 `14bd1668e`. Il mio HEAD è avanzato a
+> `14bd1668e`. A: **OK**, 127/127 con il mio `rate_window.py`.
 >
 > **La nota di A, non bloccante**: quando un colpo scade, `_expire` rimette la chiave alla fine (la più usata) del
 > gruppo più basso. Così il «least recently used» del docstring è un po' largo. **Da sistemare nel prossimo lotto**
 > (E-8), con una frase esatta.
 >
-> **R13-SEC8** (07:58, sola lettura): `backend/app` da dev `1a937b93e` a `c2b4ec20e`, senza ciò che ho già rivisto
+> **R13-SEC8** (07:58, sola lettura): `backend/app` da dev `1da1b3123` a `14bd1668e`, senza ciò che ho già rivisto
 > (SEC7-2, X-R47b, H-37, X-R43, N70, E-14).
-> - **12 commit**: Z-11 (`2db7edd68`, `5ab865a63`); B-28 (`9403ecda0`); B-29 (`c96861834`); i controlli di backup
->   (`b35581e5b`); W-B60 (`841130215`); MF-P2 (`ed954008e`); J-43/SEC7-1 (`a46f85bda`); `051409d25`; MF-SI1
->   (`69cc2faac`, `f37b1d0ea`); `d5d080a84`.
-> - `66873b0c9` (A8a) è dentro `125c19f0e`, già rivisto in SEC6.
+> - **12 commit**: Z-11 (`ddd9207b1`, `0c3bbb656`); B-28 (`63e4f3ee7`); B-29 (`ad729f63b`); i controlli di backup
+>   (`08ab0980e`); W-B60 (`3fb98c1b7`); MF-P2 (`8054c9c1d`); J-43/SEC7-1 (`2b5adbc4f`); `6eaaa20c8`; MF-SI1
+>   (`0d0500850`, `c6efcf0d2`); `f98e00195`.
+> - `97db030cd` (A8a) è dentro `bb7febeee`, già rivisto in SEC6.
 > - Prima l'agente `security-review` (07:59).
 
-> **La revisione di A-21a** (`5da71d037`, 08:0x, sola lettura, la cura del mio MEDIUM sul lookup): **chiusa, nessun
+> **La revisione di A-21a** (`9317c62b5`, 08:0x, sola lettura, la cura del mio MEDIUM sul lookup): **chiusa, nessun
 > reperto.**
 > - **Regola 3 (il lookup)**: con `@` prima l'indirizzo (A-Z senza maiuscole, P18), poi il nome legacy esatto; senza
 >   `@`, solo lo username esatto, mai un indirizzo. Gli abusivi già presenti perdono effetto, qualunque sia l'ordine di
@@ -5632,7 +5632,7 @@ non sposti il registro.
 >   - W-B60: ±inf o testo salvati si leggono come None nelle colonne NOT NULL (LOW, solo da DB vecchi o da restore);
 >   - SEC7-3 è ancora aperto da W, e su `/fx/currencies/convert` si moltiplica con SEC8-1.
 >
-> **La revisione di J-45** (`43a7f0156`, il motore fuori dal loop; MF): **nessun rischio di thread.**
+> **La revisione di J-45** (`7753b9774`, il motore fuori dal loop; MF): **nessun rischio di thread.**
 > - `build()` legge solo colonne caricate e mai la sessione; nessun `gather` sulla stessa sessione.
 > - Né il builder né i suoi import hanno stato mutabile a livello di modulo.
 > - Il contesto `decimal` è condiviso per riferimento da `copy_context()`, ma nessuno lo muta: proposta la regola «solo
@@ -5653,7 +5653,7 @@ non sposti il registro.
 >   (pulizia).
 > - **J-45**: OK. La mia regola «solo `localcontext()`» entra nelle istruzioni di financial-math (MF).
 
-> **La revisione di H-39 a posteriori** (`52adadc05`, più i docs di H-34 e H-40 in `a64fb8d07`; 09:1x, sola lettura):
+> **La revisione di H-39 a posteriori** (`f9e4be30e`, più i docs di H-34 e H-40 in `763cee0cf`; 09:1x, sola lettura):
 > **chiusa, nessun reperto.**
 > - Con `managed`, la protezione dei frame spenta dà `warning` e il CSP report-only spento dà `info`; acceso, o
 >   self-hosted, `ok`.
@@ -5666,7 +5666,7 @@ non sposti il registro.
 >   basta scrivere nel piano di H che viene dalla documentazione di Docker.
 > - **I docs di H-34**: coerenti con il codice. `TXMixedBatch` è dichiarato onestamente fuori dalla visita.
 
-> **La revisione di MF-SEC8-2** (`ee440a5db`, ramo di MF `fddeb819a`, 09:4x, sola lettura; è la cura del mio SEC8-2):
+> **La revisione di MF-SEC8-2** (`5383e5fcc`, ramo di MF `09c8786a2`, 09:4x, sola lettura; è la cura del mio SEC8-2):
 > **chiusa, nessun reperto.** Il mio SEC8-2 è curato anche prima della N74 di W.
 > - **L'emissione parte dal pavimento del 1900-01-01**: `calculate`, il `computed_from` e il `display_from` dei lots,
 >   `_unit_requests`, l'FX in transito del motore e i calendari del builder (`max(_replay_from, pavimento)`). Non resta
@@ -5678,7 +5678,7 @@ non sposti il registro.
 > - **Residuo LOW**: dopo la N74, un report dal 1900 emette circa 46 000 giorni, cioè 3,5 volte un portafoglio dal 1990.
 >   La cura facoltativa resta «un replay alla volta per utente». È una scelta di prodotto.
 
-> **Lo slot E2E di E-8** (coordinatore, 09:48; parti 1 e 2, sulla punta `20c70013e`; `files/tools/e8_e2e_slot.sh`,
+> **Lo slot E2E di E-8** (coordinatore, 09:48; parti 1 e 2, sulla punta `064e8afb1`; `files/tools/e8_e2e_slot.sh`,
 > corsia 6188, `--workers 2`, una spec alla volta, macchina condivisa con J e H):
 >
 > | Spec | Esito | Durata |
@@ -5688,7 +5688,7 @@ non sposti il registro.
 >
 > La porta 6188 è libera alla fine (09:55). E-8 è pronto all'ingresso.
 
-> **La revisione di X-R44** (`59f5bcfdc`, il ramo di X; 10:2x–10:5x, sola lettura dagli oggetti git, interrotta alle
+> **La revisione di X-R44** (`0573b90dd`, il ramo di X; 10:2x–10:5x, sola lettura dagli oggetti git, interrotta alle
 > 10:31 dall'urgenza E-8.5 e ripresa dopo): **chiusa, nessun reperto bloccante.** È la cura della mia nota di R13-SEC5:
 > `mockprov`, `MOCKFX` e `MOCKFX_FAIL` erano raggiungibili sulle istanze di produzione.
 > - **Le quattro porte nascondono i doppi**: `get_plugin`, `get_plugin_instance`/`get_provider_instance`,
@@ -5745,8 +5745,8 @@ non sposti il registro.
 >     - il catalogo delle impostazioni è filtrato;
 >     - la catena FX usa solo porte filtrate.
 
-> **La revisione di H-42** (11:4x, sola lettura dagli oggetti git, ramo di H: `7903bbe72` il codice, `84c71a0c7` la
-> guardia E2E, `fb8661dd2` i docs; più H-45, il seguito SVG/XHTML che H mi ha girato): **OK, nessun reperto
+> **La revisione di H-42** (11:4x, sola lettura dagli oggetti git, ramo di H: `1275e4196` il codice, `1be524168` la
+> guardia E2E, `304a3bde5` i docs; più H-45, il seguito SVG/XHTML che H mi ha girato): **OK, nessun reperto
 > bloccante.**
 > - **Verificato**:
 >   - `_is_html()` riconosce `text/html` in ogni maiuscola e con ogni parametro;
@@ -5777,13 +5777,13 @@ non sposti il registro.
 >   politica sparirebbe ai caricamenti rivalidati. Non provato in un browser. La guardia: nessuna CSP su un 304.
 > - Verdetto mandato alle 11:4x.
 
-> **La revisione di A9 `ForgotPasswordCard`** (`b1b647edc`, già in dev; 11:5x): **OK per E, un reperto LOW di UX.**
+> **La revisione di A9 `ForgotPasswordCard`** (`3fda5af41`, già in dev; 11:5x): **OK per E, un reperto LOW di UX.**
 > - **OK**:
 >   - il form di E è intatto, e resta il primo quando i link per email ci sono;
 >   - in managed «chiedi all'amministratore» prende il posto del pannello dei comandi;
 >   - il self-hosted non cambia;
 >   - prima della risposta del server non compare nessuno dei due.
-> - **Vitest** su `da02ed816`, 5 file, **331 / 331**: `ForgotPasswordCard.email`, `ForgotPasswordCard.managed`,
+> - **Vitest** su `7f1eec6ff`, 5 file, **331 / 331**: `ForgotPasswordCard.email`, `ForgotPasswordCard.managed`,
 >   `ForgotPasswordEmailForm`, `forgotPasswordApi` ed `emailText`. A9 era entrato dopo il mio run dei vicini di E-8.5.
 > - **Reperto, LOW** (file di A): se `GET /system/instance` fallisce, lo store mette `failed` ma mai `loaded`, e la
 >   scheda resta vuota.
@@ -5816,12 +5816,12 @@ non sposti il registro.
 ### R13-SEC9 — Revisione di sicurezza delle entrate di oggi non ancora riviste (2026-10-17, 11:4x–12:3x)
 > **Il compito del coordinatore** (11:4x, sola lettura, stesso formato di SEC7 e SEC8: reperti con gravità e
 > proprietario, niente codice):
-> - **A9** (dev `ba8f3b06e`): gli URL legali e il profilo managed;
-> - **Z-25** (`d0bc7a547`) e **MF-P2b** (`c9b1162d4`): i limiti delle richieste in blocco e dei period-changes;
-> - **MF X-R59** (`a8de6b584`, sul ramo di MF, non ancora entrato): `/prices/current?range_start`;
-> - **W-B71** (`1431e20df`, la saturazione delle date) e **la metà batch di W-B69** (`eee5dad17`);
-> - **J-47** (`647efcc28`);
-> - **B-32** (`7af21a5c1`) e **B-18** (`5c4d7456a`), solo una scorsa: B fa la sua revisione dei backup.
+> - **A9** (dev `5c1806198`): gli URL legali e il profilo managed;
+> - **Z-25** (`bdaaaee4f`) e **MF-P2b** (`dd5471a64`): i limiti delle richieste in blocco e dei period-changes;
+> - **MF X-R59** (`b3b593da1`, sul ramo di MF, non ancora entrato): `/prices/current?range_start`;
+> - **W-B71** (`22296d87e`, la saturazione delle date) e **la metà batch di W-B69** (`62faa88aa`);
+> - **J-47** (`29438a1ca`);
+> - **B-32** (`4226cef79`) e **B-18** (`f038c75e6`), solo una scorsa: B fa la sua revisione dei backup.
 >
 > **⚠️ Fuori pista, un errore mio**: nel primo comando ho messo un `git fetch -q` che non serviva, perché gli oggetti
 > sono nel deposito locale condiviso. L'ho fermato dopo 30 s. Tocca solo i riferimenti remoti, mai un ramo locale, e non
@@ -5921,7 +5921,7 @@ non sposti il registro.
 >
 > Rivedo ognuno al suo checkpoint.
 >
-> **Addendum a SEC9: H-46** (`3cce3a2b8`, già in dev con `b7dcd3a25`; 12:2x, chiesto dal coordinatore con la correzione
+> **Addendum a SEC9: H-46** (`3851c67e7`, già in dev con `0369806c2`; 12:2x, chiesto dal coordinatore con la correzione
 > di H). È la mia nota 2 di X-R44. **OK, nessun reperto.**
 > - **Il controllo** `platform.test_mode`:
 >   - `ok` con il test mode spento, `ok` dentro una corsia (un `LIBREFOLIO_TEST_LANE_ID` non vuoto), `error` fuori, in
@@ -5947,7 +5947,7 @@ non sposti il registro.
 
 ### E-16 — Le due frasi di E sulla «password dimenticata» dopo FPM-08 (2026-10-17, 12:3x)
 
-#### E-16.0 — Analisi ✅ (2026-10-17, 12:3x; sola lettura, HEAD `c2021cb52`)
+#### E-16.0 — Analisi ✅ (2026-10-17, 12:3x; sola lettura, HEAD `f26da25df`)
 > **Il compito del coordinatore** (12:20): la prossima voce aperta di E che non chiede una decisione del developer, con
 > una breve analisi; altrimenti restare fermo.
 >
@@ -5959,7 +5959,7 @@ non sposti il registro.
 >   è del developer.
 > - E-10, E-13, E-14 ed E-15 sono chiuse.
 >
-> **L'unica cosa libera, nuova**: il seguito della mia nota su A9. La correzione di A (`d04ffde90`, FPM-08, in dev)
+> **L'unica cosa libera, nuova**: il seguito della mia nota su A9. La correzione di A (`4de53d638`, FPM-08, in dev)
 > mostra solo «Ask your administrator…» quando `GET /system/instance` fallisce prima di ogni risposta, in tutti e due
 > i profili. Con la richiesta fallita, `email.links` non c'è, quindi neanche il form di E.
 > - A ha allineato le sue pagine (`frontend/components/features/auth.md`, `state/app-state.md`), non le mie due.
@@ -5989,7 +5989,7 @@ non sposti il registro.
 > - `developer/backend/email.md:1260-1262`: «When the request fails before any answer (`instanceConfig.failed`, never
 >   `loaded`), `email.links` is unknown: the card shows only `forgot-ask-admin`, the advice that holds in both profiles
 >   (FPM-08, workstream A).»
-> - Verificato sul codice di A (`d04ffde90`): il ramo `(!instanceConfig.loaded && instanceConfig.failed)` mostra solo
+> - Verificato sul codice di A (`4de53d638`): il ramo `(!instanceConfig.loaded && instanceConfig.failed)` mostra solo
 >   `askAdmin()`. Se la configurazione era già stata letta, resta in vigore l'ultima.
 >
 > **Prove** (12:22–12:24, `files/tools/e16_docs.sh`, carico 27–42):
@@ -6004,7 +6004,7 @@ non sposti il registro.
 > Pagine solo inglesi: niente traduzioni né stamp.
 
 ### X-R49 — La vista del chiamante (2026-10-17, 12:2x; dopo l'ingresso, sola lettura dagli oggetti git)
-> **Il compito del coordinatore** (12:25): X-R49 (dev `e710cf552`, commit `589f15607`). Il controllo
+> **Il compito del coordinatore** (12:25): X-R49 (dev `97cc158ad`, commit `211216f13`). Il controllo
 > `_reject_wipes_of_costless_split_adjustments()` di `provider_management.py` gira prima della prima scrittura, e il
 > 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` porta `params.splits` con gli id visibili al chiamante e un
 > conteggio dei nascosti, come X-R48.
@@ -6034,7 +6034,7 @@ non sposti il registro.
 > - La finestra è di millisecondi.
 > - La cura, se la si vuole: ripetere il controllo dopo la prima scrittura, sotto il lock, come A-42.
 
-### H-45 — La revisione (2026-10-17, 12:3x; sola lettura, ramo di H: `3553c7870` codice e test, `77e9611e0` docs)
+### H-45 — La revisione (2026-10-17, 12:3x; sola lettura, ramo di H: `f107212b9` codice e test, `5b1e7cc93` docs)
 > **Esito: OK, nessun reperto.** È il seguito che avevo proposto in H-42, più la mia nota latente sul 304.
 > - **`_is_document()`**: il tipo della risposta (il primo `content-type`, senza parametri, in minuscolo) è in
 >   `DOCUMENT_MEDIA_TYPES` (`text/html`, XHTML, SVG, `application/xml`, `text/xml`) o finisce in `+xml`.
@@ -6057,17 +6057,17 @@ non sposti il registro.
 ### E-17 — Due errori di `tsc -p frontend/tsconfig.e2e.json` (2026-10-17, 12:3x–12:5x)
 > **Il compito del coordinatore** (12:35, un riempitivo in attesa di A-42/A-43): due errori preesistenti, di nessun
 > ramo attivo.
-> - `e2e/onboarding-tour.spec.ts:863` TS2322 (da `580bd504f`, onboarding).
-> - `src/lib/types/files.ts:9` TS2307 `$lib/api/generated` (da `ff38088b9`): `tsconfig.e2e.json` non ha `$lib`.
+> - `e2e/onboarding-tour.spec.ts:863` TS2322 (da `ce718ca49`, onboarding).
+> - `src/lib/types/files.ts:9` TS2307 `$lib/api/generated` (da `bac98d06c`): `tsconfig.e2e.json` non ha `$lib`.
 > - La richiesta: correggerli al minimo (solo tipi nella spec; `paths` o `include` nel tsconfig), senza cambi a
 >   runtime, fino a `tsc` pulito, più Prettier; poi FROZEN. Nessun E2E se cambiano solo tipi e configurazione.
 >
-> **Riprodotto** (HEAD `ac3c03177`): **5 errori**, non 2. Gli altri 3 sono TS2769 in `e2e/assets/asset-list.spec.ts:1046`
+> **Riprodotto** (HEAD `3d5a12af3`): **5 errori**, non 2. Gli altri 3 sono TS2769 in `e2e/assets/asset-list.spec.ts:1046`
 > e `e2e/fixtures/sync-overwrite.ts:89,125`.
 > - Prima ipotesi: il mio `generated.ts` (09:49) era vecchio. Rigenerato con `dev.py api sync` (36 s; scrive solo file
 >   ignorati, verificato con `git check-ignore` e `git status`): i 3 restano.
 > - **La causa**: `schemas.FAPriceQueryResponse.parse()` porta l'allargamento di E-2 (`backward_fill_info` diventa
->   `X | (X | null)[] | null`). Contro di lui va il parametro di `isStoredPoint` di C-66 (`c18517e31`, 11:03, in dev).
+>   `X | (X | null)[] | null`). Contro di lui va il parametro di `isStoredPoint` di C-66 (`02348f9b3`, 11:03, in dev).
 > - Sono di un ramo attivo: non li tocco, li segnalo.
 >
 > **Le cure**:
@@ -6103,7 +6103,7 @@ non sposti il registro.
 >
 > **Non eseguito**: nessun E2E (solo tipi, configurazione e un `false` che prende lo stesso ramo di `undefined`).
 
-### SEC8-1b — La revisione della cura di J (2026-10-17, 13:5x; sola lettura, ramo di J `949825b8b`)
+### SEC8-1b — La revisione della cura di J (2026-10-17, 13:5x; sola lettura, ramo di J `ee95bbe67`)
 > **Esito: OK, nessun reperto.** È il residuo del mio SEC8-1, cioè il replay del rischio su un intervallo senza
 > limite.
 > - **`bounded_range()`** (`risk/scope.py`):
@@ -6227,12 +6227,12 @@ non sposti il registro.
 > **Non ancora**: la registrazione nel runner. Lo snippet del `test-author` è pronto
 > (`schemas currency-write-strict`, `isolation="pure"`) e va con il codice. Il file non registrato non gira in nessun
 > run del runner, quindi i suoi 236 rossi non toccano i cancelli.
-> - Il coordinatore (14:05): i rossi sono committati sul mio ramo soltanto (`93f8aa877`). Un file non registrato in
+> - Il coordinatore (14:05): i rossi sono committati sul mio ramo soltanto (`4eaf61ca9`). Un file non registrato in
 >   dev farebbe scattare `check-orphans`, quindi entrano col codice.
-> - Poi ha unito dev nel mio ramo (`719903aba`, con X-R59/SEC9-1 di MF, dev `482343eb3`): il codice di E-18 può
+> - Poi ha unito dev nel mio ramo (`037eb82ab`, con X-R59/SEC9-1 di MF, dev `b284dd624`): il codice di E-18 può
 >   partire.
 
-#### E-18.2 — Il codice ✅ (2026-10-17, 14:0x–14:3x; base `719903aba`)
+#### E-18.2 — Il codice ✅ (2026-10-17, 14:0x–14:3x; base `037eb82ab`)
 > **Sulla base unita**, i rossi prima del codice: gli stessi 236, tutti marcati, e 628 verdi.
 >
 > **Note implementazione**:
@@ -6308,10 +6308,10 @@ non sposti il registro.
 > - Un codice di truth non ISO oggi non si raggiunge. Se arrivasse, ora alzerebbe un errore dentro `_cash_proposals`.
 > - La cura, se la si vuole: saltare quella valuta con un avviso.
 
-#### E-18.3 — Il giro combinato prima dell'ingresso ✅ (2026-10-17, 14:40–14:52; corsia 6188, HEAD `dce27360a`)
+#### E-18.3 — Il giro combinato prima dell'ingresso ✅ (2026-10-17, 14:40–14:52; corsia 6188, HEAD `8e90581d3`)
 > **Il compito** (coordinatore, 14:3x):
-> - E-18 è nel mio ramo: `ed8b3c28e` codice, `601b3714b` docs, `c6a996275` diario.
-> - Poi il merge di dev `942934dd6`, con dentro MF-SEC9a: HEAD `dce27360a`.
+> - E-18 è nel mio ramo: `18c499238` codice, `2390eb743` docs, `4fec8c25a` diario.
+> - Poi il merge di dev `a5e4a1d8c`, con dentro MF-SEC9a: HEAD `8e90581d3`.
 > - La mia base era vecchia di circa 25 entrate, ed E-18 stringe ogni scrittura: un giro combinato prima dell'ingresso.
 >
 > **Note implementazione**:
@@ -6351,7 +6351,7 @@ non sposti il registro.
 > - **3 219 verdi, 0 rossi**, di cui 3 157 nella lista del coordinatore. La porta 6188 è libera.
 > - Log: `files/logs/e18c_suites.out`, `e18d_wac_rerun.out`, `e9_e18c_*.log`, `e9_e18d_*.log`.
 
-### SEC9-1 — La revisione della cura di MF (2026-10-17, 13:4x; sola lettura, ramo di MF `ad399d383`)
+### SEC9-1 — La revisione della cura di MF (2026-10-17, 13:4x; sola lettura, ramo di MF `5a4853464`)
 > **Esito: OK, nessun reperto.** Ogni punto della mia cura c'è.
 > - **`/prices/current`**:
 >   - il limite di 1 000 viene prima di ogni lettura (`prices.py:213`);
@@ -6394,7 +6394,7 @@ non sposti il registro.
 >    10 s, 5 alla volta) una richiesta può durare circa 33 minuti di chiamate in uscita, e il semaforo per richiesta si
 >    moltiplica con le richieste parallele. Un limite globale per provider lo chiuderebbe.
 
-### MF-SEC9a — La revisione della cura di MF (2026-10-17, 14:2x–14:4x; sola lettura, ramo di MF `34cc1a58b`)
+### MF-SEC9a — La revisione della cura di MF (2026-10-17, 14:2x–14:4x; sola lettura, ramo di MF `7a87cce79`)
 > **Il compito** (coordinatore, 14:2x): le mie note di SEC9-1.
 > - Letture e scritture in blocchi di 500 (`utils/sql_chunks.py`): `fx/storage.py`, `price_store.bulk_delete_prices`,
 >   `fx/sync._stored_rates`.
@@ -6472,7 +6472,7 @@ non sposti il registro.
 >   - 111 con simbolo e nome;
 >   - 499 col solo ISIN, 999 col solo simbolo.
 > - Le `except` della rotta di parse (`brokers.py`) non prendono `OperationalError`: è un 500.
-> - È nei rilasci da v1.1.0 (`d1e04b2b8`, 12/08; spostato da `548a0688d`). Un conto di qualche anno con 100 strumenti
+> - È nei rilasci da v1.1.0 (`441457341`, 12/08; spostato da `1ff66e047`). Un conto di qualche anno con 100 strumenti
 >   non si importa.
 > - Per chi lo cura: `chunks()` conta gli elementi, non i termini. Bisogna dividere per asset (circa 40 per comando) o
 >   per termini appiattiti, unire per `Asset.id` e riordinare per `display_name`.
@@ -6495,7 +6495,7 @@ non sposti il registro.
 >
 > Nessuna riga nel backlog di E: il coordinatore smista i reperti nel codice degli altri, come per SEC9-1.
 
-### A-46/A-47 — La revisione dopo l'ingresso (2026-10-17, 14:5x–15:0x; sola lettura, dev `abbe19d37`)
+### A-46/A-47 — La revisione dopo l'ingresso (2026-10-17, 14:5x–15:0x; sola lettura, dev `40f90d9c7`)
 > **Il compito** (coordinatore, 14:53):
 > - `_new_username_refusal()`: prima la `@`, poi da 3 a 50 caratteri. La usano `create_user` e `update_profile`,
 >   quest'ultimo solo per un nome cambiato.
@@ -6530,7 +6530,7 @@ non sposti il registro.
 > - **I docs** dicono quello che fa il codice:
 >   - `ACCOUNT_EXISTS` non è in `_REGISTRATION_REFUSALS`, quindi la rotta risponde 400 col messaggio semplice;
 >   - l'àncora `{: #username-refusal-codes }` sta subito sotto il suo paragrafo (attr_list la attacca) e ha due link.
-> - **`81b517f4c`** (un test di AI Export entrato col merge) cambia solo commenti: nessuna asserzione toccata.
+> - **`081082637`** (un test di AI Export entrato col merge) cambia solo commenti: nessuna asserzione toccata.
 >
 > **Le prove**, solo Python in memoria (nessuna corsia; `files/a46/`: `probe_account_error.py`, `probe_cure.py`, coi
 > log; `backend/data` invariato):
@@ -6552,7 +6552,7 @@ non sposti il registro.
 >    - Se un giorno i limiti dello schema cambiano, serve un codice per la lunghezza, o una frase neutra.
 
 ### E-19 — L'avviso dei codici di valuta non ISO salvati (MF-SEC9b, seguito di E-18)
-#### E-19.0 — Analisi ✅ (2026-10-17, 15:0x–15:3x; sola lettura, HEAD `e743fc6a3`)
+#### E-19.0 — Analisi ✅ (2026-10-17, 15:0x–15:3x; sola lettura, HEAD `fbdac510c`)
 > **Il compito** (coordinatore, 14:5x): l'analisi prima del codice. Conta di più dopo E-18: una riga salvata con un
 > codice non ISO non si salva più dopo una modifica, quindi l'utente deve sapere quali righe sono e come correggerle.
 > Dentro: dove appare l'avviso, che cosa ne fa l'utente, la nota sul gap-fix del BRIM.
@@ -6691,8 +6691,8 @@ non sposti il registro.
 >   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
 > - **La correzione** (A o C) e quella degli asset: un lotto medio.
 
-#### E-19b2.3 — Il codice ✅ (2026-10-17, 20:4x–21:0x; HEAD `2ab9a6859`)
-> I rossi nel commit `0e787dfb4`; il coordinatore ha portato dev `0897502a9` nel ramo: HEAD `2ab9a6859`
+#### E-19b2.3 — Il codice ✅ (2026-10-17, 20:4x–21:0x; HEAD `486f2d66a`)
+> I rossi nel commit `965b780e7`; il coordinatore ha portato dev `a78084fc2` nel ramo: HEAD `486f2d66a`
 > (`test_portfolio_api.py` fuso da solo). La regola delle coppie col trattino approvata.
 >
 > **Il codice**:
@@ -6726,11 +6726,11 @@ non sposti il registro.
 >   (banner, banner dei lotti e helper, ICU delle 4 lingue, porte HTML e colori), svelte-check 0 errori, `mkdocs build`
 >   stretto con 0 avvisi, `check-links` 97, `git diff --check` pulito; porta libera.
 >
-> **In mezzo, la revisione di C-54** (sola lettura, dev `630c478cd`): OK con due note, mandate al coordinatore
+> **In mezzo, la revisione di C-54** (sola lettura, dev `70bccb5d2`): OK con due note, mandate al coordinatore
 > (`mark_seen` può tornare indietro dopo un downgrade; una pre-release conta come la sua release).
 
-#### E-19b2.2 — I rossi ✅ (2026-10-17, 20:1x–20:5x; `test-author` `d495e334`, HEAD `e84778677`)
-> Le LOW di H sono entrate (commit `e84778677`, dev `0897502a9`). Il coordinatore aggiorna la mia base solo dopo il
+#### E-19b2.2 — I rossi ✅ (2026-10-17, 20:1x–20:5x; `test-author` `d495e334`, HEAD `5a318eb45`)
+> Le LOW di H sono entrate (commit `5a318eb45`, dev `a78084fc2`). Il coordinatore aggiorna la mia base solo dopo il
 > commit di questi rossi: dev ha toccato `test_portfolio_api.py`.
 >
 > **I rossi**:
@@ -6766,8 +6766,8 @@ non sposti il registro.
 > - `test_portfolio_api.py` non passa `black --check` già a HEAD (7 hunk fra 1348 e 1834), nessuno nella sezione
 >   nuova: lasciato com'è.
 
-#### E-19b2.1 — Analisi del rapporto di qualità (2026-10-17, 20:0x–20:2x; sola lettura, HEAD `2fbbf4c4c`)
-> E-19b1 è entrato (dev `1742aaaaa`, CHANGELOG `2fbbf4c4c`); Z-32 (c) è nella base.
+#### E-19b2.1 — Analisi del rapporto di qualità (2026-10-17, 20:0x–20:2x; sola lettura, HEAD `66e4dcba0`)
+> E-19b1 è entrato (dev `9955157aa`, CHANGELOG `66e4dcba0`); Z-32 (c) è nella base.
 >
 > **Lo stato vero**:
 > - **Le coppie mancanti** nascono tutte come `FROM/TO` coi codici salvati: `daily_state.py:941` e `:1139`,
@@ -6828,7 +6828,7 @@ non sposti il registro.
 > `suggest` dà `GBP` per `GBp`): un `GBp` salvato è improbabile, perché anche la vecchia regola lo portava a `GBP`, ma
 > va in E-20 insieme agli altri resti dell'audit.
 
-#### E-19a.4 — Le due LOW di H ✅ (2026-10-17, 19:5x–20:4x; HEAD `2fbbf4c4c`)
+#### E-19a.4 — Le due LOW di H ✅ (2026-10-17, 19:5x–20:4x; HEAD `66e4dcba0`)
 > Il via del coordinatore, nel mio ordine; la soglia «oltre 0,5 s a 1M righe di prezzi → passo in background».
 > 1. **`trusted_schema=OFF` per primo in `stored_currencies._read_only()`**, prima di `query_only`, come B su ogni
 >    connessione a una copia.
@@ -6896,11 +6896,11 @@ non sposti il registro.
 > - ruff e black puliti (3 file); `mkdocs build` stretto con 0 avvisi, `check-links` 97; `git diff --check` pulito;
 >   porta libera.
 >
-> **Per il checkpoint**: dev (`efef5c876`) ha cambiato `test_portfolio_api.py` (una riga, A) mentre il `test-author` di
+> **Per il checkpoint**: dev (`0420024b9`) ha cambiato `test_portfolio_api.py` (una riga, A) mentre il `test-author` di
 > b2 lo sta modificando nel mio tree: niente merge di dev finché i rossi di b2 non sono nel ramo.
 
-#### E-19b1.3 — `staging.py` sopra B-43 ✅ (2026-10-17, 18:4x–19:5x; HEAD `3464da946`)
-> Il coordinatore ha fatto il commit della parte 1 (`6e539da02`) e il merge di dev `5726486bc`: HEAD `3464da946`, con
+#### E-19b1.3 — `staging.py` sopra B-43 ✅ (2026-10-17, 18:4x–19:5x; HEAD `24a721a58`)
+> Il coordinatore ha fatto il commit della parte 1 (`f78efb23f`) e il merge di dev `20ef5b9c0`: HEAD `24a721a58`, con
 > B-43, Z-32 (c), CP-10d e il resto.
 >
 > **Il codice** (`staging.py`):
@@ -6922,7 +6922,7 @@ non sposti il registro.
 > - api `backup-restore`: **1 rosso**, sotto.
 >
 > **⚠️ Fuori pista — un ottavo posto, mancato nella parte 1.** `test_backup_restore.py::test_openapi_documents_the_totals_of_the_report`
-> confronta il suo `STAGE_WARNINGS` con l'enum dell'OpenAPI, quindi è rosso sul mio ramo da `6e539da02` (dev non
+> confronta il suo `STAGE_WARNINGS` con l'enum dell'OpenAPI, quindi è rosso sul mio ramo da `f78efb23f` (dev non
 > c'entra). I sette posti di B non lo nominavano, e nella parte 1 non avevo fatto girare le suite api del router del
 > backup.
 > - **La lezione**: un `Literal` nuovo in uno schema dell'API vuol dire far girare le suite api del suo router, e cercare
@@ -6991,7 +6991,7 @@ non sposti il registro.
 > **A-51**: la revisione (sola lettura) l'ho fatta mentre il `test-author` scriveva. Esito OK, con tre note informative,
 > mandate al coordinatore.
 
-#### E-19b1.2 — Il codice, senza `staging.py` ✅ (2026-10-17, 17:3x–18:4x; HEAD `f2cd04e9a`)
+#### E-19b1.2 — Il codice, senza `staging.py` ✅ (2026-10-17, 17:3x–18:4x; HEAD `a254c08f9`)
 > **Il backend**:
 > - `schemas/common.py`: `iso_currency_candidates(value)` diventa pubblica. Un non-testo dà `()`; il testo si ripulisce
 >   (`strip().upper()`); i tre di `NEVER_RELABELLED_CURRENCY_CODES` danno `()`; un codice alfabetico valido dà
@@ -7068,10 +7068,10 @@ non sposti il registro.
 >   `find_stored_currency_findings`);
 > - ruff e black puliti su `_backend_services.py` e RNW; i 6 file nuovi senza spazi in coda; porta 6188 libera.
 >
-> **Checkpoint b1, parte 1** (18:4x). B-43 era già in dev dalle 16:41 (`fc4d5eab4`), ma la mia base `f2cd04e9a` è
+> **Checkpoint b1, parte 1** (18:4x). B-43 era già in dev dalle 16:41 (`15909dd77`), ma la mia base `a254c08f9` è
 > precedente. Il coordinatore: congelo; lui fa il commit di b1 senza `staging.py` e porta dev nel ramo (B-43, Z-32 (c)
 > col lettore `_held_asset_quote_facts`, CP-10d `market_series`, X-R75 e il resto). Poi `staging.py` sopra B-43.
-> - **La previsione del merge** (`git diff --name-only f2cd04e9a dev_release2`, dev `c5b9cca75`, 232 file): si
+> - **La previsione del merge** (`git diff --name-only a254c08f9 dev_release2`, dev `7625f9b39`, 232 file): si
 >   sovrappongono solo i tre registri del runner, con hunk lontani. I più vicini:
 >   - `_frontend_utility.py`: il mio dopo la riga 166, quello di dev dopo la 167;
 >   - `_backend_services.py`: dev cambia la 2799, io inserisco dopo la 2804.
@@ -7140,7 +7140,7 @@ non sposti il registro.
 > - **RNW: 25 rossi, 14 verdi.** Il registro (`restore-non-iso-warning`) ora nomina `stage_archive` e resta `pure`
 >   (tutto sotto `tmp_path`, come `backup-staging`).
 
-#### E-19a.3 — Fix-forward: il passo d'avvio dopo le due riparazioni ✅ (2026-10-17, 17:1x–17:2x; HEAD `e98934eed`)
+#### E-19a.3 — Fix-forward: il passo d'avvio dopo le due riparazioni ✅ (2026-10-17, 17:1x–17:2x; HEAD `242554dfc`)
 > **Il rosso** (coordinatore, 17:1x, gate I, `all-backend` in dev):
 > `test_lone_transfer_legs.py::test_the_startup_step_runs_right_after_the_post_migration_fixes`, perché
 > `lone-transfer-legs` deve venire subito dopo `post-migration-fixes`, e il mio `stored-currencies` si era messo in
@@ -7177,7 +7177,7 @@ non sposti il registro.
 > - `api backup-roundtrip` non l'ho rifatto: taglia i passi per nome (da `pending-restore` a `restore-commit`), quindi
 >   lo spostamento non lo tocca, ed era verde nel gate I.
 
-#### E-19b.0 — Analisi del lato utente (2026-10-17, 16:4x–17:0x; sola lettura, HEAD `e98934eed`)
+#### E-19b.0 — Analisi del lato utente (2026-10-17, 16:4x–17:0x; sola lettura, HEAD `242554dfc`)
 > **Il quadro del coordinatore**:
 > - Z-32 (c), non ancora in dev, porta:
 >   - `IssueCode.QUOTE_IN_MINOR_UNIT` (`WARNING`, `navigate_asset`, sul modello di `INVALID_SPLIT_RATIO` di MF-D4);
@@ -7259,7 +7259,7 @@ non sposti il registro.
 >     `theme-roles --check` deve restare pulito. Per un tono nuovo, chiedere prima.
 > - b2 aspetta Z-32 (c).
 
-#### E-19b1.0 — Il contratto e i rossi al `test-author` (2026-10-17, 16:3x–16:5x; HEAD `e98934eed`)
+#### E-19b1.0 — Il contratto e i rossi al `test-author` (2026-10-17, 16:3x–16:5x; HEAD `242554dfc`)
 > Skill `design-system` caricata. Per la riga d'avviso valgono:
 > - solo ruoli (`text-lf-warning` regge 4,5:1 su card e campo);
 > - niente stato nelle righe evidenziate delle opzioni: sulla tinta `selected` gli stati non reggono, quindi l'avviso
@@ -7288,7 +7288,7 @@ non sposti il registro.
 >   risponde il vuoto.
 > - **RTN** (Vitest): `restoreWarningKey('non_iso_currencies')`.
 
-#### E-19a.0 — Il disegno, e i rossi al `test-author` (2026-10-17, 15:1x–15:3x; HEAD `e743fc6a3`)
+#### E-19a.0 — Il disegno, e i rossi al `test-author` (2026-10-17, 15:1x–15:3x; HEAD `fbdac510c`)
 > **Il via del coordinatore** (15:1x):
 > - D1 e D2 vanno allo sviluppatore, con la mia raccomandazione (C più D2). **D3 è deciso: `warning`.**
 > - **Via** su ciò che serve qualunque sia D1, in due checkpoint, prima i rossi.
@@ -7417,7 +7417,7 @@ non sposti il registro.
 > - 93/26, 23/1 e 6/7: gli stessi del `test-author`;
 > - ogni fallimento ha il suo «red until E-19a» nel corpo del log.
 
-#### E-19a.2 — Il codice ✅ (2026-10-17, 15:5x–16:1x; HEAD `e743fc6a3`)
+#### E-19a.2 — Il codice ✅ (2026-10-17, 15:5x–16:1x; HEAD `fbdac510c`)
 > **Note implementazione**:
 > - **`schemas/common.py`**:
 >   - `_SUGGESTION_MAX_LENGTH = 80` e `NEVER_RELABELLED_CURRENCY_CODES`;
@@ -7507,7 +7507,7 @@ non sposti il registro.
 >   - La mia sezione aggiunge i suoi elementi (`db currencies`, i blocchi, il titolo): debito vero per la traduzione
 >     futura, quindi nessun timbro.
 
-### MF-SEC9a resto + SEC9c — La revisione dopo l'ingresso (2026-10-17, 15:1x, ripresa 16:1x; sola lettura, codice `f0e54254f`, dev `29e30b6cc`) ✅
+### MF-SEC9a resto + SEC9c — La revisione dopo l'ingresso (2026-10-17, 15:1x, ripresa 16:1x; sola lettura, codice `e16729c7a`, dev `24b52f8e4`) ✅
 > **Sospesa** per ordine del coordinatore (15:1x): riprende dopo il checkpoint di E-19a.
 >
 > **Verificato finora, nessun reperto**:
@@ -7558,7 +7558,7 @@ non sposti il registro.
 > - La catena di priorità in memoria di `search_asset_candidates_bulk` (`brim_provider.py` ~2073):
 >   - per ogni estrazione più passate `for asset in universe`, e 8 `_contains` per un nome;
 >   - cioè **O(estrazioni × universo) in Python, sul ciclo degli eventi**.
-> - Misurato col codice di MF (`f0e54254f`, caricato da `git show`), 5 000 asset salvati, SQLite in memoria
+> - Misurato col codice di MF (`e16729c7a`, caricato da `git show`), 5 000 asset salvati, SQLite in memoria
 >   (`files/mfsec9a_rest/probe/`), con un monitor del ritardo del ciclo:
 >
 > | Caso | Strumenti distinti | Blocco peggiore | Tempo totale |
@@ -7580,7 +7580,7 @@ non sposti il registro.
 > - Senza la SQL, il costo della sola query è 17 s di orologio a 3 000 per 5 000. Ma gira nel thread di `aiosqlite`, e
 >   non blocca.
 
-### MF-SEC9e — La revisione dopo l'ingresso (2026-10-17, 16:3x; sola lettura, codice `53bec4d59`, dev `4507f7507`)
+### MF-SEC9e — La revisione dopo l'ingresso (2026-10-17, 16:3x; sola lettura, codice `657cb3258`, dev `3dfd5490f`)
 > **Esito: OK, nessun reperto.**
 > - **La fusione per asset** in intervalli disgiunti e inclusivi è corretta:
 >   - i giorni adiacenti si uniscono;
@@ -7609,7 +7609,7 @@ non sposti il registro.
 > normalizza oggi, se dati salvati o client dipendono dalla forma larga, il rischio, una regola stretta e l'impatto di
 > migrazione. Niente codice: `schemas/common.py` e le rotte dei prezzi sono aperti sul ramo di MF.
 >
-> **Oggi** (`schemas/common.py:97-118` e `:189-212`, dev `289fe26e8`): `strip().upper()`, poi
+> **Oggi** (`schemas/common.py:97-118` e `:189-212`, dev `a7d4f6341`): `strip().upper()`, poi
 > `pycountry.currencies.lookup(code)`, che accetta `alpha_3`, numerico e nome, senza maiuscole.
 > - **Ma restituisce l'input normalizzato, non `alpha_3`**, e quello si salva. Misurato in processo
 >   (`files/sec9b/probe.py`):
@@ -7696,7 +7696,7 @@ non sposti il registro.
 >
 > Coincide con le mie note.
 >
-> **Verificato ora, sulla base** (`c2021cb52`):
+> **Verificato ora, sulla base** (`f26da25df`):
 > - `revoke_tokens` è **un solo `UPDATE`**, senza lettura prima: prende il lock di scrittura di SQLite anche quando non
 >   tocca righe. Il punto 1 regge, a patto che resti così.
 > - `consume_token` è un UPDATE condizionato, quindi il controllo del punto 2, fatto dopo, sta dentro la transazione di
@@ -7742,8 +7742,8 @@ non sposti il registro.
 > - **Dalla parte di E**: nessun cambio. Da verificare solo che il riarmo non mandi un'email con un link poi annullato
 >   da un rollback, cioè l'invio dopo il commit.
 >
-> **L'esito** (13:1x–13:3x, sul codice entrato: dev `7156a24af`, backend e test `59161e5e2`, UI `8f8116fce`, docs
-> `145adbf27`; letto dagli oggetti git, il mio HEAD era ancora `fc979d0b4`): **OK, nessun reperto.** Ogni punto della
+> **L'esito** (13:1x–13:3x, sul codice entrato: dev `21d9172e9`, backend e test `6239388db`, UI `e83fd2eb8`, docs
+> `5aab99159`; letto dagli oggetti git, il mio HEAD era ancora `ef66e0e01`): **OK, nessun reperto.** Ogni punto della
 > lista regge.
 > - **A-42, il rilascio**:
 >   - in `issue_setup_link` e in `_keep_pending_admin` il ricontrollo `is_pending_admin` sta dopo l'`UPDATE` di
@@ -7788,8 +7788,8 @@ non sposti il registro.
 >   «inattivo» fino al ricaricamento; chi ha il link non può scegliere quel millisecondo.
 > - La cura, se la si vuole: rileggere l'account dopo la prima scrittura (un `refresh` sotto il lock) e decidere da lì.
 
-### A-51 — La revisione dopo l'ingresso (2026-10-17, 18:4x–19:0x; sola lettura, dev `180be0ff1`)
-> Codice di A `a2dbe7b7e`…`86b2f2f47`, letto dagli oggetti git mentre ero congelato. **OK**, tre note informative.
+### A-51 — La revisione dopo l'ingresso (2026-10-17, 18:4x–19:0x; sola lettura, dev `f6863a208`)
+> Codice di A `25691d0ef`…`dbcc253a3`, letto dagli oggetti git mentre ero congelato. **OK**, tre note informative.
 > - **Verificato**: `begin_writes` emette `BEGIN` col suo `UPDATE … WHERE false`, le letture prima erano in autocommit,
 >   quindi `refresh` più le guardie leggono sotto il lock; ogni rifiuto fa `rollback` prima di tornare; nel CLI ogni
 >   guardia è sotto il lock; il validatore di `cancel_setup` dà 422 senza `is_active` falso; `__getnewargs__`
@@ -7801,8 +7801,8 @@ non sposti il registro.
 >      finestra si cancella senza `DEMOTE_FIRST` (mai l'ultimo admin, perché chi chiede lo è);
 >   3. preesistente: il controllo del limite (`usage.full`) di una riattivazione sta prima del lock.
 
-### C-54 — La revisione dopo l'ingresso (2026-10-17, 20:4x–20:5x; sola lettura, dev `630c478cd`)
-> Codice di A `9e9dff30c`…`737268864`. **OK**, due note informative (mandate al coordinatore, girate ad A).
+### C-54 — La revisione dopo l'ingresso (2026-10-17, 20:4x–20:5x; sola lettura, dev `70bccb5d2`)
+> Codice di A `1333d2f57`…`c24017c6c`. **OK**, due note informative (mandate al coordinatore, girate ad A).
 > - **Verificato**: `get_git_version()` è sotto `lru_cache`, quindi nessun `git` per richiesta; `last_seen_version` viene
 >   dalla migrazione 005 e C-54 è il solo a scriverlo; ogni account passa da `create_user`; `_auth_user()` è l'unico
 >   costruttore di `AuthUserResponse`; la POST scrive la release del server, idempotente; `whats-new/seen` fuori da
@@ -7811,10 +7811,10 @@ non sposti il registro.
 >   pre-release conta come la sua release.
 
 ### C-70b — I rifiuti del parse e dell'anteprima tradotti (K2b di W)
-#### C-70b.0 — Analisi (2026-10-17, 21:0x–21:2x; sola lettura, HEAD `9e6faacf4`)
+#### C-70b.0 — Analisi (2026-10-17, 21:0x–21:2x; sola lettura, HEAD `2b3b3e4fa`)
 > **La richiesta** (coordinatore, 21:0x): il 400 del parse è ancora in inglese nel wizard, e l'anteprima illeggibile non
 > ha un codice. Errori a codice con parametri, nello stile di `BRIMRefusal`, tradotti in `importWizard.parseRefusal.*`
-> come in K2a di W (`0eac8e1b6`). W rivede. Nessuno dei file è aperto altrove.
+> come in K2a di W (`ca5bd0bb9`). W rivede. Nessuno dei file è aperto altrove.
 >
 > **Lo stato vero**:
 > - **K2a** ha dato un codice ai rifiuti dei plugin (`cannot_parse_detail` → `BRIMRefusal{code, message, context}`), ma
@@ -7881,7 +7881,7 @@ non sposti il registro.
 > **Dimensione**: piccola-media. Backend circa 80 righe, frontend circa 60, 9 chiavi ×4, test dal `test-author`, docs.
 > W rivede.
 
-#### C-70b.1 — Le risposte, e i rossi al `test-author` (2026-10-17, 21:0x; HEAD `9e6faacf4`)
+#### C-70b.1 — Le risposte, e i rossi al `test-author` (2026-10-17, 21:0x; HEAD `2b3b3e4fa`)
 > **Via del coordinatore**, W rivede:
 > - (a) la forma di BRIM, `{code, message, context}`;
 > - (b) le chiavi dell'anteprima in `files.preview.error.*`;
@@ -7900,7 +7900,7 @@ non sposti il registro.
 > - il frontend: `parseErrors.ts` (`resolveParseErrorMessage`, accanto al risolutore di K2a), `getFilePreviewError(error,
 >   t)`, 8 chiavi (3 `importWizard.parseRefusal.*`, 5 `files.preview.error.*`).
 
-#### C-70b.2 — Parcheggiato ⏸ (2026-10-19, 11:1x; HEAD `9e6faacf4`)
+#### C-70b.2 — Parcheggiato ⏸ (2026-10-19, 11:1x; HEAD `2b3b3e4fa`)
 > Lo stop dello sviluppatore (17/10, 21:2x) è arrivato a metà lotto. Alla ripartenza del 19/10 il coordinatore: C-70b
 > aspetta la lettura dei lotti piccoli da parte dello sviluppatore, e si implementa solo dopo il suo via. Il lavoro è
 > parcheggiato fuori dal repo; il worktree è tornato a HEAD (`git restore` dei 7 file modificati, `rm` dei 3 nuovi).
@@ -7929,8 +7929,8 @@ non sposti il registro.
 >   2. il nome del plugin tradotto anche per `parse_failed`, come fissano i rossi, e non solo per `cannot_parse`?
 >   3. `e2e/files.spec.ts` (~:730) finge un `detail` testuale e ne legge l'inglese: resta verde con la lettura 1.
 
-### Z-32cr — La revisione prima dell'ingresso (2026-10-19, 12:5x–13:2x; sola lettura, `4eccb5d43`)
-> Commit di Z `4eccb5d43` (padre `065c9df77`) sul ramo `e-alfy-z-sospensione-e-risveglio` (punta `f64a71ddc`), letto
+### Z-32cr — La revisione prima dell'ingresso (2026-10-19, 12:5x–13:2x; sola lettura, `09aebb705`)
+> Commit di Z `09aebb705` (padre `14e0a7ba3`) sul ramo `e-alfy-z-sospensione-e-risveglio` (punta `1d03f3699`), letto
 > dagli oggetti git: toglie l'avviso dei pence (D8: nessuna colonna nel DB) e assottiglia `HeldAssetQuoteFacts`. La
 > domanda del coordinatore: `NON_ISO_CURRENCY` e il resto di E-19b2 funzionano come prima? **OK, nessun rilievo.**
 > - **Il codice di E-19b2, invariato nel comportamento**:
@@ -7960,7 +7960,7 @@ non sposti il registro.
 > - **La prova** (`files/tools/z32cr_pure.sh`, nella cartella della sessione): `git archive` dell'albero, il python del
 >   venv condiviso chiamato direttamente, modalità test sulla data-dir della corsia, che non ha DB; niente pipenv, niente
 >   server, niente git che scrive. Gli import vengono dall'albero esportato; il worktree resta pulito.
->   - `test_data_quality_report.py`: **101 passati** su `4eccb5d43`, **109** sul padre `065c9df77`. La differenza sono
+>   - `test_data_quality_report.py`: **101 passati** su `09aebb705`, **109** sul padre `14e0a7ba3`. La differenza sono
 >     gli 8 casi della classe tolta.
 > - **Non eseguiti**:
 >   - le API: `TestNonIsoCurrencyDataQuality` vuole un server, e la classe è invariata;
@@ -7972,10 +7972,10 @@ non sposti il registro.
 >   - nessun resto dei pence nelle traduzioni del CHANGELOG né nei documenti; i documenti di E-19b2
 >     (`data-quality-banner.md`, la pagina del cruscotto) sono aggiornati con coerenza.
 
-### E-EMF9 — EMF-009 ed EMA-017 rossi dopo A-11: analisi (2026-10-19, 14:1x–14:2x; sola lettura, HEAD `664c56c20`)
+### E-EMF9 — EMF-009 ed EMA-017 rossi dopo A-11: analisi (2026-10-19, 14:1x–14:2x; sola lettura, HEAD `1890a3d0c`)
 > **La richiesta** (coordinatore, 14:15): H, nella suite completa, trova rossi EMF-009 (`test_email_flows.py`) e il
 > gemello EMA-017 (`test_email_api.py`): «DID NOT RAISE ValidationError». La precondizione era che `get_user_settings`
-> rifiutasse un tema salvato sconosciuto; dopo `3e12b09ae` di A (A-11, entrato con `250031cd1`) non lo rifiuta più, ed
+> rifiutasse un tema salvato sconosciuto; dopo `ecd0a1536` di A (A-11, entrato con `3cedf7c71`) non lo rifiuta più, ed
 > è voluto. Prima un'analisi breve, senza codice; dopo il via la riscrittura la fa il `test-author`.
 > - **Cosa proteggono**: la scelta di E2a, cioè che `account_language` (`flows.py:93`) legga solo la colonna della lingua
 >   e mai il modello di lettura. La chiamano tutte le email di un account:
@@ -8037,7 +8037,7 @@ non sposti il registro.
 > - **I selettori**: `services email-flows` e `api email`, entrambi puri (la categoria api avvia comunque il backend
 >   della corsia), nella corsia 6188.
 
-#### E-EMF9.1 — R1, la riscrittura (via del coordinatore 2026-10-19, 14:23; base `f504cb61c`)
+#### E-EMF9.1 — R1, la riscrittura (via del coordinatore 2026-10-19, 14:23; base `a0936daa6`)
 > **Il via**: R1 scritto dal `test-author`.
 > - I due test tengono la barriera «un tema che questa versione non conosce», rifiutato dallo schema.
 > - Rinomina, e riallineamento di contratti, messaggi ed helper.
@@ -8049,7 +8049,7 @@ non sposti il registro.
 > validates (a theme outside light/dark/auto, say) never stops an email» è ancora vera: lo schema `UserSettingsRead`
 > rifiuta ancora quel tema, e la lingua arriva lo stesso. R1 tocca solo i due file di test.
 
-1. ✅ **Il rosso nella corsia** (2026-10-19, 14:24–14:25; HEAD `f504cb61c`)
+1. ✅ **Il rosso nella corsia** (2026-10-19, 14:24–14:25; HEAD `a0936daa6`)
    > **Note implementazione**: `files/tools/e9_suites.sh emf9red services:email-flows api:email`, cioè
    > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6188 --data-dir
    > /tmp/librefolio-r13-e services email-flows`, poi `… --no-shared-server api email` (il file è in-process: nessun
@@ -8100,7 +8100,7 @@ non sposti il registro.
    > cartella `sqlite` alle 14:32. Non ha scritto: `app.db` è del 14:24 e `registration_mode` è `open`, scritto alle
    > 14:24:38 dal setup del runner. È la mia corsia, ed è lo stesso percorso del runner. La prova dell'analisi delle 14:1x
    > non lo toccava, perché allora la cartella non c'era.
-5. ✅ **Il verde nella corsia** (2026-10-19, 14:33–14:34; HEAD `f504cb61c` più i due file)
+5. ✅ **Il verde nella corsia** (2026-10-19, 14:33–14:34; HEAD `a0936daa6` più i due file)
    > **Note implementazione**: gli stessi comandi del passo 1 (`files/tools/e9_suites.sh emf9green services:email-flows
    > api:email`), col carico a 1 minuto a 15,9.
    > - `services email-flows`: **149 passati**.
@@ -8112,7 +8112,7 @@ non sposti il registro.
    > **Note implementazione**: nel checkpoint vanno i due file di test e questo piano. Niente di generato. Nessuna riga
    > nel backlog: E-EMF9 non lascia niente per dopo.
 
-### E-AI503 — Il 503 dell'AI Export con un asset tenuto senza prezzi: analisi (2026-10-19, 15:1x–15:4x; HEAD `47af95978`)
+### E-AI503 — Il 503 dell'AI Export con un asset tenuto senza prezzi: analisi (2026-10-19, 15:1x–15:4x; HEAD `09530dfa8`)
 > **La richiesta** (coordinatore, 15:17). Un difetto visto dallo sviluppatore sulla nightly:
 > - il percorso: AI Export → Esporta dati → «Storico asset del portafoglio» (`portfolio.asset_history`, compact, 3 mesi,
 >   broker [1,2]);
@@ -8122,7 +8122,7 @@ non sposti il registro.
 > revisore J. Il log dell'eccezione inghiottita è di H (H-60): `dependencies.py` non si tocca.
 >
 > **Letti**: le istruzioni AI (`ai-development`, `frontend-ai-export`), lo skill `ai-export-probe-tuning`, la decisione
-> della devWiki `ai-export-technical-series-and-density-contract` (quella di `a576df149`) e
+> della devWiki `ai-export-technical-series-and-density-contract` (quella di `f8990840c`) e
 > `ai-export-version-bump-once-per-release`, il codice, i test e le pagine `ai_export_*.md`.
 
 #### E-AI503.0 — Lo stato vero
@@ -8141,9 +8141,9 @@ non sposti il registro.
 >   - `get_prices_bulk`, senza righe di prezzo, risponde `FAPriceQueryResult(prices=[])`, non `None`
 >     (`price_query.py:174`, `_build_backward_filled_series`). Il builder salta solo `result is None`.
 > - **La storia.**
->   - `a576df149` (30/07) tolse il ripiego su `scope.target_currency`: era sbagliato, perché dava a una serie nativa la
+>   - `f8990840c` (30/07) tolse il ripiego su `scope.target_currency`: era sbagliato, perché dava a una serie nativa la
 >     valuta del report. Da allora `currency: str` rifiutava già `None`.
->   - `3abcb6b15` (28/08) ha solo stretto il tipo a `CurrencyCode`: il messaggio è diventato «Currency code must be a
+>   - `bfdd2b421` (28/08) ha solo stretto il tipo a `CurrencyCode`: il messaggio è diventato «Currency code must be a
 >     string, got NoneType».
 > - **Le valute miste sono già «nessuna serie» ovunque tranne qui.**
 >   - `price_result_to_close_points` restituisce `()` se la valuta non è coerente, e così `_observed_asset_points`
@@ -8198,7 +8198,7 @@ non sposti il registro.
 > 2. **La serie a valute miste** si tratta come una serie assente, senza normalizzare i codici prima del confronto:
 >    - normalizzare con `Currency.validate_code` fonderebbe `GBp` in `GBP` (verificato: `'GBp' -> 'GBP'`), cioè pence e
 >      sterline 100 volte lontani in una sola serie;
->    - è la regola di `a576df149` («mai valute miste in una serie nativa») ed è già quella dei segnali, della copertura
+>    - è la regola di `f8990840c` («mai valute miste in una serie nativa») ed è già quella dei segnali, della copertura
 >      e del contesto.
 > 3. **Asset** (`asset.ohlc_returns`): un solo bersaglio, che non si può «saltare».
 >    - Proposta: `AssetOhlcReturnsPayload.currency: CurrencyCode | None`, nullo solo quando non c'è una serie coerente.
@@ -8276,7 +8276,7 @@ non sposti il registro.
 >   e il Vitest del renderer. Facoltativa, per J: una sonda mirata sulla copia di riferimento (lo stesso export dello
 >   sviluppatore), con l'equivalenza UI/sonda.
 
-#### E-AI503.5 — Il via, le decisioni dello sviluppatore, il contratto (2026-10-19, 15:54; base `70ad4cec1`)
+#### E-AI503.5 — Il via, le decisioni dello sviluppatore, il contratto (2026-10-19, 15:54; base `e91a3a3dc`)
 > **Il via** (coordinatore, 15:54), con le decisioni dello sviluppatore. Testuale: «si deve scriverlo anche lì,
 > ovviamente, specifico che non è che gli mancano i prezzi perché è un crowdfunding, è solo un caso, un qualunque asset
 > potrebbe non avere prezzi, sia chiaro, il calcolo non va fatto sul tipo, ma sul ritorno di punti che il db dà».
@@ -8300,7 +8300,7 @@ non sposti il registro.
 > Prima i rossi; corsia 6188, carico sotto 50.
 >
 > **Il disco pieno delle 15:45**: niente di mio è fallito. Le prove erano finite alle 15:44, tutte verdi, e il piano è
-> integro: 8277 righe, committato in `70ad4cec1`. Ora restano 18 GiB liberi.
+> integro: 8277 righe, committato in `e91a3a3dc`. Ora restano 18 GiB liberi.
 >
 > **Il contratto** (mio, dentro il via; le frasi le approva lo sviluppatore):
 > - **Il motivo**, `technical_payloads.py`: `PriceSeriesGapReason = Literal["no_stored_price",
@@ -8335,10 +8335,10 @@ non sposti il registro.
 > - **Fuori dal contratto, da chiedere e non decidere**: la serie stantia (prezzi solo prima del periodo) resta in
 >   `assets` come oggi.
 
-1. ✅ **Il via e lo stato** (16:0x): HEAD `70ad4cec1`, albero pulito, la porta 6188 libera.
+1. ✅ **Il via e lo stato** (16:0x): HEAD `e91a3a3dc`, albero pulito, la porta 6188 libera.
 2. ✅ **`npm ci`: non serve, non eseguito** (16:0x)
    > **Note implementazione**: `frontend/node_modules` c'è dal 15/10, 13:41 (le prove di E-19b1 lo usavano). Il lock è
-   > cambiato l'ultima volta il 15/10 alle 08:44 (`87be1e2d8`). Confronto fra `node_modules/.package-lock.json` e
+   > cambiato l'ultima volta il 15/10 alle 08:44 (`4aad9fcdb`). Confronto fra `node_modules/.package-lock.json` e
    > `package-lock.json`:
    > - nessuna versione cambiata, nessun pacchetto in più;
    > - 134 pacchetti mancanti, tutti opzionali o legati a un'altra piattaforma (`@esbuild/*`, `@emnapi/*`), che npm non
@@ -8389,7 +8389,7 @@ non sposti il registro.
    >   - UPA-01 (precondizione) e UPA-02 (barriera, solo il broker 1) sono verdi oggi; UPA-03, UPA-04 e UPA-05 (ETF e
    >     CROWDFUND) sono rossi;
    >   - le richieste vanno con `exclude_unset=True`, perché il `broker_ids` vuoto della richiesta asset darebbe 422.
-4. ✅ **I rossi nella corsia** (16:16–16:35; HEAD `70ad4cec1` più i test)
+4. ✅ **I rossi nella corsia** (16:16–16:35; HEAD `e91a3a3dc` più i test)
    > **Note implementazione**: `files/tools/ai503_suites.sh red` (cioè `dev.py test --test-port 6188 --data-dir
    > /tmp/librefolio-r13-e …`, l'API con `--no-shared-server`) e `files/tools/ai503_front.sh red` (il Vitest del lock,
    > più Prettier). Col carico sotto 50.
@@ -8437,7 +8437,7 @@ non sposti il registro.
    >   - la decisione di rifiutare viene prima di toccare la diagnostica.
    > - **`COMPACT_COMPONENT_VERSIONS`**: `{1, 2}` per i tre componenti, col commento aggiornato.
    > - Prettier ha riformattato solo il mio blocco: a HEAD il file era pulito.
-7. ✅ **I verdi e i controlli statici** (16:40–17:0x; HEAD `70ad4cec1` più il lotto, col carico sotto 50)
+7. ✅ **I verdi e i controlli statici** (16:40–17:0x; HEAD `e91a3a3dc` più il lotto, col carico sotto 50)
    > **Note implementazione** (`files/tools/ai503_suites.sh green1`, `ai503_front.sh`):
    >
    > | Suite | Risultato |
@@ -8516,17 +8516,17 @@ non sposti il registro.
    > ```
 10. ✅ **Il checkpoint** al coordinatore (2026-10-19, 17:1x), poi FROZEN.
    > **Note implementazione**:
-   > - HEAD `70ad4cec1`; 15 file tracciati modificati e 2 nuovi (i due file di test). `git diff --check` pulito; la
+   > - HEAD `e91a3a3dc`; 15 file tracciati modificati e 2 nuovi (i due file di test). `git diff --check` pulito; la
    >   porta 6188 è libera.
    > - Esclusi i file ignorati rigenerati da `api sync` (`openapi.json`, `generated.ts`, `generated-tools.ts`, i
    >   contratti dei tool), `.testLog`, `site/`, i dati della corsia e la cartella della sessione.
    > - Nel backlog, sezione E: **E-23** (la serie stantia), aperta e senza decisione.
    > - Il CHANGELOG non è toccato: nel messaggio c'è la riga 🐛 proposta.
    >
-   > **Entrato** (coordinatore, 17:1x): `48b44ee64` `fix(ai-export): no 503 for held assets without prices` e il giornale
-   > `6623aba7b`. Le due frasi ed E-23 vanno allo sviluppatore; la revisione la fa J, quando finisce J-57.
+   > **Entrato** (coordinatore, 17:1x): `113802b0f` `fix(ai-export): no 503 for held assets without prices` e il giornale
+   > `59d7a4ed4`. Le due frasi ed E-23 vanno allo sviluppatore; la revisione la fa J, quando finisce J-57.
 
-### N62 — La guida Gmail (2026-10-19, 17:0x–17:2x; base `6623aba7b`)
+### N62 — La guida Gmail (2026-10-19, 17:0x–17:2x; base `59d7a4ed4`)
 > **La richiesta** (coordinatore, 17:07), approvata dallo sviluppatore: «fai la guida in inglese per gmail poi la testo e
 > la rifiniamo». Un esempio Gmail esplicito nella guida email, solo in inglese:
 > - il server `smtp.gmail.com`, porta 587 `starttls`;
@@ -8577,7 +8577,7 @@ non sposti il registro.
 > commit e nessun comando git.
 > - **Fermo, verificato** (18:1x): nessuna shell attiva, nessun processo della corsia, la porta 6188 è libera; gli agenti
 >   di E-AI503 e N62 hanno finito.
-> - **HEAD**: `224f607cd` (il giornale di N62), visto con l'ultimo comando git, alle 17:2x, ad albero pulito; durante la
+> - **HEAD**: `ebc9076c9` (il giornale di N62), visto con l'ultimo comando git, alle 17:2x, ad albero pulito; durante la
 >   pausa nessun comando git. Ora è sporco solo questo piano, per questa nota.
 > - **Cosa sta in /tmp**: della mia corsia, soltanto la data-dir `/tmp/librefolio-r13-e`, un DB di prova di 280 KiB
 >   scritto dalle suite alle 16:50, con dati finti. Non serve copiarla. Gli altri file `libreFolio_*` di /tmp sono di
@@ -8589,8 +8589,8 @@ non sposti il registro.
 >     `logs/`, la patch di C-70b in `parked/`, i render di E-AI503 in `ai503_render/`. L'archivio dei DB di prova sta in
 >     `.testLog/00_archive/` del worktree, ignorato da git.
 > - **Dove si è fermato il lavoro**: dopo N62.
->   - E-AI503 è entrato (`48b44ee64`, giornale `6623aba7b`) e aspetta la revisione di J, dopo J-57.
->   - N62 è entrato (`67d402b97`, giornale `224f607cd`); la pagina è anche in `dev_release2` (`98bee0d2b`).
+>   - E-AI503 è entrato (`113802b0f`, giornale `59d7a4ed4`) e aspetta la revisione di J, dopo J-57.
+>   - N62 è entrato (`1915660b1`, giornale `ebc9076c9`); la pagina è anche in `dev_release2` (`f8a855320`).
 > - **In attesa di altri**, nessun lavoro finché non arriva:
 >   - E-AI503: la revisione di J; dallo sviluppatore, le due frasi di `PRICE_SERIES_GAP_MEANINGS` ed E-23. Se le frasi
 >     cambiano, si tocca solo la mappa: i test le leggono da lì. La riga 🐛 del CHANGELOG è proposta, non scritta.
@@ -8620,18 +8620,18 @@ non sposti il registro.
 > Se nel piano 08 c'è un lotto già autorizzato, proseguire con quello; altrimenti l'analisi del prossimo, senza codice.
 > Corse leggere solo col carico a 1 minuto sotto 50, nella corsia 6188, da ripopolare.
 > - **Lo stato**:
->   - HEAD `224f607cd`; sporco solo questo piano: la nota della pausa e queste sezioni;
->   - `dev_release2` è a `ecc7ac667`, 78 commit avanti, e non contiene il mio ramo (E-AI503 è in revisione);
+>   - HEAD `ebc9076c9`; sporco solo questo piano: la nota della pausa e queste sezioni;
+>   - `dev_release2` è a `d61270a14`, 78 commit avanti, e non contiene il mio ramo (E-AI503 è in revisione);
 >   - `/tmp/librefolio-r13-e` non c'è più dopo il riavvio; la porta 6188 è libera; il carico a 1 minuto era 29,6.
 > - **Nessun lotto autorizzato per il codice**:
 >   - C-70b aspetta la lettura dello sviluppatore;
 >   - E-20 ed E-7 aspettavano B-49 e il lotto del lock di A, ora entrambi in `dev_release2` e già nella mia base: B-49
->     (`0eef55599`, merge `709dfb1e4`) e A-52…A-56 (merge `119230f9f`).
+>     (`ab9a1ad88`, merge `6d3489591`) e A-52…A-56 (merge `66eebc344`).
 >
 >   Nell'ordine della coda del 17/10 viene prima E-20. Dentro c'è la revisione di B-49 dopo l'ingresso, annunciata dal
 >   coordinatore il 17/10, perché tocca le stesse righe.
 
-### B-49 — La revisione dopo l'ingresso (2026-10-20, 08:5x; sola lettura, `0eef55599`, merge `709dfb1e4`)
+### B-49 — La revisione dopo l'ingresso (2026-10-20, 08:5x; sola lettura, `ab9a1ad88`, merge `6d3489591`)
 > **OK, nessun rilievo che blocchi.** Tre note informative.
 > - **Verificato**:
 >   - **Il posto**: `_refuse_undecodable_text` gira dopo il controllo contro il manifest e prima dell'upgrade, dentro
@@ -8670,7 +8670,7 @@ non sposti il registro.
 >      testo non UTF-8 il messaggio di sqlite3 cita i byte dell'archivio. Da B-49 lì non può più succedere; la regola
 >      (solo la classe) resta giusta. Una riga facoltativa, nel file di B.
 
-### E-20 — L'analisi della metà d'avvio (2026-10-20, 08:5x–09:1x; sola lettura, HEAD `224f607cd`, dev `ecc7ac667`)
+### E-20 — L'analisi della metà d'avvio (2026-10-20, 08:5x–09:1x; sola lettura, HEAD `ebc9076c9`, dev `d61270a14`)
 > **La richiesta** (coordinatore, 17/10): E-20 dopo l'ingresso di B-49. B-49 rifiuta al controllo del ripristino gli
 > archivi con testo non UTF-8, quindi resta solo la metà d'avvio.
 #### E-20.0 — Lo stato vero
@@ -8748,7 +8748,7 @@ non sposti il registro.
 >   - Nessun CHANGELOG: E-19a non è ancora uscito, e la riga ✨ che c'è copre il comando.
 > - **La dimensione**: piccola. Circa 10 righe di codice più le docstring, circa 120 righe di test, una frase di
 >   documentazione.
->   - La base non va aggiornata: HEAD contiene B-49, e i tre file non sono cambiati in dev dopo `47af95978`.
+>   - La base non va aggiornata: HEAD contiene B-49, e i tre file non sono cambiati in dev dopo `09530dfa8`.
 >   - Prima delle corse, la corsia si ripopola.
 > - **Domande** (nessuna decisa da me):
 >   1. il via a E-20 col factory permissivo, oppure chiudere la metà d'avvio;
@@ -8757,7 +8757,7 @@ non sposti il registro.
 >   4. la nota 2 di B-49, il ripristino a mano, per B.
 > - **Dopo**: E-7, il cui prerequisito (il lotto del lock di A) è entrato. La sua analisi può seguire.
 
-#### E-20.3 — Il via e il lavoro (2026-10-20, 09:00; base `6ad83492e`, il checkpoint del giornale del coordinatore)
+#### E-20.3 — Il via e il lavoro (2026-10-20, 09:00; base `790645a67`, il checkpoint del giornale del coordinatore)
 > **Le risposte del coordinatore** (09:00):
 > 1. via a E-20 col `text_factory` permissivo: prima i rossi col `test-author`, come elencati, poi la cura, il punto 🧱
 >    e il checkpoint. Corse leggere (`services stored-currencies`, `services restore-non-iso-warning`), col carico sotto
@@ -8768,7 +8768,7 @@ non sposti il registro.
 >
 > Dopo E-20, l'analisi di E-7.
 
-1. ✅ **Il via e lo stato** (09:0x): HEAD `6ad83492e`, albero pulito, la porta 6188 libera.
+1. ✅ **Il via e lo stato** (09:0x): HEAD `790645a67`, albero pulito, la porta 6188 libera.
    > **⚠️ Fuori pista**: nell'analisi avevo scritto «RNW-107 e RNW-109 non cambiano». È sbagliato per RNW-109. La sua
    > barriera (`test_restore_non_iso_warning.py:847-849`, scritta da B in B-49) chiama il vero
    > `find_stored_currency_findings` sul DB non UTF-8 dell'archivio e si aspetta un `OperationalError`: con la cura va
@@ -8808,8 +8808,8 @@ non sposti il registro.
      sezione `db currencies` (debito di E-19a): nessun timbro, il debito resta vero.
    - `dev.py mkdocs build` (strict) ok; `dev.py mkdocs check-links` 97 link validi.
    - Backlog: E-20 ✅, con la metà d'avvio, quella del ripristino chiusa da B-49 e il `GBp` chiuso col motivo verificato.
-7. ✅ **Il checkpoint** (09:25), insieme al testo di E-AI503: committato dal coordinatore (09:35), `f15d8c60c`
-   `fix(platform): currency audit reads text that is not UTF-8`, `f7be98971` (il testo di E-AI503), `4df888f78` (il
+7. ✅ **Il checkpoint** (09:25), insieme al testo di E-AI503: committato dal coordinatore (09:35), `4c4562e2a`
+   `fix(platform): currency audit reads text that is not UTF-8`, `295418e6a` (il testo di E-AI503), `b0de09a63` (il
    giornale). Entrano in dev col treno 2, insieme a E-AI503 ed E-24.
 
 > **Il nuovo ordine** (coordinatore, 09:06 e 09:1x): E-20, il testo di E-AI503, l'analisi di E-24, l'analisi di E-23
@@ -8852,7 +8852,7 @@ non sposti il registro.
 > novità». Vale per ogni secchio vuoto, non solo per la serie tutta vuota. Prima l'analisi, senza codice: dove si
 > formano i secchi, come si scrive il buco fuso, cosa cambia nella copertura e nei test.
 
-#### E-24 — I prompt che fanno riscrivere tutti i dati all'AI: analisi (2026-10-20, 09:0x–09:2x; sola lettura, HEAD `6ad83492e`)
+#### E-24 — I prompt che fanno riscrivere tutti i dati all'AI: analisi (2026-10-20, 09:0x–09:2x; sola lettura, HEAD `790645a67`)
 > **La richiesta del developer** (coordinatore, 09:06), testuale: «ultimamente sto usando i vari prompt e noto che in
 > tutti i casi le ai dopo l'incolla mi riscrivono TUTTO quello che gli ho mandato in forma discorsiva, aggiungi a tutti i
 > prompt, sia quelli che esportano i soli dati, che quelli con l'analisi da fare un comando che gli vieta di sbrodolare
@@ -8934,7 +8934,7 @@ Proposta: se insieme ai dati c'è una domanda, l'AI risponde solo a quella; altr
 **Le versioni** (domanda per J): istruzioni e contratti sono `v1` (`AI_EXPORT_INSTRUCTION_TEMPLATE_VERSION` e
 `AI_EXPORT_RESPONSE_CONTRACT_VERSION`, `ai_export_runtime.py:28-29`; i letterali `version: 1` dei due file frontend); la
 stretta di mano è a due lati (`compatibility.ts:113-115`) e il prompt stampa «Contract: … v1». Dalla pubblicazione V1
-(`7992471b6`, uscita con la 1.2) il testo non è mai cambiato: nessun precedente. Un bump tocca le due costanti, i
+(`23151a19b`, uscita con la 1.2) il testo non è mai cambiato: nessun precedente. Un bump tocca le due costanti, i
 letterali e i test che legano le versioni dei template ad `AI_EXPORT_SELECTION_VERSION` (`aiExportClient.test.ts:15-17`).
 Io non lo farei: il testo vive solo nel frontend e la stretta di mano protegge l'identità, non le parole.
 
@@ -8967,9 +8967,9 @@ quattro chiavi i18n, tre pin e due o tre test nuovi, due pagine EN, una sonda sm
 
 **Domande per J:** la posizione delle due sezioni; il bump delle versioni; L3 come seguito, con una Task Adequacy.
 
-#### E-23 — I secchi vuoti dei prezzi e il buco fuso: analisi (2026-10-20, 09:2x–09:3x; sola lettura, HEAD `6ad83492e`)
+#### E-23 — I secchi vuoti dei prezzi e il buco fuso: analisi (2026-10-20, 09:2x–09:3x; sola lettura, HEAD `790645a67`)
 > Scritta in sola lettura mentre ero FROZEN dopo il checkpoint delle 09:25, mandata al coordinatore insieme a E-24 e
-> copiata qui dopo il suo via (09:35, base `4df888f78`). Le domande le porta lui al developer.
+> copiata qui dopo il suo via (09:35, base `b0de09a63`). Le domande le porta lui al developer.
 
 **Dove si formano i secchi** (`technical_shared.py`):
 - `get_prices_bulk` (`price_query.py:174-221`, `_build_backward_filled_series`) dà un punto per ogni giorno di
@@ -9074,7 +9074,7 @@ della copertura di `*.technical_prices`, righe ~150-165, e i codici). Una riga n
 4. la tabella separata `PRICE GAPS` (consigliata) o i buchi dentro BUCKETS;
 5. i cambi: dentro o fuori (consiglio fuori, per ora).
 
-#### E-24.1 — Il via e il lavoro (2026-10-20, 09:4x; base `4df888f78`)
+#### E-24.1 — Il via e il lavoro (2026-10-20, 09:4x; base `b0de09a63`)
 > **Le decisioni del developer** (coordinatore, 09:4x):
 > - **Livello L2**: le due sezioni nuove («Answer Focus» per le analisi, «Reply Instructions» per l'export dei soli
 >   dati), `facts` che diventa «Key Facts», e i 6 obiettivi riscritti come «Use … to …; mention only what changes the
@@ -9131,8 +9131,8 @@ della copertura di `*.technical_prices`, righe ~150-165, e i codici). Una riga n
    - Rivista contro la cura (stesso ordine, stessa chiusa «mention only what changes the answer»). Debito di
      traduzione: `user/ai-export/index.{it,fr,es}.md` (quattro passaggi, un punto di elenco in più), non timbrato.
    `user/settings/about.en.md` («near its end») resta vera.
-5. ✅ **Il checkpoint** (10:0x), coi testi inglesi finali: committato dal coordinatore (10:1x), `3c064de75`
-   `feat(ai-export): prompts answer from the data, never restate it`, `badc30832` (il giornale).
+5. ✅ **Il checkpoint** (10:0x), coi testi inglesi finali: committato dal coordinatore (10:1x), `2c61bd71b`
+   `feat(ai-export): prompts answer from the data, never restate it`, `7ed3f2ae9` (il giornale).
    > **Le risposte del coordinatore** (10:10):
    > - «If you cannot search, say so; never invent a source or a news item.»: sì, in Reply Instructions; decisione
    >   sua, nello spirito delle istruzioni condivise. Piccolo seguito: un rosso, la cura, il checkpoint (E-24.2).
@@ -9141,7 +9141,7 @@ della copertura di `*.technical_prices`, righe ~150-165, e i codici). Una riga n
    > - E-AI503, E-20 ed E-24 entrano col treno 2; quando sono in dev aggiorna la mia base e parto con E-23.
    >   Intanto l'analisi di E-7.
 
-#### E-24.2 — Il divieto di inventare fonti nei soli dati (2026-10-20, 10:1x; base `badc30832`)
+#### E-24.2 — Il divieto di inventare fonti nei soli dati (2026-10-20, 10:1x; base `7ed3f2ae9`)
 > Le analisi lo hanno già nelle istruzioni condivise («never fabricate sources or current events»); l'export dei soli
 > dati no. La frase del coordinatore va in Reply Instructions, dopo quella della ricerca sul web, come costante
 > esportata (`AI_EXPORT_NO_INVENTED_SOURCES_RULE`): il test ne fissa la presenza, non le parole.
@@ -9173,7 +9173,7 @@ della copertura di `*.technical_prices`, righe ~150-165, e i codici). Una riga n
 > I testi sono quelli proposti; il developer li vedrà nel checkpoint. **L'ordine**: E-24, poi E-23 (dopo l'ingresso di
 > E-AI503, nel prossimo treno), poi E-7. Rivede J.
 
-#### E-7 — Il segno «in attesa di verifica» nella scheda Users: analisi (2026-10-20, 09:3x–10:1x; sola lettura, base `badc30832`)
+#### E-7 — Il segno «in attesa di verifica» nella scheda Users: analisi (2026-10-20, 09:3x–10:1x; sola lettura, base `7ed3f2ae9`)
 > **La voce** (backlog E-7, coordinatore 15/10, E5 domanda 7): con la verifica dell'email accesa, chi si è registrato e
 > non ha ancora aperto il link compare in Users come un account disattivo qualunque. Fuori dalla 1.3 allora; ora in
 > coda dopo E-23 (coordinatore, 09:5x). Il prerequisito (il lotto del lock di A, A-52…A-56) è nella base.
@@ -9225,7 +9225,7 @@ della copertura di `*.technical_prices`, righe ~150-165, e i codici). Una riga n
 **Superfici e conflitti:**
 - `api/v1/users.py`, `schemas/users.py`, `UserRow.svelte`, `types.ts`, `i18n/settings/*` e `admin/users.en.md` sono di
   A: righe mie dichiarate, A rivede (il precedente di E5b).
-- N69-4 di A (gli avatar, `ac24fdf92`, in `dev_release2`) tocca le stesse righe: la firma di `_admin_user_read`, la
+- N69-4 di A (gli avatar, `a3d16ce79`, in `dev_release2`) tocca le stesse righe: la firma di `_admin_user_read`, la
   lista, la risposta del PATCH, `AdminUserRead`, `types.ts`, `UserRow.svelte`. Il codice va scritto dopo
   l'aggiornamento della base col treno 2, non prima.
 - Nessuna migrazione: l'attesa non ha una colonna, si legge dai token.
@@ -9239,9 +9239,9 @@ pagine).
 3. il comando `user list` non mostra né questa attesa né quella del setup: lasciarlo com'è (consigliato) o un segno
    anche lì, come seguito.
 
-#### E-23.2 — Il via e il contratto (2026-10-20, 10:39; base `1ef19d8dc`, merge di `dev_release2` `f73514a77` con E-AI503, E-20 ed E-24)
-> **Il coordinatore** (10:39): checkpoint di E-24.2 in `d44210b59`; base aggiornata a `dev_release2` (`f73514a77`),
-> merge pulito, HEAD `1ef19d8dc`. **Via a E-23**, con le decisioni di E-23.1. Prima i rossi. Le domande di E-7 le porta
+#### E-23.2 — Il via e il contratto (2026-10-20, 10:39; base `efb5f82c4`, merge di `dev_release2` `1feacc35e` con E-AI503, E-20 ed E-24)
+> **Il coordinatore** (10:39): checkpoint di E-24.2 in `bd451c298`; base aggiornata a `dev_release2` (`1feacc35e`),
+> merge pulito, HEAD `efb5f82c4`. **Via a E-23**, con le decisioni di E-23.1. Prima i rossi. Le domande di E-7 le porta
 > lui al developer.
 >
 > **Il merge** tocca la strada di E-23 solo in modo neutro: `temporal/aggregators.py` (Z-29r: le stesse statistiche,
@@ -9348,10 +9348,10 @@ pagine).
    Temporal Rows»). Rivista contro il codice. `mkdocs build` strict ok, `check-links` 97 ok. Pagine solo inglesi.
    Backlog: E-23 ✅ nella mia sezione.
 5. ✅ **Il checkpoint** (11:4x), coi testi finali per il developer e una domanda: il buco del giorno dello snapshot.
-   Committato dal coordinatore (11:43): `32462b543` `feat(ai-export): merged price and rate gaps, no_price_in_period`,
-   `70bc6dc03` (il giornale).
+   Committato dal coordinatore (11:43): `6611abae4` `feat(ai-export): merged price and rate gaps, no_price_in_period`,
+   `967d87064` (il giornale).
 
-#### E-23.3 — Il buco finale del giorno dello snapshot (2026-10-20, 11:43; base `70bc6dc03`)
+#### E-23.3 — Il buco finale del giorno dello snapshot (2026-10-20, 11:43; base `967d87064`)
 > **La decisione del coordinatore** (11:43): «Una sequenza finale il cui unico giorno aperto è quello dello snapshot non
 > è un buco: è il prezzo di oggi non ancora sincronizzato, e un buco così in ogni asset sarebbe solo rumore, contro lo
 > spirito della regola del developer.» Prima il rosso, poi la cura e il checkpoint. Sì anche alla riga cosmetica del
@@ -9381,8 +9381,8 @@ pagine).
    `api ai-export-unpriced-asset` **9 passed**; ruff e black puliti; `mkdocs build` strict e `check-links` ok. Il
    renderer non cambia (decide il backend). Checkpoint al coordinatore.
 
-#### E-25 ed E-26 — I due residui di E6 per lo sviluppatore: analisi (2026-10-20, 13:1x–13:2x; sola lettura, base `4c6a12795`)
-> **La richiesta** (coordinatore, 13:16): checkpoint di E-23.3 in `d2388ea2c` e `4c6a12795`; l'interpretazione
+#### E-25 ed E-26 — I due residui di E6 per lo sviluppatore: analisi (2026-10-20, 13:1x–13:2x; sola lettura, base `2110f2a27`)
+> **La richiesta** (coordinatore, 13:16): checkpoint di E-23.3 in `62af7fa15` e `2110f2a27`; l'interpretazione
 > «giorno dello snapshot = `plan.end`» va bene. Le domande di E-7 le porta ora allo sviluppatore; intanto, se nel piano
 > 08 c'è un altro lotto pronto, la sua analisi.
 
@@ -9460,28 +9460,28 @@ pagine).
 
 > **⚠️ Fuori pista** (13:2x): mettendo E-25 ed E-26 nel backlog ho visto che manca l'intestazione
 > `## Y · Cruscotto e grafici (fase 01)`. L'ho tolta io alle 11:3x: lo script che chiudeva E-23 sostituiva un ancoraggio
-> che finiva con quell'intestazione, e il testo nuovo non la rimetteva. Il coordinatore l'ha committata in `70bc6dc03`,
+> che finiva con quell'intestazione, e il testo nuovo non la rimetteva. Il coordinatore l'ha committata in `967d87064`,
 > non ancora in `dev_release2`; da allora le voci di Y si leggevano come parte della sezione E. Rimessa al suo posto, con
-> E-25 ed E-26 in fondo alla sezione E; contro `32462b543` (prima del mio errore) il file cambia solo per la chiusura di
+> E-25 ed E-26 in fondo alla sezione E; contro `6611abae4` (prima del mio errore) il file cambia solo per la chiusura di
 > E-23 e le due righe nuove. Da qui in poi controllo ogni modifica del backlog con un diff contro il commit precedente.
 
-#### Lo scatto `settings/email` della galleria — la domanda a G (2026-10-20, 13:3x; base `e1c4ab230`)
-> **Il coordinatore** (13:34): checkpoint `e1c4ab230` (il giornale con il titolo di Y ripristinato, verificato). E-25 ed
+#### Lo scatto `settings/email` della galleria — la domanda a G (2026-10-20, 13:3x; base `72ce2f709`)
+> **Il coordinatore** (13:34): checkpoint `72ce2f709` (il giornale con il titolo di Y ripristinato, verificato). E-25 ed
 > E-26 le porta lui allo sviluppatore. Intanto chiudere con G lo scatto `settings/email`: chiedere al coordinatore dei
 > colori («UI color analysis»), che coordina G, se lo mette nel prossimo blocco della galleria.
 
-- **Riverificato a lettura** su `e1c4ab230`: il test `gallery.spec.ts:2074` (nel `describe('Settings')`, fra
+- **Riverificato a lettura** su `72ce2f709`: il test `gallery.spec.ts:2074` (nel `describe('Settings')`, fra
   `global-settings` e `plugins`) regge ancora. `settings-tab-email` viene da `settings/+page.svelte:84`; `email-tab` ha
   `data-busy`; `settings-page` c'è; i quattro testid di `expectGalleryEmailStatus` stanno in `EmailSettingsTab.svelte`.
   La fixture valida il suo stato contro lo Zod generato. Senza `links`, `linksBase` è nullo: niente sezione dei link,
   niente URL esterno, niente sonda. Non eseguito: la galleria va in uno slot, ed è di G.
 - **Manca, oltre alla corsa**: le voci nelle pagine della galleria (`gallery/{desktop,mobile}.{en,it,fr,es}.md`, accanto
   a `global-settings`): senza, lo scatto non compare. Le hanno sempre scritte i workstream dei loro scatti
-  (`c8d23c544`, `dbf4263e9`).
+  (`0210494ca`, `e9e76aece`).
 - **Chiesto** (13:3x, a «UI color analysis»): se lo scatto va nel prossimo blocco, e se le voci delle pagine le scrivo io a
   immagini fatte o le scrive G nel blocco.
 - **La risposta** (13:38): lo scatto **c'è già**. G l'ha preso in tutte e tre le gallerie di riferimento del 18/10 (su
-  `ba8e06763` e `cd686f445`), 16 immagini per giro, tutto verde; ogni blocco gira tutto lo spec. Da N69b le scene da admin
+  `80a1ca0e0` e `574c23cf0`), 16 immagini per giro, tutto verde; ogni blocco gira tutto lo spec. Da N69b le scene da admin
   mostrano un avviso di sicurezza (la corsia della galleria ha il limite dei login spento): G sceglie la cura, per me
   niente. Le voci delle pagine: le scrivo io, anche subito (i PNG sono ignorati da git, la build stretta regge); poi il
   timbro dei due `.en.md`.
@@ -9492,17 +9492,17 @@ pagine).
 - **Il timbro, non fatto** (13:4x): `translate-stamp --file gallery/desktop.en.md gallery/mobile.en.md` l'ho lanciato e
   poi tolto (il cache rimesso da `HEAD`). Le voci inglesi del cache erano già scadute rispetto a `HEAD` (md5 di
   `desktop.en.md` a `HEAD` `5e3230dd…`, nel cache `7cd49d23…` del 13/10): la voce «🧩 Plugin Settings» di X
-  (`c8d23c544`, 16/10) c'è solo in inglese, in desktop e mobile (`translate-validate`: 133 titoli contro 132, prima della
+  (`0210494ca`, 16/10) c'è solo in inglese, in desktop e mobile (`translate-validate`: 133 titoli contro 132, prima della
   mia voce 132 contro 131). Timbrare avrebbe nascosto quel debito vero. Il timbro va fatto dopo che quella voce è
   tradotta.
-- **Il via del coordinatore** (14:28; checkpoint `b02611402` e `a7c7de18d`): tradurre io la voce di X in it/fr/es (sei
+- **Il via del coordinatore** (14:28; checkpoint `fb0af49cf` e `bf47d9fd0`): tradurre io la voce di X in it/fr/es (sei
   voci brevi; lo sviluppatore permette le correzioni piccole nelle 4 lingue), poi il timbro sulle due pagine, perché a
   quel punto il debito è chiuso davvero. Seguito minimo, col checkpoint.
 - ✅ **Le sei voci** (14:3x), dopo `onboarding-replay` come in inglese: «🧩 Impostazioni dei plugin», «🧩 Paramètres des
   plugins», «🧩 Ajustes de los plugins» (`pluginSettings.tab.title`), coi termini dell'app («le fonti dei prezzi e dei
   tassi di cambio», la scheda «Plugin»/«Plugins») e quelli delle pagine (scheda/onglet/pestaña, modulo/formulaire/
-  formulario, badge/badge/insignia). Verificato prima: dal timbro (l'inglese di `810deabf9`) le due pagine inglesi sono
-  cambiate solo per la voce di X (`c8d23c544`) e per la mia (`b02611402`), quindi nient'altro resta da tradurre.
+  formulario, badge/badge/insignia). Verificato prima: dal timbro (l'inglese di `372b522a3`) le due pagine inglesi sono
+  cambiate solo per la voce di X (`0210494ca`) e per la mia (`fb0af49cf`), quindi nient'altro resta da tradurre.
 - ✅ **Le prove** (14:3x): titoli 133/133 e 134/134 nelle quattro lingue, nello stesso ordine; `translate-validate`:
   nessuna riga per le pagine della galleria (erano 684), gli errori del sito da 1544 a 1454; poi `translate-stamp --file
   gallery/desktop.en.md gallery/mobile.en.md` (il cache cambia solo quelle due voci); `mkdocs build` stretto ok,
@@ -9517,7 +9517,7 @@ pagine).
 > - **L'ordine** (coordinatore): E-25, la voce di X nella galleria (già fatta, sopra), poi E-26.
 > - Le traduzioni di `getting-started` restano debito, senza timbro, salvo diversa indicazione dello sviluppatore.
 
-#### E-25.2 — Il passo «Conferma»: esecuzione (2026-10-21, ondata 3, notte; base `2879ae3e4`)
+#### E-25.2 — Il passo «Conferma»: esecuzione (2026-10-21, ondata 3, notte; base `85fda260e`)
 > **La richiesta** (coordinatore, brief `kickoff-E.md`, ondata 3): solo il passo A, E-25, approvato dallo sviluppatore il
 > 20/10 (13:4x) coi testi proposti. Corsia `6182`, `/tmp/librefolio-r13-e`; niente E2E (solo proporlo), `front check` e
 > Vitest su più di 3 file dentro `flock /tmp/librefolio-heavy.lock`, con `LC_ALL=en_US.UTF-8`. Nessun commit: il
@@ -9534,7 +9534,7 @@ pagine).
 - il pulsante sparisce al clic (lo stato passa a `checking`, senza pulsanti): un doppio clic non spende due volte.
 
 - ✅ **Passo 1 — Base e `api sync`** (2026-10-21)
-  > **Note implementazione**: `git rev-parse HEAD` = `2879ae3e4d8d232f9fb29939addbef28ecc3bdd8` (branch `e-alfy-e-email`,
+  > **Note implementazione**: `git rev-parse HEAD` = `85fda260e8010a34d4b12857ab9fb0d09089d979` (branch `e-alfy-e-email`,
   > albero pulito); `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py api sync` exit 0, nessun file
   > tracciato cambiato. Rilette sul codice le affermazioni dell'analisi: `+page.svelte:44-56` spende il token in
   > `onMount` e su `hashchange`; `VerifyEmailCard.svelte` ha otto stati; i bottoni dell'email in
@@ -9592,8 +9592,8 @@ pagine).
   eseguito (nessuno slot): aprire `/verify-email#token=<finto>`, verificare che nessuna `POST
   /email/verification/confirm` parta prima del clic, poi il clic → `unknown`.
 
-#### E-26.2 — Il contratto dell'email trattenuta: analisi (2026-10-22, ondata 3, notte; base `bb11f1479`)
-> **La richiesta** (coordinatore): E-25 verificato e committato in `bb11f1479`; E-25-q1 va allo sviluppatore («lascia
+#### E-26.2 — Il contratto dell'email trattenuta: analisi (2026-10-22, ondata 3, notte; base `be4f3929c`)
+> **La richiesta** (coordinatore): E-25 verificato e committato in `be4f3929c`; E-25-q1 va allo sviluppatore («lascia
 > com'è (a)»). Ora solo l'analisi del contratto di E-26 (b), niente codice, scritta in
 > `salvataggi-worktrees-20261021/ondata3/E-26-contratto.md`; `auth.py` è libero, A rivede dopo A-62.
 
@@ -9609,7 +9609,7 @@ pagine).
   > **⚠️ Fuori pista**: `developer/backend/email.md:749` cita `client_address(http_request)`, il codice usa
   > `rate_limit_address(http_request)` da H-36: da correggere con la doc di E-26.
 
-#### E-26.3 — L'email trattenuta: esecuzione (2026-10-22, ondata 3, notte; base `bb11f1479`)
+#### E-26.3 — L'email trattenuta: esecuzione (2026-10-22, ondata 3, notte; base `be4f3929c`)
 > **Il via** (coordinatore): la revisione di A approva il contratto (nullabile `null | "sending" | "held"`, nomi e
 > valori, il limite per casella fuori dalla risposta), con sette correzioni: (1) la descrizione del campo comincia con
 > «lo stato dell'invio, non un indirizzo», e quella di `verification_required` non dice più «a link is on its way»;

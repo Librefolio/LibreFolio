@@ -1,6 +1,6 @@
 # 04 — Data visualization colors (charts)
 
-> Snapshot: `dev_release2` @ `6d0b1266c` (v1.2), 2026-10-14. Read-only. Produced by the chart-audit sub-agent; light/dark rendering not visually verified.
+> Snapshot: `dev_release2` @ `885f7e91e` (v1.2), 2026-10-14. Read-only. Produced by the chart-audit sub-agent; light/dark rendering not visually verified.
 
 
 Paths are relative to `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/frontend/src/`. I found colours with a hex/rgba grep over the scoped folders plus `lib/components/brokers/lots/`, where the lot charts live. I read the key places but did not read every chart file end to end, and I made no changes.

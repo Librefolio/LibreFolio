@@ -2,7 +2,7 @@
 
 > **Mandato**: P — piattaforma `ASSET_SET`, round 3 della campagna Risk Analysis.
 > **Sessione**: `e-alfy-effective-bassoon` · **ramo** `e-alfy-asset-set-platform`
-> **Baseline**: `63444460d` ✅ verificata con `git rev-parse HEAD`
+> **Baseline**: `c77a284ff` ✅ verificata con `git rev-parse HEAD`
 > **Corsia**: `--test-port 6172` · `--data-dir /tmp/librefolio-r3-p`
 > **Coordinatore**: sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca`
 > **Consumatore**: mandato **A**, autore di [`A-contratto-asset-set.md`](../A-contratto-asset-set.md)
@@ -72,7 +72,7 @@ Cancelli di baseline già eseguiti in analisi:
 
 | cancello | esito |
 |---|---|
-| `git rev-parse HEAD` | `63444460da9f752ce77af61f5b5e4b9be3acd200` ✅ |
+| `git rev-parse HEAD` | `c77a284ff84f9920e91abce754e4de1aa5611022` ✅ |
 | **Ⓜ** `alembic -c backend/alembic.ini heads` | **`ab290f6b6756 (head)`** — una sola ✅ |
 | `lsof -nP -iTCP:6172 -sTCP:LISTEN` | libera ✅ |
 

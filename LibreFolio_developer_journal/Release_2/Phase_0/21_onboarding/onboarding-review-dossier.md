@@ -1,17 +1,17 @@
 # Onboarding — Developer Review Dossier
 
 > **Status as of writing**: worktree `e-alfy-literate-lamp`, branch `e-alfy-onboarding-foundation`,
-> HEAD `580bd504fd1d0d3b7b3ee2a8ac0407ef5187a476`, working tree clean (0 modified / 0 staged /
+> HEAD `ce718ca495473ae9c6844cd28819a43e092a515d`, working tree clean (0 modified / 0 staged /
 > 0 untracked / 0 unmerged), `41 behind / 0 ahead` of `dev_release2`, port 6158 free, no owned
-> process. The work is **already merged into `dev_release2`** via `3913fe217`
+> process. The work is **already merged into `dev_release2`** via `67ee437a0`
 > (`Merge branch 'e-alfy-allocatore-pac' into dev_release2`) — it arrived folded inside the PAC
 > branch, which is why it has never been described on its own terms.
 >
-> **⚠️ Superato in parte** (verifica Q del 2026-10-09, base `3cceb4f90`). Il dossier fotografa `580bd504f`; da allora:
+> **⚠️ Superato in parte** (verifica Q del 2026-10-09, base `f545b67e3`). Il dossier fotografa `ce718ca49`; da allora:
 >
 > - la migrazione `003` è stata assorbita in `004_release_1_2_0_schema.py`, con le tabelle a `:127` e `:143`, quindi il §3.3 è superato;
 > - i replay sono in `localStorage` (Round 8, OB-8), quindi il §2.5 e la riga B8 sono superati;
-> - i punti 1–3 del §6 sono chiusi dai Round 7 e 8: l'ancora bloccata con `1982c254b`, OB-8 e OB-9, e l'E2E dei flussi in `frontend/e2e/onboarding-guides.spec.ts`;
+> - i punti 1–3 del §6 sono chiusi dai Round 7 e 8: l'ancora bloccata con `18bc11a4f`, OB-8 e OB-9, e l'E2E dei flussi in `frontend/e2e/onboarding-guides.spec.ts`;
 > - il dossier è committato.
 >
 > I punti 4–8 del §6 restano aperti: vedi «Cosa resta aperto» in [plan-phase00Onboarding.prompt.md](plan-phase00Onboarding.prompt.md). Il punto 9 è chiuso per decisione del developer del 2026-10-09.
@@ -257,7 +257,7 @@ matters the day someone asks why a long-standing user has no tour history.
 >
 > This section originally stated the opposite: that the 14 guides were seeded **`pending`**, and
 > therefore that *"an existing user gets the full intro tour and every contextual guide on next
-> use"*. **That was accurate for the code this dossier reviewed** (branch head `580bd504f`, where
+> use"*. **That was accurate for the code this dossier reviewed** (branch head `ce718ca49`, where
 > migration 003 line 8 read *"Every guide starts pending and appears only at its own trigger"*).
 > It stopped being accurate when the migration was changed on the way into `dev_release2`
 > (28 insertions / 22 deletions on that file), which is the version described above.
@@ -637,5 +637,5 @@ unit tests cannot see and that manifests as an indefinite wait.
 
 ---
 
-*Written by workstream J at HEAD `580bd504f`. Not committed. No server started, no port bound,
+*Written by workstream J at HEAD `ce718ca49`. Not committed. No server started, no port bound,
 no Git history operation performed.*

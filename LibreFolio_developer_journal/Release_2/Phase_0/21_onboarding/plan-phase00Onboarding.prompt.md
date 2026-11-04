@@ -1,7 +1,7 @@
 # Phase 0 - Onboarding foundation
 
-> **Cosa resta aperto** (verifica Q del 2026-10-09, base `3cceb4f90`; aggiornato l'11/10, base `43d92ed23`). Il developer ha deciso di non archiviare la cartella, il 09/10: «no non l'ho fatta, e il fatto che ci siano anche delle cose non ancora implementate rafforza il punto che deve restare». L'11/10 la review C7 (punto 1) è chiusa. Le voci 2–7 sono il residuo dopo la 1.2, e la cartella resta per la decisione del 09/10.
-> 1. ✅ 2026-10-11 **Review manuale del developer delle correzioni C7: chiusa.** Riguarda il Round 8, step 8, completato il 25/09, con il runbook nella sezione «Runbook review manuale — copia prod `6168`» del [Round 8](plan-phase00OnboardingRound8-PostReview.prompt.md). Il developer, l'11/10: «credo ti sei perso perchè tutte queste ricordo di averle testate, è tutto verde, forse l'unico non testato è il punto 7, ma mi fido di te, il resto era tutto fatto». Il punto 7 del runbook (Aggiungi Broker a metà guida, chiudi e riapri: la guida della modale riparte dal primo passo) l'ha provato il coordinatore l'11/10 alle 14:44, sul target `43d92ed23`, corsia 6150: `front-utility onboarding-guides`, 24 passati, con «OB-9 contrast» (`frontend/e2e/onboarding-guides.spec.ts:460`) verde su desktop e su mobile. Storia: al 09/10 risultava non fatta (verifica Q, citazione qui sopra); la cura del punto 4 (titolo della finestra) era già stata sostituita da `0aac5ef1e` (29/09), quindi quella riga del runbook non vale più.
+> **Cosa resta aperto** (verifica Q del 2026-10-09, base `f545b67e3`; aggiornato l'11/10, base `02c776e11`). Il developer ha deciso di non archiviare la cartella, il 09/10: «no non l'ho fatta, e il fatto che ci siano anche delle cose non ancora implementate rafforza il punto che deve restare». L'11/10 la review C7 (punto 1) è chiusa. Le voci 2–7 sono il residuo dopo la 1.2, e la cartella resta per la decisione del 09/10.
+> 1. ✅ 2026-10-11 **Review manuale del developer delle correzioni C7: chiusa.** Riguarda il Round 8, step 8, completato il 25/09, con il runbook nella sezione «Runbook review manuale — copia prod `6168`» del [Round 8](plan-phase00OnboardingRound8-PostReview.prompt.md). Il developer, l'11/10: «credo ti sei perso perchè tutte queste ricordo di averle testate, è tutto verde, forse l'unico non testato è il punto 7, ma mi fido di te, il resto era tutto fatto». Il punto 7 del runbook (Aggiungi Broker a metà guida, chiudi e riapri: la guida della modale riparte dal primo passo) l'ha provato il coordinatore l'11/10 alle 14:44, sul target `02c776e11`, corsia 6150: `front-utility onboarding-guides`, 24 passati, con «OB-9 contrast» (`frontend/e2e/onboarding-guides.spec.ts:460`) verde su desktop e su mobile. Storia: al 09/10 risultava non fatta (verifica Q, citazione qui sopra); la cura del punto 4 (titolo della finestra) era già stata sostituita da `d27fe6660` (29/09), quindi quella riga del runbook non vale più.
 > 2. **Contratto fra il catalogo TS e il registry Python dei flussi.** I due lati fissano ciascuno i propri 15 flussi (`frontend/src/lib/stores/app/onboarding.test.ts:1904`; `backend/app/services/onboarding_service.py:27-58`), ma nessun test li confronta. Peso medio. Dossier §6 #4.
 > 3. **Il re-trigger al cambio di versione di un flusso non è mai stato provato end-to-end.** I 15 flussi sono alla versione 1 (`onboarding_service.py:27-43`), e i test verificano solo `update_available is False` (`backend/test_scripts/test_services/test_settings_service.py:976,1146`). Peso medio. Dossier §6 #5.
 > 4. **La fascia 641–1023 px non è provata.** Playwright ha solo desktop 1280 e mobile 430 (`frontend/playwright.config.ts:123-138`). Peso basso. Dossier §6 #6.
@@ -14,7 +14,7 @@
 ## Stato e autorizzazione
 
 **Baseline approvata:** `dev_release2` a
-`f90d9801bd7a2d74aac6a27efe305314c6c004cc`.
+`e659f40bc69ada0b8df996f6a153b8ec3feebd48`.
 
 **Workstream:** J, branch `e-alfy-onboarding-foundation`.
 
@@ -27,8 +27,8 @@ una nuova autorizzazione esplicita.
 
 ### Mandato successivo - integrazione condivisa
 
-**Nuova baseline integrata verificata:** merge `4a9ae876e4599b5fdec5ade512b65b9c31a584a5`,
-parent fondazione `8d9761db1` + target integrato `570beb386`.
+**Nuova baseline integrata verificata:** merge `b451104361df9394ba4fcfef20f85e173dc54281`,
+parent fondazione `87f62c2c3` + target integrato `2217fa366`.
 
 **Autorizzazione coordinator su mandato developer, 2026-09-10:**
 procedere con l'integrazione condivisa onboarding sulle superfici prima bloccate,
@@ -442,7 +442,7 @@ integrazione senza perdere Tool/PAC, DataImport o AssetModal.
 > `scripts/test_runner/_frontend_utility.py` risolto come union: registrazioni/path
 > Tool/PAC D e cinque test onboarding J tutti preservati, component onboarding esclusi
 > dal catalogo monolitico. Coordinator ha staged, developer ha creato merge
-> `4a9ae876`; worktree pulito, `MERGE_HEAD` assente. Audit read-only post-merge ha
+> `b4511043`; worktree pulito, `MERGE_HEAD` assente. Audit read-only post-merge ha
 > verificato Sidebar `/tools`, PAC component/E2E, DataImport/AssetModal, step machine
 > ImportWizard e profondita ModalBase. Nessuna modifica developer manual-review
 > concorrente e stata segnalata sulle superfici condivise.

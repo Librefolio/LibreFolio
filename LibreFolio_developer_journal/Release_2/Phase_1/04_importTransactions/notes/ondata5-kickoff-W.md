@@ -7,7 +7,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 **Modello**: Sonnet. **E-21** (le 90 `raise BRIMParseError` nei 31 plugin) lo esegue un sotto-agente **Haiku**, tu rivedi ogni diff.
 **Giorni**: 8,5-11 (W5-1 1-1,5; W5-2 3,5-5 con lo split; W5-3 0,5; W5-5 1; W5-6 1,5-2; W5-7 0,5; W5-8 0,25).
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-fluffy-meme` · **Branch**: `e-alfy-w-import-e-transazioni`
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro; già fast-forward).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro; già fast-forward).
 **Corsia**: porta `6183`, cartella dati `/tmp/librefolio-r13-w`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md` (sezione nuova «Ondata 5»; C-70b: piano 08 ~7813-7904 se serve; B2 backlog ~668; W-B88 ~7278; W-B87 ~7271; E-21 ~10008; W-B80 ~7161). Skill utili: `brim-plugin`, `onboarding-guide` (nota a fine wizard).
 

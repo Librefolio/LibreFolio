@@ -7,7 +7,7 @@
 > - **R-5**: un evento dell'ultima settimana o dell'ultimo mese ancora aperti compare sul punto del suo periodo. T4 è passato dal rosso al verde. La riga 🐛 è proposta (passo 7).
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), lotto 51. **Origine**: i rilievi a margine della verifica a runtime del CHANGELOG (`/tmp/libreFolio_cl_runtime_I.md`, R-1, R-2, R-4; R-3 non si riproduce e resta fuori).
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `eb06ab960` (treno 84), worktree pulito, porta 6157 libera.
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `1e279facb` (treno 84), worktree pulito, porta 6157 libera.
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta, **1 worker** (V usa i 4 worker sulla sua corsia). Mai le porte 6040 e 6041, mai la galleria, mai `front build` a mano.
 > - **Tocca**: `frontend/src/routes/(app)/assets/+page.svelte` (R-1), `frontend/src/lib/components/charts/responsiveXAxis.ts` (R-2), `frontend/src/lib/components/charts/priceChartHelpers.ts` (R-5), i test (`chartCoreHelpers.test.ts`, `priceChartHelpers.test.ts`, `e2e/layout/toolbar-width-sweep.spec.ts`), la descrizione del runner (`scripts/test_runner/_frontend_utility.py`, superficie condivisa: la segnalo al checkpoint) e questo piano.
 > - **Non tocca** `PriceChartFull.svelte`: ci lavora T (le date dei tooltip).
@@ -17,7 +17,7 @@
 
 Il coordinatore: «**Lotto 51, nella 1.2** (codice di prodotto piccolo, corsia 6157):
 
-1. **R-1, la pillola Attivi/Inattivi della pagina Assets**: è nata con `3e5313d3e`, quindi va curata prima del rilascio e non vuole una riga nel CHANGELOG. In spagnolo a 320–330 px il testo si perde.
+1. **R-1, la pillola Attivi/Inattivi della pagina Assets**: è nata con `51de5dc75`, quindi va curata prima del rilascio e non vuole una riga nel CHANGELOG. In spagnolo a 320–330 px il testo si perde.
    - La cura: `min-w-0 truncate` più un `title` sui due bottoni, oppure quella che serve perché l'etichetta resti leggibile.
    - Il test-author la prova rossa prima della cura, per esempio con `scrollWidth ≤ clientWidth` sul testo della pillola a 320 px in es.
 2. **R-2, l'ultima etichetta dell'asse x tagliata sui telefoni** («Oct 1…» a 360/390): `responsiveXAxis.ts:160-162`, con `alignMaxLabel: 'right'` o l'equivalente.
@@ -27,7 +27,7 @@ Il coordinatore: «**Lotto 51, nella 1.2** (codice di prodotto piccolo, corsia 6
 
 **Come**: analisi brevissima nel tuo piano, poi parti. Per le prove, spec singole a 1 worker. Checkpoint FROZEN col manifest. Gli scatti della pagina Assets e dei grafici cambieranno: la galleria finale di M arriva dopo i lotti di V, T e tuo. R-3: niente, non si riproduce.»
 
-**Aggiunta del coordinatore, lo stesso giorno (in sintesi): R-5.** A risoluzione settimanale o mensile, il marcatore di un evento che cade nell'**ultimo periodo parziale** sparisce. Lo ha confermato V a runtime (`/tmp/libreFolio_v_events_probe.md`, 8 scatti). C'è dalla `v1.0.0` (`222a77c5e`), quindi vuole una riga 🐛, da proporre al checkpoint. La cura va negli helper, non in `PriceChartFull.svelte`; prima un test rosso sugli helper, con un periodo parziale. Da guardare anche la pagina FX (`fx/[pair]/+page.svelte:1459`), che passa `eventMarkers`.
+**Aggiunta del coordinatore, lo stesso giorno (in sintesi): R-5.** A risoluzione settimanale o mensile, il marcatore di un evento che cade nell'**ultimo periodo parziale** sparisce. Lo ha confermato V a runtime (`/tmp/libreFolio_v_events_probe.md`, 8 scatti). C'è dalla `v1.0.0` (`4f1f81283`), quindi vuole una riga 🐛, da proporre al checkpoint. La cura va negli helper, non in `PriceChartFull.svelte`; prima un test rosso sugli helper, con un periodo parziale. Da guardare anche la pagina FX (`fx/[pair]/+page.svelte:1459`), che passa `eventMarkers`.
 
 ## 1. Analisi
 
@@ -35,7 +35,7 @@ Il coordinatore: «**Lotto 51, nella 1.2** (codice di prodotto piccolo, corsia 6
 
 - **La causa.** In oneColumn (barra < 400 px) Cerca e la pillola condividono la riga 1 con la stessa classe, `flex-1 min-w-0` (`:1287`). La pillola ha `overflow-hidden` per gli angoli arrotondati, quindi il suo minimo è 0; i due bottoni sono `whitespace-nowrap` e non scendono sotto il loro testo. A metà riga non ci stanno, e la pillola li taglia.
 - **Le misure** (verifica a runtime, barra della pagina Assets, sporgenza del bottone oltre la pillola): es 320 → 20,7 px, 330 → 15,7, 340 → 10,7, 342 → 9,7; en 320 → 7,4, 330 → 2,4; fr 320 → 2,0; it mai. Le etichette: «Activos/Inactivos», «Active/Inactive», «Actifs/Inactifs», «Attivi/Inattivi».
-- **La provenienza**: `3e5313d3e`, dopo `v1.1.0`. Niente riga nel CHANGELOG.
+- **La provenienza**: `51de5dc75`, dopo `v1.1.0`. Niente riga nel CHANGELOG.
 - **La cura**: una classe propria per la pillola in oneColumn, `flex-1 min-w-max` al posto di `flex-1 min-w-0`.
   - Se le etichette stanno nella metà riga, le due metà restano uguali, come oggi.
   - Se non ci stanno, la pillola prende la larghezza del suo contenuto e Cerca cede il resto (circa 96 px su una barra di 254 px, in es).
@@ -46,7 +46,7 @@ Il coordinatore: «**Lotto 51, nella 1.2** (codice di prodotto piccolo, corsia 6
 ### R-2 — l'ultima etichetta dell'asse x (`responsiveXAxis.ts:21-29,154-166`)
 
 - **La causa.** In modalità compatta (larghezza utile < 480 px, o meno di 24 px per punto) la politica forza `showMinLabel` e `showMaxLabel`. ECharts centra ogni etichetta sul suo tick: quella dell'ultimo tick sporge di mezza larghezza oltre il bordo, e sui telefoni il margine destro non basta. Lo scatto: `/tmp/libreFolio_i_rt_shots/228_tooltip_360_viewport.png`, PriceChartFull a 360 px, «Oct 13» letto «Oct 1».
-- **La provenienza**: introdotto nella 1.2. `showMaxLabel` compatto entra con `2d22130bd` (17/09); poi `4c05c1d85`, `8682f0bbd` e `ff7c96fd0`. Tutti vengono dopo il tag `v1.1.0` (`837a8f2c7`), e in `v1.1.0` `frontend/src` non ha nessun `showMaxLabel`. **Niente riga 🐛.**
+- **La provenienza**: introdotto nella 1.2. `showMaxLabel` compatto entra con `f4d209b11` (17/09); poi `9cccf79bb`, `7aff6c163` e `c0b6e2229`. Tutti vengono dopo il tag `v1.1.0` (`aabd8f126`), e in `v1.1.0` `frontend/src` non ha nessun `showMaxLabel`. **Niente riga 🐛.**
 - **La cura** (prima versione, **superata**: vedi il fuori pista qui sotto): `alignMinLabel: 'left'` e `alignMaxLabel: 'right'` nell'`axisLabel` compatto, e solo lì, più il tipo `ResponsiveXAxisPolicy.axisLabel`.
   - ECharts 6.0.0 li applica alla prima e all'ultima etichetta della lista (`AxisBuilder.js:874-875`); i tipi li espongono (`shared.d.ts:2734-2735`).
   - In compatto quelle due etichette sono per costruzione gli estremi dell'asse, perché `showMinLabel` e `showMaxLabel` le includono, anche dentro una finestra di zoom.
@@ -90,7 +90,7 @@ Il coordinatore: «**Lotto 51, nella 1.2** (codice di prodotto piccolo, corsia 6
   - Il convertitore FX restituisce tutti i giorni di calendario (`backend/app/api/v1/fx.py:559-575`); la pagina della coppia passa solo gli eventi del confronto (`fx/[pair]/+page.svelte:434-453`).
   - Quindi nei periodi interni la fine teorica c'è sempre fra i dati: resta solo la forma stretta, l'ultimo periodo parziale. Il primo periodo parziale non perde niente, perché il suo punto sta comunque alla fine teorica.
   - Le Candele non ricevono `eventMarkers` (nota di V).
-- **La provenienza**: `222a77c5e`, già nella `v1.0.0`. **Vuole una riga 🐛.**
+- **La provenienza**: `4f1f81283`, già nella `v1.0.0`. **Vuole una riga 🐛.**
 - **La cura**, solo in `buildEventScatterGroups`, ramo non giornaliero:
   - una mappa `fine teorica → data del punto`, costruita dai punti della linea risolta (`p.bucketEnd` se c'è, altrimenti `mapDateToBucket(p.date, res).bucketEnd`, già importato);
   - la data del marcatore diventa quella del punto (`renderDate`, con ripiego sulla fine teorica), e da lì valgono indice, valore y e `bucketInfo`;

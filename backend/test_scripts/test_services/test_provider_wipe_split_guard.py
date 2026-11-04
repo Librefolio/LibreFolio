@@ -1,7 +1,7 @@
 """X-R49 (workstream X): changing a Scheduled Investment's plan, or leaving it for another provider, deletes the plan's
 SPLITs that costless incoming adjustments rely on.
 
-Measured before the cure (read at 8aafffad8): ``ProviderManagementOperations.bulk_assign_providers``
+Measured before the cure (read at 7976f187c): ``ProviderManagementOperations.bulk_assign_providers``
 (``services/assets/provider_management.py``, reached as ``AssetSourceManager.bulk_assign_providers``) saves the items of
 the request one by one. For an asset that already has an assignment it wipes when a parametric provider
 (``provider_kind == PARAMETRIC_GENERATION``: ``scheduled_investment``) keeps its code and its ``provider_params`` change,

@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | **F1 — Dati di prova** (round 2, fase 1) |
 | Worktree | `e-alfy-miniature-train` |
-| Baseline | `2ec19b8f0644eeab3d1b96efa52e6c183a8f807f` ✅ verificata |
+| Baseline | `b9d004255b4caaefc1ba100c70fed01f34b07cc1` ✅ verificata |
 | Corsia | porta **6151** · data dir **`/tmp/librefolio-r2-f1`** |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 

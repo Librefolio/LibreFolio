@@ -9,7 +9,7 @@
 > - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
 > - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
 >   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
-> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+> - P1 `analyze` rimosso il 2026-09-21 (`704ba66a3`).
 >
 > L'avanzamento è nella tabella del [README](README.md) e nel
 > [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
@@ -479,7 +479,7 @@ Casi obbligatori:
   > predisposto per G5.
   > **Riconciliazione autoritativa**: il coordinator ha poi fissato come unica
   > autorità il committed HEAD
-  > `921ad7eaa05ec463d11e794002ff7557a62ee6ce`; import probe diretto:
+  > `992ae955717d1775124d3472f52834bd88b71d10`; import probe diretto:
   > `PlannerIssueCode=89`, `allocation.planning_quantity_negative` presente,
   > `NotProvenReasonCode` composto esclusivamente da
   > `allocation.exact_proof_not_established` e
@@ -573,8 +573,8 @@ Casi obbligatori:
   > **Evidenza**: review statica del percorso leased; nessun comando runtime o
   > test eseguito perché non autorizzato.
   > **Note implementazione — avvio ledger/evaluator**: verificati worktree,
-  > branch e HEAD `509929ab3e151e796fe5807cb6db77b8fb4480fb` (parent
-  > `921ad7eaa05ec463d11e794002ff7557a62ee6ce`), con staged/unmerged `0/0` e
+  > branch e HEAD `37bd8e993f1f2c6a0e27d43e720f26fe032d52b2` (parent
+  > `992ae955717d1775124d3472f52834bd88b71d10`), con staged/unmerged `0/0` e
   > superfici W1 leased pulite. Riletti Step 2, Target Design, Mathematical
   > Core, Policies, Architecture e gli attuali `models.py`, `numeric.py`,
   > `normalize.py` ed `evaluator.py`; confermato che `evaluator.py` P1 va
@@ -845,7 +845,7 @@ Casi obbligatori:
   > whole-worktree finale: exit `0`.
 - [x] 8a. Riconciliare il core exact con il wire W0 corretto. ✅ 2026-09-17
   > **⚠️ Fuori pista — correzione contratto W0 2026-09-17:** il commit
-  > autorevole `958527e0b0075e921aeb2b5ec739b1762c91ffea` ha rimosso
+  > autorevole `5090e6d66cade43fa375f192d8ac49a397530b67` ha rimosso
   > `gross_amount_requested` dal request SELL: il lordo monetario è una
   > decisione del solver pari a quanta interi per `order_amount_step`, non un
   > input o un secondo cap. La riconciliazione è autorizzata prima dei test
@@ -1022,7 +1022,7 @@ Casi obbligatori:
   > `pac_allocator.py`/`evaluator.py`/`issues.py`/`models.py`/`normalize.py`/`ledger.py`,
   > tre test): Ruff `All checks passed!`; Black `--check` nove file
   > unchanged; `py_compile` exit `0`. `git diff --check` whole-worktree:
-  > exit `0`; staged `0`; HEAD invariato `958527e0`; `lsof
+  > exit `0`; staged `0`; HEAD invariato `5090e6d6`; `lsof
   > -nP -iTCP:6153 -sTCP:LISTEN` senza output (nessun listener). Oracle,
   > compiler/SCIP, plugin, mapper, report, runner-integrazione restano
   > esplicitamente bloccati.
@@ -1076,7 +1076,7 @@ Casi obbligatori:
   > (prima catturava esattamente i 2 gap), Black/py_compile puliti;
   > dinamicamente invariato `pac-planner-core` 135/135,
   > `pac-planner-evaluator` 140/140, `schemas pac-planner` 448/448,
-  > `schemas pac-analyze` 112/112. HEAD invariato `958527e0`, 0 staged,
+  > `schemas pac-analyze` 112/112. HEAD invariato `5090e6d6`, 0 staged,
   > porta 6153 libera.
 - [ ] 9. Implementare oracle indipendente.
 - [ ] 10. Confrontare fixture esaustive e permutation invariance.
@@ -1090,7 +1090,7 @@ services pac-planner-oracle
 ```
 
 > **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
-> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
+> (`894236b11`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
 > aperti, senza spuntarli. I selector reali sono in
 > [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md).
 > - **2B. Test di `ExactRatio`.** `ExactRatio` è in `services/pac_allocator/numeric.py:48`
@@ -1098,7 +1098,7 @@ services pac-planner-oracle
 >   generati a caso, per proprietà (`hypothesis`), **non ce ne sono**.
 > - **4D. Test di arrotondamento.** Gli arrotondamenti sono provati in
 >   `test_pac_planner_{exact,policies,wire_numbers,evaluator,report}.py`. Dal 29/09 (QX1-b,
->   `f6d7a955d`) un piano che chiude pochi centesimi sotto zero solo per gli arrotondamenti
+>   `e2929dc5d`) un piano che chiude pochi centesimi sotto zero solo per gli arrotondamenti
 >   viene pubblicato con un'integrazione dichiarata per ogni cassa, invece di essere
 >   scartato.
 > - **5. Fee, FX e tasse.** Fee e FX sono nel motore (`fx_rates` e `fx_spread_rate`,
@@ -1108,7 +1108,7 @@ services pac-planner-oracle
 >   Rebalancer.
 > - **9. Oracle indipendente.** Esiste, in
 >   `backend/test_scripts/test_services/_pac_exhaustive_oracle.py`. Dal 28/09
->   (`b48b3cec9`) vive solo nei test: il servizio considera prova soltanto lo stato di SCIP.
+>   (`83188aff7`) vive solo nei test: il servizio considera prova soltanto lo stato di SCIP.
 > - **10. Confronto esaustivo e permutazioni.** Il confronto con l'oracle è in
 >   `test_pac_planner_oracle.py`; l'indifferenza all'ordine delle righe in
 >   `test_pac_planner_evaluator.py:2055`.

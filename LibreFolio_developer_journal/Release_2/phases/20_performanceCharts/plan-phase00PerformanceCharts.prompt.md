@@ -2,7 +2,7 @@
 
 **Status:** ✅ **COMPLETATO E INTEGRATO** — contratto §3 (G3, G1a, G1b, G1c) consegnato e integrato in
 `dev_release2`; I60 accettata dal developer (review 22/09 §8.3). **Round 4** (I90), le correzioni della review
-d'uso post-merge del 22/09, completato e integrato il 2026-10-02 (`975a115ae`): §6.0.20 e il
+d'uso post-merge del 22/09, completato e integrato il 2026-10-02 (`94312819f`): §6.0.20 e il
 [piano del round 4](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md). I quattro lotti seguiti sono
 integrati, l'ultimo il 2026-10-09 (§6.0.20, «Seguiti»). Verificato e archiviato il 2026-10-09: i debiti rimasti hanno
 una casa («Esito dei debiti», sotto la tabella DBT).
@@ -14,20 +14,20 @@ I70 and I80 on 2026-09-21 (§6).
 **Revision:** 11 - I60 selected-range boundary and secondary-axis correction, 2026-09-12.
 *(Contatore non più mantenuto dopo questa data: le revisioni successive sono la sequenza §6.0.x, ultima
 §6.0.20 del 2026-09-24.)*
-**Analysis baseline:** `f90d9801bd7a2d74aac6a27efe305314c6c004cc`
+**Analysis baseline:** `e659f40bc69ada0b8df996f6a153b8ec3feebd48`
 (`refs/heads/dev_release2`).
-**Gate-0 execution baseline:** `0af66da5f366a9559549154631a4ee15ca620915`,
-containing `dev_release2@973968ed2` and workstream F commit `e50d66408`.
-**I10 implementation baseline:** `0af66da5f366a9559549154631a4ee15ca620915`;
+**Gate-0 execution baseline:** `507e98c1f77c5c5358709d3a970059da66d010ea`,
+containing `dev_release2@56bd8a123` and workstream F commit `904fddc6e`.
+**I10 implementation baseline:** `507e98c1f77c5c5358709d3a970059da66d010ea`;
 developer authorization is limited to the signal-only I10 slice.
-**I60 implementation baseline:** `0d57874303b1311c0f5ea3b8653d24a33d4245a6`,
+**I60 implementation baseline:** `736efbfbb64478332caad1324fcee6015c7d36f5`,
 including I10 and H.
-**I60 combined-validation baseline:** `5524a0eda664834bcc1fe4e0effe007d18564030`,
+**I60 combined-validation baseline:** `c5d68e1ffdc8e6d25e848442fac5bca9dba84a36`,
 including the committed I60 implementation and merged H renderer normalization.
 **I60 follow-up implementation baseline:**
-`9d270ccea9b6150eae9421385b3d12301a6e243e`, merge parents
-`7df7ccbabb181c9924dcaeef4aceb1032a1299e1` and coordinator target
-`4949b2f4c04050e46f643de848894b6706349f34`; exact clean baseline verified,
+`03b153ad2ca0c8d943810d7b97df0e980cc58e63`, merge parents
+`f3c83ce89eddcc6cff0f07c1903f77923c6cae3a` and coordinator target
+`8f189e2670c24f6866d0462204caa15c972c61f0`; exact clean baseline verified,
 target contained, port 6157 free.
 **Portfolio implementation baseline:** not yet authorized. It will be the later
 post-H target SHA supplied after the H-before-I integration gate.
@@ -142,9 +142,9 @@ explicit authorization.
 ### 2.1 Gate 0 technical refresh - 2026-09-10
 
 > **Note implementazione (G0 technical refresh, 2026-09-10):** verified clean
-> HEAD `0af66da5f366a9559549154631a4ee15ca620915` on
+> HEAD `507e98c1f77c5c5358709d3a970059da66d010ea` on
 > `e-alfy-performance-charts-plan`. It merges current
-> `dev_release2@973968ed2`, including F commit `e50d66408`. Read F's durable
+> `dev_release2@56bd8a123`, including F commit `904fddc6e`. Read F's durable
 > plan and exact committed diffs, then re-read the final engine, portfolio
 > service/schema, resolver, Asset detail/query/cache path, GrowthChart,
 > PriceChartFull, temporal reducers, stores and relevant tests. No production
@@ -638,10 +638,10 @@ A separate owner integrates G3 after F and the backend calendar signal:
 ## 6.0 G1a/G1b/G1c Gate 0 release — 2026-09-17
 
 > **Note implementazione (Gate 0 re-verification for G1a/b/c + G3, 2026-09-17):**
-> re-verified exact baseline before any merge: HEAD `2d22130bd58471463c4ae600139939680ded2ef8`,
-> `dev_release2@e1f3fe177861d2b9b953b218f66ea7d4714ab405`,
-> merge-base `4949b2f4c04050e46f643de848894b6706349f34`. H (`74afcebce`/`f092a194b`)
-> and F (`e50d66408`/`cc57b6a38`) confirmed already-absorbed ancestors of both
+> re-verified exact baseline before any merge: HEAD `f4d209b11898c52faa62593ec15409b1845f9655`,
+> `dev_release2@0ba3eff69e5190889267b9487f0ec60e17bbbd0d`,
+> merge-base `8f189e2670c24f6866d0462204caa15c972c61f0`. H (`cff0f0a11`/`a01fbbcd5`)
+> and F (`904fddc6e`/`aa30eac00`) confirmed already-absorbed ancestors of both
 > sides. `dev_release2` gained exactly 9 commits since merge-base: two
 > unrelated-worktree merges, three docs-only commits, and two internal-only
 > refactors explicitly authorized as no-product-contract-change — Workstream K
@@ -688,8 +688,8 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > the merge.
 
 > **Note autorizzazione (G1a/G1b/G1c start, 2026-09-17):** developer confirmed
-> merge committed, new HEAD `3c7e129c7b549f3e674403db8ea33268d6ed0e61`
-> (parents `2d22130bd5...` + `e1f3fe177...`, both confirmed ancestors,
+> merge committed, new HEAD `e9095ec5a888eef7864e6d5ee2593f1e1fe03785`
+> (parents `f4d209b118...` + `0ba3eff69...`, both confirmed ancestors,
 > worktree clean). Re-verified post-commit that `asset_source.py` and
 > `asset_sources/price_query.py` content is byte-identical to what was staged
 > pre-commit — no silent rewrite. This is now the authoritative baseline.
@@ -1253,7 +1253,7 @@ A separate owner integrates G3 after F and the backend calendar signal:
 > the two new batch-2 keys to the coordinator, the coordinator discovered that the
 > **five batch-1 keys were already committed in all four locales but never
 > consumed** — `GrowthChart.svelte` still hardcoded all five in English behind
-> `TODO(coordinator i18n batch)` markers. Net effect shipped in `8ed7a0f0d`:
+> `TODO(coordinator i18n batch)` markers. Net effect shipped in `a1e6fce55`:
 > IT/FR/ES users saw English submode buttons and English candle-disclosure text.
 > Root cause is a process gap, not a coding mistake: the sprint's i18n split
 > (coordinator owns locale files, workstream owns the components) leaves a seam
@@ -1375,7 +1375,7 @@ A separate owner integrates G3 after F and the backend calendar signal:
 ### 6.0.4 Post-review crash fix — candles on a category axis (2026-09-18)
 
 > **⚠️ Fuori pista (batch 2 shipped broken; one `null` killed the whole chart, 2026-09-18):**
-> batch 2 was committed as `d5e834de4` and the developer's review found the Growth
+> batch 2 was committed as `f1f0da870` and the developer's review found the Growth
 > chart dead: no candles, ~22 console errors on mouse-move, and an apparent freeze
 > where changing the date range repainted nothing. Three symptoms, **one cause**.
 >
@@ -1792,7 +1792,7 @@ A separate owner integrates G3 after F and the backend calendar signal:
 
 ### 6.0.7 Precondizioni di ripresa (scritte il 2026-09-18, da leggere PRIMA di toccare sorgente)
 
-Stato al congelamento: branch `e-alfy-performance-charts-plan`, HEAD **`69d0d27c6`**, albero
+Stato al congelamento: branch `e-alfy-performance-charts-plan`, HEAD **`4c470eedf`**, albero
 pulito, lane 6157 + `/tmp/librefolio-r2-i-charts`.
 
 **Il target si muove sotto questo branch.** Il developer integra D (PAC allocator) in
@@ -1806,7 +1806,7 @@ Conseguenza operativa: al risveglio questo branch passa da ~9 a circa **36 commi
 
 **Prima azione alla ripresa, prima di qualunque edit:** richiedere al coordinatore un
 aggiornamento di baseline `target -> branch` e rivalidare la **revisione combinata**. Il verde
-ottenuto su `69d0d27c6` non si trasferisce: una suite passata su questo HEAD non afferma nulla
+ottenuto su `4c470eedf` non si trasferisce: una suite passata su questo HEAD non afferma nulla
 su questo codice appoggiato a un allocatore PAC che non esisteva quando è girata. È la regola
 di tutta la giornata in un altro costume — **una misura su uno stato non dice niente su uno
 stato diverso** — e vale anche per le verifiche di merge: un `I -> target` pulito verificato
@@ -1815,7 +1815,7 @@ stato diverso** — e vale anche per le verifiche di merge: un `I -> target` pul
 Il merge lo esegue il developer. Questo workstream non esegue mai merge/rebase/commit.
 
 **Lavoro aperto, in ordine e non iniziato:**
-1. ladder di risoluzione a 8 rung (goldens già a terra, `d87d45e07`) — è il difetto di
+1. ladder di risoluzione a 8 rung (goldens già a terra, `d54a29fff`) — è il difetto di
    leggibilità reale, DBT-7; deve partire dalla vista del developer, non da questa pianificazione;
    *→ consegnata il 2026-09-21 da §6.0.16, in locale a `GrowthChart` (nota del 2026-09-24);*
 2. generalizzazione del parametro di `groupPointsByBucket` (4 consumer, `aggregateEnvelope`
@@ -2157,7 +2157,7 @@ difetto residuo.
 | DBT-C | ② ladder di risoluzione a 8 rung | il developer, viste le candele a 44 px, dichiara che i **salti** gli danno fastidio | Costo misurato: `mapDateToBucket` in 9 file, tripletta conteggi in 8, deroga su `ChartResolution`, goldens da rigenerare. **SUPERATO 2026-09-24**: il bisogno di prodotto — la scala a otto gradini — è consegnato da §6.0.16 **in locale** a `GrowthChart`, che dichiara i riduttori condivisi non riusabili per larghezze in giorni. Il refactor condiviso resta possibile, ma nessuna voce aperta lo richiede |
 | DBT-D | `chartCoreHelpers.test.ts`: asserzioni che specchiano **il testo sorgente** | nessuno — valutabile subito | Tre ri-pinnature in una settimana, tutte di sola grafia. La stessa proprietà è esprimibile **eseguendo** la funzione invece di leggerne il sorgente |
 
-> **Esito dei debiti alla verifica d'archivio** (2026-10-09, codice letto a `3cceb4f90`, nessun test). Nessuno si è
+> **Esito dei debiti alla verifica d'archivio** (2026-10-09, codice letto a `f545b67e3`, nessun test). Nessuno si è
 > chiuso in silenzio, e ognuno ha una casa:
 >
 > - **DBT-A** → rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «I-01 · DBT-A». Il difetto c'è ancora:
@@ -2167,7 +2167,7 @@ difetto residuo.
 > - **DBT-C** → superato il 2026-09-24 (vedi la riga).
 > - **DBT-D** → aperto, tracciato dalla voce P4-9 del backlog P4
 >   (`Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md:95`, owner M), che descrive proprio questa conversione.
->   `2e4c8589f` (28/09, S10 del round 4) ha chiuso i 12 rossi: 4 cancellati per nome (con i 10 verdi del loro
+>   `dcf79a9a2` (28/09, S10 del round 4) ha chiuso i 12 rossi: 4 cancellati per nome (con i 10 verdi del loro
 >   blocco, D19), 7 ri-pinnati, e C8 era già guarito in S9; 145 su 145. La conversione non l'ha fatta: oggi il file
 >   ha 35 righe con `readFileSync` e 12 commenti «Why (re-pin, S10)».
 >   Al coordinator ho segnalato che la chiusura di P4-9 del 28/09 copre i rossi e non la conversione, perché la
@@ -2204,7 +2204,7 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 >   cui ultima dice *«Manual desktop/mobile acceptance remains the only open I60F gate»*;
 > - la riga I60 della tabella principale, ferma a `MANUAL REVIEW ROUND 2 IN PROGRESS`;
 > - la riga I50 **scritta quella mattina**, con `LEGGIBILITÀ CANDELE APERTA` — superata poche
->   ore dopo da `70e87ac3a`;
+>   ore dopo da `583a8d677`;
 > - il footer **riscritto quella mattina**: «14 commit» (erano 17), «ferma sulla leggibilità
 >   delle candele» (risolta), «passa a ~38 commit indietro» (il merge era già avvenuto: 2).
 >
@@ -2391,7 +2391,7 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 ### 6.0.14 I80 completa, e un record dichiarato mancante mentre era consegnato (2026-09-21)
 
 > **⚠️ Fuori pista (fatto e dichiarato mancante — il rovescio del difetto consueto,
-> 2026-09-21):** `d44065d70` ha consegnato la sezione `P&L mode` in
+> 2026-09-21):** `9fd41bafc` ha consegnato la sezione `P&L mode` in
 > `mkdocs_src/docs/user/dashboard/charts.en.md` — **+104 righe, cinque heading con anchor
 > espliciti** — **e** ha toccato questo piano, **senza aggiornare le tre righe che
 > dichiaravano quelle docs mancanti**. Per due ore il record ha detto il falso su una consegna
@@ -2418,9 +2418,9 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 >
 > | voce §10 | stato |
 > |---|---|
-> | `dashboard/charts.en.md` | **consegnata** `d44065d70` — sezione P&L 131 righe |
-> | `assets/detail/chart.en.md` | **consegnata** `2d22130bd` |
-> | `assets/detail/signals.en.md` | **consegnata** `2d22130bd` |
+> | `dashboard/charts.en.md` | **consegnata** `9fd41bafc` — sezione P&L 131 righe |
+> | `assets/detail/chart.en.md` | **consegnata** `f4d209b11` |
+> | `assets/detail/signals.en.md` | **consegnata** `f4d209b11` |
 > | pagina di teoria P&L *«se le semantiche hanno bisogno di chiarimento»* | **valutata e non eseguita** — vedi sotto |
 >
 > Copertura delle tre fette nella sezione consegnata, contata: `broker` 14 occorrenze (G1a,
@@ -2564,7 +2564,7 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 > |---|---|---|
 > | la densità | **decideva** quale risoluzione disegnare, e l'etichetta diceva altro | **decide quali gradini esistono**, e la scelta resta all'utente |
 >
-> È la stessa trasformazione del fix `70e87ac3a` — *aggregare in silenzio* → *rimuovere
+> È la stessa trasformazione del fix `583a8d677` — *aggregare in silenzio* → *rimuovere
 > l'opzione* — estesa a tutta la scala. **Un controllo che aggrega dietro la propria didascalia
 > è un controllo che mente; uno che rimuove l'opzione che non può onorare no.**
 >
@@ -2836,7 +2836,7 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 
 #### Inventario nominato dei 12 rossi residui
 
-> **Esito:** chiusi nel round 4, S10, da `2e4c8589f` (28/09): 145 su 145 (registro di S10 nel
+> **Esito:** chiusi nel round 4, S10, da `dcf79a9a2` (28/09): 145 su 145 (registro di S10 nel
 > [piano del round 4](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md)). La conversione degli specchi
 > resta aperta: DBT-D, «Esito dei debiti» di §6.0.11.
 
@@ -2898,7 +2898,7 @@ documento è già oltre le 5 500 righe.
 - **Sorgenti:** [review d'uso](../../Phase_0/09_feedbackJobs/08_review_visiva_20260922.md) (R5–R11, R21) e
   [analisi statica](../../Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md) (§2.5; leggere la §9
   prima della §1).
-- **Baseline:** `dev_release2` = `f1047f766`, dopo il consolidamento Alembic in `004_release_1_2_0_schema` —
+- **Baseline:** `dev_release2` = `9df0b7b14`, dopo il consolidamento Alembic in `004_release_1_2_0_schema` —
   **nessuna migrazione nuova** in questo round.
 - **Perimetro:** privacy degli importi in Crescita e Performance (R5/R6/R7, P4-11), candele e barre Income
   (R8, R10), valore di acquisto nelle barre Income (R11), didascalia delle candele (R9), memoria della vista in
@@ -2909,16 +2909,16 @@ documento è già oltre le 5 500 righe.
 - **Indicatori riallineati in S0 (2026-09-24)**, con un passaggio meccanico su tutti i punti di lettura rapida
   (regola di §6.0.11): stato in testa, contatore di revisione, baseline portfolio, righe G0/I60/I90 e I60.6,
   §6.3, DBT-C, due voci di §6.0.7, refuso di §6.0.19 («Quattro» → «Cinque»), footer §12.
-- **Esito:** ✅ completato e integrato il 2026-10-02: commit `9a77b1b61` e `6de5646a1`, fast-forward di
-  `dev_release2` a `975a115ae`, ultimo commit del journal `dd538d650`.
+- **Esito:** ✅ completato e integrato il 2026-10-02: commit `bdb11893c` e `01a64ec23`, fast-forward di
+  `dev_release2` a `94312819f`, ultimo commit del journal `de84ff5ef`.
 - **Seguiti**, ognuno col suo piano in questa cartella e tutti integrati:
 
   | piano | cosa | commit | integrazione |
   |---|---|---|---|
-  | [EventsOnCacheHit](plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md) | gli eventi della pagina asset spariscono sul cache hit | `60d8e790a`, `f8f37ea5c` (2026-10-07) | treno 9, `0a2359573` |
-  | [IncomeColorsAxisLabels](plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md) | dividendo oro, etichette dell'asse per periodo | `bc08101d6`, `835c65d7d`, `e379cff59` (2026-10-08); merge del treno 12 `56483392c`; journal `ffda8fc84` | treno 13: fast-forward a `ffda8fc84`, poi il merge di K `c001c0968` |
-  | [AssetEvents](plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md) | eventi manuali: cambio di tipo, aggiornamento sul posto, alias CSV | `fba7edf07`, `e0b2077d2`, `c160bd34c`, `994347f55` (2026-10-08) | treno 19, `5423c334f` |
-  | [TooltipI18nEscape](plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md) | il gate controlla i cataloghi usati nei tooltip | `48e736855`, `2ee77d04e` (2026-10-09) | treno 23, `2c382824d` |
+  | [EventsOnCacheHit](plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md) | gli eventi della pagina asset spariscono sul cache hit | `93653aacd`, `06bf6677d` (2026-10-07) | treno 9, `6702ec8bb` |
+  | [IncomeColorsAxisLabels](plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md) | dividendo oro, etichette dell'asse per periodo | `844b32810`, `3b51fbe2d`, `fd1e77516` (2026-10-08); merge del treno 12 `a4a651e29`; journal `f718d16a5` | treno 13: fast-forward a `f718d16a5`, poi il merge di K `8175788c2` |
+  | [AssetEvents](plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md) | eventi manuali: cambio di tipo, aggiornamento sul posto, alias CSV | `f34455486`, `0dd4ce670`, `10a985273`, `bd7f57441` (2026-10-08) | treno 19, `fbc95f3f9` |
+  | [TooltipI18nEscape](plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md) | il gate controlla i cataloghi usati nei tooltip | `3255e9abe`, `b7d136009` (2026-10-09) | treno 23, `b39512ae1` |
 
 - **Verifica d'archivio (2026-10-09):** registro in fondo al piano del round 4.
 
@@ -2930,14 +2930,14 @@ documento è già oltre le 5 500 righe.
 | G0 | M analysis | Coordinator + assigned integrators | F integrated on `dev_release2` | Post-F technical refresh + phase-specific implementation authorization | I10 RELEASED 2026-09-10; portfolio rilasciato dopo H0 (I20–I40 COMPLETE 2026-09-18) |
 | H0 | external | H + coordinator | H/YOC accepted and integrated | Release portfolio service/schema/tests, provide exact target SHA, I re-read | COMPLETE 2026-09-11 |
 | I10 | M | G3 backend owner | G0 developer authorization; no H/F files | Calendar-return backend series + provenance, no resolver duplication | COMPLETE AND INTEGRATED 2026-09-10 |
-| I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | COMPLETE 2026-09-18 (`8ed7a0f0d`, esteso `d5e834de4`) |
-| I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | COMPLETE 2026-09-18 (`8ed7a0f0d`; fix crash asse category `eba37ba41`) |
-| I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | COMPLETE 2026-09-18 (`8ed7a0f0d`, `d5e834de4`; API sync e i18n eseguiti dal coordinatore) |
-| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`8ed7a0f0d` → `69d0d27c6`); leggibilità candele risolta 2026-09-21 (`70e87ac3a`, soglia per grammatica — §6.0.10); la conferma visiva è venuta dalla review d'uso del 22/09 (I90), le cui correzioni sulle candele (R8–R10) sono nel round 4, integrato il 2026-10-02 (verifica d'archivio 2026-10-09) |
+| I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | COMPLETE 2026-09-18 (`a1e6fce55`, esteso `f1f0da870`) |
+| I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | COMPLETE 2026-09-18 (`a1e6fce55`; fix crash asse category `30ef5a345`) |
+| I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | COMPLETE 2026-09-18 (`a1e6fce55`, `f1f0da870`; API sync e i18n eseguiti dal coordinatore) |
+| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`a1e6fce55` → `4c470eedf`); leggibilità candele risolta 2026-09-21 (`583a8d677`, soglia per grammatica — §6.0.10); la conferma visiva è venuta dalla review d'uso del 22/09 (I90), le cui correzioni sulle candele (R8–R10) sono nel round 4, integrato il 2026-10-02 (verifica d'archivio 2026-10-09) |
 | I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | IMPLEMENTAZIONE COMPLETA 2026-09-16 (vedi §6.6, ultime note); **ACCETTATA 2026-09-22** dal developer (review 22/09 §8.3: *«Mi pare funzioni MOOOLTO bene»*) |
 | I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | COMPLETE 2026-09-21 — §6.0.13: 9 casi E2E sulla superficie P&L (dashboard 14/14, broker detail 28/28), oltre agli unit backend |
-| I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | COMPLETE 2026-09-21 — docs G3 in `2d22130bd` (`assets/detail/chart\|measures\|signals`, `fx/chart-settings`); docs G1a/G1b/G1c in `d44065d70` (`dashboard/charts.en.md`, sezione `P&L mode` +104 righe, cinque heading con anchor espliciti). Voce condizionale di §10 (pagina di teoria P&L) valutata e **non** eseguita — motivazione in §6.0.14 |
-| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | ✅ **COMPLETE 2026-10-02** (`975a115ae`): la review d'uso del 22/09 (`08_review_visiva_20260922.md`) è I90; le sue correzioni sono il round 4 (§6.0.20), integrato il 2026-10-02, con quattro lotti seguiti (verifica d'archivio 2026-10-09). *Storia:* IN CORSO, round 4 in esecuzione dal 2026-09-24 |
+| I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | COMPLETE 2026-09-21 — docs G3 in `f4d209b11` (`assets/detail/chart\|measures\|signals`, `fx/chart-settings`); docs G1a/G1b/G1c in `9fd41bafc` (`dashboard/charts.en.md`, sezione `P&L mode` +104 righe, cinque heading con anchor espliciti). Voce condizionale di §10 (pagina di teoria P&L) valutata e **non** eseguita — motivazione in §6.0.14 |
+| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | ✅ **COMPLETE 2026-10-02** (`94312819f`): la review d'uso del 22/09 (`08_review_visiva_20260922.md`) è I90; le sue correzioni sono il round 4 (§6.0.20), integrato il 2026-10-02, con quattro lotti seguiti (verifica d'archivio 2026-10-09). *Storia:* IN CORSO, round 4 in esecuzione dal 2026-09-24 |
 
 > **Note implementazione (I00, 2026-09-10):** only the durable plan, final
 > product decisions, updated ASCII v2 storyboards and minimal feedback-job
@@ -2952,13 +2952,13 @@ documento è già oltre le 5 500 righe.
 > frozen.
 
 > **Note implementazione (G0 technical refresh, 2026-09-10):** F's merged
-> source was re-read at `0af66da5...`; final findings and the H-before-I gate
+> source was re-read at `507e98c1...`; final findings and the H-before-I gate
 > are recorded in section 2. Gate 0 is not complete because implementation
 > authorization is absent. No implementation/test/runtime action was taken.
 
 > **Note implementazione (G0 I10 release, 2026-09-10):** developer explicitly
 > authorized only the signal-owned calendar rolling-return slice on
-> `0af66da5f366a9559549154631a4ee15ca620915`. Authorized production boundary:
+> `507e98c1f77c5c5358709d3a970059da66d010ea`. Authorized production boundary:
 > dedicated plugin/helper plus minimal signal schema/catalog/service seam.
 > Excluded: Asset/portfolio/UI/F/H/shared generated surfaces. Portfolio Gate 0
 > remains blocked.
@@ -3020,7 +3020,7 @@ No product decision remains open. Readiness still requires:
 | I10.5 | Plan evidence, exact manifest and frozen integration handoff | COMPLETE 2026-09-10 |
 
 > **Note implementazione (I10.0, 2026-09-10):** clean exact baseline
-> `0af66da5...` verified. `AssetPriceSeries` and Asset query provide the
+> `507e98c1...` verified. `AssetPriceSeries` and Asset query provide the
 > approved existing resolution semantics; no new resolver is required.
 > Signal-only implementation can avoid every H/F-reserved production file.
 > Tests are delegated only in
@@ -3122,7 +3122,7 @@ No product decision remains open. Readiness still requires:
 | I60.6 | Evidence, manifest and frozen integration handoff | COMBINED VALIDATION COMPLETE 2026-09-11; MANUAL REVIEW ACCEPTED 2026-09-22 (review 22/09 §8.3) |
 
 > **Note implementazione (I60.0, 2026-09-11):** verified exact clean HEAD
-> `0d57874303b1311c0f5ea3b8653d24a33d4245a6`. I60 can avoid the three
+> `736efbfbb64478332caad1324fcee6015c7d36f5`. I60 can avoid the three
 > actively H-owned files (`backendRenderer.ts`, `backendTypes.ts`,
 > `backendTypes.test.ts`) and every D portfolio surface. The locked production
 > set is `assets/[id]/+page.svelte`, `PriceChartFull.svelte` and
@@ -3378,7 +3378,7 @@ strictly out of scope.
 | Step | Scope | Status |
 |---|---|---|
 | I60F.0 | Preserve validation checkpoint, merge target, verify clean authorized baseline | COMPLETE 2026-09-11 |
-| I60F.1 | Generalize hidden calendar-return window to positive integer with safe date arithmetic | COMPLETE 2026-09-16 — finestra custom presente (`CALENDAR_RETURN_PRESETS` + `customAmount`/`customUnit`), boundary del range selezionato chiuso in `2d22130bd` |
+| I60F.1 | Generalize hidden calendar-return window to positive integer with safe date arithmetic | COMPLETE 2026-09-16 — finestra custom presente (`CALENDAR_RETURN_PRESETS` + `customAmount`/`customUnit`), boundary del range selezionato chiuso in `f4d209b11` |
 | I60F.2 | Extract reusable compact duration editor without DateRangePicker regression | COMPLETE 2026-09-12 |
 | I60F.3 | Upgrade shared Asset/FX contextual axis settings and localStorage migration | COMPLETE 2026-09-16 — `AxisScaleMode = 'auto' \| 'include0' \| 'custom'` in `chartSettingsStore.svelte.ts:23` |
 | I60F.4 | Persist duration badges, icons and state in Asset detail | COMPLETE 2026-09-16 — `CompactDurationBadge.svelte` presente e montato da `DateRangePicker` |
@@ -3388,8 +3388,8 @@ strictly out of scope.
 
 > **Note implementazione (I60F.0, 2026-09-11):** coordinator completed hard
 > Gate 0 at clean merge HEAD
-> `9d270ccea9b6150eae9421385b3d12301a6e243e`; target
-> `4949b2f4c04050e46f643de848894b6706349f34` is a parent/ancestor. Manual-review
+> `03b153ad2ca0c8d943810d7b97df0e980cc58e63`; target
+> `8f189e2670c24f6866d0462204caa15c972c61f0` is a parent/ancestor. Manual-review
 > server was already stopped and port 6157 verified free. Developer explicitly
 > authorized the complete follow-up contract above. No I20-I50, portfolio,
 > i18n, docs, runner, staging or Git-history work is permitted.
@@ -3465,7 +3465,7 @@ strictly out of scope.
 > cross-boundary link check (12/12) are green. Four English user pages document
 > the final backend/localStorage/sessionStorage/runtime ownership boundary;
 > translated siblings retain expected Aphra debt. Current coordinator target
-> advanced to `e1f3fe177861d2b9b953b218f66ea7d4714ab405` after implementation
+> advanced to `0ba3eff69e5190889267b9487f0ec60e17bbbd0d` after implementation
 > started; no merge/rebase was attempted and integration must re-read overlap.
 
 > **Fuori pista (I60F manual review round 2, 2026-09-12):** developer review
@@ -3629,9 +3629,9 @@ strictly out of scope.
 > inventory is 43 tracked modified files plus two untracked source files, zero
 > staged, 45 intended paths total. Forbidden H renderer, D portfolio,
 > generated/API, i18n, changelog, navigation and shared-runner surfaces have no
-> overlap. HEAD remains `9d270ccea9b6150eae9421385b3d12301a6e243e`;
-> target `e1f3fe177861d2b9b953b218f66ea7d4714ab405` is not contained and the
-> merge base is `4949b2f4c04050e46f643de848894b6706349f34`; no merge/rebase occurred.
+> overlap. HEAD remains `03b153ad2ca0c8d943810d7b97df0e980cc58e63`;
+> target `0ba3eff69e5190889267b9487f0ec60e17bbbd0d` is not contained and the
+> merge base is `8f189e2670c24f6866d0462204caa15c972c61f0`; no merge/rebase occurred.
 > `git diff --check` is clean and lane port 6157 is free. I60F is ready for the
 > no-force manual-review server once the coordinator authorizes it.
 
@@ -5647,27 +5647,27 @@ No pending row may be marked complete from a plan, fixture or test name alone.
 The current durable state remains:
 
 ```text
-CONTRATTO §3 CONSEGNATO E INTEGRATO in dev_release2 (fast-forward 22b82e3fb)
-I60 ACCETTATA 2026-09-22 · I90 = review d'uso 22/09 → ROUND 4 INTEGRATO 2026-10-02 (975a115ae, §6.0.20)
+CONTRATTO §3 CONSEGNATO E INTEGRATO in dev_release2 (fast-forward e6c59e996)
+I60 ACCETTATA 2026-09-22 · I90 = review d'uso 22/09 → ROUND 4 INTEGRATO 2026-10-02 (94312819f, §6.0.20)
 SEGUITI INTEGRATI: EventsOnCacheHit, IncomeColorsAxisLabels, AssetEvents, TooltipI18nEscape (ultimo 2026-10-09)
-12 ROSSI DI §6.0.19 CHIUSI 2026-09-28 (2e4c8589f) · DEBITI: DBT-A → I-01, DBT-B → I-02, DBT-D → P4-9 (§6.0.11)
+12 ROSSI DI §6.0.19 CHIUSI 2026-09-28 (dcf79a9a2) · DEBITI: DBT-A → I-01, DBT-B → I-02, DBT-D → P4-9 (§6.0.11)
 CARTELLA ARCHIVIATA 2026-10-09 in Release_2/phases/20_performanceCharts
 ```
 
 Aggiornato **2026-10-09**. Il round 4 è integrato dal 2026-10-02 e i quattro lotti seguiti dal 2026-10-09.
-La verifica d'archivio ha riletto il codice a `3cceb4f90`: ogni residuo ha una casa (§6.0.11, «Esito dei debiti»;
+La verifica d'archivio ha riletto il codice a `f545b67e3`: ogni residuo ha una casa (§6.0.11, «Esito dei debiti»;
 ADJ-1/ADJ-2 → I-04), e la cartella è archiviata intera. Il registro è in fondo al
 [piano del round 4](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md). La nota del 24/09 resta come
 storia, non come stato.
 
-Aggiornato **2026-09-24**. Il ramo è entrato nel target in fast-forward (`22b82e3fb`) e il developer ha fatto
+Aggiornato **2026-09-24**. Il ramo è entrato nel target in fast-forward (`e6c59e996`) e il developer ha fatto
 la review d'uso sull'integrato: I60 è accettata (review §8.3) e le correzioni di I90 sono il round 4, con un
 piano proprio ([plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md)). Le due note che seguono sono del 21/09: restano come
 storia, non come stato.
 
 Aggiornato **2026-09-21** (secondo giro, stesso giorno). Il contratto di prodotto §3 —
 G3, G1a, G1b, G1c — è **interamente consegnato e verificato**; la leggibilità delle candele,
-che era il fermo del developer, è risolta da `70e87ac3a` (§6.0.10). Il piano non ha più
+che era il fermo del developer, è risolta da `583a8d677` (§6.0.10). Il piano non ha più
 superficie di implementazione propria: restano due voci da specialista e un gate umano.
 
 Aggiornato **2026-09-21**. Lo stato precedente
@@ -5678,13 +5678,13 @@ mentre la narrativa §6.0 avanzava. Le cause e la portata sono in §6.0.8.
 Precisazioni necessarie, perché ognuna delle tre è stata fraintesa almeno una volta:
 
 - **Non è un gate su F.** F è integrato da tempo. Il fermo che motivava questa nota — la
-  leggibilità delle candele — **è stato risolto** il 2026-09-21 (`70e87ac3a`, §6.0.10). Il
+  leggibilità delle candele — **è stato risolto** il 2026-09-21 (`583a8d677`, §6.0.10). Il
   ramo resta fuori dal target per sequenza, non per blocco: diverge perché è *attivo*.
 - **Non è un fermo di qualità.** I20 → I80 sono tutte consegnate. **I70** ha 9 casi E2E sulla
   superficie P&L (dashboard 14/14, broker detail 28/28) e **I80** è completa: docs G3 in
-  `2d22130bd`, docs G1a/G1b/G1c in `d44065d70`. §11.5 — documentazione e contratto dicono la
+  `f4d209b11`, docs G1a/G1b/G1c in `9fd41bafc`. §11.5 — documentazione e contratto dicono la
   stessa cosa — è soddisfatta. L'unico residuo è umano: l'accettazione visiva del developer.
-- **La baseline si muove.** L'allineamento post-D **è stato eseguito** (merge `b7a0b1e1a`,
+- **La baseline si muove.** L'allineamento post-D **è stato eseguito** (merge `d613aed44`,
   §6.0.9): 5 file in conflitto risolti additivamente, revisione combinata rivalidata. Distanza
   attuale: **17 avanti / 2 indietro**. La regola di §6.0.7 resta valida per ogni allineamento
   futuro — un verde su una revisione non si trasferisce a una revisione diversa — e vale anche

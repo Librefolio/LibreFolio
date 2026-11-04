@@ -12,13 +12,13 @@ related: [problems/fx-backward-fill-unbounded-stale-rates, features/F-054, featu
 # Problem: the stale-price banner existed, the report never filled it
 
 > Backlog **K-25** asked for this page (workstream K, step 13, item 9 — decision D8 of 2026-09-30, commit
-> `f1fe176a2`).
+> `feb945634`).
 
 ## What was wrong
 
 - The Dashboard's data-quality report had a `STALE_PRICE` issue ("prices not updated"), with a banner, an i18n
   message and a CTA — but `PortfolioService.get_summary` never passed `stale_prices_dto` to
-  `build_data_quality_report`. It had stopped doing so with the scope-aware engine rewrite (`77b976ebc`,
+  `build_data_quality_report`. It had stopped doing so with the scope-aware engine rewrite (`0a29ee73f`,
   2026-06-19): a holding whose price had been carried forward for weeks raised nothing.
 - The cure could not simply forward the engine's flag: the engine's per-position `valuation_stale` means "the mark
   used for this valuation is more than `STALE_PRICE_THRESHOLD_DAYS` (7) days old" **whatever the mark is** — a real

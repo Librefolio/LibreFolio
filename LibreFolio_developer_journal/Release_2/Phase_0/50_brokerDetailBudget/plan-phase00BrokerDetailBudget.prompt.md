@@ -7,7 +7,7 @@
 > - La sonda e la cura sono passate da `test-author`; la sonda non è nel diff.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), lotto 50. **Origine**: la voce C-58 di `BACKLOG_POST_1.2.md`, sezione C.
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `e501b9615` (treno 77).
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `80ee4beee` (treno 77).
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta. Mai le porte 6040 e 6041, mai la galleria, mai `front build`.
 > - **Tocca**: solo `frontend/e2e/brokers/brokers-detail.spec.ts`, più il journal: questo piano, la riga della scansione nel piano 49 (§5) e la voce C-58 del backlog.
 > - **La cartella** `50_brokerDetailBudget` è una mia proposta: il coordinatore ha dato il numero del lotto, non il nome.
@@ -32,7 +32,7 @@ Test via test-author. Poi checkpoint FROZEN.»
 
 Playwright 1.61, `frontend/playwright.config.ts`: timeout del test 30 s (`:110`), che copre anche gli hook `beforeEach` e le fixture; timeout delle `expect` 3 s (`:111`); nessun retry in locale.
 
-I numeri di riga della spec, dal §1 al §4, sono quelli della base `e501b9615`. Nel file curato il test della card è a `:133`, il blocco FIFO a `:267` e il test di C-58 a `:429`.
+I numeri di riga della spec, dal §1 al §4, sono quelli della base `80ee4beee`. Nel file curato il test della card è a `:133`, il blocco FIFO a `:267` e il test di C-58 a `:429`.
 
 Nel blocco esterno `Broker Detail Page` (`:114`) ogni test fa, in ordine:
 
@@ -100,7 +100,7 @@ Nel blocco esterno `Broker Detail Page` (`:114`) ogni test fa, in ordine:
 
 - [x] **1. Analisi** (2026-10-13): la voce C-58, la catena (§2), il triage (§3), la cura (§4).
   > **Note implementazione**:
-  > - La base è `e501b9615`, uguale al target; worktree pulita, porta 6157 libera, carico 12–18 su 10 core.
+  > - La base è `80ee4beee`, uguale al target; worktree pulita, porta 6157 libera, carico 12–18 su 10 core.
   > - Lette: la spec (`:16-118`, `:256-535`, `:700-720`, `:849-1040`), gli helper di login e navigazione, la config di Playwright, il runner (`scripts/test_runner/_frontend_common.py:213-330`, selettore `front-broker detail` a `_frontend_broker.py:54`, `:102`), la pagina della lista.
   > - Le card della lista hanno `data-testid="broker-card-{id}"` (`BrokerCard.svelte:85`); i broker non accessibili usano `broker-discovery-card-{id}`, quindi il selettore `[data-testid^="broker-card-"]` non li prende.
   >

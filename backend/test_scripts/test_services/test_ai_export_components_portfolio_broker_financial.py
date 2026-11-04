@@ -674,7 +674,7 @@ class TestAutonomousGeneralEvidence:
         overdraft's cancel out (stocks 500, cash -500): the engine gives ``AllocationItem.value`` None, and
         ``portfolio.allocations_cash`` copies it as ``percent`` null, amounts and order (the summary's) kept.
 
-        RED on the tree of 2026-10-28 (HEAD 01f1da513): ``AllocationItem(value=None)`` is refused (``ValidationError``),
+        RED on the tree of 2026-10-28 (HEAD 1a1e6d7c0): ``AllocationItem(value=None)`` is refused (``ValidationError``),
         and ``AllocationSlice.percent`` is required, so the component would fail its payload validation too.
         """
         scope = _scope()
@@ -997,7 +997,7 @@ class TestEngineReconciliation:
         assert (envelope.payload["reconciled"], Decimal(envelope.payload["residual"]["amount"])) == (True, Decimal("1E-24"))
 
 
-# J-14: the residual and the tolerance the two reconciliation components wrote in line at `e6d3e61e0`
+# J-14: the residual and the tolerance the two reconciliation components wrote in line at `e7f3f5d81`
 # (portfolio_financial.py:491-495, broker_financial.py:432-436), as written, and the module each domain's builder lives in.
 _RECONCILIATION_MODULES = {"portfolio": portfolio_financial, "broker": broker_financial}
 

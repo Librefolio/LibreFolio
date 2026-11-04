@@ -1,6 +1,6 @@
 # C — I due cancelli che mentono · esecuzione
 
-> **Mandato C, round 3.** Ramo `e-alfy-gate-repair-checklinks-i18n-audit`, baseline `f829cd76b`.
+> **Mandato C, round 3.** Ramo `e-alfy-gate-repair-checklinks-i18n-audit`, baseline `9f4618c6e`.
 > Corsia **6171** · `/tmp/librefolio-r3-c` · venv `LibreFolio-SAUMUTtc`.
 > Analisi approvata dal coordinatore il 21 Set. Piano completo nella cartella di sessione.
 

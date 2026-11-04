@@ -5,8 +5,8 @@ Report del portafoglio, lotti e serie delle posizioni (#48) sono fuori: li anali
 (letto: **non ha una sezione «Proposta del developer»**; propone la cura A «campionamento in backend» e, come
 alternativa, la cura B «serie a tratti»; qui la B viene estesa agli altri sistemi).
 
-**Base del codice.** Ramo Y `e-alfy-redesigned-spork` (`9ccc01c8a`) per tutto. Ramo X `e-alfy-cuddly-engine`
-(`c5b5ff6b2`) controllato per plugin e prezzi: per `price_query.py`, `currencies.py` (FX), `market_series.py` e
+**Base del codice.** Ramo Y `e-alfy-redesigned-spork` (`87ac9e9f3`) per tutto. Ramo X `e-alfy-cuddly-engine`
+(`b16148d0a`) controllato per plugin e prezzi: per `price_query.py`, `currencies.py` (FX), `market_series.py` e
 `calendar_rolling_return` X è **più vecchio** di Y (mancano X-Q1/Q2/Q3, `observed_prices.py`, `stretch_conversion.py`),
 quindi i numeri di riga sono quelli di Y. L'unica cosa che ho letto solo in X è il provider
 `scheduled_investment` (stesse costanti in Y: `schemas/assets/scheduled_investment.py:36-43`).

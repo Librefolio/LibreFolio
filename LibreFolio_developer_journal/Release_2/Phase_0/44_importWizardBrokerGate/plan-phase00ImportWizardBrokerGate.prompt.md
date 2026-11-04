@@ -3,7 +3,7 @@
 > **Stato**: ✅ consegnato il 2026-10-12 col checkpoint (§7, S7), in attesa dell'integrazione. Avanzamento in §7.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), voce M-16 di `BACKLOG_POST_1.2.md`. La voce sta nella sezione M e la chiude M quando la cura è nel target: questo lotto non tocca la sezione M.
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `378338fed` (`dev_release2`).
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `7c3119d97` (`dev_release2`).
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta. Mai le porte 6040 e 6041.
 > - **Origine**: M, lotto 19, passi 10.0–10.3 (la galleria).
 
@@ -91,7 +91,7 @@ Sulla corsia, uno alla volta:
 
 ### S0 — La base ✅ 2026-10-12
 
-> **Note implementazione**: HEAD = `dev_release2` = `378338fed`, worktree pulita, il file dell'agente tracciato, la porta 6157 libera, la cartella della corsia presente, i binari del frontend in `frontend/node_modules/.bin`. Le righe di §1 sono verificate sulla base.
+> **Note implementazione**: HEAD = `dev_release2` = `7c3119d97`, worktree pulita, il file dell'agente tracciato, la porta 6157 libera, la cartella della corsia presente, i binari del frontend in `frontend/node_modules/.bin`. Le righe di §1 sono verificate sulla base.
 
 ### S1 — I rossi, via `test-author` ✅ 2026-10-12
 
@@ -185,7 +185,7 @@ Sulla corsia, uno alla volta:
 > - **`BACKLOG_POST_1.2.md`, solo la sezione I**:
 >   - l'introduzione porta la decisione del developer su F-AI: la (a) nella 1.2, cioè niente; la (b) dopo, «con un codice tipizzato»;
 >   - la voce **F-AI (b)**, dopo la ✅ F e prima di B1. È il testo pronto del piano 41 (§15, «F-AI»), con il codice tipizzato su `OtherPeriodEffect` al posto della costante condivisa; per questo la stima sale a ¾ g più la sonda;
->   - le righe citate sono verificate su `378338fed`.
+>   - le righe citate sono verificate su `7c3119d97`.
 >
 >   La sezione M (M-16) non è toccata.
 > - **Il piano 41**:
@@ -195,8 +195,8 @@ Sulla corsia, uno alla volta:
 > - `git diff --check` pulito.
 >
 > **⚠️ Fuori pista**:
-> - **Il letterale «FX on cash» è scivolato** da `portfolio_service.py:2001` (`5d62658bb`) a `:1978`, con i riordini di T (`1cc9cd8f5`, `a57a43fbd`). Nel backlog c'è la riga nuova.
-> - **Il secondo confronto nel frontend** (`PerformanceChart.svelte:291`) l'ho cercato con `git log -S`: viene dal mio stesso F-W (`9a0d9280c`), come quello di `OtherPeriodEffectsTable.svelte:75`. Quindi non è codice nuovo di altri. La voce li cita tutti e due, perché il codice tipizzato li sostituisce entrambi.
+> - **Il letterale «FX on cash» è scivolato** da `portfolio_service.py:2001` (`408b31119`) a `:1978`, con i riordini di T (`775a3dd41`, `7d1ddc50f`). Nel backlog c'è la riga nuova.
+> - **Il secondo confronto nel frontend** (`PerformanceChart.svelte:291`) l'ho cercato con `git log -S`: viene dal mio stesso F-W (`179f1b132`), come quello di `OtherPeriodEffectsTable.svelte:75`. Quindi non è codice nuovo di altri. La voce li cita tutti e due, perché il codice tipizzato li sostituisce entrambi.
 
 ### S7 — Il checkpoint ✅ 2026-10-12
 

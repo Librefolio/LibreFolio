@@ -3,7 +3,7 @@
 > **A cosa serve (per il developer).** Ogni calcolo finanziario ha una sola implementazione, in `backend/app/services/financial_math/`. W sta cambiando come si legge una coppia di rettifiche collegate fra due broker propri (uscita al PMC, totale 0 con entrambi i broker). Tu controlli che la regola stia **in un posto solo** e che Dashboard, lotti, TWRR e yield on cost la leggano da lì, senza una seconda copia. Esempio di cosa cerchi: un `if tx.type == ADJUSTMENT and related_transaction_id` ripetuto in due moduli.
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-turbo-waddle` · **Branch**: `e-alfy-mf-matematica-finanziaria`
-**HEAD di partenza (da verificare)**: `c1b4ba49c` (merge di `dev_release2` `c042f2481` sul tuo ramo, dopo il commit del piano sporco `40a38289f`) (il coordinatore prima committa il tuo piano rimasto sporco, `11_financialMath/plan-phase01FinancialMath.prompt.md`, poi fa il fast-forward da `d1f75a3df`, 132 commit dietro, e `npm ci` per Linux).
+**HEAD di partenza (da verificare)**: `01ac2b23d` (merge di `dev_release2` `295a09c86` sul tuo ramo, dopo il commit del piano sporco `0f36a4508`) (il coordinatore prima committa il tuo piano rimasto sporco, `11_financialMath/plan-phase01FinancialMath.prompt.md`, poi fa il fast-forward da `cc56722a0`, 132 commit dietro, e `npm ci` per Linux).
 **Corsia**: porta `6193`, cartella dati `/tmp/librefolio-r13-mf` (ti serve solo per rilanciare un'azione dei servizi, se vuoi).
 **Piano**: il tuo, `11_financialMath/plan-phase01FinancialMath.prompt.md` (apri una sezione «Revisione N78-1k (ondata 4)»); le regole: `.github/instructions/financial-math.instructions.md` (o dove sta «Financial Math — One Home» in `backend.instructions.md`: verifica).
 **Modello**: Opus.

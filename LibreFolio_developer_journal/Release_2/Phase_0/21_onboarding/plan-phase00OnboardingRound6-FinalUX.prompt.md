@@ -8,9 +8,9 @@
 
 ## Confine e autorizzazione
 
-**Base:** `8f7acd610127d1ba24dcddfef5b9acf4552d4f51`.
+**Base:** `bbb47c60b912945863b0344287b21d99690b8402`.
 
-**Target isolato:** `4949b2f4c04050e46f643de848894b6706349f34`.
+**Target isolato:** `8f189e2670c24f6866d0462204caa15c972c61f0`.
 
 **Branch:** `e-alfy-onboarding-foundation`.
 

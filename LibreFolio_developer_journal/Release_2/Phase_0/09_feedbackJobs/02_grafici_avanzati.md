@@ -5,7 +5,7 @@ Task su visualizzazioni. Approvati dall'utente il 07/09/2026. La nota dell'utent
 Analisi del codice e decisioni successive del 2026-09-07 in
 [06_piano_sprint.md](06_piano_sprint.md); nessuna implementazione avviata.
 
-> **Al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`): G1a, G1b, G1c e G3 (backend e UI Asset) sono nel target (merge I `2c382824d`, treno 23). Vedi la tabella in fondo.
+> **Al 2026-10-09** (verifica Q del 2026-10-09, base `f545b67e3`): G1a, G1b, G1c e G3 (backend e UI Asset) sono nel target (merge I `b39512ae1`, treno 23). Vedi la tabella in fondo.
 
 **Raggruppamento raffinato 2026-09-10:** F8a P&L-only e F8b candele sintetiche
 formano SP07 perche condividono `PortfolioHistory`, backend portfolio e
@@ -16,7 +16,7 @@ pur mantenendo writer separati per dashboard e dettaglio Asset.
 > **PLANNED - autorizzazione plan-only 2026-09-10:** il contratto finale,
 > gli storyboard ASCII v2, Gate 0 e lo split XL per owner sono nel
 > [piano performance charts](../../phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md).
-> Il refresh tecnico post-F e' registrato su `0af66da5`; la sola slice I10
+> Il refresh tecnico post-F e' registrato su `507e98c1`; la sola slice I10
 > backend del rolling calendariale e' implementata, verificata e integrata insieme
 > al prerequisito H/YOC. UI G3 e tutte le superfici portfolio restano congelate;
 > I20 deve rileggere il target combinato. Nessuna review operativa UI e' avviata.
@@ -128,12 +128,12 @@ moduli segnali senza attendere l'intera corsia dei grafici portfolio.
 
 ## Analisi per task — 2026-09-07
 
-Baseline `a9138140`; superfici, rischi e DoD in [06_piano_sprint.md](06_piano_sprint.md).
+Baseline `9d8b5c54`; superfici, rischi e DoD in [06_piano_sprint.md](06_piano_sprint.md).
 
 | ID | Esito | Taglia | Sprint |
 |---|---|---|---|
-| G1a | ✅ Al 09/10 nel target (`8ed7a0f0d`; `GrowthChart.svelte` vista P&L). Storico: aperto: presentazione mancante, `total_pnl` già presente; cumulato confermato. | S | SP07 |
-| G1b | ✅ Al 09/10 nel target (`eba37ba41`; candele P&L in `GrowthChart.svelte`). Storico: candele sintetiche approvate: EOD, no volume, aggregazione e zoom esistenti obbligatori. | L | SP07 |
-| G1c | ✅ Al 09/10 nel target (`2d22130bd`, `c4595922e`). Storico: aperto: totali disponibili; serie incassi per tipo/data assente. | M | SP06 |
+| G1a | ✅ Al 09/10 nel target (`a1e6fce55`; `GrowthChart.svelte` vista P&L). Storico: aperto: presentazione mancante, `total_pnl` già presente; cumulato confermato. | S | SP07 |
+| G1b | ✅ Al 09/10 nel target (`30ef5a345`; candele P&L in `GrowthChart.svelte`). Storico: candele sintetiche approvate: EOD, no volume, aggregazione e zoom esistenti obbligatori. | L | SP07 |
+| G1c | ✅ Al 09/10 nel target (`f4d209b11`, `7f7f31304`). Storico: aperto: totali disponibili; serie incassi per tipo/data assente. | M | SP06 |
 | G2 | ✅ Già consegnato come analisi lotti; non ripianificare la vecchia wishlist. | XS residua | Nessun codice |
-| G3 | ✅ Al 09/10 nel target: backend `d4b3deb2f`, UI Asset `51cb7b677`. Storico: 🟡 Backend I10 integrato; vista Asset I60 implementata/validata sul branch I, follow-up UX attivo e integrazione finale pendente. | M | SP06 |
+| G3 | ✅ Al 09/10 nel target: backend `1b20d4e2a`, UI Asset `2cefc285a`. Storico: 🟡 Backend I10 integrato; vista Asset I60 implementata/validata sul branch I, follow-up UX attivo e integrazione finale pendente. | M | SP06 |

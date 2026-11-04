@@ -1,6 +1,6 @@
 # Rosso della run completa (treno 14): `data-quality-banners.spec.ts:387`, un link in più
 
-> Lotto di N, 08/10. Coordinator: c8328a01. Base `9eb01c756`, worktree pulito. Corsia 6159/6169, `/tmp/librefolio-r2-n`.
+> Lotto di N, 08/10. Coordinator: c8328a01. Base `311fbd6e9`, worktree pulito. Corsia 6159/6169, `/tmp/librefolio-r2-n`.
 > Collegato al piano dell'FX nella Dashboard (`plan-phase00FxDashboardSync.prompt.md`), dove sono nati
 > `serveMissingFxRates` e i test del banner per `MISSING_FX_RATES`.
 
@@ -8,7 +8,7 @@
 
 - **Il test**: «missing price issue renders one navigate link per affected asset» (`:387`), in desktop.
 - **L'errore**: `expect(locator('[data-testid^="data-quality-nav-asset-"]')).toHaveCount(2)` → **Received: 3** (`:410`).
-- **Dove**: run completa con coverage sul treno 14 (`9eb01c756`), corsia 6150.
+- **Dove**: run completa con coverage sul treno 14 (`311fbd6e9`), corsia 6150.
 
 ## 2. Analisi (`test-triage`)
 
@@ -20,11 +20,11 @@
   - la riga `MISSING_PRICE` iniettata, con i suoi **due** link;
   - una riga **vera** `MISSING_COST_BASIS`, «1 asset(s) have an acquisition without a purchase cost», con il suo
     link a **Ethereum**.
-- **L'origine del terzo link.** Dal commit `de252a38a` (#32, «single average cost», 07/10 16:33) il motore segnala
+- **L'origine del terzo link.** Dal commit `6f13e1ba4` (#32, «single average cost», 07/10 16:33) il motore segnala
   `MISSING_COST_BASIS` con `cta_action="navigate_asset"` (`portfolio_engine.py:2073-2088`), per ogni asset con
   un movimento di costo ignoto (`portfolio_service._missing_cost_basis_assets`, `:561-567`). Il seed contiene la
   ricompensa di staking ETH: `INTEREST`, quantità 0,002, senza costo (`populate_mock_data.py:1430-1438`).
-  - La run del 07/10 (`d07412899`) era precedente al #32: per questo era verde.
+  - La run del 07/10 (`5f3509536`) era precedente al #32: per questo era verde.
   - Il movimento esatto lo conferma P, se la segnalazione in sé è in discussione: non è materia di questo lotto.
 - **Il rischio gemello, stessa causa (`:101`).** Il banner raggruppato ha come chiave delle righe
   `code + group_key` (`DataQualityBanner.svelte:232`, `:240`, `:249`).
@@ -81,6 +81,6 @@ Nessuna chiave i18n, nessun file del runner, nessun codice di prodotto.
 4. ✅ (08/10) Checkpoint: 2 commit proposti in `/tmp/libreFolio_commits/libreFolio_commit_n_dq_C1..C2.txt` (lo spec;
    questo piano). Le liste dei path sono in `n_dq_paths_C1..C2.txt`, i blob in `n_dq_blobs.txt` e l'albero
    finale in `n_dq_final_tree.txt`. Stato: FROZEN.
-   > **Integrato** (allineamento del 09/10): `ce892dd7c` (spec), `5157b6762` (questo piano), treno 15 (`062ae68db`).
+   > **Integrato** (allineamento del 09/10): `742e4848c` (spec), `41e093c83` (questo piano), treno 15 (`fbf94ec80`).
    > La domanda per P sulla ricompensa di staking (§2) è chiusa: il seed di P, entrato nello stesso treno 15, toglie
    > l'anomalia vera su Ethereum (messaggio del coordinator, 08/10 17:05). Il test non dipendeva più da quel seed.

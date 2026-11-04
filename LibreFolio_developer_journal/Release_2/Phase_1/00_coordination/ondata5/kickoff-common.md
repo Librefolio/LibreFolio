@@ -6,7 +6,7 @@ Il tuo brief personale è `kickoff-<SESSIONE>.md` in questa cartella; il brief d
 
 ## Prima di tutto
 1. Leggi `CLAUDE.md` (radice del tuo worktree) e le regole dell'agente `coordinated-workstream` (`.claude/agents/coordinated-workstream.agent.md`): lavori **come** quell'agente (analisi prima, solo il tuo worktree e il tuo perimetro, corsia isolata, checkpoint al coordinatore, mai la storia di Git).
-2. Verifica la base: `git rev-parse HEAD` deve essere uguale allo SHA scritto nel tuo kickoff (`1fd80c481` = `dev_release2`, treni 9 e 10 dentro). Se è diverso, **fermati e dillo**. (W2 è nuovo: parte da `dev_release2`, stesso SHA.)
+2. Verifica la base: `git rev-parse HEAD` deve essere uguale allo SHA scritto nel tuo kickoff (`61a6c828b` = `dev_release2`, treni 9 e 10 dentro). Se è diverso, **fermati e dillo**. (W2 è nuovo: parte da `dev_release2`, stesso SHA.)
 3. Il tuo lavoro è nel **piano** del tuo workstream (percorso nel kickoff, sotto `LibreFolio_developer_journal/Release_2/Phase_1/`) e nella tua sezione del backlog `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` (oltre 10 000 righe: `grep` sugli ID, non leggerlo tutto). Per il tuo piano apri una sezione nuova «Ondata 5» (W2: file nuovo, vedi il suo kickoff).
 4. **Primo turno: analisi breve** (cosa farai, file che toccherai, rossi che scriverai, domande). I lotti marcati **PARTI SUBITO** nel tuo kickoff partono senza aspettare il via, subito dopo l'analisi, nello stesso turno; gli altri aspettano il via del coordinatore **solo se** il kickoff dice «aspetta il via».
 

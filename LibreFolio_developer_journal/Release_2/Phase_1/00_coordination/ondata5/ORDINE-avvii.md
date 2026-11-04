@@ -1,11 +1,11 @@
 # Ondata 5 — ordine di avvio delle sessioni (coordinatore) — bozza
 
-Base: `dev_release2` = `1fd80c481` (treni 9 e 10 dentro, tutti i worktree già fast-forward). Brief approvato: `BRIEF-ondata5.md`. Regole e kickoff: `kickoff-common.md` e `kickoff-<SESSIONE>.md` (W, W2, X, MF, J, Y, A, B, H, Z) in questa cartella.
+Base: `dev_release2` = `61a6c828b` (treni 9 e 10 dentro, tutti i worktree già fast-forward). Brief approvato: `BRIEF-ondata5.md`. Regole e kickoff: `kickoff-common.md` e `kickoff-<SESSIONE>.md` (W, W2, X, MF, J, Y, A, B, H, Z) in questa cartella.
 
 **Messaggio di avvio, uguale per tutti** (cambia solo il nome): «Sei la sessione `<S>` dell'ondata 5. Leggi `salvataggi-worktrees-20261021/ondata5/kickoff-common.md` e poi `kickoff-<S>.md`, lavora come l'agente `coordinated-workstream`. Primo turno: analisi breve, poi parti sui lotti marcati PARTI SUBITO.»
 
 ## Gruppo 0 — prima di avviare chiunque (il coordinatore, 15 minuti)
-1. Verifica che ogni worktree sia a `1fd80c481` e pulito (`git status --porcelain` vuoto): H, W, X, MF, J, Y, A, B, Z.
+1. Verifica che ogni worktree sia a `61a6c828b` e pulito (`git status --porcelain` vuoto): H, W, X, MF, J, Y, A, B, Z.
 2. **W2 è nuova**: crea la sessione dall'app con **worktree nuovo** (ramo nuovo da `dev_release2`); il worktree di D (`e-alfy-d-dipendenze`) **non** si riusa: D si archivia come sessione e, se vuoi, il suo worktree si rimuove (OK permanente: lotto tutto in dev). Per W2: `npm ci` (tuo, approvato) e poi `api sync`, **prima** che chieda i test; il suo primo turno è solo lettura, non aspetta.
 3. Le corsie in `/tmp` possono non esistere dopo un riavvio: ogni sessione le ricrea da sé (scritto in `kickoff-common.md`).
 4. Teniti libero il lucchetto `/tmp/librefolio-heavy.lock` per l'ordine degli slot (sotto).

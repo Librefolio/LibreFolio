@@ -1,6 +1,6 @@
 # B · SEC-3, SEC-4, SEC-5 and the status 500 — the interface the red tests pin (2026-10-22)
 
-Base: HEAD `b61c3ede3`. Security review: `ondata4/SEC-review-backup-H62.md` (findings 3, 4, 11). Not ours: H's
+Base: HEAD `a7cade9bd`. Security review: `ondata4/SEC-review-backup-H62.md` (findings 3, 4, 11). Not ours: H's
 `panel_restore.py`, `app_lifespan.py`, `instance_block.py`, `features/instance/**`.
 
 ## SEC-3 — replaced uploads removed only after the caller accepts the upload (`restore_jobs.py`)

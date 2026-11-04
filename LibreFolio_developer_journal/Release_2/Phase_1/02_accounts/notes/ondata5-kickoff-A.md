@@ -7,7 +7,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 **Modello**: Sonnet; **revisione Opus** (30 minuti) del diff di A5-1: è sicurezza.
 **Giorni**: 1,5-2 (A5-1 0,5; A5-2 1-1,5). **Blocca il tag**: sì, entrambi (cloud).
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-legendary-winner` · **Branch**: `e-alfy-a-account-e-accessi`
-**HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro; il lotto di E con i contatori email è già nel treno 10: base pulita, già fast-forward).
+**HEAD di partenza (da verificare)**: `61a6c828b` (= `dev_release2`, treni 9 e 10 dentro; il lotto di E con i contatori email è già nel treno 10: base pulita, già fast-forward).
 **Corsia**: porta `6185`, cartella dati `/tmp/librefolio-r13-a`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/02_accounts/plan-phase01Accounts.prompt.md` (sezione nuova «Ondata 5»). Recap della sera 22/10 §7.4 (admin titolare) nel piano dell'ondata 4 (`ondata4/PIANO-ondata4.md`, grep «managed»). Skill: `devpy-i18n`, `design-system`.
 

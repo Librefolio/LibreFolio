@@ -11,10 +11,10 @@ Contesto di review:
 
 ## Confine e autorizzazione
 
-**Base:** `38d44b7172eb3cc01d86f6aba1147ed1afbd346a` — identica a `dev_release2`, 0 avanti / 0 indietro.
+**Base:** `61168aa1fb065d29a9a947b622e3562944a0db2f` — identica a `dev_release2`, 0 avanti / 0 indietro.
 
 Il riallineamento è avvenuto in **fast-forward**, non in merge: `git log -1 --pretty=%p` mostra un
-solo genitore (`e4cc808e8`). Non esiste un merge commit e non esiste una revisione combinata da
+solo genitore (`552d0697a`). Non esiste un merge commit e non esiste una revisione combinata da
 validare — il ramo **è** il target, bit per bit. Il rischio "due autori sulla route logic" non si è
 materializzato qui; si materializzerà al primo checkpoint con commit propri.
 
@@ -154,7 +154,7 @@ di aver saltato qualcosa.
 
 `OnboardingOverlayHost.svelte:639` chiama `dismissHost({restartAtFirst: true})` sul mismatch di
 route. È una **decisione di comportamento**, non un guasto, e la route logic ha ora un secondo
-autore (`onboardingRouteSettlement.ts`, introdotto da `e38a521f0`, codice che J non ha scritto).
+autore (`onboardingRouteSettlement.ts`, introdotto da `71b37e4bf`, codice che J non ha scritto).
 Bundlarlo qui mescolerebbe una correzione di difetto con un cambio di prodotto.
 
 ### D7 — i18n: batch misto, già applicato
@@ -283,7 +283,7 @@ col fade, `guideState = 'stalled'`, precedenza di render, fallback centrato quan
 > **⚠️ Fuori pista — segnalazione mia, poi RITRATTATA: i 130 errori non esistono nel prodotto**.
 > `npm run check` sul mio albero dava 130 errori / 41 warning in 18 file, zero onboarding, quasi
 > tutti `features/tools/*` e `pac-allocator/*`. L'avevo segnalato al coordinator come debito del
-> target a `38d44b717`, da girare a D. **Era falso.** Sullo stesso SHA, nel checkout del
+> target a `61168aa1f`, da girare a D. **Era falso.** Sullo stesso SHA, nel checkout del
 > developer, svelte-check dà **3 errori / 41 warning / 4 file**.
 >
 > Causa, verificata da me nel mio albero e non solo riferita: `frontend/src/lib/api/generated-tools.ts`
@@ -1074,7 +1074,7 @@ Manifesto esatto in inclusione, mai "tutto tranne". Nessuno staging, nessun comm
 > ```
 > git diff --check                       EXIT=0   (nessun whitespace/conflict marker)
 > lsof -nP -iTCP:6158 -sTCP:LISTEN        EXIT=1   (nessun listener: lane libera)
-> git rev-parse HEAD                      38d44b7172eb3cc01d86f6aba1147ed1afbd346a
+> git rev-parse HEAD                      61168aa1fb065d29a9a947b622e3562944a0db2f
 > git rev-list --left-right --count       0  0     (identico a dev_release2)
 > git status --porcelain | wc -l          12       (11 tracciati + 1 non tracciato)
 > ```

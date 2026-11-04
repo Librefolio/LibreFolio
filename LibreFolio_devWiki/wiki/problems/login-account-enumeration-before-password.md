@@ -21,7 +21,7 @@ The response time leaked too: an unknown username skipped bcrypt and answered fa
 The login checked `is_active` before verifying the password, and verified a password only when an account was
 found.
 
-## Solution (train 24, merge `01da03047`)
+## Solution (train 24, merge `275d99218`)
 
 - **The password comes first, whatever the account** (`backend/app/api/v1/auth.py`, login handler): a wrong
   password gets the same `401 "Invalid credentials"` for an unknown, an active or a disabled account.

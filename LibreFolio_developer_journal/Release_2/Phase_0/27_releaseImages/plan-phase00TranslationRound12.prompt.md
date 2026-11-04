@@ -38,7 +38,7 @@
 
 ### 1. ✅ Phase 1: triage — 2026-10-10
 
-> - **Baseline:** HEAD `fbb57eb41`, tree `eb2090da4488` (= the expected one); worktree clean.
+> - **Baseline:** HEAD `fcd37d8d4`, tree `eb2090da4488` (= the expected one); worktree clean.
 > - **Detectors** (read-only; the worktree status before and after is identical):
 >   - `translate-validate --hide-localized`: 549 files, 72 missing, **2,126 errors**, 2,276 warnings (`runs/b11_validate.log`);
 >   - `translate-diff --issues-only`: 270 files with **2,253 anomalies**, 72 missing (`runs/b11_diff.log`);
@@ -181,7 +181,7 @@
 
 ### 3. ✅ Phase 3: the launch (the developer) — 2026-10-10
 
-> **Note implementazione**: checkpoint A committed by the developer (batch 24): `8f30a7f03` (26 translations), `c9cf30edc` (glossary), `416bdccac` (`.env.example`), `01c6f1ae4` (journal).
+> **Note implementazione**: checkpoint A committed by the developer (batch 24): `c7830d38c` (26 translations), `504fc0621` (glossary), `fde14f336` (`.env.example`), `42ace5dd3` (journal).
 > - **Run** 01:53–02:08, launched by the developer with 400 workers instead of 3: 299 done, 4 failed for network (`runs/b11_pipeline_run.log`).
 > - **Retry** at 09:43 by the coordinator: 4 of 4, no structure warning (`runs/b11_pipeline_retry.log`). Before it, the coordinator removed the failed language from `langs_done` in those 4 entries (`/tmp/libreFolio_b11_retry.sh`): the cache bug of step 4.1.
 > - **Result:** 231 translations modified, 72 new, the cache; the dry run on the list says «up-to-date».
@@ -209,7 +209,7 @@
 
 **4.2 ✅ Regression tests** (test-author)
 > **Note implementazione**: `backend/test_scripts/test_utilities/test_translation_cache.py`, **38 ids**, and the runner action `utils translation-cache` (`scripts/test_runner/_backend_utils.py`, `isolation="pure"`). They drive the real `run_translate`/`run_stamp`, with the four LLM seams faked, on a docs tree under `tmp_path`, and include a barrier on the fakes' contract.
-> - RED vs HEAD `01c6f1ae4`: 13 failed, 9 passed, 16 errors (transitions missing).
+> - RED vs HEAD `42ace5dd3`: 13 failed, 9 passed, 16 errors (transitions missing).
 > - RED vs the first fix (no `_read_source`): 5 failed — the 4 edit-during-analysis ids (LF/CRLF × parallel/sequential) and the barrier.
 > - GREEN on lane 6158: `utils translation-cache` 38 passed; `utils translation-code-blocks` 80 passed; `test check-orphans` clean; `--workers 4 utils all` 1320 passed (first round).
 > - Logs: `runs/b11_cache_*`, `runs/b11_cache_v2_*`.
@@ -319,13 +319,13 @@
 > - A stamp audit after every round (`b11_stamp_audit.py` + `b11_stamp_port_check.py`) could become a `translate-validate` option.
 > - Batch 12 (2026-10-10): the developer page is assigned to M (docs-writer); the devWiki entry goes to the historian through the coordinator.
 
-### 5. ✅ Second round — prepared 2026-10-10 (batch 12), run in batch 13 on train 31 (`f4a42bf4a`); its third round (5.9) closed in batches 14–15, 2026-10-11
+### 5. ✅ Second round — prepared 2026-10-10 (batch 12), run in batch 13 on train 31 (`61e598b8a`); its third round (5.9) closed in batches 14–15, 2026-10-11
 
 > Coordinator, batch 12: «prepara l'elenco … ma eseguilo dopo il treno 30, quando S è dentro. Le pagine EN del lotto 41 di I arriveranno dopo.» Nothing below has been run.
 
 **5.1 Pipeline** (large drift; the developer launches it, as for phase 3). S's three pages plus his new one, 3 languages each:
 
-| Page (`user/transactions/…`) | Why | Today (base `e32f47133`) |
+| Page (`user/transactions/…`) | Why | Today (base `99117e505`) |
 |---|---|---|
 | `import/how-to` | S rewrote the EN (guided first import, steps that appear only when needed, review, opening date) | translations of 2026-09-04; 84 validate errors and 144 warnings are all on these three pages |
 | `import/index` | S's EN (report sets, the plugin list) | stamped 2026-10-05 over an EN change of +195/−41 lines (stamp audit) |
@@ -347,15 +347,15 @@
 
 **5.5 Gates** as in phase 4: `translate-validate --hide-localized` (target: 0 errors, 0 warnings), `translate-diff --issues-only` (0), `translate-check`, `utils translation-cache`, `utils translation-code-blocks`, `check-orphans`, strict `mkdocs build` (0 WARNING/ERROR), `check-links`, `translate --dry-run` (nothing pending), `git diff --check`; plus the stamp audit (`b11_stamp_audit.py`, `b11_stamp_port_check.py`) on the stamped pages.
 
-> **Sequence** (coordinator, 11:49): train 30 is in (`dev_release2` = `d59762e0a`, S integrated: `import/how-to`, `import/index`, `transactions/index`, the new `import/scalable`, the «Portal URL» line). M closes batch 12 first; the developer merges the target into M's branch; the second round runs on that base.
+> **Sequence** (coordinator, 11:49): train 30 is in (`dev_release2` = `641ae3239`, S integrated: `import/how-to`, `import/index`, `transactions/index`, the new `import/scalable`, the «Portal URL» line). M closes batch 12 first; the developer merges the target into M's branch; the second round runs on that base.
 > I's batch-41 EN pages (`user/dashboard/charts.en.md`, `portfolio-engine/deposited-capital.en.md`) join this round if they are in by then, otherwise a small third round. `deposited-capital` was ported by hand in batch 11 (Capital Baseline, `InKindCapital`): classify I's diff from the git log, not from the counts.
 
-**Batch 13 — execution** (coordinator 13:09: batch 12 merged as `344407d03`, train 31 `f4a42bf4a` with D's catalogues and Risk 02; M's worktree fast-forwarded, clean)
+**Batch 13 — execution** (coordinator 13:09: batch 12 merged as `4fb9fc62d`, train 31 `61e598b8a` with D's catalogues and Risk 02; M's worktree fast-forwarded, clean)
 
 **5.0 ✅ Detectors on train 31** (`release-pipeline/runs/b13/b13_*_0.log`)
 > **Note implementazione**: `translate --dry-run`: 5 pages × 3 = 15 (S's 3, the new `import/scalable`, and `user/brokers/index`); `translate-validate`: 90 errors, 159 warnings, 3 files missing (`scalable` ×3) — **all 249 issues on those 5 pages, 0 outside**; `translate-diff`: 12 pairs, same pages.
 
-**5.2 ✅ `user/brokers/index` by hand** — the only EN change since its pipeline translation is the «Portal URL» line (`d5c649e9f`, icon order: custom → the Default Import Plugin's when made for this broker → the website's → a generic importer's → a briefcase). Written in it/fr/es with the page's own bold labels; validate clean in the 3 languages; `translate-stamp --file user/brokers/index.en.md`.
+**5.2 ✅ `user/brokers/index` by hand** — the only EN change since its pipeline translation is the «Portal URL» line (`9e0beaee3`, icon order: custom → the Default Import Plugin's when made for this broker → the website's → a generic importer's → a briefcase). Written in it/fr/es with the page's own bold labels; validate clean in the 3 languages; `translate-stamp --file user/brokers/index.en.md`.
 
 **5.1 ✅ Pipeline** — 4 pages × 3 = 12 translations, ~517K tokens (in ~395K, out ~122K): `import/how-to`, `import/index`, `import/scalable` (new), `transactions/index`. List: `release-pipeline/runs/b13/b13_pipeline_files.txt`. `translate-check` green (DeepSeek-V4.1-Flash via Doubleword, web search off, key present). The prompts carry the batch-12 `data-title` rule (`import/how-to` has 7 captions).
 > Command (the developer, from the worktree):
@@ -366,7 +366,7 @@
 **5.6 ✅ `pending_langs` removed** (its own commit): 29 entries, each `["it","fr","es"]` while the same entries have all three in `langs_done` — the field contradicted the cache, and no code reads it (coordinator checked the `.py`; M found no other reader). Removed with a format-preserving rewrite (HEAD round-trips byte for byte). The cache file also carries the 5.2 stamp and will carry the run: the intermediate content for the separate commit is produced by `release-pipeline/scripts/b13_cache_without_pending_langs.py` (HEAD minus `pending_langs`, nothing else; verified).
 
 **5.7 ✅ Validator unit tests** — 2026-10-11 (its own commit; test-author): new `backend/test_scripts/test_utilities/test_translation_validator.py` and runner action `utils translation-validator` (M is the writer of `_backend_utils.py` for it). A check whose behaviour looks wrong is reported to the coordinator before any change.
-> **Note implementazione** (test-author): 71 tests, 25 functions (strings in memory and docs trees under `tmp_path`; an autouse fixture redirects `DOCS_DIR`, so the repo's docs and cache are never opened); runner action `utils translation-validator` (`isolation="pure"`, +20 lines after `translation-cache`). RED vs the pre-batch-11 pipeline (`01c6f1ae4`): 64 failed, 7 passed (47 missing functions, 17 behaviour). GREEN, lane 6158: validator 71, cache 38, code-blocks 80, `check-orphans` clean, `--workers 4 utils all` 1395 passed; 21 in-memory mutants of the checks each caught; ruff/black clean. Logs `runs/b13/b13_validator_*`.
+> **Note implementazione** (test-author): 71 tests, 25 functions (strings in memory and docs trees under `tmp_path`; an autouse fixture redirects `DOCS_DIR`, so the repo's docs and cache are never opened); runner action `utils translation-validator` (`isolation="pure"`, +20 lines after `translation-cache`). RED vs the pre-batch-11 pipeline (`42ace5dd3`): 64 failed, 7 passed (47 missing functions, 17 behaviour). GREEN, lane 6158: validator 71, cache 38, code-blocks 80, `check-orphans` clean, `--workers 4 utils all` 1395 passed; 21 in-memory mutants of the checks each caught; ruff/black clean. Logs `runs/b13/b13_validator_*`.
 >
 > **⚠️ Fuori pista — a wrong behaviour of `anchor-missing`, reported to the coordinator before any change** (no test locks it in):
 > - `_page_anchors` (batch 11, mine) offers the text slug of a heading that has an explicit id, does not seed the duplicate counter with explicit ids, and reads `{#…}` / `id="…"` written in inline code; Python-Markdown gives an explicit-id heading only its id (`## Dettagli {: #details }` → build `{details}`, validator `{details, dettagli}`). Verified independently with Python-Markdown (`/tmp` probe, real tag parsing).
@@ -414,10 +414,10 @@
 > - 5.4 after P's 2 keys (`transactions.errors.pairQuantityMismatch`, `pairAssetMismatch`), which come with batch 42's checkpoint.
 > - The devWiki note `release-pipeline/b12_devwiki_stamps_hide_stale_translations.md` goes to the historian.
 
-**5.9a I's pages** — base train 33 (`c0d933abf`, tree `4ea074465be5`, batch 13 merged as `3a2e14514`); logs `release-pipeline/runs/b14/`
+**5.9a I's pages** — base train 33 (`1d27be53e`, tree `4ea074465be5`, batch 13 merged as `3944db5bd`); logs `release-pipeline/runs/b14/`
 > **Note implementazione** (triage, 2026-10-11 13:22):
 > - Detectors: `translate-validate` 36 errors, 36 warnings, **all on I's 2 pages** (`charts` 2+2 per language, `deposited-capital` 10+10): S's pages, `scalable` and `brokers/index` stay clean (train 32 had 126 = these 36 + the 90 batch 13 cleared). `translate-diff` 6 files, 45 anomalies, same pages; dry-run 2 × 3 = 6 (~298K tokens).
-> - Classified from the EN diff since the cached version (found by MD5: `charts` = `797a629d7`, the batch-11 run; `deposited-capital` = `de252a38a`, the batch-11 stamp); one commit since, I's `3801cf93e`:
+> - Classified from the EN diff since the cached version (found by MD5: `charts` = `4be750cfe`, the batch-11 run; `deposited-capital` = `6f13e1ba4`, the batch-11 stamp); one commit since, I's `6f70dd5a2`:
 >   - `user/dashboard/charts` +10/−1: the «Broker lines» paragraph rewritten (no jump at a transfer), 4 bullets (in transit, different ownership shares, no value on the arrival day, brokers outside the view), the closing sentence, a Theory link to `deposited-capital.md#internal-transfers-broker-lines`. **Small → by hand**: the pipeline would re-translate the whole page (~165K tokens) and undo batch 11's glossary review of the rest.
 >   - `portfolio-engine/deposited-capital` +137/−4: a new H2 «Internal Transfers in the Broker Lines» (6 H3, display math, 3 tables, 2 worked examples), the What-Counts table and the `InKindCapital` paragraph rewritten. **Large → pipeline**: 1 page × 3 = 3 translations, ~132.6K tokens (in ~101.2K, out ~31.4K); `translate-check` green. Command sent to the coordinator; the developer launches it.
 >   - Anchors: the new section's targets (`charts.md#pnl-line`, `index.md#2-valuation-price`) are shared explicit ids in all 4 languages; `#internal-transfers-broker-lines` is an explicit id on the EN H2, so the run carries it.
@@ -435,7 +435,7 @@
 > - **(a) implemented** (`dev.py`): `_relative_asset_urls()` + `_check_asset_paths_in_built_site(site_dir=None)` replace `_check_image_paths_in_built_site()`; every relative file URL of the built site (img/source `src`/`srcset`, video `src`/`poster`, audio `src`, `<a href>` to a non-HTML file), resolved from the page's folder like a browser (query/fragment dropped, percent-decoded, entities unescaped, HTML comments ignored); anything resolving outside the site is broken; `mkdocs build` returns **1** on a broken URL. 3.4 s on the site.
 > - **(b) implemented** (`validate_translations.py`): `html-asset-depth` (❌ ERROR) — a raw-HTML relative file path (`src`, `srcset` candidates, `poster`, `href` to a file) copied unchanged from the English; code and HTML comments ignored; line numbers of the translation; the hint is the real path, computed from the page's build folder (`_translated_file_url`: directory URLs, `<lang>/` prefix; one more `../` only for a path that climbs to the root). HEAD's translations: 21; after the fix: 0 (624 pairs).
 > - **⚠️ Fuori pista — a third false positive, found by the full validation:** `latex-inline-count` WARN on `deposited-capital` it/fr/es (148 vs 149): the extractor's suffix-currency rule (a digit before the `$`, «500 $») dropped `$A$` in the English «…on day 3 $A$'s line…» while the translations kept it. Inline math is now read as pymdownx.arithmatex reads it (smart dollar: no whitespace inside the delimiters, no unescaped `$` in the content); the suffix rule is gone. Corpus: old rule 3 mismatches (all false), new rule 0 over 624 pairs, no new mismatch anywhere.
-> - **Tests** (test-author, same agent): `test_docs_links_gate.py` 37 → **60** (`TestBuiltSiteAssets` 20, `TestMkdocsBuild` 3), `test_translation_validator.py` 96 → **130** (`TestHtmlAssetDepth` 18 incl. the real-path hint and comments, `TestInlineMath` 15, registration 1). RED on HEAD `c0d933abf`: validator 23 failed (17 missing function, 6 behaviour), gate 22 failed (20 missing function, 2 behaviour); each refinement red on the version before it; 35 one-defect mutants all caught. GREEN on lane 6158: 130 / 60 / translation-code-blocks 80 / translation-cache 38 / check-orphans clean. Developer pages (docs-writer): `translation-pipeline.md` (`html-asset-depth`, four checks, the build's check, `Tests:`), `release-pipeline.md` (the build checks its own output).
+> - **Tests** (test-author, same agent): `test_docs_links_gate.py` 37 → **60** (`TestBuiltSiteAssets` 20, `TestMkdocsBuild` 3), `test_translation_validator.py` 96 → **130** (`TestHtmlAssetDepth` 18 incl. the real-path hint and comments, `TestInlineMath` 15, registration 1). RED on HEAD `1d27be53e`: validator 23 failed (17 missing function, 6 behaviour), gate 22 failed (20 missing function, 2 behaviour); each refinement red on the version before it; 35 one-defect mutants all caught. GREEN on lane 6158: 130 / 60 / translation-code-blocks 80 / translation-cache 38 / check-orphans clean. Developer pages (docs-writer): `translation-pipeline.md` (`html-asset-depth`, four checks, the build's check, `Tests:`), `release-pipeline.md` (the build checks its own output).
 
 > - Lint (`--config pyproject.toml`): `dev.py` ruff 43, `validate_translations.py` 22, as on HEAD (`check_latex` C901 20 → 19); the runner and both test files clean; black would rewrite none of the added lines. Commit split: 7 commits, intermediate contents in `release-pipeline/b14_commit_stages/`, replay on `git archive HEAD` green at every code stage (C2 156, C3 293, C4 308).
 
@@ -457,7 +457,7 @@
 >    - numbers in the prose: 234 written in the English format localized in 52 files (it/es `28.398`/`5,18`, fr `28 398`/`5,18`); kept: versions (Tailscale 1.78, LibreFolio 1.2), AGPL-3.0, formulas; formulas: the English thousands `1{,}000` (read as «1» in it/fr/es) localized in 12 places (`deposited-capital` it/fr, `pac-allocator` it/fr/es); dates: 0 English month names, 0 slash dates (ISO only);
 >    - Spanish register: 17 pages addressed the reader as «usted» (older import guides): now «tú» like the rest of the guide and the app (115 lines, one for one; structure identical);
 >    - UI words as the app writes them: the full scan is 5.4 (part B); the English leftovers above are fixed now.
-> - **⚠️ Fuori pista:** the copy of `b11_glossary_scan_ci.py` first overwrote batch 11's `runs/b11_glossary_scan_ci.json` / `_contexts_ci.txt` (outside the repo): regenerated from batch 11's tree (`ac6ddd452`, `git archive`), the b14 run filed under `runs/b14/`.
+> - **⚠️ Fuori pista:** the copy of `b11_glossary_scan_ci.py` first overwrote batch 11's `runs/b11_glossary_scan_ci.json` / `_contexts_ci.txt` (outside the repo): regenerated from batch 11's tree (`47ec11707`, `git archive`), the b14 run filed under `runs/b14/`.
 >
 > **Open, with the reason:**
 > - 5.4, the full scan of bold/italic labels against the catalogues, and P's pages (`adjustment`, `transfer`, the new link to «Cost Basis Override»): part B, after train 34 (P's keys and pages). Known items: it `transactions/index` «Dividi coppia», «Ho capito», the dialog title; es «Añadir transacción», the dialog title; it `danske-bank` «Caricamento» (the app: «Carica»); `pac-allocator` «Sintesi/Résumé», «Torna a Riepilogo».
@@ -471,9 +471,9 @@
 > - **M-7 · La guida dei plugin BRIM e le favicon locali** — minimo; docs-writer di M, 11/10: `developer/architecture/patterns/brim_plugin_guide.md` (~1515–1531) has authors copy a card with `<img src="<favicon-url>">` into every `index.<lang>.md`; a local relative favicon needs one more `../` in the translations. English page: for its owner's section.
 > - Details for two existing lines: the `../` pipeline step — the prompts (`prompts/short_article/step3_user.txt:16`, `step4_user.txt`/`step5_user.txt:28`) require `src`/`href` copied verbatim, so re-translating the 4 pages with local raw-HTML images brings the copy back (`html-asset-depth` reports it); the stamp audit — together with the masked-pair scan, its three scripts live outside the repo (`release-pipeline/scripts/b11_stamp_audit.py`, `b11_stamp_port_check.py`, `b11_masked_scan.py`).
 
-### 6. ✅ Part B and the French typography hook — batch 15, on train 37 (`41ddc61cb`), 2026-10-11 (checkpoint B)
+### 6. ✅ Part B and the French typography hook — batch 15, on train 37 (`3bbe92424`), 2026-10-11 (checkpoint B)
 
-> Coordinator 2026-10-11 17:57: batch 14 merged as `6fa720752`. Developer's decision, verbatim: «Hook di build per il francese nella 1.2, mentre I fa F; decimali nelle formule col punto (Consigliato)». The hook applies French typography only to the HTML of the French pages, never to the sources; it never touches `code`, `pre`, `kbd`, `script`, `style`, attributes, URLs or formulas (`arithmatex`). Tests: unit tests of the hook with positive and negative cases, strict build, `check-links`; a section on the pipeline's developer page. M-5 (decimals in formulas) stays after 1.2.
+> Coordinator 2026-10-11 17:57: batch 14 merged as `ad689e230`. Developer's decision, verbatim: «Hook di build per il francese nella 1.2, mentre I fa F; decimali nelle formule col punto (Consigliato)». The hook applies French typography only to the HTML of the French pages, never to the sources; it never touches `code`, `pre`, `kbd`, `script`, `style`, attributes, URLs or formulas (`arithmatex`). Tests: unit tests of the hook with positive and negative cases, strict build, `check-links`; a section on the pipeline's developer page. M-5 (decimals in formulas) stays after 1.2.
 
 **6.0 ✅ Detectors on train 37** (`release-pipeline/runs/b15/b15_*_0.log`): `translate-validate` 6 errors, 15 warnings; `translate-diff` 6 pairs; dry-run 4 pages × 3. All four are small drifts since their cached version (found by MD5): `user/brokers/index` +2 (I's «Gain/Loss» paragraph and its link to `deposited-capital#internal-transfers-broker-lines`), `user/transactions/form` +1/−1 (P, the Manual cost of 0), `transaction-types/adjustment` +5/−3 (P: promote rule, the override of zero, the mandatory cost basis, the link to `#cost-basis-override`), `transaction-types/transfer` +2/−2 (P: the storage of a pair, the promote rule) → by hand in it/fr/es and stamped; no pipeline run.
 
@@ -522,9 +522,9 @@
 > - Four commits, 222 paths (= `git status`), messages ASCII only: C1 the hook, its tests, the runner action, `mkdocs.yml`, the developer page (5); C2 the 12 part-B translations as HEAD plus the hand port only (snapshots in `release-pipeline/b15_commit_stages/c2_part_b/`, with SHA256SUMS) and the cache's four stamps (13); C3 every other translation, and 8 of the 12 part-B files again with their label and plural edits (210); C4 this plan and the backlog (2).
 > - Replay on `git archive HEAD` with the shared venv: after C1, the five pure suites **499 passed** (191 + 130 + 60 + 80 + 38). The state after C2, before the label edits, checked alone (`b15_c2_state_check.py`): validate 0 errors, 0 warnings; diff 624/624; dry-run nothing pending.
 
-### 7. ✅ Batch 16: P's labels, the developer's terms, the English accuracy pages, the Spanish register — on train 38 (`b578f4fec`), 2026-10-11 (checkpoint)
+### 7. ✅ Batch 16: P's labels, the developer's terms, the English accuracy pages, the Spanish register — on train 38 (`93b890bd6`), 2026-10-11 (checkpoint)
 
-> Coordinator 2026-10-11 20:56: batch 15 merged as `9245ffb6f` (commits `a965956ab`…`e6f2df614`); train 38 = `b578f4fec` brings T (B3b) and P's audit mini-batch (`fix(i18n): localize broker percentages and labels`). Developer's decision, verbatim: «in italiano preferisco AI export» → the it catalogue follows the guide and the glossary. **M is assigned the i18n catalogues** for the value changes the developer decides, through `dev.py i18n`; his choices on the other 13 terminology rows come next, in this batch. Approved earlier (19:42): (a) the «Manual» provider on 5 asset-type pages, with `real-estate.en.md:22`'s wording and **No Provider**; (b) Borsa Italiana in the rows of `stocks`, `etfs`, `bonds`, `mutual-fund`; (c) «MAX» in `user/dashboard/index.en.md:51,109`; (d) `chart.it/fr.md:61` «Tutti»/«Tout»; the es «usted» forms, translation only, no stamp. F's pages (`positions`, `kpi-cards`, `deposited-capital`, `book-value`) are not M's.
+> Coordinator 2026-10-11 20:56: batch 15 merged as `682cb037d` (commits `76edb470d`…`839cb299d`); train 38 = `93b890bd6` brings T (B3b) and P's audit mini-batch (`fix(i18n): localize broker percentages and labels`). Developer's decision, verbatim: «in italiano preferisco AI export» → the it catalogue follows the guide and the glossary. **M is assigned the i18n catalogues** for the value changes the developer decides, through `dev.py i18n`; his choices on the other 13 terminology rows come next, in this batch. Approved earlier (19:42): (a) the «Manual» provider on 5 asset-type pages, with `real-estate.en.md:22`'s wording and **No Provider**; (b) Borsa Italiana in the rows of `stocks`, `etfs`, `bonds`, `mutual-fund`; (c) «MAX» in `user/dashboard/index.en.md:51,109`; (d) `chart.it/fr.md:61` «Tutti»/«Tout»; the es «usted» forms, translation only, no stamp. F's pages (`positions`, `kpi-cards`, `deposited-capital`, `book-value`) are not M's.
 
 **Plan**
 1. Catalogues: the developer's decisions (`dev.py i18n update`), key parity and the i18n gates.
@@ -541,11 +541,11 @@
 > - Not touched: the `datePicker.presets` block (T adds `datePicker.presets.days` for the tables' «Δ 1D»).
 
 **7.2 ✅ The guide's quotes realigned to the new labels** — 2026-10-11 (scripts `release-pipeline/scripts/b16_*.py`, each edit checked on its line before writing; translations only, no stamp)
-> - **Tool** `b16_catalog_delta.py REPO BASE NEW` (`NEW = WORKTREE` reads the catalogues on disk): changed keys → the docs of that language quoting the old value; added keys → translations still quoting the English. Validated on history: D's glossary commit `cd0b404d2` 31 candidates with the docs of that time → 17 today; the FX strings `0cc4a5077` 8 → 0.
-> - **P's mini-batch** (`41ddc61cb` → train 38; delta 22 candidates, all quotes; label scan: 21 new rows, 19 gone — the 11 it «AI Export», «Comparación/Comparaison», «Nuovo/Nuevo»): 21 edits on 12 pages (`b16_p_labels.py`) — fr «Rapports téléversés» ×4, «Recadrer et téléverser»; es «Sincronizar tipos de cambio» ×2, «Editar tipos de cambio» ×2, the FX editor's column «Tipo de cambio» (`fx.rate`, `FxDataEditorSection.svelte:58`) and its badge «Modificado» ×2, «Bróker para subidas», «Informes del bróker» ×3, «Asignar brókeres», the pair button «Unir» ×3 (`transactions.promoteSuggest.merge`; «Combinar» stays `mergeAllCombine`) and «Unir todos». Prose, by the English sense of each line (`b16_prose_terms.py`, 9 edits): fr upload → «téléverser» in 5 places (85 «télécharg*» read: the other 80 mean download); es «tipos de cambio» in `risk.es.md:131` and the link to the FX page («💱 Tipos de cambio», its title); 151 es «tasa(s)» read: interest, growth, return, tax and risk-free rates and the indicator ROC stay.
+> - **Tool** `b16_catalog_delta.py REPO BASE NEW` (`NEW = WORKTREE` reads the catalogues on disk): changed keys → the docs of that language quoting the old value; added keys → translations still quoting the English. Validated on history: D's glossary commit `1c1a294fe` 31 candidates with the docs of that time → 17 today; the FX strings `a033474d2` 8 → 0.
+> - **P's mini-batch** (`3bbe92424` → train 38; delta 22 candidates, all quotes; label scan: 21 new rows, 19 gone — the 11 it «AI Export», «Comparación/Comparaison», «Nuovo/Nuevo»): 21 edits on 12 pages (`b16_p_labels.py`) — fr «Rapports téléversés» ×4, «Recadrer et téléverser»; es «Sincronizar tipos de cambio» ×2, «Editar tipos de cambio» ×2, the FX editor's column «Tipo de cambio» (`fx.rate`, `FxDataEditorSection.svelte:58`) and its badge «Modificado» ×2, «Bróker para subidas», «Informes del bróker» ×3, «Asignar brókeres», the pair button «Unir» ×3 (`transactions.promoteSuggest.merge`; «Combinar» stays `mergeAllCombine`) and «Unir todos». Prose, by the English sense of each line (`b16_prose_terms.py`, 9 edits): fr upload → «téléverser» in 5 places (85 «télécharg*» read: the other 80 mean download); es «tipos de cambio» in `risk.es.md:131` and the link to the FX page («💱 Tipos de cambio», its title); 151 es «tasa(s)» read: interest, growth, return, tax and risk-free rates and the indicator ROC stay.
 > - **Durations** (`b16_duration_labels.py`, 34 edits on 12 pages): date range and rolling-return window it/fr «1W…2Y/10Y» → «1S…2A/10A», with `chart.it/fr.md:61` «MAX» → «Tutti»/«Tout» (approved d); es three lines were wrong already (`fx/detail/chart.es.md:27`, `returns.es.md:132`, the alt of `chart.es.md:25`). The dashboard's candle widths, localized since 2026-09-22 (`datePicker.granularity.*Short`: days it G, fr J, es D) and missed by 5.4: it «1G…1A, 3G, 2S», fr «1J…1A, 3J, 2S» (es was right).
 > - **⚠️ Fuori pista — two duration sets still hard-coded**: the AI Export period (`frontend/src/lib/features/ai-export/ui.ts:60–63`, «3M/6M/1Y») and the tables' «Δ 1W…5Y» columns (`AssetTable.svelte:252`, `FxTable.svelte:233`). Coordinator: T localizes them after FE1 with `datePicker.presets.*` (plus `datePicker.presets.days`, «Δ 1D»); M's 7 lines wait for T's checkpoint (`user/assets/index` ×3, `user/fx/index` ×2, `user/ai-export/index` fr/es).
-> - **The developer's decisions** (delta `b578f4fec` → worktree: 69 candidates, 45 lines; `b16_decision_labels.py`, 47 edits on 37 pages): es «Exportación IA» ×12, «Divisa predeterminada» ×11 (with two gallery captions and an alt), «Ejecutar repetición» ×2 (+ «pulsa» where the verb was missing), «repetición histórica», «Cambiar a lector» ×2, «Asignación de activos» ×2, «Caída desde el máximo» ×3, «Mostrar el choque por grupo», «Degradado datos obsoletos» ×2, «Las divisas del encabezado no coinciden»; fr «Dégradé données obsolètes» ×2, «Frais et impôts» ×2, «Afficher le choc par catégorie»; it «Gradiente dati obsoleti» ×3, «Non siamo riusciti a caricare le guide», «Costo di carico manuale». Left: es «reproducción diaria» (the engine's replay), «visor» for the PDF and detail viewers, fr theory «compartiment» (the concept, not the toggle).
+> - **The developer's decisions** (delta `93b890bd6` → worktree: 69 candidates, 45 lines; `b16_decision_labels.py`, 47 edits on 37 pages): es «Exportación IA» ×12, «Divisa predeterminada» ×11 (with two gallery captions and an alt), «Ejecutar repetición» ×2 (+ «pulsa» where the verb was missing), «repetición histórica», «Cambiar a lector» ×2, «Asignación de activos» ×2, «Caída desde el máximo» ×3, «Mostrar el choque por grupo», «Degradado datos obsoletos» ×2, «Las divisas del encabezado no coinciden»; fr «Dégradé données obsolètes» ×2, «Frais et impôts» ×2, «Afficher le choc par catégorie»; it «Gradiente dati obsoleti» ×3, «Non siamo riusciti a caricare le guide», «Costo di carico manuale». Left: es «reproducción diaria» (the engine's replay), «visor» for the PDF and detail viewers, fr theory «compartiment» (the concept, not the toggle).
 > - **«Rolling return» as the app says it** (coordinator: yes, in this batch; `b16_rolling_term.py`, 43 edits on 13 pages): it «Rendimento rolling» → «Rendimento mobile» (21; plural «rendimenti mobili»), es «Rentabilidad móvil» → «Rendimiento móvil» (22; agreement «un… otro… anualízalo», «los rendimientos móviles»). Headings changed have explicit ids or no incoming links. fr «Rendement glissant» already matched. **⚠️ Fuori pista — a 5.4 residue**: the batch-15 scan pairs bold/italic spans and skips links and plain text, so a mode named in a link or a caption escaped it; noted in M-9.
 
 **7.3 ✅ English accuracy (a–d), ported and stamped** — 2026-10-11 (brief `release-pipeline/b16_docs_writer_brief.md`)
@@ -560,7 +560,7 @@
 > - **⚠️ Fuori pista — the imperative scan saw a third of it**: possessives «su/sus» meaning "your", third-person verbs whose subject is the reader («si realizó depósitos», «aportó»), «le» = you. A marker scan against the English line («you/your») gave 85 candidates; a reviewer read each in context: 24 lines usted (35 edits, plus 6 on 4 neighbouring lines the scan missed: «le cuesta», capitalised «Sus…»), 61 not («su» = its, a third-person subject, impersonal «se», «cada uno de ustedes»). The scans pair lines by number, so the 68 pages that do not line up with their English were skipped: the reviewer read the 10 with markers in full — 42 edits in 5 pages (twrr 20, mwrr 15, `instruments/index` 3, `asset-allocation` 2, `sortino-ratio` 2), 5 clean. `b16_es_register_2.py`: 83 edits, from `runs/b16/b16_es_register_review*.tsv`.
 
 **7.5 ✅ Lost headings and paragraphs** — 2026-10-11 (found by the register review; `b16_restore.py`)
-> - **Headings missing their first word**: commit `2544a3e36` (2026-08-05, «Fix translation inconsistencies», emojis added to headings) replaced the first word of 98 headings in 35 files instead of prefixing it («### Comparación con el ROI Simple» → «### 📉 con el ROI Simple»). Later runs re-translated most pages; still broken today: 37, in `mwrr` it/fr/es (all 8 H3 — plausible ones too, «📈 Annualizzato», «🧾 KPI»), `timing-effect` it/fr/es (4 each), `fifo-lot-analysis.it.md:248`. Restored with the wording before that commit, after the emoji; the anchors linked from elsewhere are explicit ids, untouched. (The developer page `ai_export_probe_workflow.md:67` matched too, but there the commit renamed an emoji heading: not a truncation.)
+> - **Headings missing their first word**: commit `c9e783563` (2026-08-05, «Fix translation inconsistencies», emojis added to headings) replaced the first word of 98 headings in 35 files instead of prefixing it («### Comparación con el ROI Simple» → «### 📉 con el ROI Simple»). Later runs re-translated most pages; still broken today: 37, in `mwrr` it/fr/es (all 8 H3 — plausible ones too, «📈 Annualizzato», «🧾 KPI»), `timing-effect` it/fr/es (4 each), `fifo-lot-analysis.it.md:248`. Restored with the wording before that commit, after the emoji; the anchors linked from elsewhere are explicit ids, untouched. (The developer page `ai_export_probe_workflow.md:67` matched too, but there the commit renamed an emoji heading: not a truncation.)
 > - **Two English paragraphs missing in all three translations** (capital-baseline deltas: `twrr.en.md:6`, `mwrr.en.md:88`), hidden because the pages' stamps were current — the case of the batch-12 devWiki note. Translated with the wording of `deposited-capital` and `roi` (base del capitale / référence de capital / base de capital; in natura / en nature / en especie).
 > - Spanish errors: `mwrr.es.md:121–123` «Día 0/5/10» → «Año» (the example counts years), `:56` the Italian «Ora» → «Ahora», `twrr.es.md:15` «Per definición» → «Por definición», `how-to.es.md:150` «Únifícalo» → «Unifícalo».
 > - Translation only, no stamp (the English pages did not change).
@@ -572,20 +572,20 @@
 > - Audits: masked pairs 624/624; coverage complete (235 nav entries per language); copied numbers and attributes as in batch 15; glossary scan 227 → 214 hits (the decided terms; the restored «Card dei KPI» first added one — aligned to the glossary and the page, «Schede KPI», and es «Efecto Timing en el MWRR» like its page); label scan 399 → 370 rows (user/admin pages 151 → 133, all decided; one new theory row, «tasa» = frequency, kept); «usted» scan 46 → 18, all excluded classes (nouns «ajuste», «importe», «cierre», «Despliegue»; the neutral «ustedes»); stamp audit 178 pairs, port check 0; hook proof PROOF_OK (6,581 → 0).
 > - Commit by commit (`b16_stages.py`, `b16_build_snapshots.py`, read-only on the repo): six commits, 142 paths (= `git status`); the doc edits come from scripts with explicit edit lists, and their replay on HEAD in commit order equals the worktree for all 126 files; 9 translations change in two commits, their intermediate contents in `release-pipeline/b16_commit_stages/` (SHA256SUMS). The state after each of C2–C5, checked alone (`b16_stage_states_check.py`): validate 0/0, diff 624/624, dry-run nothing pending.
 
-### 8. ✅ Batch 17: T's durations — on train 40 (`ab7fe324e`), 2026-10-11
+### 8. ✅ Batch 17: T's durations — on train 40 (`cf607bb1f`), 2026-10-11
 
-> Coordinator 22:28: batch 16 merged as `91be6a321` (commits `7c66234a7`…`5b22b06f1`); train 40 brings T's train 39, which localizes the last hard-coded durations with `datePicker.presets.*` (`c7b49085f`): the tables' «Δ» columns through `deltaPeriodLabel` (`frontend/src/lib/utils/assetPriceDerived.ts:126`, plus `datePicker.presets.days` for the fixed day column: it «1G», fr «1J», es «1D») and the AI Export period (`features/ai-export/ui.ts:60–63`: «3M», «6M», «1A» in it/fr/es).
+> Coordinator 22:28: batch 16 merged as `0a79f3338` (commits `6f0648408`…`b8f0d574e`); train 40 brings T's train 39, which localizes the last hard-coded durations with `datePicker.presets.*` (`1bf4197fa`): the tables' «Δ» columns through `deltaPeriodLabel` (`frontend/src/lib/utils/assetPriceDerived.ts:126`, plus `datePicker.presets.days` for the fixed day column: it «1G», fr «1J», es «1D») and the AI Export period (`features/ai-export/ui.ts:60–63`: «3M», «6M», «1A» in it/fr/es).
 
 **8.1 ✅ The 7 held lines** — 2026-10-11 (`release-pipeline/scripts/b17_durations_t.py`, translation only, no stamp)
 > **Note implementazione**: of the 7 lines held in 7.2, the Spanish ones (`user/assets/index.es.md:28`, `user/fx/index.es.md:26`) and the French/Spanish AI Export line already read «1S…5A» / «1A». Changed: `user/assets/index` it/fr «1W…5Y» → «1S…5A», `user/fx/index.it.md:27` likewise, `user/ai-export/index.it.md:60` «**1Y**» → «**1A**»; and `user/fx/index.fr.md:26`, which paraphrased the columns («de 1 semaine à 5 ans») where the English quotes them, → «de 1S à 5A». The duration token scan leaves only «Treasury 10Y», a bond's name. No page quotes the fixed «Δ 1D» column (the English says «over one day»).
 > - Gates (lane 6158, load 14): `translate-validate` 0 errors, 0 warnings; `translate-diff` 624/624; dry-run nothing pending; strict build 0 WARNING/ERROR, 0 ⚠️/❌, 2,988 asset URLs; `check-links` 95; asset scan 0 broken in 4 languages; `git diff --check` clean; ports 6158/6168 free.
 
-### 9. ✅ Batch 18: the final round after F — on train 42 (`5d62658bb`), 2026-10-12 (checkpoint)
+### 9. ✅ Batch 18: the final round after F — on train 42 (`408b31119`), 2026-10-12 (checkpoint)
 
-> Coordinator 04:25: F is in the target (train 42), M's branch fast-forwarded to `5d62658bb`. (1) F-5's translation debt: 6 English pages (`book-value`, `deposited-capital`, `index`, `nav`, `period-pnl`, `user/dashboard/positions`) with `translate-validate` 75 errors and 75 warnings on the target, plus one-line changes in `user/brokers/index`, `user/dashboard/charts`, `index`, `kpi-cards` — outside `dev` the remote pipeline blocks on `translate-validate`; (2) the port of `kpi-cards.fr.md:34` and `book-value.es.md:5` (batch-16 edits on F's pages); (3) the new key `dashboard.fxOnCash` (I's values), the it/fr/es catalogues assigned to M for this round; (4) the gallery: F adds «FX on cash» to the Performance view, and the labels of batches 16–17 — T-1 changes no UI.
+> Coordinator 04:25: F is in the target (train 42), M's branch fast-forwarded to `408b31119`. (1) F-5's translation debt: 6 English pages (`book-value`, `deposited-capital`, `index`, `nav`, `period-pnl`, `user/dashboard/positions`) with `translate-validate` 75 errors and 75 warnings on the target, plus one-line changes in `user/brokers/index`, `user/dashboard/charts`, `index`, `kpi-cards` — outside `dev` the remote pipeline blocks on `translate-validate`; (2) the port of `kpi-cards.fr.md:34` and `book-value.es.md:5` (batch-16 edits on F's pages); (3) the new key `dashboard.fxOnCash` (I's values), the it/fr/es catalogues assigned to M for this round; (4) the gallery: F adds «FX on cash» to the Performance view, and the labels of batches 16–17 — T-1 changes no UI.
 
 **9.0 ✅ Detectors and classification** (`release-pipeline/runs/b18/`)
-> **Note implementazione**: dry-run 10 English pages × 3 (~1.06M tokens through the pipeline). Every drift comes from one commit, `a4332b25b` («docs: document native cash and FX on cash»), found by the cache MD5 (`release-pipeline/scripts/b18_en_drift.py`): `index` +41/−3, `period-pnl` +40/−3, `deposited-capital` +18/−1, `book-value` +12/−2, `nav` +9/−1, the five user pages +1/−1 or +2/−2. **By hand**, not the pipeline: mostly prose, the formulas copied as they are, two new sections with explicit ids, one table, one admonition; a run would rewrite 30 pages and undo the hand reviews of batches 11–16 on them (labels, register, restored headings, glossary).
+> **Note implementazione**: dry-run 10 English pages × 3 (~1.06M tokens through the pipeline). Every drift comes from one commit, `a22a098ee` («docs: document native cash and FX on cash»), found by the cache MD5 (`release-pipeline/scripts/b18_en_drift.py`): `index` +41/−3, `period-pnl` +40/−3, `deposited-capital` +18/−1, `book-value` +12/−2, `nav` +9/−1, the five user pages +1/−1 or +2/−2. **By hand**, not the pipeline: mostly prose, the formulas copied as they are, two new sections with explicit ids, one table, one admonition; a run would rewrite 30 pages and undo the hand reviews of batches 11–16 on them (labels, register, restored headings, glossary).
 
 **9.1 ✅ The port** — 2026-10-12 (`release-pipeline/scripts/b18_port_*.py`: an engine plus one data module per page group; every edit an anchor found exactly once, display math copied from the English page by the script)
 > **Note implementazione**: 75 edits on 30 translations. The pages' own conventions kept: `\mathrm{}` identifiers and `\text{replay}`, `\text{like}` in English, `\text{if }` in Italian and `\text{si }` in French/Spanish as elsewhere in `index`; formula thousands `1\,000` with the decimal point (the developer's decision, M-5), prose numbers localized (it/es `1.000`, `0,90`; fr `1 000`); each page's money style (it/es `€900`, fr `900 €`), table type names (it/fr BUY/DEPOSIT, es COMPRA/DEPÓSITO) and link texts («Portfolio Engine — §6», «Moteur de portefeuille — §6», «Motor de cartera — §6»); the app's labels quoted (`dashboard.fxOnCash`: «Effetto cambio sulla liquidità», «Effet de change sur les liquidités», «Efecto del tipo de cambio sobre el efectivo»; **Vendite/Ventes/Ventas**; the Performance view «vista Performance / vue Performance / vista Rendimiento»), and the terms of `deposited-capital` and `roi` (base del capitale / référence de capital / base de capital; quota di proprietà / part de propriété / cuota de propiedad). The new headings: «💱 Risultato di cambio sulla liquidità in valuta / Résultat de change sur les liquidités en devises / Resultado de cambio sobre el efectivo en divisas» (`#exchange-result-on-foreign-cash`), «💵» + the app label (`#fx-on-cash`), «💱 D — …» in `deposited-capital`. Batch 16's edits on F's pages are intact (`kpi-cards.fr.md:34` «Frais et impôts», `book-value.es.md:5` «tu cartera»).
@@ -605,7 +605,7 @@
 > - **⚠️ Fuori pista — the port engine**: an insertion keeps its anchor, so the first engine would have inserted twice on a second run; «already applied» is now checked first (a rerun applies 0 of 75), and the 75 edits replayed on HEAD reproduce the worktree byte for byte (30 files).
 > - Commit by commit (`release-pipeline/scripts/b18_stages.py`): two commits, 34 paths (= `git status`), no file in both.
 
-### 10. ✅ Batch 19: M-13, the gallery probes — on train 44 (`7b3c2b5ab`), 2026-10-12 (checkpoint)
+### 10. ✅ Batch 19: M-13, the gallery probes — on train 44 (`cea004ef9`), 2026-10-12 (checkpoint)
 
 > Coordinator 06:02: M-13 goes into 1.2 — a shot skipped in silence is a defect of the release run too, which redoes the gallery from scratch. Limited scope: test-author replaces with `appears()` the probes that stand in front of a shot; of the others only those that hide a skipped step the same way, listed for the coordinator; then the touched scenarios on lane 6158, showing that the 8 missed shots come out. M-12 and M-14 stay with the developer.
 
@@ -624,14 +624,14 @@
 > - Reported by test-author and **not** changed (the coordinator's call): a hard `expect` instead of `appears()` where the component always renders the element on the path — `selectTransactionType` (2603, 2608), the table views (4192, 4675), the wizard `fileRow` (3281, 3352, 5612), the cache unlock (1969), the broker edit button (4108), the asset search (4702), the date presets (909, 911, 921). And the cost of honest waits where the element legitimately never comes: about 5 s per incompatible pair at 2860, 1 s per mobile combination at 1982, 3 s per paired clone at 2799.
 
 **10.2 ✅ The touched scenarios** — lane 6158, 2 workers, fresh populate, 06:40–07:08 (load 9 → 84 at 06:52 → 5; `runs/b19/b19_gallery.log`, `b19_verify.txt`, `b19_shot_coverage.txt`)
-> **Note implementazione**: Playwright `-g` over the 43 titles per viewport that hold a converted probe or call a converted helper (`release-pipeline/scripts/b19_grep.py`): **86 passed, 0 failed**, 26.9 min, 1,018 PNGs retaken. **The 8 shots missed in batch 18 all come out** (06:54–07:07). Every other shot name of these scenarios 16/16 (2 viewports × 4 languages × 2 themes). 318 of the 1,018 PNGs differ in bytes from batch 18's; the pairs checked by eye (`form-modal-sell`, `fifo-lots-comparison-chart-return`) differ only by an hour more of data. The bundle is batch 18's build: `frontend/src` has not changed since `5d62658bb`.
+> **Note implementazione**: Playwright `-g` over the 43 titles per viewport that hold a converted probe or call a converted helper (`release-pipeline/scripts/b19_grep.py`): **86 passed, 0 failed**, 26.9 min, 1,018 PNGs retaken. **The 8 shots missed in batch 18 all come out** (06:54–07:07). Every other shot name of these scenarios 16/16 (2 viewports × 4 languages × 2 themes). 318 of the 1,018 PNGs differ in bytes from batch 18's; the pairs checked by eye (`form-modal-sell`, `fifo-lots-comparison-chart-return`) differ only by an hour more of data. The bundle is batch 18's build: `frontend/src` has not changed since `408b31119`.
 > - **⚠️ Fuori pista — 6 other wizard shots missed in silence**, under load 84: `create-wizard-modal` (desktop/en/dark, desktop/it/light, mobile/en/dark), `import-wizard-step3` + `-step4-resolution` (mobile/it/light), `import-wizard-duplicate` (mobile/fr/dark). A real wait was not enough, because the wizard prelude raced. test-author found two causes in `ImportWizardModal.svelte`: step 2 loads its file list, plugins and set previews behind its own `data-busy` (:4596), which the prelude guessed with `waitForTimeout(800)`; and, the race no wait can fix, a Next clicked before step 1's broker list arrives lets `loadBrokerFiles()` read an empty list (:3512, :668), so every broker panel renders collapsed and the file row never exists (:3530). The other import specs settle step 1 first. Fix, by test-author: `waitForSettled(import-wizard-step1)` before Next (3 lines added), `waitForSettled(import-wizard-step2, 30_000)` in place of the 800 ms sleep (3), `waitForSettled(import-wizard-step4, 30_000)` before the create-wizard's asset select (1). The 3 tests again, fresh populate: 2 workers 07:24–07:27 and 4 workers 07:27–07:29, **6 passed each time, the 4 shot names 16/16 each time**.
 > - A user who clicks Next that fast sees the same collapsed list (Next stays enabled while the brokers load, :5378): a product question, reported to the coordinator.
 
 **10.3 ✅ Gates and checkpoint** — 2026-10-12 07:30, lane 6158 (`release-pipeline/scripts/b19_final_gates.sh`, logs `runs/b19/b19_final_*`)
 > **Note implementazione**: `check-orphans` clean; Prettier on `e2e/**/*.ts` clean; `tsc -p tsconfig.e2e.json` only the 2 errors of HEAD; `git diff --check` clean; `gallery.spec.ts` 28 `isVisible({timeout` left (classes C and D), 48 `appears(`, 3 `becomesEnabled(`, no `isEnabled(`, 6,494 lines (HEAD 6,491: the 3 step-1 barriers); ports 6158 and 6168 free. No product file changed, so no backend or unit suite.
 
-### 11. ✅ Batch 20: M-14, a browser locale per gallery language — on train 46 (`378338fed`), 2026-10-12 (checkpoint)
+### 11. ✅ Batch 20: M-14, a browser locale per gallery language — on train 46 (`7c3119d97`), 2026-10-12 (checkpoint)
 
 > Coordinator 09:57, the developer's decision (verbatim): «tanto gli screen vanno fatti in ogni caso, impostiamo il locale in playwright sin da ora, è la scelta giusta». Scope: a Playwright locale per gallery language (en-US, it-IT, fr-FR, es-ES) where the gallery picks the language; first the list of scenarios that type numbers or dates (the decimal comma and the date format could break them), fixed with test-author; a full gallery on 6158 showing nothing skipped; an it/fr/es sample checked by eye; M-14 closed in section M. Analysis sent FROZEN at 10:15, approved at 10:17 (the guard and the redraws included; M-17 opened for the two product strings).
 
@@ -665,7 +665,7 @@
 **11.4 ✅ Gates and checkpoint** — 2026-10-12 12:22, lane 6158 (`release-pipeline/scripts/b20_final_gates.sh`, logs `runs/b20/b20_final_*`)
 > **Note implementazione**: `check-orphans` clean; Prettier on `e2e/**/*.ts` clean; `tsc -p tsconfig.e2e.json` only the 2 errors of HEAD; `git diff --check` clean; `gallery.spec.ts`: 76 `setBrowserLocale(page, lang)` for 76 language loops (75 loop heads, and the generated test in place of its describe-level loop), 2 `expectDrawnUnder`, the probes of batch 19 unchanged (28 `isVisible({timeout`, 48 `appears(`); ports 6158 and 6168 free. The `testing-frontend` skill gains «Gallery: a language's shots are taken by a browser of that language». No product file changed, so no backend or unit suite. Commit by commit (`release-pipeline/scripts/b20_stages.py`): two commits, 7 paths (= `git status`), no file in both.
 
-### 12. ✅ Batch 21: the Scalable page — on `63b3e5971` (batch 20 committed, train pending), 2026-10-12 (checkpoint)
+### 12. ✅ Batch 21: the Scalable page — on `817332976` (batch 20 committed, train pending), 2026-10-12 (checkpoint)
 
 > Coordinator, 12/10 (queued after M-14; go at 12:26), the developer after reading the page (verbatim): «Siccome abbiamo l'export reale del plugin nostro, toglierei l'alpha, tanto credo che pochi useranno quello di default»; «modificherei la pagina togliendo il "*Tagesgeld*" all'inizio»; «Nella tabella dei 2 conti metterei vicino al nome l'icona del conto, come abbiamo fatto per i plugin»; «Il capitolo "cosa esportare" lo trasformerei in "Come esportare"»; «Farei un cappello in cui si dice che scalable permette di esportare nativamente solo se si è abbonati a prime ad oggi (ottobre 2026) e non permette di esportare il conto deposito, a tale scopo è stato realizzato l'esportatore …»; «Sul come si installa metti un panel foldabile dicendo che i dettagli aggiornati si trovano sul progetto, ma qui è presente la sintesi dei passaggi»; «La parte dell'alternativa quindi scompare»; «Unirei la tabella 🏦 Due conti, due broker con quella presente in ⚙️ Configurare i due broker»; «la parte dell'un solo broker? la toglierei, già all'inizio è stato specificato che è pensato per avere 1 broker per ogni conto»; «riguardo il "📝 Cosa viene importato" toglierei la sezione e la metterei nel dev manual al massimo ed eliminerei anche "Cosa ti dice LibreFolio" e la sezione dei "Limiti"»; «fagli fare direttamente la pagina in tutte le lingue, con tutte le solite verifiche usando gli strumenti di mkdocs che abbiamo sviluppato». The coordinator's reading: no «Alpha» and no other label (as DEGIRO), the index card too; one table with each account's plugin icon (`providers_list.md:31-32`); «How to export» opened by the PRIME-only lead; the installation in a `???` panel; four sections removed; «What is imported» to the developer docs (EN only, docs-writer); no link to a vanishing anchor (the plugins link only `/mkdocs/user/transactions/import/scalable/`). Translations by hand, then stamps; the usual checks.
 
@@ -684,7 +684,7 @@
 **12.3 ✅ Gates and checkpoint** — 2026-10-12 12:53–12:59 (`release-pipeline/scripts/b21_final_gates.sh`, logs `runs/b21/b21_final_*`)
 > **Note implementazione**: `docs-fr-typography` 191, `translation-validator` 130, `gate-docs-links` 60, `translation-cache` 38, `translation-code-blocks` 80, `check-orphans` clean; `translate-validate` 0/0; `translate-diff` 624/624; `translate-check` green (its key fragment redacted in the log); dry-run «Nothing to translate»; strict build 0 WARNING/ERROR, 3,004 asset URLs, all resolving; `check-links` 95; asset scan 0 broken in 4 languages; masked pairs 624/624; coverage and `nav_translations` complete; label scan 370 differing rows, as in batch 18, none on the Scalable pages; glossary scan: 3 hits fewer, all in the removed sections (es «NAV», es «transferencia de fondos», fr «transfert d'actif»), none in the new text; «usted» scan 19 lines, unchanged; hook proof PROOF_OK; stamp port check 0. Privacy: 1,158 lines of diff, no path, address or key. *Tagesgeld* stays in `providers_list.md:32` (the developer list's description of the account) and in the plugins' descriptions (`broker_scalable_deposit.py`, `brimPlugins.broker_scalable_deposit.description`, U's namespace): flagged, not changed.
 
-### 13. ✅ Batch 22: the connection-security guide — on `09e1ce757` (batch 21 committed), 2026-10-12 (checkpoint)
+### 13. ✅ Batch 22: the connection-security guide — on `4274fc6e9` (batch 21 committed), 2026-10-12 (checkpoint)
 
 > Coordinator 12/10 (queued after Scalable; go at 13:03), the developer's words (server checklist, item 48, verbatim): «la guida scritta è corretta ma un muro di testo poco chiaro, in tanto nell'incipit dice che si apre questa pagina, è stupido, non serve fare una descrizione così puntuale, questa deve essere informativa, in oltre nella parte di come si assegna il livello di sicurezza, hai fatto bene a fare così ma la strutturerei con una parte corta che spiega i pro e contro di quella modalità e in un pannello foldabile la descrizione di cosa fa ottenere quella classificazione, sul fatto di come connettersi in sicurezza sii sintetico e rimanda alla guida tailscale nel manuale amministratore, mentre per la parte della verifica per gli amministratori, dobbiamo creare una pagina apposita e ben documentata nel manuale degli amministratori, e anche la guida tailscale dovrebbe puntare a lui per spiegare come fare le verifiche. La parte del cosa non fa è corretta ma cerchiamo di metterla più discorsiva». Surfaces: `user/connection-security.{en,it,fr,es}.md` (its URL stays: the indicator links its root, `frontend/src/lib/utils/security/connectionSecurity.ts:37`); a new admin page for the checks, with its nav entry; the Tailscale guide (`admin/service_exposure.*.md`) pointing to it. All four languages; strict build, `check-links`, `translate-validate`. No separate analysis: the checkpoint opens with the structure of the two pages.
 
@@ -705,7 +705,7 @@
 > **Note implementazione**: `docs-fr-typography` 191, `translation-validator` 130, `gate-docs-links` 60, `translation-cache` 38, `translation-code-blocks` 80, `check-orphans` clean; `translate-validate` 0/0; `translate-diff` 627/627; `translate-check` green (its key fragment redacted in the log); dry-run «Nothing to translate»; strict build 0 WARNING/ERROR, 3,012 asset URLs, all resolving; `check-links` 95; asset scan 0 broken in 4 languages; masked pairs 627/627; coverage and `nav_translations` complete (325 nav pages, 236 entries per language); label scan 370 differing rows, as in batches 18 and 21, none on the two pages; «usted» scan 19 lines and copied-text scan unchanged; hook proof PROOF_OK; stamp port check 0. Two scanner deltas, both read: the label scan counts two more pages with unequal bold spans (`user/connection-security.{it,es}.md`, 33/35), because the scanner blanks inline code and the English **A local/public address over plain `http://`** ends with code while «`http://` in chiaro» / «sin cifrar» does not — pairing by block still covers all 33 spans; the glossary scan counts one more fr and es «split», the networking «split DNS» of `service_exposure` (its «Split DNS» method), not the stock split the rule watches. Privacy: 2,506 lines of diff, no path, address, e-mail or key; the hostnames and addresses are the examples the docs already used (`librefolio.your-tailnet.ts.net`, `myhome.duckdns.org`, `192.168.1.100`, the private ranges).
 > - Not done, proposed: two more pointers to the new page, from `admin/docker_advanced.en.md` §2 and from the `SESSION_COOKIE_SECURE` panel of `admin/configuration.en.md`.
 
-### 14. ✅ Batch 23: two page reviews in a live preview (Scalable, the connection guide), two more pointers — on `e7d698c4d` (train 56: batches 21 and 22 in the target), 2026-10-12 (checkpoint)
+### 14. ✅ Batch 23: two page reviews in a live preview (Scalable, the connection guide), two more pointers — on `d81bb4965` (train 56: batches 21 and 22 in the target), 2026-10-12 (checkpoint)
 
 > Coordinator 12/10 14:12, the developer on the Scalable icons (verbatim): «ti direi prima del nome, senza colonna, comunque quando termini vorrei che buildi la doc e mi fai vedere la pagina, così ti do altri feedback mirati». The coordinator's reading: each account's icon inline before the account's name in the first column, no extra column; the second column keeps the plugin's name without icon; four languages. Then `dev.py mkdocs serve` on 6042 in this worktree (free; the command has no port option), the EN and IT URLs to the coordinator, the server kept up through the feedback round with the corrections applied live, and shut down at the batch's close with the port shown free. In the same batch, the two pointers proposed in 13.3 (`admin/docker_advanced` §2, the `SESSION_COOKIE_SECURE` panel of `admin/configuration`): English by docs-writer, then the translations.
 
@@ -752,8 +752,8 @@
 > - **⚠️ Fuori pista — «the only reason» was not true**: docs-writer, checking the warning against the code, found five copy buttons that call `navigator.clipboard.writeText` directly, without the shared secure-context fallback (`frontend/src/lib/utils/clipboard.ts:14`): `components/settings/tabs/AboutTab.svelte:242`, `components/brokers/lots/UnifiedLotsTable.svelte:391`, `components/auth/AskAdminModal.svelte:30`, `components/files/FilePreviewModal.svelte:377`, `components/assets/ProviderAssignmentSection.svelte:595` (verified by M). Browsers give no Clipboard API to plain `http://` outside `localhost`, so through Tailscale over HTTP those buttons fail. The page now says «That is why an HTTPS address is still better» (no exclusivity); the defect goes to the backlog, M-20.
 > - The developer's «in connessione sicura non usare la parola pro» read with his clarification: «Pro» stays on the green level only.
 > - `translate-validate` 0/0, `translate-diff` 627/627; the preview (rebuilt 15:09) shows three tables, one warning, the headings «✅ Pro / ⚠️ Contro», «🤷 Ti accontenti di / ⚠️ Contro» ×2; at 390 px the two columns fit the screen (screenshots `runs/b23/b23_security_{desktop,mobile}_it.png`).
-> - M-19 asked by the coordinator: the defect was already in 1.1 and 1.0 — `lib-loader.js` unchanged since `7b36569c3` (2026-02-06), mkdocs-material 9.7.7 at `v1.1.0` and at HEAD, and the backend serves the docs files as they are (`backend/app/main.py:431-445`, no `<base>`). M fixes it right after batch 23 (coordinator's decision); the 🐛 CHANGELOG line is the coordinator's.
-> - Backlog, section M (coordinator 15:11): M-16 closed ✅ («chiusa nella 1.2 da I, treno 48 (`3cd25af4f`): Avanti disabilitato finché la lista dei broker non arriva»); M-19 in 1.2, M's, right after batch 23; M-20 added, assigned to I in the UI polish batch.
+> - M-19 asked by the coordinator: the defect was already in 1.1 and 1.0 — `lib-loader.js` unchanged since `89ec66352` (2026-02-06), mkdocs-material 9.7.7 at `v1.1.0` and at HEAD, and the backend serves the docs files as they are (`backend/app/main.py:431-445`, no `<base>`). M fixes it right after batch 23 (coordinator's decision); the 🐛 CHANGELOG line is the coordinator's.
+> - Backlog, section M (coordinator 15:11): M-16 closed ✅ («chiusa nella 1.2 da I, treno 48 (`40a192a89`): Avanti disabilitato finché la lista dei broker non arriva»); M-19 in 1.2, M's, right after batch 23; M-20 added, assigned to I in the UI polish batch.
 
 **14.8 ✅ The last round, the end of the review, the final gates** — 2026-10-12 15:12–15:24
 
@@ -764,7 +764,7 @@
 > - Stamps: dry-run before them exactly `user/connection-security.en.md` and `admin/connection_checks.en.md` ×3; both stamped (it, fr, es); dry-run «Nothing to translate».
 > - Final gates 15:18–15:24 (load 20–75), superseding 14.6's: `docs-fr-typography` 191, `translation-validator` 130, `gate-docs-links` 60, `translation-cache` 38, `translation-code-blocks` 80, `check-orphans` clean; `translate-validate` 0/0; `translate-diff` 627/627; `translate-check` green (key redacted); strict build 0 WARNING/ERROR, 3,012 asset URLs resolving; `check-links` 95; asset scan 0 broken; masked pairs 627/627; label scan 370 differing rows; glossary, «usted», copied-text and coverage scans identical to batch 22; unaligned rows: `scalable.it.md` italics 2/1 (14.6) and `connection-security.{it,es}.md` bold 30/32, the same code-edge artifact as batch 22 (13.3) with three bold labels fewer, now table headers; hook proof PROOF_OK; stamp port check 0.
 
-### 15. ✅ Batch 24: M-19, MathJax on nested documentation pages — on `bd14ec61d` (train 58: batch 23 in the target), 2026-10-12 (checkpoint)
+### 15. ✅ Batch 24: M-19, MathJax on nested documentation pages — on `dbd9fccfc` (train 58: batch 23 in the target), 2026-10-12 (checkpoint)
 
 > Coordinator 12/10 (after batch 23): «M-19, MathJax sulle pagine annidate: nella 1.2, tuo, subito dopo il lotto 23 e prima della pipeline del CHANGELOG. È un difetto delle doc offline: con l'immagine full le formule devono funzionare senza internet. La cura in `lib-loader.js`: la base calcolata dalla posizione dello script o dal `base_url` del sito, non dalla cartella della pagina. Il test, se c'è un posto adatto: una pagina annidata con formule servita senza accesso a jsdelivr, e le formule disegnate. Dimmi se il difetto c'era già nella 1.1»; then «Via a M-19 … nel checkpoint proponimi il testo della riga 🐛 per il CHANGELOG».
 
@@ -776,7 +776,7 @@
 
 **15.3 ✅ Verification** — 2026-10-12 15:31–15:36 (load 49–61)
 > **Note implementazione**: `dev.py mkdocs build` (strict) 0 WARNING/ERROR, 3,012 asset URLs resolving, the built `lib-loader.js` the new one. The same probe, offline: the two nested pages load `/mkdocs/javascripts/vendor/mathjax/tex-mml-chtml.js` (200) and draw 4 formulas of 4. Then 16 pages with formulas, one per language (en, it, fr, es) and depth (2 to 6 folders below the root; 400 pages have formulas), plus the root, served under `/mkdocs/` (the backend) and under `/LibreFolio/` (`site_url`'s path, GitHub Pages and `mkdocs serve`): 34 of 34 load the local copy and draw every formula (4 to 81 per page), no request to jsdelivr, every console line «Loaded mathjax from local cache». Static server stopped, ports 6042/6158/6168 free, temporary folders removed.
-> - **Already in 1.0 and 1.1** (14.7): `lib-loader.js` unchanged since `7b36569c3` (2026-02-06), mkdocs-material 9.7.7 at `v1.1.0` and at HEAD, no `<base>` from the theme or from the backend (`backend/app/main.py:431-445` serves the files as they are).
+> - **Already in 1.0 and 1.1** (14.7): `lib-loader.js` unchanged since `89ec66352` (2026-02-06), mkdocs-material 9.7.7 at `v1.1.0` and at HEAD, no `<base>` from the theme or from the backend (`backend/app/main.py:431-445` serves the files as they are).
 > - **The test**: no suitable place exists. The e2e specs that open the documentation check only the address a guide link opens (`frontend/e2e/assets/asset-detail.spec.ts:7855`, `layout/connection-security.spec.ts:44`), not what a page draws; a new spec needs a registration in `scripts/test_runner/_frontend_utility.py`, a shared file not assigned to M. Proposed to the coordinator: `frontend/e2e/layout/docs-offline-math.spec.ts` by test-author — a nested page with formulas, in English and Italian, every other host refused, `mjx-container` drawn and the local copy requested — once the runner file is assigned.
 > - **⚠️ Fuori pista — a stale site survives a docs JS change (M-21)**: `dev.py` rebuilds the documentation only when a `.md` is newer than `mkdocs_src/site/index.html` (`auto_build_mkdocs()`, `dev.py:2151-2171`, for `dev.py server`; the same check in `_docker_ensure_assets_built()` for `dev.py docker build`). A change to `lib-loader.js` or `extra.css` alone leaves an existing local site as it was. CI builds the site from scratch, so released images get the fix; a local server or image built over an old site needs `dev.py mkdocs build` first. `dev.py` is shared: not changed; backlog M-21.
 
@@ -794,7 +794,7 @@
    - `mathjax.js` threw a `TypeError` on every page.
 
    Both are fixed in batch 25: the fonts are vendored by `scripts/update_js_cache.py`, and the `typesetPromise` call is
-   guarded. The coordinator widened the 🐛 line in English (`e9bc300f0`: every nested page called jsDelivr, with or
+   guarded. The coordinator widened the 🐛 line in English (`b7d548d7d`: every nested page called jsDelivr, with or
    without formulas); M ports it into it/fr/es after the fast-forward. M-22 is filed: Mermaid only with internet.
    Details: [plan-phase00ChangelogTranslation.prompt.md](plan-phase00ChangelogTranslation.prompt.md), steps 7–8.
 5. The CHANGELOG's translation: approved by the developer on 12/10 (verbatim: «si ma fai anche la traduzione delle cose non ancora rilasciate, tanto stiamo rifinendo, ci fossero piccole aggiunte, andremo in append»); batch 25, started 12/10 after batch 24, in its own plan: [plan-phase00ChangelogTranslation.prompt.md](plan-phase00ChangelogTranslation.prompt.md). Committed in train 66; the first append (train 66's localized-changelog line) was ported by hand and stamped in batch 26 (the plan's step 10).
@@ -817,7 +817,7 @@
 
 ### 17. ✅ Batch 28: the M-19 spec registered, and the gallery's price guard after M-18 — 2026-10-12 20:00
 
-Base `d877a4e14` (train 69). The coordinator assigned M `scripts/test_runner/_frontend_utility.py` for this batch, after
+Base `abe151b09` (train 69). The coordinator assigned M `scripts/test_runner/_frontend_utility.py` for this batch, after
 T's CP1 of M-18 (train 68); the file passes to I next, for its `clipboardSink` gate. Both tasks went to test-author.
 
 **17.1 ✅ `docs-offline-math` registered**
@@ -859,12 +859,12 @@ T's CP1 of M-18 (train 68); the file passes to I next, for its `clipboardSink` g
 ### 18. ✅ Batch 29: the translation round before the tag — the proposal, and S1 — 2026-10-12 20:40
 
 **18.1 ✅ The proposal (read-only, coordinator's request at 20:28; approved at 20:37, in its order)**
-> **Note implementazione**: on `b063b16ca` (train 70), today's translation debt is zero. Evidence in
+> **Note implementazione**: on `641cd5452` (train 70), today's translation debt is zero. Evidence in
 > `release-pipeline/runs/b29/`; the full text is in `release-pipeline/b29_translation_round_proposal.md`.
 > - `translate --dry-run` is empty for the pages and the CHANGELOG.
 > - A scan that ignores the cache (`release-pipeline/scripts/b29_stale_scan.py`) takes, for each EN page and each
 >   it/fr/es, the EN delta since the translation's last commit: 0 pages, so no stamp can hide one.
-> - Since train 44 (`7b3c2b5ab`, the last full round) 9 translated EN pages changed, each with it/fr/es moved in the
+> - Since train 44 (`cea004ef9`, the last full round) 9 translated EN pages changed, each with it/fr/es moved in the
 >   same range (batches 21–25).
 > - The stamp audit with the token check: 220 stamped pairs, 0 unported.
 > - The UI-label scan: 370 rows, the same set as batches 23 and 25.
@@ -891,7 +891,7 @@ T's CP1 of M-18 (train 68); the file passes to I next, for its `clipboardSink` g
 **18.2 ✅ S1: `day-count`'s plugin path**
 > **Note implementazione**: in the four languages, line 10's code span
 > `backend/app/services/asset_source_providers/scheduled_investment.py` now reads `…/scheduled_investment/plugin.py`,
-> where `calculate_day_count_fraction()` lives since U's move (`2eed3d26c`).
+> where `calculate_day_count_fraction()` lives since U's move (`7e40a32af`).
 > - The edit was by hand, the same path everywhere; the sentence around it still holds.
 > - Before the stamp, the dry-run planned the page ×3 (~8.7K tokens each).
 > - `translate-stamp --file financial-theory/fundamentals/day-count.en.md` stamped it/fr/es, and only that cache entry
@@ -901,7 +901,7 @@ T's CP1 of M-18 (train 68); the file passes to I next, for its `clipboardSink` g
 
 ### 19. ✅ Batch 30: I2, the figures as the UI writes them since M-18, and the formats sentence — 2026-10-12 22:00
 
-Base `c57acf510` (train 71). T's CP2 formats (coordinator, 21:44; the full list in `/tmp/libreFolio_m18cp2_examples.txt`):
+Base `d59829e08` (train 71). T's CP2 formats (coordinator, 21:44; the full list in `/tmp/libreFolio_m18cp2_examples.txt`):
 
 - `en` → `en-GB` unless the browser is in English; `it`, `fr` and `es` are bare;
 - French groups with U+202F; French and Spanish put U+00A0 before `%`;
@@ -969,9 +969,9 @@ The kit was prepared at 21:00, outside the repo (`release-pipeline/i2/`, with a 
 > exists only after a build. The label scan (M's tool, outside the repo) now reads the catalogue assembled in memory by
 > `scripts/i18n_catalog.py`'s `load_catalog`.
 
-### 20. ✅ Batch 31: I1, the wrong-broker modal's labels; the CHANGELOG's `169bd60f3`; the `galleryLocale.ts` docstring — 2026-10-12 22:10
+### 20. ✅ Batch 31: I1, the wrong-broker modal's labels; the CHANGELOG's `0575a2fe7`; the `galleryLocale.ts` docstring — 2026-10-12 22:10
 
-Base `32d27501c` (train 72: I's batch 48, V's 2b, the CHANGELOG commit `169bd60f3`).
+Base `833dc8bf3` (train 72: I's batch 48, V's 2b, the CHANGELOG commit `0575a2fe7`).
 
 **20.1 ✅ I1**
 > **Note implementazione**: I's batch 48 changed two keys of the catalogue (read with `scripts/i18n_catalog.py`'s
@@ -987,7 +987,7 @@ Base `32d27501c` (train 72: I's batch 48, V's 2b, the CHANGELOG commit `169bd60f
 > - The label scan against the new catalogues: 2 more pairs checked per language, all matching; 0 new differing rows
 >   against batch 30.
 
-**20.2 ✅ The CHANGELOG, `169bd60f3`, by hand, then stamped**
+**20.2 ✅ The CHANGELOG, `0575a2fe7`, by hand, then stamped**
 > **Note implementazione**: two edits in `CHANGELOG.{it,fr,es}.md`:
 > - **✨ «Connection security in the sidebar»** gains the clause on the details closing by themselves after 30 seconds
 >   unless the pointer or the focus is on them;
@@ -1056,9 +1056,9 @@ Base `32d27501c` (train 72: I's batch 48, V's 2b, the CHANGELOG commit `169bd60f
 > - **Backlog, at I5 (coordinator):** an M-* line for a guard on `navigator.language`. It would turn red, instead of
 >   producing British English shots, wherever Chromium answers otherwise.
 
-### 22. ✅ Batch 32: I4's M-18 part — the CHANGELOG's `e7bfa342f`, by hand, then stamped — 2026-10-12 22:55
+### 22. ✅ Batch 32: I4's M-18 part — the CHANGELOG's `4f773f842`, by hand, then stamped — 2026-10-12 22:55
 
-Base `1bb4abe68`: the target with `e7bfa342f`; T's CP2 and CP3 are not in it yet.
+Base `9c0355b6e`: the target with `4f773f842`; T's CP2 and CP3 are not in it yet.
 
 **22.1 ✅ Two lines in `CHANGELOG.{it,fr,es}.md`**
 > **Note implementazione**: the two lines go where the English has them.
@@ -1098,7 +1098,7 @@ Base `1bb4abe68`: the target with `e7bfa342f`; T's CP2 and CP3 are not in it yet
 > - **`git diff --check`:** clean.
 > - **Ports:** 6158, 6168 and 6042 free.
 
-### 23. ✅ I5, part one: the security shot and `galleryLocale.ts` — on `104ba23d0` (train 75: T's CP2 and CP3, U-3), 2026-10-13 00:15
+### 23. ✅ I5, part one: the security shot and `galleryLocale.ts` — on `8c2ced093` (train 75: T's CP2 and CP3, U-3), 2026-10-13 00:15
 
 **23.1 ✅ The approved patch, applied**
 > **Note implementazione**: `gallery.spec.ts` and `galleryLocale.ts` were byte-identical to the patch's base (blobs
@@ -1141,17 +1141,17 @@ Base `1bb4abe68`: the target with `e7bfa342f`; T's CP2 and CP3 are not in it yet
 **23.3 ✅ M-24 in the backlog**
 > **Note implementazione**: the guard on `navigator.language`, as the coordinator decided (`BACKLOG_POST_1.2.md` §M).
 
-### 24. ✅ Batch 34 (I4): T-EN's changelog line, by hand, then stamped — on `b1a17b49b` (train 79), 2026-10-13 01:50
+### 24. ✅ Batch 34 (I4): T-EN's changelog line, by hand, then stamped — on `55734c380` (train 79), 2026-10-13 01:50
 
-Base `b1a17b49b`, fast-forwarded from `e501b9615` for this line. The rest of batch 34 is the frozen app version
+Base `55734c380`, fast-forwarded from `80ee4beee` for this line. The rest of batch 34 is the frozen app version
 ([ReleaseGallery plan](plan-phase00ReleaseGallery.prompt.md), step 30).
 
 **24.1 ✅ The line, by hand**
-> **Note implementazione**: `4e11c2f83` adds a 🐛 line in «Sign-in, language, app icons and small screens», right
+> **Note implementazione**: `f4eeba1d9` adds a 🐛 line in «Sign-in, language, app icons and small screens», right
 > after M-18's «The last English dates and dotted decimals are gone.». It is ported to `CHANGELOG.{it,fr,es}.md` at
 > the same place.
 >
-> Names from the catalogues (`b1a17b49b`):
+> Names from the catalogues (`55734c380`):
 > - the what-if signals are the UI's group «Benchmark Sintetici / Benchmarks Synthétiques / Benchmarks Sintéticos»
 >   (`chartSettings.categories.benchmark`). That keeps them apart from the risk section «E se…? / Et si… ? / ¿Qué
 >   pasaría si…?»;
@@ -1168,7 +1168,7 @@ Base `b1a17b49b`, fast-forwarded from `e501b9615` for this line. The rest of bat
 **24.2 ✅ Gates** — the combined-revision gates of batch 34 (ReleaseGallery plan, step 30): CHANGELOG alone 3 files
 OK, 0 localized; `translate-validate` 630 files 0/0; strict build 0; `check-links` 95.
 
-### 25. ✅ I5 part two: the full gallery with `LF_APP_VERSION=v1.2.0` — on `cea8a478d` (train 80), 2026-10-13 02:09–03:31
+### 25. ✅ I5 part two: the full gallery with `LF_APP_VERSION=v1.2.0` — on `fb90dd5e3` (train 80), 2026-10-13 02:09–03:31
 
 > **Note implementazione**: the run (full report in `release-pipeline/runs/i5p2/I5P2_REPORT.md`).
 > - The tree was clean.
@@ -1188,7 +1188,7 @@ OK, 0 localized; `translate-validate` 630 files 0/0; strict build 0; `check-link
 > **The 9 reds, triaged:**
 > - **A, Files ×4: environment.** www.schwab.com answers Chromium with a 498-byte HTML bot check, which Chromium blocks
 >   (ORB); curl gets the icon. The tests passed on 12/10 in CI and locally.
-> - **B, provider compare ×2: defect** in a test hook since `5b2aad5c4`. `data-dist-pct` follows the UI language; T
+> - **B, provider compare ×2: defect** in a test hook since `cdc341b6a`. `data-dist-pct` follows the UI language; T
 >   restores it.
 > - **C, create modal es/dark: assumption (the clock).** It waited 500 ms; the providers' chips came after the fit.
 > - **D, mobile auth ×2: assumption (the clock).** `openLoginPage` gave the boot 3 s, and the splash was still on
@@ -1198,9 +1198,9 @@ OK, 0 localized; `translate-validate` 630 files 0/0; strict build 0; `check-link
 > - an English placeholder hard-coded in `AssetModal.svelte:1949` (to T);
 > - the DU/AU dates stay ISO, on purpose.
 
-### 26. ✅ Batch 35: the [1.2.0] chapter again, five doc fixes, the gallery's waits — on `b2a21bb4a`, 2026-10-13 (checkpoint 04:25)
+### 26. ✅ Batch 35: the [1.2.0] chapter again, five doc fixes, the gallery's waits — on `8d354568e`, 2026-10-13 (checkpoint 04:25)
 
-Base `b2a21bb4a`: fast-forwarded from `cea8a478d`, with `60f734e08`, the coordinator's line-by-line rewrite of the
+Base `8d354568e`: fast-forwarded from `fb90dd5e3`, with `a57d306a0`, the coordinator's line-by-line rewrite of the
 [1.2.0] chapter (+132 −140).
 
 **26.1 ✅ The [1.2.0] chapter through the pipeline** (the coordinator: by the pipeline, chapter by chapter, then the
@@ -1300,7 +1300,7 @@ stamp)
 > **Note implementazione**:
 > - **A, the cause is ours.** The app shows its fallback, never a broken image: `BrokerIcon` keeps its `<img>` at
 >   `opacity-0` with the briefcase on top until the load is acknowledged.
->   - Since `2412c3fe4` (12/10) the icon acknowledges a load or an error only when the image's `getAttribute('src')`
+>   - Since `9b2d731cd` (12/10) the icon acknowledges a load or an error only when the image's `getAttribute('src')`
 >     equals its own URL.
 >   - The gallery's favicon fix writes the URL with `?lf-gallery`, so in the gallery no load and no error was ever
 >     acknowledged. Every broker logo drawn from a favicon stayed a briefcase, in every shot: `brokers/list` shows 8
@@ -1345,9 +1345,9 @@ stamp)
 > - **`git diff --check`:** clean. Privacy scan of the added lines: no address, path, key or account number.
 > - **Ports:** 6158, 6168 and 6042 free.
 
-### 27. ✅ Batch 36: two distinct sync labels, M-27 and M-26, three changelog lines — on `eb06ab960`, then `d0948f745` (train 85), 2026-10-13 (checkpoint 04:55)
+### 27. ✅ Batch 36: two distinct sync labels, M-27 and M-26, three changelog lines — on `1e279facb`, then `6df2b304e` (train 85), 2026-10-13 (checkpoint 04:55)
 
-Batch 35 is in the target as `4a1714658`…`40bd288cf` (tree `2cb44d925c89`, as the manifest). The coordinator's
+Batch 35 is in the target as `7498a353f`…`c0091352c` (tree `2cb44d925c89`, as the manifest). The coordinator's
 answers to its two choices:
 - «Amministrazione / Administration» stays: it is the catalogue's word.
 - One label for two buttons is a UI defect, to fix now. In it/fr/es, `dataQuality.cta.sync_asset_prices` and
@@ -1444,9 +1444,9 @@ answers to its two choices:
 > **Code, reported to the coordinator:** `cleanup()` checks only `res.ok()`. A rolled-back delete still answers 200, so
 > a failed cleanup would pass silently.
 
-**27.4 ✅ Three changelog lines from `d0948f745`, by hand, then the stamp**
+**27.4 ✅ Three changelog lines from `6df2b304e`, by hand, then the stamp**
 > **Note implementazione**:
-> - **Fast-forward:** the coordinator fast-forwarded the worktree to `d0948f745` (train 85, T's batch), between two
+> - **Fast-forward:** the coordinator fast-forwarded the worktree to `6df2b304e` (train 85, T's batch), between two
 >   commands; the 37 changed files kept their blobs.
 > - **The ported lines** (`release-pipeline/scripts/b36_changelog_lines.py`):
 >   - `:218`: the list of what now follows the language includes the asset dialog's description hint
@@ -1458,8 +1458,8 @@ answers to its two choices:
 > - **Stamp:** `translate-stamp --file CHANGELOG.md` stamped the 3 pieces × 3 languages that changed, and the dry-run
 >   was then empty.
 
-**27.5 ✅ Gates** (`release-pipeline/scripts/b36_final_gates.sh` on `eb06ab960`, 04:45; `b36_final2_gates.sh` on
-`d0948f745`, 04:51–04:53, load 15–29; logs in `release-pipeline/runs/b36/`)
+**27.5 ✅ Gates** (`release-pipeline/scripts/b36_final_gates.sh` on `1e279facb`, 04:45; `b36_final2_gates.sh` on
+`6df2b304e`, 04:51–04:53, load 15–29; logs in `release-pipeline/runs/b36/`)
 > - **Stamps:** the four M-27 pages and `cli_tools` (04:45–04:46); the CHANGELOG (above). The cache changes in three
 >   stages, each touching only its own entries: the four M-27 pages, then `cli_tools`, then the three CHANGELOG pieces.
 > - **Dry-run:** empty, for the pages and the CHANGELOG.
@@ -1473,7 +1473,7 @@ answers to its two choices:
 >   - the structure check: only the `:263` examples. `:295` has the English's two bold labels again.
 > - **`git diff --check`:** clean. **Ports:** 6158, 6168 and 6042 free.
 
-### 28. ✅ Batch 37: M-29, then M-28 — on `57773ab1a` (train 86), then `50886d1ca` (train 88: T's batch), 2026-10-13
+### 28. ✅ Batch 37: M-29, then M-28 — on `0f1cf0ad4` (train 86), then `e38b8b1cd` (train 88: T's batch), 2026-10-13
 
 The coordinator, while the final gallery waits for V, T and I: M-29 now; M-28 in two steps. First the list, without
 writing; then, once T's batch (T-ISO, T-FB) is in the target, apply it. T removes `fxDetail.assetFallback` from the same
@@ -1506,7 +1506,7 @@ source and adds keys in `charts/` and `common`.
 > **Gates** (`release-pipeline/scripts/b37_m29_gates.sh`, 05:06–05:07, load 23–36): translate dry-run empty (the page
 > is not translated); strict build 0; `check-links` 95; `git diff --check` clean; ports 6158, 6168 and 6042 free.
 
-**28.2 ✅ M-28: Spanish «tasa(s)» for an exchange rate → «tipo(s) de cambio»** (prepared 05:00, applied 05:52 on `50886d1ca`)
+**28.2 ✅ M-28: Spanish «tasa(s)» for an exchange rate → «tipo(s) de cambio»** (prepared 05:00, applied 05:52 on `e38b8b1cd`)
 > **Note implementazione**: read-only (`release-pipeline/scripts/b37_tasas_proposal.py check`; the list is in
 > `runs/b37/b37_tasas_proposal.tsv`).
 > - **The scope:** 64 Spanish values say «tasa(s)», 29 of them in the plural. The glossary keeps «tasa» where it is not
@@ -1562,9 +1562,9 @@ source and adds keys in `charts/` and `common`.
 >     tooltips, toasts, list items and help text, which wrap.
 >   - **No short form («Tipos») was needed.**
 
-### 29. ✅ Batch 38: the changelog line of `e24831a8a`, by hand, then stamped — on `4ec44c002` (train 89: M-28 in the target), 2026-10-13
+### 29. ✅ Batch 38: the changelog line of `0d73e9d46`, by hand, then stamped — on `02bd1d47b` (train 89: M-28 in the target), 2026-10-13
 
-M-28 is in the target as `89440c353` and `e22f0943a` (tree `861a3fdc0085`, as the manifest). The coordinator committed
+M-28 is in the target as `d33c6f96b` and `439110ee4` (tree `861a3fdc0085`, as the manifest). The coordinator committed
 it on its own base, then fast-forwarded the worktree: a fast-forward before the commit would have moved the base the
 commit is checked against.
 
@@ -1575,7 +1575,7 @@ commit is checked against.
 > - *Other* in the bucket rules of its stress test.
 >
 > **Ported with the app's and the docs' words:**
-> - *Other* is the stress rules' bucket since T-ISO (`d017492d8`, `risk.stress.rules.*`): *Altro* / *Autre* / *Otro*;
+> - *Other* is the stress rules' bucket since T-ISO (`dce720d07`, `risk.stress.rules.*`): *Altro* / *Autre* / *Otro*;
 > - the bucket is «bucket» / «catégorie» / «grupo», as `user/dashboard/risk.*.md:112` writes it;
 > - the comparison line follows the signals' *Confronto dati / Comparaison de données / Comparación de datos*.
 >
@@ -1588,7 +1588,7 @@ commit is checked against.
 > - Review scripts: only the intended differences (the `:263` examples, the four quotes of old text).
 > - `git diff --check` clean; ports 6158, 6168 and 6042 free.
 
-### 30. ✅ Batch 39: Tools and the PAC are stable; the changelog's open-period line — on `ef666fdee`, 2026-10-13
+### 30. ✅ Batch 39: Tools and the PAC are stable; the changelog's open-period line — on `d5873f5d3`, 2026-10-13
 
 The developer's decision (question 14, through the coordinator): Tools and the PAC are neither beta nor experimental.
 They are «da rifinire ma stabili», still to be polished but stable.
@@ -1620,7 +1620,7 @@ They are «da rifinire ma stabili», still to be polished but stable.
 >   while the lifecycle tests do reap descendants (`test_tools_executor.py:1187-1239`).
 > - `plugin.py:33-38` calls the solver's 30 s limit provisional: that fits «still being refined».
 
-**30.2 ✅ The 📈 Charts line of `fcc4ac96f`/`ef666fdee`, by hand**
+**30.2 ✅ The 📈 Charts line of `b9f03ec0a`/`d5873f5d3`, by hand**
 > **Note implementazione**:
 > - **⚠️ Fuori pista:** the dry-run before the stamp also listed `CHANGELOG.md#1.2.0/fixed/charts`, stale in the three
 >   languages. Two English commits after batch 38 added a 🐛 line: at weekly or monthly resolution, the week or month
@@ -1639,20 +1639,20 @@ They are «da rifinire ma stabili», still to be polished but stable.
 > - Strict build 0; `check-links` 95; review scripts: only the intended differences.
 > - `git diff --check` clean; ports 6158, 6168 and 6042 free.
 
-### 31. ✅ Batch 40: the risk API leaves beta, and the exporter's version — on `3d3cf811a`, 2026-10-13
+### 31. ✅ Batch 40: the risk API leaves beta, and the exporter's version — on `dfc1973f3`, 2026-10-13
 
-Batch 39 is in the target (train 94, `9c1750325`). Two coordinator edits of the [1.2.0] chapter, ported by hand
+Batch 39 is in the target (train 94, `8b824a801`). Two coordinator edits of the [1.2.0] chapter, ported by hand
 (`release-pipeline/scripts/b40_changelog_lines.py`).
 
 **31.1 ✅ The two lines**
 > **Note implementazione**:
-> - **`4de042cfe`, `:289` (Risk Analysis is no longer marked beta):** «The risk API, `/api/v1/risk`, leaves beta too:
+> - **`6bb1b58ce`, `:289` (Risk Analysis is no longer marked beta):** «The risk API, `/api/v1/risk`, leaves beta too:
 >   from this release it changes only with a major version, except the simulation.»
 >   - It reuses the chapter's own words: the section's «esce dalla beta / quitte la bêta / sale de beta», and «versione
 >     major / version majeure / versión mayor».
 >   - `translate-validate` had flagged `/api/v1/risk` missing in all three languages, not only fr and es, together
 >     with the two stale pieces.
-> - **`3d3cf811a`, `:46` (Scalable Capital importers):** after the exporter's link, «(versione 1.0.1 o successiva) /
+> - **`dfc1973f3`, `:46` (Scalable Capital importers):** after the exporter's link, «(versione 1.0.1 o successiva) /
 >   (version 1.0.1 ou ultérieure) / (versión 1.0.1 o posterior)».
 
 **31.2 ✅ Gates** (`release-pipeline/scripts/b40_gates.sh`, 12:09–12:11, load 11–20; then 12:11–12:13)
@@ -1669,18 +1669,18 @@ Batch 39 is in the target (train 94, `9c1750325`). Two coordinator edits of the 
 > - The coordinator's FREEZE-VENV (`uvicorn[standard]` into the shared venv) came after these runs. The manifest and
 >   this entry use only the system Python and git.
 
-### 32. ✅ Batch 41: the form's two changelog lines and V's form line, then the final gallery — on `f8dbdddaf`, 2026-10-13 evening
+### 32. ✅ Batch 41: the form's two changelog lines and V's form line, then the final gallery — on `a3cb0f0a2`, 2026-10-13 evening
 
-Batch 40 is in the target (train 96, `124c02a8a`). The coordinator fast-forwarded the worktree to `f8dbdddaf`; the
+Batch 40 is in the target (train 96, `9cb5a6398`). The coordinator fast-forwarded the worktree to `a3cb0f0a2`; the
 batch's brief excludes any git write, the fast-forward included. The developer keeps the Mac awake for the night and
 has delegated the merges to the coordinator: the translations first, with their own checkpoint, then the full gallery.
 
 **32.1 ✅ The translations** (`release-pipeline/scripts/b41_ports.py`)
 > **Note implementazione**:
-> - **`f8dbdddaf`'s two 🐛 lines** in «📥 Imports and transaction editing» (`:98`–`:99`): the form no longer saves a
+> - **`a3cb0f0a2`'s two 🐛 lines** in «📥 Imports and transaction editing» (`:98`–`:99`): the form no longer saves a
 >   date it has refused, and no longer says *valid* next to a field it shows in red, both «Present since v1.1.0».
 >   Inserted at the same place, so the chapter stays line-aligned.
-> - **V's `73a75650e`, `user/transactions/form.*.md:29`:** the form spots some mistakes by itself; until they are
+> - **V's `c5ea18fdb`, `user/transactions/form.*.md:29`:** the form spots some mistakes by itself; until they are
 >   fixed nothing is checked, *valid* does not appear and **Apply** stays disabled.
 > - **UI names from the catalogue:**
 >   - *valid* is `transactions.validate.ok`: valido / valide / válido;
@@ -1702,7 +1702,7 @@ has delegated the merges to the coordinator: the translations first, with their 
 **32.2 ✅ The final gallery** (on this tree, `LF_APP_VERSION=v1.2.0`; full report:
 `release-pipeline/runs/b41/B41_GALLERY_REPORT.md`)
 > **Note implementazione**: the run.
-> - **The tree:** `baabbf7a2`. The coordinator committed batch 41's translations between the bundle's build (20:38–20:40)
+> - **The tree:** `ac3cc5ae7`. The coordinator committed batch 41's translations between the bundle's build (20:38–20:40)
 >   and the start: the same 8 files, the same content.
 > - **The bundle:** a debug build with `LF_APP_VERSION=v1.2.0`, with `v1.2.0` in 9 bundle files and no `git describe`
 >   version.
@@ -1725,14 +1725,14 @@ has delegated the merges to the coordinator: the translations first, with their 
 > - the FIFO lots panel on the dashboard and on the broker page, and broker detail;
 > - privacy mode, the two data-quality banners, the connection indicator.
 
-### 33. ✅ Batch 42: the running-period line, then the time-chart groups again — on `10e646f79` (train 97), 2026-10-13 evening
+### 33. ✅ Batch 42: the running-period line, then the time-chart groups again — on `058b76dcf` (train 97), 2026-10-13 evening
 
-Train 97 is in the target: batch 41 (`b7f38e34b`, `0184e06b6`, `baabbf7a2`) and I's batch 52, then the widened changelog
-line (`10e646f79`). The coordinator fast-forwarded the worktree to it.
+Train 97 is in the target: batch 41 (`9be718740`, `e952fa6f5`, `ac3cc5ae7`) and I's batch 52, then the widened changelog
+line (`058b76dcf`). The coordinator fast-forwarded the worktree to it.
 
 **33.1 ✅ The changelog line** (`release-pipeline/scripts/b42_changelog_line.py`, `b42_es160_growth.py`)
 > **Note implementazione**:
-> - **`10e646f79`, `:162`:** at weekly or monthly resolution, the running week or month now reads right on the Growth
+> - **`058b76dcf`, `:162`:** at weekly or monthly resolution, the running week or month now reads right on the Growth
 >   chart, the allocation history and the lot comparison chart too, not only on the asset and FX charts. The tooltip
 >   dates the value on its last day with data; on the Growth chart the point stands on that day, so the line no longer
 >   reaches a date still to come.
@@ -1776,15 +1776,15 @@ line (`10e646f79`). The coordinator fast-forwarded the worktree to it.
 > - the allocation history's stack stops short of 100 %, by type, sector and geography;
 > - `brokers/detail` shows Charles Schwab empty over 3M, so it holds no broker Growth chart with data.
 
-### 34. ✅ Batch 43: the broker detail shot picks its broker by name (M-31) — on `0ae4a92cd`, 2026-10-13 evening
+### 34. ✅ Batch 43: the broker detail shot picks its broker by name (M-31) — on `75bb04e4e`, 2026-10-13 evening
 
-Batch 42 is committed on this branch (`f0ad6726b`, `0ae4a92cd`) and goes into train 98; the coordinator passed M-30 to
+Batch 42 is committed on this branch (`b670ac13c`, `75bb04e4e`) and goes into train 98; the coordinator passed M-30 to
 I. Gallery only, and no long runs: R's final coverage run is on 6176.
 
 **34.1 ✅ The test** (`frontend/e2e/gallery.spec.ts`, «broker detail - all languages and themes»)
 > **Note implementazione**:
 > - **The cause:** the test clicked the list's first card. The list is alphabetical, and Charles Schwab, first since it
->   entered the mock data (`04ed6b16b`, 2026-06-09), has no transactions: the overview read 0.00 and «No data
+>   entered the mock data (`16254f8e5`, 2026-06-09), has no transactions: the overview read 0.00 and «No data
 >   available». The shot and the brokers page that shows it are older than Schwab.
 > - **The fix:** `openBrokerCardByName(page, 'Interactive Brokers')`, the helper the info, positions and FIFO shots of
 >   the same page already use (with Coinbase), after `waitForNetworkSettled` as they do. The 1 s sleep before the cards
@@ -1816,9 +1816,9 @@ I. Gallery only, and no long runs: R's final coverage run is on 6176.
 > **Seen, outside the scope:** `user/brokers/index.*.md:29` shows this shot under «Click **Create**», with the alt of
 > the edit form above it («Broker Edit Form», «Modulo di modifica broker», …). Backlog M-32.
 
-### 35. ✅ Batch 44: the broker detail shot under «Inside a broker» (M-32) — on `8963861ec`, 2026-10-13 evening
+### 35. ✅ Batch 44: the broker detail shot under «Inside a broker» (M-32) — on `06ef4d8cd`, 2026-10-13 evening
 
-Batch 43 is committed (`21571006e`, `8963861ec`). Batches 42, 43 and 44 go into train 98 together.
+Batch 43 is committed (`914f6dd96`, `06ef4d8cd`). Batches 42, 43 and 44 go into train 98 together.
 
 **35.1 ✅ The page** (`user/brokers/index.{en,it,fr,es}.md`; port: `release-pipeline/scripts/b44_port.py`)
 > **Note implementazione**:
@@ -1848,9 +1848,9 @@ Batch 43 is committed (`21571006e`, `8963861ec`). Batches 42, 43 and 44 go into 
 >   broker» heading in all four languages, with its alt, not escaped.
 > - `git diff --check` clean; ports free.
 
-### 36. ✅ Batch 45: the allocation and positions shots again, after I-M30 (M-30) — on `bae15c3cf` (train 99), 2026-10-14 night
+### 36. ✅ Batch 45: the allocation and positions shots again, after I-M30 (M-30) — on `a40d14a78` (train 99), 2026-10-14 night
 
-Train 98 (batches 42–44) and train 99 are in the target. Train 99 is I-M30: `a26051686`, `a08e208b4`, plan 54. The
+Train 98 (batches 42–44) and train 99 are in the target. Train 99 is I-M30: `72f361a10`, `f4af2d554`, plan 54. The
 gallery fixture, `frontend/e2e/dashboard-report.json`, had scaled its allocation shares and YoCs together with the money,
 in the privacy normalization; I recomputed them. Gallery only.
 
@@ -1884,9 +1884,9 @@ in the privacy normalization; I recomputed them. Gallery only.
 > fixture number in the versioned files. This entry, 33.2 (from batch 42) and M-30 now say «stops short of 100 %» and
 > «the correct shares»; the numbers stay in the report, outside the repo.
 
-### 37. ✅ Batch 46: the [1.2.0] chapter for the release — on `a28beed92`, 2026-10-14
+### 37. ✅ Batch 46: the [1.2.0] chapter for the release — on `c8bcd1a12`, 2026-10-14
 
-Batch 45 is in the target (train 100). `a28beed92` dates the chapter 2026-10-14, release day. Its «Preparing» line gives
+Batch 45 is in the target (train 100). `c8bcd1a12` dates the chapter 2026-10-14, release day. Its «Preparing» line gives
 way to the introduction the developer approved: a sentence and 11 points. Last batch before the tag.
 
 **37.1 ✅ The chapter** (`release-pipeline/scripts/b46_intro.py`)

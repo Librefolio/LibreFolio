@@ -4,7 +4,7 @@ Sei una **sessione figlia** della release LibreFolio 1.3.0. Il coordinatore è l
 
 ## Prima di tutto
 1. Leggi `CLAUDE.md` (radice del tuo worktree) e `.claude/agents/coordinated-workstream.md`: sono le tue regole.
-2. Verifica la base: `git rev-parse HEAD` deve essere uguale allo SHA scritto nel tuo brief (`c042f2481` = `dev_release2`, treno 8 + filtro + lock di justETF). Se è diverso, **fermati e dillo**.
+2. Verifica la base: `git rev-parse HEAD` deve essere uguale allo SHA scritto nel tuo brief (`295a09c86` = `dev_release2`, treno 8 + filtro + lock di justETF). Se è diverso, **fermati e dillo**.
 3. Il tuo lavoro è descritto nel **piano** del tuo workstream (percorso nel brief) e nella tua sezione del backlog `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` (10 250 righe: usa grep sugli ID, non leggerlo tutto). Il piano dell'ondata è `salvataggi-worktrees-20261021/ondata4/PIANO-ondata4.md` (sola lettura).
 4. **Prima turno: solo analisi.** Leggi il codice che toccherai, scrivi cosa farai, i rossi che scriverai, i file che toccherai e le domande. Consegna l'analisi e aspetta il via, salvo che il brief dica «parti subito».
 
@@ -47,5 +47,5 @@ Chiudi il lavoro con un **CHECKPOINT READY** (o un **BLOCCATO** con la domanda).
 Lingua: i report al coordinatore in italiano semplice con esempi concreti; codice, commit e documentazione in inglese.
 
 ## Dipendenze Python aggiornate (22/10)
-Prima dell'avvio il coordinatore ha portato in `Pipfile.lock` **solo** `justetf-scraping` al commit `73afd12` del fork (PR #49 senza conflitti, allocazioni di nuovo lette): `dev_release2` = `c042f2481`. L'aggiornamento completo (FastAPI 0.159, SQLAlchemy 2.1…) è stato provato e tolto: SQLModel 0.0.48 rifiuta le date senza fuso orario, 57 rossi; è un lotto a parte. Il venv condiviso `LibreFolio-SAUMUTtc` è già sincronizzato: **non** lanciare `pipenv install`/`update` dal worktree. Se un test rompe per un cambiamento di libreria, è un'informazione da dare subito al coordinatore.
+Prima dell'avvio il coordinatore ha portato in `Pipfile.lock` **solo** `justetf-scraping` al commit `73afd12` del fork (PR #49 senza conflitti, allocazioni di nuovo lette): `dev_release2` = `295a09c86`. L'aggiornamento completo (FastAPI 0.159, SQLAlchemy 2.1…) è stato provato e tolto: SQLModel 0.0.48 rifiuta le date senza fuso orario, 57 rossi; è un lotto a parte. Il venv condiviso `LibreFolio-SAUMUTtc` è già sincronizzato: **non** lanciare `pipenv install`/`update` dal worktree. Se un test rompe per un cambiamento di libreria, è un'informazione da dare subito al coordinatore.
 

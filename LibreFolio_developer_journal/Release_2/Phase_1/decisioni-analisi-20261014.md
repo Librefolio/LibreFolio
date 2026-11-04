@@ -85,7 +85,7 @@ passa dalla suite completa con gli stessi conteggi di prima.
 
 **Decisione (14/10)**: approvata, senza note.
 
-**Attuazione (15/10)**: 🟡 fatta da Account e accessi: migrazione 006 `registration_mode` e `LIBREFOLIO_REGISTRATION` (A5a), l'impostazione «Registrazione» a tre scelte e le pagine dei link (A5b). Committata sul ramo di A (`7da2cd9a2`, `2b0715532`); entra in `dev_release2` dopo la finestra della galleria.
+**Attuazione (15/10)**: 🟡 fatta da Account e accessi: migrazione 006 `registration_mode` e `LIBREFOLIO_REGISTRATION` (A5a), l'impostazione «Registrazione» a tre scelte e le pagine dei link (A5b). Committata sul ramo di A (`f640b4a62`, `adf8c6f5e`); entra in `dev_release2` dopo la finestra della galleria.
 
 #### 2. «Chiusa» blocca anche gli inviti — 🟢 (D-A3)
 - **Oggi**: gli inviti non esistono.
@@ -268,7 +268,7 @@ Dovremmo invece ragionare su come può fare un amministratore ad eliminare un ut
 
 **Decisione (14/10)**: approvata, senza note.
 
-**Attuazione (15/10)**: ✅ nella migrazione 005 (A4, `e476d2ed4`): colonna `last_seen_version`.
+**Attuazione (15/10)**: ✅ nella migrazione 005 (A4, `a57229f36`): colonna `last_seen_version`.
 
 #### 10. Un invito con un'email vale solo per quell'email — 🟢 (D-A16)
 - **Proposta**: se l'admin scrive un'email nell'invito, ci si registra solo con quella. Senza email, il link vale per
@@ -306,7 +306,7 @@ Nota dev: capisco che in caso di piscing abbia senso che al cambio pw tutti i de
   nuovo: resti dentro senza riscrivere la password;
 - gli altri dispositivi, alla richiesta successiva, tornano al login.
 
-**Attuazione (15/10)**: ✅ A4b (`dbf89cdd5`): il cambio password chiude gli altri dispositivi e lascia acceso quello da cui lo fai; un reset da riga di comando, una disattivazione o un declassamento chiudono tutto.
+**Attuazione (15/10)**: ✅ A4b (`0640cd9c1`): il cambio password chiude gli altri dispositivi e lascia acceso quello da cui lo fai; un reset da riga di comando, una disattivazione o un declassamento chiudono tutto.
 
 ### Piattaforma
 
@@ -341,7 +341,7 @@ Nota dev: non la farei così complicata modificando la ui, semplicemente impedir
   diceva 30 giorni, la tua nota una settimana: si sceglie nel cloud, senza toccare il codice.
 - Cambiano di conseguenza le eccezioni di Account e accessi per la sola lettura (D-A15).
 
-**Attuazione (15/10)**: 🟡 CP6 di Piattaforma, committato sul suo ramo (`2c3b00139`, `cb34327e9`): `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`, la pagina di blocco, poche chiamate permesse. Entra dopo la finestra. Il backup per l'admin e il risveglio entrano nell'elenco con i lotti di B e Z. Da sapere: chi non ha fatto login può capire che l'istanza è bloccata, senza vedere dati; resta così (scelta del coordinatore: allargare l'elenco non lo eviterebbe).
+**Attuazione (15/10)**: 🟡 CP6 di Piattaforma, committato sul suo ramo (`4e83e48fd`, `f0637c09e`): `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`, la pagina di blocco, poche chiamate permesse. Entra dopo la finestra. Il backup per l'admin e il risveglio entrano nell'elenco con i lotti di B e Z. Da sapere: chi non ha fatto login può capire che l'istanza è bloccata, senza vedere dati; resta così (scelta del coordinatore: allargare l'elenco non lo eviterebbe).
 
 #### 13. Header di sicurezza — 🟢 (H D5, F15)
 - **Oggi**: il server non manda header di sicurezza, a parte quelli della cache.
@@ -385,7 +385,7 @@ nota dev: si mi piace
 
 **Decisione (14/10)**: approvata.
 
-**Attuazione (15/10)**: ✅ `pyproject.toml` a 0.0.0 (CP5a, `9deb0ea08`); 🟡 `frontend/package.json` con CP5b, committato, dopo la finestra.
+**Attuazione (15/10)**: ✅ `pyproject.toml` a 0.0.0 (CP5a, `cf4ce0e71`); 🟡 `frontend/package.json` con CP5b, committato, dopo la finestra.
 
 #### 15. `/system/info` dietro il login — 🟢 (H D14)
 - **Oggi**: `GET /api/v1/system/info` risponde a chiunque, anche senza login, con le versioni di tutte le dipendenze e
@@ -401,7 +401,7 @@ nota dev: facciamo che se non si è loggati il ritorno è minimo, l'equivalente 
 **Decisione (14/10)**: approvata con una modifica. Nessun endpoint nuovo: `/system/info` senza login risponde solo con il
 minimo, cioè la versione dell'app; con il login, tutto come oggi.
 
-**Attuazione (15/10)**: ✅ CP5a di Piattaforma (`9deb0ea08`): senza login `/system/info` risponde solo con la versione.
+**Attuazione (15/10)**: ✅ CP5a di Piattaforma (`cf4ce0e71`): senza login `/system/info` risponde solo con la versione.
 
 #### 16. Metriche Prometheus, spente di default — 🟢 (H D9, F08)
 - **Proposta**: `/metrics` con le richieste, i job dello scheduler, l'ultimo aggiornamento dei prezzi e la dimensione
@@ -572,7 +572,7 @@ Nota dev: si sono daccordo con la logica bulk che proponi, tutto o niente e se f
 Nota dev: si sono daccordo a fare upper e se ancora non va impedire il salvataggio, per quelli salvati male l'unica è cancellarli, tanto già ora non vengono visualizzati
 
 **Decisione (15/10)**: all'ingresso il tipo passa in maiuscolo, e uno sconosciuto viene rifiutato. Tipi già salvati: quelli correggibili vanno in maiuscolo, gli altri si cancellano, dopo aver scollegato le transazioni. Lo fa una correzione dopo le migrazioni, non Alembic: il log di ogni riga si vede anche in Docker.
-**Attuazione (15/10)**: 🟡 correzione committata sul ramo di Import e transazioni (`313dde70e`); entra con E1.
+**Attuazione (15/10)**: 🟡 correzione committata sul ramo di Import e transazioni (`81a6ec804`); entra con E1.
 
 #### 24. K-1 chiusa senza codice — 🟢 (D-W15)
 - **Contesto**: nella 1.2 il Bulk mostrava come «coppia» due cloni dello stesso tipo. La correzione è nell'interfaccia,
@@ -583,7 +583,7 @@ Nota dev: si sono daccordo a fare upper e se ancora non va impedire il salvatagg
 nota dev: si sono daccordo, niente codice, parliamo comunque di un caso limite.
 
 **Decisione (15/10)**: chiusa senza codice.
-**Attuazione (15/10)**: ✅ K-1 chiusa nel backlog 38 (`13705dd05`).
+**Attuazione (15/10)**: ✅ K-1 chiusa nel backlog 38 (`90f467f52`).
 
 #### 25. Domanda nuova: chi può modificare i dati condivisi degli asset — 🟢 se resta com'è
 - **Oggi**: asset, prezzi manuali, eventi (dividendi, split) e classificazioni sono condivisi fra tutti gli utenti
@@ -1190,7 +1190,7 @@ qui resta la decisione.
 
 ## 4. Cose che servono da te più avanti
 
-- ~~Una sola finestra per installare `cryptography`~~ **fatto il 15/10** (`dc9a5d232`, `cryptography 50.0.2`). Facoltativa
+- ~~Una sola finestra per installare `cryptography`~~ **fatto il 15/10** (`e910074cc`, `cryptography 50.0.2`). Facoltativa
   `tzdata`.
 - Docker acceso quando Piattaforma arriva al lotto dell'immagine, e poi per Litestream (Backup e Docker). **Le build Docker
   qui falliscono dentro la VPN aziendale**: la prova dell'immagine 1.3 va fatta fuori dalla VPN, con gli script di H.

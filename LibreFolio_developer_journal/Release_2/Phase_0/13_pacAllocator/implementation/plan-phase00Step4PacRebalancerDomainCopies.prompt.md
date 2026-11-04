@@ -9,7 +9,7 @@
 > - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
 > - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
 >   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
-> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+> - P1 `analyze` rimosso il 2026-09-21 (`704ba66a3`).
 >
 > L'avanzamento è nella tabella del [README](README.md) e nel
 > [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
@@ -355,7 +355,7 @@ Il backend fornisce fatti; questa logica non calcola valori finanziari.
 > - Gate finali su tutto il set W2 (schema+service+test): ruff/black/py_compile puliti
 >   sui 3 file; `services portfolio-allocation-source` 69/69; `schemas pac-planner`
 >   448/448; `schemas pac-analyze` (P1) 112/112 — nessuna regressione; `git diff --check`
->   pulito, 0 staged, HEAD invariato `958527e0`, porta 6153 libera.
+>   pulito, 0 staged, HEAD invariato `5090e6d6`, porta 6153 libera.
 > - Item 6 lasciato `[ ]`: questo intervento copre solo la porzione FX del layer
 >   prefill, non l'intero perimetro auth/missing/provenance/no-side-effect del
 >   dispatch `domain-copy-tests` originale.
@@ -377,7 +377,7 @@ I selector Playwright `front-utility pac-tool` e
 della review umana in Step 5.
 
 > **Note implementazione — W2 2026-09-16**: baseline riconciliata su
-> `22cb18d1d60c8b1197627e6e8eff9cb55f001d3e`; i tre path esclusivi sono
+> `3cfed2b030a72ec0b8232144d12b4e5b0b630c1e`; i tre path esclusivi sono
 > `schemas/portfolio.py`, `services/portfolio_allocation_source.py` e
 > `api/v1/portfolio_api.py`. Implementati endpoint read-only/no-store,
 > preflight OWNER atomico senza bypass admin, fatti saved-only exact,
@@ -391,7 +391,7 @@ della review umana in Step 5.
 > `services portfolio-allocation-source`; `api portfolio` resta il selector API.
 
 > **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
-> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
+> (`894236b11`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
 > aperti, senza spuntarli.
 > - **6. Test di permessi, dati mancanti, provenienza e assenza di scritture.** Ci sono:
 >   - `test_portfolio_allocation_source.py`, 48 test: permessi controllati prima di ogni

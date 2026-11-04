@@ -25,7 +25,7 @@ instances' attributes, not its class's): every quiet-day materialization goes th
 days a read built. Beside it, ``DailyPortfolioState.__init__`` is counted too (``dataclasses.replace`` constructs through
 it), so a read that bypassed ``state_on`` would still be seen.
 
-RED on HEAD 1fd80c481, by absence: ``StateSegment`` and ``DailyStates`` do not exist, the module fails at collection with
+RED on HEAD 61a6c828b, by absence: ``StateSegment`` and ``DailyStates`` do not exist, the module fails at collection with
 ``ImportError``. Pure: no database, no server, no network; every state is built by hand.
 
 Runs in ``./dev.py test services financial-math`` (the runner collects the whole ``test_financial_math/`` directory).

@@ -1,6 +1,6 @@
 # H — `panel/status`: `users_over_limit` e `instance_key` (D6) — analisi, nessun codice (26/10/2026)
 
-Letto in sola lettura nel ramo `e-alfy-h-piattaforma` (`88459a302` + H5-5, H5-6): `schemas/hosting_panel.py`, `api/v1/panel.py`,
+Letto in sola lettura nel ramo `e-alfy-h-piattaforma` (`d90eaaa21` + H5-5, H5-6): `schemas/hosting_panel.py`, `api/v1/panel.py`,
 `platform/instance_key.py`, `plugin_settings/crypto.py`, `plugin_secrets_check.py`, `config_audit.py`, `api/v1/system/wake.py`,
 `api/v1/instance_block.py`, il contratto L3 (§D6) e il contratto istanza-coordinatore. Il mio diario ha H-3 e P24 alle righe 3419 e 6015.
 

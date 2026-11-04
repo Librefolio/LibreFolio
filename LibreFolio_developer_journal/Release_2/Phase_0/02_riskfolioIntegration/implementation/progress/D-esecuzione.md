@@ -4,7 +4,7 @@
 |---|---|
 | Mandato | [`../D-frontend-primitive-e-card.md`](../D-frontend-primitive-e-card.md) — sola lettura |
 | Branch | `e-alfy-risk-primitives-cards` |
-| Baseline | `cc33120ebfbc61efe4c6178218ff8d64dd4adf47` ✅ verificata |
+| Baseline | `3a4431d5a3a7e8ee97b9c3d558bc903c1ece967f` ✅ verificata |
 | Lane | porta `6243` · data dir `backend/data/test-risk-d` |
 | Coordinatore | sessione `0000738d-b7e0-4561-9454-cf5ab2c439ca` |
 | Autorizzazione | relayata dal coordinatore sotto delega permanente del developer |
@@ -117,7 +117,7 @@
 
 | Comando | Esito |
 |---|---|
-| `git rev-parse HEAD` | `cc33120e…` — coincide con la baseline |
+| `git rev-parse HEAD` | `3a4431d5…` — coincide con la baseline |
 | `npx playwright test --list` sui 4 file nuovi | `Total: 12 tests in 3 files` — `risk-mocks.ts` **non** raccolto |
 | `npx playwright test --list` sul file originale (`git show HEAD:…`, ricollocato a pari profondità) | `Total: 12 tests in 1 file` |
 | `diff` dei titoli normalizzati (file:riga rimossi) | **vuoto** — 12 prima, 12 dopo, zero differenze |

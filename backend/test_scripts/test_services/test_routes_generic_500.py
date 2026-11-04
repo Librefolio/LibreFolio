@@ -1,6 +1,6 @@
 """X-R74 (release 1.3, workstream X) — a 500 of the asset and FX routes names no error; the error is logged instead.
 
-The defect, on HEAD 1bef78be1. R13-SEC9-3 cured ``api/v1/assets/prices.py``: a 500 there answered ``detail=str(e)``, and
+The defect, on HEAD 0fa46aaa8. R13-SEC9-3 cured ``api/v1/assets/prices.py``: a 500 there answered ``detail=str(e)``, and
 an SQL error echoes its statement, naming the schema. The same answer stands at 26 sites of six route files —
 ``detail=str(e)`` in ``api/v1/assets/providers.py`` (7), ``crud.py`` (7), ``events.py`` (5) and ``market_data.py`` (2);
 ``f"…: {e!s}"`` in ``api/v1/fx/providers.py`` (4) and ``currencies.py`` (1, ``sync_rates``). The probe and the five FX
@@ -44,7 +44,7 @@ place of ``FXProviderRegistry``), whatever FX plugins the checkout installs — 
 session. The asset provider bodies are real ones for ``scheduled_investment`` without parameters, which its plugin
 validates offline (as ``test_probe_rate_limit.py`` builds them).
 
-Red on HEAD 1bef78be1: ``test_xr74_a_500_names_no_error_and_logs_it``, all 26 cases — the detail echoes the error; the
+Red on HEAD 0fa46aaa8: ``test_xr74_a_500_names_no_error_and_logs_it``, all 26 cases — the detail echoes the error; the
 probe and the five FX cases, besides, log nothing. ``test_xr74_a_failed_merge_names_no_error_and_logs_it`` too: the 400
 reads «Merge failed: SELECT secret_column FROM secret_table» (the service already logs the error). Green before and after:
 ``test_xr74_guard_an_authored_refusal_answers_as_before`` (7 cases).
@@ -346,7 +346,7 @@ async def test_xr74_a_500_names_no_error_and_logs_it(monkeypatch, site, make_err
     route answers 500 with a non-empty detail that holds no word of the error (``SELECT``, ``secret``, ``FROM``, the
     error's class, the code), and the error is logged with its exception on the route module's ``logger``.
 
-    Red on HEAD 1bef78be1, every case: the detail echoes the error (``detail=str(e)``; ``f"…: {e!s}"`` at the FX sites).
+    Red on HEAD 0fa46aaa8, every case: the detail echoes the error (``detail=str(e)``; ``f"…: {e!s}"`` at the FX sites).
     The probe and the five FX cases, besides, log nothing.
     """
     error = make_error()
@@ -406,7 +406,7 @@ async def test_xr74_a_failed_merge_names_no_error_and_logs_it(monkeypatch):
     holds no word of the error, and the error is logged with its exception on the service module's ``logger``; the route
     does not log on this path.
 
-    Red on HEAD 1bef78be1: the 400 reads «Merge failed: SELECT secret_column FROM secret_table» — the service wraps
+    Red on HEAD 0fa46aaa8: the 400 reads «Merge failed: SELECT secret_column FROM secret_table» — the service wraps
     ``{e!s}`` into its ``AssetSourceError`` and the route answers ``detail=str(e)``. The log is already there. Green with
     the cure: «Merge failed: internal error», the status, the code and the log unchanged.
     """
@@ -519,11 +519,11 @@ GUARDS = [
 @pytest.mark.parametrize("site, make_error, status, answered", GUARDS)
 async def test_xr74_guard_an_authored_refusal_answers_as_before(monkeypatch, site, make_error, status, answered):
     """The call on the site's path raises the refusal its service authors. The barrier first: that call was made. Then
-    the route answers it as it does on HEAD 1bef78be1 — that status, that detail: the probe's 400 with the message, a 409
+    the route answers it as it does on HEAD 0fa46aaa8 — that status, that detail: the probe's 400 with the message, a 409
     ``{"error_code", "message", "params"}``, the 404 ``ASSET_NOT_FOUND`` with the error's text, the sync's 502 «Failed to
     sync rates: …». The cure changes the 500s only.
 
-    Guard: green on HEAD 1bef78be1 too.
+    Guard: green on HEAD 0fa46aaa8 too.
     """
     error = make_error()
     print_section(f"X-R74 guard: {site.failing_call} refuses with {getattr(error, 'error_code', type(error).__name__)}")

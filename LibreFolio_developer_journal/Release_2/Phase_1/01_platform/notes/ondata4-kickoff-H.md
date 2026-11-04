@@ -3,7 +3,7 @@
 > **A cosa serve (per il developer).** Oggi il visore PDF scarica da `cdn.jsdelivr.net` i font per giapponese, coreano e cinese (sempre) e il motore (se la copia locale non risponde): con la politica stretta della 1.3 quel ripiego è bloccato, e `files.spec.ts:826` è l'unico rosso del gate. Dopo questo lotto: l'estratto conto di un broker giapponese si legge, perché i font arrivano da noi o da un CDN controllato byte per byte (hash atteso nel codice, versione fissata), e il motore non si scarica più da fuori. Con R4 anche i worker (visore PDF, calcoli del rischio) hanno la loro politica: uno script iniettato non carica codice da fuori nemmeno lì. Con R5 Swagger e ReDoc smettono di caricare librerie da jsDelivr senza versione né controllo. **Poi**, quando B ha consegnato la busta L3, H-62: il coordinatore cloud rimette i dati su una macchina nuova da solo, con un biglietto, e una macchina appena creata su un volume vuoto non si presenta mai come «istanza nuova».
 
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-sturdy-memory` · **Branch**: `e-alfy-h-piattaforma`
-**HEAD di partenza (da verificare)**: `c042f2481` (= `dev_release2`, treno 8; fast-forward dal coordinatore da `a0d7fb5a5`).
+**HEAD di partenza (da verificare)**: `295a09c86` (= `dev_release2`, treno 8; fast-forward dal coordinatore da `66a4b1cf1`).
 **Corsia**: porta `6181`, cartella dati `/tmp/librefolio-r13-h`.
 **Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/01_platform/plan-phase01Platform.prompt.md`, sezione «H-55 v2, la CSP sempre applicata — esecuzione» (~10212-10340; R4 e R5 alla ~10332). Per H-62: `salvataggi-worktrees-20261021/ondata4/PIANO-backup-L3.md`, §3.5, §3.6, §3.7 e i passi H1, H2.
 **Modello**: Opus (sicurezza).

@@ -3,8 +3,8 @@
 > **Workstream IW del programma colori**, sessione «IW - colori dell'import». Coordinatore: sessione «UI color
 > analysis» (`aec04834-1532-4d86-9e3f-f942e82aca89`).
 > Branch `e-alfy-iw-colori-import` (nato `e-alfy-solid-meme`, rinominato dall'app all'avvio). Base dell'analisi
-> **`8f2824046`** (`dev_release2`, verificata il 16/10 alle 10:41); base del lavoro **`6e569084a`** (fast-forward del
-> coordinatore alle 11:02: lo skill comune D-T29 di T, `c59e92dfb`; nessun file dell'area toccato).
+> **`cdf74ef2a`** (`dev_release2`, verificata il 16/10 alle 10:41); base del lavoro **`16ea52b26`** (fast-forward del
+> coordinatore alle 11:02: lo skill comune D-T29 di T, `0dab6ac14`; nessun file dell'area toccato).
 > Corsia: porta **6151**, dati **`/tmp/librefolio-r2-iw`**.
 > Comandi: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-iw …`.
 >
@@ -16,8 +16,8 @@
 >
 > **Stato:** ✅ analisi inviata (16/10, 11:00); ✅ approvata dal developer nella sessione IW (uscita dal plan mode, ~11:05)
 > e dal coordinatore con le decisioni D1–D6 (~11:15); ✅ cinque lotti scritti e rivisti (11:47); ✅ prove leggere verdi
-> (12:05); ✅ checkpoint 1 `48ecea1e2`, base merge `b3162db80`; ✅ passo 5, i pulsanti di D2: checkpoint 2 `9c79d5b35`;
-> ✅ C4 dopo la base merge `b2466931d`: `ec9fec52a`; ✅ slot pesante verde (15:02–15:38); ⏳ consegna finale inviata,
+> (12:05); ✅ checkpoint 1 `f24d8d129`, base merge `c647e39dc`; ✅ passo 5, i pulsanti di D2: checkpoint 2 `5650908b4`;
+> ✅ C4 dopo la base merge `9a4e8860c`: `cf6c6c7c3`; ✅ slot pesante verde (15:02–15:38); ⏳ consegna finale inviata,
 > FROZEN, pronto per l'ingresso nel target.
 
 ## ✅ Autorizzazione e decisioni (16/10/2026)
@@ -52,7 +52,7 @@ layout o comportamento, senza decisioni di design. Dove la tabella non basta, l'
 Fuori: `GapFixToggle.svelte` (lotto unico degli interruttori di T), `lib/theme/**`, `scripts/theme/**`, `app.css`
 (salvo un selettore che il gate C4 chieda di togliere).
 
-## Stato reale (16/10, `8f2824046`)
+## Stato reale (16/10, `cdf74ef2a`)
 
 ### Inventario (`theme-roles.mjs --report` + classificatore di sessione sullo stesso scanner)
 
@@ -122,7 +122,7 @@ Nessuna `contentClass` verso `ModalBase`, nessuna classe verso `InfoBanner`, `Co
 ### File dell'area aperti altrove (sola lettura, `git --no-optional-locks status`, 10:55)
 
 Nessuno: 20 worktree senza modifiche nell'area; nessun ramo con commit propri sui file dell'area rispetto alla base
-comune (J, Z, H hanno solo il merge di `d5c3c3ae3`). Il checkout principale non è stato letto (regola dell'app).
+comune (J, Z, H hanno solo il merge di `c91f132e3`). Il checkout principale non è stato letto (regola dell'app).
 **Pianificato:** FE8b di W (1.3, «finale») sposta `components/transactions/**` (con `wizard/` che confluisce in
 `import/`): mai in parallelo con IW.
 
@@ -213,7 +213,7 @@ duplicati (D1); la timeline della card del set (12).
    > Vitest, senza approvarli né reinstallare.
    > **⚠️ Fuori pista**: alle 10:43 `theme-roles.mjs --report` (scanner node, 1 s, sola lettura) è girato con `nice` a
    > carico 84, sopra la soglia di 50 delle prove leggere; poi solo letture. Alle 11:02 il coordinatore ha portato il
-   > branch a `6e569084a` (skill comune): rilette le regole, adottate le convenzioni 12, 18, 19 e 20.
+   > branch a `16ea52b26` (skill comune): rilette le regole, adottate le convenzioni 12, 18, 19 e 20.
 1. ✅ Scrittura dei lotti IW-1…IW-5 in parallelo (16/10, 11:25–11:47), un sotto-agente per lotto (file disgiunti, niente git, niente prove,
    niente server), con la tabella della skill e le convenzioni di questo piano; revisione mia di ogni diff, elemento per
    elemento (regole 1, 2, 4, 5, 6, 8). Avviati il 16/10 alle ~11:25 (brief comune in sessione, `iw_brief.md`), più
@@ -266,7 +266,7 @@ duplicati (D1); la timeline della card del set (12).
    `iw_comp.sh` in sessione):
    - `node frontend/scripts/theme/theme-roles.mjs --check`: pulito (prima di `--update`: 17 file scesi sotto il loro
      record; dopo: 0);
-   - controllo «solo dark» del coordinatore (`dark_only_check.py 6e569084a`): 3 posizioni della base in
+   - controllo «solo dark» del coordinatore (`dark_only_check.py 16ea52b26`): 3 posizioni della base in
      `FixFlaggedStep` (594, 772, 867), verificate a mano: `bg-lf-card/70`, e i due campi (ora 764 e 859) con
      `bg-lf-field … text-lf-primary`;
    - `git diff --check` pulito; Prettier `--check` sui 18 file `.svelte`/`.ts`: pulito;
@@ -286,13 +286,13 @@ duplicati (D1); la timeline della card del set (12).
 3. ⏳ Slot pesanti A (IW-1…IW-3) e B (IW-4, IW-5), quando li assegna il coordinatore: `api sync` (fatto),
    `front check`, `front-utility core-unit`, `front-utility component-unit`, E2E mirati (elenco nella sezione dei lotti).
    Superato dal passo 7: uno slot unico per tutto, chiesto e concesso il 16/10.
-4. ✅ Checkpoint 1 (16/10, 12:05; committato dal coordinatore: `48ecea1e2`): `--update` della baseline, che si stringe solo sulle 17 righe dell'area (m1 8.249 →
+4. ✅ Checkpoint 1 (16/10, 12:05; committato dal coordinatore: `f24d8d129`): `--update` della baseline, che si stringe solo sulle 17 righe dell'area (m1 8.249 →
    **6.967**, −1.282; m2 54 → **53**, via `#dc2626`); voci IW-1…IW-8 nel backlog; messaggio al coordinatore con file,
    prove, esclusioni, conflitti, messaggio di commit, «dove guardarlo». Poi FROZEN.
    - Area dopo il lotto: m1 1.310 → **28** (AssetGroupStep 14, GapFixToggle 4, ImportWizardModal 8, `pairCellHtml.ts`
      2), m2 1 → **0**.
-5. ✅ Dopo la base merge con i ruoli nuovi di T (16/10, 12:13–12:21; coordinatore: checkpoint 1 = `48ecea1e2`, base
-   merge `b3162db80` con la punta `b171c058e`, che porta `f043c1b58`):
+5. ✅ Dopo la base merge con i ruoli nuovi di T (16/10, 12:13–12:21; coordinatore: checkpoint 1 = `f24d8d129`, base
+   merge `c647e39dc` con la punta `fa474ad3a`, che porta `ee00f754e`):
    - `api sync` dopo la base merge (12:16, uscita 0, solo file ignorati);
    - i 4 pulsanti pieni di D2 (backlog IW-1): `asset-group-confirm-all` e `asset-group-confirm-{id}` → `bg-lf-success
      text-lf-on-status hover:bg-lf-success-hover`; `import-wizard-warning-confirm` → `{… ? 'bg-lf-warning
@@ -301,24 +301,24 @@ duplicati (D1); la timeline della card del set (12).
      `action`; OK del coordinatore a segnarlo);
    - ritocco chiesto dal coordinatore: il campo dell'importo della ripartizione (`FixFlaggedStep:764`) prende
      `placeholder:text-lf-placeholder` (`app.css` colora testo e segnaposto dei campi nativi solo senza classi `-lf-`);
-   - prove: `--check` pulito; `dark_only_check.py b3162db80` 0; `native_field_check.py 6e569084a` 0 su 16 file;
+   - prove: `--check` pulito; `dark_only_check.py c647e39dc` 0; `native_field_check.py 16ea52b26` 0 su 16 file;
      `git diff --check` e Prettier puliti; Vitest dei gate più `FixFlaggedStep` e `ImportWizardModal`: **6 file, 138
      test verdi** (12:19); `--update`: m1 6.967 → **6.953** (AssetGroupStep 14 → 8, ImportWizardModal 8 → 0, riga tolta).
    - **Area:** m1 1.310 → **14** (AssetGroupStep 8: badge `KIND_TONES` con anello, 3 stelle; GapFixToggle 4;
      `pairCellHtml.ts` 2), m2 **0**.
-   - ✅ Checkpoint 2 committato dal coordinatore: `9c79d5b35` (6 file); SHA messo nella voce IW-1 del backlog.
+   - ✅ Checkpoint 2 committato dal coordinatore: `5650908b4` (6 file); SHA messo nella voce IW-1 del backlog.
 6. ✅ Preparazione dello slot (16/10, 12:22–12:53; coordinatore, 12:21: «uno alla volta, sotto `nice` e con carico sotto 50, senza server»),
    script `iw_prep.sh` in sessione, log `prep_*.log`:
    1. `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py front build --debug`: uscita 0 in
       482 s; il build lancia `svelte-check` sull'albero intero: **0 errori, 0 avvisi** (è il `front check` di
-      `npm run check`, sullo stesso albero `9c79d5b35`);
+      `npm run check`, sullo stesso albero `5650908b4`);
    2. `… dev.py mkdocs build`: uscita 0 in 203 s, 3.076 URL relativi risolti;
    3. `… dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-iw db populate --force --clean --with-reports`
       (cartella della corsia, assente fino a ora; `--with-reports` come il populate che il runner degli E2E rifà da
       sé all'inizio di una corsa): uscita 0 in 34 s; istantanea del DB nell'archivio ignorato `.testLog/00_archive/`.
    Porta 6151 libera alla fine; nessun server avviato.
-7. ✅ C4 dopo la base merge `b2466931d` (16/10, 14:58–15:01; il coordinatore ha unito la punta `e402d3b87`, con TR, BK e
-   DV, e committato le note del giornale in `1bcf00187`): sull'albero unito `text-gray-900` non ha più usi, perché gli
+7. ✅ C4 dopo la base merge `9a4e8860c` (16/10, 14:58–15:01; il coordinatore ha unito la punta `980475174`, con TR, BK e
+   DV, e committato le note del giornale in `588dd8564`): sull'albero unito `text-gray-900` non ha più usi, perché gli
    ultimi li ha tolti l'import, e C4 è rosso. In `frontend/src/app.css` il selettore doppio `html.dark .text-gray-800,
    html.dark .text-gray-900 {` perde la seconda riga; la regola resta su `.text-gray-800`, che ha ancora un uso (L-20).
    Verifica con `classUses()` dello scanner: `text-gray-900` 0, `text-gray-800` 1, nessun'altra classe del
@@ -327,8 +327,8 @@ duplicati (D1); la timeline della card del set (12).
    > **⚠️ Fuori pista**: `app.css` appartiene a T; questa è l'unica eccezione del kickoff («se il gate C4 ti chiede di
    > togliere un selettore del rimappaggio scuro, perché hai tolto il suo ultimo uso, lo togli e lo dichiari nel
    > checkpoint»).
-8. ✅ Slot pesante unico (16/10, 15:02–15:38, corsia 6151 + `/tmp/librefolio-r2-iw`, HEAD `ec9fec52a`, cioè la base
-   merge `b2466931d` con la punta `e402d3b87` (TR, BK, DV) più il ritocco C4; taglio del coordinatore alle 15:50),
+8. ✅ Slot pesante unico (16/10, 15:02–15:38, corsia 6151 + `/tmp/librefolio-r2-iw`, HEAD `cf6c6c7c3`, cioè la base
+   merge `9a4e8860c` con la punta `980475174` (TR, BK, DV) più il ritocco C4; taglio del coordinatore alle 15:50),
    script `iw_slot.sh` in sessione, log `slot_*.log`:
    1. `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py api sync`: uscita 0 in 35 s;
    2. `… dev.py front build --debug`: uscita 0 in 405 s; `svelte-check` sull'albero intero **0 errori, 0 avvisi**: è il

@@ -1,6 +1,6 @@
 # MF · parere sull'analisi di W per Q-N78-1k (turno 1, 22/10/2026)
 
-Sola lettura, worktree MF a `c1b4ba49c` (= `dev_release2` `c042f2481`). Fonte: `W-analisi-turno1.md` §1, contro il codice di
+Sola lettura, worktree MF a `01ac2b23d` (= `dev_release2` `295a09c86`). Fonte: `W-analisi-turno1.md` §1, contro il codice di
 `backend/app/services/financial_math/`.
 
 **In breve**: l'analisi tiene in larga parte. I numeri della tabella sono giusti, ma **solo nell'esempio di W** (un lotto solo,

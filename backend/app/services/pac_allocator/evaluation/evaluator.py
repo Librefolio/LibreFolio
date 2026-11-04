@@ -10,7 +10,7 @@ rounding against the plan, which the user can top up, from a rejection), and —
 in the test tree — as the scorer behind the exhaustive oracle.
 
 The P1 ``analyze`` arithmetic that used to open this file was removed on
-2026-09-21 (`b82e59ffa` and its follow-up): it was a Decimal prototype for
+2026-09-21 (`704ba66a3` and its follow-up): it was a Decimal prototype for
 budgets and target gaps, never released, superseded by the exact domain of this package.
 """
 

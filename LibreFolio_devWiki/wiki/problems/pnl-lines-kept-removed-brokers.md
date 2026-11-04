@@ -16,7 +16,7 @@ related:
 
 ## Symptom
 
-In the Growth chart's P&L in lines, with one line per broker (new in 1.2, `8ed7a0f0d`, 2026-09-18), changing the set
+In the Growth chart's P&L in lines, with one line per broker (new in 1.2, `a1e6fce55`, 2026-09-18), changing the set
 of brokers left the chart wrong: brokers removed from the filter stayed drawn and in the legend, a broker added was not
 drawn, a swapped one took the place of the old one under the old one's legend entry. The coordinator's item 1, joined
 to plan 47.
@@ -39,7 +39,7 @@ the legend's `data` exists only in the full build. Replayed on the same ECharts:
 
 ## Solution
 
-`e72b0b56e` («fix(charts): rebuild P&L lines on broker change»): the chart computes `seriesKey`, the names of its
+`76dae604b` («fix(charts): rebuild P&L lines on broker change»): the chart computes `seriesKey`, the names of its
 series in order, and takes the full path whenever the key changes since the last draw; the key is reset with the other
 `lastRendered*` values when the instance is destroyed. `CHART_SERIES_UPDATE_OPTS` is unchanged. The test replays the
 calls recorded by the fake ECharts on a real instance (`vi.importActual('echarts')`) and checks that series and legend

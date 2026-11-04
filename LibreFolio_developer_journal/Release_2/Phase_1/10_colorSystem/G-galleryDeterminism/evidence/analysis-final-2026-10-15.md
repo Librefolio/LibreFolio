@@ -5,7 +5,7 @@
 
 ## Condizioni
 
-- **Commit** `2338aaf79` di `dev_release2`: G checkpoint 1 più i lotti 1.3 integrati fino a quel momento. Checkout
+- **Commit** `2ddbf77f7` di `dev_release2`: G checkpoint 1 più i lotti 1.3 integrati fino a quel momento. Checkout
   principale, corsia del coordinatore (6150, `/tmp/librefolio-r2-main`), altre corsie ferme. L'ha lanciata il coordinatore.
 - **Due run complete**, ciascuna con `db populate` nuovo:
   - r1 `g-final3-r1`: dalle 09:14:58, 1833 s;
@@ -13,7 +13,7 @@
 - **Configurazione e prove:**
   - 6 worker (`-- --workers 6`), carico 11–16;
   - exit 0, 2824 PNG ciascuna, la stessa lista di 32 scatti stale;
-  - stesso `commit`, `dirty_files` 0, `app_version` `v0.0.0-review`, versione fissata dal toolkit (`70c84accc`).
+  - stesso `commit`, `dirty_files` 0, `app_version` `v0.0.0-review`, versione fissata dal toolkit (`bca1bee38`).
 - **`live_price_check`: 0 su entrambe.** Nessun prezzo live è arrivato al backend.
   - I sette marcatori che lo script cerca sono ancora nel codice dopo il riordino di X, in
     `backend/app/services/assets/price_query.py` e nel plugin Yahoo Finance: lo «0» vale come prova.
@@ -25,7 +25,7 @@
 
 ## Classi
 
-| Classe | 14/10 (`27228466c`, 10 worker) | 15/10 (`2338aaf79`, 6 worker) |
+| Classe | 14/10 (`666d23701`, 10 worker) | 15/10 (`2ddbf77f7`, 6 worker) |
 |---|---:|---:|
 | stable | 57 | 40 |
 | low | 74 | 112 |

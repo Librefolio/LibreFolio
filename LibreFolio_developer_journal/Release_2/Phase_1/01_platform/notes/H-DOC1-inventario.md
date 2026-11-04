@@ -1,4 +1,4 @@
-# DOC-1 — riordino della guida admin: inventario e proposta d'albero (H, 23/10/2026, base `1fd80c481`)
+# DOC-1 — riordino della guida admin: inventario e proposta d'albero (H, 23/10/2026, base `61a6c828b`)
 
 Sola lettura: nessuna pagina toccata. L'elenco delle pagine, delle intestazioni e dei riferimenti l'ha raccolto un sotto-agente
 Haiku; ho controllato io i conteggi e gli ancoraggi che contano (indicati sotto).

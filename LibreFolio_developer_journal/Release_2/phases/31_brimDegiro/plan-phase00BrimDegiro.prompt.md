@@ -1,10 +1,10 @@
 # Piano — fase 00, 31: il plugin DEGIRO (issue #35)
 
-> **Stato**: ✅ chiuso e integrato nel treno 9 (merge `2cecf5a00`): `05ff499c5`, `3d61fd63f`, `dfd6ed963` (verifica del 2026-10-09 su `3cceb4f90`, §11.7).
+> **Stato**: ✅ chiuso e integrato nel treno 9 (merge `308dc4bdd`): `79564104d`, `a79744d58`, `35c7f5687` (verifica del 2026-10-09 su `f545b67e3`, §11.7).
 > - Al checkpoint: ✅ implementato (2026-10-07); checkpoint al coordinatore, FROZEN (§11.6). Via del developer portato dal coordinatore: D1–D10 come raccomandate (§0.1).
 >
 > - Mandato: coordinatore («Release 2 backlog analysis», `c8328a01-…`), con le decisioni del developer (§0). La sua analisi: `…/c8328a01-…/files/analisi-degiro-35.md` §1–§9.
-> - Workstream L. Ramo `e-alfy-l-danske-bank`, base `d07412899` (fast-forward del developer alle 12:57). Corsia 6156/6166, `--data-dir /tmp/librefolio-r2-l`, un comando alla volta. La coverage completa gira nella 6150: un E2E in timeout si rilancia da solo prima di concludere.
+> - Workstream L. Ramo `e-alfy-l-danske-bank`, base `5f3509536` (fast-forward del developer alle 12:57). Corsia 6156/6166, `--data-dir /tmp/librefolio-r2-l`, un comando alla volta. La coverage completa gira nella 6150: un E2E in timeout si rilancia da solo prima di concludere.
 > - Ricerca multilingue (fonti open source, citate): nella sessione di L, `files/degiro/research-degiro-strings.md`; sintesi in §1.8.
 
 ## 0. Il mandato (decisioni del developer, dal coordinatore)
@@ -31,7 +31,7 @@ Test: test-author, rossi prima, file nuovo `test_brim_degiro.py`; di `test_brim_
 - **Concessioni**: `broker_degiro.py`; `degiro-account-en.csv`; `test_brim_degiro.py`; la categoria in `test_brim_api.py`; la voce `brim-degiro` nel runner; `test_brim_providers.py` solo `:1062`; `ImportWizardModal.svelte` (D3; M ripara solo `gallery.spec.ts:2222`); lo spec E2E `tx-import-degiro` (D10, test-author); doc EN via docs-writer (`degiro.en.md`, guida BRIM solo aggiunte, `providers_list.md`, tolte a Q). Una riga in `import/how-to.en.md` passa dal coordinatore (pagina di Q).
 - **CHANGELOG** del coordinatore: all'handoff la riga aggiornata (§10). Prima del commit: FROZEN e handoff.
 
-## 1. Stato verificato (codice a `d07412899`)
+## 1. Stato verificato (codice a `5f3509536`)
 
 ### 1.1 Il plugin oggi (`broker_degiro.py`, 465 righe)
 
@@ -420,14 +420,14 @@ Nessuna API cambia (niente `api sync`), nessuna migrazione, nessuna chiave i18n.
 ### 11.7 ✅ Integrazione e verifica finale (2026-10-09)
 
 > **Note implementazione**:
-> - **I commit**, integrati nel treno 9 (merge `2cecf5a00`, 2026-10-07):
->   - `05ff499c5` fix(brim): read DEGIRO statements in any language;
->   - `3d61fd63f` feat(import): one review row per linked FX pair;
->   - `dfd6ed963` docs(brim): DEGIRO statement and linked pairs.
->   - La nota di §11.6 sul `.gitattributes` è entrata col piano 33 (`cc15441e6`).
-> - **Verifica** su `3cceb4f90` (treno 24b):
+> - **I commit**, integrati nel treno 9 (merge `308dc4bdd`, 2026-10-07):
+>   - `79564104d` fix(brim): read DEGIRO statements in any language;
+>   - `a79744d58` feat(import): one review row per linked FX pair;
+>   - `35c7f5687` docs(brim): DEGIRO statement and linked pairs.
+>   - La nota di §11.6 sul `.gitattributes` è entrata col piano 33 (`ce40cb3eb`).
+> - **Verifica** su `f545b67e3` (treno 24b):
 >   - `broker_degiro.py` legge l'estratto per posizione e sceglie la lingua dall'intestazione (`_detect_language`, `:304`); `plugin_version` è a `:651`;
 >   - le coppie del passo ④ (`importPairs.ts`) e lo spec `tx-import-degiro` ci sono.
-> - **I rossi del triage di §11.6** (`tx-import-file-selection`, `tx-brim-import` T1, CAC-011/012) li ha chiusi il piano 33 (`33_e2eImportInfra/`), con `860c934ac` e `abfcdf2be`.
+> - **I rossi del triage di §11.6** (`tx-import-file-selection`, `tx-brim-import` T1, CAC-011/012) li ha chiusi il piano 33 (`33_e2eImportInfra/`), con `66eacc577` e `f7e439511`.
 > - **Fuori dal piano**: la conferma dell'utente della #35 su un export reale. Se smentisse l'ipotesi che l'estratto basti (decisione 7), si apre un lotto nuovo.
 > - **Classificazione: FINITA.** Nessun residuo. Archiviata in `Release_2/phases/31_brimDegiro/`.

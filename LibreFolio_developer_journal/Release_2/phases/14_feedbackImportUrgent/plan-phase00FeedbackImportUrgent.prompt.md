@@ -1,7 +1,7 @@
 # Urgent import feedback - incremental bugfix plan
 
 **Started:** 2026-09-08. **Owner:** Group E.
-**Baseline:** `4a73f5f63447e01b51993afb2e3c73e2c22a9a28` (`refs/heads/dev_release2`).
+**Baseline:** `41a4f23ff70189a4ad827d272a368fbf2359464d` (`refs/heads/dev_release2`).
 **Worktree:** `e-alfy-laughing-tribble`; app-managed branch `e-alfy-import-e-ux-urgenti`.
 **Follow-up:** [Round 1 - review operativa e UX approvata](plan-phase00FeedbackImportUrgentRound1-Review.prompt.md).
 **Portable handoff:** [Integration manifest](manifest-integrazione-E.md) · [Review checklist](checklist-review-E.md).
@@ -14,7 +14,7 @@ applicato al checkout target `dev_release2`; il dev ha
 approvato badge e sottotesti R4 alle 15:51. La richiesta finale di ingresso
 diretto a Crea su Instagram e' valutata nel
 [Round 4, sezione 4](plan-phase00FeedbackImportUrgentRound4-SocialBoundaries.prompt.md#4-ingresso-diretto-a-crea-su-instagram---verifica-conclusa-2026-09-09).
-Integrazione committata in `ef722b552433028c051ccb1207c84f1072e51bb7`;
+Integrazione committata in `c8a77dda370e985fc8fe259f1232ef8a760c2f54`;
 sessione e worktree E archiviati localmente il 2026-09-10. Il piano versionato
 resta in `Phase_0` finche' il coordinatore non esegue l'eventuale archivio
 documentale separato. Le note datate dei singoli passi descrivono la loro fase
@@ -314,9 +314,9 @@ remain in session messages and are not authorization to create production transa
 > [review-E-notes/REVIEW-E-R2.md](review-E-notes/REVIEW-E-R2.md).
 > No commit/staging/push or production operation; no changes imported from A/B/C/D.
 
-## Chiusura (verifica del 2026-10-09 su `3cceb4f90`)
+## Chiusura (verifica del 2026-10-09 su `f545b67e3`)
 
 > **Note implementazione** (L, per la sessione E, che non esiste più):
-> - Tutte le sezioni sono ✅. Il codice è in `dev_release2` con `ef722b552`, e i Round 1–5 e il manifest lo confermano.
+> - Tutte le sezioni sono ✅. Il codice è in `dev_release2` con `c8a77dda3`, e i Round 1–5 e il manifest lo confermano.
 > - Nessun buco nel codice.
 > - **Classificazione: FINITA.** Archiviata in `Release_2/phases/14_feedbackImportUrgent/`. I link verso `09_feedbackJobs/`, che resta in `Phase_0/`, sono riscritti di conseguenza.

@@ -263,7 +263,7 @@ Non «i test passano».
 npx tsc -p tsconfig.e2e.json --noEmit
 ```
 
-⚠️ Sulla baseline `f829cd76b` ci sono **76 errori preesistenti** (`onboarding-tour`, `tools/*`) e
+⚠️ Sulla baseline `9f4618c6e` ci sono **76 errori preesistenti** (`onboarding-tour`, `tools/*`) e
 **0 in tutto `e2e/portfolio/`**. Il cancello è quindi *«zero in `e2e/portfolio/`»*, non «zero».
 
 ### Ⓙ — il cancello `front check` non è «verde», ed è così per costruzione
@@ -321,7 +321,7 @@ corsia sbagliata**, che è peggio: una contaminazione si vede, una misura fuori 
 
 ### Ⓜ — il grafo Alembic non è unito da Git, e nessun cancello lo guarda
 
-Il merge `f829cd76b` ha prodotto **due teste** — `003_asset_benchmark_flag_and_taxonomy` e
+Il merge `9f4618c6e` ha prodotto **due teste** — `003_asset_benchmark_flag_and_taxonomy` e
 `003_user_onboarding_progress`, entrambe con `down_revision = "5b1333fa6b07"`.
 
 > **File diversi, stesso genitore: un conflitto semantico senza conflitto testuale.**

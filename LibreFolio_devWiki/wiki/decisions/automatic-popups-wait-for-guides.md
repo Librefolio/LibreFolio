@@ -23,7 +23,7 @@ user's first minutes.
 
 ## Decision
 
-`DeferredAppPopups.svelte`, mounted by the `(app)` layout since `8a8e686f0` (2026-09-11; the main plan's step 9,
+`DeferredAppPopups.svelte`, mounted by the `(app)` layout since `09f835892` (2026-09-11; the main plan's step 9,
 «popup priority»), owns the unrequested popups:
 
 - while a guide is active, or any modal is open (`document.body.dataset.modalScrollLockCount > 0`), **none is shown**;
@@ -32,7 +32,7 @@ user's first minutes.
 
 The order is workstream J's own choice; the review dossier (§2.8) records it as «onboarding beats everything, donation
 beats update», a choice nobody had specified. The dossier also describes the prompts as «suppressed entirely, not
-queued-and-shown-after»; the component it reviewed (`580bd504f`) already showed them once the guide and the modals
+queued-and-shown-after»; the component it reviewed (`ce718ca49`) already showed them once the guide and the modals
 were gone, as today — a due prompt stays due in its store.
 
 ## The exception: what the user asked for (Round 8, Q2)
@@ -40,7 +40,7 @@ were gone, as today — a due prompt stays due in its store.
 The usage review of 2026-09-22 (R3) found that a manual **check for updates** from the changelog showed a newer
 release only after the changelog closed: the lane held it back like an unrequested popup. Q2, approved with the Round 8
 plan: a requested result opens **at once, above** the changelog — `updateAvailable.show(release, {requested: true})`,
-with `DeferredAppPopups` skipping the wait for that one (`64d78e244`, 2026-09-24). Developer, point 11 of the review of
+with `DeferredAppPopups` skipping the wait for that one (`865509a12`, 2026-09-24). Developer, point 11 of the review of
 2026-09-24: «ora funziona». R4 («no "you are up to date"») did not reproduce once the version string was fixed.
 
 ## Consequences

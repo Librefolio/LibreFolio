@@ -1,15 +1,15 @@
 # Manifest checkpoint C — Piattaforma Tool
 
 **Data:** 2026-09-10
-**Stato:** base C completa · commit `1656aff69` · merge `bb0cdc334` · handoff D: §1–§7 storici, §0 contratto vivo di D (vedi [handoff-pac-D.md](handoff-pac-D.md)) · allineato il 2026-10-09 (Q)
+**Stato:** base C completa · commit `f407bd070` · merge `931c3e0a2` · handoff D: §1–§7 storici, §0 contratto vivo di D (vedi [handoff-pac-D.md](handoff-pac-D.md)) · allineato il 2026-10-09 (Q)
 **Piano:** [plan-phase00ToolPlatform.prompt.md](plan-phase00ToolPlatform.prompt.md)
 
-## 1. Fotografia esatta del checkpoint `1656aff6` pre-merge
+## 1. Fotografia esatta del checkpoint `f407bd07` pre-merge
 
 Worktree C:
 
-- HEAD/base: `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`
-- Target runtime successivo: `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`
+- HEAD/base: `41a4f23ff70189a4ad827d272a368fbf2359464d`
+- Target runtime successivo: `63cfb55d18297b71bd6d70dc8a6d97143c95fb68`
 - Commit nel range C: nessuno
 - File modificati tracciati: **14**
 - File nuovi non tracciati: **41**
@@ -120,12 +120,12 @@ i tre output Tool non committabili.
 
 Le evidenze post-merge sostitutive sono nella sezione6.
 
-## 4. Conflitti con `dev_release2/916f12bd`
+## 4. Conflitti con `dev_release2/63cfb55d`
 
 Overlap Git esatto: **3 file**.
 
 **Esito:** merge committato dal developer in
-`bb0cdc3348971d118cc12d7e5a4a5e7f6f7ccfe7`.
+`931c3e0a243de8dfdae3bc55be46bfb2ef080321`.
 Unico conflitto testuale in `_backend_utils.py`, risolto additivamente.
 `dev.py` e `cli_base.py` sono auto-merge verificati semanticamente.
 Checkpoint post-merge finale:21 path staged, nessun `UU`, untracked o modifica
@@ -248,8 +248,8 @@ Run each item in an owned process tree and derive client codecs from
 Pydantic contracts so plugins remain reusable without ambient authority.
 ```
 
-Checkpoint C iniziale: `1656aff6937f08935a902726884fdda4102f46ec`.
-Merge runtime: `bb0cdc3348971d118cc12d7e5a4a5e7f6f7ccfe7`.
+Checkpoint C iniziale: `f407bd070fa4e9d0cb2563586f200fc7455699f9`.
+Merge runtime: `931c3e0a243de8dfdae3bc55be46bfb2ef080321`.
 
 Checkpoint finale proposto:
 

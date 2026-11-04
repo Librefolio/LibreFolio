@@ -6,7 +6,7 @@
 
 ## Baseline
 
-- Worktree `e-alfy-laughing-spoon`, branch `e-alfy-g-gallery-deterministica`, HEAD `b631308d5` = target `dev_release2`
+- Worktree `e-alfy-laughing-spoon`, branch `e-alfy-g-gallery-deterministica`, HEAD `44623e084` = target `dev_release2`
   (fast-forward fatto dal coordinatore), worktree pulito.
 - Corsia 6153 + `/tmp/librefolio-r2-g` (porta libera). `node_modules` assente → `npm ci` pre-approvato una volta.
 - Grafo wiki assente (atteso): lette le pagine `gallery-is-a-release-gate-with-real-data`,

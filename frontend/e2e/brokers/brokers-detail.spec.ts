@@ -616,7 +616,7 @@ test.describe('Broker Detail Page', () => {
         // ── The comparison chart's presentation controls ─────────────────────────────────────
         //
         // What these two replace: a test pressing an Aggregate / Per-lot pair (`lots-value-*`) that
-        // left the component in 59c160325, when Value mode became aggregate-only. Its
+        // left the component in 9d086041b, when Value mode became aggregate-only. Its
         // `if (!visible) return` then ended it on every run — green without testing anything — and
         // it picked its lot by a CSS class.
         //

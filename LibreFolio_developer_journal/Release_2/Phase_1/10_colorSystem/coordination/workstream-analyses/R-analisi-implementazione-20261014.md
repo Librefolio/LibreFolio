@@ -1,11 +1,11 @@
 # Workstream R — Fattorizzazione colori a parità di aspetto · analisi di implementazione
 
 > Sessione R (`b7658ba9…`), worktree `e-alfy-literate-tribble`, branch `e-alfy-r-fattorizzazione-colori`.
-> Base verificata: HEAD = `b631308d5ef5482a8ffdc2878a4459fcf6909827` = base del kickoff (dopo ff del coordinatore). Worktree pulito.
+> Base verificata: HEAD = `44623e084145c4cf759e04a0e9fa5200f172fa5f` = base del kickoff (dopo ff del coordinatore). Worktree pulito.
 > Coordinatore: `aec04834-1532-4d86-9e3f-f942e82aca89`. Corsia: porta **6154**, dati **`/tmp/librefolio-r2-r`**.
 > Piano nel repo (da creare solo dopo l'autorizzazione): `LibreFolio_developer_journal/Release_2/Phase_0/55_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md`.
 > Stato: **FROZEN** — nessun file del repo modificato. Grafo graphify assente (atteso): consultate le pagine wiki committate.
-> Inventario di partenza (sola lettura, fuori repo): `files/inventory-b631308/`, `files/zones.out`, `files/sign_ternaries.txt`.
+> Inventario di partenza (sola lettura, fuori repo): `files/inventory-44623e0/`, `files/zones.out`, `files/sign_ternaries.txt`.
 
 ## 0. Problema e approccio
 
@@ -14,9 +14,9 @@ Approccio: tabelle di valori identici + un solo punto di scelta del tema (`theme
 le chiamate, dove i test fissano il testo sorgente; ogni ondata ha una **prova di equivalenza a livello di codice** prima
 della gallery dello stesso giorno.
 
-## 1. Verifica sul codice (R-1…R-4) — righe a `b631308`
+## 1. Verifica sul codice (R-1…R-4) — righe a `44623e0`
 
-`frontend/src` è identico a `6d0b1266c` (commit dell'analisi): le righe dell'analisi valgono, salvo le correzioni sotto.
+`frontend/src` è identico a `885f7e91e` (commit dell'analisi): le righe dell'analisi valgono, salvo le correzioni sotto.
 
 ### R-1 grafici — confermato, con correzioni
 - Perimetro reale (cartelle grafici + PAC result): **530 hex** (446 in script `.svelte`, 84 in `.ts`) + **51 funzioni colore** (coerente con le 571 del progetto Lab).
