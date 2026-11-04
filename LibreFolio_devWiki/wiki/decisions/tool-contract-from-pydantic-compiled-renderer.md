@@ -60,7 +60,7 @@ one in TypeScript, drift; a generic form generated from a schema shows numbers w
 ## Consequences
 
 - A Tool cannot run until the frontend bundle holds a compatible compiled renderer: the PAC planner's arrived on
-  2026-09-25 (`0210f9848`), and `registry.ts` holds that one registration today.
+  2026-09-25 (`502877358`), and `registry.ts` holds that one registration today.
 - Any change to a model changes the fingerprint, so a released contract must move its version with it. The PAC
   contract has kept `1.0.0` because it has never been released: its fingerprint moved with the compaction
   (2026-10-05), with the FX fix (2026-10-09, `4f061103…` → `a999932e…`) and with the schema texts of the rounding fix

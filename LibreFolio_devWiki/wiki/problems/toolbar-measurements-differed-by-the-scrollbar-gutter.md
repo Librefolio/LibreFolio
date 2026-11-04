@@ -33,7 +33,7 @@ at a 1310 px viewport, and the asset detail's by up to 11.8 px at 1210 px
 
 ## Solution
 
-`7f8febd9d` («fix(layout): Spanish toolbar no longer overflows», train 72): `denseRow` from 950 to 990 on the
+`a91ffd892` («fix(layout): Spanish toolbar no longer overflows», train 72): `denseRow` from 950 to 990 on the
 Dashboard (below its `oneRow`, 1000) and from 850 to 890 on the asset detail — margins of 22 and 21.2 px over the
 measured need. `front-utility toolbar-width-sweep` for Spanish was red before (2 failed) and green after; the full
 sweep passed 15 of 15, and the served bundle was checked for the new values.
@@ -46,7 +46,7 @@ sweep passed 15 of 15, and the served bundle was checked for the new values.
   as the scrollbar gutter, before suspecting the code.
 - 48-1, the AI Export button padded wider than its neighbours in the same bar, was closed in 1.3 by workstream Y,
   lot Y8 (2026-10-15): its trigger and the Dashboard's `sync-button` beside it now use `gap-1.5 px-2.5`, like the
-  toolbars of the asset, broker and FX pages. V-19 itself is closed in the backlog (`2166eeb90`).
+  toolbars of the asset, broker and FX pages. V-19 itself is closed in the backlog (`0a9bfae47`).
 
 ## Source files
 

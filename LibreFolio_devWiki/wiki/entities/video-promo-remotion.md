@@ -10,7 +10,7 @@ related: ["source-code-v0.9.0-batch", "gallery-is-a-release-gate-with-real-data"
 > **Moved out of the repository (2026-10-14).** The video project now lives in the project's business repository,
 > folder `media/video/`, together with its render, its AI assets and the local copies of third-party pages it used.
 > `./dev.py mkdocs video` is gone. The history was not rewritten: `mkdocs_src/videoClipPrject/` is still in the
-> commits from `484acf88b` (June 2026) up to the removal, and in the tags v0.9.0 to v1.2.0.
+> commits from `62ed84ff2` (June 2026) up to the removal, and in the tags v0.9.0 to v1.2.0.
 
 ## Context
 A programmatic video generation project bootstrapped to create promotional material for LibreFolio.

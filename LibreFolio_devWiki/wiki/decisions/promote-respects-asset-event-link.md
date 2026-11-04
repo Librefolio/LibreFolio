@@ -32,7 +32,7 @@ check asked for one ([[problems/promote-skipped-cost-basis-check]]).
 
 ## Decision
 
-- **Backend** (`7f8233c47`, train 34): `_promoted_state_issues` validates the two rows in their promoted state with the
+- **Backend** (`af4463c5f`, train 34): `_promoted_state_issues` validates the two rows in their promoted state with the
   same business rules as creates and updates (`validate_transaction_business_rules`). A row linked to an event its new
   type does not admit gives `eventTypeIncompatible` on the `promote` operation, with `ref_id` for saved rows; the
   promote is not applied and the link is untouched.

@@ -115,7 +115,7 @@ after steps that rewrite tracked files.
   logos, every icon is there and git ignores none of them, so a fresh checkout regenerates
   nothing.
 
-Red phase of batch 34, against e501b9615 (HEAD): its 59 tests, run on ``git show HEAD:``
+Red phase of batch 34, against 80ee4beee (HEAD): its 59 tests, run on ``git show HEAD:``
 copies of the workflow, ``dev.py``, ``vite.config.ts`` and the script, went 46 red and 13
 green. Red: every check of a real file (no ``LF_APP_VERSION`` export, no ``[CHECK]`` step,
 no script, ``npm install`` at the root, ``getGitVersion()`` never reading

@@ -734,7 +734,7 @@ async def test_xr38_ensure_rates_multi_source_overwrites_a_legacy_rate_no_column
 # Its rates in the window and its route are wiped before and after each test; the provider is a MockFXProvider whose
 # fetch answers the block's days whatever the range asked, behind a fetch cache of the test's own.
 #
-# Red before N83's revision (HEAD f5135c9a1): both tests of the block, for the reason each docstring gives.
+# Red before N83's revision (HEAD 4302aaa70): both tests of the block, for the reason each docstring gives.
 
 XR65_OLD_FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the floor X-R65 gave the sync and N83's revision took away
 XR65_PAIR = ("EUR", "SOS")

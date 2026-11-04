@@ -59,7 +59,7 @@ The developer called the second instance «una duplicazione errata di codice».
 
 ## Solution
 
-Commit `5ccb495e5`, release 1.3:
+Commit `79aea05e7`, release 1.3:
 
 - **The cache is observable.** `merged` is a `SvelteMap` (`svelte/reactivity`): every `$derived` or effect that calls
   `peek()` depends on it, and `SvelteMap.get()` of a missing key tracks the map's version, so the first `set` reaches
@@ -90,7 +90,7 @@ Two side notes found on the way:
   failed-then-loaded variant.
   - A faithful fake of the module must mirror its reactivity: the fakes' cache is a `SvelteMap` since A-CL1. The red
     was observed with the plain-`Map` fake, today's module semantics. A fake proves the component's side only: with
-    `new Map` back in the module, every test on the fake would stay green (the automatic review of `5ccb495e5`).
+    `new Map` back in the module, every test on the fake would stay green (the automatic review of `79aea05e7`).
 - **The real module, in Vitest.** Two walls stood in the way, and both are worth knowing:
   - the default `node` environment has no reactivity: `svelte/reactivity` is the server build (`SvelteMap =
     globalThis.Map`), `$derived` is computed once and `$effect` never runs (`src/__tests__/runes.svelte.ts`);

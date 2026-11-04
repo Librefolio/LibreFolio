@@ -16,7 +16,7 @@ related:
 
 ## Summary
 
-One plan (~165 lines), shipped in `916f12bdd` (2026-09-10) and archived on 2026-10-09. It made it possible to run
+One plan (~165 lines), shipped in `63cfb55d1` (2026-09-10) and archived on 2026-10-09. It made it possible to run
 several development servers and test campaigns in parallel — one per worktree or agent — each with its own port and
 data directory, guarded against touching production. Every later Release 2 workstream ran in such a lane.
 

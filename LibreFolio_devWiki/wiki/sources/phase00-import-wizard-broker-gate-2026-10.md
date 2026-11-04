@@ -20,8 +20,8 @@ gallery probes. On the import wizard's step 1, «Next» worked before the broker
 every broker panel collapsed and the uploaded files hidden. The developer chose to disable the button until the list
 arrives. On I's analysis the coordinator approved covering the refresh after a broker created from step 1 as well (B)
 and reusing the upload's spinner, and dropped a second E2E. The red tests came first, from `test-author`; the fix
-(`3cd25af4f`) entered with train 48. The same lot also carried I's journal work: the F-AI (b) row in section I of the
-post-1.2 backlog and the closing notes of plan 41 (`8339b0a06`).
+(`40a192a89`) entered with train 48. The same lot also carried I's journal work: the F-AI (b) row in section I of the
+post-1.2 backlog and the closing notes of plan 41 (`9065d9212`).
 
 ## Key Takeaways
 

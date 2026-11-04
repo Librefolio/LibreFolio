@@ -2406,7 +2406,7 @@ async function expectRowState(page: Page, row: Locator, rowId: number, how: {wha
  * the colour of their row, whatever the row's state, in both themes; and the highlight pulses (DataTable, 19/10).
  *
  * The defect (reported 19/10, on this page's table): under the pointer the pinned Actions column turned transparent, and the
- * row's content scrolling under it showed through instead of the ⋮. Since 77bfa6a39 the row states are translucent colour
+ * row's content scrolling under it showed through instead of the ⋮. Since dac99ffda the row states are translucent colour
  * roles — `--lf-selected`, the focus green at 12 %; a clickable row's hover at 6 %; an analyzed row's hover at 20 % — and
  * `.td-fixed { background: inherit }` copied the translucent colour. A fixed cell also paints its row's background behind
  * itself, so it showed the tint twice: a darker strip down every hovered or selected row. And the highlight pulse

@@ -1,6 +1,6 @@
 """MF-J1-8a (workstream MF, J-1 item 8) — an FX gap is read one way: by the engine's securities and by the native cash.
 
-What it guards. A guard, no product change (green on HEAD 5d87dec28, and on the P3 cure). Two readers value a portfolio
+What it guards. A guard, no product change (green on HEAD f7e648359, and on the P3 cure). Two readers value a portfolio
 day in the report currency, and both get their rates from ONE rule of the FX service
 (``backend/app/services/fx/conversion.py``): the latest usable rate on or before the day, with no limit on how far back,
 a row the bounds ``usable_fx_rate_bounds()`` (X-R38) reject (a stored 0, ``inf``, anything at or above
@@ -60,8 +60,8 @@ The tests (every day of the gap is asserted, the deviations listed all at once):
   rate: neither reader has a rate on 02-27..02-29; the native cash does not count the deposit (no conversion, reported
   missing) and neither does the engine (its ``missing_fx`` names the day; the cash on D1 is 10000 × 0.8, not 10500 × 0.8).
 
-Teeth — product mutations that turn it red. First applied at runtime in a private harness on HEAD 5d87dec28; re-measured
-on the P3 cure (HEAD 2f4ab1962 + the cure) on a scratch copy, which is what follows:
+Teeth — product mutations that turn it red. First applied at runtime in a private harness on HEAD f7e648359; re-measured
+on the P3 cure (HEAD 41f66f23a + the cure) on a scratch copy, which is what follows:
 
 - (a) a fill limit in the engine's reading only (re-expressed for P3: a step of ``_preload_fx_rates``'s map whose stored
   row is more than 5 days older than the day reads no rate; before P3, a ``convert_bulk`` answer that old was dropped):

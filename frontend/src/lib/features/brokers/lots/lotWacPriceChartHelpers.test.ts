@@ -533,7 +533,7 @@ describe('applyLotEvent', () => {
  * of `unit_price`; null on every other kind and when the conversion is missing. Rule 10 of the project: one home for
  * financial math, so the chart shows the backend's field and never recomputes it.
  *
- * Red on bab5a8fb9. `buildMarkerTooltip` (LotWacPriceChart.svelte) computes the figure from the event's own fields,
+ * Red on d261e09e1. `buildMarkerTooltip` (LotWacPriceChart.svelte) computes the figure from the event's own fields,
  * `Math.abs(quantity) * unitPrice`, and this module has no reader for the backend's. The fix exports
  * `eventOpeningValue(event)`, the field parsed as the chart parses every amount (`safeDecimal`: null when absent or not
  * a finite number), and the BUY branch of the tooltip reads it; its quantity and unit-price rows stay. ADJUSTMENT_IN
@@ -559,7 +559,7 @@ async function loadEventOpeningValue(): Promise<EventOpeningValue> {
 }
 
 describe('eventOpeningValue — a BUY’s opening value is the backend’s opening_value (Y12b, V11)', () => {
-    // Red on bab5a8fb9, on the barrier: the export is missing.
+    // Red on d261e09e1, on the barrier: the export is missing.
     it('reads a decimal string as its number, zero included', async () => {
         const eventOpeningValue = await loadEventOpeningValue();
         expect(eventOpeningValue({kind: 'BUY', opening_value: '1234.56'}), 'V11: the opening_value "1234.56" is the number 1234.56').toBe(1234.56);
@@ -567,20 +567,20 @@ describe('eventOpeningValue — a BUY’s opening value is the backend’s openi
         expect(eventOpeningValue({kind: 'BUY', quantity: '5', unit_price: '0', opening_value: '0'}), 'V11: an opening value of zero is 0, not null').toBe(0);
     });
 
-    // Red on bab5a8fb9, on the barrier. Today the tooltip shows 30 for this event.
+    // Red on d261e09e1, on the barrier. Today the tooltip shows 30 for this event.
     it('takes the backend’s figure where it differs from |quantity| × unit price: 29.97, never 3 × 10 = 30', async () => {
         const eventOpeningValue = await loadEventOpeningValue();
         expect(eventOpeningValue({kind: 'BUY', quantity: '3', unit_price: '10', opening_value: '29.97'}), 'V11: the opening value is the backend’s opening_value, 29.97, not the event’s |quantity| × unit price, 30').toBe(29.97);
     });
 
-    // Red on bab5a8fb9, on the barrier. Today the tooltip shows 30 for both events: it has their quantity and price.
+    // Red on d261e09e1, on the barrier. Today the tooltip shows 30 for both events: it has their quantity and price.
     it('is null when the backend sends none, null or absent, though quantity and unit price are there', async () => {
         const eventOpeningValue = await loadEventOpeningValue();
         expect(eventOpeningValue({kind: 'BUY', quantity: '3', unit_price: '10', opening_value: null}), 'V11: no conversion at the opening date is no opening value (null, «—»), not a product rebuilt in the browser').toBeNull();
         expect(eventOpeningValue({kind: 'BUY', quantity: '3', unit_price: '10'}), 'V11: an event without opening_value has no opening value, not |quantity| × unit price').toBeNull();
     });
 
-    // Red on bab5a8fb9, on the barrier.
+    // Red on d261e09e1, on the barrier.
     it('is null for a value that is not a finite number', async () => {
         const eventOpeningValue = await loadEventOpeningValue();
         expect(eventOpeningValue({kind: 'BUY', opening_value: 'n/a'}), 'V11: a non-numeric opening_value is null').toBeNull();
@@ -632,7 +632,7 @@ describe('LotWacPriceChart BUY tooltip — the opening value’s glue on the sou
         return new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*'\\./lotWacPriceChartHelpers'`);
     }
 
-    /** |quantity| × unit price, in either order, with or without Math.abs: the opening value the tooltip computes on bab5a8fb9. */
+    /** |quantity| × unit price, in either order, with or without Math.abs: the opening value the tooltip computes on d261e09e1. */
     const QUANTITY_TIMES_PRICE = /(?:Math\.abs\(\s*quantity\s*\)|\bquantity\b)\s*\*\s*unitPrice\b|\bunitPrice\s*\*\s*(?:Math\.abs\(\s*quantity\s*\)|\bquantity\b)/;
 
     // Green before and after the fix: the positive controls. Without them the pins below could pass on an empty or a
@@ -649,17 +649,17 @@ describe('LotWacPriceChart BUY tooltip — the opening value’s glue on the sou
         expect('const openingValue = eventOpeningValue(event);', 'the product pin spares the reader').not.toMatch(QUANTITY_TIMES_PRICE);
     });
 
-    // Red on bab5a8fb9: the branch computes the figure itself and calls no reader.
+    // Red on d261e09e1: the branch computes the figure itself and calls no reader.
     it('reads the opening value with eventOpeningValue(event)', () => {
         expect(buyBranch(), 'V11: the BUY branch of buildMarkerTooltip does not call eventOpeningValue(event), so the tooltip does not show the backend’s opening_value').toMatch(/\beventOpeningValue\(\s*event\s*\)/);
     });
 
-    // Red on bab5a8fb9: `Math.abs(quantity) * unitPrice`.
+    // Red on d261e09e1: `Math.abs(quantity) * unitPrice`.
     it('computes no opening value from the event’s quantity and unit price', () => {
         expect(buyBranch(), 'V11: the BUY branch of buildMarkerTooltip still computes the opening value in the browser, as |quantity| × unit price').not.toMatch(QUANTITY_TIMES_PRICE);
     });
 
-    // Red on bab5a8fb9: the component imports no eventOpeningValue.
+    // Red on d261e09e1: the component imports no eventOpeningValue.
     it('imports eventOpeningValue from ./lotWacPriceChartHelpers', () => {
         expect(withoutComments(componentSource()), 'V11: LotWacPriceChart.svelte does not import eventOpeningValue from ./lotWacPriceChartHelpers').toMatch(importFromHelpers('eventOpeningValue'));
     });

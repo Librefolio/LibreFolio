@@ -31,7 +31,7 @@ Two defects, one on top of the other:
    - `engine.py` read `classified`, `in_transit_intervals` and `external_cash_flows`, never `warnings`.
    - `build_data_quality_report(classifier_warnings=…)` had no caller that passed it.
    - `DataQualityReport.share_mismatch_warnings` was filled by nothing.
-   - The engine's own design table in commit `77b976ebc` (June) already marked the field «schema ✅, populated ❌».
+   - The engine's own design table in commit `0a29ee73f` (June) already marked the field «schema ✅, populated ❌».
 
 ## Solution (J-43 a + b, night decision N72)
 

@@ -22,7 +22,7 @@ falls back to the plugin's English text when the key is missing.
 
 | Text | Key | Since |
 |------|-----|-------|
-| Plugin name and description | `brimPlugins.<code>.name`, `brimPlugins.<code>.description` — every plugin, 33 today, brands identical in every language | plan 37, step 12b (`2046b7419`, 2026-10-10) |
+| Plugin name and description | `brimPlugins.<code>.name`, `brimPlugins.<code>.description` — every plugin, 33 today, brands identical in every language | plan 37, step 12b (`ec837a197`, 2026-10-10) |
 | Notices | `importWizard.brimNotice.<code>` (`resolveBrimNotice.ts`) | before plan 37; Scalable added twelve codes |
 | Evidence captions | `importWizard.brimEvidence.<code>`; an empty caption in the plugin means «use the interface's» | step 12b |
 | Refusal reasons | `importWizard.parseRefusal.<code>` (`resolveParseRefusalMessage`) | step 10, with [[decisions/import-wizard-default-plugin-check]]; the Generic CSV's and DEGIRO's codes, five of them shared by any plugin, since release 1.3 (workstream W, lot K2a) |

@@ -37,7 +37,7 @@ Counting. ``StateSegment.state_on`` is replaced on the class through ``monkeypat
 dataclass: slots restrict instances, not the class), and ``DailyPortfolioState.__init__`` is wrapped too
 (``dataclasses.replace`` constructs through it), so a quiet day built by any other path is still counted. No clock.
 
-RED on HEAD 1fd80c481, by absence: ``StateSegment`` and ``DailyStates`` do not exist, the module fails at collection with
+RED on HEAD 61a6c828b, by absence: ``StateSegment`` and ``DailyStates`` do not exist, the module fails at collection with
 ``ImportError``. After a cure that adds the types but keeps a reader walking every day, that reader's cost test is red.
 
 Runs in ``./dev.py test services financial-math`` (the runner collects the whole ``test_financial_math/`` directory).

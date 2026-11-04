@@ -24,7 +24,7 @@ Four independent features/fixes developed in a parallel terminal without formal 
 
 ## 1. PWA Support (Progressive Web App)
 
-**Commits**: `daf95a904`, `75d72f601`, `6871dc38f`, `9ab32912c`
+**Commits**: `076adabee`, `8e26e679c`, `d32cc226f`, `486096e29`
 **Plan file**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Standalone/plan-pwa-mobile-optimizations.prompt.md`
 **Status**: ✅ Completed (2026-05-26)
 
@@ -63,7 +63,7 @@ Four independent features/fixes developed in a parallel terminal without formal 
 
 ## 2. Port 60/40 Scheme
 
-**Commit**: `432d8642a`
+**Commit**: `97aff9cf3`
 **Status**: ✅ Completed
 
 ### What was done
@@ -98,7 +98,7 @@ Migrated all port defaults from `8000/8001/8002` to `6040/6041/6042`.
 
 ## 3. Borsa Italiana Provider
 
-**Commit**: `9b9fcbb65`
+**Commit**: `3189508dc`
 **Status**: ✅ Completed
 
 ### What was done
@@ -135,7 +135,7 @@ Uses the `borsa-italiana-scraping` library (optional dependency). Follows the st
 
 ## 4. FX Provider Removal Fix
 
-**Commit**: `e82346802`
+**Commit**: `af895c277`
 **Status**: ✅ Completed
 
 ### What was done

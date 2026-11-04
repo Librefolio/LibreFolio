@@ -9,7 +9,7 @@ else would tell it. The contract, pinned here where it does not go through HTTP 
   - ``release_of(version)``: the base release ``X.Y.Z`` of an app version string, or None. ``1.2.1`` and ``v1.2.1`` are
     ``1.2.1``; git describe's ``v1.3.0-7-gabc1234`` and ``v1.2.1-2106-gcd52e25fc-dirty`` are ``1.3.0`` and ``1.2.1``;
     ``v1.2.1-dirty`` is ``1.2.1``; a pre-release ``1.3.0-rc1`` is ``1.3.0``; ``1.3`` is ``1.3.0``; ``v1.10.0`` keeps its
-    two digits. A bare hash — ``cd52e25fc``, ``cd52e25fc-dirty``, or digits only —, ``dev``, ``unknown`` (what
+    two digits. A bare hash — ``104278401``, ``104278401-dirty``, or digits only —, ``dev``, ``unknown`` (what
     ``get_git_version`` answers without git nor a VERSION file), ``""`` and None are None: a release has at least ``X.Y``.
     A base of ``0.0.0`` is None too: ``v0.0.0-gabc1234`` and ``v0.0.0-gabc1234-dirty`` — what ``get_git_version``
     reports for a checkout without a tag, git describe's bare hash prefixed with ``v0.0.0-g`` — and ``0.0.0``. Read as a
@@ -121,7 +121,7 @@ NEWER_RELEASE = "1.4.0"
 #: Running versions without a release: get_git_version's answer without git nor VERSION, a bare hash, a development build.
 UNKNOWN_VERSIONS = [
     pytest.param("unknown", id="unknown"),
-    pytest.param("cd52e25fc-dirty", id="a-bare-hash-dirty"),
+    pytest.param("104278401-dirty", id="a-bare-hash-dirty"),
     pytest.param("dev", id="dev"),
 ]
 #: The last_seen_version of an account behind the running release: NULL — from before C-54 — or an older release.
@@ -138,8 +138,8 @@ RELEASES = [
     pytest.param("1.3.0-rc1", "1.3.0", id="a-pre-release"),
     pytest.param("1.3", "1.3.0", id="two-parts"),
     pytest.param("v1.10.0", "1.10.0", id="a-two-digit-minor"),
-    pytest.param("cd52e25fc", None, id="a-bare-hash"),
-    pytest.param("cd52e25fc-dirty", None, id="a-bare-hash-dirty"),
+    pytest.param("104278401", None, id="a-bare-hash"),
+    pytest.param("104278401-dirty", None, id="a-bare-hash-dirty"),
     pytest.param("2106123", None, id="a-bare-hash-of-digits-only"),
     # A checkout without a tag: get_git_version turns git describe's bare hash into v0.0.0-g<hash>, -dirty kept.
     pytest.param("v0.0.0-gabc1234", None, id="zero-base-untagged-checkout"),
@@ -176,7 +176,7 @@ PENDING = [
     pytest.param(RUNNING_VERSION, "v1.2.0-5-gabc1234", ("1.2.0", RUNNING_RELEASE), id="saw-an-older-release-written-as-git-describe"),
     pytest.param(RUNNING_VERSION, None, (None, RUNNING_RELEASE), id="null-from-before-c54"),
     pytest.param(RUNNING_VERSION, "not-a-version", (None, RUNNING_RELEASE), id="garbage"),
-    pytest.param(RUNNING_VERSION, "cd52e25fc", (None, RUNNING_RELEASE), id="a-bare-hash"),
+    pytest.param(RUNNING_VERSION, "104278401", (None, RUNNING_RELEASE), id="a-bare-hash"),
     pytest.param(RUNNING_VERSION, NEWER_RELEASE, None, id="saw-a-newer-release-a-downgrade"),
     pytest.param("v1.3.1", RUNNING_RELEASE, (RUNNING_RELEASE, "1.3.1"), id="a-patch-release-is-newer"),
     pytest.param("v1.10.0", "1.9.0", ("1.9.0", "1.10.0"), id="1.9-is-before-1.10"),
@@ -645,7 +645,7 @@ FORWARD = [
     pytest.param(RUNNING_VERSION, RUNNING_RELEASE, OLDER_RELEASE, id="an-older-release"),
     pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "v1.2.0-5-gabc1234", id="an-older-release-written-as-git-describe"),
     pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "garbage", id="garbage"),
-    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "cd52e25fc", id="a-bare-hash"),
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "104278401", id="a-bare-hash"),
     pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "v0.0.0-gabc1234", id="an-untagged-checkout-v0.0.0"),
     pytest.param("v1.10.0", "1.10.0", "1.9.0", id="saw-1.9.0-running-1.10.0"),
 ]

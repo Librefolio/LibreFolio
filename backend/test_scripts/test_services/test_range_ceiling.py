@@ -40,7 +40,7 @@ Isolation: PURE — no lane database, no server, no network. The price queries r
 in-process converter that records every day it is handed; the refresh step runs with an in-process provider double and
 stand-ins for the two core caches it reads.
 
-Red before the change (HEAD 3d13fbcdc), each for the reason its docstring gives ("Red before X-R55"): RC-000,
+Red before the change (HEAD c4742a661), each for the reason its docstring gives ("Red before X-R55"): RC-000,
 RC-B02…B04, RC-A01…A06, RC-F01…F05, RC-S01, RC-S04. Green then too — behaviour the change had to keep: RC-B01, RC-S02,
 RC-S03. Written green, with no red phase: RC-001 (the lift reaches X-R55's consumers) and RC-F06 (the signal ranges
 echoed, a review fix).
@@ -67,11 +67,11 @@ cuts do not change. The contract pinned here (RC-W):
    order, and no rate is written, not even a valid one (``upsert_rates_bulk`` replaced by an in-process writer that
    records); a rate before 1900 is handed to the writer like any other (RC-W09).
 
-Red before X-R65 (HEAD f1786a883), each for the reason its docstring gives ("Red before X-R65"): RC-W01…W06. Green then
+Red before X-R65 (HEAD 9245c52f6), each for the reason its docstring gives ("Red before X-R65"): RC-W01…W06. Green then
 too — behaviour the change has to keep: RC-W07. RC-000 now accepts the name ``latest_range_end`` in
 ``date_range_limits`` when it is ``datetime_utils``' own (X-R65 imports it there): green before X-R65 and after.
 RC-W08 (X's review of X-R65): red before the Z-30 lot's plural fix, for one date only — the message read «…: 1 do not».
-Red before N83's revision (HEAD f5135c9a1), each for the reason its docstring gives ("Red before N83's revision"):
+Red before N83's revision (HEAD 4302aaa70), each for the reason its docstring gives ("Red before N83's revision"):
 RC-W01…W05, RC-W08, RC-W09, RC-W10. Green then too, and guards of the cure: RC-W06 (its dates now after the ceiling)
 and RC-W07.
 """

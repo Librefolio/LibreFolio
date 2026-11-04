@@ -9,7 +9,7 @@ I TODO completati sono in `TODO_Completati.md`.
 
 **Il difetto.** In un investimento programmato (provider Scheduled Investment) con **mora**, la cedola di scadenza è
 contata due volte e la mora parte dal valore di prima della cedola. La liquidazione senza mora è già curata
-(`69cc2faac`).
+(`0d0500850`).
 
 **Cosa manca.** Decidere se, con la mora, la cedola di scadenza è pagata o no; poi correggere il calcolo (J, ~1 giorno).
 
@@ -18,7 +18,7 @@ contata due volte e la mora parte dal valore di prima della cedola. La liquidazi
 ## ⚖️ Rebalancer del PAC (28/10/2026)
 
 **Cosa resta.** L'analisi del Rebalancer («riga 14»), gli E2E del PAC, il difetto 1 e l'opzione (e) del backlog di
-`LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/` (i difetti 2 e 5 e C-38 sono chiusi, `ca681b4f9`).
+`LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/` (i difetti 2 e 5 e C-38 sono chiusi, `a8d6088bd`).
 
 **Decisione del developer (28/10/2026):** nella 1.4.
 
@@ -924,7 +924,7 @@ produce alcun errore: né a compile time, né a `svelte-check`, né in esecuzion
 Il contratto cresce, il consumatore resta indietro, e nulla lo dice.
 
 **Il caso che l'ha reso visibile** (21/09/2026): `memory` in `ToolItemMetrics`,
-introdotto da `4a38b9061`, mai letto da `ToolExecutionMetrics.svelte`. È stato
+introdotto da `97dde9bf3`, mai letto da `ToolExecutionMetrics.svelte`. È stato
 trovato **per caso**: è inciampato in `duration()`, un helper tipizzato
 genericamente su `ToolItemMetrics[keyof ToolItemMetrics]`, che si è allargato da
 solo al nuovo campo e si è ritrovato un oggetto dentro una funzione che formatta

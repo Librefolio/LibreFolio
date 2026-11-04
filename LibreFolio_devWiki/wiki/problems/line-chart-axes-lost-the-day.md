@@ -26,7 +26,7 @@ ago ago set set set set ott ott ott».
 
 ## Root Cause
 
-Both are new in 1.2, from `responsiveXAxis.ts` (`2d22130bd`, workstream I, 2026-09-17).
+Both are new in 1.2, from `responsiveXAxis.ts` (`f4d209b11`, workstream I, 2026-09-17).
 
 - **Compact axes.** `formatCompactXAxisDate` chose one format from the width of the period alone: «MMM yy» beyond a
   year, «MMM» beyond 90 days, «d MMM» otherwise. Compact mode starts below 480 px or 24 px per point — with daily
@@ -42,12 +42,12 @@ Both are new in 1.2, from `responsiveXAxis.ts` (`2d22130bd`, workstream I, 2026-
 Workstream I, plan 47, approved by the developer — «1 ago: anche il primo del mese col suo giorno, come le altre
 etichette» and «Sì, procedi; e sistema anche il percorso non compatto nello stesso lotto, con un commit a parte»:
 
-- `4c05c1d85` («fix(charts): name the day on compact x-axes»): the formatter receives `(value, index, {level})` as
+- `9cccf79bb` («fix(charts): name the day on compact x-axes»): the formatter receives `(value, index, {level})` as
   ECharts 6 calls it. On a time axis: the data's endpoints «d MMM» (with a two-digit year when the data cross one), a
   tick off midnight empty, the 1st of January the year («2026»), the 1st of a month «d MMM» between daily ticks and
   «MMM» when the ticks are months, any other day «d MMM». A compact category axis uses the month only when every pair
   of consecutive regular labels falls in different months.
-- `8682f0bbd` («fix(charts): localized labels off compact mode»): the policy always carries a formatter in the app's
+- `7aff6c163` («fix(charts): localized labels off compact mode»): the policy always carries a formatter in the app's
   language; every chart sets it, the lots charts included, whose own formatter is gone.
 - The guarantees: no two consecutive labels are equal in any simulated family; the `Intl.DateTimeFormat` instances are
   built once per policy; Candles and Income keep the bucket ladder of their own axis.

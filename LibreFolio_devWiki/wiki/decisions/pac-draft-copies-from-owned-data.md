@@ -55,7 +55,7 @@ The contract frozen on 2026-09-16 (Step 4, «copie dominio»), with the review r
 - Defects found on the way: a copy whose rows were all in conflict was pruned, and «Aggiorna» then stamped rows
   pointing to a copy that no longer existed (`CopyOutcome.copy`, Round 5); the saved distribution parser now
   accepts Pydantic's decimal text and the geographic key `"Other"` (R7.4); the distribution help pointed to an
-  «Allocation page» that does not exist and was reworded in four languages (`dbedcc822`, row 13).
+  «Allocation page» that does not exist and was reworded in four languages (`0b0896b83`, row 13).
 - The copies replaced P1's report branch, which the final P1 removal deleted ([[decisions/pac-p1-prototype-removed]]).
 
 ## Source files

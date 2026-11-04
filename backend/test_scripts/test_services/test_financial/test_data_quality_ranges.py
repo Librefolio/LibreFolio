@@ -35,7 +35,7 @@ What is tested:
    04-23 is a segment start and every day's ``stale_fx_pairs`` holds the pair exactly when its last row is more than 7
    days old.
 
-RED on HEAD 1164a1e65: every test reading a new field (``*_ranges``, ``ranges``, ``stale_fx_pairs``), the movement-only
+RED on HEAD ca7599e8a: every test reading a new field (``*_ranges``, ``ranges``, ``stale_fx_pairs``), the movement-only
 ``dates`` (HEAD lists 03-05..03-09 too) and the 04-23 segment start; GREEN on HEAD: the presence barriers and the
 NAV_INCOMPLETE guard.
 

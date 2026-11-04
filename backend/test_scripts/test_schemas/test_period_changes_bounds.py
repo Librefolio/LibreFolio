@@ -15,7 +15,7 @@ does when its reference day would fall before year 1 is the services' (null chan
 
 ``range_start``, optional on both items (X-R59, decision N80): the first day of the range whose change the Assets cards
 and the FX Δ Abs / Δ % show. It shares the type of ``as_of`` (``PeriodChangesAsOf``) and is not after the item's ``as_of``:
-that ordering guard stays, with its ``value_error``. On HEAD (a275ec8af, 46bbbb1e3) the field did not exist, and a
+that ordering guard stays, with its ``value_error``. On HEAD (d369e0b49, 9981ed279) the field did not exist, and a
 ``StrictModel`` refused it with an ``extra_forbidden`` error; each refusal below therefore also asserts the error is the
 rule's (``value_error``), not that one.
 
@@ -216,7 +216,7 @@ def _items(count: int, as_ofs: int = 1, range_starts: int = 0) -> list[SimpleNam
 
 
 def _refusal(items: list) -> dict | None:
-    """``period_changes_request_refusal(items)``, looked up when called: it does not exist on HEAD 46bbbb1e3."""
+    """``period_changes_request_refusal(items)``, looked up when called: it does not exist on HEAD 9981ed279."""
     return common_schemas.period_changes_request_refusal(items)
 
 

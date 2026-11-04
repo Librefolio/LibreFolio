@@ -36,7 +36,7 @@ developer asked to bring it all home:
 - on risk, signals and PAC: «la matematica comune deve essere ripresa dal modulo, ma per il resto vive bene dovè»
   ("the common math must come from the module, but otherwise they live well where they are").
 
-Workstream T's inventory (plan 43 §1, at `b20eac99`) counted about 6 600 lines to move — the portfolio engine (2 837),
+Workstream T's inventory (plan 43 §1, at `d9cdc2ca`) counted about 6 600 lines to move — the portfolio engine (2 837),
 the FIFO engine (1 604), Yield on Cost (856), `roi_utils` (437, plus a lazy barrel of 75), `price_resolver` (298),
 `valuation_utils` (26) — plus about 800 lines of pure math inside `lots_analysis_service.py`. The import surface was
 small: about 27 lines in the app, 50 references in 35 test files, 5 in the test runner. One fact decided the
@@ -96,16 +96,16 @@ take the common math from the layer.
 
 ### The method — renames first, the cut second
 
-- **Commit A, `1cc9cd8f5`** ("refactor(math): move engines into financial_math"): whole files moved, imports
+- **Commit A, `775a3dd41`** ("refactor(math): move engines into financial_math"): whole files moved, imports
   rewritten in 43 files, nothing else. Git sees renames: the portfolio engine changed 12 lines in the move,
   `roi_utils` lost 9 (`ROIResult`, alive only through the deleted barrel's `__all__`).
-- **Commit B, `a57a43fbd`** ("refactor(math): split engines and lots math"): the sub-modules of `fifo/`,
+- **Commit B, `7d1ddc50f`** ("refactor(math): split engines and lots math"): the sub-modules of `fifo/`,
   `portfolio/` and `lots/`, 53 files.
 - **Why the order matters**: `git log --follow backend/app/services/financial_math/portfolio/engine.py` still reaches
-  the engine's first commit (`77b976ebc`, 2026-06-19, 39 commits), and a branch that touched a moved file re-applies
+  the engine's first commit (`0a29ee73f`, 2026-06-19, 39 commits), and a branch that touched a moved file re-applies
   on the rename. Git does not follow a file split into many: a module carved out by B, such as
   `portfolio/daily_state.py`, starts at B, and its lines are found with `git blame -C -C`. A was committed alone on
-  T's branch; A and B reached `dev_release2` together in train 45 (merge `76a7b099b`).
+  T's branch; A and B reached `dev_release2` together in train 45 (merge `7bb3a58f4`).
 
 ### The guard
 
@@ -130,7 +130,7 @@ take the common math from the layer.
 - **Rules and docs**: D-11 (`.github/instructions/financial-math.instructions.md`), the «Financial Math — One Home»
   table in `backend.instructions.md`, one line in `frontend.instructions.md`, the new developer page
   `developer/backend/financial_math.md` (nav between Scheduler and Risk Engine) and 13 developer pages realigned.
-  The devWiki's 58 «Source files» rows were repointed in `09c089147`; the old paths left in the prose (T-W1) were
+  The devWiki's 58 «Source files» rows were repointed in `332b82660`; the old paths left in the prose (T-W1) were
   realigned on 2026-10-12 by the step-3 ingest.
 - **Left untouched on purpose**: contract identifiers that contain an old module name —
   `source_ref="portfolio_engine.PortfolioCalculationEngine"`, `Literal["portfolio_engine_market_value"]`,

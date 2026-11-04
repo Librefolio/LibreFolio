@@ -57,7 +57,7 @@ How it is proved:
 ``states[opening:]`` for the flows of the performance inputs is an equivalent mutant (the opening's own delta is zero):
 no test can tell it apart, and none tries.
 
-Red on HEAD (bbbc085d2; derived_views.py and portfolio_service.py of HEAD loaded in-process from ``git show HEAD:…``):
+Red on HEAD (96f06a14e; derived_views.py and portfolio_service.py of HEAD loaded in-process from ``git show HEAD:…``):
 214 of 278. Every builder test fails with TypeError — no view takes a window there —, the builder cost tests included;
 the six service cost tests fail on cost (all 1 000 days read, the window has 31); the six wiring tests fail on their
 assertion (recorded ``(None, None)`` / ``(None,)``). Green on HEAD, by design: the four read-log controls, the 42

@@ -367,7 +367,7 @@ class TestConcentrationContextSlicesWithoutPercent:
     ``AllocationSlice.percent`` None (null in the payload), keeps every amount, and ``_map_slices`` sorts a None percent
     as 0 (descending percent, then name) instead of raising on ``-None``.
 
-    RED on the tree of 2026-10-28 (HEAD 01f1da513): ``AllocationItem(value=None)`` and ``AllocationSlice(percent=None)``
+    RED on the tree of 2026-10-28 (HEAD 1a1e6d7c0): ``AllocationItem(value=None)`` and ``AllocationSlice(percent=None)``
     are refused (``ValidationError``); past the schema, ``_map_slices`` would raise ``TypeError`` on ``-slice_.percent``.
     """
 

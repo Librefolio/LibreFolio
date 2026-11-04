@@ -21,11 +21,11 @@ dei prezzi + nessun segnale attivo ⇒ gli eventi svanivano in silenzio» (`17_s
 
 `loadChartData()` returned early when the price store already covered the requested range and no signal was active.
 But events travel only in the same response as the prices (`include_events: true`): skipping the request skipped the
-events too. The early return came with the price cache, added in July (`5b9dddb45`).
+events too. The early return came with the price cache, added in July (`0d60124ff`).
 
 ## Solution
 
-`b45f5afbb` («fix(tests): make the full suite runnable end-to-end and fix…»): no early return; on a cache hit the page
+`251df8054` («fix(tests): make the full suite runnable end-to-end and fix…»): no early return; on a cache hit the page
 falls through to an events-only request (`include_price: false`). Loading state, chart data and the error path are all
 guarded by the same cache flag, so the fall-through changes nothing else.
 

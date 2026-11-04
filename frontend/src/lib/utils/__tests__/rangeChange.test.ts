@@ -20,7 +20,7 @@
  *     orientation from its own fields; null wherever the backend has nothing usable, never 0, and a zero never −0. Only
  *     strings are read: the generated type of a decimal is wider than what the server sends.
  *
- * Fixtures: `range_change` objects as the backend serialises `FARangeChange` and `FXRangeChange` (commit a8de6b584), and
+ * Fixtures: `range_change` objects as the backend serialises `FARangeChange` and `FXRangeChange` (commit b3b593da1), and
  * the malformed values a reader of an answer must survive. `$lib/api` is mocked only to observe that importing the module
  * never loads the API client.
  *

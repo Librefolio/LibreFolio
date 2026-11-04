@@ -24,7 +24,7 @@ a spy that calls the real method, before any flush or expiry). The exact average
 its way through, from the facade's own ``compute_average_costs`` (a spy that runs the real function), so the parity
 guard compares with the very value the facade received, whatever form the rows were loaded in.
 
-Reds — fail on HEAD ``ca2f00c35`` (facade unrounded), pass with the cure:
+Reds — fail on HEAD ``ed9e7679b`` (facade unrounded), pass with the cure:
 
 - ``TestTheFacadeRoundsAPeriodicAverage``: four pools of 3 units — 100, 1000, 200 (the half-even step rounds up) and
   1000000 EUR (the 15 significant digits bind: ``333333.333333333``) — whose exact average financial_math hands the

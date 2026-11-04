@@ -33,11 +33,11 @@ Three pieces that do not talk to each other:
 In a full period the two dates coincide: the asset page fills the weekends and the FX converter returns every
 calendar day. In the last period, still open, the point sits on the last date with data and the event vanished. The
 first partial period loses nothing, because its point sits on the theoretical end anyway. The defect dates from
-`222a77c5e` (2026-07-12), so it was already in v1.0.0.
+`4f1f81283` (2026-07-12), so it was already in v1.0.0.
 
 ## Solution
 
-`1acd1bf10` (2026-10-13, I's lot 51, train 91), in `buildEventScatterGroups` only, for resolutions other than daily:
+`ca1f01663` (2026-10-13, I's lot 51, train 91), in `buildEventScatterGroups` only, for resolutions other than daily:
 a map from each period's theoretical end to the date of its point (`renderDateByBucketEnd`, built from the resolved
 line), and the marker takes that date — falling back to the theoretical end — and with it the index, the y value and
 the period's details. `bucketEventMarkers` and `PriceChartFull.svelte` do not change.
@@ -54,24 +54,24 @@ marker … vanished», and are green with the cure.
 - A lookup keyed on a computed date must use the same date the drawing used: here the period's theoretical end
   against the point's real date.
 - The sibling in the tooltip, signalled to T, is cured too: in the open period the tooltip named the theoretical
-  end — «value at» 31 October on 13 October, a day still to come. `341c77811` (T, train 93) adds `bucketSpanUpTo`
+  end — «value at» 31 October on 13 October, a day still to come. `3071319fe` (T, train 93) adds `bucketSpanUpTo`
   in `priceChartHelpers.ts`: the span a point's tooltip names runs from the period's first day to the point's own day,
   in `PriceChartFull` and `CandlestickChart`. Present since v1.0.0 as well.
 - One more of the same family, recorded by T and not touched: the lot comparison chart (`LotComparisonChart.svelte`)
   dates its open period on the theoretical end too, since 1.1.0. The Growth and allocation history charts already
   read the open period right. *Update (train 99, I's lot 52)*: that reading was too kind to both; one rule for every
   chart now — the running period ends on
-  its last day with data, through `bucketSpanUpTo`: the lot comparison chart's tooltip (`848906fa2`), the allocation
-  history's week (`da26ded78`), and the Growth chart, whose buckets were dated at their theoretical end so that the
-  running period had no value and the line stopped early (`e1f2753ee`).
+  its last day with data, through `bucketSpanUpTo`: the lot comparison chart's tooltip (`e650371fc`), the allocation
+  history's week (`21820eb78`), and the Growth chart, whose buckets were dated at their theoretical end so that the
+  running period had no value and the line stopped early (`0c2cff10a`).
 
 ## Status
 
 Resolved. The [1.2.0] chapter carries one 🐛 line for both halves, under «📈 Charts»: «At weekly or monthly
 resolution, the week or month not over yet reads right on the asset and FX charts…», «Present since v1.0.0»
-(`fcc4ac96f`, extended with the tooltip in `ef666fdee`, then to the Growth, allocation history and lot comparison
-charts in `10e646f79`). The backlog entry T-EVW, the same defect seen in the code, is closed with a pointer to R-5
-(`fafe68863`).
+(`b9f03ec0a`, extended with the tooltip in `d5873f5d3`, then to the Growth, allocation history and lot comparison
+charts in `058b76dcf`). The backlog entry T-EVW, the same defect seen in the code, is closed with a pointer to R-5
+(`91db51ba6`).
 
 ## Source files
 

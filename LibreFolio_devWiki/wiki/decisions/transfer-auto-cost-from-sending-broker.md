@@ -20,7 +20,7 @@ related:
 ## Context
 
 Workstream Q, reading the code, reported defects in the average cost that it had not tried. On 2026-10-09 workstream P
-proved them with red tests, on `083ed26dc`; all of them were already in v1.1.0. Two share one cause — where a TRANSFER's
+proved them with red tests, on `fef0203ca`; all of them were already in v1.1.0. Two share one cause — where a TRANSFER's
 receiving side in Auto takes its cost from:
 
 1. **A whole position moved in Auto got a cost of 0.** The source was the partner's broker, but the facade read that
@@ -53,7 +53,7 @@ at 300 on 3 April, the receiving side on 5 April:
 
 ## Decision
 
-`_auto_cost_source()` (`transaction_service.py`, commit `d7c148564`, train 28) chooses the pool an Auto cost averages:
+`_auto_cost_source()` (`transaction_service.py`, commit `1076fa994`, train 28) chooses the pool an Auto cost averages:
 
 - the receiving side of a TRANSFER with `related_transaction_id` averages **its partner's broker, up to the partner's
   date, without the partner's outgoing leg and without itself**. The partner comes from the same batch, from the

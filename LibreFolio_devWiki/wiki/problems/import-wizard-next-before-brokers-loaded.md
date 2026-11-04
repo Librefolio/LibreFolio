@@ -24,7 +24,7 @@ test author found it while fixing the gallery probes (backlog M-16, batch 19), a
 
 ## Root Cause
 
-In `ImportWizardModal.svelte`, at the base `378338fed`:
+In `ImportWizardModal.svelte`, at the base `7c3119d97`:
 
 - the opening `$effect` starts `loadBrokers()`, which waits for the brokers, the transaction types and the import
   plugins before it writes `brokers`;
@@ -40,7 +40,7 @@ In `ImportWizardModal.svelte`, at the base `378338fed`:
 
 The developer, 2026-10-12: «si nella 1.2 e ok I, ma fai che disabilitiamo il pulsante finchè il pacchetto non
 arriva» ("yes, in 1.2, and fine for I, but disable the button until the package arrives"). Workstream I, plan 44,
-commit `3cd25af4f` ("fix(import): gate wizard Next on broker load", train 48):
+commit `40a192a89` ("fix(import): gate wizard Next on broker load", train 48):
 
 - `trackBrokerLoad(load)` counts the broker loads in flight — the one at opening and the refresh after `oncreated` —
   and `brokersLoading` stays true until all of them have finished. «Next» is disabled, with the upload's spinner, and
@@ -65,7 +65,7 @@ writes the same signal: the effect would depend on it and start again at every l
   - E2E E1 in `tx-import-upload.spec.ts`, which holds the import-plugins request and writes nothing.
 - Three older unit tests that pressed «Next» right after the mount now wait for `data-busy="false"`.
 - The gallery shot of step 1 waited only 300 ms; it now waits for the step to settle
-  (`waitForSettled(import-wizard-step1)`, M's batch 20, `51b581636`).
+  (`waitForSettled(import-wizard-step1)`, M's batch 20, `379b9792d`).
 
 ## Impact
 

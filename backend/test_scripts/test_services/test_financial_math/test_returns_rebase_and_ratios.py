@@ -47,7 +47,7 @@ runs, so before CP-7a each of its tests fails on the missing attribute and the r
 MF-A12 (workstream MF, «one home»; coordinator's decision N92): a Dashboard holding's one-day columns
 (``portfolio_service.get_summary``, a holding valued at its market price) take their ratio from ``change_ratio``.
 ``price_change_1d`` is ``change_ratio(current_price - prev_price_base, prev_price_base)`` rounded to 4 decimals, where
-HEAD ``efef5c876`` wrote ``((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))``;
+HEAD ``0420024b9`` wrote ``((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))``;
 ``gain_loss_change_1d_percent`` is ``change_ratio(gain_loss_change_1d, previous_position_value) × 100`` rounded to 2,
 where HEAD wrote ``(gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))``. The
 materiality guard ``|previous_position_value| > 0.01`` stays the caller's. Both HEAD expressions are copied below
@@ -690,12 +690,12 @@ _MATERIALITY = Decimal("0.01")
 
 
 def _price_change_1d_today(prev_price_base: Decimal, current_price: Decimal) -> Decimal:
-    """``get_summary``'s ``price_change_1d`` at HEAD ``efef5c876`` (``portfolio_service.py:745``), as written."""
+    """``get_summary``'s ``price_change_1d`` at HEAD ``0420024b9`` (``portfolio_service.py:745``), as written."""
     return ((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))
 
 
 def _change_1d_percent_today(gain_loss_change_1d: Decimal, previous_position_value: Decimal) -> Decimal:
-    """``get_summary``'s ``gain_loss_change_1d_percent`` at HEAD ``efef5c876`` (``portfolio_service.py:759``), as written."""
+    """``get_summary``'s ``gain_loss_change_1d_percent`` at HEAD ``0420024b9`` (``portfolio_service.py:759``), as written."""
     return (gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
 
 

@@ -18,7 +18,7 @@ Module under test: ``backend/app/services/financial_math/returns.py`` —
   for a bool or a count ≤ 0. Until J-1 it was written in line at ``risk/quant/resampling.py:235``, the block length the
   bootstrap discloses in calendar days: ``"block_length_days": max(1, round(block_length * 365 / steps_per_year))``.
 
-The oracles are verbatim copies of HEAD ``8eb783b0b`` (``*_today``): what ``risk/metrics.py``, ``returns.py`` and the
+The oracles are verbatim copies of HEAD ``47299b76f`` (``*_today``): what ``risk/metrics.py``, ``returns.py`` and the
 line of ``resampling.py`` computed before the move. Ints are compared with ``==`` and their type, floats with ``==``,
 refusals by class and message.
 
@@ -108,7 +108,7 @@ FACTOR_MESSAGE = "annualization_factor must be finite and positive"
 
 
 # =============================================================================
-# HEAD 8eb783b0b, verbatim (docstrings aside)
+# HEAD 47299b76f, verbatim (docstrings aside)
 # =============================================================================
 
 

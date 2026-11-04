@@ -22,7 +22,7 @@
  *
  * `src/lib/features/risk/CorrelationHeatmap.svelte` held a local `escapeHtml` that escaped only `& < >` (Y9 removed it), and
  * `TransactionBulkModal.svelte` an inline three-character copy for an `html` cell, allowed here as a temporary entry
- * until its workstream replaced it with `escapeHtml` (`60917185c`).
+ * until its workstream replaced it with `escapeHtml` (`2de6634b7`).
  *
  * ## How it reads, and what it cannot see
  *

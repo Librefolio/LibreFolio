@@ -23,14 +23,14 @@ plan 54.
 The dashboard shots read `frontend/e2e/dashboard-report.json`, a real capture normalized by
 `scripts/normalize_dashboard_fixture.py` ([[concepts/ci-release-pipeline]]). The script chose what to scale by the
 key's name. Amounts and per-unit prices are meant to be scaled; the same rule also caught the allocation **shares**,
-Yield on Cost and `price_change_1d`, which are ratios and must keep their value. The script came with `17adbe0f4`
-(2026-09-04) and the first normalized fixture with `3e33372c6`, both in v1.1.0: the 1.1 gallery was already wrong.
+Yield on Cost and `price_change_1d`, which are ratios and must keep their value. The script came with `f412683a1`
+(2026-09-04) and the first normalized fixture with `b0590d8fe`, both in v1.1.0: the 1.1 gallery was already wrong.
 
 ## Solution
 
-- `a26051686`: the committed fixture's shares, Yield on Cost and one-day changes are recomputed, deterministically,
+- `72f361a10`: the committed fixture's shares, Yield on Cost and one-day changes are recomputed, deterministically,
   from data already in the fixture; its Vitest guard follows.
-- `a08e208b4`: the script never scales those keys, whatever their name. Before writing, it checks invariants — the
+- `f4af2d554`: the script never scales those keys, whatever their name. Before writing, it checks invariants — the
   shares sum to 100, Yield on Cost and the one-day change agree with their inputs — and on a failure it exits with an
   error and writes nothing; its messages carry no values. A test file and a runner entry,
   `utils normalize-dashboard-fixture`, come with it.

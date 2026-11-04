@@ -1,6 +1,6 @@
 """MF-K3 (workstream MF, wave 6) — the Dashboard's TWRR and simple ROI: the card and the line follow one rule.
 
-What changed (``backend/app/services/portfolio_service.py``, HEAD ``f33d91b4f`` → the working tree):
+What changed (``backend/app/services/portfolio_service.py``, HEAD ``8ebdb3857`` → the working tree):
 
 * the summary card's ``twrr_percent`` is ``returns.period_twrr(period_navs, period_cfs)``, the last point of
   ``period_twrr_series``: None where the period's last NAV is at or below zero. HEAD computed ``calculate_twrr`` under
@@ -25,7 +25,7 @@ Tests:
   TWRR 0.12 (1 000 → 1 120 with no other flow); with ``date_from`` 03-04 (inside the history) the period opens on 1 050:
   ROI and TWRR (1 120 − 1 050) / 1 050 = 0.066667. And the card's TWRR is the last point of the line.
 
-Red on HEAD ``f33d91b4f`` (the backend of that commit extracted with ``git archive``, this file copied into it), the
+Red on HEAD ``8ebdb3857`` (the backend of that commit extracted with ``git archive``, this file copied into it), the
 exact messages:
 
 - ``test_an_emptied_portfolio_has_no_twrr_card_nor_point``: «the history's point on 03-05 (NAV 0) has twrr 0.100000:

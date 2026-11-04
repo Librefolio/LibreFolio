@@ -5,7 +5,7 @@ Workstream E, release 1.3. What the developer saw on the nightly: AI Export → 
 ``portfolio.technical_prices``, with no ``reason_code``, while broker [1] alone answered 200. Broker 2 held a CROWDFUND
 with no price row, no provider and one BUY.
 
-TODAY (HEAD ``70ad4cec1``). The valuation gives a held asset with no stored price a value (its trade mark, or its book
+TODAY (HEAD ``e91a3a3dc``). The valuation gives a held asset with no stored price a value (its trade mark, or its book
 cost), so the asset belongs to the eligible technical universe: not fully sold, a non-zero end value.
 ``AssetSourceManager.get_prices_bulk`` answers it ``FAPriceQueryResult(prices=[])`` — not ``None`` — and the builders of
 ``portfolio.technical_prices``, ``broker.technical_prices`` and ``asset.ohlc_returns`` write
@@ -41,7 +41,7 @@ The cases:
   with a null currency.
 
 E-23 (plan, «E-23.2»): an asset with prices stored in one currency but none inside the period — the price history
-returns only carries of its last close — is uncovered as ``no_price_in_period``. Today (HEAD ``1ef19d8dc``) it passes as
+returns only carries of its last close — is uncovered as ``no_price_in_period``. Today (HEAD ``efb5f82c4``) it passes as
 covered: it stays in ``assets`` with every bucket empty, and ``asset.ohlc_returns`` gives no reason. The contract:
 portfolio and broker move it from ``assets`` to ``uncovered_assets`` with ``currency``, ``last_close`` and
 ``last_close_date`` (the last close stored before the period), three fields null for the other two reasons; counted

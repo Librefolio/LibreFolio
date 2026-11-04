@@ -17,14 +17,14 @@ related: [concepts/span-as-a-detector, concepts/characterisation-test-latch, pro
 for deleting one leg of a linked pair — never ran. Its fixture `test_asset_id`:
 
 1. called `GET /assets` without `asset_ids`, a required parameter → **422**;
-2. fell back to `POST /assets`, declared `status_code=201` since `0d8ad8ad9` (2025-11-21), but checked `== 200`;
+2. fell back to `POST /assets`, declared `status_code=201` since `8351a673e` (2025-11-21), but checked `== 200`;
 3. and on that mismatch called `pytest.skip("Could not create test asset")`.
 
 The suite reported `22 passed, 1 skipped` for ten months. The test body would not have worked either: it ignored the
 fixture's value and repeated the same get-or-create (same 422, a POST with an object instead of a list), used a
 non-unique broker name and never checked its setup commits.
 
-## Fix (`3cdee7efa`, 2026-10-01, workstream K step 14)
+## Fix (`192a3a4f3`, 2026-10-01, workstream K step 14)
 
 The fixture creates its **own** asset (unique name, asserts 201 and `success`) and deletes it at teardown — assets
 are global rows, so a fixture never borrows one; `DELETE /assets` refuses an asset with transactions, so the test

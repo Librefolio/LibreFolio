@@ -10,7 +10,7 @@ leads: it registers a future, runs ``_compute_uncached`` (steps 6–12, moved un
 result. An identical request that arrives meanwhile follows: it awaits ``asyncio.shield(flight)`` and gets the same
 object (the one the cache holds, read-only like a cache hit).
 
-The defect (J45d, J's review of J45b, HEAD c5ff1f68d): a leader whose build raised settled its flight with
+The defect (J45d, J's review of J45b, HEAD e5317279a): a leader whose build raised settled its flight with
 ``_LeaderGone`` too, so every follower rebuilt, one after another (the first to resume led, the others followed it):
 on data that fails deterministically the k-th follower waited about k builds before failing the same way. The cure:
 the build's own exception settles the flight (``except Exception``: ``set_exception(error)``, marked retrieved,
@@ -20,32 +20,32 @@ for its ``finally``, which settles it with ``_LeaderGone`` (marked retrieved): t
 build, the others follow it. Either way the flight is settled before its key is removed. A ``BaseException`` other
 than cancellation (``KeyboardInterrupt``, ``SystemExit``) is out of scope.
 
-HEAD 98b364b45 is before J45b (no single-flight), HEAD c5ff1f68d is J45b before J45d.
+HEAD 799257251 is before J45b (no single-flight), HEAD e5317279a is J45b before J45d.
 
-- ``TestOneBuildForIdenticalRequests`` — red on 98b364b45 (every request builds), green on c5ff1f68d and after: two and
+- ``TestOneBuildForIdenticalRequests`` — red on 799257251 (every request builds), green on e5317279a and after: two and
   five identical concurrent calculations make one build, every caller gets the identical object, the one the blob cache
   holds; ``_IN_FLIGHT`` is empty after.
-- ``TestTheLeaderFails`` — red on c5ff1f68d (once the leader's build fails a follower starts a new build and the
+- ``TestTheLeaderFails`` — red on e5317279a (once the leader's build fails a follower starts a new build and the
   others wait on it, instead of ending), green after: leader + 3 followers, the leader's build raises; before any build
   is released again all four requests have ended, each raising that very exception object (``is``); one build in all;
   one flight, settled with that exception before its key went (the ordering pin of this path), awaited once by each
   follower, never read stale; a later identical request is not handed the failure: it builds anew and succeeds.
-- ``TestTheLeaderIsCancelled`` — red on 98b364b45 (each request builds), green on c5ff1f68d and after: the path J45d
+- ``TestTheLeaderIsCancelled`` — red on 799257251 (each request builds), green on e5317279a and after: the path J45d
   keeps. The leader's task is cancelled (its caller is cancelled); the followers make exactly one new build among them,
   led by one of them, and all succeed with its object; none hangs; ``_IN_FLIGHT`` is empty. Guards the ``except``'s
   breadth: ``except BaseException`` would hand the ``CancelledError`` to the followers, cancelled with their leader.
-- ``TestAFollowerIsCancelled`` — red on 98b364b45 (each request builds), green on c5ff1f68d and after: a follower
+- ``TestAFollowerIsCancelled`` — red on 799257251 (each request builds), green on e5317279a and after: a follower
   cancelled while it waits leaves the build, its leader and the other followers untouched (``asyncio.shield``): one
   build, all others succeed.
 - ``TestNoCoalescingAcrossKeysOrRanges`` — green on both HEADs and after (a guard of the key): another range
   (``date_to``; the blob key is the same, a precondition read from the registered flights), another broker scope,
   another currency: one build each, no request waits for another.
-- ``TestTheSettledFlightIsRetrieved`` — red on 98b364b45 (no flight is registered: the precondition fails), green on
-  c5ff1f68d and after: a leader that fails or is cancelled with nobody waiting leaves no «Future exception was never
+- ``TestTheSettledFlightIsRetrieved`` — red on 799257251 (no flight is registered: the precondition fails), green on
+  e5317279a and after: a leader that fails or is cancelled with nobody waiting leaves no «Future exception was never
   retrieved» once its future is collected (the loop's exception handler captures it; a weak reference proves the
   future was freed). Guards both ``flight.exception()`` calls: the one after ``set_exception(error)`` (fails), the one
   after ``_LeaderGone`` (is cancelled).
-- ``TestTheFlightIsSettledBeforeItsKeyGoes`` — red on 98b364b45 (no flight registered), green on c5ff1f68d and after:
+- ``TestTheFlightIsSettledBeforeItsKeyGoes`` — red on 799257251 (no flight registered), green on e5317279a and after:
   requirement (1) on the cancellation path, the one with two flights. When the cancelled leader's ``finally`` removes
   its key, its future is already done; no request ever reads a settled flight from ``_IN_FLIGHT`` (the recorder raises
   if one does: a settled flight left under its key would make the follower loop spin forever on the loop's thread, a
@@ -430,7 +430,7 @@ async def _harness_for(book: _Book, monkeypatch: pytest.MonkeyPatch) -> AsyncIte
     gate = _BuildGate(portfolio_engine_module.compute_average_costs, wake)
     flights = _RecordedFlights(wake)
     monkeypatch.setattr(portfolio_engine_module, "compute_average_costs", gate)
-    # raising=False: HEAD 98b364b45 has no _IN_FLIGHT, and its tests must fail on their counts, not on the patch
+    # raising=False: HEAD 799257251 has no _IN_FLIGHT, and its tests must fail on their counts, not on the patch
     monkeypatch.setattr(portfolio_engine_module, "_IN_FLIGHT", flights, raising=False)
     harness = _Harness(book=book, gate=gate, flights=flights, wake=wake)
     try:
@@ -494,7 +494,7 @@ def blob_stores(monkeypatch) -> _BlobStores:
 
 
 # =============================================================================
-# 1 — RED ON HEAD 98b364b45: IDENTICAL CONCURRENT REQUESTS MAKE ONE BUILD
+# 1 — RED ON HEAD 799257251: IDENTICAL CONCURRENT REQUESTS MAKE ONE BUILD
 # =============================================================================
 
 
@@ -503,7 +503,7 @@ class TestOneBuildForIdenticalRequests:
     @pytest.mark.parametrize("requests", [2, 5])
     async def test_identical_concurrent_requests_share_one_build_and_one_object(self, harness, blob_stores, requests):
         """N identical requests started together: one build; every caller gets the identical object, the one the blob
-        cache holds; no flight left. HEAD 98b364b45: every request builds (N builds, N objects)."""
+        cache holds; no flight left. HEAD 799257251: every request builds (N builds, N objects)."""
         print_section(f"MF-J45b: {requests} identical concurrent requests")
         for _ in range(requests):
             harness.start()
@@ -523,7 +523,7 @@ class TestOneBuildForIdenticalRequests:
 
 
 # =============================================================================
-# 2 — RED ON HEAD c5ff1f68d: THE LEADER FAILS, EVERY FOLLOWER RAISES ITS EXCEPTION AT ONCE, NOTHING REBUILDS
+# 2 — RED ON HEAD e5317279a: THE LEADER FAILS, EVERY FOLLOWER RAISES ITS EXCEPTION AT ONCE, NOTHING REBUILDS
 # =============================================================================
 
 
@@ -545,7 +545,7 @@ class TestTheLeaderFails:
         """Leader + 3 followers; the leader's build raises. Before any build is released again, all four requests have
         ended, each raising that very exception object: one build in all. The one flight was settled with it before its
         key went, each follower awaited it once. A later identical request is not handed the failure: it builds anew.
-        HEAD c5ff1f68d: the flight is settled with ``_LeaderGone``, a follower leads a new build, the others wait on it."""
+        HEAD e5317279a: the flight is settled with ``_LeaderGone``, a follower leads a new build, the others wait on it."""
         print_section("MF-J45d: the leader's build fails, three followers")
         leader_build, followers = await _leader_with_followers(harness, followers=3)
         [(key, flight, _leader)] = harness.flights.registered
@@ -577,7 +577,7 @@ class TestTheLeaderFails:
 
 
 # =============================================================================
-# 3 — RED ON HEAD 98b364b45, GREEN ON c5ff1f68d AND AFTER: THE LEADER IS CANCELLED, THE FOLLOWERS BUILD ONCE
+# 3 — RED ON HEAD 799257251, GREEN ON e5317279a AND AFTER: THE LEADER IS CANCELLED, THE FOLLOWERS BUILD ONCE
 # =============================================================================
 
 
@@ -608,7 +608,7 @@ class TestTheLeaderIsCancelled:
 
 
 # =============================================================================
-# 4 — RED ON HEAD 98b364b45: A FOLLOWER CANCELLED WHILE WAITING TOUCHES NOTHING ELSE
+# 4 — RED ON HEAD 799257251: A FOLLOWER CANCELLED WHILE WAITING TOUCHES NOTHING ELSE
 # =============================================================================
 
 
@@ -681,7 +681,7 @@ class TestNoCoalescingAcrossKeysOrRanges:
 
 
 # =============================================================================
-# 6 — RED ON HEAD 98b364b45 (NO FLIGHT): A SETTLED FLIGHT NOBODY AWAITED IS RETRIEVED
+# 6 — RED ON HEAD 799257251 (NO FLIGHT): A SETTLED FLIGHT NOBODY AWAITED IS RETRIEVED
 # =============================================================================
 
 
@@ -740,7 +740,7 @@ class TestTheSettledFlightIsRetrieved:
 
 
 # =============================================================================
-# 7 — RED ON HEAD 98b364b45 (NO FLIGHT): A CANCELLED LEADER'S FLIGHT IS SETTLED BEFORE ITS KEY GOES
+# 7 — RED ON HEAD 799257251 (NO FLIGHT): A CANCELLED LEADER'S FLIGHT IS SETTLED BEFORE ITS KEY GOES
 # =============================================================================
 
 

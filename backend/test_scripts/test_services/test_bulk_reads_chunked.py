@@ -1,7 +1,7 @@
 """MF-SEC9a (rest) — the bulk reads of the BRIM candidate search and of the WAC FX evidence run in statements SQLite can
 parse, and answer exactly what the one-statement read answered.
 
-The defect, on HEAD d63558abb. SQLite parses ``a OR b OR c …`` as a chain one level deeper per term and refuses a chain
+The defect, on HEAD 255c56d40. SQLite parses ``a OR b OR c …`` as a chain one level deeper per term and refuses a chain
 of a thousand («Expression tree is too large (maximum depth 1000)»). Two more reads had one OR term per item:
 
 - ``brim_provider.search_asset_candidates_bulk`` read the universe of every extracted asset in ONE statement: per
@@ -34,7 +34,7 @@ The WAC case also runs at 500 and 501 keys, the edge of one chunk; the candidate
 990 OR terms), under SQLite's limit — 90 the last size HEAD answered. The barriers prove the SQLite these tests run on answers one OR of 500 terms and refuses one of
 1 500: without them a build with a higher limit would let the import-sized cases pass untested.
 
-Red on HEAD d63558abb:
+Red on HEAD 255c56d40:
 
 - ``test_bulk_candidates_of_an_import_match_the_per_asset_search[100-triples-isin-symbol-name]``,
   ``[300-triples-isin-symbol-name]`` and ``[150-triples-name-only]``: ``OperationalError``, «Expression tree is too
@@ -45,7 +45,7 @@ Green before and after (guards): both barriers; ``test_guard_bulk_candidates_in_
 (50 and 90 triples); the WAC case at 500 and 501 keys. «No key, no statement» is pinned by
 ``test_portfolio_allocation_source.py::test_wac_fx_rows_are_read_at_exactly_the_rate_date_the_cost_used``.
 
-MF-SEC9g — the classification after the read. HEAD 633e30ca9 ran the five-step priority of every extraction over the
+MF-SEC9g — the classification after the read. HEAD 801f1bed4 ran the five-step priority of every extraction over the
 whole universe on the event loop, rebuilding a LIKE pattern at every test of every asset and dumping
 ``identifier_other`` at every check: E measured 104 s of stalled loop for 1 000 generic names over 5 000 assets. The cure
 (``_candidate_view``, ``_classify_candidates`` in a worker thread, one matcher per needle, exact ISIN/ticker indexes),
@@ -55,7 +55,7 @@ pinned here:
    from inside the classification (thread identity and a handshake, no clock);
 4. at most one LIKE compile per needle and one ``identifier_other`` text per stored asset (counted, not timed).
 
-Red on HEAD 633e30ca9: ``test_bulk_candidates_classify_off_the_event_loop`` (150 000 compiles, all on the loop's
+Red on HEAD 801f1bed4: ``test_bulk_candidates_classify_off_the_event_loop`` (150 000 compiles, all on the loop's
 thread) and ``test_bulk_candidates_compile_each_needle_once_and_dump_each_asset_once`` (150 000 compiles for 200
 needles, 60 000 dumps for 300 assets). Green before and after (guards):
 ``test_guard_bulk_candidates_at_size_match_the_per_asset_search`` (300 extractions over 1 011 assets, wildcard bond
@@ -64,7 +64,7 @@ names, codes stored in either case, duplicate holders) and ``test_guard_bulk_exa
 X-R45, reverted — the planner's saved FX reads take the stored row as it is; ``convert_bulk`` and the period changes still
 skip a rate outside ``usable_fx_rate_bounds()``. A 1.2 install could store rates outside X-R38's
 ``usable_fx_rate_bounds()``, 1E-10 <= rate < 1E+14: 0 (a manual ``1E-11`` truncated to 10 decimals), an infinite REAL
-(``1E+400``), 1E+14 and above. X-R45 (629304ab3) added ``usable_fx_rate_clause()`` to three readers that read them as
+(``1E+400``), 1E+14 and above. X-R45 (3ed9ad1a6) added ``usable_fx_rate_clause()`` to three readers that read them as
 stored — two here, the latest saved quote of a pair (``pac_allocator/source/fx_quotes._load_latest_planner_fx_rows``: a
 ``max(date)`` subquery, then a join) and the WAC evidence (``pac_allocator/source/wac._load_wac_fx_rows``: the exact
 keys); the third is the history sync's lookup, ``test_scheduler_last_fx_dates.py`` — and routed through it the two
@@ -111,7 +111,7 @@ look-back must not take:
 11. 1E+14 on D2, over 2.5 on D1 and alone: D2's quote, 1E+14 as read back, no issue;
 12. ``allocation.saved_fx_skipped`` is one of ``PortfolioPlannerSourceIssueCode`` and not one of ``PlannerIssueCode``.
 
-Red until the X-R45 revert (c720e25cb), green since, and unchanged by X-R45b, which touches neither the loader nor the
+Red until the X-R45 revert (a057becce), green since, and unchanged by X-R45b, which touches neither the loader nor the
 WAC read: ``test_xr45_reverted_the_latest_saved_planner_fx_row_is_the_latest_stored_one`` (0, inf and 1E+14, as of D2
 and later), ``test_xr45_reverted_a_planner_fx_pair_whose_only_saved_rate_is_unusable_has_that_row`` (0, inf and 1E+14)
 and ``test_xr45_reverted_wac_fx_evidence_reads_the_stored_row_of_its_exact_date`` (0, inf and 1E+14).
@@ -439,7 +439,7 @@ async def test_bulk_candidates_of_an_import_match_the_per_asset_search(session, 
 
     11 OR terms per triple with every field: 100 triples are 1 100, just past the 91 at which HEAD failed; 300 are 3 300.
     150 name-only triples are 1 200 (8 each), though only 300 conditions were they chunked as one nested OR per name.
-    Red on HEAD d63558abb: ``OperationalError``.
+    Red on HEAD 255c56d40: ``OperationalError``.
     """
     print_section(f"MF-SEC9a: bulk candidates of {count} {shape} triples == per-asset search")
     await _seed_assets(session)
@@ -520,7 +520,7 @@ async def test_wac_fx_rows_reads_every_key_of_a_long_history(session, stored_key
     """Every stored key asked for comes back with its own row (id, rate, source); keys without a row and stored rows
     nobody asked for stay out.
 
-    The keys run day by day across the five pairs, so every chunk holds several pairs. Red on HEAD d63558abb at 1 510
+    The keys run day by day across the five pairs, so every chunk holds several pairs. Red on HEAD 255c56d40 at 1 510
     keys: ``OperationalError``; 500 and 501 are under SQLite's limit (guards).
     """
     print_section(f"MF-SEC9a: _load_wac_fx_rows with {stored_keys} stored keys and {len(WAC_MISSING_KEYS)} without a row")
@@ -602,7 +602,7 @@ async def test_bulk_candidates_classify_off_the_event_loop(session, monkeypatch)
     Deterministic, no clock: ``_like_to_regex`` — what the classification calls for every LIKE it reproduces — is wrapped
     to record the thread it runs in. At the first call off the loop's thread the classification itself, mid-flight,
     sends a coroutine to the loop and waits for its answer (``LOOP_ANSWER_DEADLINE``, met at once by a free loop): the
-    concurrent request the import must not starve. Red on HEAD 633e30ca9: every compile on the loop's thread — the
+    concurrent request the import must not starve. Red on HEAD 801f1bed4: every compile on the loop's thread — the
     classification ran on the event loop, stalling it (0.5 s for 1 000 realistic instruments, 104 s for 1 000 generic
     names over 5 000 assets, E's measures).
     """
@@ -648,7 +648,7 @@ async def test_bulk_candidates_compile_each_needle_once_and_dump_each_asset_once
     needle (an extraction's ISIN, its name) and one ``identifier_other`` text built per stored asset, for 100 generic
     names (asked twice in part: duplicates collapse) over 300 funds.
 
-    Counted, never timed: ``_like_to_regex`` and ``_other_as_text`` wrapped. Red on HEAD 633e30ca9: ``_contains`` rebuilt
+    Counted, never timed: ``_like_to_regex`` and ``_other_as_text`` wrapped. Red on HEAD 801f1bed4: ``_contains`` rebuilt
     the pattern at every test of every asset, and ``identifier_other`` was dumped again at every check — about
     150 000 compiles and 60 000 dumps here, for 200 needles and 300 assets.
     """

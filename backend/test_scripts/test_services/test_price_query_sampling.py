@@ -89,7 +89,7 @@ and the series a comparison on the card needs on the same buckets, reading each 
     it from the later first day as it follows a card sent with prices (point 7), counting its own points and bounds
     only. The description of ``FAPriceQueryResult.sample_bounds`` says None «without prices» too. An item with
     ``include_price=False`` and no sampling field is read and counted as before: nothing new is pinned about it.
-15. Signals on a sample (lot Z-29s-a, contract of 20/10 on 5bbadda95; the developer's Q-Z29-2 of 19/10): an item with
+15. Signals on a sample (lot Z-29s-a, contract of 20/10 on fa20c7ba0; the developer's Q-Z29-2 of 19/10): an item with
     ``signals`` and ``max_points``, ``resolution`` or ``sample_like`` is valid. It is read, computed and counted day by
     day exactly as the same item without the sampling field — its fill with the signals' warm-up, its day budget the
     fill's days —: never a bucket read, never a placeholder, even with ``include_price=False`` (its signals need the
@@ -114,7 +114,7 @@ rates of the conversion case are rows of that file, read by the real ``convert_b
 on a session of that file, as ``test_bulk_limits.py`` calls it. The signals of point 15 compute in-process, the market
 holiday table replaced in ``price_query`` by an empty one (no row of the file is a weekend or holiday repeat).
 
-Red before Z-29a (HEAD 14247474e), each for the reason its docstring gives ("Red before Z-29a"): PQS-M01…M08 and PQS-T02
+Red before Z-29a (HEAD cb373420a), each for the reason its docstring gives ("Red before Z-29a"): PQS-M01…M08 and PQS-T02
 (``price_sampling`` does not exist); PQS-S01…S04 and S07…S13 (``key``, ``max_points``, ``resolution`` and
 ``sample_like`` are refused as extra fields and absent from the JSON schema); PQS-S05 and S06 (``FAPriceQueryResult``
 has no ``resolution`` nor ``sample_bounds``, and there is no ``FAPriceSampleBounds``); PQS-Q01…Q23 (an item with one of
@@ -129,7 +129,7 @@ PQS-Q26, Q27 and Q28 (its points and bounds, or its fill days, are counted: refu
 of the items beside it); PQS-S14 (the description of ``sample_bounds`` says None for a daily series only). Green then
 and after, kept: PQS-Q08 and PQS-Q18's last case, the answers of a placeholder and of the target it leads.
 
-Red before Z-29s-a (HEAD 5bbadda95), each for the reason its docstring gives ("Red before Z-29s-a"): PQS-SG09
+Red before Z-29s-a (HEAD fa20c7ba0), each for the reason its docstring gives ("Red before Z-29s-a"): PQS-SG09
 (``validate_sampling`` refuses signals with a sampling field); PQS-SG01…SG08 (an item with signals and a sampling field
 cannot be built, the same refusal — met after the premises, which hold on the daily answers of today); PQS-SG10 (the
 descriptions still say «not with signals» and do not name the ``aggregation_profile``). PQS-S03, updated by Z-29s-a (its
@@ -713,7 +713,7 @@ def _ref_name(node: dict) -> str | None:
 
 def test_pqs_s05_the_answer_says_its_resolution():
     """PQS-S05: the answer gains two fields and only those: ``FAPriceQueryResult`` has the five fields it had at HEAD
-    14247474e plus ``resolution`` and ``sample_bounds`` (PQS-S06). ``resolution`` is ``"daily"`` when not given, typed
+    cb373420a plus ``resolution`` and ``sample_bounds`` (PQS-S06). ``resolution`` is ``"daily"`` when not given, typed
     with ``price_sampling``'s ``SampleResolution`` — the very object, which the schema imports. Its JSON schema, in both
     modes (an answer's is the serialization one), shows ``resolution`` optional, not required, as ``prices`` and
     ``events``: its values exactly the three steps, its default ``"daily"`` — an ``enum`` on the property, or behind a

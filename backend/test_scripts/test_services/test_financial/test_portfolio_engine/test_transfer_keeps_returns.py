@@ -23,7 +23,7 @@ their ids. Only the gap changes the total cash, and only by itself.
 - ``TestMoveLinkedCash`` / ``TestApplyPoolRuleWithSplits`` — ``_move_linked_cash`` and
   ``_apply_pool_rule(..., transfer_splits)`` as pure functions.
 
-On HEAD ca2f00c35 (before J2): ``TestCrossBrokerCashTransfer``, ``TestSameBrokerFxConversion``,
+On HEAD ed9e7679b (before J2): ``TestCrossBrokerCashTransfer``, ``TestSameBrokerFxConversion``,
 ``TestConversionLossBeyondTheReturns.test_the_loss_also_takes_the_receivers_own_returns``,
 ``TestBrokersOwnedAtDifferentShares.test_a_loss_comes_out_of_the_returns_moved`` and ``…test_a_gain_goes_to_returns``,
 ``TestCashInTransit.test_the_arrival_brings_the_returns_back``, ``TestSameDayArrivalBeforeItsDeparture`` red (every

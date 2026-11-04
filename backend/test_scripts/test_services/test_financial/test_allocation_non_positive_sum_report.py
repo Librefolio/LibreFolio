@@ -15,7 +15,7 @@ Two books (each a private SQLite file, the app schema; one user owning 100 % of 
   On D1 (X 1000, Liquidity 0) the slices are 100 % / 0 %, unchanged.
 * **overdraft** — no deposit; 10 X bought for 500 on D1 (close 50): stocks 500, cash −500, sum 0 from D1 on.
 
-RED on the tree of 2026-10-28 (HEAD 01f1da513): the emptied book's last allocation reads ``Decimal('0.00')`` and the
+RED on the tree of 2026-10-28 (HEAD 1a1e6d7c0): the emptied book's last allocation reads ``Decimal('0.00')`` and the
 overdraft's ``Decimal('50000.00')`` / ``Decimal('-50000.00')`` where None is expected (``AssertionError``); neither raises
 a ``ValidationError`` today, since ``AllocationItem.value`` has no bound.
 

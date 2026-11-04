@@ -6,7 +6,7 @@ built and returns that object; on a hit it returns the stored object as it is (`
 therefore goes to every request with the same key — and to every AI Export component of a request, which memoizes it.
 A consumer that wrote into it (a ``.sort()``, an ``append``, a field assignment, a nested Decimal rewritten with another
 exponent) would silently change the answer of every later request with that key. No such write has been seen: this is
-a guard (green on HEAD 5af05312b), the J45b idea (``test_portfolio_engine/test_engine_single_flight.py``,
+a guard (green on HEAD e84ac6b5b), the J45b idea (``test_portfolio_engine/test_engine_single_flight.py``,
 ``TestTheSharedResultIsNotMutatedByItsConsumers``, which guards the ENGINE's blob-cached dataclass) applied to the L2
 cached Pydantic report.
 
@@ -173,7 +173,7 @@ _EXPECTED_CALL_SITES = frozenset(
     }
 )
 #: The AI Export components handed the shared report by their request's memoized resource (portfolio.report,
-#: broker.report, broker.whole_portfolio_report, asset.core.report, fx_core.exposure_report), at HEAD 5af05312b: each must
+#: broker.report, broker.whole_portfolio_report, asset.core.report, fx_core.exposure_report), at HEAD e84ac6b5b: each must
 #: be handed an object L2 stored. A component that stops reading the report leaves this list; one that starts is run
 #: anyway (every component of each domain is) and joins it.
 _EXPECTED_READERS = frozenset(

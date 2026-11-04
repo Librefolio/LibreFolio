@@ -23,7 +23,7 @@ The contract pinned here, from financial math's side:
    convert (native, a close of 0, no usable rate) has ``fx_rate`` None.
 
 The pre-MF-A13 pass is a copy written here (``pre_a13_convert``: ``head_convert`` of ``test_price_query_observations.py``
-as it was at cb9a720f4^), not read from the code under test. The corpus (assets, prices, rates, windows) and the dense
+as it was at 5c1075b6c^), not read from the code under test. The corpus (assets, prices, rates, windows) and the dense
 fill are the ones of ``test_price_query_observations.py``, imported: they did not change with MF-A13.
 
 Red before MF-A13: 3 (the inverse close is ``convert_bulk``'s quotient, not the native close times the step) and 4 (no
@@ -108,7 +108,7 @@ async def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterato
 
 
 # =============================================================================
-# THE PRE-MF-A13 PASS, COPIED: ``head_convert`` as it was at cb9a720f4^
+# THE PRE-MF-A13 PASS, COPIED: ``head_convert`` as it was at 5c1075b6c^
 # =============================================================================
 
 

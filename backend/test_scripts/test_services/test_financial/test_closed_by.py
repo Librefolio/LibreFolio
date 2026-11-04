@@ -14,7 +14,7 @@ whole position from broker A to broker B the frontend cannot tell it from a sale
   (``related_transaction_id``) when the user has access to it, in the requested ``broker_ids`` or not; None when the
   pair is missing (an orphan) or its broker is not the user's (never another user's broker id).
 
-No number changes: every row asserted here first equals the figures of HEAD 898bc9d15 (``_TODAY``, captured on HEAD from
+No number changes: every row asserted here first equals the figures of HEAD 8e70ec493 (``_TODAY``, captured on HEAD from
 these very books), the two new fields and the identity fields (ids, names) aside; only then are the new fields read, by
 plain attribute access — so on HEAD every test is red on ``AttributeError: 'AssetPeriodContribution' object has no
 attribute 'closed_by'`` (or ``closed_to_broker_id``), never on its setup.
@@ -321,7 +321,7 @@ def _figures(row) -> dict[str, Any]:
 
 
 def _assert_todays_figures(key: str, row) -> None:
-    """MF-CB changes no number: the row's figures are HEAD 898bc9d15's (``_TODAY``)."""
+    """MF-CB changes no number: the row's figures are HEAD 8e70ec493's (``_TODAY``)."""
     differences = _diff(_TODAY[key], _figures(row))
     shown = "\n".join(f"  {path}: HEAD={left!r} now={right!r}" for path, left, right in differences[:_DIFF_SHOWN])
     assert not differences, f"{key}: {len(differences)} figure(s) differ from HEAD's:\n{shown}"
@@ -334,7 +334,7 @@ def _assert_closed(row, closed_by: str | None, closed_to_broker_id: int | None) 
 
 
 # =============================================================================
-# HEAD 898bc9d15's FIGURES — captured on HEAD from the books above, period (03-04, 03-14], report in EUR
+# HEAD 8e70ec493's FIGURES — captured on HEAD from the books above, period (03-04, 03-14], report in EUR
 # =============================================================================
 
 _TODAY: dict[str, dict[str, Any]] = {

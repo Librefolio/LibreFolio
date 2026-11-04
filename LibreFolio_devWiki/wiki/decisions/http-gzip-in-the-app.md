@@ -26,7 +26,7 @@ docs' HTML, about 200 KiB per docs page.
 The developer, on M's proposal (plan of the release images, §0, 2026-10-06): «direi proprio che va fatta».
 
 `backend/app/main.py` adds `GZipMiddleware(minimum_size=1024, compresslevel=6)` outside the CORS middleware (since CP2b of 1.3.0 an entry of `MIDDLEWARE_STACK` in `services/platform/middleware.py`)
-(`16238e220`, «feat(server): gzip HTTP responses»), with Starlette's default exclusions kept:
+(`1557c3ddc`, «feat(server): gzip HTTP responses»), with Starlette's default exclusions kept:
 
 - images, fonts, archives, Server-Sent Events, 206 range replies and responses that are already encoded pass
   untouched — the provider search stream keeps arriving result by result;

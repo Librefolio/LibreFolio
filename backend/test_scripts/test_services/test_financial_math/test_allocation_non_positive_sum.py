@@ -22,7 +22,7 @@ What is tested (pure: hand-made ``DailyPortfolioState``s, no database, no server
 3. ``TestAssetDimension`` — current and history on the same three kinds of day, and the parity day.
 4. ``TestTheContract`` — ``AllocationItem`` and ``AllocationHistoryPoint`` accept ``value=None``; it serialises as null.
 
-RED on the tree of 2026-10-28 (HEAD 01f1da513): the views give ``Decimal('50000.00')`` / ``Decimal('-50.00')`` /
+RED on the tree of 2026-10-28 (HEAD 1a1e6d7c0): the views give ``Decimal('50000.00')`` / ``Decimal('-50.00')`` /
 ``Decimal('0.00')`` where None is expected (``AssertionError``), and the schema refuses ``value=None``
 (``ValidationError``). The parity tests are green and must stay green.
 

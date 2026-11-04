@@ -6,7 +6,7 @@
  *   1. A slow GET /auth/me is not a sign-out. On a full load of an app page the (app) layout asks /auth/me; when
  *      nothing has answered after 5 s it shows the `server-unreachable` panel (Retry: `server-unreachable-retry`) and
  *      stays on the requested URL; when /auth/me then answers 200 the panel goes and the page loads. At the base
- *      (3a8139c29) the layout raced the check against a 5 s timeout and read the timeout as "not signed in":
+ *      (adc542dc2) the layout raced the check against a 5 s timeout and read the timeout as "not signed in":
  *      `goto('/')`, where the root page routes a signed-in user to /dashboard.
  *   2. Signed out, an app page hands over to the root login carrying itself, `/?redirect=<path+query>`, and signing in
  *      through that form lands on it. At the base: a bare `/`, then /dashboard.

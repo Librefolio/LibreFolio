@@ -11,7 +11,7 @@ point on day d» is the line point dated d, and «every other point as on HEAD»
 the HEAD value of that day (``EMPTIED_HEAD`` / ``BUY_FIRST_HEAD`` stay per-day, as measured): the line must hold the
 days that matter (the first day, the day before the deposit, the deposit day, the last day).
 
-Which periods open at zero, measured on HEAD 270e85a55 with ``PortfolioService.get_report``:
+Which periods open at zero, measured on HEAD 3964ee744 with ``PortfolioService.get_report``:
 - NOT a range that merely starts before the portfolio's first day: the engine's daily states start at the first
   transaction, so the period opens on that day with the deposit already inside its value (1000 > 0), and the bug does
   not reach the Dashboard that way (the probe gave 0 on every point, the first pinned);
@@ -21,7 +21,7 @@ Which periods open at zero, measured on HEAD 270e85a55 with ``PortfolioService.g
   3/3/2025 (cash −1000, value +1000, NAV 0), DEPOSIT 1000 on 10/3, the price 100 → 110 on 20/3. No ``date_from``:
   the rebase-free path.
 
-RED on HEAD 270e85a55 (every one reads the 0.1 of the solver's start, or its cumulative):
+RED on HEAD 3964ee744 (every one reads the 0.1 of the solver's start, or its cumulative):
 - TestEmptiedAndRefundedReport::test_history_point_on_the_redeposit_day_has_no_mwrr (0.100000 / 0.002615)
 - TestEmptiedAndRefundedReport::test_report_json_carries_null_on_the_redeposit_day ("0.100000" in the JSON)
 - TestEmptiedAndRefundedReport::test_card_ending_on_the_redeposit_day_has_no_mwrr (0.100000 / 0.002615, timing 0.002615)
@@ -29,7 +29,7 @@ RED on HEAD 270e85a55 (every one reads the 0.1 of the solver's start, or its cum
 - TestWholeHistoryOpeningAtZero::test_history_point_on_the_deposit_day_has_no_mwrr (0.100000 / 0.001830)
 - TestAiExportPortfolioMwrr::test_summary_and_performance_have_no_mwrr (0.100000 in both payloads)
 
-GREEN on HEAD, guards the cure must keep green (pinned from HEAD 270e85a55): every other history point of both books,
+GREEN on HEAD, guards the cure must keep green (pinned from HEAD 3964ee744): every other history point of both books,
 the card of the longer window (to 20/5), and the AI Export of that longer window.
 
 Isolation: PURE with respect to the lane — every database is a private SQLite file under ``tmp_path`` (the app schema,
@@ -79,7 +79,7 @@ REDEPOSIT_DAY = date(2025, 5, 11)
 INTEREST_DAY = date(2025, 5, 13)
 WINDOW_END = date(2025, 5, 20)
 
-# HEAD 270e85a55, window 1/5..20/5: (annualized, cumulative) of every point but the re-deposit day.
+# HEAD 3964ee744, window 1/5..20/5: (annualized, cumulative) of every point but the re-deposit day.
 EMPTIED_HEAD: dict[date, tuple[str | None, str | None]] = {
     WINDOW_OPEN: ("0", "0"),  # the first point, pinned by get_history
     **{WINDOW_OPEN + timedelta(days=offset): (None, None) for offset in range(1, 10)},  # NAV 0: no capital
@@ -93,7 +93,7 @@ EMPTIED_HEAD: dict[date, tuple[str | None, str | None]] = {
     date(2025, 5, 19): ("0.255528", "0.011285"),
     date(2025, 5, 20): ("0.224182", "0.010585"),
 }
-# HEAD 270e85a55: the card of 1/5..20/5 — annualized, cumulative, days, timing effect, TWRR.
+# HEAD 3964ee744: the card of 1/5..20/5 — annualized, cumulative, days, timing effect, TWRR.
 EMPTIED_CARD_HEAD = ("0.224182", "0.010585", 19, "0.005585", "0.005000")
 
 # The buy-first book (whole history, no date_from).

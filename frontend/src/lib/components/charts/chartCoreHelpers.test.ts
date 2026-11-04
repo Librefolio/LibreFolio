@@ -3920,22 +3920,22 @@ describe('canonical overlay axis and reference helpers', () => {
             });
 
             it('anchors a referenceDate that falls between two days on the last day BEFORE it, never on the next one', () => {
-                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so 01-08 anchors on 01-05 (100), not on 01-12 (150).
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (9c1b6a3ff), so 01-08 anchors on 01-05 (100), not on 01-12 (150).
                 expect(findReferenceTotalPnl(entry, '2026-01-08', inputs)).toBe(100);
             });
 
             it('matches on an exact day', () => {
-                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so an exact date is matched on its own day, not on a bucket end.
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (9c1b6a3ff), so an exact date is matched on its own day, not on a bucket end.
                 expect(findReferenceTotalPnl(entry, '2026-01-19', inputs)).toBe(90);
             });
 
             it('anchors a referenceDate after every day on the LAST day, not on the first', () => {
-                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so a date after every day anchors on the last one, 01-26 (200), not on the first (100).
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (9c1b6a3ff), so a date after every day anchors on the last one, 01-26 (200), not on the first (100).
                 expect(findReferenceTotalPnl(entry, '2099-01-01', inputs)).toBe(200);
             });
 
             it('can itself return null when the located day has no P&L value that day (a genuine gap is a valid reference, never guessed)', () => {
-                // Why (re-pin, S10): the product reads the DAILY series and never a later day (e7773a143), so a day with no P&L yields null, never the next day's 50.
+                // Why (re-pin, S10): the product reads the DAILY series and never a later day (9c1b6a3ff), so a day with no P&L yields null, never the next day's 50.
                 const withGap = growthInputs(['2026-01-05', '2026-01-12'], {totalPnl: [null, 50]});
                 expect(findReferenceTotalPnl(buildResolutionData(withGap, 'daily'), '2026-01-05', withGap)).toBeNull();
             });
@@ -4106,7 +4106,7 @@ describe('canonical overlay axis and reference helpers', () => {
             it('keeps candlestick quads 1:1 by array position with dates — a gap at one position never shifts a later one', () => {
                 // Why (re-pin, S10, D21a): the per-broker overlay was removed from the candles submode
                 // (developer review 2026-09-21: total candle only; last caller of toPositionalValue gone
-                // in e7773a143), so only the candle's positional contract is left to prove.
+                // in 9c1b6a3ff), so only the candle's positional contract is left to prove.
                 const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
                 // Distinct sentinel OHLC per position so any transposition/shift is caught. The
                 // candle is missing (a genuine gap) at position 2.
@@ -4400,7 +4400,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(source).not.toContain("'__pnlReference__'");
             });
 
-            // Why (re-pin, S10, D21b): e7773a143 splits the Total P&L with splitBySign, which
+            // Why (re-pin, S10, D21b): 9c1b6a3ff splits the Total P&L with splitBySign, which
             // inserts the interpolated zero crossing into both halves (the developer's report: the
             // area vanished at a sign change). The old claim — each half as long as the source —
             // described two plain clipToSign maps and is false for the product. What stays fixed

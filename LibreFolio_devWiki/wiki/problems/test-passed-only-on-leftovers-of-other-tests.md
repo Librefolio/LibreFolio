@@ -25,7 +25,7 @@ appears (inline validate)» went red: after the clone, the WAC «auto» cell sta
 - **The product was right.** Validate answered `accessDenied` («EDITOR required for broker 2») with no WAC result,
   and `compute_wac_and_fx_issues` (`transaction_batch_stages.py`) proposes no cost for a batch with errors: `empty` is
   the correct state, and the banner says why.
-- **Why it had passed**: since `9a254f812` (2026-08-14) WB5 has required `ready`, and from then on it passed only when
+- **Why it had passed**: since `e46d6feec` (2026-08-14) WB5 has required `ready`, and from then on it passed only when
   the first pair was one left by another test — the IB→Directa pair that WB4, before it in the same file, commits and
   never deletes, or the leftovers of `tx-commit-all-types`. Alone it always failed; at four workers it started beside
   WB4 and failed; in sequence it passed.
@@ -34,7 +34,7 @@ appears (inline validate)» went red: after the clone, the WAC «auto» cell sta
 
 ## Solution
 
-`1ea16aace` («test(e2e): own the WB5 pair, clean up WB4», train 72):
+`f68365cdc` («test(e2e): own the WB5 pair, clean up WB4», train 72):
 
 - **WB5 owns its data**: two brokers and an EUR asset created through the API, two ADJUSTMENT +10 at 100 and 200 EUR,
   a linked TRANSFER −4/+4 with a manual cost of 175 on the receiving side; it clones that pair by id and asserts

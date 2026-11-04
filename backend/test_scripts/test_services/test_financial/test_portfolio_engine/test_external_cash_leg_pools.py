@@ -25,7 +25,7 @@ the NAV and the P&L do not change.
 - ``TestParityGuards`` — (g) green before and after: a linked-internal pair (J2's numbers), DEPOSIT/WITHDRAWAL alone,
   the capital baseline / NAV / P&L of every scenario, the pools never below zero, the asset TRANSFER leg.
 
-RED on HEAD b48694f3f (every value quoted "HEAD:" in the docstrings): every test of the classes above except
+RED on HEAD 3f8e670f2 (every value quoted "HEAD:" in the docstrings): every test of the classes above except
 ``TestParityGuards``, ``TestApplyPoolRuleExternalLegs.test_an_asset_transfer_leg_moves_no_pool``,
 ``TestApplyPoolRuleExternalLegs.test_an_external_leg_never_touches_the_transfer_splits`` and
 ``TestBuyFundingAfterAnExternalLeg.test_without_withdrawn_returns_the_split_is_unchanged`` (declared parity pins).

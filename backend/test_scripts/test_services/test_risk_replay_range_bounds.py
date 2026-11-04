@@ -18,7 +18,7 @@ repeats echo the request, unchanged, and so did the output's ``replay_range`` un
 period is bounded the same way, at the entry of ``RiskService.execute``, for every scope kind (R4, G3: one ASSET scope
 is enough, the asset-series call is shared).
 
-TODAY (base ``4e11fabec``) the window reaches the facts, the coverage, the suggestion and the preparation raw:
+TODAY (base ``6bf596033``) the window reaches the facts, the coverage, the suggestion and the preparation raw:
 - a window ending in the future excludes an asset quoted until yesterday as stale at its end (R1), and a suggestion keeps
   that end, after tomorrow (R3);
 - a window starting the day after a planted price is covered at both ends and walks every day since (R2: 39 999 days);
@@ -56,7 +56,7 @@ bounded, where ``risk_plugins/stress/plugin.py`` still hands it ``params.replay_
 tells the two apart: R1 (an end after tomorrow) and R6 (a start before the floor) pin both echoes, G1 (within bounds) an
 output echo equal to the request. The stress analytic's ``algorithm_version`` goes from 3.0.0 to 3.0.1, one bump for
 both lots: SEC8-1b changed the window an out-of-bounds request replays without one, J-52 changes its echo (R7). Red run
-(base ``a3d4d60a7``, G2 and G3 already bounded): ``services risk-all replay_range_bounds``.
+(base ``9277a5e72``, G2 and G3 already bounded): ``services risk-all replay_range_bounds``.
 
 Isolation: a private SQLite file under ``tmp_path`` built by ``create_all`` (as ``test_risk_price_day_budget.py``) — no
 lane database, no server, no network; uuid4 names; the market holiday table empty (built for real, it takes a QuantLib
@@ -320,12 +320,12 @@ async def test_r1_a_window_ending_after_tomorrow_is_replayed_to_tomorrow_and_dat
     echoes the window replayed, [today − 20, ``latest_range_end()``]; the parameters the metadata repeats keep the
     request, [today − 20, today + 400] (J-52).
 
-    Before SEC8-1b (base ``4e11fabec``, read 17/10/2026): unavailable, ``insufficient_history``. A, the scope's only
+    Before SEC8-1b (base ``6bf596033``, read 17/10/2026): unavailable, ``insufficient_history``. A, the scope's only
     asset, is excluded as ``stale_at_window_end`` (its last quote 401 days before the window's end), so nothing is left to
     replay; the error suggests [today − 20, A's last quote], which recovers A. No output, so no echo; the metadata's
     ``analyzed_range`` is the request's own period (from today − 30), not the replay's. Nothing is dated after tomorrow.
 
-    Today (base ``a3d4d60a7``, read 17/10/2026): replayed as above, but the output echoes the request: its end,
+    Today (base ``9277a5e72``, read 17/10/2026): replayed as above, but the output echoes the request: its end,
     today + 400 (``output.replay_range.end``), is the one date after tomorrow.
     """
     today = date.today()
@@ -478,7 +478,7 @@ async def test_r6_a_window_starting_beyond_the_span_is_replayed_from_its_floor_a
     recent quote to its last. The output echoes the window replayed, [floor, yesterday]; the parameters the metadata
     repeats keep the request, [P + 1, yesterday].
 
-    Today (base ``a3d4d60a7``, read 17/10/2026): replayed as above, but the output echoes the request, from P + 1, before
+    Today (base ``9277a5e72``, read 17/10/2026): replayed as above, but the output echoes the request, from P + 1, before
     the floor.
     """
     today = date.today()
@@ -517,7 +517,7 @@ async def test_r7_bounding_the_replay_window_is_a_new_algorithm_version(private_
     key on it, and it moves whenever the values do: SEC8-1b changed the window an out-of-bounds request replays, J-52 the
     window its output echoes — one bump for both. R1's request: A over [today − 20, today + 400].
 
-    Today (base ``a3d4d60a7``, read 17/10/2026): replayed, 3.0.0.
+    Today (base ``9277a5e72``, read 17/10/2026): replayed, 3.0.0.
     """
     today = date.today()
     asset_a = await _asset(private_db, "A", _recent_quotes())

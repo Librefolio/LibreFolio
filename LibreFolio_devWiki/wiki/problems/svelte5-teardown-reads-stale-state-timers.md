@@ -48,7 +48,7 @@ red test had to mount and unmount with Svelte's own `mount`/`unmount`, without a
 - Rejected: adding `afterEach(cleanup)` to the blamed test file — the `svelteTesting()` setup already unmounts after
   every test; the bug was in the components.
 
-Commits `4b5feb227` (Tooltip, 2026-10-01) and `2575aeaf2` (TreeSelect, 2026-10-06).
+Commits `0fad7edf2` (Tooltip, 2026-10-01) and `6dfe06560` (TreeSelect, 2026-10-06).
 
 ## The rule
 
@@ -59,7 +59,7 @@ callback reach for the global `document`. Use `$state` only for what the templat
 ## Still open (backlog 38)
 
 - **K-12** — handles still held in `$state`: `touchTimerId` in `DataTable.svelte` and `reloadTimer` on the Dashboard
-  page (verified at `083ed26dc`).
+  page (verified at `fef0203ca`).
 - **C-13** — `SearchSelect.svelte` defers four `setTimeout`s it never cancels and uses the global
   `document.querySelectorAll`.
 - A suite-wide "no timer alive at the end of a file" check is still only an idea.

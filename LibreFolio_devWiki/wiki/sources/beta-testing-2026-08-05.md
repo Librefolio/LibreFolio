@@ -109,12 +109,12 @@ already in the taxonomy or belongs to the feature pages. They are listed in
 
 ## Drift check (2026-10-12, historical folder H6)
 
-The folder moved from `Release_2/Phase_0/` to `Release_2/phases/06_betaTestingReportAndFixing/` (`91e88b8d1`); the
+The folder moved from `Release_2/Phase_0/` to `Release_2/phases/06_betaTestingReportAndFixing/` (`2ec304fa6`); the
 three reports ingested here moved without changes, the folder's `INDEX.md` was edited. Eleven files were never
 ingested: the F1–F17 feedback classification and ten plans (asset identity and identifiers, asset lifecycle, Crédit
 Agricole trades, engine accounting and signals, frontend coverage, i18n and docs assets, the import flow and wizard,
 the test-runner migration, transactions UX). Their topics already have pages — for example
-[[decisions/credit-agricole-securities-only-cash-neutral-brim]] — and their delivery is mostly `0e07359b4`; a
+[[decisions/credit-agricole-securities-only-cash-neutral-brim]] — and their delivery is mostly `9d6de0cf6`; a
 content-level check of each plan was not done in this step.
 
 ## Content check of the plans (2026-10-13, C-64 last part)

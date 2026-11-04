@@ -28,7 +28,7 @@ closes at 50 on 2025-03-01, 60 from 03-02, 80 from 03-10, 90 from 03-15. A depos
 
 Rows are identified by ``description`` / ``category`` / ``broker_id`` — API keys, not translated text.
 
-Red on HEAD b6a25adcb: (a), (b), (a) through ``get_report`` and (e) — no «Transfers at market value» row; the amount is
+Red on HEAD 91268d748: (a), (b), (a) through ``get_report`` and (e) — no «Transfers at market value» row; the amount is
 in «Other / reconciliation residual». (c) and (d) are guards, green before and after the cure.
 
 Isolation: PURE with respect to the lane — every database is a private SQLite file under ``tmp_path`` (the app schema,

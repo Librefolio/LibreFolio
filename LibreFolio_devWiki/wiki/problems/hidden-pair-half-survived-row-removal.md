@@ -26,8 +26,8 @@ key with the one taken at opening and asked to discard changes.
 
 ## Solution
 
-`e6019f349` («fix(transactions): remove both halves of a pair», train 82): `removeRow` also drops the operation whose
-`pairedWith` is the removed row. The 1.2 CHANGELOG lists it as a fix (`ed8fc5cd7`).
+`9a8b58ca9` («fix(transactions): remove both halves of a pair», train 82): `removeRow` also drops the operation whose
+`pairedWith` is the removed row. The 1.2 CHANGELOG lists it as a fix (`9b4d56a1a`).
 
 ## Prevention
 

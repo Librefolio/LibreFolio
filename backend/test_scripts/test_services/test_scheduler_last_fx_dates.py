@@ -1,7 +1,7 @@
 """X-R45 reverted — the history sync's last saved FX date is the pair's latest stored row, whatever its rate (lot Z-5's
 lookup, on the lane DB).
 
-What X-R45 (629304ab3) did here. A 1.2 install could store rates outside X-R38's ``usable_fx_rate_bounds()``, 1E-10 <=
+What X-R45 (3ed9ad1a6) did here. A 1.2 install could store rates outside X-R38's ``usable_fx_rate_bounds()``, 1E-10 <=
 rate < 1E+14: 0 (a manual ``1E-11`` truncated to 10 decimals), an infinite REAL (``1E+400``), 1E+14 and above. X-R45
 made ``jobs._last_fx_dates`` read only the rates ``usable_fx_rate_clause()`` kept, so that the history sync, which starts
 the day after the last saved date (``_history_sync_start``, lot Z-5), would fetch such a day again and the provider's

@@ -15,7 +15,7 @@ Backlog item **P-1** ("Auto cost with no position: cost 0 saved without a warnin
 archive: an incoming `ADJUSTMENT` — or the receiving side of a `TRANSFER` — saved in `cost_basis_mode: auto` on a
 broker whose pool holds no units of the asset on that date gets a cost basis of **0 per unit**, and its whole value
 then reads as gain. Typical cases: an opening position, a gift, the new line of a spin-off. Auto is the default for
-incoming rows, so the default path produces it. Checked at `083ed26dc`:
+incoming rows, so the default path produces it. Checked at `fef0203ca`:
 
 - the WAC facade `compute_wac_iterative()` returns `Currency(asset_currency, 0)` when there are no rows
   (`backend/app/services/portfolio_service.py`, ~`:185-190`), and a pool emptied by sales has a unit cost of 0

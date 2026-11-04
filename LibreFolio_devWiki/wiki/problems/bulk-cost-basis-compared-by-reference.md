@@ -22,11 +22,11 @@ workstream S's test author while writing PC2 (plan 37), confirmed by P's reds on
 
 `fieldEq` (`txPayloadHelpers.ts`) compared `cost_basis_override` with `(a || '') === (b || '')` — on `{code, amount}`
 objects — so two equal costs were always different. `buildUpdateDiff` and `diffDualItem` use it. It dated from
-`7f1a6ed39` (2026-05-05); no existing test compared two costs.
+`d1d06c0a5` (2026-05-05); no existing test compared two costs.
 
 ## Solution
 
-Commit `7f8233c47` (train 34): a branch of `fieldEq` for `cost_basis_override` (`costBasisValue`). An absent value, or one
+Commit `af4463c5f` (train 34): a branch of `fieldEq` for `cost_basis_override` (`costBasisValue`). An absent value, or one
 whose amount is empty or blank, means «no cost»; otherwise the `code` and the amount compare with `exactDecimalEqual`, as
 for `cash`. `description` stays a string comparison.
 

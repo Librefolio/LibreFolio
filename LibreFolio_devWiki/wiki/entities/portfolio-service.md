@@ -32,7 +32,7 @@ The orchestration layer between the API and the Portfolio Engine. `PortfolioServ
 
 ## Location
 
-`backend/app/services/portfolio_service.py` (~2558 lines after commit `39106380` 3-pool refactor, +612; 2 455 lines on 2026-10-07; 2 358 at `5d0585595`)
+`backend/app/services/portfolio_service.py` (~2558 lines after commit `39106380` 3-pool refactor, +612; 2 455 lines on 2026-10-07; 2 358 at `9f63eec22`)
 
 ## Key Methods
 
@@ -72,11 +72,11 @@ Lot 41 ([[decisions/native-cash-daily-revaluation]]) removed the service's own l
 
 | Where | What it reads (commit) |
 |-------|------------------------|
-| `_engine_native_cash()` | the run's ledger, or an empty one on the engine's early returns (`c04e44ff5`) |
-| `get_summary()` — cards | cash = `value_at(valuation_date)[b]` (a broker whose movements are all zero keeps its report-currency balance), `cash_balances` = `balances(valuation_date)`; capital and value in transit = the engine's `BrokerDailyContribution` at the valuation date (step H, `801b4a168`); NAV = market value + cash + in transit |
+| `_engine_native_cash()` | the run's ledger, or an empty one on the engine's early returns (`df5db60d0`) |
+| `get_summary()` — cards | cash = `value_at(valuation_date)[b]` (a broker whose movements are all zero keeps its report-currency balance), `cash_balances` = `balances(valuation_date)`; capital and value in transit = the engine's `BrokerDailyContribution` at the valuation date (step H, `f15fcfdad`); NAV = market value + cash + in transit |
 | `get_summary()` — headline and totals | headline `cash_balances` = the cards' lists summed, in access order, so the headline equals Σ cards; period and lifetime totals from `flows()` (deposits, withdrawals, fees and taxes absolute; income signed); missing pairs from `missing_conversions()` |
 | `get_income_history()`, `get_cost_history()`, `get_deposit_history()` | `_signed_transaction_sums_by_date(..., native_cash=None)`: the ledger `get_report()` passes, or one built with `rates_until = date_to or today`, so rows dated after today are ignored (B12) |
-| `get_positions_contribution()` | income and cost flows from `flows(date_from, effective_end)` (G4 and B14 closed); unallocated sums in access order; one «FX on cash» row per broker from `exchange_results()`, ahead of the residual, skipped below `CONVERSION_DUST` (`c04e44ff5`) |
+| `get_positions_contribution()` | income and cost flows from `flows(date_from, effective_end)` (G4 and B14 closed); unallocated sums in access order; one «FX on cash» row per broker from `exchange_results()`, ahead of the residual, skipped below `CONVERSION_DUST` (`df5db60d0`) |
 
 The share of a broker comes from `effective_share()` everywhere (O2); the `UserRole` import is gone.
 
@@ -102,7 +102,7 @@ cache_key = (
 
 Cache invalidated on: any transaction add/edit/delete, any price update.
 
-## Known Issues / Technical Debt — RESOLVED (2026-07-06, commit `13052a006`)
+## Known Issues / Technical Debt — RESOLVED (2026-07-06, commit `d2cf5287d`)
 
 The four items below were the open technical debt tracked in `ARCHITECTURE_CURRENT_STATE.md` §5 bugs 2, 5, 6
 and `implementation_status_report.md` §3. All four were closed out by the Holdings/Performance panel refactor
@@ -119,7 +119,7 @@ Phase 09 M1/M2 archive (2026-07-07, [[sources/phase09-m1-m2-archive-2026-07]]):
    `current_value=None`.
    *(Drift note, 2026-10-07: the mechanism described here is not the current one — the WAC-as-price fallback was
    removed in `39106380` in favour of LAST_BUY_PRICE, see [[problems/test-transaction-implied-constructor-mismatch]],
-   and the unified price resolver's `LAST_TRADE_PRICE` replaced that on 2026-07-31, commit `1c5082f81`. Not realigned
+   and the unified price resolver's `LAST_TRADE_PRICE` replaced that on 2026-07-31, commit `ed862f20f`. Not realigned
    here: valuation was not part of workstream P.)*
 3. ⚠️ **Realized P&L duplication — improved, not fully eliminated**: `_compute_period_summary_metrics()` now
    deduplicates the NAV/P&L-for-period computation shared by `get_summary()` and `get_positions_contribution()`.

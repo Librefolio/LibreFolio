@@ -25,7 +25,7 @@ latest start among the assets as everyone's start.
 
 ## Solution
 
-`a766a9d5d` («feat(risk): eligibility and replay auto-exclusion»), `services/risk/eligibility.py`: one set of facts per
+`a79e12f5e` («feat(risk): eligibility and replay auto-exclusion»), `services/risk/eligibility.py`: one set of facts per
 asset and window, read two ways — analysis eligibility for a period the user chooses (an asset that starts late may be
 selected, with a warning: the developer's decision of 24/09) and replay coverage for a crisis window, where an asset not
 priced at both ends is **excluded automatically** instead of blocking the replay or moving the baseline. On the

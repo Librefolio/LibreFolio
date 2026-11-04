@@ -54,17 +54,17 @@ found while counting V-15).
 
 **Checkpoint 2a, train 64** (the ones that dirty global state), each with its proof of damage first:
 
-- **A1** (`495fb9e86`): each test owns a **reserved MOCKFX pair** — EUR-TTD and EUR-JMD for T7, EUR-GTQ and EUR-HNL for
+- **A1** (`bd4268f4f`): each test owns a **reserved MOCKFX pair** — EUR-TTD and EUR-JMD for T7, EUR-GTQ and EUR-HNL for
   the twin, real ISO codes nothing else uses — created and removed in the spec's fixture, with the clean-up in its
   `finally`, so a timeout cannot leave it behind. The page opens on an explicit ten-day window; the test asserts the
   request, the response (validated by the generated schema: 10 fetched, 10 changed), the modal's counts read from
   `data-*`, and the rates read back through the API. After each run: nothing on the four codes, no EUR-USD row written
   after the seed.
-- **A2** (`6d62171e3`, with the attributes of `e6333930c`): the two writing tests run on a **disposable account**, with
+- **A2** (`16360529a`, with the attributes of `e356b7de6`): the two writing tests run on a **disposable account**, with
   `en`/`light` set through the API before the login and the account deleted in `finally`; options are picked by test id
   (`setting-theme-option-*`, `setting-select-option-*`) and checked through the PUT body, the
   `settings.preferences.saved` event and `GET /settings/user`. The theme test now really saves.
-- **A3** (`6d62171e3`): each writing test **reads the five scheduler keys first and restores them in `finally`**
+- **A3** (`16360529a`): each writing test **reads the five scheduler keys first and restores them in `finally`**
   through the admin bulk PATCH, then reads them back; FSCH-006 and 006b run in a nested serial `describe('Saving')`.
 - The About tab now publishes `data-busy` and `aria-busy`, so its tests wait for a state instead of a clock.
 
@@ -80,17 +80,17 @@ same rules — [[decisions/e2e-gaps-of-1-2-before-release]].
 
 **Checkpoint 2b, train 72**, each item with its damage proved first, then green at one and at four workers:
 
-- **A4** (`1b1e58fd0`): the four `tx-commit` specs left 26 transactions behind at every run; they now record their
+- **A4** (`a275fb99a`): the four `tx-commit` specs left 26 transactions behind at every run; they now record their
   writes and delete them by id after each test, and FM6 opens its own pair by id.
-- **A5, A6** (`7074fd7d1`): the seed-pair specs had altered the pairs 43↔44 and 45↔46 and added a DIVIDEND on Apple;
+- **A5, A6** (`7c0572296`): the seed-pair specs had altered the pairs 43↔44 and 45↔46 and added a DIVIDEND on Apple;
   C3 and TODO-B now work on a disposable account with their own pair, A6 on its own manual asset.
-- **A7, A7b, A7c** (`ad16a4d3c`): the broker writes moved to disposable accounts; IWR-009 and `tx-clone` delete what
+- **A7, A7b, A7c** (`e00076b50`): the broker writes moved to disposable accounts; IWR-009 and `tx-clone` delete what
   they create, by id.
-- **V-20** (`d60937c08`): the fixed 3 s waits of `auth`, `app-start-auth` and `files` became waits on the state the
+- **V-20** (`f7bea54e4`): the fixed 3 s waits of `auth`, `app-start-auth` and `files` became waits on the state the
   page publishes.
-- **WB4, WB5** (`1ea16aace`): the cleanup unmasked a test that passed only on the leftovers of others —
+- **WB4, WB5** (`f68365cdc`): the cleanup unmasked a test that passed only on the leftovers of others —
   [[problems/test-passed-only-on-leftovers-of-other-tests]].
-- The Playwright configuration's notes now match its parallel mode and its five serial blocks (`5139f4014`).
+- The Playwright configuration's notes now match its parallel mode and its five serial blocks (`259ba8a74`).
 
 The category gates at four workers were green but for V-19 (the Spanish toolbar, fixed in the same train by
 workstream I), one mobile case red only under load, and WB5; `front-transaction all` passed 327 of 327 on the
@@ -101,23 +101,23 @@ tests, which never delete their upload; V-17's two runner points; V-18. With A1�
 came next — delivered in train 76 ([[decisions/e2e-gaps-of-1-2-before-release]]).
 
 *Train 76*: `files.spec.ts` now registers every upload and deletes it, with the BRIM broker of its import test, in
-`afterEach` (`eb269ecde`) — V-21's upload item. **Still open**: V-25 (`tx-delete` uses up a seed FEE and a seed pair,
+`afterEach` (`6a5721755`) — V-21's upload item. **Still open**: V-25 (`tx-delete` uses up a seed FEE and a seed pair,
 and one test leaves a broker on purpose), 12 upload files left by an earlier run that the populate step does not
 clean, the rest of V-21 (probes and forbidden selectors, which leak nothing), V-17's two runner points, V-18.
 
 *Train 82*: V-25 is cured — `tx-delete` creates and deletes only its own rows, through the new fixture
-`frontend/e2e/fixtures/owned-pair.ts` (`5d5c7caed`); after a run it had left 73 transactions, 9 brokers and 18 assets
+`frontend/e2e/fixtures/owned-pair.ts` (`1308d3aa7`); after a run it had left 73 transactions, 9 brokers and 18 assets
 against the seed's 76, 8 and 17. V-21 in part: the transaction specs lost their probes and fragile selectors
-(`e01289a65`), and files and logout wait on the page's state (`34fb7ca37`); T1, T4, T5/T8, T13, A6 and the B3 guard
+(`717d7c61f`), and files and logout wait on the page's state (`a2bb6031f`); T1, T4, T5/T8, T13, A6 and the B3 guard
 wait on questions to the developer. A finding: after midnight the seed holds more exchange rates (4 140), because
 the populate's ECB window follows the calendar — so the no-leak check now proves that no rate is written after the
 populate, instead of counting them. **Still open**: the rest of V-21, V-17's two runner points, V-18.
 
 *Train 87*: two more leaks of the V-25 class, cured. `fx-destructive` said it used pairs outside the seed, but EUR/PLN
-and EUR/SEK have been in the seed since `a3a9ead52`, as ECB legs of other chains: its «clean slate» deleted both
+and EUR/SEK have been in the seed since `c6245282d`, as ECB legs of other chains: its «clean slate» deleted both
 pairs' 2 × 276 rates (`fx_rates` 4 140 → 3 588). It now uses currencies checked free of the seed, registers its
-pairs before creating them and deletes only those (`586fd8aca`); its `beforeAll` checks, read-only, that no pair
-already has routes or rates, and fails without touching anything otherwise — proved red on purpose. The asset specs take each id from the `POST` response and delete it in `afterEach` (`ba1c34d64`): after
+pairs before creating them and deletes only those (`1ce37932e`); its `beforeAll` checks, read-only, that no pair
+already has routes or rates, and fails without touching anything otherwise — proved red on purpose. The asset specs take each id from the `POST` response and delete it in `afterEach` (`c6ab3d50b`): after
 every round the database is back at the seed's 17 assets. New in the backlog: V-31 (the mock FX sync leaves its
 rates), V-32 (asset specs that pick rows by position), V-34 (a cleanup that checks only the HTTP status). **Still
 open**: the rest of V-21, V-17's two runner points, V-18.
