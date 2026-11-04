@@ -69,6 +69,16 @@ def front_broker_tx_actions(verbose: bool = False, ui: bool = False, headed: boo
         return False
     return _run_playwright("brokers/broker-transactions-actions.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
+def front_broker_page_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the broker page's per-role E2E: owner, editor and viewer (shared, share 0) see what their role allows."""
+    print_section("Frontend Broker Page Roles Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-page-roles.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_broker_whole_amounts(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the broker page's whole-broker amounts E2E (MF6-3, D4): apply_ownership_share=false on the broker page only."""
     print_section("Frontend Broker Whole Amounts Tests")
@@ -126,6 +136,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "list", front_broker_list, name="Broker List & CRUD Tests", desc="Broker list page, create/edit/delete", prereq="Login working", tests="brokers/brokers.spec.ts")
     add_test(cat, "detail", front_broker_detail, name="Broker Detail Tests", desc="Detail page sections, edit/import modals", prereq="Login working, brokers exist", tests="brokers/brokers-detail.spec.ts")
     add_test(cat, "broker-tx-actions", front_broker_tx_actions, name="Broker Transactions Actions Tests", desc="Transactions tab on the broker page: selection bar (Edit/Clone/Delete) and row actions for who can edit, none for a viewer, no Split, rows the user cannot edit left out with a warning", tests="brokers/broker-transactions-actions.spec.ts")
+    add_test(cat, "broker-page-roles", front_broker_page_roles, name="Broker Page Roles Tests", desc="Broker page per role (owner, editor, viewer shared with share 0): the shared broker opens and its overview loads, header edit/share buttons, Transactions bar (import and new transaction only for who can edit), Info sharing section", tests="brokers/broker-page-roles.spec.ts")
     add_test(cat, "broker-whole-amounts", front_broker_whole_amounts, name="Broker Whole Amounts Tests", desc="The broker page counts the broker whole (apply_ownership_share=false), the Dashboard keeps the owner share", prereq="Login working, e2e_test_user co-owner of the first mock broker", tests="brokers/broker-whole-amounts.spec.ts")
     add_test(cat, "broker-recovery", front_broker_recovery, name="Broker Recovery Tests", desc="Owned empty/cascade deletion success, failure notifications and preserved recovery dialog", tests="brokers/broker-recovery.spec.ts")
     add_test(cat, "broker-create-feedback", front_broker_create_feedback, name="Broker Create Feedback Tests", desc="Real duplicate failure, close/discard/reopen reset and confirmed creation feedback on desktop/mobile", tests="brokers/broker-create-feedback.spec.ts")

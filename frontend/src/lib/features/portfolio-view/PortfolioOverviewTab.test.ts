@@ -47,11 +47,21 @@ function snapshot(cashBalances: {code: string; amount: string}[] | undefined): P
     };
 }
 
-const props = (state: PortfolioDataState) => ({snapshot: state, displayCurrency: 'EUR', brokerIds: [1], onRequestPnlCandles: () => {}});
+const dashboardIds = {overviewTab: 'dashboard-overview-tab', cashBalances: 'dashboard-cash-balances', cashBalance: 'dashboard-cash-balance'};
+const props = (state: PortfolioDataState, testIds = dashboardIds) => ({snapshot: state, displayCurrency: 'EUR', brokerIds: [1], onRequestPnlCandles: () => {}, testIds});
 
 describe('PortfolioOverviewTab — cash balances', () => {
     it('lists them largest first, whatever order the report gives', () => {
-        render(PortfolioOverviewTab, props(snapshot([{code: 'USD', amount: '20'}, {code: 'EUR', amount: '900'}, {code: 'CHF', amount: '300'}])));
+        render(
+            PortfolioOverviewTab,
+            props(
+                snapshot([
+                    {code: 'USD', amount: '20'},
+                    {code: 'EUR', amount: '900'},
+                    {code: 'CHF', amount: '300'},
+                ]),
+            ),
+        );
         const chips = screen.getAllByTestId('dashboard-cash-balance');
         expect(chips.map((chip) => (chip.textContent ?? '').replace(/\D/g, '').replace(/0{2}$/, ''))).toEqual(['900', '300', '20']);
     });
@@ -65,5 +75,13 @@ describe('PortfolioOverviewTab — cash balances', () => {
     it('shows the same empty line before the first report has arrived', () => {
         render(PortfolioOverviewTab, props(snapshot(undefined)));
         expect(screen.getByTestId('dashboard-cash-balances').querySelector('p')).not.toBeNull();
+    });
+
+    it('wears the test ids of the page that mounts it: a broker page keeps its own', () => {
+        render(PortfolioOverviewTab, props(snapshot([{code: 'EUR', amount: '5'}]), {overviewTab: 'broker-overview-tab', cashBalances: 'broker-cash-balances', cashBalance: 'broker-cash-balance'}));
+        expect(screen.getByTestId('broker-overview-tab')).toBeInTheDocument();
+        expect(screen.getByTestId('broker-cash-balances')).toBeInTheDocument();
+        expect(screen.getAllByTestId('broker-cash-balance')).toHaveLength(1);
+        expect(screen.queryByTestId('dashboard-overview-tab')).toBeNull();
     });
 });

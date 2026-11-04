@@ -207,6 +207,8 @@ describe('{@html} renders sanitised or reviewed HTML only (K step 13, item 0 gat
         expect(isScanned('src/routes/(app)/dashboard/+page.svelte')).toBe(true);
         expect(isScanned('src/lib/features/portfolio-view/PortfolioView.svelte')).toBe(true);
         expect(isScanned('src/lib/features/portfolio-view/PortfolioOverviewTab.svelte')).toBe(true);
+        expect(isScanned('src/lib/features/portfolio-view/PortfolioToolbar.svelte')).toBe(true);
+        expect(isScanned('src/lib/features/portfolio-view/PortfolioBanners.svelte')).toBe(true);
         expect(isScanned('src/__tests__/harness/AppLayoutGateHarness.svelte')).toBe(false);
         expect(isScanned('src/lib/utils/core/escapeHtml.ts')).toBe(false);
         // 42 sinks in 19 components when this gate was written, 10 of them in DataTable: a walk that

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({query: vi.fn(), partners: vi.fn(), tooltips: vi
 vi.mock('$lib/api', () => ({zodiosApi: {query_transactions_api_v1_transactions_get: mocks.query}}));
 vi.mock('$lib/features/transactions/loadTransactionRows', () => ({loadPartnerRows: mocks.partners, loadEventTooltipMap: mocks.tooltips}));
 
+import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
 import {PortfolioTransactions, type PortfolioTransactionsInputs} from './portfolioTransactions.svelte';
 import type {TXReadItem} from '$lib/features/transactions/types';
 
@@ -23,9 +24,9 @@ interface Knobs {
     period: {historyStart: string; start: string; end: string; isMaxPending: boolean};
 }
 
-function make(overrides: Partial<Knobs> = {}) {
+function make(overrides: Partial<Knobs> = {}, extra: Partial<PortfolioTransactionsInputs> = {}) {
     const knobs: Knobs = {owned: [1, 2], brokerIds: [1, 2], period: {historyStart: '2026-01-01', start: '2026-01-01', end: '2026-06-30', isMaxPending: false}, ...overrides};
-    const inputs: PortfolioTransactionsInputs = {ownedBrokerIds: () => knobs.owned, brokerIds: () => knobs.brokerIds, period: () => knobs.period};
+    const inputs: PortfolioTransactionsInputs = {ownedBrokerIds: () => knobs.owned, brokerIds: () => knobs.brokerIds, period: () => knobs.period, ...extra};
     return {knobs, ctl: new PortfolioTransactions(inputs)};
 }
 
@@ -77,7 +78,11 @@ describe('PortfolioTransactions', () => {
         ctl.sync(true);
         await vi.waitFor(() => expect(ctl.mainRows.length).toBe(3));
         await loaded(ctl);
-        expect(askedQueries().map((queries) => queries.broker_id).sort()).toEqual([1, 2]);
+        expect(
+            askedQueries()
+                .map((queries) => queries.broker_id)
+                .sort(),
+        ).toEqual([1, 2]);
         expect(ctl.mainRows.map((row) => row.id).sort((a, b) => a - b)).toEqual([10, 20, 21]);
     });
 
@@ -102,5 +107,60 @@ describe('PortfolioTransactions', () => {
         expect(mocks.query).not.toHaveBeenCalled();
         expect(ctl.mainRows).toEqual([]);
         expect(ctl.partnerRows).toEqual([]);
+    });
+});
+
+describe('PortfolioTransactions · a broker page (delivery 3)', () => {
+    const wholeHistory = {followsPeriod: () => false, busyKey: 'broker-transactions'};
+
+    it('asks the broker alone, whole: no dates, whatever the period says', async () => {
+        const {ctl} = make({owned: [7], brokerIds: [7]}, wholeHistory);
+        ctl.sync(true);
+        await vi.waitFor(() => expect(ctl.mainRows.length).toBeGreaterThan(0));
+        await loaded(ctl);
+        expect(askedQueries()).toEqual([{broker_id: 7}]);
+    });
+
+    it('does not ask again when the period moves: only the broker is in its key', async () => {
+        const {ctl, knobs} = make({owned: [7], brokerIds: [7]}, wholeHistory);
+        ctl.sync(true);
+        await vi.waitFor(() => expect(ctl.mainRows.length).toBeGreaterThan(0));
+        await loaded(ctl);
+        const asked = mocks.query.mock.calls.length;
+        knobs.period = {...knobs.period, end: '2026-07-31', start: '2026-02-01'};
+        ctl.sync(true);
+        expect(mocks.query.mock.calls.length).toBe(asked);
+    });
+
+    it('tells the page what it loaded, once the partners and the tooltips are in', async () => {
+        const onLoaded = vi.fn();
+        mocks.partners.mockResolvedValue([tx(99)]);
+        const {ctl} = make({owned: [7], brokerIds: [7]}, {...wholeHistory, onLoaded});
+        ctl.sync(true);
+        await vi.waitFor(() => expect(onLoaded).toHaveBeenCalledTimes(1));
+        const [main, partners] = onLoaded.mock.calls[0];
+        expect((main as TXReadItem[]).map((row) => row.id).sort((a, b) => a - b)).toEqual([10, 21]);
+        expect((partners as TXReadItem[]).map((row) => row.id)).toEqual([99]);
+    });
+
+    it('asks again on request, only when the tab was opened before (Refresh and the bulk workspace)', async () => {
+        const {ctl} = make({owned: [7], brokerIds: [7]}, wholeHistory);
+        await ctl.reload();
+        expect(mocks.query).not.toHaveBeenCalled();
+        ctl.sync(true);
+        await vi.waitFor(() => expect(ctl.mainRows.length).toBeGreaterThan(0));
+        await loaded(ctl);
+        const asked = mocks.query.mock.calls.length;
+        await ctl.reload();
+        expect(mocks.query.mock.calls.length).toBe(asked + 1);
+    });
+
+    it("is tracked under the page's own busy key", async () => {
+        const track = vi.spyOn(pageBusy, 'track');
+        const {ctl} = make({owned: [7], brokerIds: [7]}, wholeHistory);
+        ctl.sync(true);
+        await vi.waitFor(() => expect(mocks.query).toHaveBeenCalled());
+        expect(track.mock.calls.map((call) => call[0])).toContain('broker-transactions');
+        track.mockRestore();
     });
 });
