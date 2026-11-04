@@ -22,21 +22,12 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
 -->
 <script lang="ts">
-    import {onDestroy, onMount, tick} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Shield} from 'lucide-svelte';
-    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
-    import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
-    import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
-    import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
+    import {Briefcase, TrendingUp, ArrowRightLeft, Shield} from 'lucide-svelte';
+    import type {AiExportRequestContext} from '$lib/features/ai-export/aiExportClipboard';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {notify} from '$lib/stores/app/notify.svelte';
-    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
-    import {buildMissingFxRatesSyncRequest} from '$lib/utils/sync/syncRange';
-    import {fxPairHtml} from '$lib/utils/providerHelpers';
-    import {extractErrorMessage} from '$lib/utils/trySave';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
@@ -51,34 +42,21 @@
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {createDateRangeController} from '$lib/features/dashboard/dateRangeController.svelte';
-    import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
-    import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
-    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {createPortfolioData} from './portfolioData';
-    import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
+    import PortfolioToolbar from './PortfolioToolbar.svelte';
+    import PortfolioBanners from './PortfolioBanners.svelte';
+    import {PortfolioBannerActions} from './portfolioBannerActions.svelte';
     import PortfolioOverviewTab from './PortfolioOverviewTab.svelte';
     import PortfolioPositionsTab from './PortfolioPositionsTab.svelte';
     import PortfolioRiskTab from './PortfolioRiskTab.svelte';
     import PortfolioTransactionsTab from './PortfolioTransactionsTab.svelte';
     import {PortfolioTransactions} from './portfolioTransactions.svelte';
-    import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
-    import {pairsStillStale, STALE_FX_ACTION, STALE_FX_CODE, staleFxIssue, type StaleFxPairLike} from '$lib/features/dashboard/staleFxIssue';
+    import {staleFxIssue, type StaleFxPairLike} from '$lib/features/dashboard/staleFxIssue';
     import {todayIso} from '$lib/utils/dateOnly';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
-    import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
-    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
-    import {classifyFxSyncOutcome, formatFxSyncResult, FX_SYNC_TIMEOUT_MS, type FxPairSyncCompleteDetail, type FxSyncResponse} from '$lib/services/fxCreationSync';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
-    import {getBrokerRole} from '$lib/stores/reference/brokerStore';
-    import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {goto} from '$app/navigation';
-    import {zodiosApi} from '$lib/api';
     import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
-
-    const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
     // =========================================================================
     // State
@@ -105,8 +83,8 @@
     /** A contribution already on screen is being refreshed in background: busy, but no skeleton. */
     const contributionRefreshing = $derived($data.contributionRefreshing);
     const reportLoading = $derived($data.reportLoading);
-    let syncLoading = $state(false);
-    let syncingCode = $state<string | null>(null);
+    /** «Aggiorna» is running (the banner's own syncs are `banners.syncLoading`). */
+    let refreshing = $state(false);
 
     /** The currency and broker filter the user left (E3): they last the session, so a return asks
      *  the key it left and the cache can serve it. */
@@ -188,19 +166,6 @@
     const appliedCurrency = $derived($data.appliedCurrency ?? initialCurrency);
     let targetCurrencyManuallySet = $state(restoredView.targetCurrency !== null);
 
-    /** Broker filter dropdown open state. */
-    let brokerFilterOpen = $state(false);
-    let brokerFilterTriggerEl = $state<HTMLButtonElement | null>(null);
-    let brokerFilterPanelEl = $state<HTMLDivElement | null>(null);
-
-    /** Mirrors the DateRangePicker's own effective 2-row max-width, so the Currency+Broker row
-     *  below it can be capped to the SAME pixel value when filtersStacked — otherwise it
-     *  stretches to the full (wider) filters column instead of matching the picker's box.
-     *  MUST start non-undefined (matches DateRangePicker's own maxWidthTwoRow default, 390) —
-     *  Svelte forbids bind:key={undefined} when the child prop has a declared fallback. */
-    let pickerMaxWidth = $state<number>(390);
-    let brokerFilterDropdownPosition = $state({left: 8, top: 8});
-
     // =========================================================================
     // Derived
     // =========================================================================
@@ -242,17 +207,8 @@
     const effectiveBrokerCount = $derived((activeBrokerIds ?? ownedBrokerIds).length);
     const wantsBrokerPnlHistory = $derived(effectiveBrokerCount >= 2);
 
-    /** AI export state — dropdown open/position handled internally by AiExportMenu. */
-    let aiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
-    let aiExportCatalogLoading = $state(true);
-    let aiExportCatalogFailed = $state(false);
-    let aiExportLabels = $derived(buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport')));
-
     /** Whether the filter is "active" (some but not all brokers selected). */
     const brokerFilterActive = $derived(selectedBrokerIds.length > 0 && !allBrokersSelected);
-
-    /** Broker filter trigger label — follows assets-page type-filter pattern (no separate badge). */
-    const brokerFilterLabel = $derived(brokerFilterActive ? (selectedBrokerIds.length === 1 ? (allBrokers.find((b) => b.id === selectedBrokerIds[0])?.name ?? String(selectedBrokerIds[0])) : `${$_('brokers.title')} (${selectedBrokerIds.length})`) : $_('dashboard.allBrokers'));
 
     // The report's own issues, plus one row for the exchange rates it read from an old stored row (`stale_fx_pairs`): the
     // report lists them but raises no issue, so the row is built here (developer question 18, 28/10).
@@ -291,14 +247,11 @@
         void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
     }
 
-    /** FxPairAddModal state for CTA-driven pair creation */
-    let showFxPairAddModal = $state(false);
     let pageAlive = true;
     onDestroy(() => {
         pageAlive = false;
         data.dispose();
     });
-    let fxPairCreateSlug = $state('');
 
     /** The Transazioni tab's rows: kept here, not in the tab, so leaving the tab and coming back asks nothing again. */
     const txCtl = new PortfolioTransactions({
@@ -310,135 +263,16 @@
         txCtl.sync(activeTab === 'transazioni');
     });
 
-    /**
-     * «Sync rates» on MISSING_FX_RATES. A date is missing only when no rate exists on or
-     * before it, so the missing dates precede the pair's first stored rate and a sync of the
-     * period on screen never reaches them: the request targets the dates the issue carries,
-     * a week either side, never past today (`buildMissingFxRatesSyncRequest`).
-     *
-     * The outcome is told once the report is reloaded, because only then is it known whether
-     * the dates are covered: when the provider returned nothing for them, the toast says so
-     * instead of reporting a success the banner would contradict.
-     */
-    async function syncMissingFxRates(issue: DataQualityIssue) {
-        const request = buildMissingFxRatesSyncRequest(issue);
-        if (!request) return;
-        const sessionGeneration = getClientSessionGeneration();
-        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
-        const coversRequestedPair = (candidate: DataQualityIssue) => (buildMissingFxRatesSyncRequest(candidate)?.pairs ?? []).some((slug) => request.pairs.includes(slug));
-        syncLoading = true;
-        syncingCode = issue.code;
-        toasts.info($_('fx.sync.inProgress'));
-        try {
-            let response: FxSyncResponse | undefined;
-            let transportError: string | undefined;
-            try {
-                response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(request, {timeout: FX_SYNC_TIMEOUT_MS});
-            } catch (error) {
-                transportError = extractErrorMessage(error, $_('prices.sync.failedDefault'));
-            }
-            if (!current()) return;
-            const {requestedResults, operationErrors, outcome, variant: outcomeVariant} = classifyFxSyncOutcome(request.pairs, response, transportError);
-
-            // No reload after a transport error: the backend may still be writing those rates.
-            let remaining: DataQualityIssue | undefined;
-            let stillMissing: boolean | null = null;
-            // «Old exchange rate» (Y6-6): the sync worked and, once the report is read again, the pair is still stale: the provider has no newer rate.
-            let stillStale: string[] = [];
-            if (!transportError) {
-                invalidateFxRoutes();
-                invalidate();
-                // The open lots and risk panels ask again too, as after «Aggiorna»: new rates change their figures.
-                refreshVersion += 1;
-                try {
-                    await loadAll(true, true);
-                    remaining = dataQualityIssues.find((candidate) => candidate.cta_action === 'sync_fx_pair' && coversRequestedPair(candidate));
-                    stillMissing = remaining !== undefined;
-                    if (issue.code === STALE_FX_CODE) stillStale = pairsStillStale(request.pairs, (summary?.data_quality as {stale_fx_pairs?: StaleFxPairLike[]} | undefined)?.stale_fx_pairs);
-                } catch {
-                    stillMissing = null;
-                }
-                if (!current()) return;
-            }
-
-            const tr = (key: string, opts?: any) => $_(key, opts);
-            const pairOptions = {outerFlags: true, linkToDetail: true};
-            let variant = outcomeVariant;
-            let message = transportError
-                ? request.pairs.map((slug) => buildFxSyncToast({status: 'failed', message: escapeHtml(transportError)}, slug, tr, undefined, undefined, pairOptions).message).join('\n\n')
-                : requestedResults.map((result, index) => formatFxSyncResult(result, request.pairs[index]).message).join('\n\n');
-            if (operationErrors.length > 0) message += `\n${operationErrors.map(escapeHtml).join('; ')}`;
-            if (remaining && (outcome === 'ok' || outcome === 'partial')) {
-                const params = remaining.message_params ?? {};
-                const stillMissingPairs = (buildMissingFxRatesSyncRequest(remaining)?.pairs ?? []).filter((slug) => request.pairs.includes(slug));
-                message += `\n\n${$_('dataQuality.missingFxRatesAfterSync', {
-                    values: {
-                        pairs: stillMissingPairs.map((slug) => fxPairHtml(slug, pairOptions)).join(', '),
-                        date_from: escapeHtml(String(params.date_from ?? '')),
-                        date_to: escapeHtml(String(params.date_to ?? '')),
-                        dates_count: params.dates_count ?? '',
-                    },
-                })}`;
-                if (variant === 'success') variant = 'warning';
-            }
-            if (stillStale.length > 0 && (outcome === 'ok' || outcome === 'partial')) {
-                message += `\n\n${$_('dataQuality.staleFxAfterSync', {values: {pairs: stillStale.map((slug) => fxPairHtml(slug, pairOptions)).join(', ')}})}`;
-                if (variant === 'success') variant = 'warning';
-            }
-            notify({
-                name: 'fx.rates.synced',
-                detail: {origin: 'dashboard-banner', pairs: request.pairs, start: request.start, end: request.end, outcome, stillMissing, stillStale: stillStale.length > 0},
-                toast: {variant, message},
-            });
-        } finally {
-            syncLoading = false;
-            syncingCode = null;
-        }
-    }
-
-    async function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
-        if (action === 'navigate_asset' && target) {
-            goto(`/assets/${target}`);
-        } else if (action === 'navigate_fx' && target) {
-            goto(`/fx/${target}`);
-        } else if (action === 'add_fx_pair') {
-            // The banner has one chip per missing pair: the dialog opens on the pair of the chip pressed.
-            fxPairCreateSlug = target ?? '';
-            showFxPairAddModal = true;
-        } else if (action === 'sync_fx_pair' || action === STALE_FX_ACTION) {
-            await syncMissingFxRates(_issue);
-        } else if (action === 'sync_asset_prices') {
-            // STALE_PRICE: re-sync the flagged provider assets from the day after their last
-            // stored price ('resume', the rule every auto-sync uses) up to the dashboard's end
-            // date, then reload the report (the banner clears once the prices are fresh).
-            const assetIds = _issue.affected_asset_ids ?? [];
-            if (assetIds.length === 0) return;
-            const assetNames = _issue.affected_asset_names ?? [];
-            const tr = (key: string, opts?: any) => $_(key, opts);
-            syncLoading = true;
-            syncingCode = _issue.code;
-            try {
-                const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(
-                    assetIds.map((asset_id) => ({asset_id, date_range: {start: 'resume', end: dateRangeCtl.end}})),
-                    {timeout: 120 * 1000},
-                );
-                for (const result of ((response as any)?.results ?? []) as any[]) {
-                    const name = assetNames[assetIds.indexOf(result?.asset_id)] ?? `#${result?.asset_id}`;
-                    const toast = buildAssetSyncToast(result, escapeHtml(name), tr);
-                    toasts[toast.variant](toast.message);
-                }
-                invalidate();
-                // The open lots and risk panels ask again too, as after «Aggiorna»: new prices change their figures.
-                refreshVersion += 1;
-                await loadAll(true);
-            } catch (e: any) {
-                toasts.error(`${$_('common.sync')} — ${e?.message || $_('prices.sync.failedDefault')}`);
-            } finally {
-                syncLoading = false;
-                syncingCode = null;
-            }
-        }
-    }
+    /** The banner's buttons (sync rates, sync prices, the chips) and the pair dialog, which the currency selector opens too. */
+    const banners = new PortfolioBannerActions({
+        issues: () => dataQualityIssues,
+        staleFxPairs: () => (summary?.data_quality as {stale_fx_pairs?: StaleFxPairLike[]} | undefined)?.stale_fx_pairs,
+        periodEnd: () => dateRangeCtl.end,
+        alive: () => pageAlive,
+        reload: (force, propagateError) => loadAll(force, propagateError),
+        onDataChanged: () => (refreshVersion += 1),
+        translate: (key, options) => $_(key, options as never),
+    });
 
     /** URL for "See all" links — preserves current date range (assets) and, for
      *  transactions, ALSO the broker filter (single broker_id / multi broker_ids),
@@ -474,19 +308,6 @@
 
     function hydrateFromCache() {
         data.hydrateFromCache();
-    }
-
-    async function handleFxPairCreated() {
-        if (!pageAlive) return;
-        invalidateFxRoutes();
-        invalidate();
-        await pageBusy.track('dashboard-reload', () => loadAll(true));
-    }
-
-    async function handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail) {
-        if (!pageAlive || !isClientSessionCurrent(detail.sessionGeneration)) return;
-        // The sync interceptor marks portfolio/risk caches stale at commit time, when it wrote something.
-        await loadAll(true, true);
     }
 
     /**
@@ -543,7 +364,7 @@
 
     /** «Aggiorna» (E4): report, contribution, risk and lots are all asked again; what is on screen stays meanwhile. */
     async function handleSync() {
-        syncLoading = true;
+        refreshing = true;
         // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
         data.resetRetries();
         requestPortfolioRefresh();
@@ -551,7 +372,7 @@
         try {
             await pageBusy.track('dashboard-refresh', () => loadAll(true));
         } finally {
-            syncLoading = false;
+            refreshing = false;
         }
     }
 
@@ -572,84 +393,28 @@
         }),
     );
 
-    async function loadAiExportCompatibility() {
-        aiExportCatalogLoading = true;
-        try {
-            aiExportCompatibility = await aiExportCatalogLoader.load();
-            aiExportCatalogFailed = false;
-        } catch {
-            aiExportCatalogFailed = true;
-            toasts.error($_('aiExport.catalogUnavailable'));
-        } finally {
-            aiExportCatalogLoading = false;
-        }
+    /** The toolbar's AI Export: which export it is, and the request's context (the broker filter and period on screen). */
+    const aiExport = {
+        domain: 'portfolio',
+        memoryKey: 'portfolio',
+        defaultSelectionId: 'portfolio.pac_planning',
+        get disabled() {
+            return !canAsk;
+        },
+        context: (): AiExportRequestContext => {
+            // F2: a portfolio export without the owned scope would be widened by the backend to every
+            // broker the user can see. The trigger is disabled until then; this guards the call itself.
+            if (!canAsk) throw new Error('Owned brokers are not loaded');
+            return {domain: 'portfolio', snapshotAsOf: dateRangeCtl.end, targetCurrency, brokerIds: activeBrokerIds};
+        },
+    } as const;
+
+    /** The user picked a currency in the toolbar. */
+    function handleCurrencyChange() {
+        targetCurrencyManuallySet = true;
+        writeDashboardView({targetCurrency});
+        void pageBusy.track('dashboard-currency', () => loadAll());
     }
-
-    function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
-        // F2: a portfolio export without the owned scope would be widened by the backend to every
-        // broker the user can see. The trigger is disabled until then; this guards the call itself.
-        if (!canAsk) return Promise.reject(new Error('Owned brokers are not loaded'));
-        return prepareAiExport({
-            context: {
-                domain: 'portfolio',
-                snapshotAsOf: dateRangeCtl.end,
-                targetCurrency,
-                brokerIds: activeBrokerIds,
-            },
-            options,
-            compatibility: aiExportCompatibility,
-            translate: (key) => $_(key),
-        });
-    }
-
-    function handleAiExportCopied(result: PreparedAiExport) {
-        const messages = getAiExportSuccessMessages($_, result);
-        toasts.success(messages.copied);
-        toasts.info(messages.privacyNotice);
-    }
-
-    async function positionBrokerFilterDropdown() {
-        await tick();
-        if (!brokerFilterOpen) return;
-        brokerFilterDropdownPosition = getFixedDropdownPosition(brokerFilterTriggerEl, brokerFilterPanelEl, 'start');
-    }
-
-    function updateOpenDropdownPositions() {
-        if (brokerFilterOpen) {
-            brokerFilterDropdownPosition = getFixedDropdownPosition(brokerFilterTriggerEl, brokerFilterPanelEl, 'start');
-        }
-    }
-
-    function toggleBrokerFilterDropdown() {
-        brokerFilterOpen = !brokerFilterOpen;
-        if (brokerFilterOpen) void positionBrokerFilterDropdown();
-    }
-
-    // Outside-click closes the broker filter panel (AI export dropdown handles its own outside-click internally)
-    function handleDocumentClick(e: MouseEvent) {
-        if (!brokerFilterOpen) return;
-        const target = e.target as HTMLElement;
-        if (target.closest?.('[data-broker-filter-panel]') || target.closest?.('[data-testid="broker-filter-trigger"]')) return;
-        brokerFilterOpen = false;
-    }
-
-    $effect(() => {
-        if (!brokerFilterOpen) return;
-        void positionBrokerFilterDropdown();
-    });
-
-    $effect(() => {
-        if (!brokerFilterOpen) return;
-
-        const handleViewportChange = () => updateOpenDropdownPositions();
-        window.addEventListener('resize', handleViewportChange);
-        window.addEventListener('scroll', handleViewportChange, true);
-
-        return () => {
-            window.removeEventListener('resize', handleViewportChange);
-            window.removeEventListener('scroll', handleViewportChange, true);
-        };
-    });
 
     // =========================================================================
     // Lifecycle
@@ -662,8 +427,6 @@
     hydrateFromCache();
 
     onMount(() => {
-        document.addEventListener('click', handleDocumentClick);
-        void loadAiExportCompatibility();
         // The first load holds the Refresh button (Y11), from the reference lists to the report.
         void pageBusy.track('dashboard-first-load', async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
@@ -681,7 +444,6 @@
             // A user who owns nothing is asked nothing: `loadAll` only stops the page from being busy.
             await loadAll();
         });
-        return () => document.removeEventListener('click', handleDocumentClick);
     });
 </script>
 
@@ -689,160 +451,31 @@
     class="space-y-4 text-lf-primary"
     data-testid="dashboard-page"
     use:guideAnchor={'page.dashboard'}
-    aria-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading}
-    data-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading ? 'true' : 'false'}
+    aria-busy={reportLoading || contributionLoading || contributionRefreshing || refreshing || banners.syncLoading}
+    data-busy={reportLoading || contributionLoading || contributionRefreshing || refreshing || banners.syncLoading ? 'true' : 'false'}
     data-live-updates={$data.liveState}
 >
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
-    <PageToolbar
-        thresholds={{oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 460}}
+    <PortfolioToolbar
         tabs={dashboardTabs}
         {activeTab}
         ontabchange={handleTabChange}
-        testId="dashboard-controls"
-        filterRowTestId="dashboard-filter-bar"
-        layoutDebugName="dashboard"
-    >
-        {#snippet filters({layoutMode, filtersStacked, showExtraLabels})}
-            <!-- Date range picker (wired to global store via the shared dateRangeController) -->
-            <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" {layoutMode} debugName="dashboard" onchange={dateRangeCtl.onDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
+        {dateRangeCtl}
+        bind:targetCurrency
+        {baseCurrency}
+        oncurrencychange={handleCurrencyChange}
+        oncreateforex={(slug) => banners.openFxPairModal(slug)}
+        brokers={allBrokers}
+        {selectedBrokerIds}
+        {brokerFilterActive}
+        onselectbrokers={selectBrokers}
+        liveState={$data.liveState}
+        {aiExport}
+        onrefresh={handleSync}
+    />
 
-            <!-- Currency override + Broker multi-select — share one justified row when the
-                 filters+summary zone stacks (stackFilters/oneColumn — see filtersStacked
-                 in PageToolbar), not each its own stacked full-width row; inline naturally
-                 otherwise, same as before (unconditional w-full here would fight
-                 DateRangePicker for row space in oneRow/denseRow mode). Capped to
-                 pickerMaxWidth (mirrors the picker's own 2-row max-width) so this row's right
-                 edge lines up with the picker's instead of stretching to the wider column. -->
-            <div class="flex items-center gap-3 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
-                <!-- Currency override selector -->
-                <div class="flex items-center gap-1.5 text-xs text-lf-muted">
-                    <!-- Round 13: "Valuta:" is an extra/decorative label — the select itself
-                         (flag + code) already conveys enough at very narrow widths, so it hides
-                         first via the independent noExtraLabel threshold, well before labelHide*
-                         would ever strip anything else on this row. -->
-                    {#if showExtraLabels}<span class="whitespace-nowrap">{$_('common.currency')}:</span>{/if}
-                    <div class="w-28">
-                        <CurrencySearchSelect
-                            bind:value={targetCurrency}
-                            compact={true}
-                            configuredOnly={true}
-                            testId="dashboard-target-currency"
-                            defaultCurrency={baseCurrency}
-                            createForexLabel={$_('common.createForex')}
-                            dropdownPosition="bottom"
-                            placeholder={baseCurrency}
-                            onCreateForex={() => {
-                                // Prefill base = user default currency, quote left for the user to pick
-                                fxPairCreateSlug = baseCurrency ? `${baseCurrency}-` : '';
-                                showFxPairAddModal = true;
-                            }}
-                            onchange={() => {
-                                targetCurrencyManuallySet = true;
-                                writeDashboardView({targetCurrency});
-                                void pageBusy.track('dashboard-currency', () => loadAll());
-                            }}
-                        />
-                    </div>
-                </div>
-
-                <!-- Broker multi-select panel. With one broker selected the label is that
-                     broker's name, of any length: the trigger shrinks and truncates it
-                     instead of pushing out of the bar (the full name stays in the DOM). -->
-                <div class="relative min-w-0">
-                    <button
-                        bind:this={brokerFilterTriggerEl}
-                        class="flex items-center gap-1.5 min-w-0 max-w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
-                       {brokerFilterActive ? 'bg-lf-selected text-lf-link border-lf-focus' : 'bg-lf-card text-lf-secondary border-lf-input hover:bg-lf-hover'}"
-                        onclick={toggleBrokerFilterDropdown}
-                        data-testid="broker-filter-trigger"
-                    >
-                        <span class="truncate">{brokerFilterLabel}</span>
-                        <svg class="w-3 h-3 shrink-0 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                        </svg>
-                    </button>
-
-                    {#if brokerFilterOpen}
-                        <div
-                            bind:this={brokerFilterPanelEl}
-                            class="fixed z-50 w-56 bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow overflow-hidden"
-                            style:left={`${brokerFilterDropdownPosition.left}px`}
-                            style:top={`${brokerFilterDropdownPosition.top}px`}
-                            data-broker-filter-panel
-                        >
-                            <!-- Select All / Deselect All -->
-                            <div class="flex gap-2 px-2.5 py-2 border-b border-lf-subtle">
-                                <button type="button" class="flex-1 px-2 py-1 text-[11px] font-medium border border-lf-subtle rounded bg-lf-panel text-lf-secondary hover:bg-lf-neutral transition-colors" onclick={() => selectBrokers(allBrokers.map((b) => b.id))}>{$_('common.selectAll')}</button>
-                                <button type="button" class="flex-1 px-2 py-1 text-[11px] font-medium border border-lf-subtle rounded bg-lf-panel text-lf-secondary hover:bg-lf-neutral transition-colors" onclick={() => selectBrokers([])}>{$_('common.clearAll')}</button>
-                            </div>
-                            <!-- Broker list -->
-                            <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
-                                {#each allBrokers as broker (broker.id)}
-                                    {@const isSelected = selectedBrokerIds.includes(broker.id)}
-                                    {@const role = getBrokerRole(broker.id)}
-                                    {@const RoleIcon = role ? getRoleIcon(role) : null}
-                                    <button
-                                        type="button"
-                                        class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-lf-hover transition-colors {isSelected ? 'text-lf-link' : 'text-lf-secondary'}"
-                                        onclick={() => toggleBroker(broker.id)}
-                                        data-testid="broker-filter-item-{broker.id}"
-                                    >
-                                        <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size={16} />
-                                        <span class="flex-1 truncate">{broker.name}</span>
-                                        {#if RoleIcon}
-                                            <RoleIcon size={14} class={getRoleIconColor(role)} />
-                                        {/if}
-                                        {#if isSelected}
-                                            <svg class="w-3.5 h-3.5 text-lf-link flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                                            </svg>
-                                        {/if}
-                                    </button>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-                </div>
-            </div>
-        {/snippet}
-
-        {#snippet actions({showActionLabels})}
-            <!-- «Updates paused» (FB-28): the figures stopped following the prices because nobody used the page for two minutes. -->
-            <LiveUpdatesStatus state={$data.liveState} />
-
-            <!-- AI Export -->
-            <AiExportMenu
-                domain="portfolio"
-                compatibility={aiExportCompatibility}
-                memoryKey="portfolio"
-                defaultSelectionId="portfolio.pac_planning"
-                disabled={aiExportCatalogLoading || aiExportCatalogFailed || !canAsk}
-                labels={aiExportLabels}
-                showLabel={showActionLabels}
-                onprepare={handleAiExport}
-                oncopied={handleAiExportCopied}
-                onerror={(error) => toasts.error(getAiExportErrorMessage($_, error))}
-            />
-
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
-                onclick={handleSync}
-                disabled={pageBusy.busy}
-                data-busy={pageBusy.busy ? 'true' : 'false'}
-                data-testid="sync-button"
-                title={$_('dashboard.syncData')}
-            >
-                <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
-                {#if showActionLabels}
-                    <span>{$_('dashboard.syncData')}</span>
-                {/if}
-            </button>
-        {/snippet}
-    </PageToolbar>
-
-    <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} busyCode={syncingCode} />
+    <PortfolioBanners issues={dataQualityIssues} actions={banners} />
 
     {#if activeTab === 'panoramica'}
         <PortfolioOverviewTab snapshot={$data} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} />
@@ -887,9 +520,3 @@
         <PortfolioTransactionsTab transactions={txCtl} brokers={allBrokers} />
     {/if}
 </div>
-
-<!-- FxPairAddModal — opened from DataQualityBanner CTA -->
-{#if showFxPairAddModal}
-    {@const fxParts = fxPairCreateSlug.includes('-') ? fxPairCreateSlug.split('-') : fxPairCreateSlug.split('/')}
-    <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} oncreated={handleFxPairCreated} onsynced={handleFxPairCreationSynced} />
-{/if}
