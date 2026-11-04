@@ -41,7 +41,7 @@ Aquí encuentras los **avatares** de los usuarios, los **iconos** de los bróker
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Pestaña de Informes del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Estos son los extractos exportados por tus brókeres, a la espera de ser importados o ya importados. Ves los informes de todos los brókeres a los que puedes acceder, ya sea como Propietario, Editor o Lector.
+Estos son los extractos exportados por tus brókeres, a la espera de ser importados o ya importados. Ves los informes de todos los brókeres a los que puedes acceder, ya sea como Propietario, Editor o Lector. Los informes que una versión anterior de LibreFolio guardó sin bróker solo aparecen aquí: a los administradores, y a quien los subió cuando LibreFolio registró quién lo hizo.
 
 La columna **Estado** te indica en qué situación está cada archivo:
 

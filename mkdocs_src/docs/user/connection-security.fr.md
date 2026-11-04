@@ -109,7 +109,8 @@ barre latérale est fermée.
 
 👉 **Que faire :** évitez cette adresse. Si vous gérez le serveur, donnez à LibreFolio une
 [adresse HTTPS](#https-address) et cessez d'exposer le HTTP en clair. Changez ensuite votre mot de
-passe : **Paramètres** → [**Profil**](settings/profile.md) → **Changer le mot de passe**.
+passe : **Paramètres** → [**Profil**](settings/profile.md) → **Changer le mot de passe**. Cela déconnecte aussi
+tous les autres appareils connectés à votre compte.
 
 ??? info "🔍 Quand une connexion n'est pas sécurisée"
 

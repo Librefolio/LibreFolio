@@ -59,7 +59,7 @@ The manual testing session on 2026-04-22 produced 26 I-bis follow-up issues. Not
 
 When `PATCH /assets/{id}` changes `currency` and the asset has price/event history,
 the chosen semantics is **Policy D — destructive symmetric wipe + transaction
-disconnection** (commit `c7cf528c4`, 2026-04-24):
+disconnection** (commit `fdc6cb2e0`, 2026-04-24):
 
 - All `price_history` rows for the asset → DELETED
 - All `asset_events` rows for the asset → DELETED (manual + provider-generated)
@@ -135,8 +135,8 @@ without requiring a page reload.
 
 | Role | Path |
 |------|------|
-| Transaction service | `backend/app/services/transaction_service.py` |
-| Asset source (wipe logic) | `backend/app/services/asset_source.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| Asset source (wipe logic) | `backend/app/services/assets/currency_change.py` |
 | Schemas (common FxBackwardFillInfo) | `backend/app/schemas/common.py` |
 | Scheduled investment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
 | Asset currency change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |

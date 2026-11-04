@@ -1,6 +1,6 @@
 # Source: R3-SP-D Plan Chain — FormModal Props + Event Picker + WAC FX Feedback + Bugfixes
 
-> **Ingested**: 2026-06-04 @ `4e5e500c0`
+> **Ingested**: 2026-06-04 @ `684581e90`
 > **Status**: ✅ ALL DONE (2026-06-01 → 2026-06-04)
 > **Origin**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/`
 
@@ -107,12 +107,12 @@
 | WacFxEnrich | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` |
 | WAC service (wac_service.py was git-mv'd into the portfolio service on 2026-06-10) | `backend/app/services/portfolio_service.py` |
 | Financial utils (financial_utils.py → wac_utils.py on 2026-06-10 → the average-cost function on 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
-| Transaction service | `backend/app/services/transaction_service.py` |
-| FormModal | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| WacPreviewSection | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
-| AssetEventPicker | `frontend/src/lib/components/transactions/events/AssetEventPicker.svelte` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| FormModal | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| WacPreviewSection | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
+| AssetEventPicker | `frontend/src/lib/features/transactions/events/AssetEventPicker.svelte` |
 | FxSyncModal | `frontend/src/lib/components/fx/FxSyncModal.svelte` |
-| ValidateScheduler | `frontend/src/lib/utils/transactions/useValidateScheduler.svelte.ts` |
+| ValidateScheduler | `frontend/src/lib/features/transactions/useValidateScheduler.svelte.ts` |
 | E2E WAC FX | `frontend/e2e/transactions/tx-wac-fx.spec.ts` |
 | E2E WAC mode | `frontend/e2e/transactions/tx-wac-mode.spec.ts` |
 

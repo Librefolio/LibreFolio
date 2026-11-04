@@ -34,6 +34,21 @@ export function problemCount(value: number | null): string {
     return value === null ? '?' : formatFixed(value, 1, {trim: true});
 }
 
+/** Whether the backend said where the undefined points of a calendar return are, enough to write it (Z5-F1). */
+function hasUndefinedWindow(problem: SignalProblem): boolean {
+    return problem.unavailableStart !== null && problem.unavailableEnd !== null && problem.resyncStart !== null && problem.resyncEnd !== null;
+}
+
+function undefinedWindowValues(problem: SignalProblem): Record<string, string> {
+    return {
+        count: problemCount(problem.unavailablePoints),
+        start: problem.unavailableStart ?? '',
+        end: problem.unavailableEnd ?? '',
+        resyncStart: problem.resyncStart ?? '',
+        resyncEnd: problem.resyncEnd ?? '',
+    };
+}
+
 /**
  * Turn a `SignalProblem` into a user message by selecting the branch for its
  * `code` and filling in the interpolation values. `translate` and `fieldLabel`
@@ -70,8 +85,10 @@ export function formatSignalProblem(problem: SignalProblem, translate: SignalPro
         case 'fx_conversion_unavailable':
             return problem.message || translate('chartSettings.signalProblems.unavailable');
         case 'undefined_metric':
+            if (hasUndefinedWindow(problem)) return translate('chartSettings.signalProblems.undefinedWindowUnavailable', undefinedWindowValues(problem));
             return problem.message || translate('chartSettings.signalProblems.unavailable');
         case 'partial_undefined_metric':
+            if (hasUndefinedWindow(problem)) return translate('chartSettings.signalProblems.undefinedWindowPartial', undefinedWindowValues(problem));
             return problem.message || translate('chartSettings.signalProblems.partialResult');
         case 'incomplete_warmup':
             return translate('chartSettings.signalProblems.incompleteWarmup', {

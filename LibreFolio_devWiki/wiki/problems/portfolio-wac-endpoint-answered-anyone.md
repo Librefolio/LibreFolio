@@ -18,9 +18,9 @@ its first version.
 
 ## Solution
 
-Closed on 2026-09-18 in `0088748a8`, a commit of the PAC work («feat(pac): redesign FX/funding to canonical rate
+Closed on 2026-09-18 in `b461a6b02`, a commit of the PAC work («feat(pac): redesign FX/funding to canonical rate
 map»): `get_portfolio_wac` now takes the signed-in user and checks the brokers asked for. No CHANGELOG line said so;
-since `60f734e08` the 🔒 section does: «The average purchase cost API now requires signing in».
+since `a57d306a0` the 🔒 section does: «The average purchase cost API now requires signing in».
 
 ## Prevention
 

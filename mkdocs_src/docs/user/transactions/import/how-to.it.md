@@ -130,17 +130,20 @@ LibreFolio legge ogni file, lo verifica e lo riassume in una tabella:
 | ✗ | Titoli non ancora abbinati ai tuoi asset — li abbini in **Revisione** |
 | 🔴 | Problemi di validazione: righe che non è stato possibile convertire in transazioni |
 | 🔧 | Campi da compilare prima del salvataggio (in rosso quando uno blocca il salvataggio) |
-| ⚠️ | Avvisi dell'importatore, come righe saltate |
+| ⚠️ ℹ️ | Due numeri: gli avvisi (ambra) vanno guardati, come le righe saltate; le note (blu) spiegano una scelta fatta dall'importatore, senza nulla da correggere |
 
-I riquadri sopra la tabella contano ciò che verrà realmente importato; **Vedi tutto** apre i dettagli.
+I riquadri sotto la tabella contano ciò che verrà realmente importato; **Vedi tutto**, o **Vedi Dettaglio**
+nel menu **⋮** di una riga, apre i dettagli, con gli avvisi e le note elencati a parte.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Passaggio 3 della procedura guidata: Analisi" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Avvisi**: **Continua** li elenca per primi; leggili, poi clicca **Continua comunque**.
+- **Avvisi e note**: **Continua** elenca prima gli avvisi, poi le note; leggili, poi clicca
+  **Continua comunque**.
 - **Un file non è stato elaborato**: un banner ne indica il motivo. Correggi il suo plugin in
-  **Seleziona File**, poi clicca **Rianalizza tutti**.
+  **Seleziona File**, poi analizza di nuovo. **Rianalizza tutti** c'è nell'analisi solo quando almeno un
+  file è stato letto; se nessuno lo è stato, torna a **Seleziona File** e clicca **Analizza (N)**.
 
 ### 🧩 Passaggi che compaiono solo quando servono {: #only-when-needed }
 
@@ -290,7 +293,10 @@ le spunte e clicca di nuovo.
 
 Le righe arrivano nel workspace bulk non salvate. Controllale o modificale, poi clicca
 **Salva tutto**: attende le righe elencate in rosso, e chiede prima di salvare i valori elencati in
-ambra che non hai verificato (**Salva comunque**).
+ambra che non hai verificato (**Salva comunque**). Una riga la cui quantità ha più di 10 decimali, il cui
+importo ne ha più di 6, o il cui costo di carico per unità ne ha più di 12, è rifiutata a **Salva tutto**, col
+massimo nel messaggio (*Quantità: Al massimo 10 decimali*): LibreFolio non la arrotonda mai.
+Le date delle transazioni possono risalire fino all'anno 1 e arrivare a domani. Una riga datata prima del 1900 è segnata in ambra nella revisione (una nota sopra la tabella le conta) e lo spazio di lavoro bulk chiede una sola volta di confermarle, perché una data così è di solito un refuso; una volta confermata si salva come le altre. Una riga datata dopo domani è rifiutata a **Salva tutto**, con l'ultimo giorno ammesso nel messaggio (*Data: Non oltre il 2026-10-18* se oggi è il 17 ottobre 2026).
 
 ---
 

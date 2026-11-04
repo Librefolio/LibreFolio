@@ -303,6 +303,10 @@
           "description": "Deduplicated union of every applicable FX dataset."
         }
       }
+    },
+    "tooManyPriceDays": "This export would read too many days of prices. Choose a shorter period.",
+    "replyInstructions": {
+      "dataReceived": "Data received, I'm ready for your questions."
     }
   }
 }

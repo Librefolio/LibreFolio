@@ -231,8 +231,8 @@ test.describe('BRIM Import Wizard', () => {
         // If resolve section is visible and has unresolved entries
         const resolveSection = step4.locator('text=Resolve Assets');
         if (await resolveSection.isVisible({timeout: 2_000}).catch(() => false)) {
-            // Check for amber badge (unresolved count)
-            const unresolvedBadge = step4.locator('[class*="amber"]').first();
+            // Check for the unresolved-count badge (ReviewStep renders it only while an asset is unresolved)
+            const unresolvedBadge = step4.getByTestId('import-wizard-unresolved-count');
             if (await unresolvedBadge.isVisible({timeout: 1_000}).catch(() => false)) {
                 // Import should be disabled
                 await expect(importBtn).toBeDisabled();

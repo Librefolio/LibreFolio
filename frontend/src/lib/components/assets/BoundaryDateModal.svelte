@@ -141,7 +141,7 @@
 {#if open}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-lf-overlay backdrop-blur-sm"
         role="dialog"
         tabindex="-1"
         aria-modal="true"
@@ -151,30 +151,30 @@
         }}
     >
         <div
-            class="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4 space-y-4
+            class="bg-lf-card text-lf-primary rounded-xl shadow-xl shadow-lf-shadow p-6 w-full max-w-sm mx-4 space-y-4
                      {isMultiGap ? 'max-w-md' : 'max-w-sm'} max-h-[90vh] overflow-y-auto"
         >
             <!-- Header -->
             <div class="flex items-center gap-3">
                 {#if mode === 'delete'}
-                    <div class="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                        <Trash2 size={18} class="text-red-500" />
+                    <div class="p-2 rounded-lg bg-lf-danger-soft">
+                        <Trash2 size={18} class="text-lf-danger" />
                     </div>
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    <h3 class="text-lg font-semibold text-lf-primary">
                         {$t('assets.schedule.deletePeriodTitle')}
                     </h3>
                 {:else}
-                    <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                        <Scissors size={18} class="text-blue-500" />
+                    <div class="p-2 rounded-lg bg-lf-info-soft">
+                        <Scissors size={18} class="text-lf-info" />
                     </div>
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    <h3 class="text-lg font-semibold text-lf-primary">
                         {$t('assets.schedule.splitPeriodTitle')}
                     </h3>
                 {/if}
             </div>
 
             <!-- Description -->
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="text-sm text-lf-muted">
                 {#if mode === 'delete'}
                     {$t('assets.schedule.deleteBoundaryHint')}
                 {:else}
@@ -186,14 +186,14 @@
                 <!-- Multi-gap mode: N boundary date pickers -->
                 <div class="space-y-4">
                     {#each gaps as gap, i}
-                        <div class="space-y-2 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg border border-gray-100 dark:border-slate-600">
-                            <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        <div class="space-y-2 p-3 bg-lf-panel rounded-lg border border-lf-subtle">
+                            <div class="text-xs font-medium text-lf-muted">
                                 {gap.label || `${$t('assets.schedule.boundaryDate')} ${i + 1}`}
                             </div>
                             <div class="flex justify-center">
                                 <SingleDatePicker value={boundaryDates[i] ?? gap.defaultDate} label={gap.label || $t('assets.schedule.boundaryDate')} compact={true} onchange={(d) => handleMultiDateSelected(i, d)} disabledDates={multiDisabledDates[i]} allowFuture={true} />
                             </div>
-                            <p class="text-center text-[10px] text-gray-400">
+                            <p class="text-center text-[10px] text-lf-muted">
                                 {gap.minDate} → {gap.maxDate}
                             </p>
                         </div>
@@ -202,13 +202,13 @@
             {:else}
                 <!-- Single-gap mode: one DatePicker -->
                 <div class="space-y-2">
-                    <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <div class="text-xs font-medium text-lf-muted">
                         {$t('assets.schedule.boundaryDate')}
                     </div>
                     <div class="flex justify-center">
                         <SingleDatePicker value={boundaryDate} label={$t('assets.schedule.boundaryDate')} compact={true} onchange={handleDateSelected} {disabledDates} allowFuture={true} />
                     </div>
-                    <p class="text-center text-[10px] text-gray-400">
+                    <p class="text-center text-[10px] text-lf-muted">
                         {minDate} → {maxDate}
                     </p>
                 </div>
@@ -220,8 +220,8 @@
                     type="button"
                     data-testid="boundary-modal-cancel"
                     onclick={handleCancel}
-                    class="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-slate-600
-                           text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                    class="px-4 py-2 text-sm rounded-lg border border-lf-subtle
+                           text-lf-secondary hover:bg-lf-hover transition-colors"
                 >
                     {$t('common.cancel')}
                 </button>
@@ -231,7 +231,7 @@
                     onclick={handleConfirm}
                     disabled={!isValid}
                     class="px-4 py-2 text-sm rounded-lg font-medium transition-colors disabled:opacity-50
-                           {mode === 'delete' ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-libre-green hover:bg-libre-green-dark text-white'}"
+                           {mode === 'delete' ? 'bg-lf-danger-solid hover:bg-lf-danger-hover text-lf-on-danger-solid' : 'bg-lf-action hover:bg-lf-action-hover text-lf-on-action'}"
                 >
                     {mode === 'delete' ? $t('common.confirmDelete') : $t('assets.schedule.confirmSplit')}
                 </button>

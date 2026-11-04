@@ -37,18 +37,21 @@ export function namedPoint(date: string, value: number | null) {
 }
 ```
 
-**Partial vs Full update pattern** (`lib/components/dashboard/GrowthChart.svelte`, used by the
+**Partial vs Full update pattern** (`lib/features/dashboard/GrowthChart.svelte`, used by the
 Dashboard and Broker detail):
 
 ```typescript
 // GrowthChart.svelte — renderChart(forceFullXAxisRebuild = false)
 const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;
 const masked = shouldMaskAmount();
+const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
+const seriesKey = seriesData.map((series) => series.name).join('\u0000');
 const needsFullInit =
     forceFullXAxisRebuild ||
     lastRenderedMode !== renderedModeKey ||
     lastRenderedDark !== isDark ||
-    lastRenderedMasked !== masked;
+    lastRenderedMasked !== masked ||
+    lastRenderedSeriesKey !== seriesKey;
 
 if (needsFullInit) {
     // Axes, tooltip, legend, series: setOption(option, CHART_FULL_UPDATE_OPTS)
@@ -64,6 +67,7 @@ if (needsFullInit) {
 | `renderedModeKey` | The mode (`eur`, `pct`, `pnl`) and, in `pnl`, the submode: the series *type* changes (line, candlestick, bar), which `{name, data}` cannot express. |
 | `isDark` | Colours are set once, in the full option. |
 | `masked` | The privacy toggle: ECharts caches the axis labels, so the tick formatter has to run again. The tooltip formatter reads the flag on every hover. |
+| `seriesKey` | The names of the series last drawn, in order: a broker that joins, leaves or is swapped under the P&L line changes the list, and from `{name, data}` alone ECharts would keep the old series and their legend entries. |
 | `forceFullXAxisRebuild` | The x-axis leaves its compact layout (a narrow container widening on resize). |
 
 The two flag sets differ on purpose:
@@ -75,6 +79,24 @@ The two flag sets differ on purpose:
 
 A resolution switch (daily ↔ weekly/monthly, chosen from the zoom) goes through the partial path
 without animation, after hiding the tooltip.
+
+**Where GrowthChart's code lives.** The component keeps everything reactive; what it computes
+lives in three modules in the same folder, which hold no state and see the component only through
+their arguments:
+
+| File | Holds |
+|---|---|
+| `GrowthChart.svelte` | Props, state, the `$derived` inputs and the memo of each aggregation, zoom handling, the ECharts lifecycle (`renderChart`, `updateChartData`, `applyFullOption`) and the template. `buildChartUpdateSeries` and `buildFullSeries` are thin wrappers that pass the view on screen to the series module. |
+| `growthChartData.ts` | The inputs mapped to one value per day (`mapEurStackedData`, `mapPctValues`, `mapBrokerPnlSeries`, `mapCandlesByDate`, `alignFlowToDates`), the buckets (`buildBucketInfos` for the cascade of Abs, % and the P&L line, `buildLadderBuckets` for the ladder of Candles and Income), their reductions (`aggregateMetric`, `aggregateFlowMetric`, `aggregateCandleMetric` and their `ladder*` counterparts), one entry per resolution or rung (`buildResolutionData`, `buildLadderData`) and the zoom-window geometry (`buildZoomWindow`, `cascadeIndicesAt`, `ladderIndicesAt`). |
+| `growthChartSeries.ts` | What each view draws: `buildGrowthUpdateSeries` (the `{name, data}` of the partial update) and `buildGrowthFullSeries` (every series with its type and style, for the full option), with `splitBySign`, `toCandlestickPoint` (the `'-'` gap), `findReferenceTotalPnl` and `PNL_REFERENCE_SERIES_NAME`. |
+| `growthChartTooltip.ts` | `buildGrowthTooltip`, the HTML ECharts shows on hover, built from a `GrowthTooltipView` the formatter assembles on every hover (entry on screen, mode, labels, translator, currency); amounts are masked under privacy. |
+
+The one rule: an aggregation reads its data only through `AggregationInputs`. Each memo
+(`resolutionCache`, `ladderCache`) is keyed on the identity of the `aggregationInputs` `$derived`
+object, which Svelte rebuilds whenever one of its members changes, so a new input is added to that
+object and to the `AggregationInputs` type, never passed as one more argument (the other arguments
+are the memo's keys: the resolution or rung, and `today` for the ladder). An input that bypasses
+the object does not invalidate the memo, which keeps returning entries computed before it changed.
 
 **Weekly and monthly points.** In the time-axis views (Abs, % and the P&L `line` submode, whose
 daily, weekly and monthly resolutions the code calls the *cascade*), `buildBucketInfos` stands each
@@ -116,11 +138,13 @@ not. The general rule is in [ECharts formatters](../state/app-state.md#privacy-e
 
 The `pnl` mode has three submodes (`pnlSubmode`). The mode and the submode persist per user
 (`dashboard-growth-mode`, `dashboard-growth-pnl-submode`), shared by Dashboard and Broker detail;
-the defaults are `eur` and `line`. A restored `pct` waits for the first completed load: without %
-data (`hasPctData`) the chart shows `eur` and the % button is disabled, but the stored value is
-kept, so the next mount with % data opens on `pct`. The submode buttons float over the plot's
-top-left corner and fold to their icon below a 640 px container (`CONTROLS_COMPACT_BELOW_PX`),
-keeping the label as `title` and `aria-label`.
+the defaults are `eur` and `line`. After every completed load, a `pct` view, restored or picked,
+over a history without % data (`hasPctData`) shows `eur`, and the % button is disabled. The
+fallback is display-only: the stored value is kept and `pctFallback` marks the fallback, so the next
+loaded history with % data brings the view back to `pct`, and the next mount still restores `pct`;
+`selectMode()` clears `pctFallback`, so a mode picked meanwhile, `eur` included, wins. The submode
+buttons float over the plot's top-left corner and fold to their icon below a 640 px container
+(`CONTROLS_COMPACT_BELOW_PX`), keeping the label as `title` and `aria-label`.
 
 | Submode | Series | x-axis |
 |---|---|---|
@@ -180,7 +204,12 @@ number of series in a fixed order, which the partial update relies on across zoo
   goes through `formatDay`; a `1D` bucket prints only its date.
 - **Candles**: the daily OHLC comes from the backend (see
   [Price Resolver](../../backend/transactions/price_resolver.md#intraday-range-open-high-low)),
-  requested through `onRequestPnlCandles` on entry while none is loaded. A bucket takes the first
+  requested through `onRequestPnlCandles` on entry while none is loaded. The effect calls it
+  tracked, on purpose: what the page's loader reads before its first `await` becomes a dependency,
+  so a saved Candles view asks again once the Dashboard knows its brokers (`canAsk`), and a failed
+  request is asked again when a retry falls due, at most three times, 2, 4 and 8 s later
+  ([Lazy sections after a failure](../state/domain-state.md#lazy-report-retry)); an `untrack`
+  around the call would silence both. A bucket takes the first
   open, the highest high, the lowest low and the last close of its days that have a candle
   (`ladderCandleMetric`); a bucket with none is a gap, whose tooltip prints `common.noData`. The
   disclosure caption (`dashboard.pnlCandlesHypotheticalShort`) stays on one line under the plot,
@@ -211,8 +240,11 @@ For these charts, the UX pattern is: **keep old data visible until new data arri
 #### Asset detail: Prices and Rolling Return
 
 `routes/(app)/assets/[id]/+page.svelte` keeps the primary series in `primaryMode`, `'price'` or
-`'calendar-return'` (the **Prices** and **Rolling Return** buttons). It starts on `'price'` on every
-mount and is never persisted; `setPrimaryMode()` stops the measure mode of the panel it leaves.
+`'calendar-return'` (the **Prices** and **Rolling Return** buttons). It opens in the asset's saved
+view: `detailModesForPrimaryView(settings.primaryView)` gives the mode (and Abs or %) on every load of
+the asset, and `persistPrimaryView()` saves the change into the asset's chart settings
+(`primaryView`), where the asset's list card reads it too. `setPrimaryMode()` stops the measure mode of
+the panel it leaves.
 
 | | `'price'` | `'calendar-return'` |
 |---|---|---|
@@ -227,11 +259,28 @@ The rolling return is a backend signal. `loadChartData()` sends one
 `{signal_code: 'ASSET_CALENDAR_ROLLING_RETURN', params: {window_days}}`, with `target_currency` when
 the chart is converted, and each Asset comparison gets an item of its own — `include_price: false`,
 `include_events: true`, `target_currency` set to the chart currency — with the same signal request,
-so every line uses one window and one currency. A page-local wrapper,
-`queryAssetPricesBulkWithSignalIsolation()`, validates each signal result on its own, so one
-malformed result does not discard the response. The plugin is `catalog_visible = False`
-(see [Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)), so no
-selector offers it.
+so every line uses one window and one currency. The page's `queryAssetPricesBulkWithSignalIsolation()`
+sends it, and `parseAssetPriceQueryWithSignalIsolation()`
+(`lib/components/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
+malformed result does not discard the response. The page then reads the signal results inside a `try` of
+their own (X-R16): a malformed one fails the signals only, with the panel's notice «Technical signals could
+not be updated», while the prices still reach the chart, the price cache and the **All** start. The FX
+detail page reads `POST /api/v1/fx/currencies/convert` the same way, through
+`parseFxConvertWithSignalIsolation()` (`lib/components/fx/fxDetailConvertQuery.ts`), so its rates survive a
+malformed signal result too.
+
+The same plugin is also in the signal catalog (see
+[Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)): in
+`'price'` mode the Signals panel offers it in its Risk group as **Rolling Return**, a config of
+`signalType` `asset-calendar-rolling-return` whose card edits `window_days` (30 by default, at
+least 1). `buildBackendSignalRequestPlan()` requests it like any other backend indicator, and its
+`calendar_return` line is drawn over the prices on a secondary axis of its own,
+`independent:calendar_return`. Overlay and mode compute the same metric, the price return against
+the resolved close `window_days` calendar days earlier, but never in the same request:
+`loadChartData()` requests the overlay only in `'price'` mode, with its card's window, and the
+mode's series only in `'calendar-return'` mode, with the **Window** control's days. In
+`'calendar-return'` mode the overlay config stays saved and hidden, like every config but the
+Asset comparisons.
 
 `calendarReturnWindow.ts` turns the **Window** control into days: presets `1w`, `1m`, `3m`, `1y`
 are 7, 30, 90 and 365 days, and a custom amount is multiplied by 7, 30 or 365 (weeks, months,
@@ -248,6 +297,51 @@ estimating it and trims the leading empty points, so each line starts on its own
 date. With some empty points the result is `partial` (`undefined_metric_window` warning); with no
 computable point it is `unavailable` (`undefined_metric`).
 
+#### FX detail: Prices and Rolling Return
+
+`routes/(app)/fx/[pair]/+page.svelte` has the same two modes (lot X5-F1), with the same
+`AssetChartPrimaryMode` type. Differences from the asset page:
+
+- **State and persistence.** `primaryMode` opens from `openingMode()`, which reads `primaryView` of the
+  pair's chart settings (`getSettingsForPair(canonicalSlug, 'fx')`): `'calendar-return'` opens the
+  rolling return, any other view opens prices and is remembered as `priceViewBeforeCalendar`.
+  `persistPrimaryView()` writes `calendar-return`, or that remembered price view, back with
+  `setPairSettings()`. The key is the *canonical* slug and the value is the one the pair's card in the
+  list reads, so a card in the rolling return opens the detail in it. The window is the shared
+  `calendarReturnWindow` / `calendarReturnWindowAuto` of the same settings
+  (`effectiveCalendarReturnWindow()`).
+- **Request builder.** `lib/charts/fxDetailCalendar.ts` (pure) builds the body of
+  `POST /api/v1/fx/currencies/convert`: `buildFxDetailCalendarQuery()` returns a conversion of 1 unit
+  of the page's base into its quote, in the direction the page shows (`data.urlBase` /
+  `data.urlQuote`), daily over `dateStart`..`dateEnd`, with one signal, the calendar rolling return
+  (`fxCalendarRequest(windowDays)`); then one more conversion per saved `fx-pair` signal, in that
+  signal's own direction (`_inverted`). A compared pair equal to the page's own is skipped. Unlike the
+  list cards (`utils/reducedFxQuery.ts`) it sets no `key`, `max_points` or `sample_like`.
+  `fxDetailCalendarViews()` reads `signal_results` by `request_index` into the page's
+  `CalendarReturnView` and a `Map` by `fx-pair` config id.
+- **When it is asked.** `loadCalendarReturn()` runs only in the rolling return, under a generation
+  counter that drops a stale answer, and never throws (a failure is the view's `error` state). It runs
+  on the first load, on a session change, with the chart load that follows a period change, on a
+  window change (`setCalendarPreset()` / `setCalendarCustom()`), on a change of the compared pairs
+  (`handleSignalsChange()`) and on Refresh. Going back to prices asks nothing: the rates are in the FX
+  store, and the mode switch only bumps the generation. The comparison lines come from
+  `renderCalendarPairComparisons()`.
+- **Shared components.** The page reuses `AssetChartModeToggle` and `AssetCalendarWindowControls` with
+  the new optional `idPrefix` prop (default `asset`, `fx` here), which prefixes their test ids:
+  `fx-chart-primary-price`, `fx-chart-primary-calendar-return`, `fx-calendar-window-*`,
+  `fx-calendar-return-docs`. The states use `fx-calendar-return-loading`, `-unavailable` and `-error`.
+  The chart card `fx-detail-chart` publishes `data-primary-mode` and, in the rolling return,
+  `data-window-days`, `data-series-state` and `data-calendar-comparison-ready` / `-partial` /
+  `-unavailable` / `-error` (the `fx-pair` config ids by state).
+- **Signals and buttons.** The Signals panel gets `allowedSignalTypes = ['fx-pair']` (the other
+  configs stay saved, hidden). `PriceChartFull` gets `valueUnit="percentage"` and
+  `hideViewModeToggle`; the measure and edit buttons are not rendered (`measureMode`, `editMode` are
+  forced off, `setPrimaryMode()` stops a running measure); the Measures panel itself stays on the page
+  (its data are the rates).
+
+Tests: `frontend/e2e/fx/fx-detail-rolling-return.spec.ts`, `charts/__tests__/fxDetailCalendar.test.ts`
+and `fxDetailRollingReturn.wiring.test.ts`.
+
 #### Asset detail: where the chart state lives
 
 | Layer | Holds |
@@ -263,7 +357,8 @@ only its own layout (page size, column widths, order and visibility) under its `
 
 #### Asset detail: page sync and comparison sync
 
-`requiredFxPairs` lists the FX pairs the page needs to convert into the chart currency: the
+`requiredFxPairs` (built by `buildRequiredFxPairs()`, `lib/components/assets/detail/assetDetailFxRequirements.ts`)
+lists the FX pairs the page needs to convert into the chart currency: the
 asset's, each Asset comparison's, and those of their events' currencies. Each pair has a status
 (`ok`, `missing`, `no-data`, `partial-gap`) that drives the data-quality banners. The toolbar
 **Sync** (`handleSync()`) opens the page sync modal with the main asset (when it has a provider),
@@ -280,6 +375,51 @@ today). In `'price'` mode, comparison points the backend could not convert stay 
 currency (see [Price Query](../../backend/assets/architecture.md#data-flow-price-query));
 `loadComparisonAssetsData()` (same file) drops them and flags the card with `_conversionFailed`, so
 a comparison line never mixes currencies.
+
+#### Measure mode {: #measure-mode }
+
+The asset detail and FX pair pages measure on their chart through `MeasurePanel`
+(`lib/components/charts/MeasurePanel.svelte`). The asset page mounts one panel per primary mode and
+talks to the one on screen (`activeMeasurePanel()`). 📏 calls the panel's `startMeasureMode()` or
+`stopMeasureMode()`; the panel reports its mode through `onmeasuremodechange`, and the page hands it
+to the chart as `measureMode`, with the chart's two measure callbacks wired to the panel:
+
+- `onMeasureClick(date, value)` calls `addPoint(date, value)`. The first click leaves the start
+  pending. A second click on the start's day is ignored: no measure, measure mode stays on, the start
+  stays pending. A click on another day adds the measure, its dates sorted, and stops measure mode.
+- `onMeasureHover(date, value)` returns `updatePendingEnd(date, value)` straight through:
+  `(date, value) => activeMeasurePanel()?.updatePendingEnd(date, value)` in
+  `routes/(app)/assets/[id]/+page.svelte`, `(date, value) => measurePanel?.updatePendingEnd(date, value)`
+  in `routes/(app)/fx/[pair]/+page.svelte`. `updatePendingEnd` draws the dashed live preview
+  (`__pending__`) from the start to `date` and returns a `boolean`: `true` on the pending start's
+  day, where it also removes the preview if one is drawn; `false` elsewhere, with measure mode off, or
+  with no start pending.
+
+No measure spans a single day (lot Y-N65, as in the
+[date pickers](core-ui/datePickers.md#no-single-day-range)). The expanded card's `DateRangePicker`
+cannot publish a range of one day, so `updateMeasureDates` no longer refuses one on its own: that
+silent refusal was bug N65, where the card's picker showed the same day in «From» and «To» while the
+measure kept its old dates. The panel's **+** (`addMeasureFromChartData()`) measures from the first
+measurable point to the last, and does nothing when both fall on the same day.
+
+**The cursor.** zrender writes its own cursor inline on its element at every pointer move, before
+its listeners run (`Handler.mousemove`, zrender 6), so the `cursor-crosshair` class that the chart
+container carries in measure mode was hardly ever seen. `PriceChartFull` (line view) and
+`CandlestickChart` (candles) therefore set their cursor through zrender:
+
+- On every zr `mousemove` while `measureMode` is on (and an `onMeasureHover` is given), synchronously
+  and before the `requestAnimationFrame` throttle, the chart calls `zr.setCursorStyle('crosshair')`,
+  or `'not-allowed'` while the last resolved hover was refused.
+- In the frame it resolves the point under the pointer, calls `onMeasureHover`, and applies the
+  cursor of the new answer. `onMeasureHover` is typed `(date, value) => boolean | void`; `true` means
+  refused. The container publishes the answer as `data-measure-hover`: `"blocked"` over a refused day
+  (the measure's start), `"free"` anywhere else, including off every point. Out of measure mode the
+  attribute is absent, and a hover still queued when measure mode ends publishes nothing.
+- Outside measure mode the chart never calls `setCursorStyle`: zrender keeps its own cursor.
+
+These rules are pinned in the Y-N65 describes of `MeasurePanel.test.ts` and `PriceChartFull.test.ts`.
+The latter runs each case on the line view and on the candle view, with an ECharts stand-in whose zr
+records every `setCursorStyle` call.
 
 ## Chart Settings and Axis Scales
 
@@ -303,6 +443,21 @@ Saving a scope default (`setGlobalSettings(settings, scope)`) deletes every over
 scope, detail pages included, and leaves the other scope alone. The period is not a chart
 setting: `dateRangeStore.svelte.ts` keeps it in `sessionStorage` (`librefolio_dateRange`), shared
 by the Dashboard, broker, asset and FX pages of the tab.
+
+The stored document carries a `version`, `STORAGE_VERSION` (3). When the store reads it,
+`migratePersistedChartSettings()` brings a version 1 or 2 document to version 3, in the global
+settings and in every override; a document of any other version is ignored, and the defaults
+apply. Version 3 follows the developer's decision 29, one Rolling Return measured in calendar
+days: the observation-count `RISK_ROLLING_RETURN` plugin is gone, so every saved
+`risk-rolling-return` config becomes an `asset-calendar-rolling-return` one. Its `window` param
+becomes `window_days`, with the same number; the style of its `rolling_return` output moves to
+`calendar_return` in `componentStyles`; and the secondary-axis scale saved under
+`independent:risk_return` moves to `independent:calendar_return`, unless that key already holds
+one. Every other field and every other signal stay as they were. A window of N observations thus
+becomes N calendar days: 30 observations of an exchange-traded asset, about 42 calendar days,
+become 30 days, while a crypto-asset, quoted every day, sees no change. The store writes the
+migrated document back to `localStorage` at once; `chartSettingsStore.migration.test.ts` covers
+both the function and that rewrite.
 
 ### Axis rows and ranges
 
@@ -331,6 +486,185 @@ values, within the field's `min`/`max` when set) and the `.lf-compact-number-inp
 ([Mobile CSS](../pwa.md#mobile-css)) sets every input without `.zoom-guard-exempt` to 16 px; the
 class then only resets the line height.
 
+### Signal rendering shared by cards, preview and detail pages {: #signal-rendering }
+
+`lib/charts/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
+`RenderedSignal[]`. It is pure (no Svelte state, no store read): the caller says where the series
+come from.
+
+| Function | Role |
+|----------|------|
+| `renderLocalSignal(config, baseData, viewMode, sources)` | one saved local signal, rebuilt with `signalFromConfig()`, given its data, rendered on `baseData`; nothing if the type is unknown or the series it reads is missing |
+| `renderLocalSignals(configs, definitionsByType, baseData, viewMode, sources)` | a chart's local signals in order; backend-owned and unknown definitions are skipped |
+| `renderBackendResults(configs, results, definitionsByType, baseData, viewMode, translate?)` | a chart's backend results in order, each drawn with the current config of its id |
+| `SignalDataSources` | `fxPairData(slug)`, `comparisonTarget(assetId)` and `selfAssetId`: where an FX-pair or comparison signal gets its series; `NO_SIGNAL_SOURCES` is the empty set |
+
+The Assets list (`routes/(app)/assets/+page.svelte`), the FX list (`routes/(app)/fx/+page.svelte`)
+and `ChartSettingsModal` call these functions with their own `SignalDataSources`, so a signal
+looks the same on a card and in its preview: a comparison is named after its target, a comparison
+with the chart's own asset (`selfAssetId`) is never drawn, and an FX pair follows the direction of
+the card.
+
+The two detail pages (`routes/(app)/assets/[id]/+page.svelte` and `routes/(app)/fx/[pair]/+page.svelte`)
+use the same functions: `renderLocalSignals` for their saved local signals, `renderBackendResults`
+for their backend results and, on the FX page, the module's `fxPointToLineDataPoint` to turn store
+points into chart points. They build their `SignalDataSources` with the pure helper
+`detailPageSignalSources({configs, assets, fxPairPoints, selfAssetId?})`
+(`lib/charts/chartPageSignals.ts`):
+
+- an FX pair reads the points of the FX store, straight (the signal's own `_inverted` turns them),
+  asked lazily, one pair at a time;
+- a comparison reads the series that the comparison load wrote into its config
+  (`params._resolvedData`), named with icon and type by the assets the page knows (an unknown asset
+  gets the catalogue fallback name);
+- there is no base point, because the detail pages draw daily data;
+- the asset detail page passes its own asset as `selfAssetId`.
+
+So a signal looks the same on a card, in the preview and on a detail page.
+`signalRendering.gate.test.ts` keeps it that way: no file outside the module calls
+`signalFromConfig()`, and the list of known copies (`KNOWN_COPIES`) is empty and can only shrink.
+
+### Series for comparisons {: #comparison-series }
+
+A saved comparison names its target; it never carries the series. The settings store keeps only the
+config (`params.assetId` for an `asset-comparison`, `params.pairSlug` for an `fx-pair`), and the
+renderers read the series through `SignalDataSources` (`comparisonTarget(assetId)` and
+`fxPairData(slug)`, see [above](#signal-rendering)). A chart that holds no series of its own (the
+cards of both lists and the settings preview) gets them from `lib/charts/comparisonSeries.ts`, the
+one door:
+
+| Function | Role |
+|----------|------|
+| `comparisonTargetFromStore(asset)` | the asset's cached daily series as a `ComparisonTarget`, named with icon and type; `null` while the cache holds none |
+| `ensureComparisonSeries(assets, range)` | loads what the cache lacks for the assets over `range`; never throws |
+| `fxPairSlugsOf(configs, ownSlug?)` | the pairs the `fx-pair` signals name, once each, without the chart's own pair and without an empty one |
+| `ensureSignalFxPairs(configs, ownSlug, range)` | loads those pairs' rates into the FX stores (`ensureFxRangeLoaded`); one pair failing does not stop the others; never throws |
+
+- **One request for the missing assets.** `ensureComparisonSeries` asks `POST /assets/prices/query`
+  once for all the assets whose cache has a gap in the range (in batches under the backend's caps,
+  `sendBulkBatches()`), daily, `include_events: false`, with no conversion: the series is in the
+  asset's own currency, as the FX detail page draws it. With nothing missing it sends nothing.
+- **The cache is shared.** The series are filed in `assetPriceStoreRegistry`, the cache of the asset
+  detail page, so a visit there warms the lists and the reverse. A request that fails marks nothing
+  as fetched, so the next call asks again; a 404 is final for the assets it carried.
+- **The stores are not reactive.** Neither the price stores nor the FX stores trigger a redraw. A
+  page that loads series reads a version counter in its `SignalDataSources` and bumps it after the
+  load: the FX list's `comparisonSeriesVersion` (bumped by `fetchComparisonSeries()`, which runs
+  one load at a time, and asks the assets of the cards plus the one the open settings window
+  draws) and the Assets list's `fxRatesVersion` (bumped by `loadFxRateData()`, which follows a change
+  of period). Both lists already load every pair's rates, so they do not need `ensureSignalFxPairs()`;
+  it is for a chart that loads only the pairs its signals name.
+- **For all charts there is no asset to draw.** The demo curve of the settings window for all
+  charts has no real asset, so a comparison with an asset is not drawn there; the FX pairs are.
+- **Contract for the detail pages** (owned by another workstream, still to adopt): call
+  `ensureSignalFxPairs(signals, ownSlug, {start, end})` on open, on a period change and when a pair
+  is chosen, then bump their overlay version. Until they do, a saved `fx-pair` comparison does not
+  draw on a clean load of a detail page, only when the FX store is already warm.
+- **Tests read the count, not the canvas.** The cards (`AssetCard`, `FxCard`) and the settings preview
+  (`chart-settings-preview`) publish `data-overlay-count`, the number of overlay lines they draw.
+
+### Preview chart in the modal {: #settings-preview-chart }
+
+The preview in `ChartSettingsModal` is `PriceChartFull`, the chart of the detail pages, not a
+bespoke `LineChart`. It is configured as follows:
+
+| Prop | Value |
+|------|-------|
+| `data` | the **absolute** series: the card's real data in `pair` mode, a synthetic curve in `global` mode |
+| `externalViewMode` | the modal's view selector (**Abs** / **%** / **Rolling Return**, see [Three views](#primary-views)): the chart takes the percentage view itself |
+| `externalChartType` | `'line'` (no candlesticks) |
+| `hideToolbar` | `true` |
+| `chartHeight` | `'220px'` |
+| `areaFill`, `colorByBaseline`, `showGridLines`, `showGradient` | the aesthetics being edited, not the saved ones |
+| `yAxisMode` / `yAxisMin` / `yAxisMax`, `secondaryAxisScales` | the axis scales being edited, for the primary scale of the active view and for the secondary axes |
+| `overlaySignals`, `overlaySignalInfoMap` | the preview signals and `buildOverlaySignalInfoMap()` of them, so a comparison shows its asset's icon and type in the tooltip like on the detail page |
+
+The modal passes no events, measure or edit props, so none of them is drawn. The mouse-wheel zoom
+is the chart's own `inside` dataZoom.
+
+### Baseline colour on cards {: #cards-baseline-colour }
+
+The list cards (`AssetCard`, `FxCard`) pass `colorByBaseline` from the chart settings to
+`PriceChartCompact`, which forwards it to `LineChart`; before, compact charts ignored it. The
+series is green from the baseline up and red below it, with a dashed baseline line. The base is:
+
+- **absolute view**: the `baselineValue` prop when a page gives one, else the first non-missing
+  point of the `data` the chart received. A card thins a dense series to weekly or monthly points
+  *inside* `LineChart`, after this base is taken, so the base is the real start of the period and
+  not the end of the first bucket;
+- **percentage view**: always 0, whatever `baselineValue` says.
+
+`baselineValue` is an optional prop of `LineChart`, forwarded by `PriceChartCompact`, for a page
+that knows a better base than the first point of the data it hands over. No list page uses it today.
+
+### Three views: Abs, % and Rolling Return {: #primary-views }
+
+A chart's saved view is `ChartSettings.primaryView` (`ChartPrimaryView`: `'absolute' | 'percentage' |
+'calendar-return'`, default `'percentage'`), next to `calendarReturnWindow` and
+`calendarReturnWindowAuto`. The Assets list and the FX list use all three; the FX list opens on
+`'absolute'` (`scopeDefaultView('fx')` in the store, as before), every other chart on `'percentage'`.
+`ChartSettingsModal` offers the third view only when the page passes `calendarPreviewResolver`
+(otherwise it falls back to `'percentage'` when a chart opens on `'calendar-return'`); both lists
+pass it. `STORAGE_VERSION` is unchanged: a document saved before these fields existed
+is filled by the sanitiser (`primaryView` = `'percentage'`; `calendarReturnWindowAuto` = `true` only
+when the stored window is the default one).
+
+| Function | Role |
+|----------|------|
+| `setScopePrimaryView(view, scope)` | the list's top bar: sets the scope default (`__global_<scope>__`) and resets every override of the scope to `view`, keeping their other fields; the other scope is untouched |
+| `setItemPrimaryView(slug, view, scope?)` | one chart (a card's button, the detail page); an override it creates starts from the scope's settings |
+| `nextCardPrimaryView(view)` | the card button's order: `'percentage'` → `'calendar-return'` → `'absolute'` → `'percentage'`; the button shows the view it goes to |
+| `effectiveCalendarReturnWindow(settings, rangeDays)` | the window in force: the saved one, or, while `calendarReturnWindowAuto` is `true`, the preset chosen by `largestCalendarReturnPresetFor(rangeDays)` (`calendarReturnWindow.ts`: the largest preset whose days fit the range, the smallest when none does) |
+| `detailModesForPrimaryView(view)` / `primaryViewForDetailModes(mode, viewMode)` | the mapping with the detail page's `primaryMode` and `viewMode` (below) |
+
+`calendarReturnWindowAuto` stays `true` until the user chooses a window. The rule is in the store:
+any save through `setPairSettings` or `setGlobalSettings` whose `calendarReturnWindow` differs from
+the one stored before sets it to `false`, whoever saves (modal, detail page). From then on the saved
+window is used as it is, whatever the period.
+
+**How the list asks for the rolling return.** For a card whose view is `'calendar-return'`, the list
+(`routes/(app)/assets/+page.svelte`) sends the card's item with a calendar signal
+(`ASSET_CALENDAR_ROLLING_RETURN`, `window_days` from `effectiveCalendarReturnWindow()` over the
+list's range) instead of the card's backend signals. `buildReducedQuery()` (`lib/utils/reducedPriceQuery.ts`),
+given the card's `calendar` option, adds one item for every comparison target — cached or not — as
+`sample_like` the card's item, with the same signal, `include_price: false` and `target_currency` =
+the card's currency, so every line has one window and one currency. The list keeps the answers per
+card in `calendarByCard` (the card's own view and its targets'), read with
+`extractCalendarReturnView()`. A card in this view draws the own points and
+`renderCalendarComparisons(configs, views, target, fallbackName, selfAssetId)`
+(`chartSignalRendering.ts`): the asset-comparison configs whose target view is `ready` or `partial`,
+each as a percentage line with the config's style, in the asset's name and icon; a comparison with
+the chart's own asset or without a ready view draws nothing. The other signals stay saved and are
+not requested. With no points, `AssetCard` shows the problem message (for example, less history than
+the window) instead of the chart.
+
+**The FX side.** The FX list (`routes/(app)/fx/+page.svelte`) works the same way, with
+`buildFxCalendarQuery()` (`lib/utils/reducedFxQuery.ts`) over `POST /fx/currencies/convert` (sampling:
+[backend FX architecture](../../backend/fx/architecture.md#convert-sampling)). For each card in the
+view it builds one conversion of 1 unit in the direction the card shows the pair (a flipped card asks
+the flipped rate), with the calendar signal, `key` `fx:<slug>` and `max_points` from the card's plot
+width. Every compared `fx-pair` signal adds a conversion of 1 unit in the direction its signal shows
+its pair, with the same signal and `sample_like` the card's key; the members of a card share a group,
+so `bulkBatches.ts` never cuts between them. The page reads the signals from `signal_results`, matched
+to its entries by `request_index` (local to the batch), into `calendarBySlug` (`extractCalendarReturnView()`);
+the rates of these conversions are never merged into the FX stores, and the cards' daily rates stay
+the stores' (not sampled). A card draws the own points and `renderCalendarPairComparisons(configs,
+views)` (`chartSignalRendering.ts`): each `fx-pair` signal whose view is `ready` or `partial`, as a
+percentage line with the signal's style; an asset comparison stays saved and is not drawn in this view (it is a percentage-return view of the pairs; the asset's line belongs to Abs and %, [below](#comparison-series)). The modal's
+preview (`resolveCalendarPreview`) for one pair converts the same way; for all charts it posts the
+demo points to `/signals/preview`.
+
+**The detail page.** The asset detail page opens in the view of its card: it reads
+`primaryView` with `detailModesForPrimaryView(settings.primaryView)` (`'calendar-return'` gives
+`{primaryMode: 'calendar-return', viewMode: 'percentage'}`, the two others give
+`{primaryMode: 'price', viewMode: view}`), and saves the user's change of mode or view as the card's
+view, `primaryViewForDetailModes(primaryMode, viewMode)`. It saves it with `setPairSettings()` and the
+settings it holds, its signals included, not with `setItemPrimaryView()`, which rebuilds the override
+from the store's copy and would drop what the page writes into its signal configs (a comparison's
+`_resolvedData`). Its window is `effectiveCalendarReturnWindow(settings, rangeDays)`, so the asset
+detail page uses the same window as the list, and a window chosen there is saved through the
+settings, which marks it as chosen.
+
 ## Responsive Date Axis
 
 `lib/components/charts/responsiveXAxis.ts` (`buildResponsiveXAxisPolicy()`) decides how many date
@@ -349,6 +683,31 @@ Two neighbouring labels never read the same (pinned in `chartCoreHelpers.test.ts
   year tick next to the edge would win, and the end label, pulled inward, would be the one hidden;
   its charts make room for the label instead (next bullet). The first label needs no alignment: it
   spills at most into the y-axis labels, inside the chart.
+- **Zoom** (category axis): an optional `visibleCount`, how many points a zoom leaves visible,
+  replaces `values.length` in the compactness test and the `interval`; without it, every value
+  counts. On the whole series, 365 daily points in 800 px get `interval` 33, which leaves a 34-point
+  zoom only its edge labels; counted on that window, `interval` is 2. `visiblePointCountFromZoom()`
+  reads the count from a `dataZoom` event or a `{start, end}` window, never from `getOption()`, which
+  deep-clones the whole option. `categoryAxisLabelPatch()`, the
+  `axisLabel` merged with `setOption`, puts `interval: 'auto'` first, so no merge keeps the previous
+  window's step, and gives the compact keys back their ECharts defaults once the window is wide.
+  `LineChart` and `CandlestickChart` merge it when a gesture pauses for `ZOOM_LABEL_SETTLE_MS`
+  (120 ms), `PriceChartFull` in its 200 ms `scheduleResolutionRecompute()`; resizes and full renders
+  count the visible window too. Time axes need none of it: ECharts spreads their `splitNumber` ticks
+  over the visible extent.
+- **Arrow markers** (category axis): an overlay signal may end in an arrow
+  (`markerStart`/`markerEnd: 'arrow'`), aimed along the line's on-screen slope, which a zoom, a pan
+  or a resize can change. `updateArrowRotations()` (`lineChartHelpers.ts`) reads `getOption()`, so
+  it re-aims them once a gesture or a resize pauses, in the settle that re-spaces the labels, which
+  a `dataZoom` event or a `ResizeObserver` callback re-arms instead; a full render re-aims them at
+  once, after restoring the zoom. It writes the series back only when an arrow turns by more than
+  `ARROW_ROTATE_EPSILON_DEG` (0.01°), so the stability pass after a first draw and the settle after
+  a redraw write nothing if no arrow moved. `noteArrowMarkers()`, called right after each full
+  render (`setOption(option, true)`), records whether that option draws an arrow: on a chart without
+  one (most charts), `updateArrowRotations()` returns before `getOption()`. It reads the option
+  afresh on every call, so its write-back, which carries every series' colours, never brings back
+  those from before a theme switch or a chart-colour change (pinned in `LineChart.test.ts`,
+  `PriceChartFull.test.ts`, `lineChartHelpers.test.ts` and `chartCoreHelpers.test.ts`).
 - **Right inset** (time axis, compact or wide): the axis ends on the last day of the data or of the
   zoom, and ECharts centres that day's label on its tick, so half of it overhangs the plot's right
   edge. `grid.containLabel: true` reserves the labels' height, never that overhang, so on a phone
@@ -402,7 +761,8 @@ through `PriceChartCompact`, date axis hidden). The time axis serves `GrowthChar
 views (the Candles and Income ladders plan their own labels, above), `AllocationHistoryChart` and
 the broker lots charts (`LotWacPriceChart`, `LotComparisonChart` and `LotGanttChart`, which pass
 their own padding). When a chart goes back from compact to wide, its consumer rebuilds the whole
-option, so compact-only keys such as `alignMaxLabel` do not linger.
+option, or merges `categoryAxisLabelPatch()` on a zoom, so compact-only keys such as
+`alignMaxLabel` do not linger.
 
 Three of the time-axis charts take the right inset. `GrowthChart` (`base: '4%'`, 14 px labels)
 computes it in its time-axis views only (the ladders keep `'4%'`: their plan keeps the outermost
@@ -414,6 +774,111 @@ computes it with every option it builds and on resize (`lazyUpdate`). `LotCompar
 (`base: 18` px, 12 px labels) computes it on its axis date range (`xAxisRange`, else the series'
 own) only when it builds the option: a px base does not follow the width. `LotWacPriceChart` and
 `LotGanttChart` keep a fixed 18 px (`GRID_RIGHT_PX`).
+
+## Chart Text and Tooltips {: #chart-text-and-tooltips }
+
+ECharts reads none of the app's CSS: it draws legends, labels and axes on a canvas, and writes its
+tooltip as HTML with an inline `font`. Two rules follow, one for the font of that text and one for
+the tooltip's HTML.
+
+### Flags in chart text {: #chart-flag-font }
+
+The app draws flags (the regional indicator symbols U+1F1E6–1F1FF) with the `'LF Flags'` face that
+starts its CSS font stacks ([Fonts](../styling.md#fonts)). That CSS never reaches chart text:
+ECharts drew it in its own default family, and a flag in a legend, a label, an axis or a tooltip
+fell back to the system, which prints two letters where it has no flag glyphs (Windows among them).
+
+`lib/components/charts/chartFont.ts` exports the charts' font:
+
+- `CHART_FONT_FAMILY`: `'LF Flags'`, then ECharts' own default family (`sans-serif`, or
+  `'Microsoft YaHei'` on Windows, chosen the way ECharts chooses it). The face covers the flags and
+  nothing else, so every other character falls through to that default and keeps its font.
+- `CHART_INIT_THEME`: `{textStyle: {fontFamily: CHART_FONT_FAMILY}}`.
+
+Every chart is created with that theme, and with the options of
+[`chartInitOptions`](#chart-pixel-density):
+
+```typescript
+chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
+```
+
+A theme's `textStyle` is ECharts' global font: the canvas text and the tooltip's inline `font` use
+it unless a component sets its own `fontFamily`. It is a theme rather than a `textStyle` in each
+option because ECharts merges the theme again on every `setOption`, a `notMerge` one included, so
+no option builder has to repeat it. A component that sets its own family uses `CHART_FONT_FAMILY`,
+as `CorrelationHeatmap` does on its axis labels, which it measures with a canvas context in that
+same font. The code that measures chart text from the chart model (`axisLabelFont`, see
+[Responsive Date Axis](#responsive-date-axis), and `GrowthChart`'s ladder labels) reads its
+`textStyle.fontFamily`, which is this family too.
+
+The chart colours stay in `lib/theme/chartTheme.ts`, and the font is kept out of it on purpose:
+that module holds colours only, and `chartTheme.test.ts` requires every string it exports to be a
+colour.
+
+**Loading the face.** A canvas paints its text once, with the faces loaded at that moment, and the
+browser fetches a `unicode-range` face only for page text that needs it: canvas text does not
+count. Two steps cover this:
+
+1. `chartFont.ts` asks for the face when the first chart module loads, before any chart can paint:
+   `chartFontReady()` calls `document.fonts.load()` once, with a flag as sample text (other text
+   would load nothing), and never rejects, so a face that fails to load leaves the system fallback.
+   Without `document.fonts`, in a test or on the server, it resolves at once.
+2. `scheduleFirstRenderStabilityFix` (`echartsTooltipHelpers.ts`), which a chart calls once after
+   its first full `setOption`, checks `chartFontLoaded()`: when the face is not in yet, it repaints
+   the chart (`resize()`) once the request of `chartFontReady()` settles. Every chart calls it
+   except `LotGanttChart`.
+
+### Pixel density {: #chart-pixel-density }
+
+A chart's canvases hold its CSS size times a pixel density. zrender reads the screen's density once,
+when its module loads, and fixes it for a chart at `init`: a tab opened on a 1× screen drew every
+chart at 1×, the ones opened later too, and blurred them once the window moved to a Retina screen
+or the browser zoomed in. `lib/components/charts/chartPixelRatio.ts` handles both moments:
+
+- **At creation:** `chartInitOptions(element)` gives `echarts.init` the canvas renderer and the
+  screen's density at that moment (`devicePixelRatio`, never under 1, zrender's own rule).
+- **When the density changes:** one `matchMedia` resolution query for the whole app, armed by the
+  first chart and re-armed at each change. Every chart created through `chartInitOptions` and
+  still alive is brought to the new density in place (`setChartPixelRatio`): its zoom, legend,
+  selection and handlers stay, and nothing is drawn again from its options.
+
+In place means the members of zrender 6's canvas painter that its own `resize()` uses
+(`painter.dpr`, `getLayers()`, each layer's `dpr`, `ctx.dpr` and `resize()`, then
+`refresh(true)`). They are checked before anything is touched: when one is not there, the chart
+keeps its density, with a warning in debug builds.
+
+### Tooltip HTML {: #chart-tooltip-escaping }
+
+ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a formatter takes from
+the data or from currency metadata (names, captions, currency codes, flags, event types) goes
+through the shared `escapeHtml` (`lib/utils/core/escapeHtml.ts`) where it is interpolated; a flag
+is such a value, read from `getCurrencyInfo(code).flag_emoji`. A series label with its icon goes
+through `signalLabelToHtml` (`lib/charts/signalLabel.ts`), which escapes it.
+
+The frontend sources hold one HTML escaper: write no local copy. `escapeHtml` escapes `&`, `<`,
+`>`, `"` and `'`, so its output is also safe inside an attribute, whichever quote the call site
+uses; a copy that escapes fewer characters is the defect this rule removes. One file is exempt:
+`lib/utils/inlineMath.ts`, whose KaTeX variant keeps the apostrophe on purpose (`f'(x)` is prime
+notation). The rule for every hand-built HTML string, and its other gates, is in
+[Output Escaping](../../architecture/security.md#output-escaping).
+
+### Guards {: #chart-text-guards }
+
+`./dev.py test front-portfolio chart-safety-unit` runs them:
+
+| Test | Checks |
+|---|---|
+| `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument and `chartInitOptions(<its element>)` as its third, every chart included since DV-14. `PIXEL_RATIO_PENDING` is kept, empty, for a chart that cannot migrate at once: a listed file that passes it, has no call or is gone fails the gate. And no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
+| `lib/components/charts/chartFont.load.test.ts` | The face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. |
+| `lib/components/charts/chartPixelRatio.test.ts` | A chart is created at the density of that moment; a change of density re-arms the query and brings every live chart to it; the update in place runs on the real zrender, so an upgrade that moves its painter's members fails here. What it does not recognise, an SVG chart or a disposed one, it leaves alone, never throwing. |
+| `*.tooltipEscape.test.ts`: `AllocationPieChart`, `CandlestickChart` and `PriceChartFull` beside the charts, `CorrelationHeatmap` in `lib/features/risk/` | Fed a value that carries markup, the tooltip injects no element and shows the value as text; the heatmap's also requires the shared `escapeHtml`'s output, quotes included. |
+| `lib/utils/core/escapeHtml.single.test.ts` | No production source holds an HTML escaper (`&` mapped to `&amp;`) outside `escapeHtml.ts` and the exempt `inlineMath.ts`; an exempt file that no longer holds one fails too, so an exemption cannot go stale. |
+
+Beside them, `SemiDonutChart.test.ts` checks that a chart's `init` receives the canvas renderer and
+the screen's density, and `./dev.py test front-portfolio chart-pixel-ratio`
+(`e2e/portfolio/chart-pixel-ratio.spec.ts`) changes the density of a live Dashboard through
+Chromium's device metrics: its charts follow in place, the same instances and canvases, and a chart
+opened after the change is born at the new density.
 
 ## Pie Charts (AllocationPieChart)
 

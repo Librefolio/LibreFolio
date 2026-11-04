@@ -59,12 +59,12 @@ Each line of a card, and each zone of indicators such as RSI, has its own colour
 ### ⚠️ Risk
 
 - [Underwater Drawdown](../../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md) — how far the price is below its running peak ([full history](#drawdown-full-history))
-- [Rolling Return](../../../financial-theory/fundamentals/returns.md#rolling-return-sessions) — price-only return over a sliding window
+- [Rolling Return](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar) — price-only return against the close a chosen number of calendar days earlier, the same measure as the chart's [Rolling Return](chart.md#rolling-return) mode
 - [Rolling Volatility](../../../financial-theory/technical-analysis/risk-metrics/volatility.md) — annualized volatility over a sliding window
 - [Rolling Sharpe Ratio](../../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md) — excess return per unit of volatility over a sliding window
 - [Rolling Beta](../../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md) — how strongly the asset follows a comparison asset you pick
 
-Periods count **sessions**, the days the asset was quoted: an SMA 200 covers 200 sessions, about 290 calendar days ([why](../../../financial-theory/technical-analysis/indicators/index.md)). The **Window** of the four rolling risk signals counts days with a quote too; for Rolling Beta, days on which both assets were quoted.
+Periods count **sessions**, the days the asset was quoted: an SMA 200 covers 200 sessions, about 290 calendar days ([why](../../../financial-theory/technical-analysis/indicators/index.md)). The **Window** of Rolling Volatility, Rolling Sharpe Ratio and Rolling Beta counts **observations**: one return for each day the asset was quoted — for Rolling Beta, for each day either of the two assets was quoted, the other counting at its last price. The **Window** of Rolling Return counts **calendar days**, as in the chart's [Rolling Return](chart.md#rolling-return) mode.
 
 !!! info "Not every indicator can run on every asset"
 
@@ -84,8 +84,10 @@ The **Underwater Drawdown** card has a **Full history** checkbox, on by default:
 
 The **Data Comparison** menu adds:
 
-- **Asset Comparison** — another asset on the same chart, such as a stock against its index ETF. In **%** view both lines start at 0 %.
+- **Asset Comparison** — another asset on the same chart, such as a stock against its index ETF. In **%** view both lines start at 0 %. The asset is picked in the same panel as the risk comparison's: a search box, **Type** and **Currency** filters, the benchmarks listed first, one click to choose. The chart's own asset is greyed out; one that another comparison already uses carries a warning mark but can still be chosen.
 - **FX Pair** — the rate of one of your currency pairs.
+
+With **All** selected, the chart starts on the older of the two series. If the compared asset has prices from 1985 and the chart's own asset from 2010, the chart is drawn from 1985, the chart's own line empty until 2010, and the **From** date shows 1985. In **%** view each line starts at 0 % on its own first price. If the compared asset starts later than the chart's own, the chart stays as it was and the comparison line begins on its own first day. The other signals (indicators and synthetic benchmarks) follow the chart's own days, so they are empty before its first day.
 
 **Sync** (🔄) on an Asset Comparison card downloads that asset's prices for the chart's dates, together with the exchange rates that convert it, for pairs that exist. When the pair is missing, an amber ⚠️ on the card creates it; when its rates are missing, an amber 🔄 syncs them.
 

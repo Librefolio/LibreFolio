@@ -11,6 +11,7 @@ Ce manuel s'adresse aux personnes qui installent et exploitent LibreFolio. La pl
 - 🐳 **[Docker avancé](docker_advanced.md)** : déploiement conteneurisé avec Docker Compose, montages de volumes et configuration de la propriété GID/UID de l'utilisateur.
 - 🌐 **[Exposer en toute sécurité](service_exposure.md)** : exposez en toute sécurité votre instance privée LibreFolio sur Internet.
 - 🔍 **[Vérifier la sécurité de la connexion](connection_checks.md)** : vérifiez que vos utilisateurs se connectent en toute sécurité, et corrigez le cookie de session ou le proxy inverse quand ce n'est pas le cas.
+- 💤 **[Veille et réveil](sleep_wake.md)** : une machine Fly.io inutilisée se met en veille d'elle-même et se réveille à heure fixe : un panneau d'hébergement ou une tâche cron met à jour les prix et les taux de change.
 
 ### ⚙️ Configuration système
 - 📝 **[Variables d'environnement](configuration.md)** : liste complète des variables `.env` prises en charge (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) et priorité de résolution des variables.

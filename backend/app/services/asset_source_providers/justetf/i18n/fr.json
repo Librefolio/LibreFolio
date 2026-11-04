@@ -1,0 +1,31 @@
+{
+  "assets": {
+    "providerParams": {
+      "justetf": {
+        "label": {
+          "currency": "Devise du prix"
+        },
+        "description": {
+          "currency": "Devise du prix. EUR = cotation en temps réel + historique. USD/CHF/GBP = dernier prix quotidien + historique (convertis par JustETF)."
+        }
+      }
+    }
+  },
+  "pluginSettings": {
+    "asset": {
+      "justetf": {
+        "label": {
+          "preferred_currency": "Devise préférée"
+        },
+        "description": {
+          "preferred_currency": "La recherche affiche chaque fonds dans cette seule devise. Avec Toutes les devises, chaque fonds apparaît dans les quatre, et 👑 marque la devise du fonds."
+        },
+        "option": {
+          "preferred_currency": {
+            "all": "Toutes les devises"
+          }
+        }
+      }
+    }
+  }
+}

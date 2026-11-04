@@ -9,7 +9,7 @@ Covers:
 
 import pytest
 
-from backend.app.services.brim_provider import BRIMParseError
+from backend.app.services.brim.brim_provider import BRIMParseError
 
 
 class TestBRIMParseError:

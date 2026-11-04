@@ -26,7 +26,7 @@ fallback, and the grid said «copied» even when nothing was (C-63). M-20 went t
   secure context and falls back to `execCommand('copy')` when the API is missing — on plain HTTP it copies at once
   through a read-only textarea (`legacyCopy`) — and also when the API refuses.
 - **Every copy button uses it**: the five of M-20 (About, the lots table, the request to an admin, the file preview,
-  the provider check) and the two of C-63 (`FilesTable`, `FileGrid`) — seven call sites in `65d20910e` («fix(clipboard):
+  the provider check) and the two of C-63 (`FilesTable`, `FileGrid`) — seven call sites in `367ae7d56` («fix(clipboard):
   copy buttons work on plain HTTP», train 72).
 - **A gate keeps it so**: `frontend/src/clipboardSink.gate.test.ts`, built like the HTML-sink gate
   ([[decisions/html-escape-at-the-source]]), fails on any other `navigator.clipboard.writeText` or `execCommand('copy')`
@@ -44,7 +44,7 @@ fallback, and the grid said «copied» even when nothing was (C-63). M-20 went t
 - Copy works on every address the connection-security indicator can describe ([[features/F-102]]); the 1.2
   CHANGELOG says so: «Copy buttons work over plain HTTP too».
 - A new copy button that bypasses the helper fails the unit suite, not a user on HTTP.
-- C-63 and M-20 are closed in the backlog (`2166eeb90`).
+- C-63 and M-20 are closed in the backlog (`0a9bfae47`).
 - Tests: the gate and the helper, 8 red before and green after (`125 passed`); `support-copy-and-go.spec.ts` red
   against the old helper (4 failed) and green after (16 passed).
 
@@ -56,6 +56,6 @@ fallback, and the grid said «copied» even when nothing was (C-63). M-20 went t
 | The gate | `frontend/src/clipboardSink.gate.test.ts` |
 | The model gate (HTML sinks) | `frontend/src/htmlSink.gate.test.ts` |
 | AI Export's own writer (the exception) | `frontend/src/lib/features/ai-export/aiExportClipboard.ts` |
-| File list and grid (C-63) | `frontend/src/lib/components/files/FilesTable.svelte`, `frontend/src/lib/components/files/FileGrid.svelte` |
+| File list and grid (C-63) | `frontend/src/lib/features/files/FilesTable.svelte`, `frontend/src/lib/features/files/FileGrid.svelte` |
 | Copy-and-go E2E | `frontend/e2e/support-copy-and-go.spec.ts` |
 | Plan 48 | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |

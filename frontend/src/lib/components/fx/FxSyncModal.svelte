@@ -20,13 +20,15 @@
         dateStart: string;
         dateEnd: string;
         pairs: string[];
+        /** The pairs whose shown rates already hold a stored row in the range: the dialog warns (C-66). */
+        withDataInRange?: string[];
         onsynced: () => void;
         onclose: () => void;
         /** z-index for stacking above other modals */
         zIndex?: number;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, pairs, onsynced, onclose, zIndex = 50}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, pairs, withDataInRange = [], onsynced, onclose, zIndex = 50}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
 
@@ -69,6 +71,7 @@
             targetIds: pairs,
             resultRow: fxResultRow,
             countLabel: $t('fx.sync.pairsCount') ?? 'pairs',
+            existingIds: withDataInRange,
         },
     ]);
 </script>
@@ -99,7 +102,7 @@
     <span class="inline-flex items-center gap-0.5 whitespace-nowrap">
         <span class="emoji-flag">{getCurrencyInfo(pairBase).flag_emoji}</span>
         {pairBase}
-        <ArrowLeftRight size={10} class="shrink-0 text-gray-400" />
+        <ArrowLeftRight size={10} class="shrink-0 text-lf-muted" />
         <span class="emoji-flag">{getCurrencyInfo(pairQuote).flag_emoji}</span>
         {pairQuote}
     </span>
@@ -118,7 +121,7 @@
                 {/if}
             </span>
             {#if i < chain.length - 1}
-                <span class="text-gray-400 text-[8px]">→</span>
+                <span class="text-lf-muted text-[8px]">→</span>
             {/if}
         {/each}
     </span>

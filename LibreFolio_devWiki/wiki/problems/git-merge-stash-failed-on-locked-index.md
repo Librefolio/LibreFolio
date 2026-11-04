@@ -36,10 +36,10 @@ nothing to undo. A clean clone ran the same merge without an error.
 ## Solution — a workaround
 
 The coordinator resumed with train 71b, whose merge step retries up to 5 times when the merge dies before starting.
-Train 71 then integrated (`c57acf510`, gates green). The retry lives in the coordinator's train script, outside the
+Train 71 then integrated (`d59829e08`, gates green). The retry lives in the coordinator's train script, outside the
 repository: nothing in the code changed.
 
-*Update (2026-10-13, `6e1a2ef3e`)*: the rule is now in the repository, in the coordinator agent's section «When
+*Update (2026-10-13, `05698d3a5`)*: the rule is now in the repository, in the coordinator agent's section «When
 `git merge` dies with «stash failed»». The developer decided that the coordinator **asks him first**, because he may be
 working in that checkout — an IDE commit, a refresh, a Git command of his own. A retry without asking happens only
 when he has said he is away and has delegated the merges, as in an overnight train; it is then recorded in the
@@ -59,6 +59,6 @@ to verifying the merge afterwards; they live there and are not repeated here.
 
 | Role | Path |
 |------|------|
-| The procedure, section «When `git merge` dies with «stash failed»» (`6e1a2ef3e`) | `.github/agents/release-coordinator.agent.md` |
+| The procedure, section «When `git merge` dies with «stash failed»» (`05698d3a5`) | `.github/agents/release-coordinator.agent.md` |
 | Git 2.53.0: `save_state()` and its call | [builtin/merge.c](https://github.com/git/git/blob/v2.53.0/builtin/merge.c#L341-L366), [l. 1784](https://github.com/git/git/blob/v2.53.0/builtin/merge.c#L1784) |
 | Git 2.53.0: `git stash create` writes the index | [builtin/stash.c](https://github.com/git/git/blob/v2.53.0/builtin/stash.c#L1429-L1450) |

@@ -25,9 +25,12 @@ services:
     volumes:
       - ./LibreFolio-data:/app/backend/data/prod-docker
     env_file: .env
+    # 'environment' overrides env_file. PORT is the host side of the mapping
+    # above: inside the container the server always listens on 6040.
     environment:
       - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
       - HOST=0.0.0.0
+      - PORT=6040
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
       interval: 30s

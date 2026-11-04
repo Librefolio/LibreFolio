@@ -1,6 +1,6 @@
 # 🏦 Broker Components
 
-Components in `lib/components/brokers/` that power the broker management UI.
+Components in `lib/features/brokers/` that power the broker management UI.
 
 ## 📖 Overview
 

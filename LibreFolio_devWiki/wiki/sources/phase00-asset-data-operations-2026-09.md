@@ -16,7 +16,7 @@ related:
 
 ## Summary
 
-One plan (~300 lines), shipped in `e50d66408` (2026-09-10) and polished in `cc57b6a38` (2026-09-11), archived on
+One plan (~300 lines), shipped in `904fddc6e` (2026-09-10) and polished in `aa30eac00` (2026-09-11), archived on
 2026-10-09. Three small features with strict contracts.
 
 ## Key takeaways
@@ -52,6 +52,6 @@ None.
 | Sector taxonomy (bonds) | `backend/app/utils/asset/sector.py` |
 | Distributions CSV import | `frontend/src/lib/components/assets/DistributionDataImportModal.svelte` |
 | Distribution editor | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
-| Delete with counts | `backend/app/services/asset_sources/crud.py` |
+| Delete with counts | `backend/app/services/assets/crud.py` |
 | User doc (distributions) | `mkdocs_src/docs/user/assets/create-edit.en.md` |
 | User doc (delete) | `mkdocs_src/docs/user/assets/index.en.md` |

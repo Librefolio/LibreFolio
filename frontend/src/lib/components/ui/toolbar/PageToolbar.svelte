@@ -212,7 +212,7 @@
     });
 </script>
 
-<div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden {className}" data-testid={testId}>
+<div class="bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card overflow-hidden {className}" data-testid={testId}>
     <div bind:this={barRef} class="flex gap-3 p-4 {isStacked ? 'flex-col items-stretch' : 'flex-row items-center justify-between'}" data-testid={filterRowTestId}>
         <!-- Zones A+B: filters (anchored by date range) + optional summary.
              Justified: full-width & start-aligned when stacked, never centered.

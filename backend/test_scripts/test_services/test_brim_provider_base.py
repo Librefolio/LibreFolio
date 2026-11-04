@@ -17,6 +17,9 @@ the encoding chain ``TEXT_ENCODINGS``, the helpers built on it
 and the ``_brim_io`` readers, which must delegate to them.
 
 Plan: Release_2 Phase_0 journal step 26, §4 (CSV encoding fix), step 1a.
+
+And the words of the parse guard's refusal: the plugin by its name and the file
+by the name it was uploaded with (workstream W, lot K2a, backlog L6).
 """
 
 from __future__ import annotations
@@ -29,8 +32,8 @@ from pathlib import Path
 import pytest
 
 from backend.app.schemas.brim import BRIMFileStatus, BRIMParseOutput
-from backend.app.services import brim_provider
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.brim import brim_provider
+from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.brim_providers import _brim_io
 
 
@@ -212,6 +215,140 @@ def test_get_file_path_falls_back_to_root_folder(isolated_brim_dir) -> None:
 
     assert file_path == fallback_path
     assert file_path is not None and file_path.exists()
+
+
+# =============================================================================
+# DELETING A BROKER'S FILES: ITS FOLDERS AND ITS LOCK GO TOO (C-79 / C-3)
+# =============================================================================
+#
+# save_uploaded_file creates <status>/broker_<id>/ for every status (_ensure_dirs) and, through the broker
+# metadata lock, .locks/broker_<id>.lock. delete_files_for_brokers runs once a broker is deleted: besides the
+# broker's BRIM files, its status folders go when empty and its lock file goes. A folder still holding a file the
+# store did not write is not the store's to delete: it stays, with that file, and no error is raised. Another
+# broker's files, folders and lock are never touched. The return value stays the number of BRIM files removed.
+#
+# Before the fix only the files go: the empty folders and the lock outlive the broker — and a new broker that
+# reuses the id inherits them.
+
+_REPORT_CSV = b"date,type,amount\n2026-01-01,BUY,100\n"
+_STATUS_FOLDERS = tuple(status.value for status in BRIMFileStatus)
+
+
+def _broker_folders(reports_dir: Path, broker_id: int) -> list[Path]:
+    return [reports_dir / status / f"broker_{broker_id}" for status in _STATUS_FOLDERS]
+
+
+def _broker_lock(reports_dir: Path, broker_id: int) -> Path:
+    return reports_dir / ".locks" / f"broker_{broker_id}.lock"
+
+
+def _broker_paths(reports_dir: Path, broker_id: int, *, existing: bool) -> list[str]:
+    """A broker's three status folders and its lock that exist (``existing``) or are missing, relative to the reports directory."""
+    paths = [*_broker_folders(reports_dir, broker_id), _broker_lock(reports_dir, broker_id)]
+    return [str(path.relative_to(reports_dir)) for path in paths if path.exists() == existing]
+
+
+def test_delete_files_for_brokers_removes_the_broker_folders_and_lock(isolated_brim_dir) -> None:
+    """The deleted broker's files go, then its three status folders and its lock; the neighbour keeps all of its own."""
+    deleted, neighbour = 42, 43
+    brim_provider.save_uploaded_file(content=_REPORT_CSV, original_filename="first.csv", user_id=7, broker_id=deleted)
+    failed = brim_provider.save_uploaded_file(content=_REPORT_CSV, original_filename="second.csv", user_id=7, broker_id=deleted)
+    assert brim_provider.move_to_failed(failed.file_id, "probe") is True
+    kept = brim_provider.save_uploaded_file(content=_REPORT_CSV, original_filename="kept.csv", user_id=7, broker_id=neighbour)
+    # Presence barrier: what must go is there, and so is what must stay.
+    for broker_id in (deleted, neighbour):
+        assert _broker_paths(isolated_brim_dir, broker_id, existing=False) == [], f"Precondition: broker {broker_id} has its folders and lock before the call"
+
+    removed = brim_provider.delete_files_for_brokers([deleted])
+
+    assert removed == 2
+    assert _broker_paths(isolated_brim_dir, neighbour, existing=False) == [], "the neighbour keeps its folders and lock"
+    kept_path = brim_provider.get_file_path(kept.file_id)
+    assert kept_path is not None and kept_path.is_file(), "the neighbour keeps its file"
+    assert all((isolated_brim_dir / status).is_dir() for status in _STATUS_FOLDERS), "the status folders are shared: they stay"
+    assert _broker_paths(isolated_brim_dir, deleted, existing=True) == [], f"broker {deleted} is deleted with its files, yet its folders/lock remain"
+
+
+def test_delete_files_for_brokers_keeps_a_folder_holding_a_foreign_file(isolated_brim_dir) -> None:
+    """A file the store did not write stays, and so does its folder; the broker's other, empty folders go; no error."""
+    broker_id = 42
+    brim_provider.save_uploaded_file(content=_REPORT_CSV, original_filename="report.csv", user_id=7, broker_id=broker_id)
+    stray = isolated_brim_dir / "uploaded" / f"broker_{broker_id}" / "stray.tmp"
+    stray.write_bytes(b"not a BRIM file")
+    assert all(folder.is_dir() for folder in _broker_folders(isolated_brim_dir, broker_id)), "Precondition: the broker's three status folders exist"
+
+    removed = brim_provider.delete_files_for_brokers([broker_id])
+
+    assert removed == 1
+    assert stray.is_file() and stray.read_bytes() == b"not a BRIM file", "a file the store did not write is not deleted"
+    emptied = [str(folder.relative_to(isolated_brim_dir)) for folder in _broker_folders(isolated_brim_dir, broker_id) if folder != stray.parent and folder.exists()]
+    assert emptied == [], f"broker {broker_id}'s empty folders must go; the one holding {stray.name} stays"
+
+
+def test_delete_files_for_brokers_removes_the_empty_folders_of_a_broker_without_files(isolated_brim_dir) -> None:
+    """A broker that never kept a file still had its folders made: they go, 0 is returned, and the missing lock is no error."""
+    broker_id = 42
+    brim_provider._ensure_dirs(broker_id)
+    assert all(folder.is_dir() for folder in _broker_folders(isolated_brim_dir, broker_id)), "Precondition: the broker's three status folders exist"
+    assert not _broker_lock(isolated_brim_dir, broker_id).exists(), "Precondition: no lock was ever taken for this broker"
+
+    removed = brim_provider.delete_files_for_brokers([broker_id])
+
+    assert removed == 0
+    assert _broker_paths(isolated_brim_dir, broker_id, existing=True) == [], f"broker {broker_id}'s empty folders must go, and no lock may be left behind"
+
+
+# =============================================================================
+# THE PARSE REFUSAL NAMES THE PLUGIN AND THE FILE AS THE USER KNOWS THEM (workstream W, lot K2a — backlog L6)
+# =============================================================================
+#
+# A parse forced with a plugin that refuses the file stops at the guard of ``parse_file``: a ``ValueError``, which
+# the API answers with a 400 and keeps as the failed file's ``error_message``. Before lot K2a it read
+# ``Plugin '<plugin_code>' cannot parse file '<file_id><ext>'``: the plugin's code and the name the store gave the
+# file, two names the user never saw. The contract: the plugin by its ``provider_name`` (``Generic CSV``), the file
+# by the name it was uploaded with (``get_file_info(file_id).filename``), neither the plugin code nor the file id
+# anywhere, and the plugin's reason still after the colon. The rest of the wording is free here; the whole message
+# is pinned in test_brim_parse_race.py («THE REFUSAL SAYS WHY») and by RS-G05 of test_api/test_brim_api.py.
+#
+# Written red, before the guard named them; the reason after the colon is a guard, true before K2a too.
+
+_GENERIC_CSV_CODE = "broker_generic_csv"
+
+# Two files the generic CSV refuses, each under the name the user uploads it with.
+_REFUSED_UPLOADS = [
+    pytest.param("my_statement.txt", b"date,type,amount\n2026-01-01,BUY,100\n2026-01-02,DEPOSIT,50\n", id="another-extension"),
+    pytest.param("my_statement.csv", b"amount,description\n10,first\n20,second\n", id="a-csv-without-date-and-type"),
+]
+
+
+@pytest.mark.parametrize(("original_filename", "content"), _REFUSED_UPLOADS)
+def test_the_parse_refusal_names_the_plugin_and_the_file_as_uploaded(isolated_brim_dir, original_filename: str, content: bytes) -> None:
+    """``parse_file`` forced with the generic CSV on a file it refuses: the refusal names ``Generic CSV`` and ``my_statement…``, never ``broker_generic_csv`` nor the file id."""
+    broker_id = 42
+    info = brim_provider.save_uploaded_file(content=content, original_filename=original_filename, user_id=7, broker_id=broker_id)
+    stored = brim_provider.get_file_path(info.file_id)
+    plugin = brim_provider.BRIMProviderRegistry.get_provider_instance(_GENERIC_CSV_CODE)
+    assert plugin is not None, f"{_GENERIC_CSV_CODE} is not registered"
+    # Premises: the generic CSV refuses the file and says why; the store keeps the user's name and files the content under the id.
+    assert _GENERIC_CSV_CODE not in info.compatible_plugins, f"premise: the generic CSV does not offer itself for {original_filename}, so the parse forces it: {info.compatible_plugins}"
+    reason = plugin.cannot_parse_reason(stored)
+    assert reason, f"premise: the generic CSV says why it refuses {original_filename}"
+    assert brim_provider.get_file_info(info.file_id).filename == original_filename, "premise: the upload keeps the name the user gave"
+    assert stored is not None and stored.name == f"{info.file_id}{Path(original_filename).suffix}", f"premise: the content is stored under the file id, {stored}"
+
+    with pytest.raises(ValueError) as refusal:
+        brim_provider.parse_file(info.file_id, _GENERIC_CSV_CODE, broker_id)
+
+    message = str(refusal.value)
+    assert message.endswith(f": {reason}"), f"the plugin's reason no longer follows the colon: {message!r}"
+    named = message[: -len(f": {reason}")]
+    said = {
+        f"names the plugin {plugin.provider_name!r}": plugin.provider_name in named,
+        f"names the file {original_filename!r}": original_filename in named,
+        f"never shows the plugin code {_GENERIC_CSV_CODE!r}": _GENERIC_CSV_CODE not in message,
+        "never shows the file id": info.file_id not in message,
+    }
+    assert said == dict.fromkeys(said, True), f"the refusal {message!r} breaks the contract: {[what for what, kept in said.items() if not kept]}"
 
 
 # =============================================================================

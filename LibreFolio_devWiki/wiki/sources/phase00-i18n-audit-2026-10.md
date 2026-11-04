@@ -20,7 +20,7 @@ related:
 Workstream O audited the four catalogues end to end — unused keys, duplicates, plurals and the audit tool itself —
 in 23 steps (S0–S22), archived on 2026-10-09. Its findings were filed while it ran (2026-10-07): the usage audit was
 wrong in both directions, svelte-i18n leaks plural rules across locales, and the language loading gate rebuilt the
-whole app. Result recorded by the plan: 4 215 keys per language, 0 dead (re-counted on `en.json` at `586a4f0ea`:
+whole app. Result recorded by the plan: 4 215 keys per language, 0 dead (re-counted on `en.json` at `249f5a9aa`:
 4 215 leaf keys).
 
 ## Key takeaways

@@ -36,6 +36,43 @@ const sharedAggregationFixture = JSON.parse(readFileSync(new URL('../../../../..
     }>;
 };
 
+/** A point of the shared signal sampling table: a line, area or bar point, or a band point. */
+type SamplingScalarPoint = {date: string; value: number | null};
+type SamplingBandPoint = {date: string; lower: number | null; middle: number | null; upper: number | null};
+interface SignalSamplingCase {
+    id: string;
+    kind: 'line' | 'area' | 'bar' | 'band';
+    profile: RenderedSignal['aggregationProfile'];
+    resolution: ChartResolution;
+    render_dates: string[];
+    points: Array<SamplingScalarPoint | SamplingBandPoint>;
+    expected: Array<SamplingScalarPoint | SamplingBandPoint>;
+    browser_parity: boolean;
+    note: string;
+}
+/**
+ * O1: the series of one signal, each reduced alone and then aligned on the union of their dates by the backend
+ * (`align_signal_series`). Each series is drawn here alone, as a case of the table is.
+ */
+interface SignalSeriesSet {
+    id: string;
+    resolution: ChartResolution;
+    render_dates: string[];
+    series: Array<{key: string; kind: SignalSamplingCase['kind']; profile: SignalSamplingCase['profile']; points: SignalSamplingCase['points']; expected: SignalSamplingCase['expected']}>;
+    browser_parity: boolean;
+    note: string;
+}
+/**
+ * Z-29s-a: the case table the backend's `sample_signal_series` is pinned on (test_signal_aggregation.py, SAG-S02). Its
+ * browser_parity cases are what this chart draws: they tie the backend's reduction to `downsampleRenderedSignal`.
+ */
+const signalSamplingTable = JSON.parse(readFileSync(new URL('../../../../../../backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json', import.meta.url), 'utf8')) as {
+    version: number;
+    description: string;
+    cases: SignalSamplingCase[];
+    series_sets: SignalSeriesSet[];
+};
+
 function pt(date: string, value: number, extra: Partial<LineDataPoint> = {}): LineDataPoint {
     return {
         date,
@@ -68,6 +105,84 @@ function signal(data: LineDataPoint[], extra: Partial<RenderedSignal> = {}): Ren
 
 function renderedBucket(date: string, bucketStart: string, bucketEnd: string): LineDataPoint {
     return pt(date, 0, {bucketStart, bucketEnd});
+}
+
+/**
+ * The runs a backend line or area output is drawn as (backendRenderer.ts, `renderScalarSeries`): only the points with a
+ * value are drawn, and a point without one ends a run; leading and trailing ones end nothing.
+ */
+function samplingRuns(points: SamplingScalarPoint[]): Array<Array<{date: string; value: number}>> {
+    const runs: Array<Array<{date: string; value: number}>> = [];
+    let current: Array<{date: string; value: number}> = [];
+    for (const point of points) {
+        if (typeof point.value !== 'number') {
+            if (current.length > 0) runs.push(current);
+            current = [];
+            continue;
+        }
+        current.push({date: point.date, value: point.value});
+    }
+    if (current.length > 0) runs.push(current);
+    return runs;
+}
+
+function isCompleteBandPoint(point: SamplingBandPoint): point is {date: string; lower: number; middle: number; upper: number} {
+    return typeof point.lower === 'number' && typeof point.middle === 'number' && typeof point.upper === 'number';
+}
+
+/**
+ * What this chart draws of a case of the shared signal sampling table, series by series: the RenderedSignals the
+ * renderer builds from the backend's points (a line or an area: one per run; a bar: one, its nulls dropped; a band: its
+ * complete points, `bandData` aligned on them), each downsampled alone on one price point per render date, those left
+ * empty not drawn.
+ */
+function browserSampling(fixtureCase: SignalSamplingCase): Array<Array<SamplingScalarPoint | SamplingBandPoint>> {
+    const bucketedData = fixtureCase.render_dates.map((date) => pt(date, 0));
+    if (fixtureCase.kind === 'band') {
+        const complete = (fixtureCase.points as SamplingBandPoint[]).filter(isCompleteBandPoint);
+        const band = signal(
+            complete.map((point) => pt(point.date, point.middle)),
+            {
+                id: fixtureCase.id,
+                seriesType: 'band',
+                aggregationProfile: fixtureCase.profile,
+                bandData: {upper: complete.map((point) => point.upper), middle: complete.map((point) => point.middle), lower: complete.map((point) => point.lower)},
+            },
+        );
+        const drawn = downsampleRenderedSignal(band, fixtureCase.resolution, bucketedData);
+        const envelope = drawn.bandData ?? {lower: [], middle: [], upper: []};
+        const points = drawn.data.map((point, index) => ({date: point.date, lower: envelope.lower[index], middle: envelope.middle[index], upper: envelope.upper[index]}));
+        return points.length > 0 ? [points] : [];
+    }
+    const scalar = fixtureCase.points as SamplingScalarPoint[];
+    const runs = fixtureCase.kind === 'bar' ? [scalar.filter((point): point is {date: string; value: number} => typeof point.value === 'number')] : samplingRuns(scalar);
+    return runs
+        .map((run) =>
+            downsampleRenderedSignal(
+                signal(
+                    run.map((point) => pt(point.date, point.value)),
+                    {id: fixtureCase.id, seriesType: fixtureCase.kind, aggregationProfile: fixtureCase.profile},
+                ),
+                fixtureCase.resolution,
+                bucketedData,
+            ),
+        )
+        .map((drawn) => drawn.data.map((point) => ({date: point.date, value: point.value})))
+        .filter((points) => points.length > 0);
+}
+
+/** A series of a set of the table as a case of its own, drawn and expected as one. */
+function seriesSetCase(set: SignalSeriesSet, entry: SignalSeriesSet['series'][number]): SignalSamplingCase {
+    return {id: `${set.id}/${entry.key}`, kind: entry.kind, profile: entry.profile, resolution: set.resolution, render_dates: set.render_dates, points: entry.points, expected: entry.expected, browser_parity: set.browser_parity, note: set.note};
+}
+
+/** A case's expected points as the series the chart would draw from them: split at their gap markers (a band has none). */
+function expectedSampling(fixtureCase: SignalSamplingCase): Array<Array<SamplingScalarPoint | SamplingBandPoint>> {
+    if (fixtureCase.kind === 'band') {
+        const drawn = (fixtureCase.expected as SamplingBandPoint[]).filter(isCompleteBandPoint);
+        return drawn.length > 0 ? [drawn] : [];
+    }
+    return samplingRuns(fixtureCase.expected as SamplingScalarPoint[]);
 }
 
 describe('timeSeriesAggregation', () => {
@@ -239,6 +354,78 @@ describe('timeSeriesAggregation', () => {
         }
     });
 
+    // -------------------------------------------------------------------------
+    // aggregateSumSeries and missing points (I-01)
+    // -------------------------------------------------------------------------
+    //
+    // `missing: true` means "the point exists but its value is unavailable" (LineDataPoint):
+    // its `value` is a placeholder, not a flow. Summed as if it were one, a bucket adds a
+    // number nobody measured (999 below stands for that placeholder), and the bucket also
+    // inherits `missing` from its LAST point, so one unavailable day at the end of a week
+    // blanks a week that did have flows. The contract: the sum adds only the points that are
+    // not missing; a bucket is missing only when ALL its points are, and then its value is 0;
+    // otherwise the bucket point carries no truthy `missing`, whatever its last point was.
+    // Dates: Mon 2026-07-20 .. Sun 2026-07-26 is one ISO week.
+
+    it('aggregateSumSeries leaves a missing LAST point out of the weekly sum, and the bucket is not missing (I-01)', () => {
+        const points = [pt('2026-07-20', 10), pt('2026-07-22', 20), pt('2026-07-24', 999, {missing: true})];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        // Precondition: one ISO week, so one bucket holds the three points.
+        expect(result).toHaveLength(1);
+        expect(result[0] as BucketedPoint).toMatchObject({bucketStart: '2026-07-20', bucketEnd: '2026-07-26'});
+        // Soft: the two defects are independent, and the red names both.
+        expect.soft(result[0].value, 'only the points that are not missing are summed').toBe(30);
+        expect.soft(result[0].missing, 'two of three points have a value: the bucket is not missing').toBeFalsy();
+    });
+
+    it('aggregateSumSeries leaves a missing point in the MIDDLE of a weekly bucket out of the sum (I-01)', () => {
+        const points = [pt('2026-07-20', 10), pt('2026-07-22', 999, {missing: true}), pt('2026-07-24', 20)];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].value, 'only the points that are not missing are summed').toBe(30);
+        expect(result[0].missing).toBeFalsy();
+    });
+
+    it('aggregateSumSeries reports a weekly bucket whose points are ALL missing as missing, with value 0 (I-01)', () => {
+        const points = [pt('2026-07-21', 5, {missing: true}), pt('2026-07-25', 7, {missing: true})];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(1);
+        expect({value: result[0].value, missing: result[0].missing}, 'no point has a value: the bucket is missing, and its value is 0, not the placeholders summed').toEqual({value: 0, missing: true});
+    });
+
+    it('aggregateSumSeries applies the same rule per monthly bucket: a month with values sums them, an all-missing month is missing at 0 (I-01)', () => {
+        const points = [
+            // July 2026: two flows, and an unavailable last day.
+            pt('2026-07-03', 40),
+            pt('2026-07-15', 2),
+            pt('2026-07-31', 999, {missing: true}),
+            // August 2026: nothing measured.
+            pt('2026-08-10', 11, {missing: true}),
+            pt('2026-08-20', 13, {missing: true}),
+        ];
+
+        const result = aggregateSumSeries(points, 'monthly');
+
+        // Precondition: two calendar months, two buckets.
+        expect(result.map((point) => (point as BucketedPoint).bucketStart)).toEqual(['2026-07-01', '2026-08-01']);
+        expect(result.map((point) => ({value: point.value, missing: point.missing ?? false}))).toEqual([
+            {value: 42, missing: false},
+            {value: 0, missing: true},
+        ]);
+    });
+
+    it('aggregateSumSeries still returns the ORIGINAL array by reference at daily resolution when it holds missing points (I-01 guard)', () => {
+        const points = [pt('2026-07-20', 10), pt('2026-07-21', 999, {missing: true})];
+
+        expect(aggregateSumSeries(points, 'daily')).toBe(points);
+    });
+
     // =========================================================================
     // aggregateOHLCV
     // =========================================================================
@@ -406,6 +593,54 @@ describe('timeSeriesAggregation', () => {
                 const representative = selectSignalRepresentative(points, profile as RenderedSignal['aggregationProfile']);
                 expect(representative ? {date: representative.date, value: String(representative.value)} : null).toEqual(expected);
             }
+        }
+    });
+
+    // =========================================================================
+    // Z-29s-a: the shared signal sampling table (the backend's sample_signal_series)
+    // =========================================================================
+    const parityCases = signalSamplingTable.cases.filter((fixtureCase) => fixtureCase.browser_parity);
+
+    it.each(parityCases.map((fixtureCase) => [fixtureCase.id, fixtureCase] as const))('draws the shared signal sampling case %s as the backend reduces it', (_id, fixtureCase) => {
+        expect(browserSampling(fixtureCase)).toEqual(expectedSampling(fixtureCase));
+    });
+
+    it('keeps the residues of the shared signal sampling table documented: parity cases, and non-parity ones each with a note and drawn otherwise', () => {
+        expect(signalSamplingTable.version).toBe(1);
+        expect(parityCases.length).toBeGreaterThan(0);
+        const residues = signalSamplingTable.cases.filter((fixtureCase) => !fixtureCase.browser_parity);
+        expect(residues.length).toBeGreaterThan(0);
+        for (const fixtureCase of residues) {
+            expect(fixtureCase.note.trim(), fixtureCase.id).not.toBe('');
+            expect(browserSampling(fixtureCase), fixtureCase.id).not.toEqual(expectedSampling(fixtureCase));
+        }
+    });
+
+    // =========================================================================
+    // O1: the series of one signal, aligned by the backend on the union of their dates
+    // =========================================================================
+    const parityEntries = signalSamplingTable.series_sets.filter((set) => set.browser_parity).flatMap((set) => set.series.map((entry) => seriesSetCase(set, entry)));
+
+    it.each(parityEntries.map((fixtureCase) => [fixtureCase.id, fixtureCase] as const))('draws the aligned series %s as the backend leaves it: its points without a value end or begin nothing', (_id, fixtureCase) => {
+        expect(browserSampling(fixtureCase)).toEqual(expectedSampling(fixtureCase));
+    });
+
+    it('keeps the aligned series of the shared table on identical dates, and its residue drawn otherwise', () => {
+        const sets = signalSamplingTable.series_sets;
+        expect(sets.length).toBeGreaterThan(0);
+        for (const set of sets) {
+            const dates = set.series.map((entry) => entry.expected.map((point) => point.date));
+            for (const own of dates) expect(own, set.id).toEqual(dates[0]);
+            expect(set.note.trim(), set.id).not.toBe('');
+        }
+        const residues = sets.filter((set) => !set.browser_parity);
+        expect(residues.length).toBeGreaterThan(0);
+        for (const set of residues) {
+            const differing = set.series.filter((entry) => {
+                const fixtureCase = seriesSetCase(set, entry);
+                return JSON.stringify(browserSampling(fixtureCase)) !== JSON.stringify(expectedSampling(fixtureCase));
+            });
+            expect(differing.length, set.id).toBeGreaterThan(0);
         }
     });
 

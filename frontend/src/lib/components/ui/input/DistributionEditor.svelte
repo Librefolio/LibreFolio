@@ -135,7 +135,7 @@
     let isMissing = $derived(totalPercent < 99.995 && entries.length > 0);
     let maxWeight = $derived(Math.max(...entries.map((e) => e.weight), 1));
 
-    let validBarClass = $derived(isValid ? 'bg-libre-green' : isExcess ? 'bg-red-400' : 'bg-amber-400');
+    let validBarClass = $derived(isValid ? 'bg-lf-success' : isExcess ? 'bg-lf-danger' : 'bg-lf-warning');
 
     /** Sector select options (all keys, with i18n labels) */
     let allSectorOptions = $derived(
@@ -365,7 +365,7 @@
             type: 'custom',
             cell: (row) => ({
                 type: 'html' as const,
-                html: `<div data-testid="distribution-entry-${kind}-${escapeHtml(row.key)}" data-weight="${row.weight}" class="h-3 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all ${validBarClass}" style="width: ${Math.min(100, (row.weight / maxWeight) * 100)}%"></div></div>`,
+                html: `<div data-testid="distribution-entry-${kind}-${escapeHtml(row.key)}" data-weight="${row.weight}" class="h-3 bg-lf-neutral rounded-full overflow-hidden"><div class="h-full rounded-full transition-all ${validBarClass}" style="width: ${Math.min(100, (row.weight / maxWeight) * 100)}%"></div></div>`,
             }),
             sortable: false,
             filterable: false,
@@ -420,10 +420,10 @@
     );
 </script>
 
-<div class="space-y-1" data-testid="distribution-editor-{kind}">
+<div class="space-y-1 text-lf-primary" data-testid="distribution-editor-{kind}">
     <!-- Section header with +Add, bulk toolbar, and Ask Provider buttons -->
     <div class="flex items-center justify-between mb-1">
-        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+        <div class="text-xs font-medium text-lf-muted uppercase">
             {kind === 'sector' ? $t('common.sectorDistribution') : $t('common.geoDistribution')}
         </div>
         <div class="flex items-center gap-1.5">
@@ -452,13 +452,7 @@
                 />
             {/if}
             {#if !isReadonly && !disabled}
-                <button
-                    type="button"
-                    onclick={() => (showImportModal = true)}
-                    data-testid="distribution-import-{kind}"
-                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                    title={$t('dataEditor.importCsv')}
-                >
+                <button type="button" onclick={() => (showImportModal = true)} data-testid="distribution-import-{kind}" class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors" title={$t('dataEditor.importCsv')}>
                     <Upload size={10} />
                     <span class="hidden sm:inline">{$t('dataEditor.importCsv')}</span>
                 </button>
@@ -468,7 +462,7 @@
                     disabled={addingEntry}
                     data-busy={addingEntry}
                     data-testid="distribution-add-{kind}"
-                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
+                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors disabled:opacity-50"
                     title={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}
                 >
                     <Plus size={10} />
@@ -482,7 +476,7 @@
                     disabled={!hasProvider || askingProvider}
                     data-testid="distribution-ask-provider-{kind}"
                     class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded
-                               text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200
+                               text-lf-muted hover:text-lf-secondary
                                disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title={$t('assets.identifiers.askProvider')}
                 >
@@ -523,22 +517,22 @@
 
         <!-- Total badge -->
         <div class="flex items-center justify-end gap-1.5 text-xs font-medium pt-1">
-            <span class="text-gray-500 dark:text-gray-400">{$t('assets.distribution.total')}:</span>
-            <span data-testid="distribution-total-{kind}" class="{isValid ? 'text-green-600 dark:text-green-400' : isExcess ? 'text-red-500' : 'text-amber-500'} font-mono">
+            <span class="text-lf-muted">{$t('assets.distribution.total')}:</span>
+            <span data-testid="distribution-total-{kind}" data-state={isValid ? 'valid' : isExcess ? 'excess' : 'missing'} class="{isValid ? 'text-lf-success' : isExcess ? 'text-lf-danger' : 'text-lf-warning'} font-mono">
                 {formatPercent(totalPercent, {signed: false})}
             </span>
             {#if isValid}
-                <span class="text-green-500">✅</span>
+                <span class="text-lf-success">✅</span>
             {:else if isExcess}
-                <span class="text-red-500">⚠ ({formatPercent(totalPercent - 100)} {$t('assets.distribution.excess')})</span>
+                <span class="text-lf-danger">⚠ ({formatPercent(totalPercent - 100)} {$t('assets.distribution.excess')})</span>
             {:else if isMissing}
-                <span class="text-amber-500">⚠ ({formatPercent(100 - totalPercent, {signed: false})} {$t('assets.distribution.missing')})</span>
+                <span class="text-lf-warning">⚠ ({formatPercent(100 - totalPercent, {signed: false})} {$t('assets.distribution.missing')})</span>
             {/if}
         </div>
     {:else if isReadonly || disabled}
-        <div class="text-xs text-gray-400 italic py-2">—</div>
+        <div class="text-xs text-lf-muted italic py-2">—</div>
     {:else}
-        <div class="text-xs text-gray-400 italic py-2">{$t('assets.distribution.emptyHint')}</div>
+        <div class="text-xs text-lf-muted italic py-2">{$t('assets.distribution.emptyHint')}</div>
     {/if}
 </div>
 

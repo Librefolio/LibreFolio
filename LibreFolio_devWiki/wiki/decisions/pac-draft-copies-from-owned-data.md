@@ -55,7 +55,7 @@ The contract frozen on 2026-09-16 (Step 4, «copie dominio»), with the review r
 - Defects found on the way: a copy whose rows were all in conflict was pruned, and «Aggiorna» then stamped rows
   pointing to a copy that no longer existed (`CopyOutcome.copy`, Round 5); the saved distribution parser now
   accepts Pydantic's decimal text and the geographic key `"Other"` (R7.4); the distribution help pointed to an
-  «Allocation page» that does not exist and was reworded in four languages (`dbedcc822`, row 13).
+  «Allocation page» that does not exist and was reworded in four languages (`0b0896b83`, row 13).
 - The copies replaced P1's report branch, which the final P1 removal deleted ([[decisions/pac-p1-prototype-removed]]).
 
 ## Source files
@@ -63,7 +63,7 @@ The contract frozen on 2026-09-16 (Step 4, «copie dominio»), with the review r
 | Role | Path |
 |------|------|
 | Endpoint | `backend/app/api/v1/portfolio_api.py` |
-| Snapshot service (owner check, saved facts) | `backend/app/services/portfolio_allocation_source.py` |
+| Snapshot service (owner check, saved facts) | `backend/app/services/pac_allocator/source/portfolio_allocation_source.py` |
 | Snapshot DTOs | `backend/app/schemas/portfolio.py` |
 | Planner client and copy merge | `frontend/src/lib/features/tools/pac-allocator/planner/source.ts`, `frontend/src/lib/features/tools/pac-allocator/planner/copies.ts` |
 | Stale-answer guard | `frontend/src/lib/features/tools/pac-allocator/planner/sourceLoad.svelte.ts` |

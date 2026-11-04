@@ -4,6 +4,7 @@ Portfolio Service for LibreFolio.
 Contains:
 - compute_wac_iterative(): WAC (PMC) of one (broker, asset) for the transaction preview, the
   WAC endpoint and the planner — a facade over financial_math.average_cost
+- wac_pool_holding(): what that WAC's pool holds — the units, and whether their cost is known (N88)
 - PortfolioService: Orchestrator for portfolio-level aggregation and reporting
 
 PortfolioService uses:
@@ -16,8 +17,9 @@ PortfolioService uses:
 from __future__ import annotations
 
 import asyncio
-import bisect
-from collections import defaultdict, deque
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -29,15 +31,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
-    AssetEvent,
-    AssetEventType,
     Broker,
     BrokerUserAccess,
     PriceHistory,
     Transaction,
     TransactionType,
 )
-from backend.app.schemas.common import Currency, FxBackwardFillInfo
+from backend.app.db.precision import round_computed_value
+from backend.app.schemas.common import Currency, DateSpan, FxBackwardFillInfo, is_canonical_iso_currency
 from backend.app.schemas.portfolio import (
     AcquisitionFundingPoint,
     AcquisitionFundingSeries,
@@ -50,16 +51,15 @@ from backend.app.schemas.portfolio import (
     BrokerPnlHistoryPoint,
     CostHistoryPoint,
     CostHistorySeries,
-    DataQualityIssue,
     DepositHistoryPoint,
     DepositHistorySeries,
+    HoldingGroupGainLoss,
     IncomeHistoryPoint,
     IncomeHistorySeries,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
     MissingPriceAsset,
+    MwrrLinePoint,
     OtherPeriodEffect,
+    OtherPeriodEffectCode,
     PnlCandlePoint,
     PnlCandleSeries,
     PortfolioHistoryPoint,
@@ -69,12 +69,16 @@ from backend.app.schemas.portfolio import (
     PortfolioReportResponse,
     PortfolioSummary,
     PositionsContribution,
+    PositionSeries,
+    PositionSeriesPoint,
+    PositionsSeriesQuery,
+    PositionsSeriesResponse,
     StalePriceAsset,
     UnallocatedContribution,
     UnrealizedBreakdownRow,
 )
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
-from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.services.accounts.settings_service import get_effective_base_currency
 from backend.app.services.financial_math.average_cost import (
     CostEffect,
     CostPosition,
@@ -82,28 +86,53 @@ from backend.app.services.financial_math.average_cost import (
     compute_average_costs,
     cost_movement_from_transaction,
     determine_target_currency,
+    movement_unit_costs,
 )
-from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
+from backend.app.services.financial_math.holding_window import closed_position_window, closing_move, exits_in, oldest_open_lot_date, quantity_moves
+from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, broker_shares, cash_movement_from_transaction, compute_native_cash
+from backend.app.services.financial_math.portfolio import period as period_math
+from backend.app.services.financial_math.portfolio.contributions import (
+    annualized_period_return,
+    closed_flight_too_short,
+    closed_position_annualized,
+    closed_position_base,
+    period_return_on_start,
+    position_period_pnl,
+    transfer_costs_moved_out,
+    transfer_tract_adjustments,
+    transfer_tracts_moved_in,
+    window_start,
+)
+from backend.app.services.financial_math.portfolio.models import DailyStates
+from backend.app.services.financial_math.portfolio.position_series import acquisitions_from_average_costs, build_position_series
 from backend.app.services.financial_math.returns import (
-    CashFlowInput,
-    NAVSnapshot,
     annualized_to_cumulative,
-    calculate_mwrr,
-    calculate_mwrr_series,
     calculate_simple_roi,
     calculate_simple_roi_series,
-    calculate_twrr,
-    calculate_twrr_series,
+    change_ratio,
     cumulative_to_annualized,
+    gain_loss_ratio,
+    group_gain_loss,
+    net_holding_return,
+    period_mwrr,
+    period_mwrr_series,
+    period_twrr,
+    period_twrr_series,
+    realized_gain,
+    rebase_to_period,
+    timing_effect,
 )
+from backend.app.services.financial_math.series_steps import merged_spans
+from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.financial_math.weights import percent_of
 from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
     calculate_yield_on_cost_for_positions,
     compute_yield_on_cost_dependency_identity,
 )
-from backend.app.services.fx import convert_bulk
-from backend.app.services.settings_service import get_effective_base_currency
+from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 _logger = structlog.get_logger(__name__)
@@ -144,23 +173,8 @@ async def compute_wac_iterative(
     """
     excluded = set(excluded_tx_ids or [])
 
-    # 1. Query ALL transactions for this (broker, asset) with date <= as_of_date and qty != 0
-    stmt = select(Transaction).where(
-        Transaction.broker_id == broker_id,
-        Transaction.asset_id == asset_id,
-        Transaction.date <= as_of_date,
-        Transaction.quantity.is_not(None),
-        Transaction.quantity != 0,
-    )
-    db_rows = list((await session.execute(stmt)).scalars().all())
-
-    # 1b. Identify which rows are ADJUSTMENT linked to a SPLIT AssetEvent — a split
-    # rescales the pool (same cost, new quantity) instead of adding or reducing.
-    split_event_row_ids = {row.id for row in db_rows if row.asset_event_id is not None}
-    split_linked_row_ids: set[int] = set()
-    if split_event_row_ids:
-        split_stmt = select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_row_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        split_linked_row_ids = set((await session.execute(split_stmt)).scalars().all())
+    # 1. The pool's rows, and the ones linked to a split
+    db_rows, split_linked_row_ids = await _wac_pool_rows(session, broker_id, asset_id, as_of_date)
 
     # WAC cache check: fingerprint from transaction IDs + updated_at
     import hashlib  # noqa: PLC0415
@@ -212,8 +226,11 @@ async def compute_wac_iterative(
             wac_missing_pairs=[WACMissingPairInfo(pair=item.pair, dates=list(item.dates)) for item in average_cost.missing if item.leg == "report"],
         )
 
+    # The average stays exact in the house; here it leaves the calculation to become an input — a preview the user
+    # freezes into a manual cost, an auto cost written on the row — so it is rounded to what that column keeps
+    # (C-97 decision D6, MF-W56): a periodic quotient would otherwise be refused (D2) or stored past the limit.
     result = WACPreviewResultItem(
-        wac=Currency(code=target_currency, amount=average_cost.unit_cost_report),
+        wac=Currency(code=target_currency, amount=round_computed_value(average_cost.unit_cost_report, Transaction, "cost_basis_override")),
         wac_qualifying_txs=_wac_qualifying_txs(average_cost.steps, target_currency),
         wac_missing_pairs=[],
     )
@@ -223,6 +240,63 @@ async def compute_wac_iterative(
         _wac_cache.set(wac_cache_key, result)
 
     return result
+
+
+async def _wac_pool_rows(session: AsyncSession, broker_id: int, asset_id: int, as_of_date: date_type) -> tuple[list[Transaction], set[int]]:
+    """The rows of the pool a WAC averages — every transaction of ``(broker, asset)`` up to ``as_of_date`` with a quantity
+    neither NULL nor zero — and those linked to a SPLIT AssetEvent, which rescale the pool (same cost, new quantity)
+    instead of adding or reducing."""
+    stmt = select(Transaction).where(
+        Transaction.broker_id == broker_id,
+        Transaction.asset_id == asset_id,
+        Transaction.date <= as_of_date,
+        Transaction.quantity.is_not(None),
+        Transaction.quantity != 0,
+    )
+    db_rows = list((await session.execute(stmt)).scalars().all())
+    return db_rows, await split_linked_ids(session, db_rows)
+
+
+@dataclass(frozen=True, slots=True)
+class WacPoolHolding:
+    """What the pool of a WAC holds on its date (N88, J-57): the units, and whether their cost is wholly known."""
+
+    quantity: Decimal
+    cost_complete: bool
+
+
+async def wac_pool_holding(
+    session: AsyncSession,
+    broker_id: int,
+    asset_id: int,
+    as_of_date: date_type,
+    asset_currency: str,
+    excluded_tx_ids: list[int] | None = None,
+    target_currency_override: str | None = None,
+) -> WacPoolHolding:
+    """The average-cost engine's own quantity and cost completeness for the pool :func:`compute_wac_iterative` averages
+    with the same arguments, uncached.
+
+    An average of 0 is no cost when the pool holds no units (never held, or sold out: the engine resets a pool that
+    empties) or holds only units of unknown cost (``ADD_UNKNOWN_COST`` counts at zero and leaves the cost incomplete);
+    a pool of free units holds units at a known cost of 0. The batch's Auto step reads it only when the average is 0.
+    """
+    excluded = set(excluded_tx_ids or [])
+    db_rows, split_linked_row_ids = await _wac_pool_rows(session, broker_id, asset_id, as_of_date)
+    rows = sorted((row for row in db_rows if row.id not in excluded), key=lambda row: (row.date, row.id))
+    movements = tuple(movement for row in rows if (movement := cost_movement_from_transaction(row, asset_currency=asset_currency, split_linked=row.id in split_linked_row_ids)) is not None)
+    if not movements:
+        return WacPoolHolding(quantity=Decimal("0"), cost_complete=True)
+    position_key = (broker_id, asset_id)
+    average_cost = (
+        await compute_average_costs(
+            session,
+            [CostPosition(key=position_key, asset_currency=asset_currency, movements=movements)],
+            report_currency=target_currency_override or determine_target_currency(movements, asset_currency),
+            asset_leg=False,
+        )
+    )[position_key]
+    return WacPoolHolding(quantity=average_cost.quantity, cost_complete=average_cost.report_complete)
 
 
 # Effects of the average-cost steps in the vocabulary of WACQualifyingTX.effect, which the
@@ -239,18 +313,8 @@ _WAC_PREVIEW_EFFECTS = {
 def _wac_qualifying_txs(steps: tuple[CostStep, ...], target_currency: str) -> list[WACQualifyingTX]:
     """One preview row per movement: unit cost, running WAC and conversion provenance."""
     rows: list[WACQualifyingTX] = []
-    previous_wac = Decimal("0")
-    for step in steps:
+    for step, unit_cost in zip(steps, movement_unit_costs(steps), strict=True):
         movement = step.movement
-        running_wac = step.unit_cost_report
-        if step.effect == CostEffect.ADD:
-            unit_cost = step.cost_report_change / movement.quantity
-        elif step.effect == CostEffect.REDUCE:
-            unit_cost = previous_wac
-        elif step.effect == CostEffect.SPLIT_RESCALE:
-            unit_cost = running_wac
-        else:
-            unit_cost = Decimal("0")
         conversion = step.conversion
         rows.append(
             WACQualifyingTX(
@@ -258,61 +322,54 @@ def _wac_qualifying_txs(steps: tuple[CostStep, ...], target_currency: str) -> li
                 type=movement.transaction_type,
                 date=movement.date,
                 quantity=movement.quantity,
-                unit_cost=unit_cost,
+                unit_cost=unit_cost.report,
                 currency=target_currency,
                 effect=_WAC_PREVIEW_EFFECTS[step.effect],
-                running_wac=running_wac,
+                running_wac=step.unit_cost_report,
                 fx_info=FxBackwardFillInfo(fx_rate_date=conversion.rate_date, fx_days_back=conversion.days_back) if conversion else None,
-                original_unit_cost=conversion.original_amount / movement.quantity if conversion else None,
+                original_unit_cost=unit_cost.original,
                 original_currency=conversion.original_currency if conversion else None,
                 fx_rate_used=conversion.rate if conversion else None,
             )
         )
-        previous_wac = running_wac
     return rows
 
 
-def _boundary_cost(position_cost: Any, day: date_type, quantity: Decimal) -> Decimal | None:
-    """Historical cost of ``quantity`` units of a position's average-cost pool on ``day``.
-
-    None when the pool lacks part of its cost on that day (a missing rate or cost basis), so
-    that no partial cost enters an unrealized figure.
-    """
-    state = position_cost.state_at(day) if position_cost is not None else None
-    if state is None:
-        return Decimal("0")
-    if not state.report_complete:
-        return None
-    return state.cost_report_for(quantity)
-
-
-def _period_realized_sales(sales: list[Any], date_from: date_type | None, date_to: date_type | None) -> list[Any]:
-    """The engine's realized SELLs in (date_from, date_to] whose proceeds and cost are both known.
-
-    A sale whose proceeds could not be converted, or taken from a pool that already lacked part
-    of its cost, is left out: its pair, or the cost it lacks, is reported in the data quality.
-    """
-    return [sale for sale in sales if (date_from is None or sale.date > date_from) and (date_to is None or sale.date <= date_to) and sale.proceeds is not None and sale.cost_complete]
-
-
 def _engine_missing_fx_pairs(engine_result: Any, period_from: date_type | None, period_to: date_type | None) -> list[WACMissingPairInfo]:
-    """Every conversion the engine could not make, as pair + dates for the data-quality banner.
+    """Every conversion the engine could not make, as pair + dates + ranges for the data-quality banner.
 
-    Movements (cost, cash, external flows, in-transit cost) count on whatever date they happened;
-    valuations only on the days of the period shown, [period_from, period_to], whose first day is
-    the opening state of the period.
+    ``dates``: the movements (cost, cash, external flows, in-transit cost), on whatever date they happened. ``ranges``:
+    the valuation days, only those of the period shown, [period_from, period_to], whose first day is the opening state of
+    the period, with the consecutive days merged (D-P4: no list of every day).
     """
     dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
     for pair, dates in (getattr(engine_result, "missing_fx", None) or {}).items():
         dates_by_pair[pair].update(dates)
-    for state in getattr(engine_result, "daily_states", None) or []:
-        if not state.missing_fx_pairs:
-            continue
-        if (period_from is not None and state.date < period_from) or (period_to is not None and state.date > period_to):
-            continue
-        for pair in state.missing_fx_pairs:
-            dates_by_pair[pair].add(state.date)
-    return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(dates_by_pair.items())]
+    spans_by_pair: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
+    daily_states = getattr(engine_result, "daily_states", None) or []
+    if isinstance(daily_states, DailyStates):
+        # Every day of a segment reads its state's pairs (P4): no state is built
+        for segment in daily_states.iter_segments(period_from, period_to):
+            for pair in segment.state.missing_fx_pairs:
+                spans_by_pair[pair].append((segment.start, segment.end))
+    else:
+        for state in daily_states:
+            if not state.missing_fx_pairs:
+                continue
+            if (period_from is not None and state.date < period_from) or (period_to is not None and state.date > period_to):
+                continue
+            for pair in state.missing_fx_pairs:
+                spans_by_pair[pair].append((state.date, state.date))
+    return [WACMissingPairInfo(pair=pair, dates=sorted(dates_by_pair.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans_by_pair.get(pair, ()))]) for pair in sorted(set(dates_by_pair) | set(spans_by_pair))]
+
+
+@dataclass(frozen=True)
+class HistorySteps:
+    """The report's history in steps (D-P4): its ``range``, the steps, and the MWRR line of true points."""
+
+    range: DateSpan | None
+    history: list[PortfolioHistoryPoint]
+    mwrr_line: list[MwrrLinePoint]
 
 
 def _engine_native_cash(engine_result: Any, report_currency: str) -> NativeCash:
@@ -324,21 +381,15 @@ def _engine_native_cash(engine_result: Any, report_currency: str) -> NativeCash:
 def _unrealized_breakdown_rows(engine_result: Any, date_from: date_type | None, as_of: date_type, currency: str) -> list[UnrealizedBreakdownRow]:
     """The period's unrealized change by asset currency: assets' own change, exchange-rate effect, unsplit.
 
-    Same boundary states as PortfolioService._compute_period_summary_metrics (the last state on
-    or before ``date_from``, zero when there is none or no ``date_from``; the state at ``as_of``),
-    so the rows add up to ``period_unrealized_gain_loss_delta`` exactly. Order: asset rows, then
-    exchange-rate rows, then unsplit rows; the report currency first, then alphabetical.
+    Same boundary states as the period P&L (``financial_math.portfolio.period.period_boundaries``: the
+    last state on or before ``date_from``, zero when there is none or no ``date_from``; the state at
+    ``as_of``), so the rows add up to ``period_unrealized_gain_loss_delta`` exactly. Order: asset rows,
+    then exchange-rate rows, then unsplit rows; the report currency first, then alphabetical.
     """
-    daily_states = getattr(engine_result, "daily_states", None) or []
-    if len(daily_states) < 2:
+    boundaries = period_math.period_boundaries(getattr(engine_result, "daily_states", None) or [], date_from, as_of)
+    if boundaries is None:
         return []
-    end_state = _daily_state_as_of(daily_states, as_of)
-    if end_state is None:
-        return []
-    start_state = None
-    if date_from:
-        pre_states = [state for state in daily_states if state.date <= date_from]
-        start_state = pre_states[-1] if pre_states else None
+    start_state, end_state = boundaries.start, boundaries.end
     end_parts = end_state.unrealized_by_currency
     start_parts = start_state.unrealized_by_currency if start_state is not None else {}
     currencies = sorted(set(end_parts) | set(start_parts), key=lambda code: (code != currency, code))
@@ -363,61 +414,15 @@ def _unrealized_breakdown_rows(engine_result: Any, date_from: date_type | None, 
     return rows
 
 
-def _daily_state_as_of(daily_states: list[Any], as_of: date_type) -> Any | None:
-    """Return the last daily state with date <= as_of using backward fill.
-
-    daily_states must be sorted ascending by date. Defensive helper: engine_result's
-    daily_states is expected to already be bound to the requested date_to, but this
-    guards downstream consumers against a stale/wider cached blob leaking states
-    beyond the requested range (rather than blindly indexing daily_states[-1]).
-    Returns None if no state exists at or before as_of.
-    """
-    if not daily_states:
-        return None
-    dates = [s.date for s in daily_states]
-    idx = bisect.bisect_right(dates, as_of) - 1
-    if idx < 0:
-        return None
-    return daily_states[idx]
-
-
 # =============================================================================
 # PORTFOLIO SERVICE — Orchestrator
 # =============================================================================
 
 _HOLDING_TYPES = {TransactionType.BUY, TransactionType.SELL}
-# Transaction types that open or consume quantity in a FIFO lot stream (used to derive the
-# oldest still-open lot's opening date per position). ADJUSTMENT/TRANSFER are signed: a
-# positive leg opens a lot, a negative leg consumes oldest-first (per-broker view: a
-# transfer-in opens a lot dated at the receiving broker's transfer date).
+# Transaction types that move a position's quantity: its holding window comes from them
+# (financial_math.holding_window; a split rescales the open lots, a transfer-in opens one
+# dated at its arrival at the receiving broker).
 _LOT_AFFECTING_TYPES = {TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT, TransactionType.TRANSFER}
-
-
-def _oldest_open_lot_date(txns: list[Transaction]) -> Optional[date_type]:
-    """Opening date of the oldest FIFO lot still open, from one (broker, asset) holding stream.
-
-    Opens (add a lot): positive-quantity BUY / ADJUSTMENT / TRANSFER.
-    Closes (consume oldest-first): negative-quantity SELL / ADJUSTMENT / TRANSFER.
-    Returns None when no lot remains open (fully closed) or the stream is empty. This is the
-    FIFO-exact opening date, which differs from the first-ever position date once partial sells
-    have fully consumed the earliest lots.
-    """
-    open_lots: deque[tuple[date_type, Decimal]] = deque()
-    for tx in sorted(txns, key=lambda t: (t.date, t.id or 0)):
-        qty = tx.quantity or Decimal("0")
-        if qty > 0:
-            open_lots.append((tx.date, qty))
-        elif qty < 0:
-            remaining = -qty
-            while remaining > 0 and open_lots:
-                lot_date, lot_qty = open_lots[0]
-                if lot_qty > remaining:
-                    open_lots[0] = (lot_date, lot_qty - remaining)
-                    remaining = Decimal("0")
-                else:
-                    remaining -= lot_qty
-                    open_lots.popleft()
-    return open_lots[0][0] if open_lots else None
 
 
 # Some instruments (e.g. CROWDFUND real-estate loans redeemed via periodic partial
@@ -428,36 +433,19 @@ def _oldest_open_lot_date(txns: list[Transaction]) -> Optional[date_type]:
 # 8×(-0.031102) + (-0.751182) against a +1 buy leaves a +0.000002 residual). This
 # is not Decimal arithmetic error — it's an artifact of the recorded transaction
 # quantities themselves — so treat anything at or below this threshold as closed.
-# The value lives in data_quality_thresholds, shared with the asset list's held-now flags.
+# The value lives in data_quality_thresholds, shared with the asset list's held-now flags
+# and the closed-position window (financial_math.holding_window).
 _QUANTITY_DUST_THRESHOLD = QUANTITY_DUST_THRESHOLD
 
 
-def _closed_position_window(txns: list[Transaction]) -> tuple[Optional[date_type], Optional[date_type]]:
-    """Realized flight time of a fully-closed holding stream: (oldest_open, last_close).
+@dataclass(frozen=True)
+class HeldAssetQuoteFacts:
+    """An asset held at the end of a report's period, with what the data-quality report's asset quote check reads: its
+    stored currency (E-19b's NON_ISO_CURRENCY)."""
 
-    - oldest_open: date the first lot was ever opened (first positive-quantity
-      BUY / ADJUSTMENT / TRANSFER).
-    - last_close: date the running quantity last dropped to (dust-)zero, i.e. when
-      the final open lot was consumed. CROWDFUND-style dust residuals (see
-      ``_QUANTITY_DUST_THRESHOLD``) count as closed.
-
-    Returns ``(open_date, None)`` if the stream never fully closes and
-    ``(None, None)`` if it never opens. Needed because a fully-closed position has
-    no still-open lot, so ``_oldest_open_lot_date`` is ``None`` and there is no end
-    cost basis — leaving the generic annualized path without a window or a base.
-    """
-    open_date: Optional[date_type] = None
-    last_close: Optional[date_type] = None
-    running = Decimal("0")
-    for tx in sorted(txns, key=lambda t: (t.date, t.id or 0)):
-        qty = tx.quantity or Decimal("0")
-        prev = running
-        running += qty
-        if qty > 0 and open_date is None:
-            open_date = tx.date
-        if qty < 0 and prev > _QUANTITY_DUST_THRESHOLD and running <= _QUANTITY_DUST_THRESHOLD:
-            last_close = tx.date
-    return open_date, last_close
+    asset_id: int
+    name: str
+    currency: str
 
 
 class PortfolioService:
@@ -481,6 +469,71 @@ class PortfolioService:
     async def _get_base_currency(self, user_id: int) -> str:
         """Effective base currency: per-user setting, global default, EUR (P0-1)."""
         return await get_effective_base_currency(self.db, user_id)
+
+    async def _engine_run(
+        self,
+        *,
+        user_id: int,
+        broker_ids: list[int] | None,
+        date_from: date_type | None,
+        date_to: date_type | None,
+        target_currency: str,
+        include_candles: bool = False,
+        apply_ownership_share: bool = True,
+    ):
+        """The one engine run of the report, the Performance table and the positions chart (FB-14).
+
+        Every caller asks the same run — the replay from t=0, with the position frames, the BUY funding split and the
+        positions at the end of ``date_from`` — so the requests of one page share the engine's blob-cache key: the first
+        builds the run, the others read it, or wait on it (single-flight). Each caller serializes only what its query asks.
+        The candles stay a flag of their own: their OHLC work is kept off the ordinary reports. ``apply_ownership_share``
+        False counts every broker whole (the broker page, MF6-3): a run of its own, under its own key.
+        """
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
+
+        return await PortfolioCalculationEngine(self.db).calculate(
+            user_id=user_id,
+            broker_ids=broker_ids,
+            date_from=None,  # always from t=0 for correct cumulative values
+            date_to=date_to,
+            target_currency=target_currency,
+            include_candles=include_candles,
+            include_acquisition_funding=True,
+            period_start=date_from,
+            include_positions=True,
+            apply_ownership_share=apply_ownership_share,
+        )
+
+    async def _closing_transactions(
+        self,
+        user_id: int,
+        lot_txns_by_key: Mapping[tuple[int, int], Sequence[Transaction]],
+        lot_moves: Mapping[tuple[int, int], Sequence],
+    ) -> dict[tuple[int, int], tuple[str, Optional[int]]]:
+        """How each position that ever closed last closed (MF-CB): ``(type, destination broker)`` by position.
+
+        The closing movement is ``holding_window.closing_move``'s; its type is the row's ``closed_by``. A TRANSFER names
+        the broker of its paired leg (both legs carry ``related_transaction_id``) when the user can read that broker,
+        whether or not the report asked for it; an orphan leg, or another user's broker, names none.
+        """
+        closing_txs: dict[tuple[int, int], Transaction] = {}
+        for key, moves in lot_moves.items():
+            move = closing_move(moves)
+            if move is not None:
+                closing_txs[key] = next(tx for tx in lot_txns_by_key[key] if (tx.id or 0) == move.order)
+        partner_ids = {tx.related_transaction_id for tx in closing_txs.values() if tx.type == TransactionType.TRANSFER and tx.related_transaction_id is not None}
+        partner_brokers: dict[int, int] = {}
+        if partner_ids:
+            readable = {access.broker_id for access in await self._get_user_broker_access(user_id, None)}
+            rows = await self.db.execute(select(Transaction.id, Transaction.broker_id).where(Transaction.id.in_(partner_ids)))
+            partner_brokers = {tx_id: broker_id for tx_id, broker_id in rows.all() if broker_id in readable}
+        return {
+            key: (
+                str(getattr(tx.type, "value", tx.type)),
+                partner_brokers.get(tx.related_transaction_id) if tx.type == TransactionType.TRANSFER and tx.related_transaction_id is not None else None,
+            )
+            for key, tx in closing_txs.items()
+        }
 
     async def _get_user_broker_access(
         self,
@@ -522,14 +575,6 @@ class PortfolioService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def _get_price_at_date(self, asset_id: int, target_date: date_type) -> Optional[tuple[Decimal, str, date_type]]:
-        """Return (close_price, currency, actual_date) for the latest price on or before target_date (backward-fill)."""
-        stmt = select(PriceHistory.close, PriceHistory.currency, PriceHistory.date).where(PriceHistory.asset_id == asset_id, PriceHistory.close.is_not(None), PriceHistory.date <= target_date).order_by(PriceHistory.date.desc()).limit(1)
-        row = (await self.db.execute(stmt)).one_or_none()
-        if row:
-            return row.close, row.currency, row.date
-        return None
-
     async def _get_asset(self, asset_id: int) -> Asset | None:
         return await self.db.get(Asset, asset_id)
 
@@ -540,27 +585,6 @@ class PortfolioService:
         result = await self.db.execute(stmt)
         return {asset.id: asset for asset in result.scalars().all()}
 
-    async def _convert_to_base(
-        self,
-        amount: Decimal,
-        currency: str,
-        base_currency: str,
-        as_of_date: date_type,
-    ) -> tuple[Decimal | None, list[WACMissingPairInfo]]:
-        """Convert amount to base_currency. Returns (converted_amount, missing_pairs)."""
-        if currency == base_currency:
-            return amount, []
-        results, _ = await convert_bulk(
-            self.db,
-            [(Currency(code=currency, amount=amount), base_currency, as_of_date)],
-            raise_on_error=False,
-        )
-        if results and results[0] is not None:
-            converted, _, _ = results[0]
-            return converted.amount, []
-        pair_key = f"{currency}/{base_currency}"
-        return None, [WACMissingPairInfo(pair=pair_key, dates=[as_of_date])]
-
     async def _missing_cost_basis_assets(self, engine_result: Any) -> list[tuple[int, str]]:
         """(asset_id, name) of the assets with an acquisition of unknown cost in the engine's replay."""
         asset_ids = sorted({asset_id for (asset_id, _broker_id), average_cost in getattr(engine_result, "average_costs", {}).items() if average_cost.unknown_cost_movement_ids})
@@ -569,88 +593,42 @@ class PortfolioService:
         assets = await self._get_assets_map(set(asset_ids))
         return [(asset_id, assets[asset_id].display_name if asset_id in assets else f"Asset {asset_id}") for asset_id in asset_ids]
 
+    async def _invalid_split_assets(self, engine_result: Any) -> list[tuple[int, str]]:
+        """(asset_id, name) of the assets with a SPLIT event whose stored ratio the engine counted as missing (MF-D4)."""
+        asset_ids = sorted({event.asset_id for event in getattr(engine_result, "invalid_split_events", [])})
+        if not asset_ids:
+            return []
+        assets = await self._get_assets_map(set(asset_ids))
+        return [(asset_id, assets[asset_id].display_name if asset_id in assets else f"Asset {asset_id}") for asset_id in asset_ids]
+
+    async def _held_asset_quote_facts(self, engine_result: Any) -> list[HeldAssetQuoteFacts]:
+        """The assets held at the end of the period (a position above the dust threshold), each with its stored
+        currency, read in one query: what the data-quality report's asset quote check needs (E-19b's NON_ISO_CURRENCY)."""
+        asset_ids = sorted({ps.asset_id for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD})
+        if not asset_ids:
+            return []
+        assets = (await self.db.execute(select(Asset).where(Asset.id.in_(asset_ids)).order_by(Asset.id))).scalars().all()
+        return [HeldAssetQuoteFacts(asset_id=asset.id, name=asset.display_name, currency=asset.currency) for asset in assets]
+
+    @staticmethod
+    def _non_iso_currency_assets(facts: Sequence[HeldAssetQuoteFacts]) -> list[tuple[int, str, str]]:
+        """(asset_id, name, stored currency) of the held assets whose currency is not an ISO 4217 code as stored (E-19b):
+        ``978``, ``EURO`` or ``eur``, which an earlier version saved as written."""
+        return [(fact.asset_id, fact.name, fact.currency) for fact in facts if not is_canonical_iso_currency(fact.currency)]
+
     @staticmethod
     def _merge_missing_pairs(items: list[WACMissingPairInfo]) -> list[WACMissingPairInfo]:
         merged: dict[str, set[date_type]] = defaultdict(set)
+        spans: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
         for item in items:
             merged[item.pair].update(item.dates)
-        return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(merged.items())]
+            spans[item.pair].extend((span.start, span.end) for span in item.ranges)
+        return [WACMissingPairInfo(pair=pair, dates=sorted(dates), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans[pair])]) for pair, dates in sorted(merged.items())]
 
     async def _get_configured_fx_pair_sets(self) -> tuple[set[str], set[str]]:
         from backend.app.services.financial_math.portfolio.data_quality import load_configured_fx_pair_sets  # noqa: PLC0415 — same lazy engine import as the methods below
 
         return await load_configured_fx_pair_sets(self.db)
-
-    @staticmethod
-    def _compute_period_summary_metrics(
-        engine_result: Any,
-        date_from: date_type | None,
-        as_of: date_type,
-    ) -> dict[str, Decimal | None]:
-        """Compute period NAV/P&L inputs from engine daily states.
-
-        as_of: the requested date_to (or today) — the "end" state is looked up
-        by date rather than assumed to be daily_states[-1], as a guard against
-        a stale/wider cached blob leaking states beyond the requested range.
-        """
-        metrics: dict[str, Decimal | None] = {
-            "period_nav_start_val": None,
-            "period_net_flows_val": None,
-            "period_pnl_val": None,
-            "period_ugl_start": None,
-            "period_ugl_end": None,
-            "period_ugl_delta": None,
-            "period_book_value_start_val": None,
-            "period_market_value_start_val": None,
-        }
-        daily_states = getattr(engine_result, "daily_states", None) or []
-        if len(daily_states) < 2:
-            return metrics
-
-        zero = Decimal("0")
-        end_state = _daily_state_as_of(daily_states, as_of)
-        if end_state is None:
-            return metrics
-        period_ugl_end = end_state.market_value - end_state.open_cost_basis
-
-        if date_from:
-            pre_states = [s for s in daily_states if s.date <= date_from]
-            if pre_states:
-                start_state = pre_states[-1]
-                period_nav_start_val = start_state.nav_value
-                period_book_value_start_val = start_state.book_value
-                period_market_value_start_val = start_state.market_value
-                period_ugl_start = start_state.market_value - start_state.open_cost_basis
-                period_net_flows_val = end_state.cumulative_external_cash_flow - start_state.cumulative_external_cash_flow
-            else:
-                period_nav_start_val = zero
-                period_book_value_start_val = zero
-                period_market_value_start_val = zero
-                period_ugl_start = zero
-                period_net_flows_val = end_state.cumulative_external_cash_flow
-        else:
-            period_nav_start_val = zero
-            period_book_value_start_val = zero
-            period_market_value_start_val = zero
-            period_ugl_start = zero
-            period_net_flows_val = end_state.cumulative_external_cash_flow
-
-        period_pnl_val = end_state.nav_value - period_nav_start_val - period_net_flows_val
-        period_ugl_delta = period_ugl_end - period_ugl_start
-
-        metrics.update(
-            {
-                "period_nav_start_val": period_nav_start_val,
-                "period_net_flows_val": period_net_flows_val,
-                "period_pnl_val": period_pnl_val,
-                "period_ugl_start": period_ugl_start,
-                "period_ugl_end": period_ugl_end,
-                "period_ugl_delta": period_ugl_delta,
-                "period_book_value_start_val": period_book_value_start_val,
-                "period_market_value_start_val": period_market_value_start_val,
-            }
-        )
-        return metrics
 
     # ------------------------------------------------------------------
     # Public API
@@ -674,13 +652,19 @@ class PortfolioService:
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
-        from backend.app.services.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.data_quality import transaction_implied_assets_to_report  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.models import ValuationSource  # noqa: PLC0415
+        from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS  # noqa: PLC0415
 
         today = date_type.today()
+        # R13-SEC7-1: the summary's whole horizon (engine run, MWRR, stale prices, annualization) ends by latest_range_end()
+        if date_to is not None:
+            date_to = min(date_to, latest_range_end())
         valuation_date = date_to or today
+        if date_from is not None:
+            date_from = min(date_from, valuation_date)
         base_currency = target_currency_override or await self._get_base_currency(user_id)
 
         # ── 1. Run engine for aggregate values + performance ──
@@ -701,7 +685,7 @@ class PortfolioService:
         # ── 2. Extract aggregate values from last daily state ──
         # Looked up by date (not blindly daily_states[-1]) as a guard against a
         # stale/wider cached blob leaking states beyond the requested valuation_date.
-        last_state = _daily_state_as_of(engine_result.daily_states, valuation_date)
+        last_state = period_math.state_as_of(engine_result.daily_states, valuation_date)
         engine_nav = last_state.nav_value if last_state else Decimal("0")
         engine_cash = last_state.cash_value if last_state else Decimal("0")
         engine_market_value = last_state.market_value if last_state else Decimal("0")
@@ -716,7 +700,6 @@ class PortfolioService:
         all_missing_pairs: list[WACMissingPairInfo] = []
         missing_price_assets: list[MissingPriceAsset] = []
         broker_names: dict[int, str] = {}
-        broker_market_values: dict[int, Decimal] = defaultdict(Decimal)
         first_position_dates: dict[tuple[int, int], date_type] = {}
         # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
         lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
@@ -762,17 +745,22 @@ class PortfolioService:
                 if pos_key not in first_position_dates or tx.date < first_position_dates[pos_key]:
                     first_position_dates[pos_key] = tx.date
 
-        # Realized G/L of the SELLs in the period: proceeds minus the historical cost the
-        # engine's average-cost pool gave up, both in base currency with the owner's share.
-        _realized_accum = sum((sale.proceeds - sale.cost for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to)), Decimal("0"))
+        # Realized G/L of the SELLs and outgoing ADJUSTMENTs (proceeds 0, N78-1) in the period: proceeds minus the
+        # historical cost the engine's average-cost pool gave up, both in base currency with the owner's share.
+        _realized_accum = sum((gain for sale in period_math.period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
 
-        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
+        lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
+        # MF-A10: the moves at the run's share (the owner's, or the whole broker: MF6-3), as the engine's quantities the rows
+        # test against the dust threshold
+        lot_shares = engine_result.broker_shares
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(quantity_moves(txns, lot_split_ids, share=lot_shares[key[0]])) for key, txns in lot_txns_by_key.items()}
         # First lot-affecting transaction per position (includes ADJUSTMENT/TRANSFER, so
         # in-kind/succession/snapshot-seeded positions get a real window start — unlike
         # first_position_dates which only tracks BUY/SELL). Anchors the net annualized window.
         first_lot_txn_dates: dict[tuple[int, int], date_type] = {key: min(t.date for t in txns) for key, txns in lot_txns_by_key.items() if txns}
 
         end_positions = [ps for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD]
+        marks = getattr(engine_result, "marks", None)
         yield_on_cost_by_position = await calculate_yield_on_cost_for_positions(
             self.db,
             user_id=user_id,
@@ -799,44 +787,40 @@ class PortfolioService:
             broker = brokers_map.get(ps.broker_id)
             broker_name = broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}")
 
+            # MF6-1 (T-U5): the unit prices come from the engine's reader, as the replay valued them, converted at the
+            # day's rate; a missing rate is the engine's to report (the position's missing_fx_pair)
             current_price: Decimal | None = None
             if ps.valuation_effective_unit_price is not None and ps.valuation_effective_currency is not None:
                 if ps.valuation_effective_currency == base_currency:
                     current_price = ps.valuation_effective_unit_price
-                else:
-                    current_price, mp = await self._convert_to_base(
-                        ps.valuation_effective_unit_price,
-                        ps.valuation_effective_currency,
-                        base_currency,
-                        ps.date,
-                    )
-                    all_missing_pairs.extend(mp)
+                elif marks is not None:
+                    current_price = marks.in_target(ps.valuation_effective_unit_price, ps.valuation_effective_currency, ps.date)
 
             yield_on_cost_calculation = yield_on_cost_by_position[(ps.asset_id, ps.broker_id)]
             wac_per_unit = yield_on_cost_calculation.wac_per_unit
             all_missing_pairs.extend(yield_on_cost_calculation.missing_fx_pairs)
 
             current_value = ps.market_value
-            if current_value is not None:
-                broker_market_values[ps.broker_id] += current_value
 
             gain_loss = ps.unrealized_pnl
-            gain_loss_pct = (gain_loss / ps.cost_basis) if gain_loss is not None and ps.cost_basis != 0 else None
+            gain_loss_pct = gain_loss_ratio(gain_loss, ps.cost_basis, positive_base=False)
 
             price_change_1d: Decimal | None = None
             gain_loss_change_1d: Decimal | None = None
             gain_loss_change_1d_percent: Decimal | None = None
-            if ps.valuation_source == "MARKET_PRICE" and current_price is not None:
-                prev_price_data = await self._get_price_at_date(ps.asset_id, ps.date - timedelta(days=1))
-                if prev_price_data:
-                    prev_raw, prev_ccy, prev_date = prev_price_data
-                    if prev_ccy == base_currency:
-                        prev_price_base = prev_raw
-                    else:
-                        prev_price_base, mp = await self._convert_to_base(prev_raw, prev_ccy, base_currency, prev_date)
-                        all_missing_pairs.extend(mp)
+            if ps.valuation_source == "MARKET_PRICE" and current_price is not None and marks is not None:
+                # The day before: the last market quote on or before it, converted at that day's rate (a mark is converted
+                # on the day it is read); none on a day the engine did not replay
+                day_before = ps.date - timedelta(days=1)
+                previous = marks.last_market_price_at(ps.asset_id, day_before)
+                if previous is not None:
+                    prev_price_base = marks.in_target(previous.unit_price, previous.currency, day_before)
                     if prev_price_base is not None and prev_price_base != 0:
-                        price_change_1d = ((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))
+                        # MF-A12 (N92): the change over the size of the previous price, measured as the % column measures
+                        # the value's (the same association: a tie rounds as before); a negative price's change keeps the
+                        # move's sign, as the % column's does
+                        price_ratio_1d = change_ratio(current_price - prev_price_base, prev_price_base)
+                        price_change_1d = price_ratio_1d.quantize(Decimal("0.0001")) if price_ratio_1d is not None else None
                         # Bugfix: raw quoted prices (current_price/prev_price_base) are NOT
                         # 1 unit == 1 currency unit for every asset — e.g. bonds are quoted
                         # "per quote_base_quantity" (BTPs: quote_base_quantity=100, price=98.70
@@ -850,7 +834,8 @@ class PortfolioService:
                         previous_position_value = compute_holding_value(ps.quantity, prev_price_base, asset.quote_base_quantity)
                         gain_loss_change_1d = current_position_value - previous_position_value
                         if abs(previous_position_value) > Decimal("0.01"):
-                            gain_loss_change_1d_percent = (gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
+                            value_ratio_1d = change_ratio(gain_loss_change_1d, previous_position_value)
+                            gain_loss_change_1d_percent = (value_ratio_1d * 100).quantize(Decimal("0.01")) if value_ratio_1d is not None else None
 
             if ps.valuation_source == "MISSING":
                 missing_price_assets.append(
@@ -876,11 +861,10 @@ class PortfolioService:
             holding_first_tx = first_lot_txn_dates.get((ps.broker_id, ps.asset_id))
             holding_annualized = None
             if ps.cost_complete and ps.cost_basis and ps.cost_basis != 0 and holding_first_tx is not None:
-                market_component = gain_loss if gain_loss is not None else Decimal("0")
                 pos_income = income_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0"))
                 pos_fees = fees_taxes_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0"))
-                net_holding_return = (market_component + pos_income - pos_fees) / ps.cost_basis
-                holding_annualized = cumulative_to_annualized(net_holding_return, (valuation_date - holding_first_tx).days)
+                holding_return = net_holding_return(gain_loss, pos_income, pos_fees, ps.cost_basis)
+                holding_annualized = cumulative_to_annualized(holding_return, (valuation_date - holding_first_tx).days)
 
             all_holdings.append(
                 PortfolioHolding(
@@ -926,17 +910,16 @@ class PortfolioService:
 
         if include_breakdown:
             for broker_id, broker_name in broker_names.items():
-                # Capital and in-transit value come from the engine's per-broker slice, so an
-                # internal transfer moves capital on arrival instead of showing -X / +X, and
-                # the value in transit stays on the sender's card. Market value and cash keep
-                # their own valuation at valuation_date: the engine re-values a day only when
-                # something happens on it.
+                # Each card is the engine's per-broker slice of the headline on valuation_date
+                # (the cards add up to it): market value, cash at that day's rates and the value
+                # in transit, which stays on the sender's card; capital moves on arrival, so an
+                # internal transfer never shows -X / +X.
                 contribution = last_state.broker_contributions.get(broker_id) if last_state is not None else None
-                broker_in_transit = contribution.in_transit_contribution if contribution is not None else Decimal("0")
                 broker_capital = contribution.capital_contribution if contribution is not None else Decimal("0")
-                broker_nav = broker_market_values.get(broker_id, Decimal("0")) + broker_cash_base.get(broker_id, Decimal("0")) + broker_in_transit
-                broker_gain = broker_nav - broker_capital
-                broker_gl_pct = (broker_gain / broker_capital) if broker_capital > 0 else Decimal("0")
+                broker_nav = contribution.nav_contribution if contribution is not None else Decimal("0")
+                broker_gain = contribution.pnl_contribution if contribution is not None else Decimal("0")
+                broker_gl_ratio = gain_loss_ratio(broker_gain, broker_capital, positive_base=True)
+                broker_gl_pct = broker_gl_ratio if broker_gl_ratio is not None else Decimal("0")
                 by_broker_list.append(
                     BrokerBreakdown(
                         broker_id=broker_id,
@@ -951,73 +934,42 @@ class PortfolioService:
 
         # ── 4. Allocation from engine (scope-aware, includes in-transit) ──
         alloc_type, alloc_sector, alloc_geo = views.build_allocation_current()
+        last_by_asset = views.daily_states[-1].by_asset if views.daily_states else {}
+        alloc_asset_names = {asset_id: asset.display_name for asset_id, asset in (await self._get_assets_map(set(last_by_asset))).items()}
+        alloc_asset = views.build_asset_allocation_current(alloc_asset_names)
 
         def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
             return [AllocationItem(**item) for item in items]
 
-        total_market = sum(h.current_value for h in all_holdings if h.current_value) or Decimal("1")
-        nav_denominator = engine_nav if engine_nav > 0 else Decimal("1")
+        # Weights from the house (D-MF7): no share of a total at or below zero — the field stays None («—»).
+        total_market = sum((h.current_value for h in all_holdings if h.current_value), Decimal("0"))
         for h in all_holdings:
-            if h.current_value and total_market:
-                object.__setattr__(h, "allocation_percent", (h.current_value / total_market * 100).quantize(Decimal("0.01")))
-            if h.current_value:
-                object.__setattr__(h, "nav_weight_percent", (h.current_value / nav_denominator * 100).quantize(Decimal("0.01")))
+            if not h.current_value:
+                continue
+            allocation = percent_of(h.current_value, total_market)
+            nav_weight = percent_of(h.current_value, engine_nav)
+            object.__setattr__(h, "allocation_percent", allocation.quantize(Decimal("0.01")) if allocation is not None else None)
+            object.__setattr__(h, "nav_weight_percent", nav_weight.quantize(Decimal("0.01")) if nav_weight is not None else None)
 
         # ── 5. Performance from engine (correct daily NAV) ──
-        nav_snapshots, cash_flows_perf = views.build_performance_inputs()
+        nav_snapshots, cash_flows_perf = views.build_performance_inputs(date_from)
 
         # Period re-basing: when date_from is set, compute metrics for that period only
-        if date_from and nav_snapshots:
-            pre_period = [s for s in nav_snapshots if s.date <= date_from]
-            if pre_period:
-                period_start_nav_perf = pre_period[-1].nav
-                period_start_date_perf = pre_period[-1].date
-            else:
-                period_start_nav_perf = Decimal("0")
-                period_start_date_perf = nav_snapshots[0].date
+        period = rebase_to_period(nav_snapshots, cash_flows_perf, date_from)
+        period_cfs = list(period.cash_flows)
+        period_navs = list(period.nav_snapshots)
+        period_start_date_perf = period.start_date if period.start_date is not None else today
 
-            synthetic_cf = CashFlowInput(date=period_start_date_perf, amount=-period_start_nav_perf)
-            if period_start_nav_perf > 0:
-                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
-            else:
-                # Data-less start (e.g. a Sunday): the first NAV snapshot already
-                # contains any flow dated on it, so those flows must be EXCLUDED
-                # from the XIRR input — otherwise the deposit is counted twice
-                # (inside the NAV and as a flow) and the solver is dragged to a
-                # pole (beta report: MWRR cumulative +9.94% on a −1.5% period).
-                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
-            period_navs = [s for s in nav_snapshots if s.date >= period_start_date_perf]
-        else:
-            period_cfs = cash_flows_perf
-            period_navs = nav_snapshots
-            period_start_nav_perf = Decimal("0") if nav_snapshots else Decimal("0")
-            period_start_date_perf = nav_snapshots[0].date if nav_snapshots else today
-
-        # Net invested for the period (sum of deposits minus withdrawals)
-        period_net_invested = sum(-cf.amount for cf in period_cfs)
+        # Net invested for the period (sum of deposits minus withdrawals), from the same flows as the ROI line (MF-K3)
+        period_net_invested = sum(-cf.amount for cf in views.build_roi_cash_flows(date_from, nav_snapshots, cash_flows_perf))
         simple_roi = calculate_simple_roi(engine_nav, period_net_invested) if period_net_invested > 0 else Decimal("0")
-        twrr_result: Decimal | None = None
         mwrr_result: Decimal | None = None
-
-        if period_navs and period_cfs and engine_nav > 0:
-            try:
-                twrr_point = calculate_twrr(period_navs, period_cfs)
-                twrr_result = twrr_point.twrr
-            except (ValueError, ZeroDivisionError):
-                twrr_result = None
-            if period_net_invested > 0:
-                # Use first actual NAV when period_start is 0 (portfolio starts from nothing)
-                # This matches calculate_mwrr_series which uses sorted_navs[0].nav
-                initial_nav_for_mwrr = period_start_nav_perf if period_start_nav_perf > 0 else (period_navs[0].nav if period_navs else Decimal("0"))
-                mwrr_point = await asyncio.to_thread(
-                    calculate_mwrr,
-                    period_cfs,
-                    initial_nav_for_mwrr,
-                    engine_nav,
-                    period_start_date_perf,
-                    date_to or today,
-                )
-                mwrr_result = mwrr_point.mwrr
+        # The Dashboard's TWRR rule lives in the house: the card is the last point of the line (MF-K3), «—» at a value at
+        # or below zero
+        twrr_result = period_twrr(period_navs, period_cfs)
+        # The Dashboard's MWRR rule lives in the house: the card is the last point of the line by construction
+        # (D-MF5): no rate without net invested capital or with a value at or below zero.
+        mwrr_result = (await asyncio.to_thread(period_mwrr, period_navs, period_cfs, date_to or today, engine_nav)).mwrr
 
         # ── MWRR cumulative derivation ──
         mwrr_period_days: int | None = None
@@ -1037,19 +989,20 @@ class PortfolioService:
             total_gl = last_state.total_pnl
         else:
             total_gl = engine_nav - total_invested
-        total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
+        total_gl_ratio = gain_loss_ratio(total_gl, total_invested, positive_base=True)
+        total_gl_pct = total_gl_ratio if total_gl_ratio is not None else Decimal("0")
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
         # ── Period P&L breakdown: NAV, unrealized delta, income, fees ──
-        period_metrics = self._compute_period_summary_metrics(engine_result, date_from, valuation_date)
-        period_nav_start_val = period_metrics["period_nav_start_val"]
-        period_net_flows_val = period_metrics["period_net_flows_val"]
-        period_pnl_val = period_metrics["period_pnl_val"]
-        period_ugl_start = period_metrics["period_ugl_start"]
-        period_ugl_end = period_metrics["period_ugl_end"]
-        period_ugl_delta = period_metrics["period_ugl_delta"]
-        period_book_value_start_val = period_metrics["period_book_value_start_val"]
-        period_market_value_start_val = period_metrics["period_market_value_start_val"]
+        period_figures = period_math.period_pnl(getattr(engine_result, "daily_states", None) or [], date_from, valuation_date)
+        period_nav_start_val = period_figures.nav_start if period_figures is not None else None
+        period_net_flows_val = period_figures.net_flows if period_figures is not None else None
+        period_pnl_val = period_figures.pnl if period_figures is not None else None
+        period_ugl_start = period_figures.ugl_start if period_figures is not None else None
+        period_ugl_end = period_figures.ugl_end if period_figures is not None else None
+        period_ugl_delta = period_figures.ugl_delta if period_figures is not None else None
+        period_book_value_start_val = period_figures.book_value_start if period_figures is not None else None
+        period_market_value_start_val = period_figures.market_value_start if period_figures is not None else None
         period_realized_val: Decimal | None = None
         period_income_val: Decimal | None = None
         period_fees_taxes_val: Decimal | None = None
@@ -1063,7 +1016,7 @@ class PortfolioService:
 
             # Other result: residual that closes the identity
             # pnl = ugl_delta + realized + income - fees_taxes + other_result
-            period_other_result_val = period_pnl_val - period_ugl_delta - period_realized_val - period_income_val + period_fees_taxes_val
+            period_other_result_val = period_math.period_other_result(period_pnl_val, period_ugl_delta, period_realized_val, period_income_val, period_fees_taxes_val)
 
         # ── 6. Data quality report ──
         # "Valued at cost" is an *as-of* statement (dataQuality.transactionImplied:
@@ -1074,19 +1027,30 @@ class PortfolioService:
         # any asset ever valued at cost — e.g. funds that only get quotes from their first
         # provider sync onward stayed flagged forever despite a fresh current price.
         # The grace period still suppresses a brand-new acquisition whose first market
-        # price simply has not landed yet (e.g. BTP collocamento lag).
+        # price simply has not landed yet (e.g. BTP collocamento lag); it counts from the
+        # last market quote (decision 30), see transaction_implied_assets_to_report.
         first_position_date_by_asset: dict[int, date_type] = {}
         for (_b_id, a_id), d in first_position_dates.items():
             if a_id not in first_position_date_by_asset or d < first_position_date_by_asset[a_id]:
                 first_position_date_by_asset[a_id] = d
+        # W-B94: an asset priced only by the cost of the transfer that brought it in has no BUY or SELL; its grace counts
+        # from its first lot movement, the arrival, as the at-cost grace does
+        first_lot_date_by_asset: dict[int, date_type] = {}
+        for (_b_id, a_id), d in first_lot_txn_dates.items():
+            if a_id not in first_lot_date_by_asset or d < first_lot_date_by_asset[a_id]:
+                first_lot_date_by_asset[a_id] = d
+        for a_id, d in first_lot_date_by_asset.items():
+            first_position_date_by_asset.setdefault(a_id, d)
 
         implied_asset_ids: set[int] = set()
         if last_state is not None:
-            for aid in last_state.transaction_implied_asset_ids:
-                first_dt = first_position_date_by_asset.get(aid)
-                if first_dt is not None and (last_state.date - first_dt).days <= TRANSACTION_IMPLIED_GRACE_DAYS:
-                    continue
-                implied_asset_ids.add(aid)
+            implied_asset_ids = transaction_implied_assets_to_report(
+                last_state.transaction_implied_asset_ids,
+                last_state.transaction_implied_last_quote_dates,
+                first_position_date_by_asset,
+                last_state.date,
+                TRANSACTION_IMPLIED_GRACE_DAYS,
+            )
 
         transaction_implied_assets: list[MissingPriceAsset] = []
         for ps in end_positions:
@@ -1122,10 +1086,43 @@ class PortfolioService:
         manual_implied_ids = implied_asset_ids - assets_with_provider
         transaction_implied_assets = [a for a in transaction_implied_assets if a.asset_id not in manual_implied_ids]
 
+        # VALUED_AT_COST: an open position with no price at all (no quote, no BUY or SELL, no transfer-cost estimate:
+        # W-B94), counted at its book cost (J-17). Same grace as TRANSACTION_IMPLIED, counted from the asset's first
+        # acquisition: it has no quote, and no BUY or SELL (an ADJUSTMENT or a TRANSFER opened it), so the BUY/SELL
+        # first position date would list it at once. Only for an asset with a provider: for a manual
+        # asset the cost is its intended value.
+        first_acquisition_by_asset: dict[int, date_type] = {}
+        for (_b_id, a_id), d in first_lot_txn_dates.items():
+            if a_id not in first_acquisition_by_asset or d < first_acquisition_by_asset[a_id]:
+                first_acquisition_by_asset[a_id] = d
+        at_cost_ids = {ps.asset_id for ps in end_positions if ps.valuation_source == ValuationSource.ESTIMATED_AT_COST}
+        at_cost_reported = transaction_implied_assets_to_report(at_cost_ids, {}, first_acquisition_by_asset, last_state.date, TRANSACTION_IMPLIED_GRACE_DAYS) if last_state is not None else set()
+        valued_at_cost_assets: list[MissingPriceAsset] = []
+        for ps in end_positions:
+            if ps.asset_id not in at_cost_reported or ps.asset_id not in assets_with_provider:
+                continue
+            asset = assets_map.get(ps.asset_id)
+            if not asset:
+                continue
+            broker = brokers_map.get(ps.broker_id)
+            valued_at_cost_assets.append(
+                MissingPriceAsset(
+                    asset_id=ps.asset_id,
+                    symbol=asset.identifier_ticker,
+                    name=asset.display_name,
+                    broker_id=ps.broker_id,
+                    broker_name=broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}"),
+                    first_position_date=first_lot_txn_dates.get((ps.broker_id, ps.asset_id)),
+                    quantity=ps.quantity,
+                    open_cost_basis=ps.cost_basis if ps.cost_basis != 0 else None,
+                    currency=base_currency,
+                )
+            )
+
         # STALE_PRICE: an open position valued at a market price carried forward past the
         # threshold, for an asset with a provider — the case a price sync can fix. A manual
         # asset valued at its last trade price (crowdfunding, HOLD) is stale by design, and a
-        # provider asset with no quote at all is TRANSACTION_IMPLIED's case. One entry per asset.
+        # provider asset with no quote at all is TRANSACTION_IMPLIED's or VALUED_AT_COST's case. One entry per asset.
         stale_price_dates: dict[int, date_type] = {}
         for ps in end_positions:
             if not ps.valuation_stale or ps.valuation_source != ValuationSource.MARKET_PRICE:
@@ -1139,18 +1136,44 @@ class PortfolioService:
         configured_fx_pairs, real_provider_fx_pairs = await self._get_configured_fx_pair_sets()
         all_missing_pairs.extend(_engine_missing_fx_pairs(engine_result, date_from, valuation_date))
         merged_missing_fx_pairs = self._merge_missing_pairs(all_missing_pairs)
+        held_quote_facts = await self._held_asset_quote_facts(engine_result)
         data_quality = views.build_data_quality_report(
             missing_price_assets_dto=missing_price_assets,
             stale_prices_dto=stale_prices or None,
             missing_fx_pairs_dto=merged_missing_fx_pairs,
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
+            invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
+            non_iso_currency_assets=self._non_iso_currency_assets(held_quote_facts) or None,
+            report_currency=base_currency,
+            valued_at_cost_assets_dto=valued_at_cost_assets or None,
             mwrr_available=mwrr_result is not None,
+            share_mismatches=engine_result.share_mismatches,
             configured_fx_pairs=configured_fx_pairs,
             real_provider_fx_pairs=real_provider_fx_pairs,
             period_from=date_from,
             period_to=valuation_date,
         )
+
+        # The day's change of the total P&L, from the engine's states of the valuation date and of the calendar day before.
+        day_change = period_math.day_change(engine_result.daily_states, valuation_date)
+
+        # Unrealized G/L of each broker's holdings, and of each asset type at each broker (the Dashboard treemap's groups).
+        group_members: dict[tuple[int, str | None], list[tuple[Decimal | None, Decimal | None]]] = defaultdict(list)
+        for holding in all_holdings:
+            group_members[(holding.broker_id, None)].append((holding.current_value, holding.gain_loss))
+            group_members[(holding.broker_id, holding.asset_type)].append((holding.current_value, holding.gain_loss))
+        holding_groups: list[HoldingGroupGainLoss] = []
+        for (group_broker_id, group_asset_type), members in sorted(group_members.items(), key=lambda item: (item[0][0], item[0][1] is not None, item[0][1] or "")):
+            group_gain, group_ratio = group_gain_loss(members)
+            holding_groups.append(
+                HoldingGroupGainLoss(
+                    broker_id=group_broker_id,
+                    asset_type=group_asset_type,
+                    gain_loss=Currency(code=base_currency, amount=group_gain) if group_gain is not None else None,
+                    gain_loss_percent=group_ratio,
+                )
+            )
 
         return PortfolioSummary(
             net_worth=Currency(code=base_currency, amount=engine_nav),
@@ -1188,18 +1211,24 @@ class PortfolioService:
             mwrr_annualized_percent=mwrr_result,
             mwrr_cumulative_percent=mwrr_cumulative,
             mwrr_period_days=mwrr_period_days,
+            timing_effect_percent=timing_effect(mwrr_cumulative, twrr_result),
+            pnl_change_1d=Currency(code=base_currency, amount=day_change.pnl_change) if day_change is not None else None,
+            pnl_change_1d_vs_total_pnl_percent=day_change.vs_total_pnl if day_change is not None else None,
+            pnl_change_1d_vs_nav_percent=day_change.vs_nav if day_change is not None else None,
             simple_roi_percent=simple_roi,
             allocation_by_type=_alloc_from_engine(alloc_type),
             allocation_by_sector=_alloc_from_engine(alloc_sector),
             allocation_by_geography=_alloc_from_engine(alloc_geo),
+            allocation_by_asset=_alloc_from_engine(alloc_asset),
             holdings=all_holdings,
+            holding_groups=holding_groups,
             by_broker=by_broker_list if include_breakdown else None,
             missing_fx_pairs=merged_missing_fx_pairs,
             missing_price_assets=missing_price_assets,
             data_quality=data_quality,
         )
 
-    async def get_history(  # noqa: C901 — sequential engine→metrics→merge pipeline with period-rebase if/else
+    async def get_history(
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -1207,14 +1236,32 @@ class PortfolioService:
         date_to: date_type | None = None,
         target_currency_override: str | None = None,
         _precomputed_engine_result=None,
-        _mwrr_use_warm_start: bool = True,
     ) -> list[PortfolioHistoryPoint]:
-        """Return daily portfolio value series via PortfolioCalculationEngine.
+        """Return the portfolio value series in steps via PortfolioCalculationEngine: see :meth:`get_history_steps`.
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
-        _mwrr_use_warm_start: if False, use cold-start for MWRR series (no warm-start).
         """
-        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
+        steps = await self.get_history_steps(user_id, broker_ids, date_from, date_to, target_currency_override, _precomputed_engine_result)
+        return steps.history
+
+    async def get_history_steps(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
+    ) -> HistorySteps:
+        """The history of ``[date_from, date_to]`` in steps, its ``range`` and its MWRR line (D-P4, contract §1.2, §2).
+
+        Each point holds from its ``date`` to its ``through``: the values of every day in it, TWRR and ROI included, are
+        the daily series' values of that day. The MWRR moves even on a quiet day, so it is not in the steps: the line has
+        its true values at each step's ``date`` and ``through``, and at the month ends inside a long step.
+
+        _precomputed_engine_result: if provided by get_report(), skip engine re-run.
+        """
+        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder, mwrr_line_days  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
         base_currency = target_currency_override or await self._get_base_currency(user_id)
@@ -1230,123 +1277,63 @@ class PortfolioService:
                 target_currency=base_currency,
             )
 
-        if not result.daily_states:
-            return []
-
         views = DerivedViewsBuilder(result.daily_states, base_currency)
+        window = views.window_range(date_from, date_to) if result.daily_states else None
+        if window is None:
+            return HistorySteps(range=None, history=[], mwrr_line=[])
+        start, end = window
 
-        # ── Build history dicts ──
-        history_dicts = views.build_history()
+        # The first point pins the TWRR to 0, so the day after it may differ from it even when nothing happens
+        pins = (start + timedelta(days=1),) if start < end else ()
 
-        # ── Performance metrics ──
-        nav_snapshots, cash_flows = views.build_performance_inputs()
-
-        # Period re-basing for ROI metrics
-        if date_from and nav_snapshots:
-            pre_period = [s for s in nav_snapshots if s.date <= date_from]
-            if pre_period:
-                period_start_nav = pre_period[-1].nav
-                period_start_date = pre_period[-1].date
-            else:
-                # date_from is before any portfolio data — NAV was 0
-                period_start_nav = Decimal("0")
-                period_start_date = nav_snapshots[0].date
-
-            synthetic_cf = CashFlowInput(date=period_start_date, amount=-period_start_nav)
-            # When period_start_nav > 0, CFs on start date are already embedded in starting NAV (exclude with >)
-            # When period_start_nav == 0 (data-less start), the first NAV snapshot is
-            # post-flow: flows dated on it are already inside that NAV, so they too are
-            # excluded (>) — including them double-counts the deposit and poles the XIRR.
-            if period_start_nav > 0:
-                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
-            else:
-                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
-            period_nav_snapshots = [s for s in nav_snapshots if s.date >= period_start_date]
-            # When period_start_nav > 0, ensure first snapshot matches so MWRR series is consistent
-            if period_start_nav > 0 and period_nav_snapshots and period_nav_snapshots[0].nav != period_start_nav:
-                period_nav_snapshots = [NAVSnapshot(date=period_start_date, nav=period_start_nav)] + period_nav_snapshots
-        else:
-            period_cash_flows = cash_flows
-            period_nav_snapshots = nav_snapshots
-
-        twrr_map: dict[date_type, Decimal] = {}
+        # ── TWRR and ROI on the days a step may start (a quiet day keeps both) ──
+        performance_days = [*views.change_days(start, end, pins), end]
+        nav_snapshots, cash_flows = views.build_performance_inputs(date_from, days=performance_days)
+        period = rebase_to_period(nav_snapshots, cash_flows, date_from)
+        period_cash_flows = list(period.cash_flows)
+        period_nav_snapshots = list(period.nav_snapshots)
+        twrr_map: dict[date_type, Decimal | None] = {}
         roi_map: dict[date_type, Decimal] = {}
-        mwrr_map: dict[date_type, Decimal | None] = {}
-
         if period_nav_snapshots and period_cash_flows:
-            twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
-            roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
-            mwrr_series = await asyncio.to_thread(
-                calculate_mwrr_series,
-                period_nav_snapshots,
-                period_cash_flows,
-                use_warm_start=_mwrr_use_warm_start,
-            )
-            twrr_map = {pt.date: pt.twrr for pt in twrr_series}
-            roi_map = {pt.date: pt.roi for pt in roi_series}
+            # The card's rules at every point (MF-K3): no TWRR at a value at or below zero; the ROI's capital from the
+            # first day with capital when the range starts before the portfolio
+            twrr_map = {pt.date: pt.twrr for pt in period_twrr_series(period_nav_snapshots, period_cash_flows)}
+            roi_map = {pt.date: pt.roi for pt in calculate_simple_roi_series(period_nav_snapshots, list(views.build_roi_cash_flows(date_from, nav_snapshots, cash_flows, days=performance_days)))}
+
+        # First point pinned to 0% for the TWRR (and the MWRR line): period-relative returns measured from inception are
+        # 0 at the period start by definition. ROI is NOT pinned — it is an absolute ratio (NAV − net_invested)/net_invested,
+        # so on the very first day it must already reflect any seeded cost-vs-market gap (e.g. an in-kind succession
+        # seeded above/below market shows its day-1 gain/loss instead of a flat 0).
+        def metrics(day: date_type) -> dict[str, Decimal | None]:
+            return {"twrr": Decimal("0") if day == start else twrr_map.get(day), "roi": roi_map.get(day)}
+
+        history_dicts = views.build_history(start, end, metrics=metrics, extra_days=pins)
+        history = [PortfolioHistoryPoint(**point) for point in history_dicts]
+        mwrr_line = await self._mwrr_line(views, date_from, mwrr_line_days(history_dicts), start)
+        return HistorySteps(range=DateSpan(start=start, end=end), history=history, mwrr_line=mwrr_line)
+
+    @staticmethod
+    async def _mwrr_line(views: Any, date_from: date_type | None, days: list[date_type], start: date_type) -> list[MwrrLinePoint]:
+        """The MWRR line's true points on ``days`` (D-P4, contract §2): each the period MWRR ending that day — the value
+        the daily line gives there, bit for bit (:func:`returns.period_mwrr_series`, every point its own solve) — and its
+        cumulative form from the period's start; the first day pinned to 0."""
+        nav_snapshots, cash_flows = views.build_performance_inputs(date_from, days=days)
+        period = rebase_to_period(nav_snapshots, cash_flows, date_from)
+        period_nav_snapshots, period_cash_flows = list(period.nav_snapshots), list(period.cash_flows)
+        mwrr_map: dict[date_type, Decimal | None] = {}
+        if period_nav_snapshots and period_cash_flows:
+            # The same rule as the card, at every point (D-MF5): no rate where the card would have none.
+            mwrr_series = await asyncio.to_thread(period_mwrr_series, period_nav_snapshots, period_cash_flows)
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
-
-        # Period start date for cumulative MWRR calculation
         period_start = period_nav_snapshots[0].date if period_nav_snapshots else None
-
-        # ── Slice to [date_from, date_to] and merge performance ──
-        history_points: list[PortfolioHistoryPoint] = []
-        for h in history_dicts:
-            d = h["date"]
-            if date_from and d < date_from:
+        line: list[MwrrLinePoint] = []
+        for day in days:
+            if day == start:
+                line.append(MwrrLinePoint(date=day, annualized=Decimal("0"), cumulative=Decimal("0")))
                 continue
-            # Defensive upper bound: daily_states should already be bound to
-            # date_to by the engine, but guard against a stale/wider cached
-            # blob leaking extra days into the returned history array.
-            if date_to and d > date_to:
-                continue
-
-            twrr = twrr_map.get(d)
-            roi = roi_map.get(d)
-            mwrr_ann = mwrr_map.get(d)
-
-            # Compute cumulative MWRR from annualized
-            days_from_start = (d - period_start).days if period_start else 0
-            mwrr_cum = annualized_to_cumulative(mwrr_ann, days_from_start)
-
-            history_points.append(
-                PortfolioHistoryPoint(
-                    date=d,
-                    cash_value=h["cash_value"],
-                    market_value=h["market_value"],
-                    broker_nav_value=h.get("broker_nav_value"),
-                    in_transit_cash_value=h.get("in_transit_cash_value"),
-                    in_transit_asset_market_value=h.get("in_transit_asset_market_value"),
-                    in_transit_market_value=h.get("in_transit_market_value"),
-                    nav_value=h["nav_value"],
-                    open_cost_basis=h.get("open_cost_basis"),
-                    in_transit_asset_cost_basis=h.get("in_transit_asset_cost_basis"),
-                    in_transit_book_value=h.get("in_transit_book_value"),
-                    book_value=h.get("book_value"),
-                    capital_baseline=h["capital_baseline"],
-                    book_asset_like=h["book_asset_like"],
-                    cash_from_contributed_capital=h["cash_from_contributed_capital"],
-                    cash_from_generated_returns=h["cash_from_generated_returns"],
-                    total_pnl=h["total_pnl"],
-                    unrealized_gain_loss=h.get("unrealized_gain_loss"),
-                    twrr=twrr,
-                    mwrr_annualized=mwrr_ann,
-                    mwrr_cumulative=mwrr_cum,
-                    roi=roi,
-                )
-            )
-
-        # First point pinned to 0% for the cumulative growth measures (TWRR/MWRR): they are
-        # period-relative returns measured from inception, so they are 0 at the period start by
-        # definition. ROI is NOT pinned — it is an absolute ratio (NAV − net_invested)/net_invested,
-        # so on the very first day it must already reflect any seeded cost-vs-market gap (e.g. an
-        # in-kind succession seeded above/below market shows its day-1 gain/loss instead of a flat 0).
-        if history_points:
-            history_points[0].twrr = Decimal("0")
-            history_points[0].mwrr_annualized = Decimal("0")
-            history_points[0].mwrr_cumulative = Decimal("0")
-
-        return history_points
+            annualized = mwrr_map.get(day)
+            line.append(MwrrLinePoint(date=day, annualized=annualized, cumulative=annualized_to_cumulative(annualized, (day - period_start).days if period_start else 0)))
+        return line
 
     async def get_broker_pnl_history(
         self,
@@ -1384,14 +1371,18 @@ class PortfolioService:
             return []
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        by_broker = views.build_broker_pnl_history()
+        by_broker = views.build_broker_pnl_history(date_from, date_to)
+        if not by_broker:
+            # A window holding no state: the whole-history build still listed every broker, with no point. Otherwise
+            # the window lists them all, in the same order: every state carries every broker of the scope (DailyStateBuilder)
+            states = (segment.state for segment in result.daily_states.segments) if isinstance(result.daily_states, DailyStates) else result.daily_states
+            by_broker = {broker_id: [] for state in states for broker_id in state.broker_contributions}
 
         broker_pnl_history: list[BrokerPnlHistory] = []
         for broker_id, points in by_broker.items():
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
-            sliced_points = [BrokerPnlHistoryPoint(date=p["date"], total_pnl=p["total_pnl"]) for p in points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
-            broker_pnl_history.append(BrokerPnlHistory(broker_id=broker_id, broker_name=broker_name, points=sliced_points))
+            broker_pnl_history.append(BrokerPnlHistory(broker_id=broker_id, broker_name=broker_name, points=[BrokerPnlHistoryPoint(**point) for point in points]))
 
         return broker_pnl_history
 
@@ -1434,9 +1425,7 @@ class PortfolioService:
             return PnlCandleSeries(points=[])
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        raw_points = views.build_pnl_candles()
-        sliced_points = [PnlCandlePoint(date=p["date"], open=p["open"], high=p["high"], low=p["low"], close=p["close"]) for p in raw_points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
-        return PnlCandleSeries(points=sliced_points)
+        return PnlCandleSeries(points=[PnlCandlePoint(**point) for point in views.build_pnl_candles(date_from, date_to)])
 
     async def _signed_transaction_sums_by_date(
         self,
@@ -1461,10 +1450,10 @@ class PortfolioService:
         horizon = date_to or date_type.today()
         if native_cash is None:
             movements = []
+            shares = broker_shares(accesses)
             for access in accesses:
-                share = effective_share(access.role, access.share_percentage)
                 for tx in await self._get_transactions(access.broker_id, tx_types=tx_types, date_to=horizon):
-                    movement = cash_movement_from_transaction(tx, share=share)
+                    movement = cash_movement_from_transaction(tx, share=shares[access.broker_id])
                     if movement is not None:
                         movements.append(movement)
             movements.sort(key=lambda movement: (movement.date, movement.movement_id or 0))
@@ -1583,27 +1572,18 @@ class PortfolioService:
         the shared engine run or every day comes back empty" caveat).
         """
         from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
-        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
         base_currency = target_currency_override or await self._get_base_currency(user_id)
         if _precomputed_engine_result is not None:
             result = _precomputed_engine_result
         else:
-            engine = PortfolioCalculationEngine(self.db)
-            result = await engine.calculate(
-                user_id=user_id,
-                broker_ids=broker_ids,
-                date_from=None,  # Always compute from t=0 for correct cumulative pool state
-                date_to=date_to,
-                target_currency=base_currency,
-                include_acquisition_funding=True,
-            )
+            result = await self._engine_run(user_id=user_id, broker_ids=broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency)
 
         if not result.daily_states:
             return AcquisitionFundingSeries(points=[])
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        raw_points = views.build_acquisition_funding()
+        raw_points = views.build_acquisition_funding(date_from, date_to)
         # Canonical (date_from, date_to] boundary — exclusive start, inclusive end.
         # NOTE the deliberate difference from get_pnl_candles/get_broker_pnl_history,
         # whose engine-backed slicing this method otherwise mirrors: those two are
@@ -1624,6 +1604,7 @@ class PortfolioService:
         date_to: date_type | None = None,
         target_currency_override: str | None = None,
         _precomputed_engine_result=None,
+        apply_ownership_share: bool = True,
     ) -> PositionsContribution:
         """Compute per-asset period P&L contribution for dashboard Performance view.
 
@@ -1647,17 +1628,9 @@ class PortfolioService:
             return PositionsContribution(gross_gains=Decimal("0"), gross_losses=Decimal("0"))
 
         engine_result = _precomputed_engine_result
-        if engine_result is None:
-            from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
-
-            engine = PortfolioCalculationEngine(self.db)
-            engine_result = await engine.calculate(
-                user_id=user_id,
-                broker_ids=broker_ids,
-                date_from=None,
-                date_to=date_to,
-                target_currency=base_currency,
-            )
+        # Without a shared run, or with one taken for another period start (no positions at this one's): the page's run.
+        if engine_result is None or (date_from is not None and engine_result.position_states_start_date != date_from):
+            engine_result = await self._engine_run(user_id=user_id, broker_ids=broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency, apply_ownership_share=apply_ownership_share)
 
         # Quantity-affecting transactions: BUY/SELL plus in-kind ADJUSTMENT and TRANSFER,
         # mirroring _LOT_AFFECTING_TYPES / the engine's position model. Restricting this to
@@ -1669,6 +1642,7 @@ class PortfolioService:
         # Per-position accumulators
         per_realized: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         per_cost_sold: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
+        per_sales: dict[tuple[int, int], int] = defaultdict(int)
 
         # ── Income / Fees with asset_id attribution: the period's cash flows of the native
         # cash (financial_math.native_cash), the same the summary's period income and fees
@@ -1689,173 +1663,133 @@ class PortfolioService:
 
         for access in accesses:
             broker_id = access.broker_id
-            # F2 — OWNER share scales (0% is valid, contributes nothing); EDITOR/VIEWER
-            # always carry share 0 by schema rule but see full data → scale 1 for them.
-            share = effective_share(access.role, access.share_percentage)
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
 
-            broker_txns = await self._get_transactions(broker_id, date_to=date_to)
+            broker_txns = await self._get_transactions(broker_id, date_to=effective_end)
 
-            # ── Holdings: group by asset for realized + unrealized ──
-            txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
+            # ── Positions: every (broker, asset) whose quantity a transaction ever moved ──
+            # The owner's share is the engine's: its boundary states are already scaled.
+            held_asset_ids: dict[int, None] = {}  # in the order of each asset's first transaction
             for tx in broker_txns:
-                if tx.asset_id is not None and tx.type in _LOT_AFFECTING_TYPES:
+                if tx.asset_id is not None and tx.type in _QTY_TYPES:
                     lot_txns_by_key[(broker_id, tx.asset_id)].append(tx)
-                if tx.type not in _QTY_TYPES:
-                    continue
-                if tx.asset_id is not None:
-                    txns_by_asset[tx.asset_id].append(tx)
+                    held_asset_ids.setdefault(tx.asset_id, None)
 
-            for asset_id, asset_txns in txns_by_asset.items():
+            for asset_id in held_asset_ids:
                 asset = await self._get_asset(asset_id)
                 if not asset:
                     continue
+                position_info[(broker_id, asset_id)] = {"asset": asset, "broker_name": broker_name}
 
-                pos_key = (broker_id, asset_id)
-                position_info[pos_key] = {
-                    "asset": asset,
-                    "broker_name": broker_name,
-                    "share": share,
-                    "txns": asset_txns,
-                }
-
-        # ── Realized gain/loss from SELLs in period: proceeds minus the historical cost the
-        # engine's average-cost pool gave up (base currency, owner share applied) ──
-        for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to):
+        # ── Realized gain/loss from SELLs and outgoing ADJUSTMENTs (proceeds 0, N78-1) in period: proceeds minus the
+        # historical cost the engine's average-cost pool gave up (base currency, owner share applied) ──
+        for sale in period_math.period_realized_sales(engine_result.realized_sales, date_from, date_to):
+            gain = realized_gain(sale.proceeds, sale.cost)
+            if gain is None:
+                continue
             pos_key = (sale.broker_id, sale.asset_id)
-            per_realized[pos_key] += sale.proceeds - sale.cost
+            per_realized[pos_key] += gain
             per_cost_sold[pos_key] += sale.cost
+            per_sales[pos_key] += 1
 
-        # ── Unrealized delta: 2-point computation per position ──
+        # ── Unrealized change per position, from the engine's values at the period's boundaries ──
+        # The positions held at the end of the period's start day and at its end, valued as the portfolio values them
+        # (trade marks, split adjustment, estimate at cost, the boundary day's rate): the rows' unrealized changes add up
+        # to the period's ugl_delta. An internal transfer inside the period splits the result between the two brokers.
         contributions: list[AssetPeriodContribution] = []
+        start_states = {(ps.broker_id, ps.asset_id): ps for ps in engine_result.position_states_start} if date_from is not None else {}
+        end_states = {(ps.broker_id, ps.asset_id): ps for ps in engine_result.position_states_end}
+        tract_adjustments = transfer_tract_adjustments(engine_result.internal_asset_transfers, date_from, effective_end)
+        moved_out = transfer_costs_moved_out(engine_result.internal_asset_transfers, date_from, effective_end)
+        moved_in = transfer_tracts_moved_in(engine_result.internal_asset_transfers, date_from, effective_end)
 
-        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
+        lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
+        # MF-A10: the moves at the run's share (the owner's, or the whole broker: MF6-3), as the engine's quantities the rows
+        # test against the dust threshold
+        lot_shares = engine_result.broker_shares
+        lot_moves = {key: quantity_moves(txns, lot_split_ids, share=lot_shares[key[0]]) for key, txns in lot_txns_by_key.items()}
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(moves) for key, moves in lot_moves.items()}
+        closings = await self._closing_transactions(user_id, lot_txns_by_key, lot_moves)
 
         for pos_key, info in position_info.items():
             broker_id, asset_id = pos_key
             asset = info["asset"]
-            share = info["share"]
-            asset_txns = info["txns"]
-
-            # Quantity at start and end of period
-            qty_at_start = Decimal("0")
-            qty_at_end = Decimal("0")
-            for tx in asset_txns:
-                q = tx.quantity or Decimal("0")
-                if date_from is None or tx.date <= date_from:
-                    qty_at_start += q * share
-                if tx.date <= effective_end:
-                    qty_at_end += q * share
-
+            start_state = start_states.get(pos_key)
+            end_state = end_states.get(pos_key)
+            qty_at_start = start_state.quantity if start_state is not None else Decimal("0")
+            qty_at_end = end_state.quantity if end_state is not None else Decimal("0")
             is_fully_sold = qty_at_end <= _QUANTITY_DUST_THRESHOLD
 
-            # Unrealized P&L at start and end
+            # A dust residual counts as not held: no value, no unrealized of its own.
             ug_start: Decimal | None = None
             ug_end: Decimal | None = None
             cb_end: Decimal | None = None
             start_value: Decimal | None = Decimal("0") if date_from is None or qty_at_start <= _QUANTITY_DUST_THRESHOLD else None
             end_value: Decimal | None = Decimal("0") if qty_at_end <= _QUANTITY_DUST_THRESHOLD else None
+            if start_state is not None and qty_at_start > _QUANTITY_DUST_THRESHOLD:
+                start_value = start_state.market_value
+                ug_start = start_state.unrealized_pnl
+            if end_state is not None and qty_at_end > _QUANTITY_DUST_THRESHOLD:
+                end_value = end_state.market_value
+                ug_end = end_state.unrealized_pnl
+                cb_end = end_state.cost_basis if end_state.cost_complete else None
 
-            # Historical cost of the held quantity at each boundary, from the engine's
-            # average-cost timeline (already in base currency); None when part of it is unknown.
-            position_cost = engine_result.average_costs.get((asset_id, broker_id))
-
-            if qty_at_start > _QUANTITY_DUST_THRESHOLD and date_from is not None:
-                cb_start = _boundary_cost(position_cost, date_from, qty_at_start)
-                price_s_data = await self._get_price_at_date(asset_id, date_from)
-
-                if cb_start is not None and price_s_data is not None:
-                    raw_price_s, price_ccy_s, _ = price_s_data
-                    price_s_base = raw_price_s
-                    if price_ccy_s != base_currency:
-                        price_s_base, _ = await self._convert_to_base(raw_price_s, price_ccy_s, base_currency, date_from)
-
-                    if price_s_base is not None:
-                        mv_start = compute_holding_value(qty_at_start, price_s_base, asset.quote_base_quantity)
-                        ug_start = mv_start - cb_start
-                        start_value = mv_start
-
-            if qty_at_end > _QUANTITY_DUST_THRESHOLD:
-                # Cost basis at end is price-independent, so a position held with no market
-                # price still gets a normalization base.
-                cb_end = _boundary_cost(position_cost, effective_end, qty_at_end)
-                price_e_data = await self._get_price_at_date(asset_id, effective_end)
-
-                if cb_end is not None:
-                    if price_e_data is not None:
-                        raw_price_e, price_ccy_e, price_date_e = price_e_data
-                        price_e_base = raw_price_e
-                        if price_ccy_e != base_currency:
-                            price_e_base, _ = await self._convert_to_base(raw_price_e, price_ccy_e, base_currency, price_date_e)
-                        if price_e_base is not None:
-                            mv_end = compute_holding_value(qty_at_end, price_e_base, asset.quote_base_quantity)
-                            ug_end = mv_end - cb_end
-                            end_value = mv_end
-
-            unrealized_delta = None
-            if ug_end is not None or ug_start is not None:
-                unrealized_delta = (ug_end or Decimal("0")) - (ug_start or Decimal("0"))
-
-            # Assemble period P&L
+            # The period P&L of the row (financial_math.portfolio.contributions, the one home of the formula)
             realized = per_realized.get(pos_key)
             income = per_income.get(pos_key)
             fees = per_fees_taxes.get(pos_key)
+            row_pnl = position_period_pnl(
+                held_at_start=qty_at_start > _QUANTITY_DUST_THRESHOLD and start_state is not None,
+                held_at_end=qty_at_end > _QUANTITY_DUST_THRESHOLD,
+                unrealized_start=ug_start,
+                unrealized_end=ug_end,
+                transfer_adjustment=tract_adjustments.get(pos_key),
+                realized=realized,
+                income=income,
+                fees=fees,
+            )
+            unrealized_delta, period_pnl = row_pnl.unrealized_delta, row_pnl.period_pnl
             has_period_activity = any(value is not None and value != 0 for value in (realized, income, fees))
             has_boundary_position = qty_at_start > _QUANTITY_DUST_THRESHOLD or qty_at_end > _QUANTITY_DUST_THRESHOLD
-
-            pnl_parts = [
-                unrealized_delta,
-                realized,
-                income,
-                Decimal("0") - fees if fees else None,
-            ]
-            non_none = [p for p in pnl_parts if p is not None]
-            period_pnl = sum(non_none, Decimal("0")) if non_none else None
 
             if not has_period_activity and not has_boundary_position and period_pnl is None:
                 continue
 
-            period_pnl_pct: Decimal | None = None
-            if period_pnl is not None and start_value not in (None, Decimal("0")):
-                period_pnl_pct = (period_pnl / abs(start_value)).quantize(Decimal("0.0001"))
-            # Annualize over the position's actual holding window inside the period:
-            # from the oldest lot opening that falls in the period (clamped to date_from)
-            # to the period end. The normalization base falls back to the end cost basis
-            # when the position was opened mid-period (start_value 0/None), so the column
-            # no longer collapses to empty for positions opened after the period start.
-            # This base is used ONLY for the annualized figure; the displayed
-            # period_pnl_percent keeps its start_value semantics untouched.
-            ann_base: Decimal | None = abs(start_value) if start_value not in (None, Decimal("0")) else (cb_end if cb_end not in (None, Decimal("0")) else None)
-            ann_pct = period_pnl_pct
-            if ann_pct is None and period_pnl is not None and ann_base is not None:
-                ann_pct = (period_pnl / ann_base).quantize(Decimal("0.0001"))
-            window_start = date_from
-            olp = oldest_open_lot_dates.get(pos_key)
-            if olp is not None and (window_start is None or olp > window_start):
-                window_start = olp
-            period_annualized = None
-            if ann_pct is not None and window_start is not None:
-                period_annualized = cumulative_to_annualized(ann_pct, (effective_end - window_start).days)
-
-            # Fully-closed position: its FIFO stream has no still-open lot, so
-            # oldest_open_lot_date is None (no window start) and there is no end
-            # cost basis (no normalization base) — the generic path above collapses
-            # to "—". Annualize the realized net return over the position's real
-            # flight time: oldest lot opened (clamped to the period start) -> the
-            # date the last lot closed. Base = capital actually deployed (cost of
-            # the sold lots). This also fixes the window end for closed positions,
-            # which the generic path would otherwise run to the period end.
-            if is_fully_sold and period_pnl is not None:
-                deployed_cost = per_cost_sold.get(pos_key)
-                if deployed_cost and deployed_cost != 0:
-                    open_date, close_date = _closed_position_window(lot_txns_by_key.get(pos_key, []))
-                    if open_date is not None and close_date is not None:
-                        closed_start = open_date if date_from is None or open_date > date_from else date_from
-                        closed_return = (period_pnl / deployed_cost).quantize(Decimal("0.0001"))
-                        closed_annualized = cumulative_to_annualized(closed_return, (close_date - closed_start).days)
-                        if closed_annualized is not None:
-                            period_annualized = closed_annualized
+            # R4 (financial_math.portfolio.contributions): the return on the start value; the annualized return over
+            # the position's window, on the end cost for a position opened inside the period; for a position closed in
+            # it, the annualized return on the cost it sold over its flight time.
+            period_pnl_pct = period_return_on_start(period_pnl, start_value)
+            # MF-A9: a position opened in the period that received units by a counted tract, and from which no unit left in
+            # the period, counts them, in its fallback base, from their value on arrival, as its result does
+            row_moves = lot_moves.get(pos_key, [])
+            row_exits = exits_in(row_moves, date_from, effective_end)
+            # MF-A5: the cost of every unit that left, sold or moved by a counted tract; a unit that left another way
+            # leaves no base. MF-A8: units received by a counted tract enter it at their value on arrival, as they enter
+            # the row's result
+            exits_base = closed_position_base(
+                per_cost_sold.get(pos_key, Decimal("0")),
+                per_sales.get(pos_key, 0),
+                moved_out.get(pos_key),
+                row_exits,
+                moved_in.get(pos_key),
+            )
+            period_annualized = annualized_period_return(
+                period_pnl,
+                start_value,
+                cb_end,
+                window_from=window_start(date_from, oldest_open_lot_dates.get(pos_key)),
+                end=effective_end,
+                moved_in=moved_in.get(pos_key) if row_exits == 0 else None,
+            )
+            if is_fully_sold:
+                opened, closed = closed_position_window(row_moves)
+                closed_annualized = closed_position_annualized(period_pnl, exits_base, opened, closed, date_from)
+                if closed_annualized is not None:
+                    period_annualized = closed_annualized
+                elif closed_flight_too_short(opened, closed, date_from):
+                    # MF-A3: held too few days in the period to annualize, «—», never the general rule over the period
+                    period_annualized = None
 
             contributions.append(
                 AssetPeriodContribution(
@@ -1871,10 +1805,17 @@ class PortfolioService:
                     period_fees_taxes=fees if fees else None,
                     period_pnl=period_pnl,
                     period_pnl_percent=period_pnl_pct,
+                    # Each component on the same base as the row's return (P4, the Performance tooltip).
+                    period_unrealized_delta_percent=period_return_on_start(unrealized_delta, start_value),
+                    period_realized_gain_loss_percent=period_return_on_start(realized if realized else None, start_value),
+                    period_income_percent=period_return_on_start(income if income else None, start_value),
+                    period_fees_taxes_percent=period_return_on_start(fees if fees else None, start_value),
                     annualized_return=period_annualized,
                     start_value=start_value,
                     end_value=end_value,
                     is_fully_sold=is_fully_sold,
+                    closed_by=closings[pos_key][0] if is_fully_sold and pos_key in closings else None,
+                    closed_to_broker_id=closings[pos_key][1] if is_fully_sold and pos_key in closings else None,
                     oldest_open_lot_date=oldest_open_lot_dates.get(pos_key),
                 )
             )
@@ -1950,15 +1891,15 @@ class PortfolioService:
                         )
                     )
 
-        period_metrics = self._compute_period_summary_metrics(engine_result, date_from, effective_end)
-        period_pnl_total = period_metrics["period_pnl_val"]
-        period_ugl_delta = period_metrics["period_ugl_delta"]
+        period_figures = period_math.period_pnl(getattr(engine_result, "daily_states", None) or [], date_from, effective_end)
+        period_pnl_total = period_figures.pnl if period_figures is not None else None
+        period_ugl_delta = period_figures.ugl_delta if period_figures is not None else None
         period_other_result: Decimal | None = None
         if period_pnl_total is not None and period_ugl_delta is not None:
             total_realized = sum(per_realized.values(), Decimal("0"))
             total_income = sum(per_income.values(), Decimal("0")) + sum(unalloc_income.values(), Decimal("0"))
             total_fees = sum(per_fees_taxes.values(), Decimal("0")) + sum(unalloc_fees.values(), Decimal("0"))
-            period_other_result = period_pnl_total - period_ugl_delta - total_realized - total_income + total_fees
+            period_other_result = period_math.period_other_result(period_pnl_total, period_ugl_delta, total_realized, total_income, total_fees)
 
         if period_other_result is not None:
             # FX on cash (financial_math.native_cash): each broker's exchange result on foreign
@@ -1976,6 +1917,7 @@ class PortfolioService:
                 other_effects.append(
                     OtherPeriodEffect(
                         description="FX on cash",
+                        code=OtherPeriodEffectCode.FX_ON_CASH,
                         category="Other",
                         period_pnl=exchange_result,
                         broker_id=bid,
@@ -1983,6 +1925,24 @@ class PortfolioService:
                     )
                 )
                 residual -= exchange_result
+            # B5 (financial_math.portfolio.period): the gain securities accrued at a broker outside the view before they
+            # crossed its boundary, a row per broker in the same order; the residual drops by the same amount.
+            transfer_results = period_math.market_value_transfer_results(getattr(engine_result, "market_value_transfers", None) or [], date_from, effective_end)
+            for bid in sorted(transfer_results, key=lambda broker_id: access_order.get(broker_id, len(access_order))):
+                transfer_result = transfer_results[bid]
+                if abs(transfer_result) < CONVERSION_DUST:
+                    continue
+                broker = await self._get_broker(bid)
+                other_effects.append(
+                    OtherPeriodEffect(
+                        description="Transfers at market value",
+                        category="Other",
+                        period_pnl=transfer_result,
+                        broker_id=bid,
+                        broker_name=broker.name if broker else f"Broker {bid}",
+                    )
+                )
+                residual -= transfer_result
             show_residual = abs(residual) >= CONVERSION_DUST if native_cash.foreign_cash_broker_ids else residual != 0
             if show_residual:
                 other_effects.append(
@@ -2006,7 +1966,95 @@ class PortfolioService:
             gross_losses=gross_losses,
         )
 
-    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration + nested MWRR divergence retry
+    async def get_positions_series(self, user_id: int, query: PositionsSeriesQuery) -> PositionsSeriesResponse:
+        """The daily series of the chosen positions: the Dashboard's positions chart (#48).
+
+        The page's engine run (``_engine_run``, FB-14): the same blob-cache key as the report and the Performance table of
+        that period, so the chart reads the run the report built, and a change of the selection reuses it. The series are built by ``financial_math.portfolio.position_series``
+        from that run's frames, realized sales, internal transfers and average costs, and the native cash's income and costs by
+        day; only the asked positions are read. A position of a broker the user cannot read has no frame in the run, so it
+        comes back empty. Period figures are those of ``get_positions_contribution`` at each day.
+        """
+        today = date_type.today()
+        base_currency = query.target_currency or await self._get_base_currency(user_id)
+        date_from = query.date_range.resolved_start() if query.date_range else None
+        date_to = query.date_range.resolved_end() if query.date_range else None
+        if date_to is not None:
+            date_to = min(date_to, latest_range_end())
+        effective_end = date_to or today
+        if date_from is not None:
+            date_from = min(date_from, effective_end)
+
+        requests = [(key.broker_id, key.asset_id) for key in query.positions]
+        accesses = await self._get_user_broker_access(user_id, query.broker_ids)
+        series_data = []
+        engine_result = None
+        if accesses:
+            engine_result = await self._engine_run(user_id=user_id, broker_ids=query.broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency, apply_ownership_share=query.apply_ownership_share)
+        if engine_result is not None and engine_result.position_frames is not None:
+            frames: dict[tuple[int, int], list] = defaultdict(list)
+            for frame in engine_result.position_frames:
+                frames[(frame.broker_id, frame.asset_id)].append(frame)
+            native_cash = _engine_native_cash(engine_result, base_currency)
+            transfers = list(engine_result.internal_asset_transfers)
+            series_data = build_position_series(
+                requests,
+                date_from=date_from,
+                date_to=effective_end,
+                frames=frames,
+                realized_sales=period_math.period_realized_sales(engine_result.realized_sales, date_from, effective_end),
+                flow_steps=native_cash.position_flow_steps(date_from, effective_end),
+                transfers=transfers,
+                acquisitions=acquisitions_from_average_costs(engine_result.average_costs, transfers),
+            )
+
+        asset_names = await self._get_assets_map({asset_id for _, asset_id in requests})
+        out: list[PositionSeries] = []
+        for index, (broker_id, asset_id) in enumerate(requests):
+            data = series_data[index] if index < len(series_data) else None
+            asset = asset_names.get(asset_id)
+            broker = await self._get_broker(broker_id) if broker_id is not None else None
+            out.append(
+                PositionSeries(
+                    key=query.positions[index],
+                    asset_name=asset.display_name if asset else f"Asset {asset_id}",
+                    asset_ticker=asset.identifier_ticker if asset else None,
+                    broker_name=broker.name if broker else None,
+                    first_date=data.first_date if data else None,
+                    last_date=data.last_date if data else None,
+                    held_at_start=data.held_at_start if data else False,
+                    held_at_end=data.held_at_end if data else False,
+                    closed_on=data.closed_on if data else None,
+                    complete=data.complete if data else True,
+                    points=[
+                        PositionSeriesPoint(
+                            date=point.date,
+                            through=point.through,
+                            quantity=point.quantity,
+                            market_value=point.market_value,
+                            cost_basis=point.cost_basis,
+                            pnl=point.pnl,
+                            base=point.base,
+                            pnl_percent=point.pnl_percent,
+                            valuation_source=getattr(point.valuation_source, "value", point.valuation_source),
+                            complete=point.complete,
+                        )
+                        for point in (data.points if data else [])
+                    ],
+                )
+            )
+        missing_pairs = _engine_missing_fx_pairs(engine_result, date_from, effective_end) if engine_result is not None else []
+        window_start = date_from if date_from is not None else (min((p.date for s in out for p in s.points), default=effective_end))
+        return PositionsSeriesResponse(
+            currency=base_currency,
+            date_from=window_start,
+            date_to=effective_end,
+            range=DateSpan(start=window_start, end=effective_end),
+            series=out,
+            missing_fx_pairs=[info.pair for info in missing_pairs],
+        )
+
+    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration
         self,
         user_id: int,
         query: PortfolioReportQuery,
@@ -2019,13 +2067,19 @@ class PortfolioService:
         Uses Layer 2 cache: keyed by (user, scope, date_range, query_features, data_fingerprint).
         """
         from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
-        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine, _compute_tx_fingerprint, compute_portfolio_fx_cache_identity  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import compute_portfolio_fx_cache_identity, compute_tx_fingerprint  # noqa: PLC0415
 
         today = date_type.today()
         base_currency = query.target_currency or await self._get_base_currency(user_id)
         date_from = query.date_range.resolved_start() if query.date_range else None
         date_to = query.date_range.resolved_end() if query.date_range else None
+        # R13-SEC7-1: the report — history, summary, metadata, cache key — ends by latest_range_end(), and a start after
+        # that end moves to it
+        if date_to is not None:
+            date_to = min(date_to, latest_range_end())
         effective_date_to = date_to or today
+        if date_from is not None:
+            date_from = min(date_from, effective_date_to)
 
         # ── 0. Layer 2 cache check ──
         # Build a fingerprint from transactions + prices to detect data changes
@@ -2046,7 +2100,7 @@ class PortfolioService:
             tx_stmt = select(Transaction).where(Transaction.broker_id.in_(scope_broker_ids)).order_by(Transaction.date, Transaction.id)
             tx_result = await self.db.execute(tx_stmt)
             all_txs_for_fp = list(tx_result.scalars().all())
-            tx_fp = _compute_tx_fingerprint(all_txs_for_fp) if all_txs_for_fp else "no_txs"
+            tx_fp = compute_tx_fingerprint(all_txs_for_fp) if all_txs_for_fp else "no_txs"
 
             held_ids = {tx.asset_id for tx in all_txs_for_fp if tx.asset_id and tx.quantity and tx.quantity != 0}
             price_fp = "no_assets"
@@ -2088,6 +2142,7 @@ class PortfolioService:
                 query.include_cost_history,
                 query.include_deposit_history,
                 query.include_acquisition_funding,
+                query.apply_ownership_share,
                 tx_fp,
                 price_fp,
                 fx_fp,
@@ -2099,16 +2154,15 @@ class PortfolioService:
                 _logger.debug("Portfolio L2 cache hit", user_id=user_id)
                 return cached
 
-        # ── 1. Single engine run ──
-        engine = PortfolioCalculationEngine(self.db)
-        engine_result = await engine.calculate(
+        # ── 1. Single engine run: the page's run, shared with the Performance table and the positions chart (FB-14) ──
+        engine_result = await self._engine_run(
             user_id=user_id,
             broker_ids=query.broker_ids,
-            date_from=None,  # always from t=0 for correct cumulative values
+            date_from=date_from,
             date_to=effective_date_to,
             target_currency=base_currency,
             include_candles=query.include_pnl_candles,
-            include_acquisition_funding=query.include_acquisition_funding,
+            apply_ownership_share=query.apply_ownership_share,
         )
 
         views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
@@ -2131,9 +2185,10 @@ class PortfolioService:
 
         # ── 3. History ──
         history: list[PortfolioHistoryPoint] | None = None
+        mwrr_line: list[MwrrLinePoint] | None = None
         if query.include_history:
             included.append("history")
-            history = await self.get_history(
+            history_steps = await self.get_history_steps(
                 user_id=user_id,
                 broker_ids=query.broker_ids,
                 date_from=date_from,
@@ -2141,63 +2196,18 @@ class PortfolioService:
                 target_currency_override=base_currency,
                 _precomputed_engine_result=engine_result,
             )
+            history, mwrr_line = history_steps.history, history_steps.mwrr_line
 
-        # ── 3b. MWRR series reliability check ──
-        mwrr_series_unreliable = False
-        _mwrr_divergence_info: dict[str, Any] = {}
-        if summary and history and len(history) >= 2:
-            summary_mwrr_cum = summary.mwrr_cumulative_percent
-            history_last_mwrr_cum = history[-1].mwrr_cumulative
-            if summary_mwrr_cum is not None and history_last_mwrr_cum is not None:
-                divergence = abs(summary_mwrr_cum - history_last_mwrr_cum)
-                # Relative tolerance: 5% of summary value or 50bp absolute, whichever is larger
-                tolerance = max(Decimal("0.005"), abs(summary_mwrr_cum) * Decimal("0.05"))
-                if divergence > tolerance:
-                    # Retry with cold-start
-                    history = await self.get_history(
-                        user_id=user_id,
-                        broker_ids=query.broker_ids,
-                        date_from=date_from,
-                        date_to=effective_date_to,
-                        target_currency_override=base_currency,
-                        _precomputed_engine_result=engine_result,
-                        _mwrr_use_warm_start=False,
-                    )
-                    # Re-check invariant
-                    history_last_mwrr_cum = history[-1].mwrr_cumulative if history else None
-                    if history_last_mwrr_cum is not None:
-                        divergence = abs(summary_mwrr_cum - history_last_mwrr_cum)
-                    if history_last_mwrr_cum is None or divergence > tolerance:
-                        # Find first date where cumulative diverges significantly
-                        first_bad_date: str | None = None
-                        for pt in history:
-                            if pt.mwrr_cumulative is not None and summary.mwrr_annualized_percent is not None:
-                                days_from_start = (pt.date - history[0].date).days
-                                expected_cum = annualized_to_cumulative(summary.mwrr_annualized_percent, days_from_start)
-                                if expected_cum is not None and abs(pt.mwrr_cumulative - expected_cum) > tolerance:
-                                    first_bad_date = str(pt.date)
-                                    break
-                        # Store info for issue
-                        _mwrr_divergence_info = {
-                            "summary_cum": str(round(float(summary_mwrr_cum) * 100, 2)),
-                            "series_cum": str(round(float(history_last_mwrr_cum or 0) * 100, 2)),
-                            "divergence_pp": str(round(float(divergence) * 100, 2)),
-                            "first_bad_date": first_bad_date or "unknown",
-                        }
-                        # Null out MWRR in history
-                        mwrr_series_unreliable = True
-                        for pt in history:
-                            object.__setattr__(pt, "mwrr_annualized", None)
-                            object.__setattr__(pt, "mwrr_cumulative", None)
-
-        # ── 4. Allocation history (all 3 dimensions from same engine result) ──
+        # ── 4. Allocation history (all 4 dimensions from same engine result) ──
         alloc_history: AllocationHistoryDimensions | None = None
         if query.include_allocation_history:
             included.append("allocation_history")
+            history_asset_names = {asset_id: asset.display_name for asset_id, asset in (await self._get_assets_map(views.allocation_asset_ids(date_from))).items()}
             alloc_history = AllocationHistoryDimensions(
                 type=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("type", date_from=date_from)],
                 sector=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("sector", date_from=date_from)],
                 geography=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("geography", date_from=date_from)],
+                asset=[AllocationHistoryPoint(**p) for p in views.build_asset_allocation_history(history_asset_names, date_from=date_from)],
             )
 
         # ── 4b. Positions contribution (per-asset period P&L attribution) ──
@@ -2211,6 +2221,7 @@ class PortfolioService:
                 date_to=effective_date_to,
                 target_currency_override=base_currency,
                 _precomputed_engine_result=engine_result,
+                apply_ownership_share=query.apply_ownership_share,
             )
 
         # ── 4c. Broker P&L history (additive per-broker overlay for GrowthChart P&L mode) ──
@@ -2279,9 +2290,7 @@ class PortfolioService:
             )
 
         # ── 4h. New-vs-reinvested BUY funding split (batch 2 — Income submode's
-        # acquisition-size dimension). Requires the shared engine run to have been
-        # computed with include_acquisition_funding=True (see above), mirroring
-        # pnl_candles's own shared-engine-result requirement.
+        # acquisition-size dimension). The page's run always carries it (_engine_run, FB-14).
         acquisition_funding: AcquisitionFundingSeries | None = None
         if query.include_acquisition_funding:
             included.append("acquisition_funding")
@@ -2299,26 +2308,20 @@ class PortfolioService:
             data_quality = summary.data_quality
         else:
             configured_fx_pairs, real_provider_fx_pairs = await self._get_configured_fx_pair_sets()
+            held_quote_facts = await self._held_asset_quote_facts(engine_result)
             data_quality = views.build_data_quality_report(
                 missing_fx_pairs_dto=_engine_missing_fx_pairs(engine_result, date_from, effective_date_to) or None,
                 missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
+                invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
+                non_iso_currency_assets=self._non_iso_currency_assets(held_quote_facts) or None,
+                report_currency=base_currency,
                 mwrr_available=False,
+                share_mismatches=engine_result.share_mismatches,
                 configured_fx_pairs=configured_fx_pairs,
                 real_provider_fx_pairs=real_provider_fx_pairs,
                 period_from=date_from,
                 period_to=effective_date_to,
             )
-
-        # Append MWRR series unreliable issue if needed
-        if mwrr_series_unreliable and data_quality:
-            mwrr_issue = DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.MWRR_SERIES_UNRELIABLE,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.mwrrSeriesUnreliable",
-                message_params=_mwrr_divergence_info,
-            )
-            data_quality.issues.append(mwrr_issue)
 
         # ── 6. Metadata ──
         computed_from = engine_result.daily_states[0].date if engine_result.daily_states else None
@@ -2335,10 +2338,16 @@ class PortfolioService:
             included_features=included,
         )
 
+        # The window of the step series (D-P4): the days of the period that have a state
+        step_series_included = query.include_history or query.include_allocation_history or query.include_broker_pnl_history or query.include_pnl_candles
+        window = views.window_range(date_from, effective_date_to) if step_series_included and engine_result.daily_states else None
+
         report = PortfolioReportResponse(
             metadata=metadata,
+            range=DateSpan(start=window[0], end=window[1]) if window is not None else None,
             summary=summary,
             history=history,
+            mwrr_line=mwrr_line,
             allocation_history=alloc_history,
             data_quality=data_quality,
             positions_contribution=positions_contribution,

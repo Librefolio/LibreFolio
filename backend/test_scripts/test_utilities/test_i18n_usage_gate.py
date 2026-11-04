@@ -306,9 +306,9 @@ GREETING = f"Hello {name}"
 JOINED = f"{a}.{b}"
 """
 
-# pac_allocator/evaluator.py:968, in single quotes: a family the catalogue no longer
+# pac_allocator/evaluation/references.py:52, in single quotes: a family the catalogue no longer
 # has a single key for (§2.4).
-EVALUATOR_PY = """
+REFERENCES_PY = """
 def _constraint_ref(code: str) -> ConstraintRef:
     return ConstraintRef(explanation_key=f'tools.allocation.constraints.{code.lower()}')
 """
@@ -701,14 +701,14 @@ export function resolveProviderError(op: Operation): string {
             tmp_path / "backend",
             {
                 "services/ai_export/analyses/catalog.py": CATALOG_PY,
-                "services/pac_allocator/evaluator.py": EVALUATOR_PY,
+                "services/pac_allocator/evaluation/references.py": REFERENCES_PY,
             },
         )
         # Equality: `f"Hello {name}"` and `f"{a}.{b}"` sit in the same file without a
         # dotted head, so they must add nothing.
         assert U.harvest_backend_families(backend) == {
             "aiExport.additionalData.reason.": f"catalog.py:{_line_of(CATALOG_PY, 'reason_i18n_key=')}",
-            "tools.allocation.constraints.": f"evaluator.py:{_line_of(EVALUATOR_PY, 'explanation_key=')}",
+            "tools.allocation.constraints.": f"references.py:{_line_of(REFERENCES_PY, 'explanation_key=')}",
         }
 
     def test_a_missing_backend_directory_has_no_family(self, tmp_path):
@@ -950,7 +950,7 @@ export const SIGNALS = [
 class TestPhantomFamilies:
     """R7 — a family no catalogue key answers is reported, not silently kept.
 
-    ``pac_allocator/evaluator.py:968`` still writes
+    ``pac_allocator/evaluation/references.py:52`` still writes
     ``explanation_key=f"tools.allocation.constraints.{code.lower()}"``, while the
     catalogue has had no ``tools.allocation.*`` key since D's row 13 (§2.4). Nothing
     reads it today, which is exactly why nobody noticed: a family that can only ever
@@ -960,7 +960,7 @@ class TestPhantomFamilies:
 
     def test_a_family_with_no_key_beneath_it_is_reported(self):
         families = {
-            "tools.allocation.constraints.": "evaluator.py:968",
+            "tools.allocation.constraints.": "references.py:52",
             "aiExport.additionalData.reason.": "catalog.py:77",
         }
         keys = ["aiExport.additionalData.reason.deeperTechnical", "tools.pacAllocator.planner.title"]
@@ -977,7 +977,7 @@ class TestPhantomFamilies:
         assert U.phantom_families(families, iter(["b.live.leaf"])) == ["a.phantom."]
 
     def test_the_harvested_backend_families_feed_the_report(self, tmp_path):
-        backend = _tree(tmp_path / "backend", {"catalog.py": CATALOG_PY, "evaluator.py": EVALUATOR_PY})
+        backend = _tree(tmp_path / "backend", {"catalog.py": CATALOG_PY, "references.py": REFERENCES_PY})
         families = U.harvest_backend_families(backend)
         assert U.phantom_families(families, ["aiExport.additionalData.reason.deeperTechnical"]) == ["tools.allocation.constraints."]
 
@@ -1082,7 +1082,7 @@ class TestNestedTemplates:
 
 
 # ---------------------------------------------------------------------------
-# Third round (R8-R12). On the release tip (d07412899) 78 live keys still read "not
+# Third round (R8-R12). On the release tip (5f3509536) 78 live keys still read "not
 # verified": the evidence for their last segment sits in a module the family's file
 # imports, in a backend code of another case or with a leading digit, or behind several
 # runtime segments. And a key read only by a component nobody imports still reads
@@ -1377,7 +1377,7 @@ class TestUnreferencedSources:
     imports counted as used. ``planner/shared/AgeLabel.svelte`` reads five
     ``tools.pacAllocator.planner.age.*`` keys on the release tip and no file imports it,
     as none imported ``planner/result/WeightBars.svelte`` before it was removed with its
-    keys (``08b885d43``). Reachability starts from SvelteKit's own entries (``+page``,
+    keys (``15a52c0a5``). Reachability starts from SvelteKit's own entries (``+page``,
     ``+layout``, ``+error``, ``+server``, the hooks, the service worker) and follows static
     and dynamic imports: the planner itself is loaded only by
     ``import('./pac-allocator/planner/PacPlannerTool.svelte')`` at
@@ -1412,7 +1412,7 @@ const compiledRendererRegistrations: readonly CompiledToolRendererRegistration[]
 <CopyNotice />
 """
 
-    # planner/shared/AgeLabel.svelte at d07412899, reduced.
+    # planner/shared/AgeLabel.svelte at 5f3509536, reduced.
     AGE_LABEL = """
 <script lang="ts">
     import {t, locale} from '$lib/i18n';

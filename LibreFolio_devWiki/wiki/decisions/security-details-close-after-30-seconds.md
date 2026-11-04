@@ -33,7 +33,7 @@ leaving, it starts again from 30 s").
 - **Why not `:focus-visible`** (option (a)): it depends on each browser's heuristics, and jsdom, where the tests run,
   cannot tell the keyboard from the mouse.
 
-`5e9eff52d` («feat(layout): security details close by themselves», train 72), in `ConnectionSecurityIndicator.svelte`:
+`673b68028` («feat(layout): security details close by themselves», train 72), in `ConnectionSecurityIndicator.svelte`:
 the reason becomes a button that closes the panel; `pointerInside` and `focusInDetails` hold the count; an effect arms
 `AUTO_CLOSE_MS` (30 000 ms) whenever the panel is open and neither holds it.
 
@@ -43,7 +43,7 @@ the reason becomes a button that closes the panel; `pointerInside` and `focusInD
 - 20 new Vitest cases with fake timers (red before, 34 green after); the `connection-security` E2E, 8 passed.
 - The gallery shoots the open panel and parks the pointer away before a shot (`parkPointer`), which starts the 30 s:
   that risk was passed to workstream M, who prepared the fix in batch 32 (I5), to apply once T's CP3 is in the target. *Applied in batch 33*
-  (`2d0ca1660`): the gallery opens the details right before the shot and leaves the pointer on the indicator, so the
+  (`94fb49f5b`): the gallery opens the details right before the shot and leaves the pointer on the indicator, so the
   count never starts.
 
 ## Source files

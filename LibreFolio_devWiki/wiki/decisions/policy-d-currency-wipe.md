@@ -19,7 +19,7 @@ related:
 
 > Authoritative semantics for `PATCH /assets/{id}` when the request changes
 > `currency` and the asset has any price/event history. Implemented in
-> commit `c7cf528c4` (2026-04-24, Phase 7 Part 3 Closure Batch 3 / R3-3 / R3-3b).
+> commit `fdc6cb2e0` (2026-04-24, Phase 7 Part 3 Closure Batch 3 / R3-3 / R3-3b).
 
 ## Context
 
@@ -121,9 +121,9 @@ raising HTTP 500 instead of 404. Fixed in G-batch6 — see
 
 | Role | Path |
 |------|------|
-| Wipe service | `backend/app/services/asset_source.py::wipe_market_data_for_currency_change` |
-| PATCH handler | `backend/app/api/v1/assets.py` (currency-change branch) |
-| Backup router | `backend/app/api/v1/backup.py` |
+| Wipe service | `backend/app/services/assets/currency_change.py::wipe_market_data_for_currency_change` |
+| PATCH handler | `backend/app/api/v1/assets/crud.py` (currency-change branch) |
+| Backup router (per-series exports) | `backend/app/api/v1/backup/exports.py` |
 | Currency-change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
 | Test (wipe) | `backend/test_scripts/test_api/test_market_data_wipe.py` |
 | Test (backup endpoints) | `backend/test_scripts/test_api/test_backup_export_extras.py` |

@@ -42,6 +42,7 @@
     import TweenedValue from '$lib/components/ui/TweenedValue.svelte';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {SIGN_BAR, SIGN_TEXT} from '$lib/theme/toneClasses';
 
     interface Props {
         /** Plain-language title. The question the metric answers. */
@@ -82,11 +83,11 @@
 
     let {label, technicalName, value = '—', numericValue, formatValue, caption, captionScroll = false, sentiment = 'neutral', docsPath, loading = false, testId, submetrics, sparkline}: Props = $props();
 
-    const accentClass = $derived(sentiment === 'positive' ? 'bg-green-500 dark:bg-green-400' : sentiment === 'negative' ? 'bg-red-500 dark:bg-red-400' : null);
-    const valueClass = $derived(sentiment === 'positive' ? 'text-green-700 dark:text-green-400' : sentiment === 'negative' ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100');
+    const accentClass = $derived(sentiment === 'positive' ? SIGN_BAR.accent.gain : sentiment === 'negative' ? SIGN_BAR.accent.loss : null);
+    const valueClass = $derived(sentiment === 'positive' ? SIGN_TEXT.headline.gain : sentiment === 'negative' ? SIGN_TEXT.headline.loss : SIGN_TEXT.headline.neutral);
 </script>
 
-<div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid={testId}>
+<div class="relative @container bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-5 flex flex-col gap-2 overflow-hidden" data-testid={testId}>
     {#if accentClass}
         <div class="absolute top-0 left-0 right-0 h-0.5 {accentClass}" data-testid={testId ? `${testId}-accent` : undefined}></div>
     {/if}
@@ -99,20 +100,20 @@
     <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div class="min-w-[9rem] flex-1">
             <div class="flex items-start gap-1">
-                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500 line-clamp-2" data-testid={testId ? `${testId}-label` : undefined}>{label}</p>
+                <p class="text-xs font-medium uppercase tracking-wide text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-label` : undefined}>{label}</p>
                 {#if docsPath}
                     <DocsLink path={docsPath} {label} size={14} testId={testId ? `${testId}-docs` : undefined} />
                 {/if}
             </div>
             {#if technicalName}
-                <p class="text-[10px] text-gray-400 dark:text-gray-600 line-clamp-2" data-testid={testId ? `${testId}-technical` : undefined}>{technicalName}</p>
+                <p class="text-[10px] text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-technical` : undefined}>{technicalName}</p>
             {/if}
         </div>
 
         <div class="relative ml-auto shrink-0">
             {#if loading}
                 <div class="absolute inset-0 z-10 flex items-center justify-end" data-testid={testId ? `${testId}-skeleton` : undefined}>
-                    <div class="h-7 w-20 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
+                    <div class="h-7 w-20 bg-lf-neutral rounded animate-pulse"></div>
                 </div>
             {/if}
             <div class:invisible={loading}>
@@ -130,7 +131,7 @@
     <div class="relative">
         {#if loading && caption}
             <div class="absolute inset-0 z-10 flex justify-end">
-                <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+                <div class="h-3 w-1/2 bg-lf-neutral rounded animate-pulse"></div>
             </div>
         {/if}
         <div class:invisible={loading}>
@@ -139,9 +140,9 @@
                      `title`, since the whole caption is on screen (developer's decision of 05/10/2026).
                      A caption that is a name scrolls on one line instead (`captionScroll`). -->
                 {#if captionScroll}
-                    <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-right text-gray-500 dark:text-gray-400" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
+                    <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-right text-lf-muted" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
                 {:else}
-                    <p class="text-xs text-right text-gray-500 dark:text-gray-400 line-clamp-2" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
+                    <p class="text-xs text-right text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
                 {/if}
             {/if}
 

@@ -54,3 +54,5 @@ The same wizard opens from **Import** on the [Transactions](../transactions/inde
 - **Manage all files** opens the [Files & Uploads](../files/index.md#broker-reports) page, filtered on this broker.
 
 Uploading and deleting reports needs Owner or Editor access to the broker.
+
+The reports an older version of LibreFolio stored without a broker are not in this list: the person who uploaded them and the administrators find them on the [Files & Uploads](../files/index.md#broker-reports) page.

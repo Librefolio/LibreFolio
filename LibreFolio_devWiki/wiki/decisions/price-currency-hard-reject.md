@@ -55,7 +55,7 @@ In both cases, failing loudly is better than silently skipping rows.
 **User must**: DELETE all prices first (via bulk delete or DataEditor clear), then PATCH currency.
 
 **Or accept the destructive path** — Phase 7 Part 3 Closure Batch 3 added
-[[decisions/policy-d-currency-wipe]] (commit `c7cf528c4`): when the user explicitly
+[[decisions/policy-d-currency-wipe]] (commit `fdc6cb2e0`): when the user explicitly
 confirms in `AssetCurrencyChangeModal`, the PATCH proceeds with a server-side
 symmetric wipe of prices + events (transactions preserved with
 `asset_event_id = NULL`). The 409 + Policy D pair is the canonical flow:
@@ -100,8 +100,8 @@ This is an intentional asymmetry with `price_history.currency`.
 
 | Role | Path |
 |------|------|
-| Asset source (upsert_prices_bulk) | `backend/app/services/asset_source.py` |
-| Asset API (currency change 409) | `backend/app/api/v1/assets.py` |
+| Asset source (upsert_prices_bulk) | `backend/app/services/assets/price_store.py` |
+| Asset API (currency change 409) | `backend/app/api/v1/assets/crud.py` |
 | DB model (price_history.currency) | `backend/app/db/models.py` |
 | Asset detail page (requiredFxPairs) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
 | Asset currency change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |

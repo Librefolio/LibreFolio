@@ -1,0 +1,115 @@
+{
+  "instance": {
+    "notices": {
+      "label": "Avvisi dell'istanza"
+    },
+    "checks": {
+      "jwtSecret": {
+        "ok": "Le sessioni sono firmate con una chiave impostata dall'amministratore.",
+        "ephemeral": "Nessuna chiave di firma delle sessioni è impostata: ogni riavvio disconnette tutti gli utenti.",
+        "short": "La chiave di firma delle sessioni da {source} è lunga {length} caratteri: usane almeno {minimum}, casuali.",
+        "unreadable": "La chiave di firma delle sessioni non si può leggere: {reason}"
+      },
+      "secretsSetTwice": {
+        "ok": "Ogni segreto è impostato in un solo posto.",
+        "found": "Impostati sia direttamente sia da file: {variables}. Vince il valore diretto e il file viene ignorato."
+      },
+      "instanceKey": {
+        "ok": "La chiave d'istanza è utilizzabile.",
+        "unusable": "La chiave d'istanza non è utilizzabile: {reason}",
+        "permissions": "{path} è accessibile ad altri utenti: la cartella dovrebbe essere 0700 e il file 0600.",
+        "mismatch": "La chiave dell'istanza non è quella con cui sono stati scritti i dati: i backup del pannello di hosting e i risvegli programmati sono fermi. Rimetti la chiave giusta e riavvia; per un cambio voluto, avvia una volta con LIBREFOLIO_INSTANCE_KEY_ACCEPT=1."
+      },
+      "sessionCookie": {
+        "ok": "Il cookie di sessione è Secure ogni volta che il browser usa HTTPS.",
+        "never": "Il cookie di sessione viaggia anche su HTTP in chiaro (SESSION_COOKIE_SECURE=never)."
+      },
+      "clientAddress": {
+        "ok": "Dall'avvio del server nessuna richiesta è passata da un proxy di cui LibreFolio non si fida.",
+        "untrustedProxy": "Le richieste passano da un reverse proxy di cui LibreFolio non si fida ({headers}): i limiti per indirizzo del visitatore non si applicano. Elenca il proxy in FORWARDED_ALLOW_IPS, oppure indica in LIBREFOLIO_CLIENT_IP_HEADER l'header che imposta.",
+        "publicForwarding": "Header di inoltro da un indirizzo pubblico ignorati ({headers}). Se un proxy con un indirizzo pubblico inoltra le richieste, elencalo in FORWARDED_ALLOW_IPS; altrimenti non c'è nulla da fare."
+      },
+      "frameProtection": {
+        "on": "Solo le pagine di LibreFolio possono mostrarlo in un frame.",
+        "offSelfHosted": "Le pagine a un altro indirizzo, come le tue dashboard, possono mostrare LibreFolio in un frame: il default di un'installazione tua.",
+        "offManaged": "La protezione dai frame è spenta nel profilo managed: qualunque sito può mostrare LibreFolio in un frame. Accendi LIBREFOLIO_FRAME_PROTECTION, come fa per default il profilo managed."
+      },
+      "cspReportOnly": {
+        "on": "Oltre alla politica sempre applicata, le pagine dell'app hanno una Content-Security-Policy più ampia in sola segnalazione: il browser elenca nella console ciò che bloccherebbe in più, e non lo blocca.",
+        "offSelfHosted": "Nessuna Content-Security-Policy in sola segnalazione: il default di un'installazione tua.",
+        "offManaged": "La Content-Security-Policy in sola segnalazione è spenta nel profilo managed: i browser non elencano nulla di ciò che bloccherebbe. Accendi LIBREFOLIO_CSP_REPORT_ONLY, come fa per default il profilo managed."
+      },
+      "logLevel": {
+        "ok": "Il livello di log è adatto alla produzione.",
+        "verbose": "Il livello di log è {log_level}: il log registra dettagli operativi; in produzione basta INFO."
+      },
+      "pluginSecrets": {
+        "ok": "I segreti dei plugin salvati si possono leggere con la chiave d'istanza.",
+        "unreadable": "{count, plural, one {# segreto dei plugin salvato non si può leggere con la chiave d'istanza: inseriscilo di nuovo in Impostazioni → Plugin, o ripristina la chiave d'istanza con cui è stato salvato.} other {# segreti dei plugin salvati non si possono leggere con la chiave d'istanza: inseriscili di nuovo in Impostazioni → Plugin, o ripristina la chiave d'istanza con cui sono stati salvati.}}"
+      },
+      "testMode": {
+        "off": "La modalità di test è spenta.",
+        "testLane": "La modalità di test è accesa, in una corsia del runner dei test.",
+        "outsideTestLane": "La modalità di test è accesa fuori dal runner dei test: sono disponibili i fornitori di dati fatti per i test, i dati stanno in {data_dir} e il file .env non viene letto. Togli LIBREFOLIO_TEST_MODE."
+      },
+      "hostingPanel": {
+        "off": "Nessun token né chiave pubblica è impostato per il risveglio programmato o per la rotta di stato del pannello del fornitore: quelle rotte sono spente.",
+        "ok": "Le credenziali del pannello del fornitore che sono impostate (token del risveglio programmato e della rotta di stato, chiavi pubbliche dei biglietti firmati) si possono usare.",
+        "unusable": "{variables}: questi token del pannello del fornitore non si possono usare (un file che non si legge, troppo corti o con caratteri che un'intestazione di richiesta non porta): le loro rotte rispondono 503 finché non si corregge.",
+        "ticketsUnusable": "{variables}: le impostazioni dei biglietti firmati del pannello del fornitore non si possono usare (una chiave pubblica malformata, una tolleranza dell'orologio fuori da 0–300 secondi, o chiavi senza indirizzo pubblico): ogni rotta del pannello risponde 503 finché non si corregge.",
+        "coexisting": "{variables}: un token del pannello del fornitore è ancora impostato accanto alle chiavi pubbliche del pannello. Toglilo quando il pannello firma le sue chiamate con i biglietti.",
+        "audiencePath": "LIBREFOLIO_PUBLIC_URL contiene il percorso {path}, ma un biglietto del pannello del fornitore nomina solo l'origine (schema, host e porta): un'altra istanza sulla stessa origine accetterebbe i biglietti di questa. Servi un'istanza per origine."
+      }
+    },
+    "block": {
+      "title": "Questa istanza è bloccata",
+      "adminDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Regolarizza con il fornitore per sbloccarla.",
+      "userDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Chiedi all'amministratore un backup dei tuoi dati.",
+      "deletionDate": "L'istanza e i suoi dati verranno cancellati il {date}.",
+      "manageSubscription": "Gestisci abbonamento",
+      "backupTitle": "Conserva una copia dei dati"
+    },
+    "awaitingRestore": {
+      "title": "Stiamo ripristinando i tuoi dati",
+      "message": "Stiamo rimettendo a posto i tuoi dati: riprova tra qualche minuto.",
+      "autoReload": "La pagina si ricarica da sola quando i dati sono pronti.",
+      "retry": "Riprova"
+    },
+    "restoreInterrupted": {
+      "title": "Il ripristino si è fermato a metà",
+      "message": "LibreFolio non sa quali dati contiene, quindi non ne mostra nessuno finché il tuo amministratore non sceglie come procedere.",
+      "adminHint": "Amministratore: ferma LibreFolio, poi esegui ./dev.py backup pending per vedere cosa è successo e --recover previous per rimettere i dati di prima.",
+      "autoReload": "La pagina si ricarica da sola quando LibreFolio torna a servire i dati.",
+      "support": "Scrivi all'assistenza",
+      "ownerTitle": "L'account del titolare non è pronto",
+      "ownerMessage": "I dati sono stati ripristinati, ma il titolare non ha ancora il suo account: LibreFolio non ne mostra nessuno finché il tuo amministratore non lo imposta.",
+      "ownerAdminHint": "Amministratore: ferma LibreFolio, esegui ./dev.py backup pending --recover owner per impostare di nuovo l'account del titolare, poi riavvia LibreFolio.",
+      "supportMissing": "Per riavere i tuoi dati, contatta chi ti fornisce il servizio.",
+      "docs": "Come recuperare"
+    },
+    "userLimit": {
+      "title": "Più utenti di quelli del tuo piano",
+      "description": "Questa istanza ha {active} utenti attivi ma il piano ne consente {max}. Scegli chi mantiene l'accesso: gli altri vengono disattivati, non cancellati, quindi nessun dato va perso, e potrai riattivarli se si libera un posto.",
+      "counter": "{chosen} scelti su {max}",
+      "administrator": "Amministratore",
+      "protectedOwner": "Titolare dell'istanza: resta sempre",
+      "protectedYou": "Tu: stai scegliendo",
+      "brokersAlone": "Unico titolare di {count} broker: gli altri ne perdono l'accesso",
+      "noAdministrator": "Mantieni almeno un amministratore.",
+      "invitesCancelled": "{count} invito/i in sospeso verranno annullati per fare posto.",
+      "confirm": "Disattiva gli altri e continua",
+      "backupTitle": "Scarica prima un backup completo",
+      "waitingTitle": "L'amministratore deve ancora scegliere chi mantiene l'accesso",
+      "waitingDescription": "Questa istanza ha più utenti attivi di quelli consentiti dal piano. Finché un amministratore non sceglie chi mantiene l'accesso, nessun altro può usarla. Riprova più tardi.",
+      "checkAgain": "Controlla di nuovo",
+      "error": {
+        "load": "Non è stato possibile caricare l'elenco. Riprova.",
+        "generic": "Non è stato possibile salvare la scelta. Riprova.",
+        "UNKNOWN_USER": "Uno degli account scelti non è più attivo. Ricarica la pagina.",
+        "TOO_MANY_KEPT": "Hai scelto troppi account per il piano.",
+        "PROTECTED_MISSING": "Il titolare dell'istanza, o tu, deve restare.",
+        "NO_ADMIN_KEPT": "Almeno un amministratore deve mantenere l'accesso."
+      }
+    }
+  }
+}

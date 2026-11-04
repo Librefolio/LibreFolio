@@ -32,11 +32,44 @@
  * literals. Every expected figure is written by `Intl` itself. Its days (T-ISO) —
  * the current price's day and the history's range as the backend writes it — are
  * written in the house notation of a tooltip day, every expected day written by
- * `Intl` too.
+ * `Intl` too. The current price keeps its significant digits (C-97c-3): the
+ * describe after the M-18 one.
+ *
+ * The probe's scope note (C-90): the manual probe reads only the last few days of
+ * history, while creating the asset downloads all of it. Once a manual probe has
+ * settled with a `history` row — a success or a warning — the section ends on one
+ * `provider-test-scope-note` under the total time, in the catalogue's words
+ * (`assets.probe.scopeNote`); none before a test, none while one runs, none when
+ * the probe failed as a whole or answered without a history, none after an
+ * automatic probe.
  *
  * The pure probe classifiers/formatters (`isSoftProbeFailure`,
  * `summarizeProbeError`, `buildProbeTooltipHtml`, …) are covered exhaustively in
  * `providerProbe.test.ts`; here we only prove the component wires them up.
+ *
+ * The provider's plugin settings (workstream X, lot CP11b) are the last block:
+ * on a provider change the panel reads that provider's settings
+ * (`GET /settings/plugins`, `family=asset`, `plugin_code`), ignoring an answer
+ * overtaken by a newer change and a read that fails; with an entry it shows
+ * `provider-settings-status` (`data-configured="false"`) only while the
+ * provider still needs settings, and `provider-configure` (`data-configured`,
+ * hidden when `readonly`, disabled with the panel), which opens
+ * `PluginSettingsModal`; a save there refreshes the badge, and the dialog keeps
+ * its form: it does not read the plugin again (PAS-S8). A case that does not
+ * program the read gets the Proxy's `undefined`: the read fails on it, and the
+ * panel takes a failed read as «no settings». The lifecycle cases route it
+ * explicitly, answering no settings.
+ *
+ * The probe refused for too many probes (workstream X, X-R66) — red until
+ * X-R66. Past `LIBREFOLIO_PROBE_RATE_LIMIT` probes a minute the endpoint
+ * answers 429: `detail.error_code` PROBE_RATE_LIMITED with its `retry_after`
+ * and the server's English, and `Retry-After`. Today the manual probe's one
+ * `probe` row shows that English, as its one line and as its detail. Once
+ * `probeRateLimitMessage` answers, both are its sentence: the catalogue's
+ * PROBE_RATE_LIMITED with the time the pause ends — read through `$_`, the
+ * clock pinned (Date only), never as a literal; the detail is read where the
+ * row hands it over, its copy button (PAS-RL1). Any other failure of the probe
+ * call keeps today's one line and detail (PAS-RL2, green before and after).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
@@ -58,6 +91,9 @@ const lifecycleApi = vi.hoisted(() => ({
     unexpected: [] as string[],
     list: vi.fn<() => Promise<LifecycleProvider[]>>(),
     probe: vi.fn<(request: LifecycleProbeRequest) => Promise<LifecycleProbeResponse>>(),
+    // The panel reads the selected provider's plugin settings (workstream X, CP11): a planned request of its own,
+    // answered «no settings» so that these cases keep proving the probe's lifecycle and nothing else.
+    settings: vi.fn<(request: {queries: Record<string, string>}) => Promise<{plugins: unknown[]}>>(),
 }));
 
 // --- Mocks --------------------------------------------------------------
@@ -72,6 +108,7 @@ vi.mock('$lib/api', () => {
                 if (lifecycleApi.enabled) {
                     if (prop === 'list_providers_api_v1_assets_provider_get') return lifecycleApi.list;
                     if (prop === 'probe_provider_config_api_v1_assets_provider_probe_post') return lifecycleApi.probe;
+                    if (prop === 'get_plugin_settings_api_v1_settings_plugins_get') return lifecycleApi.settings;
                     lifecycleApi.unexpected.push(prop);
                     throw new Error(`Unexpected provider lifecycle API method: ${prop}`);
                 }
@@ -109,6 +146,7 @@ import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+import {formatResumeTime, resumesToday} from './resolveProviderError';
 
 // --- Provider fixtures --------------------------------------------------
 // mockprov must be filtered out of the options; yahoo has an icon + help url +
@@ -537,6 +575,8 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
     function expected({price, count, resultMs, totalMs}: ProbeInput, locale: string): Figures {
         const time = `(${fixed(resultMs / 1000, 2, locale)}s)`;
         return {
+            // Two decimals: since C-97c-3 a price shows as many as its first four significant digits need, two at
+            // least; every price this block reads is 100 or more, so it shows exactly two before and after that cure.
             price: fixed(Number(price), 2, locale),
             count: fixed(count, 0, locale),
             times: [time, time],
@@ -785,6 +825,231 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
 });
 
 // =========================================================================
+describe('ProviderAssignmentSection — the probe’s current price keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /*
+     * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits. The
+     * current price that opens its result's detail is written with two fixed decimals, `formatFixed(Number(cpValue),
+     * 2)`: a provider quoting 0.0000034573 USD reads `0.00`, one quoting 1.234 reads `1.23`. The contract:
+     * `formatPrice(Number(cpValue))` — two decimals at least, as many as the first four significant digits need
+     * (`priceFractionDigits`, formatFixed.ts). The M-18 cases above read prices of 100 and more, which do not move.
+     *
+     * Reds: 0.0000034573 (today `0.00`) and 1.234 (today `1.23`). Guard, green today and after: 123.45. The probe
+     * answers the current price alone, as the backend sends it (a decimal string). Its row is the one publishing
+     * `data-operation="current_price"`, its detail the second of the row's three spans (as the M-18 cases read it);
+     * the figure is matched as a whole number token, since the detail also holds the currency and the day. English UI on
+     * jsdom's en-US browser, checked before each case: the digits are typed.
+     */
+    type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
+
+    /** `digits` as a whole number in a text: no digit, decimal mark, group separator or sign glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,+\\-\\u2212])${digits.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![.,]?\\d)`);
+    }
+
+    /** The probe's answer: a current price of `price` dollars, as the backend sends it, and nothing else. */
+    function answer(price: string): ProbeResponse {
+        return {provider_code: 'yahoo', identifier: 'AAPL', total_execution_time_ms: 120, current_price: {success: true, value: price, currency: 'USD', as_of_date: '2024-01-02', execution_time_ms: 120}};
+    }
+
+    /** Runs the manual probe that answers `price`, once it has settled, and returns the current price's detail. */
+    async function currentPriceDetailFor(price: string): Promise<string> {
+        probeFn().mockResolvedValue(answer(price));
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'passed'));
+
+        const rows = screen.getAllByTestId('provider-test-result').filter((row) => row.getAttribute('data-operation') === 'current_price');
+        expect(rows, 'barrier: one current_price result').toHaveLength(1);
+        const spans = [...rows[0].children].filter((child) => child.tagName === 'SPAN');
+        expect(spans, 'a result row is its label, its detail and its time: three spans').toHaveLength(3);
+        return (spans[1].textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the section writes en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    });
+
+    it('a current price of 0.0000034573 USD opens its detail as 0.000003457, not 0.00', async () => {
+        expect(await currentPriceDetailFor('0.0000034573'), 'the current price (today 0.00)').toMatch(numberToken('0.000003457'));
+    });
+
+    it('a current price of 1.234 USD reads 1.234 — four significant digits — not 1.23', async () => {
+        expect(await currentPriceDetailFor('1.234'), 'the current price (today 1.23)').toMatch(numberToken('1.234'));
+    });
+
+    it('guard: a current price of 123.45 USD still reads 123.45', async () => {
+        expect(await currentPriceDetailFor('123.45'), 'the current price').toMatch(numberToken('123.45'));
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the probe’s scope note (C-90)', () => {
+    /*
+     * The manual probe reads only the last few days of history, while creating the asset downloads all of it, and the
+     * probe's few points were taken for what the asset would get. So a manual probe that has settled with a `history`
+     * row — a success, or a warning — ends on one note under the total time, `provider-test-scope-note`, in the
+     * catalogue's words (`assets.probe.scopeNote`). The note goes with the history row, not with the verdict: a probe
+     * that failed on its current price has still read the history. No note before a test, none while one runs, none
+     * when the probe failed as a whole (its one `probe` row) or answered without a history, and none after an
+     * automatic probe, which draws no results.
+     *
+     * Every absence is asserted after a positive barrier — the button's status, and the rows the answer drew — so that
+     * «no note» never means «not drawn yet». The note's words are compared through the catalogue, never as a literal,
+     * and the catalogue must know them: a missing key renders as itself, and would match itself.
+     */
+    type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
+    type Operations = Pick<ProbeResponse, 'current_price' | 'history'>;
+    type Settled = 'passed' | 'failed';
+
+    const NOTE = 'provider-test-scope-note';
+    const PRICE_OK = {success: true, value: '100.50', currency: 'USD', as_of_date: '2024-01-05', execution_time_ms: 120};
+    const PRICE_FAILED = {success: false, error: 'HTTP 500 upstream', error_code: 'HTTP_ERROR', execution_time_ms: 40};
+    const HISTORY_OK = {success: true, points_count: 5, date_range: '2024-01-01 → 2024-01-05', sample_prices: [{date: '2024-01-05', close: '100.50'}], execution_time_ms: 300};
+    const HISTORY_SOFT = {success: false, error: 'no prices in the days read', error_code: 'NO_DATA', execution_time_ms: 20};
+
+    /** The probe's answer: the operations a case names, in 0.42 s. */
+    function answer(operations: Operations): ProbeResponse {
+        return {provider_code: 'yahoo', identifier: 'AAPL', total_execution_time_ms: 420, ...operations};
+    }
+
+    function normalize(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** A catalogue text as the section words it: `$_`, in whatever language the catalogue speaks. */
+    function word(key: string): string {
+        return normalize(get(_)(key));
+    }
+
+    /** Mounts the section, runs a manual probe, and waits until it has settled on `status`. */
+    async function probeManually(status: Settled): Promise<void> {
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', status));
+    }
+
+    /** The list of results: the rows' nearest common ancestor, as the M-18 cases find it. */
+    function resultListOf(rows: HTMLElement[]): HTMLElement {
+        for (let node = rows[0].parentElement; node; node = node.parentElement) {
+            const candidate = node;
+            if (rows.every((row) => candidate.contains(row))) return candidate;
+        }
+        throw new Error('the result rows share no list');
+    }
+
+    /** The total line, by structure: the one line of the results list that holds no result, and is not, nor holds, the note. */
+    function totalLineOf(rows: HTMLElement[], note: HTMLElement): HTMLElement {
+        const lines = [...resultListOf(rows).children].filter((child): child is HTMLElement => child instanceof HTMLElement && !rows.some((row) => child.contains(row)) && !child.contains(note));
+        expect(lines, 'besides its results and the note, the results list holds one line, the total: the note is a line of its own, not part of the total').toHaveLength(1);
+        expect(normalize(lines[0].textContent).startsWith(`${word('assets.probe.totalTime')}:`), 'control: the line found is the total time, its label read through the catalogue').toBe(true);
+        return lines[0];
+    }
+
+    interface Shown {
+        /** What the history did, for the title. */
+        history: string;
+        operations: Operations;
+        status: Settled;
+        rows: string[];
+    }
+
+    const SHOWN: Shown[] = [
+        {history: 'succeeded', operations: {current_price: PRICE_OK, history: HISTORY_OK}, status: 'passed', rows: ['current_price:success', 'history:success']},
+        {history: 'failed softly, a warning (no prices in the days it read)', operations: {current_price: PRICE_OK, history: HISTORY_SOFT}, status: 'passed', rows: ['current_price:success', 'history:warning']},
+        {history: 'succeeded while the current price failed for real', operations: {current_price: PRICE_FAILED, history: HISTORY_OK}, status: 'failed', rows: ['current_price:error', 'history:success']},
+    ];
+
+    it.each(SHOWN)('a manual probe whose history $history ends on one scope note, under the total time, in the catalogue’s words', async ({operations, status, rows}) => {
+        probeFn().mockResolvedValue(answer(operations));
+
+        await probeManually(status);
+
+        const results = screen.getAllByTestId('provider-test-result');
+        expect(operationStatuses(results), 'barrier: the rows the answer drew, a history among them').toEqual(rows);
+        const notes = screen.queryAllByTestId(NOTE);
+        expect(notes, 'no scope note under the result: nothing says the test read only the last few days, while creating the asset downloads its whole history').toHaveLength(1);
+        const [note] = notes;
+        expect(note).toBeVisible();
+        const total = totalLineOf(results, note);
+        expect(total.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING, 'the note is not under the total time').toBeTruthy();
+        const words = word('assets.probe.scopeNote');
+        expect(words, 'the shipped catalogue does not word the note: assets.probe.scopeNote is missing').not.toBe('assets.probe.scopeNote');
+        expect(normalize(note.textContent), 'the note is not in the catalogue’s words, assets.probe.scopeNote').toBe(words);
+    });
+
+    it('says nothing before a test: no scope note while the configuration is untested', async () => {
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+
+        // Barrier: the section is drawn and ready to test, and has not been tested.
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeEnabled();
+        expect(screen.queryByTestId(NOTE), 'a scope note before any test').toBeNull();
+    });
+
+    it('says nothing while a test runs — not even when the result before it held a history', async () => {
+        let settle!: (response: ProbeResponse) => void;
+        probeFn()
+            .mockResolvedValueOnce(answer({current_price: PRICE_OK, history: HISTORY_OK}))
+            .mockImplementationOnce(
+                () =>
+                    new Promise<ProbeResponse>((resolve) => {
+                        settle = resolve;
+                    }),
+            );
+        await probeManually('passed');
+        expect(operationStatuses(screen.getAllByTestId('provider-test-result')), 'barrier: the first test settled, a history among its rows').toEqual(['current_price:success', 'history:success']);
+
+        await fireEvent.click(testBtn());
+
+        // Barrier: the second test is in flight.
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        expect(screen.queryByTestId(NOTE), 'a scope note while the test runs').toBeNull();
+
+        settle(answer({current_price: PRICE_OK, history: HISTORY_OK}));
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'passed'));
+    });
+
+    interface Silent {
+        when: string;
+        program: () => void;
+        status: Settled;
+        rows: string[];
+    }
+
+    const SILENT: Silent[] = [
+        {when: 'the probe failed as a whole', program: () => probeFn().mockRejectedValue(new Error('network down')), status: 'failed', rows: ['probe:error']},
+        {when: 'the answer holds no history', program: () => probeFn().mockResolvedValue(answer({current_price: PRICE_OK})), status: 'passed', rows: ['current_price:success']},
+    ];
+
+    it.each(SILENT)('says nothing when $when: no history row, no scope note', async ({when, program, status, rows}) => {
+        program();
+
+        await probeManually(status);
+
+        expect(operationStatuses(screen.getAllByTestId('provider-test-result')), 'barrier: the rows the probe drew, none of them a history').toEqual(rows);
+        expect(screen.queryByTestId(NOTE), `a scope note when ${when}`).toBeNull();
+    });
+
+    it('says nothing after an automatic probe, which draws no results', async () => {
+        probeFn().mockResolvedValue(answer({current_price: PRICE_OK, history: HISTORY_OK}));
+        render(ProviderProbeLifecycleHarness, {providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+
+        await fireEvent.click(screen.getByTestId('provider-probe-auto'));
+
+        // Barrier: the automatic answer, a history among it, has landed: its verdict is drawn.
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'passed'));
+        expect(probeFn()).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId(NOTE), 'a scope note after an automatic probe').toBeNull();
+    });
+});
+
+// =========================================================================
 describe('ProviderAssignmentSection — readonly & disabled', () => {
     it('hides the test button and disables inputs when readonly', async () => {
         mount({providerCode: 'yahoo', identifier: 'AAPL', readonly: true});
@@ -926,6 +1191,7 @@ describe('ProviderAssignmentSection — probe ownership lifecycle', () => {
         pending.length = 0;
         lifecycleApi.list.mockReset().mockImplementation(() => unexpected('provider catalogue'));
         lifecycleApi.probe.mockReset().mockImplementation(() => unexpected('provider probe'));
+        lifecycleApi.settings.mockReset().mockResolvedValue({plugins: []});
     });
 
     afterEach(async () => {
@@ -939,6 +1205,7 @@ describe('ProviderAssignmentSection — probe ownership lifecycle', () => {
             lifecycleApi.enabled = false;
             lifecycleApi.list.mockReset();
             lifecycleApi.probe.mockReset();
+            lifecycleApi.settings.mockReset();
             pending.length = 0;
         }
     });
@@ -1181,5 +1448,319 @@ describe('ProviderAssignmentSection — probe ownership lifecycle', () => {
         expectManualResults(container);
         expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request], [request]]);
         expect(lifecycleApi.list.mock.calls).toStrictEqual([[]]);
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the provider’s plugin settings (workstream X, CP11b)', () => {
+    const settingsFn = () => vi.mocked(zodiosApi.get_plugin_settings_api_v1_settings_plugins_get as never) as ReturnType<typeof vi.fn>;
+    const writeFn = () => vi.mocked(zodiosApi.update_plugin_settings_api_v1_settings_plugins_bulk_patch as never) as ReturnType<typeof vi.fn>;
+
+    /** A provider's entry as `GET /settings/plugins` answers it: one user API key, saved once the provider is configured. */
+    function pluginEntry(code: string, configured: boolean) {
+        return {
+            family: 'asset',
+            plugin_code: code,
+            plugin_name: code,
+            configured,
+            fields: [
+                {
+                    key: 'api_key',
+                    type: 'string',
+                    scope: 'user',
+                    secret: true,
+                    required: true,
+                    label: 'API key',
+                    description: '',
+                    options: [],
+                    is_set: configured,
+                    source: configured ? 'db' : 'none',
+                    locked: false,
+                    editable: true,
+                    problem: null,
+                    updated_at: null,
+                },
+            ],
+        };
+    }
+
+    const answer = (...plugins: unknown[]) => ({plugins});
+    /** The read of one provider's settings, as the panel asks for it. */
+    const readOf = (code: string) => ({queries: {family: 'asset', plugin_code: code}});
+
+    /**
+     * Lets every answer already given reach the panel — one real macrotask, so every pending microtask runs first —
+     * then flushes Svelte. Waits for no time to pass: used only before asserting that something did not appear, after
+     * a positive barrier.
+     */
+    async function drain(): Promise<void> {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        await tick();
+        flushSync();
+    }
+
+    /**
+     * Starts recording the values `data-busy` takes on `element`, from the DOM's own record of its changes, and returns
+     * the reader: the values in order, the current one last, repeats folded (as in `EmailSettingsTab.test.ts`). Nothing
+     * is sampled, so a flash is not missed.
+     */
+    function recordBusy(element: HTMLElement): () => Array<string | null> {
+        const records: MutationRecord[] = [];
+        const observer = new MutationObserver((batch) => {
+            records.push(...batch);
+        });
+        observer.observe(element, {attributes: true, attributeFilter: ['data-busy'], attributeOldValue: true});
+        return () => {
+            records.push(...observer.takeRecords());
+            observer.disconnect();
+            const values = [...records.map((record) => record.oldValue), element.getAttribute('data-busy')];
+            return values.filter((value, index) => index === 0 || value !== values[index - 1]);
+        };
+    }
+
+    afterEach(() => {
+        settingsFn().mockReset();
+        writeFn().mockReset();
+    });
+
+    it('PAS-S1: reads the selected provider’s settings; a provider still to configure shows the badge and «Configure»', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', false)));
+
+        mount({providerCode: 'yahoo'});
+
+        expect(await screen.findByTestId('provider-settings-status')).toHaveAttribute('data-configured', 'false');
+        const configure = screen.getByTestId('provider-configure');
+        expect(configure).toHaveAttribute('data-configured', 'false');
+        expect(configure).toBeEnabled();
+        expect(settingsFn()).toHaveBeenCalledTimes(1);
+        expect(settingsFn()).toHaveBeenCalledWith(readOf('yahoo'));
+        expect(screen.queryByTestId('plugin-settings-modal'), 'the dialog opens on a click, not before').toBeNull();
+    });
+
+    it('PAS-S2: a configured provider shows «Configure» and no badge', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', true)));
+
+        mount({providerCode: 'yahoo'});
+
+        expect(await screen.findByTestId('provider-configure')).toHaveAttribute('data-configured', 'true');
+        expect(screen.queryByTestId('provider-settings-status'), 'drawn with the button, from the same answer').toBeNull();
+    });
+
+    it.each([
+        ['declares none', () => Promise.resolve(answer())],
+        ['come back without its entry', () => Promise.resolve(answer(pluginEntry('justetf', false)))],
+        ['cannot be read', () => Promise.reject(new Error('settings unavailable'))],
+    ])('PAS-S3: a provider whose settings %s gets no badge and no «Configure», and the panel works as before', async (_label, reply) => {
+        settingsFn().mockImplementation(reply);
+
+        mount({providerCode: 'yahoo'});
+
+        await waitLoaded('Yahoo');
+        await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('yahoo')));
+        await drain();
+        expect(screen.queryByTestId('provider-settings-status')).toBeNull();
+        expect(screen.queryByTestId('provider-configure')).toBeNull();
+        expect(screen.getByTestId('provider-code-select')).toBeInTheDocument();
+        expect(idInput()).toBeEnabled();
+    });
+
+    it('PAS-S4: a read-only panel shows the badge, and offers no «Configure»', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', false)));
+
+        mount({providerCode: 'yahoo', readonly: true});
+
+        expect(await screen.findByTestId('provider-settings-status')).toHaveAttribute('data-configured', 'false');
+        expect(screen.queryByTestId('provider-configure')).toBeNull();
+    });
+
+    it('PAS-S5: a disabled panel disables «Configure»', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', true)));
+
+        mount({providerCode: 'yahoo', disabled: true});
+
+        expect(await screen.findByTestId('provider-configure')).toBeDisabled();
+    });
+
+    it('PAS-S6: «No provider» reads no settings at all', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', false)));
+
+        mount({providerCode: 'yahoo', noProvider: true});
+
+        // The catalogue is read with or without a provider, by an effect declared after the settings one.
+        await waitFor(() => expect(listFn()).toHaveBeenCalled());
+        await drain();
+        expect(settingsFn()).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('provider-settings-status')).toBeNull();
+        expect(screen.queryByTestId('provider-configure')).toBeNull();
+    });
+
+    it('PAS-S7: on a provider change, an answer about the previous provider that lands last changes nothing', async () => {
+        let answerYahoo!: (value: unknown) => void;
+        settingsFn().mockImplementation(({queries}: {queries: {plugin_code: string}}) =>
+            queries.plugin_code === 'yahoo'
+                ? new Promise((resolve) => {
+                      answerYahoo = resolve;
+                  })
+                : Promise.resolve(answer(pluginEntry(queries.plugin_code, true))),
+        );
+        mount({providerCode: 'yahoo'});
+        await waitLoaded('Yahoo');
+        await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('yahoo')));
+
+        await fireEvent.click(screen.getByTestId('provider-code-select-button'));
+        await fireEvent.click(await screen.findByTestId('provider-option-justetf'));
+
+        expect(await screen.findByTestId('provider-configure')).toHaveAttribute('data-configured', 'true');
+        expect(settingsFn()).toHaveBeenLastCalledWith(readOf('justetf'));
+
+        answerYahoo(answer(pluginEntry('yahoo', false)));
+        await drain();
+
+        expect(screen.queryByTestId('provider-settings-status'), 'yahoo needed settings, but yahoo is no longer the provider').toBeNull();
+        expect(screen.getByTestId('provider-configure')).toHaveAttribute('data-configured', 'true');
+    });
+
+    it('PAS-S8: «Configure» opens the dialog on that provider; a save there refreshes the badge, and the dialog keeps its form — no read of its own again, no flash back to «loading»', async () => {
+        let saved = false;
+        settingsFn().mockImplementation(async ({queries}: {queries: {plugin_code: string}}) => answer(pluginEntry(queries.plugin_code, saved)));
+        writeFn().mockImplementation(async () => {
+            saved = true;
+            return {results: [{family: 'asset', plugin_code: 'yahoo', field_key: 'api_key', scope: 'user', success: true, error_code: null, message: null}], success_count: 1};
+        });
+        mount({providerCode: 'yahoo'});
+        expect(await screen.findByTestId('provider-settings-status'), 'premise: yahoo needs settings').toHaveAttribute('data-configured', 'false');
+        expect(settingsFn().mock.calls, 'the panel’s read').toStrictEqual([[readOf('yahoo')]]);
+
+        await fireEvent.click(screen.getByTestId('provider-configure'));
+
+        const dialog = await screen.findByTestId('plugin-settings-modal');
+        const form = await within(dialog).findByTestId('plugin-settings-form-yahoo');
+        expect(form).toHaveAttribute('data-configured', 'false');
+        expect(settingsFn().mock.calls, 'and the dialog’s, on opening').toStrictEqual([[readOf('yahoo')], [readOf('yahoo')]]);
+        const content = dialog.querySelector<HTMLElement>('[data-plugin="yahoo"]');
+        expect(content, 'the dialog’s content, about yahoo').not.toBeNull();
+        expect(content).toHaveAttribute('data-busy', 'false');
+        const dialogBusy = recordBusy(content as HTMLElement);
+
+        await fireEvent.input(within(form).getByTestId('plugin-setting-secret-input'), {target: {value: 'sk-yahoo-00000001'}});
+        await fireEvent.click(within(form).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(screen.getByTestId('provider-configure')).toHaveAttribute('data-configured', 'true'));
+        expect(screen.queryByTestId('provider-settings-status'), 'configured now: the badge goes').toBeNull();
+        const currentForm = () => within(screen.getByTestId('plugin-settings-modal')).getByTestId('plugin-settings-form-yahoo');
+        await waitFor(() => expect(currentForm(), 'the save, and the read after it, are over').toHaveAttribute('data-busy', 'false'));
+        await drain();
+        expect(currentForm(), 'the form the save was made in, refreshed in place: the dialog did not load again').toBe(form);
+        expect(form).toHaveAttribute('data-configured', 'true');
+        expect(dialogBusy(), 'the dialog never went back to «loading»').toEqual(['false']);
+        expect(settingsFn().mock.calls, 'the panel’s read, the dialog’s on opening and the form’s after its save: no third read of the dialog’s own').toStrictEqual([[readOf('yahoo')], [readOf('yahoo')], [readOf('yahoo')]]);
+        expect(writeFn().mock.calls).toStrictEqual([[{items: [{family: 'asset', plugin_code: 'yahoo', field_key: 'api_key', scope: 'user', secret_value: 'sk-yahoo-00000001'}]}]]);
+
+        await fireEvent.click(within(screen.getByTestId('plugin-settings-modal')).getByTestId('plugin-settings-modal-close'));
+
+        await waitFor(() => expect(screen.queryByTestId('plugin-settings-modal')).toBeNull());
+        expect(screen.getByTestId('provider-configure'), '«Configure» stays, for the next change').toHaveAttribute('data-configured', 'true');
+    });
+
+    it('PAS-S9: a provider change closes «Configure», and the next provider’s state comes in with the dialog closed', async () => {
+        settingsFn().mockImplementation(async ({queries}: {queries: {plugin_code: string}}) => answer(pluginEntry(queries.plugin_code, false)));
+        const {rerender} = mount({providerCode: 'yahoo'});
+        await fireEvent.click(await screen.findByTestId('provider-configure'));
+        expect(await screen.findByTestId('plugin-settings-modal'), 'premise: the dialog is open on yahoo').toBeVisible();
+
+        await rerender({providerCode: 'justetf'});
+
+        await waitFor(() => expect(screen.queryByTestId('plugin-settings-modal')).toBeNull());
+        await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('justetf')));
+        expect(await screen.findByTestId('provider-settings-status'), 'justetf’s own state').toHaveAttribute('data-configured', 'false');
+        expect(screen.queryByTestId('plugin-settings-modal'), 'and the dialog stays closed').toBeNull();
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the probe refused for too many probes (workstream X, X-R66)', () => {
+    /** «Now» when the refusal lands: 10 June 2026, 14:30:20 local time — a month with no daylight-saving change. */
+    const NOW = new Date(2026, 5, 10, 14, 30, 20);
+    /** The refusal's wait, in whole seconds as the server counts them: the pause ends at 14:31:02, written 14:32. */
+    const WAIT = 42;
+    const KEY = 'providerErrors.PROBE_RATE_LIMITED';
+    /** The server's own English for the refusal (`backend/app/api/v1/assets/providers.py`): what the row shows today. */
+    const SERVER_MESSAGE = 'Too many provider probes: try again later';
+
+    /** A failed request as a zodios (axios) call rejects with it: the answer's status, its `detail` as sent, its headers. */
+    function httpFailure(status: number, detail: unknown, headers: Record<string, string> = {}) {
+        return Object.assign(new Error(`Request failed with status code ${status}`), {response: {status, data: {detail}, headers}});
+    }
+
+    /** The probe's refusal: 429, its code with the wait and the server's English, and `Retry-After` with the same seconds. */
+    function probeRateLimited() {
+        return httpFailure(429, {error_code: 'PROBE_RATE_LIMITED', retry_after: WAIT, message: SERVER_MESSAGE}, {'retry-after': String(WAIT)});
+    }
+
+    /** Whitespace as one space: Intl writes some times with a narrow no-break space, and the DOM is read as text. */
+    function squash(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Runs the manual probe `failure` refuses; ends on the one row of the probe call's own failure, the probe settled. */
+    async function refusedProbeRow(failure: unknown): Promise<HTMLElement> {
+        probeFn().mockRejectedValue(failure as never);
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
+        const rows = screen.getAllByTestId('provider-test-result');
+        expect(operationStatuses(rows), 'barrier: one row, the probe call’s own failure — probe, an error, as today').toEqual(['probe:error']);
+        return rows[0];
+    }
+
+    /** The row's one line, after its label: its summary. The row is its label, that line and its time — three spans, in that order. */
+    function oneLineOf(row: HTMLElement): string {
+        const spans = [...row.children].filter((child) => child.tagName === 'SPAN');
+        expect(spans, 'a result row is its label, its one line and its time: three spans').toHaveLength(3);
+        return squash(spans[1].textContent);
+    }
+
+    /** The row's detail, where the row hands it over: its copy button, on plain HTTP — the text of the legacy copy. */
+    async function copiedDetail(row: HTMLElement): Promise<string | undefined> {
+        const http = onPlainHttp();
+        await fireEvent.click(within(row).getByTestId('provider-test-result-copy'));
+        await waitFor(() => expect(http.execCommand).toHaveBeenCalledTimes(1));
+        expect(http.captured, 'one copy, of the row’s detail').toHaveLength(1);
+        return http.captured[0];
+    }
+
+    beforeEach(() => {
+        // Only the clock: the moment the pause ends is computed from «now», by the section and by the expectation alike.
+        vi.useFakeTimers({toFake: ['Date']});
+        vi.setSystemTime(NOW);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('PAS-RL1: a manual probe refused with 429 PROBE_RATE_LIMITED — its row’s one line and its detail are the catalogue’s PROBE_RATE_LIMITED with the time the pause ends, not the server’s English', async () => {
+        const row = await refusedProbeRow(probeRateLimited());
+        expect(resumesToday(WAIT, NOW), 'premise: the pause ends today').toBe(true);
+        const time = formatResumeTime(WAIT, NOW);
+        const sentence = get(_)(KEY, {values: {time}});
+
+        const oneLine = oneLineOf(row);
+        expect(oneLine, 'the one line is no longer the server’s English').not.toBe(SERVER_MESSAGE);
+        expect(oneLine, 'the one line is the catalogue’s PROBE_RATE_LIMITED, with the time the pause ends').toBe(squash(sentence));
+        expect(oneLine, 'the time the pause ends, rounded up to the minute').toContain(squash(time));
+        expect(await copiedDetail(row), 'the detail is the same sentence').toBe(sentence);
+        expect(get(_)(KEY), `premise: the catalogue has ${KEY}`).not.toBe(KEY);
+    });
+
+    it.each<{when: string; failure: () => unknown; shown: string}>([
+        {when: 'a 429 the probe’s limiter did not send, another code', failure: () => httpFailure(429, {error_code: 'SYNTHETIC_OTHER_LIMIT', retry_after: WAIT, message: 'Synthetic limit of another kind'}, {'retry-after': String(WAIT)}), shown: 'Synthetic limit of another kind'},
+        {when: 'a request that got no answer', failure: () => new Error('Synthetic connection dropped'), shown: 'Synthetic connection dropped'},
+    ])('PAS-RL2: guard — $when: as today, the row’s one line and its detail are the failure’s own message', async ({failure, shown}) => {
+        const row = await refusedProbeRow(failure());
+
+        expect(oneLineOf(row), 'the one line, as today').toBe(shown);
+        expect(await copiedDetail(row), 'the detail, as today').toBe(shown);
     });
 });

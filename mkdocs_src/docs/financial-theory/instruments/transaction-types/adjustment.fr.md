@@ -74,7 +74,7 @@ Cela enregistre un capital en nature, pas un P&L : l'ajustement crée ou modifie
 
     | Scénario | Ce qu'il faut définir |
     |----------|------------|
-    | **Transfert normal** | Laisser vide — calculé automatiquement |
+    | **Transfert normal** | Laisser le coût sur **Auto** — calculé à partir de vos achats |
     | **Exit Tax** | Valeur de marché à la date du transfert (spécifique à la juridiction) |
     | **Héritage** | Juste valeur marchande à la date du décès (ou base actualisée) |
     | **Don** | Prix de revient d'origine du donateur (base reportée) |

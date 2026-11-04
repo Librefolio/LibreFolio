@@ -33,6 +33,13 @@ _QUANTITATIVE_FAILURE_CODES: frozenset[str] = frozenset(
         "TRANSFER_PAIR_MISSING",
     }
 )
+
+
+def fails_the_replay(code: str) -> bool:
+    """Whether an issue of this code makes the whole replay unreliable: the analysis is FAILED (J-12 withholds its lots)."""
+    return code in _QUANTITATIVE_FAILURE_CODES
+
+
 EventKind = Literal[
     "BUY",
     "SELL",
@@ -88,10 +95,18 @@ class FifoInputTransaction:
     related_transaction_id: int | None = None
     target_amount: Decimal | None = None
     target_currency: str | None = None
+    # An ADJUSTMENT-out that hands each fragment over at its own FIFO cost (realized 0): a transfer leg leaving the scope
+    # on a day without any price (``financial_math/lots/scope_boundary.py``, J-10).
+    hands_over_at_own_cost: bool = False
 
     @classmethod
-    def from_transaction(cls, tx: TransactionLike) -> FifoInputTransaction:
+    def from_transaction(cls, tx: TransactionLike | FifoInputTransaction) -> FifoInputTransaction:
+        if isinstance(tx, FifoInputTransaction):
+            return tx
         tx_type = getattr(tx.type, "value", tx.type)
+        # N78-1 (the developer's decision, 21/10/2026): an ADJUSTMENT-out has no value, whatever cost basis the row holds.
+        # Its units leave at 0. The scope-boundary readings of J-10 build their own copies and keep their value.
+        outgoing_adjustment = str(tx_type) == "ADJUSTMENT" and tx.quantity is not None and tx.quantity < 0
         return cls(
             id=_require_id(tx.id),
             broker_id=tx.broker_id,
@@ -101,8 +116,8 @@ class FifoInputTransaction:
             quantity=tx.quantity,
             amount=tx.amount or Decimal("0"),
             currency=tx.currency,
-            cost_basis_override=tx.cost_basis_override,
-            cost_basis_currency=tx.cost_basis_currency,
+            cost_basis_override=None if outgoing_adjustment else tx.cost_basis_override,
+            cost_basis_currency=None if outgoing_adjustment else tx.cost_basis_currency,
             related_transaction_id=tx.related_transaction_id,
         )
 
@@ -170,6 +185,15 @@ class FragmentInterval:
 
 @dataclass(frozen=True, slots=True)
 class LotClosure:
+    """A piece of a lot closed by one transaction, in native amounts.
+
+    ``open_unit_price`` is in the lot's currency; ``close_unit_price`` and ``proceeds`` are in
+    ``close_currency``, the currency of the closing price (None counts as the report currency, as the
+    lots analysis reads it). ``realized_pnl`` is native too, so it is None when the two currencies
+    differ: the engine has no rates. The report-currency figures come from
+    ``financial_math.lots.conversions.convert_closure``, each leg at its own date (decision 26).
+    """
+
     lot_id: int
     transaction_id: int
     quantity: Decimal
@@ -178,8 +202,9 @@ class LotClosure:
     fragment_id: str
     open_unit_price: Decimal
     close_unit_price: Decimal
-    realized_pnl: Decimal
+    realized_pnl: Decimal | None
     proceeds: Decimal
+    close_currency: str | None = None
 
 
 @dataclass(slots=True)
@@ -196,8 +221,10 @@ class FifoLot:
     currency: str | None
     open_quantity: Decimal
     realized_quantity: Decimal = Decimal("0")
-    realized_pnl: Decimal = Decimal("0")
-    cumulative_proceeds: Decimal = Decimal("0")
+    # Native sums in the lot's currency: None once a closure is in another currency (see LotClosure). A short
+    # lot's cumulative proceeds are its opening proceeds, which its closures never change.
+    realized_pnl: Decimal | None = Decimal("0")
+    cumulative_proceeds: Decimal | None = Decimal("0")
     reference_unit_price: Decimal | None = None
     reference_price_source: ReferencePriceSource | None = None
 

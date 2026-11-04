@@ -36,11 +36,13 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMNotice, BRIMParseOutput, BRIMRefusal, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -206,13 +208,65 @@ DATE_FORMATS = [
     "%d %B %Y",  # Full text: 03 January 2025
 ]
 
+#: ``date_order`` setting: how a date such as 03/04/2025 is read. ``day_first`` is the behaviour before the field existed.
+DAY_FIRST = "day_first"
+MONTH_FIRST = "month_first"
 
-def parse_date(value: str) -> Optional[date]:
+#: ``month_first``: for the slash, the dash and the dot the month is tried first and the day order is the fallback, so a value the
+#: first cannot read (25/12/2025) is still read. ISO, compact and text dates have one reading and do not move.
+MONTH_FIRST_DATE_FORMATS = [
+    "%Y-%m-%d",
+    "%m/%d/%Y",
+    "%d/%m/%Y",
+    "%m-%d-%Y",
+    "%d-%m-%Y",
+    "%Y/%m/%d",
+    "%m.%d.%Y",
+    "%d.%m.%Y",
+    "%Y%m%d",
+    "%d %b %Y",
+    "%d %B %Y",
+]
+
+
+#: The orders that name the shape of the date, FB-18: each tries its own formats first and then the whole list of the order it
+#: belongs to, so a value written with a four-digit year still reads. A two-digit year is Python's ``%y``: 00-68 are 2000-2068,
+#: 69-99 are 1969-1999. ``DAY_FIRST`` and ``MONTH_FIRST`` above are untouched, bit for bit.
+DAY_FIRST_SHORT = "day_first_short"  # dd/mm/yy: 03/04/26 is 3 April 2026
+MONTH_FIRST_SHORT = "month_first_short"  # mm/dd/yy: 03/04/26 is 4 March 2026
+YEAR_FIRST_SHORT = "year_first_short"  # yy/mm/dd: 26/04/03 is 3 April 2026
+YEAR_FIRST = "year_first"  # yyyy-mm-dd: 2026-04-03 is 3 April 2026
+
+
+def _joined(*lists: List[str]) -> List[str]:
+    """The lists joined in order, a format kept at its first place only."""
+    joined: List[str] = []
+    for formats in lists:
+        joined.extend(fmt for fmt in formats if fmt not in joined)
+    return joined
+
+
+_ORDER_FORMATS = {
+    MONTH_FIRST: MONTH_FIRST_DATE_FORMATS,
+    DAY_FIRST_SHORT: _joined(["%Y-%m-%d", "%d/%m/%y", "%d-%m-%y", "%d.%m.%y"], DATE_FORMATS),
+    MONTH_FIRST_SHORT: _joined(["%Y-%m-%d", "%m/%d/%y", "%m-%d-%y", "%m.%d.%y"], MONTH_FIRST_DATE_FORMATS),
+    YEAR_FIRST_SHORT: _joined(["%Y-%m-%d", "%y/%m/%d", "%y-%m-%d", "%y.%m.%d"], DATE_FORMATS),
+    YEAR_FIRST: _joined(["%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d"], DATE_FORMATS),
+}
+
+
+def _date_formats(order: str) -> List[str]:
+    """The formats of ``order``: ``DATE_FORMATS`` untouched for ``day_first`` (and for a value the plugin does not know)."""
+    return _ORDER_FORMATS.get(order, DATE_FORMATS)
+
+
+def parse_date(value: str, order: str = DAY_FIRST) -> Optional[date]:
     """
     Parse a date string using multiple format patterns.
 
     Args:
         value: Date string to parse
+        order: ``day_first`` (default), ``month_first`` or one of the short and year-first orders (FB-18): which reading wins when more than one fits
 
     Returns:
         date object or None if parsing fails
@@ -221,7 +275,7 @@ def parse_date(value: str) -> Optional[date]:
     if not value:
         return None
 
-    for fmt in DATE_FORMATS:
+    for fmt in _date_formats(order):
         try:
             return datetime.strptime(value, fmt).date()
         except ValueError:
@@ -299,8 +353,58 @@ def parse_decimal(value: str) -> Optional[Decimal]:
 
 
 # =============================================================================
+# COST BASIS TODO
+# =============================================================================
+
+
+def needs_cost_basis_todo(transaction: TXCreateItem) -> bool:
+    """Whether a parsed row gets the blocking «inherited cost» todo: an incoming ADJUSTMENT with no cost.
+
+    A cost of 0 written by the user is a cost (a gift is received at 0): only a missing one asks for it (W6-5, J-64; the
+    decision Q-J57-3, «0 is a true cost»). An outgoing ADJUSTMENT takes no cost (N78-1), so it never asks.
+    """
+    if transaction.type != TransactionType.ADJUSTMENT or transaction.quantity <= 0:
+        return False
+    return transaction.cost_basis_override is None
+
+
+# =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
+
+
+#: How many rows with an unreadable date get a notice of their own (FB-18b): past them one notice counts the rest.
+MAX_UNREADABLE_DATE_NOTICES = 20
+
+#: The shape of each ``date_order``, in English letters, for the notice's own ``message`` (the interface translates it).
+_DATE_ORDER_PATTERNS = {
+    DAY_FIRST: "dd/mm/yyyy",
+    MONTH_FIRST: "mm/dd/yyyy",
+    DAY_FIRST_SHORT: "dd/mm/yy",
+    MONTH_FIRST_SHORT: "mm/dd/yy",
+    YEAR_FIRST_SHORT: "yy/mm/dd",
+    YEAR_FIRST: "yyyy-mm-dd",
+}
+
+
+class UnreadableDateError(ValueError):
+    """A row whose date cell holds text no format of the chosen ``date_order`` reads: a date that does not exist (31/02/2026) or is
+    written another way. The row is left out and the parse says why (FB-18b)."""
+
+    def __init__(self, value: str) -> None:
+        super().__init__(f"Invalid date format: '{value}'")
+        self.value = value
+
+
+def _unreadable_date_notice(row_num: int, value: str, order: str) -> BRIMNotice:
+    """The notice of one row whose date cannot be read; the interface writes it in its language from ``code`` and ``context``."""
+    pattern = _DATE_ORDER_PATTERNS.get(order, _DATE_ORDER_PATTERNS[DAY_FIRST])
+    return BRIMNotice(
+        severity="warning",
+        code="date_unreadable",
+        message=(f"Row {row_num}: {value} is not a valid date in the format {pattern}. Fix the date in the file, or change the date format in the plugin settings (Settings > Plugins > Broker imports > Generic CSV > Date format), then re-parse."),
+        context={"row": row_num, "value": value, "order": order},
+    )
 
 
 @register_provider(BRIMProviderRegistry)
@@ -315,6 +419,29 @@ class GenericCSVBrokerProvider(BRIMProvider):
     Detection priority is 0 (lowest) - used as fallback when no broker-specific
     plugin matches the file.
     """
+
+    # The order of day and month is the user's: each one imports files of their own country's format. The default is the
+    # behaviour before the field existed, so nobody who never opened the setting sees a different date.
+    settings_fields = (
+        PluginSettingField(
+            key="date_order",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,
+            label="Date format",
+            description="How the dates of the file are written: the order of day, month and year, with a four-digit or a two-digit year.",
+            default=DAY_FIRST,
+            options=(
+                SettingOption(DAY_FIRST, "dd/mm/yyyy: 03/04/2025 = 3 April 2025", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.day_first"),
+                SettingOption(MONTH_FIRST, "mm/dd/yyyy: 03/04/2025 = 4 March 2025", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.month_first"),
+                SettingOption(DAY_FIRST_SHORT, "dd/mm/yy: 03/04/26 = 3 April 2026", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.day_first_short"),
+                SettingOption(MONTH_FIRST_SHORT, "mm/dd/yy: 03/04/26 = 4 March 2026", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.month_first_short"),
+                SettingOption(YEAR_FIRST_SHORT, "yy/mm/dd: 26/04/03 = 3 April 2026", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.year_first_short"),
+                SettingOption(YEAR_FIRST, "yyyy-mm-dd: 2026-04-03 = 3 April 2026", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.year_first"),
+            ),
+            label_key="pluginSettings.brim.broker_generic_csv.label.date_order",
+            description_key="pluginSettings.brim.broker_generic_csv.description.date_order",
+        ),
+    )
 
     @property
     def provider_code(self) -> str:
@@ -352,26 +479,37 @@ class GenericCSVBrokerProvider(BRIMProvider):
         """
         return self.cannot_parse_reason(file_path) is None
 
-    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
-        """Why ``can_parse`` refuses the file — the extension, an unreadable or empty file, or the required columns the header misses."""
+    def cannot_parse_detail(self, file_path: Path) -> Optional[BRIMRefusal]:
+        """Why ``can_parse`` refuses the file — the extension, an unreadable or empty file, or the required columns the header misses.
+
+        Each refusal carries a code the import wizard translates (``importWizard.parseRefusal.<code>``); the codes
+        ``file_unreadable``, ``no_header_row`` and ``missing_columns`` are shared with other plugins.
+        """
         if file_path.suffix.lower() != ".csv":
-            return "the Generic CSV reads only .csv files"
+            return BRIMRefusal(code="csv_only", message="the Generic CSV reads only .csv files", context={"plugin_code": self.provider_code})
 
         try:
             with self._open_text(file_path) as f:
                 reader = csv.reader(f, delimiter=self.detect_csv_delimiter(file_path))
                 header = next(reader, None)
         except Exception:
-            return "the file could not be read"
+            return BRIMRefusal(code="file_unreadable", message="the file could not be read")
         if not header:
-            return "the file has no header row"
+            return BRIMRefusal(code="no_header_row", message="the file has no header row")
         column_map = self._detect_columns(header)
         missing = [column for column in ("date", "type") if column not in column_map]
         if not missing:
             return None
         if len(missing) == 1:
-            return f"required column '{missing[0]}' not found in the CSV header"
-        return "required columns " + " and ".join(f"'{column}'" for column in missing) + " not found in the CSV header"
+            message = f"required column '{missing[0]}' not found in the CSV header"
+        else:
+            message = "required columns " + " and ".join(f"'{column}'" for column in missing) + " not found in the CSV header"
+        return BRIMRefusal(code="missing_columns", message=message, context={"columns": ", ".join(missing), "count": len(missing)})
+
+    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
+        """The English sentence of ``cannot_parse_detail``: ``None`` exactly when ``can_parse`` accepts the file."""
+        detail = self.cannot_parse_detail(file_path)
+        return detail.message if detail else None
 
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: header validation and per-row error handling, no nested logic
         """
@@ -391,7 +529,8 @@ class GenericCSVBrokerProvider(BRIMProvider):
         - Assigns consistent fake IDs (same asset = same fake ID)
         """
         transactions: List[TXCreateItem] = []
-        warnings: List[str] = []
+        warnings: List[str | BRIMNotice] = []
+        unreadable_dates = 0
         validation_issues: List[BRIMValidationIssue] = []
         field_todos: List[BRIMFieldTodo] = []
 
@@ -402,6 +541,9 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         # Track extracted asset info (BRIMExtractedAssetInfo objects)
         self._extracted_assets_raw: Dict[int, BRIMExtractedAssetInfo] = {}
+
+        # Read here, never in __init__: only the parse receives the values (detection and report sets run without them)
+        date_order = self.settings.get("date_order", DAY_FIRST)
 
         detected_delim = self.detect_csv_delimiter(file_path)
 
@@ -416,12 +558,12 @@ class GenericCSVBrokerProvider(BRIMProvider):
                 if "date" not in column_map:
                     raise BRIMParseError(
                         "Required column 'date' not found in CSV header",
-                        details={"headers": reader.fieldnames},
+                        details={"headers": reader.fieldnames, "code": "missing_columns", "context": {"columns": "date", "count": 1}},
                     )
                 if "type" not in column_map:
                     raise BRIMParseError(
                         "Required column 'type' not found in CSV header",
-                        details={"headers": reader.fieldnames},
+                        details={"headers": reader.fieldnames, "code": "missing_columns", "context": {"columns": "type", "count": 1}},
                     )
 
                 # Parse rows
@@ -435,32 +577,46 @@ class GenericCSVBrokerProvider(BRIMProvider):
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,
+                            date_order=date_order,
                         )
+                    except UnreadableDateError as e:
+                        unreadable_dates += 1
+                        if unreadable_dates <= MAX_UNREADABLE_DATE_NOTICES:
+                            warnings.append(_unreadable_date_notice(row_num, e.value, date_order))
+                        continue
                     except Exception as e:
                         warnings.append(f"Row {row_num}: {e!s}")
                         continue
 
-                    # Emit field_todo for ADJUSTMENT rows missing cost_basis_override
+                    # Emit field_todo for incoming ADJUSTMENT rows missing cost_basis_override (an outgoing one has no
+                    # value, N78-1)
                     if len(transactions) > tx_count_before:
                         added_tx = transactions[-1]
-                        if added_tx.type == TransactionType.ADJUSTMENT:
-                            cbo = added_tx.cost_basis_override
-                            has_cbo = cbo is not None and not (hasattr(cbo, "amount") and float(str(cbo.amount)) == 0)
-                            if not has_cbo:
-                                field_todos.append(
-                                    BRIMFieldTodo(
-                                        tx_index=len(transactions) - 1,
-                                        field="cost_basis_override",
-                                        severity="blocker",
-                                        reason_code="corporate_action",
-                                        message="Missing inherited per-unit cost basis (WAC). Enter the cost per single unit (not the total) to import.",
-                                    )
+                        if needs_cost_basis_todo(added_tx):
+                            field_todos.append(
+                                BRIMFieldTodo(
+                                    tx_index=len(transactions) - 1,
+                                    field="cost_basis_override",
+                                    severity="blocker",
+                                    reason_code="corporate_action",
+                                    message="Missing inherited per-unit cost basis (WAC). Enter the cost per single unit (not the total) to import.",
                                 )
+                            )
 
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name}) from e
+            raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name, "code": "file_unreadable", "context": {"error": str(e)}}) from e
+
+        if unreadable_dates > MAX_UNREADABLE_DATE_NOTICES:
+            warnings.append(
+                BRIMNotice(
+                    severity="warning",
+                    code="date_unreadable_more",
+                    message=f"{unreadable_dates - MAX_UNREADABLE_DATE_NOTICES} more rows have a date that is not valid in this format: the same fix applies.",
+                    context={"n": unreadable_dates - MAX_UNREADABLE_DATE_NOTICES},
+                )
+            )
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -506,6 +662,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         row_num: int,
         transactions: List[TXCreateItem],
         validation_issues: List[BRIMValidationIssue],
+        date_order: str = DAY_FIRST,
     ) -> Optional[TXCreateItem]:
         """
         Parse a single CSV row into a TXCreateItem.
@@ -537,9 +694,9 @@ class GenericCSVBrokerProvider(BRIMProvider):
         if not date_str:
             raise ValueError("Empty date value")
 
-        tx_date = parse_date(date_str)
+        tx_date = parse_date(date_str, date_order)
         if not tx_date:
-            raise ValueError(f"Invalid date format: '{date_str}'")
+            raise UnreadableDateError(date_str.strip())
 
         # Parse type (required)
         type_str = get_val("type")

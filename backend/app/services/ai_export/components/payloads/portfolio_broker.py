@@ -48,6 +48,7 @@ from backend.app.schemas.portfolio import (
     LotsAnalysisResponse,
     LotSummarySchema,
     OtherPeriodEffect,
+    OtherPeriodEffectCode,
     PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportQuery,
@@ -55,10 +56,13 @@ from backend.app.schemas.portfolio import (
     UnallocatedContribution,
 )
 from backend.app.services.ai_export.components.resources import LotsResultsResource
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
+from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
-from backend.app.services.lots_analysis_service import LotsAnalysisService
+from backend.app.services.financial_math.lots.summary import residual_cost
+from backend.app.services.financial_math.returns import price_return
+from backend.app.services.financial_math.series_steps import points_between
+from backend.app.services.lots_analysis_service import LotsAnalysisService, analysis_failure_codes
 from backend.app.services.portfolio_service import PortfolioService
 
 if TYPE_CHECKING:
@@ -70,6 +74,7 @@ __all__ = [
     "EffectRow",
     "FifoAssetSummaryRow",
     "FifoCustodyRow",
+    "FifoFailedReconstructionRow",
     "FifoLotRow",
     "PerformanceBucketRow",
     "PositionRow",
@@ -78,7 +83,9 @@ __all__ = [
     "build_performance_bucket_rows",
     "build_uniform_performance_buckets",
     "count_unavailable_amount_lots",
+    "counts_ownership_share",
     "discover_transacted_asset_ids",
+    "fifo_scope_totals",
     "has_nonzero_open_lot",
     "load_lots_results",
     "load_portfolio_report",
@@ -93,6 +100,7 @@ __all__ = [
     "map_unallocated_row",
     "performance_path_bucket_count",
     "resolve_accessible_broker_ids",
+    "split_failed_reconstructions",
     "summarize_fifo_asset_rows",
     "total_fifo_residual_cost_basis",
 ]
@@ -155,22 +163,18 @@ def lot_status(lot: Any) -> _FifoLotStatus:
 
 
 def lot_residual_cost_basis(lot: Any) -> Decimal | None:
-    """Return original cost attributable to the still-open quantity.
+    """Return original cost attributable to the still-open quantity (``financial_math.lots.summary.residual_cost``).
 
     `None` when the lot is still open and its original cost is unknown (a missing FX rate);
     a closed lot has no residual cost, so it is 0 whatever its cost.
     """
 
-    open_quantity = abs(_lot_decimal(getattr(lot, "open_quantity", None)))
-    if open_quantity.is_zero():
-        return Decimal("0")
     original_cost = getattr(lot, "original_cost", None)
-    if original_cost is None:
-        return None
-    original_quantity = abs(_lot_decimal(getattr(lot, "original_quantity", None)))
-    if original_quantity.is_zero():
-        return Decimal("0")
-    return _lot_decimal(original_cost) * open_quantity / original_quantity
+    return residual_cost(
+        _lot_decimal(original_cost) if original_cost is not None else None,
+        _lot_decimal(getattr(lot, "open_quantity", None)),
+        _lot_decimal(getattr(lot, "original_quantity", None)),
+    )
 
 
 def has_nonzero_open_lot(lots: Sequence[Any]) -> bool:
@@ -226,7 +230,8 @@ class AllocationSlice(StrictModel):
     """One allocation category slice (type/sector/geography)."""
 
     name: str
-    percent: SafeDecimal
+    #: None for every slice when the slices' sum is zero or negative (MF-C2); the amounts stay.
+    percent: SafeDecimal | None
     amount: Currency
     emoji: str | None = None
 
@@ -264,6 +269,8 @@ class EffectRow(StrictModel):
     """Non-position period P&L row, mirroring `OtherPeriodEffect`."""
 
     description: str
+    #: Fixed code of the rows a reader recognizes by it, never by `description` (`fx_on_cash`); None for every other row.
+    code: OtherPeriodEffectCode | None = None
     category: str
     period_pnl: Currency
     broker_id: int | None = None
@@ -324,15 +331,22 @@ def build_performance_bucket_rows(
     *,
     currency_code: str,
 ) -> tuple[PerformanceBucketRow, ...]:
-    """Map engine history to flow-aware inter-bucket returns and P&L."""
+    """Map engine history to flow-aware inter-bucket returns and P&L.
+
+    ``history`` is in steps (D-P4): a point holds from its ``date`` to its ``through``. A bucket reads the steps that touch
+    it, clipped to it (``points_between``); every date a row reports is a DAY: the first day a value is reached inside the
+    bucket (``max(step.date, bucket.start_date)``, the earliest on a tie) and the last day of the bucket's data for the
+    close, never the ``date`` of a step.
+    """
     ordered_history = tuple(sorted(history, key=lambda point: point.date))
     previous_close: PortfolioHistoryPoint | None = None
+    previous_close_day: Date | None = None
     rows: list[PerformanceBucketRow] = []
 
     buckets = bucket_plan.buckets if isinstance(bucket_plan, BucketPlan) else tuple(bucket_plan)
     first_twrr_observation = next((point for point in ordered_history if point.twrr is not None), None)
     for bucket in buckets:
-        bucket_points = tuple(point for point in ordered_history if bucket.start_date <= point.date <= bucket.end_date)
+        bucket_points = points_between(ordered_history, bucket.start_date, bucket.end_date)
         if not bucket_points:
             rows.append(
                 PerformanceBucketRow(
@@ -346,8 +360,13 @@ def build_performance_bucket_rows(
 
         first_point = bucket_points[0]
         end_point = bucket_points[-1]
-        min_point = min(bucket_points, key=lambda point: point.nav_value.amount)
-        max_point = max(bucket_points, key=lambda point: point.nav_value.amount)
+        # The first step to reach the lowest and the highest NAV: strict comparisons keep the earliest on a tie.
+        min_point = max_point = first_point
+        for point in bucket_points[1:]:
+            if point.nav_value.amount < min_point.nav_value.amount:
+                min_point = point
+            if point.nav_value.amount > max_point.nav_value.amount:
+                max_point = point
 
         net_external_flow = None
         period_pnl = None
@@ -367,9 +386,8 @@ def build_performance_bucket_rows(
                 amount=(end_point.nav_value.amount - previous_close.nav_value.amount - net_external_flow.amount - period_pnl.amount),
             )
             if previous_close.twrr is not None and end_point.twrr is not None:
-                denominator = Decimal(1) + Decimal(previous_close.twrr)
-                if denominator != 0:
-                    return_percent = ((Decimal(1) + Decimal(end_point.twrr)) / denominator) - Decimal(1)
+                # The return between two cumulative TWRRs is the return between their wealth levels, 1 + TWRR.
+                return_percent = price_return(Decimal(1) + Decimal(previous_close.twrr), Decimal(1) + Decimal(end_point.twrr))
 
         rows.append(
             PerformanceBucketRow(
@@ -383,7 +401,7 @@ def build_performance_bucket_rows(
                 max_value=max_point.nav_value,
                 min_date=min_point.date,
                 max_date=max_point.date,
-                variation_start_date=(previous_close.date if previous_close is not None else None),
+                variation_start_date=previous_close_day,
                 variation_start_value=(previous_close.nav_value if previous_close is not None else None),
                 net_external_flow=net_external_flow,
                 period_pnl=period_pnl,
@@ -393,15 +411,12 @@ def build_performance_bucket_rows(
                     if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None and Decimal(1) + Decimal(first_twrr_observation.twrr) != 0
                     else None
                 ),
-                return_from_first_ratio=(
-                    (Decimal(1) + Decimal(end_point.twrr)) / (Decimal(1) + Decimal(first_twrr_observation.twrr)) - Decimal("1")
-                    if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None and Decimal(1) + Decimal(first_twrr_observation.twrr) != 0
-                    else None
-                ),
+                return_from_first_ratio=(price_return(Decimal(1) + Decimal(first_twrr_observation.twrr), Decimal(1) + Decimal(end_point.twrr)) if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None else None),
                 reconciliation_diff=reconciliation_diff,
             )
         )
         previous_close = end_point
+        previous_close_day = end_point.through
 
     return tuple(rows)
 
@@ -443,6 +458,19 @@ class FifoAssetSummaryRow(StrictModel):
     custody_types: list[str] = Field(default_factory=list)
     states: list[str] = Field(default_factory=list)
     has_in_transit_custody: bool = False
+
+
+class FifoFailedReconstructionRow(StrictModel):
+    """An Asset whose lot reconstruction FAILED (J-12, N81): its identity and failure codes, never a figure.
+
+    The replay hit a quantitative failure, so every lot figure of the Asset would be wrong: it has no summary row and
+    no lot row, and its part of the scope totals is unknown. `failure_codes`: the sorted unique codes that failed it.
+    """
+
+    asset_id: int
+    asset_name: str
+    asset_ticker: str | None = None
+    failure_codes: list[str] = Field(default_factory=list)
 
 
 class FifoCustodyRow(StrictModel):
@@ -551,8 +579,9 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
 
     The cost, proceeds, realized, income/fee/tax, total and net totals are `None` as soon as one lot's
     part is unknown (a missing FX rate, or no market value). Market-value totals (open value, unrealized
-    P&L, potential gain and loss) keep summing the valued open lots, with their coverage stated in
-    `value_coverage_status` and the valued/unavailable open lot counts.
+    P&L, potential gain and loss) sum the same lots — the valued open lots, whose value and unrealized P&L
+    are both known (v3, T-B8) — with their coverage stated in `value_coverage_status` and the
+    valued/unavailable open lot counts.
     """
 
     rows = tuple(rows)
@@ -602,8 +631,8 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
         residual_cost_basis=_sum_complete("residual_cost_basis"),
         cumulative_proceeds=_sum_complete("cumulative_proceeds"),
         realized_pnl=_sum_complete("realized_pnl"),
-        open_value=_sum_optional("open_value", open_rows),
-        unrealized_pnl=_sum_optional("unrealized_pnl", open_rows),
+        open_value=_sum_optional("open_value", valued_open_rows),
+        unrealized_pnl=_sum_optional("unrealized_pnl", valued_open_rows),
         potential_gain=potential_gain,
         potential_loss=potential_loss,
         total_pnl=_sum_complete("total_pnl"),
@@ -651,6 +680,45 @@ def total_fifo_residual_cost_basis(rows: Sequence[FifoAssetSummaryRow], currency
     return Currency(code=currency_code, amount=sum((amount.amount for amount in amounts), Decimal("0")))
 
 
+def fifo_scope_totals(rows: Sequence[FifoAssetSummaryRow], currency_code: str, *, failed_asset_count: int) -> dict[str, Any]:
+    """The four scope totals of a FIFO summary, over its Asset rows.
+
+    An Asset whose lot reconstruction FAILED is an unknown part of the scope, so every total is `None`, never a sum of
+    the reliable Assets alone (J-12, N81).
+    """
+
+    if failed_asset_count:
+        return dict.fromkeys(("total_open_lots", "total_partial_lots", "total_closed_lots", "total_residual_cost_basis"))
+    return {
+        "total_open_lots": sum(row.open_lot_count for row in rows),
+        "total_partial_lots": sum(row.partial_lot_count for row in rows),
+        "total_closed_lots": sum(row.closed_lot_count for row in rows),
+        "total_residual_cost_basis": total_fifo_residual_cost_basis(rows, currency_code),
+    }
+
+
+def split_failed_reconstructions(lots_resource: LotsResultsResource, assets_meta: Mapping[int, Any]) -> tuple[list[int], list[FifoFailedReconstructionRow]]:
+    """The Assets whose lots can be exported, sorted, and one row for each Asset whose lot reconstruction FAILED."""
+
+    exportable: list[int] = []
+    failed: list[FifoFailedReconstructionRow] = []
+    for asset_id in sorted(lots_resource.by_asset_id):
+        response = lots_resource.by_asset_id[asset_id]
+        if response.calculation_status != "FAILED":
+            exportable.append(asset_id)
+            continue
+        asset = assets_meta.get(asset_id)
+        failed.append(
+            FifoFailedReconstructionRow(
+                asset_id=asset_id,
+                asset_name=str(getattr(asset, "display_name", None) or f"Asset {asset_id}"),
+                asset_ticker=getattr(asset, "identifier_ticker", None),
+                failure_codes=analysis_failure_codes(response),
+            )
+        )
+    return exportable, failed
+
+
 # =============================================================================
 # Pure mapping helpers (no I/O, no recomputed formulas)
 # =============================================================================
@@ -661,7 +729,8 @@ def map_position_row(
     *,
     currency_code: str,
 ) -> PositionRow:
-    unit_price = holding.current_value / holding.quantity if holding.current_value is not None and holding.quantity != 0 else None
+    # A holding valued at cost has no price (J-17): its value per unit would be its unit cost, not a price.
+    unit_price = holding.current_value / holding.quantity if holding.current_value is not None and holding.quantity != 0 and holding.valuation_source != "ESTIMATED_AT_COST" else None
     return PositionRow(
         asset_id=holding.asset_id,
         asset_name=holding.asset_name,
@@ -730,6 +799,7 @@ def sort_unallocated(rows: Sequence[UnallocatedRow]) -> list[UnallocatedRow]:
 def map_effect_row(item: OtherPeriodEffect, *, currency_code: str) -> EffectRow:
     return EffectRow(
         description=item.description,
+        code=item.code,
         category=item.category,
         period_pnl=_currency_required(currency_code, item.period_pnl),
         broker_id=item.broker_id,
@@ -846,12 +916,28 @@ async def resolve_accessible_broker_ids(session: AsyncSession, user_id: int) -> 
     return sorted({int(broker_id) for broker_id in result.scalars().all()})
 
 
+def counts_ownership_share(scope: BuildScope) -> bool:
+    """Whether an export of `scope` counts an owner's share of each broker.
+
+    False for a Broker scope (R11, developer 30/10): the export opened from the broker page gives the broker's whole
+    amounts, as the page does, and a note says who the user is for it (`broker.provenance`). True for every other
+    domain: the portfolio, asset and FX pages count the user's own part. The share rule itself stays in
+    `native_cash.broker_shares`.
+    """
+    return scope.domain is not Domain.BROKER
+
+
 async def load_portfolio_report(
     context: BuildContext,
     scope: BuildScope,
     resource_key: ResourceKey[PortfolioReportResponse],
+    *,
+    apply_ownership_share: bool | None = None,
 ) -> PortfolioReportResponse:
     """Loads the single `PortfolioReportResponse` for this request, memoized under `resource_key`.
+
+    `apply_ownership_share` None follows the scope's domain (`counts_ownership_share`); a caller that needs another
+    basis for a different resource key passes it (the broker-vs-portfolio comparison loads the whole portfolio whole).
 
     Every `portfolio.*`/`broker.*` financial component builder calls this with
     the *same* `PORTFOLIO_REPORT_RESOURCE`/`BROKER_REPORT_RESOURCE` key for its
@@ -873,6 +959,7 @@ async def load_portfolio_report(
             include_allocation_history=False,
             include_breakdown=True,
             include_positions_contribution=True,
+            apply_ownership_share=counts_ownership_share(scope) if apply_ownership_share is None else apply_ownership_share,
         )
         return await PortfolioService(session).get_report(scope.user_id, query)
 

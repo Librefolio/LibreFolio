@@ -38,9 +38,9 @@ Found by workstream D on 2026-09-24/25, while making SCIP's status the proof (D-
 
 ## Solution
 
-- `f92e5560b` (2026-09-25, «bound the solver fee by its minimum»): the fee's upper bound never falls below the
+- `148515efb` (2026-09-25, «bound the solver fee by its minimum»): the fee's upper bound never falls below the
   minimum.
-- `6061affd7` (2026-09-25, «model the solver fee cap exactly»): an exact binary for the capped regime
+- `6129d7f23` (2026-09-25, «model the solver fee cap exactly»): an exact binary for the capped regime
   (`_fee_clamp_upper`, `_fee_cap_excess`), added only where the cap can actually bind; with it the bound becomes
   `max(floor, min(rate · notional_upper, cap))`. The developer, on QX1-a: «sì, modelliamolo subito».
 
@@ -59,6 +59,6 @@ Found by workstream D on 2026-09-24/25, while making SCIP's status the proof (D-
 | Role | Path |
 |------|------|
 | Fee rows, bounds and the cap binary | `backend/app/services/pac_allocator/constraints.py` |
-| Exact fee rules in the replay | `backend/app/services/pac_allocator/evaluator.py` |
+| Exact fee rules in the replay | `backend/app/services/pac_allocator/evaluation/economics.py` |
 | Policy and fee tests | `backend/test_scripts/test_services/test_pac_planner_policies.py` |
 | Round 5 plan (Passo F, X2 and QX1-a) | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md` |

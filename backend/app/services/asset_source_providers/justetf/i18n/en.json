@@ -1,0 +1,31 @@
+{
+  "assets": {
+    "providerParams": {
+      "justetf": {
+        "label": {
+          "currency": "Price currency"
+        },
+        "description": {
+          "currency": "Price currency. EUR = real-time quote + history. USD/CHF/GBP = latest daily price + history (converted by JustETF)."
+        }
+      }
+    }
+  },
+  "pluginSettings": {
+    "asset": {
+      "justetf": {
+        "label": {
+          "preferred_currency": "Preferred currency"
+        },
+        "description": {
+          "preferred_currency": "Search shows each fund only in this currency. With All currencies, every fund appears in all four, and 👑 marks the fund's own currency."
+        },
+        "option": {
+          "preferred_currency": {
+            "all": "All currencies"
+          }
+        }
+      }
+    }
+  }
+}

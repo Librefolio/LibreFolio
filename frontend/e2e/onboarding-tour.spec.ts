@@ -10,6 +10,7 @@ import {expect, test, type APIRequestContext, type Locator, type Page, type Requ
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {waitForParseVerdict, waitForSettled} from './fixtures/app-events';
 import {uniqueSuffix} from './fixtures/unique';
+import {ONBOARDING_FLOWS} from '../src/lib/types/onboarding';
 
 test.setTimeout(120_000);
 
@@ -50,7 +51,7 @@ const DESCRIPTION_ID = 'onboarding-coachmark-description';
 const CORE_ORDER = ['intro.scene', 'intro.navigation', 'intro.dashboard', 'intro.transactions_nav', 'intro.brokers_nav', 'intro.fx_nav', 'intro.assets_nav', 'intro.tools_nav', 'intro.settings_nav'] as const;
 const BULK_STEPS = ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'] as const;
 const BULK_ACCOUNT_SETUP_SKIPS = ['transactions_page_guide', 'transaction_create_guide'] as const;
-const TRANSACTION_FORM_GUIDE_STEPS = [
+const TRANSACTION_FORM_GUIDE_STEPS: ReadonlyArray<Pick<Parameters<typeof expectGuideStep>[1], 'stepId' | 'pointer' | 'highlight' | 'placement' | 'allowTargetOverlap'> & {targetId: string}> = [
     {stepId: 'transaction.create.basics', targetId: 'tx-form-type-wrap', pointer: 'none', highlight: 'pulse'},
     {stepId: 'transaction.create.amounts', targetId: 'tx-form-required', pointer: 'none', highlight: 'pulse', allowTargetOverlap: true},
     {stepId: 'transaction.create.details', targetId: 'tx-form-optional-toggle', pointer: 'none', highlight: 'pulse'},
@@ -713,7 +714,7 @@ test.describe('Onboarding Round 5', () => {
                 },
             });
         });
-        await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await page.route('**/api/v1/assets/prices/current*', async (route) => {
             await route.fulfill({json: {results: [], success_count: 0, errors: []}});
         });
 
@@ -760,7 +761,8 @@ test.describe('Onboarding Round 5', () => {
             const progress = (await progressResponse.json()) as {
                 flows: Array<{flow: string; steps?: Array<{step_id: string}>}>;
             };
-            expect(progress.flows).toHaveLength(15);
+            // Every flow the client knows, once: no fixed count, so the next guide does not break it
+            expect(progress.flows.map((flow) => flow.flow)).toEqual([...ONBOARDING_FLOWS]);
             expect(progress.flows.find((flow) => flow.flow === 'import_guide')?.steps?.map((step) => step.step_id)).toEqual(['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.gapFix', 'import.bulk']);
             expect(progress.flows.find((flow) => flow.flow === 'transaction_bulk_guide')?.steps?.map((step) => step.step_id)).toEqual(BULK_STEPS);
             await expect(page.getByTestId('dashboard-page')).toBeVisible();
@@ -860,6 +862,7 @@ test.describe('Onboarding Round 5', () => {
                     target,
                     pointer: guideStep.pointer,
                     highlight: guideStep.highlight,
+                    backdrop: false,
                     placement: 'placement' in guideStep ? guideStep.placement : undefined,
                     allowTargetOverlap: 'allowTargetOverlap' in guideStep ? guideStep.allowTargetOverlap : undefined,
                 });

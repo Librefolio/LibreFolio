@@ -2,8 +2,13 @@
 Database models for LibreFolio.
 
 All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
-- Decimal columns use Numeric(18, 6) for precision
-- Timestamps in UTC (created_at, updated_at, fetched_at)
+- Decimal columns: RealDecimal(18, 6) for amounts and event values (W-B60), RealDecimal(22, 10) for quantities,
+  RealDecimal(24, 12) for prices and the per-unit cost basis, RealDecimal(24, 0) for the volume and RealDecimal(24, 10)
+  for the FX rate (W-B63), read back as the decimal written (C-97, db/real_decimal.py); the one plain Numeric left is
+  the owner's share of a broker (Numeric(7, 6))
+- Timestamps in UTC (created_at, updated_at, fetched_at), written by utcnow() and stored without an offset:
+  every datetime field declares sa_type=DateTime, the plain column; SQLModel >= 0.0.48 would otherwise map it to
+  its UTCDateTime, which refuses naive values and reads aware ones back (D-UTC, 1.4: moving to aware datetimes)
 - Daily-point policy: one record per day for prices and FX rates
 - Foreign keys enforced with PRAGMA foreign_keys=ON
 - Currency fields validated against ISO 4217 via Currency.validate_code()
@@ -21,17 +26,22 @@ from sqlalchemy import (
     JSON,
     CheckConstraint,
     Column,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     event,
+    func,
+    text,
 )
 from sqlmodel import Field, Relationship, SQLModel
 
+from backend.app.db.real_decimal import RealDecimal
 from backend.app.utils.asset.identifier import normalize_other_identifiers
 from backend.app.utils.datetime_utils import utcnow
 
@@ -105,7 +115,8 @@ class IdentifierType(StrEnum):
     ⚠️  DEPENDENT SCHEMAS - If you add/remove values, update these files:
 
     1. DATABASE SCHEMA:
-       - backend/alembic/versions/001_initial.py
+       - a new incremental Alembic migration (./dev.py db migrate "..."), never
+         001_initial.py: the assets table has already shipped
          → Add column: identifier_{value.lower()} in assets table
          → Add index if frequently searched (ISIN, TICKER have indexes)
 
@@ -114,17 +125,17 @@ class IdentifierType(StrEnum):
          → Add field: identifier_{value.lower()}: Optional[str]
          → Add validator if needed (e.g., ISIN requires 12 chars)
 
-    3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):
+    3. PYDANTIC SCHEMAS (backend/app/schemas/assets/assets.py):
        - FAAssetCreateItem: Add identifier_{value.lower()} field
        - FAAssetPatchItem: Add identifier_{value.lower()} field
        - FAinfoResponse: Add identifier_{value.lower()} field
        - FAAinfoFiltersRequest: Add filter field (exact or partial match)
 
-    4. SERVICE LAYER (backend/app/services/asset_source.py):
+    4. SERVICE LAYER (backend/app/services/assets/crud.py):
        - list_assets(): Add condition for new filter
        - create_assets_bulk(): Pass new field to Asset()
 
-    5. BRIM PROVIDER (backend/app/services/brim_provider.py):
+    5. BRIM PROVIDER (backend/app/services/brim/brim_provider.py):
        - search_asset_candidates(): Add search priority if relevant
 
     6. TESTS:
@@ -291,7 +302,7 @@ class TransactionType(StrEnum):
     Impact:
     - TRANSFER, FX_CONVERSION and CASH_TRANSFER require related_transaction_id
     - Validation ensures sign rules are followed
-    - All calculations based on settlement date
+    - All calculations based on the trade date: the day the operation was made (B-52)
     """
 
     BUY = "BUY"
@@ -340,6 +351,7 @@ class OnboardingFlow(StrEnum):
     ASSET_PAGE_GUIDE = "asset_page_guide"
     ASSET_GUIDE = "asset_guide"
     ASSET_DETAIL_GUIDE = "asset_detail_guide"
+    TOOLS_PAGE_GUIDE = "tools_page_guide"
 
 
 class OnboardingStatus(StrEnum):
@@ -348,6 +360,18 @@ class OnboardingStatus(StrEnum):
     PENDING = "pending"
     COMPLETED = "completed"
     SKIPPED = "skipped"
+
+
+class AccountTokenPurpose(StrEnum):
+    """What an account token is for: a token of one purpose is never accepted for another."""
+
+    INVITE = "invite"
+    PASSWORD_RESET = "password_reset"
+    EMAIL_VERIFICATION = "email_verification"
+    ADMIN_SETUP = "admin_setup"
+    #: The owner of a managed instance moves to the address the host put in ``LIBREFOLIO_ADMIN_EMAIL`` (A5-1b): the link is
+    #: emailed to the NEW address, and the change happens only when it is clicked.
+    EMAIL_CHANGE = "email_change"
 
 
 # ============================================================================
@@ -366,8 +390,8 @@ class User(SQLModel, table=True):
     __table_args__ = {"sqlite_autoincrement": True}  # ids leave the backend: never reuse one (plan 34)
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    username: str = Field(unique=True, index=True, nullable=False, min_length=3, max_length=50)
-    email: str = Field(unique=True, index=True, nullable=False)
+    username: str = Field(unique=True, nullable=False, min_length=3, max_length=50)
+    email: str = Field(unique=True, nullable=False)
     hashed_password: str = Field(nullable=False)
     is_active: bool = Field(default=True)
     is_superuser: bool = Field(default=False)
@@ -375,12 +399,32 @@ class User(SQLModel, table=True):
     # Lifetime login counter — incremented on every successful login, unconditionally.
     # Kept independent from the donation-popup logic below for future/generic use.
     login_count: int = Field(default=0, nullable=False)
-    # Donation-popup trigger bookkeeping (see services/donation_popup_service.py).
-    donation_popup_last_shown_at: Optional[datetime] = Field(default=None, nullable=True)
+    # Donation-popup trigger bookkeeping (see services/accounts/donation_popup_service.py).
+    donation_popup_last_shown_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
     donation_popup_logins_since_shown: int = Field(default=0, nullable=False)
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    # Session version of the account, carried by the session JWT as `sv`: raising it (user_service.end_sessions)
+    # ends every session issued before.
+    session_version: int = Field(default=0, nullable=False)
+    # When the email address was verified; NULL for the accounts that existed before migration 005.
+    email_verified_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+    # The release whose changelog this user last saw.
+    last_seen_version: Optional[str] = Field(default=None, max_length=40, nullable=True)
+    # The account that owns this (managed) instance: the paying administrator (A5-1b, migration 005, step 1). At most one account
+    # holds it (``ux_users_instance_owner``, partial). Never in an API schema: only ``user_service.account_protection`` and
+    # ``instance_owner`` read it. Set by the managed bootstrap and the startup sync, never in another profile.
+    is_instance_owner: bool = Field(default=False, nullable=False, sa_column_kwargs={"server_default": text("0")})
+
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+
+
+# Email addresses are unique regardless of case (P18, migration 005, step 6). SQLite's lower() folds A–Z only, so letters outside
+# ASCII compare as written; user_service.email_fold() is the same rule in Python.
+Index("ux_users_email_lower", func.lower(User.__table__.c.email), unique=True)  # type: ignore[attr-defined]
+# At most one instance owner (A5-1b, migration 005, step 1). The query that reads it, ``SELECT id FROM users WHERE is_instance_owner = 1``,
+# plans ``SEARCH users USING COVERING INDEX ux_users_instance_owner`` (pinned by test_migration_005_release_1_3).
+Index("ux_users_instance_owner", User.__table__.c.is_instance_owner, unique=True, sqlite_where=text("is_instance_owner = 1"))  # type: ignore[attr-defined]
 
 
 class UserSettings(SQLModel, table=True):
@@ -401,8 +445,8 @@ class UserSettings(SQLModel, table=True):
     theme: str = Field(default="light", max_length=20)  # e.g., "light", "dark"
     avatar_url: Optional[str] = Field(default=None, max_length=500)  # URL to user avatar image
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("base_currency", mode="before")
     @classmethod
@@ -442,10 +486,10 @@ class UserOnboardingProgress(SQLModel, table=True):
     )
     version: int = Field(default=1, ge=1, nullable=False)
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
-    completed_at: Optional[datetime] = Field(default=None, nullable=True)
-    skipped_at: Optional[datetime] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    completed_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+    skipped_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
 
 
 class UserOnboardingStepProgress(SQLModel, table=True):
@@ -485,10 +529,52 @@ class UserOnboardingStepProgress(SQLModel, table=True):
     )
     version: int = Field(default=1, ge=1, nullable=False)
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
-    completed_at: Optional[datetime] = Field(default=None, nullable=True)
-    skipped_at: Optional[datetime] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    completed_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+    skipped_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+
+
+class AccountToken(SQLModel, table=True):
+    """A single-use account link: an invitation, a password reset, an email verification or the admin setup.
+
+    Only the SHA-256 of the token is stored; the token itself is shown once to whoever asked for it
+    (``services/accounts/token_service.py``). ``user_id`` is the account the token acts on, and its
+    tokens go with it; an invitation has none, its account does not exist yet.
+    """
+
+    __tablename__ = "account_tokens"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_account_tokens_token_hash"),
+        CheckConstraint(
+            "purpose IN ('invite', 'password_reset', 'email_verification', 'admin_setup', 'email_change')",
+            name="ck_account_tokens_purpose",
+        ),
+        Index("ix_account_tokens_purpose_expires_at", "purpose", "expires_at"),
+        Index("ix_account_tokens_user_id", "user_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    purpose: AccountTokenPurpose = Field(sa_column=Column(String(32), nullable=False))
+    token_hash: str = Field(sa_column=Column(String(64), nullable=False))
+    user_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True),
+    )
+    email: Optional[str] = Field(default=None, nullable=True)
+    grants_admin: bool = Field(default=False, nullable=False)
+    created_by_user_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+    )
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    expires_at: datetime = Field(nullable=False, sa_type=DateTime)
+    consumed_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+    revoked_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+    consumed_by_user_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+    )
 
 
 class GlobalSetting(SQLModel, table=True):
@@ -501,7 +587,7 @@ class GlobalSetting(SQLModel, table=True):
     Predefined keys:
     - session_ttl_hours: Session cookie TTL in hours (int, default: 24)
     - max_file_upload_mb: Max file upload size in MB (int, default: 10)
-    - enable_registration: Allow new user registration (bool, default: true)
+    - registration_mode: Who may create an account: open, invite or disabled (string, default: invite on a new install)
     """
 
     __tablename__ = "global_settings"
@@ -510,8 +596,64 @@ class GlobalSetting(SQLModel, table=True):
     value: str = Field(...)  # Stored as string, converted based on value_type
     value_type: str = Field(max_length=20)  # "string", "int", "bool", "json"
     description: Optional[str] = Field(default=None)
-    updated_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
     updated_by_user_id: Optional[int] = Field(default=None, foreign_key="users.id", nullable=True)
+
+
+class PluginSystemSetting(SQLModel, table=True):
+    """A plugin setting of the whole instance (``scope = system``), written by an administrator.
+
+    One row per field, named by ``family`` (``asset``, ``fx``), ``plugin_code`` and ``field_key``. A plain value is
+    JSON in ``value_json``; a secret is encrypted in ``secret_ciphertext``, with the id of the key that encrypted it in
+    ``key_id`` (``services/plugin_settings/crypto.py``): a row holds exactly one of the two. An environment variable
+    set for the field wins over the row. Rows of fields that no plugin declares any more stay, ignored.
+    """
+
+    __tablename__ = "plugin_system_settings"
+    __table_args__ = (
+        UniqueConstraint("family", "plugin_code", "field_key", name="uq_plugin_system_settings_field"),
+        CheckConstraint("(value_json IS NULL) <> (secret_ciphertext IS NULL)", name="ck_plugin_system_settings_one_value"),
+        CheckConstraint("(secret_ciphertext IS NULL) = (key_id IS NULL)", name="ck_plugin_system_settings_key_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    family: str = Field(sa_column=Column(String(16), nullable=False))
+    plugin_code: str = Field(sa_column=Column(String(64), nullable=False))
+    field_key: str = Field(sa_column=Column(String(64), nullable=False))
+    value_json: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    secret_ciphertext: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
+    key_id: Optional[str] = Field(default=None, sa_column=Column(String(32), nullable=True))
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_by_user_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+    )
+
+
+class PluginUserSetting(SQLModel, table=True):
+    """A plugin setting of one user (``scope = user``): a preference, or a personal secret, written by that user only.
+
+    The same columns as ``PluginSystemSetting``, plus ``user_id``: the rows go with the account. Nobody else reads
+    them through the API, an administrator included. The encryption binds a secret to its row, ``user_id`` included,
+    so a ciphertext copied to another user's row does not decrypt.
+    """
+
+    __tablename__ = "plugin_user_settings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "family", "plugin_code", "field_key", name="uq_plugin_user_settings_field"),
+        CheckConstraint("(value_json IS NULL) <> (secret_ciphertext IS NULL)", name="ck_plugin_user_settings_one_value"),
+        CheckConstraint("(secret_ciphertext IS NULL) = (key_id IS NULL)", name="ck_plugin_user_settings_key_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(sa_column=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False))
+    family: str = Field(sa_column=Column(String(16), nullable=False))
+    plugin_code: str = Field(sa_column=Column(String(64), nullable=False))
+    field_key: str = Field(sa_column=Column(String(64), nullable=False))
+    value_json: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    secret_ciphertext: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
+    key_id: Optional[str] = Field(default=None, sa_column=Column(String(32), nullable=True))
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 # ============================================================================
@@ -535,7 +677,7 @@ class Broker(SQLModel, table=True):
     __table_args__ = {"sqlite_autoincrement": True}  # ids leave the backend: never reuse one (plan 34)
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True, nullable=False)
+    name: str = Field(unique=True, nullable=False)
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
     portal_url: Optional[str] = Field(default=None)
     icon_url: Optional[str] = Field(default=None, description="Custom icon URL for the broker")
@@ -549,8 +691,8 @@ class Broker(SQLModel, table=True):
     is_active: bool = Field(default=True, description="Whether the broker account is currently active")
     opened_at: Optional[date_type] = Field(default=None, description="Date when the account was opened in reality")
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 class BrokerUserAccess(SQLModel, table=True):
@@ -580,7 +722,7 @@ class BrokerUserAccess(SQLModel, table=True):
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
+    user_id: int = Field(foreign_key="users.id", nullable=False)
     broker_id: int = Field(foreign_key="brokers.id", nullable=False, index=True)
     role: UserRole = Field(default=UserRole.VIEWER)
     share_percentage: Decimal = Field(
@@ -589,8 +731,8 @@ class BrokerUserAccess(SQLModel, table=True):
         description="Ownership fraction (0.000000 to 1.000000) for portfolio aggregation",
     )
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 # ============================================================================
@@ -660,8 +802,8 @@ class Asset(SQLModel, table=True):
     identifier_uuid: Optional[str] = Field(default=None, max_length=36, description="UUID for custom assets")
     identifier_other: Optional[List[str]] = Field(default=None, sa_column=Column(JSON), description="JSON list of other/soft identifiers (technical codes without a dedicated column + soft broker labels); additive across imports")
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -697,7 +839,7 @@ class Asset(SQLModel, table=True):
     @field_validator("classification_params")
     def validate_classification_params(cls, v):
         # Lazy import to avoid circular dependency
-        from backend.app.schemas.assets import FAClassificationParams  # noqa: PLC0415 — avoid circular import
+        from backend.app.schemas.assets.metadata import FAClassificationParams  # noqa: PLC0415 — avoid circular import
 
         if v is None:
             return v
@@ -728,7 +870,7 @@ class Transaction(SQLModel, table=True):
     Field semantics:
     - quantity: Asset delta (positive = buy/in, negative = sell/out)
     - amount: Cash delta (positive = receive, negative = spend)
-    - date: Settlement date (when transaction is finalized)
+    - date: Trade date (the day the operation was made, not the day its cash settles; B-52)
 
     Relationship rules:
     - TRANSFER: quantity != 0, amount = 0, related_transaction_id REQUIRED
@@ -747,25 +889,27 @@ class Transaction(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    broker_id: int = Field(foreign_key="brokers.id", nullable=False, index=True)
+    broker_id: int = Field(foreign_key="brokers.id", nullable=False)
     asset_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(Integer, ForeignKey("assets.id"), nullable=True, index=True),
+        sa_column=Column(Integer, ForeignKey("assets.id"), nullable=True),
         description="Asset ID, NULL for pure cash transactions",
     )
 
     type: TransactionType = Field(nullable=False)
-    date: date_type = Field(nullable=False, index=True, description="Settlement date")
+    date: date_type = Field(nullable=False, description="Trade date: the day the operation was made")
 
     # Signed values: + in, - out. Default 0, NOT NULL for SUM calculations
     quantity: Decimal = Field(
         default=Decimal("0"),
-        sa_column=Column(Numeric(18, 6), nullable=False, default=0),
+        sa_column=Column(RealDecimal(22, 10), nullable=False, default=0),
         description="Asset quantity delta (+ in, - out)",
     )
     amount: Decimal = Field(
         default=Decimal("0"),
-        sa_column=Column(Numeric(18, 6), nullable=False, default=0),
+        # W-B60: a REAL read back as the decimal written; a plain Numeric read it through '%.6f', the double's noise
+        # in the decimals from about 11 integer digits (123456789012.345 read 123456789012.345001). Same DDL.
+        sa_column=Column(RealDecimal(18, 6), nullable=False, default=0),
         description="Cash amount delta (+ in, - out)",
     )
     currency: Optional[str] = Field(default=None, max_length=3, description="ISO 4217 currency code, required if amount != 0")
@@ -815,7 +959,7 @@ class Transaction(SQLModel, table=True):
     # - Can be manually overridden (e.g., Exit Tax, inheritances use market value)
     cost_basis_override: Optional[Decimal] = Field(
         default=None,
-        sa_column=Column(Numeric(18, 6), nullable=True),
+        sa_column=Column(RealDecimal(24, 12), nullable=True),
         description="Frozen PER-UNIT cost basis (WAC per single unit) for TRANSFER_IN / opening ADJUSTMENT. Multiplied by quantity to get the total cost basis. Overrides calculated cost basis.",
     )
 
@@ -839,8 +983,8 @@ class Transaction(SQLModel, table=True):
         description="FK to AssetEvent this transaction realizes. RESTRICT on delete.",
     )
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", "cost_basis_currency", mode="before")
     @classmethod
@@ -867,26 +1011,25 @@ class PriceHistory(SQLModel, table=True):
     """
 
     __tablename__ = "price_history"
-    __table_args__ = (
-        UniqueConstraint("asset_id", "date", name="uq_price_history_asset_date"),
-        Index("idx_price_history_asset_date", "asset_id", "date"),
-    )
+    __table_args__ = (UniqueConstraint("asset_id", "date", name="uq_price_history_asset_date"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
     asset_id: int = Field(foreign_key="assets.id", nullable=False)
     date: date_type = Field(nullable=False)
 
-    open: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    high: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    low: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    close: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    volume: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(24, 0)))
-    adjusted_close: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
+    open: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
+    high: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
+    low: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
+    close: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
+    volume: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 0)))
+    adjusted_close: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
 
     currency: str = Field(nullable=False)  # ISO 4217
     source_plugin_key: str = Field(nullable=False)
-    fetched_at: datetime = Field(default_factory=utcnow)
+    # When the row last changed, not when it was last read: a live quote equal to today's row stamps nothing (MF-FA).
+    # It feeds the price fingerprint (COUNT + MAX(fetched_at)) of the portfolio engine and report caches.
+    fetched_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -923,7 +1066,8 @@ class AssetEvent(SQLModel, table=True):
     asset_id: int = Field(foreign_key="assets.id", nullable=False)
     date: date_type = Field(nullable=False)
     type: AssetEventType = Field(nullable=False)
-    value: Decimal = Field(sa_column=Column(Numeric(18, 6), nullable=False))
+    # W-B60: read back as the decimal written, as Transaction.amount. Same DDL, NUMERIC(18, 6).
+    value: Decimal = Field(sa_column=Column(RealDecimal(18, 6), nullable=False))
     currency: str = Field(nullable=False)
     provider_assignment_id: Optional[int] = Field(
         default=None,
@@ -935,8 +1079,8 @@ class AssetEvent(SQLModel, table=True):
         description="FK to provider config that generated this event. NULL = user-created manual event.",
     )
     notes: Optional[str] = Field(default=None, sa_column=Column(Text))
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -975,10 +1119,10 @@ class FxRate(SQLModel, table=True):
     date: date_type = Field(nullable=False)
     base: str = Field(nullable=False)  # ISO 4217
     quote: str = Field(nullable=False)  # ISO 4217
-    rate: Decimal = Field(sa_column=Column(Numeric(24, 10), nullable=False))
+    rate: Decimal = Field(sa_column=Column(RealDecimal(24, 10), nullable=False))
 
     source: str = Field(default="ECB")
-    fetched_at: datetime = Field(default_factory=utcnow)
+    fetched_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("base", "quote", mode="before")
     @classmethod
@@ -1015,14 +1159,13 @@ class FxConversionRoute(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("base", "quote", "priority", name="uq_route_base_quote_priority"),
         CheckConstraint("base < quote", name="ck_route_base_less_than_quote"),
-        Index("idx_route_base_quote", "base", "quote"),
         {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    base: str = Field(nullable=False, min_length=3, max_length=3, index=True)
-    quote: str = Field(nullable=False, min_length=3, max_length=3, index=True)
+    base: str = Field(nullable=False, min_length=3, max_length=3)
+    quote: str = Field(nullable=False, min_length=3, max_length=3)
 
     priority: int = Field(default=1, ge=1, description="Priority level (1=primary, 2=fallback, etc.)")
 
@@ -1031,8 +1174,8 @@ class FxConversionRoute(SQLModel, table=True):
         description="JSON array of conversion steps [{from, to, provider}, ...]",
     )
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("base", "quote", mode="before")
     @classmethod
@@ -1097,10 +1240,7 @@ class AssetProviderAssignment(SQLModel, table=True):
     """
 
     __tablename__ = "asset_provider_assignments"
-    __table_args__ = (
-        UniqueConstraint("asset_id", name="uq_asset_provider_asset_id"),
-        Index("idx_asset_provider_asset_id", "asset_id"),
-    )
+    __table_args__ = (UniqueConstraint("asset_id", name="uq_asset_provider_asset_id"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -1126,10 +1266,10 @@ class AssetProviderAssignment(SQLModel, table=True):
         sa_column=Column(Text),
         description="JSON configuration for provider (validated by plugin)",
     )
-    last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
+    last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)", sa_type=DateTime)
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 # ============================================================================

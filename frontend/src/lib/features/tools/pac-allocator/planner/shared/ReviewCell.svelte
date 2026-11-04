@@ -37,16 +37,16 @@
 </script>
 
 {#if cell.type === 'step'}
-    <span class="flex items-center gap-2 font-medium text-gray-900 dark:text-gray-100" data-testid="pac-planner-review-section" data-step={cell.step} data-blocked={cell.blocked ? 'true' : 'false'}>
+    <span class="flex items-center gap-2 font-medium text-lf-primary" data-testid="pac-planner-review-section" data-step={cell.step} data-blocked={cell.blocked ? 'true' : 'false'}>
         {#if cell.blocked}
-            <CircleAlert class="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+            <CircleAlert class="h-4 w-4 shrink-0 text-lf-warning" aria-hidden="true" />
         {:else}
-            <CircleCheck class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <CircleCheck class="h-4 w-4 shrink-0 text-lf-success" aria-hidden="true" />
         {/if}
         {$t(stepKey(cell.step), {default: STEP_FALLBACKS[cell.step]})}
     </span>
 {:else if cell.type === 'summary'}
-    <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-700 dark:text-gray-300">
+    <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-lf-secondary">
         {#if cell.text !== ''}<span>{cell.text}</span>{/if}
         {#each cell.currencies as code (code)}<CurrencyCode {code} />{/each}
     </span>
@@ -67,16 +67,16 @@
         {:else if subject.type === 'asset'}
             <AssetNameCell label={fact.entity} iconUrl={cell.asset?.iconUrl ?? null} assetType={cell.asset?.assetClass ? cell.asset.assetClass.toUpperCase() : null} />
         {:else}
-            <span class="flex items-center gap-1.5 font-medium text-gray-900 dark:text-gray-100">
+            <span class="flex items-center gap-1.5 font-medium text-lf-primary">
                 <CurrencyCode code={subject.base} />
-                <span class="text-gray-400 dark:text-gray-500" aria-hidden="true">→</span>
+                <span class="text-lf-muted" aria-hidden="true">→</span>
                 <CurrencyCode code={subject.quote} />
             </span>
         {/if}
     </span>
 {:else if cell.type === 'value'}
     {@const value = cell.fact.value}
-    <span class="flex flex-wrap items-center gap-x-2 gap-y-1 tabular-nums text-gray-700 dark:text-gray-300">
+    <span class="flex flex-wrap items-center gap-x-2 gap-y-1 tabular-nums text-lf-secondary">
         {#if value.kind === 'money'}
             {#if value.selected === null}
                 {formatPlannerMoneyPlain(value.amount, value.currency)}
@@ -107,10 +107,10 @@
     {@const originState = factOriginState(fact)}
     <span class="flex flex-wrap items-center gap-2 text-sm" data-origin={originState}>
         {#if originState === 'librefolio'}
-            <span class="text-gray-600 dark:text-gray-300">{$t(`${KEY}.origin.librefolio`, {default: 'LibreFolio'})}</span>
+            <span class="text-lf-secondary">{$t(`${KEY}.origin.librefolio`, {default: 'LibreFolio'})}</span>
             {#if fact.stale && fact.referenceDate}
                 <Tooltip text={$t(`${KEY}.staleTitle`, {default: 'Not of today: the calculation uses the latest value LibreFolio has.'})} position="top" maxWidth="280px">
-                    <span class="text-amber-600 dark:text-amber-400" data-testid="pac-planner-review-fact-stale">{formatPlannerDate(fact.referenceDate)}</span>
+                    <span class="text-lf-warning" data-testid="pac-planner-review-fact-stale">{formatPlannerDate(fact.referenceDate)}</span>
                 </Tooltip>
             {/if}
         {:else if originState === 'manual'}

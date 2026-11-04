@@ -21,7 +21,10 @@ This directory contains sample broker report files for testing BRIM plugins.
 | File                   | Description                                              | Expected Result                                             |
 |------------------------|---------------------------------------------------------|-------------------------------------------------------------|
 | `fineco-export.csv`    | Variant B (15 columns, with commission columns)         | Trades/dividends/coupons/redemptions + separate FEE rows    |
+| `fineco_btp_market.csv`, `fineco_btp_placement.csv` | Variant B, bond trades with commissions | BUY (Controvalore minus commission) + separate FEE rows |
 | `fineco_variant_a.csv` | Variant A (11 columns, no commission columns)           | Same operations parsed, no FEE rows (currency from Divisa)  |
+
+In the Variant-B samples the **Controvalore** of a trade already includes the commission (purchase) or has it taken off (sale), as in a real Fineco export (discussion #49): `Prezzo` = `Controvalore` / `Quantita` on euro rows.
 
 ### Danske Bank Plugin (`broker_danske_bank`) — report sets
 
@@ -37,6 +40,28 @@ combined first, and the combined file is parsed. The sets are declared in the pl
 | gap  | `danske_bank-gap-custody-1.xlsx` | First custody period                                                                                                  | Segment 1                                                                                                                                            |
 | gap  | `danske_bank-gap-custody-2.xlsx` | Second custody period, two months later                                                                               | Segment 2; the last trade settles after the cash export ends (`not_yet_settled`)                                                                    |
 | gap  | `danske_bank-gap-cash.csv`       | Cash statement covering both periods and the trades in between                                                        | A proven gap: an opening checkpoint and a gap checkpoint; the standalone rows of the gap are imported                                               |
+
+### Crédit Agricole Plugin (`broker_credit_agricole`) — report sets
+
+Synthetic files with invented values, built on the structure of the two Italian exports (securities movements and
+account movements). A member is never parsed alone: each set is combined first, and the combined file is parsed. The sets
+are declared in the plugin's `test_sample_sets`.
+
+| Set  | File                                  | Description                                                                                                     | Expected Result                                                                                                                              |
+|------|---------------------------------------|-----------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| main | `credit_agricole-securities.csv`      | Securities movements, newest first: a transfer before the opening, coupons, a placement, a fund, a maturity     | Role `securities`; one row with no account counterpart (`no_counterpart`)                                                                    |
+| main | `credit_agricole-account.xlsx`        | Account movements with the header (opening and closing balance, period); the balances add up                    | Role `account`; pairs by value date, a coupon of the account alone, an opening checkpoint with its position, a closing verification         |
+| gap  | `credit_agricole-gap-securities.xlsx` | Securities movements of three periods                                                                           | Role `securities`; a coupon inside the month no account export covers (`in_gap`)                                                             |
+| gap  | `credit_agricole-gap-account-1.xlsx`  | Account movements of May-June, with its header                                                                  | Role `account`; segment before the hole                                                                                                      |
+| gap  | `credit_agricole-gap-account-2.xlsx`  | Account movements of August, with its header; the opening balance differs from the first file's closing balance | A hole in July: a `gap` checkpoint (a proposed cash correction at its end)                                                                   |
+
+The older `credit_agricole-export.*` (securities) and `credit_agricole-conti*.*` (account) files are not a matching pair:
+they stay as fixtures for the tests of single rows (unknown causali, unreadable amounts, the dates of the rows).
+
+`credit_agricole-conti-contract.csv` (account) and `credit_agricole-securities-contract.csv` (securities, one transfer from
+another dossier that pairs with nothing and raises no cash) form the set of the E2E spec `tx-import-ca-contract.spec.ts`:
+the account rows raise every channel of the plugin → wizard contract (notices, field todos, split hints, asset advisory),
+the securities member is there because a set needs both exports and is chosen to change none of them.
 
 ### Scalable Capital plugins (`broker_scalable`, `broker_scalable_deposit`)
 

@@ -15,6 +15,8 @@ pydantic-settings = "*"
 numpy = "*"
 python-dotenv = "*"
 apscheduler = "*"
+# zoneinfo (scheduler, settings, Yahoo) needs the IANA database; outside Docker only this package provides it
+tzdata = "*"
 structlog = "*"
 psutil = "*"
 python-dateutil = "*"
@@ -54,6 +56,8 @@ pyyaml = "==6.0.3"
 pyscipopt = "==6.2.1"
 borsa-italiana-scraping = {ref = "main", git = "https://github.com/Librefolio/borsaItaliana-scraping.git"}
 uvicorn = {extras = ["standard"], version = "==0.52.4"}
+cryptography = "*"
+pyrage = "==1.4.0"
 
 [dev-packages]
 pytest = "*"

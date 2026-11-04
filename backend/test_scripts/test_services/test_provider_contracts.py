@@ -7,7 +7,9 @@ WITHOUT making any HTTP calls. These tests validate:
 - Static URL generation follows expected patterns
 - Test cases / test data are well-formed
 - Provider metadata is consistent — including with what it points at: an asset
-  provider's help URL names an existing page of the user guide, and an FX
+  provider's help URL names an existing page of the user guide, an asset
+  provider that translates its parameters translates exactly the fields its
+  params_schema shows, in every language of the catalogue, and an FX
   provider's description counts the currencies its own table serves
 
 Unlike test_external/test_*_providers.py (which test live HTTP), these run
@@ -18,16 +20,16 @@ When a new provider is added with @register_provider, these tests
 automatically cover it — no manual test authoring needed.
 """
 
+import json
 import re
 from pathlib import Path
 
 import pytest
 
-from backend.app.services.provider_registry import (
-    AssetProviderRegistry,
-    BRIMProviderRegistry,
-    FXProviderRegistry,
-)
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.fx.registry import FXProviderRegistry
+from scripts import i18n_catalog as catalog
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -191,6 +193,62 @@ class TestFXProviderStatedCoverage:
 # ASSET SOURCE PROVIDER CONTRACT
 # ============================================================================
 
+# The languages the app ships: those of the catalogue's base (scripts/i18n_catalog.py). A provider that
+# translates its parameters translates them in each one.
+CATALOG_LANGUAGES = tuple(catalog.languages(REPO_ROOT))
+# The two texts the asset form reads for a parameter, `assets.providerParams.<code>.<kind>.<key>`
+# (ProviderAssignmentSection.paramText), before falling back to params_schema's English.
+PARAM_TEXT_KINDS = ("label", "description")
+# The providers whose params_schema fields carry an English label and whose own i18n fragments translate
+# them: Borsa Italiana always did, justETF and the CSS scraper since O-9.
+LABELLED_PARAM_PROVIDERS = ("borsa_italiana", "css_scraper", "justetf")
+
+
+def _form_param_fields(provider) -> list[dict]:
+    """The params_schema fields the asset form shows with a label and a tooltip: every one but a
+    ``ui_component``, the meta-field naming a custom editor (ProviderAssignmentSection's ``genericFields``)."""
+    return [field for field in provider.params_schema if field.get("type") != "ui_component"]
+
+
+def _param_fragment(provider, lang: str) -> Path:
+    """The provider's own fragment in ``lang``, a source of the catalogue: ``i18n/<lang>.json`` in the plugin
+    folder its class was loaded from (the module discovery names ``<family>.<plugin>.plugin``)."""
+    folder = type(provider).__module__.split(".")[:-1]
+    return REPO_ROOT.joinpath(*folder, catalog.PLUGIN_I18N_DIR, f"{lang}.json")
+
+
+def _param_translations(provider) -> dict[str, object]:
+    """``assets.providerParams.<code>`` of the provider's fragment in each catalogue language; None where the
+    file or the branch is absent."""
+    found: dict[str, object] = {}
+    for lang in CATALOG_LANGUAGES:
+        path = _param_fragment(provider, lang)
+        node: object = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+        for segment in ("assets", "providerParams", provider.provider_code):
+            node = node.get(segment) if isinstance(node, dict) else None
+        found[lang] = node
+    return found
+
+
+def _is_text(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _param_text_problems(where: str, kind: str, texts: object, expected: set[str]) -> list[str]:
+    """What is wrong with one ``label`` or ``description`` branch against the keys of the form's fields: the
+    branch missing, a field without its text, a text for no field, a text that is empty or not a string."""
+    if not isinstance(texts, dict):
+        return [f"{where}: no {kind} branch"]
+    given = set(texts)
+    problems = []
+    if missing := sorted(expected - given):
+        problems.append(f"{where}: no {kind} for {missing}, fields of params_schema")
+    if stale := sorted(given - expected):
+        problems.append(f"{where}: a {kind} for {stale}, no field of params_schema")
+    if blank := sorted(key for key in expected & given if not _is_text(texts[key])):
+        problems.append(f"{where}: the {kind} of {blank} is not a non-empty string")
+    return problems
+
 
 class TestAssetProviderContract:
     """Every Asset Source provider must satisfy this contract."""
@@ -290,6 +348,61 @@ class TestAssetProviderContract:
             assert isinstance(field, dict), f"params_schema entry is not dict: {field}"
             assert "key" in field, f"params_schema field missing 'key': {field}"
             assert "type" in field, f"params_schema field missing 'type': {field}"
+
+    def test_param_translations_cover_exactly_its_form_params(self, provider):
+        """A provider that translates its parameters translates exactly the fields its form shows, in every
+        language of the catalogue.
+
+        The asset form shows ``assets.providerParams.<code>.<label|description>.<key>`` when the catalogue has
+        it, else the English ``label`` / ``description`` of params_schema (a label without either shows the raw
+        key). So a field added without a translation reads English in an Italian form, and the translation of a
+        removed field lingers as a key nobody reads: under ``label`` and under ``description`` the keys are the
+        form's fields, no more, no fewer, each with a non-empty text, in every language. A provider whose
+        fragments hold no ``assets.providerParams.<code>`` shows params_schema's English: nothing to compare.
+        """
+        code = provider.provider_code
+        translations = _param_translations(provider)
+        if all(branch is None for branch in translations.values()):
+            pytest.skip(f"{code} translates no parameter: its form shows the English of params_schema")
+        expected = {field["key"] for field in _form_param_fields(provider)}
+        problems = []
+        for lang, branch in translations.items():
+            where = f"{code} [{lang}] {catalog.display_path(_param_fragment(provider, lang), REPO_ROOT)}"
+            if not isinstance(branch, dict):
+                problems.append(f"{where}: no assets.providerParams.{code} branch, which another language has")
+                continue
+            for kind in PARAM_TEXT_KINDS:
+                problems += _param_text_problems(where, kind, branch.get(kind), expected)
+
+        assert not problems, f"{len(problems)} problem(s):\n" + "\n".join(problems)
+
+    def test_param_translation_guard_has_something_to_check(self):
+        """Positive control for the guard above: its green is not the green of an empty check.
+
+        The catalogue ships the four languages, and each provider that labels and translates its parameters is
+        registered and has a branch where the guard reads, in its own fragment, under its own code. So a skip
+        there is a provider with nothing translated, never a guard reading the wrong folder or the wrong code.
+        """
+        assert {"en", "it", "fr", "es"} <= set(CATALOG_LANGUAGES), f"the catalogue's base ships {CATALOG_LANGUAGES}"
+        for code in LABELLED_PARAM_PROVIDERS:
+            provider = AssetProviderRegistry.get_provider_instance(code)
+            assert provider is not None, f"{code} is not a registered asset provider"
+            translated = [lang for lang, branch in _param_translations(provider).items() if branch is not None]
+            fragments = catalog.display_path(_param_fragment(provider, catalog.SOURCE_LANGUAGE).parent, REPO_ROOT)
+            assert translated, f"{code}: no assets.providerParams.{code} in {fragments}: the guard checks nothing of it"
+
+    @pytest.mark.parametrize("code", LABELLED_PARAM_PROVIDERS)
+    def test_form_params_carry_an_english_label(self, code):
+        """Each field the form shows has a non-empty English ``label``: its caption when a translation is
+        missing, and the one an API client reads. With neither, the form shows the raw key
+        (``current_css_selector``): what justETF and the CSS scraper showed before O-9."""
+        provider = AssetProviderRegistry.get_provider_instance(code)
+        assert provider is not None, f"{code} is not a registered asset provider"
+        fields = _form_param_fields(provider)
+        assert fields, f"{code}: params_schema shows no field, nothing to label"
+
+        unlabelled = [field["key"] for field in fields if not _is_text(field.get("label"))]
+        assert not unlabelled, f"{code}: params_schema fields without an English label: {unlabelled}"
 
     def test_accepted_identifier_types_valid(self, provider):
         """accepted_identifier_types must be a non-empty list."""

@@ -55,5 +55,5 @@ banner) but never selects a row in the BulkModal or checks that its selection to
 
 | Role | Path |
 |------|------|
-| TransactionBulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| TransactionBulkModal | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | DataTable component | `frontend/src/lib/components/table/DataTable.svelte` |

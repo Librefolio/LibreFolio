@@ -14,7 +14,7 @@
  * `data-invalid`, `data-active`, the `calendar-day` grid's `data-iso`). Never a
  * translated label — the row shows "1W/1M…" but the section headings, the
  * From/To captions and the formatted dates are i18n/locale output — and never a
- * Tailwind class: the field turns red through `text-red-600`, and matching on
+ * Tailwind class: the field turns red through `text-lf-danger`, and matching on
  * that would test the palette.
  *
  * Dates that must be "in the past whatever today is" are hardcoded in 2024;
@@ -931,9 +931,13 @@ describe('DateRangePicker — zoom-guard exemption (F17)', () => {
 // about "all of history", so it drops MAX, whose min/max sentinels it has no
 // way to resolve. Both are additive. Every existing caller passes neither and
 // must keep exactly the picker it renders today, so the default paths are
-// pinned: the frame token by token (`FRAME`, transcribed from the template at
-// the k5a baseline) in each state its classes depend on, and the row button by
+// pinned: the frame token by token (`FRAME`, transcribed from the template on
+// the colour roles) in each state its classes depend on, and the row button by
 // button in each layout a caller mounts.
+//
+// The roles brought one rule of their own, pinned here as well: an open frame
+// draws the focus border instead of its closed one, never beside it (`FRAME`
+// says why).
 //
 // As in the F17 block above, the class is the contract here, so it is read;
 // elements are still found by testid and by their place in the render. Date is
@@ -944,23 +948,41 @@ describe('DateRangePicker — zoom-guard exemption (F17)', () => {
 /** The k5a contract, typed here so this file compiles before the props exist. */
 type K5aProps = {fieldsClass?: string; excludePresets?: readonly QuickPreset[]};
 
-/** Today's frame around the two fields, token by token, as the template composes it at the k5a baseline. */
+/**
+ * Today's frame around the two fields, token by token, as the template composes it on the colour
+ * roles of `$lib/theme/tokens.css`: what every existing caller renders. A role utility follows the
+ * theme through its variable, so no token has a `dark:` half. The border follows the calendar:
+ * `closedBorder` while it is closed, `open` while it is open — instead of the closed one, never
+ * beside it.
+ *
+ * Tailwind 4 emits two utilities that set the same property under the same variants in the
+ * alphabetical order of their names, so on an element carrying both the later name wins; a `hover:`
+ * utility comes after every base one. `border-lf-focus` sorts before `border-lf-input`: an open
+ * frame that kept its closed border would draw that one, and under the pointer its hover border.
+ * So the template puts the two borders in the two branches of one ternary, and every open state
+ * below pins it.
+ */
 const FRAME = {
-    base: ['w-full', 'flex', 'items-center', 'gap-0', 'bg-white', 'dark:bg-slate-800', 'rounded-xl', 'border', 'border-gray-200', 'dark:border-slate-600', 'overflow-hidden', 'hover:border-libre-green/50', 'transition-colors'],
+    base: ['w-full', 'flex', 'items-center', 'gap-0', 'bg-lf-field', 'rounded-xl', 'border', 'overflow-hidden', 'transition-colors'],
     /** Every size but compact. */
     shadow: ['shadow-sm'],
     stacked: ['flex-col'],
-    /** While the calendar is open. */
-    open: ['ring-1', 'ring-libre-green', 'border-libre-green'],
+    /** While the calendar is closed. */
+    closedBorder: ['border-lf-input', 'hover:border-lf-input-hover'],
+    /** While the calendar is open, in place of `closedBorder`. */
+    open: ['ring-1', 'ring-lf-focus', 'border-lf-focus'],
 };
 
 /** The frame in each state its classes depend on: size, stacking, and whether the calendar is open. */
 const FRAME_STATES: {state: string; props: Record<string, unknown>; open: boolean; classes: string[]}[] = [
-    {state: 'regular', props: {}, open: false, classes: [...FRAME.base, ...FRAME.shadow]},
-    {state: 'compact', props: {compact: true}, open: false, classes: [...FRAME.base]},
-    {state: 'stacked', props: {stacked: true}, open: false, classes: [...FRAME.base, ...FRAME.stacked, ...FRAME.shadow]},
+    {state: 'regular', props: {}, open: false, classes: [...FRAME.base, ...FRAME.shadow, ...FRAME.closedBorder]},
+    {state: 'compact', props: {compact: true}, open: false, classes: [...FRAME.base, ...FRAME.closedBorder]},
+    {state: 'stacked', props: {stacked: true}, open: false, classes: [...FRAME.base, ...FRAME.stacked, ...FRAME.shadow, ...FRAME.closedBorder]},
     {state: 'calendar open', props: {}, open: true, classes: [...FRAME.base, ...FRAME.shadow, ...FRAME.open]},
 ];
+
+/** Every state in which the calendar is open: where `FRAME.closedBorder` must be absent. */
+const OPEN_FRAME_STATES = FRAME_STATES.filter(({open}) => open);
 
 /** Today's quick-range row, in drawing order: the centred row and the toolbar's alike, since jsdom measures no room for the "jolly" fill. */
 const QUICK_ROW = ['1w', '1m', '3m', '6m', '1y', '2y', 'ytd', 'max', 'custom'].map((key) => `date-preset-${key}`);
@@ -1060,6 +1082,19 @@ describe('DateRangePicker — the caller’s class for the fields’ frame (k5a)
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    it.each(OPEN_FRAME_STATES)('draws the focus border instead of the closed one, never beside it: $state', async ({props, open}) => {
+        const {frame} = await frameInState(props, open);
+        const tokens = classesOf(frame);
+
+        // Presence first: on a frame that lost its border colour altogether, the absence below would hold as well. And the
+        // closed states above carry `FRAME.closedBorder`, so the absence is checked for names the template really writes.
+        expect(tokens, 'the open frame does not draw the focus border').toContain('border-lf-focus');
+        expect(
+            tokens.filter((token) => FRAME.closedBorder.includes(token)),
+            'the open frame keeps a closed border beside the focus one, and Tailwind emits it later: that is the border drawn',
+        ).toEqual([]);
     });
 });
 
@@ -1272,5 +1307,181 @@ describe('DateRangePicker — the count presets are labelled from the catalogues
         } finally {
             room.mockRestore();
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Y-N65 — no range of a single day (decision of the developer, 19/10).
+//
+// «In every date-range picker of the app the same day cannot be chosen twice: a
+// second click on the same date is ignored, and the day shows the same "you can't
+// go there" cursor as the future days.» For each way into the range:
+//   - the calendar: after a first click on X (pending), a second click on X is
+//     ignored — nothing published, the calendar stays open, X stays pending, and
+//     the next day clicked closes the range — and hovering X previews nothing;
+//   - a typed date equal to the other end's date is refused like a typed future
+//     date: it stays in its field, red once armed (blur/Enter), nothing published;
+//     it is applied once the other end moves away from it;
+//   - an arrow step landing on the other end's date goes one day further in the
+//     same direction (the swap still applies), and does nothing when that day is a
+//     future the picker refuses;
+//   - a typed date with the other end empty, or on a min/max sentinel, leaves that
+//     end as it is: the swap is between two real dates only.
+// A range of one day already saved stays as it is (no code, nothing to pin here).
+// The cursor itself is CalendarMonth's (`disabled`, its Y-N65 describe).
+//
+// Read through what the picker publishes: the onchange payload, `data-open`, the
+// fields' value and `data-invalid`, the grids' `data-state`. Dates are in 2024,
+// past whatever today is, except the arrow case at the ceiling, which freezes the
+// clock (`FROZEN_NOW`: today is Friday 14 June 2024 there).
+// ---------------------------------------------------------------------------
+
+describe('DateRangePicker — no range of a single day (Y-N65)', () => {
+    /** The day clicked first: after the committed range's end (2024-02-20), so its published state is `pending`, not `in-range`. */
+    const X = '2024-02-25';
+    /** The date typed where the other end is empty or a sentinel. */
+    const TYPED = '2024-02-10';
+
+    /** A hover over a day: the grid hears it on the day's <td> (`mouseenter`, which does not bubble), not on the button. */
+    async function hover(cell: HTMLButtonElement): Promise<void> {
+        const td = cell.closest('td');
+        if (!td) throw new Error(`the day ${cell.dataset.iso} sits in no table cell`);
+        await fireEvent.mouseEnter(td);
+    }
+
+    /** What both grids publish, day by day: `grid:iso` → `data-state`. */
+    function dayStates(): Record<string, string> {
+        return Object.fromEntries(grids().flatMap((grid, index) => [...grid.querySelectorAll<HTMLButtonElement>('[data-testid="calendar-day"]')].map((cell) => [`${index}:${cell.dataset.iso}`, cell.dataset.state ?? ''])));
+    }
+
+    it('a second click on the pending day is ignored — nothing published, the calendar stays open, the day stays pending — and the next day clicked closes the range', async () => {
+        // Today: the second click on X closes the range X–X — onchange('2024-02-25', '2024-02-25') — and the calendar.
+        const {startInput, onchange, root} = setup({start: '2024-01-15', end: '2024-02-20'});
+        await fireEvent.focus(startInput); // left = Jan, right = Feb 2024
+        await fireEvent.click(dayIn(1, X));
+        expect(dayIn(1, X), 'precondition: the first click left X pending').toHaveAttribute('data-state', 'pending');
+
+        await fireEvent.click(dayIn(1, X));
+
+        expect(onchange, 'the second click on the pending day published a range of one day').not.toHaveBeenCalled();
+        expect(root, 'the second click on the pending day closed the calendar').toHaveAttribute('data-open', 'true');
+        expect(dayIn(1, X), 'the pending day was dropped').toHaveAttribute('data-state', 'pending');
+
+        await fireEvent.click(dayIn(0, '2024-01-10'));
+        expect(onchange, 'the next day clicked does not close the range from the pending one, once and sorted').toHaveBeenCalledExactlyOnceWith('2024-01-10', X);
+        expect(root).toHaveAttribute('data-open', 'false');
+    });
+
+    it('hovering the pending day previews no range of one day — every day keeps its state — while hovering another day previews as today', async () => {
+        // Today: hovering X while X is pending previews the range X–X: X turns `range-start`, and the committed range's
+        // days drop their `range-start`/`in-range`/`range-end`, as under any preview.
+        const {startInput} = setup({start: '2024-01-15', end: '2024-02-20'});
+        await fireEvent.focus(startInput);
+        await fireEvent.click(dayIn(1, X));
+        const pendingOnly = dayStates();
+        expect(pendingOnly[`1:${X}`], 'precondition: X is pending').toBe('pending');
+
+        await hover(dayIn(1, X));
+
+        const hovered = dayStates();
+        expect({x: hovered[`1:${X}`], changed: Object.keys(hovered).filter((key) => hovered[key] !== pendingOnly[key])}, 'hovering the pending day previewed a range of one day').toEqual({x: 'pending', changed: []});
+
+        // Control: another day is previewed as today — it and X are the ends, the days between them in range.
+        await hover(dayIn(1, '2024-02-22'));
+        expect(['2024-02-22', '2024-02-23', '2024-02-24', X].map((iso) => dayIn(1, iso).getAttribute('data-state'))).toEqual(['range-start', 'in-range', 'in-range', 'range-end']);
+    });
+
+    it.each([
+        {field: 'start', typed: DEF_END, arm: 'blur'},
+        {field: 'end', typed: DEF_START, arm: 'Enter'},
+    ] as const)('a date typed in «$field» equal to the other end’s is refused like a future date — kept in the field, red once armed by $arm, nothing published', async ({field, typed, arm}) => {
+        // Today: it is accepted — the range collapses on that day, onchange(typed, typed) — and the field is not red.
+        const {startInput, endInput, onchange} = setup();
+        const input = field === 'start' ? startInput : endInput;
+        await fireEvent.focus(input);
+        await type(input, typed);
+        if (arm === 'blur') await fireEvent.blur(input);
+        else await fireEvent.keyDown(input, {key: 'Enter'});
+        await tick();
+
+        expect({shown: input.value, invalid: input.getAttribute('data-invalid'), published: onchange.mock.calls}, 'the day of the other end was accepted: a range of one day').toEqual({shown: typed, invalid: 'true', published: []});
+    });
+
+    it('GUARD: «Da» typed as the old «A», then a new «A» — the range is published once, from the typed «Da» to the new «A»', async () => {
+        // Green today, by another road: today the typed «Da» is accepted at once, as the one-day draft 02-20–02-20, and
+        // the new «A» moves that draft's end — one onchange('2024-02-20', '2024-03-05') once focus leaves the picker.
+        // After the cure the typed «Da» is refused (the case above) and must be applied once the new «A» differs from it:
+        // the same single publish, both fields on it, neither red.
+        const {startInput, endInput, onchange} = setup({compact: true, start: '2024-01-15', end: '2024-02-20'});
+        await fireEvent.focus(startInput);
+        await type(startInput, '2024-02-20');
+        await fireEvent.blur(startInput, {relatedTarget: endInput}); // on to «A»: still inside the picker, nothing published
+        await fireEvent.focus(endInput);
+        await type(endInput, '2024-03-05');
+        await fireEvent.blur(endInput); // out of the picker
+
+        await waitFor(() => expect(onchange).toHaveBeenCalled());
+        expect(onchange).toHaveBeenCalledExactlyOnceWith('2024-02-20', '2024-03-05');
+        expect({start: startInput.value, end: endInput.value, startInvalid: startInput.getAttribute('data-invalid'), endInvalid: endInput.getAttribute('data-invalid')}).toEqual({start: '2024-02-20', end: '2024-03-05', startInvalid: 'false', endInvalid: 'false'});
+    });
+
+    it('an arrow step landing on the other end’s date goes one day further, and the swap still applies: «A» 03-11 ArrowDown, «Da» 03-10 → (03-09, 03-10)', async () => {
+        // Today: the step lands on 03-10, the start's date, and stays there — leaving the picker publishes
+        // onchange('2024-03-10', '2024-03-10').
+        const {endInput, onchange} = setup({start: '2024-03-10', end: '2024-03-11'});
+        await fireEvent.focus(endInput);
+        await fireEvent.keyDown(endInput, {key: 'ArrowDown'});
+        await fireEvent.keyUp(endInput, {key: 'ArrowDown'});
+        await tick();
+
+        await fireEvent.click(document.body); // leaving the picker publishes the stepped range
+        expect(onchange, 'the step stopped on the other end’s date: a range of one day').toHaveBeenCalledExactlyOnceWith('2024-03-09', '2024-03-10');
+    });
+
+    it('an arrow step whose day further on would be a refused future does nothing: «Da» yesterday ArrowUp, «A» today', async () => {
+        // Today: the step lands on today, the end's date, and stays there — the start field reads today, and leaving the
+        // picker publishes onchange(today, today).
+        vi.setSystemTime(FROZEN_NOW);
+        try {
+            const {startInput, onchange} = setup({start: offsetISO(-1), end: todayISO()});
+            await fireEvent.focus(startInput);
+            await fireEvent.keyDown(startInput, {key: 'ArrowUp'});
+            await fireEvent.keyUp(startInput, {key: 'ArrowUp'});
+            await tick();
+            const shown = startInput.value; // focused: the ISO date the field holds
+
+            await fireEvent.click(document.body);
+            expect({shown, published: onchange.mock.calls}, 'the step collapsed the range on today').toEqual({shown: offsetISO(-1), published: []});
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it.each([
+        {range: 'an empty', start: '', end: '', field: 'start', published: [TYPED, '']},
+        {range: 'an empty', start: '', end: '', field: 'end', published: ['', TYPED]},
+        {range: 'a MAX (min–max)', start: 'min', end: 'max', field: 'start', published: [TYPED, 'max']},
+        {range: 'a MAX (min–max)', start: 'min', end: 'max', field: 'end', published: ['min', TYPED]},
+    ] as const)('$range range: a date typed in «$field» leaves the other end as it is', async ({start, end, field, published}) => {
+        // Today: the other end is filled with the typed date — onchange(TYPED, TYPED), a range of one day.
+        const {startInput, endInput, onchange} = setup({start, end});
+        const input = field === 'start' ? startInput : endInput;
+        await fireEvent.focus(input);
+        await type(input, TYPED);
+        await fireEvent.blur(input);
+
+        await waitFor(() => expect(onchange).toHaveBeenCalled());
+        expect(onchange.mock.calls, 'the other end was filled with the typed date').toEqual([published]);
+    });
+
+    it('GUARD: two adjacent days still make a range — published once, sorted, and the calendar closes', async () => {
+        // Green today and after: the refusal is of one day, not of a short range.
+        const {startInput, onchange, root} = setup({start: '2024-01-15', end: '2024-02-20'});
+        await fireEvent.focus(startInput);
+        await fireEvent.click(dayIn(1, X));
+        await fireEvent.click(dayIn(1, '2024-02-24'));
+
+        expect(onchange).toHaveBeenCalledExactlyOnceWith('2024-02-24', X);
+        expect(root).toHaveAttribute('data-open', 'false');
     });
 });

@@ -152,8 +152,8 @@ a release before its container image is pullable.
 
 | Role | Path |
 |------|------|
-| Fixed-target GHCR probe and trust validation | `backend/app/services/container_registry.py` |
-| Authenticated same-origin endpoint | `backend/app/api/v1/system.py` |
+| Fixed-target GHCR probe and trust validation | `backend/app/services/platform/container_registry.py` |
+| Authenticated same-origin endpoint | `backend/app/api/v1/system/container_image.py` |
 | Typed status/reason contract | `backend/app/schemas/system.py` |
 | Release metadata probe, image gate, and fail-closed mapping | `frontend/src/lib/features/update-check/updateCheck.ts` |
 | Registry protocol and endpoint regressions | `backend/test_scripts/test_services/test_container_registry.py` |

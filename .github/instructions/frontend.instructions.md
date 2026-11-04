@@ -46,13 +46,21 @@ frontend/
 
 ## Financial numbers
 
-The frontend computes no financial quantity — cost, P&L, capital, NAV, returns, FX value, yields: it shows the fields the backend computes in `backend/app/services/financial_math/`; interactive measures (the measuring tool, what-if) are the only exceptions, and each must be declared where it lives.
+The frontend computes no financial quantity — cost, P&L, capital, NAV, returns, FX value, yields: it shows the fields the backend computes in `backend/app/services/financial_math/`; interactive measures (the measuring tool, what-if, the aggregates of the lots the user chooses — D-MF6(b)) and the transaction form's trade amount (`txTradeAmount.ts`: one product or quotient on exact decimals, never a route of its own) are the only exceptions, and each must be declared where it lives.
 
 ## Design System
 
-- **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no TS config file)
-- **Brand colors**: `#1a4031` (libre-green), `#f5f4ef` (libre-beige)
-- **Full dark mode**: CSS variables in `html.dark`
+- **The design system — read it before building or changing any UI**: the two themes («Stone and Sage» in light, «Slate and Sage» in dark), every colour role with its value in both themes and when to use it, the shared colour folder `lib/theme/` (components take colours from it, never define them) and all the colour rules: skill `design-system` (`.github/skills/design-tools/design-system/SKILL.md`)
+- **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no TS config file); the colour roles live in `lib/theme/tokens.css`, which `app.css` imports
+- **Colours are roles** (colour programme, workstream T): new and migrated code writes only the role utilities, never a palette class (`bg-white`, `text-gray-500`, `dark:bg-slate-800`) or a hand-written colour (`#1a4031`, `rgba(…)`, `white`)
+  - surfaces `bg-lf-app` (behind the shell), `bg-lf-page` (standalone pages), `bg-lf-header` (the app header, D-T23), `bg-lf-card`, `bg-lf-panel`, `bg-lf-field`, `hover:bg-lf-hover`, `bg-lf-neutral`, `bg-lf-inverse`, `bg-lf-overlay`, `bg-lf-logo`; floating card, modal or dropdown `border-lf-raised shadow-lf-shadow`
+  - the green sidebar, one family in both themes: `bg-lf-bar`, `text-lf-bar-text`, `hover:bg-lf-bar-hover`, active `bg-lf-bar-active text-lf-on-bar-active`, focus `outline-lf-bar-focus`, states `text-lf-bar-<state>` (D-T17)
+  - text `text-lf-primary`, `text-lf-secondary`, `text-lf-muted`, `placeholder:text-lf-placeholder`, `text-lf-link`; borders `border-lf-subtle`, `border-lf-input` (`hover:border-lf-input-hover`); focus `ring-lf-focus`
+  - brand `bg-lf-brand` + `text-lf-on-brand` (the login card header), primary button `bg-lf-action hover:bg-lf-action-hover text-lf-on-action`, `bg-lf-selected`, selected control `bg-lf-checked` + `text-lf-on-checked` (D-T16)
+  - states `success`, `warning`, `danger`, `info`: `text-lf-<state>`, `bg-lf-<state>-soft`, `border-lf-<state>-line`, `text-lf-<state>-on-soft`, `bg-lf-<state> text-lf-on-status`; solid red button `bg-lf-danger-solid text-lf-on-danger-solid`; `text-lf-gain`, `text-lf-loss`, `text-lf-donate`
+  - special: switch `bg-lf-switch-*`, terminal `bg-lf-terminal`, `<mark>` `bg-lf-mark`, AI `text-lf-ai`; the full palette, with both themes' values and when to use each role, is in the skill `design-system`
+- **Dark theme**: a role changes value under `html.dark` — never write `dark:` on a role utility. A component not migrated yet keeps its look from the frozen legacy remap of `app.css` (P1); migrate an element whole, never mixing roles and palette classes on it
+- **Gates**: `src/themeRoles.gate.test.ts` (a ratchet: legacy classes and colour literals per file only go down; role grammar) and `src/themeTokens.gate.test.ts` (both themes, contrast pairs). A file split is declared in the same commit: `node frontend/scripts/theme/theme-roles.mjs --split OLD:NEW1,NEW2`. How to migrate, the class → role table and the merge rule of the baseline: skill `theme-roles` (`.github/skills/design-tools/theme-roles/SKILL.md`)
 - **Font**: `'LF Flags', Inter, system-ui, sans-serif` (`html`, `@theme --font-sans`; `--font-mono` also starts with `'LF Flags'`)
 - **Flags**: `'LF Flags'` (`static/lf-flags.css`, linked by `app.html` and `offline.html`) draws only the flags (`unicode-range: U+1F1E6-1F1FF`) — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere. Never name an emoji font in a `font-family`: emoji fonts also draw digits, `#` and `*`. A component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`. Gate: `src/flagFont.gate.test.ts`; ECharts text is not covered yet
 - **Icons**: lucide-svelte
@@ -135,6 +143,47 @@ production build the E2E suite runs against.
 
 Naming: `area.thing.past-tense` — `asset.saved`, `fx.rates.synced`,
 `tx.import.committed`.
+
+### API errors in the console
+
+The API client writes every unexpected API failure to the browser console, in production too (lot H-60):
+`lib/api/apiErrorConsole.ts`, called by the Axios response interceptor and by the `zod-validation` plugin of
+`lib/api/zodios-client.ts`. One line: `console.error('[API]', '<status> <METHOD> <path>', {code, reason_code,
+component_id, request_id, error_type})`, `network` for a call nothing answered, `schema` for an answer that breaks its
+schema (with the issues' paths). How much follows the instance, `client_log_level` of `/system/instance` (the backend's
+`LOG_LEVEL`): `error` writes server errors, network failures and schema mismatches; `debug` writes every 4xx too. A
+canceled request is not a failure.
+
+- **Do not add a `console.*` of your own for an API error**, and never print an error object whole: an Axios error
+  holds the request's body and configuration, a `ZodiosError` message embeds the whole answer it refused.
+- **Never print** a request body, a header (the `X-Request-Id` aside), a token, a password, a query string, the text of
+  a `detail`, the `input` a 422 can repeat.
+- **To show the id to the user**, in a generic error message: `withRequestId(t, message, error)`
+  (`lib/api/requestIdMessage.ts`, H-60r). The message stays whole and the code follows it, «… (code: <id>)»
+  (`common.errorWithRequestId`), only for a 5xx carrying a LibreFolio id: the failure whose id the server log always
+  holds. Pass the caught error as it is (a wrapper is followed through `originalError` or `cause`); never build that
+  text by hand, never instead of a message that tells the user what to do.
+- A console line is for the human who investigates; it is never the signal a test or a component reads («Publish
+  state, do not print it»).
+
+## Help for a check: guide or support (FB-27)
+
+A check or state that tells the user something is wrong ends in one of two kinds of help, and the choice is data, never
+a component's guess. `lib/features/instance/checkGuides.json` gives every check an entry: `guide` (the administrator
+solves it alone → the section of the administrator's guide, a `DocsLink`) or `support` (whoever hosts the instance
+solves it → «Contact support»). A limit that applies to a self-hosted instance too (`backup.upload_limit`,
+`backup.restore_limit`) is a `guide`. `CheckHelp.svelte` renders the choice; a new check needs its entry, and the table
+test fails without it.
+
+- **Support goes through `lib/features/support/supportChannel.ts`** (`supportChannel`, `reportHref`): the instance's
+  `LIBREFOLIO_SUPPORT_URL`, a `mailto:` or an http(s) page, with a report as the subject and body (`title` and `body`
+  in the query of a page). The report of a check is `buildCheckReport` (`features/instance/checkSupportReport.ts`):
+  the code, the severity, the instance's address, the version and the date; never a personal datum, a secret or the
+  check's details.
+- **The page of an interrupted restore splits by who can act**: the recovery is a command on the server, so on a self-hosted
+  instance (`selfHostedConfirmed()`) it links the recovery guide, on a managed one only the support (or the line below).
+- **No address → no link and no GitHub issue** (a public issue would publish the instance's address): a line tells the
+  user to contact whoever provides the service. A check that passed has no support control.
 
 ## Chart Components (`lib/components/charts/`)
 

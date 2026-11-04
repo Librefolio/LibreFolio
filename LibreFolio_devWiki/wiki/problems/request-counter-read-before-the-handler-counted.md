@@ -25,7 +25,7 @@ The verdict, with the test-triage skill: an assumption of the test, not load and
 
 ## Solution
 
-`6a1d95d85` («test(e2e): count asset-detail requests», train 77): `waitForCountedRequest` resolves only after the
+`28b78480c` («test(e2e): count asset-detail requests», train 77): `waitForCountedRequest` resolves only after the
 handler has counted the request, through a local registry, so a counter read right after it is fresh; the call sites
 stay as they were. A rescan found 12 reads truly at risk, not the 42 first counted. Proof K-B: the old helper fails at
 the first risky read, the new one passes the whole test, with 56 of 56 counted waits waiting for the handler. A

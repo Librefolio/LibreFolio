@@ -127,17 +127,20 @@ LibreFolio lee cada archivo, lo comprueba y lo resume en una tabla:
 | ✗ | Valores aún no emparejados con tus activos — los emparejas en **Revisar** |
 | 🔴 | Problemas de validación: filas que no pudieron convertirse en transacciones |
 | 🔧 | Campos por rellenar antes de guardar (en rojo cuando uno bloquea el guardado) |
-| ⚠️ | Advertencias del importador, como filas omitidas |
+| ⚠️ ℹ️ | Dos números: las advertencias (ámbar) hay que mirarlas, como las filas omitidas; las notas (azul) explican una decisión del importador, sin nada que corregir |
 
-Los mosaicos sobre la tabla cuentan lo que realmente se va a importar; **Ver todo** abre los detalles.
+Los mosaicos bajo la tabla cuentan lo que realmente se va a importar; **Ver todo**, o **Ver Detalle** en
+el menú **⋮** de una fila, abre los detalles, con las advertencias y las notas listadas aparte.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Paso 3 del asistente: Análisis" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Advertencias**: **Continuar** las lista primero; léelas y después haz clic en **Continuar de todos modos**.
-- **Un archivo ha fallado**: un aviso indica por qué. Corrige su plugin en **Seleccionar** y luego haz clic en
-  **Reanalizar todos**.
+- **Advertencias y notas**: **Continuar** lista primero las advertencias, luego las notas; léelas y
+  después haz clic en **Continuar de todos modos**.
+- **Un archivo ha fallado**: un aviso indica por qué. Corrige su plugin en **Seleccionar** y vuelve a analizar.
+  **Reanalizar todos** solo aparece en el análisis cuando se ha leído al menos un archivo; si no se ha leído
+  ninguno, vuelve a **Seleccionar** y haz clic en **Analizar (N)**.
 
 ### 🧩 Pasos que aparecen solo cuando hacen falta {: #only-when-needed }
 
@@ -280,7 +283,10 @@ de nuevo.
 
 Las filas llegan al espacio de trabajo masivo sin guardar. Compruébalas o edítalas y luego haz clic en **Guardar todo**: espera
 a las filas listadas en rojo, y pregunta antes de guardar los valores listados en ámbar que no hayas
-verificado (**Guardar de todos modos**).
+verificado (**Guardar de todos modos**). Una fila cuya cantidad tiene más de 10 decimales, cuyo importe tiene
+más de 6, o cuyo coste base por unidad tiene más de 12, se rechaza en **Guardar todo**, con el máximo en el
+mensaje (*Cantidad: Como máximo 10 decimales*): LibreFolio nunca la redondea.
+Las fechas de las transacciones pueden remontarse hasta el año 1 y llegar hasta mañana. Una fila fechada antes de 1900 se marca en ámbar en la revisión (una nota sobre la tabla las cuenta) y el espacio de trabajo bulk pide una sola vez confirmarlas, porque una fecha así suele ser un error de escritura; una vez confirmada se guarda como las demás. Una fila fechada después de mañana se rechaza en **Guardar todo**, con el último día permitido en el mensaje (*Fecha: No posterior al 2026-10-18* si hoy es 17 de octubre de 2026).
 
 ---
 

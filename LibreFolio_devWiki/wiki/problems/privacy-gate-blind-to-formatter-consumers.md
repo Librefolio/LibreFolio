@@ -27,7 +27,7 @@ matched only because of nearby variable names — a rename would have turned the
 
 ## Solution
 
-`804bc9903` («fix(privacy): mask growth and performance amounts»): mask at the formatter's definition with
+`8fa118ba4` («fix(privacy): mask growth and performance amounts»): mask at the formatter's definition with
 `maskFormattedNumber` — in the Growth chart, and `shortMoney` in the Performance chart — so every consumer inherits it;
 the gate now guards that boundary, and its list of residual sites is empty.
 
@@ -40,6 +40,6 @@ call sites misses the ones that do not look like money.
 
 | Role | Path |
 |------|------|
-| Masked formatters | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
+| Masked formatters | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
 | The gate | `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` |
 | Journal (P4-11) | `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md` |

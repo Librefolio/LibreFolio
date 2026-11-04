@@ -13,6 +13,11 @@ business-logic surface:
 - Image preview rejected with 400 for malformed dimensions.
 - ``download=true`` sets a Content-Disposition with the original filename.
 
+Decision 36 (scope of uploaded files, red until it lands), as three fixture users of populate_mock_data.py (helpers of
+test_uploads_api.py, the lane populated): a personal file is served in every mode (plain, download, image preview,
+text window) to its owner and the admin, and to anyone else answers like a file that does not exist, a thumbnail
+already cached included; a common one is served to everyone; image previews go out ``Cache-Control: private``.
+
 Plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`` §G-batch7 #2.
 """
 
@@ -26,6 +31,14 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
+from backend.test_scripts.test_api.test_uploads_api import (
+    SCOPE_TEXT,
+    Actor,
+    hidden_problem,
+    media_type,
+    scope_lane,
+    scope_name,
+)
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -79,6 +92,18 @@ def _png_bytes(width: int = 64, height: int = 48) -> bytes:
     out = BytesIO()
     img.save(out, format="PNG")
     return out.getvalue()
+
+
+def _image_size(content: bytes) -> tuple[int, int]:
+    """The pixel size of an image answer."""
+    from PIL import Image  # noqa: PLC0415 — local import, test-only
+
+    return Image.open(BytesIO(content)).size
+
+
+def _cache_directives(response: httpx.Response) -> set[str]:
+    """The directive names of ``Cache-Control``, lower case: ``private, max-age=3600`` → {"private", "max-age"}."""
+    return {part.split("=", 1)[0].strip().lower() for part in response.headers.get("cache-control", "").split(",") if part.strip()}
 
 
 @pytest.fixture(scope="module")
@@ -149,7 +174,7 @@ async def test_text_preview_rejected_for_image_mime(test_server):
 
 @pytest.mark.asyncio
 async def test_image_preview_resizes(test_server):
-    """G7§2.4 — Image preview returns a resized image with cache headers."""
+    """G7§2.4 — Image preview returns a resized image with cache headers (private since decision 36)."""
     print_section("G7§2.4: image preview resizes")
     async with httpx.AsyncClient() as client:
         await _create_user_and_login(client)
@@ -162,7 +187,8 @@ async def test_image_preview_resizes(test_server):
         )
         assert resp.status_code == 200
         assert resp.headers.get("content-type", "").startswith("image/")
-        assert resp.headers.get("cache-control", "").startswith("public")
+        directives = _cache_directives(resp)
+        assert "private" in directives and "public" not in directives, f"a thumbnail is content behind the login: Cache-Control {resp.headers.get('cache-control')!r}"
         # Resized image should be smaller than the original
         assert 0 < len(resp.content) <= len(original)
         # Re-fetch hits the in-process preview cache (still 200, same bytes)
@@ -242,3 +268,151 @@ async def test_serve_unknown_id_returns_404(test_server):
         )
         assert resp.status_code == 404
         print_success("✓ Unknown id returns 404")
+
+
+# ============================================================================
+# Scope of uploaded files (decision 36): every mode of GET /uploads/file/{id}
+# ============================================================================
+
+
+def _serve_cases(image: dict, text: dict) -> list[tuple[str, dict, dict]]:
+    """Every mode of GET /uploads/file/{id}: (label, the file, the query)."""
+    return [
+        ("plain image", image, {}),
+        ("download image", image, {"download": "true"}),
+        ("img_preview 64x64", image, {"img_preview": "64x64"}),
+        ("plain text", text, {}),
+        ("download text", text, {"download": "true"}),
+        ("text window offset=0 window=10", text, {"offset": 0, "window": 10}),
+    ]
+
+
+async def _served_problem(actor: Actor, label: str, file: dict, params: dict, original: bytes) -> str | None:
+    """What is wrong with ``actor``'s answer in one mode, on a file they may read, or None."""
+    resp = await actor.client.get(f"{API_BASE}/uploads/file/{file['id']}", params=params, timeout=TIMEOUT)
+    where = f"{actor.label} GET /uploads/file/{{id}} ({label})"
+    if resp.status_code != 200:
+        return f"{where}: answers {resp.status_code} {resp.text[:200]!r}, expected 200"
+    if "img_preview" in params:
+        return None if media_type(resp).startswith("image/") else f"{where}: content-type {resp.headers.get('content-type')!r}, expected an image"
+    if "window" in params:
+        expected = original.decode()[: params["window"]]
+        return None if resp.text == expected else f"{where}: {resp.text!r}, expected {expected!r}"
+    if resp.content != original:
+        return f"{where}: {len(resp.content)} bytes that are not the uploaded file"
+    if params.get("download") == "true" and file["original_name"] not in resp.headers.get("content-disposition", ""):
+        return f"{where}: content-disposition {resp.headers.get('content-disposition')!r} does not name {file['original_name']}"
+    return None
+
+
+@pytest.mark.asyncio
+async def test_personal_files_are_served_to_owner_and_admin_only(test_server):
+    """SCOPE-SERVE-1 — A's personal image and text: A and the admin get every mode, B the answer of a missing file."""
+    print_section("SCOPE-SERVE-1: personal files, every mode")
+    async with scope_lane() as lane:
+        png = _png_bytes(200, 150)
+        image = await lane.upload(lane.a, scope_name("serve-personal", ".png"), png, "image/png", scope="personal")
+        text = await lane.upload(lane.a, scope_name("serve-personal", ".txt"), SCOPE_TEXT, "text/plain", scope="personal")
+        originals = {image["id"]: png, text["id"]: SCOPE_TEXT}
+        cases = _serve_cases(image, text)
+
+        # Every mode answers its owner: the barrier that gives B's 404 its meaning.
+        problems = [problem for label, file, params in cases if (problem := await _served_problem(lane.a, label, file, params, originals[file["id"]]))]
+        assert not problems, "the owner of the files:\n" + "\n".join(problems)
+
+        problems = [f"({label}) {problem}" for label, file, params in cases if (problem := await hidden_problem(lane.b, "GET", "/uploads/file/{id}", file["id"], params=params))]
+        problems += [problem for label, file, params in cases if (problem := await _served_problem(lane.admin, label, file, params, originals[file["id"]]))]
+        assert not problems, f"A's personal files, {len(problems)} problem(s):\n" + "\n".join(problems)
+        print_success("✓ Personal files: every mode to A and the admin, 404 to B")
+
+
+@pytest.mark.asyncio
+async def test_common_files_are_served_to_everyone(test_server):
+    """SCOPE-SERVE-2 — A's common image (inherited) and text (asked): every mode to A, B and the admin.
+
+    Green before decision 36 too, nothing being hidden yet: it guards that the new check hides personal files only."""
+    print_section("SCOPE-SERVE-2: common files, every mode")
+    async with scope_lane() as lane:
+        png = _png_bytes(200, 150)
+        image = await lane.upload(lane.a, scope_name("serve-common", ".png"), png, "image/png")  # no scope: an image inherits common
+        text = await lane.upload(lane.a, scope_name("serve-common", ".txt"), SCOPE_TEXT, "text/plain", scope="common")
+        originals = {image["id"]: png, text["id"]: SCOPE_TEXT}
+
+        problems = [problem for actor in (lane.a, lane.b, lane.admin) for label, file, params in _serve_cases(image, text) if (problem := await _served_problem(actor, label, file, params, originals[file["id"]]))]
+        assert not problems, f"A's common files, {len(problems)} problem(s):\n" + "\n".join(problems)
+        print_success("✓ Common files: every mode to everyone")
+
+
+@pytest.mark.asyncio
+async def test_cached_thumbnail_of_a_personal_image_is_not_served_to_others(test_server):
+    """SCOPE-SERVE-3 — once A's thumbnail is in the preview cache, B still gets the answer of a missing file."""
+    print_section("SCOPE-SERVE-3: cached thumbnail, another user")
+    async with scope_lane() as lane:
+        image = await lane.upload(lane.a, scope_name("thumb-personal", ".png"), _png_bytes(200, 150), "image/png", scope="personal")
+        url = f"{API_BASE}/uploads/file/{image['id']}"
+        params = {"img_preview": "64x64"}
+
+        first = await lane.a.client.get(url, params=params, timeout=TIMEOUT)
+        assert first.status_code == 200, f"A's thumbnail: {first.status_code} {first.text[:200]}"
+        assert _image_size(first.content) == (64, 48), "precondition: a generated thumbnail, the kind the preview cache keeps"
+        again = await lane.a.client.get(url, params=params, timeout=TIMEOUT)
+        assert (again.status_code, again.content) == (200, first.content), "precondition: the thumbnail answers again, now from the cache"
+
+        problem = await hidden_problem(lane.b, "GET", "/uploads/file/{id}", image["id"], params=params)
+        assert problem is None, f"with A's thumbnail cached: {problem}"
+        admin = await lane.admin.client.get(url, params=params, timeout=TIMEOUT)
+        assert (admin.status_code, admin.content) == (200, first.content), f"the admin's thumbnail: {admin.status_code}"
+        print_success("✓ Cached thumbnail not served to another user")
+
+
+@pytest.mark.asyncio
+async def test_image_preview_answers_are_private(test_server):
+    """SCOPE-SERVE-4 — img_preview answers carry Cache-Control private, never public: generated, cached, or the original
+    served as it is (smaller than the box), for a common and a personal image."""
+    print_section("SCOPE-SERVE-4: Cache-Control of image previews")
+    async with scope_lane() as lane:
+        problems = []
+        for scope in (None, "personal"):
+            png = _png_bytes(200, 150)
+            image = await lane.upload(lane.a, scope_name("cache-control", ".png"), png, "image/png", scope=scope)
+            url = f"{API_BASE}/uploads/file/{image['id']}"
+            generated = await lane.a.client.get(url, params={"img_preview": "64x64"}, timeout=TIMEOUT)
+            cached = await lane.a.client.get(url, params={"img_preview": "64x64"}, timeout=TIMEOUT)
+            as_is = await lane.a.client.get(url, params={"img_preview": "1600x1600"}, timeout=TIMEOUT)
+            assert (generated.status_code, cached.status_code, as_is.status_code) == (200, 200, 200)
+            assert _image_size(generated.content) == (64, 48) and cached.content == generated.content and as_is.content == png, "precondition: a generated thumbnail, the same from the cache, and the original as it is"
+
+            for label, resp in (("generated", generated), ("cached", cached), ("original, smaller than the box", as_is)):
+                directives = _cache_directives(resp)
+                if "private" not in directives or "public" in directives:
+                    problems.append(f"{scope or 'inherited common'} image, {label} preview: Cache-Control {resp.headers.get('cache-control')!r}")
+        assert not problems, "image previews are content behind the login, never for a shared cache:\n" + "\n".join(problems)
+        print_success("✓ Image previews are private")
+
+
+@pytest.mark.asyncio
+async def test_mismatched_modes_on_a_personal_file_are_404_never_400(test_server):
+    """SCOPE-SERVE-5 — modes that do not fit the file: a thumbnail of a text file, a text window on an image, a malformed
+    img_preview. The owner gets the 400 that names the problem; B gets the answer of a missing file, never that 400,
+    which would tell B the file exists, and its type."""
+    print_section("SCOPE-SERVE-5: mismatched modes, another user")
+    async with scope_lane() as lane:
+        image = await lane.upload(lane.a, scope_name("mismatch-personal", ".png"), _png_bytes(200, 150), "image/png", scope="personal")
+        text = await lane.upload(lane.a, scope_name("mismatch-personal", ".txt"), SCOPE_TEXT, "text/plain", scope="personal")
+        cases = [
+            ("img_preview on a text file", text, {"img_preview": "64x64"}),
+            ("text window on an image", image, {"offset": 0, "window": 10}),
+            ("malformed img_preview", image, {"img_preview": "not-a-size"}),
+        ]
+
+        # The owner gets the 400: these modes really do not fit, so the 404 B gets below is the hidden-file answer.
+        problems = []
+        for label, file, params in cases:
+            resp = await lane.a.client.get(f"{API_BASE}/uploads/file/{file['id']}", params=params, timeout=TIMEOUT)
+            if resp.status_code != 400:
+                problems.append(f"A ({label}): answers {resp.status_code} {resp.text[:200]!r}, expected 400")
+        assert not problems, "the owner of the files:\n" + "\n".join(problems)
+
+        problems = [f"({label}) {problem}" for label, file, params in cases if (problem := await hidden_problem(lane.b, "GET", "/uploads/file/{id}", file["id"], params=params))]
+        assert not problems, "A's personal files, modes that do not fit:\n" + "\n".join(problems)
+        print_success("✓ Mismatched modes: 400 to the owner, the missing-file 404 to B")

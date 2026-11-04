@@ -24,7 +24,7 @@ from backend.app.schemas import (
     FAinfoResponse,
     FASectorArea,
 )
-from backend.app.schemas.assets import FAAssetPatchItem
+from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
@@ -973,7 +973,7 @@ async def test_list_asset_providers(test_server):
             assert "volume_kind" in provider, "Provider should have 'volume_kind'"
 
         # Note: `mockprov` is intentionally hidden from the public /assets/provider
-        # list (see backend/app/api/v1/assets.py::list_providers). It remains usable
+        # list (see backend/app/api/v1/assets/providers.py::list_providers). It remains usable
         # internally by tests that reference it by code, but must NOT appear here.
         mock_provider = next((p for p in providers if p["code"] == "mockprov"), None)
         assert mock_provider is None, "mockprov must be hidden from the public provider list"
@@ -987,6 +987,12 @@ async def test_list_asset_providers(test_server):
         for code in ("justetf", "css_scraper", "scheduled_investment"):
             assert by_code[code]["supports_meaningful_volume"] is False, f"{code} should NOT declare meaningful volume support"
             assert by_code[code]["volume_kind"] == "unknown", f"{code} should default to unknown volume kind"
+
+        # F21: where each provider stands in the asset search. A lane sets neither LIBREFOLIO_ASSET_PROVIDERS_PREMIUM nor
+        # LIBREFOLIO_ASSET_PROVIDERS_ORDER (configure_test_runtime drops them) and no shipped plugin declares otherwise,
+        # so every listed provider is community at the default priority.
+        placements = {p["code"]: (p.get("tier"), p.get("priority")) for p in providers}
+        assert placements == dict.fromkeys(placements, ("community", 100)), f"every listed provider must be community at priority 100 on a lane without overrides: {placements}"
 
         print_success(f"✓ Listed {len(providers)} providers")
         print_info(f"  Providers: {', '.join([p['code'] for p in providers])}")
@@ -1200,7 +1206,7 @@ async def test_bulk_read_get_all_list_and_delete_identifier_variants(test_server
 
 @pytest.mark.asyncio
 async def test_patch_market_data_summary_and_wipe_flow(test_server):
-    """Test 21: Cover patch + market-data summary/wipe happy path."""
+    """Test 21: Cover patch + market-data summary/wipe happy path (N68: the SPLIT survives, ``splits_kept``)."""
     print_section("Test 21: PATCH + market-data summary/wipe")
 
     async with httpx.AsyncClient() as client:
@@ -1263,7 +1269,13 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
                             "type": "DIVIDEND",
                             "value": {"code": "USD", "amount": "1.25"},
                             "notes": "wipe me",
-                        }
+                        },
+                        {
+                            "date": "2025-01-11",
+                            "type": "SPLIT",
+                            "value": {"code": "USD", "amount": "2"},
+                            "notes": "keep me",
+                        },
                     ],
                 }
             ],
@@ -1282,7 +1294,9 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
             timeout=TIMEOUT,
         )
         assert query_resp.status_code == 200, query_resp.text
-        event_id = query_resp.json()["items"][0]["events"][0]["id"]
+        events_before = query_resp.json()["items"][0]["events"]
+        event_id = next(e["id"] for e in events_before if e["type"] == "DIVIDEND")
+        split_id = next(e["id"] for e in events_before if e["type"] == "SPLIT")
 
         broker_resp = await client.post(
             f"{API_BASE}/brokers",
@@ -1314,7 +1328,9 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         assert summary_resp.status_code == 200, summary_resp.text
         summary = summary_resp.json()
         assert summary["prices"] == 1
-        assert summary["events_manual"] == 1
+        assert summary["events_manual"] == 1, "the SPLIT is not counted among the events that go"
+        assert summary["events_provider"] == 0
+        assert summary["splits_kept"] == 1
         assert summary["linked_tx"] == 1
         assert summary["dry_run"] is True
         print_success("✓ Market-data summary reports existing rows")
@@ -1324,6 +1340,7 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         wiped = wipe_resp.json()
         assert wiped["prices"] == 1
         assert wiped["events_manual"] == 1
+        assert wiped["splits_kept"] == 1
         assert wiped["linked_tx"] == 1
         assert wiped["dry_run"] is False
 
@@ -1338,7 +1355,7 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
             timeout=TIMEOUT,
         )
         assert post_wipe_query.status_code == 200, post_wipe_query.text
-        assert post_wipe_query.json()["items"][0]["events"] == []
+        assert [e["id"] for e in post_wipe_query.json()["items"][0]["events"]] == [split_id], "only the SPLIT survives the wipe"
 
         price_check = await client.post(
             f"{API_BASE}/assets/prices/query",
@@ -1352,7 +1369,7 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         )
         assert price_check.status_code == 200, price_check.text
         assert price_check.json()["items"][0]["prices"] == []
-        print_success("✓ Market-data wipe removed prices/events and disconnected tx links")
+        print_success("✓ Market-data wipe removed prices/non-split events, kept the SPLIT and disconnected tx links")
 
 
 # ============================================================================
@@ -1674,7 +1691,7 @@ async def test_list_held_flags_read_positions_through_the_portfolio_dust_thresho
 # .patch_assets_bulk / prepared patch_dict must shallow-merge classification_
 # params per subfield, not fully replace it: an unrelated field patch must
 # leave it alone, and an explicit null on one subfield must clear only that
-# subfield, never the whole block. See backend/app/services/asset_source.py
+# subfield, never the whole block. See backend/app/services/assets/crud.py
 # ~ patch_assets_bulk (prepared patch_dict + per-field merge loop).
 # ============================================================================
 

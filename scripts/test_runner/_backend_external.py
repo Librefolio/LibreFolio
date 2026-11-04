@@ -238,6 +238,17 @@ def external_brim_danske_bank(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "BRIM Danske Bank tests", verbose=verbose)
 
 
+def external_brim_credit_agricole(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Crédit Agricole report-set modules (rows, classes, rule M, pairs, balances)."""
+    print_section("External: BRIM Crédit Agricole Report-Set Tests")
+    print_info("Testing: broker_credit_agricole — rows, testata, classes, rule M, pairing, balances, truth points")
+    print_info("Tests: reading, roles, describe member/set, outcomes, holes and gaps, in-flight cash, opening positions, zones")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_credit_agricole.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM Crédit Agricole tests", verbose=verbose)
+
+
 def external_brim_degiro(verbose: bool = False, test_names: list = None) -> bool:
     """Test the DEGIRO plugin (Account Statement by position, any language)."""
     print_section("External: BRIM DEGIRO Tests")
@@ -258,6 +269,50 @@ def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bo
     cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_scalable.py",
                             test_names or None)
     return run_command(cmd, "BRIM Scalable Capital tests", verbose=verbose)
+
+
+def external_brim_row_skips(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the rows BRIM plugins leave out: known quietly, unknown loudly (W-B86)."""
+    print_section("External: BRIM Row Skips Tests")
+    print_info("Testing: the shared RowSkips helper, the rows each stable plugin leaves out, the contract over every registered plugin, the catalogue keys")
+    print_info("Tests: one file per case (a sample plus one row), report_issue, silent rows, versions, samples, plugin classification")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_row_skips.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM row skips tests", verbose=verbose)
+
+
+def external_brim_operation_date(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that BRIM plugins record the operation date, never the value / settlement date (W-B88)."""
+    print_section("External: BRIM Operation Date Tests")
+    print_info("Testing: the transaction date is the day of the operation, not the value / settlement date")
+    print_info("Tests: rows whose two dates differ, per plugin; the Disnat settlement-date fallback for rows with no trade date")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_operation_date.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM operation date tests", verbose=verbose)
+
+
+def external_brim_economic_rows(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that eToro, Swissquote, Revolut and Trading 212 import the rows with an economic effect they used to leave out (W-B87)."""
+    print_section("External: BRIM Economic Rows Tests")
+    print_info("Testing: overnight fees, SDRT, forex pairs and stock splits become transactions; the rows that cannot are still listed")
+    print_info("Tests: eToro FEE and TAX, Swissquote FX_CONVERSION pairs, Revolut and Trading 212 ADJUSTMENT with a possible_split todo")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_economic_rows.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM economic rows tests", verbose=verbose)
+
+
+def external_brim_date_order(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the generic CSV plugin's date_order field: parity with the old behaviour, month_first, the declaration (CP12, W5-8)."""
+    print_section("External: BRIM Date Order Tests")
+    print_info("Testing: broker_generic_csv parse_date(value, order), the date_order setting and its declaration")
+    print_info("Tests: day_first is the old behaviour bit for bit, month_first mirrors the slash, dash and dot dates, the plugin declares the field")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_date_order.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM date order tests", verbose=verbose)
 
 
 def external_all(verbose: bool = False,
@@ -305,12 +360,29 @@ These tests verify external API integrations:
     add_test(cat, "brim-danske-bank", external_brim_danske_bank, name="BRIM Danske Bank",
              desc="Test the Danske Bank report-set plugin", prereq="Sample files in test fixtures",
              tests="Roles, combine (zones, pairing, truth points), parse of the combined file")
+    add_test(cat, "brim-credit-agricole", external_brim_credit_agricole, name="BRIM Crédit Agricole",
+             desc="Test the Crédit Agricole report-set modules", prereq="None (synthetic files)",
+             tests="Rows and testata, roles, rule M, classes, pairing, balances, holes, truth points, in-flight cash",
+             isolation="pure")
     add_test(cat, "brim-degiro", external_brim_degiro, name="BRIM DEGIRO",
              desc="Test the DEGIRO plugin", prereq="Sample files in test fixtures",
              tests="Recognition, reading by position, types, FX pairs, numbers, messages, orders list")
     add_test(cat, "brim-scalable", external_brim_scalable, name="BRIM Scalable Capital",
              desc="Test the Scalable Capital plugins (broker and overnight account)", prereq="Sample files in test fixtures",
              tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases")
+    add_test(cat, "brim-row-skips", external_brim_row_skips, name="BRIM Row Skips",
+             desc="Test the rows BRIM plugins leave out (known quietly, unknown loudly)", prereq="Sample files in test fixtures",
+             tests="RowSkips helper, report_issue per plugin, silent rows, versions, plugin classification, catalogue keys")
+    add_test(cat, "brim-operation-date", external_brim_operation_date, name="BRIM Operation Date",
+             desc="Test that BRIM plugins date a transaction with the operation date, never the value / settlement date", prereq="Sample files in test fixtures",
+             tests="Directa, DEGIRO, InvestEngine, Saxo, Credit Agricole, Schwab, Disnat (incl. settlement fallback)")
+    add_test(cat, "brim-economic-rows", external_brim_economic_rows, name="BRIM Economic Rows",
+             desc="Test that eToro, Swissquote, Revolut and Trading 212 import the rows with an economic effect", prereq="Sample files in test fixtures",
+             tests="eToro overnight fee and SDRT, Swissquote forex pairs, Revolut and Trading 212 stock splits, rows still listed")
+    add_test(cat, "brim-date-order", external_brim_date_order, name="BRIM Date Order",
+             desc="Test the generic CSV plugin's date_order field (CP12, W5-8): day_first parity with the old behaviour, month_first, the declaration", prereq="Sample files in test fixtures",
+             tests="parse_date parity with a frozen reference, generic samples with and without day_first bound, month_first on slash/dash/dot, field declared as the contract says",
+             isolation="pure")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat

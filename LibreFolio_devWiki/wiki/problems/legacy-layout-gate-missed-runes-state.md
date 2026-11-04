@@ -36,7 +36,7 @@ R20», the privacy toggle that legacy broker components did not follow
 
 ## Solution
 
-`cc20b8288` (2026-09-24): the layout reads the flag through `toStore(() => appBootstrap.ready)`, so the `$:` gate
+`43c128ed2` (2026-09-24): the layout reads the flag through `toStore(() => appBootstrap.ready)`, so the `$:` gate
 re-runs when the bootstrap settles. While a redirect is pending the layout shows `onboarding-redirecting`, never the
 requested page. The developer's review of the same day, point 17: «il redirect funziona bene».
 

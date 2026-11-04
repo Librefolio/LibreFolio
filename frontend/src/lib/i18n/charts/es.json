@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Obsoleto: {days} día(s)",
+      "stale": "Obsoleto: {days, plural, one {# día} other {# días}}",
       "fxStale": "Tipo FX: {days}d",
       "percentNote": "% relativo a la fecha de inicio del rango",
       "upper": "Superior",
@@ -14,11 +14,14 @@
       "currentBucket": "En curso: {days} de {total} días",
       "originalValue": "orig. {value}",
       "fxRateDate": "cambio al {date}",
-      "fxDaysBack": "({days}d antes)"
+      "fxDaysBack": "({days}d antes)",
+      "yearLabel": "{year}",
+      "staleBadge": "{days}d"
     },
     "resolution": {
       "weekly": "Semanal",
-      "monthly": "Mensual"
+      "monthly": "Mensual",
+      "yearly": "Anual"
     },
     "marketPrice": "Precio de mercado",
     "showPercentage": "Mostrar porcentaje",
@@ -136,7 +139,9 @@
       "resultMissing": "El backend no devolvió ningún resultado para esta señal. Reintenta la solicitud de señales.",
       "partialResult": "Esta señal solo está disponible parcialmente con los datos actuales.",
       "unavailable": "Esta señal no se puede calcular con los datos disponibles.",
-      "partialContiguousSegment": "Señal calculada sobre el segmento contiguo completo {start}–{end}. Se excluyeron {excluded} puntos cargados porque faltaban fechas o campos obligatorios. Entrada completa: {available}/{requested} ({coverage}%, calentamiento incluido). Racha máxima ausente: {consecutive} puntos."
+      "partialContiguousSegment": "Señal calculada sobre el segmento contiguo completo {start}–{end}. Se excluyeron {excluded} puntos cargados porque faltaban fechas o campos obligatorios. Entrada completa: {available}/{requested} ({coverage}%, calentamiento incluido). Racha máxima ausente: {consecutive} puntos.",
+      "undefinedWindowPartial": "{count} puntos de esta rentabilidad no se pueden calcular, del {start} al {end}, porque falta un precio necesario o no es utilizable. Vuelve a sincronizar los precios de este activo del {resyncStart} al {resyncEnd} e inténtalo de nuevo.",
+      "undefinedWindowUnavailable": "Esta rentabilidad no se puede calcular: los {count} puntos, del {start} al {end}, no tienen un precio utilizable. Vuelve a sincronizar los precios de este activo del {resyncStart} al {resyncEnd} e inténtalo de nuevo."
     },
     "axes": {
       "exchangeRate": "Eje del tipo de cambio ({pair})",
@@ -145,7 +150,12 @@
       "signal": "Eje {name}",
       "volume": "Eje de volúmenes"
     },
-    "yAxisAuto": "Auto"
+    "yAxisAuto": "Auto",
+    "lineShape": "Forma de las líneas",
+    "lineShapeDesc": "Cómo los gráficos unen sus puntos. Solo vale para este gráfico.",
+    "lineShapeSegments": "Segmentos",
+    "lineShapeSteps": "Escalones",
+    "lineShapeSpline": "Curva suave"
   },
   "measure": {
     "pending": "Inicio: {startDate} ({startValue}) — haga clic en el gráfico para el punto final",
@@ -194,7 +204,8 @@
     "units": {
       "days": "días",
       "sessions": "sesiones",
-      "percentPerYear": "%/año"
+      "percentPerYear": "%/año",
+      "observations": "observaciones"
     },
     "visual": {
       "components": "Componentes",
@@ -204,6 +215,9 @@
     "reference": {
       "zero": "Cero"
     },
+    "gapsJoined": {
+      "label": "huecos unidos"
+    },
     "regions": {
       "oversoldDescription": "Extremo inferior por debajo del umbral configurado.",
       "neutralDescription": "Rango central entre los umbrales configurados.",
@@ -211,13 +225,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Seleccionar activo de comparación",
-      "loadError": "No se pudieron cargar los activos."
-    },
-    "riskRollingReturn": {
-      "name": "Rendimiento móvil",
-      "description": "Rendimiento compuesto solo del precio sobre una ventana móvil.",
-      "output": "Rendimiento",
-      "outputDescription": "Rendimiento compuesto del periodo de tenencia, en puntos porcentuales."
+      "loadError": "No se pudieron cargar los activos.",
+      "blocked": "No disponibles",
+      "isMainAsset": "Es el activo del gráfico",
+      "alreadyCompared": "Ya comparado en otra señal"
     }
   }
 }

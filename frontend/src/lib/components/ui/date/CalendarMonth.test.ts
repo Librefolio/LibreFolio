@@ -246,3 +246,226 @@ describe('CalendarMonth', () => {
         expect(screen.queryByTestId('calendar-go-today')).toBeNull();
     });
 });
+
+/**
+ * Y-N65 (decision of the developer, 19/10): no range of a single day. In a range picker the first click leaves a day
+ * pending (`highlights.pending`); a second click on that same day closed a range of one day. The contract, after the
+ * cure: the pending day is a `disabled` button — the "you can't go there" a future day already has — and a click on it
+ * never reaches `onDayClick`; what it publishes (`data-state`, the handle of its colour) does not change, precedence as
+ * today; no other day changes. `SingleDatePicker` never sets `pending`, so its grid is untouched.
+ *
+ * The click is a dispatched one (`fireEvent.click`), as in the `disabledDates` case above: jsdom blocks
+ * `HTMLElement.click()` on a disabled control, not a dispatched event, so "never reaches `onDayClick`" is read as that
+ * case reads it — the handler refuses the pending day as well, not only the attribute.
+ */
+describe('CalendarMonth — the pending day cannot be chosen again (Y-N65)', () => {
+    /** A pending day in the middle of March 2024, away from any range end. */
+    const PENDING = '2024-03-12';
+
+    /** Every day cell of the grid, out-of-month ones included. */
+    function allDays(): HTMLButtonElement[] {
+        return [...document.querySelectorAll<HTMLButtonElement>('[data-testid="calendar-day"]')];
+    }
+
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    it('disables the pending day and reports no click on it, while every other day stays usable', async () => {
+        // Today: the pending day is an ordinary enabled button — `disabled` is `future || disabledDates` only — and a
+        // click on it reaches onDayClick('2024-03-12'): in DateRangePicker, the second half of a range of one day.
+        const onDayClick = vi.fn();
+        render(CalendarMonth, baseProps({onDayClick, highlights: {pending: PENDING}}));
+
+        const pending = day(PENDING);
+        expect(pending, 'the pending day is still a usable button: a second click on it closes a range of one day').toBeDisabled();
+        await fireEvent.click(pending);
+        expect(onDayClick, 'a click on the pending day reached the parent').not.toHaveBeenCalled();
+
+        // No other day changes: March 2024 is all past, so every other cell — out-of-month ones included — is enabled,
+        // and a neighbour is still reported. Without this, "nothing is clickable" would satisfy the two assertions above.
+        expect(
+            allDays()
+                .filter((cell) => cell.dataset.iso !== PENDING && cell.disabled)
+                .map((cell) => cell.dataset.iso),
+            'another day was disabled along with the pending one',
+        ).toEqual([]);
+        await fireEvent.click(day('2024-03-13'));
+        expect(onDayClick).toHaveBeenCalledExactlyOnceWith('2024-03-13');
+    });
+
+    it.each([
+        {without: 'no highlight at all', highlights: {}},
+        {without: 'a committed range', highlights: {rangeStart: '2024-03-10', rangeEnd: '2024-03-14'}},
+        {without: 'SingleDatePicker’s selected day', highlights: {selected: PENDING}},
+    ])('GUARD: without a pending day no past day is disabled — $without', ({highlights}) => {
+        // Green today and after: the cure disables the pending day only. A selected day (SingleDatePicker) and the ends of
+        // a committed range stay usable — re-choosing them is how a single date or a range is changed.
+        render(CalendarMonth, baseProps({highlights}));
+
+        expect(day(PENDING), 'premise: the grid is drawn, and the day a pending one would sit on is usable').toBeEnabled();
+        expect(
+            allDays()
+                .filter((cell) => cell.disabled)
+                .map((cell) => cell.dataset.iso),
+        ).toEqual([]);
+    });
+
+    it('GUARD: the pending day publishes the state it publishes today — `pending` on its own, `in-range` inside a committed range', () => {
+        // Green today and after: disabling the pending day changes neither its colour nor its `data-state`, and the
+        // precedence stays range-start > range-end > in-range > pending.
+        const {unmount} = render(CalendarMonth, baseProps({highlights: {pending: PENDING}}));
+        expect(day(PENDING)).toHaveAttribute('data-state', 'pending');
+        unmount();
+
+        render(CalendarMonth, baseProps({highlights: {rangeStart: '2024-03-10', rangeEnd: '2024-03-14', pending: PENDING}}));
+        expect(day(PENDING)).toHaveAttribute('data-state', 'in-range');
+        expect(day('2024-03-10')).toHaveAttribute('data-state', 'range-start');
+        expect(day('2024-03-14')).toHaveAttribute('data-state', 'range-end');
+    });
+});
+
+/**
+ * D-P4 (W5-10): the year field no longer stops at 1900. The backend floor stays, and the forms warn about a date before
+ * it, so the calendar must let the user get there to be warned (and to enter an old transaction at all). Contract: the
+ * year input has no `min` attribute; `max` is still 2200; a year typed below 1900 reaches `onSetYear` as it is; the
+ * arrows (`numericArrows`) stop at year 1, not at 1900.
+ */
+describe('CalendarMonth — the year field has no 1900 floor (D-P4)', () => {
+    const yearInput = (): HTMLInputElement => screen.getByTestId('calendar-year-input') as HTMLInputElement;
+
+    it('has no min attribute, and still caps the year at 2200', () => {
+        render(CalendarMonth, baseProps());
+        expect(yearInput().hasAttribute('min')).toBe(false);
+        expect(yearInput()).toHaveAttribute('max', '2200');
+    });
+
+    it.each([1850, 1899, 1900, 1])('a year of %i typed is handed to onSetYear as it is', async (year) => {
+        const onSetYear = vi.fn();
+        render(CalendarMonth, baseProps({onSetYear}));
+
+        await fireEvent.change(yearInput(), {target: {value: String(year)}});
+
+        expect(onSetYear).toHaveBeenCalledExactlyOnceWith(year);
+    });
+
+    it('shows a year before 1900 the parent hands it, and the grid spans that month', () => {
+        render(CalendarMonth, baseProps({year: 1850, month: 4}));
+        expect(yearInput()).toHaveValue(1850);
+        expect(screen.getByTestId('calendar-month')).toHaveAttribute('data-year', '1850');
+        expect(day('1850-05-01')).toBeInTheDocument();
+    });
+
+    it('ArrowDown on a year before 1900 steps by one and fires the change (no clamp at 1900)', async () => {
+        const onSetYear = vi.fn();
+        render(CalendarMonth, baseProps({year: 1850, month: 4, onSetYear}));
+
+        await fireEvent.keyDown(yearInput(), {key: 'ArrowDown'});
+
+        expect(onSetYear).toHaveBeenCalledWith(1849);
+    });
+
+    it('ArrowDown on year 1 stays at year 1: the arrows have a floor of their own', async () => {
+        const onSetYear = vi.fn();
+        render(CalendarMonth, baseProps({year: 1, month: 4, onSetYear}));
+
+        await fireEvent.keyDown(yearInput(), {key: 'ArrowDown'});
+
+        expect(onSetYear).not.toHaveBeenCalledWith(0);
+        expect(onSetYear).not.toHaveBeenCalledWith(-1);
+        expect(yearInput()).toHaveValue(1);
+    });
+});
+
+/**
+ * W5-11: `new Date(y, m, 1)` reads a year 0..99 as 1900..1999, so the grid of a short year (a date typed `0024-03-01`,
+ * D-P4) was the grid of 1924 — its first day in the wrong weekday column — and its cells were written with an unpadded
+ * year (`24-03-01`). Contract: cells carry a four-digit ISO year, and the first of the month sits in the column of its
+ * weekday on the proleptic Gregorian calendar (Monday = column 0; the grid starts on a Monday).
+ */
+describe('CalendarMonth — years below 100 (W5-11)', () => {
+    /** Every day cell of the grid, in reading order. */
+    const cells = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>('[data-testid="calendar-day"]')];
+
+    /** Index of a day in the grid: its row is index div 7, its weekday column (Monday = 0) is index mod 7. */
+    function indexOf(iso: string): number {
+        const index = cells().findIndex((cell) => cell.dataset.iso === iso);
+        if (index < 0) throw new Error(`no day cell for ${iso} — the grid does not span that date`);
+        return index;
+    }
+
+    // Weekdays computed with Python's datetime.date(y, m, d).weekday() (Monday = 0), not by the code under test.
+    it.each([
+        {name: 'March 2024 (control)', year: 2024, month: 2, first: '2024-03-01', last: '2024-03-31', weekday: 4},
+        {name: 'March of year 24', year: 24, month: 2, first: '0024-03-01', last: '0024-03-31', weekday: 4},
+        {name: 'January of year 1', year: 1, month: 0, first: '0001-01-01', last: '0001-01-31', weekday: 0},
+    ])('$name: 31 days in the month, the first on weekday column $weekday', ({year, month, first, last, weekday}) => {
+        render(CalendarMonth, baseProps({year, month}));
+
+        const inMonth = cells().filter((cell) => cell.dataset.inMonth === 'true');
+        expect(inMonth).toHaveLength(31);
+        expect(inMonth[0].dataset.iso).toBe(first);
+        expect(inMonth[30].dataset.iso).toBe(last);
+        expect(day(first)).toHaveAttribute('data-in-month', 'true');
+        // The number of cells before the 1st is its weekday, and its column is the weekday.
+        expect(indexOf(first)).toBe(weekday);
+        expect(indexOf(first) % 7).toBe(weekday);
+        // The grid is six full weeks.
+        expect(cells()).toHaveLength(42);
+    });
+
+    // Independent of how a cell writes its ISO year: only the position of the first in-month cell is read, so the
+    // Date(y, m, 1) century shift shows up on its own (1 March 24 is a Friday; 1924-03-01 is a Saturday).
+    it.each([
+        {year: 2024, month: 2, weekday: 4},
+        {year: 24, month: 2, weekday: 4},
+        {year: 1, month: 0, weekday: 0},
+        {year: 99, month: 11, weekday: 1},
+    ])('year $year, month $month: the first in-month cell sits in weekday column $weekday', ({year, month, weekday}) => {
+        render(CalendarMonth, baseProps({year, month}));
+
+        expect(cells().findIndex((cell) => cell.dataset.inMonth === 'true')).toBe(weekday);
+    });
+
+    it('year 24: every day of the month is addressed by its four-digit ISO date', () => {
+        render(CalendarMonth, baseProps({year: 24, month: 2}));
+
+        for (let d = 1; d <= 31; d++) {
+            expect(day(`0024-03-${String(d).padStart(2, '0')}`)).toHaveAttribute('data-in-month', 'true');
+        }
+        expect(screen.getByTestId('calendar-month')).toHaveAttribute('data-year', '24');
+    });
+
+    it('year 24: February, the leap one, spans 29 days', () => {
+        render(CalendarMonth, baseProps({year: 24, month: 1}));
+
+        expect(cells().filter((cell) => cell.dataset.inMonth === 'true')).toHaveLength(29);
+        expect(day('0024-02-29')).toHaveAttribute('data-in-month', 'true');
+    });
+
+    it('year 1, January: renders (its leading cells belong to year 0) and does not throw', () => {
+        expect(() => render(CalendarMonth, baseProps({year: 1, month: 0}))).not.toThrow();
+        expect(day('0001-01-01')).toBeInTheDocument();
+    });
+
+    it('a click on a day of year 24 reports its ISO date with the padded year', async () => {
+        const onDayClick = vi.fn();
+        render(CalendarMonth, baseProps({year: 24, month: 2, onDayClick}));
+
+        await fireEvent.click(day('0024-03-15'));
+
+        expect(onDayClick).toHaveBeenCalledExactlyOnceWith('0024-03-15');
+    });
+});
+
+describe('CalendarMonth — the year before the first day (W5-11)', () => {
+    it('January of year 1: the leading cells of year 0 are disabled, 0001-01-01 is not', () => {
+        render(CalendarMonth, baseProps({year: 1, month: 0}));
+        const cells = screen.getAllByTestId('calendar-day');
+        const first = cells.find((cell) => cell.getAttribute('data-iso') === '0001-01-01');
+        expect(first).toBeDefined();
+        expect(first).not.toBeDisabled();
+        const outside = cells.filter((cell) => (cell.getAttribute('data-iso') ?? '') < '0001-01-01');
+        for (const cell of outside) expect(cell).toBeDisabled();
+    });
+});

@@ -74,17 +74,18 @@
         padding: 0.25rem 0.5rem;
         border: 1px solid transparent;
         border-radius: 6px;
-        background: rgba(26, 64, 49, 0.1);
+        background: var(--lf-selected);
         font-size: 0.8125rem;
-        color: #1a4031;
+        color: var(--lf-link);
         font-weight: 500;
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .selected-count-btn:hover {
-        background: rgba(26, 64, 49, 0.15);
-        border-color: rgba(26, 64, 49, 0.2);
+        background: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        border-color: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        color: var(--lf-text-primary);
     }
 
     .selected-count-btn .clear-icon {
@@ -95,16 +96,6 @@
 
     .selected-count-btn:hover .clear-icon {
         opacity: 1;
-    }
-
-    :global(.dark) .selected-count-btn {
-        background: rgba(74, 222, 128, 0.1);
-        color: #4ade80;
-    }
-
-    :global(.dark) .selected-count-btn:hover {
-        background: rgba(74, 222, 128, 0.15);
-        border-color: rgba(74, 222, 128, 0.2);
     }
 
     .bulk-actions {
@@ -120,42 +111,23 @@
         height: 28px;
         border: none;
         border-radius: 6px;
-        background: #f1f5f9;
-        color: #64748b;
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .bulk-btn:hover {
-        background: #e2e8f0;
-        color: #0f172a;
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
     }
 
     .bulk-btn.danger {
-        color: #dc2626;
+        color: var(--lf-danger);
     }
 
     .bulk-btn.danger:hover {
-        background: #fef2f2;
-        color: #b91c1c;
-    }
-
-    :global(.dark) .bulk-btn {
-        background: #334155;
-        color: #94a3b8;
-    }
-
-    :global(.dark) .bulk-btn:hover {
-        background: #475569;
-        color: #f1f5f9;
-    }
-
-    :global(.dark) .bulk-btn.danger {
-        color: #f87171;
-    }
-
-    :global(.dark) .bulk-btn.danger:hover {
-        background: #7f1d1d;
-        color: #fecaca;
+        background: var(--lf-danger-soft);
+        color: var(--lf-danger-on-soft);
     }
 </style>

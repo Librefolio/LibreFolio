@@ -44,8 +44,8 @@ This source group covers the archived sub-plan bundle for split and promote oper
 | Backend D1 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-PlanD1_BackendBatchSuggest.prompt.md` |
 | Frontend D2 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-PlanD2_FrontendSplitPromoteUI.prompt.md` |
 | Payload centralization | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-CentralizePayloadCommit.prompt.md` |
-| Transaction schemas | `backend/app/schemas/transactions.py` |
-| Transaction service | `backend/app/services/transaction_service.py` |
-| Payload helpers (FE) | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` |
-| Commit API (FE) | `frontend/src/lib/utils/transactions/txCommitApi.ts` |
-| BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Transaction schemas | `backend/app/schemas/transactions/transactions.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| Payload helpers (FE) | `frontend/src/lib/features/transactions/txPayloadHelpers.ts` |
+| Commit API (FE) | `frontend/src/lib/features/transactions/txCommitApi.ts` |
+| BulkModal | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |

@@ -29,7 +29,7 @@ portfolio service and AI Export read cash from it. Why it exists, and the K/R ru
 
 ## Location
 
-`backend/app/services/financial_math/native_cash.py` (490 lines at `5d0585595`), flat next to `average_cost.py` in the
+`backend/app/services/financial_math/native_cash.py` (490 lines at `9f63eec22`), flat next to `average_cost.py` in the
 financial math layer ([[decisions/financial-math-one-home]]). It imports only `Currency` (`schemas.common`) and
 `convert_bulk` (`services.fx`), from the modules that define them.
 
@@ -46,7 +46,8 @@ financial math layer ([[decisions/financial-math-one-home]]). It imports only `C
 | `NativeCash.flows(date_from, date_to)` | `CashFlows` of `(date_from, date_to]`: signed and absolute sums by type, income and costs by position, unallocated by broker |
 | `NativeCash.sums_by_date(date_from, date_to, types)` | counted movements summed by date and type, dates ascending |
 | `NativeCash.missing_conversions(date_from, date_to, types)` | `MissingCashConversion(pair, dates)` for every pair that could not be converted |
-| `NativeCash.rate_change_days(date_from, date_to)` | the days a held foreign currency's rate changes (the first rate counts) |
+| `NativeCash.rate_change_days(date_from, date_to)` | the days a held foreign currency's rate changes (the first rate counts); computed by `change_days` |
+| `change_days(read, currencies, days)` | pure, the one home of «the day a rate changes» (J CP-6, 2026-10-16): the days of the calendar on which the caller's reading gives a currency another rate than on the previous day; a rate on the first day counts. The native cash reads the last rate known, on the calendar of its rate points; the portfolio engine the exact day's rate, on its frame |
 | `NativeCash.foreign_cash_broker_ids` | brokers with a counted movement outside the report currency |
 | `NativeCash.exchange_results(date_from, date_to)` | each foreign-cash broker's exchange result on cash over `(date_from, date_to]`, returned whole |
 | `CONVERSION_DUST` | `Decimal("1e-9")`: below it an exchange result is the rounding of two conversions, not a result |
@@ -79,9 +80,9 @@ financial math layer ([[decisions/financial-math-one-home]]). It imports only `C
 
 | Date | Change |
 |------|--------|
-| 2026-10-11 | Created by lot 41 step F-1 (`36b181836`): ledger, flows, missing conversions, `effective_share`. The engine reads it from step F-2 (`aa6b6077a`). |
-| 2026-10-12 | `exchange_results()` and `CONVERSION_DUST` (`a5f41f60c`); the service reads cards, histories and contributions from it (`c04e44ff5`). |
-| 2026-10-12 | AI Export uses `CONVERSION_DUST` for `reconciled` (C-53, `876d2b430`). |
+| 2026-10-11 | Created by lot 41 step F-1 (`e95d053e4`): ledger, flows, missing conversions, `effective_share`. The engine reads it from step F-2 (`04522e123`). |
+| 2026-10-12 | `exchange_results()` and `CONVERSION_DUST` (`b92c0cfdb`); the service reads cards, histories and contributions from it (`df5db60d0`). |
+| 2026-10-12 | AI Export uses `CONVERSION_DUST` for `reconciled` (C-53, `323c5ff13`). |
 
 ## Source files
 

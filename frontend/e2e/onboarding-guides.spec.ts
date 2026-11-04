@@ -63,6 +63,7 @@ const BROKER_DETAIL_STEPS = [
     cursor('broker.detail.transactions', 'broker-tab-transazioni'),
     cursor('broker.detail.info', 'broker-tab-info'),
 ];
+const TOOLS_PAGE_STEPS = [area('tools.page.overview', 'tools-hub'), cursor('tools.page.refresh', 'tools-hub-refresh')];
 const FX_PAGE_STEPS = [area('fx.page.overview', 'fx-page-overview-guide-target'), area('fx.page.filters', 'fx-page-filters'), cursor('fx.page.sync', 'fx-sync-all-button'), cursor('fx.page.add', 'fx-add-pair-button')];
 const FX_MODAL_STEPS = [area('fx.currencies', 'fx-tour-pair-selectors'), area('fx.providers', 'fx-tour-providers')];
 const FX_DETAIL_STEPS = [area('fx.detail.header', 'fx-detail-header'), cursor('fx.detail.provider', 'fx-detail-provider-btn'), area('fx.detail.chart', 'fx-detail-chart'), cursor('fx.detail.editor', 'fx-detail-edit-btn')];
@@ -290,7 +291,7 @@ test.beforeEach(async ({context}) => {
     // providers (yfinance, justetf, ...) and upserts today's OHLC row on the shared
     // seeded assets. No guide reads a live price, so the poll is answered with an
     // empty result: no test reaches a third party or writes a shared price.
-    await context.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await context.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 });
 
 test.describe('T11 — every contextual guide walked against its real page', () => {
@@ -372,6 +373,18 @@ test.describe('T11 — every contextual guide walked against its real page', () 
             await page.getByTestId('assets-add-button').click();
             await expect(page.getByTestId('asset-modal')).toBeVisible({timeout: 10_000});
             await walkToCompletion(page, 'asset_guide', ASSET_MODAL_STEPS);
+        } finally {
+            await deleteDisposableUser(request, user);
+        }
+    });
+
+    test('T12 tools_page_guide on the Tools page walks both steps and completes on desktop/mobile (21-7)', async ({page, request}, testInfo) => {
+        const user = await registerDisposableUser(request, accountTag('t12tp', testInfo.project.name));
+        try {
+            await prepareOnboardingAccount(page, user, ['tools_page_guide']);
+            await navigateTo(page, '/tools');
+            await expect(page.getByTestId('tools-hub')).toBeVisible({timeout: 15_000});
+            await walkToCompletion(page, 'tools_page_guide', TOOLS_PAGE_STEPS);
         } finally {
             await deleteDisposableUser(request, user);
         }

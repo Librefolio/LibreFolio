@@ -52,12 +52,12 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
 PRIORITY_MAP = {
     # HIGH — core business logic
-    "backend/app/services/asset_source.py": "HIGH",
-    "backend/app/services/fx.py": "HIGH",
-    "backend/app/services/broker_service.py": "HIGH",
-    "backend/app/services/user_service.py": "HIGH",
-    "backend/app/services/transaction_service.py": "HIGH",
-    "backend/app/services/brim_provider.py": "HIGH",
+    "backend/app/services/assets/": "HIGH",
+    "backend/app/services/fx/": "HIGH",
+    "backend/app/services/brokers/": "HIGH",
+    "backend/app/services/accounts/user_service.py": "HIGH",
+    "backend/app/services/transactions/": "HIGH",
+    "backend/app/services/brim/": "HIGH",
     # MEDIUM — API endpoints
     "backend/app/api/": "MEDIUM",
     # MEDIUM — providers
@@ -66,13 +66,18 @@ PRIORITY_MAP = {
     "backend/app/services/brim_providers/": "MEDIUM",
     # LOW — utilities, infrastructure
     "backend/app/utils/": "LOW",
-    "backend/app/services/global_settings_service.py": "LOW",
-    "backend/app/services/settings_service.py": "LOW",
-    "backend/app/services/static_uploads.py": "LOW",
+    "backend/app/services/accounts/global_settings_service.py": "LOW",
+    "backend/app/services/accounts/settings_service.py": "LOW",
+    "backend/app/services/files/static_uploads.py": "LOW",
     "backend/app/services/provider_registry.py": "LOW",
     "backend/app/schemas/": "LOW",
     # INFRA — not unit-testable
     "backend/app/main.py": "INFRA",
+    # The startup, middleware and static serving cut out of main.py (CP2b)
+    "backend/app/services/platform/app_lifespan.py": "INFRA",
+    "backend/app/services/platform/database_bootstrap.py": "INFRA",
+    "backend/app/services/platform/middleware.py": "INFRA",
+    "backend/app/services/platform/static_site.py": "INFRA",
     "backend/app/logging_config.py": "INFRA",
     "backend/app/uploads.py": "INFRA",
     "backend/app/db/models.py": "INFRA",
@@ -175,9 +180,9 @@ def classify_category(filepath: str, func_name: str, stmts: int) -> str:  # noqa
 
     # Core services
     if any(svc in filepath for svc in [
-        "asset_source.py", "services/fx.py", "broker_service.py",
-        "transaction_service.py", "user_service.py",
-        "brim_provider.py", "settings_service.py",
+        "services/assets/", "services/fx/", "services/brokers/",
+        "services/transactions/", "user_service.py",
+        "services/brim/", "settings_service.py",
     ]):
         return "CORE_SVC"
 

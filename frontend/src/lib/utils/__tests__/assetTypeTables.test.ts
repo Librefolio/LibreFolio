@@ -9,6 +9,8 @@
  *   - the PNG it names is not on disk      → a broken `<img>`, hidden by `onerror`
  *   - an i18n file misses a label          → the raw key `assets.types.X` is rendered
  *   - `BADGE_CLASS_MAP` misses an entry    → the badge falls back to grey
+ *   - `BADGE_DOT_CLASS_MAP` misses a type  → a subtype's badge loses its dot, the
+ *                                            colour of what it contains
  *   - a type filter list misses a value    → the type becomes un-filterable
  *   - `ASSET_TYPE_FAMILY` misfiles a type  → the type select lists it in the wrong
  *                                            group, or in none at all
@@ -69,6 +71,7 @@ const ASSET_TYPES_TS = path.join(FRONTEND_DIR, 'src', 'lib', 'utils', 'assetType
 const GENERATED_TS = path.join(FRONTEND_DIR, 'src', 'lib', 'api', 'generated.ts');
 const ASSET_TABLE_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'components', 'assets', 'AssetTable.svelte');
 const ASSET_CARD_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'components', 'assets', 'AssetCard.svelte');
+const PROVIDER_COMPARISON_MODAL_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'components', 'assets', 'ProviderComparisonModal.svelte');
 const ASSETS_PAGE_SVELTE = path.join(FRONTEND_DIR, 'src', 'routes', '(app)', 'assets', '+page.svelte');
 const ASSET_TYPE_SELECT_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'components', 'ui', 'select', 'AssetTypeSelect.svelte');
 const ICON_DIR = path.join(FRONTEND_DIR, 'static', 'icons', 'asset-types');
@@ -261,17 +264,33 @@ describe('asset type tables', () => {
         );
     });
 
-    it('renders the badge from that one map in both views', () => {
+    it('renders the badge and its dot from those maps in all three views', () => {
         // AssetTable and AssetCard each used to carry their own hand-written colour
         // map, and the two had already drifted: the card had no INDEX, no explicit
-        // OTHER, and a switch statement instead of a lookup. Checking the shared map
-        // above is only worth something while both views actually read it.
-        for (const [label, file] of [
+        // OTHER, and a switch statement instead of a lookup. The provider comparison
+        // draws the same badge. Checking the shared maps — the colour above, the dot
+        // of a subtype in the families block below — is only worth something while
+        // every view actually reads them: the colour through assetTypeBadgeClass(),
+        // the dot through assetTypeBadgeDotClass() (designer, round 3).
+        const views = [
             ['AssetTable.svelte', ASSET_TABLE_SVELTE],
             ['AssetCard.svelte', ASSET_CARD_SVELTE],
-        ] as const) {
-            expect(read(file).includes('assetTypeBadgeClass'), `${label} no longer calls assetTypeBadgeClass(). If it has gone back to its own colour map, that map is unguarded and will drift from the enum exactly as it did before.`).toBe(true);
+            ['ProviderComparisonModal.svelte', PROVIDER_COMPARISON_MODAL_SVELTE],
+        ] as const;
+        const missing: string[] = [];
+        for (const [label, file] of views) {
+            const source = read(file);
+            for (const helper of ['assetTypeBadgeClass', 'assetTypeBadgeDotClass']) {
+                // A call, with its argument: the import line names a helper too, and so does a
+                // comment such as «see assetTypeBadgeDotClass()», and neither draws anything.
+                if (!new RegExp(`\\b${helper}\\(\\s*[^)\\s]`).test(source)) missing.push(`${label}: ${helper}()`);
+            }
         }
+
+        expectNoGaps(
+            missing,
+            'these views of the asset type badge no longer call the shared helpers of src/lib/utils/assetTypes.ts. A view back on a colour map of its own leaves that map unguarded, and it will drift from the enum exactly as it did before; a view that skips assetTypeBadgeDotClass() draws a subtype in its family colour with no dot, so its badge stops saying what the subtype contains.',
+        );
     });
 
     it('offers every asset type in the AssetTable type filter', () => {
@@ -460,13 +479,16 @@ describe('contract K2 — primaryAssetType behaviour', () => {
 });
 
 /**
- * R15 — the families of the asset type select (T4).
+ * R15 — the families of the asset type select (T4), and of the badge (designer, round 3, §1.9).
  *
  * `ASSET_TYPE_FAMILY` is the *container* view of the taxonomy — `ETF_STOCK` is an ETF — and the
  * deliberate counterpart of `primaryAssetType()`, the *content* view — `ETF_STOCK` holds STOCK.
- * The select builds one group per family out of the first, the badge colour follows the second,
- * and the composite icons are generated from both. None of the three fails loudly when a table
- * is wrong: a subtype simply lands in the wrong group, or in none, or wears the wrong colour.
+ * The select builds one group per family out of the first, and the badge colour follows it too
+ * since the designer's round 3 (developer and designer, 17/10): an equity ETF is an ETF, in the
+ * ETF's colour. The second is said by the composite icon, generated from both, with its pastille
+ * (`ASSET_TYPE_CONTENT_ICON`, D61), and by the dot the badge of a subtype draws beside its label,
+ * in the colour of that same content. None of these fails loudly when a table is wrong: a subtype
+ * simply lands in the wrong group, or in none, or wears the wrong colour, or the wrong dot.
  */
 describe('asset type families (R15)', () => {
     it('files every subtype under an enum value, and never a family inside a family', () => {
@@ -568,15 +590,57 @@ describe('asset type families (R15)', () => {
         );
     });
 
-    it('colours every badge by what the asset contains: badge(x) is badge(primary(x))', () => {
+    it('colours every badge by the family the asset belongs to: badge(x) is badge(family(x)), and no two families share one', () => {
         const badge = readRecord('BADGE_CLASS_MAP', ['STOCK', 'ETF', 'OTHER']);
-        // Scraped, like everything in this block: primaryAssetType() is this map plus "itself".
-        const primary = readRecord('PRIMARY_TYPE_MAP', ['ETF_STOCK', 'CROWDFUND_REAL_ESTATE']);
-        const primaryOf = (type: string) => primary.get(type) ?? type;
+        // Scraped, like everything in this block: assetTypeFamily() is ASSET_TYPE_FAMILY plus "itself".
+        const {family} = readFamilies();
+        const familyOf = (type: string) => family.get(type) ?? type;
+        // A badge is a set of classes: the same classes in another order are the same badge.
+        const normalise = (classes: string): string => classes.split(/\s+/).filter(Boolean).sort().join(' ');
+        const badgeOf = (type: string): string | undefined => {
+            const classes = badge.get(type);
+            return classes === undefined ? undefined : normalise(classes);
+        };
 
         expectNoGaps(
-            ASSET_TYPES.filter((type) => badge.get(type) !== badge.get(primaryOf(type))).map((type) => `${type} (contains ${primaryOf(type)})`),
-            'BADGE_CLASS_MAP in src/lib/utils/assetTypes.ts colours these types differently from the base type they contain (PRIMARY_TYPE_MAP, i.e. primaryAssetType()). The badge answers "what am I exposed to?" — an equity ETF is blue like a share, real-estate crowdfunding teal like real estate — which is what makes a list scannable by exposure. A colour picked by hand here breaks that for one type, and nothing else would ever notice.',
+            ASSET_TYPES.filter((type) => badgeOf(type) !== badgeOf(familyOf(type))).map((type) => `${type} (a member of ${familyOf(type)})`),
+            "BADGE_CLASS_MAP in src/lib/utils/assetTypes.ts colours these types differently from their family (ASSET_TYPE_FAMILY, i.e. assetTypeFamily()). The badge says what the instrument is — an equity ETF is an ETF, in the ETF's colour — and leaves what it contains to its dot (designer, round 3, §1.9; developer and designer, 17/10). A colour picked by hand here breaks that for one type, and nothing else would ever notice.",
+        );
+
+        // Every other entry a badge of its own, the cash bucket's included. Without this, one class for every type
+        // would satisfy the equality above; with it, two families sharing a colour are caught before they read as one.
+        const holders = new Map<string, string[]>();
+        for (const [type, classes] of badge) {
+            if (family.has(type)) continue;
+            const key = normalise(classes);
+            holders.set(key, [...(holders.get(key) ?? []), type]);
+        }
+        expectNoGaps(
+            [...holders.values()].filter((types) => types.length > 1).map((types) => types.join(' = ')),
+            "BADGE_CLASS_MAP in src/lib/utils/assetTypes.ts gives these types one badge between them. Each family has a colour of its own (designer, round 3, §1.9), and so has the cash bucket: only a subtype shares a badge, its family's, and in a list two families in one colour read as one.",
+        );
+    });
+
+    it('marks every subtype, and only a subtype, with a dot in the colour of what it contains', () => {
+        const {family} = readFamilies();
+        const content = readRecord('ASSET_TYPE_CONTENT_ICON', FAMILY_ANCHORS);
+        const dot = readRecord('BADGE_DOT_CLASS_MAP', FAMILY_ANCHORS);
+
+        expectNoGaps(
+            [...family.keys()].filter((subtype) => !dot.has(subtype)),
+            "BADGE_DOT_CLASS_MAP in src/lib/utils/assetTypes.ts has no dot for these subtypes. Their badge wears their family's colour, so the dot is the one part of it that says in colour what they contain: without it assetTypeBadgeDotClass() answers null, and the views draw nothing.",
+        );
+        expectNoGaps(
+            [...dot.keys()].filter((type) => !family.has(type)),
+            'BADGE_DOT_CLASS_MAP gives a dot to types that ASSET_TYPE_FAMILY does not file as subtypes. A base type contains nothing but itself, and so does the cash bucket: a dot would repeat its own colour beside its label, and make it look like a subtype.',
+        );
+        // The pastille's file name doubles as the key of the category role, as it does for every content today. A
+        // content whose icon is named otherwise — CROWDFUND's is crowdfunding, its role --lf-cat-crowdfund — would name
+        // a role that does not exist, which the colour grammar refuses (G2, src/themeRoles.gate.test.ts).
+        const roleOf = (subtype: string) => `bg-lf-cat-${content.get(subtype)}-on-soft`;
+        expectNoGaps(
+            [...family.keys()].filter((subtype) => dot.has(subtype) && content.has(subtype) && dot.get(subtype) !== roleOf(subtype)).map((subtype) => `${subtype}: '${dot.get(subtype)}', its pastille '${content.get(subtype)}' asks for '${roleOf(subtype)}'`),
+            "BADGE_DOT_CLASS_MAP colours these dots otherwise than the pastille of their icon. The dot says what the subtype contains, as the pastille does (ASSET_TYPE_CONTENT_ICON: D61, and D67 for the liquidity of ETF_MONETARY), in the badge text role of that content, bg-lf-cat-<pastille>-on-soft — not in the content's own colour, too light for a dot in the light theme: the crypto colour gave the dot of an ETF_CRYPTO 2.84:1 on the ETF tint. src/themeTokens.gate.test.ts holds every dot at 3:1 on its family's tint.",
         );
     });
 });
@@ -654,7 +718,7 @@ describe('composite icons of the subtypes (R16)', () => {
         }
         expectNoGaps(
             offenders,
-            'ASSET_TYPE_CONTENT_ICON in src/lib/utils/assetTypes.ts draws these subtypes with a pastille that is not the icon of what they contain. The pastille says what the instrument holds — the same thing its badge colour says — so a pastille that disagrees with primaryAssetType() tells the user one thing in the corner and another in the badge.',
+            'ASSET_TYPE_CONTENT_ICON in src/lib/utils/assetTypes.ts draws these subtypes with a pastille that is not the icon of what they contain. The pastille says what the instrument holds, and since round 3 the dot of its badge says it again, in colour, held to this very table: a pastille that disagrees with primaryAssetType() tells the user, in the corner and in the dot, something the label contradicts — an «Equity ETF» with a bond on it.',
         );
 
         const unborrowable = Object.entries(PASTILLE_EXCEPTIONS)
@@ -668,9 +732,10 @@ describe('composite icons of the subtypes (R16)', () => {
  * R15 — the tree of the asset type select, and the family view, called for real (T5).
  *
  * The blocks above prove the tables agree; these prove that `buildAssetTypeTree()` makes of them
- * what they say. They need `assetTypes.ts` imported, hence `generated.ts`: the import is dynamic
- * and local, exactly as in the K2 block and for the same reason, and a missing client is reported
- * rather than skipped.
+ * what they say, and that `assetTypeBadgeDotClass()` draws a dot exactly where its table says.
+ * They need `assetTypes.ts` imported, hence `generated.ts`: the import is dynamic and local,
+ * exactly as in the K2 block and for the same reason, and a missing client is reported rather
+ * than skipped.
  *
  * The translator is the identity. Every label is then its own i18n key, which lets these tests
  * say *which* key a row reads — the keys the catalogue checks above guard — without asserting a
@@ -954,6 +1019,43 @@ describe('the asset type tree and the family view (R15)', () => {
         expectNoGaps(
             ASSET_TYPES.filter((type) => isEtfSubtype(type) !== (type !== 'ETF' && assetTypeFamily(type) === 'ETF')),
             'isEtfSubtype() (the ETF_SUBTYPES list) and ASSET_TYPE_FAMILY disagree on these values. They are two spellings of the same fact — which values specialise ETF — and a value added to one list only is an ETF for half the app.',
+        );
+    });
+
+    it('draws a dot for a subtype alone: assetTypeBadgeDotClass() answers null for every other type', async () => {
+        const module = await importAssetTypes();
+        // Read by name and checked here, as isFamilyOnlyProposal() is above: a missing helper fails this test, not the block.
+        const candidate: unknown = Reflect.get(module, 'assetTypeBadgeDotClass');
+        expect(
+            typeof candidate,
+            'src/lib/utils/assetTypes.ts does not export assetTypeBadgeDotClass(type). The three views of the badge call it for the dot of a subtype, in the colour of what it contains (designer, round 3): without it no badge says what a subtype holds, and an equity ETF wears the very badge of a bond ETF.',
+        ).toBe('function');
+        const dotOf = candidate as (type: string | null | undefined) => string | null;
+        const {assetTypeFamily} = module;
+        const dots = readRecord('BADGE_DOT_CLASS_MAP', FAMILY_ANCHORS);
+
+        const cases: Array<[string | null | undefined, string | null]> = [
+            // A subtype gets the class of its entry, the one the families block holds to its pastille, whatever its case,
+            // as assetTypeBadgeClass() answers for the badge; every other type of the enum gets none.
+            ...ASSET_TYPES.flatMap((type): Array<[string, string | null]> => {
+                const expected = assetTypeFamily(type) === type ? null : (dots.get(type) ?? null);
+                return [
+                    [type, expected],
+                    [type.toLowerCase(), expected],
+                ];
+            }),
+            // The cash bucket, spelt as the engine injects it: a badge of its own, and no dot.
+            ['Liquidity', null],
+            ['SOMETHING_NOBODY_HAS_ADDED_YET', null],
+            [null, null],
+            [undefined, null],
+            ['', null],
+            ['   ', null],
+        ];
+
+        expectNoGaps(
+            cases.filter(([input, expected]) => dotOf(input) !== expected).map(([input, expected]) => `assetTypeBadgeDotClass(${JSON.stringify(input)}) is ${JSON.stringify(dotOf(input))}, expected ${JSON.stringify(expected)}`),
+            'assetTypeBadgeDotClass() in src/lib/utils/assetTypes.ts does not answer as the three views of the badge need it to: the class of BADGE_DOT_CLASS_MAP for a subtype, whatever its case, as assetTypeBadgeClass() reads its own map; null for every other type, for the cash bucket and for unknown, nullish or blank input. A view draws a dot for any class it gets, so a fallback class here would put a dot on every base type.',
         );
     });
 });

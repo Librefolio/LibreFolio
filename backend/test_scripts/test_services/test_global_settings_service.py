@@ -2,7 +2,11 @@
 Test: GlobalSettingsService — _convert_value, get_setting_value, typed getters.
 
 Tests the global settings service layer including type conversion,
-DB reads with defaults, and the three convenience getters.
+DB reads with defaults, the two convenience getters, and the registration
+mode row read through the registry key (release 1.3: ``registration_mode``,
+open / invite / disabled, replaces the ``enable_registration`` switch, and
+defaults to ``invite`` since lot A6d, decision 36; the effective mode, with
+its environment override, is registration_service's).
 """
 
 import asyncio
@@ -23,12 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import GlobalSetting
 from backend.app.db.session import get_async_engine
-from backend.app.services.global_settings_service import (
+from backend.app.schemas.settings import SETTINGS_REGISTRY
+from backend.app.services.accounts.global_settings_service import (
     _convert_value,
     get_max_upload_mb,
     get_session_ttl_hours,
     get_setting_value,
-    is_registration_enabled,
 )
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_utils import print_section, print_success
@@ -178,7 +182,7 @@ class TestGetSettingValue:
 
 @pytest.mark.asyncio
 class TestTypedGetters:
-    """Tests for get_session_ttl_hours, get_max_upload_mb, is_registration_enabled."""
+    """Tests for get_session_ttl_hours, get_max_upload_mb, and the registration_mode row through its registry key."""
 
     async def test_session_ttl_default(self, _clean_settings):
         print_section("get_session_ttl_hours: default (no DB row)")
@@ -216,20 +220,20 @@ class TestTypedGetters:
             assert result == 50
             print_success(f"Custom upload MB = {result}")
 
-    async def test_registration_enabled_default(self, _clean_settings):
-        print_section("is_registration_enabled: default (no DB row)")
+    async def test_registration_mode_default(self, _clean_settings):
+        print_section("registration_mode: default (no DB row) is invite")
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            result = await is_registration_enabled(session)
-            assert result is True
-            print_success(f"Default registration = {result}")
+            result = await get_setting_value(session, SETTINGS_REGISTRY.global_.REGISTRATION_MODE.key)
+            assert result == "invite", f"Without a row registration is by invitation: new installs register by invitation since lot A6d (decision 36), the first account being always creatable; got {result!r}"
+            print_success(f"Default registration mode = {result}")
 
-    async def test_registration_disabled(self, _clean_settings):
-        print_section("is_registration_enabled: disabled in DB")
+    async def test_registration_mode_disabled(self, _clean_settings):
+        print_section("registration_mode: disabled in DB")
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            session.add(GlobalSetting(key="enable_registration", value="false", value_type="bool", updated_at=utcnow()))
+            session.add(GlobalSetting(key=SETTINGS_REGISTRY.global_.REGISTRATION_MODE.key, value="disabled", value_type="string", updated_at=utcnow()))
             await session.commit()
-            result = await is_registration_enabled(session)
-            assert result is False
-            print_success(f"Registration disabled = {result}")
+            result = await get_setting_value(session, SETTINGS_REGISTRY.global_.REGISTRATION_MODE.key)
+            assert result == "disabled", f"The stored mode must read back as written: got {result!r}"
+            print_success(f"Registration mode = {result}")

@@ -12,7 +12,7 @@
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {ArrowLeftRight, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
+    import {ArrowLeftRight, CalendarSync, ChartLine, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
     import FxTable from '$lib/components/fx/FxTable.svelte';
@@ -22,15 +22,33 @@
     import {ConfirmModal} from '$lib/components/table';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
-    import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
+    import {type ChartPrimaryView, type ChartSettings, effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
+    import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
+    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
+    import {DEFAULT_COMPACT_PLOT_WIDTH_PX} from '$lib/components/charts/timeSeriesAggregation';
+    import {buildFxCalendarQuery, estimateFxCalendarDays, fxCalendarRequest, type FxCalendarCardInput, type FxCalendarEntry} from '$lib/utils/reducedFxQuery';
+    import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
+    import {comparisonTargetFromStore, ensureComparisonSeries} from '$lib/charts/comparisonSeries';
+    import {comparisonTargetIds} from '$lib/utils/reducedPriceQuery';
+    import {todayIso} from '$lib/utils/dateOnly';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, displayFxDelta, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
+    import {fetchFxPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
@@ -94,7 +112,17 @@
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
 
-    let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
+    // The view of the FX cards (Y-40): the list's, saved with the chart settings, which the top bar sets for every card; a
+    // card's button keeps its own (V-1 a, V-3 a). The FX list opens on absolute rates.
+    let globalPrimaryView = $derived.by((): ChartPrimaryView => {
+        void getSettingsVersion();
+        return getGlobalSettings('fx').primaryView;
+    });
+    /** The rolling return of each card in that view, and its compared pairs' by signal id (Y-40), by pair. */
+    let calendarBySlug = $state(new Map<string, {own: CalendarReturnView; targets: Map<string, CalendarReturnView>}>());
+    /** The last request of each card's rolling return: an older answer arriving later is dropped. */
+    const calendarRequestOfSlug = new Map<string, number>();
+    let calendarRequestSeq = 0;
     let refreshing = $state(false);
 
     // View mode (grid/list)
@@ -118,6 +146,18 @@
     let addModalOpen = $state(false);
     let fxTourPreview = $state(false);
     let syncModalOpen = $state(false);
+    /** The sync dialog's pairs whose shown rates hold a stored row in its range (C-66): the dialog warns that the sync
+     * replaces them. */
+    let syncModalWithData = $derived.by(() => {
+        if (!syncModalOpen) return [];
+        const targets = new Set(syncModalPairs);
+        const withData: string[] = [];
+        for (const p of pairs) {
+            const id = `${p.config.base}-${p.config.quote}`;
+            if (targets.has(id) && hasStoredPointInRange(getFxStore(p.config.slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) withData.push(id);
+        }
+        return withData;
+    });
     let settingsModalOpen = $state(false);
     /** Slug of the pair currently being configured via per-card ⚙️ (null = global) */
     let settingsTargetSlug = $state<string | null>(null);
@@ -137,7 +177,7 @@
     let signalBackendError = $derived(signalCatalogFailed ? $_('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $_('chartSettings.signalResultsUnavailable') : null);
 
     // Asset list for cross-domain signal selection (loaded lazily)
-    let availableAssetsList = $state<Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>>([]);
+    let availableAssetsList = $state<Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string | null; is_benchmark?: boolean}>>([]);
 
     // Filter bar adaptive layout is now owned by PageToolbar (shared with dashboard/broker-detail/
     // assets) — see the {#snippet filters}/{#snippet actions} below. Tune live via
@@ -155,54 +195,26 @@
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
-    // Delta periods for table columns
-    const DELTA_PERIODS = [
-        {key: '1W', days: 7},
-        {key: '1M', days: 30},
-        {key: '3M', days: 91},
-        {key: '6M', days: 182},
-        {key: '1Y', days: 365},
-        {key: '2Y', days: 730},
-        {key: '3Y', days: 1095},
-        {key: '5Y', days: 1825},
-    ] as const;
+    // The Δ columns (1D … 5Y): the backend computes them up to the end of the range, both ways, and lists the
+    // periods (X-R53). Kept apart from the rate flow. Which answer is kept while several are in flight, the ledger says
+    // (X-R60); `periodChangesLoading` copies its `busy`, one-pair requests included.
+    let periodSpecs = $state<PeriodSpec[]>([]);
+    let periodDeltas = $state<Map<string, {direct: PeriodDeltas; inverse: PeriodDeltas}>>(new Map());
+    let periodChangesLoading = $state(false);
+    const periodChangesLedger = new PeriodChangesLedger<string>();
+    // The Δ over the whole range (the table's Δ Abs and Δ %, the card's), both ways, comes in the same answer (X-R59),
+    // kept by a ledger of its own: it belongs to the range's first day too, so a failed request keeps only the values
+    // of the same range (`rangeKey`).
+    let rangeDeltas = $state<Map<string, {direct: RangeDelta; inverse: RangeDelta}>>(new Map());
+    const rangeDeltaLedger = new PeriodChangesLedger<string>();
+
+    /** The identity of a range for the range-Δ ledger: both its days. */
+    function rangeKey(start: string, end: string): string {
+        return `${start}…${end}`;
+    }
 
     // Which delta periods are visible for the selected date range
-    let visiblePeriods = $derived(
-        DELTA_PERIODS.filter((p) => {
-            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
-            const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
-            return rangeDays >= p.days;
-        }),
-    );
-
-    function computePeriodDelta(data: FxDataPoint[], periodDays: number, inverted: boolean): number | null {
-        if (data.length < 2) return null;
-        const lastPoint = data[data.length - 1];
-        const targetDate = new Date(lastPoint.date);
-        targetDate.setDate(targetDate.getDate() - periodDays);
-        const targetStr = targetDate.toISOString().slice(0, 10);
-        // Find closest point at or before target date (backward-fill)
-        let refPoint: FxDataPoint | null = null;
-        for (let i = data.length - 1; i >= 0; i--) {
-            if (data[i].date <= targetStr) {
-                refPoint = data[i];
-                break;
-            }
-        }
-        if (!refPoint) return null;
-        return displayFxDelta(refPoint.rate, lastPoint.rate, inverted)?.pct ?? null;
-    }
-
-    function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
-        const rate = displayFxRate(point.rate, inverted);
-        return {
-            date: point.date,
-            value: rate ?? 0,
-            missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
-        };
-    }
+    let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
 
     // Extract unique currencies from configured pairs for filter dropdown
     let configuredCurrencies = $derived([...new Set(pairs.flatMap((p) => [p.config.base, p.config.quote]))].sort());
@@ -231,13 +243,8 @@
     // Map to FxRow for table view
     let fxTableRows = $derived<FxRow[]>(
         filteredPairs.map((p) => {
-            const inv = isCardInverted(p.config.slug);
-            const deltas: Record<string, number | null> = {
-                '1D': computePeriodDelta(p.data, 1, inv),
-            };
-            for (const period of visiblePeriods) {
-                deltas[period.key] = computePeriodDelta(p.data, period.days, inv);
-            }
+            const changes = periodDeltas.get(`${p.config.base}/${p.config.quote}`);
+            const deltas: PeriodDeltas = (isCardInverted(p.config.slug) ? changes?.inverse : changes?.direct) ?? {};
             return {
                 slug: p.config.slug,
                 base: p.config.base,
@@ -246,6 +253,7 @@
                 manualOnly: p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL',
                 providers: p.config.providers,
                 deltas,
+                rangeDeltas: rangeDeltas.get(`${p.config.base}/${p.config.quote}`) ?? null,
             };
         }),
     );
@@ -283,15 +291,21 @@
     }
 
     async function retryBackendSignals() {
-        await loadFxSignalDefinitions(true);
-        await fetchAllPairData();
+        await pageBusy.track('fx-signals-retry', async () => {
+            await loadFxSignalDefinitions(true);
+            // The rates and the signals only: the Δ columns do not depend on the signals (X-R60).
+            await fetchAllPairSeries();
+        });
     }
 
     onMount(async () => {
         // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
         getCurrencyGraph();
-        await loadFxSignalDefinitions();
-        await loadPairSources();
+        // The first load holds the page's Refresh button (Y11): the catalog, the pairs, their rates.
+        await pageBusy.track('fx-first-load', async () => {
+            await loadFxSignalDefinitions();
+            await loadPairSources();
+        });
         // Load asset list for cross-domain signal selection
         loadAssetList();
         onboardingGuide.maybeStartContextual('fx_page_guide');
@@ -376,7 +390,33 @@
         if (!isMaxPending) return;
         const firstDates = pairs.map((p) => p.data?.[0]?.date).filter((d): d is string => !!d);
         if (firstDates.length === 0) return;
-        dateStart = firstDates.reduce((min, d) => (d < min ? d : min));
+        const oldest = firstDates.reduce((min, d) => (d < min ? d : min));
+        // FB-7b: each pair's first day is kept for the session; a pair that starts after the oldest has nothing between, so its
+        // store is marked fetched from the oldest and a later look at that range asks nothing
+        for (const pair of pairs) {
+            const first = pair.data?.[0]?.date;
+            if (!first) {
+                if (!pair.loading) rememberNoSeries('fx', pair.config.slug);
+                continue;
+            }
+            rememberFirstDate('fx', pair.config.slug, first);
+            if (first > oldest) getFxStore(pair.config.slug).markFetched(oldest, first);
+        }
+        dateStart = oldest;
+        displayDateStart = dateStart;
+        isMaxPending = false;
+    }
+
+    /**
+     * FB-7b: «All» still pending and every listed pair's first day already known this session: «All» starts at the oldest of them,
+     * as a real day, and the rates come from the stores, never asked from the `min` sentinel again.
+     */
+    function adoptKnownFirstDays() {
+        if (!isMaxPending || pairs.length === 0) return;
+        if (pairs.some((pair) => !isFirstDateKnown('fx', pair.config.slug))) return;
+        const days = pairs.map((pair) => firstDateOf('fx', pair.config.slug)).filter((day): day is string => day !== undefined);
+        if (days.length === 0) return;
+        dateStart = days.reduce((min, day) => (day < min ? day : min));
         displayDateStart = dateStart;
         isMaxPending = false;
     }
@@ -393,16 +433,268 @@
      */
     function rearmMaxPendingBeforeReload() {
         if (activePreset !== 'MAX') return;
+        // FB-7b: a sync, a refresh or a catch-up may have moved a pair's first day: the listed ones are asked again
+        for (const pair of pairs) forgetFirstDate('fx', pair.config.slug);
         isMaxPending = true;
         dateStart = resolveDateSentinel('min');
         displayDateStart = 'min';
     }
 
-    async function fetchAllPairData(propagateError = false) {
+    /**
+     * Rates and signals (the bulk convert, the cache) and the Δ columns (the backend's period changes), together. The
+     * signals' retry, a settings change and an inversion ask only the rates and signals (`fetchAllPairSeries`): the Δ
+     * columns come both ways and depend on none of them (X-R60).
+     */
+    async function fetchAllPairData(propagateError = false, silent = false) {
+        adoptKnownFirstDays();
+        // FB-7b: «All» still to be settled: the Δ over the range needs its first day, which the rates' answers give; asked together,
+        // it would be valued from a day nobody knows
+        if (isMaxPending) {
+            await Promise.all([fetchAllPairSeries(propagateError, silent), fetchCalendarReturns(undefined, silent), fetchComparisonSeries([], silent)]);
+            await loadPeriodChanges(silent);
+            return;
+        }
+        await Promise.all([fetchAllPairSeries(propagateError, silent), loadPeriodChanges(silent), fetchCalendarReturns(undefined, silent), fetchComparisonSeries([], silent)]);
+    }
+
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, Z-14b): the rates, the Δ columns, the rolling returns and the compared assets on
+    // screen are asked again, in silence — the cards keep their lines, nothing says the page is busy — and outside `pageBusy`: it is not the
+    // user's Refresh.
+    onMount(() => onPricesCaughtUp(() => (pageAlive ? fetchAllPairData(false, true) : undefined)));
+
+    /** The view a card shows: its own saved one, else the FX list's (Y-40). */
+    function cardPrimaryView(slug: string): ChartPrimaryView {
+        void getSettingsVersion();
+        return getSettingsForPair(slug, 'fx').primaryView;
+    }
+
+    /** The top bar (V-3 a): every card takes the view; the cards entering or leaving the rolling return ask it, or drop it. */
+    function handleListPrimaryView(view: ChartPrimaryView) {
+        const toCalendar = view === 'calendar-return';
+        const changed = new Set(pairs.filter((pair) => (cardPrimaryView(pair.config.slug) === 'calendar-return') !== toCalendar).map((pair) => pair.config.slug));
+        setScopePrimaryView(view, 'fx');
+        if (changed.size > 0) void pageBusy.track('fx-view', () => fetchCalendarReturns(changed));
+    }
+
+    /** A card's button (V-1 a): that card keeps the view; entering or leaving the rolling return, it asks it, or drops it. */
+    function handleCardPrimaryView(slug: string, view: ChartPrimaryView) {
+        const wasCalendar = cardPrimaryView(slug) === 'calendar-return';
+        setItemPrimaryView(slug, view, 'fx');
+        if (wasCalendar !== (view === 'calendar-return')) void pageBusy.track('fx-view', () => fetchCalendarReturns(new Set([slug])));
+    }
+
+    /** The FX pairs a card's `fx-pair` signals compare, the way each shows its pair. */
+    function pairTargetsOf(configs: SignalConfig[]): FxCalendarCardInput['pairTargets'] {
+        return configs.filter((config) => config.signalType === 'fx-pair' && config.params.pairSlug).map((config) => ({configId: config.id, pairSlug: String(config.params.pairSlug), inverted: Boolean(config.params._inverted)}));
+    }
+
+    /** The cards' rolling returns and their compared pairs', by entry, from the answers of a convert request (Y-40). */
+    function calendarViewsOf(answers: ReadonlyArray<{batch: {items: readonly FxCalendarEntry[]}; answer: unknown}>) {
+        const own = new Map<string, CalendarReturnView>();
+        const targets = new Map<string, Map<string, CalendarReturnView>>();
+        for (const {batch, answer} of answers) {
+            // A request_index is local to the request that carried it: it points into that batch's entries.
+            const groups: unknown[] = (answer as {signal_results?: unknown[]})?.signal_results ?? [];
+            for (const group of groups) {
+                const {request_index: index, signals} = group as {request_index?: number; signals?: unknown};
+                const entry = typeof index === 'number' ? batch.items[index] : undefined;
+                if (!entry) continue;
+                const view = extractCalendarReturnView(signals, CALENDAR_RETURN_INSTANCE_ID);
+                if (entry.role === 'card') own.set(entry.cardSlug, view);
+                else if (entry.configId) {
+                    if (!targets.has(entry.cardSlug)) targets.set(entry.cardSlug, new Map());
+                    targets.get(entry.cardSlug)!.set(entry.configId, view);
+                }
+            }
+        }
+        return {own, targets};
+    }
+
+    /**
+     * The rolling return of the cards in that view (Y-40), with their compared pairs', from the backend's sampled
+     * conversions (Z-29fx, `utils/reducedFxQuery.ts`); the cards in another view drop theirs. `only` limits it to some cards.
+     * The conversions' rates are not the cards' daily rates: they never reach the FX stores.
+     */
+    async function fetchCalendarReturns(only?: ReadonlySet<string>, silent = false) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
+        const rangeDays = calendarReturnRangeDays(dateStart, dateEnd);
+        const next = new Map(calendarBySlug);
+        const cards: FxCalendarCardInput[] = [];
+        const requestId = ++calendarRequestSeq;
+        for (const pair of pairs) {
+            const slug = pair.config.slug;
+            if (only && !only.has(slug)) continue;
+            const settings = getSettingsForPair(slug, 'fx');
+            if (settings.primaryView !== 'calendar-return') {
+                next.delete(slug);
+                continue;
+            }
+            const windowDays = calendarReturnWindowDays(effectiveCalendarReturnWindow(settings, rangeDays)) ?? 30;
+            cards.push({slug, base: pair.config.base, quote: pair.config.quote, inverted: isCardInverted(slug), plotWidthPx: DEFAULT_COMPACT_PLOT_WIDTH_PX, start: isMaxPending ? MIN_START : dateStart, end: dateEnd, windowDays, pairTargets: pairTargetsOf(settings.signals)});
+            calendarRequestOfSlug.set(slug, requestId);
+            // While the new return loads, the old one stays on screen. A silent reload (a catch-up) keeps its state as well: the page does not say busy.
+            const previous = next.get(slug);
+            next.set(slug, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: silent && previous ? previous.own.state : 'loading'}, targets: previous?.targets ?? new Map()});
+        }
+        calendarBySlug = next;
+        if (cards.length === 0) return;
+
+        const settle = (views: ReturnType<typeof calendarViewsOf> | null) => {
+            const settled = new Map(calendarBySlug);
+            for (const card of cards) {
+                const previous = settled.get(card.slug);
+                if (!previous || calendarRequestOfSlug.get(card.slug) !== requestId) continue;
+                const own = views?.own.get(card.slug);
+                settled.set(card.slug, own ? {own, targets: views?.targets.get(card.slug) ?? new Map()} : {own: {...previous.own, state: 'error'}, targets: previous.targets});
+            }
+            calendarBySlug = settled;
+        };
+        const today = todayIso();
+        try {
+            const outcome = await sendBulkBatches(
+                buildFxCalendarQuery(cards),
+                (entry) => estimateFxCalendarDays(entry, today),
+                (batch) => zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(batch.map((entry) => entry.request)),
+                {groupOf: (entry) => entry.group},
+            );
+            if (!current()) return;
+            settle(calendarViewsOf(outcome.answers));
+            if (outcome.failed) {
+                console.error('Failed to fetch the FX rolling returns:', outcome.error);
+                const refusal = bulkRefusalMessage(outcome.error, $_);
+                if (refusal !== null) toasts.error(refusal);
+            }
+        } catch (requestError) {
+            if (!current()) return;
+            console.error('Failed to fetch the FX rolling returns:', requestError);
+            settle(null);
+        }
+    }
+
+    function translateCalendarProblem(key: string, values?: Record<string, string | number>): string {
+        return values ? $_(key, {values}) : $_(key);
+    }
+
+    /** A card's rolling return, with the detail's message when the backend has none (V-7 a). */
+    function cardCalendarReturn(slug: string) {
+        const view = calendarBySlug.get(slug)?.own ?? emptyCalendarReturnView('loading');
+        const problemMessage = view.problem ? formatSignalProblem(view.problem, translateCalendarProblem, (field) => $_(`signals.dataFields.${field}`)) : view.state === 'error' ? $_('chartSettings.signalResultsUnavailable') : null;
+        return {state: view.state, points: view.points, problemCode: view.problem?.code ?? null, problemMessage};
+    }
+
+    /** A card's compared pairs in the rolling-return view (V-5 a): their returns. */
+    function cardCalendarOverlays(slug: string): RenderedSignal[] {
+        const views = calendarBySlug.get(slug)?.targets;
+        return views ? renderCalendarPairComparisons(getSettingsForPair(slug, 'fx').signals, views) : [];
+    }
+
+    /** The plot width the settings preview asks its rolling return for (Y-40): about the preview chart's. */
+    const CALENDAR_PREVIEW_PLOT_WIDTH_PX = 600;
+
+    /**
+     * The rolling return of the settings preview (Y-40). A card's: its pair's over the range on screen, the way the card
+     * shows it, with its compared pairs', as the card asks them. The global settings': the synthetic curve the modal hands,
+     * through `/signals/preview`, as the other backend signals of that preview.
+     */
+    async function resolveCalendarPreview(windowDays: number, configs: SignalConfig[], points: LineDataPoint[]): Promise<{points: LineDataPoint[]; overlays: RenderedSignal[]} | null> {
+        const slug = settingsTargetSlug;
+        if (!slug) {
+            if (points.length === 0) return null;
+            const response = await zodiosApi.compute_signal_preview_api_v1_signals_preview_post({domain: 'fx', points: points.map((point) => ({date: point.date, value: point.value})), signals: [fxCalendarRequest(windowDays)]});
+            const view = extractCalendarReturnView(response.signals ?? [], CALENDAR_RETURN_INSTANCE_ID);
+            return view.state === 'ready' || view.state === 'partial' ? {points: view.points, overlays: []} : null;
+        }
+        const pair = pairs.find((item) => item.config.slug === slug);
+        if (!pair) return null;
+        const entries = buildFxCalendarQuery([{slug, base: pair.config.base, quote: pair.config.quote, inverted: isCardInverted(slug), plotWidthPx: CALENDAR_PREVIEW_PLOT_WIDTH_PX, start: dateStart, end: dateEnd, windowDays, pairTargets: pairTargetsOf(configs)}]);
+        const answer = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(entries.map((entry) => entry.request));
+        const views = calendarViewsOf([{batch: {items: entries}, answer}]);
+        const own = views.own.get(slug);
+        if (!own || (own.state !== 'ready' && own.state !== 'partial')) return null;
+        return {points: own.points, overlays: renderCalendarPairComparisons(configs, views.targets.get(slug) ?? new Map())};
+    }
+
+    /** The Δ columns of every configured pair up to the end of the range, and each pair's Δ over the range, both ways, from the backend (X-R53, X-R59). */
+    async function loadPeriodChanges(silent = false) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current() || pairs.length === 0) return;
+        const ticket = periodChangesLedger.begin(dateEnd, true);
+        const rangeStart = dateStart;
+        const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), true);
+        if (!silent) periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        try {
+            const result = await fetchFxPeriodChanges(
+                pairs.map((pair) => ({base: pair.config.base, quote: pair.config.quote})),
+                ticket.asOf,
+                rangeStart,
+            );
+            if (!current()) return;
+            const nextRange = rangeDeltaLedger.settle(rangeTicket, rangeDeltas, result.rangeDeltasByPair);
+            if (nextRange !== null) rangeDeltas = nextRange;
+            const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByPair);
+            if (next === null) return;
+            if (result.periods.length > 0) periodSpecs = result.periods;
+            periodDeltas = next;
+        } catch (requestError) {
+            if (!current()) return;
+            // The Δ computed up to the same day stay: only those of another range go (X-R60); the range's Δ, only for the same range.
+            const nextRange = rangeDeltaLedger.fail(rangeTicket, rangeDeltas);
+            if (nextRange !== null) rangeDeltas = nextRange;
+            const next = periodChangesLedger.fail(ticket, periodDeltas);
+            if (next === null) return;
+            console.error('Failed to fetch FX period changes:', requestError);
+            periodDeltas = next;
+        } finally {
+            periodChangesLedger.end(ticket);
+            rangeDeltaLedger.end(rangeTicket);
+            periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        }
+    }
+
+    /**
+     * One pair's Δ columns and Δ over the range from the backend, merged into the others' (after its sync, or once
+     * added). The page stays busy while it is in flight, and a full answer asked before it can no longer overwrite the
+     * pair (X-R60).
+     */
+    async function loadPairPeriodChanges(index: number) {
+        const pair = pairs[index];
+        if (!pair) return;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        const ticket = periodChangesLedger.begin(dateEnd, false);
+        const rangeStart = dateStart;
+        const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), false);
+        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        try {
+            const result = await fetchFxPeriodChanges([{base: pair.config.base, quote: pair.config.quote}], ticket.asOf, rangeStart);
+            if (!current()) return;
+            const nextRange = rangeDeltaLedger.settle(rangeTicket, rangeDeltas, result.rangeDeltasByPair);
+            if (nextRange !== null) rangeDeltas = nextRange;
+            const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByPair);
+            if (next === null) return;
+            if (result.periods.length > 0) periodSpecs = result.periods;
+            periodDeltas = next;
+        } catch (requestError) {
+            if (current()) console.error(`Failed to fetch the period changes of ${pair.config.slug}:`, requestError);
+        } finally {
+            periodChangesLedger.end(ticket);
+            rangeDeltaLedger.end(rangeTicket);
+            periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        }
+    }
+
+    async function fetchAllPairSeries(propagateError = false, silent = false) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || pairs.length === 0) return;
         void getSettingsVersion();
+        adoptKnownFirstDays();
+        // FB-7b: «All» pending, the first days unknown: the rates are asked from the sentinel `min` (the server answers each pair's first
+        // stored day, whatever its year), never from a made-up start; the stores are marked from the first rate that came
+        const askedFromMin = isMaxPending;
 
         const bulkRequests: Array<{
             slug: string;
@@ -435,7 +727,7 @@
                 requestVersion,
             });
 
-            const needsRates = store.getMissingIntervals(dateStart, dateEnd).length > 0;
+            const needsRates = askedFromMin || store.getMissingIntervals(dateStart, dateEnd).length > 0;
             if (!needsRates) {
                 // Fast path: already cached — nothing to wait for, so clear the
                 // per-card skeleton here too (this branch never reaches the bulk
@@ -443,13 +735,16 @@
                 pairs[i] = {...pair, data: store.getRange(dateStart, dateEnd).data, loading: false};
             } else {
                 needFetch.push({index: i, slug: pair.config.slug});
-                pairs[i] = {...pair, loading: true};
+                // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
+                // are asked in background, with no skeleton. A silent reload of the range already on screen leaves the card as it is.
+                const staleHeld = store.isStale ? store.getRange(dateStart, dateEnd).data : [];
+                pairs[i] = staleHeld.length > 0 ? {...pair, data: silent && pair.data.length > 0 ? pair.data : staleHeld, loading: false} : silent ? pair : {...pair, loading: true};
             }
 
             if (needsRates || plan.requests.length > 0) {
                 bulkRequests.push({
                     slug: pair.config.slug,
-                    start: dateStart,
+                    start: askedFromMin ? MIN_START : dateStart,
                     end: dateEnd,
                     signals: plan.requests,
                     displayedInverted: isCardInverted(pair.config.slug),
@@ -469,7 +764,7 @@
             return;
         }
 
-        // Exactly one bulk call for every pair needing rates and/or signals.
+        // One bulk call for every pair needing rates and/or signals, in batches under the backend's caps (Z-27).
         signalRequestFailed = false;
         try {
             const bulkResult = await loadFxRatesAndSignalsBulk(bulkRequests);
@@ -491,6 +786,20 @@
         } catch (requestError) {
             if (!current()) return;
             console.error('Failed to fetch FX rates/signals bulk:', requestError);
+            // FB-7b: asked from `min`, the list goes in more batches than from a made-up start, and a batch whose pairs all have no
+            // rate is answered 404, `All conversions failed`: the pairs of the batches that answered are already in their stores. A 404
+            // is «no rates here», not a failure: those pairs stay without data, and «All» settles on the others'.
+            if (askedFromMin && (requestError as {response?: {status?: number}})?.response?.status === 404) {
+                for (const nf of needFetch) {
+                    const stored = getFxStore(nf.slug);
+                    pairs[nf.index] = {...pairs[nf.index], data: stored.getRange(firstDateOf('fx', nf.slug) ?? dateEnd, dateEnd).data, loading: false};
+                }
+                resolveMaxStartFromPairs();
+                return;
+            }
+            // X-R58: a request the backend refused as too large is said, not left as cards without rates.
+            const refusal = bulkRefusalMessage(requestError, $_);
+            if (refusal !== null) toasts.error(refusal);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             // Fallback: update with whatever is cached
             for (const nf of needFetch) {
@@ -501,7 +810,12 @@
         }
     }
 
+    /** One pair's rates and signals, and its Δ columns, together. */
     async function fetchPairData(index: number) {
+        await Promise.all([fetchPairSeries(index), loadPairPeriodChanges(index)]);
+    }
+
+    async function fetchPairSeries(index: number) {
         const pair = pairs[index];
         if (!pair) return;
         const store = getFxStore(pair.config.slug);
@@ -509,7 +823,8 @@
         const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
         const state = resultStateForPair(pair.config.slug);
         const requestVersion = state.beginRequest();
-        const needsRates = store.getMissingIntervals(dateStart, dateEnd).length > 0;
+        const askedFromMin = isMaxPending;
+        const needsRates = askedFromMin || store.getMissingIntervals(dateStart, dateEnd).length > 0;
 
         if (!needsRates && plan.requests.length === 0) {
             pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
@@ -526,7 +841,7 @@
             const result = await loadFxRatesAndSignalsBulk([
                 {
                     slug: pair.config.slug,
-                    start: dateStart,
+                    start: askedFromMin ? MIN_START : dateStart,
                     end: dateEnd,
                     signals: plan.requests,
                     displayedInverted: isCardInverted(pair.config.slug),
@@ -549,6 +864,8 @@
             if (e?.response?.status !== 404) {
                 console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
             }
+            const refusal = bulkRefusalMessage(e, $_);
+            if (refusal !== null) toasts.error(refusal);
         }
     }
 
@@ -568,13 +885,21 @@
 
     function handleSettingsSave(s: ChartSettings) {
         const shouldReloadBackend = backendRequestFingerprint(settingsForModal.signals) !== backendRequestFingerprint(s.signals);
-        if (settingsTargetSlug) {
-            setPairSettings(settingsTargetSlug, s);
+        const target = settingsTargetSlug;
+        // The rolling-return view asks its own data (Y-40): entering it, leaving it, or a window or a pair changed in it.
+        const calendarBefore = target ? cardPrimaryView(target) === 'calendar-return' : pairs.some((pair) => cardPrimaryView(pair.config.slug) === 'calendar-return');
+        if (target) {
+            setPairSettings(target, s);
         } else {
             setGlobalSettings(s, 'fx');
         }
         if (shouldReloadBackend) {
-            void fetchAllPairData();
+            void pageBusy.track('fx-settings', () => fetchAllPairSeries());
+        }
+        // A comparison with an asset saved in this window: its series, if the cache lacks them (the window asked them while open).
+        void fetchComparisonSeries(comparisonTargetIds(s.signals, 0));
+        if (calendarBefore || s.primaryView === 'calendar-return') {
+            void pageBusy.track('fx-settings', () => fetchCalendarReturns(target ? new Set([target]) : undefined));
         }
     }
 
@@ -588,11 +913,94 @@
                 display_name: a.display_name,
                 icon_url: a.icon_url ?? null,
                 asset_type: a.asset_type ?? null,
+                currency: a.currency ?? null,
+                is_benchmark: a.is_benchmark === true,
             }));
+            // The cards' comparisons with an asset need its currency (the key of its cached series): ask them now.
+            void fetchComparisonSeries();
         } catch {
             // Non-critical — asset dropdown will just be empty
         }
     }
+
+    // =========================================================================
+    // The comparisons with an asset (Y-41)
+    // =========================================================================
+
+    /**
+     * Bumped when asset series reach the cache: the price stores are not reactive, so what reads them (the cards' signals)
+     * reads this too, and draws again.
+     */
+    let comparisonSeriesVersion = $state(0);
+    let comparisonSeriesLoading = $state(0);
+    let comparisonSeriesChain: Promise<void> = Promise.resolve();
+
+    /**
+     * The daily series of the assets the cards compare (`comparisonSeries.ts`): one request for all of them, only for the
+     * cards that have such a comparison, and only for what the cache does not cover (the asset detail page fills the same
+     * cache). `extraIds` adds assets the settings window is about to draw. Never throws.
+     */
+    function fetchComparisonSeries(extraIds: readonly number[] = [], silent = false): Promise<void> {
+        // One at a time: a call that follows another finds what it loaded in the cache, and asks nothing twice.
+        comparisonSeriesChain = comparisonSeriesChain.then(() => loadComparisonSeries(extraIds, silent));
+        return comparisonSeriesChain;
+    }
+
+    async function loadComparisonSeries(extraIds: readonly number[], silent: boolean) {
+        const sessionGeneration = getClientSessionGeneration();
+        const ids = new Set(extraIds);
+        for (const pair of pairs) {
+            for (const id of comparisonTargetIds(getSettingsForPair(pair.config.slug, 'fx').signals, 0)) ids.add(id);
+        }
+        const assets = [...ids].flatMap((id) => {
+            const asset = availableAssetsList.find((candidate) => candidate.id === id);
+            return asset?.currency ? [{id, currency: asset.currency}] : [];
+        });
+        if (assets.length === 0) return;
+        const range = {start: dateStart, end: dateEnd};
+        if (!silent) comparisonSeriesLoading++;
+        try {
+            await ensureComparisonSeries(assets, range);
+        } finally {
+            if (!silent) comparisonSeriesLoading--;
+        }
+        if (pageAlive && isClientSessionCurrent(sessionGeneration)) comparisonSeriesVersion++;
+    }
+
+    /** An asset the settings window draws and the cache lacks is asked once per range, as the list of assets asks a target (Z-29d). */
+    const wantedForPreview = new Set<string>();
+    function wantComparisonSeries(assetId: number) {
+        const key = `${assetId}|${dateStart}|${dateEnd}`;
+        if (wantedForPreview.has(key)) return;
+        wantedForPreview.add(key);
+        // Read from a derived: the load starts after it, never inside it.
+        queueMicrotask(() => void fetchComparisonSeries([assetId]));
+    }
+
+    /**
+     * Where the cards — and their settings preview — get the series their saved comparisons read (Y-39a, Y-41): an FX
+     * pair from the FX stores, straight, each signal turning its pair by its own `_inverted`; an asset from the price
+     * cache, its daily series in its own currency (`comparisonSeries.ts`, as the FX detail page draws it). With `readMissing`
+     * (the settings window) an asset the cache lacks is asked.
+     */
+    function signalSourcesFor(readMissing: boolean): SignalDataSources {
+        return {
+            fxPairData: (pairSlug) =>
+                getFxStore(pairSlug)
+                    .getAllSorted()
+                    .map((point) => fxPointToLineDataPoint(point, false)),
+            comparisonTarget: (assetId) => {
+                void comparisonSeriesVersion;
+                const asset = availableAssetsList.find((candidate) => candidate.id === assetId);
+                if (!asset?.currency) return null;
+                const target = comparisonTargetFromStore({id: asset.id, currency: asset.currency, display_name: asset.display_name, icon_url: asset.icon_url, asset_type: asset.asset_type});
+                if (!target && readMissing) wantComparisonSeries(assetId);
+                return target;
+            },
+        };
+    }
+    const fxListSignalSources = signalSourcesFor(false);
+    const settingsSignalSources = signalSourcesFor(true);
 
     /**
      * Render overlay signals for a pair. Called by FxCard reactively whenever
@@ -603,57 +1011,7 @@
         void getSettingsVersion();
         const settings = getSettingsForPair(slug, 'fx');
         if (!settings.signals.length) return [];
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of settings.signals) {
-            const definition = signalDefinitionsByType.get(cfg.signalType);
-            if (!definition || definition.source === 'backend') continue;
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-
-            // For FxPairSignal: resolve data from the TimeSeriesStore before rendering
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                try {
-                    const store = getFxStore(pairSlug);
-                    const storeData = store.getAllSorted();
-                    if (storeData.length === 0) continue;
-                    // Inject resolved data as LineDataPoint[]
-                    instance.params._resolvedData = storeData.map((d) => fxPointToLineDataPoint(d, false));
-                } catch {
-                    continue; // Store not available for this pair
-                }
-            }
-
-            // AssetComparisonSignal: graceful skip — asset data not available in FX view
-            // Full resolution requires async loading, will be implemented in Parte A
-            if (cfg.signalType === 'asset-comparison') {
-                continue;
-            }
-
-            const results = instance.renderMulti(absoluteData, vm);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
-        }
-
-        for (const item of signalResultsByPair.get(slug) ?? []) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
-            const definition = signalDefinitionsByType.get(currentConfig.signalType);
-            if (!definition || definition.source !== 'backend') {
-                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
-                continue;
-            }
-            const outcome = renderBackendSignalResult(item.result, currentConfig, {
-                baseData: absoluteData,
-                viewMode: vm,
-                definition,
-                translate: (key) => $_(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
+        return [...renderLocalSignals(settings.signals, signalDefinitionsByType, absoluteData, vm, fxListSignalSources), ...renderBackendResults(settings.signals, signalResultsByPair.get(slug) ?? [], signalDefinitionsByType, absoluteData, vm, (key) => $_(key))];
     }
 
     /**
@@ -670,20 +1028,7 @@
             signals: plan.requests,
         });
         const mapped = mapSignalInstanceResults(configs, plan, response.signals ?? []);
-        const rendered: RenderedSignal[] = [];
-        for (const item of mapped) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const definition = signalDefinitionsByType.get(item.config.signalType);
-            if (!definition || definition.source !== 'backend') continue;
-            const outcome = renderBackendSignalResult(item.result, item.config, {
-                baseData: points,
-                viewMode,
-                definition,
-                translate: (key) => $_(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
+        return renderBackendResults(configs, mapped, signalDefinitionsByType, points, viewMode, (key) => $_(key));
     }
 
     function resolveSettingsBackendPreview(viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
@@ -705,7 +1050,7 @@
             invalidateAllFxStores();
             rearmMaxPendingBeforeReload();
             pairs = pairs.map((p) => ({...p, data: [], loading: true}));
-            await fetchAllPairData();
+            await pageBusy.track('fx-refresh', () => fetchAllPairData());
         } finally {
             refreshing = false;
         }
@@ -779,7 +1124,7 @@
         // resolved date) so the URL stays meaningful across reloads/shares and
         // the "All" badge doesn't look stuck on a specific historical date.
         gotoDateRange(newStart, newEnd);
-        fetchAllPairData();
+        void pageBusy.track('fx-period', () => fetchAllPairData());
     }
 
     function handleAddPair() {
@@ -924,7 +1269,7 @@
     async function handlePairCreated() {
         if (!pageAlive) return;
         addModalOpen = false;
-        await loadPairSources();
+        await pageBusy.track('fx-reload', () => loadPairSources());
     }
 
     async function handlePairCreationSynced(detail: FxPairSyncCompleteDetail) {
@@ -946,10 +1291,12 @@
      * Same two-wave load as the assets page: the pair list first, then rates per pair. See the
      * note there — until this is false, the rates on screen are not the final ones.
      */
-    let busy = $derived(loading || pairs.some((p) => p.loading));
+    // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
+    // The assets the cards compare are one too (Y-41).
+    let busy = $derived(loading || periodChangesLoading || comparisonSeriesLoading > 0 || pairs.some((p) => p.loading) || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
-<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
+<div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
     <!-- Header: Title left, ViewModeToggle + Add Pair right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room, the opposite of what "wrap only when space is
@@ -958,13 +1305,13 @@
          no JS threshold tuning is needed for a simple 2-block header). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div use:guideAnchor={'fx.page.overview'} data-testid="fx-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
                 {$_('fx.title')}
                 {#if pairs.length > 0}
-                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{pairs.length}</span>
+                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{pairs.length}</span>
                 {/if}
             </h2>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
+            <p class="text-lf-muted text-sm">{$_('fx.subtitle')}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedFxRows.length > 0}
@@ -983,7 +1330,7 @@
                 />
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
                 <Plus size={16} />
                 {$_('fx.actions.addPair')}
             </button>
@@ -1041,7 +1388,7 @@
                 </div>
                 <!-- Reset filters button -->
                 <button
-                    class="p-1.5 rounded-md transition-colors {filterCurrency1 ? 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}"
+                    class="p-1.5 rounded-md transition-colors {filterCurrency1 ? 'hover:bg-lf-hover text-lf-muted hover:text-lf-danger' : 'text-lf-muted/50 cursor-not-allowed'}"
                     data-testid="fx-reset-filters"
                     disabled={!filterCurrency1}
                     onclick={() => {
@@ -1060,84 +1407,134 @@
             {#if viewMode === 'list'}
                 <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels} />
             {:else}
-                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                    <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => {
-                            globalViewMode = 'absolute';
-                        }}
-                        >Abs
-                    </button>
-                    <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => {
-                            globalViewMode = 'percentage';
-                        }}
-                        >%
-                    </button>
+                <!-- The cards' view (Y-40): absolute, percent, rolling return -->
+                <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="fx-global-view" data-view={globalPrimaryView}>
+                    <Tooltip text={$_('chart.showAbsolute')} position="bottom" interactiveChild wrapperClass="flex-1" testId="fx-global-view-absolute-tooltip">
+                        <button
+                            type="button"
+                            class="w-full inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="fx-global-view-absolute"
+                            aria-pressed={globalPrimaryView === 'absolute'}
+                            aria-label={$_('chart.showAbsolute')}
+                            onclick={(event) => {
+                                event.stopPropagation();
+                                handleListPrimaryView('absolute');
+                            }}
+                        >
+                            <ChartLine size={14} />
+                        </button>
+                    </Tooltip>
+                    <Tooltip text={$_('chart.showPercentage')} position="bottom" interactiveChild wrapperClass="flex-1" testId="fx-global-view-percentage-tooltip">
+                        <button
+                            type="button"
+                            class="w-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="fx-global-view-percentage"
+                            aria-pressed={globalPrimaryView === 'percentage'}
+                            aria-label={$_('chart.showPercentage')}
+                            onclick={(event) => {
+                                event.stopPropagation();
+                                handleListPrimaryView('percentage');
+                            }}
+                        >
+                            %
+                        </button>
+                    </Tooltip>
+                    <Tooltip text={$_('signals.riskRollingReturn.name')} position="bottom" interactiveChild wrapperClass="flex-1" testId="fx-global-view-calendar-return-tooltip">
+                        <button
+                            type="button"
+                            class="w-full inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="fx-global-view-calendar-return"
+                            aria-pressed={globalPrimaryView === 'calendar-return'}
+                            aria-label={$_('signals.riskRollingReturn.name')}
+                            onclick={(event) => {
+                                event.stopPropagation();
+                                handleListPrimaryView('calendar-return');
+                            }}
+                        >
+                            <CalendarSync size={14} />
+                        </button>
+                    </Tooltip>
                 </div>
             {/if}
-            <!-- Settings -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="fx-chart-settings-button"
-                onclick={handleGlobalSettings}
-            >
-                <Settings size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
-            </button>
+            <!-- Settings. The three buttons say what they do in a delayed tooltip (Y5-F1); a click is theirs, so it
+                 stops before the tooltip's own click, which would pin the hint over the window it opens. -->
+            <Tooltip text={$_('sharedResource.settingsHint')} position="bottom" interactiveChild testId="fx-chart-settings-tooltip">
+                <button
+                    class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    data-testid="fx-chart-settings-button"
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleGlobalSettings();
+                    }}
+                >
+                    <Settings size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
+                </button>
+            </Tooltip>
             <!-- Sync All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="fx-sync-all-button"
-                use:guideAnchor={'fx.page.sync'}
-                onclick={handleSyncAll}
-            >
-                <RotateCw size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
-            </button>
+            <Tooltip text={$_('sharedResource.syncAllHint')} position="bottom" interactiveChild testId="fx-sync-all-tooltip">
+                <button
+                    class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    data-testid="fx-sync-all-button"
+                    use:guideAnchor={'fx.page.sync'}
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleSyncAll();
+                    }}
+                >
+                    <RotateCw size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
+                </button>
+            </Tooltip>
             <!-- Refresh All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="fx-refresh-all-button"
-                onclick={handleRefreshAll}
-            >
-                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
-            </button>
+            <Tooltip text={$_('sharedResource.refreshAllHint')} position="bottom" interactiveChild testId="fx-refresh-tooltip">
+                <button
+                    class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                    data-testid="fx-refresh-all-button"
+                    data-busy={pageBusy.busy ? 'true' : 'false'}
+                    disabled={pageBusy.busy}
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleRefreshAll();
+                    }}
+                >
+                    <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
+                </button>
+            </Tooltip>
         {/snippet}
     </PageToolbar>
 
     <!-- Content -->
     {#if loading}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
+            <p class="text-lf-muted">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
-            <p class="text-red-600 dark:text-red-400">{error}</p>
-            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={() => loadPairSources()}>
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-6 text-center">
+            <p class="text-lf-danger-on-soft">{error}</p>
+            <button class="mt-3 px-4 py-2 text-sm bg-lf-danger-solid text-lf-on-danger-solid rounded-lg hover:bg-lf-danger-hover transition-colors" onclick={() => loadPairSources()}>
                 {$_('common.retry')}
             </button>
         </div>
     {:else if filteredPairs.length === 0}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full mb-4">
                 <Coins class="text-amber-600 dark:text-amber-400" size={32} />
             </div>
             {#if pairs.length === 0}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noPairsTitle')}</h3>
-                <p class="text-gray-500 dark:text-gray-400 mb-4">{$_('fx.empty.noPairsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('fx.empty.noPairsTitle')}</h3>
+                <p class="text-lf-muted mb-4">{$_('fx.empty.noPairsDesc')}</p>
+                <button class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
                     <Plus size={16} class="inline mr-1" />
                     {$_('fx.empty.addFirstPair')}
                 </button>
             {:else}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('common.noMatchesTitle')}</h3>
-                <p class="text-gray-500 dark:text-gray-400">{$_('fx.empty.noMatchesDesc')}</p>
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('common.noMatchesTitle')}</h3>
+                <p class="text-lf-muted">{$_('fx.empty.noMatchesDesc')}</p>
             {/if}
         </div>
     {:else if viewMode === 'grid'}
@@ -1149,18 +1546,26 @@
                     quote={pair.config.quote}
                     slug={pair.config.slug}
                     data={pair.data}
+                    rangeDeltas={rangeDeltas.get(`${pair.config.base}/${pair.config.quote}`) ?? null}
                     loading={pair.loading}
                     dateStart={urlDateStart}
                     dateEnd={urlDateEnd}
                     manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
-                    {globalViewMode}
+                    primaryView={cardPrimaryView(pair.config.slug)}
+                    onprimaryviewchange={handleCardPrimaryView}
+                    calendarReturn={cardPrimaryView(pair.config.slug) === 'calendar-return' ? cardCalendarReturn(pair.config.slug) : undefined}
+                    calendarOverlaySignals={cardPrimaryView(pair.config.slug) === 'calendar-return' ? cardCalendarOverlays(pair.config.slug) : []}
                     chartSettings={getSettingsForPair(pair.config.slug, 'fx')}
                     renderSignals={(chartData, vm) => getRenderedSignals(pair.config.slug, chartData, vm)}
                     ondelete={handleDeletePair}
                     onrefresh={handleRefreshPair}
                     onsync={handleSyncPair}
                     onsettings={handleCardSettings}
-                    oninversionchange={() => void fetchAllPairData()}
+                    oninversionchange={({slug}) => {
+                        void fetchAllPairSeries();
+                        // The rolling return of a swapped pair is the swapped rate's.
+                        if (cardPrimaryView(slug) === 'calendar-return') void fetchCalendarReturns(new Set([slug]));
+                    }}
                 />
             {/each}
         </div>
@@ -1176,7 +1581,11 @@
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
-            oninversionchange={() => void fetchAllPairData()}
+            oninversionchange={() => {
+                void fetchAllPairSeries();
+                // A pair swapped in the table: the cards in the rolling-return view read the swapped rate's return.
+                void fetchCalendarReturns();
+            }}
             onselectionchange={(rows) => {
                 selectedFxRows = rows;
             }}
@@ -1218,7 +1627,7 @@
 <FxPairAddModal bind:open={addModalOpen} tourPreview={fxTourPreview} onclose={closeAddPair} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
 
 <!-- Sync Modal -->
-<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />
+<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} withDataInRange={syncModalWithData} />
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal
@@ -1246,18 +1655,8 @@
                   return fxPointToLineDataPoint(d, inv);
               })
         : undefined}
-    pairsDataMap={Object.fromEntries(
-        pairs
-            .filter((p) => p.data.length > 0)
-            .map((p) => {
-                const inv = isCardInverted(p.config.slug);
-                return [
-                    p.config.slug,
-                    p.data.map((d) => {
-                        return fxPointToLineDataPoint(d, inv);
-                    }),
-                ];
-            }),
-    )}
+    signalSources={settingsSignalSources}
     settings={settingsForModal}
+    calendarRangeDays={calendarReturnRangeDays(dateStart, dateEnd)}
+    calendarPreviewResolver={resolveCalendarPreview}
 />

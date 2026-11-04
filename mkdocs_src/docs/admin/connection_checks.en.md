@@ -8,7 +8,11 @@ them. This page is for whoever runs the server: how to check that your deploymen
 
 The goal is an HTTPS address, from Tailscale Serve or Funnel
 ([Exposing Securely](service_exposure.md)) or from a reverse proxy with a certificate
-([Behind a reverse proxy](#reverse-proxy)), and a session cookie marked `Secure`.
+([Behind a reverse proxy](connection_proxy.md#reverse-proxy)), and a session cookie marked `Secure`.
+
+!!! info "📚 This guide is in several pages"
+
+    This page is the checklist: what the indicator shows, how to look at the server's view and the session cookie, and what to do when a check fails. If you run LibreFolio behind a reverse proxy, [Checking Connection Security: Behind a Reverse Proxy](connection_proxy.md) explains the headers it must send and how LibreFolio learns the visitor's address.
 
 ---
 
@@ -19,9 +23,11 @@ You need an administrator account and, for the last two checks, a phone on mobil
 
 1. **Open the HTTPS address and sign in.** The indicator shows 🟢 **Connection: secure**, and its
    details say that the connection is encrypted with HTTPS.
-2. **Look for the cookie line.** Signed in as an administrator, the details show only that reason
-   and the **How to connect securely** link. One more line, about the session cookie, means that
-   LibreFolio does not know about the HTTPS: see [Behind a reverse proxy](#reverse-proxy).
+2. **Look for the cookie line.** Signed in as an administrator, the details show that reason and the
+   **How to connect securely** link, plus, when the [security checks](settings.md#security-tab) list
+   errors or warnings, a link to them, such as **2 security warnings**. One more line, about the
+   session cookie, means that LibreFolio does not know about the HTTPS: see
+   [Behind a reverse proxy](connection_proxy.md#reverse-proxy).
 3. **Ask the server.** In a new tab, open `https://<your address>/api/v1/system/connection`: the
    answer contains `"cookie_secure":true` ([The server's view](#server-view)).
 4. **Look at the cookie.** In the browser's developer tools, the `session` cookie is
@@ -94,7 +100,7 @@ only once per page load, reload LibreFolio after a change to see its new verdict
 
 **`cookie_secure`** tells whether a session cookie set on this request would be `Secure`, following
 [`SESSION_COOKIE_SECURE`](#session-cookie). On the HTTPS address it must be `true`: `false` is what
-shows the administrator line about the cookie ([Behind a reverse proxy](#reverse-proxy)). Over plain
+shows the administrator line about the cookie ([Behind a reverse proxy](connection_proxy.md#reverse-proxy)). Over plain
 HTTP, `false` is expected.
 
 **`client_class`** is where the server sees the request coming from. It reads the last
@@ -154,64 +160,16 @@ The console cannot show it: `document.cookie` leaves out `HttpOnly` cookies.
 
 ---
 
-## 🧰 Behind a Reverse Proxy {: #reverse-proxy }
-
-A reverse proxy receives the HTTPS connection and passes it to LibreFolio over plain HTTP, so
-LibreFolio learns about the HTTPS, and about the visitor, only from the proxy's headers:
-
-- `X-Forwarded-Proto: https` says that the browser uses HTTPS: with `SESSION_COOKIE_SECURE=auto`,
-  the default, LibreFolio then marks the session cookie `Secure`;
-- `X-Forwarded-For` carries the visitor's address, which lets the indicator see where users connect
-  from.
-
-Tailscale Serve and Funnel, Caddy and Traefik send both on their own. Nginx needs both lines in the
-`location` block that passes requests to LibreFolio:
-
-```nginx
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-```
-
-If the browser uses HTTPS but the session cookie is not marked `Secure`, because the proxy does not
-send `X-Forwarded-Proto` or because `SESSION_COOKIE_SECURE` is `never`, administrators see one more
-line in the indicator's details. The level stays **Connection: secure**, because the connection is
-encrypted; only the cookie lacks `Secure`:
-
-> Your browser uses HTTPS, but the session cookie is not marked Secure. Make the reverse proxy send
-> X-Forwarded-Proto (Nginx: `proxy_set_header X-Forwarded-Proto $scheme;`), or set
-> SESSION_COOKIE_SECURE back to auto if it is never.
-
-Once the proxy is fixed, reload LibreFolio: the line disappears. Then sign out and sign in again,
-so that the browser gets a `Secure` cookie.
-
-??? tip "⚙️ Set `SESSION_COOKIE_SECURE` instead"
-
-    Sending the header is the better fix. If you only ever reach LibreFolio over HTTPS, you can
-    instead add this line to `.env`:
-
-    ```bash
-    SESSION_COOKIE_SECURE=always
-    ```
-
-    Then restart LibreFolio: with Docker, run `docker compose up -d` (a plain
-    `docker compose restart` keeps the old environment); on a host installation, restart
-    `./dev.py server`, which reads `.env` too. Then sign out and sign in again.
-
-    Use `never` only for the rare proxy that claims HTTPS while the browser is on plain HTTP. See
-    [Configuration](configuration.md#session-cookie-secure) for every option.
-
----
-
 ## 🛠️ When a Check Fails {: #when-a-check-fails }
 
 | What you see | Why | What to do |
 | --- | --- | --- |
 | The HTTPS address does not show **Connection: secure** | The page is not on HTTPS: the address bar shows `http://` | Open the `https://` address, and have the proxy redirect `http://` to it |
-| The line about the session cookie, or `"cookie_secure":false` on the HTTPS address | The proxy does not send `X-Forwarded-Proto: https`, or `SESSION_COOKIE_SECURE` is `never` | Fix the proxy ([Behind a reverse proxy](#reverse-proxy)) or set the option back to `auto`, then reload |
+| The line about the session cookie, or `"cookie_secure":false` on the HTTPS address | The proxy does not send `X-Forwarded-Proto: https`, or `SESSION_COOKIE_SECURE` is `never` | Fix the proxy ([Behind a reverse proxy](connection_proxy.md#reverse-proxy)) or set the option back to `auto`, then reload |
 | `"cookie_secure":true`, but the `session` cookie is not `Secure` | The cookie was set before the fix | Sign out and sign in again |
 | `{"detail":"Not authenticated"}` | No session at this address | Sign in at this address, in the same browser |
 | Every sign-in ends on the login page again | The cookie is `Secure`, but the browser uses plain HTTP: `SESSION_COOKIE_SECURE=always`, or a proxy that sends `X-Forwarded-Proto: https` to a plain-HTTP browser | Use the HTTPS address, or fix the proxy: see [Configuration](configuration.md#session-cookie-secure) |
-| From outside, the HTTPS address does not load | A Tailscale Serve address is private; a new Funnel needs approval and a few minutes | Switch Tailscale on on the phone, or use Funnel; approve the Funnel and wait ([Exposing Securely](service_exposure.md)) |
+| From outside, the HTTPS address does not load | A Tailscale Serve address is private; a new Funnel needs approval and a few minutes | Switch Tailscale on on the phone, or use Funnel; approve the Funnel and wait ([Exposing Securely: Public Access with Funnel](service_exposure_funnel.md#step-2-approve-and-wait-for-propagation)) |
 | From outside, plain `http://…:6040` loads | LibreFolio's port is open to the internet: a port forward on the router, or a server with a public address | Close it: remove the port forward, or block the port in the server's firewall. Tailscale needs no open port, and a reverse proxy only its own |
 | `client_class` reads `lan` or `loopback` from mobile data, or plain HTTP from the internet shows **Connection: local network**, *Unclear* | The server cannot see where visitors come from | See [Limits](#limits); with Nginx, add the `X-Forwarded-For` line |
 | A Tailscale address shows **Connection: local network** | A short MagicDNS name has no dot, so it counts as local | Use the Tailscale IP, the full `.ts.net` name or, better, the HTTPS address |
@@ -226,22 +184,30 @@ deployment.
 **It cannot always see where visitors are.** With Docker Desktop exposed directly, or behind a
 proxy that does not pass the visitor's address in `X-Forwarded-For`, the server sees every visitor
 as local: `lan`, or `loopback` for a proxy on the same machine. Plain HTTP from the internet then
-shows **Connection: local network**, as unclear, instead of **Connection: not secure**. Docker
-Engine on Linux keeps the visitor's address. HTTPS addresses are not affected: they show
-**Connection: secure** either way.
+shows **Connection: local network**, as unclear, instead of **Connection: not secure**. HTTPS
+addresses are not affected: they show **Connection: secure** either way. Docker Engine on Linux
+keeps the visitor's address over IPv4; over IPv6, unless the container has an IPv6 address of its
+own, IPv6 visitors arrive through Docker's proxy, from the gateway of the container's network, so
+all of them share that one local address, for the indicator and for the limits per visitor's
+address, which then count them together. Docker's proxy adds no forwarding header, so LibreFolio
+cannot notice it: its warning about a proxy it does not trust needs one. A reverse proxy in front
+that sees each visitor's own address, set up as [The Visitor's Address](connection_proxy.md#client-address) explains,
+avoids it.
 
 **It does not check certificates.** A self-signed certificate that a user accepted in the browser
 shows **Connection: secure**: the traffic is encrypted, but nobody vouches that the server is really
 yours.
 
-There is no list of trusted proxies to set up. `X-Forwarded-For` only feeds the indicator, so a
-forged value misleads only the indicator of whoever sent it; `X-Forwarded-Proto` can only turn
-`Secure` on, so a forged `https` breaks only the sender's own sign-in.
+Neither the indicator nor the session cookie needs a list of trusted proxies: a forged
+`X-Forwarded-For` misleads only the indicator of whoever sent it, and since `X-Forwarded-Proto` can
+only turn `Secure` on, a forged `https` breaks only the sender's own sign-in. The limits per
+visitor's address are another matter: see [The Visitor's Address](connection_proxy.md#client-address).
 
 ---
 
 ## 🔗 Related
 
+- 📄 **[Checking Connection Security: Behind a Reverse Proxy](connection_proxy.md)** — Which proxy LibreFolio trusts, the visitor's address, Tailscale with Docker
 - 🔐 **[Connection Security](../user/connection-security.md)** — The user guide: the three levels
   and what to do at each
 - 🌐 **[Exposing Securely](service_exposure.md)** — Tailscale, from a private VPN to a public HTTPS

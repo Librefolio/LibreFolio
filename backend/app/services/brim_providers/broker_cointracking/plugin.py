@@ -32,9 +32,10 @@ import structlog
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency, is_fiat_currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -206,7 +207,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                 reader = csv.reader(f, delimiter=detected_delim)
                 header = next(reader, None)
                 if header != EXPECTED_HEADER:
-                    raise BRIMParseError("Unexpected CoinTracking header")
+                    raise BRIMParseError("Unexpected CoinTracking header", details={"code": "header_mismatch"})
 
                 row_num = 1
                 for row in reader:
@@ -404,11 +405,11 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                     create_fee(row_num, tx_date, fee_amount, fee_cur, asset_id, context)
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if skipped_crypto_trades:
             warnings.append(f"Summary: skipped {skipped_crypto_trades} unsupported crypto-to-crypto/fiat-to-fiat trade rows")

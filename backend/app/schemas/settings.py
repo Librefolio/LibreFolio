@@ -17,7 +17,7 @@ import pycountry
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.db.models import OnboardingFlow, OnboardingStatus
-from backend.app.schemas.common import BaseListResponse
+from backend.app.schemas.common import BaseListResponse, IsoCurrencyCode
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # ============================================================================
@@ -38,7 +38,7 @@ class UserSettingsUpdate(BaseModel):
     """User settings update request. All fields optional."""
 
     language: Optional[str] = Field(None, min_length=2, max_length=5)
-    base_currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    base_currency: Optional[IsoCurrencyCode] = Field(None, min_length=3, max_length=3)
     theme: Optional[Literal["light", "dark", "auto"]] = None
     avatar_url: Optional[str] = Field(None, max_length=500, description="URL to user avatar image")
 
@@ -93,7 +93,7 @@ class OnboardingWelcomeSettings(BaseModel):
     """Preferences committed atomically when the welcome flow finishes."""
 
     language: Literal["en", "it", "fr", "es"]
-    base_currency: str = Field(..., min_length=3, max_length=3)
+    base_currency: IsoCurrencyCode = Field(..., min_length=3, max_length=3)
     avatar_url: Optional[str] = Field(None, max_length=500)
 
     model_config = ConfigDict(extra="forbid")
@@ -174,6 +174,10 @@ class SchedulerJobStateInfo(BaseModel):
     last_status: Optional[str] = Field(None, description="Outcome of the last run: ok, partial, or error")
     last_items_ok: int = Field(..., description="Items processed successfully in the last run")
     last_items_err: int = Field(..., description="Items that failed in the last run")
+    last_items_deferred: int = Field(0, description="Items a provider's pause after too many requests deferred in the last run: neither ok nor failed")
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried, before the regular round; null when none")
+    consecutive_failures: int = Field(0, description="Runs in a row that raised")
+    next_attempt_at: Optional[str] = Field(None, description="ISO-8601 datetime before which the job does not run again after a run that raised; null when none")
 
 
 class SchedulerStateResponse(BaseModel):
@@ -194,6 +198,8 @@ class SchedulerLogCurrentPriceItem(BaseModel):
     ok: bool
     icon_url: Optional[str] = None
     error: Optional[str] = None
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the item is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogHistoryAssetItem(BaseModel):
@@ -208,6 +214,8 @@ class SchedulerLogHistoryAssetItem(BaseModel):
     prices_changed: Optional[int] = None
     events_changed: Optional[int] = None
     points_changed: Optional[int] = Field(None, description="Legacy field name used by log entries written before prices_changed/events_changed existed")
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the item is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogHistoryFxItem(BaseModel):
@@ -220,6 +228,8 @@ class SchedulerLogHistoryFxItem(BaseModel):
     errors: Optional[list[str]] = None
     provider: Optional[str] = None
     points_changed: int
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the pair is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogCurrentPriceSummary(BaseModel):
@@ -227,6 +237,7 @@ class SchedulerLogCurrentPriceSummary(BaseModel):
 
     ok: int
     err: int
+    deferred: int = Field(0, description="Items deferred by a provider's pause, counted in neither ok nor err")
 
 
 class SchedulerLogHistorySyncSummary(BaseModel):
@@ -236,6 +247,8 @@ class SchedulerLogHistorySyncSummary(BaseModel):
     assets_err: int
     fx_ok: int
     fx_err: int
+    assets_deferred: int = Field(0, description="Assets deferred by a provider's pause, counted in neither assets_ok nor assets_err")
+    fx_deferred: int = Field(0, description="FX pairs deferred by a provider's pause, counted in neither fx_ok nor fx_err")
 
 
 class SchedulerLogCurrentPriceEntry(BaseModel):
@@ -246,6 +259,7 @@ class SchedulerLogCurrentPriceEntry(BaseModel):
     duration_s: float
     status: str
     summary: SchedulerLogCurrentPriceSummary
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried; null when none")
     items: list[SchedulerLogCurrentPriceItem]
 
 
@@ -257,6 +271,7 @@ class SchedulerLogHistorySyncEntry(BaseModel):
     duration_s: float
     status: str
     summary: SchedulerLogHistorySyncSummary
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried; null when none")
     assets: list[SchedulerLogHistoryAssetItem]
     fx: list[SchedulerLogHistoryFxItem]
 
@@ -285,12 +300,16 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "int",
         "description": "Session cookie TTL in hours (default: 24)",
     },
-    "enable_registration": {
-        "value": "true",
-        "type": "bool",
-        "description": "Allow new user registration",
+    # Who may create an account; LIBREFOLIO_REGISTRATION, when set, pins it and the row is read-only. A new install
+    # starts by invitation (decision 36): its first account can always be created, and an install upgraded with
+    # accounts but no row keeps registration open (the data migration registration_invite_default).
+    "registration_mode": {
+        "value": "invite",
+        "type": "str",
+        "description": "Who may create an account: open, invite or disabled",
     },
-    # placeholder — email verification not implemented (see TODO_FUTURI email server)
+    # Read by services/email/verification.py (workstream E, developer decision 44): every account but the first waits for
+    # an emailed link before it can sign in. It turns on only while an email with a link can go out.
     "require_email_verification": {
         "value": "false",
         "type": "bool",
@@ -380,6 +399,7 @@ GLOBAL_SETTINGS_CONSTRAINTS: dict[str, SettingConstraint] = {
     "default_currency": SettingConstraint(format="currency"),
     "default_language": SettingConstraint(choices=("en", "it", "fr", "es")),
     "default_theme": SettingConstraint(choices=("light", "dark", "auto")),
+    "registration_mode": SettingConstraint(choices=("open", "invite", "disabled")),
 }
 
 _BOOL_WORDS = {"true": "true", "1": "true", "yes": "true", "on": "true", "false": "false", "0": "false", "no": "false", "off": "false"}
@@ -546,7 +566,7 @@ class SETTINGS_REGISTRY:
 
         # Authentication & Security
         SESSION_TTL_HOURS = _global_spec("session_ttl_hours")
-        ENABLE_REGISTRATION = _global_spec("enable_registration")
+        REGISTRATION_MODE = _global_spec("registration_mode")
         REQUIRE_EMAIL_VERIFICATION = _global_spec("require_email_verification")
         # File Upload
         MAX_FILE_UPLOAD_MB = _global_spec("max_file_upload_mb")

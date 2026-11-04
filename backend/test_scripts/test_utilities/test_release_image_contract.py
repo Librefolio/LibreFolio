@@ -1,9 +1,10 @@
 """Release images ship a production frontend: the contract between ``release.yml`` and the ``Dockerfile`` (M, R2 P0).
 
 The images are built from the runner's working tree, and the docs gallery runs in the
-same job before them. Its Playwright webServer is ``./dev.py server --test``, which
-rebuilds ``frontend/build/`` in debug mode (no minification, sourcemaps, ~2.7x the
-size), and that build is what reached the published images. It also built the docs
+same job before them. The gallery rebuilds ``frontend/build/`` in debug mode for its
+test server (no minification, sourcemaps, ~2.7x the size) — today in its build step
+``./dev.py server --test --build-only``, before Playwright starts the webServer — and
+that build is what reached the published images. It also built the docs
 site *before* the screenshots existed, so the "full" image had no gallery. Two halves
 now hold the line, and this module pins both:
 
@@ -114,7 +115,7 @@ after steps that rewrite tracked files.
   logos, every icon is there and git ignores none of them, so a fresh checkout regenerates
   nothing.
 
-Red phase of batch 34, against e501b9615 (HEAD): its 59 tests, run on ``git show HEAD:``
+Red phase of batch 34, against 80ee4beee (HEAD): its 59 tests, run on ``git show HEAD:``
 copies of the workflow, ``dev.py``, ``vite.config.ts`` and the script, went 46 red and 13
 green. Red: every check of a real file (no ``LF_APP_VERSION`` export, no ``[CHECK]`` step,
 no script, ``npm install`` at the root, ``getGitVersion()`` never reading
@@ -1311,7 +1312,7 @@ def writes_app_version(step: dict) -> bool:
 
 
 def builds_frontend(step: dict) -> bool:
-    """Whether the step builds or serves the frontend, which bakes ``__APP_VERSION__`` in: ``dev.py front build``, the gallery (its webServer rebuilds), ``dev.py server``, ``npm run build``."""
+    """Whether the step builds or serves the frontend, which bakes ``__APP_VERSION__`` in: ``dev.py front build``, the gallery (its build step rebuilds), ``dev.py server``, ``npm run build``."""
     runs = _runs_dev_py(step, "front", "build") or _runs_dev_py(step, "mkdocs", "gallery") or _runs_dev_py(step, "server")
     return bool(runs) or any(NPM_BUILD.search(line) for line in _logical_lines(step))
 
@@ -2183,7 +2184,7 @@ class TestCacheKeys:
             (drop_image_export, (f"no step exports {IMAGE_OS}=$ImageOS",)),
             (move_image_export_after_first_cache, ("after the first actions/cache",)),
             (rewrite(exports_runner_image, re.escape("${ImageOS:-unknown}"), "linux"), (f"no step exports {IMAGE_OS}=$ImageOS",)),
-            (rewrite(_cache_keyed("pipenv"), re.escape("-${{ env.RUNNER_IMAGE_OS }}-pipenv-"), "-pipenv-", field="key"), ("(Cache Pipenv): key ${{ runner.os }}-pipenv-${{",)),
+            (rewrite(_cache_keyed("pipenv"), re.escape("-${{ env.RUNNER_IMAGE_OS }}-py"), "-py", field="key"), ("(Cache Pipenv): key ${{ runner.os }}-py${{",)),
             (rewrite(_cache_keyed("node"), re.escape("-${{ env.RUNNER_IMAGE_OS }}-node-"), "-node-", field="restore-keys"), ("(Cache NPM): restore-keys ${{ runner.os }}-node- lacks",)),
         ],
         ids=["export-dropped", "export-after-first-cache", "export-a-constant", "pipenv-key-without-image", "npm-restore-key-without-image"],

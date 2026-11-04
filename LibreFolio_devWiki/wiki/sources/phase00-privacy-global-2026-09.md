@@ -17,9 +17,9 @@ related:
 ## Summary
 
 An analysis (~1 100 lines) and two plans, archived on 2026-10-09. Round 1 (masking core, 2026-09-22,
-`b66e93003` + the gate `9a6dd2015`) put a "hide values" switch in the header and the masking in the currency
+`9d9613471` + the gate `b4c078097`) put a "hide values" switch in the header and the masking in the currency
 formatters. The usage review of 2026-09-22 found it hid too much — the currency symbol, the risk sign, lots, the
-broker view, every quantity — because values were classified by formatter; Round 2 (2026-09-24, `176f19707`
+broker view, every quantity — because values were classified by formatter; Round 2 (2026-09-24, `0ca72f743`
 "keep currency and sign under the mask") moved to a classification by context.
 
 ## Key takeaways
@@ -55,4 +55,4 @@ source scan sees).
 | Round 2 — post review | `LibreFolio_developer_journal/Release_2/phases/24_privacyGlobal/plan-phase00PrivacyGlobalRound2-PostReview.prompt.md` |
 | Masking primitives | `frontend/src/lib/utils/privacy/maskable.ts` |
 | Gate | `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` |
-| Risk formatter (repaired 2026-09-24) | `frontend/src/lib/components/risk/riskAnalysisHelpers.ts` |
+| Risk formatter (repaired 2026-09-24) | `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` |

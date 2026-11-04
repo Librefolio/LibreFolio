@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
 from backend.app.schemas.portfolio import (
     DataQualityExcludedAsset,
     DataQualityExclusionReason,
@@ -45,9 +45,10 @@ from backend.app.schemas.risk import (
     RiskWarning,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.provider_registry import RiskAnalyticRegistry
+from backend.app.services.risk import replay as risk_replay_module
+from backend.app.services.risk import scope as risk_scope_module
 from backend.app.services.risk import service as risk_service_module
 from backend.app.services.risk.base import (
     RiskAnalytic,
@@ -56,23 +57,24 @@ from backend.app.services.risk.base import (
     RiskExecutionContext,
     RiskUnavailableError,
 )
+from backend.app.services.risk.data_quality import data_quality_warnings
 from backend.app.services.risk.metrics import annualized_sharpe, annualized_sortino, beta, pearson_correlation
-from backend.app.services.risk.service import (
+from backend.app.services.risk.registry import RiskAnalyticRegistry
+from backend.app.services.risk.results import assets_excluded_warnings, build_execution_context, portfolio_twrr_returns, with_warning_asset_names
+from backend.app.services.risk.scope import (
     RiskScopeAccessError,
     RiskScopeNotFoundError,
-    RiskService,
-    _assets_excluded_warnings,
-    _data_quality_warnings,
-    _portfolio_twrr_returns,
-    _scope_reference,
-    _ScopeInputs,
+    ScopeInputs,
+    load_scope_inputs,
+    scope_reference,
 )
+from backend.app.services.risk.service import RiskService
 
 
 class NamesDb:
     """Stands in for the session where the only query is the warning-name lookup.
 
-    `_with_warning_asset_names` reads `(Asset.id, Asset.display_name)` for the ids its warnings
+    `with_warning_asset_names` reads `(Asset.id, Asset.display_name)` for the ids its warnings
     name; this answers from a dict and records the ids of every lookup, so a test can say how many
     queries were issued and for which assets.
     """
@@ -180,8 +182,8 @@ def make_prepared_set(
     )
 
 
-def scope_inputs(asset_ids: tuple[int, ...]) -> _ScopeInputs:
-    return _ScopeInputs(
+def scope_inputs(asset_ids: tuple[int, ...]) -> ScopeInputs:
+    return ScopeInputs(
         requested_asset_ids=asset_ids,
         weights={},
         asset_values={},
@@ -204,21 +206,21 @@ async def test_bulk_query_isolates_catalog_scope_and_param_errors(monkeypatch):
     )
     calls = {"scope": 0, "assets": 0, "prepare": 0}
 
-    async def fake_scope(**_kwargs):
+    async def fake_scope(_db, **_kwargs):
         calls["scope"] += 1
         return scope_inputs((1, 2))
 
-    async def fake_assets(_asset_ids):
+    async def fake_assets(_db, _asset_ids):
         calls["assets"] += 1
         return {1, 2}
 
-    async def fake_prepare(**_kwargs):
+    async def fake_prepare(_db, **_kwargs):
         calls["prepare"] += 1
         return prepared
 
-    monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
-    monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
-    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
 
     response = await service.execute(
         user_id=7,
@@ -305,13 +307,13 @@ async def test_runtime_failure_does_not_abort_other_analytics(monkeypatch):
     service = RiskService(db=object())
     prepared = make_prepared_set({1: [0.01, -0.01] * 10})
 
-    async def fake_scope(**_kwargs):
+    async def fake_scope(_db, **_kwargs):
         return scope_inputs((1,))
 
-    async def fake_assets(_asset_ids):
+    async def fake_assets(_db, _asset_ids):
         return {1}
 
-    async def fake_prepare(**_kwargs):
+    async def fake_prepare(_db, **_kwargs):
         return prepared
 
     plugin_map = {
@@ -323,9 +325,9 @@ async def test_runtime_failure_does_not_abort_other_analytics(monkeypatch):
         "get_plugin",
         classmethod(lambda cls, code: plugin_map.get(code)),
     )
-    monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
-    monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
-    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
 
     response = await service.execute(
         user_id=7,
@@ -373,8 +375,8 @@ async def test_historical_replay_uses_dedicated_period_and_proxy_series(
     )
     prepare_calls = []
 
-    async def fake_scope(**_kwargs):
-        return _ScopeInputs(
+    async def fake_scope(_db, **_kwargs):
+        return ScopeInputs(
             requested_asset_ids=(1,),
             weights={1: 1.0},
             asset_values={1: Decimal("100")},
@@ -387,11 +389,11 @@ async def test_historical_replay_uses_dedicated_period_and_proxy_series(
             composition_as_of=date(2026, 1, 21),
         )
 
-    async def fake_assets(asset_ids):
+    async def fake_assets(_db, asset_ids):
         assert asset_ids == {1, 3}
         return {1, 3}
 
-    async def fake_prepare(**kwargs):
+    async def fake_prepare(_db, **kwargs):
         prepare_calls.append(kwargs)
         if kwargs["date_range"].start.year == 2020:
             return replay_prepared
@@ -412,10 +414,12 @@ async def test_historical_replay_uses_dedicated_period_and_proxy_series(
     async def serve_holidays() -> frozenset[date]:
         return served_holidays
 
-    monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
-    monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
-    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
-    monkeypatch.setattr(risk_service_module, "load_price_window_facts", fake_window_facts)
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    # The service prepares the analysis period and the replay its own window: one fake records both.
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_replay_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_replay_module, "load_price_window_facts", fake_window_facts)
     monkeypatch.setattr(risk_service_module, "ensure_market_holidays", serve_holidays)
 
     response = await service.execute(
@@ -491,20 +495,22 @@ async def test_historical_replay_rejects_missing_proxy_explicitly(monkeypatch):
     prepared = make_prepared_set({1: [0.0] * 20})
     prepare_calls = 0
 
-    async def fake_scope(**_kwargs):
+    async def fake_scope(_db, **_kwargs):
         return scope_inputs((1,))
 
-    async def fake_assets(_asset_ids):
+    async def fake_assets(_db, _asset_ids):
         return {1}
 
-    async def fake_prepare(**_kwargs):
+    async def fake_prepare(_db, **_kwargs):
         nonlocal prepare_calls
         prepare_calls += 1
         return prepared
 
-    monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
-    monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
-    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    # Counted wherever a series is prepared: the service's analysis period and the replay's window.
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_replay_module, "prepare_asset_series", fake_prepare)
 
     response = await service.execute(
         user_id=7,
@@ -556,33 +562,33 @@ async def test_hypothetical_stress_uses_classification_context_without_partial_s
     service = RiskService(db=names_db)
     prepared = make_prepared_set({1: [0.0] * 20})
 
-    async def fake_scope(**_kwargs):
+    async def fake_scope(_db, **_kwargs):
         return scope_inputs((1,))
 
-    async def fake_assets(_asset_ids):
+    async def fake_assets(_db, _asset_ids):
         return {1}
 
-    async def fake_prepare(**_kwargs):
+    async def fake_prepare(_db, **_kwargs):
         return prepared
 
-    async def fake_classifications(_asset_ids):
+    async def fake_classifications(_db, _asset_ids):
         return {
             1: RiskAssetClassification(
                 asset_class="ETF",
             )
         }
 
-    monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
-    monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
-    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
     monkeypatch.setattr(
-        service,
-        "_load_asset_classifications",
+        risk_service_module,
+        "load_asset_classifications",
         fake_classifications,
     )
     monkeypatch.setattr(
-        service,
-        "_geography_group_members",
+        risk_service_module,
+        "geography_group_members",
         lambda: {"european_union": frozenset({"ITA"})},
     )
 
@@ -649,14 +655,17 @@ async def test_portfolio_scope_reuses_one_report_for_weights_and_twrr(monkeypatc
         history=[
             PortfolioHistoryPoint.model_construct(
                 date=date(2026, 1, 1),
+                through=date(2026, 1, 1),
                 twrr=Decimal("0"),
             ),
             PortfolioHistoryPoint.model_construct(
                 date=date(2026, 1, 2),
+                through=date(2026, 1, 2),
                 twrr=Decimal("0.1"),
             ),
             PortfolioHistoryPoint.model_construct(
                 date=date(2026, 1, 3),
+                through=date(2026, 1, 3),
                 twrr=Decimal("0.045"),
             ),
         ],
@@ -673,12 +682,12 @@ async def test_portfolio_scope_reuses_one_report_for_weights_and_twrr(monkeypatc
         return report
 
     monkeypatch.setattr(PortfolioService, "get_report", fake_get_report)
-    service = RiskService(db=object())
+    db = object()
 
-    async def fake_accessible_broker_ids(_user_id):
+    async def fake_accessible_broker_ids(_db, _user_id):
         return (3, 5)
 
-    monkeypatch.setattr(service, "_accessible_broker_ids", fake_accessible_broker_ids)
+    monkeypatch.setattr(risk_scope_module, "load_accessible_broker_ids", fake_accessible_broker_ids)
     request = RiskQueryRequest.model_validate(
         {
             "scope": {"kind": "portfolio"},
@@ -697,11 +706,12 @@ async def test_portfolio_scope_reuses_one_report_for_weights_and_twrr(monkeypatc
         }
     )
 
-    inputs = await service._load_scope_inputs(
+    inputs = await load_scope_inputs(
+        db,
         user_id=7,
         request=request,
     )
-    baseline, dates, returns, calendar_days, annualization, coverage = _portfolio_twrr_returns(report)
+    baseline, dates, returns, calendar_days, annualization, coverage = portfolio_twrr_returns(report)
 
     assert calls["report"] == 1
     assert inputs.weights == pytest.approx({1: 0.5, 2: 0.25})
@@ -721,18 +731,18 @@ async def test_asset_historical_kpi_uses_canonical_close_returns(monkeypatch):
     service = RiskService(db=object())
     prepared = make_prepared_set({1: [0.01, -0.005] * 10})
 
-    async def fake_scope(**_kwargs):
+    async def fake_scope(_db, **_kwargs):
         return scope_inputs((1,))
 
-    async def fake_assets(_asset_ids):
+    async def fake_assets(_db, _asset_ids):
         return {1}
 
-    async def fake_prepare(**_kwargs):
+    async def fake_prepare(_db, **_kwargs):
         return prepared
 
-    monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
-    monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
-    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
 
     response = await service.execute(
         user_id=7,
@@ -767,12 +777,12 @@ async def test_asset_historical_kpi_uses_canonical_close_returns(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_portfolio_subset_requires_exact_user_access(monkeypatch):
-    service = RiskService(db=object())
+    db = object()
 
-    async def fake_accessible_broker_ids(_user_id):
+    async def fake_accessible_broker_ids(_db, _user_id):
         return (3, 5)
 
-    monkeypatch.setattr(service, "_accessible_broker_ids", fake_accessible_broker_ids)
+    monkeypatch.setattr(risk_scope_module, "load_accessible_broker_ids", fake_accessible_broker_ids)
     request = RiskQueryRequest.model_validate(
         {
             "scope": {"kind": "portfolio", "broker_ids": [5, 99]},
@@ -792,7 +802,8 @@ async def test_portfolio_subset_requires_exact_user_access(monkeypatch):
     )
 
     with pytest.raises(RiskScopeAccessError, match="not fully accessible: 99"):
-        await service._load_scope_inputs(
+        await load_scope_inputs(
+            db,
             user_id=7,
             request=request,
         )
@@ -841,7 +852,7 @@ def slice_report(
                 for asset_id, value in holdings.items()
             ],
         ),
-        history=[PortfolioHistoryPoint.model_construct(date=point_date, twrr=value) for point_date, value in (twrr or [])],
+        history=[PortfolioHistoryPoint.model_construct(date=point_date, through=point_date, twrr=value) for point_date, value in (twrr or [])],
         data_quality=DataQualityReport(),
     )
 
@@ -862,7 +873,6 @@ def twrr_history(
 
 def install_portfolio_report(
     monkeypatch,
-    service: RiskService,
     report: PortfolioReportResponse,
     *,
     accessible_broker_ids: tuple[int, ...] = (3, 5),
@@ -876,29 +886,32 @@ def install_portfolio_report(
         calls["broker_ids"].append(query.broker_ids)
         return report
 
-    async def fake_accessible_broker_ids(_user_id):
+    async def fake_accessible_broker_ids(_db, _user_id):
         return accessible_broker_ids
 
     monkeypatch.setattr(PortfolioService, "get_report", fake_get_report)
-    monkeypatch.setattr(service, "_accessible_broker_ids", fake_accessible_broker_ids)
+    monkeypatch.setattr(risk_scope_module, "load_accessible_broker_ids", fake_accessible_broker_ids)
     return calls
 
 
 def install_prepared_series(
     monkeypatch,
-    service: RiskService,
     prepared: PreparedAssetSeriesSet,
 ) -> None:
-    """Skip price/FX I/O: the slice is decided before series preparation."""
+    """Skip price/FX I/O: the slice is decided before series preparation.
 
-    async def fake_existing_asset_ids(asset_ids):
+    Only the request's own preparation, which the service reads; a historical replay prepares its
+    window through `risk.replay`, which this leaves alone.
+    """
+
+    async def fake_existing_asset_ids(_db, asset_ids):
         return set(asset_ids)
 
-    async def fake_prepare(**_kwargs):
+    async def fake_prepare(_db, **_kwargs):
         return prepared
 
-    monkeypatch.setattr(service, "_existing_asset_ids", fake_existing_asset_ids)
-    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_existing_asset_ids)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
 
 
 def slice_request(
@@ -931,17 +944,17 @@ def slice_request(
 
 @pytest.mark.asyncio
 async def test_portfolio_slice_renormalizes_weights_and_scope_value_to_the_slice(monkeypatch):
-    service = RiskService(db=ForbiddenDb())
+    db = ForbiddenDb()
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(
             holdings={1: "100", 2: "300", 3: "100"},
             cash="100",
         ),
     )
 
-    inputs = await service._load_scope_inputs(
+    inputs = await load_scope_inputs(
+        db,
         user_id=7,
         request=slice_request(asset_ids=[3, 1]),
     )
@@ -960,17 +973,17 @@ async def test_portfolio_slice_renormalizes_weights_and_scope_value_to_the_slice
 
 @pytest.mark.asyncio
 async def test_unsliced_portfolio_scope_keeps_net_worth_denominator_and_cash_residual(monkeypatch):
-    service = RiskService(db=ForbiddenDb())
+    db = ForbiddenDb()
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(
             holdings={1: "100", 2: "300", 3: "100"},
             cash="100",
         ),
     )
 
-    inputs = await service._load_scope_inputs(
+    inputs = await load_scope_inputs(
+        db,
         user_id=7,
         request=slice_request(),
     )
@@ -984,14 +997,14 @@ async def test_unsliced_portfolio_scope_keeps_net_worth_denominator_and_cash_res
 
 @pytest.mark.asyncio
 async def test_portfolio_slice_ignores_requested_assets_that_are_not_held(monkeypatch):
-    service = RiskService(db=ForbiddenDb())
+    db = ForbiddenDb()
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(holdings={1: "100", 2: "300"}),
     )
 
-    inputs = await service._load_scope_inputs(
+    inputs = await load_scope_inputs(
+        db,
         user_id=7,
         request=slice_request(asset_ids=[1, 77, 99]),
     )
@@ -1009,15 +1022,15 @@ async def test_portfolio_slice_ignores_requested_assets_that_are_not_held(monkey
 
 @pytest.mark.asyncio
 async def test_portfolio_slice_without_any_held_asset_is_not_found(monkeypatch):
-    service = RiskService(db=ForbiddenDb())
+    db = ForbiddenDb()
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(holdings={1: "100", 2: "300"}),
     )
 
     with pytest.raises(RiskScopeNotFoundError, match=r"\[77, 99\]"):
-        await service._load_scope_inputs(
+        await load_scope_inputs(
+            db,
             user_id=7,
             request=slice_request(asset_ids=[99, 77]),
         )
@@ -1038,14 +1051,15 @@ async def test_portfolio_slice_never_reaches_an_asset_outside_the_accessible_rep
             holdings.update(holdings_by_broker.get(broker_id, {}))
         return slice_report(holdings=holdings)
 
-    async def fake_accessible_broker_ids(_user_id):
+    async def fake_accessible_broker_ids(_db, _user_id):
         return accessible_broker_ids
 
-    service = RiskService(db=ForbiddenDb())
+    db = ForbiddenDb()
     monkeypatch.setattr(PortfolioService, "get_report", fake_get_report)
-    monkeypatch.setattr(service, "_accessible_broker_ids", fake_accessible_broker_ids)
+    monkeypatch.setattr(risk_scope_module, "load_accessible_broker_ids", fake_accessible_broker_ids)
 
-    inputs = await service._load_scope_inputs(
+    inputs = await load_scope_inputs(
+        db,
         user_id=7,
         request=slice_request(asset_ids=[1, 42]),
     )
@@ -1060,13 +1074,13 @@ async def test_portfolio_slice_never_reaches_an_asset_outside_the_accessible_rep
 
 
 def test_scope_reference_encodes_the_asset_slice_of_a_portfolio_scope():
-    unsliced = _scope_reference(slice_request(), broker_ids=(3, 5))
-    first_slice = _scope_reference(
+    unsliced = scope_reference(slice_request(), broker_ids=(3, 5))
+    first_slice = scope_reference(
         slice_request(asset_ids=[2, 1]),
         broker_ids=(3, 5),
         slice_asset_ids=(2, 1),
     )
-    second_slice = _scope_reference(
+    second_slice = scope_reference(
         slice_request(asset_ids=[1, 3]),
         broker_ids=(3, 5),
         slice_asset_ids=(1, 3),
@@ -1076,7 +1090,7 @@ def test_scope_reference_encodes_the_asset_slice_of_a_portfolio_scope():
     assert first_slice == "portfolio:3,5/assets:1,2"
     assert second_slice == "portfolio:3,5/assets:1,3"
     assert first_slice != second_slice
-    assert _scope_reference(slice_request(asset_ids=[1]), slice_asset_ids=(1,)) == "portfolio:none/assets:1"
+    assert scope_reference(slice_request(asset_ids=[1]), slice_asset_ids=(1,)) == "portfolio:none/assets:1"
 
 
 @pytest.mark.asyncio
@@ -1084,7 +1098,6 @@ async def test_portfolio_slice_changes_the_current_composition_result(monkeypatc
     service = RiskService(db=ForbiddenDb())
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(
             holdings={1: "100", 2: "200", 3: "100"},
             cash="100",
@@ -1092,7 +1105,6 @@ async def test_portfolio_slice_changes_the_current_composition_result(monkeypatc
     )
     install_prepared_series(
         monkeypatch,
-        service,
         make_prepared_set(
             {
                 1: [0.012, -0.004, 0.003, -0.011] * 5,
@@ -1133,7 +1145,6 @@ async def test_portfolio_slice_changes_the_historical_result_and_leaves_twrr(mon
     service = RiskService(db=ForbiddenDb())
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(
             holdings={1: "100", 2: "300"},
             cash="100",
@@ -1142,7 +1153,6 @@ async def test_portfolio_slice_changes_the_historical_result_and_leaves_twrr(mon
     )
     install_prepared_series(
         monkeypatch,
-        service,
         make_prepared_set(
             {
                 1: [0.012, -0.004, 0.003, -0.011] * 5,
@@ -1189,29 +1199,29 @@ async def test_sliced_historical_context_replays_the_slice_instead_of_portfolio_
         cash="100",
         twrr=twrr_history([0.004, -0.002, 0.006]),
     )
-    service = RiskService(db=ForbiddenDb())
-    install_portfolio_report(monkeypatch, service, report)
+    db = ForbiddenDb()
+    install_portfolio_report(monkeypatch, report)
     prepared = make_prepared_set(asset_returns)
 
     whole_request = slice_request(mode="historical")
     sliced_request = slice_request(mode="historical", asset_ids=[1])
     full_slice_request = slice_request(mode="historical", asset_ids=[1, 2])
-    whole_context = service._build_context(
+    whole_context = build_execution_context(
         request=whole_request,
-        scope_inputs=await service._load_scope_inputs(user_id=7, request=whole_request),
+        scope_inputs=await load_scope_inputs(db, user_id=7, request=whole_request),
         prepared=prepared,
     )
-    sliced_context = service._build_context(
+    sliced_context = build_execution_context(
         request=sliced_request,
-        scope_inputs=await service._load_scope_inputs(user_id=7, request=sliced_request),
+        scope_inputs=await load_scope_inputs(db, user_id=7, request=sliced_request),
         prepared=prepared,
     )
-    full_slice_context = service._build_context(
+    full_slice_context = build_execution_context(
         request=full_slice_request,
-        scope_inputs=await service._load_scope_inputs(user_id=7, request=full_slice_request),
+        scope_inputs=await load_scope_inputs(db, user_id=7, request=full_slice_request),
         prepared=prepared,
     )
-    twrr_returns = _portfolio_twrr_returns(report)[2]
+    twrr_returns = portfolio_twrr_returns(report)[2]
 
     assert whole_context.primary_return_basis == RiskReturnBasis.TWRR
     assert whole_context.primary_returns == pytest.approx(twrr_returns)
@@ -1229,10 +1239,9 @@ async def test_sliced_historical_context_replays_the_slice_instead_of_portfolio_
 
 @pytest.mark.asyncio
 async def test_full_slice_matches_the_unsliced_scope_when_no_cash_is_held(monkeypatch):
-    service = RiskService(db=ForbiddenDb())
+    db = ForbiddenDb()
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(holdings={1: "100", 2: "300"}),
     )
     prepared = make_prepared_set(
@@ -1244,14 +1253,14 @@ async def test_full_slice_matches_the_unsliced_scope_when_no_cash_is_held(monkey
 
     whole_request = slice_request()
     sliced_request = slice_request(asset_ids=[1, 2])
-    whole_inputs = await service._load_scope_inputs(user_id=7, request=whole_request)
-    sliced_inputs = await service._load_scope_inputs(user_id=7, request=sliced_request)
-    whole_context = service._build_context(
+    whole_inputs = await load_scope_inputs(db, user_id=7, request=whole_request)
+    sliced_inputs = await load_scope_inputs(db, user_id=7, request=sliced_request)
+    whole_context = build_execution_context(
         request=whole_request,
         scope_inputs=whole_inputs,
         prepared=prepared,
     )
-    sliced_context = service._build_context(
+    sliced_context = build_execution_context(
         request=sliced_request,
         scope_inputs=sliced_inputs,
         prepared=prepared,
@@ -1269,10 +1278,9 @@ async def test_full_slice_matches_the_unsliced_scope_when_no_cash_is_held(monkey
 
 @pytest.mark.asyncio
 async def test_sliced_asset_without_usable_history_stays_a_zero_return_residual(monkeypatch):
-    service = RiskService(db=ForbiddenDb())
+    db = ForbiddenDb()
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(
             holdings={1: "100", 2: "100"},
             cash="200",
@@ -1282,8 +1290,8 @@ async def test_sliced_asset_without_usable_history_stays_a_zero_return_residual(
     prepared = make_prepared_set({1: asset_one_returns})
 
     request = slice_request(asset_ids=[1, 2])
-    inputs = await service._load_scope_inputs(user_id=7, request=request)
-    context = service._build_context(
+    inputs = await load_scope_inputs(db, user_id=7, request=request)
+    context = build_execution_context(
         request=request,
         scope_inputs=inputs,
         prepared=prepared,
@@ -1308,18 +1316,17 @@ async def test_sliced_asset_without_usable_history_stays_a_zero_return_residual(
 
 @pytest.mark.asyncio
 async def test_worthless_slice_fails_on_its_own_value_not_on_net_worth(monkeypatch):
-    service = RiskService(db=ForbiddenDb())
+    db = ForbiddenDb()
     install_portfolio_report(
         monkeypatch,
-        service,
         slice_report(
             holdings={1: "0", 2: "300"},
             cash="100",
         ),
     )
 
-    sliced = await service._load_scope_inputs(user_id=7, request=slice_request(asset_ids=[1]))
-    whole = await service._load_scope_inputs(user_id=7, request=slice_request())
+    sliced = await load_scope_inputs(db, user_id=7, request=slice_request(asset_ids=[1]))
+    whole = await load_scope_inputs(db, user_id=7, request=slice_request())
 
     # The denominator is the slice, so a worthless slice has no composition at all,
     # even though the portfolio it comes from is worth 400.
@@ -1380,13 +1387,13 @@ async def test_undeclared_value_error_is_reported_as_ours_while_a_declared_one_s
     service = RiskService(db=object())
     prepared = make_prepared_set({1: [0.01, -0.01] * 10})
 
-    async def fake_scope(**_kwargs):
+    async def fake_scope(_db, **_kwargs):
         return scope_inputs((1,))
 
-    async def fake_assets(_asset_ids):
+    async def fake_assets(_db, _asset_ids):
         return {1}
 
-    async def fake_prepare(**_kwargs):
+    async def fake_prepare(_db, **_kwargs):
         return prepared
 
     plugin_map = {
@@ -1399,9 +1406,9 @@ async def test_undeclared_value_error_is_reported_as_ours_while_a_declared_one_s
         "get_plugin",
         classmethod(lambda cls, code: plugin_map.get(code)),
     )
-    monkeypatch.setattr(service, "_load_scope_inputs", fake_scope)
-    monkeypatch.setattr(service, "_existing_asset_ids", fake_assets)
-    monkeypatch.setattr(service, "_prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
 
     response = await service.execute(
         user_id=7,
@@ -1442,7 +1449,7 @@ async def test_undeclared_value_error_is_reported_as_ours_while_a_declared_one_s
 
 
 def test_excluded_assets_get_one_warning_per_reason_with_its_own_key():
-    warnings = _assets_excluded_warnings(
+    warnings = assets_excluded_warnings(
         (
             RiskExcludedAsset(asset_id=3, reason="missing_price"),
             RiskExcludedAsset(asset_id=2, reason="missing_fx"),
@@ -1462,11 +1469,11 @@ def test_excluded_assets_get_one_warning_per_reason_with_its_own_key():
         "invalid_currency": ("risk.warnings.assets_excluded_invalid_currency", [5]),
         "insufficient_history": ("risk.warnings.assets_excluded_insufficient_history", [4]),
     }
-    assert _assets_excluded_warnings(()) == []
+    assert assets_excluded_warnings(()) == []
 
 
 def test_an_unrecognised_exclusion_reason_reads_as_insufficient_history():
-    (warning,) = _assets_excluded_warnings((RiskExcludedAsset(asset_id=9, reason="not_a_known_reason"),))
+    (warning,) = assets_excluded_warnings((RiskExcludedAsset(asset_id=9, reason="not_a_known_reason"),))
 
     assert warning.message_i18n_key == "risk.warnings.assets_excluded_insufficient_history"
     assert warning.details == {"asset_ids": [9], "reason": "not_a_known_reason"}
@@ -1489,17 +1496,17 @@ def _missing_price(asset_id: int) -> MissingPriceAsset:
         pytest.param({"missing_price_assets": [_missing_price(9)]}, "missing_prices", "risk.warnings.data_quality_missing_prices", id="missing-price"),
         pytest.param({"unresolved_fx_pairs": ["GBP/EUR"]}, "missing_fx_rates", "risk.warnings.data_quality_missing_fx_rates", id="unresolved-fx"),
         pytest.param({"missing_fx_pairs": [WACMissingPairInfo(pair="CHF/EUR")]}, "missing_fx_rates", "risk.warnings.data_quality_missing_fx_rates", id="missing-fx"),
-        pytest.param({"incomplete_nav_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-nav"),
-        pytest.param({"incomplete_book_value_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-book-value"),
-        pytest.param({"incomplete_allocation_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-allocation"),
-        pytest.param({"incomplete_valuation_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-valuation"),
+        pytest.param({"incomplete_nav_ranges": [DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 5))]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-nav"),
+        pytest.param({"incomplete_book_value_ranges": [DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 5))]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-book-value"),
+        pytest.param({"incomplete_allocation_ranges": [DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 5))]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-allocation"),
+        pytest.param({"incomplete_valuation_ranges": [DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 5))]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-valuation"),
     ],
 )
 def test_each_data_quality_cause_alone_gets_exactly_its_own_warning(fields, cause, key):
     report = DataQualityReport(**fields)
     assert report.data_quality_status != DataQualityStatus.OK
 
-    (warning,) = _data_quality_warnings(report)
+    (warning,) = data_quality_warnings(report)
 
     assert warning.code == "data_quality_degraded"
     assert warning.message_i18n_key == key
@@ -1517,11 +1524,11 @@ def test_every_data_quality_cause_together_gets_one_warning_each_and_no_generic_
         missing_price_assets=[_missing_price(9)],
         unresolved_fx_pairs=["GBP/EUR"],
         missing_fx_pairs=[WACMissingPairInfo(pair="CHF/EUR", dates=[date(2026, 1, 5)])],
-        incomplete_nav_dates=[date(2026, 1, 5), date(2026, 1, 6)],
-        incomplete_valuation_dates=[date(2026, 1, 6), date(2026, 1, 7)],
+        incomplete_nav_ranges=[DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 6))],
+        incomplete_valuation_ranges=[DateSpan(start=date(2026, 1, 6), end=date(2026, 1, 7))],
     )
 
-    warnings = _data_quality_warnings(report)
+    warnings = data_quality_warnings(report)
 
     by_cause = {warning.details["cause"]: warning for warning in warnings}
     assert len(warnings) == len(by_cause)
@@ -1540,12 +1547,56 @@ def test_every_data_quality_cause_together_gets_one_warning_each_and_no_generic_
     assert by_cause["incomplete_dates"].message_params == {"count": 3}
 
 
+def _steps_report(*steps: tuple[date, date, str | None]) -> PortfolioReportResponse:
+    """A report whose history is steps: ``(date, through, cumulative twrr)``."""
+    report = slice_report(holdings={1: "100"})
+    report.history = [PortfolioHistoryPoint.model_construct(date=first, through=last, twrr=None if twrr is None else Decimal(twrr)) for first, last, twrr in steps]
+    return report
+
+
+def test_the_portfolio_twrr_reads_a_step_on_every_day_it_holds():
+    """D-P4: a step holds its cumulative TWRR from ``date`` to ``through``; the returns are those of the daily history the steps
+    stand for, on the observation days and on every calendar day alike."""
+    steps = _steps_report((date(2026, 1, 1), date(2026, 1, 3), "0"), (date(2026, 1, 4), date(2026, 1, 6), "0.1"), (date(2026, 1, 7), date(2026, 1, 7), "0.045"))
+    daily = slice_report(holdings={1: "100"}, twrr=[(date(2026, 1, day), Decimal(value)) for day, value in ((1, "0"), (2, "0"), (3, "0"), (4, "0.1"), (5, "0.1"), (6, "0.1"), (7, "0.045"))])
+
+    assert portfolio_twrr_returns(steps) == portfolio_twrr_returns(daily)
+    observed = {date(2026, 1, 3), date(2026, 1, 5), date(2026, 1, 7)}
+    on_observed = portfolio_twrr_returns(steps, observed)
+    assert on_observed == portfolio_twrr_returns(daily, observed)
+    # The TWRR stays exact across the days dropped: 0 → 0.1 over the 4th-5th, then 0.1 → 0.045.
+    assert on_observed[1] == (date(2026, 1, 3), date(2026, 1, 5), date(2026, 1, 7))
+    assert on_observed[2] == pytest.approx((0.0, 0.1, -0.05))
+
+
+def test_the_portfolio_twrr_skips_the_steps_that_have_none_and_starts_at_the_first_that_has_one():
+    steps = _steps_report((date(2026, 1, 1), date(2026, 1, 2), None), (date(2026, 1, 3), date(2026, 1, 4), "0"), (date(2026, 1, 5), date(2026, 1, 6), "0.02"))
+
+    baseline, dates, returns, calendar_days, _annualization, _coverage = portfolio_twrr_returns(steps, {date(2026, 1, 2), date(2026, 1, 5), date(2026, 1, 6)})
+
+    assert baseline == date(2026, 1, 3)
+    assert dates == (date(2026, 1, 5), date(2026, 1, 6))  # the 2nd has no TWRR: it is not a day of the series
+    assert returns == pytest.approx((0.02, 0.0))
+    assert calendar_days == 3
+
+
+def test_a_history_with_a_step_of_seven_centuries_is_read_on_the_observation_days_alone():
+    """The year-1 typo: the observed days are read by a lookup in the steps, never a walk of the calendar."""
+    steps = _steps_report((date(1, 1, 3), date(2020, 1, 1), "0"), (date(2020, 1, 2), date(2026, 1, 1), "0.05"))
+
+    baseline, dates, returns, _calendar_days, _annualization, _coverage = portfolio_twrr_returns(steps, {date(2020, 1, 2), date(2025, 6, 2)})
+
+    assert baseline == date(1, 1, 3)
+    assert dates == (date(2020, 1, 2), date(2025, 6, 2))
+    assert returns == pytest.approx((0.05, 0.0))
+
+
 def test_the_generic_data_quality_warning_appears_only_when_no_cause_applies():
     # A carried count with no asset to name: degraded, and nothing more specific to say.
     unnamed = DataQualityReport(carried_forward_price_points=3)
     assert unnamed.data_quality_status == DataQualityStatus.CARRIED_FORWARD
 
-    (warning,) = _data_quality_warnings(unnamed)
+    (warning,) = data_quality_warnings(unnamed)
 
     assert warning.code == "data_quality_degraded"
     assert warning.message_i18n_key == "risk.warnings.data_quality_degraded"
@@ -1555,7 +1606,7 @@ def test_the_generic_data_quality_warning_appears_only_when_no_cause_applies():
     # Unusable assets alone: `assets_excluded` already names them, so nothing is added here.
     only_unusable = DataQualityReport(unusable_assets=[DataQualityExcludedAsset(asset_id=4, reason=DataQualityExclusionReason.MISSING_PRICE)])
     assert only_unusable.data_quality_status == DataQualityStatus.PARTIAL
-    assert _data_quality_warnings(only_unusable) == []
+    assert data_quality_warnings(only_unusable) == []
 
 
 def _unavailable_with(*warnings: RiskWarning, instance_id: str) -> RiskAnalyticResult:
@@ -1581,7 +1632,7 @@ async def test_warning_names_come_from_one_lookup_for_the_whole_response():
         _unavailable_with(single, unknown, about_no_asset, instance_id="second"),
     ]
 
-    first, second = await RiskService(db=names_db)._with_warning_asset_names(items)
+    first, second = await with_warning_asset_names(names_db, items)
 
     # Names in the warning's own order, next to the params it already had.
     assert first.warnings[0].message_params == {"kept": "yes", "names": "Beta, Alpha", "count": 2}
@@ -1609,7 +1660,7 @@ async def test_warning_names_issue_no_query_when_no_warning_needs_them():
         )
     ]
 
-    enriched = await RiskService(db=names_db)._with_warning_asset_names(items)
+    enriched = await with_warning_asset_names(names_db, items)
 
     assert enriched == items
     assert names_db.lookups == []
@@ -1654,7 +1705,7 @@ SPY = {"instance_id": "spy", "analytic_code": "context_spy"}
 # past the staleness threshold, and a date dropped from the joint calendar. Each names its own cause.
 JOINT_CALENDAR_DEGRADATIONS = [
     pytest.param({"carried_forward_price_points": 3, "carried_forward_price_asset_ids": [BENCHMARK_ASSET_ID]}, "stale_prices", id="carried-benchmark-price"),
-    pytest.param({"incomplete_valuation_dates": [date(2026, 1, 12)]}, "incomplete_dates", id="dropped-calendar-date"),
+    pytest.param({"incomplete_valuation_ranges": [DateSpan(start=date(2026, 1, 12), end=date(2026, 1, 12))]}, "incomplete_dates", id="dropped-calendar-date"),
 ]
 
 
@@ -1768,8 +1819,8 @@ async def query_unpriced_holding(
 ) -> dict[str, RiskAnalyticResult]:
     """Run one portfolio request over the unpriced-holding fixture; results keyed by instance."""
     service = RiskService(db=db if db is not None else EmptyRowsDb())
-    install_portfolio_report(monkeypatch, service, report if report is not None else unpriced_holding_report())
-    install_prepared_series(monkeypatch, service, prepared if prepared is not None else prepared_without())
+    install_portfolio_report(monkeypatch, report if report is not None else unpriced_holding_report())
+    install_prepared_series(monkeypatch, prepared if prepared is not None else prepared_without())
     request = slice_request(
         mode=mode,
         asset_ids=asset_ids,
@@ -2079,7 +2130,7 @@ async def test_a_slice_counts_its_excluded_holding_against_the_slice(monkeypatch
 async def test_a_scope_without_weights_has_no_excluded_weight(monkeypatch, scope):
     seen = install_context_spy(monkeypatch)
     service = RiskService(db=EmptyRowsDb())
-    install_prepared_series(monkeypatch, service, prepared_without())
+    install_prepared_series(monkeypatch, prepared_without())
 
     await service.execute(
         user_id=7,
@@ -2143,7 +2194,7 @@ async def test_contribution_and_risk_return_name_the_excluded_weight_inside_cash
     assert results["risk_return"].metadata.algorithm_version == "1.2.0"
 
 
-# Captured on `ffe41c5ba`, before `excluded_weight` existed, from exactly the current-composition
+# Captured on `30866c47e`, before `excluded_weight` existed, from exactly the current-composition
 # inputs of `query_unpriced_holding`. Publishing the split must not move any of them. The relative
 # tolerance only absorbs BLAS differences in `np.cov` between machines.
 GOLDEN_REL = 1e-12
@@ -2353,7 +2404,7 @@ async def test_a_holding_without_a_correlation_makes_the_comparison_partial(monk
 
 
 def test_an_asset_nothing_can_price_gets_a_sentence_of_its_own():
-    warnings = _assets_excluded_warnings(
+    warnings = assets_excluded_warnings(
         (
             RiskExcludedAsset(asset_id=7, reason="no_price_source"),
             RiskExcludedAsset(asset_id=5, reason="missing_price"),
@@ -2460,8 +2511,8 @@ async def observe_the_portfolio_twrr(
     # Never the real build here: these tests are about what the service does with the quote dates.
     monkeypatch.setattr(risk_service_module, "ensure_market_holidays", no_holiday_table, raising=False)
     service = RiskService(db=EmptyRowsDb())
-    install_portfolio_report(monkeypatch, service, slice_report(holdings=holdings, cash="100", twrr=twrr_history(DAILY_TWRR, start=OBSERVATION_START)))
-    install_prepared_series(monkeypatch, service, prepared)
+    install_portfolio_report(monkeypatch, slice_report(holdings=holdings, cash="100", twrr=twrr_history(DAILY_TWRR, start=OBSERVATION_START)))
+    install_prepared_series(monkeypatch, prepared)
     response = await service.execute(user_id=7, request=slice_request(mode="historical", analytics=list(analytics), start=OBSERVATION_START, end=OBSERVATION_END))
     (context,) = seen
     return context, {item.instance_id: item for item in response.items}

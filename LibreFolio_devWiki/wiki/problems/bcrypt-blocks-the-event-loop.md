@@ -36,13 +36,13 @@ the event loop.
 
 Train 66, the same day (backlog V-16 closed; plan 46, §12.7):
 
-- **Red first** (`0d6aee67c`): `TestPasswordWorkLeavesTheEventLoopFree` in `test_auth_api.py` calls each handler
+- **Red first** (`8d9687ca9`): `TestPasswordWorkLeavesTheEventLoopFree` in `test_auth_api.py` calls each handler
   in-process on its own SQLite under `tmp_path`, with the password function replaced through `monkeypatch` by a
   stand-in that holds its thread for 0.4 s — no real bcrypt is measured. A heartbeat on the same loop beats every 10 ms,
   and the longest gap **during** the stand-in must stay under 0.15 s; outcomes are checked too (a 401, the stand-in's
   hash saved, the arguments), so a test cannot turn green by skipping the work. LOOP-000 checks the instrument itself.
   Red before the cure: gaps of 0.41 s (login), 0.40 s (register), 0.40 + 0.40 s (password change).
-- **The cure** (`a9e0fe4d9`): `await asyncio.to_thread(...)` around `verify_password_or_dummy` in `login`, around
+- **The cure** (`9d6357d87`): `await asyncio.to_thread(...)` around `verify_password_or_dummy` in `login`, around
   `verify_password` and `hash_password` in `change_password`, and around `hash_password` in
   `user_service.create_user`, whose signature is unchanged because the CLI calls it under `asyncio.run`.
   `user_service.reset_password`, used only by the CLI, stays as it is.
@@ -60,8 +60,8 @@ event loop proves it without timing the library itself.
 | Role | Path |
 |------|------|
 | Handlers (`login`, `register`, `change_password`) | `backend/app/api/v1/auth.py` |
-| bcrypt calls (`hash_password`, `verify_password_or_dummy`) | `backend/app/services/auth_service.py` |
-| Registration path (`create_user`) | `backend/app/services/user_service.py` |
+| bcrypt calls (`hash_password`, `verify_password_or_dummy`) | `backend/app/services/accounts/auth_service.py` |
+| Registration path (`create_user`) | `backend/app/services/accounts/user_service.py` |
 | Event-loop tests (`TestPasswordWorkLeavesTheEventLoopFree`) | `backend/test_scripts/test_api/test_auth_api.py` |
 | Backlog (V-16) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Journal (§12.7) | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |

@@ -53,7 +53,7 @@ the one the tooltip-HTML fix of 2026-10-09 extended ([[concepts/echarts-chart-go
 
 ## Consequences and gotchas
 
-- `escapeHtml` is defined **three** times at `083ed26dc`: the canonical helper; `$lib/utils/inlineMath.ts`, which
+- `escapeHtml` is defined **three** times at `fef0203ca`: the canonical helper; `$lib/utils/inlineMath.ts`, which
   deliberately does not escape the apostrophe (its output goes to KaTeX, where `f'(x)` is prime notation); and a
   local copy in `CorrelationHeatmap.svelte` (Risk, 2026-09-24) that escapes only `& < >`. The interpolation gate
   accepts any call **named** `escapeHtml`, so a weaker copy with that name passes it; the heatmap's uses are all text
@@ -76,5 +76,5 @@ the one the tooltip-HTML fix of 2026-10-09 extended ([[concepts/echarts-chart-go
 | Helper tests | `frontend/src/lib/utils/core/__tests__/escapeHtml.test.ts` |
 | Sanitiser tests | `frontend/src/lib/utils/core/sanitizeHtml.test.ts` |
 | KaTeX variant (apostrophe kept) | `frontend/src/lib/utils/inlineMath.ts` |
-| Local copy (text content only) | `frontend/src/lib/components/risk/CorrelationHeatmap.svelte` |
+| Local copy (text content only) | `frontend/src/lib/features/risk/CorrelationHeatmap.svelte` |
 | Plan (step 13, item 0) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md` |

@@ -20,8 +20,9 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.financial_math.returns import observed_annualization
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_return_points,
     require_annualization_factor,
@@ -41,8 +42,10 @@ from backend.app.services.risk.metrics import (
     annualized_volatility,
     beta,
     comparison_summary,
+    compounded_return,
     pearson_correlation,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 @dataclass(frozen=True)
@@ -57,12 +60,7 @@ class _SpanPair:
 
 def _compounded(values: Sequence[float]) -> float:
     """Compound simple returns, taking a single one as it is so no rounding is added."""
-    if len(values) == 1:
-        return values[0]
-    growth = 1.0
-    for value in values:
-        growth *= 1.0 + value
-    return growth - 1.0
+    return values[0] if len(values) == 1 else compounded_return(values)
 
 
 def _pair_over_primary_spans(
@@ -233,7 +231,7 @@ class ComparisonAnalytic(RiskAnalytic):
             )
         baseline_date = pairs[0].span_start
         calendar_days = (common_dates[-1] - baseline_date).days
-        annualization_factor = len(common_dates) * 365 / calendar_days if calendar_days > 0 else require_annualization_factor(context)
+        annualization_factor = observed_annualization(len(common_dates), baseline_date, common_dates[-1])[1] if calendar_days > 0 else require_annualization_factor(context)
         comparison_common_returns = [pair.comparison_return for pair in pairs]
         summary = comparison_summary(
             [pair.primary_return for pair in pairs],

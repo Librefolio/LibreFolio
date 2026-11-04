@@ -147,7 +147,7 @@ Which means the isolation work had to be done anyway, even if the decision had
 been never to parallelise anything.
 
 - The first time this bit, `test all` could not pass by construction: the services category recreated an empty
-  database before the API category, and only the clean audit's last step (`b45f5afbb`, August 2026) gave the API run
+  database before the API category, and only the clean audit's last step (`251df8054`, August 2026) gave the API run
   its own populate — [[sources/phase00-clean-audit-2026-08]].
 
 ## E2E: a write to shared state belongs to its test (2026-10-12)
@@ -175,4 +175,4 @@ test and removes it afterwards, so `tx-delete` no longer consumes seed rows (V-2
 | Consolidated frontend pass | `scripts/test_runner/_consolidate.py` |
 | Consolidated backend pass | `scripts/test_runner/_consolidate_backend.py` |
 | Coverage combine | `scripts/test_runner/_coverage.py`, `.coveragerc` |
-| Service-level transaction scoping | `backend/app/services/transaction_service.py` — `_get_accessible_broker_ids` |
+| Service-level transaction scoping | `backend/app/services/transactions/access.py` — `_get_accessible_broker_ids` |

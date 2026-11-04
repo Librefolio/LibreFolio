@@ -111,7 +111,9 @@ type TransactionRead = {id: number; broker_id: number; asset_id?: number | null;
 type WacBody = {results: Array<{broker_id: number; asset_id: number; currency: string; series: Array<{date: string; wac: string; pool_qty: string}>}>};
 type ReportHolding = {asset_id: number; broker_id?: number | null; quantity: string; wac_per_unit?: string | null; current_value?: string | null; gain_loss?: string | null};
 type ReportBody = {metadata?: {target_currency?: string} | null; summary?: {holdings?: ReportHolding[]} | null};
-type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: string; end?: string} | null};
+type ReportRequestBody = {include_summary?: boolean; include_positions_contribution?: boolean; date_range?: {start?: string; end?: string} | null};
+type ContributionRow = {asset_id: number; broker_id?: number | null; is_fully_sold?: boolean; closed_by?: string | null; closed_to_broker_id?: number | null};
+type ContributionBody = {positions_contribution?: {positions?: ContributionRow[]} | null};
 
 /**
  * A wait armed before the action and awaited later. If the test fails in between, the pending wait would reject
@@ -381,13 +383,15 @@ function dashboardUrl(): string {
 }
 
 /** A full load of the dashboard, with the report it asked for: the application's own response, captured, never routed. */
-async function openDashboard(page: Page): Promise<{range: ReportRequestBody['date_range']; report: ReportBody}> {
+async function openDashboard(page: Page): Promise<{range: ReportRequestBody['date_range']; report: ReportBody; contribution: Promise<ContributionBody>}> {
     const reportResponse = armed(page.waitForResponse((response) => isSummaryReport(response.request()), {timeout: 30_000}));
+    // The Portfolio table asks the period's contribution for the positions closed inside it (FB-13): armed here, read where a spec needs it.
+    const contributionResponse = armed(page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === REPORT_PATH && (response.request().postDataJSON() as ReportRequestBody | null)?.include_positions_contribution === true, {timeout: 60_000}));
     await page.goto(dashboardUrl());
     const answer = await reportResponse;
     const range = (answer.request().postDataJSON() as ReportRequestBody).date_range;
     const report = await jsonFrom<ReportBody>(answer, 'dashboard report');
-    return {range, report};
+    return {range, report, contribution: contributionResponse.then((response) => jsonFrom<ContributionBody>(response, 'dashboard contribution'))};
 }
 
 function holdingsOf(report: ReportBody, asset: Asset, broker: Broker): ReportHolding[] {
@@ -600,8 +604,14 @@ async function transferInAuto(page: Page, request: APIRequestContext, owned: Own
             await expect(remainingRow, 'the units left on A are listed').toBeVisible();
             await expectPositionOnScreen(remainingRow, scenario.remaining, 'A');
         } else {
-            // B's row above is the presence barrier: the table is drawn from the same holdings.
-            await expect(remainingRow, 'nothing is left on A: no row').toHaveCount(0);
+            // B's row above is the presence barrier: the table is drawn from the same holdings. Nothing is left on A, and the units
+            // moved to B, which is in the report and holds them: the engine names the closure (`closed_by` TRANSFER, to B), and the
+            // Portfolio table does not list A as a position sold out (T1) — B's full row is where the units are.
+            const closure = ((await load.contribution).positions_contribution?.positions ?? []).find((position) => position.asset_id === asset.id && position.broker_id === from.id);
+            expect(closure, 'precondition: the period’s contribution brings A as a closed position, closed by a transfer to B').toMatchObject({is_fully_sold: true, closed_by: 'TRANSFER', closed_to_broker_id: to.id});
+            // The page says every wave is in (the contribution included) before the absence is read.
+            await waitForSettled(dashboard, 25_000);
+            await expect(remainingRow, 'A is not listed as sold out: the units moved to B, they were not sold').toHaveCount(0);
         }
     });
 }

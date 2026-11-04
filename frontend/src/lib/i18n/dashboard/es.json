@@ -28,7 +28,7 @@
     "unrealizedDelta": "Variación no realizada",
     "unrealizedDeltaTooltip": "Variación de la ganancia/pérdida latente en posiciones aún abiertas.",
     "realizedSales": "Ventas",
-    "realizedSalesTooltip": "Ganancia o pérdida realizada de las ventas del período, calculada respecto al precio medio de compra.",
+    "realizedSalesTooltip": "Ganancia o pérdida realizada de las ventas del período, y de los títulos cedidos a un coste (por ejemplo a un bróker que LibreFolio no sigue), calculada respecto al precio medio de compra.",
     "income": "Dividendos e intereses",
     "incomeTooltip": "Ingresos recibidos en el período por dividendos, intereses o cupones.",
     "feesAndTaxes": "Costes e impuestos",
@@ -128,7 +128,8 @@
       "missingFx": "No está disponible el tipo de cambio necesario para un pago.",
       "missingWac": "El precio medio de compra (PMC) no está disponible.",
       "nonPositiveWac": "El precio medio de compra (PMC) es nulo o negativo.",
-      "missingFxDetails": "Falta el tipo de cambio {pair} necesario para el cálculo en la fecha {date}."
+      "missingFxDetails": "Falta el tipo de cambio {pair} necesario para el cálculo en la fecha {date}.",
+      "negativeNetIncome": "Las correcciones superan los ingresos del último año."
     },
     "yieldOnCostValue": "Rendimiento sobre coste",
     "yieldOnCostPeriod": "Periodo",
@@ -147,6 +148,29 @@
     "unrealizedAssetEffect": "Activos en {currency}",
     "unrealizedFxEffect": "Tipo de cambio {from} → {to}",
     "unrealizedUnsplit": "{currency}, sin desglosar",
-    "fxOnCash": "Efecto del tipo de cambio sobre el efectivo"
+    "fxOnCash": "Efecto del tipo de cambio sobre el efectivo",
+    "allocationNegativeCash": "Liquidez negativa: {amount}",
+    "startValueTooltip": "Valor de la posición al inicio del período, calculado como la columna Valor de la Cartera; 0 si la posición aún no existía. Es la base de los porcentajes del período.",
+    "endValueTooltip": "Valor de la posición al final del período, calculado como la columna Valor de la Cartera; 0 si la posición ya estaba cerrada.",
+    "transfersAtMarketValue": "Transferencias a valor de mercado",
+    "assetAllocation": "Por activo",
+    "positionsChart": {
+      "title": "Rendimiento de las posiciones",
+      "viewAbsolute": "Abs",
+      "viewPercentage": "%",
+      "viewAbsoluteHint": "Ganancia o pérdida en dinero, desde el inicio del periodo",
+      "viewPercentageHint": "Rendimiento, base 100 al inicio del periodo",
+      "portfolio": "Cartera (rendimiento del panel)",
+      "portfolioNote": "La línea de la cartera es el rendimiento que mide el panel, no la ganancia de las posiciones sobre el capital empleado: pueden diferir.",
+      "hint": "Marca filas de la tabla para comparar su rendimiento con el de la cartera.",
+      "failed": "No se han podido cargar las series de las posiciones.",
+      "closedOn": "Cerrada el {date}",
+      "incomplete": "Faltan algunos valores (un precio o un tipo de cambio): la línea los deja fuera.",
+      "rowSelect": "Selecciona la fila para dibujar su rendimiento",
+      "viewRolling": "Móvil",
+      "viewRollingHint": "Porcentaje que se movió el precio del activo en una ventana móvil a lo largo del período: para comparar activos entre sí"
+    },
+    "allocationNoShares": "No hay porcentajes que mostrar: las porciones suman cero o menos (por ejemplo, un descubierto que anula tus posiciones). Los importes se listan debajo.",
+    "allocationHistoryNoShares": "No hay porcentajes que mostrar: en estos días las porciones suman cero o menos."
   }
 }

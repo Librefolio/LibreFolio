@@ -24,6 +24,10 @@ from backend.test_scripts.test_utils import print_info, print_section, print_suc
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
+# The search's own wait (X-R25). The server gives each provider 30 s to search (services/assets/search.py) and, when it
+# finds nothing and the provider resolves URLs, the link-finder's web search and 20 s of URL resolution: waiting
+# TIMEOUT, one provider's search alone, timed the request out on a slow provider while the server was within its budget.
+SEARCH_TIMEOUT = 90.0
 
 
 async def create_user_and_login(client: httpx.AsyncClient) -> None:
@@ -96,10 +100,12 @@ async def test_complete_e2e_flow_justetf(test_server):  # noqa: C901 — sequent
         # =====================================================================
         print("\n[STEP 1] Search for ETF...")
 
+        # providers=justetf (X-R25): the test is about justETF. Without it the search asks every provider (mockprov too,
+        # X-R24) and waits for the slowest, and the row kept below may come from another provider.
         response = await client.get(
             f"{API_BASE}/assets/provider/search",
-            params={"q": "iShares Core MSCI World"},
-            timeout=TIMEOUT,
+            params={"q": "iShares Core MSCI World", "providers": "justetf"},
+            timeout=SEARCH_TIMEOUT,
         )
 
         assert response.status_code == 200, f"Search failed: {response.status_code}"
@@ -321,7 +327,8 @@ async def test_complete_e2e_flow_yfinance(test_server):
         assert response.status_code == 200, f"Search failed: {response.status_code}"
         search_data = response.json()
 
-        # Find yfinance result (mockprov also returns Apple)
+        # Keep the yfinance row: without providers the search asks every provider that can search but the test-only ones
+        # (X-R24), and another one may answer "Apple" too.
         target_result = None
         for result in search_data.get("results", []):
             if result.get("provider_code") == "yfinance":
@@ -432,7 +439,9 @@ async def test_search_provides_all_required_fields(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
 
-        response = await client.get(f"{API_BASE}/assets/provider/search", params={"q": "World"}, timeout=TIMEOUT)
+        # providers=mockprov: this case checks the fields of the results, not a live provider. mockprov answers any query
+        # at once, with no network; without providers the case counted on it answering by default, which X-R24 stops.
+        response = await client.get(f"{API_BASE}/assets/provider/search", params={"q": "World", "providers": "mockprov"}, timeout=TIMEOUT)
 
         assert response.status_code == 200
         data = response.json()

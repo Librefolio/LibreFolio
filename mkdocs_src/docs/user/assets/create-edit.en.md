@@ -14,7 +14,7 @@ Add an instrument you hold or follow, connect it to a price provider and keep it
     1. On the **Assets** page, click **+ Add Asset**.
     2. In **Search Online**, type a name, ticker or ISIN and pick a result: LibreFolio fills in the
        form, connects that provider and [checks its data](#provider-data-comparison). No result?
-       Fill in the form yourself.
+       Fill in the form yourself, and report the search with [**Let us know**](#let-us-know).
     3. Check the fields below, then click **Create Asset**.
 
 === "From a broker import"
@@ -33,13 +33,65 @@ Check these fields before saving:
 
 - **Name**: required and unique; a warning appears if another asset already uses it.
 - **Type**: see [Choose the asset type](#choosing-the-asset-type).
-- **Units per single price**: how many units one price refers to, usually 1. Bonds are quoted per
-  100: LibreFolio proposes it when you choose **Bond**.
+- **Units per single price**: how many units one price refers to, usually 1, and 100 for most
+  bonds. Picking a **Search Online** result sets it, as it sets the name: to the provider's
+  suggestion if it makes one, with a note under the field saying why
+  ([Yahoo Finance](providers/yahoo-finance.md) suggests 100 for a London line quoted in pence, for
+  example), otherwise to 100 for a **Bond** and 1 for any other type. It does so in **Edit Asset**
+  too, over the saved value, which changes only when you save. Typing in the field removes the
+  note. Choosing the **Type** yourself leaves the field as it is; for a **Bond**, a hint reminds you
+  that bonds are usually quoted per 100.
 - **Currency**: the currency the prices are quoted in. For a fund listed in euros that is EUR,
   even when the fund is denominated in another currency.
 
 After saving from the **Assets** page, the confirmation links to the new asset. If the asset has a
 provider, its price history starts downloading right away.
+
+## 🔎 Search Online results {: #search-online-results }
+
+**Search Online** asks the providers all at once and sorts their results as they arrive:
+**premium** sources first (those your instance vouches for, such as licensed data), then
+**community** ones, each group by priority. None of the providers that come with LibreFolio is
+premium, and all have the same priority: the results appear as the providers answer, unless your
+administrator [changes the order](../../admin/configuration_accounts.md#provider-order).
+
+When the search included a premium source, the list has two parts:
+
+- **Premium**: the premium sources' results, or *No results from the premium sources.*
+- **Non-premium sources (community) · N results**, closed. Opening it first shows a warning: these
+  are third-party sources, LibreFolio does not vouch for their prices or data, and choosing one
+  applies to this asset only. The section is closed again the next time you open the form.
+
+### 📨 Can't find it? Let us know {: #let-us-know }
+
+Once a search has finished, whatever it found, even after an error or a timeout, the list offers
+*Can't find it?* **Let us know** (between the two parts, when there are two), as long as the app
+knows where to send the report. The report goes to whoever supports your instance. If the list has
+closed, click in the search box to bring it back; emptying the box forgets the search.
+
+Where the link leads depends on your instance's support address; its tooltip tells you which:
+
+| Support address | What **Let us know** does |
+|---|---|
+| An email address | Your email app opens a message with the subject and the details filled in |
+| A web page | The page opens in a new tab with the subject and the details in its address, so a support form can fill itself in. The details are copied too, ready to paste there; a message confirms the copy, or says it failed |
+| None (the default), on a self-hosted instance | A new GitHub issue opens in a new tab, filled in. It is **public**: review it before you submit it |
+
+On a managed instance, one that a hosting provider runs for you, **Let us know** needs a support
+address: without one, the list does not offer it, since a public issue would publish that the
+instance is managed, the providers it asks and the identifiers in your form. The link is also
+missing, even with a support address, when the app could not read your instance's configuration:
+reloading the page tries again.
+
+The details are in English: the text you searched; each provider asked and its outcome (how many
+results, *no answer*, or an error, with its code when it has one; never the error's message); the
+identifiers already in the form, and its currency and type unless they are still the defaults of a
+new, blank form (your base currency and Stock); your LibreFolio version, whether the instance is
+self-hosted or managed, and the language of the app. When you edit an asset, the details therefore
+include the asset's own identifiers (ISIN, ticker…), its currency and its type, as the form shows
+them. They never include who you are, an email address, your instance's address or any portfolio
+data. You send the report yourself, from your own device: it never goes through the LibreFolio
+server.
 
 ## 🗂️ Choose the asset type {: #choosing-the-asset-type }
 
@@ -67,7 +119,14 @@ Picking a **Search Online** result connects its provider for you. To set one up 
 2. Click **Test Configuration**: LibreFolio fetches a **Current Price** and a few days of
    **History**. ⚠️ means the provider does not offer that data or has none right now (CSS Scraper
    has no history, for example); the test still passes. ❌ is an error: check the identifier and
-   the settings.
+   the settings. When **History** answers, ⚠️ included, a note recalls that the test reads only
+   the last few days: a new asset gets its whole price history when it is created.
+
+⚠️ *Paused for too many requests until …* means the provider has refused LibreFolio's requests
+because there were too many: LibreFolio leaves it alone until the time shown, in your local time,
+with the date when the pause ends another day. Your settings may well be right, so the test still
+passes. When the end of the pause is not known, you see *Too many requests: try again later*.
+Meanwhile, the Assets list and the asset page keep showing the last saved price.
 
 An asset has at most one provider; tick **No Provider** if you will enter its prices yourself. See
 [Providers](providers/index.md) for what each one offers.
@@ -106,15 +165,92 @@ The accepted values only fill in the form: they are stored when you save the ass
 - **Each question is asked once.** When a search result brings a different ISIN (or other code)
   from the one in the form, LibreFolio first asks which is the main one, and the comparison does
   not ask again.
+- **Units per single price is proposed, never filled in.** A check of everything (after a search
+  pick, or with **Ask Provider** at the top of **Asset Details**) compares it with the provider's
+  suggestion or, without one, with 100 for a bond and 1 for any other type (the type the provider
+  proposes, if it proposes another). A difference is a ticked row under **Asset Details**, with a
+  note giving the reason: the provider's suggestion, or that bonds are usually quoted per 100 (a
+  row proposing the usual 1 has none). Untick it to keep your value. If a check comes back without
+  the provider's suggestion (it took too long, for example), the one it gave earlier for the same
+  provider and identifier, in the search result or an earlier check, still counts: LibreFolio does
+  not propose to undo it.
 
 ## 🛠️ Edit an asset {: #editing-an-asset }
 
 On the asset's [detail page](detail/index.md), click **Edit** (✏️), change what you need in the
 **Edit Asset** form, and click **Save Changes**.
 
-A new **Currency** for an asset that already has prices means deleting its stored prices and
-events: on saving, a dialog lists what goes (transactions stay) and offers a backup. After
-**Delete & Change Currency**, prices are downloaded again from the provider, if there is one.
+### 💱 Changing the currency {: #changing-the-currency }
+
+A new **Currency** is always allowed, but prices and events are stored in the currency they were quoted
+in, so the old ones cannot stay next to the new ones. Changing the currency deletes some of what is
+stored for the asset, and keeps the rest:
+
+| Stored for the asset | After the change |
+|----------------------|------------------|
+| Its **price history** | Deleted |
+| Its **dividends, interest and other events**, the ones you entered and the ones the provider generated | Deleted |
+| Your **transactions** | Always **kept**. The ones linked to a deleted event stay, but lose that link |
+| Its **splits** | **Kept**, and so are the transactions linked to them: the adjustments of a split keep their link and their cost |
+
+Splits are a ratio, not an amount of money, so they mean the same in any currency.
+
+Before anything is saved, the form asks the server what would go. If the answer cannot be read, the form
+shows the error and saves nothing. If nothing would go (the asset has no prices, events or linked
+transactions yet), the change is simply saved. If something would, one **Change asset currency** dialog
+lists it:
+
+- the **price points** that will be deleted, with the period they cover;
+- the **manual events** and the **events generated by the provider** that will be deleted;
+- the transactions that **lose their link to a deleted event** (the transactions themselves are kept);
+- the **split events** that stay, with the transactions linked to them.
+
+Nothing is deleted until you click **Delete & change currency**; **Cancel** leaves the asset as it was.
+The dialog also lets you download a **backup** of the prices and of the events (CSV or JSON) first, when there are some.
+
+After the change, if the asset has a provider and it had prices, they are downloaded again from the
+provider, from the oldest date you had, in the new currency. Without a provider, you import the prices
+again yourself. The transactions that lost the link to an event can be linked again in one go: see
+[Relink events](../transactions/index.md#relink-events).
+
+Changing or removing the provider has its own rules, below.
+
+### 🔄 Changing or removing the provider {: #changing-or-removing-the-provider }
+
+Some changes of provider throw away data LibreFolio had stored. Before saving, the form asks the
+server what would go, and if something would, it shows **one** confirmation that gives the numbers.
+Nothing is deleted until you confirm; **Cancel** leaves the asset as it was.
+
+| What you change | What is deleted |
+|-----------------|-----------------|
+| New settings for a [Scheduled Investment](providers/scheduled-investment.md) plan | All the asset's prices, and the events the plan generated: they are generated again from the new settings |
+| Another provider, when the asset was on a Scheduled Investment plan | The same: all the prices and the events the plan generated; the new provider then supplies the history |
+| **No Provider** | The events the provider generated (its dividends, splits or coupons). The prices you already have are **kept** |
+| Another online provider, or new settings for an online one (Yahoo Finance, justETF…); a first provider for an asset that had none | Nothing, and no question is asked |
+
+For example, switching from a plan to Yahoo Finance asks:
+
+> The history of this asset was generated by Scheduled Investment. Switching to Yahoo Finance
+> deletes 1,240 price points and 6 events generated by the provider. 3 transactions lose their
+> link to a deleted event (the transactions themselves are kept). […] Manual events are kept.
+> This cannot be undone. Continue?
+
+What the dialog means:
+
+- **Price points and events** are counted as stored right now. The prices include any you entered
+  yourself, when a plan's settings or provider change; with **No Provider** they stay.
+- **Transactions are never deleted.** A transaction you recorded against a deleted event, such as a
+  dividend or a coupon, stays in your portfolio but loses its link: its **Linked Event** field
+  is empty. The dialog counts all such transactions, including any on brokers
+  you cannot see, and does not name them.
+- **Events you added yourself stay**, with their links.
+- If nothing would be lost, or the count could not be obtained, the form saves without a dialog.
+
+⚠️ **One case is refused.** If a split the provider generated has linked adjustments without a
+[purchase cost](../transactions/form.md), the change or removal is not made: with the split gone,
+those units would count as bought at an unknown price. The form shows the message instead of the
+dialog, names the split by its date, and the rest of your edit is saved. Give those adjustments a
+purchase cost, then change the provider again.
 
 ## 🏷️ Edit identifiers {: #one-instrument-several-codes }
 

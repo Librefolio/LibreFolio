@@ -13,19 +13,22 @@ LibreFolio guarda todo lo que almacena en un **directorio de datos**: la base de
 
 ```text
 backend/data/
-├── 📂 prod/                          # Production data (default)
+├── 📂 prod/                          # Datos de producción (predeterminado)
 │   ├── 🗃️ sqlite/
-│   │   └── 📄 app.db                 # Main SQLite database (WAL mode)
-│   ├── 🖼️ custom-uploads/            # Files uploaded in the app
+│   │   └── 📄 app.db                 # Base de datos SQLite principal (modo WAL)
+│   ├── 🖼️ custom-uploads/            # Archivos subidos en la aplicación
 │   ├── 📊 broker_reports/
-│   │   ├── 📥 uploaded/              # Reports waiting to be read
-│   │   ├── ✅ parsed/                # Reports read successfully
-│   │   └── ❌ failed/                # Reports that could not be read
-│   ├── 📝 logs/                      # Application log files
-│   ├── 🎭 scenario_catalog/          # Optional: your own stress scenarios
-│   └── 📋 scheduler_state.json       # Last run of the scheduled syncs
+│   │   ├── 📥 uploaded/              # Informes a la espera de ser leídos
+│   │   ├── ✅ parsed/                # Informes leídos correctamente
+│   │   └── ❌ failed/                # Informes que no se pudieron leer
+│   ├── 📝 logs/                      # Archivos de registro de la aplicación
+│   ├── 💾 backups/                   # Copias de seguridad creadas por ./dev.py backup create
+│   ├── 🎭 scenario_catalog/          # Opcional: tus propios escenarios de estrés
+│   ├── 🔐 secrets/                   # Se crea la primera vez que LibreFolio usa la clave
+│   │   └── 🔑 instance.key           # La clave de la instancia: guarda una copia, no la cambies nunca
+│   └── 📋 scheduler_state.json       # Sincronizaciones: última ejecución, reintento
 │
-└── 🧪 test/                          # Test data (completely isolated)
+└── 🧪 test/                          # Datos de prueba (completamente aislados)
     ├── 🗃️ sqlite/app.db
     ├── 🖼️ custom-uploads/
     ├── 📊 broker_reports/
@@ -123,7 +126,7 @@ docker compose start librefolio
 
     Con Docker, la base de datos es `./LibreFolio-data/sqlite/app.db`. Esto copia solo la base de datos: copia las carpetas de abajo como de costumbre.
 
-### ✅ Qué incluir en la copia de seguridad
+### ✅ Qué incluir en la copia de seguridad {: #what-to-back-up }
 
 Como mínimo, haz copia de seguridad de:
 

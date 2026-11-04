@@ -101,16 +101,18 @@ LibreFolio lit chaque fichier, le vérifie et le résume dans un tableau :
 | ✗ | Titres pas encore associés à vos actifs — vous les associez dans **Révision** |
 | 🔴 | Problèmes de validation : lignes qui n'ont pas pu devenir des transactions |
 | 🔧 | Champs à renseigner avant l'enregistrement (en rouge quand l'un bloque l'enregistrement) |
-| ⚠️ | Avertissements de l'importateur, comme des lignes ignorées |
+| ⚠️ ℹ️ | Deux nombres : les avertissements (ambre) sont à regarder, comme des lignes ignorées ; les notes (bleu) expliquent un choix de l'importateur, sans rien à corriger |
 
-Les tuiles au-dessus du tableau comptent ce qui sera réellement importé ; **Voir tout** ouvre les détails.
+Les tuiles sous le tableau comptent ce qui sera réellement importé ; **Voir tout**, ou **Voir Détail** dans
+le menu **⋮** d'une ligne, ouvre les détails, avec les avertissements et les notes listés à part.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Étape 3 de l'assistant : Analyse" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Avertissements** : **Continuer** les liste d'abord ; lisez-les, puis cliquez sur **Continuer quand même**.
-- **Un fichier a échoué** : une bannière en explique la raison. Corrigez son plugin dans **Sélectionner**, puis cliquez sur **Réanalyser tout**.
+- **Avertissements et notes** : **Continuer** liste d'abord les avertissements, puis les notes ; lisez-les,
+  puis cliquez sur **Continuer quand même**.
+- **Un fichier a échoué** : une bannière en explique la raison. Corrigez son plugin dans **Sélectionner**, puis relancez l'analyse. **Réanalyser tout** n'apparaît dans l'analyse que lorsqu'au moins un fichier a été lu ; si aucun ne l'a été, retournez dans **Sélectionner** et cliquez sur **Analyser (N)**.
 
 ### 🧩 Étapes qui n'apparaissent qu'en cas de besoin {: #only-when-needed }
 
@@ -252,7 +254,10 @@ titre. Une dernière vérification des doublons s'exécute d'abord : des doublon
 
 Les lignes arrivent dans l'espace de travail groupé sans être enregistrées. Vérifiez-les ou modifiez-les, puis cliquez sur **Enregistrer Tout** : cela attend
 les lignes listées en rouge, et demande confirmation avant d'enregistrer les valeurs listées en ambre que vous n'avez pas
-vérifiées (**Enregistrer quand même**).
+vérifiées (**Enregistrer quand même**). Une ligne dont la quantité a plus de 10 décimales, dont le montant en a
+plus de 6, ou dont le prix de revient unitaire en a plus de 12, est refusée à **Enregistrer Tout**, avec le
+maximum dans le message (*Quantité : Au maximum 10 décimales*) : LibreFolio ne l'arrondit jamais.
+Les dates des transactions peuvent remonter jusqu'à l'an 1 et aller jusqu'à demain. Une ligne datée avant 1900 est marquée en ambre dans la vérification (une note au-dessus du tableau les compte) et l'espace de travail bulk demande une seule fois de les confirmer, car une telle date est le plus souvent une faute de frappe ; une fois confirmée, elle s'enregistre comme les autres. Une ligne datée après demain est refusée à **Enregistrer Tout**, avec le dernier jour autorisé dans le message (*Date : Pas après le 2026-10-18* si nous sommes le 17 octobre 2026).
 
 ---
 

@@ -11,7 +11,10 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {_ as t} from '$lib/i18n';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
     import ChartToolbar from './ChartToolbar.svelte';
@@ -19,7 +22,7 @@
     import CandlestickChart from './CandlestickChart.svelte';
     import ResolutionBadge from './ResolutionBadge.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {buildMainSeries, COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {buildFittedTooltipRow, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
@@ -29,14 +32,16 @@
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
-    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom} from './responsiveXAxis';
     import {
         buildDeltaHtml,
         buildEventScatterGroups,
         buildStaleTooltipHtml,
+        type StaleLabel,
         bucketSpanUpTo,
         computeGhostSeries,
         computeZoomWindow,
+        extendToOverlayDays,
         countBuckets,
         formatMonthLabel,
         formatTruncatedGhostLabel,
@@ -52,9 +57,13 @@
         type CalendarReturnPointContext,
         type LogicalVisibleRange,
     } from './priceChartHelpers';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {applyLineShape, type LineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     // =========================================================================
     // Event Marker types and constants
@@ -111,6 +120,8 @@
         areaFill?: boolean;
         showGridLines?: boolean;
         showGradient?: boolean;
+        /** The shape of the lines (FB-3). Without it the chart follows the global shape. */
+        lineShape?: LineShape;
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number;
         yAxisMax?: number;
@@ -119,8 +130,11 @@
         /** Measure mode: enables click-to-place measurement points */
         measureMode?: boolean;
         onMeasureClick?: (date: string, value: number) => void;
-        /** Called on mousemove during measure mode (for live preview) */
-        onMeasureHover?: (date: string, value: number) => void;
+        /**
+         * Called on mousemove during measure mode (for live preview). Answers `true` on a day the
+         * measure refuses (its start: no measure of one day), and the chart shows the not-allowed cursor.
+         */
+        onMeasureHover?: (date: string, value: number) => boolean | void;
         /** Hide the built-in toolbar (chart type + view mode toggles) */
         hideToolbar?: boolean;
         /** Externally controlled chart type (when toolbar is hidden) */
@@ -141,10 +155,10 @@
         onDblClick?: (date: string, value: number) => void;
         /** Called on double-click on an event marker (date, eventType) — for editor scroll */
         onEventDblClick?: (date: string, eventType: string) => void;
-        /** Translated label for stale indicator in tooltip (e.g. "Stale: {days}d") — receives `{days}` placeholder */
-        staleLabel?: string;
-        /** Translated label for FX stale indicator (e.g. "FX rate: {days}d old") — receives `{days}` placeholder */
-        fxStaleLabel?: string;
+        /** Translated label for the stale indicator in the tooltip: a function of the days (a plural), or a template with a `{days}` placeholder */
+        staleLabel?: StaleLabel;
+        /** Translated label for the FX stale indicator: a function of the days, or a template with a `{days}` placeholder */
+        fxStaleLabel?: StaleLabel;
         /** Display currency code (e.g. "EUR") — used for main label suffix when FX conversion active */
         displayCurrency?: string;
         /** Display currency flag emoji (e.g. "🇪🇺") — pre-computed by parent */
@@ -182,6 +196,7 @@
         areaFill = true,
         showGridLines = true,
         showGradient = true,
+        lineShape,
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
@@ -222,6 +237,16 @@
     let viewMode: ViewMode = $state('absolute');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
+    /**
+     * The last resolved measure hover: `blocked` over a day `onMeasureHover` refuses, `free`
+     * elsewhere, null out of measure mode. It picks the cursor, and the container publishes it.
+     */
+    let measureHover = $state<'blocked' | 'free' | null>(null);
+
+    // Out of measure mode the container publishes no hover, and the next measure starts free.
+    $effect(() => {
+        if (!measureMode) measureHover = null;
+    });
     let resizeObserver: ResizeObserver | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let chartOptionSet = false;
@@ -232,6 +257,8 @@
     let resolvedDataCache = new Map<ChartResolution, ResolvedDataCacheEntry>();
     let lastRawDataRef: LineDataPoint[] | null = null;
     let lastDisplayDataRef: LineDataPoint[] | null = null;
+    /** The days the axis was lengthened with, as text: another comparison (or none) moves every index the zoom and the resolution hold. */
+    let lastAxisKey = '';
     let lastRenderedResolution: ChartResolution | null = null;
     let lastRenderedDates: string[] = [];
     let responsiveXAxisCompact = false;
@@ -247,19 +274,24 @@
     // Derived data
     // =========================================================================
 
-    let displayData = $derived(valueUnit === 'percentage' ? data : toDisplaySeries(data, viewMode));
+    // The axis is laid on the main series' days, lengthened with the days of a comparison older (or younger) than it (Y2-CMP): the main line is
+    // empty there and the comparison is drawn from its own first day. `data` stays the main series, for what only it answers (a click's value, the ghost).
+    let axisData = $derived(extendToOverlayDays(data, overlaySignals));
+    let displayData = $derived(valueUnit === 'percentage' ? axisData : toDisplaySeries(axisData, viewMode));
 
     // =========================================================================
     // Lifecycle
     // =========================================================================
 
     onMount(() => {
-        const observer = new MutationObserver(() => {
+        const redraw = () => {
             if (chartContainer && data.length > 0) renderChart();
-        });
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        };
+        const observer = onThemeClassChange(redraw);
+        const chartColors = onChartColorsChange(redraw);
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
             resizeObserver?.disconnect();
             dataZoomTouchPanHandle?.dispose();
@@ -270,7 +302,9 @@
     });
 
     $effect(() => {
-        if (data !== lastRawDataRef) {
+        const axisKey = axisData === data ? '' : `${axisData[0].date}|${axisData.length}`;
+        if (data !== lastRawDataRef || axisKey !== lastAxisKey) {
+            lastAxisKey = axisKey;
             resolvedDataCache.clear();
             resolution = 'daily';
             logicalRange = null;
@@ -291,6 +325,8 @@
             void colorByBaseline;
             void showGridLines;
             void showGradient;
+            void lineShape;
+            void getGlobalLineShape();
             void viewMode;
             void displayData;
             void resolution;
@@ -339,19 +375,23 @@
         }
     }
 
+    /** The tooltip header, tagged with the ISO days it stands for (`data-tooltip-from` / `data-tooltip-to`, read by the specs: the text is translated). */
     function buildTooltipHeader(date: string, currentResolution: ChartResolution, bucketInfo?: BucketInfo): string {
+        const asDay = (value: string): string => (/^\d+$/.test(value) ? dayOfAxisValue(Number(value)) : value.slice(0, 10));
         if (currentResolution === 'daily') {
-            return `<strong>${formatDay(date)}</strong>`;
+            const day = asDay(date);
+            return `<strong data-tooltip-from="${day}" data-tooltip-to="${day}">${formatDayWithWeekday(date)}</strong>`;
         }
 
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
+        const span = `data-tooltip-from="${info.bucketStart}" data-tooltip-to="${info.bucketEnd}"`;
 
         if (currentResolution === 'weekly') {
-            return `<strong>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;
+            return `<strong ${span}>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;
         }
 
-        return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</span>`;
+        return `<strong ${span}>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</span>`;
     }
 
     function getResolvedSeries(currentResolution: ChartResolution): ResolvedDataCacheEntry {
@@ -425,8 +465,34 @@
 
             if (nextResolution !== resolution) {
                 resolution = nextResolution;
+            } else {
+                // No new resolution means no redraw: the labels are re-spaced, and the arrow markers re-aimed, on the settled
+                // window here (47-1, Y-8). A new resolution redraws, and renderChart() re-aims them itself.
+                applyZoomedAxisLabels();
+                updateArrowRotations(chartInstance);
             }
         }, 200);
+    }
+
+    /** How many of the drawn categories the current zoom leaves visible, from the logical range (47-1). */
+    function visibleCategoryCount(): number | undefined {
+        if (lastRenderedDates.length === 0) return undefined;
+        const zoomWindow = computeZoomWindow(getResolvedSeries(resolution).lineData, resolution, logicalRange);
+        return visiblePointCountFromZoom(zoomWindow, lastRenderedDates.length) ?? undefined;
+    }
+
+    /** Re-space the category labels on the zoomed window: the step is computed on all the points otherwise (47-1). */
+    function applyZoomedAxisLabels() {
+        if (!chartInstance || !chartContainer || lastRenderedDates.length === 0) return;
+        const policy = buildResponsiveXAxisPolicy({
+            width: chartContainer.clientWidth,
+            values: lastRenderedDates,
+            locale: uiLocale(),
+            axisType: 'category',
+            visibleCount: visibleCategoryCount(),
+        });
+        responsiveXAxisCompact = policy.compact;
+        chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
     }
 
     // =========================================================================
@@ -458,16 +524,18 @@
                                 values: lastRenderedDates,
                                 locale: uiLocale(),
                                 axisType: 'category',
+                                visibleCount: visibleCategoryCount(),
                             });
                             const wasCompact = responsiveXAxisCompact;
                             responsiveXAxisCompact = policy.compact;
                             if (policy.axisLabel) {
-                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                                chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
                             } else if (wasCompact) {
                                 renderChart();
                             }
                         }
-                        if (chartInstance) updateArrowRotations(chartInstance);
+                        // The arrows are re-aimed by scheduleResolutionRecompute() below, once the resize settles, never on
+                        // each callback: a re-aim deep-copies the whole option (Y-25)
                         // Bugfix: resizing the container (e.g. rotating a device, or
                         // shrinking a browser window to a narrow/mobile width) changes
                         // plotWidthPx, which can push the density past the weekly/monthly
@@ -491,7 +559,7 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
             // Expose the instance for gallery/E2E tooling (deterministic tooltip control
             // without simulating a pixel-perfect hover on a scatter marker).
             (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
@@ -551,11 +619,16 @@
             // Mousemove for live measure preview (throttled via rAF)
             let hoverRafPending = false;
             chartInstance.getZr().on('mousemove', (params: any) => {
-                if (!measureMode || !onMeasureHover || !chartInstance || hoverRafPending) return;
+                if (!measureMode || !onMeasureHover || !chartInstance) return;
+                // zrender puts its own default cursor back on every move, before its listeners: in
+                // measure mode the chart sets its own at once — not-allowed while the last hover was refused.
+                chartInstance.getZr().setCursorStyle(measureHover === 'blocked' ? 'not-allowed' : 'crosshair');
+                if (hoverRafPending) return;
                 hoverRafPending = true;
                 requestAnimationFrame(() => {
                     hoverRafPending = false;
-                    if (!chartInstance) return;
+                    if (!chartInstance || !measureMode || !onMeasureHover) return;
+                    let blocked = false;
                     const pointInPixel = [params.offsetX, params.offsetY];
                     if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                         const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
@@ -566,23 +639,25 @@
                                 const point = activeLineData[dateIdx];
                                 // Convert back from % to absolute if needed
                                 const baseValue = data.length > 0 ? data[0].value : undefined;
-                                onMeasureHover(point.date, toAbsoluteValue(point.value, viewMode, baseValue));
+                                blocked = onMeasureHover(point.date, toAbsoluteValue(point.value, viewMode, baseValue)) === true;
                             }
                         }
                     }
+                    measureHover = blocked ? 'blocked' : 'free';
+                    chartInstance.getZr().setCursorStyle(blocked ? 'not-allowed' : 'crosshair');
                 });
             });
 
-            // Recompute arrow rotations when zoom changes (aspect ratio shifts).
+            // A zoom changes the pixel aspect, so the arrow markers must be re-aimed.
             // NOTE: do NOT read chartInstance.getOption() here — it deep-clones the entire
             // chart option (documented ECharts behavior) and this handler fires on every
             // single dataZoom tick during an interactive zoom/pan (up to ~60/sec), which
             // caused severe stutter on charts with years of daily data. The logical-range
-            // read (which internally calls getOption()) is deferred to the debounced body
-            // of scheduleResolutionRecompute(), so it only runs once the gesture settles.
+            // read and updateArrowRotations() both call getOption(): they are deferred to the
+            // debounced body of scheduleResolutionRecompute(), so they only run once the
+            // gesture settles (Y-8).
             chartInstance.on('dataZoom', () => {
                 if (!chartInstance) return;
-                updateArrowRotations(chartInstance);
                 scheduleResolutionRecompute();
             });
 
@@ -685,7 +760,8 @@
             chartContainer.addEventListener('touchcancel', onTouchEnd);
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
         const isPercentage = valueUnit === 'percentage' || viewMode === 'percentage';
         const baseColor = isDark ? COLORS.lineDark : COLORS.lineLight;
         const greenColor = isDark ? COLORS.greenDark : COLORS.greenLight;
@@ -706,7 +782,7 @@
         lastRenderedDates = dates;
         const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], activeResolution)]));
         const useBaselineColoring = colorByBaseline;
-        const baselineValue = isPercentage ? 0 : (resolvedLineData[0]?.value ?? 0);
+        const baselineValue = isPercentage ? 0 : (resolvedLineData.find((point) => !point.missing)?.value ?? 0);
         const staleDaysArr = resolvedLineData.map((point) => point.staleDays ?? 0);
         const mainSeriesName = mainSeriesLabel || currency || 'Value';
         const series: any[] = [];
@@ -767,7 +843,7 @@
                 symbol: 'none',
                 showSymbol: false,
                 sampling: 'lttb',
-                lineStyle: {color: isDark ? '#64748b' : '#9ca3af', type: 'dashed', width: 1},
+                lineStyle: {color: neutrals.price.baseline, type: 'dashed', width: 1},
                 itemStyle: {color: 'transparent'},
                 emphasis: {disabled: true},
                 tooltip: {show: false},
@@ -778,15 +854,15 @@
 
         const formatEventEntry = (marker: EventMarker, eventColor: string, includeDate: boolean): string => {
             const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor};margin-right:4px;"></span>`;
-            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${formatDay(marker.date)}</span><br/>${dot}${marker.type}` : `${dot}${marker.type}`;
+            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${formatDay(marker.date)}</span><br/>${dot}${escapeHtml(marker.type)}` : `${dot}${escapeHtml(marker.type)}`;
 
             if (marker.value !== undefined) {
                 const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
-                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
-                html += `<br/>💰 ${formatFixed(marker.value, 4)}${currBadge}`;
+                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${escapeHtml(marker.currencyFlag ?? '')} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
+                html += `<br/>💰 ${formatPrice(marker.value, {minDecimals: 4})}${currBadge}`;
                 if (isConverted) {
-                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
-                    html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatFixed(marker.originalValue!, 4)}})}${origBadge}</span>`;
+                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${escapeHtml(marker.originalCurrencyFlag ?? '')} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
+                    html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatPrice(marker.originalValue!, {minDecimals: 4})}})}${origBadge}</span>`;
                     if (marker.fxRateDate) {
                         const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` ${$t('chart.tooltip.fxDaysBack', {values: {days: formatFixed(marker.fxDaysBack, 0)}})}` : '';
                         html += `<br/><span style="font-size:10px;opacity:0.6">${$t('chart.tooltip.fxRateDate', {values: {date: formatDay(marker.fxRateDate)}})}${backfillHint}</span>`;
@@ -851,7 +927,7 @@
                             let html = buildTooltipHeader(bucketDate, activeResolution, bucketInfo);
 
                             if (params.data?.bucketValue !== undefined) {
-                                html += `<br/>💰 ${formatFixed(Number(params.data.bucketValue), 4)}`;
+                                html += `<br/>💰 ${formatPrice(Number(params.data.bucketValue), {minDecimals: 4})}`;
                             }
 
                             if (activeResolution === 'daily' && marker) {
@@ -865,9 +941,9 @@
                             }
                             return html;
                         },
-                        backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                        borderColor: isDark ? '#334155' : '#e2e8f0',
-                        textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                        backgroundColor: neutrals.tooltip.box.background,
+                        borderColor: neutrals.tooltip.box.border,
+                        textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                     },
                     z: 20,
                 });
@@ -875,7 +951,7 @@
         }
 
         const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0, true, secondaryAxisScales);
-        const colors = getChartColors(isDark);
+        const colors = getChartColors(isDark, chartContainer);
         const staleLookup = new Map<string, number>();
         const fxStaleLookup = new Map<string, number>();
         for (const point of resolvedLineData) {
@@ -888,6 +964,7 @@
             values: dates,
             locale: uiLocale(),
             axisType: 'category',
+            visibleCount: visiblePointCountFromZoom(zoomWindow, dates.length) ?? undefined,
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
 
@@ -899,9 +976,9 @@
                     type: 'category',
                     data: dates,
                     gridIndex: 0,
-                    axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                    axisLine: {lineStyle: {color: neutrals.priceAxis.line}},
                     axisLabel: {
-                        color: isDark ? '#94a3b8' : '#6b7280',
+                        color: neutrals.priceAxis.label,
                         fontSize: 14,
                         formatter: xAxisPolicy.formatter,
                         ...(xAxisPolicy.axisLabel ?? {}),
@@ -913,9 +990,9 @@
             dataZoom: [{...buildDataZoom([0])[0], start: zoomWindow.start, end: zoomWindow.end}],
             tooltip: {
                 trigger: 'axis',
-                backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                backgroundColor: neutrals.tooltip.box.background,
+                borderColor: neutrals.tooltip.box.border,
+                textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                 confine: true,
                 position: tooltipPositionSide,
                 formatter: (params: any) => {
@@ -955,7 +1032,7 @@
                         const axisIdx = isGhost ? 0 : (signalAxisMap.get(p.seriesName) ?? 0);
                         const valueSuffix = axisIdx === 0 ? suffix : '';
                         const axisLabel = signalAxisLabelMap.get(axisIdx);
-                        const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
+                        const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
 
                         // Use signalLabelToHtml for proper icon rendering. The label (crown, icon, name)
                         // gives way on a narrow chart, ending in an ellipsis; the currency travels with
@@ -982,7 +1059,7 @@
                                     overlayLabel = ghostParts.name;
                                     if (ghostParts.currency) currencyHtml = `&nbsp;${escapeHtml(ghostParts.currency)}`;
                                 } else if (sigInfo.currency) {
-                                    currencyHtml = `&nbsp;<span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${escapeHtml(sigInfo.currency)})</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px;opacity:0.7">(${escapeHtml(sigInfo.currencyFlag || '')} ${escapeHtml(sigInfo.currency)})</span>`;
                                 }
                                 labelHtml = signalLabelToHtml({...sigInfo, label: overlayLabel}, undefined, {inline: true});
                                 if (sigInfo.isGhost) isGhostRow = true;
@@ -991,10 +1068,10 @@
                                 let mainLabel: string;
                                 if (conversionActive) {
                                     mainLabel = mainSeriesName;
-                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${displayCurrencyFlag} ${displayCurrencyProp}) 💱</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${escapeHtml(displayCurrencyFlag ?? '')} ${escapeHtml(displayCurrencyProp ?? '')}) 💱</span>`;
                                 } else if (mainCurrencyProp) {
                                     mainLabel = mainSeriesName;
-                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${escapeHtml(mainCurrencyFlagProp || '')} ${escapeHtml(mainCurrencyProp)})</span>`;
                                 } else {
                                     mainLabel = mainSeriesName;
                                 }
@@ -1013,23 +1090,23 @@
                                 labelHtml = `${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}`;
                             }
                         }
-                        let rowHtml = buildFittedTooltipRow(labelHtml, `${currencyHtml}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`);
+                        let rowHtml = buildFittedTooltipRow(labelHtml, `${currencyHtml}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`);
                         if (p.seriesName === mainSeriesName) {
                             const context = mainPointContext?.get(date);
                             if (context) {
                                 const referenceObservation = context.referencePriceDate && context.referencePriceDate !== context.referenceTargetDate ? ` · ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.referencePriceDate)}})}` : '';
-                                rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">↩ ${formatDay(context.referenceTargetDate)}${referenceObservation}</span>`;
+                                rowHtml += `<br/><span style="font-size:10px;color:${neutrals.tooltip.aside}">↩ ${formatDay(context.referenceTargetDate)}${referenceObservation}</span>`;
                                 if (context.currentPriceDate !== date) {
-                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">📅 ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.currentPriceDate)}})}</span>`;
+                                    rowHtml += `<br/><span style="font-size:10px;color:${neutrals.tooltip.aside}">📅 ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.currentPriceDate)}})}</span>`;
                                 }
                                 if (context.currentFxDate || context.referenceFxDate) {
-                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">💱 ${context.currentFxDate ? formatDay(context.currentFxDate) : '—'} / ${context.referenceFxDate ? formatDay(context.referenceFxDate) : '—'}</span>`;
+                                    rowHtml += `<br/><span style="font-size:10px;color:${neutrals.tooltip.aside}">💱 ${context.currentFxDate ? formatDay(context.currentFxDate) : '—'} / ${context.referenceFxDate ? formatDay(context.referenceFxDate) : '—'}</span>`;
                                 }
                             }
                         }
                         const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                         if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                            rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
+                            rowHtml += ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                         }
                         if (isGhostRow) {
                             rowHtml = `<span style="opacity:0.7">${rowHtml}</span>`;
@@ -1040,14 +1117,14 @@
                             html += buildDeltaHtml(Number(value), firstValue, isPercentage);
                         }
                     }
-                    html += buildStaleTooltipHtml(staleLookup.get(date), fxStaleLookup.get(date), staleLabel, fxStaleLabel);
+                    html += buildStaleTooltipHtml(staleLookup.get(date), fxStaleLookup.get(date), neutrals.tooltip.staleWarning, staleLabel, fxStaleLabel);
                     // No wider than the chart, minus ECharts' padding and tooltipPositionSide's 8 px
                     // margins: on a phone a long name otherwise pushed the value off-screen.
                     const chartWidth = chartInstance?.getWidth() ?? 0;
                     return chartWidth > 0 ? fitTooltipToWidth(html, chartWidth - 32) : html;
                 },
             },
-            series,
+            series: applyLineShape(series, lineShape ?? getGlobalLineShape()),
         };
 
         // Resolution switch: the number of data points/series changes drastically
@@ -1063,6 +1140,7 @@
         }
 
         chartInstance.setOption(option, true);
+        noteArrowMarkers(chartInstance, option);
         chartOptionSet = true;
         lastRenderedResolution = activeResolution;
 
@@ -1085,31 +1163,23 @@
     <div class="relative">
         <div class="absolute top-2 left-12 z-10 flex flex-wrap items-center gap-1.5 pr-24">
             {#if !disableCandlestick}
-                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity">
-                    <button
-                        class="p-1.5 transition-colors {chartType === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        data-testid="chart-type-line"
-                        title="Line chart"
-                        onclick={() => handleChartTypeChange('line')}><ChartLine size={14} /></button
-                    >
-                    <button
-                        class="p-1.5 transition-colors {chartType === 'candlestick' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        data-testid="chart-type-candlestick"
-                        title="Candlestick chart"
-                        onclick={() => handleChartTypeChange('candlestick')}><ChartCandlestick size={14} /></button
+                <div class="flex rounded-lg border border-lf-subtle/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity">
+                    <button class="p-1.5 transition-colors {chartType === 'line' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}" data-testid="chart-type-line" title="Line chart" onclick={() => handleChartTypeChange('line')}><ChartLine size={14} /></button>
+                    <button class="p-1.5 transition-colors {chartType === 'candlestick' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}" data-testid="chart-type-candlestick" title="Candlestick chart" onclick={() => handleChartTypeChange('candlestick')}
+                        ><ChartCandlestick size={14} /></button
                     >
                 </div>
             {/if}
             {#if hideToolbar && !hideViewModeToggle}
-                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity" data-testid="chart-view-mode-toggle">
+                <div class="flex rounded-lg border border-lf-subtle/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity" data-testid="chart-view-mode-toggle">
                     <button
-                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}"
                         data-testid="chart-view-absolute"
                         aria-pressed={viewMode === 'absolute'}
                         onclick={() => handleViewModeChange('absolute')}>Abs</button
                     >
                     <button
-                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}"
                         data-testid="chart-view-percentage"
                         aria-pressed={viewMode === 'percentage'}
                         onclick={() => handleViewModeChange('percentage')}>%</button
@@ -1121,7 +1191,7 @@
             </div>
         </div>
         {#if chartType === 'line'}
-            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode}></div>
+            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode} data-measure-hover={measureHover ?? undefined} data-line-shape={lineShape ?? getGlobalLineShape()}></div>
         {:else}
             <CandlestickChart
                 data={candleSeries}

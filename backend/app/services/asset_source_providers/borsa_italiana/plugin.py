@@ -16,18 +16,22 @@ from urllib.parse import parse_qs, urlparse
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets import (
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
-    FACurrentValue,
     FAGeographicArea,
-    FAHistoricalData,
-    FAPricePoint,
     FASectorArea,
 )
+from backend.app.schemas.prices import (
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+)
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
+from backend.app.services.provider_registry import register_provider
 
 try:
     from borsa_italiana_scraping import (
@@ -46,12 +50,25 @@ try:
         ottieni_scheda,
         ottieni_storico,
     )
+    from borsa_italiana_scraping.eccezioni import RateLimitRaggiunto
 
     BORSA_ITALIANA_AVAILABLE = True
 except ImportError:
     BORSA_ITALIANA_AVAILABLE = False
 
 logger = get_logger(__name__)
+
+
+def _raise_if_rate_limited(error: Exception) -> None:
+    """Raise ``AssetRateLimitedError`` when Borsa Italiana refused for too many requests (HTTP 429) or its firewall
+    blocked the session (HTTP 403): the library's ``RateLimitRaggiunto``. The core then pauses the provider.
+
+    The library has already retried a 429 by itself, sleeping 2, 4 and 8 s in the provider's thread after each refusal
+    (``Sessione``, version 0.3.2): a gap of the library, written in the plugin guide.
+    """
+    if isinstance(error, RateLimitRaggiunto):
+        raise AssetRateLimitedError(f"Borsa Italiana refused for too many requests: {error}") from error
+
 
 # ISIN (optionally followed by a ``-MIC`` market segment) embedded in a Borsa
 # Italiana stock/bond/ETF scheda URL, e.g. ``…/scheda/IT0005436693-MOTX.html``.
@@ -79,7 +96,9 @@ _TIPO_TO_ASSET_TYPE: dict[str, AssetType] = {
     "obbligazione": AssetType.BOND,
     "obbligazione eurotlx": AssetType.BOND,
     "etf": AssetType.ETF,
-    "etc/etn": AssetType.ETF,
+    # ETC/ETN: one label for exchange-traded commodities and notes. Both map to ETF_COMMODITY (D-X7), an
+    # approximation for an ETN on an index or a currency, which the label does not tell apart.
+    "etc/etn": AssetType.ETF_COMMODITY,
     "fondi comuni": AssetType.FUND,
     "fondo chiuso": AssetType.FUND,
     # English labels (lingua="en")
@@ -333,6 +352,38 @@ class BorsaItalianaProvider(AssetSourceProvider):
     SUPPORTED_LANGUAGES = ("en", "it")
     LANGUAGE_FLAGS = {"en": "🇬🇧", "it": "🇮🇹"}
 
+    #: The language row search shows for each instrument (early user C, item 15; decision D-X14). A user's own choice,
+    #: so it reaches search only (D-X13): prices and metadata follow the language stored with the asset.
+    settings_fields = (
+        PluginSettingField(
+            key="preferred_language",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,
+            label="Preferred language",
+            description="Search shows each instrument only in this language, the one its name and details come in. With Both languages, Italian first, then English.",
+            default="all",
+            options=(
+                SettingOption("all", "Both languages", label_key="pluginSettings.asset.borsa_italiana.option.preferred_language.all"),
+                SettingOption("it", "🇮🇹 Italian", label_key="pluginSettings.asset.borsa_italiana.option.preferred_language.it"),
+                SettingOption("en", "🇬🇧 English", label_key="pluginSettings.asset.borsa_italiana.option.preferred_language.en"),
+            ),
+            label_key="pluginSettings.asset.borsa_italiana.label.preferred_language",
+            description_key="pluginSettings.asset.borsa_italiana.description.preferred_language",
+        ),
+    )
+
+    def _languages_in_order(self) -> tuple[str, ...]:
+        """Every supported language, Italian first: the order of an instrument's rows in search."""
+        first = ("it", "en")
+        return tuple(lg for lg in first if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in first)
+
+    def _emitted_languages(self) -> tuple[str, ...]:
+        """The languages search emits each instrument in: the user's preferred one (setting ``preferred_language``), or
+        all of them. Every instrument has a row in every language, so keeping only the preferred one never drops one."""
+        every = self._languages_in_order()
+        preferred = self.settings.get("preferred_language")
+        return (preferred,) if preferred in every else every
+
     def _get_lingua(self, provider_params: Dict | None) -> str:
         """Extract language from provider_params, default 'en'."""
         if provider_params and provider_params.get("language"):
@@ -515,6 +566,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)},
             ) from e
         except BorsaItalianaErrore as e:
+            _raise_if_rate_limited(e)
             raise AssetSourceError(
                 f"Failed to fetch current value for {identifier} from Borsa Italiana: {e}",
                 "FETCH_ERROR",
@@ -600,6 +652,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)},
             ) from e
         except BorsaItalianaErrore as e:
+            _raise_if_rate_limited(e)
             raise AssetSourceError(
                 f"Failed to fetch history for {identifier} from Borsa Italiana: {e}",
                 "FETCH_ERROR",
@@ -629,6 +682,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"codice_fondo": codice_fondo, "error": str(e)},
             ) from e
         except BorsaItalianaErrore as e:
+            _raise_if_rate_limited(e)
             raise AssetSourceError(
                 f"Failed to fetch NAV for fund {codice_fondo} from Borsa Italiana: {e}",
                 "FETCH_ERROR",
@@ -703,18 +757,17 @@ class BorsaItalianaProvider(AssetSourceProvider):
         ``resolve_url`` is only an alternative **entry point** into search: just like
         an on-site ``cerca`` hit, it returns one row per supported language (Italian
         first) with a flag suffix in ``display_name``, so the user picks the language
-        exactly as with a normal search result — instead of a single "neutral" row.
+        exactly as with a normal search result — instead of a single "neutral" row. Only the user's preferred
+        language when there is one (``_emitted_languages``).
         """
-        preferred = ("it", "en")
-        emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
-        return [self._fund_search_item(dati, lingua, display_name=f"{dati.nome} {self.LANGUAGE_FLAGS[lingua]}") for lingua in emit_language_order]
+        return [self._fund_search_item(dati, lingua, display_name=f"{dati.nome} {self.LANGUAGE_FLAGS[lingua]}") for lingua in self._emitted_languages()]
 
     def _scheda_search_items_all_langs(self, isin: str, mic: str | None, platform: str | None = None, url_diretto: str | None = None) -> list[dict] | None:
         """Emit the canonical search-item set for a resolved stock/bond/ETF page.
 
         Mirrors :meth:`_fund_search_items_all_langs` for ISIN-priced instruments: the
         scheda is fetched once (ISIN and type are language-independent) and one row
-        per supported language is emitted with a flag suffix, so a web link-finder
+        per emitted language (``_emitted_languages``) with a flag suffix, so a web link-finder
         hit behaves exactly like an on-site ``cerca`` result. The currency comes from
         one chart-API call shared by every row (see :func:`_price_api_currency`), not
         from the scheda. Returns ``None`` when the page can't be fetched or parsed.
@@ -728,13 +781,13 @@ class BorsaItalianaProvider(AssetSourceProvider):
         except (StrumentoNonTrovato, DatiNonDisponibili):
             return None
         except Exception as e:  # best-effort — never fatal to search
+            _raise_if_rate_limited(e)  # a refusal is no miss: the core pauses the provider
             logger.debug(f"Borsa Italiana resolve_url (scheda) failed for '{isin}': {e}")
             return None
         asset_type = _map_asset_type(scheda.tipo)
         real_isin = scheda.isin or isin
         currency = _price_api_currency(real_isin, mic)
-        preferred = ("it", "en")
-        emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
+        emit_language_order = self._emitted_languages()
         # The page URL we actually loaded (scheda.url_pagina = post-redirect canonical,
         # or the link-finder's canonical URL): stored so get_asset_url never rebuilds
         # a dead universal link for markets whose routing params we don't have.
@@ -766,8 +819,8 @@ class BorsaItalianaProvider(AssetSourceProvider):
         """Resolve a Borsa Italiana page URL into search-item(s).
 
         Two page families are recognised, both returning the **same canonical set a
-        normal search would emit** — one item per supported language (Italian first,
-        with a flag suffix), each carrying the real ISIN and the params needed to price
+        normal search would emit** — one item per emitted language (Italian first,
+        with a flag suffix; ``_emitted_languages``), each carrying the real ISIN and the params needed to price
         the asset afterwards:
 
         * **Fund detail pages** (``/borsa/fondi/dettaglio/{code}.html``) — NAV-by-code;
@@ -790,6 +843,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             except (StrumentoNonTrovato, DatiNonDisponibili):
                 return None
             except Exception as e:  # best-effort — never fatal to search
+                _raise_if_rate_limited(e)  # a refusal is no miss: the core pauses the provider
                 logger.debug(f"Borsa Italiana resolve_url (fund) failed for '{url}': {e}")
                 return None
             return self._fund_search_items_all_langs(dati)
@@ -809,6 +863,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                     mic = found_mic or mic
                     break
         except Exception as e:  # best-effort — fall back to URL-only params
+            _raise_if_rate_limited(e)  # a refusal is no miss: the core pauses the provider
             logger.debug(f"Borsa Italiana resolve_url: market-param discovery failed for '{isin}': {e}")
         # If the discovery couldn't supply the platform (e.g. the instrument is
         # temporarily de-indexed from the site search), fall back to reading the
@@ -821,8 +876,8 @@ class BorsaItalianaProvider(AssetSourceProvider):
     async def search(self, query: str) -> list[dict]:  # noqa: C901 — flat result mapping with language fan-out
         """Search for instruments on Borsa Italiana.
 
-        Emits 2 results per match (EN + IT) with flag emojis,
-        similar to JustETF's multi-currency approach.
+        Emits one row per language for each match (Italian, then English) with a flag emoji, similar to JustETF's
+        multi-currency approach; only the user's preferred language when there is one (``_emitted_languages``).
         """
         self._check_availability()
         try:
@@ -831,10 +886,11 @@ class BorsaItalianaProvider(AssetSourceProvider):
             # the localized instrument *page* consulted later (pricing/metadata URL), not the search
             # result set. So we fetch ONCE and emit two rows per instrument (IT + EN) that differ
             # solely by the flag emoji and the downstream ``provider_params.language``. This halves
-            # the search network cost versus fetching each language separately.
-            preferred = ("it", "en")
-            emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
-            fetch_language = emit_language_order[0] if emit_language_order else "it"
+            # the search network cost versus fetching each language separately. The user's preferred language only
+            # chooses the rows emitted: the fetch stays in the first language, as without a preference.
+            every_language = self._languages_in_order()
+            emit_language_order = self._emitted_languages()
+            fetch_language = every_language[0] if every_language else "it"
 
             seen_isins: set[str] = set()
             results: list = []
@@ -927,6 +983,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"query": query, "error": str(e)},
             ) from e
         except Exception as e:
+            _raise_if_rate_limited(e)
             raise AssetSourceError(
                 f"Search failed for '{query}' on Borsa Italiana: {e}",
                 "SEARCH_ERROR",
@@ -972,6 +1029,8 @@ class BorsaItalianaProvider(AssetSourceProvider):
         """
         try:
             dati = self._fetch_fund(codice_fondo)
+        except AssetRateLimitedError:
+            raise  # the core pauses the provider: not "no metadata"
         except AssetSourceError as e:
             logger.warning(f"Could not fetch fund metadata for code '{codice_fondo}' from Borsa Italiana: {e}")
             return None
@@ -1095,6 +1154,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             # Unresolved market page: actionable — surface, don't swallow.
             raise _unsupported_page_error(identifier, e) from e
         except Exception as e:
+            _raise_if_rate_limited(e)
             logger.warning(f"Could not fetch metadata for {identifier} from Borsa Italiana: {e}")
             return None
 

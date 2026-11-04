@@ -281,7 +281,7 @@ describe('scatterChartHelpers', () => {
  */
 describe('scatterChartHelpers — the selected point', () => {
     /** The light theme's selection colour. The dark one is only required to differ from the dot it replaces. */
-    const SELECTED_LIGHT = '#22c55e';
+    const SELECTED_LIGHT = '#236b4d';
     const ROLES: RiskReturnRole[] = ['portfolio', 'benchmark', 'asset'];
 
     /**

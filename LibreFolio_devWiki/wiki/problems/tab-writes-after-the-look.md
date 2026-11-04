@@ -102,9 +102,9 @@ What browser writes into measured lanes cost this campaign, during the look and 
 |------|------|
 | Live-price `$effect` — on mount, then every 30 s while the range ends today | `frontend/src/routes/(app)/assets/+page.svelte` |
 | `POST /api/v1/assets/prices/current` from the client | `frontend/src/lib/services/livePriceService.ts` |
-| The endpoint | `backend/app/api/v1/assets.py` |
-| The `/prices/current` writer — F.2 bootstrap, F.3 intra-day extend (`_extend_ohlc_bounds`); the log lines above | `backend/app/services/asset_sources/price_query.py` |
-| The equivalent bounds merge R2-64 cited (bulk upserts); every write stamps `fetched_at` | `backend/app/services/asset_sources/price_store.py` |
+| The endpoint | `backend/app/api/v1/assets/prices.py` |
+| The `/prices/current` writer — F.2 bootstrap, F.3 intra-day extend (`_extend_ohlc_bounds`); the log lines above | `backend/app/services/assets/price_query.py` |
+| The equivalent bounds merge R2-64 cited (bulk upserts); every write stamps `fetched_at` | `backend/app/services/assets/price_store.py` |
 | Rule Ⓓ, the order, the gate | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/_comune.md` |
 | The measurement — passo 1e, *Fuori pista* 1 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/S5-esecuzione.md` |
 | Registry — R2-64, R2-68, R2-74, R2-98, R2-101, R2-111, R2-115 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/REGISTRO.md` |

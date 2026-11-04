@@ -1,3 +1,4 @@
+import {utcMs} from '../../../utils/dateOnly';
 import {escapeMarkdownTableCell, normalizeJsonSafeValue, serializeYaml} from '../serialization';
 
 type JsonRecord = Record<string, unknown>;
@@ -27,6 +28,7 @@ export interface SnapshotFormatDiagnostics {
     readonly already_scaled_percent_values: number;
     readonly empty_columns_removed: number;
     readonly empty_parent_columns_removed: number;
+    readonly null_columns_declared: number;
     readonly semantic_duplicate_columns_detected: number;
     readonly empty_temporal_rows_detected: number;
     readonly empty_temporal_rows_omitted: number;
@@ -50,16 +52,19 @@ export interface SnapshotSignalMetric {
 }
 
 const COMPONENT_SEPARATOR = '\n\n';
+/** The key of the line that names, right after a table, the columns left out because they were null in every row (T-B7). */
+const OMITTED_NULL_COLUMNS_KEY = 'omitted_null_columns';
 const BASE_FORMAT_PREAMBLE_LINES = [
     'SNAPSHOT DATA FORMAT',
-    'technical_components=compact_pipe_tables_v1',
-    'other_components=generic_pipe_tables_v1',
+    'technical_components=compact_pipe_tables_v2',
+    'other_components=generic_pipe_tables_v2',
     'unknown_versions=yaml_fallback_v1',
     'entity_refs=resolve through ENTITY DIRECTORY',
     'user_facing_rule=never use refs or numeric IDs as names; use display names or clear shortened names',
     'numeric_display=remove trailing zeros, round fractional precision to 4 significant digits after leading zeros, and suppress only semantically identified floating-point noise; backend calculations remain full precision',
     'normalized_weights=shown directly as percentages; no user or model conversion required',
     'null=explicitly unavailable',
+    `${OMITTED_NULL_COLUMNS_KEY}=a column null in every row is left out of its table and named on the ${OMITTED_NULL_COLUMNS_KEY} line right after that table`,
     'dated_scalar=value@date',
     'range=f:first;l:last;n:min;x:max;c:observation_count',
     'history_date_refs=s:row start;e:row end;+N:N calendar days after row start',
@@ -79,6 +84,7 @@ interface MutableSnapshotFormatDiagnostics {
     already_scaled_percent_values: number;
     empty_columns_removed: number;
     empty_parent_columns_removed: number;
+    null_columns_declared: number;
     semantic_duplicate_columns_detected: number;
     empty_temporal_rows_detected: number;
     empty_temporal_rows_omitted: number;
@@ -104,6 +110,7 @@ function createFormatDiagnostics(): MutableSnapshotFormatDiagnostics {
         already_scaled_percent_values: 0,
         empty_columns_removed: 0,
         empty_parent_columns_removed: 0,
+        null_columns_declared: 0,
         semantic_duplicate_columns_detected: 0,
         empty_temporal_rows_detected: 0,
         empty_temporal_rows_omitted: 0,
@@ -307,7 +314,50 @@ function isEmptyPublicValue(value: unknown): boolean {
     return value === undefined || value === null || value === '' || value === 'null';
 }
 
-function pipeTable(headers: readonly string[], rows: readonly (readonly unknown[])[], diagnostics?: MutableSnapshotFormatDiagnostics): string {
+/** One column whose `null` means "none for this row", not "unavailable" (J-54). */
+export interface NullMeansNoneColumn {
+    /** The column, as its header reads. */
+    readonly column: string;
+    /** The table, by the title the prompt prints right before it (`OUTPUT DEFINITIONS`, `TABLE rows`); absent: any table. */
+    readonly table?: string;
+    /** The component id; absent: any component. */
+    readonly component?: string;
+    /** What a null in it means. */
+    readonly means: string;
+}
+
+/**
+ * The columns whose `null` means "none for this row" rather than "unavailable" (J-54). The backend writes every `None`
+ * as `null` (`model_dump(mode="json")`), also where nothing of that kind exists for the row: a column of these, null in
+ * every row, is not applicable, so it is dropped silently and never named on the `omitted_null_columns` line. A name
+ * that could carry a real value elsewhere is bound to its table, its component, or both. A cell in a column with values
+ * keeps its `null`.
+ */
+export const NULL_MEANS_NONE_COLUMNS: readonly NullMeansNoneColumn[] = [
+    {column: 'closing_date', means: 'an open lot: it has not closed'},
+    {column: 'reason_code', means: 'a row with nothing to report'},
+    {column: 'conversion_reason', means: 'an amount converted at a known rate: no gap to explain'},
+    {column: 'component', table: 'OUTPUT DEFINITIONS', means: 'a scalar output, not one component of a band'},
+    {column: 'minimum', table: 'OUTPUT DEFINITIONS', means: 'an output with no lower bound'},
+    {column: 'maximum', table: 'OUTPUT DEFINITIONS', means: 'an output with no upper bound'},
+    {column: 'asset_ref', component: 'portfolio.income_timeline', means: 'income not tied to an asset, such as interest on cash'},
+    {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators', means: 'one asset: no portfolio weight'},
+    {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators', means: 'one FX pair: no portfolio weight'},
+    {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators', means: 'one asset: no weight to normalize'},
+    {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators', means: 'one FX pair: no weight to normalize'},
+];
+
+/** Where a table sits, for `NULL_MEANS_NONE_COLUMNS`: its printed title and its component. */
+interface TableContext {
+    readonly table?: string;
+    readonly component?: string;
+}
+
+function meansNoneWhenNull(column: string, context: TableContext): boolean {
+    return NULL_MEANS_NONE_COLUMNS.some((entry) => entry.column === column && (entry.table === undefined || entry.table === context.table) && (entry.component === undefined || entry.component === context.component));
+}
+
+function pipeTable(headers: readonly string[], rows: readonly (readonly unknown[])[], diagnostics?: MutableSnapshotFormatDiagnostics, context: TableContext = {}): string {
     if (rows.some((row) => row.length !== headers.length)) {
         throw new TypeError('AI Export compact table row width must match its header');
     }
@@ -315,7 +365,29 @@ function pipeTable(headers: readonly string[], rows: readonly (readonly unknown[
     if (diagnostics) diagnostics.empty_columns_removed += headers.length - includedIndexes.length;
     const includedHeaders = includedIndexes.map((index) => headers[index]);
     const includedRows = rows.map((row) => includedIndexes.map((index) => row[index]));
-    return [pipeRow(includedHeaders), ...includedRows.map(pipeRow)].join('\n');
+    const table = [pipeRow(includedHeaders), ...includedRows.map(pipeRow)].join('\n');
+    // Named only when a cell said null, the backend's "unavailable". A column of undefined or '' cells is one the
+    // renderer has nothing for in this scope ("not applicable"): it goes silently, as before (T-B7); so does a column
+    // whose null means "none" (J-54).
+    const included = new Set(includedIndexes);
+    const nullColumns = headers.filter((header, index) => !included.has(index) && !meansNoneWhenNull(header, context) && rows.some((row) => isExplicitNull(row[index])));
+    return nullColumns.length ? `${table}\n${omittedNullColumnsLine(nullColumns, diagnostics)}` : table;
+}
+
+function isExplicitNull(value: unknown): boolean {
+    return value === null || value === 'null';
+}
+
+/** The columns a table left out because they were null in every row, named as their header cells would have been. */
+function omittedNullColumnsLine(columns: readonly string[], diagnostics?: MutableSnapshotFormatDiagnostics): string {
+    if (diagnostics) diagnostics.null_columns_declared += columns.length;
+    return `${OMITTED_NULL_COLUMNS_KEY}=${columns.map(tableCell).join(',')}`;
+}
+
+/** The value of the first of `keys` that `record` carries, `null` included: `??` would read an explicit null as absent. */
+function firstPresent(record: JsonRecord, ...keys: readonly string[]): unknown {
+    for (const key of keys) if (Object.hasOwn(record, key)) return record[key];
+    return undefined;
 }
 
 function valueMap(value: unknown, boundsByKey?: JsonRecord, diagnostics?: MutableSnapshotFormatDiagnostics): string {
@@ -348,13 +420,13 @@ interface HistoryDateContext {
     readonly end: string;
 }
 
-function dateOrdinal(value: string): number | undefined {
+export function dateOrdinal(value: string): number | undefined {
     const match = /^(\d{4})[/-](\d{2})[/-](\d{2})$/.exec(value);
     if (!match) return undefined;
     const year = Number(match[1]);
     const month = Number(match[2]);
     const day = Number(match[3]);
-    const timestamp = Date.UTC(year, month - 1, day);
+    const timestamp = utcMs(year, month - 1, day);
     const parsed = new Date(timestamp);
     if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) return undefined;
     return timestamp / 86_400_000;
@@ -620,7 +692,11 @@ function technicalSeries(payload: JsonRecord, directory: EntityDirectory): {read
 function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics): string | undefined {
     const series = technicalSeries(payload, directory);
     if (!series) return undefined;
-    const summaryRows = series.map(({entity, portfolioWeightRatio, values}) => [entity, normalizedRatioPercent(portfolioWeightRatio, diagnostics), values.currency ?? values.quote_currency, values.latest_close ?? values.latest_rate, values.latest_date]);
+    const gaps = priceSeriesGaps(payload);
+    if (!gaps) return undefined;
+    const seriesGaps = seriesGapRows(series);
+    if (!seriesGaps) return undefined;
+    const summaryRows = series.map(({entity, portfolioWeightRatio, values}) => [entity, normalizedRatioPercent(portfolioWeightRatio, diagnostics), firstPresent(values, 'currency', 'quote_currency'), firstPresent(values, 'latest_close', 'latest_rate'), values.latest_date]);
     const bucketRows: unknown[][] = [];
     for (const {entity, values} of series) {
         const buckets = records(values.buckets);
@@ -652,6 +728,7 @@ function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory,
     }
     const globalRows = [
         ['price_basis', payload.price_basis],
+        ['reason_code', gaps.targetCode],
         ['period_position_leg_count', payload.period_position_leg_count],
         ['period_contributor_asset_count', payload.period_contributor_asset_count],
         ['eligible_asset_count', payload.eligible_asset_count],
@@ -659,13 +736,113 @@ function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory,
         ['base_currency', payload.base_currency],
         ['quote_currency', payload.quote_currency],
     ].filter((row) => row[1] !== undefined);
+    // E-23: the last price stored before the period, only for no_price_in_period; the columns only when one such row is there
+    const withLastPrice = gaps.uncovered.some((asset) => asset.reason_code === 'no_price_in_period');
+    const gapRows = gaps.uncovered.map((asset) => [
+        assetRef(asset.asset_id, directory),
+        normalizedRatioPercent(asset.portfolio_weight_ratio, diagnostics),
+        asset.reason_code,
+        ...(withLastPrice ? (asset.reason_code === 'no_price_in_period' ? [asset.currency, asset.last_close, asset.last_close_date] : [undefined, undefined, undefined]) : []),
+    ]);
     return [
-        ...(globalRows.length ? ['SUMMARY', pipeTable(['field', 'value'], globalRows, diagnostics)] : []),
+        ...(globalRows.length ? ['SUMMARY', pipeTable(['field', 'value'], globalRows, diagnostics), ...priceSeriesGapMeaningLines(gaps.targetCode ? [gaps.targetCode] : [])] : []),
         'SERIES',
         pipeTable(['entity', 'portfolio_weight_percent', 'currency', 'latest_value', 'latest_date'], summaryRows, diagnostics),
+        ...(gapRows.length
+            ? [
+                  'ASSETS WITHOUT PRICE SERIES',
+                  pipeTable(['entity', 'portfolio_weight_percent', 'reason_code', ...(withLastPrice ? ['currency', 'last_price', 'last_price_date'] : [])], gapRows, diagnostics),
+                  ...priceSeriesGapMeaningLines(gaps.uncovered.map((asset) => asset.reason_code).filter(isPriceSeriesGapCode)),
+              ]
+            : []),
         'BUCKETS',
         pipeTable(['entity', 'start', 'end', 'days', 'obs', 'first', 'last', 'min', 'min_date', 'max', 'max_date', 'return_from', 'simple_return', 'volatility'], bucketRows, diagnostics),
+        ...(seriesGaps.rows.length ? [seriesGaps.table.title, pipeTable(['entity', 'from', 'to', 'days', seriesGaps.table.lastValue, seriesGaps.table.lastValueDate], seriesGaps.rows, diagnostics), `${seriesGaps.table.key}=${SERIES_GAP_MEANINGS[seriesGaps.table.key]}`] : []),
     ].join('\n');
+}
+
+/**
+ * Why an eligible asset has no price series in `*.technical_prices` or `asset.ohlc_returns` (E-AI503): the backend's
+ * reason codes, each with its local meaning, printed right after the assets it explains. The backend decides the code
+ * on the price points it found, never on the asset type; the meanings stay here, as the frontend never takes
+ * presentation text from the backend.
+ */
+export const PRICE_SERIES_GAP_MEANINGS = {
+    no_stored_price: 'no price is stored for this asset up to the end of the period, so it has no price series, return or price-based indicator in the technical data; its value in the positions comes from its last trade or its cost (valuation_source); missing data, not a zero',
+    mixed_price_currencies:
+        'the prices stored for this asset are not all in one currency, so they do not form a price series in the technical data: no return or price-based indicator for it here; its value in the positions still comes from its latest stored price or a later trade, converted (valuation_source); missing data, not a zero',
+    no_price_in_period:
+        'prices are stored for this asset, but none inside the period: last_price is the last one, on last_price_date; so it has no price series, return or price-based indicator in the technical data; its value in the positions still comes from its latest stored price or a later trade, converted (valuation_source); missing data, not a zero',
+} as const satisfies Readonly<Record<string, string>>;
+
+/**
+ * The meaning of a gap table (E-23), printed once right after it: `PRICE GAPS` for the prices of assets, `RATE GAPS`
+ * for an FX pair. A gap is a run of whole empty buckets with a market-open day, merged by the backend, which also
+ * gives the last value stored before it; the meanings stay here, as the frontend never takes presentation text from
+ * the backend.
+ */
+export const SERIES_GAP_MEANINGS = {
+    price_gap: 'a span of whole buckets with no stored price while markets were open, merged: last_price is the last price stored before it, on last_price_date (empty when none is stored before it); missing data, not a zero, and not proof that the price stayed the same',
+    rate_gap: 'a span of whole buckets with no stored rate while markets were open, merged: last_rate is the last rate stored before it, on last_rate_date (empty when none is stored before it); missing data, not a zero, and not proof that the rate stayed the same',
+} as const satisfies Readonly<Record<string, string>>;
+
+type PriceSeriesGapCode = keyof typeof PRICE_SERIES_GAP_MEANINGS;
+
+function isPriceSeriesGapCode(value: unknown): value is PriceSeriesGapCode {
+    return typeof value === 'string' && Object.hasOwn(PRICE_SERIES_GAP_MEANINGS, value);
+}
+
+/** One `<code>=<meaning>` line per distinct code, sorted by code. */
+function priceSeriesGapMeaningLines(codes: readonly PriceSeriesGapCode[]): string[] {
+    return [...new Set(codes)].sort().map((code) => `${code}=${PRICE_SERIES_GAP_MEANINGS[code]}`);
+}
+
+interface PriceSeriesGaps {
+    /** `asset.ohlc_returns` without a series: why; undefined when it has one, and in every other component. */
+    readonly targetCode: PriceSeriesGapCode | undefined;
+    /** `*.technical_prices`: the eligible assets without a series, in payload order. */
+    readonly uncovered: readonly JsonRecord[];
+}
+
+/** Which gap table a series' gaps go to, and its last-value columns (E-23). */
+const SERIES_GAP_TABLES = {
+    price_gaps: {key: 'price_gap', title: 'PRICE GAPS', lastValue: 'last_price', lastValueDate: 'last_price_date'},
+    rate_gaps: {key: 'rate_gap', title: 'RATE GAPS', lastValue: 'last_rate', lastValueDate: 'last_rate_date'},
+} as const;
+
+type SeriesGapTable = (typeof SERIES_GAP_TABLES)[keyof typeof SERIES_GAP_TABLES];
+
+function isSeriesGapRecord(gap: JsonRecord): boolean {
+    return typeof gap.start_date === 'string' && typeof gap.end_date === 'string' && typeof gap.calendar_days === 'number' && (gap.last_value === null || typeof gap.last_value === 'number') && (gap.last_value_date === null || typeof gap.last_value_date === 'string');
+}
+
+/**
+ * The gap rows of the series (E-23), in series order, or undefined for a gap list this renderer does not know: the
+ * section then goes through the generic renderer. A gap without a value stored before it gets empty cells
+ * (`undefined`, never `null`): none, rather than unavailable.
+ */
+function seriesGapRows(series: readonly {readonly entity: string; readonly values: JsonRecord}[]): {readonly table: SeriesGapTable; readonly rows: unknown[][]} | undefined {
+    let table: SeriesGapTable = SERIES_GAP_TABLES.price_gaps;
+    const rows: unknown[][] = [];
+    for (const {entity, values} of series) {
+        for (const field of ['price_gaps', 'rate_gaps'] as const) {
+            if (values[field] === undefined) continue;
+            const gaps = records(values[field]);
+            if (!gaps || !gaps.every(isSeriesGapRecord)) return undefined;
+            table = SERIES_GAP_TABLES[field];
+            for (const gap of gaps) rows.push([entity, gap.start_date, gap.end_date, gap.calendar_days, gap.last_value ?? undefined, gap.last_value_date ?? undefined]);
+        }
+    }
+    return {table, rows};
+}
+
+/** A continuous series' gaps, or undefined for a code or a list this renderer does not know: the section then goes through the generic renderer, with no meaning invented. */
+function priceSeriesGaps(payload: JsonRecord): PriceSeriesGaps | undefined {
+    const uncovered = payload.uncovered_assets === undefined ? [] : records(payload.uncovered_assets);
+    if (!uncovered || !uncovered.every((asset) => isPriceSeriesGapCode(asset.reason_code))) return undefined;
+    const code = payload.reason_code;
+    if (code === undefined || code === null) return {targetCode: undefined, uncovered};
+    return isPriceSeriesGapCode(code) ? {targetCode: code, uncovered} : undefined;
 }
 
 interface IndicatorEntity {
@@ -874,6 +1051,7 @@ function renderIndicators(
                         column.semantic_description,
                     ]),
                     diagnostics,
+                    {table: 'OUTPUT DEFINITIONS', component: componentId},
                 );
             })(),
         ].join('\n');
@@ -935,7 +1113,7 @@ function renderIndicators(
                 `INSTANCE ${instanceId}`,
                 ...(statusRows.length ? ['ENTITY STATUS', pipeTable(['entity', 'result_status', 'partial_reason_code'], statusRows, diagnostics)] : []),
                 'PERIOD SUMMARY',
-                pipeTable(['entity', 'portfolio_weight_percent', 'technical_normalized_weight_percent', 'column_key', 'latest', 'period_summary'], summaryRows, diagnostics),
+                pipeTable(['entity', 'portfolio_weight_percent', 'technical_normalized_weight_percent', 'column_key', 'latest', 'period_summary'], summaryRows, diagnostics, {table: 'PERIOD SUMMARY', component: componentId}),
             ].join('\n');
             const historyBlock = ['HISTORY', pipeTable(['entity', 'start', 'end', 'days', 'obs', ...columnKeys], historyRows, diagnostics)].join('\n');
             summaryChars += summaryBlock.length;
@@ -1331,7 +1509,7 @@ function isEmptyPublicCell(value: string | undefined): boolean {
     return value === undefined || value === '' || value === 'null';
 }
 
-function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics): string {
+function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics, componentId?: string): string {
     const summaryRows: unknown[][] = [];
     const arrays: GenericArrayTable[] = [];
     const visit = (record: JsonRecord, prefix: string): void => {
@@ -1390,8 +1568,13 @@ function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, d
         }
         const columns = discoveredColumns.filter((column) => flattenedRows.some((row) => !isEmptyPublicCell(row.get(column))));
         const removedColumns = discoveredColumns.filter((column) => !columns.includes(column));
+        const parentColumns = new Set(removedColumns.filter((column) => discoveredColumns.some((candidate) => candidate.startsWith(`${column}.`))));
         diagnostics.empty_columns_removed += removedColumns.length;
-        diagnostics.empty_parent_columns_removed += removedColumns.filter((column) => discoveredColumns.some((candidate) => candidate.startsWith(`${column}.`))).length;
+        diagnostics.empty_parent_columns_removed += parentColumns.size;
+        // Named when it would have printed null in a row: a parent's values live on in its `parent.child` columns,
+        // and a column of empty strings says nothing (T-B7).
+        const table: TableContext = {table: `TABLE ${array.path}`, component: componentId};
+        const nullColumns = removedColumns.filter((column) => !parentColumns.has(column) && !meansNoneWhenNull(column, table) && flattenedRows.some((row) => isExplicitNull(row.get(column) ?? 'null')));
         blocks.push(
             `TABLE ${array.path}`,
             pipeTable(
@@ -1399,6 +1582,7 @@ function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, d
                 flattenedRows.map((row, index) => [index + 1, ...columns.map((column) => row.get(column) ?? 'null')]),
                 diagnostics,
             ),
+            ...(nullColumns.length ? [omittedNullColumnsLine(nullColumns, diagnostics)] : []),
         );
     }
     return blocks.length ? blocks.join('\n') : 'SUMMARY\n|field|value|\n|payload|{}|';
@@ -1416,7 +1600,7 @@ function technicalPayload(
 ): {readonly format: string; readonly content: string} | undefined {
     if (componentId.includes('technical_coverage')) {
         const publicPayload = Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== null));
-        return {format: 'technical_coverage_tables_v1', content: renderGenericPayload(publicPayload, directory, diagnostics)};
+        return {format: 'technical_coverage_tables_v1', content: renderGenericPayload(publicPayload, directory, diagnostics, componentId)};
     }
     if (componentId.endsWith('.indicators') || componentId.includes('technical_indicators')) {
         const content = renderIndicators(componentId, payload, target, directory, samplingByInstance, historyLimit, signalMetrics, diagnostics);
@@ -1440,17 +1624,46 @@ function technicalPayload(
 // Component versions whose schema-1 payload the compact renderer knows. A version bump that changes
 // only semantics text keeps the payload shape, so that version renders exactly like its v1. The lot
 // and FIFO bumps (B3b) only make amounts nullable, which the generic renderer already prints as `null`; the
-// reconciliation bump (C-53) only changes what `reconciled` means for a rounding-size residual.
+// reconciliation bump (C-53) only changes what `reconciled` means for a rounding-size residual. The drawdown
+// bump (MF-D2) only lets a total loss keep its section with `remaining_to_peak_ratio` null. The FIFO lots and
+// lot detail bumps (J-12) add the reconstruction status and the FAILED assets (identity and codes only), which
+// the generic renderer prints as a scalar and a table. The price series bumps (E-AI503) add the eligible assets
+// without a price series and a single asset's null currency, each with its reason code, which the continuous-series
+// renderer prints with the local meaning of the code. The gap bumps (E-23: `fx.rate_ohlc`, the price components
+// already at 2) add the merged runs of empty buckets, which the continuous-series renderer prints as a gap table.
 const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new Map([
-    ['portfolio.provenance', new Set([1, 2])],
-    ['broker.provenance', new Set([1, 2])],
-    ['asset.lot_detail', new Set([1, 2, 3])],
-    ['portfolio.fifo_lots', new Set([1, 2])],
-    ['broker.fifo_lots', new Set([1, 2])],
-    ['portfolio.fifo_summary', new Set([1, 2])],
-    ['broker.fifo_summary', new Set([1, 2])],
+    ['portfolio.provenance', new Set([1, 2, 3])],
+    ['broker.provenance', new Set([1, 2, 3])],
+    ['portfolio.positions', new Set([1, 2])],
+    ['broker.positions', new Set([1, 2])],
+    ['portfolio.technical_prices', new Set([1, 2])],
+    ['broker.technical_prices', new Set([1, 2])],
+    ['asset.ohlc_returns', new Set([1, 2])],
+    ['fx.rate_ohlc', new Set([1, 2])],
+    ['asset.provenance', new Set([1, 2])],
+    ['asset.positions_by_broker', new Set([1, 2])],
+    ['asset.lot_detail', new Set([1, 2, 3, 4])],
+    ['portfolio.fifo_lots', new Set([1, 2, 3])],
+    ['broker.fifo_lots', new Set([1, 2, 3])],
+    ['portfolio.fifo_summary', new Set([1, 2, 3])],
+    ['broker.fifo_summary', new Set([1, 2, 3])],
     ['portfolio.reconciliation', new Set([1, 2])],
     ['broker.reconciliation', new Set([1, 2])],
+    ['portfolio.income_timeline', new Set([1, 2])],
+    ['broker.cost_efficiency', new Set([1, 2])],
+    ['portfolio.drawdown_summary', new Set([1, 2])],
+    ['broker.drawdown_summary', new Set([1, 2])],
+    ['asset.drawdown_summary', new Set([1, 2])],
+    ['portfolio.asset_drawdown_snapshot', new Set([1, 2])],
+    // The allocation bump (MF-C2) only lets a slice percent be null; the concentration bump (T-U9) moves two shares
+    // through the one percentage formula and splits the reason code of an unavailable comparison.
+    ['portfolio.allocations_cash', new Set([1, 2])],
+    ['broker.concentration_context', new Set([1, 2])],
+    ['broker.concentration_comparison', new Set([1, 2])],
+    // F-AI (b): a `code` on every effect row and the portfolio's `fx_on_cash_effects`; the shape is otherwise the same.
+    ['portfolio.flows_income', new Set([1, 2])],
+    ['portfolio.fees_taxes', new Set([1, 2])],
+    ['broker.flows_income_costs', new Set([1, 2])],
 ]);
 const DEFAULT_COMPACT_VERSIONS: ReadonlySet<number> = new Set([1]);
 
@@ -1465,7 +1678,7 @@ function renderComponent(section: JsonRecord, target: unknown, directory: Entity
     const compactVersion = isCompactVersion(componentId, section);
     const technical = compactVersion && payload ? technicalPayload(componentId, payload, target, directory, samplingByInstance, historyLimit, signalMetrics, diagnostics) : undefined;
     if (technical) return `${componentHeader(section)}\n${technical.content}`;
-    if (compactVersion && payload) return `${componentHeader(section)}\n${renderGenericPayload(payload, directory, diagnostics)}`;
+    if (compactVersion && payload) return `${componentHeader(section)}\n${renderGenericPayload(payload, directory, diagnostics, componentId)}`;
     return `${componentHeader(section)}\nPAYLOAD YAML FALLBACK\n${serializeYaml({payload: section.payload})}`;
 }
 

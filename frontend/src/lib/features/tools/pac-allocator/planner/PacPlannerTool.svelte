@@ -16,6 +16,7 @@
     import {assertToolAccount, type CompatibleToolDescriptor} from '../../contracts';
     import {PLANNER_CONTRACT_VERSION, PLANNER_TOOL_CODE} from './defaults';
     import {copiedOnly, refreshCopiedFacts, refreshPlan, refreshQuery, type RefreshSummary} from './copies';
+    import type {PlannerSource} from './source';
     import {PlannerDraft} from './draft.svelte';
     import {STEP_FALLBACKS, listLocalProblem, stepKey, type ListedIssue} from './labels';
     import {defaultPolicy} from './policies';
@@ -85,7 +86,7 @@
     let refreshing = $state(false);
     let refreshFailure = $state.raw<SourceLoadError | null>(null);
     /** What the last re-read changed, valid only for the draft it produced. */
-    let refreshNotice = $state.raw<{fingerprint: string; summary: RefreshSummary} | null>(null);
+    let refreshNotice = $state.raw<{fingerprint: string; summary: RefreshSummary; source: PlannerSource} | null>(null);
     let allowLeave = false;
     let destroyed = false;
 
@@ -112,7 +113,7 @@
     const navVariant = $derived(desktop.current ? 'vertical' : tablet.current ? 'horizontal' : 'compact');
     const leaveCounts = $derived({assets: draft.data.assets.length, sources: draft.data.cash.length + draft.data.contributions.length});
     const working = $derived(run.running || refreshing);
-    const reviewNotice = $derived(step === 'review' && refreshNotice !== null && refreshNotice.fingerprint === draft.fingerprint && reviewProblems.length > 0 ? refreshNotice.summary : null);
+    const reviewNotice = $derived(step === 'review' && refreshNotice !== null && refreshNotice.fingerprint === draft.fingerprint && reviewProblems.length > 0 ? refreshNotice : null);
 
     async function focusFirst(...ids: string[]): Promise<void> {
         await tick();
@@ -215,7 +216,7 @@
             if (sequence !== refreshSequence || destroyed) return 'stopped';
             if (!source) return refreshLoad.status === 'error' && refreshLoad.error ? refreshFailed(sequence, refreshLoad.error) : 'stopped';
             const summary = refreshCopiedFacts(draft, source, readable);
-            refreshNotice = {fingerprint: draft.fingerprint, summary};
+            refreshNotice = {fingerprint: draft.fingerprint, summary, source};
             return 'done';
         } finally {
             if (sequence === refreshSequence) refreshing = false;
@@ -296,7 +297,7 @@
     });
 </script>
 
-<div class="min-w-0 space-y-4" data-testid="pac-planner" data-view={view} data-step={step} data-state={runState} data-busy={working ? 'true' : 'false'} aria-busy={working}>
+<div class="min-w-0 space-y-4 text-lf-primary" data-testid="pac-planner" data-view={view} data-step={step} data-state={runState} data-busy={working ? 'true' : 'false'} aria-busy={working}>
     {#if view === 'result'}
         {#if refreshing}
             <BusyPanel phase="refresh" onstop={stopRefresh} />
@@ -311,7 +312,7 @@
                 </p>
             {/if}
             {#if refreshNotice && refreshNotice.fingerprint === run.outcome.built.fingerprint}
-                <RefreshNotice summary={refreshNotice.summary} asOf={draft.data.asOf} />
+                <RefreshNotice summary={refreshNotice.summary} source={refreshNotice.source} {draft} asOf={draft.data.asOf} />
             {/if}
             <ResultView outcome={run.outcome} {draft} {apiVersion} busy={run.running} ongoto={editStep} onedit={() => editStep('review')} oncalculate={() => void calculate()} onretry={retry} ondiscard={discard} />
         {:else}
@@ -336,12 +337,12 @@
             <!-- R9.2: one column for the steps and, below them, the summary on request, at every width. -->
             <div class="space-y-2 {CARD} {desktop.current ? 'sticky top-4' : ''}">
                 <StepNav current={step} {steps} {visited} {problemSteps} variant={navVariant} onselect={go} />
-                <button type="button" class="inline-flex items-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-200" aria-expanded={summaryOpen} aria-controls={SUMMARY_ID} data-testid="pac-planner-summary-toggle" onclick={() => (summaryOpen = !summaryOpen)}>
+                <button type="button" class="inline-flex items-center gap-1 text-sm font-medium text-lf-secondary" aria-expanded={summaryOpen} aria-controls={SUMMARY_ID} data-testid="pac-planner-summary-toggle" onclick={() => (summaryOpen = !summaryOpen)}>
                     {$t(`${PLANNER_KEY}.summary.toggle`, {default: 'Summary'})}
                     {#if summaryOpen}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}
                 </button>
                 {#if summaryOpen}
-                    <div id={SUMMARY_ID} class="border-t border-gray-200 pt-3 dark:border-gray-700">
+                    <div id={SUMMARY_ID} class="border-t border-lf-subtle pt-3">
                         <SummaryPanel {draft} {step} {apiVersion} {uiVersion} />
                     </div>
                 {/if}
@@ -375,7 +376,7 @@
                 {/if}
 
                 {#if reviewNotice}
-                    <div class="mb-4"><RefreshNotice summary={reviewNotice} asOf={draft.data.asOf} /></div>
+                    <div class="mb-4"><RefreshNotice summary={reviewNotice.summary} source={reviewNotice.source} {draft} asOf={draft.data.asOf} /></div>
                 {/if}
 
                 {#if step === 'scenario'}
@@ -398,7 +399,7 @@
                     <ReviewStep {draft} problems={reviewProblems} busy={working} hasResult={run.outcome !== null} ongoto={go} oncalculate={() => void calculate()} onshowresult={showResult} />
                 {/if}
 
-                <div class="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-gray-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur dark:border-gray-700 dark:bg-gray-800/95" data-testid="pac-planner-footer">
+                <div class="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-lf-subtle bg-lf-card/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur" data-testid="pac-planner-footer">
                     {#if index > 0}
                         <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-back" onclick={back}>
                             <ArrowLeft class="h-4 w-4" aria-hidden="true" />

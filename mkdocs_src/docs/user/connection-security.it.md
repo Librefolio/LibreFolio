@@ -107,7 +107,8 @@ barra laterale è chiusa.
 
 👉 **Cosa fare:** evita questo indirizzo. Se gestisci il server, assegna a LibreFolio un
 [indirizzo HTTPS](#https-address) e smetti di esporre l'HTTP in chiaro. Poi cambia la tua password:
-**Impostazioni** → [**Profilo**](settings/profile.md) → **Cambia password**.
+**Impostazioni** → [**Profilo**](settings/profile.md) → **Cambia password**. Così vengono disconnessi anche tutti gli
+altri dispositivi collegati al tuo account.
 
 ??? info "🔍 Quando una connessione non è sicura"
 

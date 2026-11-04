@@ -3,6 +3,8 @@ import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {login} from '../fixtures/auth-helpers';
 import {showChartTooltip} from '../fixtures/charts';
+import {optionsClosed} from '../fixtures/probe';
+import {focusHeaderControlByKeyboard} from '../fixtures/headerKeyboardFocus';
 import {TEST_USER} from '../fixtures/test-users';
 
 /**
@@ -187,87 +189,136 @@ test.describe('Dashboard charts and view matrix', () => {
         await expect(history).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
     });
 
-    test('Allocation by type carries a per-slice colour derived from its primary type', async ({page}) => {
-        // ECharts draws to a canvas, so a colour has no DOM to assert on. The
-        // component exposes its instance as `__lfChart` (same hook as
-        // PriceChartFull); reading the option is the only way to observe that the
-        // hierarchy actually reached the chart rather than merely compiling.
+    test('Allocation by type: each family in a colour of its own, the same in the pie and in the history (GR1)', async ({page}) => {
+        // GR1 of the designer's round 2 (D-T17): a category keeps one colour, by key and never by rank, so a
+        // family is the same colour in the pie («now») and in the history, whatever its rank in either. ECharts
+        // draws to a canvas, so a colour has no DOM to assert on: both charts expose their instance as
+        // `__lfChart` (same hook as PriceChartFull), and the option they were handed is the only place to read
+        // it. No colour is written here: the page draws in whichever theme it is in — read off <html> with each
+        // option — and the pie is compared with the history drawn under the same theme. Which colour a key has
+        // is pinned by the theme's unit tests (chartCategories), what a chart hands ECharts by its component tests.
         await page.goto('/dashboard');
         await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
         await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
 
         const panel = page.getByTestId('allocation-panel');
         await expect(panel).toBeVisible({timeout: 15_000});
-        // Never assume the default tab — select it.
-        await page.getByTestId('allocation-tab-type').click();
+        // The view and the dimension persist per user (S4): select both, never assume a default.
+        const nowView = page.getByTestId('allocation-view-now');
+        await nowView.click();
+        await expect(nowView).toHaveAttribute('aria-pressed', 'true');
+        const typeTab = page.getByTestId('allocation-tab-type');
+        await typeTab.click();
+        await expect(typeTab).toHaveAttribute('aria-pressed', 'true');
 
-        type Slice = {rawName: string; value: number; color: string | null; groupSize: number | null; primaryKey: string | null; primaryTotal: number | null};
-        const read = async (): Promise<{palette: unknown; slices: Slice[]} | null> =>
+        type Arc = {series: string; rawName: string; primaryKey: string; ringRole: string | null; filler: boolean; color: string | null};
+        // The pie by type: the instance under the panel whose every arc names the family it belongs to — a
+        // sector pie names none, and the history chart draws lines.
+        const readPie = async (): Promise<{dark: boolean; arcs: Arc[]} | null> =>
             panel.evaluate((root) => {
                 for (const node of Array.from(root.querySelectorAll('*'))) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const chart = (node as any).__lfChart;
-                    if (!chart) continue;
-                    const option = chart.getOption();
+                    if (!chart || chart.isDisposed?.()) continue;
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const series = ((option.series as any[]) ?? [])[0];
-                    if (series?.type !== 'pie') continue; // the history chart lives here too
+                    const series = ((chart.getOption().series as any[]) ?? []).filter((entry) => entry?.type === 'pie');
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const data = series.flatMap((entry) => ((entry.data as any[]) ?? []).map((datum) => ({entry, datum})));
+                    if (data.length === 0 || data.some(({datum}) => typeof datum?.primaryKey !== 'string')) continue;
                     return {
-                        palette: option.color,
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        slices: ((series.data as any[]) ?? []).map((d) => ({
-                            rawName: String(d?.rawName ?? ''),
-                            value: Number(d?.value ?? 0),
-                            color: d?.itemStyle?.color ?? null,
-                            groupSize: d?.groupSize ?? null,
-                            primaryKey: d?.primaryKey ?? null,
-                            primaryTotal: d?.primaryTotal ?? null,
+                        dark: document.documentElement.classList.contains('dark'),
+                        arcs: data.map(({entry, datum}) => ({
+                            series: String(entry.id ?? 'pie'),
+                            rawName: String(datum.rawName ?? ''),
+                            primaryKey: String(datum.primaryKey),
+                            ringRole: datum.ringRole ?? null,
+                            filler: datum.filler === true || datum.ringRole === 'filler',
+                            color: typeof datum.itemStyle?.color === 'string' ? datum.itemStyle.color : null,
                         })),
                     };
                 }
                 return null;
             });
 
-        // Poll rather than sleep: the pie mounts when the tab flips, so the first
-        // read can legitimately land before the instance exists.
-        await expect.poll(async () => (await read())?.slices.length ?? 0, {timeout: 15_000}).toBeGreaterThan(0);
-        const option = (await read())!;
+        // Poll rather than sleep: the pie mounts when the tab flips, so the first read can land before it draws.
+        await expect.poll(async () => (await readPie())?.arcs.length ?? 0, {timeout: 15_000}).toBeGreaterThan(0);
+        const pie = (await readPie())!;
+        const theme = pie.dark ? 'dark' : 'light';
+        // A filler is the outer ring's invisible spacer, transparent by design: every other arc is seen.
+        const shown = pie.arcs.filter((arc) => !arc.filler);
 
-        // Option-level palette, grown to 14 so 13 possible primaries cannot wrap.
-        expect(Array.isArray(option.palette)).toBe(true);
-        expect((option.palette as string[]).length).toBe(14);
+        // Every arc a reader sees wears a #rrggbb of its own: none is left to a palette handed out by index.
+        expect(
+            shown.filter((arc) => !/^#[0-9a-f]{6}$/i.test(arc.color ?? '')).map((arc) => `${arc.series} ${arc.rawName}: ${arc.color}`),
+            `arcs without a colour of their own (${theme} theme)`,
+        ).toEqual([]);
 
-        for (const slice of option.slices) {
-            // Per-datum colour: proves buildAllocationHierarchy ran. Before this
-            // change slices had no itemStyle at all and inherited the palette by index.
-            expect(slice.color, `slice ${slice.rawName} has no own colour`).toMatch(/^#[0-9a-f]{6}$/i);
-            expect(slice.groupSize).toBeGreaterThanOrEqual(1);
-            // A group total can never be smaller than one of its members.
-            expect(slice.primaryTotal).toBeGreaterThanOrEqual(slice.value - 0.01);
+        // A family's arcs are contiguous on every ring: first-seen indices that never go back. An interleaving
+        // like [A, A, B, C, B] breaks the order, and is caught.
+        for (const series of [...new Set(pie.arcs.map((arc) => arc.series))]) {
+            const keys = pie.arcs.filter((arc) => arc.series === series).map((arc) => arc.primaryKey);
+            const firstSeen = keys.map((key) => keys.indexOf(key));
+            expect(firstSeen, `series ${series}: a family split around another: ${keys.join(', ')}`).toEqual([...firstSeen].sort((a, b) => a - b));
         }
 
-        // No two categories may share a colour — the failure mode the 12-entry
-        // palette produced by wrapping with `% 12`.
-        const colors = option.slices.map((s) => String(s.color).toLowerCase());
-        expect(new Set(colors).size).toBe(colors.length);
-
-        // Members of one primary must be contiguous, otherwise a shared hue reads
-        // as coincidence rather than kinship. Holds trivially while every group is
-        // a singleton, and becomes load-bearing as soon as subtypes exist in the data.
-        // Non-decreasing first-occurrence indices is exactly contiguity: an
-        // interleaving like [A, A, B, C, B] breaks the order, and is caught.
-        const primaries = option.slices.map((s) => s.primaryKey);
-        const firstSeen = primaries.map((p) => primaries.indexOf(p));
-        expect(firstSeen).toEqual([...firstSeen].sort((a, b) => a - b));
-
-        // Legacy pin, observed end to end: with no subtype present every group is a
-        // singleton, so the result must still be the plain value-descending order
-        // painted with the palette in order — exactly what shipped before.
-        if (option.slices.every((s) => s.groupSize === 1)) {
-            const values = option.slices.map((s) => s.value);
-            expect(values).toEqual([...values].sort((a, b) => b - a));
-            expect(colors).toEqual((option.palette as string[]).slice(0, colors.length).map((c) => c.toLowerCase()));
+        // The colour of each family: its base arc when the pie draws two rings, else its own slice — the arc whose
+        // type is the family itself. On the outer ring, the family's generic member wears it too.
+        const rings = pie.arcs.some((arc) => arc.ringRole === 'base');
+        const familyColour = new Map<string, string>();
+        for (const arc of shown.filter((candidate) => (rings ? candidate.ringRole === 'base' : candidate.rawName.toUpperCase() === candidate.primaryKey))) {
+            expect(familyColour.has(arc.primaryKey), `two arcs stand for the family ${arc.primaryKey}`).toBe(false);
+            familyColour.set(arc.primaryKey, (arc.color ?? '').toLowerCase());
         }
+        const families = [...new Set(shown.map((arc) => arc.primaryKey))];
+        expect(
+            families.filter((family) => !familyColour.has(family)),
+            'families with no arc of their own',
+        ).toEqual([]);
+        expect(
+            shown.filter((arc) => arc.ringRole === 'member' && arc.rawName.toUpperCase() === arc.primaryKey && (arc.color ?? '').toLowerCase() !== familyColour.get(arc.primaryKey)).map((arc) => arc.rawName),
+            'a generic member not in its family colour',
+        ).toEqual([]);
+
+        // Distinct families, distinct colours.
+        const listing = [...familyColour].map(([family, colour]) => `${family} ${colour}`).join(', ');
+        expect(new Set(familyColour.values()).size, `families sharing a colour (${theme} theme): ${listing}`).toBe(familyColour.size);
+
+        // The history of the same dimension: one series per family (D375), keyed by the family.
+        const history = page.getByTestId('allocation-history-chart');
+        const historyView = page.getByTestId('allocation-view-history');
+        await historyView.click();
+        await expect(historyView).toHaveAttribute('aria-pressed', 'true');
+        await expect(history).toBeVisible({timeout: 15_000});
+        await expect(history).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
+
+        const readHistory = async (): Promise<{dark: boolean; series: {id: string; color: string | null}[]} | null> =>
+            history.evaluate((node) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const chart = (node as any).__lfChart;
+                if (!chart || chart.isDisposed?.()) return null;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const series = (chart.getOption().series as any[]) ?? [];
+                return {
+                    dark: document.documentElement.classList.contains('dark'),
+                    series: series.map((entry) => {
+                        const color = entry?.itemStyle?.color ?? entry?.lineStyle?.color;
+                        return {id: String(entry?.id ?? ''), color: typeof color === 'string' ? color : null};
+                    }),
+                };
+            });
+        await expect.poll(async () => (await readHistory())?.series.length ?? 0, {timeout: 15_000}).toBeGreaterThan(0);
+        const drawnHistory = (await readHistory())!;
+        // Precondition: both charts were drawn under one theme, or their colours could not be compared.
+        expect(drawnHistory.dark, 'the theme changed between the pie and the history').toBe(pie.dark);
+
+        // Every family present in both charts, in one colour in both.
+        const inBoth = families.filter((family) => drawnHistory.series.some((entry) => entry.id === family));
+        expect(inBoth.length, `no family of the pie (${families.join(', ')}) is drawn in the history (${drawnHistory.series.map((entry) => entry.id).join(', ')})`).toBeGreaterThan(0);
+        const twoColours = inBoth.flatMap((family) => {
+            const historyColour = (drawnHistory.series.find((entry) => entry.id === family)?.color ?? '').toLowerCase();
+            return historyColour === familyColour.get(family) ? [] : [`${family}: pie ${familyColour.get(family)}, history ${historyColour || 'none'}`];
+        });
+        expect(twoColours, `families drawn in two colours (${theme} theme)`).toEqual([]);
     });
 
     test('Positions panel publishes its loading state through data-busy', async ({page}) => {
@@ -276,6 +327,15 @@ test.describe('Dashboard charts and view matrix', () => {
         // is a promise the test resolves the instant it has seen "true". Only the
         // first request is held — any later report call (e.g. a re-fetch) passes
         // straight through so it cannot deadlock the page.
+        //
+        // `login()` lands on /dashboard and returns once the app is up, not once that
+        // landing page has fetched its report: a POST /portfolio/report it starts after
+        // the route below exists would become "the first" request, be held, and then be
+        // abandoned by the goto() to the page under test — whose own request would pass
+        // through and the panel would never be busy. Leaving for about:blank first
+        // (nothing there fetches) means every report request the route sees is one of
+        // the page under test.
+        await page.goto('about:blank');
         let release: () => void = () => {};
         const held = new Promise<void>((resolve) => (release = resolve));
         let firstHeld = false;
@@ -296,6 +356,109 @@ test.describe('Dashboard charts and view matrix', () => {
 
         await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
         await expect(page.getByTestId('exposure-table')).toBeVisible({timeout: 15_000});
+    });
+
+    test('Dashboard, Positions: the lot detail opens below the positions, the chart stays, and its ✕ or the browser’s back closes it (FB-12b)', async ({page}) => {
+        test.setTimeout(90_000);
+        await openPositionsTab(page);
+
+        // Holdings × table, whatever preference this context holds (both controls are setters, not toggles).
+        await page.getByTestId('positions-toggle-holdings').click();
+        await page.getByTestId('positions-toggle-table').click();
+        const positions = page.getByTestId('positions-panel');
+        const lots = page.getByTestId('lots-analysis-panel');
+        const table = page.getByTestId('exposure-table');
+        await expect(table).toBeVisible({timeout: 15_000});
+
+        // A position to open, read from the table: the id is `{assetId}-{brokerId}`, the table of a shared
+        // dashboard changes under any test, so nothing here counts rows or names one.
+        await expect.poll(() => table.locator('tbody tr[data-row-id]').count(), {message: 'the holdings table lists no position: check populate_mock_data.py', timeout: 15_000}).toBeGreaterThan(0);
+        const rowIds = await table.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
+        const rowId = rowIds.find((id) => /^\d+-\d+$/.test(id));
+        if (!rowId) throw new Error(`No holdings row with an {assetId}-{brokerId} id (rows: ${rowIds.join(', ')})`);
+        const assetId = Number(rowId.split('-')[0]);
+        const row = table.locator(`tbody tr[data-row-id="${rowId}"]`);
+        const assetInUrl = new RegExp(`[?&]asset=${assetId}(?:&|$)`);
+
+        /** The lot detail of the position, the way a user opens it: right click on its row, then the menu action. */
+        const openDetail = async () => {
+            await row.click({button: 'right'});
+            await page.getByTestId('context-menu-action-analyze-lots').click();
+            await expectDetail();
+        };
+        /** The lot detail is open below the positions: the positions panel and its chart stay, the lots panel and the asset in the URL are there. */
+        const expectDetail = async () => {
+            await expect(lots).toBeVisible({timeout: 15_000});
+            await expect(positions, 'the lot detail opens below: the positions panel stays on the page').toBeVisible();
+            await expect(positions.getByTestId('positions-return-chart'), 'and so does the chart of the positions').toBeVisible();
+            await expect(page).toHaveURL(assetInUrl);
+        };
+        /** Closed: no lots panel, no asset in the URL; the positions were there all the time. */
+        const expectClosed = async () => {
+            await expect(lots).toBeHidden({timeout: 15_000});
+            await expect(positions).toBeVisible();
+            await expect(page).not.toHaveURL(/[?&]asset=/);
+        };
+
+        // The detail opens under the positions; the panel's ✕ closes it.
+        await openDetail();
+        await page.getByTestId('lots-analysis-panel-close').click();
+        await expectClosed();
+
+        // The detail is a step of the history: the browser's Back closes it, Forward opens it again.
+        await expect(positions).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+        await openDetail();
+        await page.goBack();
+        await expectClosed();
+        await page.goForward();
+        await expectDetail();
+    });
+
+    test('Dashboard, Positions: opening the lot detail scrolls to the start of its section, on the same page (FB-12b)', async ({page}) => {
+        test.setTimeout(90_000);
+        await openPositionsTab(page);
+        await page.getByTestId('positions-toggle-holdings').click();
+        await page.getByTestId('positions-toggle-table').click();
+        const table = page.getByTestId('exposure-table');
+        const lots = page.getByTestId('lots-analysis-panel');
+        await expect.poll(() => table.locator('tbody tr[data-row-id]').count(), {message: 'the holdings table lists no position: check populate_mock_data.py', timeout: 15_000}).toBeGreaterThan(0);
+        const rowIds = await table.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
+        const rowId = rowIds.find((id) => /^\d+-\d+$/.test(id));
+        if (!rowId) throw new Error(`No holdings row with an {assetId}-{brokerId} id (rows: ${rowIds.join(', ')})`);
+        const pathBefore = new URL(page.url()).pathname;
+
+        await table.locator(`tbody tr[data-row-id="${rowId}"]`).click({button: 'right'});
+        await page.getByTestId('context-menu-action-analyze-lots').click();
+        await expect(lots).toBeVisible({timeout: 15_000});
+
+        // No second page: same route, the positions stay; the section is below, and the view moves to its start.
+        expect(new URL(page.url()).pathname, 'the lot detail is a section of the page, not another page').toBe(pathBefore);
+        await expect(page.getByTestId('positions-panel')).toBeVisible();
+        await expect
+            .poll(() => lots.evaluate((el) => Math.round(el.getBoundingClientRect().top)), {message: 'the view scrolls to the start of the lot detail', timeout: 10_000})
+            .toBeLessThanOrEqual(120);
+        expect(await lots.evaluate((el) => el.getBoundingClientRect().top), 'the start of the section is not scrolled past').toBeGreaterThanOrEqual(-2);
+    });
+
+    test('Dashboard, Positions: the chart sits beside the allocation by asset, with Abs / % on the chart, under Portfolio and under Period (FB-12)', async ({page}) => {
+        test.setTimeout(90_000);
+        await openPositionsTab(page);
+
+        for (const mode of ['holdings', 'performance'] as const) {
+            await page.getByTestId(`positions-toggle-${mode}`).click();
+            await page.getByTestId('positions-toggle-table').click();
+            const section = page.getByTestId('positions-chart-section');
+            await expect(section, `${mode}: the chart section is under the table`).toBeVisible({timeout: 30_000});
+            await expect(section.getByTestId('positions-return-chart')).toBeVisible();
+            // Abs / % are on the plot, not in the title row.
+            await expect(section.getByTestId('positions-chart-plot').getByTestId('positions-chart-view-absolute')).toBeVisible();
+            // The allocation beside it is the one by asset only: pie and history, no dimension tabs.
+            const allocation = section.getByTestId('allocation-panel');
+            await expect(allocation).toBeVisible();
+            await expect(allocation.getByTestId('allocation-view-now')).toBeVisible();
+            await expect(allocation.getByTestId('allocation-view-history')).toBeVisible();
+            await expect(allocation.getByTestId('allocation-tab-type')).toHaveCount(0);
+        }
     });
 });
 
@@ -752,8 +915,9 @@ test.describe('GrowthChart P&L mode — dashboard', () => {
         await expect(host).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
         await expect.poll(() => chartRenders(host), {timeout: 15_000}).toBeGreaterThan(rendersBefore);
 
-        const servedDays: number = overviews().at(-1)?.json?.history?.length ?? 0;
-        expect(servedDays, 'the 1Y overview serves a daily history').toBeGreaterThan(0);
+        const servedDays: number = servedDaysOf(overviews().at(-1)?.json).length;
+        const servedSteps: number = overviews().at(-1)?.json?.history?.length ?? 0;
+        expect(servedDays, 'the 1Y overview covers a range of days').toBeGreaterThan(0);
 
         // The two bounds the claim lives between: the line stays daily while it
         // has at most 1.3 buckets per pixel (a vertex survives sub-pixel density),
@@ -767,10 +931,12 @@ test.describe('GrowthChart P&L mode — dashboard', () => {
         expect(canvasWidth, 'the chart reports its canvas width').toBeGreaterThan(0);
         expect(servedDays * LADDER_MIN_BODY_PX, 'the seed no longer gives the 1Y window enough days for the 1D body floor').toBeGreaterThan(canvasWidth);
 
-        // The line: one point per served day, read off the chart (the positive
-        // statement), then no ladder and no badge (the badge renders only when the
+        // The line: the steps themselves, read off the chart (the positive statement): a point for each step the report served, none for
+        // the days between them, and never more than one per served day; then no ladder and no badge (the badge renders only when the
         // resolution is not daily, so its absence is the UI saying "daily").
-        await expect.poll(() => lineBuckets(host), {timeout: 15_000, message: 'the P&L line draws the 1Y window one point per served day'}).toBe(servedDays);
+        await expect.poll(() => lineBuckets(host), {timeout: 15_000, message: 'the P&L line draws the 1Y window as the served steps'}).toBeGreaterThanOrEqual(servedSteps);
+        const lineSteps = await lineBuckets(host);
+        expect(lineSteps, 'the line has no more points than the served days').toBeLessThanOrEqual(servedDays);
         await expect(ladder, 'the line has no candle-width ladder').toHaveCount(0);
         await expect(badge, 'the line at 1Y is daily, so no resolution badge').toHaveCount(0);
 
@@ -793,7 +959,8 @@ test.describe('GrowthChart P&L mode — dashboard', () => {
         // And back — proving the grammar drove it, not a one-way drift that would
         // have made the middle assertions true for the wrong reason.
         await selectSubmode(chart, 'line');
-        await expect.poll(() => lineBuckets(host), {timeout: 15_000, message: 'back on the line, one point per served day again'}).toBe(servedDays);
+        await expect.poll(() => lineBuckets(host), {timeout: 15_000, message: 'back on the line, the served steps again (the candle report adds its own dates, a few)'}).toBeGreaterThanOrEqual(lineSteps);
+        expect(await lineBuckets(host), 'still no more points than the served days').toBeLessThanOrEqual(servedDays);
         await expect(ladder).toHaveCount(0);
         await expect(badge).toHaveCount(0);
     });
@@ -923,14 +1090,14 @@ async function axisLabels(host: Locator, axis: 'xAxis' | 'yAxis', values: number
  * Flip the header's privacy toggle and wait for `host` to redraw under it.
  *
  * House style from privacy-masking.spec.ts: the header hides on scroll, so the
- * toggle is focused and the header proven pinned before the click; the state is
- * asserted on both sides. The renders counter is sampled before the click.
+ * toggle is reached by keyboard and the header proven pinned before the click; the
+ * state is asserted on both sides. The renders counter is sampled before the click.
  */
 async function setPrivacy(page: Page, on: boolean, host: Locator): Promise<void> {
     const toggle = page.getByTestId('privacy-toggle');
     await expect(toggle, 'privacy must start from the opposite state').toHaveAttribute('aria-pressed', String(!on));
     const before = await chartRenders(host);
-    await toggle.focus();
+    await focusHeaderControlByKeyboard(page, 'privacy-toggle');
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', String(on));
@@ -941,7 +1108,7 @@ async function setPrivacy(page: Page, on: boolean, host: Locator): Promise<void>
 async function restorePrivacyOff(page: Page): Promise<void> {
     const toggle = page.getByTestId('privacy-toggle');
     if ((await toggle.getAttribute('aria-pressed')) === 'true') {
-        await toggle.focus();
+        await focusHeaderControlByKeyboard(page, 'privacy-toggle');
         await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
         await toggle.click();
     }
@@ -1396,6 +1563,19 @@ function round2(value: number): number {
     return Math.round(value * 100) / 100;
 }
 
+/**
+ * Every day the report covers, both ends of its `range` included. A series of the report is one point per stretch without news (D-P4),
+ * so «the days the dashboard served» is the range, not the points: the ladder closes each bucket on the last day of its period that
+ * this range holds.
+ */
+function servedDaysOf(report: {range?: {start: string; end: string} | null} | null | undefined): string[] {
+    const range = report?.range;
+    if (!range) return [];
+    const days: string[] = [];
+    for (let ms = Date.parse(`${range.start}T00:00:00Z`); ms <= Date.parse(`${range.end}T00:00:00Z`); ms += 86_400_000) days.push(new Date(ms).toISOString().slice(0, 10));
+    return days;
+}
+
 /** Every break in a contiguous daily ISO history: [] when each step is exactly one UTC day. */
 function dailyGaps(dates: string[]): string[] {
     const DAY_MS = 86_400_000;
@@ -1804,9 +1984,9 @@ async function openLadder(page: Page, opts: {viewport: {width: number; height: n
     }
     await expect(rung).toHaveAttribute('aria-pressed', 'true');
 
-    const served: string[] = (overviews().at(-1)?.json?.history ?? []).map((point: {date: string}) => point.date);
+    const served: string[] = servedDaysOf(overviews().at(-1)?.json);
     expect(served.length, `precondition: the ${presetLabel} overview served a history`).toBeGreaterThan(0);
-    expect(dailyGaps(served), 'precondition: the served history is contiguous daily ISO dates, one UTC day per step').toEqual([]);
+    expect(dailyGaps(served), 'precondition: the served range is contiguous daily ISO dates, one UTC day per step').toEqual([]);
     return {chart, host, served};
 }
 
@@ -2157,5 +2337,420 @@ test.describe('Dashboard display currency menu (D8)', () => {
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'});
         }
+    });
+});
+
+/**
+ * Dashboard, the return chart of the positions (Y5-2, #48) — on REAL data.
+ *
+ * What is proven here and nowhere else: the page, the generated client and the backend agree on
+ * `POST /portfolio/positions-series`. Nothing is stubbed (but the one failure of the last test): the
+ * rows come from the live holdings table, the answer from the engine, and every check reads the
+ * request the page actually sent and the answer it actually got.
+ *
+ * Shared-DB rules: no row is named, no count is assumed — the rows ticked are read off the table,
+ * each is checked against the answer (`key.asset_id`) and the ones the chart draws are computed from
+ * that same answer, never from a literal. Each test owns its browser context, so the chart view
+ * (user storage) starts at its default; the tests write nothing to the database.
+ *
+ * Ids: a table row is `{assetId}-{brokerId}` (`0` for an asset summed over brokers), and the chart's
+ * legend entry `positions-chart-legend-{id}` carries the same id.
+ */
+const POSITIONS_SERIES_PATH = '/api/v1/portfolio/positions-series';
+const REPORT_API_PATH = '/api/v1/portfolio/report';
+
+type SeriesKey = {asset_id: number; broker_id?: number | null};
+type SeriesBody = {positions: SeriesKey[]; broker_ids?: number[]; date_range?: {start?: string; end?: string}; target_currency?: string};
+type SeriesPoint = {pnl?: string | null; pnl_percent?: string | null};
+type SeriesEntry = {key: SeriesKey; points?: SeriesPoint[]};
+type SeriesAnswer = {currency?: string; series?: SeriesEntry[]};
+type SeriesCall = {body: SeriesBody; status: number; json: SeriesAnswer | null};
+
+/** What the page sent to the series endpoint, and what came back, in order. */
+interface SeriesTraffic {
+    sent: SeriesBody[];
+    answered: SeriesCall[];
+}
+
+/** The chart id of a position key — the table's row id, `makePositionKey`'s format. */
+function lineIdOf(key: SeriesKey): string {
+    return `${key.asset_id}-${key.broker_id ?? 0}`;
+}
+
+/** Every request to the series endpoint, and every answer to one (status and body, read when it lands). */
+function recordSeriesTraffic(page: Page): SeriesTraffic {
+    const traffic: SeriesTraffic = {sent: [], answered: []};
+    page.on('request', (request) => {
+        if (request.method() === 'POST' && new URL(request.url()).pathname === POSITIONS_SERIES_PATH) traffic.sent.push(request.postDataJSON() as SeriesBody);
+    });
+    page.on('response', async (response) => {
+        const request = response.request();
+        if (request.method() !== 'POST' || new URL(response.url()).pathname !== POSITIONS_SERIES_PATH) return;
+        const json = await response.json().catch(() => null);
+        traffic.answered.push({body: request.postDataJSON() as SeriesBody, status: response.status(), json: json as SeriesAnswer | null});
+    });
+    return traffic;
+}
+
+/** The answered calls asking for `lineId`, as a count: the number `expect.poll` watches. */
+function answeredFor(traffic: SeriesTraffic, lineId: string, match: (call: SeriesCall) => boolean = () => true): SeriesCall[] {
+    return traffic.answered.filter((call) => call.body.positions.some((key) => lineIdOf(key) === lineId) && match(call));
+}
+
+/** The series of `lineId` in an answer. */
+function seriesOf(call: SeriesCall, lineId: string): SeriesEntry | undefined {
+    return call.json?.series?.find((entry) => lineIdOf(entry.key) === lineId);
+}
+
+/** Whether the answer gives `lineId` a point to draw in a view — the chart draws a line only with one known value. */
+function drawableIn(call: SeriesCall, lineId: string, view: 'absolute' | 'percentage'): boolean {
+    const field = view === 'absolute' ? 'pnl' : 'pnl_percent';
+    return (seriesOf(call, lineId)?.points ?? []).some((point) => point[field] !== null && point[field] !== undefined);
+}
+
+/** The rows of the holdings table the chart can be asked about: `{assetId}-{brokerId}`, in table order. */
+async function holdingRowIds(page: Page): Promise<string[]> {
+    const table = page.getByTestId('exposure-table');
+    await expect.poll(() => table.locator('tbody tr[data-row-id]').count(), {message: 'the holdings table lists no position: check populate_mock_data.py', timeout: 15_000}).toBeGreaterThan(0);
+    const ids = await table.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
+    return ids.filter((id) => /^\d+-\d+$/.test(id));
+}
+
+/** Holdings × table, settled, with the chart under it: the view a user ticks rows in. */
+async function openHoldingsChart(page: Page): Promise<Locator> {
+    await openPositionsTab(page);
+    // Both controls are setters, not toggles: whatever this context remembers.
+    await page.getByTestId('positions-toggle-holdings').click();
+    await page.getByTestId('positions-toggle-table').click();
+    await expect(page.getByTestId('exposure-table')).toBeVisible({timeout: 15_000});
+    const chart = page.getByTestId('positions-return-chart');
+    await expect(chart, 'the return chart sits under the holdings table').toBeVisible({timeout: 15_000});
+    return chart;
+}
+
+/** Tick (or untick) a row through its own box, and wait for the box to say so. */
+async function setRowTicked(page: Page, rowId: string, ticked: boolean): Promise<void> {
+    const box = page.getByTestId(`dt-row-checkbox-${rowId}`);
+    const state = ticked ? 'checked' : 'unchecked';
+    if ((await box.getAttribute('data-state')) !== state) await box.click();
+    await expect(box).toHaveAttribute('data-state', state);
+}
+
+async function lineCount(chart: Locator): Promise<number> {
+    return Number((await chart.getAttribute('data-line-count')) ?? '-1');
+}
+
+test.describe('Dashboard: the return chart of the positions on real data (Y5-2, #48)', () => {
+    test.describe.configure({timeout: 120_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('ticking rows asks the series of exactly those positions, draws a line each, and Abs/% keep the lines', async ({page}) => {
+        const traffic = recordSeriesTraffic(page);
+        const chart = await openHoldingsChart(page);
+        const rowIds = await holdingRowIds(page);
+        if (rowIds.length < 2) throw new Error(`The holdings table has ${rowIds.length} position row(s): two are needed to tick two. Check populate_mock_data.py. (rows: ${rowIds.join(', ')})`);
+        const [first, second] = rowIds;
+        const firstAsset = Number(first.split('-')[0]);
+        const lineOf = (id: string) => page.getByTestId(`positions-chart-legend-${id}`);
+
+        // Nothing ticked yet: nothing asked, and the portfolio's own line (the Dashboard's history) is the chart.
+        expect(traffic.sent, 'the page asked for a series before any row was ticked').toEqual([]);
+        await expect(chart).toHaveAttribute('data-view', 'percentage');
+        const baseline = await lineCount(chart);
+        await expect(lineOf('portfolio'), 'the portfolio line is in the legend before any row is ticked').toBeVisible();
+
+        // 1. One row: one request, for that position; the answer is 200 and holds its series.
+        await setRowTicked(page, first, true);
+        await expect.poll(() => answeredFor(traffic, first).length, {message: `no answer to the series request of ${first}`, timeout: 30_000}).toBeGreaterThan(0);
+        const call1 = answeredFor(traffic, first)[0];
+        expect(call1.status, 'POST /portfolio/positions-series').toBe(200);
+        expect(call1.body.positions.map(lineIdOf), 'the request asks exactly the ticked position').toEqual([first]);
+        expect(call1.body.positions[0].asset_id).toBe(firstAsset);
+        const series1 = seriesOf(call1, first);
+        expect(series1, `the answer holds the series of ${first}`).toBeDefined();
+        expect(series1!.key.asset_id, 'the series is the ticked row’s asset').toBe(firstAsset);
+        for (const view of ['percentage', 'absolute'] as const) {
+            expect(drawableIn(call1, first, view), `the series of ${first} has no known point in the ${view} view: the chart cannot draw it (check the mock data)`).toBe(true);
+        }
+
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf(first), 'a legend entry for the ticked row').toBeVisible();
+        await expect(lineOf('portfolio'), 'and the portfolio line is still there').toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        await expect(page.getByTestId('positions-chart-canvas')).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
+
+        // 2. A second row: the next request carries both positions.
+        await setRowTicked(page, second, true);
+        await expect.poll(() => answeredFor(traffic, second, (call) => call.body.positions.length === 2).length, {message: `no answer to a series request with both ${first} and ${second}`, timeout: 30_000}).toBeGreaterThan(0);
+        const call2 = answeredFor(traffic, second, (call) => call.body.positions.length === 2)[0];
+        expect(call2.status).toBe(200);
+        expect(call2.body.positions.map(lineIdOf).sort(), 'the request carries both keys').toEqual([first, second].sort());
+        expect(drawableIn(call2, second, 'percentage') && drawableIn(call2, second, 'absolute'), `the series of ${second} has no known point to draw (check the mock data)`).toBe(true);
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf(second)).toBeVisible();
+        await expect(lineOf(first)).toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 2));
+
+        // 3. Unticking the second drops its entry and its line; what is already on screen answers the first, so nothing is asked.
+        const sentBefore = traffic.sent.length;
+        await setRowTicked(page, second, false);
+        await expect(lineOf(second), 'the unticked row leaves the legend').toHaveCount(0);
+        await expect(lineOf(first)).toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        expect(traffic.sent.length, 'unticking asked the series again although the answer on screen covers the rest').toBe(sentBefore);
+
+        // 4. Abs / %: the view changes, the lines do not (same answer, another reading of it), and nothing is asked.
+        await page.getByTestId('positions-chart-view-absolute').click();
+        await expect(chart).toHaveAttribute('data-view', 'absolute');
+        await expect(chart).toHaveAttribute('data-state', 'ready');
+        await expect(lineOf(first)).toBeVisible();
+        await expect(lineOf('portfolio')).toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        await page.getByTestId('positions-chart-view-percentage').click();
+        await expect(chart).toHaveAttribute('data-view', 'percentage');
+        await expect(lineOf(first)).toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        expect(traffic.sent.length, 'a change of view asked the series again').toBe(sentBefore);
+
+        // 5. Unticking the last row leaves the portfolio line alone.
+        await setRowTicked(page, first, false);
+        await expect(lineOf(first)).toHaveCount(0);
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline));
+    });
+
+    test('a change of period or of currency asks the series again, for the same positions', async ({page}) => {
+        const traffic = recordSeriesTraffic(page);
+        const chart = await openHoldingsChart(page);
+        const [rowId] = await holdingRowIds(page);
+        if (!rowId) throw new Error('The holdings table has no position row: check populate_mock_data.py');
+        const lineOf = page.getByTestId(`positions-chart-legend-${rowId}`);
+
+        await setRowTicked(page, rowId, true);
+        await expect.poll(() => answeredFor(traffic, rowId).length, {message: `no answer to the series request of ${rowId}`, timeout: 30_000}).toBeGreaterThan(0);
+        const opening = answeredFor(traffic, rowId)[0];
+        expect(opening.status).toBe(200);
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf).toBeVisible();
+
+        // Period: the Dashboard opens on 3M, so 6M is a change.
+        const sixMonths = page.getByTestId('date-preset-6m');
+        await expect(sixMonths, 'precondition: 6M is a change of period (the Dashboard opens on 3M)').toHaveAttribute('data-active', 'false');
+        await sixMonths.click();
+        await expect(sixMonths).toHaveAttribute('data-active', 'true');
+        await expect
+            .poll(() => answeredFor(traffic, rowId, (call) => JSON.stringify(call.body.date_range ?? null) !== JSON.stringify(opening.body.date_range ?? null)).length, {
+                message: 'choosing 6M asked no series for another window',
+                timeout: 30_000,
+            })
+            .toBeGreaterThan(0);
+        const periodCall = answeredFor(traffic, rowId, (call) => JSON.stringify(call.body.date_range ?? null) !== JSON.stringify(opening.body.date_range ?? null))[0];
+        expect(periodCall.status).toBe(200);
+        expect(periodCall.body.positions.map(lineIdOf), 'the new window asks the same position').toEqual([rowId]);
+        expect(periodCall.body.target_currency ?? null, 'a period change keeps the currency').toBe(opening.body.target_currency ?? null);
+        // The page settles on the new window with the position still drawn.
+        await waitForSettled(page.getByTestId('dashboard-page'), 30_000);
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf, 'the ticked row is still in the legend after the period moved').toBeVisible();
+
+        // Currency: USD must be a change.
+        const currency = page.getByTestId('dashboard-target-currency-trigger');
+        await expect(currency, 'precondition: the Dashboard does not open in USD already').not.toContainText('USD');
+        await currency.click();
+        await page.getByTestId('dashboard-target-currency').getByTestId('search-select-option-USD').click();
+        await optionsClosed(page);
+        await expect(currency).toContainText('USD');
+        await expect.poll(() => answeredFor(traffic, rowId, (call) => call.body.target_currency === 'USD').length, {message: 'choosing USD asked no series in USD', timeout: 30_000}).toBeGreaterThan(0);
+        const currencyCall = answeredFor(traffic, rowId, (call) => call.body.target_currency === 'USD')[0];
+        expect(currencyCall.status).toBe(200);
+        expect(currencyCall.json?.currency, 'the answer is in the currency asked').toBe('USD');
+        expect(currencyCall.body.positions.map(lineIdOf)).toEqual([rowId]);
+        expect(JSON.stringify(currencyCall.body.date_range ?? null), 'a currency change keeps the 6M window').toBe(JSON.stringify(periodCall.body.date_range ?? null));
+        await waitForSettled(page.getByTestId('dashboard-page'), 30_000);
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf, 'the ticked row is still in the legend after the currency moved').toBeVisible();
+    });
+
+    test('a failed series request shows the failure state, and ticking again without the fault recovers', async ({page}) => {
+        const traffic = recordSeriesTraffic(page);
+        let injected = 0;
+        const fault = async (route: import('@playwright/test').Route) => {
+            injected += 1;
+            await route.fulfill({status: 500, contentType: 'application/json', body: JSON.stringify({detail: 'synthetic fault of the E2E: the series cannot be computed'})});
+        };
+        await page.route(`**${POSITIONS_SERIES_PATH}`, fault);
+        try {
+            const chart = await openHoldingsChart(page);
+            const [rowId] = await holdingRowIds(page);
+            if (!rowId) throw new Error('The holdings table has no position row: check populate_mock_data.py');
+            const lineOf = page.getByTestId(`positions-chart-legend-${rowId}`);
+
+            await setRowTicked(page, rowId, true);
+            await expect.poll(() => injected, {message: 'the series request never reached the fault', timeout: 30_000}).toBe(1);
+            await expect(page.getByTestId('positions-chart-failed'), 'a 500 shows the failure state').toBeVisible({timeout: 15_000});
+            await expect(chart).toHaveAttribute('data-state', 'failed');
+            await expect(page.getByTestId('positions-chart-skeleton')).toHaveCount(0);
+
+            // The fault is gone. Unticking leaves nothing to fail, ticking again asks again.
+            await page.unroute(`**${POSITIONS_SERIES_PATH}`, fault);
+            await setRowTicked(page, rowId, false);
+            await expect(page.getByTestId('positions-chart-failed'), 'with nothing ticked there is nothing that failed').toHaveCount(0);
+            await setRowTicked(page, rowId, true);
+            await expect.poll(() => traffic.answered.filter((call) => call.status === 200 && call.body.positions.some((key) => lineIdOf(key) === rowId)).length, {message: 'ticking again asked no series', timeout: 30_000}).toBeGreaterThan(0);
+            await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+            await expect(page.getByTestId('positions-chart-failed')).toHaveCount(0);
+            await expect(lineOf, 'the position is drawn after the recovery').toBeVisible();
+            expect(injected, 'the fault was served once only').toBe(1);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+});
+
+/**
+ * Dashboard, Allocation «By Asset» (Y5-2, #48) on real data.
+ *
+ * The pie of «now» is drawn from `summary.allocation_by_asset` (read here off the very reports the page
+ * asked), and the history view from `allocation_history.asset`. The chart is a canvas: the instance every
+ * allocation chart exposes as `__lfChart` is the only place to read what it drew. Nothing here assumes which
+ * assets the portfolio holds: the arcs are compared with the report's own list.
+ */
+test.describe('Dashboard: Allocation by asset on real data (Y5-2, #48)', () => {
+    test.describe.configure({timeout: 90_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    type AssetItem = {id?: number | null; value?: string | number | null};
+
+    /** The ids of the assets the page's reports put in `summary.allocation_by_asset` with a positive share. */
+    function recordHeldAssetIds(page: Page): Set<number> {
+        const held = new Set<number>();
+        page.on('response', async (response) => {
+            if (response.request().method() !== 'POST' || new URL(response.url()).pathname !== REPORT_API_PATH) return;
+            const json = (await response.json().catch(() => null)) as {summary?: {allocation_by_asset?: AssetItem[]}} | null;
+            for (const item of json?.summary?.allocation_by_asset ?? []) {
+                if (typeof item.id === 'number' && Number(item.value) > 0) held.add(item.id);
+            }
+        });
+        return held;
+    }
+
+    /** The asset ids of the arcs the allocation pie drew, read off its ECharts instance. */
+    async function pieAssetIds(panel: Locator): Promise<number[]> {
+        return panel.evaluate((root) => {
+            for (const node of Array.from(root.querySelectorAll('*'))) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const chart = (node as any).__lfChart;
+                if (!chart || chart.isDisposed?.()) continue;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const pies = ((chart.getOption().series as any[]) ?? []).filter((entry) => entry?.type === 'pie');
+                if (pies.length === 0) continue;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return pies.flatMap((entry) => ((entry.data as any[]) ?? []).map((datum) => datum?.assetId)).filter((id) => typeof id === 'number') as number[];
+            }
+            return [];
+        });
+    }
+
+    /** How many series the history chart draws. */
+    async function historySeriesCount(history: Locator): Promise<number> {
+        return history.evaluate((node) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const chart = (node as any).__lfChart;
+            if (!chart || chart.isDisposed?.()) return 0;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return ((chart.getOption().series as any[]) ?? []).length;
+        });
+    }
+
+    test('By Asset draws the pie of the assets held, switches to the history and back, and is remembered across a reload', async ({page}) => {
+        const held = recordHeldAssetIds(page);
+        await page.goto('/dashboard');
+        await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+        const panel = page.getByTestId('allocation-panel');
+        await expect(panel).toBeVisible({timeout: 15_000});
+
+        // View and tab persist per user: select both, never assume a default.
+        const nowView = page.getByTestId('allocation-view-now');
+        await nowView.click();
+        await expect(nowView).toHaveAttribute('aria-pressed', 'true');
+        const assetTab = page.getByTestId('allocation-tab-asset');
+        await assetTab.click();
+        await expect(assetTab).toHaveAttribute('aria-pressed', 'true');
+
+        // The pie is drawn: arcs that are assets, every one of them in the report's own list of holdings.
+        await expect.poll(async () => (await pieAssetIds(panel)).length, {message: 'the By Asset pie drew no asset arc', timeout: 15_000}).toBeGreaterThan(0);
+        expect(held.size, 'the report lists no asset with a positive share: the portfolio holds nothing (check populate_mock_data.py)').toBeGreaterThan(0);
+        const drawn = await pieAssetIds(panel);
+        expect(
+            drawn.filter((id) => !held.has(id)),
+            'arcs of assets the report does not hold',
+        ).toEqual([]);
+        expect(new Set(drawn).size, 'an asset has more than one arc').toBe(drawn.length);
+
+        // History: the asset history chart draws, with at least a series.
+        const history = page.getByTestId('allocation-history-chart');
+        await page.getByTestId('allocation-view-history').click();
+        await expect(page.getByTestId('allocation-view-history')).toHaveAttribute('aria-pressed', 'true');
+        await expect(history).toBeVisible({timeout: 15_000});
+        await expect(history).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
+        await expect.poll(() => historySeriesCount(history), {message: 'the asset history drew no series', timeout: 15_000}).toBeGreaterThan(0);
+
+        // Back to «now»: the history leaves, the pie draws again, the tab is still By Asset.
+        await nowView.click();
+        await expect(nowView).toHaveAttribute('aria-pressed', 'true');
+        await expect(history).toBeHidden();
+        await expect(assetTab).toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(async () => (await pieAssetIds(panel)).length, {message: 'the pie did not come back', timeout: 15_000}).toBeGreaterThan(0);
+
+        // The dimension is the user's choice and lasts (user storage, written on click, as the other tabs).
+        await page.reload();
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+        await expect(page.getByTestId('allocation-panel')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('allocation-tab-asset'), 'the By Asset tab came back after a reload').toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(async () => (await pieAssetIds(page.getByTestId('allocation-panel'))).length, {message: 'after the reload the By Asset pie drew no asset arc', timeout: 15_000}).toBeGreaterThan(0);
+    });
+});
+
+test.describe('Dashboard «All» period (FB-7)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('«All» asks the report for the whole history ("min"), never for a 2000 floor', async ({page}) => {
+        const reports = await recordReports(page);
+        await page.goto('/dashboard');
+        await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+
+        const all = page.getByTestId('date-preset-max');
+        await expect(all).toHaveAttribute('data-active', 'false');
+        const callsBefore = reports.length;
+        await all.click();
+        await expect(all).toHaveAttribute('data-active', 'true');
+
+        const startOf = (call: ReportCall) => (call.body.date_range as {start?: string} | undefined)?.start;
+        await expect.poll(() => reports.slice(callsBefore).some((call) => startOf(call) === 'min'), {timeout: 30_000, message: 'picking «All» asks a report with the "min" sentinel'}).toBe(true);
+        expect(
+            reports.slice(callsBefore).filter((call) => startOf(call) === '2000-01-01'),
+            'no report is asked from the 2000-01-01 floor: a history before 2000 would be cut',
+        ).toHaveLength(0);
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+
+        // …and the backend answers from the first real movement, whatever its year: the answer starts on the date of the
+        // earliest transaction the user can read. (The mock book has no 1850 row; a pre-2000 one needs a row in
+        // `populate_mock_data.py`. The Vitest case pins the request, this pins what the backend makes of it.)
+        const asked = reports.slice(callsBefore).find((call) => startOf(call) === 'min');
+        const answeredFrom = (asked?.json?.range as {start?: string} | undefined)?.start;
+        const response = await page.request.get('/api/v1/transactions');
+        expect(response.ok(), 'the transactions list answers').toBe(true);
+        const dates = ((await response.json()) as Array<{date: string}>).map((tx) => tx.date).sort();
+        expect(dates.length, 'the seeded book has transactions').toBeGreaterThan(0);
+        expect(answeredFrom, 'the «All» report starts on the first movement').toBe(dates[0]);
     });
 });

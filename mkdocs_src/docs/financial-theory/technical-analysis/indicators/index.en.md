@@ -2,7 +2,7 @@
 
 LibreFolio exposes **22 backend-calculated technical indicators**, grouped by the market property they measure. The same mathematical contracts power Asset charts, compatible FX charts, annotations, and analytical consumers such as AI Export.
 
-Indicators count **sessions**, not calendar days: a session is a day on which the series has a quote of its own — a price for an Asset, a published rate for an FX pair. A day the series fills with the last known value — a weekend, a market holiday, any day without a quote — is not a session, and neither is a stored price dated on a weekend or a market holiday that only repeats the close before it (a [stored carry](../risk-metrics/data-quality.md#stored-carries)). Periods, warm-up and minimum history all count sessions, so SMA 200 averages the last 200 sessions, about 290 calendar days. The chart keeps its calendar dates: an indicator has values on sessions only, and its line bridges the closed days in between. The one calendar-window exception is the calendar rolling return behind the chart's [Rolling Return mode](../../../user/assets/detail/chart.md#primary-modes), which compares each date with the resolved close exactly $N$ calendar days earlier.
+Indicators count **sessions**, not calendar days: a session is a day on which the series has a quote of its own — a price for an Asset, a published rate for an FX pair. A day the series fills with the last known value — a weekend, a market holiday, any day without a quote — is not a session, and neither is a stored price dated on a weekend or a market holiday that only repeats the close before it (a [stored carry](../risk-metrics/data-quality.md#stored-carries)). Periods, warm-up and minimum history all count sessions, so SMA 200 averages the last 200 sessions, about 290 calendar days. The chart keeps its calendar dates: an indicator has values on sessions only, and its line bridges the closed days in between. The Risk family counts its windows otherwise. Rolling Volatility, Rolling Sharpe Ratio and Rolling Beta count **return observations** of the asset's prepared return series: one return per session, measured from the session before it — for Rolling Beta, per date of the two assets' [joint calendar](../risk-metrics/data-quality.md#alignment-what-missing-data-actually-costs) — so a window of $w$ reads $w$ returns from $w + 1$ prices. **Rolling Return** counts **calendar days**: it compares each date with the resolved close exactly $N$ calendar days earlier ([Rolling Return](../../fundamentals/returns.md#rolling-return-calendar)), the same calculation as the chart's [Rolling Return mode](../../../user/assets/detail/chart.md#primary-modes).
 
 !!! info "Price fields matter"
 
@@ -82,11 +82,11 @@ Risk indicators turn the price series itself into a rolling risk read-out. They 
 
 | Indicator | Main Question | Data | Details |
 |---|---|---|---|
-| **Underwater Drawdown** | How far below the running peak is the price? | Close | [📖](../risk-metrics/max-drawdown.md) |
-| **Rolling Return** | What did the last window compound to? | Close | [📖](../../fundamentals/returns.md) |
+| **Underwater Drawdown** | How far below the running peak is the price? | Close | [📖](../risk-metrics/current-drawdown.md) |
+| **Rolling Return** | How much did the price move over the last $N$ calendar days? | Close | [📖](../../fundamentals/returns.md#rolling-return) |
 | **Rolling Volatility** | How dispersed are recent returns? | Close | [📖](../risk-metrics/volatility.md) |
 | **Rolling Sharpe Ratio** | Is excess return paying for its risk? | Close | [📖](../risk-metrics/sharpe-ratio.md) |
-| **Rolling Beta** | How sensitive is the asset to a comparison asset? | Close + comparison asset | — |
+| **Rolling Beta** | How sensitive is the asset to a comparison asset? | Close + comparison asset | [📖](../risk-metrics/beta-active-return.md) |
 
 ➡️ [Risk metrics overview](../risk-metrics/index.md)
 

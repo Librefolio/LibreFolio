@@ -48,7 +48,7 @@ Seuls les administrateurs (superusers) disposent du cadenas ; tous les autres ob
 |---|---|---|---|
 | ⏳ Session | **Durée de session** | 24 heures | Combien de temps les utilisateurs restent connectés. Raccourcissez-la sur les appareils partagés ; une nouvelle valeur s'applique à partir de la prochaine connexion de chaque utilisateur. |
 | 🛡️ Sécurité | **Activer l'inscription** | Activé | Permet à de nouvelles personnes de s'inscrire. Désactivez cet interrupteur une fois que tout le monde a un compte, surtout si l'instance est accessible depuis internet. Le premier compte d'une nouvelle instance peut toujours être créé. |
-| 🛡️ Sécurité | **Vérification Email Requise** | Désactivé | Pas encore actif : l'envoi d'e-mails est une fonctionnalité prévue, donc l'interrupteur est en lecture seule et marqué **Bientôt**. |
+| 🛡️ Sécurité | **Vérification Email Requise** | Désactivé | Les nouveaux comptes doivent ouvrir un lien envoyé par e-mail à leur adresse avant de pouvoir se connecter ; le premier compte n'attend jamais, et les comptes existants ne changent pas. Elle ne s'active que lorsque l'e-mail fonctionne et que `LIBREFOLIO_PUBLIC_URL` est utilisable : d'ici là, l'interrupteur reste grisé. Voir *Email Verification* dans [E-mail](email.md). |
 | 🔄 Tâche de mise à jour | **Planificateur activé** | Activé | Active ou désactive les mises à jour automatiques des prix et des taux de change : voir [Planificateur de données de marché](#market-data-scheduler). |
 | 🧠 Mémoire | **Taille Max Téléversement** | 10 Mo | Le plus gros fichier que les utilisateurs peuvent téléverser, rapports de courtiers inclus. Augmentez-la si un gros export est refusé. |
 | 🌍 Valeurs par défaut | **Devise par défaut** | `EUR` | La devise dans laquelle les nouveaux utilisateurs déclarent leurs opérations. |
@@ -68,8 +68,14 @@ Le planificateur maintient les prix et les taux de change à jour tout seul, mê
 - 💰 **Actualisation des Prix Courants** — toutes les quelques minutes, le dernier prix de chaque actif actif qui dispose
   d'un fournisseur de prix.
 - 📊 **Synchronisation Historique** — aux jours et heures que vous choisissez, les prix quotidiens de ces actifs et les
-  taux de chaque paire FX disposant d'un fournisseur, sur l'**Horizon de récupération**, pour combler tout manque. Les paires
-  avec uniquement des taux manuels sont ignorées.
+  taux de chaque paire FX disposant d'un fournisseur, sur au moins l'**Horizon de récupération**, pour combler tout
+  manque. Pour un actif ou une paire dont le dernier prix ou taux enregistré est plus ancien, elle remonte jusqu'à ce
+  jour, d'un an au plus ; un actif sans aucun prix enregistré n'a que l'horizon, car le planificateur ne télécharge
+  jamais un historique complet. Les paires avec uniquement des taux manuels sont ignorées.
+
+Si le serveur est éteint ou en veille à une heure de synchronisation, la synchronisation historique
+manquée s'exécute dès que le serveur revient, sans attendre l'heure de synchronisation suivante : un serveur
+éteint pendant des semaines comble tout son manque.
 
 ### ⚙️ Configurer la planification
 
@@ -86,7 +92,7 @@ La boîte de dialogue possède son propre bouton **Enregistrer**.
 | **Actualiser toutes les** | 10 minutes | La fréquence de rafraîchissement des prix actuels, de 1 à 1440 minutes. |
 | **Heures de synchronisation** | `06:00`, `23:00` | Quand la synchronisation de l'historique s'exécute ; **Ajouter un horaire** ajoute un créneau. |
 | **Jours de synchronisation** | Lun au Sam | Les jours de la synchronisation de l'historique. |
-| **Horizon de récupération** | 14 jours | Combien de jours passés chaque synchronisation de l'historique vérifie, de 1 à 365. |
+| **Horizon de récupération** | 14 jours | Combien de jours passés chaque synchronisation de l'historique vérifie au moins, de 1 à 365. Elle remonte plus loin, jusqu'à un an, quand le dernier prix ou taux enregistré d'un actif ou d'une paire est plus ancien. |
 
 Conservez au moins une heure et un jour. Astuce : une synchronisation de l'historique après la clôture des marchés (par exemple
 `22:00`) obtient les données les plus complètes.
@@ -100,6 +106,9 @@ Conservez au moins une heure et un jour. Astuce : une synchronisation de l'histo
 ### 📜 Lire le journal du planificateur
 
 La ligne **État du planificateur** affiche le dernier rafraîchissement du prix actuel, avec un point pour son résultat.
+Quand un nouvel essai est prévu, une ligne de plus en donne l'heure : **Échec : nouvel essai à …** après un
+rafraîchissement qui n'a pas pu aboutir, sinon **Éléments en pause réessayés à …** pour les prix reportés parce que
+leur fournisseur est en pause.
 Cliquez sur la ligne (ou sur **Détails…**) pour ouvrir le **Journal d'exécution du planificateur**. Seuls les administrateurs peuvent
 lire l'état et le journal.
 
@@ -108,9 +117,13 @@ lire l'état et le journal.
 </div>
 
 - Chaque entrée correspond à une exécution : tâche, heure, durée et combien d'éléments ont réussi. 🟢 **OK** : tous,
-  ou rien à faire ; 🟡 **Partiel** : certains ont échoué ; 🔴 **Erreur** : aucun n'a réussi.
+  ou rien à faire ; 🟡 **Partiel** : certains ont échoué, ou ont été reportés parce que leur fournisseur est en pause
+  après trop de requêtes ; 🔴 **Erreur** : aucun n'a réussi et aucun n'a été reporté.
 - Cliquez sur une entrée pour voir chaque actif ou paire FX, son fournisseur et les prix modifiés (**Delta**).
   Survolez une erreur pour la lire en entier ; double-cliquez dessus (appui long sur un téléphone) pour la copier.
+- Un élément reporté affiche une icône de pause et **Reporté : fournisseur en pause** : survolez le libellé pour lire
+  le message du fournisseur. L'entrée compte les éléments reportés avec ⏸, à côté de ✓ et ✗ (par exemple
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), et **Nouvel essai à …** dans son en-tête donne l'heure prévue pour les réessayer.
 - Filtrez par tâche, statut ou période, de la dernière heure aux 30 derniers jours. Seules les exécutions les plus récentes
   sont conservées.
 

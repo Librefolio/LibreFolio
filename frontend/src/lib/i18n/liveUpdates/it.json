@@ -1,0 +1,9 @@
+{
+  "liveUpdates": {
+    "paused": "Aggiornamento in pausa",
+    "pausedHint": "I prezzi in tempo reale riprendono ad aggiornarsi appena torni a usare la pagina.",
+    "priceRefresh": {
+      "running": "Aggiornamento prezzi…"
+    }
+  }
+}

@@ -14,7 +14,7 @@ related:
 
 ## Summary
 
-One short plan (~220 lines), delivered in `ebba209c5` (merge `5c2a711f3`, 2026-09-10) and archived on 2026-10-09.
+One short plan (~220 lines), delivered in `d31797b75` (merge `04cd2173a`, 2026-09-10) and archived on 2026-10-09.
 
 ## Key takeaways
 
@@ -33,7 +33,7 @@ One short plan (~220 lines), delivered in `ebba209c5` (merge `5c2a711f3`, 2026-0
 ## Residuals (backlog 38)
 
 L10 — a stale `TODO(P2-refactor) … nested trade-resolution closures` comment in `broker_credit_agricole.py`; the
-closures are gone (verified at `586a4f0ea`).
+closures are gone (verified at `249f5a9aa`).
 
 ## Wiki pages updated
 

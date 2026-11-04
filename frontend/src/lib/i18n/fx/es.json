@@ -46,7 +46,8 @@
       "timeoutAfter": "Tiempo agotado tras {seconds} s",
       "requestTimedOut": "La solicitud agotó el tiempo tras {seconds} s. Aumenta el tiempo de espera y vuelve a intentarlo.",
       "failed": "Error de sincronización",
-      "retryFailed": "{n, plural, one {Reintentar el fallido} other {Reintentar los # fallidos}}"
+      "retryFailed": "{n, plural, one {Reintentar el fallido} other {Reintentar los # fallidos}}",
+      "overwriteWarning": "{existing, plural, one {# de {total} ya tiene} other {# de {total} ya tienen}} datos guardados en este intervalo: la sincronización los reemplaza con los valores del proveedor, incluidas las ediciones manuales."
     },
     "route": {
       "title": "Rutas de Conversión",
@@ -99,6 +100,7 @@
     "savedCount": "{n, plural, one {# guardado} other {# guardados}}",
     "deletedCount": "{n, plural, one {# eliminado} other {# eliminados}}",
     "skippedCount": "{n, plural, one {# omitido (no válido)} other {# omitidos (no válidos)}}",
-    "saveFailed": "Error al guardar los tipos de cambio: {error}"
+    "saveFailed": "Error al guardar los tipos de cambio: {error}",
+    "refusedCount": "{n, plural, one {# rechazado} other {# rechazados}}"
   }
 }

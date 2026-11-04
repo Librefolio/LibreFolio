@@ -144,9 +144,10 @@
 
 <div class="space-y-2" data-testid="pac-planner-assets-table">
     <div class="flex flex-wrap items-center gap-2">
-        <p class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400" data-testid="pac-planner-assets-legend">
-            <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-gray-400 dark:bg-gray-500" aria-hidden="true"></span>{$t(`${KEY}.targetShare`, {default: 'Target share'})}</span>
-            <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-libre-green" aria-hidden="true"></span>{$t(`${KEY}.finalShare`, {default: 'Share after the plan'})}</span>
+        <p class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-lf-secondary" data-testid="pac-planner-assets-legend">
+            <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-lf-secondary" aria-hidden="true"></span>{$t(`${KEY}.targetShare`, {default: 'Target share'})}</span>
+            <!-- colour: closest role, to review: the «after the plan» bar fill was the brand green as a data colour; bg-lf-checked (the visible accent green on the panel track), alt bg-lf-action -->
+            <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-lf-checked" aria-hidden="true"></span>{$t(`${KEY}.finalShare`, {default: 'Share after the plan'})}</span>
         </p>
         <TableColumns {table} testid="pac-planner-assets-columns" />
     </div>

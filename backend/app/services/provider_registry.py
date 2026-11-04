@@ -1,6 +1,17 @@
+"""Bases and decorators of the plugin registries.
+
+Each plugin family keeps its registry in its own runtime package (developer decision D-P1): ``services/assets/registry.py``,
+``services/fx/registry.py``, ``services/brim/registry.py``, ``services/signals/registry.py``,
+``services/risk/registry.py`` and ``services/tools/registry.py``. This module holds what they share: the folder-per-plugin
+discovery, the registration rules and the ``register_provider`` / ``register_plugin`` decorators.
+
+A registry whose plugins may declare settings names its family in ``settings_family()`` (``asset``, ``fx``); a plugin
+whose ``settings_fields`` do not pass ``validate_declaration``, or whose environment variable is already another
+plugin's (``claim_env_variables``), is refused at registration, like one that fails to import.
+"""
+
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import sys
 import threading
@@ -8,33 +19,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Type
 
-from backend.app.config import PROJECT_ROOT
+from backend.app.config import PROJECT_ROOT, is_test_mode
 from backend.app.logging_config import get_logger
+from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
 
 logger = get_logger(__name__)
 
 PLUGIN_MODULE_NAME = "plugin"
 """A plugin is a folder ``<family>/<name>/``: ``__init__.py`` holds only its docstring and the code is in ``plugin.py``,
 loaded as ``<namespace>.<name>.plugin``."""
-
-_LAZY_PLUGIN_BASES = {
-    "RiskAnalytic": "backend.app.services.risk.base",
-    "SignalPlugin": "backend.app.services.signal_plugins.base",
-}
-
-
-def __getattr__(name: str) -> object:
-    """Preserve existing base-class aliases without eager domain imports."""
-    module_name = _LAZY_PLUGIN_BASES.get(name)
-    if module_name is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    value = getattr(importlib.import_module(module_name), name)
-    globals()[name] = value
-    return value
-
-
-def __dir__() -> list[str]:
-    return sorted(set(globals()) | _LAZY_PLUGIN_BASES.keys())
 
 
 class PluginRegistryError(RuntimeError):
@@ -130,6 +123,7 @@ class AbstractPluginRegistry:
     def register(cls, plugin_class: Type) -> None:
         """Validate and register one plugin class."""
         cls._validate_plugin_class(plugin_class)
+        cls._validate_settings_declaration(plugin_class)
         code = cls._get_registration_code(plugin_class)
         if not isinstance(code, str) or not code.strip():
             raise ValueError(f"Plugin class must define a non-empty {cls._get_plugin_code_attr()} attribute")
@@ -139,17 +133,29 @@ class AbstractPluginRegistry:
         if existing is not None and existing is not plugin_class:
             same_definition = existing.__module__ == plugin_class.__module__ and existing.__qualname__ == plugin_class.__qualname__
             if same_definition:
+                cls._claim_settings_variables(plugin_class, code)
                 storage[code] = plugin_class
                 return
             if cls._reject_duplicate_codes():
                 raise DuplicatePluginCodeError(f"Duplicate plugin code '{code}' in {existing.__module__}.{existing.__qualname__} and {plugin_class.__module__}.{plugin_class.__qualname__}")
+        cls._claim_settings_variables(plugin_class, code)
         storage[code] = plugin_class
 
     @classmethod
+    def _withheld(cls, plugin_class: Type | None) -> bool:
+        """X-R44: a plugin that exists for the tests (``test_only``) is not served outside test mode.
+
+        No lookup finds it and no list names it, so no request reaches it on a production instance: not a search that
+        names it, an assignment, a probe, a refresh, a setting. ``is_test_mode()`` is read at each call.
+        """
+        return plugin_class is not None and bool(getattr(plugin_class, "test_only", False)) and not is_test_mode()
+
+    @classmethod
     def get_plugin(cls, code: str):
-        """Return a registered class by code after auto-discovery."""
+        """Return a registered class by code after auto-discovery; ``None`` for a test-only one outside test mode."""
         cls.auto_discover()
-        return cls._get_storage().get(cls._normalize_lookup_code(code))
+        plugin_class = cls._get_storage().get(cls._normalize_lookup_code(code))
+        return None if cls._withheld(plugin_class) else plugin_class
 
     @classmethod
     def get_plugin_instance(cls, code: str, **kwargs):
@@ -164,9 +170,9 @@ class AbstractPluginRegistry:
 
     @classmethod
     def list_plugin_codes(cls) -> list[str]:
-        """Return all registered codes in registration order."""
+        """Return all registered codes in registration order, without the test-only ones outside test mode."""
         cls.auto_discover()
-        return list(cls._get_storage())
+        return [code for code, plugin_class in cls._get_storage().items() if not cls._withheld(plugin_class)]
 
     @classmethod
     def auto_discover(cls) -> None:
@@ -279,6 +285,40 @@ class AbstractPluginRegistry:
             raise TypeError("Registry entries must be classes")
 
     @classmethod
+    def settings_family(cls) -> str | None:
+        """The family name of the plugin settings (``asset``, ``fx``), or ``None`` when its plugins declare none yet."""
+        return None
+
+    @classmethod
+    def _validate_settings_declaration(cls, plugin_class: Type) -> None:
+        """Refuse a plugin whose ``settings_fields`` are invalid for this family (``plugin_settings/fields.py``)."""
+        fields = getattr(plugin_class, "settings_fields", ())
+        if not fields:
+            return
+        family = cls.settings_family()
+        if family is None:
+            raise SettingsDeclarationError(f"{plugin_class.__qualname__}: the plugins of {cls.__name__} cannot declare settings")
+        try:
+            validate_declaration(fields, family=family)
+        except SettingsDeclarationError as error:
+            raise SettingsDeclarationError(f"{plugin_class.__qualname__}: {error}") from None
+
+    @classmethod
+    def _claim_settings_variables(cls, plugin_class: Type, code: str) -> None:
+        """Reserve the environment variables of the plugin's fields; refuse it when one is another plugin's.
+
+        Called last, right before the plugin is stored: a refused claim leaves it unregistered. A plugin without fields
+        drops the claims a previous class of the same code made.
+        """
+        family = cls.settings_family()
+        if family is None:
+            return
+        try:
+            claim_env_variables(family, code, getattr(plugin_class, "settings_fields", ()))
+        except SettingsDeclarationError as error:
+            raise SettingsDeclarationError(f"{plugin_class.__qualname__}: {error}") from None
+
+    @classmethod
     def _get_storage_attribute(cls) -> str:
         return "_plugins"
 
@@ -346,6 +386,8 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
         providers = []
         cls.auto_discover()
         for code, provider_class in list(cls._providers.items()):
+            if cls._withheld(provider_class):
+                continue
             try:
                 instance = provider_class()
                 name = getattr(instance, "provider_name", None) or getattr(instance, "name", code)
@@ -369,207 +411,6 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
                 )
 
 
-# Specializations
-class FXProviderRegistry(AbstractProviderRegistry):
-    @classmethod
-    def _get_provider_folder(cls) -> str:
-        return "fx_providers"
-
-
-class AssetProviderRegistry(AbstractProviderRegistry):
-    @classmethod
-    def _get_provider_folder(cls) -> str:
-        return "asset_source_providers"
-
-
-class SignalPluginRegistry(AbstractPluginRegistry):
-    """Strict registry for autonomous technical signal plugins."""
-
-    @classmethod
-    def _get_plugin_folder(cls) -> str:
-        return "signal_plugins"
-
-    @classmethod
-    def _get_plugin_code_attr(cls) -> str:
-        return "signal_code"
-
-    @classmethod
-    def _normalize_lookup_code(cls, code: str) -> str:
-        return code.strip().upper()
-
-    @classmethod
-    def _reject_duplicate_codes(cls) -> bool:
-        return True
-
-    @classmethod
-    def _fail_on_discovery_errors(cls) -> bool:
-        return True
-
-    @classmethod
-    def _ignored_module_stems(cls) -> frozenset[str]:
-        return frozenset({"base"})
-
-    @classmethod
-    def _validate_plugin_class(cls, plugin_class: Type) -> None:
-        super()._validate_plugin_class(plugin_class)
-        from backend.app.services.signal_plugins.base import SignalPlugin  # noqa: PLC0415 - keep the generic registry independent of signal imports
-
-        if not issubclass(plugin_class, SignalPlugin):
-            raise TypeError("SignalPluginRegistry entries must extend SignalPlugin")
-        plugin_class.validate_definition()
-
-    @classmethod
-    def list_definitions(cls):
-        """Return stable static catalog definitions sorted by signal code."""
-        cls.auto_discover()
-        return [plugin_class.catalog_definition() for _code, plugin_class in sorted(cls._plugins.items()) if plugin_class.catalog_visible]
-
-
-class RiskAnalyticRegistry(AbstractPluginRegistry):
-    """Strict registry for multi-asset risk analytics."""
-
-    @classmethod
-    def _get_plugin_folder(cls) -> str:
-        return "risk_plugins"
-
-    @classmethod
-    def _get_plugin_code_attr(cls) -> str:
-        return "analytic_code"
-
-    @classmethod
-    def _normalize_lookup_code(cls, code: str) -> str:
-        return code.strip().lower()
-
-    @classmethod
-    def _reject_duplicate_codes(cls) -> bool:
-        return True
-
-    @classmethod
-    def _fail_on_discovery_errors(cls) -> bool:
-        return True
-
-    @classmethod
-    def _ignored_module_stems(cls) -> frozenset[str]:
-        return frozenset({"base"})
-
-    @classmethod
-    def _validate_plugin_class(cls, plugin_class: Type) -> None:
-        super()._validate_plugin_class(plugin_class)
-        from backend.app.services.risk.base import RiskAnalytic  # noqa: PLC0415 - keep the generic registry independent of risk imports
-
-        if not issubclass(plugin_class, RiskAnalytic):
-            raise TypeError("RiskAnalyticRegistry entries must extend RiskAnalytic")
-        plugin_class.validate_definition()
-
-    @classmethod
-    def list_definitions(cls):
-        """Return stable static catalog definitions sorted by analytic code."""
-        cls.auto_discover()
-        return [plugin_class.catalog_definition() for _code, plugin_class in sorted(cls._plugins.items())]
-
-
-class BRIMProviderRegistry(AbstractProviderRegistry):
-    """
-    Registry for Broker Report Import Manager (BRIM) plugins.
-
-    Auto-discovers plugins from `backend/app/services/brim_providers/`.
-    """
-
-    @classmethod
-    def _get_provider_folder(cls) -> str:
-        return "brim_providers"
-
-    @classmethod
-    def auto_detect_plugin(cls, file_path) -> str | None:
-        """
-        Auto-detect the best plugin for a file based on content analysis.
-
-        Iterates through all registered plugins sorted by detection_priority
-        (highest first) and returns the first plugin that can parse the file.
-
-        Args:
-            file_path: Path to the file to analyze
-
-        Returns:
-            Plugin code of the best matching plugin, or None if no match
-        """
-        cls.auto_discover()
-
-        # Get all plugins with their instances and priorities
-        plugins_with_priority = []
-        for code, plugin_cls in list(cls._providers.items()):
-            try:
-                instance = plugin_cls()
-                priority = getattr(instance, "detection_priority", 100)
-                plugins_with_priority.append((code, instance, priority))
-            except Exception:
-                continue
-
-        # Sort by priority descending (highest first)
-        plugins_with_priority.sort(key=lambda x: x[2], reverse=True)
-
-        # Try each plugin in order
-        for code, instance, priority in plugins_with_priority:
-            try:
-                if instance.can_parse(file_path):
-                    logger.debug(
-                        "Auto-detected plugin for file",
-                        plugin_code=code,
-                        priority=priority,
-                        file_path=str(file_path),
-                    )
-                    return code
-            except Exception as e:
-                logger.warning("Error checking plugin can_parse", plugin_code=code, error=str(e))
-                continue
-
-        return None
-
-    @classmethod
-    def get_compatible_plugins(cls, file_path) -> list:
-        """
-        Get list of plugin codes that can parse the given file.
-
-        Iterates through all registered plugins and calls can_parse().
-        Results are sorted by detection_priority descending (best match first).
-
-        Args:
-            file_path: Path to the file to check
-
-        Returns:
-            List of plugin codes that can parse this file, sorted by priority
-        """
-        cls.auto_discover()
-        compatible: list[tuple[str, int]] = []
-        for code, plugin_cls in list(cls._providers.items()):
-            try:
-                instance = plugin_cls()
-                if instance.can_parse(file_path):
-                    compatible.append((code, instance.detection_priority))
-            except Exception:
-                continue
-        compatible.sort(key=lambda x: x[1], reverse=True)
-        return [code for code, _ in compatible]
-
-    @classmethod
-    def list_plugin_info(cls) -> list:
-        """
-        Get detailed info for all registered plugins.
-
-        Returns:
-            List of BRIMPluginInfo objects (via plugin.to_plugin_info())
-        """
-        cls.auto_discover()
-        result = []
-        for _code, plugin_cls in list(cls._providers.items()):
-            try:
-                instance = plugin_cls()
-                result.append(instance.to_plugin_info())
-            except Exception:
-                logger.exception("Failed to build plugin info", plugin_class=f"{plugin_cls.__module__}.{plugin_cls.__qualname__}")
-        return result
-
-
 # Decorator factory
 def register_provider(registry_class: Type[AbstractProviderRegistry]):
     """
@@ -577,7 +418,7 @@ def register_provider(registry_class: Type[AbstractProviderRegistry]):
     :param registry_class: The registry class to register the provider with. (e.g., AssetProviderRegistry or FXProviderRegistry)
     :return:
 
-    Example usage:
+    Example usage, with the registry imported from its family package (``services/assets/registry.py``):
     @register_provider(AssetProviderRegistry)
     class MyAssetProvider(AssetSourceProvider):
         ...
@@ -604,14 +445,10 @@ __all__ = [
     "PLUGIN_MODULE_NAME",
     "AbstractPluginRegistry",
     "AbstractProviderRegistry",
-    "AssetProviderRegistry",
-    "BRIMProviderRegistry",
     "DuplicatePluginCodeError",
-    "FXProviderRegistry",
     "PluginDiscoveryError",
     "PluginDiscoveryFailure",
     "PluginRegistryError",
-    "SignalPluginRegistry",
     "register_plugin",
     "register_provider",
 ]

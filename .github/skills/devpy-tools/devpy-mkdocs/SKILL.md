@@ -15,24 +15,12 @@ description: "Use this skill when the user needs to build, serve, or deploy MkDo
 ./dev.py mkdocs check-links           # Validate cross-boundary links (frontend/backend → docs)
 ```
 
-## Promotional Video
-
-Manage the Remotion promo-video project (`mkdocs_src/videoClipPrject/video_promo`):
-
-```bash
-./dev.py mkdocs video sync                       # Sync AI assets for the promo video (npm run sync)
-./dev.py mkdocs video start                      # Start Remotion studio (interactive preview/editor)
-./dev.py mkdocs video build                      # Build all promo videos (npm run build:all)
-./dev.py mkdocs video build --locale it          # Build a single locale (en|it|es|fr|all)
-./dev.py mkdocs video review                     # Generate review assets (npm run review:assets --clean)
-```
-
 ## Gallery Screenshots
 
 Generate automatic screenshots for documentation (light/dark × desktop/mobile × 4 languages):
 
 ```bash
-./dev.py mkdocs gallery                          # Full gallery generation
+./dev.py mkdocs gallery                          # Full gallery generation (browser workers: 60% of the CPUs)
 ./dev.py mkdocs gallery -l                       # List available test names
 ./dev.py mkdocs gallery -f "assets"              # Filter by name
 ./dev.py mkdocs gallery --desktop-only           # Only desktop viewport
@@ -62,9 +50,13 @@ quantities / ids / dates untouched, and **fails loudly** if its invariant checks
 ### Gallery Pipeline
 1. Populates test DB with deterministic data (`--with-static --with-reports`)
 2. Ensures E2E test users exist
-3. Starts test server on port 6041
-4. Runs `gallery.spec.ts` via Playwright (desktop + mobile projects)
-5. Screenshots saved to `mkdocs_src/docs/gallery/`
+3. Builds what the test server serves (`dev.py server --test --build-only`: debug frontend and site when
+   missing or stale, JS cache) in the foreground, with the environment Playwright gets (`LF_APP_VERSION`
+   included, baked into the sidebar); a failed build stops the gallery before Playwright
+4. Playwright's webServer starts the test server on the lane port (6041 by default); with the builds up to
+   date it answers in seconds, inside `STARTUP_TIMEOUT_S`
+5. Runs `gallery.spec.ts` via Playwright (desktop + mobile projects)
+6. Screenshots saved to `mkdocs_src/docs/gallery/`
 
 ### On Failure
 When tests fail, the output shows which tests failed and provides retry commands:
@@ -142,7 +134,7 @@ The stamp updates only `.translate-hashes.json` (tracked in git) — it never re
 ### Translation Architecture
 - Strategy: `mkdocs-static-i18n` with suffix (`index.en.md`, `index.it.md`)
 - LLM: Aphra workflow (Analyze → Translate → Critique → Refine)
-- EN-only sections: `Developer Manual`, `POC UX`
+- EN-only section: `Developer Manual`
 - Cache: `.translate-hashes.json` (MD5-based skip)
 
 ## Documentation Style Rules

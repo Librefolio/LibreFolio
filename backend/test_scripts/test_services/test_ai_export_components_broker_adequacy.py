@@ -13,19 +13,28 @@ Covers `backend.app.services.ai_export.components.broker_concentration_context`
 - deterministic turnover signs/types, zero-denominator and missing-fee handling
   (never coerced to zero),
 - no asset/lot/transaction row-id leakage,
-- deterministic ordering.
+- deterministic ordering,
+- one share rule per export, the report's: the ownership share applied to
+  turnover is ``native_cash.effective_share(role, share_percentage)`` (an
+  owner's share, the whole broker for an editor or a viewer), never the raw
+  ``share_percentage`` column (backlog B9 / O3).
 
 `PortfolioService.get_report` and the broker period-transaction DB loader are
 monkeypatched (no live DB), matching
-`test_ai_export_components_portfolio_broker_financial.py`.
+`test_ai_export_components_portfolio_broker_financial.py`. The DB-level loader
+tests run against a private in-memory SQLite database.
 """
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import date
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
@@ -43,10 +52,13 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.services.ai_export.components import broker_concentration_context, broker_cost_efficiency, broker_financial
 from backend.app.services.ai_export.components.broker_concentration_context import ConcentrationComparisonStatus
-from backend.app.services.ai_export.components.broker_cost_efficiency import FeeStatus, TradeActivityRecord
+from backend.app.services.ai_export.components.broker_cost_efficiency import BrokerCostEfficiencyAccessError, FeeStatus, TradeActivityRecord
+from backend.app.services.ai_export.components.catalog import build_component_registry
+from backend.app.services.ai_export.components.payloads.portfolio_broker import AllocationSlice, map_allocation_slice
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
-from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, build_bucket_plan_for_scope
+from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, ResourceLoadError, build_bucket_plan_for_scope
+from backend.app.services.financial_math.native_cash import effective_share
 from backend.app.services.portfolio_service import PortfolioService
 
 CURRENCY = "EUR"
@@ -77,12 +89,52 @@ def _make_async_session() -> AsyncSession:
     return AsyncSession(engine)
 
 
-async def _make_real_db_session() -> AsyncSession:
-    """A real in-memory SQLite session with the ORM schema created (for DB-level loader tests)."""
+@asynccontextmanager
+async def _private_sqlite_session(*extra_ddl: str) -> AsyncIterator[AsyncSession]:
+    """A private in-memory SQLite database with the ORM schema, plus optional raw DDL run after it.
+
+    Torn down whatever the test's outcome: the session is closed and the engine
+    disposed, so no aiosqlite connection outlives the test. Left to the garbage
+    collector, the pooled connection would be closed against an event loop that
+    no longer runs, and its worker thread's failure would surface as a warning
+    blamed on whichever unrelated test happened to be running.
+    """
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    return AsyncSession(engine)
+    session = AsyncSession(engine)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.create_all)
+            for statement in extra_ddl:
+                await conn.exec_driver_sql(statement)
+        yield session
+    finally:
+        await session.close()
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def real_db_session() -> AsyncIterator[AsyncSession]:
+    """A private in-memory SQLite database with the ORM schema (for DB-level loader tests)."""
+    async with _private_sqlite_session() as session:
+        yield session
+
+
+# The production schema stores `broker_user_access.share_percentage` NOT NULL (default 1),
+# so an owner with no recorded share cannot be written there. `native_cash.effective_share`
+# still defines that case (the whole broker), and the loader must follow the report's rule
+# rather than its own reading of the column. This private database re-creates the table with
+# the same columns and a nullable share, so the loader runs its real SELECT on a real result.
+_NULLABLE_SHARE_ACCESS_DDL = (
+    "DROP TABLE broker_user_access",
+    "CREATE TABLE broker_user_access (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, broker_id INTEGER NOT NULL, role VARCHAR(6) NOT NULL, share_percentage NUMERIC(7, 6), created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)",
+)
+
+
+@pytest_asyncio.fixture
+async def nullable_share_db_session() -> AsyncIterator[AsyncSession]:
+    """Like `real_db_session`, but `broker_user_access.share_percentage` accepts NULL (see the DDL note above)."""
+    async with _private_sqlite_session(*_NULLABLE_SHARE_ACCESS_DDL) as session:
+        yield session
 
 
 def _tx(broker_id: int, type_: TransactionType, tx_date: date, *, amount: object | None = None, currency: str | None = CURRENCY, quantity: object = 0) -> Transaction:
@@ -309,6 +361,69 @@ class TestConcentrationContext:
         assert payload["herfindahl_index_points"] is None
 
 
+class TestConcentrationContextSlicesWithoutPercent:
+    """MF-C2 (developer's decision, ondata 6): a broker whose allocation slices add up to zero or less (stocks 500 bought
+    on overdraft, cash -500) gets ``AllocationItem.value`` None from the engine; the dataset copies it as
+    ``AllocationSlice.percent`` None (null in the payload), keeps every amount, and ``_map_slices`` sorts a None percent
+    as 0 (descending percent, then name) instead of raising on ``-None``.
+
+    RED on the tree of 2026-10-28 (HEAD 1a1e6d7c0): ``AllocationItem(value=None)`` and ``AllocationSlice(percent=None)``
+    are refused (``ValidationError``); past the schema, ``_map_slices`` would raise ``TypeError`` on ``-slice_.percent``.
+    """
+
+    @staticmethod
+    def _null_item(name: str, amount: str) -> AllocationItem:
+        return AllocationItem(name=name, value=None, amount=Decimal(amount))
+
+    def test_allocation_slice_accepts_a_null_percent(self):
+        slice_ = AllocationSlice(name="Liquidity", percent=None, amount=_money("-500"))
+        assert slice_.percent is None
+        assert slice_.model_dump(mode="json")["percent"] is None, "null in the payload, never dropped"
+
+    def test_map_allocation_slice_copies_a_null_value(self):
+        mapped = map_allocation_slice(self._null_item("Stock", "500"), currency_code=CURRENCY)
+        assert (mapped.name, mapped.percent, mapped.amount.amount) == ("Stock", None, Decimal("500"))
+
+    def test_map_slices_sorts_a_null_percent_as_zero_then_by_name(self):
+        items = [
+            AllocationItem(name="Cash", value=Decimal("-10"), amount=Decimal("-100")),
+            self._null_item("Zeta", "0"),
+            AllocationItem(name="ETF", value=Decimal("60"), amount=Decimal("600")),
+            self._null_item("Alpha", "0"),
+            AllocationItem(name="Bond", value=Decimal("0"), amount=Decimal("0")),
+        ]
+        ordered = broker_concentration_context._map_slices(items, currency_code=CURRENCY)
+        assert [(slice_.name, slice_.percent) for slice_ in ordered] == [
+            ("ETF", Decimal("60")),
+            ("Alpha", None),
+            ("Bond", Decimal("0")),
+            ("Zeta", None),
+            ("Cash", Decimal("-10")),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_net_zero_broker_builds_with_null_percents_and_its_amounts(self, monkeypatch):
+        scope = _scope()
+        summary = _summary(
+            holdings=[_holding(1, current_value=500, nav_weight_percent=None)],
+            net_worth=_money(0),
+            cash_total=_money(-500),
+            allocation_by_type=[self._null_item("Stock", "500"), self._null_item("Liquidity", "-500")],
+            allocation_by_sector=[self._null_item("Tech", "500"), self._null_item("Liquidity", "-500")],
+            allocation_by_geography=[AllocationItem(name="US", value=Decimal("100.00"), amount=Decimal("500"))],
+        )
+        _patch_report(monkeypatch, _report(scope, summary=summary))
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_context", required=True)).payload
+
+        # Both percents None (sorted as 0): ties broken by name, so Liquidity before Stock / Tech
+        assert [(s["name"], s["percent"], Decimal(s["amount"]["amount"])) for s in payload["allocation_by_type"]] == [("Liquidity", None, Decimal("-500")), ("Stock", None, Decimal("500"))]
+        assert [(s["name"], s["percent"], Decimal(s["amount"]["amount"])) for s in payload["allocation_by_sector"]] == [("Liquidity", None, Decimal("-500")), ("Tech", None, Decimal("500"))]
+        assert [(s["name"], Decimal(s["percent"])) for s in payload["allocation_by_geography"]] == [("US", Decimal("100.00"))], "a positive-sum dimension keeps its percent"
+        assert payload["largest_position_weight_percent"] is None, "no NAV weight on a NAV at zero (D-MF7)"
+
+
 # =============================================================================
 # broker.concentration_comparison
 # =============================================================================
@@ -336,6 +451,35 @@ class TestConcentrationComparison:
         assert Decimal(payload["broker_share_of_portfolio_market_value_percent"]) == Decimal("40")
         # One filtered load + one unfiltered load only.
         assert counts == {"broker": 1, "portfolio": 1}
+
+    @pytest.mark.asyncio
+    async def test_both_sides_of_the_comparison_count_every_broker_whole(self, monkeypatch):
+        """R11: the broker is whole, so the portfolio it is compared with is whole too - one basis for the share.
+
+        Owner at 30 % of a 10 000 broker, the rest of the portfolio 7 000: the page counts 3 000 / 10 000 = 30 %;
+        a whole broker over a share-applied portfolio would read 10 000 / 10 000 = 100 %, a mixed basis. Before R11
+        the portfolio side asked for the owner's share (`apply_ownership_share` True) while the broker side was whole.
+        """
+        scope = _scope()
+        broker_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=100)], market_value=_money(10000)))
+        portfolio_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=60), _holding(9, nav_weight_percent=40)], market_value=_money(17000)))
+        queries: list[object] = []
+
+        async def _fake(self, user_id, query):  # noqa: ARG001
+            queries.append(query)
+            return broker_report if query.broker_ids else portfolio_report
+
+        monkeypatch.setattr(PortfolioService, "get_report", _fake)
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
+
+        assert len(queries) == 2
+        assert all(query.apply_ownership_share is False for query in queries), [q.apply_ownership_share for q in queries]
+        # Whole broker over whole portfolio: 10 000 / 17 000.
+        assert Decimal(payload["broker_share_of_portfolio_market_value_percent"]).quantize(Decimal("0.01")) == Decimal("58.82")
+        # The probe found the portfolio side undeclared: a reader compared it with the Dashboard's (share-reduced) portfolio.
+        assert payload["amounts_basis"] == "all_brokers_whole"
 
     @pytest.mark.asyncio
     async def test_whole_portfolio_loaded_once_and_shared_with_other_broker_components(self, monkeypatch):
@@ -373,6 +517,44 @@ class TestConcentrationComparison:
         payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
         assert payload["status"] == ConcentrationComparisonStatus.UNAVAILABLE.value
         assert payload["reason_code"] == broker_concentration_context.REASON_PORTFOLIO_EMPTY
+
+    @pytest.mark.asyncio
+    async def test_unavailable_reason_names_a_summary_without_positions(self, monkeypatch):
+        """T-U9: a summary that exists but holds no position is not «summary unavailable» (the message was right, the code was not)."""
+        scope = _scope()
+        _patch_split_report(monkeypatch, broker_report=_report(scope, summary=_summary(holdings=[])), portfolio_report=_report(scope, summary=_summary(holdings=[_holding(1)])))
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
+
+        assert payload["status"] == ConcentrationComparisonStatus.UNAVAILABLE.value
+        assert payload["reason_code"] == broker_concentration_context.REASON_BROKER_NO_POSITIONS
+        assert payload["reason_code"] != broker_concentration_context.REASON_BROKER_EMPTY
+
+    @pytest.mark.asyncio
+    async def test_unavailable_reason_names_a_portfolio_summary_without_positions(self, monkeypatch):
+        scope = _scope()
+        _patch_split_report(monkeypatch, broker_report=_report(scope, summary=_summary(holdings=[_holding(1)])), portfolio_report=_report(scope, summary=_summary(holdings=[])))
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
+
+        assert payload["status"] == ConcentrationComparisonStatus.UNAVAILABLE.value
+        assert payload["reason_code"] == broker_concentration_context.REASON_PORTFOLIO_NO_POSITIONS
+
+    @pytest.mark.asyncio
+    async def test_broker_share_has_no_value_on_a_negative_portfolio_total(self, monkeypatch):
+        """T-U9: the share goes through `weights.percent_of` — a total at or below zero gives no share, never a negative one."""
+        scope = _scope()
+        broker_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=100)], market_value=_money(1000)))
+        portfolio_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=100)], market_value=_money(-500)))
+        _patch_split_report(monkeypatch, broker_report=broker_report, portfolio_report=portfolio_report)
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
+
+        assert payload["status"] == ConcentrationComparisonStatus.OK.value
+        assert payload["broker_share_of_portfolio_market_value_percent"] is None
 
     @pytest.mark.asyncio
     async def test_no_asset_or_row_ids_leaked(self, monkeypatch):
@@ -615,9 +797,9 @@ class TestCostEfficiencyPeriodActivityLoader:
     """DB-level tests of the real ``_load_broker_period_activity`` loader (boundary + share + access)."""
 
     @pytest.mark.asyncio
-    async def test_boundary_is_start_exclusive_end_inclusive(self, monkeypatch):
+    async def test_boundary_is_start_exclusive_end_inclusive(self, monkeypatch, real_db_session):
         scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
-        session = await _make_real_db_session()
+        session = real_db_session
         await _seed_parents(session, user_id=scope.user_id, broker_ids=(scope.broker_id, 999))
         session.add(BrokerUserAccess(user_id=scope.user_id, broker_id=scope.broker_id, role=UserRole.OWNER, share_percentage=Decimal("1")))
         session.add_all(
@@ -638,12 +820,12 @@ class TestCostEfficiencyPeriodActivityLoader:
         assert payload["trade_count"] == 2
         # |−200| (BUY) + 300 (SELL) = 500; boundary-start and after-end trades excluded.
         assert Decimal(payload["turnover"]["gross_turnover"]["amount"]) == Decimal("500")
-        await session.close()
 
     @pytest.mark.asyncio
-    async def test_share_loaded_from_broker_user_access(self, monkeypatch):
+    async def test_owner_share_does_not_scale_the_whole_broker_turnover(self, monkeypatch, real_db_session):
+        """R11: the broker page counts the broker whole, so an owner at 25 % still sees the full turnover (before: 250, ratio 0.25)."""
         scope = _scope()
-        session = await _make_real_db_session()
+        session = real_db_session
         await _seed_parents(session, user_id=scope.user_id, broker_ids=(scope.broker_id,))
         session.add(BrokerUserAccess(user_id=scope.user_id, broker_id=scope.broker_id, role=UserRole.OWNER, share_percentage=Decimal("0.25")))
         session.add(_tx(scope.broker_id, TransactionType.BUY, date(2026, 1, 10), amount=-1000))
@@ -652,14 +834,13 @@ class TestCostEfficiencyPeriodActivityLoader:
         context = _make_context(scope, _registry(), session)
 
         payload = (await context.resolve("broker.cost_efficiency", required=True)).payload
-        assert Decimal(payload["ownership_share_ratio"]) == Decimal("0.25")
-        assert Decimal(payload["turnover"]["gross_turnover"]["amount"]) == Decimal("250")  # 1000 × 0.25
-        await session.close()
+        assert Decimal(payload["ownership_share_ratio"]) == Decimal("1")
+        assert Decimal(payload["turnover"]["gross_turnover"]["amount"]) == Decimal("1000")
 
     @pytest.mark.asyncio
-    async def test_no_access_row_fails_explicitly(self, monkeypatch):
+    async def test_no_access_row_fails_explicitly(self, monkeypatch, real_db_session):
         scope = _scope()
-        session = await _make_real_db_session()
+        session = real_db_session
         await _seed_parents(session, user_id=scope.user_id, broker_ids=(scope.broker_id,))
         # No BrokerUserAccess row for this user/broker.
         session.add(_tx(scope.broker_id, TransactionType.BUY, date(2026, 1, 10), amount=-1000))
@@ -669,4 +850,138 @@ class TestCostEfficiencyPeriodActivityLoader:
 
         with pytest.raises(RequiredComponentBuildError):
             await context.resolve("broker.cost_efficiency", required=True)
-        await session.close()
+
+
+async def _seed_access(session: AsyncSession, *, user_id: int, broker_id: int, role: UserRole, share: object) -> None:
+    """Parents + one committed `BrokerUserAccess` row with an explicit stored share."""
+    await _seed_parents(session, user_id=user_id, broker_ids=(broker_id,))
+    session.add(BrokerUserAccess(user_id=user_id, broker_id=broker_id, role=role, share_percentage=Decimal(str(share))))
+    await session.commit()
+
+
+class TestCostEfficiencyReportShareRule:
+    """One share rule per export, the report's (backlog B9 / O3).
+
+    The portfolio report this export reads (fees, NAV, invested) counts a broker with
+    ``native_cash.effective_share(role, share_percentage)``: an owner its share (the
+    whole broker when none is recorded), an editor or a viewer the whole broker. The
+    turnover denominator must sit on that same basis, so the ownership-share loader
+    returns the report's share, not the raw ``share_percentage`` column — which is 0
+    by default for an editor or a viewer and would zero their turnover against fees
+    the report counts in full.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("role", "stored_share", "expected"),
+        [
+            pytest.param(UserRole.VIEWER, "0", Decimal("1"), id="viewer-stored-0-counts-whole-broker"),
+            pytest.param(UserRole.EDITOR, "0.5", Decimal("1"), id="editor-stored-half-counts-whole-broker"),
+            pytest.param(UserRole.OWNER, "0.5", Decimal("0.5"), id="owner-stored-half-counts-its-share"),
+            pytest.param(UserRole.OWNER, "0", Decimal("0"), id="owner-stored-0-counts-zero-not-missing"),
+        ],
+    )
+    async def test_loader_returns_the_report_share(self, real_db_session, role, stored_share, expected):
+        # The table is the report's rule, not an independent opinion of this test.
+        assert effective_share(role, Decimal(stored_share)) == expected, "test table drifted from native_cash.effective_share"
+        scope = _scope()
+        session = real_db_session
+        await _seed_access(session, user_id=scope.user_id, broker_id=scope.broker_id, role=role, share=stored_share)
+
+        share = await broker_cost_efficiency._load_broker_ownership_share(session, user_id=scope.user_id, broker_id=scope.broker_id)
+
+        assert isinstance(share, Decimal), f"expected a Decimal share, got {share!r}"
+        assert share == expected, f"{role.value} with stored share {stored_share}: loader returned {share}, the report counts {expected}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("role", "stored_share"),
+        [
+            pytest.param(UserRole.OWNER, "0.5", id="owner-half"),
+            pytest.param(UserRole.OWNER, "0", id="owner-zero"),
+            pytest.param(UserRole.EDITOR, "0.5", id="editor"),
+            pytest.param(UserRole.VIEWER, "0", id="viewer"),
+        ],
+    )
+    async def test_loader_counts_the_broker_whole_when_the_share_is_not_applied(self, real_db_session, role, stored_share):
+        """R11: with `apply_ownership_share=False` every role counts the broker whole; a missing access row is still `None`."""
+        scope = _scope()
+        session = real_db_session
+        await _seed_access(session, user_id=scope.user_id, broker_id=scope.broker_id, role=role, share=stored_share)
+
+        share = await broker_cost_efficiency._load_broker_ownership_share(session, user_id=scope.user_id, broker_id=scope.broker_id, apply_ownership_share=False)
+        missing = await broker_cost_efficiency._load_broker_ownership_share(session, user_id=scope.user_id + 1, broker_id=scope.broker_id, apply_ownership_share=False)
+
+        assert share == Decimal("1"), f"{role.value} with stored share {stored_share}: expected the whole broker, got {share!r}"
+        assert missing is None
+
+    @pytest.mark.asyncio
+    async def test_loader_owner_without_recorded_share_counts_whole_broker(self, nullable_share_db_session):
+        scope = _scope()
+        session = nullable_share_db_session
+        await _seed_access(session, user_id=scope.user_id, broker_id=scope.broker_id, role=UserRole.OWNER, share=1)
+        await session.execute(update(BrokerUserAccess).where(BrokerUserAccess.user_id == scope.user_id).where(BrokerUserAccess.broker_id == scope.broker_id).values(share_percentage=None).execution_options(synchronize_session=False))
+        await session.commit()
+        # Precondition, verified rather than inferred: the access row exists and carries no share.
+        stored = (await session.execute(select(BrokerUserAccess.role, BrokerUserAccess.share_percentage).where(BrokerUserAccess.user_id == scope.user_id).where(BrokerUserAccess.broker_id == scope.broker_id))).one()
+        assert stored.share_percentage is None
+        assert effective_share(UserRole.OWNER, None) == Decimal("1")
+
+        share = await broker_cost_efficiency._load_broker_ownership_share(session, user_id=scope.user_id, broker_id=scope.broker_id)
+
+        # Not None: an existing access row with no recorded share is not "no access".
+        assert share == Decimal("1"), f"OWNER with no recorded share: loader returned {share!r}, the report counts the whole broker"
+
+    @pytest.mark.asyncio
+    async def test_missing_access_row_still_raises_access_error(self, real_db_session):
+        scope = _scope()
+        session = real_db_session
+        neighbour_user_id = scope.user_id + 1
+        await _seed_parents(session, user_id=scope.user_id, broker_ids=(scope.broker_id,))
+        # `BrokerUserAccess.user_id` is a bare FK column with no ORM relationship, so the unit of
+        # work does not order a User insert before an access row added in the same flush: the
+        # neighbour must be flushed first, exactly as `_seed_parents` does for its parents.
+        session.add(User(id=neighbour_user_id, username=f"user{neighbour_user_id}", email=f"user{neighbour_user_id}@example.test", hashed_password="x"))
+        await session.flush()
+        # The broker has an access row, but for someone else: the scoped user still has none.
+        session.add(BrokerUserAccess(user_id=neighbour_user_id, broker_id=scope.broker_id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+        session.add(_tx(scope.broker_id, TransactionType.BUY, date(2026, 1, 10), amount=-1000))
+        await session.commit()
+        # Precondition, verified rather than inferred: the broker's only access row belongs to the neighbour.
+        access_rows = (await session.execute(select(BrokerUserAccess.user_id).where(BrokerUserAccess.broker_id == scope.broker_id))).scalars().all()
+        assert access_rows == [neighbour_user_id]
+        context = _make_context(scope, _registry(), session)
+
+        with pytest.raises(ResourceLoadError) as excinfo:
+            await broker_cost_efficiency._load_broker_period_activity(context, scope)
+
+        assert isinstance(excinfo.value.cause, BrokerCostEfficiencyAccessError), f"expected BrokerCostEfficiencyAccessError, got {excinfo.value.cause!r}"
+
+    @pytest.mark.asyncio
+    async def test_viewer_with_zero_stored_share_turnover_counts_whole_broker(self, monkeypatch, real_db_session):
+        scope = _scope()
+        session = real_db_session
+        await _seed_access(session, user_id=scope.user_id, broker_id=scope.broker_id, role=UserRole.VIEWER, share=0)
+        session.add(_tx(scope.broker_id, TransactionType.BUY, date(2026, 1, 10), amount=-1000, currency=CURRENCY))
+        await session.commit()
+        # The report counts this broker in full for a viewer: these are whole-broker fees.
+        _patch_report(monkeypatch, _report(scope, summary=_summary(period_fees=_money(10))))
+        context = _make_context(scope, _registry(), session)
+
+        payload = (await context.resolve("broker.cost_efficiency", required=True)).payload
+
+        turnover = payload["turnover"]
+        assert payload["trade_count"] == 1
+        assert turnover["coverage"]["complete"] is True
+        assert Decimal(turnover["gross_turnover"]["amount"]) == Decimal("1000")
+        assert Decimal(turnover["buy_turnover"]["amount"]) == Decimal("1000")
+        assert Decimal(payload["ownership_share_ratio"]) == Decimal("1")
+        # Numerator and denominator on the same whole-broker basis: 10 / 1000, not declined as zero turnover.
+        assert payload["fees_to_turnover"]["status"] == FeeStatus.RECORDED.value
+        assert Decimal(payload["fees_to_turnover"]["value_ratio"]) == Decimal("10") / Decimal("1000")
+
+    def test_component_version_is_2(self):
+        spec = build_component_registry().get("broker.cost_efficiency")
+
+        assert spec.output_model is broker_cost_efficiency.BrokerCostEfficiencyPayload
+        assert spec.version == 2, f"broker.cost_efficiency changed its ownership_share_ratio semantics: version must be 2, is {spec.version}"

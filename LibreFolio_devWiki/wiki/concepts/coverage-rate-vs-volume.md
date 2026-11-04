@@ -108,11 +108,11 @@ useful than showing a delta that would not hold.
 
 | area | uncovered | coverage | files |
 |---|---|---|---|
-| `components/transactions` | **1 542** | 69,9 % | 29 |
+| `features/transactions` | **1 542** | 69,9 % | 29 |
 | **routes (pages)** | **1 074** | 67,8 % | 21 |
 | `components/ui` | 947 | 75,5 % | 53 |
 | `components/assets` | 720 | 69,3 % | 18 |
-| `components/brokers` | **672** | 75,5 % | 17 — *never had a lane* |
+| `features/brokers` | **672** | 75,5 % | 17 — *never had a lane* |
 | `components/charts` | 618 | 74,6 % | 31 |
 | `components/table` | 440 | 67,2 % | 7 |
 

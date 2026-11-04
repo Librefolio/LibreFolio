@@ -39,7 +39,7 @@
      *
      * Known top-level segments in our docs nav:
      *   gallery/, developer/, user-manual/, admin-manual/, getting-started/,
-     *   tutorials/, financial-theory/, poc-ux/, faq/, ...
+     *   tutorials/, financial-theory/, faq/, ...
      *
      * If the current URL is: /LibreFolio/gallery/desktop/
      * then the base path is: /LibreFolio
@@ -64,7 +64,7 @@
         var knownSegments = [
             '/gallery/', '/developer/', '/user/', '/admin/',
             '/getting-started/', '/tutorials/', '/financial-theory/',
-            '/POC_UX/', '/community/'
+            '/community/'
         ];
 
         for (var i = 0; i < knownSegments.length; i++) {

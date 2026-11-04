@@ -31,4 +31,4 @@ Removed all three functions. No callers found. No tests broken.
 
 | Role | Path |
 |------|------|
-| Fixed file | `backend/app/services/global_settings_service.py` |
+| Fixed file | `backend/app/services/accounts/global_settings_service.py` |

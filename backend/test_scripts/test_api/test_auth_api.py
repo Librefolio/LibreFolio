@@ -2,6 +2,10 @@
 Authentication API Tests
 
 Tests for login, logout, register, and session management endpoints.
+
+Since lot A6c (decision 37) the API applies the backend's password rules to every new password: REG-004, CHPWD-005
+and PWD-001..PWD-008 pin it on register and change-password (the reset link is in test_registration_api.py). Every
+other password this module registers meets the rules, which the API checks before anything else of the request.
 """
 
 import asyncio
@@ -21,7 +25,7 @@ from typing import Optional, Union
 import httpx
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException, Request, Response
+from fastapi import BackgroundTasks, HTTPException, Request, Response
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -33,19 +37,32 @@ from backend.app.db.base import SQLModel  # imports every model: SQLModel.metada
 from backend.app.db.models import GlobalSetting, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.auth import AuthLoginRequest, AuthLoginResponse, AuthRegisterRequest, ChangePasswordRequest
-from backend.app.services import auth_service, user_service
-from backend.app.services.global_settings_service import is_registration_enabled
+from backend.app.services.accounts import auth_service, user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 10.0
+#: The global setting that decides who may register (release 1.3: open, invite or disabled), and its row's key.
+REGISTRATION_MODE_KEY = "registration_mode"
 
 
-async def set_registration_enabled(enabled: bool) -> None:
+def _register_http_request() -> Request:
+    """The HTTP request ``auth_api.register`` reads the client address from, as FastAPI hands it over (E5b: the limit
+    of registration emails per client address)."""
+    return Request({"type": "http", "method": "POST", "path": "/api/v1/auth/register", "headers": [], "client": ("127.0.0.1", 50000)})
+
+
+def _error_code(response: httpx.Response) -> Optional[str]:
+    """``detail.error_code`` of a coded refusal (as ACCOUNT_DISABLED is given), or None."""
+    detail = response.json().get("detail")
+    return detail.get("error_code") if isinstance(detail, dict) else None
+
+
+async def set_registration_mode(mode: str) -> None:
     """
-    Put the registration gate in the state this module needs.
+    Put the registration gate in the state this module needs: ``open`` or ``disabled``.
 
     The row is created when missing instead of being asserted into existence.
     Asserting worked only by accident: every module used to start its own server,
@@ -58,17 +75,17 @@ async def set_registration_enabled(enabled: bool) -> None:
 
     engine = get_async_engine()
     async with AsyncSession(engine) as session:
-        result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == "enable_registration"))
+        result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == REGISTRATION_MODE_KEY))
         setting = result.scalar_one_or_none()
         if setting is None:
-            spec = GLOBAL_SETTINGS_DEFAULTS.get("enable_registration", {})
+            spec = GLOBAL_SETTINGS_DEFAULTS.get(REGISTRATION_MODE_KEY, {})
             setting = GlobalSetting(
-                key="enable_registration",
-                value="true",
-                value_type=spec.get("type", "bool"),
+                key=REGISTRATION_MODE_KEY,
+                value="open",
+                value_type=spec.get("type", "string"),
                 description=spec.get("description"),
             )
-        setting.value = "true" if enabled else "false"
+        setting.value = mode
         session.add(setting)
         await session.commit()
 
@@ -83,11 +100,11 @@ def test_server():
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def registration_enabled_by_default(test_server):
+async def registration_open_by_default(test_server):
     """Keep global registration state isolated between auth API tests."""
-    await set_registration_enabled(True)
+    await set_registration_mode("open")
     yield
-    await set_registration_enabled(True)
+    await set_registration_mode("open")
 
 
 class TestRegister:
@@ -111,7 +128,7 @@ class TestRegister:
 
             response = await client.post(
                 f"{API_BASE}/auth/register",
-                json={"username": username, "email": email, "password": "testpassword123"},
+                json={"username": username, "email": email, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -133,10 +150,10 @@ class TestRegister:
 
     @pytest.mark.asyncio
     async def test_register_succeeds_when_registration_enabled(self, test_server):
-        """REG-005: Registration succeeds when enable_registration is true."""
-        print_section("REG-005: Registration enabled allows new user")
+        """REG-005: Registration succeeds when registration_mode is open."""
+        print_section("REG-005: Registration open allows new user")
 
-        await set_registration_enabled(True)
+        await set_registration_mode("open")
 
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
@@ -147,7 +164,7 @@ class TestRegister:
                 json={
                     "username": username,
                     "email": f"{username}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
@@ -158,10 +175,10 @@ class TestRegister:
 
     @pytest.mark.asyncio
     async def test_register_disabled_rejects_when_users_exist(self, test_server):
-        """REG-006: Disabled registration returns 403 when at least one user exists."""
+        """REG-006: Disabled registration returns 403 REGISTRATION_DISABLED when at least one user exists."""
         print_section("REG-006: Disabled registration rejects non-bootstrap user")
 
-        await set_registration_enabled(True)
+        await set_registration_mode("open")
 
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
@@ -172,14 +189,14 @@ class TestRegister:
                 json={
                     "username": seed_username,
                     "email": f"{seed_username}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
             assert seed_response.status_code == 201, f"Setup failed: {seed_response.text}"
 
             try:
-                await set_registration_enabled(False)
+                await set_registration_mode("disabled")
                 username = f"disabledreg_{timestamp}"
 
                 response = await client.post(
@@ -187,47 +204,54 @@ class TestRegister:
                     json={
                         "username": username,
                         "email": f"{username}@example.com",
-                        "password": "password123",
+                        # Meets the password rules (decision 37): they are checked first, and a weak password would be
+                        # refused with PASSWORD_TOO_WEAK before the registration mode is read.
+                        "password": "TestPass123!",
                     },
                     timeout=TIMEOUT,
                 )
 
-                assert response.status_code == 403
-                assert "registration is disabled" in response.json()["detail"].lower()
+                assert (response.status_code, _error_code(response)) == (403, "REGISTRATION_DISABLED"), f"Expected 403 REGISTRATION_DISABLED, got {response.status_code}: {response.text}"
                 print_success("Disabled registration rejected non-bootstrap user")
             finally:
-                await set_registration_enabled(True)
+                await set_registration_mode("open")
 
     @pytest.mark.asyncio
-    async def test_register_disabled_allows_bootstrap_when_no_users(self, tmp_path):
+    async def test_register_disabled_allows_bootstrap_when_no_users(self, tmp_path, monkeypatch):
         """REG-007: Disabled registration still allows bootstrap when user count is zero.
 
         On a private database (a fresh SQLite file under tmp_path with the whole ORM schema), zero
-        users and enable_registration=false are its real state, not a patched counter. The lane's
+        users and registration_mode=disabled are its real state, not a patched counter. The lane's
         users and global settings are never touched, and the bootstrap administrator no longer
-        stays behind in the shared database.
+        stays behind in the shared database. LIBREFOLIO_REGISTRATION is removed from this process,
+        so that the row alone decides, whatever the shell that started the run had set.
         """
         print_section("REG-007: Disabled registration allows bootstrap user")
+        from backend.app.services.accounts.registration_service import effective_registration_mode  # noqa: PLC0415 — release 1.3 module: only this test needs it, and its absence must fail this test alone
 
+        monkeypatch.delenv("LIBREFOLIO_REGISTRATION", raising=False)
         engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'bootstrap.db'}", poolclass=NullPool)
         try:
             async with engine.begin() as connection:
                 await connection.run_sync(SQLModel.metadata.create_all)
             async with AsyncSession(engine) as session:
-                session.add(GlobalSetting(key="enable_registration", value="false", value_type="bool"))
+                session.add(GlobalSetting(key=REGISTRATION_MODE_KEY, value="disabled", value_type="string"))
                 await session.commit()
 
             username = "bootstrapreg"
             async with AsyncSession(engine, expire_on_commit=False) as session:
                 assert await user_service.count_users(session) == 0, "Precondition: the private database must have no user"
-                assert await is_registration_enabled(session) is False, "Precondition: registration must be disabled"
+                assert (await effective_registration_mode(session)).mode == "disabled", "Precondition: registration must be disabled"
+                # Keyword arguments, as FastAPI calls the route: E5b added ``background`` before ``session``.
                 response = await auth_api.register(
                     AuthRegisterRequest(
                         username=username,
                         email=f"{username}@example.com",
-                        password="password123",
+                        password="TestPass123!",
                     ),
-                    session,
+                    background=BackgroundTasks(),
+                    http_request=_register_http_request(),
+                    session=session,
                 )
 
             assert response.user.username == username
@@ -251,7 +275,7 @@ class TestRegister:
                 json={
                     "username": username,
                     "email": f"first_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
@@ -262,7 +286,7 @@ class TestRegister:
                 json={
                     "username": username,
                     "email": f"second_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
@@ -283,14 +307,14 @@ class TestRegister:
             # First registration
             await client.post(
                 f"{API_BASE}/auth/register",
-                json={"username": f"user1_{timestamp}", "email": email, "password": "password123"},
+                json={"username": f"user1_{timestamp}", "email": email, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
             # Try duplicate email
             response = await client.post(
                 f"{API_BASE}/auth/register",
-                json={"username": f"user2_{timestamp}", "email": email, "password": "password123"},
+                json={"username": f"user2_{timestamp}", "email": email, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -299,25 +323,26 @@ class TestRegister:
             print_success("Duplicate email correctly rejected")
 
     @pytest.mark.asyncio
-    async def test_register_short_password(self, test_server):
-        """REG-004: Password must be at least 8 characters."""
+    async def test_register_short_password(self, test_server, lane_accounts):
+        """REG-004 — red until A6c (a 422 of the schema): a password of seven characters that meets every other rule → 400 PASSWORD_TOO_WEAK with rules exactly ["min_length"]; no account.
+
+        Decision 37: the length is one of the password rules the backend applies (PWD-001 covers the others); the
+        schema keeps only «not empty» (PWD-008).
+        """
         print_section("REG-004: Short password rejected")
+        username = lane_accounts.new_username("shortpw")
 
         async with httpx.AsyncClient() as client:
-            timestamp = int(datetime.now().timestamp() * 1000)
-
             response = await client.post(
                 f"{API_BASE}/auth/register",
-                json={
-                    "username": f"shortpw_{timestamp}",
-                    "email": f"shortpw_{timestamp}@example.com",
-                    "password": "short",  # Less than 8 chars
-                },
+                # Seven characters, with an uppercase and lowercase letters, a digit and a symbol: only the length is missing.
+                json={"username": username, "email": f"{username}@example.com", "password": "Short1!"},
                 timeout=TIMEOUT,
             )
 
-            assert response.status_code == 422  # Validation error
-            print_success("Short password correctly rejected")
+        _assert_password_too_weak(response, ["min_length"], "POST /auth/register with seven characters")
+        assert not await _lane_user_exists(username), f"a refused password must create no account, yet {username} exists"
+        print_success("Short password correctly rejected: 400 PASSWORD_TOO_WEAK, rules [min_length]")
 
 
 class TestLogin:
@@ -330,7 +355,7 @@ class TestLogin:
             timestamp = int(datetime.now().timestamp() * 1000)
             username = f"logintest_{timestamp}"
             email = f"login_{timestamp}@example.com"
-            password = "loginpassword123"
+            password = "LoginPass123!"
 
             response = await client.post(
                 f"{API_BASE}/auth/register",
@@ -421,13 +446,13 @@ class TestLogin:
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test-only local import
         from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test-only local import
-        from backend.app.services import settings_service, user_service  # noqa: PLC0415 — test-only local import
+        from backend.app.services.accounts import settings_service, user_service  # noqa: PLC0415 — test-only local import
 
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
             username = f"loginsettings_{timestamp}"
             email = f"loginsettings_{timestamp}@example.com"
-            password = "loginpassword123"
+            password = "LoginPass123!"
 
             register_resp = await client.post(
                 f"{API_BASE}/auth/register",
@@ -493,14 +518,14 @@ class TestLogout:
                 json={
                     "username": username,
                     "email": f"logout_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "password123"},
+                json={"username": username, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
             assert "session" in login_resp.cookies
@@ -534,14 +559,14 @@ class TestMe:
                 json={
                     "username": username,
                     "email": f"me_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "password123"},
+                json={"username": username, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -599,14 +624,14 @@ class TestSessionPersistence:
                 json={
                     "username": username,
                     "email": f"cookie_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             response = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "password123"},
+                json={"username": username, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -629,14 +654,14 @@ class TestSessionPersistence:
                 json={
                     "username": username,
                     "email": f"persist_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "password123"},
+                json={"username": username, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -662,8 +687,8 @@ class TestChangePassword:
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
             username = f"chpwd_{timestamp}"
-            old_password = "oldpassword123"
-            new_password = "newpassword456"
+            old_password = "OldPass123!"
+            new_password = "NewPass456!"
 
             # Register user
             await client.post(
@@ -730,22 +755,22 @@ class TestChangePassword:
                 json={
                     "username": username,
                     "email": f"chpwd_wrong_{timestamp}@example.com",
-                    "password": "correctpassword123",
+                    "password": "CorrectPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "correctpassword123"},
+                json={"username": username, "password": "CorrectPass123!"},
                 timeout=TIMEOUT,
             )
             client.cookies.update(login_resp.cookies)
 
-            # Try to change with wrong current password
+            # Try to change with wrong current password; the new one meets the rules (decision 37), which are checked first
             response = await client.post(
                 f"{API_BASE}/auth/change-password",
-                json={"current_password": "wrongpassword", "new_password": "newpassword456"},
+                json={"current_password": "wrongpassword", "new_password": "NewPass456!"},
                 timeout=TIMEOUT,
             )
 
@@ -762,7 +787,7 @@ class TestChangePassword:
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
             username = f"chpwd_same_{timestamp}"
-            password = "samepassword123"
+            password = "SamePass123!"
 
             # Register and login
             await client.post(
@@ -802,7 +827,7 @@ class TestChangePassword:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE}/auth/change-password",
-                json={"current_password": "oldpass", "new_password": "newpass123"},
+                json={"current_password": "oldpass", "new_password": "NewPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -812,7 +837,10 @@ class TestChangePassword:
 
     @pytest.mark.asyncio
     async def test_change_password_too_short(self, test_server):
-        """CHPWD-005: New password must be at least 8 characters."""
+        """CHPWD-005 — red until A6c (a 422 of the schema): a new password of seven characters that meets every other rule → 400 PASSWORD_TOO_WEAK with rules exactly ["min_length"]; the password stays the old one.
+
+        Decision 37: the length is one of the password rules the backend applies (PWD-003 covers the others).
+        """
         print_section("CHPWD-005: Short password rejected")
 
         async with httpx.AsyncClient() as client:
@@ -825,28 +853,32 @@ class TestChangePassword:
                 json={
                     "username": username,
                     "email": f"chpwd_short_{timestamp}@example.com",
-                    "password": "longpassword123",
+                    "password": "LongPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "longpassword123"},
+                json={"username": username, "password": "LongPass123!"},
                 timeout=TIMEOUT,
             )
+            assert login_resp.status_code == 200, f"Setup: login failed: {login_resp.status_code} {login_resp.text}"
             client.cookies.update(login_resp.cookies)
 
-            # Try short password
+            # Try short password: seven characters, with an uppercase and lowercase letters, a digit and a symbol
             response = await client.post(
                 f"{API_BASE}/auth/change-password",
-                json={"current_password": "longpassword123", "new_password": "short"},
+                json={"current_password": "LongPass123!", "new_password": "Short1!"},
                 timeout=TIMEOUT,
             )
 
-            assert response.status_code == 422, f"Expected 422, got {response.status_code}"
+            _assert_password_too_weak(response, ["min_length"], "POST /auth/change-password with a new password of seven characters")
+            client.cookies.clear()
+            old_login = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": "LongPass123!"}, timeout=TIMEOUT)
+            assert old_login.status_code == 200, f"A refused new password must leave the old one in place: login with it got {old_login.status_code} {old_login.text}"
 
-            print_success("Short password correctly rejected")
+            print_success("Short password correctly rejected: 400 PASSWORD_TOO_WEAK, rules [min_length], the old password kept")
 
 
 class TestDeleteOwnAccount:
@@ -1012,7 +1044,7 @@ class TestSessionCookieSecure:
         Teardown logs in over plain HTTP and sends the session explicitly, so the deletion works
         whatever the cookie's Secure says; a test that deleted the account itself marks it deleted.
         """
-        user = _DisposableUser(username=f"cookiesec_{uuid.uuid4().hex[:12]}", password="cookiepassword123")
+        user = _DisposableUser(username=f"cookiesec_{uuid.uuid4().hex[:12]}", password="CookiePass123!")
         async with httpx.AsyncClient() as client:
             response = await client.post(f"{IPV4_API_BASE}/auth/register", json={**user.credentials, "email": f"{user.username}@example.com"}, timeout=TIMEOUT)
         assert response.status_code == 201, f"Setup failed: {response.status_code} {response.text}"
@@ -1306,8 +1338,9 @@ async def login_accounts(test_server) -> AsyncIterator[_LoginAccounts]:
     teardown deletes both through user_service.delete_user, the service DELETE /auth/users/me calls.
     """
     accounts = _LoginAccounts(
-        active=_DisposableUser(username=f"loginon_{uuid.uuid4().hex[:12]}", password=f"Active-{uuid.uuid4().hex[:12]}"),
-        disabled=_DisposableUser(username=f"loginoff_{uuid.uuid4().hex[:12]}", password=f"Disabled-{uuid.uuid4().hex[:12]}"),
+        # A digit at the end whatever the hex holds: both must meet the password rules (decision 37) to register.
+        active=_DisposableUser(username=f"loginon_{uuid.uuid4().hex[:12]}", password=f"Active-{uuid.uuid4().hex[:12]}-1"),
+        disabled=_DisposableUser(username=f"loginoff_{uuid.uuid4().hex[:12]}", password=f"Disabled-{uuid.uuid4().hex[:12]}-1"),
     )
     user_ids: list[int] = []
     try:
@@ -1808,23 +1841,33 @@ class TestPasswordWorkLeavesTheEventLoopFree:
 
     @pytest.mark.asyncio
     async def test_register_hashes_the_password_off_the_event_loop(self, private_account, monkeypatch):
-        """LOOP-002 — NEW, red today: POST /auth/register hashes the password in a worker thread; the event loop keeps beating meanwhile.
+        """LOOP-002 — POST /auth/register hashes the password in a worker thread; the event loop keeps beating meanwhile.
 
-        The hash is computed by user_service.create_user, which register calls (the CLI too): the
-        stand-in replaces the name create_user calls, and the new user must be stored with the
-        stand-in's hash. Today the hash runs in the loop (user_service.py, create_user).
+        Whichever service computes the hash — user_service.create_user until 1.2, the registration
+        service from 1.3, under whatever name it imports the function — the call ends in bcrypt's own
+        hashpw: the stand-in replaces that one, answering bytes as bcrypt does, and the new user must be
+        stored with the stand-in's hash. The accounts variables are removed from this process, and the
+        private database's registration_mode row is written ``open`` (no limit): an open registration is
+        what register meets. Since lot A6d a database without that row is ``invite`` (decision 36), and the
+        private account makes this registration a second one, which would then need an invitation.
         """
         print_section("LOOP-002: register hashes the password off the event loop")
-        hashing = _block(monkeypatch, user_service, "hash_password", result="stand-in-hash-of-loop_newcomer")
+        for variable in ("LIBREFOLIO_REGISTRATION", "LIBREFOLIO_MAX_USERS"):
+            monkeypatch.delenv(variable, raising=False)
+        async with AsyncSession(private_account.engine) as session:
+            session.add(GlobalSetting(key=REGISTRATION_MODE_KEY, value="open", value_type="str"))
+            await session.commit()
+        stand_in_hash = b"stand-in-hash-of-loop_newcomer"
+        hashing = _block(monkeypatch, auth_service.bcrypt, "hashpw", result=stand_in_hash)
         username, password = "loop_newcomer", "NewcomerPass123!"
 
         async with AsyncSession(private_account.engine, expire_on_commit=False) as session, _heartbeat() as ticks:
-            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), session)
+            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), background=BackgroundTasks(), http_request=_register_http_request(), session=session)
 
         assert response.user.username == username, f"register must answer with the new user: got {response!r}"
-        assert hashing.calls == [{"password": password}], f"register must hash the chosen password, once: {hashing.calls}"
+        assert [call["password"] for call in hashing.calls] == [password.encode("utf-8")], f"register must hash the chosen password, once: {hashing.calls}"
         stored = await _stored_hash(private_account.engine, username)
-        assert stored == hashing.result, f"The new user must be stored with the hash create_user computed, {hashing.result!r}: got {stored!r}"
+        assert stored == stand_in_hash.decode("utf-8"), f"The new user must be stored with the hash bcrypt computed, {stand_in_hash!r}: got {stored!r}"
         measured = _assert_the_loop_kept_beating("register", ticks, hashing)
 
         print_success(f"✓ register: the user stored with the stand-in's hash, the loop kept beating ({measured})")
@@ -1845,7 +1888,8 @@ class TestPasswordWorkLeavesTheEventLoopFree:
             user = await user_service.get_user_by_username(session, private_account.username)
             assert user is not None, f"Setup: {private_account.username} must be in the private database"
             async with _heartbeat() as ticks:
-                await auth_api.change_password(request=ChangePasswordRequest(current_password=private_account.password, new_password=new_password), current_user=user, session=session)
+                # Since A4b the handler re-issues the session cookie on the response, its Secure decided by the request: FastAPI hands it both.
+                await auth_api.change_password(request=ChangePasswordRequest(current_password=private_account.password, new_password=new_password), response=Response(), http_request=_request("http"), current_user=user, session=session)
 
         assert check.calls == [{"plain_password": private_account.password, "hashed_password": private_account.hashed_password}], f"change-password must check the current password against the stored hash, once: {check.calls}"
         assert hashing.calls == [{"password": new_password}], f"change-password must hash the new password, once: {hashing.calls}"
@@ -1854,3 +1898,597 @@ class TestPasswordWorkLeavesTheEventLoopFree:
         measured = _assert_the_loop_kept_beating("change_password", ticks, check, hashing)
 
         print_success(f"✓ change-password: the new hash stored, the loop kept beating ({measured})")
+
+
+# ============================================================================
+# THE PASSWORD RULES ON EVERY NEW PASSWORD (decision 37, lot A6c)
+# ============================================================================
+#
+# The backend holds the password rules (services/accounts/password_policy.py: at least 8 characters, an uppercase and a
+# lowercase letter, a digit, a symbol, with Unicode's classes) and applies them to every new password: POST
+# /auth/register and POST /auth/change-password here, the reset link in test_registration_api.py, the command line in
+# test_dev_cli_image.py. A password that breaks them is refused with 400 {"detail": {"error_code": "PASSWORD_TOO_WEAK",
+# "message": ..., "rules": [the codes missed, in the policy's order]}}, before anything else of the request is looked
+# at — the current password included —; the schemas keep only «not empty» (422). A password stored before keeps
+# working: the login never checks the rules.
+#
+# On the lane's server, open while this module runs (registration_open_by_default). Every account a test registers or
+# writes is named in lane_accounts before the request, and deleted at teardown, after a red too: a refused
+# registration that a red lets through leaves nothing behind.
+
+#: The refusal's detail carries exactly these keys.
+PASSWORD_TOO_WEAK_KEYS = {"error_code", "message", "rules"}
+#: (password, the codes it misses, in the policy's order): every rule alone — with ASCII, and with Unicode classes —, and several.
+WEAK_PASSWORDS = [
+    pytest.param("Short1!", ["min_length"], id="seven-characters"),
+    pytest.param("lowercase-only-1", ["uppercase"], id="no-uppercase"),
+    pytest.param("UPPERCASE-ONLY-1", ["lowercase"], id="no-lowercase"),
+    pytest.param("No-Digits-Here", ["digit"], id="no-digit"),
+    pytest.param("NoSymbols123", ["special"], id="no-symbol"),
+    pytest.param("Ecrire12 ", ["special"], id="a-space-is-not-a-symbol"),
+    pytest.param("écrire-12", ["uppercase"], id="e-acute-is-lowercase"),
+    pytest.param("Écrire²²!", ["digit"], id="superscript-two-is-not-a-digit"),
+    pytest.param("testpassword123", ["uppercase", "special"], id="this-modules-old-password"),
+    pytest.param("short", ["min_length", "uppercase", "digit", "special"], id="four-rules"),
+]
+#: Passwords that meet every rule: ASCII, and Unicode classes (É uppercase, é lowercase, ٣ a digit, € a symbol).
+STRONG_PASSWORDS = [
+    pytest.param("Strong-Pass-2026", id="ascii"),
+    pytest.param("Écrire٣٣€", id="unicode-classes"),
+]
+#: The password of the accounts these tests register: it meets every rule.
+PWD_ACCOUNT_PASSWORD = "Before-Change-2026"
+#: A password stored before decision 37 that breaks four rules: seven lowercase letters. No route accepts it any more.
+LEGACY_PASSWORD = "oldpass"
+LEGACY_RULES = ["min_length", "uppercase", "digit", "special"]
+#: What the legacy account changes its weak password for: it meets every rule.
+UPGRADED_PASSWORD = "Upgraded-Pass-2026"
+
+
+def _detail(response: httpx.Response) -> object:
+    """``detail`` of a JSON body; None for a body without one, or that is not JSON (a 500's text)."""
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    return body.get("detail") if isinstance(body, dict) else None
+
+
+def _assert_password_too_weak(response: httpx.Response, rules: list[str], request: str) -> None:
+    """``response`` is decision 37's refusal: 400 PASSWORD_TOO_WEAK, a message, and ``rules`` exactly — the codes missed, in the policy's order."""
+    detail = _detail(response)
+    error_code = detail.get("error_code") if isinstance(detail, dict) else None
+    assert (response.status_code, error_code) == (400, "PASSWORD_TOO_WEAK"), f"{request}: expected 400 PASSWORD_TOO_WEAK, got {response.status_code} {response.text}"
+    assert isinstance(detail, dict) and set(detail) == PASSWORD_TOO_WEAK_KEYS, f"{request}: the refusal must carry exactly {sorted(PASSWORD_TOO_WEAK_KEYS)}: {detail}"
+    assert isinstance(detail["message"], str) and detail["message"].strip(), f"{request}: the refusal must carry a message: {detail}"
+    assert detail["rules"] == rules, f"{request}: rules must be exactly the codes missed, in the policy's order, {rules}: got {detail['rules']}"
+
+
+async def _lane_user_exists(username: str) -> bool:
+    """Whether the lane's database holds ``username``, read in a fresh session."""
+    async with AsyncSession(get_async_engine()) as session:
+        return await user_service.get_user_by_username(session, username) is not None
+
+
+@dataclass
+class _LaneAccounts:
+    """The accounts one test registers or writes on the lane, by username: named before the request — a red may let one through —, deleted at teardown."""
+
+    usernames: list[str] = field(default_factory=list)
+
+    def new_username(self, prefix: str) -> str:
+        username = f"{prefix}_{uuid.uuid4().hex[:12]}"
+        self.usernames.append(username)
+        return username
+
+
+async def _delete_lane_accounts(usernames: list[str]) -> list[str]:
+    """Delete those of these accounts the lane holds, through user_service.delete_user, each in a session of its own; what failed."""
+    errors: list[str] = []
+    for username in usernames:
+        async with AsyncSession(get_async_engine()) as session:
+            try:
+                user = await user_service.get_user_by_username(session, username)
+                if user is not None:
+                    await user_service.delete_user(session, user.id)
+            except Exception as exc:  # every account gets its attempt; the failures are reported together
+                errors.append(f"{username}: {exc!r}")
+    return errors
+
+
+@pytest_asyncio.fixture
+async def lane_accounts(test_server) -> AsyncIterator[_LaneAccounts]:
+    """The accounts this test registers or writes on the lane's server, deleted at teardown, after a red too."""
+    accounts = _LaneAccounts()
+    try:
+        yield accounts
+    finally:
+        errors = await _delete_lane_accounts(accounts.usernames)
+        assert not errors, f"Cleanup: could not delete what this test wrote on the lane: {errors}"
+
+
+@pytest_asyncio.fixture
+async def legacy_account(lane_accounts: _LaneAccounts) -> _DisposableUser:
+    """An account of this test whose stored password predates decision 37 and breaks four rules (LEGACY_PASSWORD).
+
+    Written as a row on the lane — no route accepts that password any more, and a row needs none —, with a real bcrypt
+    hash of it, so that it signs in; lane_accounts deletes it at teardown.
+    """
+    user = _DisposableUser(username=lane_accounts.new_username("pwd_legacy"), password=LEGACY_PASSWORD)
+    hashed = await asyncio.to_thread(auth_service.hash_password, user.password)
+    async with AsyncSession(get_async_engine()) as session:
+        session.add(User(username=user.username, email=f"{user.username}@example.com", hashed_password=hashed))
+        await session.commit()
+    assert await _lane_user_exists(user.username), f"Setup: {user.username} must be in the lane's database"
+    return user
+
+
+async def _register_on_lane(username: str, password: str) -> httpx.Response:
+    """POST /auth/register on the lane's server from a client of its own: ``username``, ``<username>@example.com``, ``password``."""
+    async with httpx.AsyncClient() as client:
+        return await client.post(f"{API_BASE}/auth/register", json={"username": username, "email": f"{username}@example.com", "password": password}, timeout=TIMEOUT)
+
+
+async def _change_password_on_lane(token: str, current_password: str, new_password: str) -> httpx.Response:
+    """POST /auth/change-password on the lane's server, the session token sent explicitly from a client of its own."""
+    async with httpx.AsyncClient() as client:
+        return await client.post(f"{API_BASE}/auth/change-password", json={"current_password": current_password, "new_password": new_password}, headers={"Cookie": f"{auth_api.SESSION_COOKIE_NAME}={token}"}, timeout=TIMEOUT)
+
+
+async def _me_on_lane(token: str) -> int:
+    """GET /auth/me with one session token, sent explicitly from a client of its own: the status code."""
+    async with httpx.AsyncClient() as client:
+        return (await client.get(f"{API_BASE}/auth/me", headers={"Cookie": f"{auth_api.SESSION_COOKIE_NAME}={token}"}, timeout=TIMEOUT)).status_code
+
+
+async def _registered_and_signed_in(lane_accounts: _LaneAccounts, prefix: str) -> tuple[str, str]:
+    """An account of this test registered on the lane with PWD_ACCOUNT_PASSWORD, then signed in: (username, session token)."""
+    username = lane_accounts.new_username(prefix)
+    registered = await _register_on_lane(username, PWD_ACCOUNT_PASSWORD)
+    assert registered.status_code == 201, f"Setup: registering {username} failed: {registered.status_code} {registered.text}"
+    signed_in = await _post_login(username, PWD_ACCOUNT_PASSWORD)
+    assert signed_in.status_code == 200, f"Setup: signing in as {username} failed: {signed_in.status_code} {signed_in.text}"
+    token, _ = _session_set_cookie(signed_in)
+    return username, token
+
+
+class TestPasswordRulesOnEveryNewPassword:
+    """Decision 37 on the lane's server: register and change-password refuse a password that breaks the rules, and say which; the login never checks them."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("password", "rules"), WEAK_PASSWORDS)
+    async def test_register_refuses_a_password_that_breaks_the_rules(self, lane_accounts, password, rules):
+        """PWD-001 — NEW, red today (201, or a 422 of the schema under eight characters): POST /auth/register with a password that breaks the rules → 400 PASSWORD_TOO_WEAK, a message, and ``rules`` exactly the codes missed, in the policy's order; no account."""
+        print_section(f"PWD-001: register refuses {password!r}")
+        username = lane_accounts.new_username("pwd_register")
+
+        response = await _register_on_lane(username, password)
+
+        _assert_password_too_weak(response, rules, f"POST /auth/register with {password!r}")
+        assert not await _lane_user_exists(username), f"a refused password must create no account, yet {username} exists"
+        print_success(f"✓ {password!r}: 400 PASSWORD_TOO_WEAK, rules {rules}, no account")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("password", STRONG_PASSWORDS)
+    async def test_register_accepts_a_password_that_meets_every_rule(self, lane_accounts, password):
+        """PWD-002 — GUARD, green today and after: a password that meets every rule, with ASCII or with Unicode classes, registers (201) and signs in: the API applies the policy's classes, not ASCII ones."""
+        print_section(f"PWD-002: register accepts {password!r}")
+        username = lane_accounts.new_username("pwd_strong")
+
+        registered = await _register_on_lane(username, password)
+        signed_in = await _post_login(username, password)
+
+        assert registered.status_code == 201, f"{password!r} meets every rule: POST /auth/register must answer 201, got {registered.status_code} {registered.text}"
+        assert signed_in.status_code == 200, f"the account must sign in with {password!r}: {signed_in.status_code} {signed_in.text}"
+        print_success(f"✓ {password!r}: registered and signed in")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("password", "rules"), WEAK_PASSWORDS)
+    async def test_change_password_refuses_a_new_password_that_breaks_the_rules(self, lane_accounts, password, rules):
+        """PWD-003 — NEW, red today (200, or a 422 of the schema under eight characters): POST /auth/change-password with a new password that breaks the rules → 400 PASSWORD_TOO_WEAK with exactly the codes missed; nothing changes: no session cookie set, the session still works, the old password still signs in and the refused one does not."""
+        print_section(f"PWD-003: change-password refuses {password!r}")
+        username, token = await _registered_and_signed_in(lane_accounts, "pwd_change")
+
+        response = await _change_password_on_lane(token, PWD_ACCOUNT_PASSWORD, password)
+
+        _assert_password_too_weak(response, rules, f"POST /auth/change-password with the new password {password!r}")
+        assert _session_set_cookies(response) == [], f"a refused change must set no session cookie: {response.headers.get_list('set-cookie')}"
+        assert await _me_on_lane(token) == 200, "a refused change must end no session: the session from before must still work"
+        old, refused = await _post_login(username, PWD_ACCOUNT_PASSWORD), await _post_login(username, password)
+        assert (old.status_code, refused.status_code) == (200, 401), f"the password must stay the old one: login with the old one {old.status_code}, with the refused one {refused.status_code}"
+        print_success(f"✓ {password!r}: 400 PASSWORD_TOO_WEAK, rules {rules}; the password and the session as they were")
+
+    @pytest.mark.asyncio
+    async def test_change_password_checks_the_new_password_before_the_current_one(self, lane_accounts):
+        """PWD-004 — NEW, red today (400 «Current password is incorrect»): a new password that breaks the rules with a wrong current password → 400 PASSWORD_TOO_WEAK: the new password is checked before anything else of the request; the password unchanged."""
+        print_section("PWD-004: change-password checks the new password first")
+        username, token = await _registered_and_signed_in(lane_accounts, "pwd_first")
+
+        response = await _change_password_on_lane(token, _wrong_password(), "weakpassword")
+
+        _assert_password_too_weak(response, ["uppercase", "digit", "special"], "POST /auth/change-password with a wrong current password and the new password 'weakpassword'")
+        signed_in = await _post_login(username, PWD_ACCOUNT_PASSWORD)
+        assert signed_in.status_code == 200, f"the password must stay the old one: {signed_in.status_code} {signed_in.text}"
+        print_success("✓ wrong current password and a weak new one: PASSWORD_TOO_WEAK, the new password first")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("password", STRONG_PASSWORDS)
+    async def test_change_password_accepts_a_new_password_that_meets_every_rule(self, lane_accounts, password):
+        """PWD-005 — GUARD, green today and after: a new password that meets every rule, with ASCII or with Unicode classes → 200; the new password signs in, the old one does not."""
+        print_section(f"PWD-005: change-password accepts {password!r}")
+        username, token = await _registered_and_signed_in(lane_accounts, "pwd_changed")
+
+        response = await _change_password_on_lane(token, PWD_ACCOUNT_PASSWORD, password)
+
+        assert response.status_code == 200, f"{password!r} meets every rule: POST /auth/change-password must answer 200, got {response.status_code} {response.text}"
+        new, old = await _post_login(username, password), await _post_login(username, PWD_ACCOUNT_PASSWORD)
+        assert (new.status_code, old.status_code) == (200, 401), f"the new password must sign in and the old one must not: {new.status_code}, {old.status_code}"
+        print_success(f"✓ {password!r}: changed, and signs in")
+
+    @pytest.mark.asyncio
+    async def test_a_stored_weak_password_still_signs_in(self, legacy_account):
+        """PWD-006 — GUARD, green today and after: the login never checks the rules. An account whose stored password breaks four of them signs in with it: 200 and one session cookie."""
+        print_section("PWD-006: a stored weak password still signs in")
+        response = await _post_login(legacy_account.username, legacy_account.password)
+
+        assert response.status_code == 200, f"a password stored before decision 37 must still sign in, the login never checks the rules: {response.status_code} {response.text}"
+        assert len(_session_set_cookies(response)) == 1, f"the login must set one session cookie: {response.headers.get_list('set-cookie')}"
+        print_success(f"✓ {LEGACY_PASSWORD!r}, stored before the rules: 200 and a session")
+
+    @pytest.mark.asyncio
+    async def test_a_stored_weak_password_is_changed_only_for_one_that_meets_the_rules(self, legacy_account):
+        """PWD-007 — NEW, red today (a 422 of the schema, seven characters): signed in with its weak password, the account «changes» it to itself → 400 PASSWORD_TOO_WEAK with the four codes — the rules before «must be different» —; then to one that meets the rules → 200, the weak current password never judged. The new one signs in, the weak one no more."""
+        print_section("PWD-007: a stored weak password is changed only for one that meets the rules")
+        signed_in = await _post_login(legacy_account.username, legacy_account.password)
+        assert signed_in.status_code == 200, f"Setup: the legacy account must sign in: {signed_in.status_code} {signed_in.text}"
+        token, _ = _session_set_cookie(signed_in)
+
+        same = await _change_password_on_lane(token, LEGACY_PASSWORD, LEGACY_PASSWORD)
+        upgraded = await _change_password_on_lane(token, LEGACY_PASSWORD, UPGRADED_PASSWORD)
+
+        _assert_password_too_weak(same, LEGACY_RULES, f"POST /auth/change-password from the stored weak password {LEGACY_PASSWORD!r} to itself")
+        assert upgraded.status_code == 200, f"a weak current password is still the current password: changing it for one that meets the rules must answer 200, got {upgraded.status_code} {upgraded.text}"
+        new, old = await _post_login(legacy_account.username, UPGRADED_PASSWORD), await _post_login(legacy_account.username, LEGACY_PASSWORD)
+        assert (new.status_code, old.status_code) == (200, 401), f"the new password must sign in and the weak one must not: {new.status_code}, {old.status_code}"
+        print_success("✓ to itself: PASSWORD_TOO_WEAK; to a password that meets the rules: 200")
+
+    @pytest.mark.asyncio
+    async def test_an_empty_password_is_still_a_schema_error(self, lane_accounts):
+        """PWD-008 — GUARD, green today and after: the schemas keep «not empty». POST /auth/register with an empty password and POST /auth/change-password with an empty new password → 422, a request validation error, not PASSWORD_TOO_WEAK; no account."""
+        print_section("PWD-008: an empty password is a 422 of the schema")
+        _, token = await _registered_and_signed_in(lane_accounts, "pwd_empty")
+        newcomer = lane_accounts.new_username("pwd_empty_new")
+
+        registered = await _register_on_lane(newcomer, "")
+        changed = await _change_password_on_lane(token, PWD_ACCOUNT_PASSWORD, "")
+
+        assert registered.status_code == 422, f"an empty password is a request validation error: POST /auth/register must answer 422, got {registered.status_code} {registered.text}"
+        assert changed.status_code == 422, f"an empty new password is a request validation error: POST /auth/change-password must answer 422, got {changed.status_code} {changed.text}"
+        assert not await _lane_user_exists(newcomer), f"a refused registration must create no account, yet {newcomer} exists"
+        print_success("✓ empty: 422 on both routes")
+
+
+# ============================================================================
+# NO TYPED IDENTIFIER IN THE LOG OF A SIGN-IN — lot A-22 (LOGIN-027 to LOGIN-033), in-process on a private database
+# ============================================================================
+# Workstream E's rule: no email address in any log. The login field takes a username or an email address, so a sign-in
+# that logs what was typed writes an address whenever one was typed. These imports and helpers serve
+# TestSignInLogsNoTypedIdentifier only, so they live next to it. The lane's server writes its logs in a process of its
+# own, which no test can capture: so these cases run in-process, as TestProfileLogsNoAddress (test_profile_api.py, lot
+# A7c) runs its own, on a private instance — the real auth router, mounted as api/v1/router.py mounts it, in an app of
+# this test whose get_session_generator opens sessions on a private SQLite file under tmp_path, seeded as a new install
+# (the default global settings, email verification off among them, no account). No sign-in reaches the lane. bcrypt
+# runs at its lowest cost in this process (auth_service.BCRYPT_ROUNDS = 4), the dummy hash of an unknown login included,
+# in a cache of the test's own; the lane's server keeps its own. Each address has a local part of its own that no
+# username contains: a log may carry the stored username, never the address, and the check looks for the local part
+# alone too.
+
+import functools
+import logging
+from collections.abc import Iterable
+from typing import Any
+
+import structlog
+from fastapi import FastAPI
+from structlog.testing import capture_logs
+
+from backend.app.config import API_V1_PREFIX
+from backend.app.db.models import AccountTokenPurpose
+from backend.app.db.session import get_session_generator
+from backend.app.services.accounts import token_service
+from backend.app.services.accounts.settings_service import initialize_global_settings
+
+#: The logger of POST /auth/login: the auth routes' structlog.get_logger(__name__).
+_SIGN_IN_LOGGER = auth_api.__name__
+#: The canary logged through _SIGN_IN_LOGGER, to both captures.
+_SIGN_IN_CANARY = f"canary: the capture sees the events of {_SIGN_IN_LOGGER}"
+#: The events of POST /auth/login, word for word: the three failures of lot A-22, the refusal of an account waiting for
+#: its email verification (lot E5b), and the success.
+_LOGIN_FAILED_USER_NOT_FOUND = "Login failed: user not found"
+_LOGIN_FAILED_WRONG_PASSWORD = "Login failed: wrong password"
+_LOGIN_FAILED_USER_INACTIVE = "Login failed: user inactive"
+_LOGIN_REFUSED_EMAIL_NOT_VERIFIED = "Login refused: email not verified"
+_USER_LOGGED_IN = "User logged in"
+#: The keys of a captured structlog event that are not fields of the call: the message, the level, a timestamp.
+_STRUCTLOG_KEYS = frozenset({"event", "log_level", "timestamp"})
+#: The SQL loggers. Below WARNING they print every statement with its parameters and every row read, so the identifier
+#: the login's SELECT looks for and the address of the row it reads. configure_logging (backend/app/logging_config.py)
+#: sets them to WARNING: a running server never writes those records, caplog sees them only because it lowers the root's
+#: level. UADM-030 (test_users_admin_api.py) pins that premise, read from configure_logging's source.
+_SIGN_IN_SQL_LOGGERS = ("aiosqlite", "sqlalchemy.engine", "sqlalchemy.pool")
+#: The password of every account of the private instance.
+_SIGN_IN_PASSWORD = "Sign-In-Pass-2026"
+
+
+@dataclass(frozen=True)
+class _PrivateSignIn:
+    """An instance of one test: the auth router, every session on ``engine``."""
+
+    engine: AsyncEngine
+    app: FastAPI
+
+
+def _private_sign_in_app(engine: AsyncEngine) -> FastAPI:
+    """The real auth router, mounted under the API prefix as ``api/v1/router.py`` mounts it; ``get_session_generator`` opens sessions on ``engine``."""
+    app = FastAPI()
+    app.include_router(auth_api.router, prefix=API_V1_PREFIX)
+
+    async def private_session() -> AsyncIterator[AsyncSession]:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            yield session
+
+    app.dependency_overrides[get_session_generator] = private_session
+    return app
+
+
+@pytest_asyncio.fixture
+async def private_sign_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_PrivateSignIn]:
+    """A private SQLite file under tmp_path, schema and default settings as a new install starts with, no account; bcrypt at cost 4. Disposed at teardown.
+
+    The dummy hash an unknown login is checked against is computed once per process (functools.cache), at the cost of
+    its first call: the test gets a cache of its own, so a dummy of cost 4 never outlives it (LOGIN-024 pins the real
+    cost on the process's own).
+    """
+    monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
+    monkeypatch.setattr(auth_service, "_dummy_password_hash", functools.cache(auth_service._dummy_password_hash.__wrapped__))
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'sign-in-logs.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine) as session:
+            await initialize_global_settings(session)
+        yield _PrivateSignIn(engine=engine, app=_private_sign_in_app(engine))
+    finally:
+        await engine.dispose()
+
+
+@dataclass(frozen=True)
+class _SignInAccount:
+    """An account of the private instance: its id, its username, and its address, whose local part the username does not contain."""
+
+    user_id: int
+    username: str
+    email: str
+
+
+async def _sign_in_account(private: _PrivateSignIn, *, active: bool = True, awaiting_verification: bool = False) -> _SignInAccount:
+    """An account written as a row with a real bcrypt hash of _SIGN_IN_PASSWORD (cost 4): all before any capture.
+
+    ``active=False`` alone is a plainly deactivated account, as an administrator leaves it: no verification token.
+    ``awaiting_verification`` adds one unspent email-verification token, the «hold» registration gives an account that
+    waits for its link (email_verification.hold_for_verification); such an account is inactive.
+    """
+    assert not (active and awaiting_verification), "Setup: an account waiting for its email verification is inactive"
+    username, email = f"signin_{uuid.uuid4().hex[:12]}", f"inbox_{uuid.uuid4().hex[:12]}@example.com"
+    async with AsyncSession(private.engine, expire_on_commit=False) as session:
+        user = User(username=username, email=email, hashed_password=auth_service.hash_password(_SIGN_IN_PASSWORD), is_active=active)
+        session.add(user)
+        await session.flush()
+        if awaiting_verification:
+            await token_service.issue_token(session, AccountTokenPurpose.EMAIL_VERIFICATION, user_id=user.id)
+        await session.commit()
+    assert user.id is not None and user.is_active is active, f"Setup: {username} must be written {'active' if active else 'inactive'}: {user!r}"
+    return _SignInAccount(user_id=user.id, username=username, email=email)
+
+
+async def _logged_sign_in(private: _PrivateSignIn, identifier: str, password: str, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch) -> tuple[httpx.Response, list[dict[str, Any]], list[logging.LogRecord]]:
+    """POST /auth/login on the private instance with ``identifier`` typed in the login field, from a client of its own,
+    and everything that request logged, from the canary to the answer: the structlog events (capture_logs) and the stdlib
+    records (caplog at DEBUG, on the root and on _SIGN_IN_LOGGER, enabled even if a configuration disabled it).
+
+    Barrier first: the canary through _SIGN_IN_LOGGER must reach both captures, or a capture that sees nothing would pass
+    for a request that logs nothing.
+    """
+    monkeypatch.setattr(logging.getLogger(_SIGN_IN_LOGGER), "disabled", False)
+    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.DEBUG, logger=_SIGN_IN_LOGGER)
+    caplog.clear()
+    with capture_logs() as events:
+        structlog.get_logger(_SIGN_IN_LOGGER).debug(_SIGN_IN_CANARY)
+        logging.getLogger(_SIGN_IN_LOGGER).debug(_SIGN_IN_CANARY)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=private.app), base_url="http://test", timeout=TIMEOUT) as client:
+            response = await client.post(f"{API_V1_PREFIX}/auth/login", json={"username": identifier, "password": password})
+    records = list(caplog.records)
+    assert _SIGN_IN_CANARY in {event.get("event") for event in events}, f"barrier: structlog events of {_SIGN_IN_LOGGER} do not reach capture_logs"
+    assert (_SIGN_IN_LOGGER, _SIGN_IN_CANARY) in {(record.name, record.getMessage()) for record in records}, f"barrier: stdlib records of {_SIGN_IN_LOGGER} do not reach caplog at DEBUG"
+    return response, events, records
+
+
+def _shows_the_identifier(text: str, identifiers: Iterable[str]) -> bool:
+    """Whether ``text`` shows one of ``identifiers``, whole or, for an address, by its local part alone, compared in lower case."""
+    lowered = text.lower()
+    return any(identifier.lower() in lowered or identifier.lower().partition("@")[0] in lowered for identifier in identifiers)
+
+
+def _sign_in_record_text(record: logging.LogRecord) -> str:
+    """All a stdlib record shows: its message and every attribute."""
+    return record.getMessage() + repr(vars(record))
+
+
+def _sign_in_record_written_by_a_server(record: logging.LogRecord) -> bool:
+    """Whether a running server writes ``record``: every record but those below WARNING of the SQL loggers and their children."""
+    of_sql = any(record.name == name or record.name.startswith(f"{name}.") for name in _SIGN_IN_SQL_LOGGERS)
+    return record.levelno >= logging.WARNING or not of_sql
+
+
+def _assert_identifier_not_logged(events: list[dict[str, Any]], records: list[logging.LogRecord], identifiers: Iterable[str], call: str) -> None:
+    """No structlog event, and no stdlib record a server would write, shows one of ``identifiers``: in any key, value or
+    message, whole or, for an address, by its local part, in any case."""
+    needles = sorted(set(identifiers))
+    leaked_events = [event for event in events if _shows_the_identifier(repr(event), needles)]
+    leaked_records = [f"{record.name}: {record.getMessage()}" for record in records if _sign_in_record_written_by_a_server(record) and _shows_the_identifier(_sign_in_record_text(record), needles)]
+    assert leaked_events == [], f"{call}: structlog events showing {needles}, whole or by the local part: {leaked_events}"
+    assert leaked_records == [], f"{call}: stdlib records showing {needles}, whole or by the local part: {leaked_records}"
+
+
+def _the_sign_in_event(events: list[dict[str, Any]], name: str) -> dict[str, Any]:
+    """The event ``name`` of the capture, asserted to be there once."""
+    matching = [event for event in events if event.get("event") == name]
+    assert len(matching) == 1, f"The sign-in must log «{name}» once: {matching}"
+    return matching[0]
+
+
+def _own_fields(event: dict[str, Any]) -> set[str]:
+    """The keys of a captured event beyond _STRUCTLOG_KEYS: the fields the logging call itself passed."""
+    return set(event) - _STRUCTLOG_KEYS
+
+
+class TestSignInLogsNoTypedIdentifier:
+    """Lot A-22 (release 1.3, workstream A): POST /auth/login writes in no log the identifier typed in the login field —
+    a username or an email address —, after workstream E's rule: no email address in any log. The three failures keep
+    their messages word for word: «Login failed: user not found» carries nothing of what was typed (no ``username`` key,
+    no key holding it); «Login failed: wrong password» and «Login failed: user inactive» carry the account's
+    ``user_id`` and no ``username`` key. The success's «User logged in» keeps ``user_id`` and the stored ``username``.
+
+    What is checked is everything the request logged, captured at DEBUG by ``_logged_sign_in``: no structlog event and
+    no stdlib record shows the typed address (or the account's own address), whole or by its local part, in any case —
+    the SQL loggers' records below WARNING aside, which no server writes (``_SIGN_IN_SQL_LOGGERS``).
+
+    Today the three failures log ``username=`` with what was typed: LOGIN-027 to LOGIN-031 are red until A-22, on that
+    keyword alone (every answer is already the contract's). LOGIN-032, the success, and LOGIN-033, the refusal of an
+    account waiting for its email verification (lot E5b, ``user_id`` only), log no address today and are guards.
+
+    Write-safe: every account lives in the test's own tmp_path (private_sign_in), and no sign-in reaches the lane.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_address_is_not_logged(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-027 — NEW, red until A-22, on the ``username=`` keyword alone: «Login failed: user not found» carries
+        the address as typed. An address no account has, typed to sign in: 401 «Invalid credentials», no event and no
+        record of that request shows the address, whole or by its local part, and «Login failed: user not found» is
+        there once, without a ``username`` key."""
+        print_section("LOGIN-027: an unknown address typed to sign in is not logged")
+        typed = f"ghost.{uuid.uuid4().hex[:12]}@example.com"
+
+        response, events, records = await _logged_sign_in(private_sign_in, typed, _wrong_password(), caplog, monkeypatch)
+
+        assert response.status_code == 401 and response.json() == INVALID_CREDENTIALS, f"barrier: an unknown address must get 401 {INVALID_CREDENTIALS}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [typed], "POST /auth/login with an unknown address")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_USER_NOT_FOUND)
+        assert "username" not in event, f"«{_LOGIN_FAILED_USER_NOT_FOUND}» must carry no 'username' key: {event}"
+        print_success(f"✓ 401; {len(events)} events and {len(records)} records without the address; no username key")
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_username_is_not_logged(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-028 — NEW, red until A-22, on the ``username=`` keyword alone: «Login failed: user not found» carries
+        the name as typed. A username no account has, typed to sign in: 401 «Invalid credentials», the typed name
+        appears in no event and no record of that request, and «Login failed: user not found» is there once, without a
+        ``username`` key."""
+        print_section("LOGIN-028: an unknown username typed to sign in is not logged")
+        typed = f"ghost_{uuid.uuid4().hex[:12]}"
+
+        response, events, records = await _logged_sign_in(private_sign_in, typed, _wrong_password(), caplog, monkeypatch)
+
+        assert response.status_code == 401 and response.json() == INVALID_CREDENTIALS, f"barrier: an unknown username must get 401 {INVALID_CREDENTIALS}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [typed], "POST /auth/login with an unknown username")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_USER_NOT_FOUND)
+        assert "username" not in event, f"«{_LOGIN_FAILED_USER_NOT_FOUND}» must carry no 'username' key: {event}"
+        print_success(f"✓ 401; {len(events)} events and {len(records)} records without the typed name; no username key")
+
+    @pytest.mark.asyncio
+    async def test_a_wrong_password_with_the_address_logs_the_user_id_not_the_address(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-029 — NEW, red until A-22, on the ``username=`` keyword alone: «Login failed: wrong password» carries
+        the address as typed. An active account signed in by its address with a wrong password: 401 «Invalid
+        credentials», no event and no record of that request shows the address, and «Login failed: wrong password» is
+        there once, with the account's ``user_id`` and without a ``username`` key."""
+        print_section("LOGIN-029: a wrong password typed with the address logs the user_id, not the address")
+        account = await _sign_in_account(private_sign_in)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.email, _wrong_password(), caplog, monkeypatch)
+
+        assert response.status_code == 401 and response.json() == INVALID_CREDENTIALS, f"barrier: a wrong password must get 401 {INVALID_CREDENTIALS}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the address with a wrong password")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_WRONG_PASSWORD)
+        assert "username" not in event, f"«{_LOGIN_FAILED_WRONG_PASSWORD}» must carry no 'username' key: {event}"
+        assert event.get("user_id") == account.user_id, f"«{_LOGIN_FAILED_WRONG_PASSWORD}» must carry the account's user_id, {account.user_id}: {event}"
+        print_success(f"✓ 401; {len(events)} events and {len(records)} records without the address; user_id {account.user_id}")
+
+    @pytest.mark.asyncio
+    async def test_a_wrong_password_with_the_username_logs_only_the_user_id(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-030 — NEW, red until A-22: «Login failed: wrong password» carries ``username``, here the name as typed,
+        which is also the stored one. An active account signed in by its username with a wrong password: 401 «Invalid
+        credentials», its address in no event and no record of that request, and «Login failed: wrong password» there
+        once with exactly one field of its own, the account's ``user_id``: no ``username``, typed or stored."""
+        print_section("LOGIN-030: a wrong password typed with the username logs the user_id only")
+        account = await _sign_in_account(private_sign_in)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.username, _wrong_password(), caplog, monkeypatch)
+
+        assert response.status_code == 401 and response.json() == INVALID_CREDENTIALS, f"barrier: a wrong password must get 401 {INVALID_CREDENTIALS}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the username with a wrong password")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_WRONG_PASSWORD)
+        assert _own_fields(event) == {"user_id"} and event["user_id"] == account.user_id, f"«{_LOGIN_FAILED_WRONG_PASSWORD}» must carry exactly one field beside {sorted(_STRUCTLOG_KEYS)}, user_id={account.user_id}, and no username: {event}"
+        print_success(f"✓ 401; the event's own fields are exactly user_id={account.user_id}")
+
+    @pytest.mark.asyncio
+    async def test_a_deactivated_account_signed_in_by_address_logs_the_user_id_not_the_address(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-031 — NEW, red until A-22, on the ``username=`` keyword alone: «Login failed: user inactive» carries
+        the address as typed. A plainly deactivated account — inactive, without a verification token, as an
+        administrator leaves it; an account waiting for its email verification gets EMAIL_NOT_VERIFIED instead
+        (LOGIN-033) — signed in by its address with the right password: 403 ACCOUNT_DISABLED, no event and no record of
+        that request shows the address, and «Login failed: user inactive» is there once, with the account's ``user_id``
+        and without a ``username`` key."""
+        print_section("LOGIN-031: a deactivated account signed in by its address logs the user_id, not the address")
+        account = await _sign_in_account(private_sign_in, active=False)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.email, _SIGN_IN_PASSWORD, caplog, monkeypatch)
+
+        assert response.status_code == 403 and response.json() == {"detail": ACCOUNT_DISABLED_DETAIL}, f"barrier: a deactivated account with the right password must get 403 with detail {ACCOUNT_DISABLED_DETAIL}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the address of a deactivated account")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_USER_INACTIVE)
+        assert "username" not in event, f"«{_LOGIN_FAILED_USER_INACTIVE}» must carry no 'username' key: {event}"
+        assert event.get("user_id") == account.user_id, f"«{_LOGIN_FAILED_USER_INACTIVE}» must carry the account's user_id, {account.user_id}: {event}"
+        print_success(f"✓ 403 ACCOUNT_DISABLED; {len(events)} events and {len(records)} records without the address; user_id {account.user_id}")
+
+    @pytest.mark.asyncio
+    async def test_a_sign_in_by_address_logs_the_stored_username_not_the_address(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-032 — GUARD, green today and after: an active account signed in by its address with the right password:
+        200, no event and no record of that request shows the address, and «User logged in» is there once with the
+        account's ``user_id`` and its stored ``username`` — what a sign-in may log, never what was typed."""
+        print_section("LOGIN-032: a sign-in by the address logs the stored username, not the address")
+        account = await _sign_in_account(private_sign_in)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.email, _SIGN_IN_PASSWORD, caplog, monkeypatch)
+
+        assert response.status_code == 200 and response.json()["user"]["id"] == account.user_id, f"barrier: the account must sign in by its address with its password: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the address with the right password")
+        event = _the_sign_in_event(events, _USER_LOGGED_IN)
+        assert (event.get("user_id"), event.get("username")) == (account.user_id, account.username), f"«{_USER_LOGGED_IN}» keeps user_id and the stored username: {event}"
+        print_success(f"✓ 200; {len(events)} events and {len(records)} records without the address; user_id and the stored username")
+
+    @pytest.mark.asyncio
+    async def test_an_account_awaiting_verification_signed_in_by_address_logs_no_address(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-033 — GUARD, green today and after: an account waiting for its email verification (lot E5b) — inactive,
+        with an unspent verification token — signed in by its address with the right password: 403 EMAIL_NOT_VERIFIED,
+        no event and no record of that request shows the address, and «Login refused: email not verified» is there
+        once, with the account's ``user_id`` and without a ``username`` key."""
+        print_section("LOGIN-033: an account awaiting its email verification, signed in by its address, logs no address")
+        account = await _sign_in_account(private_sign_in, active=False, awaiting_verification=True)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.email, _SIGN_IN_PASSWORD, caplog, monkeypatch)
+
+        assert (response.status_code, _error_code(response)) == (403, "EMAIL_NOT_VERIFIED"), f"barrier: an account waiting for its email verification, with the right password, must get 403 EMAIL_NOT_VERIFIED: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the address of an account waiting for its verification")
+        event = _the_sign_in_event(events, _LOGIN_REFUSED_EMAIL_NOT_VERIFIED)
+        assert "username" not in event and event.get("user_id") == account.user_id, f"«{_LOGIN_REFUSED_EMAIL_NOT_VERIFIED}» carries the account's user_id, {account.user_id}, and no 'username' key: {event}"
+        print_success(f"✓ 403 EMAIL_NOT_VERIFIED; {len(events)} events and {len(records)} records without the address; user_id {account.user_id}")

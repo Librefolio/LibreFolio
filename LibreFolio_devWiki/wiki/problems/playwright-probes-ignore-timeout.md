@@ -37,12 +37,12 @@ missing from the release.
   `loadBrokerFiles()` read an empty list, so every broker panel renders collapsed and the file row never exists. No
   wait inside step 2 can fix that. (The product side of this race was M-16, fixed in train 48 — below.)
 
-The trap itself was known — `e2e/fixtures/probe.ts` has had `appears()` for it since 2026-08-15 (`e39ab4571`), and
+The trap itself was known — `e2e/fixtures/probe.ts` has had `appears()` for it since 2026-08-15 (`fda663d2a`), and
 the agent rules warn about it — but `gallery.spec.ts` used `appears()` nowhere.
 
 ## Solution
 
-Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853a6`, train 46, merge `378338fed`):
+Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `e67b66375`, train 46, merge `7c3119d97`):
 
 - The 76 probes were read one by one and classified: **A**, 19 guard a shot; **B**, 29 prepare a later shot; **C**, 7
   fail loudly when they miss; **D**, 21 are cleanups or a deliberate instant question. A and B — **48** — became
@@ -69,7 +69,7 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
 - **The developer's decision** (2026-10-12, verbatim): «tanto gli screen vanno fatti in ogni caso, impostiamo il locale
   in playwright sin da ora, è la scelta giusta» ("the shots have to be taken anyway: set the locale in Playwright from
   now on, it is the right choice").
-- **The fix** (batch 20 of M, test-author; `51b581636`, journal `63b3e5971`, train 52 `d33fca26f`):
+- **The fix** (batch 20 of M, test-author; `379b9792d`, journal `817332976`, train 52 `7da9438c4`):
   - Playwright's `locale` is fixed per browser context, while the gallery loops four languages in one page. So
     `setBrowserLocale(page, lang)` (`frontend/e2e/fixtures/galleryLocale.ts`) sends Chromium's
     `Emulation.setLocaleOverride` from the page's CDP session — en-US, it-IT, fr-FR, es-ES — as the first statement of
@@ -80,7 +80,7 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
     whose page was drawn under another locale, or carries no stamp.
   - *Update (train 78)*: the override moves only `Intl`'s fallback locale and `Accept-Language`; `navigator.language`,
     which `uiLocale()` reads since M-18, stays en-US — backlog M-24 (low), written into the header of
-    `galleryLocale.ts` (`1e4a3ecd5`).
+    `galleryLocale.ts` (`fc66a1055`).
   - The 13 tests that shoot a page prepared once (3 auth pages, 2 PAC, 8 Files) now redraw it in each language.
   - **The trap**: `@playwright/test` gives every context `locale: 'en-US'`, and Chromium then refuses a second override
     («Another locale override is already in effect»). `test.use({locale: undefined})` falls back to that default; the
@@ -94,13 +94,13 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
 
 - The product side of the wizard race above: on step 1 «Next» stayed enabled while the broker list loaded, and a user
   faster than the list found step 2's broker panels collapsed, the files there but hidden.
-- Fixed by workstream I (`3cd25af4f`, "fix(import): gate wizard Next on broker load"; train 48, `0e4f35b0a`; plan
+- Fixed by workstream I (`40a192a89`, "fix(import): gate wizard Next on broker load"; train 48, `9d9004dfb`; plan
   `Phase_0/44_importWizardBrokerGate/`). Every broker-list load in flight — the one at opening and the refresh after a
   broker created from step 1 — keeps step 1 busy (`data-busy`) and «Next» disabled with its spinner
   (`trackBrokerLoad()`, `brokersLoading`). `loadBrokers()` waits with `Promise.allSettled`, so a loader that fails
   neither releases «Next» early nor locks it.
 - The gallery line that depends on it, `waitForSettled(import-wizard-step1)` before the step-1 shot, came with batch 20
-  of M (`51b581636`).
+  of M (`379b9792d`).
 - The defect and its fix in full: [[problems/import-wizard-next-before-brokers-loaded]].
 
 ## Still open (post-1.2 backlog, section M)
@@ -113,11 +113,11 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
 ## Planned in release 1.2 (assigned to I)
 
 - **M-17**, found by M-14 — the coordinator's decision, after M-16: two UI strings fixed in English — the date range
-  picker formats with `'en'`, and «Last updated:» in the global settings. *Resolved in M-18's CP2 (`ff7c96fd0`, train 75).*
+  picker formats with `'en'`, and «Last updated:» in the global settings. *Resolved in M-18's CP2 (`c0b6e2229`, train 75).*
 - **M-18**, found by M-14 — the developer's decision of 2026-10-12, after the UI refinement: numbers built with
   `toFixed(n)` never meet a locale and keep the dot in every language — percentages (about 50 lines in some 30 files),
   file sizes, durations — so a shot reads «+4788,01 €» next to «14.07%». *Update (train 68)*: moved to T, with the
-  developer's rule «Lingua della UI per tutto» — CP1 delivered (`5b2aad5c4`); CP2 and CP3 delivered in trains 75–76, M-18 closed —
+  developer's rule «Lingua della UI per tutto» — CP1 delivered (`cdc341b6a`); CP2 and CP3 delivered in trains 75–76, M-18 closed —
   [[decisions/figures-in-the-interface-language]]. A known limit stays after it (T's analysis,
   backlog T-DI): a native `<input type="date">` is drawn by the browser in the browser's language
   (`RiskAnalysisPanel.svelte`); only a date picker of the app's own would follow the UI.
@@ -139,8 +139,8 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
 | `setBrowserLocale()`, `stampDocumentLocale()`, `expectDrawnUnder()` (M-14) | `frontend/e2e/fixtures/galleryLocale.ts` |
 | `waitForSettled()` | `frontend/e2e/fixtures/app-events.ts` |
 | The gallery scenarios | `frontend/e2e/gallery.spec.ts` |
-| The wizard (step `data-busy`, `loadBrokerFiles`; M-16: `trackBrokerLoad`, `loadBrokers`) | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| M-16 tests (unit, E2E) | `frontend/src/lib/components/transactions/modals/ImportWizardModal.test.ts`, `frontend/e2e/transactions/tx-import-upload.spec.ts` |
+| The wizard (`loadBrokerFiles`; M-16: `trackBrokerLoad`, `loadBrokers`; each step's `data-busy` in its component under `frontend/src/lib/features/transactions/import/`) | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| M-16 tests (unit, E2E) | `frontend/src/lib/features/transactions/import/ImportWizardModal.test.ts`, `frontend/e2e/transactions/tx-import-upload.spec.ts` |
 | M-16 plan (workstream I) | `LibreFolio_developer_journal/Release_2/Phase_0/44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md` |
 | Amount formatting by the browser's locale (M-14) | `frontend/src/lib/utils/currency/currencyFormat.ts` |
 | Same `isEnabled` defect outside the gallery (M-15) | `frontend/e2e/transactions/tx-picker-pagination.spec.ts` |

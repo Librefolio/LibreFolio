@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Stale: {days} day(s) old",
+      "stale": "Stale: {days, plural, one {# day} other {# days}} old",
       "fxStale": "FX rate: {days}d old",
       "percentNote": "% relative to range start date",
       "upper": "Upper",
@@ -14,11 +14,14 @@
       "currentBucket": "In progress: {days} of {total} days",
       "originalValue": "orig. {value}",
       "fxRateDate": "fx @ {date}",
-      "fxDaysBack": "({days}d back)"
+      "fxDaysBack": "({days}d back)",
+      "yearLabel": "{year}",
+      "staleBadge": "{days}d"
     },
     "resolution": {
       "weekly": "Weekly",
-      "monthly": "Monthly"
+      "monthly": "Monthly",
+      "yearly": "Yearly"
     },
     "marketPrice": "Market Price",
     "showPercentage": "Show percentage",
@@ -136,7 +139,9 @@
       "resultMissing": "No backend result was returned for this signal. Retry the signal request.",
       "partialResult": "This signal is only partially available with the current data.",
       "unavailable": "This signal cannot be calculated with the available data.",
-      "partialContiguousSegment": "Signal calculated on the complete contiguous segment {start}–{end}. {excluded} loaded points were excluded because required dates or fields were incomplete. Complete input: {available}/{requested} ({coverage}%, including warm-up). Longest missing streak: {consecutive} points."
+      "partialContiguousSegment": "Signal calculated on the complete contiguous segment {start}–{end}. {excluded} loaded points were excluded because required dates or fields were incomplete. Complete input: {available}/{requested} ({coverage}%, including warm-up). Longest missing streak: {consecutive} points.",
+      "undefinedWindowPartial": "{count} points of this return cannot be calculated, from {start} to {end}, because a price they need is missing or unusable. Sync the prices of this asset from {resyncStart} to {resyncEnd} and try again.",
+      "undefinedWindowUnavailable": "This return cannot be calculated: the {count} points, from {start} to {end}, have no usable price. Sync the prices of this asset from {resyncStart} to {resyncEnd} and try again."
     },
     "axes": {
       "exchangeRate": "Exchange-rate axis ({pair})",
@@ -145,7 +150,12 @@
       "signal": "{name} axis",
       "volume": "Volume axis"
     },
-    "yAxisAuto": "Auto"
+    "yAxisAuto": "Auto",
+    "lineShape": "Line shape",
+    "lineShapeDesc": "How charts join their points. Applies to this chart only.",
+    "lineShapeSegments": "Segments",
+    "lineShapeSteps": "Steps",
+    "lineShapeSpline": "Smooth curve"
   },
   "measure": {
     "pending": "Start: {startDate} ({startValue}) — click chart for end point",
@@ -194,7 +204,8 @@
     "units": {
       "days": "days",
       "sessions": "sessions",
-      "percentPerYear": "%/yr"
+      "percentPerYear": "%/yr",
+      "observations": "observations"
     },
     "visual": {
       "components": "Components",
@@ -204,6 +215,9 @@
     "reference": {
       "zero": "Zero"
     },
+    "gapsJoined": {
+      "label": "gaps joined"
+    },
     "regions": {
       "oversoldDescription": "Lower extreme below the configured threshold.",
       "neutralDescription": "Central range between the configured thresholds.",
@@ -211,13 +225,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Select comparison asset",
-      "loadError": "Assets could not be loaded."
-    },
-    "riskRollingReturn": {
-      "name": "Rolling Return",
-      "description": "Compounded price-only return over a rolling window.",
-      "output": "Return",
-      "outputDescription": "Compounded holding-period return, in percentage points."
+      "loadError": "Assets could not be loaded.",
+      "blocked": "Not available",
+      "isMainAsset": "This is the asset of the chart",
+      "alreadyCompared": "Already compared in another signal"
     }
   }
 }

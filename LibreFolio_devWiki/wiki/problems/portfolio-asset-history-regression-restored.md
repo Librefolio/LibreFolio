@@ -21,7 +21,7 @@ available.
 
 ## Root Cause
 
-Commit `1b03cc63e` removed the route as part of a broader cleanup of legacy endpoints that **were** genuinely
+Commit `e708daa8f` removed the route as part of a broader cleanup of legacy endpoints that **were** genuinely
 superseded by the unified `/portfolio/report` entrypoint (see [[concepts/portfolio-report-unified]]) —
 `asset-history` was swept into that same cleanup by mistake even though it was not superseded (there is no
 per-asset WAC/market-price series in the unified report response).
@@ -29,7 +29,7 @@ per-asset WAC/market-price series in the unified report response).
 ## Solution
 
 Verified via `git log` that the route existed, was functional, and had tests before the removal. Restored in
-commit `222a77c5e`; confirmed present again at `backend/app/api/v1/portfolio_api.py:137-151`.
+commit `4f1f81283`; confirmed present again at `backend/app/api/v1/portfolio_api.py:137-151`.
 
 ## Prevention
 

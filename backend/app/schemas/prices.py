@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import (
     ConfigDict,
@@ -37,6 +37,7 @@ from pydantic import (
     model_validator,
 )
 
+from backend.app.schemas.assets.events import FAAssetEventPoint, FAAssetEventPointOut
 from backend.app.schemas.common import (
     BackwardFillInfo,
     BaseBulkDeleteResponse,
@@ -46,6 +47,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    MinStartDateRangeModel,
     SafeDecimal,
     StrictModel,
 )
@@ -57,6 +59,10 @@ from backend.app.schemas.signals import (
     SignalRequest,
     SignalResult,
 )
+from backend.app.services.assets.price_sampling import SampleResolution  # Z-29: a pure module of dates, no service
+
+#: A price query item's key, and a sample_like naming one (Z-29)
+SAMPLE_KEY_PATTERN = r"^[A-Za-z0-9_.:-]{1,64}$"
 
 # ============================================================================
 # BACKWARD-FILL INFO (EXTENDED FOR FX STALENESS)
@@ -85,40 +91,45 @@ class AssetBackwardFillInfo(BackwardFillInfo, FxBackwardFillInfo):
 # ============================================================================
 
 
+def _description_without_backticks(schema: dict) -> None:
+    """The web client's generator writes the description of a required field's model between backticks
+    (openapi-zod-client, a multi-line text in a template literal): a backtick inside would end it. Since Z-29,
+    ``FAPriceSampleBounds`` holds two required ``FAPricePoint`` fields; the docstring keeps its backticks, the
+    schema says quotes."""
+    if isinstance(schema.get("description"), str):
+        schema["description"] = schema["description"].replace("`", "'")
+
+
 class FAPricePoint(StrictModel):
     """Single price point with OHLC data.
 
-    Used for both:
-    - Upsert operations (backward_fill_info is None)
-    - Query results (backward_fill_info may be present)
+    Used for:
+    - a provider's history (``FAHistoricalData``) and the Sync's ``changed_points`` (backward_fill_info is None);
+    - query results (backward_fill_info may be present).
 
     The API contract uses separate `close: Decimal` and `currency: str` fields
     for JSON compatibility. Build a `Currency(code=…, amount=…)` inline where
     a Currency object is needed (project-wide style).
 
-    **F.4 sentinel rules on upsert** (applied per-field, for ``open/high/low/volume``):
-
-    - ``None`` / omitted → **no-op**: existing DB value is preserved (partial merge).
-    - ``>= 0`` → write the provided value.
-    - ``-1`` → ``SET NULL`` on the DB column.
-
-    ``close`` is **not** affected by the sentinel rules: it is always required
-    and always written verbatim. To "clear" a row use the DELETE endpoint on
-    that date; to clear OHLC auxiliary fields use ``-1``.
+    A manual write uses ``FAPriceWritePoint`` (N92), where ``"clear"`` empties a stored field. This model checks no
+    sign: the refresh discards a provider's point with a price not above 0, and the write model refuses one (N92).
     """
 
+    model_config = ConfigDict(json_schema_extra=_description_without_backticks)
+
     date: date_type = Field(..., description="Price date")
-    open: Optional[SafeDecimal] = Field(None, description="Opening price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    high: Optional[SafeDecimal] = Field(None, description="High price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    low: Optional[SafeDecimal] = Field(None, description="Low price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    close: SafeDecimal = Field(..., description="Closing price (required; not affected by -1 sentinel)")
-    volume: Optional[SafeDecimal] = Field(None, description="Trading volume (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    open: Optional[SafeDecimal] = Field(None, description="Opening price (None when unknown)")
+    high: Optional[SafeDecimal] = Field(None, description="High price (None when unknown)")
+    low: Optional[SafeDecimal] = Field(None, description="Low price (None when unknown)")
+    close: SafeDecimal = Field(..., description="Closing price")
+    volume: Optional[SafeDecimal] = Field(None, description="Trading volume (None when unknown)")
     currency: Optional[str] = Field(
         None,
         description=(
             "Currency code (ISO 4217). Post-Blocco I: OPTIONAL in both request and response. "
             "On upsert, if omitted the backend uses `asset.currency`; if provided and != asset.currency, "
-            "the upsert is rejected with HTTP 400 (defensive — the frontend no longer sends it). "
+            "the whole upsert is refused with HTTP 422 price_currency_mismatch before anything is written "
+            "(defensive — the frontend no longer sends it). "
             "On response, kept populated for backward compat but the frontend uses `asset.currency` "
             "as single source of truth; see phase-07 Blocco I for rationale."
         ),
@@ -128,6 +139,7 @@ class FAPricePoint(StrictModel):
     original_open: Optional[SafeDecimal] = Field(None, description="Open price in original currency before FX conversion")
     original_high: Optional[SafeDecimal] = Field(None, description="High price in original currency before FX conversion")
     original_low: Optional[SafeDecimal] = Field(None, description="Low price in original currency before FX conversion")
+    fx_rate: Optional[SafeDecimal] = Field(None, description="The unit rate the point was converted with: the day's step, from `original_currency` to `currency` (None = no conversion). Close, open, high and low are their `original_*` times it")
     source_plugin_key: Optional[str] = Field(None, description="Provider key that produced the stored price")
     backward_fill_info: Optional[AssetBackwardFillInfo] = Field(None, description="Backward-fill + FX staleness info (only in query results)")
 
@@ -138,30 +150,64 @@ class FAPricePoint(StrictModel):
             return None
         return Currency.validate_code(v)
 
-    @field_validator("open", "high", "low", "close", "volume", "original_open", "original_high", "original_low", "original_close", mode="before")
+    @field_validator("open", "high", "low", "close", "volume", "original_open", "original_high", "original_low", "original_close", "fx_rate", mode="before")
     @classmethod
     def parse_decimal(cls, v):
         if v is None:
             return None
         return Decimal(str(v))
 
-    @field_validator("close", mode="after")
-    @classmethod
-    def close_must_be_positive(cls, v: Decimal) -> Decimal:
-        if v <= 0:
-            raise ValueError("close price must be positive (> 0)")
-        return v
 
-    @field_validator("open", "high", "low", "volume", "original_open", "original_high", "original_low", "original_close", mode="after")
+#: The value of a manual write that empties a stored open, high, low or volume (N92); ``null`` or no field leaves it.
+CLEAR = "clear"
+
+#: A manual write's open, high, low or volume (N92): a number, written; ``"clear"``, which empties the stored value; or
+#: ``null``. Read left to right, so ``"clear"`` is never taken for a number; any other text is refused. The ``enum``
+#: beside pydantic's ``const`` makes the generated client read ``'clear'`` as a literal (openapi-zod-client 1.18.3
+#: ignores ``const``), as in ``schemas/signals.py``.
+PriceWriteValue = Annotated[Union[Annotated[Literal["clear"], Field(json_schema_extra={"enum": [CLEAR]})], SafeDecimal, None], Field(union_mode="left_to_right")]
+
+
+class FAPriceWritePoint(StrictModel):
+    """One price point of a manual write (``POST /assets/prices``), N92.
+
+    ``open``, ``high``, ``low`` and ``volume`` each take a number of 0 or more, written as it is; the string ``"clear"``,
+    which empties the stored value (NULL); or ``null``, or no field at all, which leaves the stored value as it is.
+    ``close`` is required and above 0: LibreFolio keeps no negative price. The ``-1`` that emptied a field before N92 is
+    a negative number now, refused. ``from_attributes``: a ``FAPricePoint`` can be given, read field by field.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date_type = Field(..., description="Price date")
+    open: PriceWriteValue = Field(None, description="Opening price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    high: PriceWriteValue = Field(None, description="High price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    low: PriceWriteValue = Field(None, description="Low price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    close: SafeDecimal = Field(..., description="Closing price, above 0 (required)")
+    volume: PriceWriteValue = Field(None, description="Trading volume: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    currency: Optional[str] = Field(None, description="Currency code (ISO 4217), optional: if omitted the backend uses `asset.currency`; if provided and != asset.currency, the whole upsert is refused with HTTP 422 price_currency_mismatch before anything is written.")
+
+    @field_validator("currency")
     @classmethod
-    def ohlcv_must_be_positive_or_sentinel(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def currency_validate(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
-        # -1 is the "SET NULL" sentinel — allowed
-        if v == Decimal("-1"):
+        return Currency.validate_code(v)
+
+    @field_validator("close", mode="after")
+    @classmethod
+    def close_above_zero(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("close price must be above 0")
+        return v
+
+    @field_validator("open", "high", "low", "volume", mode="after")
+    @classmethod
+    def zero_or_more_or_clear(cls, v: Decimal | str | None) -> Decimal | str | None:
+        if v is None or v == CLEAR:
             return v
         if v < 0:
-            raise ValueError("price/volume fields must be >= 0 (or -1 sentinel to clear)")
+            raise ValueError('price and volume fields must be 0 or more, or "clear" to empty the stored value')
         return v
 
 
@@ -172,7 +218,17 @@ class FAUpsert(StrictModel):
     """
 
     asset_id: int = Field(..., description="Asset ID")
-    prices: List[FAPricePoint] = Field(..., min_length=1, description="List of price points")
+    prices: List[FAPriceWritePoint] = Field(..., min_length=1, description="List of price points (N92: open, high, low and volume take a number, 'clear' or null)")
+
+
+class FAPriceRejection(StrictModel):
+    """A date a price upsert left out, and why (X-R46): the data editor names it instead of counting it as saved."""
+
+    date: date_type = Field(..., description="The date left out")
+    reason: Literal["ohlc_inconsistent", "date_out_of_range", "value_not_storable"] = Field(
+        ...,
+        description="ohlc_inconsistent: the close lies outside [low, high], or a manual price's only bound lies on the wrong side of the close; date_out_of_range: a provider's date after tomorrow; value_not_storable: a provider's value no price column can keep",
+    )
 
 
 class FAUpsertResult(StrictModel):
@@ -181,6 +237,7 @@ class FAUpsertResult(StrictModel):
     asset_id: int
     count: int
     message: str
+    rejected: List[FAPriceRejection] = Field(default_factory=list, description="The dates left out, in date order, each with its reason (X-R46); `count` does not include them")
 
 
 class FABulkUpsertResponse(BaseBulkResponse[FAUpsertResult]):
@@ -263,190 +320,11 @@ class FAHistoricalData(StrictModel):
 
     prices: List[FAPricePoint]
     events: List[FAAssetEventPoint] = Field(default_factory=list, description="Asset events in the date range")
-    currency: Optional[str] = None
+    currency: Optional[str] = Field(
+        None,
+        description="The quote currency as the provider reports it, NOT normalized (Yahoo's `GBp` for a line quoted in pence; the price points carry the ISO code, `GBP`): a validator here would hide the minor unit.",
+    )
     source: Optional[str] = None
-
-
-class FAAssetEventPoint(StrictModel):
-    """
-    Single asset event data point — shared shape between DB, provider output, and frontend editor.
-
-    Uses Currency class for value (amount + currency code in one object).
-
-    Used in:
-    - FAHistoricalData.events (provider output)
-    - FAPriceQueryResult.events (API response)
-    - FAScheduledInvestmentSchedule.asset_events (provider_params config)
-    """
-
-    date: date_type = Field(..., description="Event date")
-    type: str = Field(..., description="Event type (DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT)")
-    value: Currency = Field(..., description="Event value with currency (amount + code)")
-    notes: Optional[str] = Field(None, description="Optional notes")
-
-
-class FAAssetEventPointOut(FAAssetEventPoint):
-    """
-    Output-only schema for asset events returned by the API.
-
-    Extends FAAssetEventPoint with DB-level fields needed by the frontend editor:
-    - id: Primary key for targeted deletion
-    - is_auto: Whether this event was auto-generated by a provider (readonly in UI)
-
-    E.8 — FX conversion metadata, populated iff ``target_currency`` was requested
-    on the query AND the conversion succeeded:
-    - ``original_value``: the amount + currency BEFORE conversion (mirror of
-      the prices pattern ``original_close``/``original_currency`` combined into
-      a single ``Currency`` object).
-    - ``fx_info``: FX-specific backward-fill staleness (rate date + days back).
-      Shared ``FxBackwardFillInfo`` building-block from ``common.py``. Price
-      backward-fill fields (``actual_rate_date``/``days_back``) do NOT apply to
-      events, which exist on discrete real dates and are never backfilled.
-
-    If conversion was requested but failed (FX rate missing), both
-    ``original_value`` and ``fx_info`` stay ``None`` and the event is returned
-    in its native currency — the frontend uses this as a signal to hide the
-    event marker from the converted chart (see §E.8.2 of closure plan).
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: int = Field(..., description="Event DB primary key")
-    is_auto: bool = Field(..., description="True if generated by provider (provider_assignment_id IS NOT NULL)")
-    original_value: Optional[Currency] = Field(
-        None,
-        description="Value before FX conversion (amount + currency). Populated iff target_currency conversion applied (E.8).",
-    )
-    fx_info: Optional[FxBackwardFillInfo] = Field(
-        None,
-        description="FX staleness for the conversion (fx_rate_date + fx_days_back). Populated iff target_currency conversion applied (E.8).",
-    )
-
-
-# ============================================================================
-# FA EVENT CRUD
-# ============================================================================
-
-
-class FAEventUpsertPoint(FAAssetEventPoint):
-    """Event point of a manual upsert, optionally naming the stored event it edits.
-
-    - ``id`` set: the stored manual event with that id is edited in place. Every field
-      may change, date and type included, and the id is kept, so a transaction linked
-      to the event stays linked.
-    - ``id`` unset: the event replaces the stored manual events with the same
-      ``(date, type)``. Those rows are updated in place and keep their ids; only
-      events beyond the stored ones are inserted.
-
-    ``from_attributes`` lets a plain ``FAAssetEventPoint`` instance stand for an
-    upsert point without an id. Unknown fields are still rejected.
-    """
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: Optional[int] = Field(None, description="Id of the stored manual event to edit in place; omit to match on (date, type)")
-
-
-class FAEventUpsert(StrictModel):
-    """Manual event upsert for a single asset (multiple events).
-
-    Groups multiple event points for one asset.
-    Only for manual events (provider_assignment_id = NULL).
-    """
-
-    asset_id: int = Field(..., description="Asset ID")
-    events: List[FAEventUpsertPoint] = Field(..., min_length=1, description="List of event points")
-
-    @model_validator(mode="after")
-    def validate_unique_event_ids(self) -> FAEventUpsert:
-        ids = [event.id for event in self.events if event.id is not None]
-        repeated = sorted({event_id for event_id in ids if ids.count(event_id) > 1})
-        if repeated:
-            raise ValueError(f"Duplicate event id in one upsert item: {', '.join(str(event_id) for event_id in repeated)}")
-        return self
-
-
-class FAEventUpsertResult(StrictModel):
-    """Result of event upsert for a single asset."""
-
-    asset_id: int
-    count: int
-    message: str
-
-
-class FABulkEventUpsertResponse(BaseBulkResponse[FAEventUpsertResult]):
-    """Response for bulk event upsert."""
-
-
-class FAEventDeleteItemResult(StrictModel):
-    """
-    Per-item result of a bulk AssetEvent delete.
-
-    status:
-      - "deleted": event removed
-      - "not_found": id did not match any event
-      - "in_use": event is referenced by one or more transactions (RESTRICT);
-                  accessible_transactions[] lists tx IDs the caller can see,
-                  hidden_transactions_count counts refs from other users.
-    """
-
-    event_id: int = Field(..., description="Event ID this result refers to")
-    status: Literal["deleted", "not_found", "in_use"] = Field(..., description="Outcome for this event")
-    accessible_transactions: List[int] = Field(
-        default_factory=list,
-        description="Transaction IDs referencing this event that the current user can access",
-    )
-    hidden_transactions_count: int = Field(
-        default=0,
-        description="Number of transactions referencing this event that belong to other users",
-    )
-
-
-class FAEventBulkDeleteResponse(StrictModel):
-    """
-    Aggregate response of a bulk AssetEvent delete.
-
-    Always HTTP 200: inspect per-item ``results`` for per-id outcome.
-    Successful deletions are committed even if others are blocked (no partial rollback).
-    """
-
-    results: List[FAEventDeleteItemResult] = Field(default_factory=list)
-    deleted_count: int = Field(..., description="Count of events successfully deleted")
-    not_found_count: int = Field(..., description="Count of ids that did not exist")
-    in_use_count: int = Field(..., description="Count of events blocked by RESTRICT")
-
-
-class FAEventQueryItem(StrictModel):
-    """Single asset event query in a bulk request."""
-
-    asset_id: int = Field(..., description="Asset ID to query")
-    date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
-    target_currency: Optional[str] = Field(
-        None,
-        description=("Convert event.value to this currency via FX rates at each event's date (E.8). " "None = return events in their native currency. " "FX misses are surfaced as non-fatal warnings in FAEventQueryResult.errors."),
-    )
-
-    @field_validator("target_currency")
-    @classmethod
-    def target_currency_validate(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None:
-            return Currency.validate_code(v)
-        return v
-
-
-class FAEventQueryResult(StrictModel):
-    """Response for a single asset event query."""
-
-    asset_id: int = Field(..., description="Asset ID queried")
-    events: List[FAAssetEventPointOut] = Field(default_factory=list, description="Asset events with id and is_auto")
-    errors: List[str] = Field(
-        default_factory=list,
-        description="Non-fatal warnings (e.g. FX rate missing for target_currency conversion at some event dates)",
-    )
-
-
-class FAEventQueryResponse(BaseListResponse[FAEventQueryResult]):
-    """Bulk response for event queries."""
 
 
 # ============================================================================
@@ -462,8 +340,11 @@ class FAPriceQueryItem(StrictModel):
     """
 
     asset_id: int = Field(..., description="Asset ID to query")
-    date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
-    include_price: bool = Field(True, description="Include price history in response")
+    date_range: DateRangeModel | MinStartDateRangeModel = Field(..., description="Date range (end defaults to start); `start` may be the sentinel min (with a required `end`): the day of the asset first stored price, an empty series when it has none (FB-7b)")
+    include_price: bool = Field(
+        True,
+        description="Include price history in response. False with max_points, resolution or sample_like (Z-29a-f): the item only gives its step (its resolution, and a sample_like's buckets), reads no price row past its plan and counts nothing against the day budget",
+    )
     include_events: bool = Field(False, description="Include asset events in response")
     target_currency: Optional[str] = Field(None, description="Convert prices to this currency via FX rates (None = native currency)")
     signals: List[SignalRequest] = Field(
@@ -473,6 +354,27 @@ class FAPriceQueryItem(StrictModel):
     annotation_requests: List[SignalAnnotationRequest] = Field(
         default_factory=list,
         description="Optional cross/threshold rules evaluated on extended signal output",
+    )
+    key: Optional[str] = Field(None, pattern=SAMPLE_KEY_PATTERN, description="A name for this item, unique in the request, that another item's sample_like can give (Z-29)")
+    max_points: Optional[int] = Field(
+        None,
+        ge=1,
+        le=10_000,
+        description=(
+            "Sample the series for a compact chart (Z-29): the most points the chart's plot takes. Per asset, the finest of daily, weekly (ISO, Monday to Sunday) and monthly whose count over the asset's own fill fits, "
+            "monthly when none does; a weekly or monthly series is the last point of each week or month, each the point the daily series has on that date, and sample_bounds its first and last points. "
+            "The result's resolution says the step. At most one of max_points, resolution and sample_like; not with annotation_requests or include_events. "
+            "With signals (Z-29s), the series is read and the signals computed every day, then both reduced to the same dates: each signal series keeps one point per bucket, the one its output's aggregation_profile picks. None: every day."
+        ),
+    )
+    resolution: Optional[SampleResolution] = Field(None, description="Sample the series at this step whatever its length (Z-29): daily, weekly (ISO, Monday to Sunday) or monthly; as max_points does otherwise")
+    sample_like: Optional[str] = Field(
+        None,
+        pattern=SAMPLE_KEY_PATTERN,
+        description=(
+            "Sample the series like the item of this request whose key this is (Z-29): its step and buckets, from the later of its first day and this item's own; the same date_range. "
+            "A comparison's target, on its card. That item has no sample_like itself; with nothing to fill it lends its max_points or resolution."
+        ),
     )
 
     @field_validator("target_currency")
@@ -500,6 +402,25 @@ class FAPriceQueryItem(StrictModel):
                     raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
         return self
 
+    @model_validator(mode="after")
+    def validate_sampling(self) -> FAPriceQueryItem:
+        """One way to sample the series at most, and not with annotations or events, which need every day (Z-29). Signals
+        are computed every day, then reduced with the prices (Z-29s)."""
+        asked = [name for name in ("max_points", "resolution", "sample_like") if getattr(self, name) is not None]
+        if len(asked) > 1:
+            raise ValueError(f"at most one of max_points, resolution and sample_like, not {' and '.join(asked)}")
+        if asked and (self.annotation_requests or self.include_events):
+            raise ValueError(f"{asked[0]} samples the price series: not with annotation_requests or include_events")
+        return self
+
+
+class FAPriceSampleBounds(StrictModel):
+    """The ends of a sampled price series (Z-29): the chart draws the last point of each week or month, and these two
+    points apart — the fill's first, from which the percentage view and «All» start, and its last."""
+
+    first: FAPricePoint = Field(..., description="The fill's first point: the range's start when a row precedes it, else the asset's first row in the range (with sample_like, the later of that and the item named's)")
+    last: FAPricePoint = Field(..., description="The fill's last point, on the range's end once cut at the ceiling: the last point of prices too")
+
 
 class FAPriceQueryResult(StrictModel):
     """Response for a single asset price query."""
@@ -513,8 +434,16 @@ class FAPriceQueryResult(StrictModel):
     errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. FX pair missing)")
     signals: List[SignalResult] = Field(
         default_factory=list,
-        description="Technical signal results keyed by request instance_id",
+        description=(
+            "Technical signal results keyed by request instance_id. On a weekly or monthly result (Z-29s), each series holds one point per bucket, the one its output's aggregation_profile picks, "
+            "dated as prices; a line or an area keeps its gaps, a bucket where two runs meet showing the later one's point"
+        ),
     )
+    resolution: SampleResolution = Field(
+        "daily",
+        description="The step of prices (Z-29): daily, or weekly or monthly when the item's max_points, resolution or sample_like sampled the series. The signals' series have the same step (Z-29s): one point per bucket, the one each output's aggregation_profile picks",
+    )
+    sample_bounds: Optional[FAPriceSampleBounds] = Field(None, description="A weekly or monthly series' first and last points (Z-29); None for a daily one or without prices")
 
 
 class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
@@ -530,6 +459,14 @@ class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
 # ============================================================================
 
 
+class FARangeChange(StrictModel):
+    """The change of an asset's price over the whole range the page shows (X-R59): the first and last point of its series."""
+
+    reference_date: Optional[date_type] = Field(None, description="The day of the reference price: range_start, or the first price inside the range when none is on or before it; null without any")
+    change_abs: Optional[SafeDecimal] = Field(None, description="Price on as_of (or the live price) − reference price, in the result's currency; null without a usable price (a reference ≤ 0, a negative price)")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="((Price on as_of or the live price) ÷ reference price) − 1; −1 for a price of 0; null without a usable price")
+
+
 class FACurrentPriceItem(StrictModel):
     """Current price result for a single asset."""
 
@@ -539,6 +476,9 @@ class FACurrentPriceItem(StrictModel):
     as_of_date: Optional[date_type] = Field(None, description="Date/time the price refers to")
     source: Optional[str] = Field(None, description="Price source (e.g. 'provider:justetf', 'db:last_known')")
     error: Optional[str] = Field(None, description="Error message if price could not be fetched")
+    error_code: Optional[str] = Field(None, description="'RATE_LIMITED' when the provider refused for too many requests or is paused: the price is then the last one stored, if any")
+    retry_after: Optional[float] = Field(None, ge=0, description="With RATE_LIMITED: seconds until the provider may be called again")
+    range_change: Optional[FARangeChange] = Field(None, description="With range_start: the change from the reference of the range to this price (X-R59), the one the page shows with a live quote")
 
 
 class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
@@ -549,3 +489,57 @@ class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
     - success_count: int
     - errors: List[str]
     """
+
+
+# ============================================================================
+# FA FIXED-PERIOD CHANGES (MF-P2, D-MF6 b)
+# ============================================================================
+
+
+class FAPeriodChangesQueryItem(StrictModel):
+    """One asset of a fixed-period changes request: the Assets table's Δ columns (1D … 5Y), up to ``as_of``."""
+
+    asset_id: int = Field(..., description="Asset ID")
+    as_of: date_type = Field(..., description="Anchor day: the end of the range the table shows (any day of the calendar; a period whose reference day falls before 0001-01-01 has a null change)")
+    target_currency: Optional[str] = Field(None, description="Value the prices in this currency, each day's at that day's rate (None = native currency)")
+    range_start: Optional[date_type] = Field(None, description="First day of the range the page shows: asks its whole-range change (X-R59); on or before as_of")
+
+    @field_validator("target_currency")
+    @classmethod
+    def target_currency_validate(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return Currency.validate_code(v)
+        return v
+
+    @model_validator(mode="after")
+    def validate_range_start(self) -> FAPeriodChangesQueryItem:
+        if self.range_start is not None and self.range_start > self.as_of:
+            raise ValueError(f"range_start ({self.range_start}) must be on or before as_of ({self.as_of})")
+        return self
+
+
+class FAPeriodChange(StrictModel):
+    """The change of an asset's price over one fixed period, as a fraction (0.05 = +5 %)."""
+
+    key: str = Field(..., description="Period key: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y")
+    days: int = Field(..., ge=1, description="Calendar days of the period")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="(Price on as_of ÷ price on as_of − days) − 1; −1 for a price of 0 on as_of; null without a usable price on either day")
+
+
+class FAPeriodChangesResult(StrictModel):
+    """The fixed-period changes of one asset.
+
+    The price on a day is the last stored price on or before it, the rule of the price history's backward fill; with a
+    ``target_currency`` it is converted at that day's rate.
+    """
+
+    asset_id: int = Field(..., description="Asset ID")
+    as_of: date_type = Field(..., description="Anchor day")
+    currency: Optional[str] = Field(None, description="Currency of the compared prices: target_currency when given, else the asset's own on as_of (null with no price up to as_of)")
+    periods: List[FAPeriodChange] = Field(default_factory=list, description="One entry per fixed period, in display order")
+    range_change: Optional[FARangeChange] = Field(None, description="The whole-range change, when range_start was asked")
+    errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. a missing FX rate)")
+
+
+class FAPeriodChangesResponse(BaseListResponse[FAPeriodChangesResult]):
+    """Bulk response of fixed-period changes: one item per requested asset, in request order."""

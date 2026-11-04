@@ -18,9 +18,10 @@ import structlog
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -206,7 +207,7 @@ class XTBBrokerProvider(BRIMProvider):
             with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if reader.fieldnames != XTB_HEADER.split(";"):
-                    raise BRIMParseError("XTB CSV header mismatch")
+                    raise BRIMParseError("XTB CSV header mismatch", details={"code": "header_mismatch"})
 
                 row_num = 1
                 for row in reader:
@@ -302,11 +303,11 @@ class XTBBrokerProvider(BRIMProvider):
                     )
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")

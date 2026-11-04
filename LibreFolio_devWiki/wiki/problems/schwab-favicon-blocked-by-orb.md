@@ -25,22 +25,22 @@ of about 500 bytes, a bot check; as the source of an `<img>`, Chromium blocks th
 ([[problems/broker-icon-race-condition]]); the gallery, a release gate, goes red
 ([[decisions/gallery-is-a-release-gate-with-real-data]]).
 
-*Correction (2026-10-13, train 84, M's lot 35): the four reds were also our own.* Since `2412c3fe4` (2026-10-12,
+*Correction (2026-10-13, train 84, M's lot 35): the four reds were also our own.* Since `9b2d731cd` (2026-10-12,
 [[problems/late-img-error-marked-the-visible-icon-failed]]) the
 icon chain acknowledges a load or an error only when the image's `getAttribute('src')` equals its own URL
 (`brokerIconChain.svelte.ts`). The gallery's favicon fix wrote the URL with a `?lf-gallery` mark, so in the gallery no
 load and no error was ever acknowledged: every logo drawn from a favicon stayed a briefcase (eight on the brokers
 list, where the published 1.1 gallery shows the logos), and Schwab's refused favicon never moved down its chain. The
-cure, `6bb79fecd`: `keepFaviconImagesLoading` gives the URL back unmarked when it is read, while the stored attribute
+cure, `30d1b44fe`: `keepFaviconImagesLoading` gives the URL back unmarked when it is read, while the stored attribute
 keeps the mark, and `expectFaviconImagesLoading` checks both. The targeted rerun passed 42 of 42. M's eye check after
 the cure: the other logos are back, and Schwab, whose favicon Chromium still refuses, falls down its chain to the
 plugin's generic icon.
 
 ## Status
 
-**Accepted** (developer, 2026-10-13). The answer to question 16 first brought the logo into 1.2: U-6 (`a6d1754ed`)
+**Accepted** (developer, 2026-10-13). The answer to question 16 first brought the logo into 1.2: U-6 (`2a478dabf`)
 bundled it, a frame of the site's favicon taken from a web archive capture, served like Scalable's. The same day the
-developer had it undone (U-6b, `2871db292`):
+developer had it undone (U-6b, `ead88ba08`):
 
 > «no, evitiamo per ora, anche per schwab, ci blocca solo perchè abbiamo fatto tante richieste tutte assieme. comunque
 > mostrare la valigetta è accettabile.» — «c'è stato un fraintendimento, pensavo fosse che non avevi l'url, ritorna

@@ -18,20 +18,29 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
+    import {toRgba} from '$lib/theme/colorAlpha';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
-    import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+    import {aggregateLineSeries, chooseCompactResolution, compactPlotWidth, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
-    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom, ZOOM_LABEL_SETTLE_MS} from './responsiveXAxis';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
+    import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
+    import {chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {applyLineShape, type LineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     // =========================================================================
     // Types
@@ -72,8 +81,16 @@
         areaFill?: boolean;
         /** Show stale-data gradient (per-point opacity) */
         showGradient?: boolean;
+        /** The shape of the lines (FB-3). Without it the chart follows the global shape. */
+        lineShape?: LineShape;
         /** Enable baseline coloring (red below baseline, green above) */
         colorByBaseline?: boolean;
+        /**
+         * The base of the colouring and of the dashed reference line in the absolute view. Without it, the base is the
+         * first point of `data`; a compact chart draws a reduced series, so a page that knows a base the reduction hides
+         * hands it in. The percentage view's base is 0 whatever this says.
+         */
+        baselineValue?: number;
         /** Show grid split lines */
         showGridLines?: boolean;
         /** CSS height */
@@ -92,6 +109,8 @@
         pendingData?: LineDataPoint[];
         /** Called when a data point is clicked */
         onPointClick?: (date: string, value: number) => void;
+        /** Compact mode: told the static resolution chosen for the data it was given, each time it is drawn (Y5-F3) */
+        onresolution?: (resolution: ChartResolution) => void;
         /** View mode (for tooltip formatting and segment colors) */
         viewMode?: 'absolute' | 'percentage';
         /** Y-axis mode: 'auto' = fit to data, 'include0' = always show 0, 'custom' = user-defined min/max */
@@ -111,16 +130,19 @@
         currency = '',
         areaFill = true,
         showGradient = true,
+        lineShape,
         colorByBaseline = true,
+        baselineValue: baselineOverride,
         showGridLines = true,
         height = '300px',
         compact = false,
         showMiniAxis = false,
         lineColor,
         darkLineColor,
-        pendingColor = '#f59e0b',
+        pendingColor,
         pendingData = [],
         onPointClick,
+        onresolution,
         viewMode = 'absolute',
         yAxisMode = 'auto',
         yAxisMin,
@@ -149,12 +171,43 @@
     let needsInitialLayoutStabilityPass = false;
     let currentRenderedData: LineDataPoint[] = [];
     let responsiveXAxisCompact = false;
+    /** The last zoom window, and the timer that, once the gesture settles, re-spaces the x labels on it (47-1) and re-aims the arrow markers (Y-8). Plain variables: the teardown reads them. */
+    let lastZoomEvent: unknown = null;
+    let zoomLabelTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const COMPACT_DENSITY_THRESHOLD = 1.3;
+    /** How many of the drawn categories the last zoom left visible; undefined before any zoom. */
+    function zoomedCategoryCount(): number | undefined {
+        return visiblePointCountFromZoom(lastZoomEvent, currentRenderedData.length) ?? undefined;
+    }
+
+    function scheduleZoomedAxisLabels(event: unknown) {
+        lastZoomEvent = event;
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        zoomLabelTimer = setTimeout(() => {
+            zoomLabelTimer = null;
+            applyZoomedAxisLabels();
+            // Once per gesture, never per tick: it reads getOption(), a deep copy of the whole option, and writes every series back (Y-8).
+            if (chartInstance) updateArrowRotations(chartInstance);
+        }, ZOOM_LABEL_SETTLE_MS);
+    }
+
+    /** Re-space the category labels on the zoomed window: the step is computed on all the points otherwise (47-1). */
+    function applyZoomedAxisLabels() {
+        if (!chartInstance || compact || currentRenderedData.length === 0) return;
+        const visibleCount = zoomedCategoryCount();
+        if (visibleCount === undefined) return;
+        const policy = buildResponsiveXAxisPolicy({
+            width: chartContainer.clientWidth,
+            values: currentRenderedData.map((point) => point.date),
+            locale: uiLocale(),
+            axisType: 'category',
+            visibleCount,
+        });
+        responsiveXAxisCompact = policy.compact;
+        chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
+    }
+
     const COMPACT_RESIZE_EPSILON_PX = 4;
-    const COMPACT_GRID_LEFT_PX = 5;
-    const COMPACT_GRID_RIGHT_PX = 5;
-    const COMPACT_GRID_RIGHT_WITH_AXIS_PX = 45;
 
     let lastSourceRef: LineDataPoint[] | null = null;
     let aggregatedByResolution = new Map<ChartResolution, LineDataPoint[]>();
@@ -167,15 +220,14 @@
     // =========================================================================
 
     onMount(() => {
-        const observer = new MutationObserver(() => {
+        const redraw = () => {
             if (chartContainer && data.length > 0) renderChart();
-        });
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class'],
-        });
+        };
+        const observer = onThemeClassChange(redraw);
+        const chartColors = onChartColorsChange(redraw);
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             cleanup();
         };
     });
@@ -186,8 +238,11 @@
             void overlaySignals;
             void areaFill;
             void colorByBaseline;
+            void baselineOverride;
             void showGridLines;
             void showGradient;
+            void lineShape;
+            void getGlobalLineShape();
             void viewMode;
             void compact;
             void showMiniAxis;
@@ -208,6 +263,8 @@
         resizeObserver = null;
         chartOptionSet = false;
         currentRenderedData = [];
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        lastZoomEvent = null;
         chartInstance?.dispose();
         chartInstance = null;
     }
@@ -248,18 +305,12 @@
 
     function getCompactPlotWidthPx() {
         const measuredWidth = chartContainer?.getBoundingClientRect().width || chartInstance?.getWidth() || 0;
-        const rightPadding = showMiniAxis ? COMPACT_GRID_RIGHT_WITH_AXIS_PX : COMPACT_GRID_RIGHT_PX;
-        return Math.max(measuredWidth - COMPACT_GRID_LEFT_PX - rightPadding, 0);
+        return compactPlotWidth(measuredWidth, showMiniAxis);
     }
 
+    /** The rule a card's `max_points` is sized by (`timeSeriesAggregation.ts`, Z-29b): a series sampled for this plot stays as it is. */
     function chooseStaticResolution(dailyPointCount: number, plotWidthPx: number): ChartResolution {
-        const densityDaily = computeDensity(dailyPointCount, plotWidthPx);
-        if (densityDaily <= COMPACT_DENSITY_THRESHOLD) return 'daily';
-
-        const densityWeekly = computeDensity(lastWeeklyBucketCount, plotWidthPx);
-        if (densityWeekly <= COMPACT_DENSITY_THRESHOLD) return 'weekly';
-
-        return 'monthly';
+        return chooseCompactResolution({dailyCount: dailyPointCount, weeklyCount: lastWeeklyBucketCount}, plotWidthPx);
     }
 
     function resizeChartOnly() {
@@ -271,16 +322,19 @@
                     values: currentRenderedData.map((point) => point.date),
                     locale: uiLocale(),
                     axisType: 'category',
+                    visibleCount: zoomedCategoryCount(),
                 });
                 const wasCompact = responsiveXAxisCompact;
                 responsiveXAxisCompact = policy.compact;
                 if (policy.axisLabel) {
-                    chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                    chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
                 } else if (wasCompact) {
                     renderChart();
                 }
             }
-            if (chartInstance) updateArrowRotations(chartInstance);
+            // Re-aimed once the resize settles, by the settle that re-spaces the labels, never on each callback: a re-aim
+            // deep-copies the whole option (Y-25)
+            scheduleZoomedAxisLabels(lastZoomEvent);
         } catch (_) {
             /* ignore coord errors during resize */
         }
@@ -344,7 +398,7 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
             attachChartReady(chartInstance, chartContainer, 'line');
             needsInitialLayoutStabilityPass = true;
 
@@ -357,13 +411,15 @@
                 });
             }
 
-            // Recompute arrow rotations when zoom changes (aspect ratio shifts)
-            chartInstance.on('dataZoom', () => {
-                if (chartInstance) updateArrowRotations(chartInstance);
+            // A zoom changes the pixel aspect: the x labels are re-spaced on the window, and the arrow markers re-aimed, once the
+            // gesture settles, never on each tick (47-1, Y-8)
+            chartInstance.on('dataZoom', (event: unknown) => {
+                scheduleZoomedAxisLabels(event);
             });
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
         const isPercentage = viewMode === 'percentage';
 
         const baseColor = isDark ? darkLineColor || DEFAULT_LINE_DARK : lineColor || DEFAULT_LINE_LIGHT;
@@ -381,6 +437,7 @@
 
             lastMeasuredWidthPx = plotWidthPx;
             lastChosenResolution = resolution;
+            onresolution?.(resolution);
             renderedData = getCompactAggregatedData(resolution);
 
             if (resolution !== 'daily') {
@@ -401,9 +458,11 @@
         const dates = renderedData.map((d) => d.date);
 
         // Determine if we need baseline coloring (green above baseline, red below)
-        const useBaselineColoring = colorByBaseline && !compact;
-        const firstValue = renderedData.find((point) => !point.missing)?.value ?? 0;
-        const baselineValue = isPercentage ? 0 : firstValue;
+        // The base is the first point of the data it was given: a compact chart draws a reduced series, whose first point is
+        // the end of the first bucket.
+        const useBaselineColoring = colorByBaseline;
+        const firstValue = data.find((point) => !point.missing)?.value ?? 0;
+        const baselineValue = isPercentage ? 0 : Number.isFinite(baselineOverride) ? (baselineOverride as number) : firstValue;
 
         // Build per-point stale data array
         const staleDaysArr = renderedData.map((d) => d.staleDays ?? 0);
@@ -435,8 +494,9 @@
                 symbol: 'diamond',
                 symbolSize: 10,
                 itemStyle: {
-                    color: pendingColor,
-                    borderColor: isDark ? '#1e293b' : '#ffffff',
+                    // Read here, not as the prop's default: a default is kept, and a theme switch would not reach it
+                    color: pendingColor ?? PRICE_SERIES.pendingEditPoint,
+                    borderColor: neutrals.price.pendingEditPointRing,
                     borderWidth: 2,
                 },
                 z: 10,
@@ -498,7 +558,7 @@
                     ...(sType === 'area'
                         ? {
                               areaStyle: {
-                                  color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                                  color: toRgba(signal.color, signal.fillOpacity ?? 0.2),
                                   origin: 0,
                               },
                           }
@@ -572,7 +632,7 @@
                 showSymbol: false,
                 sampling: 'lttb',
                 lineStyle: {
-                    color: isDark ? '#64748b' : '#9ca3af',
+                    color: neutrals.price.baseline,
                     type: 'dashed',
                     width: 1,
                 },
@@ -610,11 +670,30 @@
         for (const d of renderedData) {
             if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
         }
+        // Preserve user zoom state across re-renders (adding signals, toggling options).
+        // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
+        // Read before the axis policy, so the labels are spaced on the window about to be restored (47-1).
+        let savedZoom: {start: number; end: number} | null = null;
+        if (chartOptionSet && chartInstance) {
+            try {
+                const opt = chartInstance.getOption() as any;
+                if (opt?.dataZoom?.[0]) {
+                    const dz = opt.dataZoom[0];
+                    if (typeof dz.start === 'number' && typeof dz.end === 'number') {
+                        savedZoom = {start: dz.start, end: dz.end};
+                    }
+                }
+            } catch (_) {
+                /* ignore */
+            }
+        }
+        const restoredZoomCount = savedZoom && !compact ? visiblePointCountFromZoom(savedZoom, dates.length) : null;
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
             locale: uiLocale(),
             axisType: 'category',
+            visibleCount: restoredZoomCount ?? undefined,
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
 
@@ -636,9 +715,9 @@
                 type: 'category',
                 data: dates,
                 show: !compact,
-                axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                axisLine: {lineStyle: {color: neutrals.priceAxis.line}},
                 axisLabel: {
-                    color: isDark ? '#94a3b8' : '#6b7280',
+                    color: neutrals.priceAxis.label,
                     fontSize: 11,
                     formatter: xAxisPolicy.formatter,
                     ...(xAxisPolicy.axisLabel ?? {}),
@@ -666,12 +745,12 @@
                         position: compact && showMiniAxis ? ('right' as const) : ('left' as const),
                         min: effectiveMin,
                         max: effectiveMax,
-                        axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                        axisLine: {show: !compact, lineStyle: {color: neutrals.priceAxis.line}},
                         axisTick: {show: !compact},
                         splitNumber: compact && showMiniAxis ? 2 : undefined,
                         axisLabel: {
                             show: showYAxis,
-                            color: isDark ? '#94a3b8' : '#6b7280',
+                            color: neutrals.priceAxis.label,
                             fontSize: compact && showMiniAxis ? 9 : 11,
                             formatter: isPercentage
                                 ? (v: number) => formatPercent(v, {digits: 1, signed: false})
@@ -684,7 +763,7 @@
                         splitLine: {
                             show: showGridLines && showYAxis,
                             lineStyle: {
-                                color: isDark ? '#4b5563' : '#d1d5db',
+                                color: neutrals.priceAxis.gridLine,
                                 type: 'dashed' as const,
                                 opacity: compact && showMiniAxis ? 0.5 : 1,
                             },
@@ -701,14 +780,16 @@
                       appendToBody: true,
                       confine: true,
                       position: tooltipPositionSide,
-                      backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                      borderColor: isDark ? '#334155' : '#e2e8f0',
-                      textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                      backgroundColor: neutrals.tooltip.box.background,
+                      borderColor: neutrals.tooltip.box.border,
+                      textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                       formatter: (params: any) => {
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
                           const date = items[0].axisValue || items[0].name;
-                          let html = `<strong>${formatDay(String(date))}</strong>`;
+                          // `data-tooltip-from` / `data-tooltip-to`: the ISO day the header stands for, which the specs read (the text is translated)
+                          const shownDay = /^\d+$/.test(String(date)) ? dayOfAxisValue(Number(date)) : String(date).slice(0, 10);
+                          let html = `<strong data-tooltip-from="${shownDay}" data-tooltip-to="${shownDay}">${formatDayWithWeekday(String(date))}</strong>`;
 
                           // Build a set of band helper series names to skip in tooltip
                           const bandHelperNames = new Set<string>();
@@ -757,11 +838,11 @@
                               // Signals on non-primary axes have their own scale — show without % suffix
                               const valueSuffix = axisIdx === 0 ? suffix : '';
                               const axisLabel = signalAxisLabelMap.get(axisIdx);
-                              const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
-                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`;
+                              const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
+                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`;
                               const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                               if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
+                                  html += ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                               }
 
                               // For band signals, also show upper/lower in the tooltip
@@ -769,7 +850,7 @@
                               if (bandSignal?.bandData) {
                                   const dataIdx = bandSignal.data.findIndex((d) => d.date === date);
                                   if (dataIdx >= 0) {
-                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${formatFixed(bandSignal.bandData.upper[dataIdx], 4)}${suffix} · ${$t('chart.tooltip.lower')}: ${formatFixed(bandSignal.bandData.lower[dataIdx], 4)}${suffix}</span>`;
+                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:${neutrals.tooltip.aside}">${$t('chart.tooltip.upper')}: ${formatPrice(bandSignal.bandData.upper[dataIdx], {minDecimals: 4})}${suffix} · ${$t('chart.tooltip.lower')}: ${formatPrice(bandSignal.bandData.lower[dataIdx], {minDecimals: 4})}${suffix}</span>`;
                                   }
                               }
                           }
@@ -777,46 +858,23 @@
                           // Stale warning for main series
                           const staleDays = staleLookup.get(date);
                           if (staleDays !== undefined) {
-                              html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
+                              html += `<br/><span style="color:${neutrals.tooltip.staleWarning};font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
                           }
                           if (isPercentage) {
-                              html += `<br/><span style="color:#94a3b8;font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
+                              html += `<br/><span style="color:${neutrals.tooltip.aside};font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
                           }
                           return html;
                       },
                   },
-            series,
+            series: applyLineShape(series, lineShape ?? getGlobalLineShape()),
         };
 
         // Single pass: render everything at once — no visualMap needed
         // (baseline coloring is handled by segmented series above)
 
-        // Preserve user zoom state across re-renders (adding signals, toggling options).
-        // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
-        let savedZoom: {start: number; end: number} | null = null;
-        if (chartOptionSet && chartInstance) {
-            try {
-                const opt = chartInstance.getOption() as any;
-                if (opt?.dataZoom?.[0]) {
-                    const dz = opt.dataZoom[0];
-                    if (typeof dz.start === 'number' && typeof dz.end === 'number') {
-                        savedZoom = {start: dz.start, end: dz.end};
-                    }
-                }
-            } catch (_) {
-                /* ignore */
-            }
-        }
-
         chartInstance.setOption(option, true);
+        noteArrowMarkers(chartInstance, option);
         chartOptionSet = true;
-
-        // Compute pixel-accurate arrow rotations after layout is established
-        updateArrowRotations(chartInstance);
-        if (needsInitialLayoutStabilityPass) {
-            needsInitialLayoutStabilityPass = false;
-            scheduleFirstRenderStabilityFix(chartInstance, chartContainer, updateArrowRotations);
-        }
 
         // Restore zoom position if the user had zoomed/panned
         if (savedZoom && !compact) {
@@ -826,7 +884,15 @@
                 end: savedZoom.end,
             });
         }
+
+        // Compute pixel-accurate arrow rotations after layout is established, on the zoom just restored: the restore's
+        // dataZoom event only schedules the settle, so aiming them before it left them on the whole axis until then (Y-8)
+        updateArrowRotations(chartInstance);
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer, updateArrowRotations);
+        }
     }
 </script>
 
-<div bind:this={chartContainer} class="w-full" style="height: {height};"></div>
+<div bind:this={chartContainer} class="w-full" style="height: {height};" data-line-shape={lineShape ?? getGlobalLineShape()}></div>

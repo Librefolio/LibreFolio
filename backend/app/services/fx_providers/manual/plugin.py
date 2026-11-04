@@ -16,8 +16,9 @@ from datetime import date
 from decimal import Decimal
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FXProviderStartDate, FXRateProvider
-from backend.app.services.provider_registry import FXProviderRegistry, register_provider
+from backend.app.services.fx.base import FXProviderStartDate, FXRateProvider
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
 

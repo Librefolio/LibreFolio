@@ -37,7 +37,7 @@ exact class of cache-key regression.
 """
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -68,6 +68,7 @@ from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 # =============================================================================
 # HELPERS — mirror the established conventions in this test directory
@@ -596,9 +597,12 @@ class TestDerivedViewsBuilderPnlCandles:
         result = _golden_result()
         points = DerivedViewsBuilder(result.daily_states, "EUR").build_pnl_candles()
 
+        # Steps (D-P4): a candle holds from its ``date`` to its ``through``; the two golden days have different candles,
+        # so each is its own one-day step.
         assert len(points) == 2
+        assert [(p["date"], p["through"]) for p in points] == [(date(2025, 1, 1), date(2025, 1, 1)), (date(2025, 1, 2), date(2025, 1, 2))]
         for point in points:
-            assert set(point.keys()) == {"date", "open", "high", "low", "close"}
+            assert set(point.keys()) == {"date", "through", "open", "high", "low", "close"}
             for field in ("open", "high", "low", "close"):
                 assert isinstance(point[field], CurrencySchema)
                 assert point[field].code == "EUR"
@@ -616,7 +620,11 @@ class TestDerivedViewsBuilderPnlCandles:
 
         assert points  # sanity: the golden scenario has no gaps
         for point in points:
-            assert point["close"].amount == states_by_date[point["date"]].total_pnl
+            # Per day, by expanding the step: every day it holds closes at that day's total P&L.
+            day = point["date"]
+            while day <= point["through"]:
+                assert point["close"].amount == states_by_date[day].total_pnl
+                day += timedelta(days=1)
 
     def test_missing_day_is_omitted_not_zeroed(self):
         """Reuses the MISSING-gating scenario above: day 2's candle is None, so
@@ -707,6 +715,15 @@ class TestPortfolioServiceGetPnlCandlesPure:
 #
 # Real DB integration tests (AsyncSession against the test database, no HTTP server),
 # mirroring TestPortfolioBlobCacheFxSensitivity in test_financial/test_portfolio_service.py.
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the real-DB scenarios below live in 2034, after tomorrow, so the range bound is lifted for the whole
+    module, before any fixture builds data (see ``lift_range_bound``); the pure builder tests above never reach it."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

@@ -38,8 +38,8 @@ Two ordering faults in `.github/workflows/release.yml`, both invisible in a gree
 
 ## Solution
 
-M's commit `dda56c9e1` (2026-10-06, «fix(docker): production frontend, real light/full»), with the journal in
-`810bab323`:
+M's commit `c8231cc5f` (2026-10-06, «fix(docker): production frontend, real light/full»), with the journal in
+`282082904`:
 
 - **A guard stage.** The Dockerfile's `frontend` stage runs `scripts/docker/check_frontend_build.sh` on the build it
   copies. The image fails unless `index.html` and `200.html` (the SPA fallback) exist, the `.build-debug` marker that

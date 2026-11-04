@@ -32,11 +32,11 @@ The developer had already answered: «possiamo cancellare il vecchio p1 che non 
 funzionava e collegarlo **prima di metterci a fare le prove**», and the instruction recorded in the hand-off is
 «togli p1 e poi lavora su v2».
 
-1. **`b82e59ffa`** (2026-09-21, «drop P1 prototype, wire planner v2», 33 files, +193/−11,877): the P1 wiring, UI and
+1. **`704ba66a3`** (2026-09-21, «drop P1 prototype, wire planner v2», 33 files, +193/−11,877): the P1 wiring, UI and
    tests go; `plan` is the one operation of the one service `pac_allocator`. The Rebalancer card and its user page go
    too, and the PAC page is rewritten because it was «inverted», not merely stale. A residue pass the same day took
-   the orphan count from 83 to 0 (`154182295` for the pages).
-2. **The final removal, row 13** (`6ebad820b`, 2026-10-06): P1's data side — the `allocation_source` branch of
+   the orphan count from 83 to 0 (`aab74f191` for the pages).
+2. **The final removal, row 13** (`3a03d6c1e`, 2026-10-06): P1's data side — the `allocation_source` branch of
    `POST /api/v1/portfolio/report`, its seven schemas, `allocationSource.ts` and 285 i18n keys in each language (from
    4,508 to 4,223; the `tools.allocation` and `tools.portfolioRebalancer` namespaces disappear). The report goes from
    13 to 12 sections, and a request that still sends the field gets 422.

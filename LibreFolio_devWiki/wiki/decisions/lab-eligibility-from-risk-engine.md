@@ -13,7 +13,7 @@ related: [asset-global-page-shows-no-money, discarded-risk-answer-read-as-empty]
 The developer's review of the laboratory's "+" picker (24/09): four crowdfunding assets were offered as selectable
 although they had **0 prices recorded**. "The point is not the crowdfunding type, it is the zero prices", and it
 "should reconnect to the asset eligibility engine". Risk's backend (`POST /api/v1/risk/eligibility`, time ② of its
-redesign) arrived in the lab's branch with the Risk → F merge `2c02ff070`.
+redesign) arrived in the lab's branch with the Risk → F merge `288998c72`.
 
 ## Options Considered
 1. **A frontend rule** (e.g. "no prices loaded → disabled") — rejected: whether an asset has enough prices in a period
@@ -54,11 +54,11 @@ redesign) arrived in the lab's branch with the Risk → F merge `2c02ff070`.
 ## Source files
 | Role | Path |
 |------|------|
-| Verdicts, wording, batching | `frontend/src/lib/components/risk/eligibility.ts` |
-| Tests | `frontend/src/lib/components/risk/eligibility.test.ts` |
-| Panel: request, parking, holdings | `frontend/src/lib/components/risk/AssetSetRiskPanel.svelte` |
-| The "+" picker | `frontend/src/lib/components/risk/LabAssetPicker.svelte` |
-| Ladder and quick actions | `frontend/src/lib/components/risk/assetSetSelection.ts` |
+| Verdicts, wording, batching | `frontend/src/lib/features/risk/eligibility.ts` |
+| Tests | `frontend/src/lib/features/risk/eligibility.test.ts` |
+| Panel: request, parking, holdings | `frontend/src/lib/features/risk/AssetSetRiskPanel.svelte` |
+| The "+" picker | `frontend/src/lib/features/risk/LabAssetPicker.svelte` |
+| Ladder and quick actions | `frontend/src/lib/features/risk/assetSetSelection.ts` |
 | Usage panels (`assetScope`) | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Engine | `backend/app/services/risk/eligibility.py` |
 

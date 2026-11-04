@@ -30,7 +30,9 @@
  *   - the page is `/assets/34?tab=risk`, mounted through `AppLayoutGateHarness`, which fills the slot;
  *   - every child component is a no-op and every store or API the layout touches is a stub — except
  *     `$lib/utils/internalPath` (real: the URLs below are literal) and the new `ServerUnreachable` panel
- *     (real: its test ids are the contract).
+ *     (real: its test ids are the contract);
+ *   - `instanceConfig.load` never settles: the layout asks for the public configuration at mount and must not wait
+ *     for it, so every case starting its auth check at all shows that it did not.
  *
  * Assertions read `data-testid`, `data-busy`, the disabled state and the `goto` targets — never text.
  * `app-auth-checking` (the «Checking authentication» state) is new markup. Where it is the presence
@@ -56,12 +58,15 @@ const mocks = await vi.hoisted(async () => {
         goto: vi.fn((_target: string, _options?: unknown) => Promise.resolve()).mockName('goto'),
         // Never settles: the authenticated start is observed by its call, and can navigate nowhere behind the assertions.
         runOwnedSettlement: vi.fn(() => new Promise<void>(() => {})).mockName('runOwnedOnboardingRouteSettlement'),
+        // Never settles either: the layout must not wait for the public configuration, so the auth check starting at
+        // all (`mountApp`'s premise) shows that it did not.
+        instanceConfigLoad: vi.fn((_options?: unknown) => new Promise<void>(() => {})).mockName('instanceConfig.load'),
         noopComponent: () => {},
     };
 });
 
 vi.mock('$app/environment', () => ({browser: true, dev: true, building: false, version: 'test'}));
-vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
+vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), onNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
 vi.mock('$app/stores', async () => {
     const {readable} = await import('svelte/store');
     return {page: readable({route: {id: '/(app)/assets/[id]'}, url: new URL('http://librefolio.test/assets/34?tab=risk')})};
@@ -114,6 +119,7 @@ vi.mock('$lib/stores/app/donationPopupStore.svelte', () => ({donationPopup: {for
 vi.mock('$lib/features/update-check/updateCheckStore.svelte', () => ({updateAvailable: {show: vi.fn()}}));
 vi.mock('$lib/features/update-check/updateCheck', () => ({checkForNewerRelease: vi.fn(() => Promise.resolve(null))}));
 vi.mock('$lib/api', () => ({zodiosApi: {get_system_info_api_v1_system_info_get: vi.fn(() => new Promise(() => {}))}}));
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({instanceConfig: {load: mocks.instanceConfigLoad}}));
 vi.mock('$lib/components/layout/Sidebar.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/components/layout/Header.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/components/ui/feedback/ToastContainer.svelte', () => ({default: mocks.noopComponent}));
@@ -121,6 +127,10 @@ vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBlock.svelte', (
 vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBanner.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/onboarding/components/OnboardingOverlayHost.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/onboarding/components/DeferredAppPopups.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/instance/components/InstanceNotices.svelte', () => ({default: mocks.noopComponent}));
+// The instance block (H, CP6) stays off here: the auth gate is the subject, and the block page is a no-op like every child.
+vi.mock('$lib/features/instance/instanceBlock.svelte', () => ({instanceBlock: {blocked: false, markBlocked: vi.fn(), clear: vi.fn()}}));
+vi.mock('$lib/features/instance/components/InstanceBlockedPage.svelte', () => ({default: mocks.noopComponent}));
 
 import {cleanup, fireEvent, render, screen, within} from '$test/component';
 import {assertEffectsRun} from '$test/runes.svelte';
@@ -184,6 +194,7 @@ beforeEach(() => {
     );
     mocks.goto.mockClear();
     mocks.runOwnedSettlement.mockClear();
+    mocks.instanceConfigLoad.mockClear();
     mocks.isSignOutRequested.mockClear();
     mocks.isSignOutRequested.mockReturnValue(false);
 });
@@ -310,5 +321,18 @@ describe('(app) layout — the auth check at start: only a 401 is a sign-out (K,
         expect(screen.queryByTestId('app-bootstrap-loading'), 'the started app is still on screen').not.toBeNull();
         expect(panel(), 'no panel appears after a check that was answered in time').toBeNull();
         expect(gotoTargets(), 'and nothing navigated').toEqual([]);
+    });
+});
+
+describe('(app) layout — the public configuration of the instance is asked for at mount, whatever the auth check answers (CP4b)', () => {
+    it.each(['authenticated', 'unauthenticated', 'unreachable', 'superseded'] as const)('%s: one shared load() at mount, never waited for, never repeated', async (outcome) => {
+        await mountApp();
+
+        expect(mocks.instanceConfigLoad, 'asked for at mount, before the auth check has answered').toHaveBeenCalledTimes(1);
+        expect(mocks.instanceConfigLoad, 'the shared request of the page load, not a forced one').toHaveBeenCalledWith();
+
+        await answerCheck(0, outcome);
+
+        expect(mocks.instanceConfigLoad, 'the auth answer neither repeats nor forces the request').toHaveBeenCalledTimes(1);
     });
 });

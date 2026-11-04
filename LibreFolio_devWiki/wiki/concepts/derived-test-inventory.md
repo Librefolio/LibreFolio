@@ -95,7 +95,7 @@ is the same failure mode as the silently-lost coverage
 ([[problems/e2e-python-coverage-lost-above-two-workers]]) and the half-wired
 environment variable ([[problems/env-var-injection-point-duplicated]]).
 
-The runner itself nearly did it once (test-runner migration, detour 15, `78a0103ae`). A guard,
+The runner itself nearly did it once (test-runner migration, detour 15, `85995e38c`). A guard,
 `nothing_left_to_run()`, skips a category's serial pass when the consolidated pass already ran every action; its
 first version simply returned `True`, so a skipped category counted as **passed**. With `--no-fail-fast` the run
 printed `✘ front-transaction tx-wac-mode` and, twenty lines below, «🎉 ALL FRONTEND TESTS PASSED! 🎉». The exit code

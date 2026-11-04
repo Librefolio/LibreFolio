@@ -5,10 +5,12 @@
  * and assemble `classification_params` from the same three inputs; only the
  * empty-case sentinel differs (create omits the field, edit sends `null`). Pulling
  * the two out makes those branches unit-testable and keeps the two save paths from
- * drifting apart.
+ * drifting apart. The request items themselves (create, patch, provider assignment)
+ * are built here too, from a plain copy of the form (`AssetFormFields`).
  *
  * @module components/assets/assetPayload
  */
+import {identifierRowsToColumns, type IdentifierRow} from './assetIdentifiers';
 
 /** A distribution map: `{Technology: 0.4, Health: 0.6}` etc. */
 export type Distribution = Record<string, number>;
@@ -73,4 +75,88 @@ export function buildClassificationParams(shortDescription: string, sectorDistri
     if (Object.keys(sectorDistribution).length > 0) params.sector_area = {distribution: sectorDistribution};
     if (Object.keys(geographicDistribution).length > 0) params.geographic_area = {distribution: geographicDistribution};
     return Object.keys(params).length > 0 ? params : undefined;
+}
+
+/** The form values the save requests are built from. */
+export interface AssetFormFields {
+    displayName: string;
+    currency: string;
+    assetType: string;
+    iconUrl: string | null;
+    quoteBaseQuantity: number;
+    active: boolean;
+    isBenchmark: boolean;
+    /** The provider page the user linked (`user_url`). */
+    userUrl: string;
+    shortDescription: string;
+    sectorDistribution: Distribution;
+    geographicDistribution: Distribution;
+    identifierRows: IdentifierRow[];
+}
+
+/**
+ * The item of the create request. An empty icon, user URL or classification is omitted; the identifier columns come
+ * from the rows.
+ */
+export function buildCreateItem(form: AssetFormFields) {
+    return {
+        display_name: form.displayName.trim(),
+        currency: form.currency,
+        asset_type: form.assetType,
+        icon_url: form.iconUrl || undefined,
+        quote_base_quantity: normalizeQuoteBaseQuantity(form.quoteBaseQuantity),
+        active: form.active,
+        is_benchmark: form.isBenchmark,
+        user_url: form.userUrl || undefined,
+        classification_params: buildClassificationParams(form.shortDescription, form.sectorDistribution, form.geographicDistribution),
+        ...identifierRowsToColumns(form.identifierRows),
+    };
+}
+
+/**
+ * The item of the edit request. Unlike the create item, an empty user URL or identifier column is sent as `null` (a
+ * deliberate clear) and the icon as it is; `classification_params` is present only when it differs from the one the
+ * modal opened with (see `buildClassificationPatch`).
+ */
+export function buildPatchItem(assetId: number, form: AssetFormFields, initialClassification: ClassificationParams | undefined) {
+    const classificationPatch = buildClassificationPatch(initialClassification, buildClassificationParams(form.shortDescription, form.sectorDistribution, form.geographicDistribution));
+    const idCols = identifierRowsToColumns(form.identifierRows);
+    return {
+        asset_id: assetId,
+        display_name: form.displayName.trim(),
+        currency: form.currency,
+        asset_type: form.assetType,
+        icon_url: form.iconUrl,
+        quote_base_quantity: normalizeQuoteBaseQuantity(form.quoteBaseQuantity),
+        active: form.active,
+        is_benchmark: form.isBenchmark,
+        user_url: form.userUrl || null,
+        ...(classificationPatch !== undefined ? {classification_params: classificationPatch} : {}),
+        identifier_isin: idCols.identifier_isin || null,
+        identifier_ticker: idCols.identifier_ticker || null,
+        identifier_cusip: idCols.identifier_cusip || null,
+        identifier_sedol: idCols.identifier_sedol || null,
+        identifier_figi: idCols.identifier_figi || null,
+        identifier_uuid: idCols.identifier_uuid || null,
+        identifier_other: idCols.identifier_other || null,
+    };
+}
+
+/** The provider the modal assigns to an asset. */
+export interface ProviderAssignment {
+    code: string;
+    identifier: string;
+    identifierType: string;
+    params: Record<string, any> | null;
+}
+
+/** The item of the provider-assignment request. */
+export function buildProviderAssignItem(assetId: number, provider: ProviderAssignment) {
+    return {
+        asset_id: assetId,
+        provider_code: provider.code,
+        identifier: provider.identifier,
+        identifier_type: provider.identifierType,
+        provider_params: provider.params,
+    };
 }

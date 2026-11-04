@@ -7,7 +7,6 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Literal, Sequence
 
@@ -15,7 +14,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import AssetEvent, AssetEventType, Broker, BrokerUserAccess, Transaction, TransactionType
+from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     YieldOnCostFxProvenance,
@@ -27,8 +26,11 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FragmentInterval
-from backend.app.services.fx import convert_bulk
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FragmentInterval
+from backend.app.services.financial_math.lots.scope_boundary import TransferPartner, read_arrivals_at_scope_boundary
+from backend.app.services.financial_math.splits import SplitLink, is_valid_split_ratio, load_split_links
+from backend.app.services.fx.conversion import convert_bulk
+from backend.app.utils.datetime_utils import day_before, shift_date
 
 logger = structlog.get_logger(__name__)
 
@@ -40,7 +42,9 @@ _SPLIT_QUANTITY_REL_TOLERANCE = Decimal("0.000000001")
 
 @dataclass(frozen=True, slots=True)
 class YieldOnCostPositionInput:
-    """Residual WAC input for one open position at report end."""
+    """Residual WAC of one open position at report end: its historical average cost per unit, already in the report
+    currency (each acquisition converted at its own date by the average cost). A per-unit average has no date, so it
+    is never converted here; ``wac_currency`` must be the report currency."""
 
     asset_id: int
     broker_id: int
@@ -50,7 +54,7 @@ class YieldOnCostPositionInput:
 
 @dataclass(frozen=True, slots=True)
 class YieldOnCostPositionCalculation:
-    """Public calculation plus converted WAC reused by PortfolioService."""
+    """Public calculation plus the WAC reused by PortfolioService."""
 
     result: YieldOnCostResult
     wac_per_unit: Decimal | None
@@ -58,31 +62,17 @@ class YieldOnCostPositionCalculation:
 
 
 @dataclass(frozen=True, slots=True)
-class _SplitRecord:
-    transaction_id: int
-    event_id: int
-    transaction_asset_id: int
-    event_asset_id: int
-    broker_id: int
-    transaction_type: TransactionType
-    transaction_quantity: Decimal | None
-    transaction_date: date_type
-    event_date: date_type
-    ratio: Decimal | None
-
-
-@dataclass(frozen=True, slots=True)
 class _ConversionSpec:
     position_key: PositionKey
-    purpose: Literal["income", "wac"]
     requested_date: date_type
     from_currency: str
-    transaction_id: int | None = None
+    transaction_id: int
 
 
 @dataclass(frozen=True, slots=True)
 class _TransactionContext:
-    replay_transactions: list[Transaction]
+    # The rows the replay reads, an arrival from a broker the user cannot see read at the scope's edge (J-51).
+    replay_transactions: list[Transaction | FifoInputTransaction]
     first_pair_date: dict[PositionKey, date_type]
     income_by_key: dict[PositionKey, list[Transaction]]
 
@@ -96,7 +86,6 @@ class _ReplayContext:
 
 @dataclass(frozen=True, slots=True)
 class _ConversionContext:
-    wac_by_key: dict[PositionKey, Decimal]
     income_by_transaction: dict[int, Decimal]
     provenance_by_key: dict[PositionKey, list[YieldOnCostFxProvenance]]
     missing_by_key: dict[PositionKey, tuple[str | None, date_type]]
@@ -179,8 +168,12 @@ async def calculate_yield_on_cost_for_positions(
         return {}
 
     target_currency = Currency.validate_code(target_currency)
+    for position in positions:
+        if position.wac_per_unit is not None and position.wac_currency and Currency.validate_code(position.wac_currency) != target_currency:
+            raise ValueError(f"The WAC of asset {position.asset_id} on broker {position.broker_id} is in {position.wac_currency}: it must already be in the report currency {target_currency}, since a historical average cost has no date to convert it at.")
     position_by_key = {(position.asset_id, position.broker_id): position for position in positions}
-    window_start = as_of_date - timedelta(days=364)
+    # The trailing year; it starts on date.min at the earliest for an as_of in year 1 (MF-SEC8-2b: it raised before).
+    window_start = shift_date(as_of_date, -364)
     transaction_context = await _load_transaction_context(
         db,
         user_id=user_id,
@@ -197,10 +190,8 @@ async def calculate_yield_on_cost_for_positions(
     )
     conversion_context = await _resolve_conversion_context(
         db,
-        position_by_key=position_by_key,
         income_by_key=transaction_context.income_by_key,
         target_currency=target_currency,
-        as_of_date=as_of_date,
     )
     return {
         key: _calculate_position(
@@ -231,7 +222,7 @@ async def _load_transaction_context(
     visible_broker_ids = set((await db.execute(visible_stmt)).scalars().all()) | selected_broker_ids
     tx_stmt = select(Transaction).where(Transaction.asset_id.in_(asset_ids)).where(Transaction.broker_id.in_(visible_broker_ids)).where(Transaction.date <= as_of_date).order_by(Transaction.date, Transaction.id)
     historical_transactions = list((await db.execute(tx_stmt)).scalars().all())
-    replay_transactions = await _include_external_transfer_legs(db, historical_transactions, asset_ids)
+    ledger_transactions = await _include_external_transfer_legs(db, historical_transactions, asset_ids)
 
     first_pair_date: dict[PositionKey, date_type] = {}
     income_by_key: dict[PositionKey, list[Transaction]] = defaultdict(list)
@@ -245,7 +236,7 @@ async def _load_transaction_context(
         if transaction.type in _INCOME_TYPES and window_start <= transaction.date <= as_of_date:
             income_by_key[key].append(transaction)
     return _TransactionContext(
-        replay_transactions=replay_transactions,
+        replay_transactions=_read_unseen_arrivals(ledger_transactions, visible_broker_ids),
         first_pair_date=first_pair_date,
         income_by_key=dict(income_by_key),
     )
@@ -263,6 +254,23 @@ async def _include_external_transfer_legs(
         paired_stmt = select(Transaction).where(Transaction.id.in_(external_pair_ids)).where(Transaction.asset_id.in_(asset_ids))
         replay_transactions.extend((await db.execute(paired_stmt)).scalars().all())
     return sorted(replay_transactions, key=lambda transaction: (transaction.date, transaction.id or 0))
+
+
+def _read_unseen_arrivals(ledger: Sequence[Transaction], visible_broker_ids: set[int]) -> list[Transaction | FifoInputTransaction]:
+    """The ledger to replay, each arriving TRANSFER leg whose partner pairs back from a broker the user cannot see read at
+    the scope's edge (J-51, ``scope_boundary.read_arrivals_at_scope_boundary``).
+
+    Replayed with its partner, such an arrival joins the sender's broker to a component where that broker has no history,
+    so the replay fails and the yield on cost is unavailable. Read at the edge, the units arrive on the leg's own date and
+    the partner leaves the replay. A departure keeps its partner: units in transit count for the broker they left.
+    """
+    seen = [row for row in ledger if row.broker_id in visible_broker_ids]
+    unseen = {row.id: row for row in ledger if row.broker_id not in visible_broker_ids and row.id is not None}
+    partners = {row_id: TransferPartner(id=row_id, broker_id=row.broker_id, asset_id=row.asset_id, type=str(getattr(row.type, "value", row.type)), quantity=row.quantity, related_transaction_id=row.related_transaction_id) for row_id, row in unseen.items()}
+    reading = read_arrivals_at_scope_boundary(seen, partners=partners, scope_broker_ids=visible_broker_ids)
+    read_partner_ids = {row.related_transaction_id for row in seen if row.id in reading.legs}
+    kept_partners = [row for row_id, row in unseen.items() if row_id not in read_partner_ids]
+    return sorted([*reading.transactions, *kept_partners], key=lambda row: (row.date, row.id or 0))
 
 
 async def _build_replay_context(
@@ -379,7 +387,7 @@ def _has_incoherent_split_quantity(replay: FifoEngineResult) -> bool:
 
 
 def _index_split_records(
-    split_records: Sequence[_SplitRecord],
+    split_records: Sequence[SplitLink],
 ) -> tuple[dict[int, dict[int, Decimal]], dict[int, dict[int, int]], dict[int, set[int]]]:
     ratios_by_asset: dict[int, dict[int, Decimal]] = defaultdict(dict)
     event_ids_by_asset: dict[int, dict[int, int]] = defaultdict(dict)
@@ -394,9 +402,7 @@ def _index_split_records(
             or record.transaction_quantity == 0
             or record.transaction_asset_id != record.event_asset_id
             or record.transaction_date != record.event_date
-            or record.ratio is None
-            or not record.ratio.is_finite()
-            or record.ratio <= 0
+            or not is_valid_split_ratio(record.ratio)
         )
         seen_events.add(identity)
         if invalid:
@@ -439,27 +445,13 @@ def _broker_components(transactions: Sequence[Transaction]) -> list[set[int]]:
 async def _resolve_conversion_context(
     db: AsyncSession,
     *,
-    position_by_key: dict[PositionKey, YieldOnCostPositionInput],
     income_by_key: dict[PositionKey, list[Transaction]],
     target_currency: str,
-    as_of_date: date_type,
 ) -> _ConversionContext:
+    """Every income movement converted at its own date. The WAC is not converted: it is already in the report currency."""
     specs: list[_ConversionSpec] = []
     inputs: list[tuple[Currency, str, date_type]] = []
     missing_by_key: dict[PositionKey, tuple[str | None, date_type]] = {}
-    for key, position in position_by_key.items():
-        if position.wac_per_unit is None or not position.wac_currency:
-            continue
-        _append_conversion(
-            specs,
-            inputs,
-            position_key=key,
-            purpose="wac",
-            requested_date=as_of_date,
-            from_currency=position.wac_currency,
-            target_currency=target_currency,
-            amount=position.wac_per_unit,
-        )
     for key in sorted(income_by_key):
         for transaction in income_by_key[key]:
             if transaction.id is None or not transaction.currency:
@@ -469,7 +461,6 @@ async def _resolve_conversion_context(
                 specs,
                 inputs,
                 position_key=key,
-                purpose="income",
                 requested_date=transaction.date,
                 from_currency=transaction.currency,
                 target_currency=target_currency,
@@ -487,7 +478,6 @@ def _index_conversions(
     target_currency: str,
     missing_by_key: dict[PositionKey, tuple[str | None, date_type]],
 ) -> _ConversionContext:
-    wac_by_key: dict[PositionKey, Decimal] = {}
     income_by_transaction: dict[int, Decimal] = {}
     provenance_by_key: dict[PositionKey, list[YieldOnCostFxProvenance]] = defaultdict(list)
     missing_pairs_by_key: dict[PositionKey, list[WACMissingPairInfo]] = defaultdict(list)
@@ -499,10 +489,7 @@ def _index_conversions(
             missing_pairs_by_key[spec.position_key].append(WACMissingPairInfo(pair=pair, dates=[spec.requested_date]))
             continue
         converted, rate_date, _backfilled = conversion
-        if spec.purpose == "wac":
-            wac_by_key[spec.position_key] = converted.amount
-        elif spec.transaction_id is not None:
-            income_by_transaction[spec.transaction_id] = converted.amount
+        income_by_transaction[spec.transaction_id] = converted.amount
         if spec.from_currency != target_currency:
             _append_fx_provenance(
                 provenance_by_key,
@@ -512,7 +499,6 @@ def _index_conversions(
                 rate_date=rate_date,
             )
     return _ConversionContext(
-        wac_by_key=wac_by_key,
         income_by_transaction=income_by_transaction,
         provenance_by_key=dict(provenance_by_key),
         missing_by_key=missing_by_key,
@@ -528,13 +514,13 @@ def _append_fx_provenance(
     target_currency: str,
     rate_date: date_type,
 ) -> None:
-    identity = (spec.purpose, spec.requested_date, rate_date, spec.from_currency, target_currency)
+    identity = ("income", spec.requested_date, rate_date, spec.from_currency, target_currency)
     if identity in seen_provenance[spec.position_key]:
         return
     seen_provenance[spec.position_key].add(identity)
     provenance_by_key[spec.position_key].append(
         YieldOnCostFxProvenance(
-            purpose=spec.purpose,
+            purpose="income",
             requested_date=spec.requested_date,
             rate_date=rate_date,
             from_currency=spec.from_currency,
@@ -569,38 +555,37 @@ def _calculate_position(
         return _unavailable(
             provenance.model_copy(update={"issue_pair": issue_pair, "issue_date": issue_date}),
             reason,
-            conversion_context.wac_by_key.get(key),
+            _input_wac(position),
             conversion_context.missing_pairs_by_key.get(key, []),
         )
-    converted_wac = conversion_context.wac_by_key[key]
-    if converted_wac <= 0:
-        return _unavailable(
-            provenance,
-            YieldOnCostUnavailableReason.NON_POSITIVE_WAC,
-            converted_wac,
-        )
+    wac = position.wac_per_unit
     if not income_transactions:
         return _calculate_no_income(
             provenance,
-            converted_wac,
+            wac,
             target_currency,
             window_start,
         )
 
     if key in replay_context.invalid_keys:
-        return _unavailable(provenance, YieldOnCostUnavailableReason.INVALID_SPLIT, converted_wac)
+        return _unavailable(provenance, YieldOnCostUnavailableReason.INVALID_SPLIT, wac)
     if key in replay_context.failed_keys or key not in replay_context.replay_by_key:
-        return _unavailable(provenance, YieldOnCostUnavailableReason.REPLAY_INCONSISTENT, converted_wac)
+        return _unavailable(provenance, YieldOnCostUnavailableReason.REPLAY_INCONSISTENT, wac)
     return _calculate_income_position(
         key=key,
         income_transactions=income_transactions,
         replay=replay_context.replay_by_key[key],
         conversion_context=conversion_context,
         provenance=provenance,
-        converted_wac=converted_wac,
+        wac=wac,
         target_currency=target_currency,
         as_of_date=as_of_date,
     )
+
+
+def _input_wac(position: YieldOnCostPositionInput) -> Decimal | None:
+    """The WAC handed back to the caller: none without its currency."""
+    return position.wac_per_unit if position.wac_per_unit is not None and position.wac_currency else None
 
 
 def _base_failure_reason(
@@ -612,15 +597,15 @@ def _base_failure_reason(
         return YieldOnCostUnavailableReason.MISSING_WAC, None, None
     if position.wac_per_unit <= 0:
         return YieldOnCostUnavailableReason.NON_POSITIVE_WAC, None, None
-    if key in conversion_context.missing_by_key or key not in conversion_context.wac_by_key:
-        issue_pair, issue_date = conversion_context.missing_by_key.get(key, (None, None))
+    if key in conversion_context.missing_by_key:
+        issue_pair, issue_date = conversion_context.missing_by_key[key]
         return YieldOnCostUnavailableReason.MISSING_FX, issue_pair, issue_date
     return None
 
 
 def _calculate_no_income(
     provenance: YieldOnCostProvenance,
-    converted_wac: Decimal,
+    wac: Decimal,
     target_currency: str,
     window_start: date_type,
 ) -> YieldOnCostPositionCalculation:
@@ -628,7 +613,7 @@ def _calculate_no_income(
         return _unavailable(
             provenance,
             YieldOnCostUnavailableReason.INSUFFICIENT_HISTORY,
-            converted_wac,
+            wac,
         )
     return YieldOnCostPositionCalculation(
         result=YieldOnCostResult(
@@ -636,7 +621,7 @@ def _calculate_no_income(
             value=Decimal("0"),
             provenance=provenance.model_copy(update={"gross_income_per_unit": Currency(code=target_currency, amount=Decimal("0"))}),
         ),
-        wac_per_unit=converted_wac,
+        wac_per_unit=wac,
     )
 
 
@@ -647,7 +632,7 @@ def _calculate_income_position(
     replay: FifoEngineResult,
     conversion_context: _ConversionContext,
     provenance: YieldOnCostProvenance,
-    converted_wac: Decimal,
+    wac: Decimal,
     target_currency: str,
     as_of_date: date_type,
 ) -> YieldOnCostPositionCalculation:
@@ -663,13 +648,13 @@ def _calculate_income_position(
             replay,
             fragments_by_lot,
             broker_id,
-            transaction.date - timedelta(days=1),
+            day_before(transaction.date),
         )
         if eligible_quantity <= 0:
             return _unavailable(
                 provenance.model_copy(update={"issue_date": transaction.date}),
                 YieldOnCostUnavailableReason.INCOME_WITHOUT_ELIGIBLE_QUANTITY,
-                converted_wac,
+                wac,
             )
         split_ratio = _current_unit_split_ratio(
             split_events,
@@ -677,17 +662,24 @@ def _calculate_income_position(
             broker_id=broker_id,
         )
         if split_ratio is None:
-            return _unavailable(provenance, YieldOnCostUnavailableReason.INVALID_SPLIT, converted_wac)
+            return _unavailable(provenance, YieldOnCostUnavailableReason.INVALID_SPLIT, wac)
         if transaction.id is None or transaction.id not in conversion_context.income_by_transaction:
             issue_pair, issue_date = conversion_context.missing_by_key.get(key, (None, transaction.date))
             return _unavailable(
                 provenance.model_copy(update={"issue_pair": issue_pair, "issue_date": issue_date}),
                 YieldOnCostUnavailableReason.MISSING_FX,
-                converted_wac,
+                wac,
                 conversion_context.missing_pairs_by_key.get(key, []),
             )
         gross_income_per_unit += conversion_context.income_by_transaction[transaction.id] / eligible_quantity / split_ratio
 
+    if gross_income_per_unit < 0:
+        # Income keeps its sign (D-MF3): corrections larger than the income of the window leave no yield to show.
+        return _unavailable(
+            provenance.model_copy(update={"gross_income_per_unit": Currency(code=target_currency, amount=gross_income_per_unit)}),
+            YieldOnCostUnavailableReason.NEGATIVE_NET_INCOME,
+            wac,
+        )
     final_provenance = provenance.model_copy(
         update={
             "gross_income_per_unit": Currency(code=target_currency, amount=gross_income_per_unit),
@@ -697,10 +689,10 @@ def _calculate_income_position(
     return YieldOnCostPositionCalculation(
         result=YieldOnCostResult(
             status=YieldOnCostStatus.AVAILABLE,
-            value=gross_income_per_unit / converted_wac,
+            value=gross_income_per_unit / wac,
             provenance=final_provenance,
         ),
-        wac_per_unit=converted_wac,
+        wac_per_unit=wac,
         missing_fx_pairs=tuple(conversion_context.missing_pairs_by_key.get(key, [])),
     )
 
@@ -709,8 +701,11 @@ def _eligible_position_quantity(
     replay: FifoEngineResult,
     fragments_by_lot: dict[int, list[FragmentInterval]],
     broker_id: int,
-    cutoff: date_type,
+    cutoff: date_type | None,
 ) -> Decimal:
+    """The LONG quantity held at the end of ``cutoff``; 0 without a cutoff (an income on ``date.min``: no day before)."""
+    if cutoff is None:
+        return Decimal("0")
     return sum(
         (
             eligible_income_quantity(
@@ -755,18 +750,16 @@ def _append_conversion(
     inputs: list[tuple[Currency, str, date_type]],
     *,
     position_key: PositionKey,
-    purpose: Literal["income", "wac"],
     requested_date: date_type,
     from_currency: str,
     target_currency: str,
     amount: Decimal,
-    transaction_id: int | None = None,
+    transaction_id: int,
 ) -> None:
     normalized_currency = Currency.validate_code(from_currency)
     specs.append(
         _ConversionSpec(
             position_key=position_key,
-            purpose=purpose,
             requested_date=requested_date,
             from_currency=normalized_currency,
             transaction_id=transaction_id,
@@ -800,53 +793,8 @@ def _unavailable(
 
 async def _load_split_records(
     db: AsyncSession,
-    transactions: Sequence[Transaction],
-) -> list[_SplitRecord]:
-    linked_ids = [transaction.id for transaction in transactions if transaction.id is not None and transaction.asset_event_id is not None]
-    if not linked_ids:
-        return []
-    stmt = (
-        select(
-            Transaction.id,
-            AssetEvent.id,
-            Transaction.asset_id,
-            AssetEvent.asset_id,
-            Transaction.broker_id,
-            Transaction.type,
-            Transaction.quantity,
-            Transaction.date,
-            AssetEvent.date,
-            AssetEvent.value,
-        )
-        .join(AssetEvent, Transaction.asset_event_id == AssetEvent.id)
-        .where(Transaction.id.in_(linked_ids))
-        .where(AssetEvent.type == AssetEventType.SPLIT)
-        .order_by(Transaction.id)
-    )
-    return [
-        _SplitRecord(
-            transaction_id=transaction_id,
-            event_id=event_id,
-            transaction_asset_id=transaction_asset_id,
-            event_asset_id=event_asset_id,
-            broker_id=broker_id,
-            transaction_type=transaction_type,
-            transaction_quantity=transaction_quantity,
-            transaction_date=transaction_date,
-            event_date=event_date,
-            ratio=ratio,
-        )
-        for (
-            transaction_id,
-            event_id,
-            transaction_asset_id,
-            event_asset_id,
-            broker_id,
-            transaction_type,
-            transaction_quantity,
-            transaction_date,
-            event_date,
-            ratio,
-        ) in (await db.execute(stmt)).all()
-        if transaction_asset_id is not None
-    ]
+    transactions: Sequence[Transaction | FifoInputTransaction],
+) -> list[SplitLink]:
+    # A copy read at the scope's edge (J-51) stands for a TRANSFER leg, which no SPLIT links: only stored rows are asked.
+    stored = [transaction for transaction in transactions if isinstance(transaction, Transaction)]
+    return [link for link in await load_split_links(db, stored) if link.transaction_asset_id is not None]

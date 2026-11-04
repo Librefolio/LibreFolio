@@ -1,17 +1,20 @@
 /**
  * FX Data Editor — E2E Tests
  *
- * Tests the data editor section in the FX detail page.
+ * Tests the data editor section in the FX detail page, and what it says when the server
+ * refuses a save, whole or in part (X-R46): the server's facts, never Axios's sentence.
  *
  * Prerequisites:
  * - Test server running (./dev.py server --test)
  * - Database populated with EUR-USD data
  */
 
-import {expect, test} from '../fixtures/playwright';
+import {readFileSync} from 'node:fs';
+import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {t} from '../fixtures/i18n-data';
+import {daysAgoIso} from '../fixtures/dates';
 import {goToFxDetailPage} from './fx-helpers';
 
 test.describe('FX Data Editor', () => {
@@ -54,6 +57,55 @@ test.describe('FX Data Editor', () => {
         // Click the edit button again to close (toggle)
         await page.getByTestId('fx-detail-edit-btn').click();
         await expect(page.getByTestId('fx-detail-editor-panel')).not.toBeVisible();
+    });
+
+    // ========================================================================
+    // Export (FB-30): the rates editor's Export button downloads the pair as JSON or CSV.
+    // Read-only: an export writes nothing, so nothing to restore.
+    // ========================================================================
+    test('export downloads the pair rates as JSON and as CSV', async ({page}) => {
+        await goToFxDetailPage(page, 'EUR-USD');
+        await page.getByTestId('fx-detail-edit-btn').click();
+        const panel = page.getByTestId('fx-detail-editor-panel');
+        await expect(panel).toBeVisible();
+        const exportButton = panel.getByTestId('data-editor-export-btn');
+        await expect(exportButton).toBeVisible();
+
+        const dialog = page.getByTestId('data-export-modal');
+        /** Opens the dialog (it starts on CSV), picks `format`, confirms, and returns the file the browser received. */
+        const exportAs = async (format: 'csv' | 'json') => {
+            await exportButton.click();
+            await expect(dialog).toBeVisible();
+            await expect(dialog.getByTestId('data-export-format-csv')).toBeChecked();
+            if (format === 'json') await dialog.getByTestId('data-export-format-json').check();
+            const downloading = page.waitForEvent('download', {timeout: 15_000});
+            await dialog.getByTestId('data-export-confirm').click();
+            const download = await downloading;
+            await expect(dialog).toBeHidden();
+            const path = await download.path();
+            expect(path, 'the download completed').not.toBeNull();
+            return {name: download.suggestedFilename(), text: readFileSync(path!, 'utf8')};
+        };
+
+        // JSON: the envelope names the pair (stored order, as the page asked it) and holds its rates.
+        const json = await exportAs('json');
+        expect(json.name.endsWith('.json')).toBe(true);
+        const envelope = JSON.parse(json.text) as {scope: string; entity: {type: string; base: string; quote: string; inverted: boolean}; row_count: number; rows: Array<{date: string; base: string; quote: string; rate: string | null}>};
+        expect(envelope.scope).toBe('fx_rates');
+        expect(envelope.entity).toMatchObject({type: 'fx_pair', base: 'EUR', quote: 'USD', inverted: false});
+        expect(envelope.rows.length).toBeGreaterThan(0);
+        expect(envelope.row_count).toBe(envelope.rows.length);
+        for (const row of envelope.rows) expect([row.base, row.quote]).toEqual(['EUR', 'USD']);
+
+        // CSV: the default; the header is the export's fixed column list.
+        const csv = await exportAs('csv');
+        expect(csv.name.endsWith('.csv')).toBe(true);
+        const lines = csv.text.split(/\r?\n/).filter((line) => line.length > 0);
+        const header = lines[0].split(';');
+        expect(header).toContain('date');
+        expect(header).toContain('rate');
+        // Not equal to the JSON's count: the pair is shared, and another test may have synced it between the two downloads.
+        expect(lines.length - 1, 'the CSV holds rates').toBeGreaterThan(0);
     });
 
     // ========================================================================
@@ -132,5 +184,199 @@ test.describe('FX Data Editor', () => {
         // the deletion only ever lived in this page, which the test discards.
         await expect(save).toBeEnabled();
         await page.unroute(rates);
+    });
+
+    // ========================================================================
+    // What a refused save says (X-R46)
+    // ========================================================================
+    /**
+     * X-R46. The editor mishandled the server's refusals of a save:
+     * - refused whole (a 400 or a 422), its banner and its toast showed Axios's generic
+     *   `e.message` — «Request failed with status code 422» — instead of what the server
+     *   answered: which rate it refused, and why;
+     * - taken in part (a 200 with refusals), every rate sent was counted as saved, and the
+     *   save was announced as a success.
+     *
+     * Each test imports its own lines into the editor of the seeded EUR-USD, which it only
+     * reads, and answers the rate save (POST) at the network edge with what the server answers
+     * to those rates: nothing is written, so nothing needs restoring. The answers have the
+     * shapes of the server's coded refusals, and carry the refused day only where the editor
+     * must read it (`items`, `rejected`): a day in the editor's words can come from there alone.
+     *
+     * Read without words: a toast by its variant (`toast-error`, `toast-warning`), the banner by
+     * `fx-editor-error`, and their text only for ISO days and for the absence of Axios's
+     * sentence, which is English whatever the interface language. FxDataEditorSection does not
+     * publish `fx-editor-error` yet: until X-R46 adds it, the banner is red as not found too.
+     */
+    test.describe('server refusals (X-R46)', () => {
+        // A red lists every missing fact at once (soft assertions, two seconds each, behind a
+        // barrier): the budget is for that report — green, a test takes a fraction of it.
+        test.describe.configure({timeout: 60_000});
+
+        const RATES_URL = '**/api/v1/fx/currencies/rate';
+        const RATES_PATH = '/api/v1/fx/currencies/rate';
+        /** Axios's own sentence for any answer outside 2xx: English, and none of the server's facts in it. */
+        const AXIOS_GENERIC = 'Request failed with status code';
+
+        /** One rate as the editor sends it. */
+        type SentRate = {base: string; quote: string; date: string; rate: number | string};
+
+        /** The editor of EUR-USD, with `lines` (`[day, rate]`, written EUR>USD) imported through its CSV modal. */
+        async function editorWithImported(page: Page, lines: Array<[string, string]>): Promise<Locator> {
+            await goToFxDetailPage(page, 'EUR-USD');
+            await page.getByTestId('fx-detail-edit-btn').click();
+            const panel = page.getByTestId('fx-detail-editor-panel');
+            await expect(panel).toBeVisible();
+            await panel.getByTestId('fx-data-import-btn').click();
+            const modal = page.getByTestId('data-import-modal');
+            await expect(modal).toBeVisible();
+            // The header names the page's own direction: the rates go in as written, never inverted.
+            const csv = ['date;EUR>USD', ...lines.map(([day, rate]) => `${day};${rate}`)].join('\n');
+            const input = modal.getByTestId('csv-editor-input');
+            await input.fill(csv);
+            await expect(input).toHaveValue(csv);
+            const confirm = modal.getByTestId('data-import-confirm');
+            await expect(confirm, 'every line is a valid rate').toHaveAttribute('data-valid-rows', String(lines.length));
+            await confirm.click();
+            await expect(modal).toBeHidden();
+            return panel;
+        }
+
+        /**
+         * Answer every rate save (POST) of the page with `answer(sent)` — the server's answer to the
+         * rates sent — and keep what each save sent. No save reaches the server; any other method does.
+         */
+        async function answerSaves(page: Page, answer: (sent: SentRate[]) => {status: number; json: unknown}): Promise<SentRate[][]> {
+            const saves: SentRate[][] = [];
+            await page.route(RATES_URL, async (route) => {
+                if (route.request().method() !== 'POST') {
+                    await route.fallback();
+                    return;
+                }
+                const sent = route.request().postDataJSON() as SentRate[];
+                saves.push(sent);
+                await route.fulfill(answer(sent));
+            });
+            return saves;
+        }
+
+        /** The days each save sent, sorted. */
+        function sentDays(saves: SentRate[][]): string[][] {
+            return saves.map((sent) => sent.map((rate) => rate.date).sort());
+        }
+
+        /** Where `day` sits in what was sent: the `index` by which the server names a rate. */
+        function indexOf(sent: SentRate[], day: string): number {
+            return sent.findIndex((rate) => rate.date === day);
+        }
+
+        /** Click Save, and return the status of the answer once the save has been answered. */
+        async function save(page: Page, panel: Locator): Promise<number> {
+            const saveButton = panel.getByTestId('fx-editor-save-btn');
+            await expect(saveButton).toBeEnabled();
+            const answered = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === RATES_PATH, {timeout: 15_000});
+            await saveButton.click();
+            return (await answered).status();
+        }
+
+        /**
+         * `told` — a toast, or the banner — is shown, holds every one of `facts` and not Axios's
+         * sentence. Soft, so a red lists every missing fact; the wait is short, the text being
+         * final once `told` is shown.
+         */
+        async function expectTold(told: Locator, what: string, facts: string[]): Promise<void> {
+            await expect(told, `${what} is shown`).toBeVisible();
+            for (const fact of facts) await expect.soft(told, `${what} holds ${fact}`).toContainText(fact, {timeout: 2_000});
+            await expect.soft(told, `${what} says what the server said, not Axios's sentence`).not.toContainText(AXIOS_GENERIC, {timeout: 2_000});
+        }
+
+        test("a rate dated after the last storable day is told refused with that day and the last storable day, not with Axios's sentence", async ({page}) => {
+            // Pins: a 422 `date_out_of_range` is told, by the error toast and by the banner, with
+            // the day refused and the last storable day the server gave (`params.max`), in ISO;
+            // the editor stays open on the rate, ready to be corrected.
+            // Red on HEAD (X-R46): the toast reads «… Request failed with status code 422», and the
+            // banner, which holds the same sentence, publishes no `fx-editor-error`.
+            // Red until N83's revision (19/10) reaches `writeRefusal.ts`: it reads no
+            // `date_out_of_range` detail without `params.min`, so the toast and the banner fall back
+            // to the server's message, which names the last storable day and not the day refused.
+            const refused = daysAgoIso(-30);
+            const max = daysAgoIso(-1);
+            const panel = await editorWithImported(page, [[refused, '1.0823']]);
+            // The server's answer to a day after tomorrow (X-R65): the whole save refused. A stored
+            // rate has no first day since N83's revision, so `params` holds the last storable day
+            // alone, tomorrow, and the day refused lies after it. The message says that last day,
+            // never the day refused — that is in `items`.
+            const saves = await answerSaves(page, (sent) => ({
+                status: 422,
+                json: {detail: {code: 'date_out_of_range', message: `Dates must lie on or before ${max}: 1 does not`, params: {max}, items: [{index: indexOf(sent, refused), date: refused}], count: 1}},
+            }));
+
+            expect(await save(page, panel), 'the save reached the refusal').toBe(422);
+            expect(sentDays(saves), 'one save, of the imported rate alone').toEqual([[refused]]);
+
+            await expectTold(page.getByTestId('toast-error'), 'the error toast', [refused, max]);
+            // Nothing is lost: the editor stays open on the imported rate, ready to save again.
+            await expect(panel).toBeVisible();
+            await expect(panel.getByTestId('fx-editor-save-btn')).toBeEnabled();
+            await expectTold(panel.getByTestId('fx-editor-error'), 'the banner', [refused, max]);
+        });
+
+        test('a save the server takes in part is told as a warning naming the refused day, not as a success', async ({page}) => {
+            // Pins: a 200 whose `rejected` lists a rate is no full success. The editor counts as
+            // saved only the `results`, and its toast is a warning naming the day refused, in ISO.
+            // Red on HEAD: the answer's refusals are ignored, both rates are counted as saved and
+            // the toast is a success.
+            // Two days of the page's three-month range, so the save widens nothing. The second rate
+            // cannot be stored — 1E-11 is 0 at the column's ten decimal places (X-R38) — and the
+            // server keeps the first alone.
+            const [kept, refused] = [daysAgoIso(12), daysAgoIso(11)];
+            const panel = await editorWithImported(page, [
+                [kept, '1.2345'],
+                [refused, '0.00000000001'],
+            ]);
+            // `errors` stays empty: the refusal is told in `rejected` alone.
+            const saves = await answerSaves(page, (sent) => ({
+                status: 200,
+                json: {
+                    results: [{success: true, action: 'updated', rate: '1.2345000000', date: kept, base: 'EUR', quote: 'USD'}],
+                    success_count: 1,
+                    errors: [],
+                    rejected: [{index: indexOf(sent, refused), date: refused, reason: 'rate_not_storable'}],
+                },
+            }));
+
+            expect(await save(page, panel), 'the save was answered').toBe(200);
+            expect(sentDays(saves), 'one save, of the two imported rates').toEqual([[kept, refused].sort()]);
+
+            // The save is told by one toast: a warning, one of its two rates being refused, that
+            // names the day refused.
+            const toast = page.getByTestId(/^toast-(success|warning|error|info)$/);
+            await expect(toast, 'the save is told').toBeVisible();
+            await expect.soft(toast, 'as a warning, not as a success: one of the two rates was refused').toHaveAttribute('data-testid', 'toast-warning', {timeout: 2_000});
+            await expect.soft(toast, `naming the day refused, ${refused}`).toContainText(refused, {timeout: 2_000});
+        });
+
+        test("a save the server refuses whole is told with the refused day, not with Axios's sentence", async ({page}) => {
+            // Pins: a 400 `fx_rates_refused` — no rate of the save could be stored — is told
+            // without Axios's sentence, and the banner names the day of the rate refused, in ISO.
+            // Red on HEAD: the toast and the banner read «… Request failed with status code 400»,
+            // and the banner publishes no `fx-editor-error`.
+            const refused = daysAgoIso(13);
+            const panel = await editorWithImported(page, [[refused, '0.00000000001']]);
+            // The server's message names the day too (`fx_rate_refusal`); this one stops short of
+            // it, or a banner echoing the message would pass for one built from `rejected`.
+            const saves = await answerSaves(page, (sent) => ({
+                status: 400,
+                json: {detail: {code: 'fx_rates_refused', message: 'All rates failed: Rate 0: Validation error: the rate cannot be stored', rejected: [{index: indexOf(sent, refused), date: refused, reason: 'rate_not_storable'}]}},
+            }));
+
+            expect(await save(page, panel), 'the save reached the refusal').toBe(400);
+            expect(sentDays(saves), 'one save, of the imported rate alone').toEqual([[refused]]);
+
+            await expectTold(page.getByTestId('toast-error'), 'the error toast', []);
+            // Nothing is lost: the editor stays open on the imported rate.
+            await expect(panel).toBeVisible();
+            await expectTold(panel.getByTestId('fx-editor-error'), 'the banner', [refused]);
+        });
     });
 });

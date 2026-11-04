@@ -60,7 +60,7 @@
         defaultExpanded?: 'first' | 'selected' | 'none';
         /** Lower bound of the dropdown width, in px; the dropdown never shrinks below the trigger. */
         minDropdownWidth?: number;
-        /** Border of the closed trigger. The signals panel's strong border is the default; a form field matches its neighbours. */
+        /** Border of the closed trigger: a border role (`border-lf-input` by default). The trigger draws on the colour roles, so a palette class here would mix them. */
         triggerBorderClass?: string;
     }
 
@@ -80,7 +80,7 @@
         noMatchesText,
         defaultExpanded = 'first',
         minDropdownWidth = 390,
-        triggerBorderClass = 'border-gray-900 dark:border-slate-600',
+        triggerBorderClass = 'border-lf-input',
     }: Props = $props();
     let isOpen = $state(false);
     let query = $state('');
@@ -320,7 +320,7 @@
         aria-selected={isActive}
         tabindex="-1"
         class="w-full px-4 py-2 text-left transition-colors
-            {isActive ? 'bg-libre-green/15 dark:bg-libre-green/25' : 'hover:bg-libre-green/10 dark:hover:bg-libre-green/20'}"
+            {isActive ? 'bg-lf-selected' : 'hover:bg-lf-selected'}"
         onclick={() => select(item)}
         onmouseenter={() => activateEntry(navigationId)}
         data-testid="{testIdPrefix}-option-{item.value}"
@@ -329,15 +329,15 @@
     </button>
 {/snippet}
 
-<div bind:this={containerRef} class="relative" data-testid={testId}>
+<div bind:this={containerRef} class="relative text-lf-primary" data-testid={testId}>
     <div
         aria-expanded={isOpen}
         aria-haspopup={flat ? 'listbox' : 'tree'}
         aria-controls={treeId}
         aria-activedescendant={activeEntry?.id}
         class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-all
-            bg-white text-sm text-gray-900 hover:border-gray-600 dark:bg-slate-700 dark:text-gray-100 dark:hover:border-slate-500
-            {isOpen ? 'border-libre-green ring-2 ring-libre-green dark:border-libre-green' : triggerBorderClass}"
+            bg-lf-field text-sm text-lf-primary
+            {isOpen ? 'border-lf-focus ring-2 ring-lf-focus' : `${triggerBorderClass} hover:border-lf-input-hover`}"
         onclick={toggle}
         onkeydown={(event) => {
             if (!isOpen && (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key.length === 1)) {
@@ -353,13 +353,13 @@
         data-testid={testId ? `${testId}-button` : undefined}
     >
         {#if isOpen}
-            <Search size={14} class="shrink-0 text-gray-400" />
+            <Search size={14} class="shrink-0 text-lf-muted" />
             <input
                 bind:this={inputRef}
                 bind:value={query}
                 aria-controls={treeId}
                 aria-activedescendant={activeEntry?.id}
-                class="min-w-0 flex-1 border-none bg-transparent text-sm outline-none placeholder:text-gray-400"
+                class="min-w-0 flex-1 border-none bg-transparent text-sm text-lf-primary outline-none placeholder:text-lf-placeholder"
                 placeholder={searchPlaceholder ?? $t('common.search')}
                 onclick={(event) => event.stopPropagation()}
                 oninput={() => defer(() => setActiveIndex(0))}
@@ -371,7 +371,7 @@
             {#if query}
                 <button
                     type="button"
-                    class="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    class="shrink-0 text-lf-muted hover:text-lf-secondary"
                     aria-label={$t('common.clear')}
                     onclick={(event) => {
                         event.stopPropagation();
@@ -387,17 +387,17 @@
             <div class="min-w-0 flex-1">
                 {@render selectedItem(selectedEntry)}
             </div>
-            <ChevronDown size={14} class="shrink-0 text-gray-400" />
+            <ChevronDown size={14} class="shrink-0 text-lf-muted" />
         {:else}
-            <span class="text-gray-400">{placeholder || $t('common.select')}</span>
-            <ChevronDown size={14} class="shrink-0 text-gray-400" />
+            <span class="text-lf-placeholder">{placeholder || $t('common.select')}</span>
+            <ChevronDown size={14} class="shrink-0 text-lf-muted" />
         {/if}
     </div>
 
     {#if isOpen}
-        <div bind:this={dropdownRef} class="max-h-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800" id={treeId} style={dropdownStyle} role={flat ? 'listbox' : 'tree'}>
+        <div bind:this={dropdownRef} class="max-h-[420px] overflow-y-auto rounded-lg border border-lf-raised bg-lf-card shadow-lg shadow-lf-shadow" id={treeId} style={dropdownStyle} role={flat ? 'listbox' : 'tree'}>
             {#if visibleGroups.length === 0}
-                <div class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <div class="px-4 py-8 text-center text-sm text-lf-muted">
                     {noMatchesText ?? $t('common.noData')}
                 </div>
             {:else if flat}
@@ -409,7 +409,7 @@
             {:else}
                 {#each visibleGroups as group (group.key)}
                     {#if group.inline}
-                        <div class="border-b border-gray-100 py-1 last:border-b-0 dark:border-slate-700">
+                        <div class="border-b border-lf-subtle py-1 last:border-b-0">
                             {#each group.items as item (item.value)}
                                 {@render option(item)}
                             {/each}
@@ -418,7 +418,7 @@
                         {@const groupOpen = normalizedQuery !== '' || expanded.has(group.key)}
                         {@const navigationId = groupNavigationId(group.key)}
                         {@const isActive = activeEntry?.id === navigationId}
-                        <div class="border-b border-gray-100 last:border-b-0 dark:border-slate-700">
+                        <div class="border-b border-lf-subtle last:border-b-0">
                             <button
                                 type="button"
                                 id={navigationId}
@@ -426,26 +426,26 @@
                                 tabindex="-1"
                                 aria-selected={isActive}
                                 class="flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors
-                                    {isActive ? 'bg-libre-green/10 dark:bg-libre-green/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                    {isActive ? 'bg-lf-selected' : 'hover:bg-lf-hover'}"
                                 aria-expanded={groupOpen}
                                 onclick={() => toggleGroup(group.key)}
                                 onmouseenter={() => activateEntry(navigationId)}
                                 data-testid="{testIdPrefix}-group-{group.key}"
                             >
                                 {#if groupOpen}
-                                    <ChevronDown size={15} class="mt-0.5 shrink-0 text-gray-400" />
+                                    <ChevronDown size={15} class="mt-0.5 shrink-0 text-lf-muted" />
                                 {:else}
-                                    <ChevronRight size={15} class="mt-0.5 shrink-0 text-gray-400" />
+                                    <ChevronRight size={15} class="mt-0.5 shrink-0 text-lf-muted" />
                                 {/if}
                                 {#if groupLabel}
                                     {@render groupLabel(group)}
                                 {:else}
                                     <span class="min-w-0">
-                                        <span class="block text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200">{group.label}</span>
-                                        <span class="block text-[10px] leading-4 text-gray-400 dark:text-gray-500">{group.subtitle}</span>
+                                        <span class="block text-xs font-semibold uppercase tracking-wide text-lf-secondary">{group.label}</span>
+                                        <span class="block text-[10px] leading-4 text-lf-muted">{group.subtitle}</span>
                                     </span>
                                 {/if}
-                                <span class="ml-auto rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-slate-700 dark:text-gray-400">{group.items.length}</span>
+                                <span class="ml-auto rounded-full bg-lf-panel px-1.5 py-0.5 text-[10px] text-lf-muted">{group.items.length}</span>
                             </button>
                             {#if groupOpen}
                                 <div class="pb-1" role="group">
@@ -461,3 +461,13 @@
         </div>
     {/if}
 </div>
+
+<style>
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside the active option,
+       and inside an option under the pointer, which takes the tint too (`hover:bg-lf-selected`), a muted caption, this
+       component's own or a caller's snippet's, turns secondary. */
+    [aria-selected='true'] :global(.text-lf-muted),
+    [aria-selected]:hover :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
+    }
+</style>

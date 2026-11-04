@@ -2,7 +2,7 @@
 
 The chart is the heart of the asset page: the price history, or how much the price moved over a rolling window. Scroll to zoom, drag to pan, and hover a point for its values.
 
-_Last updated: 2026-10-11_
+_Last updated: 2026-10-22_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Price Chart" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -17,7 +17,7 @@ The two buttons above the chart choose what it draws:
 - **Prices** — the price history, with the asset's [events](events.md) as markers.
 - **Rolling Return** — for every date, the price change over a window you choose ([below](#rolling-return)).
 
-The page always opens on **Prices**.
+The page opens in the view this asset's card has on the [Assets page](../index.md): **Abs** or **%** open **Prices** in that view, **Rolling Return** opens **Rolling Return**. Change the mode here, or **Abs** and **%** under **Prices**, and that becomes the asset's view: its card and your next visit open in it. It is remembered in this browser, for your user, with the chart settings; the list's switch resets every card, and so every detail page, to its view.
 
 ### 🗓️ Rolling Return Window {: #rolling-return }
 
@@ -39,7 +39,7 @@ Pick $N$ with the **Window** control next to the two buttons:
 - **Custom** — a whole number with **W**, **M** or **Y**, counted as 7, 30 and 365 days: `3M` is 90 days.
 - **?** opens this section of the manual.
 
-The window may be longer than the dates on screen: LibreFolio reads the older prices it needs. It is remembered for this asset, in this browser.
+The window may be longer than the dates on screen: LibreFolio reads the older prices it needs. It is the same as on the asset's card: the one chosen for this asset or, until you choose one, an automatic one, the largest preset that fits the dates on screen (about 3 months use 3M, a year or more 1Y, under a week 1W). A window you pick here is kept for this asset, in this browser.
 
 How to read it:
 
@@ -58,7 +58,7 @@ How to read it:
 
 ### 📅 Date range
 
-The date range in the page toolbar sets the dates on screen: **1W**, **1M**, **3M**, **6M**, **1Y**, **2Y**, **YTD**, **All**, or **Custom** with a calendar. With spare room on the bar, more presets appear (3Y, 5Y, 10Y, WTD, MTD, QTD). The range you pick follows you to the Dashboard, broker, asset and FX pages of the same browser tab.
+The date range in the page toolbar sets the dates on screen: **1W**, **1M**, **3M**, **6M**, **1Y**, **2Y**, **YTD**, **All**, or **Custom**, a number of days, weeks, months or years back from today; click a date to pick the two ends on a calendar. The two ends must be different days: the day you click first cannot be clicked again, and a typed date equal to the other end turns red. With spare room on the bar, more presets appear (3Y, 5Y, 10Y, WTD, MTD, QTD). The range you pick follows you to the Dashboard, broker, asset and FX pages of the same browser tab.
 
 On a long range the chart may group the days into weeks or months to stay readable: a **Weekly** or **Monthly** badge at its top left says so.
 

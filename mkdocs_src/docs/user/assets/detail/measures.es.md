@@ -25,8 +25,8 @@ Las medidas no se guardan: recargar la página vacía el panel. **Precios** y **
 La tabla tiene una fila para el activo (una segunda en su propia moneda cuando el gráfico se convierte) y una para cada línea dibujada en el eje de precios, como un activo de comparación o una media móvil. Junto a los valores de **Inicio** y **Fin**:
 
 - **Δ Abs** — la diferencia $V_{end} - V_{start}$, en la unidad de la línea.
-- **Δ %** — el cambio $\frac{V_{end} - V_{start}}{V_{start}}$ → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/año** — el mismo cambio como tasa anual a lo largo de los $d$ días naturales entre los puntos, $(1 + \Delta\%)^{365/d} - 1$ → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
+- **Δ %** — el cambio $\frac{V_{end} - V_{start}}{V_{start}}$, o `—` cuando la línea parte de 0 → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/año** — el mismo cambio como tasa anual a lo largo de los $d$ días naturales entre los puntos, $(1 + \Delta\%)^{365/d} - 1$, a partir de 30 días: `—` en un intervalo más corto, sin un **Δ %**, o cuando la línea termina al otro lado del cero → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
 
 La línea de resumen de la medida añade el número de días.
 

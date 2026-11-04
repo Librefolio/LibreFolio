@@ -57,6 +57,10 @@ graph TD
 - [[decisions/onboarding-versioned-progress-per-flow]] and [[decisions/automatic-popups-wait-for-guides]] — since
   1.2 the shell also hosts the onboarding: one versioned progress row per user and flow, and a popup lane that holds
   the donation and update prompts while a guide or a modal is on screen ([[F-105]]).
+- The Settings tabs come from a registry (`settingsTabs.ts`, release 1.3, workstream A, lot A3, 15/10): the page
+  names no tab, so a workstream adds its tab with one entry (`id`, `order`, `visible(ctx)`, `props(ctx)`,
+  `alignEnd`), and an admin-only tab is hidden from everyone else. How-to in the developer page
+  `frontend/components/features/settings.md#tab-registry`.
 
 ## Known problems / limitations
 
@@ -65,7 +69,7 @@ graph TD
 
 ## What comes next
 
-- [[F-092]] Default Language/Currency for New Users — admin sets a system default that pre-fills new user preferences; small addition to the Global Settings page. *Delivered (`2a8e5bf1c`, 2026-07-17) and documented in `admin/settings` (lint 2026-10-12).*
+- [[F-092]] Default Language/Currency for New Users — admin sets a system default that pre-fills new user preferences; small addition to the Global Settings page. *Delivered (`4483757c0`, 2026-07-17) and documented in `admin/settings` (lint 2026-10-12).*
 - No major structural changes planned — this domain is intentionally stable as the foundation for all other domains.
 
 ## Source files
@@ -81,7 +85,10 @@ graph TD
 | Theme store | `frontend/src/lib/stores/app/themeStore.ts` |
 | Language store | `frontend/src/lib/stores/app/language.ts` |
 | i18n translations | `frontend/src/lib/i18n/base/{en,it,fr,es}.json` |
+| Settings page (runtime of the tab registry) | `frontend/src/routes/(app)/settings/+page.svelte` |
+| Settings tab registry | `frontend/src/lib/features/settings/settingsTabs.ts` |
+| Settings components mkdocs | `mkdocs_src/docs/developer/frontend/components/features/settings.md` |
 | Global settings API | `backend/app/api/v1/settings.py` |
-| Global settings service | `backend/app/services/global_settings_service.py` |
+| Global settings service | `backend/app/services/accounts/global_settings_service.py` |
 | Onboarding engine | `frontend/src/lib/features/onboarding/onboardingGuide.svelte.ts` |
 | Popup lane | `frontend/src/lib/features/onboarding/components/DeferredAppPopups.svelte` |

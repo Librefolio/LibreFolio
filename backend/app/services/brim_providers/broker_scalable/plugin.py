@@ -18,9 +18,10 @@ from pathlib import Path
 from typing import List, Optional
 
 from backend.app.schemas.brim import BRIMParseOutput, BRIMRefusal
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.brim.brim_provider import BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _scalable
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.services.provider_registry import register_provider
 
 
 @register_provider(BRIMProviderRegistry)
@@ -55,7 +56,8 @@ class ScalableBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        """1.1.0: a status the file shows that the importer does not know is reported; the known ones that are not movements are dropped quietly (W-B86)."""
+        return "1.1.0"
 
     @property
     def docs_url(self) -> Optional[str]:

@@ -1,7 +1,7 @@
 <script lang="ts">
     import ExactDecimalInput from './ExactDecimalInput.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalDigitCounts, exceedsSignificantDigits, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
 
     type QuantitySignRule = 'positive' | 'negative' | 'nonzero' | 'zero' | 'any';
     type SignState = 'ok' | 'bad' | 'neutral';
@@ -27,6 +27,8 @@
         step?: string;
         maxIntegerDigits?: number;
         maxFractionDigits?: number;
+        /** At most this many significant digits in all (B-48): past it the value is invalid, as past the other budgets. */
+        maxSignificantDigits?: number;
         allowNegative?: boolean;
         accelerateOnHold?: boolean;
         min?: string;
@@ -59,6 +61,7 @@
         step = '1',
         maxIntegerDigits = 12,
         maxFractionDigits = 12,
+        maxSignificantDigits,
         allowNegative = false,
         accelerateOnHold = true,
         min,
@@ -102,12 +105,10 @@
         return sign === 0 ? 'ok' : 'bad';
     }
 
+    /** Within the budget as the backend counts digits, leading integer and trailing fraction zeros not counted (W-B64). */
     function withinDigitBudget(candidate: string): boolean {
-        const normalized = normalizeDecimalInput(candidate);
-        if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) return false;
-        const unsigned = normalized.startsWith('-') ? normalized.slice(1) : normalized;
-        const [integer = '', fraction = ''] = unsigned.split('.');
-        return (integer || '0').length <= maxIntegerDigits && fraction.length <= maxFractionDigits;
+        const counts = decimalDigitCounts(normalizeDecimalInput(candidate));
+        return counts !== null && counts.integerDigits <= maxIntegerDigits && counts.fractionDigits <= maxFractionDigits;
     }
 
     function displayValue(candidate: string): string {
@@ -158,17 +159,19 @@
 
     let signState = $derived(signStateFor(rawValue));
     let signInvalid = $derived(signState === 'bad');
-    let canShowSignColor = $derived(!externalInvalid && !decimalValidity.empty && decimalValidity.syntaxValid && decimalValidity.digitsValid && decimalValidity.rangeValid);
-    let signBorderColor = $derived(canShowSignColor && signState === 'bad' ? 'oklch(0.637 0.237 25.331 / 0.7)' : canShowSignColor && signState === 'ok' ? 'oklch(0.765 0.177 163.223 / 0.7)' : '');
+    let significantInvalid = $derived(maxSignificantDigits !== undefined && exceedsSignificantDigits(rawValue, maxSignificantDigits));
+    let canShowSignColor = $derived(!externalInvalid && !decimalValidity.empty && decimalValidity.syntaxValid && decimalValidity.digitsValid && !significantInvalid && decimalValidity.rangeValid);
+    let signBorderColor = $derived(canShowSignColor && signState === 'bad' ? 'color-mix(in oklab, var(--lf-danger) 70%, transparent)' : canShowSignColor && signState === 'ok' ? 'color-mix(in oklab, var(--lf-success) 70%, transparent)' : '');
     let mergedStyle = $derived(`${inlineStyle.trim().replace(/;$/, '')}${inlineStyle.trim() && signBorderColor ? '; ' : ''}${signBorderColor ? `border-color: ${signBorderColor}` : ''}`);
 
     $effect(() => {
         const state: QuantityValidity = {
             ...decimalValidity,
             normalized: normalizeDecimalInput(rawValue),
+            digitsValid: decimalValidity.digitsValid && !significantInvalid,
             signState,
             signValid: !signInvalid,
-            valid: decimalValidity.valid && !externalInvalid && !signInvalid,
+            valid: decimalValidity.valid && !externalInvalid && !signInvalid && !significantInvalid,
         };
         const key = `${state.normalized}\0${state.empty}\0${state.syntaxValid}\0${state.requiredValid}\0${state.digitsValid}\0${state.rangeValid}\0${state.signState}\0${state.valid}`;
         if (key === lastValidityKey) return;
@@ -219,7 +222,7 @@
     {ariaLabel}
     {ariaDescribedby}
     {ariaErrormessage}
-    externalInvalid={externalInvalid || signInvalid}
+    externalInvalid={externalInvalid || signInvalid || significantInvalid}
     {testid}
     {className}
     style={mergedStyle}

@@ -30,6 +30,9 @@
  *     of them is the subject, and each would otherwise start network, storage or observer work.
  *   - `i18nLoading` is a writable that every case starts at `false` (the dictionary is ready); only
  *     the workstream O case below flips it, to stand for a later catalogue load.
+ *   - `instanceBlock` (workstream H, CP6) is a fake of the real store's shape, an enumerable getter over
+ *     `$state` (`reactiveBox`), off unless a case turns it on; `InstanceBlockedPage` is
+ *     `InstanceBlockedPageStub`, one element with a testid of its own that calls the `onlogout` it is handed.
  *
  * Assertions read `data-testid` only: the stubbed `$_` returns keys, and nothing reads text.
  */
@@ -42,6 +45,9 @@ const mocks = await vi.hoisted(async () => {
     const {writable} = await import('svelte/store');
     return {
         bootstrap: reactiveBox<{state: AppBootstrapState}>({state: 'loading'}),
+        // The instance block of workstream H (CP6): off unless a case turns it on.
+        block: reactiveBox<{blocked: boolean}>({blocked: false}),
+        authLogout: vi.fn(() => Promise.resolve()).mockName('auth.logout'),
         i18nLoading: writable(false),
         resolveDestination: vi.fn<(path: string) => string>(),
         goto: vi.fn(() => Promise.resolve()),
@@ -52,7 +58,7 @@ const mocks = await vi.hoisted(async () => {
 });
 
 vi.mock('$app/environment', () => ({browser: false, dev: true, building: false, version: 'test'}));
-vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
+vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), onNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
 vi.mock('$app/stores', async () => {
     const {readable} = await import('svelte/store');
     return {page: readable({route: {id: '/(app)/dashboard'}, url: new URL('http://librefolio.test/dashboard')})};
@@ -64,7 +70,7 @@ vi.mock('$lib/i18n', async () => {
 vi.mock('$lib/stores/app/auth', async () => {
     const {readable} = await import('svelte/store');
     return {
-        auth: {checkAuth: vi.fn(() => new Promise<boolean>(() => {})), logout: vi.fn(() => Promise.resolve())},
+        auth: {checkAuth: vi.fn(() => new Promise<boolean>(() => {})), logout: mocks.authLogout},
         isAuthenticated: readable(true),
         isAuthInitialized: readable(true),
         // The reactive redirect's `$:` reads every identifier it names at mount, so this must exist; `browser: false` keeps it from being called.
@@ -110,6 +116,7 @@ vi.mock('$lib/stores/app/donationPopupStore.svelte', () => ({donationPopup: {for
 vi.mock('$lib/features/update-check/updateCheckStore.svelte', () => ({updateAvailable: {show: vi.fn()}}));
 vi.mock('$lib/features/update-check/updateCheck', () => ({checkForNewerRelease: vi.fn(() => Promise.resolve(null))}));
 vi.mock('$lib/api', () => ({zodiosApi: {get_system_info_api_v1_system_info_get: vi.fn(() => new Promise(() => {}))}}));
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({instanceConfig: {load: vi.fn(() => new Promise<void>(() => {}))}}));
 vi.mock('$lib/components/layout/Sidebar.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/components/layout/Header.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/components/ui/feedback/ToastContainer.svelte', () => ({default: mocks.noopComponent}));
@@ -117,8 +124,21 @@ vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBlock.svelte', (
 vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBanner.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/onboarding/components/OnboardingOverlayHost.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/onboarding/components/DeferredAppPopups.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/instance/components/InstanceNotices.svelte', () => ({default: mocks.noopComponent}));
+// The instance block (H, CP6): the same shape as the real store, a plain object with an enumerable getter over `$state`,
+// which is what the legacy template's `$.deep_read_state` reads; the page is a stub with a testid of its own.
+vi.mock('$lib/features/instance/instanceBlock.svelte', () => ({
+    instanceBlock: {
+        get blocked() {
+            return mocks.block.blocked;
+        },
+        markBlocked: vi.fn(),
+        clear: vi.fn(),
+    },
+}));
+vi.mock('$lib/features/instance/components/InstanceBlockedPage.svelte', async () => ({default: (await import('$test/harness/InstanceBlockedPageStub.svelte')).default}));
 
-import {cleanup, render, screen, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, within} from '$test/component';
 import {assertEffectsRun} from '$test/runes.svelte';
 import AppLayoutGateHarness from '$test/harness/AppLayoutGateHarness.svelte';
 
@@ -151,6 +171,8 @@ beforeEach(() => {
     // Negative assertions below would pass vacuously in an environment where effects never run.
     assertEffectsRun();
     mocks.bootstrap.state = 'loading';
+    mocks.block.blocked = false;
+    mocks.authLogout.mockClear();
     mocks.i18nLoading.set(false);
     mocks.resolveDestination.mockReset();
     mocks.goto.mockClear();
@@ -213,5 +235,60 @@ describe('(app) layout — a later catalogue load keeps the requested page mount
         await tick();
         expect(screen.getByTestId('app-layout-requested-page'), 'the requested page was rebuilt after the load').toBe(requestedPage);
         expectNothingNavigated();
+    });
+});
+
+// The hosting provider blocked the instance (workstream H, CP6): the first `423 instance_blocked` turns
+// `instanceBlock.blocked` on, and the layout shows the block page instead of the app, before every bootstrap branch,
+// so that the app shell never starts and its requests never pile up refusals.
+describe('(app) layout — the instance block wins over the bootstrap (workstream H, CP6)', () => {
+    /** The block page is the one branch on screen: no bootstrap wrapper, no shell, no requested page. */
+    function expectOnlyTheBlockPage(): void {
+        expect(screen.getByTestId('instance-blocked-page-stub')).toBeInTheDocument();
+        for (const testId of ['app-bootstrap-loading', 'onboarding-redirecting', 'welcome-shell', 'app-shell', 'app-layout-requested-page']) {
+            expect(screen.queryByTestId(testId), `${testId} is on screen beside the block page`).toBeNull();
+        }
+    }
+
+    it.each(['loading', 'blocked', 'ready', 'degraded'] as const)('shows the block page, not the app, while the bootstrap is %s', async (state) => {
+        mocks.resolveDestination.mockImplementation((path) => path);
+        mocks.bootstrap.state = state;
+        mocks.block.blocked = true;
+
+        render(AppLayoutGateHarness);
+        await tick();
+
+        expectOnlyTheBlockPage();
+        expectNothingNavigated();
+    });
+
+    it('replaces the running app at the first refusal, and gives it back when the flag is cleared', async () => {
+        mocks.resolveDestination.mockImplementation((path) => path);
+        mocks.bootstrap.state = 'ready';
+        render(AppLayoutGateHarness);
+        await tick();
+        expect(within(screen.getByTestId('app-shell')).getByTestId('app-layout-requested-page'), 'Barrier: the app runs').toBeInTheDocument();
+        expect(screen.queryByTestId('instance-blocked-page-stub')).toBeNull();
+
+        mocks.block.blocked = true;
+        await tick();
+        expectOnlyTheBlockPage();
+
+        mocks.block.blocked = false;
+        await tick();
+        expect(within(screen.getByTestId('app-shell')).getByTestId('app-layout-requested-page')).toBeInTheDocument();
+        expect(screen.queryByTestId('instance-blocked-page-stub')).toBeNull();
+        expectNothingNavigated();
+    });
+
+    it("hands the block page the layout's logout", async () => {
+        mocks.bootstrap.state = 'ready';
+        mocks.block.blocked = true;
+        render(AppLayoutGateHarness);
+        await tick();
+
+        await fireEvent.click(screen.getByTestId('instance-blocked-page-stub'));
+
+        expect(mocks.authLogout, 'the logout button of the block page signs the user out').toHaveBeenCalledTimes(1);
     });
 });

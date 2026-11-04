@@ -44,6 +44,7 @@ replay (pre-frame and frame alike), for each transaction that moves quantity:
   pool after the step = step.quantity, step.cost_report (C_T), step.cost_asset (C_A)
   SELL → realized cost = −step.cost_report_change     # C_T × q / Q; the whole C_T when the pool empties
   priced in-kind ADJUSTMENT in / out → capital baseline ± the cost the step added / removed
+    (J-24, 2026-10-16: out → − the value handed over at its date's rate; realized = that value − the cost removed)
 open cost basis of the day = Σ cost_report_for(qty) over the held positions — no exchange rate
 ```
 

@@ -9,9 +9,11 @@ all read from the **same** numbers.
 Daily model (per asset, per day ``D``)::
 
     1. asset-system price exists on D            -> MARKET     (exact real quote)
-    2. else same-day transactions exist          -> TRADE_AVG  (average of their unit prices)
+    2. else same-day BUY/SELL exist              -> TRADE_AVG  (average of their unit prices; for an asset with
+                                                    nothing else yet, an incoming TRANSFER's cost, W-B94)
     3. else carry the last observation <= D      -> CARRIED    (LOCF; may be MARKET- or TRADE-origin)
-    4. else (nothing on/before D)                -> MISSING
+    4. else (nothing on/before D)                -> MISSING    (the engine then values a holding of
+                                                    known cost at that cost, ESTIMATED_AT_COST)
 
 Staleness of a ``CARRIED`` mark is reported with the project-wide
 :class:`~backend.app.schemas.common.BackwardFillInfo` pattern (``actual_rate_date`` +
@@ -54,6 +56,7 @@ from typing import Optional, Sequence
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.common import BackwardFillInfo
+from backend.app.services.financial_math.trade_amount import unit_price_on_quote_axis
 
 
 class MarkSource(StrEnum):
@@ -69,7 +72,7 @@ class ObservationKind(StrEnum):
     """Origin of a single price observation fed into the resolver."""
 
     MARKET = "MARKET"  # an asset-system quote (price_history)
-    TRADE = "TRADE"  # a transaction-implied unit price (BUY/SELL/priced ADJUSTMENT)
+    TRADE = "TRADE"  # a transaction-implied unit price (BUY/SELL, or W-B94's transfer cost estimate; never an ADJUSTMENT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +155,7 @@ class AssetPriceSeries:
     LOCF, else MISSING). O(log n) per query via ``bisect``.
     """
 
-    __slots__ = ("_dates", "_values", "_is_market", "_currencies", "_ohlc")
+    __slots__ = ("_dates", "_values", "_is_market", "_currencies", "_ohlc", "_last_market")
 
     def __init__(self, observations: Sequence[PriceObservation]) -> None:
         market_by_day: dict[date_type, Decimal] = {}
@@ -189,10 +192,33 @@ class AssetPriceSeries:
         self._currencies: list[str] = [collapsed[day][2] for day in self._dates]
         # G1b: OHLC only ever exists for an exact MARKET day (None for TRADE_AVG/CARRIED days).
         self._ohlc: list[Optional[tuple[Decimal, Decimal, Decimal]]] = [market_ohlc_by_day.get(day) if collapsed[day][1] else None for day in self._dates]
+        # The last MARKET day at or before each observation day (None before the first quote).
+        self._last_market: list[Optional[date_type]] = []
+        latest_market: Optional[date_type] = None
+        for day, is_market in zip(self._dates, self._is_market, strict=True):
+            if is_market:
+                latest_market = day
+            self._last_market.append(latest_market)
 
     @property
     def has_observations(self) -> bool:
         return bool(self._dates)
+
+    @property
+    def observation_dates(self) -> tuple[date_type, ...]:
+        """The days that carry an observation — a market quote, or the average of the day's trades — ascending: the only
+        days on which :meth:`resolve` answers anything other than a carried mark (D-P4: a reader walks these, not the
+        calendar)."""
+        return tuple(self._dates)
+
+    def last_market_date(self, query_date: date_type) -> Optional[date_type]:
+        """The last day on or before ``query_date`` with a market quote; None when there is none.
+
+        A trade observed after it does not move it: the mark may come from the trade, but the
+        market price the asset last had is still the one of that day.
+        """
+        idx = bisect.bisect_right(self._dates, query_date) - 1
+        return self._last_market[idx] if idx >= 0 else None
 
     def resolve(self, query_date: date_type) -> ResolvedMark:
         """Resolve the per-unit mark for ``query_date`` under the daily model."""
@@ -251,10 +277,14 @@ def build_asset_price_series(
 
     * **MARKET** observations come from ``price_rows`` (``(date, close, currency)``); ``close``
       is per quote_base_quantity, so it is **not** re-scaled.
-    * **TRADE** observations come from BUY/SELL (``|amount| / |quantity|`` in ``tx.currency``)
-      and priced ADJUSTMENT carryovers (``cost_basis_override`` in ``cost_basis_currency``),
+    * **TRADE** observations come from BUY/SELL (``|amount| / |quantity|`` in ``tx.currency``),
       which are per-unit and therefore multiplied by ``quote_base_quantity`` to reach the market
-      scale. Split-linked rows and pure quantity adjustments carry no price and are skipped.
+      scale. Split-linked rows are skipped. An ADJUSTMENT is never a price, with or without a
+      cost basis (developer's decision P2, J-17): its ``cost_basis_override`` is a cost — often a
+      WAC — not what the asset was worth that day. The cost of an incoming TRANSFER is an estimated
+      TRADE observation only for an asset with no quote and no other operation yet (W-B94,
+      :func:`_transfer_cost_estimates`). A holding left without any observation is
+      valued at its book cost by the engine, as a declared estimate (``ESTIMATED_AT_COST``).
 
     ``ohlc_by_date`` (G1b, optional, additive — deliberately NOT a new element in ``price_rows``
     itself, so the existing 3-tuple shape stays untouched for every other caller, e.g.
@@ -265,7 +295,6 @@ def build_asset_price_series(
     Mirrors the historical ``_build_market_price_map`` / ``_build_trade_price_points`` math so
     adoption is behaviour-preserving; the added value here is the unified series + staleness.
     """
-    scale = Decimal(quote_base_quantity if quote_base_quantity and quote_base_quantity > 0 else 1)
     observations: list[PriceObservation] = []
 
     for price_date, close, currency in price_rows:
@@ -282,17 +311,40 @@ def build_asset_price_series(
         if quantity == Decimal("0"):
             continue
         tx_type = str(getattr(tx.type, "value", tx.type))
-        unit_native: Optional[Decimal] = None
-        obs_currency = asset_currency
-        if tx_type in ("BUY", "SELL"):
-            if tx.amount:
-                obs_currency = tx.currency or asset_currency
-                unit_native = abs(tx.amount) / abs(quantity)
-        elif tx_type == "ADJUSTMENT" and tx.cost_basis_override not in (None, Decimal("0")):
-            obs_currency = tx.cost_basis_currency or asset_currency
-            unit_native = tx.cost_basis_override
-        if unit_native is None:
+        if tx_type not in ("BUY", "SELL") or not tx.amount:
             continue
-        observations.append(PriceObservation(date=tx.date, unit_price=unit_native * scale, currency=obs_currency, kind=ObservationKind.TRADE))
+        # Per-unit trade price lifted onto the market ×quote_base_quantity axis (financial_math.trade_amount, one home)
+        unit_price = unit_price_on_quote_axis(abs(quantity), abs(tx.amount), quote_base_quantity)
+        observations.append(PriceObservation(date=tx.date, unit_price=unit_price, currency=tx.currency or asset_currency, kind=ObservationKind.TRADE))
 
+    observations.extend(_transfer_cost_estimates(transactions, split_linked_tx_ids, [obs.date for obs in observations], quote_base_quantity))
     return AssetPriceSeries(observations)
+
+
+def _is_incoming_transfer(tx: Transaction) -> bool:
+    return str(getattr(tx.type, "value", tx.type)) == "TRANSFER" and (tx.quantity or Decimal("0")) > 0
+
+
+def _transfer_cost_estimates(transactions: Sequence[Transaction], split_linked_tx_ids: set[int], quote_days: Sequence[date_type], quote_base_quantity: int) -> list[PriceObservation]:
+    """W-B94 (the developer's decision, road b): the cost of an incoming TRANSFER as an estimated price, for an asset that
+    has nothing else to be priced by yet.
+
+    An incoming TRANSFER leg with a cost (``cost_basis_override``, per unit, in ``cost_basis_currency``) is a TRADE
+    observation, estimated as a trade's, only while the asset has, on or before its day, no market quote and no other
+    movement of its units — no BUY or SELL, no ADJUSTMENT (a cost, never a price: P2, J-17), no outgoing leg; a row that
+    moves no units (a dividend, a fee) does not count. Another incoming leg
+    does not stop it: before any real observation each one is the best estimate of its day. A quote or a trade is never
+    overridden, so a security moved between brokers on a weekend keeps its carried quote.
+    """
+    counted = [tx for tx in transactions if tx.id not in split_linked_tx_ids and (tx.quantity or Decimal("0")) != 0]
+    other_days = [tx.date for tx in counted if not _is_incoming_transfer(tx)]
+    first_real = min([*quote_days, *other_days], default=None)
+    estimates: list[PriceObservation] = []
+    for tx in counted:
+        if not _is_incoming_transfer(tx) or (first_real is not None and tx.date >= first_real):
+            continue
+        cost = tx.cost_basis_override
+        if cost is None or cost <= 0 or not tx.cost_basis_currency:
+            continue
+        estimates.append(PriceObservation(date=tx.date, unit_price=cost * quote_base_quantity, currency=tx.cost_basis_currency, kind=ObservationKind.TRADE))
+    return estimates

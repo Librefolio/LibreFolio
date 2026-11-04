@@ -22,7 +22,7 @@ container, not even `info`.
 the application, not the development tree). Earlier `try/except ImportError` blocks around some groups hid the
 dependency instead of stating it.
 
-## Solution (train 19, merge `cdde3bc4d`)
+## Solution (train 19, merge `c61a90883`)
 
 - `_has(paths)` checks, **before importing**, whether what a command group needs is part of this installation; never
   by catching `ImportError`, so that in a full checkout a broken import stays loud.
@@ -60,7 +60,7 @@ Docker users could not reset a password or run any maintenance command from the 
 | `_has`, `_add_unavailable`, conditional registration | `dev.py` |
 | Image contents, HEALTHCHECK on 6040 | `Dockerfile` |
 | Excluded development tree | `.dockerignore` |
-| Forgot-password card (both commands) | `frontend/src/lib/components/auth/ForgotPasswordCard.svelte` |
+| Forgot-password card (both commands) | `frontend/src/lib/features/auth/ForgotPasswordCard.svelte` |
 | Test | `backend/test_scripts/test_utilities/test_dev_cli_image.py` |
 | Runner registration (`utils dev-cli-image`) | `scripts/test_runner/_backend_utils.py` |
 | Admin doc (container commands) | `mkdocs_src/docs/admin/docker_advanced.en.md` |

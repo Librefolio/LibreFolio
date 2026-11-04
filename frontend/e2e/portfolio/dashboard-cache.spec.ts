@@ -25,12 +25,16 @@
  * price of the asset page (`POST /assets/prices/current` writes today's candle and asks a live
  * provider), is answered in the browser with a schema-valid "no quote" answer: no provider is reached,
  * nothing is written, and the axios interceptor still sees a successful mutation — the trigger under
- * test. Owned brokers are read from `GET /brokers` (`page.request`, which no route intercepts), never
- * hard-coded. Every request the page sends is recorded per test with `page.on('request')`; nothing
- * here counts a request it did not watch the page send.
+ * test. The asset page asks for it only for an asset with a provider (Z-8), so the path goes through a
+ * Performance row whose asset has one, checked through `GET /assets/query`, never assumed. Owned brokers
+ * are read from `GET /brokers` (`page.request`, which no route intercepts), never hard-coded. Every
+ * request the page sends is recorded per test with `page.on('request')`; nothing here counts a request
+ * it did not watch the page send.
  *
  * Settled states read: `dashboard-page` / `positions-panel` `data-busy`, `risk-levels-panel`
- * `data-catalog="ready"` and `data-busy`, `risk-l1-cards` visible with no `risk-l1-loading`.
+ * `data-catalog="ready"` and `data-busy`, `risk-l1-cards` visible with no `risk-l1-loading`, and the
+ * page's Refresh (`sync-button`) `disabled` / `data-busy`, which waits for every big request of the
+ * page, the risk panel's base wave included: the panel has no Refresh of its own (Y11, decision 48).
  */
 
 import type {Route} from '@playwright/test';
@@ -93,7 +97,7 @@ function mark(traffic: Traffic): {reports: number; riskQueries: number; lots: nu
  */
 async function stubLivePrice(page: Page): Promise<{served: number}> {
     const live = {served: 0};
-    await page.route('**/api/v1/assets/prices/current', async (route) => {
+    await page.route('**/api/v1/assets/prices/current*', async (route) => {
         const ids = (route.request().postDataJSON() as number[] | null) ?? [];
         const body = {
             results: ids.map((asset_id) => ({asset_id, value: null, currency: null, as_of_date: null, source: null, error: 'Synthetic offline boundary: no live quote requested'})),
@@ -205,6 +209,26 @@ async function riskSettled(page: Page): Promise<Locator> {
     return panel;
 }
 
+/**
+ * The page's Refresh, «Aggiorna»: `disabled`, with `data-busy="true"`, while any big request of the Dashboard is pending
+ * (Y11, `pageBusy`) — the risk panel's base wave among them, which «Aggiorna» asks again through `refreshVersion`.
+ */
+function pageRefresh(page: Page): Locator {
+    return page.getByTestId('sync-button');
+}
+
+/**
+ * Presses «Aggiorna» once nothing of the page is pending, and hands back where the traffic stood right before the click:
+ * a request of a load still pending would otherwise be counted as the click's.
+ */
+async function pressRefresh(page: Page, traffic: Traffic): Promise<ReturnType<typeof mark>> {
+    const refresh = pageRefresh(page);
+    await expect(refresh, 'the Dashboard never stopped loading: «Aggiorna» cannot be pressed').toBeEnabled({timeout: PAGE_TIMEOUT});
+    const before = mark(traffic);
+    await refresh.click();
+    return before;
+}
+
 function contributionRows(page: Page): Locator {
     return page.getByTestId('contribution-table').locator('tbody tr[data-row-id^="pos-"]');
 }
@@ -240,6 +264,29 @@ async function ownedPerformanceRow(page: Page, owned: readonly number[]): Promis
     return {rowId, ...parseRowId(rowId)};
 }
 
+/** The assets with a provider assigned: `provider_code` of `GET /assets/query`, which reads the provider assignments. */
+async function assetIdsWithProvider(page: Page): Promise<Set<number>> {
+    const response = await page.request.get(`${API}/assets/query`);
+    expect(response.ok(), `GET ${API}/assets/query → HTTP ${response.status()}`).toBe(true);
+    const assets = (await response.json()) as Array<{id: number; provider_code?: string | null}>;
+    return new Set(assets.filter((asset) => !!asset.provider_code).map((asset) => asset.id));
+}
+
+/**
+ * A Performance row on a broker the user owns whose asset has a provider — both checked, neither inferred: the asset
+ * page polls the live price only for an asset with a provider (Z-8), and that poll is the trigger of the path under test.
+ */
+async function ownedPricedPerformanceRow(page: Page, owned: readonly number[]): Promise<{rowId: string; brokerId: number; assetId: number}> {
+    const priced = await assetIdsWithProvider(page);
+    const rowIds = await contributionRowIds(page);
+    const rowId = rowIds.find((id) => {
+        const {brokerId, assetId} = parseRowId(id);
+        return owned.includes(brokerId) && priced.has(assetId);
+    });
+    if (!rowId) throw new Error(`No Performance row on an owned broker whose asset has a provider (owned: ${owned.join(', ') || 'none'}; rows: ${rowIds.join(', ')}). Check populate_mock_data.py (populate_asset_provider_assignments).`);
+    return {rowId, ...parseRowId(rowId)};
+}
+
 /** The row's «Analizza lotti», the way a user opens it: right click, then the menu action. Ends on the panel loaded. */
 async function analyzeLots(page: Page, rowId: string): Promise<Locator> {
     await page.getByTestId('contribution-table').locator(`tbody tr[data-row-id="${rowId}"]`).click({button: 'right'});
@@ -248,6 +295,16 @@ async function analyzeLots(page: Page, rowId: string): Promise<Locator> {
     await expect(panel).toBeVisible({timeout: PAGE_TIMEOUT});
     await expect(panel.getByTestId('lots-analysis-panel-loading')).toHaveCount(0, {timeout: PAGE_TIMEOUT});
     return panel;
+}
+
+/**
+ * Closes the lot detail with its ✕: the lots panel goes off the page and the positions panel, which stays under it (FB-12b), is
+ * the view alone, with no wait on the panel's own settled state (a refresh may be held on purpose). Ends on both facts.
+ */
+async function backToPortfolio(page: Page): Promise<void> {
+    await page.getByTestId('lots-analysis-panel-close').click();
+    await expect(page.getByTestId('lots-analysis-panel')).toBeHidden({timeout: PAGE_TIMEOUT});
+    await expect(page.getByTestId('positions-panel')).toBeVisible({timeout: PAGE_TIMEOUT});
 }
 
 /** Leaves the Dashboard through the sidebar and waits for Transactions to be the page. */
@@ -351,7 +408,7 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             // The developer's path: Positions → Performance → row → «Analizza lotti» → «Vedi asset».
             await openPerformanceTable(page);
             const owned = await ownedBrokerIds(page);
-            const {rowId, assetId} = await ownedPerformanceRow(page, owned);
+            const {rowId, assetId} = await ownedPricedPerformanceRow(page, owned);
             const lotsPanel = await analyzeLots(page, rowId);
             await expect(page).toHaveURL(new RegExp(`[?&]asset=${assetId}(?:&|$)`));
             await lotsPanel.getByTestId('lots-analysis-panel-asset-link').click();
@@ -364,6 +421,10 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             const before = mark(traffic);
             await page.getByTestId('asset-detail-back-btn').click();
             await expect(page.getByTestId('dashboard-positions-tab'), 'the ‹ arrow did not return to the Positions tab').toBeVisible({timeout: PAGE_TIMEOUT});
+            // The ‹ arrow lands on the lot detail the user came from (the URL keeps `asset`); its ✕ is one more step, which closes it (FB-12b).
+            await expect(page.getByTestId('lots-analysis-panel'), 'the ‹ arrow did not return to the lot detail').toBeVisible({timeout: PAGE_TIMEOUT});
+            await expect(page.getByTestId('positions-panel'), 'the lot detail opens below the positions: the panel stays (FB-12b)').toBeVisible();
+            await backToPortfolio(page);
 
             // While the refresh is held: the cached Performance rows, not a skeleton…
             await expect(page.getByTestId('contribution-table').locator(`tbody tr[data-row-id="${rowId}"]`), 'the Performance table shows a skeleton while its refresh is held, instead of the rows it had').toBeVisible({timeout: 10_000});
@@ -409,16 +470,21 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             await analyzeLots(page, rowId);
             await expect(page).toHaveURL(new RegExp(`[?&]asset=${assetId}(?:&|$)`));
 
-            // Out through the sidebar, back with the browser's own Back.
+            // Out through the sidebar, back with the browser's own Back: it lands on the lot detail, opened below the positions (FB-12b).
             await goToTransactions(page);
             const before = mark(traffic);
             await page.goBack();
             await expect(page.getByTestId('dashboard-positions-tab'), 'Back did not return to the Positions tab').toBeVisible({timeout: PAGE_TIMEOUT});
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
-            await waitForSettled(page.getByTestId('positions-panel'), PAGE_TIMEOUT);
             const lotsPanel = page.getByTestId('lots-analysis-panel');
             await expect(lotsPanel).toBeVisible({timeout: PAGE_TIMEOUT});
             await expect(lotsPanel.getByTestId('lots-analysis-panel-loading')).toHaveCount(0, {timeout: PAGE_TIMEOUT});
+            await expect(page.getByTestId('positions-panel'), 'the lot detail opens below the positions: the panel stays (FB-12b)').toBeVisible();
+
+            // The detail closed: the Performance table (the view is remembered) asks, if at all, only for the owned brokers.
+            await backToPortfolio(page);
+            await waitForSettled(page.getByTestId('positions-panel'), PAGE_TIMEOUT);
+            await expect(page.getByTestId('contribution-table')).toBeVisible({timeout: PAGE_TIMEOUT});
 
             // Owned now or when the test began: a neighbour may create or delete a broker of this user meanwhile.
             const allowed = new Set([...ownedBefore, ...(await ownedBrokerIds(page))]);
@@ -470,8 +536,7 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
             await expect(currency, 'the currency restarted from the base currency on return').toContainText('USD');
 
-            const before = mark(traffic);
-            await page.getByTestId('sync-button').click();
+            const before = await pressRefresh(page, traffic);
             await expect.poll(() => traffic.reports.length - before.reports, {message: '«Aggiorna» asked no report', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
             const refreshed = traffic.reports[before.reports];
             expect(refreshed.target_currency, '«Aggiorna» refreshed in another currency than the one restored').toBe('USD');
@@ -493,8 +558,7 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             await page.getByTestId('dashboard-tab-risk').click();
             await riskSettled(page);
 
-            const before = mark(traffic);
-            await page.getByTestId('sync-button').click();
+            const before = await pressRefresh(page, traffic);
 
             await expect.poll(() => traffic.riskQueries.length - before.riskQueries, {message: '«Aggiorna» on the Risk tab reloaded the report and left the risk as it was cached', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
@@ -549,11 +613,11 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
             await expect(panel.getByTestId('risk-scope-label'), 'with the filter on, the risk panel does not say it still reads the whole portfolio').toBeVisible();
 
-            // …and «Aggiorna» asks the risk again, still over every broker the user owns.
-            const before = mark(traffic);
-            await page.getByTestId('sync-button').click();
+            // …and «Aggiorna» asks the risk again, still over every broker the user owns. The page's Refresh waits for
+            // that question too: idle again, it has landed — the panel's own `data-busy` covers only its first load.
+            const before = await pressRefresh(page, traffic);
             await expect.poll(() => traffic.riskQueries.length - before.riskQueries, {message: '«Aggiorna» on the Risk tab asked no risk', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
-            await expect(panel.getByTestId('risk-refresh-button'), 'the risk asked again by «Aggiorna» never landed').toBeEnabled({timeout: PAGE_TIMEOUT});
+            await expect(pageRefresh(page), 'the risk asked again by «Aggiorna» never landed').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
             await riskSettled(page);
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
             readings.push(await ownedBrokerIds(page));

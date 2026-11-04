@@ -32,7 +32,7 @@ largest residual of 1e-24, both before and after F — F only changed which five
 
 ## Solution
 
-Commit `876d2b430` (2026-10-12, workstream T, train 47), approved by the developer for release 1.2:
+Commit `323c5ff13` (2026-10-12, workstream T, train 47), approved by the developer for release 1.2:
 
 - `reconciled = abs(residual_amount) < CONVERSION_DUST` in both builders, `CONVERSION_DUST` (1e-9) imported from
   `financial_math/native_cash.py` ([[entities/native-cash]]) — the same threshold that hides conversion dust in the

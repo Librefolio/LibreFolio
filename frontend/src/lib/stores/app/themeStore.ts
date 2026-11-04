@@ -55,8 +55,9 @@ export function applyTheme(mode: ThemePreference): void {
         const resolved: ResolvedTheme = mode === 'auto' ? getSystemTheme() : mode;
         document.documentElement.classList.remove('light', 'dark');
         document.documentElement.classList.add(resolved);
-        // Update PWA theme-color meta tag for title bar (matches sidebar color)
-        const themeColor = resolved === 'dark' ? '#156534' : '#1a4031';
+        // PWA title bar: the green sidebar's --lf-surface-bar, the same in both themes (N2, D-T17, D-T24). Kept a pair, so a theme
+        // of its own stays one edit away; themeColorMeta.gate.test.ts reads the three copies (app.html, offline.html).
+        const themeColor = resolved === 'dark' ? '#1b4334' : '#1b4334';
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.setAttribute('content', themeColor);
     }

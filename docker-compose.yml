@@ -15,8 +15,9 @@
 #   3. Access:          http://localhost:${PORT:-6040}
 #
 # Commands inside the running container (./dev.py docker exec <cmd>):
-#   ./dev.py docker exec user list                # user, db and info work
+#   ./dev.py docker exec user list                # user, db, info and backup work
 #   ./dev.py docker exec db current
+#   ./dev.py docker exec backup create            # one archive, in <data dir>/backups/
 #   The image has no test runner, frontend sources or Node: `test …` answers
 #   "not available" and `server --test` cannot start. Run test mode from a
 #   source checkout instead (./dev.py server --test, ./dev.py test …).
@@ -39,12 +40,11 @@ services:
         DOCS_VARIANT: ${DOCS_VARIANT:-full}
     container_name: librefolio
     # The container starts as root so the entrypoint can fix bind-mount
-    # permissions, then drops to the 'librefolio' user via gosu.
-    # (Same pattern as postgres, mysql, redis official images.)
+    # permissions, then drops to the numeric LIBREFOLIO_UID:LIBREFOLIO_GID via
+    # gosu, like ./dev.py docker exec. (Same pattern as postgres, mysql, redis.)
     restart: unless-stopped
     ports:
       - "${PORT:-6040}:6040"
-      - "${TEST_PORT:-6041}:6041"
     volumes:
       - ./LibreFolio-data:/app/backend/data/prod-docker
     env_file: .env
@@ -53,9 +53,12 @@ services:
     #   - LIBREFOLIO_DATA_DIR must match the container-side bind-mount path.
     #   - HOST must be 0.0.0.0 so the server is reachable from outside the container
     #     (even if the user sets HOST=127.0.0.1 in .env for local development).
+    #   - PORT is the host side of the mapping above; inside the container the
+    #     server always listens on 6040, and dev.py commands must read 6040 too.
     environment:
       - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
       - HOST=0.0.0.0
+      - PORT=6040
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
       interval: 30s

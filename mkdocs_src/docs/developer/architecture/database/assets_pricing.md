@@ -63,8 +63,8 @@ erDiagram
 Global definition of a financial instrument. `display_name` is unique; the identifier columns (`identifier_isin`, `identifier_ticker`, …) are indexed but not unique. Each asset belongs to an [Asset Type](../../../financial-theory/instruments/asset-types/index.md).
 
 - 📋 **`classification_params`** (JSON): Stores flexible metadata like Sector, Geography, and Industry without requiring schema changes.
-    - **Distributions** (`FAClassificationParams.geographic_area` and `.sector_area`, `backend/app/schemas/assets.py:533-556`) store their weights as **fractions** that sum to exactly 1, with 4 decimals. The UI works in percent: the distribution editor and the distribution CSV import accept a total within 0.005 points of 100, and divide each weight by 100 before saving (`DistributionEditor.svelte:132,192`, `DistributionDataImportModal.svelte:35,42`).
-    - **Backend check.** `BaseDistribution._validate_and_normalize_weights` (`assets.py:352-431`) rejects a sum farther than 0.01 from 1. Otherwise it renormalizes the weights, quantizes them to 4 decimals with `ROUND_HALF_EVEN`, and puts the rounding residue on the smallest weight.
+    - **Distributions** (`FAClassificationParams.geographic_area` and `.sector_area`, `backend/app/schemas/assets/metadata.py:235-258`) store their weights as **fractions** that sum to exactly 1, with 4 decimals. The UI works in percent: the distribution editor and the distribution CSV import accept a total within 0.005 points of 100, and divide each weight by 100 before saving (`DistributionEditor.svelte:132,192`, `DistributionDataImportModal.svelte:35,42`).
+    - **Backend check.** `BaseDistribution._validate_and_normalize_weights` (`metadata.py:54-133`) rejects a sum farther than 0.01 from 1. Otherwise it renormalizes the weights, quantizes them to 4 decimals with `ROUND_HALF_EVEN`, and puts the rounding residue on the smallest weight.
 - 💰 **`currency`**: The asset's native currency (e.g., USD for Apple, EUR for ASML).
 - 🏷️ **`asset_type`**: One `AssetType` value — see [Asset types and subtypes](#asset-types) below.
 - ⭐ **`is_benchmark`** (`BOOLEAN NOT NULL DEFAULT 0`): The asset is offered as a comparison benchmark. The risk benchmark selector (`BenchmarkSelect.svelte`) and the chart's comparison-asset picker (`SignalAssetParamControl.svelte`) list flagged assets in a section of their own, apart from the other assets; `GET /api/v1/assets/query?is_benchmark=true|false` filters on the flag (omitted = both).
@@ -85,14 +85,16 @@ Global definition of a financial instrument. `display_name` is unique; the ident
 A subtype says which base type the instrument contains: `ETF_BOND` is an ETF that holds bonds, `CROWDFUND_REAL_ESTATE` a crowdfunding loan backed by property. `ETF_MONETARY` (money-market funds) is the one subtype with no base-type counterpart. The plain `ETF` and `CROWDFUND` values stay valid, as the residual for mixed or unstated content.
 
 - 🗄️ **Stored as is.** The column keeps the exact value and nothing rolls up in the database; the backend aggregates by the stored value too (the allocation by type, `DailyStateBuilder._distribute_allocation()` in `financial_math/portfolio/daily_state.py`). Grouping a subtype with its family is a frontend concern: `ASSET_TYPE_FAMILY` / `assetTypeFamily()` in `frontend/src/lib/utils/assetTypes.ts` files every `ETF_*` value under `ETF` and `CROWDFUND_REAL_ESTATE` under `CROWDFUND`, for the asset-type select and for both allocation charts (see the [Allocation Panel](../../../user/dashboard/charts.md#allocation-panel)).
-- 🚫 **`INDEX`** is the one value with backend behaviour: transactions on an `INDEX` asset are refused (`transaction_batch_stages.py`). It does not imply `is_benchmark`.
+- 🚫 **`INDEX`** is the one value with backend behaviour: transactions on an `INDEX` asset are refused (`batch_creates.py`). It does not imply `is_benchmark`.
 - ➕ **Adding a value** needs no migration: the column is a plain `VARCHAR(32)` with no `CHECK` constraint (databases created before 22/09/2026 still declare `VARCHAR(14)`, harmless on SQLite — see [Migrations](index.md#enum-column-length)). The frontend tables keyed on the enum must follow: `frontend/src/lib/utils/__tests__/assetTypeTables.test.ts` reads the enum from `backend/app/db/models.py` and fails when one of them misses the new value.
 
 ### 📈 `PRICE_HISTORY`
 
 Daily OHLCV (Open, High, Low, Close, Volume) price data for each asset, one row per `(asset_id, date)`. Populated by asset pricing providers. `open`, `high`, `low` and `close` are all nullable: the [price resolver](../../backend/transactions/price_resolver.md) values a day from `close`, and uses the day's range only when `open`, `high` and `low` are all present.
 
-### 🔌 `ASSET_PROVIDER_ASSIGNMENT`
+The prices (`open`, `high`, `low`, `close`, `adjusted_close`) are `RealDecimal(24, 12)`: up to 12 digits before the decimal point and 12 decimal places, read back as written; `volume` is `RealDecimal(24, 0)` (W-B63): up to 24 digits before the point. A provider's prices are truncated to 12 decimal places and 15 significant digits, and a date with a value no column can keep (a price not finite or past 12 digits before the point, a volume past 24) is skipped; a manual price over any of these limits, or a manual volume past 24 digits, is refused (see [Decimal Columns](index.md#decimal-columns)).
+
+### 🔌 `ASSET_PROVIDER_ASSIGNMENT` {: #asset-provider-assignment }
 
 Decouples the asset from its data source. This table configures which provider to use for fetching prices and metadata.
 
@@ -116,7 +118,7 @@ Asset-level events that affect pricing or generate distributions. Events are dis
 | `SPLIT` | Changes quantity, not total value | Stock/unit split |
 | `MATURITY_SETTLEMENT` | Final capital return | Asset reaches maturity — no further calculations |
 
-**Deduplication strategy**: events are upserted **in place**, per source, on `(asset_id, date, type)`: a sync matches only the events of its own assignment, and a matched row keeps its id, so the transactions linked to it stay linked. Manual events (`provider_assignment_id = NULL`) are edited by id or matched on date and type, and a sync never deletes them. See [Asset Events](../../backend/assets/events.md#dedup-strategy).
+**Deduplication strategy**: events are upserted **in place**, per source, on `(asset_id, date, type)`: a sync matches only the events of its own assignment, and a matched row keeps its id, so the transactions linked to it stay linked. Manual events (`provider_assignment_id = NULL`) are edited by id or matched on date and type, except in a `create` item (the transaction form's **+ New event**), which is refused on a date and type the asset already has instead of overwriting it; a sync never deletes them. See [Asset Events](../../backend/assets/events.md#dedup-strategy).
 
 **Indexes**: `(asset_id, date)`, `(asset_id, type, date)`, `(provider_assignment_id)`.
 

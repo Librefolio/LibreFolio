@@ -23,5 +23,6 @@ Save the file and import it into LibreFolio. If you choose CSV, don't open or re
 - Supports stock, bond, and ETF trades, dividends, taxes (*ritenute fiscali*), and transaction fees.
 - Both **CSV** and **XLSX** (Excel) formats are supported — not ods.
 - Account operations are denominated in EUR.
+- Rows LibreFolio cannot read (too few columns, a date it cannot understand, a missing or unknown operation type) are not imported: they are listed in an amber warning during the import, with a link to open an issue on GitHub.
 - The export covers up to 3,000 rows per file. For longer histories, export multiple periods and import them in sequence.
 

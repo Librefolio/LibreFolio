@@ -7,11 +7,12 @@
   Features:
   - Semi-circle pie chart (180°-360°)
   - Circular avatar images pre-clipped via offscreen canvas
-  - Initial letter fallback when no avatar available
+  - Initial letter fallback when no avatar available, in the text that reads best on its disc
   - "Available" slice for unallocated percentage
-  - Dark mode support
+  - Dark mode support: redraws when the theme switches, or when the chart colours change (Designer Lab, C4)
   - ResizeObserver for responsive sizing
-  - Diversified color palette with high chromatic distance
+  - Owners coloured by their key, never by the order of the data (round 3, §1.5): sorted by key, they take
+    the first eight asset types of the designer's palette, a version per theme, shaded past the eighth
 
   Used by:
   - BrokerSharingModal (ownership distribution)
@@ -20,6 +21,8 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
@@ -27,12 +30,19 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
+    import {CATEGORY_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
+    import {shadePoles} from '$lib/theme/chartShades';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types
     // =========================================================================
 
     interface OwnerSlice {
+        /** The owner's stable key (its user id): the colour follows it, whatever the order of the data. */
+        key: string | number;
         /** Display name */
         name: string;
         /** Percentage (0-100) */
@@ -64,9 +74,6 @@
     let needsInitialLayoutStabilityPass = false;
     let renderGeneration = 0;
 
-    // Diversified color palette — high chromatic distance between adjacent slices
-    const PALETTE = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5'];
-
     // Cache for circular avatar data URLs
     const circularAvatarCache = new Map<string, string>();
 
@@ -75,8 +82,26 @@
     // =========================================================================
 
     onMount(() => {
-        return () => cleanup();
+        // The colours are read when the chart draws: a theme switch, or a chart colour changed without one (a Designer
+        // Lab edit, contract C4), draws it again (backlog R-7).
+        const theme = onThemeClassChange(redraw);
+        const colors = onChartColorsChange(redraw);
+        return () => {
+            theme.disconnect();
+            colors.disconnect();
+            cleanup();
+        };
     });
+
+    /** Draws the current data again, as the next generation. */
+    function redraw() {
+        if (!chartContainer) return;
+        void renderChart(
+            ++renderGeneration,
+            data.map((slice) => ({...slice})),
+            availableLabel,
+        );
+    }
 
     $effect(() => {
         const container = chartContainer;
@@ -173,22 +198,35 @@
         return generation === renderGeneration && chartContainer === container && container.isConnected;
     }
 
+    /** The owners in the order of their colours: by key, numbers by value, so a colour stays with its owner. */
+    function compareKeys(a: OwnerSlice, b: OwnerSlice): number {
+        return typeof a.key === 'number' && typeof b.key === 'number' ? a.key - b.key : String(a.key).localeCompare(String(b.key));
+    }
+
     async function renderChart(generation: number, slices: OwnerSlice[], label: string) {
         const container = chartContainer;
         if (!container) return;
         if (!(await waitForRenderableContainer(container, generation))) return;
 
         if (!chartInstance || chartInstance.isDisposed()) {
-            chartInstance = echarts.init(container, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(container, CHART_INIT_THEME, chartInitOptions(container));
             attachChartReady(chartInstance, container, 'semi-donut');
             needsInitialLayoutStabilityPass = true;
         }
         const currentInstance = chartInstance;
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, container);
         const avatarSize = 44;
-        const borderColor = isDark ? '#334155' : '#ffffff';
+        const borderColor = neutrals.semiDonut.avatarBorder;
         const borderWidth = 2;
+        // §1.5: an owner's colour is read by its key, never by the order of the data. Sorted by key, the owners take the
+        // first eight asset types in order, then a shade of them (GR4) past the eighth. The card is read once, from the
+        // chart's own element.
+        const roles = chartRoles(isDark, container);
+        const poles = shadePoles(isDark, roles.color('--lf-surface-card'));
+        const rankByKey = new Map([...slices].sort(compareKeys).map((slice, rank) => [slice, rank]));
+        const ownerColor = (slice: OwnerSlice) => sequenceColor(CATEGORY_SEQUENCE, rankByKey.get(slice) ?? 0, isDark, poles, container);
 
         // Pre-load circular avatars in parallel
         const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];
@@ -214,17 +252,19 @@
         slices.forEach((slice, i) => {
             if (slice.percentage <= 0) return;
 
+            // The slice and its avatar's disc are one colour, the owner's: by its key among the owners'.
+            const color = ownerColor(slice);
             const initial = slice.name.charAt(0).toUpperCase();
             const totalIconSize = avatarSize + borderWidth * 2;
             const rich: Record<string, any> = {
                 pct: {
                     fontSize: 11,
                     fontWeight: 'bold',
-                    color: isDark ? '#e2e8f0' : '#1e293b',
+                    color: neutrals.semiDonut.label,
                     lineHeight: 18,
                     padding: [2, 0, 0, 0],
                     align: 'center',
-                    textShadowColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)',
+                    textShadowColor: neutrals.semiDonut.labelShadow,
                     textShadowBlur: 3,
                 },
             };
@@ -243,14 +283,14 @@
                 rich['avatar'] = {
                     fontSize: 18,
                     fontWeight: 'bold',
-                    color: '#fff',
-                    backgroundColor: PALETTE[i % PALETTE.length],
+                    color: roles.readableText(color),
+                    backgroundColor: color,
                     borderRadius: avatarSize / 2,
                     width: avatarSize,
                     height: avatarSize,
                     align: 'center',
                     lineHeight: avatarSize,
-                    borderColor: isDark ? '#334155' : '#ffffff',
+                    borderColor: neutrals.semiDonut.avatarBorder,
                     borderWidth: 2,
                 };
                 formatter = `{avatar|${initial}}\n{pct|${formatPercent(slice.percentage, {digits: 1, signed: false})}}`;
@@ -259,6 +299,7 @@
             chartData.push({
                 value: slice.percentage,
                 name: slice.name,
+                itemStyle: {color},
                 label: {show: true, formatter, rich},
             });
         });
@@ -269,7 +310,7 @@
             chartData.push({
                 value: avail,
                 name: label,
-                itemStyle: {color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)'},
+                itemStyle: {color: neutrals.semiDonut.available},
                 label: {show: false},
             });
         }
@@ -279,13 +320,12 @@
             chartData.push({
                 value: 100,
                 name: `${label} (100%)`,
-                itemStyle: {color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)'},
+                itemStyle: {color: neutrals.semiDonut.available},
                 label: {show: false},
             });
         }
 
         const option: echarts.EChartsOption = {
-            color: PALETTE,
             tooltip: {
                 trigger: 'item',
                 formatter: (params: unknown) => {
@@ -293,9 +333,9 @@
                     return `${escapeHtml(String(item.name ?? ''))}: ${formatPercent(Number(item.value), {digits: 1, signed: false})}`;
                 },
                 position: tooltipPositionAboveFinger,
-                backgroundColor: isDark ? '#1e293b' : '#fff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b'},
+                backgroundColor: neutrals.tooltip.box.background,
+                borderColor: neutrals.tooltip.box.border,
+                textStyle: {color: neutrals.tooltip.box.text},
             },
             series: [
                 {
@@ -307,7 +347,7 @@
                     padAngle: 2,
                     itemStyle: {
                         borderRadius: 6,
-                        borderColor: isDark ? '#1e293b' : '#ffffff',
+                        borderColor: neutrals.semiDonut.sliceGap,
                         borderWidth: 2,
                     },
                     label: {
@@ -320,7 +360,7 @@
                         show: true,
                         length: 10,
                         length2: 8,
-                        lineStyle: {color: isDark ? '#475569' : '#94a3b8'},
+                        lineStyle: {color: neutrals.semiDonut.labelLine},
                     },
                     emphasis: {
                         label: {show: true},

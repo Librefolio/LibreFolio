@@ -207,8 +207,8 @@ category when it holds for the whole category:
 ```python
 add_test(
     "auth", ...,
-    exclusive_because="flips global_settings.enable_registration to False; every "
-                      "concurrent user creation fails while it is down",
+    exclusive_because="rewrites global_settings.registration_mode; while it is not "
+                      "open every concurrent user creation fails",
 )
 ```
 
@@ -223,6 +223,16 @@ weather. It fails when the provider is slow, and it makes the whole category
 exclusive to protect a timeout. Use the mock providers that already exist
 (`MOCKFX`, `MOCKFX_FAIL`, and their asset-source equivalents): they return fixed
 values, which lets the assertion be **exact** instead of "some number arrived".
+
+### 7. Close every aiosqlite connection you open
+
+Every backend test runs under the shared conftest's aiosqlite leak guard
+(`_aiosqlite_leak_guard`): a test that leaves open an aiosqlite connection it
+created gets an ERROR at its own teardown, with the connection's creation stack.
+Close the session and dispose the engine (`async with`, or a fixture with
+`finally: await engine.dispose()`). An exception goes in
+`AIOSQLITE_LEAK_EXCEPTIONS` (`backend/test_scripts/test_aiosqlite_guard.py`) with
+a one-line reason; its self-tests are `utils gate-aiosqlite-leak`.
 
 > When a test fails and the cause is not obvious, use the **`test-triage`**
 > skill: it gives the ordered hypotheses, starting with *"was it the shape of the

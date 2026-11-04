@@ -14,8 +14,8 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_returns,
     prepared_scope_series,
@@ -34,6 +34,7 @@ from backend.app.services.risk.metrics import (
     annualized_volatility,
     comparison_summary,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class AssetSetComparisonParams(BaseModel):
@@ -128,7 +129,7 @@ class AssetSetComparisonAnalytic(RiskAnalytic):
         observations = prepared.n_observations if prepared else 0
         # ⚠️ UNREACHABLE THROUGH THE SERVICE, AND DELIBERATELY KEPT — do not
         # "harmonise" it away with the one in asset_set_var, which is a different
-        # animal. `_available_observations` hands the service this very number
+        # animal. `available_observations` (risk/results.py) hands the service this very number
         # and compares it against this very minimum before compute() is called,
         # so the service refuses first. The var analytic's check survives because
         # it tests the *compounded* count, which the service cannot know. This

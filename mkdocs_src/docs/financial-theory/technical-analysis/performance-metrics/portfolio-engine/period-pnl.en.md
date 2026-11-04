@@ -12,7 +12,7 @@ $$
 \boxed{\mathrm{PnL}_{\text{period}} = \mathrm{NAV}(t_1)-\mathrm{NAV}(t_0)-\Delta \mathrm{CapitalBaseline}_{[t_0,t_1]}}
 $$
 
-The baseline delta comes from `cumulative_external_cash_flow`, so it includes cash flows and priced in-kind ADJUSTMENT/TRANSFER capital.
+The baseline delta comes from `cumulative_external_cash_flow`, so it includes cash flows and priced in-kind ADJUSTMENT/TRANSFER capital. An outgoing ADJUSTMENT has no value and takes nothing out ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ---
 
@@ -24,11 +24,11 @@ $$
 
 | Component | Definition |
 |-----------|-----------|
-| $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period — for assets priced in another currency, including the exchange-rate effect on their historical cost |
-| Realized | Sum of (sell proceeds − historical cost of the units sold) for SELLs in period; proceeds are converted at the sale date |
+| $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period: market value − open cost basis of the positions held at each boundary, securities in transit left out ([the period unrealized](index.md#two-unrealized-figures)) — for assets priced in another currency, including the exchange-rate effect on their historical cost |
+| Realized | Sum of (proceeds − historical cost of the units given up) for the SELLs in period and the outgoing ADJUSTMENTs not linked to a split, whose proceeds are zero; proceeds are converted at the transaction's date ([Portfolio Engine — §8](index.md#8-realized-gain-loss)) |
 | Income | DIVIDEND + INTEREST in period |
 | FeesTaxes | FEE + TAX in period |
-| Other | What closes the identity: the exchange result on cash held in another currency (FX on cash) plus a residual |
+| Other | What closes the identity: the exchange result on cash held in another currency (FX on cash), the gain securities accrued outside the view before crossing its boundary (transfers at market value), plus a residual |
 
 Other is computed as:
 
@@ -36,18 +36,19 @@ $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. Cash held in another currency is different: NAV and Book both value it at each day's rate, so its exchange-rate effect cancels in the unrealized gain/loss and is not in $\Delta\mathrm{UGL}$. It is the first part of Other, the [FX on cash](#fx-on-cash) of each broker $b$, which the Period view shows per broker:
+Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. Cash held in another currency is different: NAV and Book both value it at each day's rate, so its exchange-rate effect cancels in the unrealized gain/loss and is not in $\Delta\mathrm{UGL}$. It is the first part of Other, the [FX on cash](#fx-on-cash) of each broker $b$, which the Period view shows per broker. The second part, the [transfers at market value](#transfers-at-market-value), is shown per broker too:
 
 $$
-\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \sum_{b \in S} \mathrm{TMV}_b + \mathrm{Residual}
 $$
 
-The residual holds what neither the four components nor the exchange result on cash can see:
+The residual holds what neither the four components, the exchange result on cash nor the transfers at market value can see:
 
 - the exchange-rate move of cash while it travels between two brokers: in transit, it belongs to no broker's balance;
 - the cost of a currency exchange, at one broker or across two: −1,000 USD worth €920 at the day's rate, exchanged into +€900, gives −€20, which is neither a fee nor a sale;
 - the value of assets travelling between two brokers on a boundary day;
-- a sale left out of Realized because its proceeds could not be converted or its position's cost is incomplete.
+- a sale left out of Realized because its proceeds could not be converted, or a sale or an outgoing ADJUSTMENT left out because its position's cost is incomplete.
+- the cost of dust: a sale that leaves $10^{-5}$ units or fewer in a position takes what is left out of the open cost basis without selling it, so its cost is in neither $\Delta\mathrm{UGL}$ nor Realized — 0.00001 units bought at 100,000 leave −1.00 here ([§7](index.md#7-period-contribution)).
 
 ### 💵 FX on Cash {: #fx-on-cash }
 
@@ -74,6 +75,31 @@ $N_{b,c}(t)$ is the balance $b$ holds in currency $c$ on $t$, scaled by the brok
     $$
 
     The deposit entered the capital at €455; the +€25 is what the dollars gained against the euro while the broker held them.
+
+### 🔀 Transfers at Market Value {: #transfers-at-market-value }
+
+In a view that selects only some brokers, a TRANSFER leg whose other side is outside the view — securities sent to a broker that is not selected, received from one, or a transfer with no counterpart — is in-kind capital at its market value on its date, while the position's cost moves with it ([Deposited Capital](deposited-capital.md)). The gain the units accrued at the other broker is therefore in neither $\Delta\mathrm{UGL}$ nor Realized, and used to end up in the residual. It is the second part of Other. For each broker $b$ of the view, over the legs $\ell$ dated in $(t_0, t_1]$:
+
+$$
+\mathrm{TMV}_b = \sum_{\ell \in (t_0, t_1]} \bigl(\mathrm{Cost}_\ell - \mathrm{Capital}_\ell\bigr)
+$$
+
+$\mathrm{Capital}_\ell$ is the market value the leg adds to the capital (positive when received, negative when sent) and $\mathrm{Cost}_\ell$ the cost it moves in the position (same sign), both in $C^*$ at the broker's share. For units with market value $\mathrm{MV}$ and cost $C$:
+
+| Leg | $\mathrm{Capital}$ | $\mathrm{Cost}$ | Contribution |
+|-----|---------|------|--------------|
+| Sent out of the view | $-\mathrm{MV}$ | $-C$ | $+(\mathrm{MV} - C)$ |
+| Received from outside the view | $+\mathrm{MV}$ | $+C$ | $-(\mathrm{MV} - C)$ |
+
+The sender's view takes the gain the units made while it held them as a result of its own; the receiver's view starts from the value they arrive with, so what they gained before is not its result and is taken out. A figure below the rounding threshold is not shown, and the residual drops by the amount shown. With both brokers selected nothing changes: the pair is internal, and the units only split the result between the two rows (see the internal transfer under Per-Asset Contribution below).
+
+??? example "Example: units bought at one broker and sent to another"
+
+    10 units bought at 50 each (cost €500) on broker A are sent to broker B when worth €800.
+
+    - **View on A only:** the units leave at €800 of capital and take €500 of cost with them: $\mathrm{TMV}_A = -500 + 800 = +300$ EUR.
+    - **View on B only:** the units arrive at €800 of capital with €500 of cost: $\mathrm{TMV}_B = 500 - 800 = -300$ EUR.
+    - **View on A and B:** no such row.
 
 ---
 
@@ -104,7 +130,7 @@ $$
 
 For a mark quoted in $A$, $\mathrm{MV}_A(t) = \frac{q}{qbq} \cdot \mathrm{mark}_A(t) \cdot r_A(t)$, so the asset effect is the assets' own change in their currency, translated at the day's rate: $E^{\text{asset}}_A(t) = \bigl(\frac{q}{qbq} \cdot \mathrm{mark}_A(t) - \mathrm{Cost}^{A}_A(t)\bigr)\, r_A(t)$. The exchange-rate effect is zero on the day of each purchase. For $A = C^*$, $r = 1$ and $\mathrm{Cost}^{A} = \mathrm{Cost}^{*}$: the exchange-rate effect vanishes, and assets already in the report currency have an asset effect only.
 
-A position in a currency $A \neq C^*$ that cannot be split on day $t$ — no market value, no rate $r_A(t)$, or a cost incomplete in either currency — adds its whole $\mathrm{MV} - \mathrm{Cost}^{*}$ (with $\mathrm{MV} = 0$ when it has no market value) to an **unsplit** part $E^{\text{unsplit}}_A(t)$ instead. Positions in $C^*$ always count in the asset effect.
+A position in a currency $A \neq C^*$ that cannot be split on day $t$ — no market value, no rate $r_A(t)$, or a cost incomplete in either currency — adds its whole $\mathrm{MV} - \mathrm{Cost}^{*}$ (with $\mathrm{MV} = 0$ when it has no market value) to an **unsplit** part $E^{\text{unsplit}}_A(t)$ instead. Positions in $C^*$ always count in the asset effect. A position valued at its cost because its asset has no mark at all ([Portfolio Engine — §3](index.md#3-position-state)) has $\mathrm{MV} = \mathrm{Cost}^{*}$ and adds to no part: splitting it would invent an asset effect and an exchange-rate effect of opposite sign.
 
 The period rows are the changes between the period's two boundary states — the last state on or before $t_0$ (zero if there is none) and the state at $t_1$ —, the same two states as $\Delta\mathrm{UGL}$:
 
@@ -147,7 +173,20 @@ $$
 \mathcal{P} = \text{positions with BUY/SELL/ADJUSTMENT/TRANSFER activity or boundary quantity}
 $$
 
+A position's start and end values are the portfolio's own valuation of it at the end of $t_0$ and of $t_1$, the two states of $\Delta\mathrm{UGL}$ ([Portfolio Engine — §3](index.md#3-position-state)):
+
+- its mark ([§2](index.md#2-valuation-price)): a market quote, or else a BUY/SELL price — or, for an asset with nothing else yet, the cost of an incoming transfer as an estimate —, a trade price being restated through any later split;
+- its cost basis, for a holding whose asset has no mark at all (`ESTIMATED_AT_COST`);
+- converted at the exchange rate of the boundary day itself.
+
+The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, transfers at market value, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference. A position left with $10^{-5}$ units or fewer — dust — is held neither by a row nor by the portfolio, so it changes nothing in the identity ([§3](index.md#3-position-state)); its cost is in the residual (above).
+
+- **Internal transfer.** A security moved between two of your brokers inside the period splits its result: the sending broker's row answers for the units until they arrive, the receiving broker's from their arrival, and the total is unchanged. A transfer already in transit at $t_0$, or still in transit at $t_1$, keeps the plain boundary values ([§7](index.md#7-period-contribution)).
+- **Unknown values.** A position held at a boundary whose unrealized gain/loss is unknown there — a missing exchange rate, an incomplete cost — has an unknown $\Delta\mathrm{UGL}(a,b)$, never the known side minus zero.
+
 Annualized period return clamps its window start to the later of the requested start and the oldest open lot date. It uses $|\mathrm{StartValue}|$ as annualization base, falling back to end cost basis for positions opened mid-period. See [Net Annualized Return](net-annualized-return.md).
+
+A position closed in the period — nothing left at $t_1$ — annualizes differently: on the historical cost of the units that left it in the period — sold, or moved to another broker of the scope — over the time it was held inside it, from the later of $t_0$ and its first opening to the day its last units left. Its period percentage keeps $|\mathrm{StartValue}|$ as base. See [Net Annualized Return — Positions Closed in the Period](net-annualized-return.md#closed-in-period).
 
 🔗 See **[Portfolio Engine — §7 Period Contribution](index.md#7-period-contribution)** for details.
 

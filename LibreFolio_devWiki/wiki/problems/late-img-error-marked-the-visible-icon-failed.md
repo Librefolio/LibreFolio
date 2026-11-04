@@ -37,7 +37,7 @@ With a working favicon the same race was only cosmetic. The diagnosis written wh
 
 ## Solution
 
-`2412c3fe4` («fix(brokers): plugin icon first, late img events», train 72), in
+`9b2d731cd` («fix(brokers): plugin icon first, late img events», train 72), in
 `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts`:
 
 - **each event belongs to its own image**: `eventUrl(event)` reads `currentTarget.getAttribute('src')`; `handleError`
@@ -63,8 +63,8 @@ With a working favicon the same race was only cosmetic. The diagnosis written wh
 | Role | Path |
 |------|------|
 | The icon chain (`eventUrl`, `handleError`, `handleLoad`) | `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts` |
-| The component | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |
-| Component tests | `frontend/src/lib/components/brokers/BrokerIcon.test.ts` |
+| The component | `frontend/src/lib/components/ui/display/BrokerIcon.svelte` |
+| Component tests | `frontend/src/lib/components/ui/display/BrokerIcon.test.ts` |
 | Chain tests | `frontend/src/lib/utils/broker/__tests__/brokerIconChain.test.ts` |
 | Plan 48 (H1, the fix) | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |
 | Backlog (C-56, C-57) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

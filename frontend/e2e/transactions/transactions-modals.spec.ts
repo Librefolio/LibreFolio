@@ -14,7 +14,7 @@ import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/
 import {daysAgoIso, todayIso} from '../fixtures/dates';
 import {uniqueSuffix} from '../fixtures/unique';
 import {createOwnedBroker} from '../fixtures/onboarding-accounts';
-import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount, openOwnedAccount, readTransactions, seededAssetId} from '../fixtures/owned-pair';
+import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount, jsonFrom, openOwnedAccount, readTransactions, seededAssetId} from '../fixtures/owned-pair';
 
 // ---------------------------------------------------------------------------
 // Constants — known mock data (populate_mock_data.py)
@@ -78,6 +78,16 @@ async function fillCashAmount(page: Page, amount: string) {
     // Blur commits the value through the locale parser; assert the commit
     // instead of sleeping through it.
     await expect(amountInput).not.toBeFocused({timeout: 3_000});
+}
+
+/** Type a date in the form's date picker and leave the field, which is when the picker takes it. */
+async function typeFormDate(page: Page, date: string) {
+    const dateInput = page.getByTestId('tx-form-date-wrap').getByTestId('single-date-picker-root').locator('input[type="text"]');
+    await dateInput.click();
+    await dateInput.fill(date);
+    await dateInput.press('Tab');
+    await expect(dateInput).not.toBeFocused({timeout: 3_000});
+    await expect(dateInput).toHaveValue(date);
 }
 
 /** Compare the effective browser border color, not merely an inline declaration
@@ -323,6 +333,36 @@ async function deleteApiOwnedRows(page: Page): Promise<void> {
     expect(body.committed, `cleanup of rows ${stillThere.join(', ')} was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
 }
 
+/**
+ * Assets created through `page.request`: deleted by id in `afterEach`, which runs for a red test too. A leftover asset
+ * would sit in every later test's asset picker.
+ */
+let apiOwnedAssetIds: number[] = [];
+
+/**
+ * An EUR stock this test owns, found again by its unique name; returns its id. Recorded before anything is asserted.
+ * `quoteBase` is how many units its quote refers to (100 for a bond quoted per 100 nominal); left out, the backend's 1.
+ */
+async function createOwnedAsset(page: Page, name: string, quoteBase?: number): Promise<number> {
+    const resp = await page.request.post(`${API}/assets`, {data: [{display_name: name, currency: 'EUR', asset_type: 'STOCK', ...(quoteBase === undefined ? {} : {quote_base_quantity: quoteBase})}]});
+    const body = (await resp.json().catch(() => null)) as {results?: Array<{asset_id: number | null; success: boolean; message?: string}>} | null;
+    const created = (body?.results ?? []).filter((r) => r.success && r.asset_id != null).map((r) => r.asset_id as number);
+    apiOwnedAssetIds.push(...created);
+    expect(resp.status(), `create the owned asset: ${JSON.stringify(body)}`).toBe(201);
+    expect(created, 'the call creates exactly the owned asset').toHaveLength(1);
+    return created[0];
+}
+
+/** Delete the API-created assets. Fails loud: a silent leftover is somebody else's picker entry. */
+async function deleteApiOwnedAssets(page: Page): Promise<void> {
+    const ids = apiOwnedAssetIds;
+    apiOwnedAssetIds = [];
+    if (ids.length === 0) return;
+    const res = await page.request.delete(`${API}/assets?${ids.map((id) => `asset_ids=${id}`).join('&')}`);
+    const body = (await res.json().catch(() => null)) as {success_count?: number} | null;
+    expect(res.ok() && body?.success_count === ids.length, `cleanup must delete assets ${ids.join(', ')}: ${JSON.stringify(body)}`).toBe(true);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -477,6 +517,106 @@ test.describe('Transactions', () => {
     });
 
     // ===================================================================
+    // D-P4 (lot L3) — a date before 1900 is accepted: one confirmation, then it is saved with its date
+    // ===================================================================
+    // The backend has no floor any more (only the ceiling, tomorrow by the server's calendar): the frontend's warning and
+    // its one confirmation at Save All are the only protection against a typo. On a broker of the test's own: a row of
+    // 1850 on a seeded broker would move every other test's NAV, positions and history, and `Transaction` has no user.
+    test.describe('Date before 1900 — saved (D-P4 L3)', () => {
+        const OLD_DATE = '1850-05-01';
+
+        test('a DEPOSIT dated 1850-05-01 is saved once the user confirms the warning, and reads back with that date', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the DEPOSIT itself.
+            test.setTimeout(60_000);
+            await openOwnedAccount(page, request, owned, `l3_${testInfo.project.name}`);
+            const broker = await createOwnedBroker(page, 'l3', owned.brokerIds);
+            // After the broker exists, so the page's broker list has it.
+            await goToTransactions(page);
+            await openCreateFlow(page);
+            await selectType(page, 'DEPOSIT');
+            await pickBroker(page, broker.name);
+            await fillCashAmount(page, '100');
+            await typeFormDate(page, OLD_DATE);
+            await expect(page.getByTestId('tx-form-pre-floor'), 'the form warns about a date before 1900').toBeVisible({timeout: 3_000});
+
+            const bulkRoot = page.getByTestId('tx-bulk-modal-root');
+            const runsBefore = await validateRuns(bulkRoot);
+            await clickApply(page);
+            await expect(page.getByTestId('tx-bulk-modal')).toBeVisible();
+            // The workspace is this test's own: it holds the applied row and nothing else.
+            const rows = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]');
+            await expect(rows, 'the workspace must hold exactly the applied row').toHaveCount(1, {timeout: 3_000});
+            await expect(rows.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'new');
+            await waitForValidateRun(bulkRoot, runsBefore);
+            // The validation of the row (the backend's own check) finds no problem with its date: nothing blocks Save All.
+            await expect(page.getByTestId('tx-bulk-pre-floor')).toHaveAttribute('data-count', '1');
+            await expect(page.getByTestId('tx-bulk-error'), 'the backend has no floor: the old date raises no error').toHaveCount(0);
+
+            // Save All asks once; the commit leaves only after the user confirms.
+            const commitBtn = page.getByTestId('tx-bulk-commit');
+            await expect(commitBtn).toBeEnabled({timeout: 8_000});
+            await commitBtn.click();
+            const confirm = page.getByTestId('confirm-modal-confirm');
+            await expect(confirm, 'Save All asks before it commits a date before 1900').toBeVisible({timeout: 5_000});
+            // Armed after the question, before the answer: the request is what the answer sends.
+            const response = page.waitForResponse((res) => res.request().method() === 'POST' && new URL(res.url()).pathname === `${API}/transactions/commit`, {timeout: 15_000});
+            await confirm.click();
+            const res = await response;
+            const sent = (res.request().postDataJSON() as {creates?: Array<{type: string; broker_id: number; date: string}>}).creates ?? [];
+            expect(
+                sent.map((create) => [create.type, create.broker_id, create.date]),
+                'the commit sends the applied DEPOSIT and nothing else, dated as typed',
+            ).toEqual([['DEPOSIT', broker.id, OLD_DATE]]);
+            expect(res.status(), `the commit is accepted: ${await res.text()}`).toBe(200);
+            const answer = (await res.json()) as {committed?: boolean; issues?: unknown[]; results?: CommitBody['results']};
+            expect(answer.committed, `the DEPOSIT must be saved — issues: ${JSON.stringify(answer.issues ?? [])}`).toBe(true);
+            const ids = (answer.results ?? []).filter((result) => result.operation === 'create' && result.status === 'success').flatMap((result) => result.ids ?? []);
+            expect(ids, 'the commit creates exactly the DEPOSIT').toHaveLength(1);
+            await expect(page.getByTestId('tx-bulk-modal')).toBeHidden({timeout: 10_000});
+
+            // Found again on the server, by its id, with the date it was sent.
+            const saved = (await readTransactions(page, {broker_id: broker.id})).find((tx) => tx.id === ids[0]);
+            expect(saved, `transaction ${ids[0]} must be on broker ${broker.id}`).toBeDefined();
+            expect([saved!.type, saved!.date, Number(saved!.cash?.amount)], `transaction ${ids[0]} as saved`).toEqual(['DEPOSIT', OLD_DATE, 100]);
+        });
+    });
+
+    // ===================================================================
+    // #47 — a saved BUY in view mode reads in both forms
+    // ===================================================================
+    test.describe('Total amount / Unit price in view mode (#47)', () => {
+        test('a saved BUY shows its total amount and its unit price, read-only, with no badge', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the BUY itself.
+            test.setTimeout(60_000);
+            await openOwnedAccount(page, request, owned, `t47v_${testInfo.project.name}`);
+            const broker = await createOwnedBroker(page, 't47v', owned.brokerIds);
+            const appleId = await seededAssetId(page, 'AAPL');
+            // Premise, read and not inferred: the seeded asset quotes per unit, so 4 units for 100 is 25 each.
+            const [apple] = await jsonFrom<Array<{quote_base_quantity?: number | null}>>(await page.request.get(`${API}/assets/query?ticker=AAPL`), 'read the AAPL quote base');
+            expect(apple.quote_base_quantity ?? 1, 'premise: AAPL is quoted per 1 unit').toBe(1);
+            await commitCreates(page, [{broker_id: broker.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: BUY_CASH_CODE, amount: '1000'}}], 'fund the owned broker');
+            const [buyId] = await commitCreates(page, [{broker_id: broker.id, asset_id: appleId, type: 'BUY', date: daysAgoIso(9), quantity: '4', cash: {code: BUY_CASH_CODE, amount: '-100'}, description: `T47 view ${uniqueSuffix()}`}], 'a funded BUY of 4 units for 100');
+
+            const row = await goToTransactionById(page, buyId);
+            await row.getByTestId(`tx-desc-${buyId}`).dblclick();
+            await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+
+            // View mode, proven positively first: only a read-only form offers the switch to edit.
+            await expect(page.getByTestId('tx-form-switch-edit')).toBeVisible();
+            await expect(page.getByTestId('tx-form-save')).toBeHidden();
+
+            // Both forms of the same trade: the total amount (a BUY shows it unsigned) and the unit price next to it.
+            const cashAmount = page.getByTestId('tx-form-cash-amount');
+            await expect.poll(async () => Number((await cashAmount.inputValue()).replace(',', '.')), {timeout: 3_000, message: 'the total amount of the saved BUY'}).toBe(100);
+            const derived = page.getByTestId('tx-form-cash-derived');
+            await expect(derived).toHaveAttribute('data-mode', 'unit_price', {timeout: 3_000});
+            await expect(derived).toHaveAttribute('data-value', '25');
+            // Read-only: no selector to change how the amount is read. The derived unit price is on screen (above), so its absence is about the form.
+            await expect(page.getByTestId('tx-form-entry-mode')).toHaveCount(0);
+        });
+    });
+
+    // ===================================================================
     // T6 — Banner dismissible (M1/M2)
     // ===================================================================
     test.describe('Banner dismissible (M1/M2)', () => {
@@ -605,8 +745,8 @@ test.describe('Transactions', () => {
                 await expect(validInline, 'a refused date is on screen: the form must not call itself valid').toBeHidden({timeout: 5_000});
                 await expect(page.getByTestId('tx-form-save'), 'Apply must not take the previous date behind the refused text').toBeDisabled();
 
-                // «Validate now» keeps the state a complete form gives it, sends nothing, and leads to the field.
-                await expect(validateNow, 'Validate now is disabled only by an incomplete form').toBeEnabled();
+                // «Validate now» is always available (V-37b), sends nothing while the form holds an error of its own, and leads to the field.
+                await expect(validateNow, 'Validate now is always available (V-37b)').toBeEnabled();
                 const runsBeforeClick = await validateRuns(root);
                 await validateNow.click();
                 await expect(dateInput, 'Validate now leads to the refused date').toBeFocused();
@@ -645,7 +785,7 @@ test.describe('Transactions', () => {
             expect(quantitiesPerRequest(posts.validate.slice(validatesAtEdit), broker.id), 'no validate request may carry the refused quantity, not even sign-corrected to 1').toEqual([]);
 
             // «Validate now» stays enabled (the form is complete), sends nothing, and leads to the field.
-            await expect(validateNow, 'Validate now is disabled only by an incomplete form').toBeEnabled();
+            await expect(validateNow, 'Validate now is always available (V-37b)').toBeEnabled();
             const runsBeforeClick = await validateRuns(root);
             await validateNow.click();
             await expect(quantity, 'Validate now leads to the refused quantity').toBeFocused();
@@ -661,6 +801,96 @@ test.describe('Transactions', () => {
             expect(await validateRuns(root), 'the corrected quantity is validated exactly once').toBe(runsBeforeCorrection + 1);
             await expect(validInline, 'the corrected BUY is valid again').toBeVisible();
             expect(quantitiesPerRequest(posts.validate.slice(validatesAtEdit), broker.id), 'since -1: one validate request, for 3, and none for 1').toEqual([['3']]);
+        });
+    });
+
+    // ===================================================================
+    // V-38 — a balance problem is listed with the balance problems
+    // ===================================================================
+    // The form's warning banner has two lists: the problems of its own fields (`tx-form-issue`)
+    // and the inconsistencies the entry would cause in the data (`tx-form-balance-issue`, under
+    // its own header). The form splits the server's verdict by index — a field problem when the
+    // index is 0 or more — while the server attaches `balanceCashNegative` to the row that takes
+    // the cash below zero: the form's own create, index 0. A WITHDRAWAL from a broker without
+    // cash is therefore listed as a problem of the form's fields, which no field can fix. The
+    // bulk editor classifies by code (`isBulkBalanceIssue`). Read on screen, by testid and count;
+    // the server's verdict is read off the wire, as the premise. The account, its broker and the
+    // form are this test's own: nothing is saved, form and editor are discarded, and the block's
+    // `afterEach` deletes the broker and the account — after a red too.
+    test.describe('A balance problem is not a field problem (V-38)', () => {
+        type SentCreate = {type?: string; broker_id?: number; date?: string; cash?: {code?: string; amount?: string} | null};
+        type ValidateAnswer = {issues?: Array<{operation?: string; index?: number; code?: string | null}>};
+
+        /** A broker of the account's own that allows no overdraft and holds no cash; its id is recorded for cleanup before anything else is checked. */
+        async function createBrokerWithoutCash(page: Page, tag: string): Promise<{id: number; name: string}> {
+            const name = `${tag}-broker-${uniqueSuffix()}`;
+            const body = await jsonFrom<{results: Array<{name: string; success: boolean; broker_id: number | null; message?: string}>}>(await page.request.post(`${API}/brokers`, {data: [{name, opened_at: '2025-01-01', allow_cash_overdraft: false}]}), `create the broker ${name}`);
+            const created = body.results.find((result) => result.name === name);
+            if (typeof created?.broker_id === 'number') owned.brokerIds.push(created.broker_id);
+            if (!created?.success || typeof created.broker_id !== 'number') throw new Error(`create the broker ${name}: no id — ${created?.message ?? 'no result'}`);
+            return {id: created.broker_id, name};
+        }
+
+        /** Leave without saving: the form through its discard guard — it holds the WITHDRAWAL —, then the editor, which holds nothing: Apply was never pressed. */
+        async function discardFormAndEditor(page: Page) {
+            const discard = page.getByTestId('confirm-modal-confirm');
+            await page.getByTestId('tx-form-cancel').click();
+            await expect(discard, 'the form holds the WITHDRAWAL: cancelling it asks to discard it').toBeVisible({timeout: 5_000});
+            await discard.click();
+            await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 5_000});
+            await page.getByTestId('tx-bulk-close').click();
+            await expect.poll(() => closeOutcome(page), {timeout: 5_000, message: 'the editor holds nothing: one click on close closes it'}).toBe('closed');
+        }
+
+        test('V-38: a WITHDRAWAL from a broker without cash lists the negative cash among the balance problems, none among the field problems', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the form itself.
+            test.setTimeout(60_000);
+            await openOwnedAccount(page, request, owned, `v38_${testInfo.project.name}`);
+            const broker = await createBrokerWithoutCash(page, 'v38');
+            // After the broker exists, so the page's broker list has it.
+            await goToTransactions(page);
+            await openCreateFlow(page);
+            await selectType(page, 'WITHDRAWAL');
+            await pickBroker(page, broker.name);
+            await fillCashAmount(page, '100');
+
+            // Validate now, and wait for that run: the counter is read before the click, and the
+            // response is armed before it too — a response is an edge.
+            const root = page.getByTestId('tx-form-modal-root');
+            const validateNow = page.getByTestId('tx-form-validate-now');
+            await expect(validateNow).toBeEnabled({timeout: 5_000});
+            const runsBefore = await validateRuns(root);
+            const validated = page.waitForResponse((res) => res.request().method() === 'POST' && new URL(res.url()).pathname === `${API}/transactions/validate`, {timeout: 15_000});
+            await validateNow.click();
+            const response = await validated;
+            await waitForValidateRun(root, runsBefore);
+
+            // Premise, off the wire: the form sent its WITHDRAWAL of 100 today on this broker, and the
+            // server answers with one problem, the negative cash, attached to that create — index 0.
+            const sent = ((response.request().postDataJSON() as {creates?: SentCreate[]}).creates ?? []).map((create) => ({type: create.type, broker_id: create.broker_id, date: create.date, amount: Number(create.cash?.amount)}));
+            expect(sent, 'premise: the form validates its WITHDRAWAL of 100, today, on the broker').toEqual([{type: 'WITHDRAWAL', broker_id: broker.id, date: todayIso(), amount: -100}]);
+            const answer = (await response.json()) as ValidateAnswer;
+            expect(
+                (answer.issues ?? []).map(({operation, index, code}) => ({operation, index, code})),
+                'premise: one problem, the negative cash, attached to the form’s own create',
+            ).toEqual([{operation: 'create', index: 0, code: 'balanceCashNegative'}]);
+
+            // On screen the verdict is in: the warning banner names this test's broker.
+            const body = page.getByTestId('tx-form-body');
+            const banner = body.getByTestId('info-banner-warning');
+            await expect(banner).toBeVisible({timeout: 5_000});
+            await expect(banner).toContainText(broker.name);
+            await banner.scrollIntoViewIfNeeded();
+            const shot = testInfo.outputPath('V-38-form-after-validation.png');
+            await root.screenshot({path: shot});
+            await testInfo.attach('V-38 form after validation', {path: shot, contentType: 'image/png'});
+
+            // The subject, soft: the form and the editor are discarded whatever the verdict.
+            await expect.soft(body.getByTestId('tx-form-balance-issue'), 'the negative cash is listed among the balance problems').toHaveCount(1);
+            await expect.soft(body.getByTestId('tx-form-issue'), 'no field has a problem: none is listed among the field problems').toHaveCount(0);
+
+            await discardFormAndEditor(page);
+            expect(await readTransactions(page, {broker_id: broker.id}), 'nothing was saved: the broker holds no row').toEqual([]);
         });
     });
 });
@@ -691,7 +921,11 @@ test.describe('Transactions', () => {
         try {
             await tracker?.cleanup();
         } finally {
-            await deleteApiOwnedRows(page);
+            try {
+                await deleteApiOwnedRows(page);
+            } finally {
+                await deleteApiOwnedAssets(page);
+            }
         }
     });
 
@@ -738,6 +972,183 @@ test.describe('Transactions', () => {
             await expect(amountInput).toHaveValue('1234,');
             await amountInput.pressSequentially('56');
             await expect(amountInput).toHaveValue('1234,56');
+        });
+    });
+
+    // ===================================================================
+    // #47 — «Total amount / Unit price» in the single BUY / SELL form
+    // ===================================================================
+    // The form calculates the other value itself, on the spot: there is no response to wait for. What is polled below is
+    // the form catching up with the keystroke, not a round trip. The saved-trade (view mode) half is in the block of the
+    // disposable account, which owns a BUY.
+    test.describe('Total amount / Unit price (#47)', () => {
+        test('on Unit price, 83,40 for 12 units reads as 1000.8 in total; Total reads the same text as a total; an edited total gives the unit price back; nothing is committed', async ({page}) => {
+            // The asset is this test's own and the form is never saved: Apply is not even pressed.
+            const name = `E2E entry mode ${uniqueSuffix()}`;
+            await createOwnedAsset(page, name);
+            // A fresh load, so the asset catalogue (which carries the quote base the calculation reads) holds the asset just created.
+            await goToTransactions(page);
+
+            // An edge, armed before anything is typed: the whole test must not send a commit.
+            const commits: string[] = [];
+            page.on('request', (req) => {
+                if (req.method() === 'POST' && new URL(req.url()).pathname === `${API}/transactions/commit`) commits.push(req.url());
+            });
+
+            await openCreateFlow(page);
+            await pickBroker(page, OWNED_BROKER);
+            await pickAsset(page, name);
+            await page.getByTestId('tx-form-quantity').fill('12');
+
+            // A BUY single form: the selector is in the cash field, on the row of its label, and the number is read as the total by default.
+            const cashWrap = page.getByTestId('tx-form-cash-wrap');
+            const selector = cashWrap.getByTestId('tx-form-entry-mode');
+            const totalButton = page.getByTestId('tx-form-entry-mode-amount');
+            const unitPriceButton = page.getByTestId('tx-form-entry-mode-unit-price');
+            await expect(selector).toBeVisible({timeout: 5_000});
+            await expect(totalButton).toHaveAttribute('aria-pressed', 'true');
+
+            // The same field, read two ways: one input, no second price field.
+            const cashAmount = page.getByTestId('tx-form-cash-amount');
+            await expect(cashAmount).toBeVisible();
+            await expect(page.getByTestId('tx-form-unit-price')).toHaveCount(0);
+            // On the row of the label: above the amount, not under it.
+            const selectorBox = await selector.boundingBox();
+            const amountBox = await cashAmount.boundingBox();
+            expect(selectorBox && amountBox && selectorBox.y + selectorBox.height <= amountBox.y + 1, 'the selector is above the amount input').toBe(true);
+
+            // Switch to Unit price and type the number the way the locale writes it: 83,40 is a price, the total follows.
+            await unitPriceButton.click();
+            await expect(unitPriceButton).toHaveAttribute('aria-pressed', 'true');
+            await expect(totalButton).toHaveAttribute('aria-pressed', 'false');
+            await fillCashAmount(page, '83,40');
+            await expect(unitPriceButton, 'typing the number does not change how it is read').toHaveAttribute('aria-pressed', 'true');
+            const derived = page.getByTestId('tx-form-cash-derived');
+            await expect(derived).toHaveAttribute('data-mode', 'total', {timeout: 3_000});
+            await expect(derived).toHaveAttribute('data-value', '1000.8');
+
+            // Back to Total: the text of the input is the same one, now it is the total, and the form shows the unit price (83.4 / 12).
+            const written = await cashAmount.inputValue();
+            await totalButton.click();
+            await expect(totalButton).toHaveAttribute('aria-pressed', 'true');
+            await expect(cashAmount).toHaveValue(written);
+            await expect(derived).toHaveAttribute('data-mode', 'unit_price', {timeout: 3_000});
+            await expect(derived).toHaveAttribute('data-value', '6.95');
+
+            // Edit the total: 1000.9 / 12 is 83.408333333333 (12 decimals).
+            await fillCashAmount(page, '1000.9');
+            await expect(totalButton).toHaveAttribute('aria-pressed', 'true');
+            await expect(derived).toHaveAttribute('data-mode', 'unit_price');
+            await expect(derived).toHaveAttribute('data-value', '83.408333333333', {timeout: 3_000});
+
+            expect(commits, 'typing prices and amounts never commits anything').toEqual([]);
+        });
+
+        test('a bond quoted per 100: 1000 units at 98,5 are 985, and 985.5 over 1000 units is 98.55', async ({page}) => {
+            // The quote base travels from the asset's own row to the form: the same sum on base 1 would be 98 500.
+            const name = `E2E entry mode bond ${uniqueSuffix()}`;
+            await createOwnedAsset(page, name, 100);
+            await goToTransactions(page);
+
+            await openCreateFlow(page);
+            await pickBroker(page, OWNED_BROKER);
+            await pickAsset(page, name);
+            await page.getByTestId('tx-form-quantity').fill('1000');
+
+            await page.getByTestId('tx-form-entry-mode-unit-price').click();
+            await expect(page.getByTestId('tx-form-entry-mode-unit-price')).toHaveAttribute('aria-pressed', 'true');
+            await fillCashAmount(page, '98,5');
+            const derived = page.getByTestId('tx-form-cash-derived');
+            await expect(derived).toHaveAttribute('data-mode', 'total', {timeout: 3_000});
+            await expect(derived).toHaveAttribute('data-value', '985');
+
+            // Read the other way: a total of 985.5 over 1000 units is 98.55 per 100.
+            await page.getByTestId('tx-form-entry-mode-amount').click();
+            await expect(page.getByTestId('tx-form-entry-mode-amount')).toHaveAttribute('aria-pressed', 'true');
+            await fillCashAmount(page, '985.5');
+            await expect(derived).toHaveAttribute('data-mode', 'unit_price');
+            await expect(derived).toHaveAttribute('data-value', '98.55', {timeout: 3_000});
+        });
+    });
+
+    // ===================================================================
+    // D-P4 (W5-10) — a date before 1900: the forms warn, the bulk editor asks once at Save All
+    // ===================================================================
+    // These tests never commit (the one that saves such a row is in the owned-account block above, «Date before 1900 —
+    // saved»: a row of 1850 on a seeded broker would shift every other test's NAV): they prove the warning, the
+    // flag that says «this form does not ask itself» and the bulk editor's banner. The form opened from the page's «+» is
+    // the bulk editor's (`commitOnSave` false): it shows the banner without a confirm button and its Apply is not gated.
+    // The form that saves by itself and asks for its own confirmation (button `tx-form-pre-floor-confirm`) has no page
+    // that mounts it editable today, so that half is proved by the component test (TransactionFormModal.preFloor.test.ts).
+    test.describe('Date before 1900 (D-P4)', () => {
+        const OLD_DATE = '1850-05-01';
+        const OTHER_OLD_DATE = '1851-06-02';
+
+        /** No commit may leave the page during the test: an edge, armed before anything is typed. */
+        function watchCommits(page: Page): string[] {
+            const commits: string[] = [];
+            page.on('request', (req) => {
+                if (req.method() === 'POST' && new URL(req.url()).pathname === `${API}/transactions/commit`) commits.push(req.url());
+            });
+            return commits;
+        }
+
+        test('a date before 1900 typed in the form shows the warning; the form handed to the bulk editor does not ask and Apply stays open', async ({page}) => {
+            const commits = watchCommits(page);
+            await openCreateFlow(page);
+            await fillBuyTransaction(page, {broker: OWNED_BROKER, asset: ASSET_NAME, qty: '2'});
+            // A normal date first, proven: no warning for it.
+            await expect(page.getByTestId('tx-form-pre-floor')).toHaveCount(0);
+
+            await typeFormDate(page, OLD_DATE);
+
+            const banner = page.getByTestId('tx-form-pre-floor');
+            await expect(banner).toBeVisible({timeout: 3_000});
+            // This form only hands the row to the bulk editor, which asks once for all its rows: no pending answer, no button.
+            await expect(banner).toHaveAttribute('data-pending', 'false');
+            await expect(page.getByTestId('tx-form-pre-floor-confirm')).toHaveCount(0);
+            await expect(page.getByTestId('tx-form-save'), 'Apply is not gated by the form').toBeEnabled({timeout: 5_000});
+
+            // A date from 1900 on takes the warning away again.
+            await typeFormDate(page, todayIso());
+            await expect(banner).toBeHidden({timeout: 3_000});
+
+            expect(commits, 'typing a date never commits anything').toEqual([]);
+        });
+
+        test('two rows applied with dates before 1900: the bulk editor lists both, and Save All asks, cancel commits nothing', async ({page}) => {
+            const commits = watchCommits(page);
+            const dates = [OLD_DATE, OTHER_OLD_DATE];
+
+            for (const [index, date] of dates.entries()) {
+                if (index === 0) await openCreateFlow(page);
+                else {
+                    await page.getByTestId('tx-bulk-add-row').click();
+                    await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+                }
+                await fillBuyTransaction(page, {broker: OWNED_BROKER, asset: ASSET_NAME, qty: String(index + 1)});
+                await typeFormDate(page, date);
+                await clickApply(page);
+                await expect(page.getByTestId('tx-bulk-modal')).toBeVisible();
+            }
+
+            const banner = page.getByTestId('tx-bulk-pre-floor');
+            await expect(banner).toBeVisible({timeout: 5_000});
+            await expect(banner).toHaveAttribute('data-count', '2');
+            const lines = banner.getByTestId('tx-bulk-pre-floor-row');
+            await expect(lines).toHaveCount(2);
+            for (const date of dates) await expect(lines.and(page.locator(`[data-date="${date}"]`))).toHaveCount(1);
+
+            // Save All asks before it commits; «cancel» returns to the grid and the rows are still there.
+            const commitBtn = page.getByTestId('tx-bulk-commit');
+            await expect(commitBtn).toBeEnabled({timeout: 8_000});
+            await commitBtn.click();
+            const cancel = page.getByTestId('confirm-modal-cancel');
+            await expect(cancel).toBeVisible({timeout: 5_000});
+            await cancel.click();
+            await expect(cancel).toBeHidden({timeout: 5_000});
+            await expect(banner).toHaveAttribute('data-count', '2');
+            expect(commits, 'nothing was committed: the user did not confirm').toEqual([]);
         });
     });
 
@@ -1075,15 +1486,15 @@ test.describe('Transactions', () => {
             const qtyWrap = page.getByTestId('tx-form-quantity-wrap');
             await expect(qtyWrap.locator('text=(+)')).toBeVisible({timeout: 5_000});
 
-            // Enter negative value → border-color should have red hue (~25 in oklch)
+            // Enter negative value → border-color should be the danger role at 70%
             await qtyInput.fill('');
             await qtyInput.type('-5');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on BUY should have the effective red border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-danger) 70%, transparent)', 'Negative qty on BUY should have the effective red border color');
 
-            // Enter positive value → green hue (~163 in oklch)
+            // Enter positive value → the success role at 70%
             await qtyInput.fill('');
             await qtyInput.type('5');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on BUY should have the effective green border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-success) 70%, transparent)', 'Positive qty on BUY should have the effective green border color');
         });
 
         test('SELL qty positive → green border (auto-negated on save)', async ({page}) => {
@@ -1105,12 +1516,12 @@ test.describe('Transactions', () => {
             // Enter positive → green (auto-negated = correct)
             await qtyInput.fill('');
             await qtyInput.type('10');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on SELL should have the effective green border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-success) 70%, transparent)', 'Positive qty on SELL should have the effective green border color');
 
             // Enter negative → red (double-negative = wrong)
             await qtyInput.fill('');
             await qtyInput.type('-10');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on SELL should have the effective red border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-danger) 70%, transparent)', 'Negative qty on SELL should have the effective red border color');
         });
     });
 
@@ -1119,6 +1530,8 @@ test.describe('Transactions', () => {
     // ===================================================================
     test.describe('BulkModal validation issues', () => {
         test('invalid TX in BulkModal shows issues banner with clickable error', async ({page}) => {
+            // Under load the create flow alone can use the default 30 s before any check: the budget of its neighbours (W-B45).
+            test.setTimeout(60_000);
             await openCreateFlow(page);
 
             // Use ADJUSTMENT type with qty>0 and cost_basis_mode=auto

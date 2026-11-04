@@ -45,8 +45,8 @@ The provider supports 4 currencies via JustETF's chart API (`load_chart(isin, cu
 - Searches against a **cached ETF list** (`load_overview()` DataFrame).
 - Search is performed in-memory across: `name`, `ticker`, `wkn`, and ISIN (index).
 - Case-insensitive string matching using pandas vectorized operations.
-- **Multi-currency**: emits 4 results per ETF match (EUR/USD/CHF/GBP) with flag emojis.
-- Fund's native currency marked with 👑 (e.g., `"🇺🇸👑 iShares Core MSCI World"` for a USD-denominated fund).
+- **Multi-currency**: emits one result per ETF match in each of the 4 currencies (EUR/USD/CHF/GBP), with flag emojis; only in the user's `preferred_currency` when it is one of them. The setting is the user's own (`scope=user`, default `all`), read with `self.settings.get("preferred_currency")` in `search()` only, after the cached ETF list: prices and history never depend on it ([Plugin Settings](../../architecture/patterns/plugin_settings.md#shipped-plugins)).
+- Fund's native currency marked with 👑 (e.g., `"🇺🇸👑 iShares Core MSCI World"` for a USD-denominated fund); with a preferred currency, 👑 appears only on the funds denominated in it.
 - All results have `identifier_type: ISIN` and `type: "ETF"`.
 
 ### 📋 Metadata (`fetch_asset_metadata`)
@@ -90,9 +90,9 @@ During sync, the provider parses dividend data from `load_chart()` and generates
 
 All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are populated lazily and cleared on server restart. Live gettex quotes are not TTL-cached: they sit in `_live_quote_store`, refreshed by the feed threads.
 
-!!! info "Pre-warm"
+!!! info "No pre-warm of the ETF list"
 
-    The ETF list cache is warmed at startup via `_prewarm_provider_caches()` in `main.py`. This makes the first search instant rather than waiting ~2-3 seconds for `load_overview()`.
+    The `provider-prewarm` startup step (`_prewarm_provider_caches()` in `backend/app/services/platform/app_lifespan.py`) only instantiates each registered asset provider, and `JustETFProvider` does no work when constructed. The ETF list is loaded by the first `search()` (`etf_list()` → `load_overview()`), which waits for the download; later searches read it from the cache until its 1-hour TTL expires.
 
 ---
 
@@ -110,6 +110,11 @@ All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are 
 - **ISIN only**: Does not accept tickers — use Yahoo Finance for ticker-based search.
 - **Live price in EUR only**: the gettex feed is EUR; USD/CHF/GBP current values are the daily `latestQuote`, converted by justETF.
 - **Scraping fragility**: The library scrapes justetf.com HTML. Site layout changes may break it.
+- **Too many requests**: `justetf-scraping` has no error class of its own and reports an HTTP 429
+  only in its message («Got status 429…»). `raise_if_rate_limited()`, first in the handlers of
+  current value, history, search and metadata, turns it into `AssetRateLimitedError`; metadata no
+  longer answers `None` for it. No `Retry-After` reaches the plugin, so the pause is the core's own
+  ([Provider Pauses](architecture.md#provider-pauses)).
 - **Blocking I/O**: All justetf-scraping calls are synchronous — wrapped in `asyncio.to_thread()` to avoid blocking the event loop.
 
 ---

@@ -16,7 +16,7 @@
 <script lang="ts">
     import type {ComponentProps} from 'svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import ReportSetCard from '$lib/components/transactions/import/ReportSetCard.svelte';
+    import ReportSetCard from '$lib/features/transactions/import/ReportSetCard.svelte';
 
     interface Props {
         onRequestClose?: () => void;

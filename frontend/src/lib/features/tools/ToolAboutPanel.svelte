@@ -234,18 +234,18 @@
     });
 </script>
 
-<section class="mt-4 min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" data-testid="tool-about-panel" data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
+<section class="mt-4 min-w-0 space-y-4 rounded-xl border border-lf-subtle bg-lf-card p-4 text-lf-primary" data-testid="tool-about-panel" data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
     <header class="space-y-1">
         <div class="flex min-w-0 items-center justify-between gap-3">
-            <h4 class="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
-                <Wrench size={18} aria-hidden="true" class="shrink-0 text-libre-green dark:text-green-400" />
+            <h4 class="flex items-center gap-2 font-semibold text-lf-primary">
+                <Wrench size={18} aria-hidden="true" class="shrink-0 text-lf-link" />
                 {$t('tools.title', {default: 'Tools'})}
             </h4>
             <button
                 type="button"
                 onclick={() => refreshCatalog(true)}
                 disabled={!active || !account.authenticated || catalogPending}
-                class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+                class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-lf-input px-3 py-2 text-sm text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={$t('common.refresh')}
                 data-testid="tool-about-refresh"
             >
@@ -253,31 +253,31 @@
                 <span class="hidden sm:inline">{$t('common.refresh')}</span>
             </button>
         </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400">
+        <p class="text-xs text-lf-muted">
             {$t('tools.about.readOnly', {default: 'Read-only catalogue and diagnostics. No calculations, probes or repairs are run.'})}
         </p>
     </header>
 
     {#if !active}
-        <p class="text-sm text-gray-500 dark:text-gray-400" role="status" data-testid="tool-about-inactive">
+        <p class="text-sm text-lf-muted" role="status" data-testid="tool-about-inactive">
             {$t('tools.about.inactive', {default: 'Open Plugin diagnostics to load tool metadata.'})}
         </p>
     {:else if !account.authenticated}
-        <p class="text-sm text-gray-500 dark:text-gray-400" role="status" data-testid="tools-auth-required">{$t('tools.authRequired', {default: 'Sign in to use tools.'})}</p>
+        <p class="text-sm text-lf-muted" role="status" data-testid="tools-auth-required">{$t('tools.authRequired', {default: 'Sign in to use tools.'})}</p>
     {:else}
         {#if catalogPending}
-            <p class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300" role="status" data-testid="tool-about-catalog-loading">
+            <p class="flex items-center gap-2 text-sm text-lf-secondary" role="status" data-testid="tool-about-catalog-loading">
                 <LoaderCircle size={18} class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
                 {$t('common.loading')}
             </p>
         {:else if catalogError && catalogErrorCopy}
-            <div class="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="tool-about-catalog-error" data-error-code={catalogError.code}>
+            <div class="space-y-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="tool-about-catalog-error" data-error-code={catalogError.code}>
                 <p>{$t(catalogErrorCopy.key, {default: catalogErrorCopy.fallback})}</p>
                 <button type="button" onclick={() => refreshCatalog(true)} class="rounded border border-current px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2" data-testid="tool-about-catalog-retry">{$t('common.retry')}</button>
             </div>
         {:else if catalog}
             {#if catalog.unavailable.length > 0 || incompatibleCount > 0}
-                <aside class="space-y-1 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" role="status" data-testid="tool-about-degraded">
+                <aside class="space-y-1 rounded-lg bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" role="status" data-testid="tool-about-degraded">
                     <AlertTriangle size={16} aria-hidden="true" />
                     {#if catalog.unavailable.length > 0}
                         <p>{$t('tools.catalog.degraded', {default: 'Unavailable backend entries: {count}.', values: {count: catalog.unavailable.length}})}</p>
@@ -288,34 +288,34 @@
                 </aside>
             {/if}
             {#if entries.length === 0}
-                <p class="text-sm text-gray-500 dark:text-gray-400" role="status" data-testid="tool-about-catalog-empty">{$t('tools.catalog.emptyTitle', {default: 'No tools available'})}</p>
+                <p class="text-sm text-lf-muted" role="status" data-testid="tool-about-catalog-empty">{$t('tools.catalog.emptyTitle', {default: 'No tools available'})}</p>
             {:else}
                 <ul class="space-y-3" data-testid="tool-about-catalog">
                     {#each entries as entry (entry.descriptor.tool_code)}
                         {@const item = entry.descriptor}
                         {@const documentation = toolDocumentationPath(item)}
-                        <li class="min-w-0 rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid={`tool-about-entry-${item.tool_code}`}>
+                        <li class="min-w-0 rounded-lg border border-lf-subtle p-3" data-testid={`tool-about-entry-${item.tool_code}`}>
                             <div class="flex flex-wrap items-start justify-between gap-2">
                                 <div class="min-w-0">
-                                    <h5 class="break-words text-sm font-semibold text-gray-900 dark:text-gray-100">{toolName(item, $t)}</h5>
-                                    <p class="mt-1 break-words text-xs text-gray-600 dark:text-gray-400">{toolDescription(item, $t)}</p>
+                                    <h5 class="break-words text-sm font-semibold text-lf-primary">{toolName(item, $t)}</h5>
+                                    <p class="mt-1 break-words text-xs text-lf-secondary">{toolDescription(item, $t)}</p>
                                 </div>
                                 {#if documentation}
                                     <DocsLink path={documentation} label={$t('common.documentation')} icon="book" size={18} testId={`tool-about-docs-${item.tool_code}`} />
                                 {:else}
-                                    <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">{$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}</span>
+                                    <span class="text-xs text-lf-muted" data-testid="tool-docs-unavailable">{$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}</span>
                                 {/if}
                             </div>
-                            <p class="mt-2 break-words text-xs text-gray-500 dark:text-gray-400">
+                            <p class="mt-2 break-words text-xs text-lf-muted">
                                 <code>{item.tool_code}</code> · {$t('tools.version', {default: 'Version'})}: {item.contract_version}
                             </p>
                             {#if entry.resolution.status === 'ready'}
-                                <p class="mt-2 text-xs text-green-800 dark:text-green-300" data-testid="tool-about-ui-compatible">
+                                <p class="mt-2 text-xs text-lf-success" data-testid="tool-about-ui-compatible">
                                     {$t('tools.about.interfaceRegistered', {default: 'Compatible interface registered in this build.'})}
                                 </p>
                             {:else}
                                 {@const message = unavailableMessage(entry.resolution.reason)}
-                                <p class="mt-2 text-xs text-amber-800 dark:text-amber-300" data-testid="tool-about-ui-unavailable" data-reason={entry.resolution.reason}>
+                                <p class="mt-2 text-xs text-lf-warning" data-testid="tool-about-ui-unavailable" data-reason={entry.resolution.reason}>
                                     {$t(message.key, {default: message.fallback})}
                                 </p>
                             {/if}
@@ -324,7 +324,7 @@
                 </ul>
             {/if}
             {#if catalog.unavailable.length > 0}
-                <div class="text-xs text-gray-600 dark:text-gray-400" data-testid="tool-about-unavailable-entries">
+                <div class="text-xs text-lf-secondary" data-testid="tool-about-unavailable-entries">
                     <p class="font-medium">{$t('tools.catalog.unavailableEntries', {default: 'Unavailable backend entries'})}</p>
                     <ul class="mt-1 space-y-1">
                         {#each catalog.unavailable as item}
@@ -335,11 +335,8 @@
             {/if}
         {/if}
 
-        <details open={diagnosticsOpen} ontoggle={toggleDiagnostics} class="border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="tool-about-diagnostics">
-            <summary
-                class="flex cursor-pointer list-none items-center justify-between gap-2 rounded text-sm font-medium text-gray-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-libre-green dark:text-gray-200 dark:focus-visible:outline-green-400"
-                data-testid="tool-about-diagnostics-toggle"
-            >
+        <details open={diagnosticsOpen} ontoggle={toggleDiagnostics} class="border-t border-lf-subtle pt-3" data-testid="tool-about-diagnostics">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-2 rounded text-sm font-medium text-lf-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lf-focus" data-testid="tool-about-diagnostics-toggle">
                 {$t('tools.diagnostics.title', {default: 'Tool diagnostics'})}
                 <ChevronDown size={16} aria-hidden="true" class={`shrink-0 transition-transform ${diagnosticsOpen ? 'rotate-180' : ''}`} />
             </summary>

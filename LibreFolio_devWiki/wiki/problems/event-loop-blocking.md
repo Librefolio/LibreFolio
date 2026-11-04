@@ -34,7 +34,7 @@ async def get_current_value(self, identifier: str, ...):
 ```
 
 **2. Thread isolation at framework level ([[F-060]]):**
-`_run_provider_in_thread()` in `asset_source.py` runs every provider call in a dedicated thread with its own event loop — providers can use sync I/O directly without `asyncio.to_thread()`.
+`_run_provider_in_thread()` in `assets/core.py` runs every provider call in a dedicated thread with its own event loop — providers can use sync I/O directly without `asyncio.to_thread()`.
 
 ## Prevention
 See [[concepts/async-io-rule]] — the rule codified from this problem.
@@ -49,6 +49,7 @@ Any new provider or endpoint touching external HTTP must follow the rule.
 
 | Role | Path |
 |------|------|
-| Thread isolation fix | `backend/app/services/asset_source.py` |
+| Thread isolation fix | `backend/app/services/assets/core.py` |
 | yfinance provider (example) | `backend/app/services/asset_source_providers/yahoo_finance/plugin.py` |
-| FastAPI main (sync endpoints) | `backend/app/main.py` |
+| Static site (sync endpoints) | `backend/app/services/platform/static_site.py` |
+| BRIM file-store gate (no sync `brim_provider` call in an `async def` handler) | `backend/test_scripts/test_utilities/test_event_loop_brim_io_gate.py` |

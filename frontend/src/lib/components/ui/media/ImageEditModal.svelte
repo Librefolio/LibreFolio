@@ -17,6 +17,7 @@
     import ImageCropper from './ImageCropper.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/files/imageCrop';
+    import type {UploadScope} from '$lib/types';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // Props
@@ -27,6 +28,8 @@
     export let customConfig: Partial<{aspectRatio: number; outputWidth: number | null; outputHeight: number | null; outputQuality: number}> | null = null;
     export let allowPresetChange: boolean = true;
     export let uploadOnComplete: boolean = true;
+    /** Who sees the uploaded image: common for the image pickers (icons, logos, photos, avatars); the Files page passes personal */
+    export let scope: UploadScope = 'common';
 
     type _DispatchEvents = {
         complete: {url: string | null; file: File};
@@ -306,7 +309,7 @@
                 return;
             }
 
-            const uploadedUrl = await uploadFile(croppedFile, `Cropped image (${currentPreset})`);
+            const uploadedUrl = await uploadFile(croppedFile, `Cropped image (${currentPreset})`, scope);
             cleanup();
             dispatch('complete', {url: uploadedUrl, file: croppedFile});
         } catch (err) {
@@ -514,23 +517,15 @@
         align-items: center;
         justify-content: space-between;
         padding: 0.625rem 1rem;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--lf-border-subtle);
         flex-shrink: 0;
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: #374151;
     }
 
     .modal-title {
         font-size: 1rem;
         font-weight: 600;
-        color: #111827;
+        color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    :global(.dark) .modal-title {
-        color: #f3f4f6;
     }
 
     .header-actions {
@@ -548,29 +543,24 @@
         border-radius: 0.375rem;
         border: none;
         background: transparent;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .header-btn:hover {
-        background: #f3f4f6;
-        color: #374151;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-secondary);
     }
 
     .header-btn.reset {
-        background: rgba(245, 158, 11, 0.1);
-        color: #f59e0b;
+        background: var(--lf-warning-soft);
+        color: var(--lf-warning);
     }
 
     .header-btn.reset:hover {
-        background: rgba(245, 158, 11, 0.2);
-        color: #d97706;
-    }
-
-    :global(.dark) .header-btn:hover {
-        background: #374151;
-        color: #d1d5db;
+        background: var(--lf-warning-line);
+        color: var(--lf-warning-on-soft);
     }
 
     /* Body */
@@ -601,57 +591,45 @@
         flex: 1;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-right: none;
         border-radius: 0.375rem 0 0 0.375rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         outline: none;
     }
 
+    .filename-input::placeholder {
+        color: var(--lf-text-placeholder);
+    }
+
     .filename-input:focus {
-        border-color: #1a4031;
-    }
-
-    :global(.dark) .filename-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
-    }
-
-    :global(.dark) .filename-input:focus {
-        border-color: #10b981;
+        border-color: var(--lf-focus);
     }
 
     .format-select {
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-radius: 0 0.375rem 0.375rem 0;
-        background: #f3f4f6;
-        color: #374151;
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-primary);
         cursor: pointer;
         outline: none;
     }
 
-    :global(.dark) .format-select {
-        background: #4b5563;
-        border-color: #4b5563;
-        color: #f3f4f6;
+    .format-select:focus {
+        border-color: var(--lf-focus);
     }
 
     /* Quality spinner (inline with filename) */
     .quality-spinner {
         display: flex;
         align-items: center;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.375rem;
         overflow: hidden;
         flex-shrink: 0;
-    }
-
-    :global(.dark) .quality-spinner {
-        border-color: #4b5563;
     }
 
     .spin-btn {
@@ -661,8 +639,8 @@
         width: 26px;
         height: 26px;
         border: none;
-        background: #f3f4f6;
-        color: #374151;
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-secondary);
         cursor: pointer;
         font-size: 0.8125rem;
         font-weight: 600;
@@ -670,29 +648,16 @@
     }
 
     .spin-btn:hover {
-        background: #e5e7eb;
-    }
-
-    :global(.dark) .spin-btn {
-        background: #374151;
-        color: #d1d5db;
-    }
-
-    :global(.dark) .spin-btn:hover {
-        background: #4b5563;
+        background: var(--lf-surface-neutral);
     }
 
     .quality-value {
         padding: 0 0.375rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        color: #374151;
+        color: var(--lf-text-primary);
         min-width: 32px;
         text-align: center;
-    }
-
-    :global(.dark) .quality-value {
-        color: #e5e7eb;
     }
 
     /* Cropper section with eye toggle on LEFT */
@@ -708,13 +673,9 @@
         align-items: center;
         justify-content: center;
         border-radius: 0.5rem;
-        background: rgb(255 255 255 / 0.55);
-        color: var(--color-libre-green, #16a34a);
+        background: color-mix(in oklab, var(--lf-surface-card) 55%, transparent);
+        color: var(--lf-link);
         cursor: progress;
-    }
-
-    :global(.dark) .cropper-guard {
-        background: rgb(15 23 42 / 0.55);
     }
 
     .filename-input:disabled,
@@ -742,20 +703,20 @@
         height: 30px;
         border: none;
         border-radius: 0.25rem;
-        background: rgba(0, 0, 0, 0.5);
-        color: rgba(255, 255, 255, 0.7);
+        background: color-mix(in oklab, var(--lf-surface-overlay) 80%, transparent);
+        color: color-mix(in oklab, var(--lf-on-overlay) 70%, transparent);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .ellipse-toggle:hover {
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
+        background: var(--lf-surface-overlay);
+        color: var(--lf-on-overlay);
     }
 
     .ellipse-toggle.active {
-        background: rgba(16, 185, 129, 0.8);
-        color: white;
+        background: color-mix(in oklab, var(--lf-checked) 80%, transparent);
+        color: var(--lf-on-checked);
     }
 
     /* ========= BOTTOM PANEL (2 columns) ========= */
@@ -764,12 +725,8 @@
         grid-template-columns: 1fr 1fr;
         gap: 0.5rem 1rem;
         padding: 0.625rem 0.75rem;
-        background: #f3f4f6;
+        background: var(--lf-surface-panel);
         border-radius: 0.5rem;
-    }
-
-    :global(.dark) .bottom-panel {
-        background: #1a2332;
     }
 
     .panel-col {
@@ -788,12 +745,8 @@
     .panel-label {
         font-size: 0.6875rem;
         font-weight: 500;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         min-width: 48px;
-    }
-
-    :global(.dark) .panel-label {
-        color: #9ca3af;
     }
 
     /* Preset buttons */
@@ -809,45 +762,25 @@
         padding: 0.1875rem 0.5rem;
         font-size: 0.625rem;
         font-weight: 500;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.25rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .preset-btn:hover,
     .aspect-btn:hover {
-        border-color: #1a4031;
-        color: #1a4031;
+        border-color: var(--lf-focus);
+        color: var(--lf-link);
     }
 
     .preset-btn.active,
     .aspect-btn.active {
-        background: #1a4031;
-        border-color: #1a4031;
-        color: white;
-    }
-
-    :global(.dark) .preset-btn,
-    :global(.dark) .aspect-btn {
-        background: #374151;
-        border-color: #4b5563;
-        color: #d1d5db;
-    }
-
-    :global(.dark) .preset-btn:hover,
-    :global(.dark) .aspect-btn:hover {
-        border-color: #10b981;
-        color: #10b981;
-    }
-
-    :global(.dark) .preset-btn.active,
-    :global(.dark) .aspect-btn.active {
-        background: #10b981;
-        border-color: #10b981;
-        color: white;
+        background: var(--lf-checked);
+        border-color: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     /* Dimensions */
@@ -862,40 +795,30 @@
         padding: 0.1875rem 0.25rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.25rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         text-align: center;
         outline: none;
     }
 
     .dim-input:focus {
-        border-color: #1a4031;
-    }
-
-    :global(.dark) .dim-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
-    }
-
-    :global(.dark) .dim-input:focus {
-        border-color: #10b981;
+        border-color: var(--lf-focus);
     }
 
     .dim-sep {
-        color: #9ca3af;
+        color: var(--lf-text-muted);
         font-size: 0.6875rem;
     }
 
     .dim-unit {
         font-size: 0.625rem;
-        color: #9ca3af;
+        color: var(--lf-text-muted);
     }
 
     :global(.lock-icon) {
-        color: #9ca3af;
+        color: var(--lf-text-muted);
         margin-left: 0.125rem;
     }
 
@@ -913,7 +836,7 @@
 
     .scale-x {
         font-size: 0.625rem;
-        color: #9ca3af;
+        color: var(--lf-text-muted);
     }
 
     .scale-input {
@@ -921,22 +844,16 @@
         padding: 0.1875rem 0.25rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.25rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         text-align: center;
         outline: none;
     }
 
     .scale-input:focus {
-        border-color: #1a4031;
-    }
-
-    :global(.dark) .scale-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
+        border-color: var(--lf-focus);
     }
 
     /* Info values (right column) */
@@ -947,26 +864,17 @@
     .info-value {
         font-size: 0.6875rem;
         font-family: monospace;
-        color: #4b5563;
-    }
-
-    :global(.dark) .info-value {
-        color: #9ca3af;
+        color: var(--lf-text-secondary);
     }
 
     /* Error */
     .error-message {
         padding: 0.5rem 0.75rem;
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
+        background-color: var(--lf-danger-soft);
+        border: 1px solid var(--lf-danger-line);
         border-radius: 0.375rem;
-        color: #dc2626;
+        color: var(--lf-danger-on-soft);
         font-size: 0.8125rem;
-    }
-
-    :global(.dark) .error-message {
-        background-color: rgba(220, 38, 38, 0.1);
-        border-color: rgba(220, 38, 38, 0.3);
     }
 
     /* Footer */
@@ -975,14 +883,9 @@
         justify-content: flex-end;
         gap: 0.5rem;
         padding: 0.625rem 1rem;
-        border-top: 1px solid #e5e7eb;
-        background: #f9fafb;
+        border-top: 1px solid var(--lf-border-subtle);
+        background: var(--lf-surface-panel);
         flex-shrink: 0;
-    }
-
-    :global(.dark) .modal-footer {
-        background: #111827;
-        border-top-color: #374151;
     }
 
     .btn {
@@ -1004,38 +907,23 @@
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: #143326;
-    }
-
-    :global(.dark) .btn-primary {
-        background: #10b981;
-    }
-
-    :global(.dark) .btn-primary:hover:not(:disabled) {
-        background: #059669;
+        background: var(--lf-action-hover);
     }
 
     .btn-secondary {
-        background: #e5e7eb;
-        color: #374151;
+        background: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
+        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: #d1d5db;
-    }
-
-    :global(.dark) .btn-secondary {
-        background: #374151;
-        color: #d1d5db;
-    }
-
-    :global(.dark) .btn-secondary:hover:not(:disabled) {
-        background: #4b5563;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     :global(.animate-spin) {
@@ -1053,15 +941,10 @@
 
     /* Confirmation Dialog — backdrop handled by ModalBase */
     .confirm-dialog {
-        background: white;
+        background: var(--lf-surface-card);
         border-radius: 0.75rem;
         padding: 1.5rem;
         width: 100%;
-    }
-
-    :global(.dark) .confirm-dialog {
-        background: #1f2937;
-        border: 1px solid #374151;
     }
 
     .confirm-header {
@@ -1079,21 +962,13 @@
         margin: 0;
         font-size: 1rem;
         font-weight: 600;
-        color: #d97706;
-    }
-
-    :global(.dark) .confirm-header h3 {
-        color: #fbbf24;
+        color: var(--lf-warning);
     }
 
     .confirm-message {
-        color: #6b7280;
+        color: var(--lf-text-muted);
         margin-bottom: 1.5rem;
         line-height: 1.5;
-    }
-
-    :global(.dark) .confirm-message {
-        color: #9ca3af;
     }
 
     .confirm-actions {
@@ -1103,13 +978,13 @@
     }
 
     .btn-warning {
-        background: #f59e0b;
-        color: white;
+        background: var(--lf-warning);
+        color: var(--lf-on-status);
         border: none;
     }
 
     .btn-warning:hover {
-        background: #d97706;
+        background: var(--lf-warning-hover);
     }
 
     /* Mobile: single column */

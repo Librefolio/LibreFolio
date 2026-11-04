@@ -9,6 +9,9 @@
     import {getDocumentScrollY} from '$lib/utils/layout/headerScroll';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {connectionSecurity} from '$lib/stores/app/connectionSecurityStore';
+    import {auth} from '$lib/stores/app/auth';
+    import {securityChecks} from '$lib/features/settings/security/securityChecks.svelte';
+    import {donationsVisible} from '$lib/features/support/donations.svelte';
 
     type ScrollState = 'visible' | 'hidden' | 'pinned';
 
@@ -21,6 +24,13 @@
     }
 
     let {onToggleSidebar = () => {}, sidebarOpen = false, routeKey = '', keepVisible = false, guideActive = false}: Props = $props();
+
+    // On a phone the burger stands for the sidebar's connection line: an insecure connection (plan 36) or an
+    // administrator's security warnings (N69-1) mark it, the worse first. The sidebar's line loads the checks.
+    const insecure = $derived($connectionSecurity.level === 'insecure');
+    const menuAttention = $derived($auth.user?.is_superuser === true ? securityChecks.attentionCount : 0);
+    const menuDot = $derived(insecure || (menuAttention > 0 && securityChecks.attentionSeverity === 'error') ? 'error' : menuAttention > 0 ? 'warning' : null);
+    const menuLabel = $derived([$_('nav.toggleMenu'), insecure ? $_('connectionSecurity.level.insecure') : null, menuAttention > 0 ? $_('connectionSecurity.attention', {values: {count: menuAttention}}) : null].filter(Boolean).join(' — '));
 
     const HIDE_SCROLL_THRESHOLD = 8;
     const SHOW_SCROLL_THRESHOLD = 4;
@@ -123,8 +133,22 @@
         scheduleScrollFrame();
     }
 
+    /**
+     * Keyboard focus inside the header pins it. The focus a mouse click leaves on a button does not (Chrome keeps it
+     * there): after a click on the theme toggle the header must still hide on scroll. An engine that cannot read
+     * `:focus-visible` keeps the old rule, any focus.
+     */
+    function focusPinsHeader(element: unknown): boolean {
+        if (!(element instanceof Element) || headerRef?.contains(element) !== true) return false;
+        try {
+            return element.matches(':focus-visible');
+        } catch {
+            return true;
+        }
+    }
+
     function handleFocusIn(event: FocusEvent) {
-        if (event.target instanceof Element && headerRef?.contains(event.target)) {
+        if (focusPinsHeader(event.target)) {
             focusPinned = true;
             syncScrollContext();
         }
@@ -134,8 +158,7 @@
         cancelFocusRecheckFrame();
         focusRecheckFrame = requestAnimationFrame(() => {
             focusRecheckFrame = null;
-            const activeElement = document.activeElement;
-            const nextFocusPinned = activeElement instanceof Element && headerRef?.contains(activeElement) === true;
+            const nextFocusPinned = focusPinsHeader(document.activeElement);
             if (nextFocusPinned !== focusPinned) {
                 focusPinned = nextFocusPinned;
                 syncScrollContext();
@@ -211,7 +234,7 @@
 
 <header
     bind:this={headerRef}
-    class={`sticky top-0 z-30 bg-libre-beige dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-4 py-3 safe-top transition-transform duration-200 motion-reduce:transition-none ${scrollState === 'hidden' ? '-translate-y-full' : 'translate-y-0'}`}
+    class={`sticky top-0 z-30 bg-lf-header text-lf-primary border-b border-lf-subtle px-4 py-3 safe-top transition-transform duration-200 motion-reduce:transition-none ${scrollState === 'hidden' ? '-translate-y-full' : 'translate-y-0'}`}
     data-testid="app-header"
     data-scroll-state={scrollState}
     data-menu-open={helpMenuOpen || languageMenuOpen ? 'true' : 'false'}
@@ -222,27 +245,32 @@
     data-guide-active={guideActive ? 'true' : 'false'}
 >
     <div class="flex items-center justify-between">
-        <!-- The sidebar's connection line hides behind the burger on a phone: an insecure level marks it (plan 36). -->
-        <button
-            aria-label={$connectionSecurity.level === 'insecure' ? `Toggle menu — ${$_('connectionSecurity.level.insecure')}` : 'Toggle menu'}
-            class="relative lg:hidden p-2 rounded-lg transition-colors"
-            data-testid="mobile-menu-toggle"
-            use:guideAnchor={'nav.toggle.mobile'}
-            onclick={onToggleSidebar}
-        >
-            <Menu class="text-libre-dark dark:text-gray-200" size={24} />
-            {#if $connectionSecurity.level === 'insecure'}
-                <span class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-libre-beige dark:ring-slate-900" data-testid="mobile-menu-security-dot" aria-hidden="true"></span>
+        <!-- The sidebar's connection line hides behind the burger on a phone: an insecure level, or an administrator's
+             security warnings, mark it (plan 36, N69-1). -->
+        <button aria-label={menuLabel} class="relative lg:hidden p-2 rounded-lg transition-colors hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" data-testid="mobile-menu-toggle" use:guideAnchor={'nav.toggle.mobile'} onclick={onToggleSidebar}>
+            <Menu class="text-lf-primary" size={24} />
+            {#if menuDot}
+                <span class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full ring-2 ring-lf-header {menuDot === 'error' ? 'bg-lf-danger' : 'bg-lf-warning'}" data-testid="mobile-menu-security-dot" data-severity={menuDot} aria-hidden="true"></span>
             {/if}
         </button>
 
         <div class="hidden lg:block"></div>
 
         <div class="flex items-center space-x-2">
-            <a href="https://www.buymeacoffee.com/librefolio" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-amber-600 dark:text-amber-400" title={$_('help.buyMeACoffee')}>
-                <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
-                <Coffee size={20} class="flex-shrink-0" />
-            </a>
+            <!-- F05 (workstream A): only once the server said self-hosted -->
+            {#if donationsVisible()}
+                <a
+                    href="https://www.buymeacoffee.com/librefolio"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-lf-hover transition-colors text-lf-donate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                    data-testid="header-donate-link"
+                    title={$_('help.buyMeACoffee')}
+                >
+                    <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
+                    <Coffee size={20} class="flex-shrink-0" />
+                </a>
+            {/if}
             <PrivacyToggle />
             <ThemeToggle />
             <LanguageSelector onOpenChange={handleLanguageOpenChange} />

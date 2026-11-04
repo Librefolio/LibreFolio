@@ -7,6 +7,8 @@
  * - Bug 10: Readonly broker "To" side shows static text (not dropdown)
  * - Bug 13: Hidden broker shows lock icon + name + "not accessible" message
  * - Enum filter defaults: start deselected (no filter active)
+ * - V-23:   Bulk editor on a clone of [Asym-c] names the VIEWER-only broker in its broker cell and in the
+ *           access refusal, which points at the refused row (1b)
  *
  * Prerequisites: backend test mode (port 6041), mock data populated
  * with asymmetric broker access pairs (Asym-a through Asym-d).
@@ -20,6 +22,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
+import {canEdit, listBrokers, seededPair} from '../fixtures/owned-pair';
 
 // 45 s: login and the 20 s transactions-page gate share this budget; the old 15 s could not even fit the gate under load.
 test.setTimeout(45_000);
@@ -183,4 +186,94 @@ test.describe('Transaction Broker Access Visibility', () => {
     // TODO: Add test once DataTableColumnFilter has data-testid on the trigger button.
     // The filter opens via a header button that currently lacks a testid,
     // making it hard to locate reliably across i18n and column reordering.
+});
+
+// ---------------------------------------------------------------------------
+// V-23 — a broker the user only views, inside the bulk editor
+// ---------------------------------------------------------------------------
+//
+// The seeded pair [Asym-c] sends MSFT from a broker TEST_USER owns to one it only views (DEGIRO). The toolbar's
+// Clone asks nothing about access, so it opens the bulk editor on a copy of the pair: one grid row, the sending
+// half visible as row 1a, the receiving half riding behind it as row 1b. Validation refuses the copy — TEST_USER
+// cannot write on the receiving broker — and the editor must say so about the refused row, naming the broker:
+// the grid's broker cell names it (not "—"), the refusal points at row 1b (not the sending 1a), and its message
+// names it (not "Broker #<id>").
+//
+// Read-only on the seed: the pair is found through the API by its marker and checked, never modified; the copy
+// is never saved — the editor is closed and the copy discarded at the end.
+
+/** Open the transactions table narrowed to these ids — a filter, so flat mode — and wait for each of their rows. */
+async function goToRows(page: Page, ids: number[]) {
+    await navigateTo(page, `/transactions?id_min=${Math.min(...ids)}&id_max=${Math.max(...ids)}`);
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    for (const id of ids) {
+        await expect(page.getByTestId('tx-table').locator(`tbody tr[data-row-id="tx-${id}"]`)).toBeVisible({timeout: 15_000});
+    }
+}
+
+/** Where a click on the editor's close landed: both ends are states, so a poll tells them apart. */
+async function closeOutcome(page: Page): Promise<'asks to discard' | 'closed' | 'closing'> {
+    if (await page.getByTestId('confirm-modal-confirm').isVisible()) return 'asks to discard';
+    if (await page.getByTestId('tx-bulk-modal').isHidden()) return 'closed';
+    return 'closing';
+}
+
+/** Close the bulk editor without saving: a copy is unsaved work, so it may ask to discard it first. */
+async function discardBulkEditor(page: Page) {
+    await page.getByTestId('tx-bulk-close').click();
+    await expect.poll(() => closeOutcome(page), {timeout: 5_000, message: 'closing the editor either asks to discard the copy or closes it'}).not.toBe('closing');
+    if ((await closeOutcome(page)) === 'asks to discard') await page.getByTestId('confirm-modal-confirm').click();
+    await expect(page.getByTestId('tx-bulk-modal')).toBeHidden({timeout: 5_000});
+}
+
+test.describe('V-23 — Bulk editor and a broker the user only views', () => {
+    test('V-23 — clone of [Asym-c]: the broker cell, the refused row and its message name the VIEWER broker', async ({page}) => {
+        // Login, the 20 s table gate and the editor's first validation share this budget.
+        test.setTimeout(60_000);
+        await login(page, TEST_USER);
+
+        // The pair and its brokers, read through the API and checked rather than assumed.
+        const {giver, receiver} = await seededPair(page, '[Asym-c]', {editable: false});
+        const brokers = new Map((await listBrokers(page)).map((broker) => [broker.id, broker]));
+        const giverBroker = brokers.get(giver.broker_id);
+        const receiverBroker = brokers.get(receiver.broker_id);
+        if (!giverBroker || !receiverBroker) throw new Error(`[Asym-c] #${giver.id}/#${receiver.id}: TEST_USER must see both brokers ${giver.broker_id} and ${receiver.broker_id} — check populate_mock_data.py`);
+        expect(canEdit(giverBroker), `premise: [Asym-c] sends from a broker TEST_USER can edit (${JSON.stringify(giverBroker)})`).toBe(true);
+        expect(receiverBroker.user_role, `premise: [Asym-c] lands on a broker TEST_USER only views (${JSON.stringify(receiverBroker)})`).toBe('VIEWER');
+
+        // Select the sending half and clone it: the editor brings its partner along.
+        await goToRows(page, [giver.id, receiver.id]);
+        const checkbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${giver.id}`);
+        await expect(checkbox).toBeVisible({timeout: 5_000});
+        if ((await checkbox.getAttribute('data-state')) !== 'checked') await checkbox.click();
+        await expect(checkbox).toHaveAttribute('data-state', 'checked');
+        await page.getByTestId('toolbar-action-clone').click();
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+        // Premise: the copy is one paired row on the grid, with no form on top of it.
+        const gridRow = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]').filter({hasText: '[Asym-c]'});
+        await expect(gridRow).toHaveCount(1, {timeout: 10_000});
+        await expect(page.getByTestId('tx-form-modal')).toBeHidden();
+
+        // Settled: the editor validated the copy it opened (a fresh editor counts from zero) and nothing is queued behind it.
+        const root = page.getByTestId('tx-bulk-modal-root');
+        await expect(root).not.toHaveAttribute('data-validate-runs', '0', {timeout: 25_000});
+        await waitForSettled(root, 25_000);
+
+        // Validation refuses the copy, once: TEST_USER cannot write on the receiving broker.
+        const refusal = page.locator('[data-testid="tx-bulk-issue"][data-code="accessDenied"]');
+        await expect(refusal, 'validation refuses the copy once').toHaveCount(1);
+
+        // The broker cell of the pair names both halves; the sending one is the presence barrier for the other.
+        const brokerCell = gridRow.locator('td[data-column-id="broker"]');
+        await expect(brokerCell, 'premise: the broker cell names the sending broker').toContainText(giverBroker.name);
+
+        // V-23. Soft, so that one run reports all three.
+        await expect.soft(brokerCell, `the broker cell names the receiving broker ${receiverBroker.name}, which TEST_USER sees but cannot edit (not "—")`).toContainText(receiverBroker.name);
+        await expect.soft(refusal, 'the refusal points at the refused row: the receiving half, 1b (not the sending 1a)').toHaveAttribute('data-row-label', '1b');
+        await expect.soft(refusal, `the refusal names the broker it is refused on, ${receiverBroker.name} (not "Broker #${receiverBroker.id}")`).toContainText(receiverBroker.name);
+
+        // Never saved: close the editor, discarding the copy.
+        await discardBulkEditor(page);
+    });
 });

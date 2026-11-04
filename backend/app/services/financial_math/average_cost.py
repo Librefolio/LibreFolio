@@ -40,7 +40,7 @@ from enum import StrEnum
 from typing import Any, Literal
 
 from backend.app.schemas.common import Currency
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
@@ -169,6 +169,41 @@ class CostStep:
         if self.cost_asset is None:
             return None
         return _share_of(self.cost_asset, quantity, self.quantity)
+
+
+@dataclass(frozen=True, slots=True)
+class MovementUnitCost:
+    """The unit cost one step's movement carried: in the report currency, and in its own currency when converted."""
+
+    report: Decimal
+    original: Decimal | None
+
+
+def movement_unit_costs(steps: Sequence[CostStep]) -> tuple[MovementUnitCost, ...]:
+    """The unit cost of each step's movement, in the order of ``steps`` (one position's timeline).
+
+    An acquisition (ADD) brings its own cost per unit; a reduction (REDUCE) leaves at the average cost the
+    pool had before it, which stays known even when the reduction closes the pool; a split
+    (SPLIT_RESCALE) restates the pool's average; any other step carries no cost (0). A converted
+    acquisition also gives its unit cost in the currency it was paid in.
+    """
+    unit_costs: list[MovementUnitCost] = []
+    previous_average = _ZERO
+    for step in steps:
+        movement = step.movement
+        average = step.unit_cost_report
+        if step.effect == CostEffect.ADD:
+            report = step.cost_report_change / movement.quantity
+        elif step.effect == CostEffect.REDUCE:
+            report = previous_average
+        elif step.effect == CostEffect.SPLIT_RESCALE:
+            report = average
+        else:
+            report = _ZERO
+        conversion = step.conversion
+        unit_costs.append(MovementUnitCost(report=report, original=conversion.original_amount / movement.quantity if conversion else None))
+        previous_average = average
+    return tuple(unit_costs)
 
 
 @dataclass(frozen=True, slots=True)

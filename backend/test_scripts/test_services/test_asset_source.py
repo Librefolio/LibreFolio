@@ -53,7 +53,8 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
-from backend.app.schemas.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FAAssetPatchItem
+from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import (
@@ -64,23 +65,18 @@ from backend.app.schemas.provider import (
     ProbeOperation,
 )
 from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest, SyncStatus
-from backend.app.services.asset_source import (
-    AssetCRUDService,
-    AssetSearchService,
-    AssetSourceManager,
-    AssetSourceProvider,
-)
 from backend.app.services.asset_source_providers.borsa_italiana import plugin as borsa_provider_module
-from backend.app.services.asset_source_providers.scheduled_investment.plugin import (
-    calculate_day_count_fraction,
-)
 from backend.app.services.asset_source_providers.yahoo_finance import plugin as yahoo_provider_module
-from backend.app.services.asset_sources import core as asset_source_core
-from backend.app.services.asset_sources import price_query as price_query_module
-from backend.app.services.asset_sources import price_store as price_store_module
-from backend.app.services.asset_sources import refresh as refresh_module
-from backend.app.services.asset_sources import search as search_module
-from backend.app.services.asset_sources.provider_management import AssetProviderRegistry
+from backend.app.services.assets import core as asset_source_core
+from backend.app.services.assets import price_query as price_query_module
+from backend.app.services.assets import price_store as price_store_module
+from backend.app.services.assets import search as search_module
+from backend.app.services.assets.base import AssetSourceProvider
+from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.assets.search import AssetSearchService
+from backend.app.services.financial_math.interest import calculate_day_count_fraction
 from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.test_scripts.test_utils import (
     print_info,
@@ -146,10 +142,10 @@ def test_price_column_precision():
     columns = ["open", "high", "low", "close", "adjusted_close"]
     for col in columns:
         precision, scale = get_model_column_precision(PriceHistory, col)
-        # Detailed logging per case
-        print_info(f"Case: column={col} | expected=(18,6) | actual=({precision},{scale})")
-        assert precision == 18, f"{col}: Expected precision 18, got {precision}"
-        assert scale == 6, f"{col}: Expected scale 6, got {scale}"
+        # Detailed logging per case (C-97a: the price columns are RealDecimal(24, 12))
+        print_info(f"Case: column={col} | expected=(24,12) | actual=({precision},{scale})")
+        assert precision == 24, f"{col}: Expected precision 24, got {precision}"
+        assert scale == 12, f"{col}: Expected scale 12, got {scale}"
         print_success(f"✓ {col}: precision OK ({precision},{scale})")
 
 
@@ -157,11 +153,12 @@ def test_truncate_price():
     """Test truncate_price_to_db_precision() helper."""
     print_section("Test 2: Price Truncation")
 
+    # C-97a: a price keeps 12 decimals, then at most 15 significant digits, both ROUND_DOWN
     test_cases = [
-        ("175.1234567890", "175.123456"),  # Truncate extra decimals
+        ("175.1234567890123", "175.123456789012"),  # Truncate extra decimals
         ("175.123456", "175.123456"),  # Already at precision
-        ("175.12", "175.120000"),  # Pad to 6 decimals
-        ("1000.9999999", "1000.999999"),  # Large number
+        ("175.12", "175.12"),  # Fewer decimals: same value
+        ("1000.99999999999999", "1000.99999999999"),  # Large number: 15 significant digits
     ]
 
     for input_str, expected_str in test_cases:
@@ -241,7 +238,8 @@ async def test_yfinance_history_uses_native_max_for_min_start(monkeypatch):
 
     result = await provider.get_history_value("AAPL", IdentifierType.TICKER, None, "min", date(2025, 1, 2))
 
-    assert calls["history_kwargs"] == {"period": "max"}
+    # X5-2: the closes are the raw ones (split-adjusted by Yahoo in every mode), not the dividend-adjusted ones.
+    assert calls["history_kwargs"] == {"period": "max", "auto_adjust": False}
     assert [p.date for p in result.prices] == [date(2025, 1, 1), date(2025, 1, 2)]
 
 
@@ -1678,7 +1676,11 @@ async def test_refresh_assets_from_provider_uses_metadata_cache(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_wipe_market_data_for_currency_change_dry_run_and_execute():
-    """Dry-run reports counts; destructive call wipes prices/events and disconnects transactions."""
+    """Dry-run reports counts; destructive call wipes prices/non-split events, unlinks their transactions, keeps the SPLIT.
+
+    N68: ``splits_kept`` counts the SPLIT events that stay, ``events_manual`` / ``events_provider`` the NON-SPLIT events
+    that go, ``linked_tx`` the transactions linked to those; the transaction linked to the SPLIT stays linked.
+    """
     print_section("Test 24: wipe_market_data_for_currency_change")
 
     AssetProviderRegistry.auto_discover()
@@ -1746,10 +1748,20 @@ async def test_wipe_market_data_for_currency_change_dry_run_and_execute():
                     provider_assignment_id=assignment.id,
                     notes="provider event",
                 ),
+                AssetEvent(
+                    asset_id=asset.id,
+                    date=date(2025, 6, 3),
+                    type=AssetEventType.SPLIT,
+                    value=Decimal("2"),
+                    currency="USD",
+                    provider_assignment_id=None,
+                    notes="manual split",
+                ),
             ]
         )
         await session.commit()
 
+        split_event = (await session.execute(select(AssetEvent).where(AssetEvent.asset_id == asset.id, AssetEvent.type == AssetEventType.SPLIT))).scalar_one()
         provider_event = (
             await session.execute(
                 select(AssetEvent).where(
@@ -1772,6 +1784,19 @@ async def test_wipe_market_data_for_currency_change_dry_run_and_execute():
                 description="linked event tx",
             )
         )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date(2025, 6, 3),
+                quantity=Decimal("10"),
+                amount=Decimal("0"),
+                currency=None,
+                asset_event_id=split_event.id,
+                description="costless split adjustment",
+            )
+        )
         await session.commit()
 
         dry_run = await AssetSourceManager.wipe_market_data_for_currency_change(asset.id, session, dry_run=True)
@@ -1779,6 +1804,7 @@ async def test_wipe_market_data_for_currency_change_dry_run_and_execute():
             "prices": 2,
             "events_manual": 1,
             "events_provider": 1,
+            "splits_kept": 1,
             "linked_tx": 1,
             "oldest": "2025-06-01",
             "newest": "2025-06-02",
@@ -1788,11 +1814,13 @@ async def test_wipe_market_data_for_currency_change_dry_run_and_execute():
         wiped = await AssetSourceManager.wipe_market_data_for_currency_change(asset.id, session, dry_run=False)
         assert wiped["dry_run"] is False
         assert wiped["prices"] == 2
+        assert (wiped["events_manual"], wiped["events_provider"], wiped["splits_kept"], wiped["linked_tx"]) == (1, 1, 1, 1)
         assert (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset.id))).scalar_one() == 0
-        assert (await session.execute(select(func.count()).select_from(AssetEvent).where(AssetEvent.asset_id == asset.id))).scalar_one() == 0
-        tx = (await session.execute(select(Transaction).where(Transaction.asset_id == asset.id))).scalar_one()
-        assert tx.asset_event_id is None
-        print_success("✓ Currency-change wipe clears market data and disconnects linked tx")
+        remaining = (await session.execute(select(AssetEvent.id, AssetEvent.type).where(AssetEvent.asset_id == asset.id))).all()
+        assert [(event_id, kind) for event_id, kind in remaining] == [(split_event.id, AssetEventType.SPLIT)], f"only the SPLIT stays: {remaining}"
+        links = {t.type: t.asset_event_id for t in (await session.execute(select(Transaction).where(Transaction.asset_id == asset.id))).scalars()}
+        assert links == {TransactionType.DIVIDEND: None, TransactionType.ADJUSTMENT: split_event.id}, f"the dividend's tx is unlinked, the split adjustment stays linked: {links}"
+        print_success("✓ Currency-change wipe clears prices and non-split events, disconnects their tx, keeps the SPLIT")
 
 
 @pytest.mark.asyncio
@@ -1918,7 +1946,9 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         def validate_params(self, params):
             return None
 
-    original_get_provider_instance = refresh_module.AssetProviderRegistry.get_provider_instance
+    # Patched on the registry class itself: refresh reaches it through core.configured_provider, which looks the
+    # provider up on this same class (refresh no longer imports the registry, so it is no attribute of that module).
+    original_get_provider_instance = AssetProviderRegistry.get_provider_instance
 
     def _patched_get_provider_instance(cls, code: str, **kwargs):
         if code == "partialprov":
@@ -1926,7 +1956,7 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         return original_get_provider_instance.__func__(cls, code, **kwargs)
 
     monkeypatch.setattr(
-        refresh_module.AssetProviderRegistry,
+        AssetProviderRegistry,
         "get_provider_instance",
         classmethod(_patched_get_provider_instance),
     )
@@ -2253,49 +2283,63 @@ async def test_p05_patch_without_currency_change_issues_one_select_total():
     assert counter.selects == 1, f"expected the single bulk preload SELECT, got {counter.selects} SELECTs:\n" + "\n".join(counter.statements)
 
 
-@pytest.mark.asyncio
-async def test_p05_currency_change_guard_queries_stay_constant():
-    """3 currency-changing patches → 1 preload + 3 guard aggregates, constant in k.
-
-    The currency-change guard (Policy D) needs four datasets (prices, manual
-    events, provider events, linked tx). Before P0-5 each changing asset paid
-    up to 6 SELECTs of its own (3 → 1+18=19); now the aggregates are GROUP BY
-    batches shared by the whole request, so k=3 costs exactly 4 SELECTs.
-    """
-    asset_ids, _uid = await _p05_make_assets(3, "ccy")
-    patches = [FAAssetPatchItem(asset_id=asset_id, currency="USD") for asset_id in asset_ids]
-
-    response, counter = await _p05_patch_counting(patches)
-
-    # No market data on these assets → the guard does not block, patches apply.
-    assert response.success_count == 3
-    assert counter.selects == 4, f"expected 1 preload + 3 aggregate SELECTs, got {counter.selects}:\n" + "\n".join(counter.statements)
+async def _p05_seed_market_data(asset_ids: list[int], tag: str) -> None:
+    """One price and one manual dividend per asset: something for a currency change to remove."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        for index, asset_id in enumerate(asset_ids):
+            session.add(PriceHistory(asset_id=asset_id, date=date(2025, 3, 3), close=Decimal("10") + index, currency="EUR", source_plugin_key="p05"))
+            session.add(AssetEvent(asset_id=asset_id, date=date(2025, 3, 4), type=AssetEventType.DIVIDEND, value=Decimal("1"), currency="EUR", provider_assignment_id=None, notes=f"p05-{tag}"))
+        await session.commit()
 
 
 @pytest.mark.asyncio
-async def test_p05_batched_guard_attributes_counts_to_the_right_asset():
-    """The batched aggregates must not cross-attribute counts between assets.
+@pytest.mark.parametrize("with_market_data", [pytest.param(False, id="nothing-to-lose"), pytest.param(True, id="with-prices-and-events")])
+async def test_p05_currency_change_queries_stay_constant(with_market_data):
+    """The SELECTs of a currency-changing PATCH do not grow with the number of assets (N68 keeps the P0-5 promise).
 
-    New risk introduced by the P0-5 batching itself: the per-asset numbers in
-    the block token now come from dicts keyed by asset_id filled by GROUP BY —
-    a keying mistake would show asset A's data in asset B's token. Two blocked
-    assets with *different* market-data footprints make the attribution
-    observable.
+    Before P0-5 each changing asset paid up to 6 SELECTs of its own. The count itself is the implementation's (the
+    block's four aggregates before N68, the wipe's batched reads after it); what must hold is that 3 assets cost exactly
+    what 1 asset costs, and that it is a small constant, with and without market data to remove.
     """
-    (asset_a, asset_b), tag = await _p05_make_assets(2, "attr")
+    (single,), _ = await _p05_make_assets(1, "ccy1")
+    triple, _uid = await _p05_make_assets(3, "ccy3")
+    if with_market_data:
+        await _p05_seed_market_data([single, *triple], "ccy")
+
+    single_response, single_counter = await _p05_patch_counting([FAAssetPatchItem(asset_id=single, currency="USD")])
+    triple_response, triple_counter = await _p05_patch_counting([FAAssetPatchItem(asset_id=asset_id, currency="USD") for asset_id in triple])
+
+    assert single_response.success_count == 1 and triple_response.success_count == 3, "N68: a currency change always succeeds, with market data or without"
+    assert triple_counter.selects == single_counter.selects, f"1 asset costs {single_counter.selects} SELECTs, 3 assets {triple_counter.selects}: the count must not grow with k\n" + "\n".join(triple_counter.statements)
+    assert triple_counter.selects <= 12, f"expected a small constant number of SELECTs, got {triple_counter.selects}:\n" + "\n".join(triple_counter.statements)
+
+
+@pytest.mark.asyncio
+async def test_p05_batched_currency_change_attributes_its_work_to_the_right_asset():
+    """The batched wipe inside the PATCH must not cross-attribute rows between assets.
+
+    The risk of batching: per-asset work keyed by asset_id in dicts or one DELETE ... IN (...) — a keying mistake would
+    remove asset A's rows from asset B, or from an asset nobody patched. Two patched assets with *different*
+    footprints and a third left alone make the attribution observable.
+
+    Contract (N68): A (3 prices, a manual dividend, a SPLIT) and B (1 price) change currency in one call, both succeed;
+    A keeps its SPLIT and nothing else, B has nothing left; C, not patched, keeps everything.
+    """
+    (asset_a, asset_b, asset_c), tag = await _p05_make_assets(3, "attr")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        # Asset A: 3 price rows across two days + 1 manual event.
         session.add_all(
             [
                 PriceHistory(asset_id=asset_a, date=date(2025, 1, 6), close=Decimal("100"), currency="EUR", source_plugin_key="p05"),
                 PriceHistory(asset_id=asset_a, date=date(2025, 1, 7), close=Decimal("101"), currency="EUR", source_plugin_key="p05"),
                 PriceHistory(asset_id=asset_a, date=date(2025, 1, 8), close=Decimal("102"), currency="EUR", source_plugin_key="p05"),
                 AssetEvent(asset_id=asset_a, date=date(2025, 1, 7), type=AssetEventType.DIVIDEND, value=Decimal("1.5"), currency="EUR", provider_assignment_id=None, notes=f"p05-{tag}"),
+                AssetEvent(asset_id=asset_a, date=date(2025, 1, 8), type=AssetEventType.SPLIT, value=Decimal("2"), currency="EUR", provider_assignment_id=None, notes=f"p05-split-{tag}"),
+                PriceHistory(asset_id=asset_b, date=date(2025, 2, 10), close=Decimal("55"), currency="EUR", source_plugin_key="p05"),
+                PriceHistory(asset_id=asset_c, date=date(2025, 2, 11), close=Decimal("66"), currency="EUR", source_plugin_key="p05"),
+                AssetEvent(asset_id=asset_c, date=date(2025, 2, 11), type=AssetEventType.DIVIDEND, value=Decimal("2.5"), currency="EUR", provider_assignment_id=None, notes=f"p05-c-{tag}"),
             ]
         )
-        # Asset B: a single price row, no events.
-        session.add(PriceHistory(asset_id=asset_b, date=date(2025, 2, 10), close=Decimal("55"), currency="EUR", source_plugin_key="p05"))
         await session.commit()
 
     response, _counter = await _p05_patch_counting(
@@ -2305,25 +2349,16 @@ async def test_p05_batched_guard_attributes_counts_to_the_right_asset():
         ]
     )
 
-    assert response.success_count == 0, "both assets own market data — both must be blocked"
-    tokens = {r.asset_id: r.message for r in response.results}
-    assert tokens[asset_a].startswith("CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|"), tokens[asset_a]
-    assert tokens[asset_b].startswith("CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|"), tokens[asset_b]
+    assert response.success_count == 2, f"N68: both assets own market data, neither may be blocked: {[(r.asset_id, r.success, r.message) for r in response.results]}"
+    assert not any("CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA" in (r.message or "") for r in response.results), "the block's token is never produced any more"
 
-    fields_a = dict(part.split("=", 1) for part in tokens[asset_a].split("|")[1:])
-    fields_b = dict(part.split("=", 1) for part in tokens[asset_b].split("|")[1:])
-
-    # Each token carries ITS OWN asset's footprint.
-    assert fields_a["prices"] == "3", tokens[asset_a]
-    assert fields_a["events_manual"] == "1", tokens[asset_a]
-    assert fields_a["events_provider"] == "0", tokens[asset_a]
-    assert fields_a["linked_tx"] == "0", tokens[asset_a]
-    assert fields_a["oldest"] == "2025-01-06" and fields_a["newest"] == "2025-01-08", tokens[asset_a]
-    assert fields_a["from"] == "EUR" and fields_a["to"] == "USD", tokens[asset_a]
-
-    assert fields_b["prices"] == "1", tokens[asset_b]
-    assert fields_b["events_manual"] == "0", tokens[asset_b]
-    assert fields_b["oldest"] == "2025-02-10" and fields_b["newest"] == "2025-02-10", tokens[asset_b]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        prices = dict((await session.execute(select(PriceHistory.asset_id, func.count()).where(PriceHistory.asset_id.in_([asset_a, asset_b, asset_c])).group_by(PriceHistory.asset_id))).all())
+        events = {(a_id, kind) for a_id, kind in (await session.execute(select(AssetEvent.asset_id, AssetEvent.type).where(AssetEvent.asset_id.in_([asset_a, asset_b, asset_c])))).all()}
+        currencies = dict((await session.execute(select(Asset.id, Asset.currency).where(Asset.id.in_([asset_a, asset_b, asset_c])))).all())
+    assert prices == {asset_c: 1}, f"only the asset nobody patched keeps its price: {prices}"
+    assert events == {(asset_a, AssetEventType.SPLIT), (asset_c, AssetEventType.DIVIDEND)}, f"A keeps its SPLIT alone, C keeps its dividend, B had no event: {events}"
+    assert currencies == {asset_a: "USD", asset_b: "USD", asset_c: "EUR"}, currencies
 
 
 # ============================================================================

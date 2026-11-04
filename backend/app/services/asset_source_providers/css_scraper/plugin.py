@@ -12,6 +12,7 @@ import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Dict
+from urllib.parse import urlsplit
 
 from mergedeep import merge
 
@@ -29,11 +30,23 @@ except ImportError:
     BeautifulSoup = None
     SCRAPER_AVAILABLE = False
 
-from backend.app.schemas.assets import FACurrentValue, FAHistoricalData
-from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.schemas.prices import FACurrentValue, FAHistoricalData
+from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider, raise_if_rate_limited
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
+
+
+def _url_host(url: object) -> str | None:
+    """The host of ``url``, lowercase without the port; None when it has none or cannot be read."""
+    if not isinstance(url, str):
+        return None
+    try:
+        host = urlsplit(url.strip()).hostname
+    except ValueError:  # a malformed URL (an unclosed IPv6 bracket): no host to pause
+        return None
+    return host or None
 
 
 @register_provider(AssetProviderRegistry)
@@ -71,6 +84,10 @@ class CSSScraperProvider(AssetSourceProvider):
         """The identifier IS the URL for CSS scraper."""
         return identifier if identifier.startswith("http") else None
 
+    def cooldown_scope(self, identifier: str, identifier_type=None, provider_params=None) -> str | None:
+        """The host of the scraped page: a site that refuses for too many requests pauses itself, not every site."""
+        return _url_host(identifier)
+
     @property
     def params_schema(self) -> list[dict]:
         return [
@@ -78,6 +95,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 "key": "current_css_selector",
                 "type": "string",
                 "required": True,
+                "label": "Price CSS selector",
                 "description": "CSS selector for the price element on the web page",
                 "placeholder": ".price-value strong",
             },
@@ -85,15 +103,17 @@ class CSSScraperProvider(AssetSourceProvider):
                 "key": "currency",
                 "type": "currency",
                 "required": True,
+                "label": "Currency",
                 "description": "Currency code (ISO 4217, e.g. EUR, USD)",
                 "placeholder": "EUR",
             },
-            {"key": "decimal_format", "type": "select", "required": False, "options": ["us", "eu"], "default": "us", "description": "Number format: 'us' = 1,234.56 / 'eu' = 1.234,56"},
+            {"key": "decimal_format", "type": "select", "required": False, "options": ["us", "eu"], "default": "us", "label": "Number format", "description": "Number format: 'us' = 1,234.56 / 'eu' = 1.234,56"},
             {
                 "key": "timeout",
                 "type": "number",
                 "required": False,
                 "default": 30,
+                "label": "Timeout (seconds)",
                 "description": "HTTP request timeout in seconds",
                 "placeholder": "30",
             },
@@ -102,6 +122,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 "type": "string",
                 "required": False,
                 "default": "LibreFolio/1.0",
+                "label": "User-Agent",
                 "description": "Custom User-Agent header",
                 "placeholder": "LibreFolio/1.0",
             },
@@ -219,6 +240,7 @@ class CSSScraperProvider(AssetSourceProvider):
         except AssetSourceError:
             raise
         except httpx.HTTPStatusError as e:
+            raise_if_rate_limited(e, self.provider_name, scope=_url_host(url))
             raise AssetSourceError(
                 f"HTTP error {e.response.status_code}: {e.response.reason_phrase}",
                 "HTTP_ERROR",

@@ -14,7 +14,7 @@
 -->
 <script lang="ts">
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {brokerStoreVersion, getBrokerInfo} from '$lib/stores/reference/brokerStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';

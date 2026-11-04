@@ -118,7 +118,8 @@
         "invalid_input_model": "Modelo de entrada no válido",
         "invalid_output_model": "Modelo de salida no válido",
         "invalid_schema": "El esquema no se puede publicar",
-        "invalid_operation_policy": "Política de operación no válida"
+        "invalid_operation_policy": "Política de operación no válida",
+        "invalid_settings": "Declaración de ajustes no válida"
       }
     },
     "version": "Versión",

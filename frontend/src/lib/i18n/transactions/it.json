@@ -8,7 +8,8 @@
       "quantity": "Qtà",
       "cash": "Importo",
       "broker": "Broker",
-      "links": "Link"
+      "links": "Link",
+      "unitPrice": "Prezzo unitario"
     },
     "actions": {
       "clone": "Clona",
@@ -78,10 +79,10 @@
       "costBasis": "Costo di carico manuale",
       "linkUuid": "TX Collegata",
       "pairPartner": "Transazione collegata",
-      "hintSignPositive": "deve essere > 0",
-      "hintSignNegative": "inserisci positivo — invertito al salvataggio",
-      "hintSignZero": "deve essere 0",
-      "hintSignNonzero": "deve essere ≠ 0",
+      "hintSignPositive": "Inserisci un valore maggiore di 0",
+      "hintSignNegative": "Inserisci un valore positivo",
+      "hintSignZero": "Inserisci 0",
+      "hintSignNonzero": "Inserisci un valore diverso da 0",
       "saveFailed": "Impossibile salvare la transazione",
       "fxTitle": "Cambio Valuta",
       "transferAssetTitle": "Trasferimento Asset",
@@ -93,7 +94,18 @@
       "eventPickerCreateNew": "Nuovo evento",
       "eventCreateTitle": "Crea evento per {asset}",
       "eventCreateAmountRequired": "L'importo è obbligatorio",
-      "eventCreateDateRequired": "La data è obbligatoria"
+      "eventCreateDateRequired": "La data è obbligatoria",
+      "fxDatesHint": "Le date 'Da' e 'A' di solito coincidono: si separano quando il broker accredita la nuova valuta in un altro giorno.",
+      "eventEditTitle": "Modifica evento per {asset}",
+      "entryModeAmount": "Totale",
+      "entryModeUnitPrice": "Prezzo unitario",
+      "preFloorDate": {
+        "message": "La data {date} è anteriore al 1° gennaio 1900. Controlla che l'anno sia giusto: spesso è un errore di battitura.",
+        "confirm": "Sì, la data è giusta"
+      },
+      "entryModeLabel": "Come leggere il numero",
+      "entryDerivedTotal": "= {value} in totale",
+      "entryDerivedUnit": "= {value} {base, plural, =1 {per unità} other {per # unità}}"
     },
     "bulk": {
       "resetRow": "Reimposta riga",
@@ -127,14 +139,34 @@
       "issueRowsHidden": "Le righe coinvolte sono nascoste dai filtri della tabella.",
       "unseenSuggestionsTitle": "Suggerimenti non ancora visti",
       "unseenSuggestionsMessage": "{n, plural, one {# suggerimento di unione non è ancora stato visto} other {# suggerimenti di unione non sono ancora stati visti}}. Unire le due metà di un trasferimento evita che contino come un deposito e un prelievo separati. Salvare comunque?",
-      "unseenSuggestionsReview": "Mostra i suggerimenti"
+      "unseenSuggestionsReview": "Mostra i suggerimenti",
+      "possibleSplit": {
+        "title": "{n, plural, one {# riga potrebbe essere uno split} other {# righe potrebbero essere split}}",
+        "explain": "Queste azioni sono entrate a costo zero. Se è uno split, collega un evento SPLIT: il costo si distribuisce su tutte le tue azioni. Se non lo è, il costo medio della posizione si abbassa.",
+        "create": "Crea l'evento SPLIT e collega",
+        "link": "Collega a un evento esistente",
+        "goto": "Vai alla riga",
+        "assetNeeded": "Scegli prima l'asset di questa riga.",
+        "quantityAdded": "+{quantity} azioni",
+        "ratioLabel": "Rapporto dello split (azioni nuove per azione vecchia)",
+        "ratioHint": "Scrivi 3 per uno split 3 per 1, 0.25 per uno split inverso 1 a 4. Le azioni che possiedi si moltiplicano per questo numero.",
+        "ratio": "Rapporto {ratio} (dalle {held} azioni che tenevi)",
+        "rounding": "Il broker ha arrotondato la quantità: con rapporto {ratio} questa riga differisce di {delta} azioni da quelle che tenevi per il rapporto. Lotti e Dashboard possono mostrare un piccolo scarto."
+      },
+      "preFloorDate": {
+        "message": "{n} righe hanno una data anteriore al 1° gennaio 1900. Controlla l'anno: spesso è un errore di battitura.",
+        "row": "Riga {row}: {date}",
+        "confirmTitle": "Salvare date anteriori al 1900?",
+        "confirmMessage": "{n} righe hanno una data anteriore al 1° gennaio 1900. Salvarle così?",
+        "confirmProceed": "Sì, le date sono giuste"
+      }
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
     },
     "costBasisOverride": {
-      "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
-      "warningAdjustment": "Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto sono costate queste quote: 0 per uno split, il costo di carico originale del donante per un regalo."
+      "tooltip": "Il costo che inserisci al posto del prezzo medio di carico: per Exit Tax, eredità o regole fiscali particolari. Auto lo calcola dai tuoi acquisti. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
+      "warningAdjustment": "Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto ti sono costate queste quote: 0 per le quote nuove di uno split. Per un regalo, scrivi 0, oppure quanto le ha pagate il donante: così il prezzo medio di carico, e l'utile su cui potresti pagare le tasse, restano più vicini a quelli veri."
     },
     "wacPreview": {
       "calculating": "Calcolo in corso...",
@@ -156,7 +188,7 @@
         "add": "Pesata",
         "reduce": "Quantità ridotta",
         "addZeroCost": "Diluizione",
-        "addAtWac": "Auto PMC"
+        "splitRescale": "Adeguamento split"
       },
       "pendingCreate": "Transazione in attesa (nuova, non ancora salvata)",
       "pendingEdit": "Transazione in attesa (modificata, non ancora salvata)",
@@ -188,7 +220,9 @@
       "concat": "Concatena",
       "union": "Unione",
       "promoteSubtitle": "Seleziona la transazione di destinazione",
-      "target": "Destinazione"
+      "target": "Destinazione",
+      "descriptionTooLong": "La descrizione unita supera i {max} caratteri: accorciala per confermare.",
+      "mergeAllLeftTooLong": "{count, plural, one {# coppia è rimasta} other {# coppie sono rimaste}} da unire a mano: la descrizione unita supererebbe i {max} caratteri."
     },
     "validate": {
       "now": "Verifica ora",
@@ -197,7 +231,8 @@
       "issuesHeader": "Sono stati identificati degli errori nei campi",
       "balanceIssuesHeader": "Questa configurazione genera dati inconsistenti",
       "autoOff": "Auto-validazione OFF ({n} righe > {threshold}) — premi ⚡️Verifica ora prima del commit",
-      "contextualIssuesHeader": "Considerando le altre modifiche in sospeso, questa riga causa i seguenti problemi:"
+      "contextualIssuesHeader": "Considerando le altre modifiche in sospeso, questa riga causa i seguenti problemi:",
+      "checkSummary": "{n, plural, one {# campo da correggere} other {# campi da correggere}}"
     },
     "errors": {
       "idRequired": "L'ID transazione è obbligatorio e deve essere > 0",
@@ -237,7 +272,26 @@
       "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>.",
       "pairDeleteIncomplete": "Transazione collegata: per eliminare questa riga devi eliminare anche la sua controparte (transazione #{partnerId}). Se la controparte è in un broker che non puoi modificare, chiedi al proprietario di eliminarla.",
       "pairQuantityMismatch": "Un trasferimento deve far uscire da un broker ed entrare nell'altro la stessa quantità (trovate {qtyA} e {qtyB})",
-      "pairAssetMismatch": "I due lati di un trasferimento devono essere lo stesso asset"
+      "pairAssetMismatch": "I due lati di un trasferimento devono essere lo stesso asset",
+      "wacFxUnavailableSplit": "Le unità che escono sono valutate al loro costo medio, che richiede il cambio {pairs}: sincronizza i tassi FX, poi scollega di nuovo la coppia.",
+      "pairBrokerMismatch": "I due lati di un cambio valuta devono essere sullo stesso broker",
+      "cashNonzero": "{type} richiede un importo diverso da zero",
+      "decimalPlacesExceeded": "Al massimo {max} decimali",
+      "significantDigitsExceeded": "Al massimo {max} cifre significative",
+      "integerDigitsExceeded": "Al massimo {max} cifre prima della virgola",
+      "dateOutOfRange": "Non oltre il {max}",
+      "autoCostUnreadable": "Costo automatico non disponibile: {count, plural, one {# transazione usata} other {# transazioni usate}} per il costo medio di questo asset {count, plural, one {contiene} other {contengono}} un valore che non è un numero. Inserisci il costo a mano.",
+      "autoCostEmptyPool": "Costo automatico non disponibile: in quella data non c'erano unità di questo asset di cui fare la media. Scegli Manuale e scrivi quanto ti sono costate; se le hai ricevute in regalo, scrivi 0.",
+      "autoCostUnknownPool": "Costo automatico non disponibile: le unità di questo asset detenute in quella data non hanno un costo noto di cui fare la media. Scegli Manuale e scrivi quanto ti sono costate.",
+      "ledgerUnreadable": "I saldi di {brokerName} non si possono verificare: {count, plural, one {# sua transazione contiene} other {# sue transazioni contengono}} un valore che non è un numero. Chiedi all'amministratore di sistemare i dati.",
+      "costBasisNotAllowed": "❌ {type} qui non prende un costo base: toglilo. Lo portano solo le unità che entrano con una Rettifica o un Trasferimento Asset.",
+      "costBasisModeIncompatible": "❌ {type} qui non prende un costo base, quindi nessuna modalità Auto o Manuale: toglila.",
+      "costBasisNegative": "Il costo di carico non può essere negativo: scrivi 0 o più.",
+      "pairAdjustmentNotAllowed": "Due Rettifiche non si possono collegare: per spostare titoli fra broker usa un Trasferimento Asset.",
+      "pairArrivalBeforeDeparture": "L'arrivo ({arrivalDate}) è datato prima della partenza ({departureDate}). È stato salvato come inserito: controlla le due date.",
+      "pairCurrencyMismatch": "I due lati di un bonifico devono essere nella stessa valuta (trovate {currencyA} e {currencyB}). Per cambiare valuta usa un cambio valuta",
+      "pairAmountMismatch": "Un bonifico deve far uscire da un broker ed entrare nell'altro lo stesso importo (trovati {amountA} e {amountB})",
+      "pairCurrencySame": "I due lati di un cambio valuta devono essere in valute diverse (entrambi sono in {currency})"
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",
@@ -249,7 +303,8 @@
       "decimalParsing": "Deve essere un numero valido",
       "intParsing": "Deve essere un numero intero valido",
       "valueError": "Valore non valido",
-      "extraForbidden": "Campo non previsto"
+      "extraForbidden": "Campo non previsto",
+      "stringTooLong": "Al massimo {max_length} caratteri"
     },
     "fields": {
       "broker_id": "Broker",
@@ -298,6 +353,43 @@
       "spread": "Spread",
       "stale": "non agg. {days}g",
       "marketNotAvailable": "Tasso di mercato non disponibile"
+    },
+    "reconcile": {
+      "button": "Ricollega eventi",
+      "buttonTitle": "Collega dividendi, interessi e rettifiche all'evento dell'asset dello stesso giorno",
+      "title": "Ricollega eventi",
+      "intro": "Dividendi, interessi e rettifiche senza un evento dell'asset. Un evento è proposto solo se è dello stesso asset, nello stesso giorno e di tipo corrispondente: un dividendo accreditato qualche giorno dopo l'evento non è proposto, e lo colleghi a mano nella transazione.",
+      "loading": "Cerco le transazioni senza evento…",
+      "loadError": "Impossibile leggere le transazioni senza evento.",
+      "empty": "Ogni transazione che può avere un evento dell'asset ce l'ha.",
+      "statusUnique": "Un evento in quel giorno",
+      "statusNone": "Nessun evento in quel giorno",
+      "statusSeveral": "{n} eventi in quel giorno: scegli nella transazione",
+      "link": "Collega",
+      "linkAll": "Collega tutte le righe con un solo evento",
+      "linkError": "Non è stato collegato nulla: il server ha rifiutato la modifica.",
+      "close": "Chiudi",
+      "colAsset": "Asset",
+      "colBroker": "Broker",
+      "colEvent": "Evento",
+      "colStatus": "Stato",
+      "colAction": "Azione",
+      "status": {
+        "unique": "Un evento quel giorno",
+        "none": "Nessun evento quel giorno",
+        "several": "Più eventi quel giorno"
+      },
+      "linkSelected": "Collega i selezionati",
+      "createSelected": "Crea gli eventi",
+      "createOne": "Crea evento",
+      "nothingToLink": "Seleziona righe con un evento quel giorno per collegarle.",
+      "nothingToCreate": "Seleziona righe senza evento quel giorno per crearne gli eventi.",
+      "createTitle": "Crea gli eventi mancanti",
+      "createIntro": "Controlla il tipo e inserisci il valore di ogni evento, nella valuta dell’asset. Gli eventi sono creati nel giorno della transazione; poi collegali.",
+      "createValue": "Valore",
+      "createServes": "{n} transazioni",
+      "createHint": "Inserisci per ogni evento un valore maggiore di 0, con al massimo 6 decimali.",
+      "createConfirm": "{n, plural, one {Crea # evento} other {Crea # eventi}}"
     }
   }
 }

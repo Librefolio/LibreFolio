@@ -14,6 +14,10 @@ import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {API_BASE, goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
+import {daysAgoIso, todayIso} from '../fixtures/dates';
+import {INSTANCE_CONFIG_PATH} from '../fixtures/instance-config';
+import {schemas} from '../../src/lib/api/generated';
+import {createOwnedAsset as createEventsAsset, deleteOwned, jsonFrom, linkDividend, seedProviderDividend, type Owned} from './asset-events-owned';
 
 /**
  * Every asset a test saved, by the unique name it gave it: its id once the create response has
@@ -520,10 +524,11 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
 
     // ========================================================================
     // Switching away from a parametric provider must warn *before* destroying
+    // (X5-1: the counts are the server's dry run, one dialog for every provider change)
     //
     // A parametric series is invented from provider_params; under a market provider it
     // is not history, so the backend discards it ("provider changed" in
-    // asset_source.py). That is correct — but silent destruction is not, and the
+    // services/assets/provider_management.py). That is correct — but silent destruction is not, and the
     // warning has to be able to say *how much* it is about to destroy, otherwise it
     // is decoration. Both branches are driven: cancelling must leave the series
     // untouched, confirming must remove it.
@@ -650,7 +655,7 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             // lies in the past, whereas a foreign write-back can only ever create today's
             // row. That is why the wipe is asserted through `inventedDates()` and never
             // through `countPrices()`.
-            await page.route('**/api/v1/assets/prices/current', async (route) => {
+            await page.route('**/api/v1/assets/prices/current*', async (route) => {
                 await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({results: [], success_count: 0, errors: []})});
             });
 
@@ -675,24 +680,34 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             await selectNewProvider();
             // Two reads, two purposes. `inventedAtSave` is what the wipe must destroy and
             // what the cancel branch must find intact. `pricesAtSave` is the global total,
-            // read here only because the modal quotes it: `countGeneratedSeries()` in
-            // AssetModal.svelte calls the very same summary endpoint.
+            // read here only to prove that nothing deletes before the confirm.
             const inventedAtSave = (await inventedDates()).length;
             expect(inventedAtSave, 'the series must still be there when the switch is attempted').toBeGreaterThan(0);
             const pricesAtSave = await countPrices();
+
+            // X5-1: the count the dialog quotes is the server's dry run (POST /assets/provider/impact),
+            // not a second read of the market-data summary. The response is awaited from the click, so
+            // the figure the dialog must say is the very one the server answered.
+            const impactResponse = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `${API_BASE}/assets/provider/impact`, {timeout: 15_000});
             await page.getByTestId('asset-modal-save').click();
+            type ImpactBody = {results: Array<{asset_id: number; action: string; reason: string; prices_deleted: number; events_deleted: number; transactions_unlinked: number; blocking_splits?: unknown[]}>};
+            const impact = ((await (await impactResponse).json()) as ImpactBody).results.find((result) => result.asset_id === assetId);
+            expect(impact, 'the dry run answers for the asset being saved').toBeTruthy();
+            expect(impact!.action).toBe('assign');
+            expect(impact!.reason, 'leaving a parametric provider for a market one').toBe('provider_changed');
+            expect(impact!.blocking_splits ?? [], 'no split with an adjustment to refuse the change').toEqual([]);
+            // The series this test authored is part of what the server says it will delete; the total
+            // is global and may hold a foreign write-back, so the claim is a lower bound.
+            expect(impact!.prices_deleted, 'the dry run counts at least the invented series').toBeGreaterThanOrEqual(inventedAtSave);
+            // The dialog writes the figure with the language's own number format; below a thousand that is its digits.
+            expect(impact!.prices_deleted, 'a figure of three digits or fewer is written without a group separator').toBeLessThan(1000);
 
             // Branch 1 — the warning appears, and it can say how much it is about to destroy.
             await expect(page.getByTestId('asset-parametric-switch-confirm')).toBeVisible({timeout: 15_000});
-            // The modal fetched that total itself, somewhere between the click and now, and
-            // the total is global: a foreign write-back landing in that gap makes the quoted
-            // number one higher than the one read a moment ago. Nothing deletes before the
-            // confirm, so the total can only grow — bracket it between the two reads instead
-            // of pinning it to either. The claim is unchanged: the warning quotes a real count.
+            // Nothing deletes before the confirm, so the total can only grow.
             const pricesAtWarning = await countPrices();
             expect(pricesAtWarning, 'nothing may delete rows before the confirm').toBeGreaterThanOrEqual(pricesAtSave);
-            const quotable = Array.from({length: pricesAtWarning - pricesAtSave + 1}, (_, i) => String(pricesAtSave + i));
-            await expect(page.getByTestId('confirm-modal-message')).toContainText(new RegExp(`\\b(${quotable.join('|')})\\b`));
+            await expect(page.getByTestId('confirm-modal-message')).toContainText(new RegExp(`\\b${impact!.prices_deleted}\\b`));
 
             await page.getByTestId('confirm-modal-cancel').click();
             await expect(page.getByTestId('asset-parametric-switch-confirm')).not.toBeVisible({timeout: 5000});
@@ -716,6 +731,82 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             if (assetId !== null) {
                 await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
             }
+        }
+    });
+
+    // ========================================================================
+    // X5-1 (C-65a + W-B2 + X-R69): removing a provider is no longer refused for the transactions
+    // linked to the events it generated. A dialog says how many prices, events and linked
+    // transactions are lost (the transactions are kept, only unlinked); confirm goes through.
+    //
+    // Data: an asset of the test's own, a scheduled_investment assignment whose planned DIVIDEND a
+    // price sync stores under it (is_auto), and a DIVIDEND on a broker of the test's own that
+    // realises that event. Nothing shared is read or written; the broker (with its transaction) and
+    // the asset go afterwards, whatever the outcome.
+    // ========================================================================
+    test('X5-1: removing a provider whose generated dividend a transaction is linked to asks first, then removes it and only unlinks the transaction', async ({page}) => {
+        test.setTimeout(90_000);
+        const own: Owned = {assetIds: [], brokerIds: []};
+        try {
+            const asset = await createEventsAsset(page, own, {label: 'E2E X5-1 remove'});
+            const eventId = await seedProviderDividend(page, asset.id, 5, `x5-1 ${uniqueSuffix()}`, '0.80');
+            const txId = await linkDividend(page, own, asset.id, eventId, daysAgoIso(5));
+
+            // Verified, not inferred: the DIVIDEND realises the generated event, and the provider is assigned.
+            const readTransaction = async () => {
+                const rows = await jsonFrom<Array<{id: number; asset_event_id?: number | null}>>(await page.request.get(`${API_BASE}/transactions`, {params: {ids: txId}}), `read transaction ${txId}`);
+                const row = rows.find((candidate) => candidate.id === txId);
+                if (!row) throw new Error(`Transaction ${txId} is not stored: ${JSON.stringify(rows)}`);
+                return row;
+            };
+            const assignmentsOf = async () => jsonFrom<Array<{asset_id: number; provider_code: string}>>(await page.request.get(`${API_BASE}/assets/provider/assignments`, {params: {asset_ids: asset.id}}), `read the assignment of asset ${asset.id}`);
+            expect((await readTransaction()).asset_event_id, 'the DIVIDEND realises the provider event').toBe(eventId);
+            expect(
+                (await assignmentsOf()).filter((assignment) => assignment.asset_id === asset.id).map((assignment) => assignment.provider_code),
+                'the asset is priced by the scheduled provider',
+            ).toEqual(['scheduled_investment']);
+
+            // Nothing here is about live prices: the detail page's OHLC write-back is answered locally.
+            await page.route('**/api/v1/assets/prices/current*', async (route) => {
+                await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({results: [], success_count: 0, errors: []})});
+            });
+            await goToAssetDetailPage(page, String(asset.id));
+            await openEditAssetModal(page);
+
+            const noProvider = page.getByTestId('asset-modal-no-provider');
+            await expect(noProvider).toBeVisible();
+            await noProvider.check();
+            await expect(noProvider).toBeChecked();
+
+            // Save: the dry run goes first, the dialog follows, and nothing has been removed yet.
+            const impactResponse = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `${API_BASE}/assets/provider/impact`, {timeout: 15_000});
+            await page.getByTestId('asset-modal-save').click();
+            type ImpactBody = {results: Array<{asset_id: number; action: string; reason: string; events_deleted: number; transactions_unlinked: number; blocking_splits?: unknown[]}>};
+            const impact = ((await (await impactResponse).json()) as ImpactBody).results.find((result) => result.asset_id === asset.id);
+            expect(impact, 'the dry run answers for the asset being saved').toBeTruthy();
+            expect(impact!.action).toBe('remove');
+            expect(impact!.reason).toBe('provider_removed');
+            expect(impact!.events_deleted, 'the generated DIVIDEND is among what is lost').toBeGreaterThanOrEqual(1);
+            expect(impact!.transactions_unlinked, 'the one DIVIDEND this test linked loses its link').toBe(1);
+            expect(impact!.blocking_splits ?? [], 'a DIVIDEND is no split: nothing refuses the removal').toEqual([]);
+
+            await expect(page.getByTestId('asset-provider-remove-confirm')).toBeVisible({timeout: 15_000});
+            expect(
+                (await assignmentsOf()).some((assignment) => assignment.asset_id === asset.id),
+                'nothing is removed before the confirm',
+            ).toBe(true);
+            expect((await readTransaction()).asset_event_id, 'the link is intact before the confirm').toBe(eventId);
+
+            await page.getByTestId('confirm-modal-confirm').click();
+            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 20_000});
+
+            // The provider is gone, and the transaction is still there — unlinked, not deleted.
+            await expect.poll(async () => (await assignmentsOf()).some((assignment) => assignment.asset_id === asset.id), {message: 'the confirmed removal takes the provider away', timeout: 15_000}).toBe(false);
+            const kept = await readTransaction();
+            expect(kept.id, 'the transaction is kept').toBe(txId);
+            expect(kept.asset_event_id ?? null, 'but it no longer realises the deleted event').toBeNull();
+        } finally {
+            await deleteOwned(page, own);
         }
     });
 
@@ -828,6 +919,181 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
 });
 
 // ============================================================================
+// O-20: one creation, one price sync.
+//
+// Creating an asset with a provider from the list page asks for its prices TWICE: the modal fires a background
+// full-history sync as it closes (AssetModal.svelte, saveCreate), and the list page's `oncreated` reloads the
+// assets and syncs the new one again (assets/+page.svelte, handleSyncAsset). The direction is one sync, owned by
+// the modal — but this test pins the count only, never which of the two survives.
+//
+// Offline: the dropdown cannot offer `mockprov` (the backend hides test-only providers and
+// ProviderAssignmentSection filters it), so the UI path picks a live provider as Bug K does, and every
+// provider-facing call of this page — probe, sync, current prices — is answered here; cross-origin requests
+// (provider icons) are refused.
+// ============================================================================
+
+type SyncItem = {asset_id: number; date_range: {start: string; end: string}};
+type ProbeBody = {provider_code: string; identifier: string; operations?: string[]};
+type ProviderInfo = {code: string; kind?: string; accepted_identifier_types?: string[]; params_schema?: Array<{required?: boolean}>};
+
+/** A sync that reached no provider: nothing fetched, nothing written, and said so — never a fabricated success. */
+function offlineSyncAnswer(items: SyncItem[]) {
+    return {
+        results: items.map(({asset_id}) => ({asset_id, status: 'failed', provider_used: null, points_fetched: 0, points_changed: 0, inserted_count: 0, updated_count: 0, events_fetched: 0, events_changed: 0, changed_points: null, errors: ['Synthetic offline boundary: no sync performed']})),
+        success_count: 0,
+        errors: [],
+        total_points_changed: 0,
+    };
+}
+
+/** The connection test only has to open the Save gate: a passing price and history, nothing for metadata. */
+function offlineProbeAnswer(request: ProbeBody) {
+    const operations = request.operations ?? [];
+    return {
+        provider_code: request.provider_code,
+        identifier: request.identifier,
+        total_execution_time_ms: 0,
+        ...(operations.includes('current_price') ? {current_price: {success: true, execution_time_ms: 0, value: '100.00', currency: 'EUR', as_of_date: todayIso()}} : {}),
+        ...(operations.includes('history') ? {history: {success: true, execution_time_ms: 0, points_count: 2, date_range: `${daysAgoIso(1)} → ${todayIso()}`}} : {}),
+        ...(operations.includes('metadata') ? {metadata: {success: false, execution_time_ms: 0, error_code: 'NO_DATA', error: 'Synthetic offline boundary: no metadata'}} : {}),
+    };
+}
+
+/** The list's live poll: no quote, hence no write-back of today's price. */
+function offlineCurrentPricesAnswer(assetIds: number[]) {
+    return {results: assetIds.map((asset_id) => ({asset_id, value: null, currency: null, as_of_date: null, source: null, error: 'Synthetic offline boundary: no current quote requested'})), success_count: 0, errors: []};
+}
+
+test.describe('NR — One price sync per asset creation (O-20)', () => {
+    let owned: OwnedAssets = new Map();
+
+    test.beforeEach(async ({page}) => {
+        owned = new Map();
+        await login(page, TEST_USER);
+    });
+
+    // Routes first, so a callback racing the page's teardown cannot report an error of its own; then the asset, by id.
+    test.afterEach(async ({page}) => {
+        await page.unrouteAll({behavior: 'ignoreErrors'});
+        await deleteOwnedAssets(page, owned);
+    });
+
+    test('creating an asset with a provider from the list page posts exactly one price sync for it', async ({page, baseURL}) => {
+        // Two load waves of the list (before and after the save) plus the modal: more than the default 30 s under load.
+        test.setTimeout(60_000);
+        const name = `E2E O20 ${uniqueSuffix()}`;
+        // ISIN-shaped, under the user-assigned "ZZ" prefix: no real instrument carries it.
+        const identifier = `ZZ${uniqueToken(10)}`;
+
+        // Schema-checked here, once: nobody awaits a route callback, so a stub that drifted from the generated
+        // schema must fail at this line, not as a request left unanswered.
+        schemas.FABulkRefreshResponse.parse(offlineSyncAnswer([{asset_id: 1, date_range: {start: 'resume', end: todayIso()}}]));
+        schemas.FAProviderProbeResponse.parse(offlineProbeAnswer({provider_code: 'any', identifier, operations: ['current_price', 'history', 'metadata']}));
+        schemas.FACurrentPriceResponse.parse(offlineCurrentPricesAnswer([1]));
+
+        // A provider the form settles on by itself — the default TICKER, or its only identifier type — with no
+        // required parameter and no parametric series (that kind skips the sync on purpose). Today: borsa_italiana.
+        const providersResponse = await page.request.get(`${API_BASE}/assets/provider`);
+        expect(providersResponse.ok(), `GET ${API_BASE}/assets/provider answered ${providersResponse.status()}`).toBeTruthy();
+        const providers = (await providersResponse.json()) as ProviderInfo[];
+        const provider = providers.find((p) => {
+            const types = p.accepted_identifier_types ?? [];
+            return p.code !== 'mockprov' && p.kind === 'online_scraper' && (types.includes('TICKER') || (types.length === 1 && types[0] !== 'AUTO_GENERATED')) && !(p.params_schema ?? []).some((field) => field.required);
+        });
+        if (!provider) throw new Error(`no market provider the form can assign without extra parameters: ${JSON.stringify(providers.map((p) => ({code: p.code, kind: p.kind, types: p.accepted_identifier_types})))}`);
+
+        // ---- offline boundary: the catch-all first, since routes registered after it are tried before it ----
+        if (!baseURL) throw new Error('the project must set use.baseURL');
+        const origin = new URL(baseURL).origin;
+        await page.route('**/*', async (route) => {
+            const url = new URL(route.request().url());
+            if (['http:', 'https:'].includes(url.protocol) && url.origin !== origin) await route.abort('blockedbyclient');
+            else await route.fallback();
+        });
+        await page.route(`**${API_BASE}/assets/provider/probe`, async (route) => {
+            await route.fulfill({json: offlineProbeAnswer(route.request().postDataJSON() as ProbeBody)});
+        });
+        await page.route(`**${API_BASE}/assets/prices/current*`, async (route) => {
+            await route.fulfill({json: offlineCurrentPricesAnswer(route.request().postDataJSON() as number[])});
+        });
+        // The subject: every sync this page posts, recorded before it is answered.
+        const syncs: SyncItem[][] = [];
+        await page.route(`**${API_BASE}/assets/prices/sync`, async (route) => {
+            const items = route.request().postDataJSON() as SyncItem[];
+            syncs.push(items);
+            await route.fulfill({json: offlineSyncAnswer(items)});
+        });
+
+        // ---- create through the modal, from the list page ----
+        await goToAssetsPage(page);
+        // Cards are the grid's: the default view, driven to rather than assumed (the view is remembered).
+        await page.getByTestId('view-mode-grid').click();
+        await openCreateAssetModal(page);
+        const form = page.getByTestId('asset-modal-form');
+        await expect(form).toHaveAttribute('data-snapshot-ready', 'true');
+
+        const nameInput = page.getByTestId('asset-modal-display-name');
+        await nameInput.fill(name);
+        await expect(nameInput).toHaveValue(name);
+
+        // A toggle: ask for its state, act only if it is not there yet.
+        const providerHeader = page.getByTestId('asset-modal-provider-header');
+        if ((await providerHeader.getAttribute('data-expanded')) !== 'true') await providerHeader.click();
+        await expect(providerHeader).toHaveAttribute('data-expanded', 'true');
+
+        const providerSelect = page.getByTestId('provider-code-select-button');
+        await providerSelect.click();
+        await page.getByTestId(`provider-option-${provider.code}`).click();
+        await expect(providerSelect).toHaveAttribute('aria-expanded', 'false');
+
+        // Choosing a provider clears the identifier, so it is typed after; the field is always drawn for a typed identifier.
+        const identifierInput = page.getByTestId('provider-identifier');
+        await expect(identifierInput).toBeVisible();
+        await identifierInput.fill(identifier);
+        await expect(identifierInput).toHaveValue(identifier);
+
+        // Save is gated on a passing connection test once a provider is set: driven, and answered offline above.
+        await page.getByTestId('provider-test-config').click();
+        await expect(page.getByTestId('asset-modal-provider-status')).toHaveAttribute('data-status', 'passed', {timeout: 10_000});
+
+        const saveBtn = page.getByTestId('asset-modal-save');
+        await expect(saveBtn).toBeEnabled();
+        const assetId = await saveAndRecordCreated(page, owned, name, () => saveBtn.click());
+        await expect(form).toBeHidden({timeout: 15_000});
+
+        // Precondition, verified rather than inferred: the provider is really assigned — without it no sync is owed.
+        const assignmentsResponse = await page.request.get(`${API_BASE}/assets/provider/assignments?asset_ids=${assetId}`);
+        expect(assignmentsResponse.ok(), `provider assignments of asset ${assetId} answered ${assignmentsResponse.status()}`).toBeTruthy();
+        const assignment = ((await assignmentsResponse.json()) as Array<{asset_id: number; provider_code: string}>).find((a) => a.asset_id === assetId);
+        expect(assignment?.provider_code, `asset ${assetId} must carry the provider chosen in the modal`).toBe(provider.code);
+
+        // ---- barrier: the page has finished what it does after a creation ----
+        // The modal's sync leaves as the modal closes; the page's, if any, only after the second wave (prices) of its
+        // reload. The end of that wave (`data-busy` false) and the page marking the asset as syncing land in one
+        // microtask run, so from here a page sync shows as the card's sync control disabled, until the sync is
+        // answered and the prices reloaded. That control has no test id: it is the card's only button that can be
+        // disabled, and with a provider assigned (checked above) disabled means "syncing".
+        const card = page.getByTestId(`asset-card-${assetId}`);
+        await expect(card, 'the asset this test created must reach the grid').toBeVisible({timeout: 20_000});
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        // Presence barrier for the absence below: the card's footer, where the sync control lives, is drawn.
+        await expect(card.getByTestId('asset-card-merge')).toBeVisible();
+        await expect(card.getByRole('button', {disabled: true}), 'the card must stop syncing: its sync control stays disabled while the page syncs the asset').toHaveCount(0, {timeout: 20_000});
+
+        // ---- the claim ----
+        const syncsOfAsset = () => syncs.filter((items) => items.some((item) => item.asset_id === assetId));
+        // Presence first (the modal's sync is fire-and-forget), then the count, read once the page is done.
+        await expect.poll(() => syncsOfAsset().length, {message: `creating asset ${assetId} with a provider must ask for its prices`, timeout: 10_000}).toBeGreaterThanOrEqual(1);
+        const requests = syncsOfAsset();
+        expect(requests, `one creation, one POST ${API_BASE}/assets/prices/sync for asset ${assetId}; the page sent ${requests.length}: ${JSON.stringify(requests)}`).toHaveLength(1);
+        expect(
+            requests[0].map((item) => item.asset_id),
+            'the sync asks for the asset just created, and only for it',
+        ).toEqual([assetId]);
+    });
+});
+
+// ============================================================================
 // R14–R16: the type field is a two-level searchable select (TreeSelect). A
 // subtype is chosen inside its family, stored as itself, and drawn everywhere
 // with its composite icon — the ETF tag with the stock pastille — which is what
@@ -927,5 +1193,268 @@ test.describe('Asset type select (R14–R16)', () => {
             }
             if (assetId !== null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
         }
+    });
+});
+
+// ============================================================================
+// Workstream X, sub-lot 3 — premium sources first (F21), «Can’t find it? Let us know» (P20).
+//
+// Search Online in the create dialog, in a real browser and offline. Three reads of the page are answered here, each
+// on its exact path and for GET only; anything else goes through:
+// - `GET /system/instance`: the backend's own answer with `support_url` set per test — and `profile`, when a test asks —
+//   so the report's channel is the test's, not the lane's;
+// - `GET /assets/provider`: the backend's own list, one searchable provider made premium (the first in code order,
+//   mockprov aside — the dropdown never shows it), every other one community at the default priority;
+// - `GET /assets/provider/search/stream`: a canned stream, as services/assets/search.py sends it — one event per
+//   provider the search asked, then `done`. No provider is reached.
+// The component test (AssetSearchAutocomplete.test.ts, blocks F21 and P20) pins the cases; this pins the path through
+// the dialog, the real provider list and the real link — read and decoded, never followed. Nothing is written: the
+// dialog is cancelled, and the routes go with the test's page.
+// ============================================================================
+
+const PROVIDER_LIST_PATH = `${API_BASE}/assets/provider`;
+const SEARCH_STREAM_PATH = `${API_BASE}/assets/provider/search/stream`;
+
+/** What the routes of one test chose, and what they served. */
+interface SearchBoundary {
+    /** The provider made premium: the first searchable one in code order, mockprov aside. */
+    premium: string;
+    /** The provider whose result fills the community section: the next one. */
+    community: string;
+    /** Each answer the page read the instance configuration with, as served. */
+    instance: Array<Record<string, unknown>>;
+    /** The providers each streamed search asked, in its order. */
+    searches: string[][];
+}
+
+/**
+ * Answer this page's `GET <path>` — that path only; any other method falls through — with the backend's own answer,
+ * rewritten. The headers that describe the body in transit go: the backend gzips from 1 KB up, and a kept
+ * `content-encoding` would have the browser decode plain JSON (fixtures/instance-config.ts). Nobody awaits a route
+ * callback, so it never throws (Bug G above): a read it leaves unanswered fails the test on its own assertions.
+ */
+async function serveRewritten(page: Page, path: string, rewrite: (body: unknown) => unknown): Promise<void> {
+    await page.route(
+        (url) => url.pathname === path,
+        async (route, request) => {
+            if (request.method() !== 'GET') return route.fallback();
+            try {
+                const response = await route.fetch();
+                const headers = {...response.headers()};
+                delete headers['content-encoding'];
+                delete headers['content-length'];
+                await route.fulfill({status: response.status(), headers, ...(response.ok() ? {json: rewrite(await response.json())} : {body: await response.body()})});
+            } catch (error) {
+                console.warn(`[asset-modal] left GET ${request.url()} unanswered: ${String(error)}`);
+            }
+        },
+    );
+}
+
+/** A search result as the backend sends it, under `provider`: checked against the generated schema. */
+function searchHit(provider: string, identifier: string) {
+    return schemas.FAProviderSearchResultItem.parse({identifier, identifier_type: 'TICKER', display_name: `E2E search ${identifier}`, provider_code: provider, currency: 'EUR', asset_type: 'ETF', provider_url: null, provider_params: null, via_web: false});
+}
+
+/**
+ * Install the three routes on this page, before it loads. With `found`, the premium provider answers two results and
+ * the community one one result; every other provider the search asks answers none — all of them, without `found`.
+ * With `profile`, the instance answers that profile; without it, the backend's own passes through.
+ */
+async function routeSearchBoundary(page: Page, {supportUrl, found, profile}: {supportUrl: string | null; found: boolean; profile?: 'selfhosted' | 'managed'}): Promise<SearchBoundary> {
+    // The real list, through `page.request`, which no page route reaches.
+    const listed = await page.request.get(PROVIDER_LIST_PATH);
+    expect(listed.ok(), `GET ${PROVIDER_LIST_PATH} answered ${listed.status()}`).toBe(true);
+    const searchable = ((await listed.json()) as Array<{code: string; supports_search?: boolean}>)
+        .filter((provider) => provider.supports_search === true && provider.code !== 'mockprov')
+        .map((provider) => provider.code)
+        .sort();
+    if (searchable.length < 2) throw new Error(`F21 needs two searchable providers besides mockprov, one made premium and one left community; this backend lists ${JSON.stringify(searchable)}`);
+    const [premium, community] = searchable;
+    const boundary: SearchBoundary = {premium, community, instance: [], searches: []};
+    const hits: Record<string, unknown[]> = found ? {[premium]: [searchHit(premium, 'E2E-F21-P1'), searchHit(premium, 'E2E-F21-P2')], [community]: [searchHit(community, 'E2E-F21-C1')]} : {};
+
+    await serveRewritten(page, INSTANCE_CONFIG_PATH, (body) => {
+        const answer = {...(body as Record<string, unknown>), support_url: supportUrl, ...(profile === undefined ? {} : {profile})};
+        boundary.instance.push(answer);
+        return answer;
+    });
+    await serveRewritten(page, PROVIDER_LIST_PATH, (body) => (body as Array<{code: string}>).map((provider) => ({...provider, ...(provider.code === premium ? {tier: 'premium', priority: 0} : {tier: 'community', priority: 100})})));
+    await page.route(
+        (url) => url.pathname === SEARCH_STREAM_PATH,
+        async (route, request) => {
+            if (request.method() !== 'GET') return route.fallback();
+            const asked = (new URL(request.url()).searchParams.get('providers') ?? '').split(',').filter((code) => code !== '');
+            boundary.searches.push(asked);
+            // The premium provider answers last: its results must lead by their tier, not by their arrival.
+            const answers = [...asked.filter((code) => code !== premium), ...asked.filter((code) => code === premium)].map((code) => ({event: 'provider_results', provider_code: code, results: hits[code] ?? []}));
+            const done = {event: 'done', total_results: answers.reduce((total, answer) => total + answer.results.length, 0), providers_queried: asked, providers_with_errors: []};
+            await route.fulfill({status: 200, contentType: 'text/event-stream', body: [...answers, done].map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')}).catch((error) => console.warn(`[asset-modal] left GET ${request.url()} unanswered: ${String(error)}`));
+        },
+    );
+    return boundary;
+}
+
+/** The report a link to a new GitHub issue carries: the address it opens, and the lines of the issue's body. */
+function githubReport(href: string | null): {issue: string; lines: string[]} {
+    const url = new URL(href ?? 'about:blank');
+    return {issue: `${url.origin}${url.pathname}`, lines: (url.searchParams.get('body') ?? '').split('\n')};
+}
+
+test.describe('Asset search — premium first, «Can’t find it? Let us know» (F21, P20)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('premium results lead in a section of their own, the report row follows it, the community section stays closed until opened; the report is a prefilled GitHub issue', async ({page}) => {
+        const boundary = await routeSearchBoundary(page, {supportUrl: null, found: true, profile: 'selfhosted'});
+        const {premium, community} = boundary;
+        const query = 'E2E F21 world equity';
+
+        await goToAssetsPage(page);
+        await openCreateAssetModal(page);
+        const dialog = page.getByTestId('asset-modal');
+        await expect(dialog.getByTestId(`asset-search-provider-${premium}`), 'precondition: Search Online asks the provider made premium').toHaveAttribute('data-selected', 'true', {timeout: 10_000});
+        // Its input has no test id: it is the one text field of the search block.
+        await dialog.locator('[data-search-autocomplete] input[type="text"]').fill(query);
+        const results = dialog.getByTestId('asset-search-results');
+        await expect(results, 'the search ends with results').toHaveAttribute('data-state', 'results', {timeout: 15_000});
+        expect(boundary.searches, 'one search, which asked the premium provider and the community one').toEqual([expect.arrayContaining([premium, community])]);
+
+        // Premium first, though it answered last: its two results, in a section of their own, under its badge. Every
+        // result is this test's own (the stream is routed), so their count is the subject: the closed section draws none.
+        const premiumSection = results.getByTestId('asset-search-premium-section');
+        await expect(premiumSection.getByTestId('asset-search-premium-badge')).toBeVisible();
+        for (const [i, identifier] of ['E2E-F21-P1', 'E2E-F21-P2'].entries()) {
+            const row = premiumSection.getByTestId(`asset-search-result-${i}`);
+            await expect(row).toHaveAttribute('data-provider', premium);
+            await expect(row).toHaveAttribute('data-identifier', identifier);
+        }
+        await expect(results.locator('[data-testid^="asset-search-result-"]'), 'only the premium results are drawn').toHaveCount(2);
+
+        // Then the report row, outside the Premium section, then the community section's button: closed, counting one.
+        const reportRow = results.getByTestId('asset-search-report-row');
+        const toggle = results.getByTestId('asset-search-community-toggle');
+        await expect(reportRow).toBeVisible();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        await expect(toggle).toHaveAttribute('data-count', '1');
+        await expect(results.getByTestId('asset-search-community-warning'), 'closed: no warning yet').toHaveCount(0);
+        const placed = await results.evaluate((dropdown) => {
+            const [section, row, button] = ['asset-search-premium-section', 'asset-search-report-row', 'asset-search-community-toggle'].map((id) => dropdown.querySelector(`[data-testid="${id}"]`));
+            const follows = (a: Element | null, b: Element | null) => a !== null && b !== null && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+            return {afterPremium: follows(section, row) && !section?.contains(row), beforeCommunity: follows(row, button)};
+        });
+        expect(placed, 'the report row stands between the Premium section, outside it, and the community one').toEqual({afterPremium: true, beforeCommunity: true});
+
+        // The report: no support address, so a new GitHub issue, in a new tab. Read from its href, never followed.
+        const link = reportRow.getByTestId('asset-search-report');
+        await expect(link).toHaveAttribute('data-channel', 'github');
+        await expect(link).toHaveAttribute('target', '_blank');
+        await expect(link).toHaveAttribute('rel', /(^|\s)noopener(\s|$)/);
+        await expect(link).toHaveAttribute('rel', /(^|\s)noreferrer(\s|$)/);
+        // Who wrote it: the app's version, the profile of the routed answer, the language in force. Polled: the page
+        // applies the instance's answer on a schedule of its own.
+        await expect.poll(() => boundary.instance.length, {message: 'the page read the instance configuration through the route'}).toBeGreaterThan(0);
+        const profile = String(boundary.instance.at(-1)?.profile);
+        const language = await page.locator('html').getAttribute('lang');
+        await expect.poll(async () => githubReport(await link.getAttribute('href')).lines.find((line) => line.startsWith('LibreFolio ')) ?? '', {message: 'the report names its writer'}).toMatch(new RegExp(`^LibreFolio .+, ${profile}, language ${language}$`));
+        const report = githubReport(await link.getAttribute('href'));
+        expect(report.issue, 'a new issue of the project').toBe('https://github.com/Librefolio/LibreFolio/issues/new');
+        expect(report.lines).toContain(`Search: ${query}`);
+        const outcome = (code: string) => (code === premium ? '2 results' : code === community ? '1 result' : '0 results');
+        expect(report.lines.filter((line) => line.startsWith('- ')).sort(), 'every provider searched, with what it answered').toEqual(boundary.searches[0].map((code) => `- ${code}: ${outcome(code)}`).sort());
+
+        // Opened: the warning, and the community result, numbered on from the premium ones.
+        await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        await expect(results.getByTestId('asset-search-community-warning')).toBeVisible();
+        const communityRow = results.getByTestId('asset-search-result-2');
+        await expect(communityRow).toHaveAttribute('data-provider', community);
+        await expect(communityRow).toHaveAttribute('data-identifier', 'E2E-F21-C1');
+
+        await page.getByTestId('asset-modal-cancel').click();
+        await expect(page.getByTestId('asset-modal-form')).toBeHidden();
+    });
+
+    test('a mailto: support address sends the report by mail; a finished search closed by a click outside comes back on focus, with its report', async ({page}) => {
+        const boundary = await routeSearchBoundary(page, {supportUrl: 'mailto:support@example.org', found: false});
+        const query = 'E2E P20 nothing like it';
+
+        await goToAssetsPage(page);
+        await openCreateAssetModal(page);
+        const dialog = page.getByTestId('asset-modal');
+        await expect(dialog.getByTestId(`asset-search-provider-${boundary.premium}`), 'precondition: Search Online asks the provider made premium').toHaveAttribute('data-selected', 'true', {timeout: 10_000});
+        const input = dialog.locator('[data-search-autocomplete] input[type="text"]');
+        await input.fill(query);
+        const results = dialog.getByTestId('asset-search-results');
+        await expect(results, 'every provider answered nothing').toHaveAttribute('data-state', 'empty', {timeout: 15_000});
+        const reportRow = results.getByTestId('asset-search-report-row');
+        await expect(reportRow).toBeVisible();
+
+        // The routed support address reached the page: the report is a mail to it, which opens no tab.
+        const link = reportRow.getByTestId('asset-search-report');
+        await expect(link, 'the support address of the routed answer').toHaveAttribute('data-channel', 'mailto');
+        await expect(link, 'a mail opens no tab').not.toHaveAttribute('target');
+        const href = (await link.getAttribute('href')) ?? '';
+        const mail = /^mailto:support@example\.org\?subject=([^&]*)&body=([^&]*)$/.exec(href);
+        if (!mail) throw new Error(`the report is not mailto:support@example.org?subject=…&body=…: ${href}`);
+        expect(decodeURIComponent(mail[1])).toBe(`LibreFolio: asset not found — ${query}`);
+        expect(mail[2], 'a mail body breaks its lines with CRLF (RFC 6068)').toContain('%0D%0A');
+        const body = decodeURIComponent(mail[2]);
+        expect(body.replace(/\r\n/g, ''), 'every line break of the body is CRLF').not.toContain('\n');
+        expect(body.split('\r\n')).toContain(`Search: ${query}`);
+
+        // A click elsewhere in the dialog (its name field: a click on the overlay would close the dialog itself) closes
+        // the dropdown, report row included.
+        await dialog.getByTestId('asset-modal-display-name').click();
+        await expect(results).toHaveCount(0);
+        await expect(dialog.getByTestId('asset-modal-form'), 'the dialog stays open').toBeVisible();
+
+        // Back in the search box: the finished search shows again, with its report row — shown, not searched again.
+        await input.focus();
+        await expect(results).toHaveAttribute('data-state', 'empty');
+        await expect(results.getByTestId('asset-search-report-row')).toBeVisible();
+        expect(boundary.searches, 'the focus shows the last search: it does not search again').toHaveLength(1);
+
+        await page.getByTestId('asset-modal-cancel').click();
+        await expect(page.getByTestId('asset-modal-form')).toBeHidden();
+    });
+
+    test('a managed instance with no support address shows no report row: a public GitHub issue would publish the instance and its search (N61)', async ({page}) => {
+        const boundary = await routeSearchBoundary(page, {supportUrl: null, found: true, profile: 'managed'});
+        const {premium, community} = boundary;
+        const query = 'E2E N61 managed world equity';
+
+        await goToAssetsPage(page);
+        // Precondition, verified: the page read the instance through the route, and its client takes that answer — the
+        // generated schema is the one it validates with (fixtures/instance-config.ts). A refused answer would leave the
+        // page on its defaults, never loaded: no row either, for the wrong reason.
+        await expect.poll(() => boundary.instance.length, {message: 'the page read the instance configuration through the route'}).toBeGreaterThan(0);
+        const served = schemas.InstanceConfigResponse.parse(boundary.instance.at(-1));
+        expect(served.profile).toBe('managed');
+        expect(served.support_url ?? null).toBeNull();
+
+        await openCreateAssetModal(page);
+        const dialog = page.getByTestId('asset-modal');
+        await expect(dialog.getByTestId(`asset-search-provider-${premium}`), 'precondition: Search Online asks the provider made premium').toHaveAttribute('data-selected', 'true', {timeout: 10_000});
+        await dialog.locator('[data-search-autocomplete] input[type="text"]').fill(query);
+        const results = dialog.getByTestId('asset-search-results');
+        await expect(results, 'the search ends with results').toHaveAttribute('data-state', 'results', {timeout: 15_000});
+        expect(boundary.searches, 'one search, which asked the premium provider and the community one').toEqual([expect.arrayContaining([premium, community])]);
+
+        // The search is over and drawn — its premium results, the community section's button: on a self-hosted instance
+        // the report row stands between them by now (the first test of this block). Here there is none.
+        await expect(results.getByTestId('asset-search-premium-section').getByTestId('asset-search-result-0')).toHaveAttribute('data-provider', premium);
+        const toggle = results.getByTestId('asset-search-community-toggle');
+        await expect(toggle).toBeVisible();
+        await expect(results.getByTestId('asset-search-report-row')).toHaveCount(0);
+        // Nor once the community section is open; and no address of GitHub anywhere in the search block.
+        await toggle.click();
+        await expect(results.getByTestId('asset-search-community-warning')).toBeVisible();
+        await expect(results.getByTestId('asset-search-report-row')).toHaveCount(0);
+        await expect(dialog.locator('[data-search-autocomplete] [href*="github.com"]')).toHaveCount(0);
+
+        await page.getByTestId('asset-modal-cancel').click();
+        await expect(page.getByTestId('asset-modal-form')).toBeHidden();
     });
 });

@@ -27,7 +27,7 @@ description is the merge of the two sides' texts.
 
 ## Solution
 
-Commit `305b80202` (2026-10-09, plan 37 §9, for every plugin): an incoming DEPOSIT or WITHDRAWAL also looks at the saved
+Commit `69bf64f4b` (2026-10-09, plan 37 §9, for every plugin): an incoming DEPOSIT or WITHDRAWAL also looks at the saved
 `CASH_TRANSFER` and `FX_CONVERSION` legs (`_MERGED_LEG_TYPES`) with the same sign, date and amount. On a merged leg the
 description matches when it *contains* the incoming one — merged texts are joined with a newline — and the match is
 then **«probable»**. A «possible» duplicate stays selected for import by default, so it would still have doubled the
@@ -50,6 +50,6 @@ with the Scalable importers (train 30), whose two-broker flow makes such re-impo
 
 | Role | Path |
 |------|------|
-| `detect_tx_duplicates`, `_MERGED_LEG_TYPES` | `backend/app/services/brim_provider.py` |
+| `detect_tx_duplicates`, `_MERGED_LEG_TYPES` | `backend/app/services/brim/brim_provider.py` |
 | `TestMergedPairDuplicates` | `backend/test_scripts/test_db/test_brim_db.py` |
 | SC-A01, SC-B01 | `backend/test_scripts/test_api/test_brim_scalable_api.py` |

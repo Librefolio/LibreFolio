@@ -231,10 +231,10 @@
             {$t('tools.pacAllocator.planner.assets.composition', {default: 'Composition'})}
             <HelpTip label={$t('tools.pacAllocator.planner.assets.composition', {default: 'Composition'})} help={compositionHelp()} />
         </h3>
-        <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-exposure-block" data-dimension="sector">
+        <div class="rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-exposure-block" data-dimension="sector">
             <DistributionEditor kind="sector" bind:value={sectorValue} onchange={(value) => writeDimension('sector', value)} zIndex={70} />
         </div>
-        <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-exposure-block" data-dimension="geography">
+        <div class="rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-exposure-block" data-dimension="geography">
             <DistributionEditor kind="geographic" bind:value={geographyValue} onchange={(value) => writeDimension('geography', value)} zIndex={70} />
         </div>
     </section>

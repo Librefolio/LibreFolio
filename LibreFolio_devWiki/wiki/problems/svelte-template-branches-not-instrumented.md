@@ -1,5 +1,5 @@
 ---
-title: "Svelte template branches were invisible to V8 coverage: an empty `branchMap` for `{#if}` — istanbul instrumentation of the source counts them (`2e104b919`)"
+title: "Svelte template branches were invisible to V8 coverage: an empty `branchMap` for `{#if}` — istanbul instrumentation of the source counts them (`4e719107e`)"
 category: problem
 status: resolved
 date: 2026-08-31
@@ -68,7 +68,7 @@ noise. The real matrix has to be counted by hand.
 
 ## Status
 
-**Resolved** by `2e104b919` (2026-08-30, shipped in 1.1.0), the day before this page was written from the earlier
+**Resolved** by `4e719107e` (2026-08-30, shipped in 1.1.0), the day before this page was written from the earlier
 measurement: the build is instrumented by `vite-plugin-istanbul`, which reads the source before the compiler
 rewrites it, and the branches counted on `.svelte` files went from 0 to 11 620. The same commit made the JS pipeline
 istanbul end to end and stopped a double count of shared files. Points 1 and 2 of the consequences describe the V8
@@ -76,7 +76,7 @@ measurement; point 3 stands. What remains is weaker and documented: the remap fr
 *whether a component was reached*, much less about *whether line X is covered* (`coverage-model.md`, «Coverage is a
 map, not a grade»).
 
-Until 2026-10-13 this section read «Accepted, not fixed»; the backlog's C-72 found it contradicted by `2e104b919`.
+Until 2026-10-13 this section read «Accepted, not fixed»; the backlog's C-72 found it contradicted by `4e719107e`.
 
 ## Source files
 
@@ -88,7 +88,7 @@ Until 2026-10-13 this section read «Accepted, not fixed»; the backlog's C-72 f
 | Vitest coverage provider | `frontend/vitest.config.ts` — `provider: 'istanbul'` (V8 reports an **empty branch map** for a Svelte template; that is the whole reason for this page) |
 | Report classification | `scripts/test_runner/_coverage.py` — `coverage-report --lang js` |
 | Developer docs, «Why istanbul, and no monocart any more» | `mkdocs_src/docs/developer/test-walkthrough/coverage-model.md` |
-| Extraction precedent | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| Extraction precedent | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
 
 > **Path note (2026-09-01)**: this table cited `frontend/mcr.config.js`. **That file
 > has never existed** — it was proposal B.3 of `plan-p7-js-coverage.md:227`, and the

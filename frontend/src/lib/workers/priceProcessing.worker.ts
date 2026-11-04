@@ -6,7 +6,7 @@
  * receives a subset of the `items` array from `POST /api/v1/assets/prices/query`'s raw
  * (not-yet-validated) response, validates every item with the SAME Zod schema the
  * generated Zodios client would otherwise use automatically, then computes the SAME
- * derived UI state (last price, per-period deltas, chart-ready points) the Assets list
+ * derived UI state (last price, the delta over the range, chart-ready points) the Assets list
  * page already computed on the main thread — identical schema, identical algorithm,
  * only WHERE it runs changes.
  *
@@ -42,6 +42,10 @@ export interface PriceProcessingRequest {
 
 export interface ProcessedAssetResult {
     assetId: number;
+    /** The position of the item in the request it answers (the workers' chunks and the pool's balancing reorder the results). */
+    requestIndex: number;
+    /** The step of the item's prices: `daily`, or `weekly` or `monthly` when the item was sampled (Z-29b). */
+    resolution: 'daily' | 'weekly' | 'monthly';
     mappedPoints: AssetPricePoint[];
     derived: DerivedPriceState;
     signals: Array<z.infer<typeof schemas.SignalResult>>;
@@ -65,7 +69,7 @@ export function processPriceRequest(request: PriceProcessingRequest): PriceProce
     const results: ProcessedAssetResult[] = [];
     const invalidItemErrors: string[] = [];
 
-    for (const rawItem of request.items) {
+    for (const [requestIndex, rawItem] of request.items.entries()) {
         const parsed = FAPriceQueryResultSchema.safeParse(rawItem);
         if (!parsed.success) {
             invalidItemErrors.push(parsed.error.message);
@@ -76,8 +80,11 @@ export function processPriceRequest(request: PriceProcessingRequest): PriceProce
         const prices = item.prices ?? [];
         results.push({
             assetId: item.asset_id,
+            requestIndex,
+            resolution: item.resolution ?? 'daily',
             mappedPoints: apiPricesToAssetPricePoints(prices),
-            derived: computeDerivedPriceState(prices),
+            // The generated type of a nullable object is wider than the schema's: an array is never what the backend sends.
+            derived: computeDerivedPriceState(prices, Array.isArray(item.sample_bounds) ? null : item.sample_bounds),
             signals: item.signals ?? [],
         });
     }

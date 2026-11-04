@@ -29,7 +29,7 @@ expression does not depend on the store and is not recomputed.
 
 ## Solution
 
-Commit `0de730f3b` (train 38): the store is read in the template expression itself —
+Commit `f3dc1eb27` (train 38): the store is read in the template expression itself —
 `formatPercent(value, {…, locale: $currentLanguage})` — and a helper that needs the language receives it as a parameter.
 Digits and rounding do not change, and English text is identical.
 
@@ -50,17 +50,17 @@ The trap had already bitten twice, three weeks before plan 42:
 
 - **The privacy switch (R20)** — in the usage review of 2026-09-22 the broker list and the broker page did not follow
   the privacy toggle: in these two legacy components the formatter call inside a template expression compiled into
-  `$.untrack()`. `64d78e244` (2026-09-24) moved their five amounts to `CurrencyAmount.svelte`, a runes component
+  `$.untrack()`. `865509a12` (2026-09-24) moved their five amounts to `CurrencyAmount.svelte`, a runes component
   ([[features/F-101]]).
 - **The layout gate** — the same family, in a `$:` statement rather than a template: the `(app)` layout's gate
   missed the runes field `appBootstrap.ready`, and the requested page flashed before the Welcome redirect
-  (`cc20b8288`, read through `toStore()`) — [[problems/legacy-layout-gate-missed-runes-state]].
+  (`43c128ed2`, read through `toStore()`) — [[problems/legacy-layout-gate-missed-runes-state]].
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| The card | `frontend/src/lib/components/brokers/BrokerCard.svelte` |
-| The sharing panel | `frontend/src/lib/components/brokers/BrokerSharingPanel.svelte` |
+| The card | `frontend/src/lib/features/brokers/BrokerCard.svelte` |
+| The sharing panel | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` |
 | `formatPercent` and its `locale` option | `frontend/src/lib/utils/core/formatPercent.ts` |
 | E2E | `frontend/e2e/brokers/brokers-detail.spec.ts` |

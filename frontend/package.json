@@ -1,7 +1,7 @@
 {
   "name": "librefolio-frontend",
   "private": true,
-  "version": "1.1.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "predev": "node scripts/i18n-catalog-build.mjs",
@@ -14,12 +14,13 @@
     "prepare": "svelte-kit sync || echo ''",
     "precheck": "node scripts/i18n-catalog-build.mjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:e2e": "tsc -p tsconfig.e2e.json",
     "precheck:watch": "node scripts/i18n-catalog-build.mjs",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write 'src/**/*.{ts,svelte,js,css,html,json}' 'e2e/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.{ts,svelte,js,css,html,json}' 'e2e/**/*.ts'",
     "lint:dead": "knip --no-progress",
-    "generate-api": "npx openapi-zod-client src/lib/api/openapi.json -o src/lib/api/generated.ts --export-types --with-docs --with-description && node scripts/fix-openapi-discriminators.mjs && node scripts/tools-fix-main-discriminators.mjs && npm run generate-tools",
+    "generate-api": "node scripts/sanitize-openapi-descriptions.mjs && npx openapi-zod-client src/lib/api/openapi.json -o src/lib/api/generated.ts --export-types --with-docs --with-description && node scripts/fix-openapi-discriminators.mjs && node scripts/tools-fix-main-discriminators.mjs && npm run generate-tools",
     "generate-tools": "node scripts/generate-tools-client.mjs",
     "i18n:audit": "python scripts/i18n-audit.py",
     "i18n:audit:xlsx": "python scripts/i18n-audit.py --format xlsx",

@@ -49,7 +49,7 @@ This section answers *which of these move together?* — to spot the assets that
 
 **How to read it**
 
-- **One square per pair**: blue when the two assets move together, red when they move in opposite directions, pale when they move independently. Hover or tap it for the value in words.
+- **One square per pair**: blue when the two assets move together, red when they move in opposite directions, grey when they move independently. Hover or tap it for the value in words.
 - **Start from the two lists**: **The most alike** names the pairs that are almost the same exposure, **The ones that offset** the pairs that cushion each other. An empty list is a finding. Click a pair to find it in the matrix.
 - **A dash is not a zero**: the pair could not be measured — too little history, or a price that never moved.
 - **The order buttons** rearrange the matrix; they never change a value.
@@ -155,6 +155,7 @@ When something is wrong with the data, the tab says so once, right below the sel
 **How to read it**
 
 - **The data-quality banner** lists what to fix, each problem with its action, such as **Sync prices** or **Sync rates**. Click it to open the list.
+- **A currency pair with no exchange-rate route** gets its own button in that banner, one per pair (tooltip **Add FX pair**): it opens the **Add New Currency Pair** window right there, already filled in with that pair, and the analysis recalculates by itself once the pair is saved and its rates are downloaded → [Adding a Currency Pair](../fx/add-pair.md)
 - **The notice** below it names the **partial** results and their cause. A partial result still shows its figures: read them with that cause in mind.
 - **A section's own amber banner** means a result did not come back at all, often because the period is too short: choose a longer one, or sync the prices.
 - **What if…?** reports its own problems inside its section.

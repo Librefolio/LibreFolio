@@ -34,7 +34,7 @@ carried a null cost.
 
 ## Solution
 
-Commit `d7c148564` (train 28), on the developer's choice «3 facendo chiedere il costo anche col promote» ("ask for the
+Commit `1076fa994` (train 28), on the developer's choice «3 facendo chiedere il costo anche col promote» ("ask for the
 cost on a promote too"):
 
 - `_check_result_create_cost_basis` checks the promoted creations like any other creation — only Auto rows stay
@@ -68,7 +68,7 @@ A promoted transfer could enter the portfolio with no cost, its whole value then
 
 | Role | Path |
 |------|------|
-| `validate_cost_basis`, `_check_result_create_cost_basis`, `_check_promoted_saved_cost_basis`, `_apply_promote_cost_basis` | `backend/app/services/transaction_batch_stages.py` |
+| `validate_cost_basis`, `_check_result_create_cost_basis`, `_check_promoted_saved_cost_basis`, `_apply_promote_cost_basis` | `backend/app/services/transactions/batch_costs.py`, `backend/app/services/transactions/batch_creates.py` (`_apply_promote_cost_basis`) |
 | R3a, R3b, C0, G1, G2, B2.2 | `backend/test_scripts/test_api/test_transactions_batch_split_promote.py` |
 | The editor's E2E | `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` |
 | Developer doc, «Promote boundary» | `mkdocs_src/docs/developer/backend/transactions/wac.md` |

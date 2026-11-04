@@ -1,6 +1,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
+    import {donationsVisible} from '$lib/features/support/donations.svelte';
     import {onMount} from 'svelte';
     import {Book, Bug, ChevronDown, Coffee, Download, ExternalLink, HelpCircle, MessageCircle} from 'lucide-svelte';
 
@@ -94,7 +95,7 @@
 <div bind:this={menuRef} class="relative" data-menu-open={isOpen ? 'true' : 'false'} data-testid="help-menu">
     <button
         type="button"
-        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-gray-600 dark:text-gray-300"
+        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-colors text-lf-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls="help-menu-panel"
@@ -107,54 +108,57 @@
     </button>
 
     {#if isOpen}
-        <div id="help-menu-panel" class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 dark:bg-slate-800 dark:border-slate-700 py-1 z-50" role="menu" data-menu-open="true" data-testid="help-menu-panel">
+        <div id="help-menu-panel" class="absolute right-0 mt-2 w-56 bg-lf-card rounded-lg shadow-lg shadow-lf-shadow border border-lf-raised py-1 z-50" role="menu" data-menu-open="true" data-testid="help-menu-panel">
             {#if !isStandalone}
-                <button onclick={handleInstall} class="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" type="button" role="menuitem">
-                    <Download size={18} class="text-libre-green dark:text-green-400" />
+                <button onclick={handleInstall} class="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-lf-primary hover:bg-lf-hover transition-colors" type="button" role="menuitem">
+                    <Download size={18} class="text-lf-link" />
                     <span>{$_('help.installApp')}</span>
                 </button>
                 {#if showIosHint}
-                    <p class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                    <p class="px-4 py-2 text-xs text-lf-muted italic">
                         {$_('help.installAppIos')}
                     </p>
                 {/if}
                 {#if showDesktopHint}
-                    <p class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                    <p class="px-4 py-2 text-xs text-lf-muted italic">
                         {isAndroid ? $_('help.installAppAndroid') : $_('help.installAppDesktop')}
                     </p>
                 {/if}
-                <div class="border-t border-gray-100 dark:border-slate-600 my-1"></div>
+                <div class="border-t border-lf-subtle my-1"></div>
             {/if}
 
-            <a href={mkdocsUrl('community/faq/')} target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" role="menuitem">
-                <Book size={18} class="text-gray-500 dark:text-gray-400" />
+            <a href={mkdocsUrl('community/faq/')} target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 px-4 py-2.5 text-sm text-lf-primary hover:bg-lf-hover transition-colors" role="menuitem">
+                <Book size={18} class="text-lf-muted" />
                 <span>{$_('help.faq')}</span>
             </a>
 
-            <a href={mkdocsUrl()} target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" role="menuitem">
-                <MessageCircle size={18} class="text-gray-500 dark:text-gray-400" />
+            <a href={mkdocsUrl()} target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 px-4 py-2.5 text-sm text-lf-primary hover:bg-lf-hover transition-colors" role="menuitem">
+                <MessageCircle size={18} class="text-lf-muted" />
                 <span>{$_('common.documentation')}</span>
             </a>
 
-            <div class="border-t border-gray-100 dark:border-slate-600 my-1"></div>
+            <div class="border-t border-lf-subtle my-1"></div>
 
-            <a href={githubIssuesUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group" role="menuitem">
+            <a href={githubIssuesUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-lf-primary hover:bg-lf-hover transition-colors group" role="menuitem">
                 <div class="flex items-center space-x-3">
-                    <Bug size={18} class="text-orange-500" />
+                    <Bug size={18} class="text-lf-warning" />
                     <span>{$_('help.reportBug')}</span>
                 </div>
-                <ExternalLink size={14} class="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <ExternalLink size={14} class="text-lf-muted opacity-0 group-hover:opacity-100 transition-opacity" />
             </a>
 
-            <div class="border-t border-gray-100 dark:border-slate-600 my-1"></div>
+            <!-- F05 (workstream A): only once the server said self-hosted -->
+            {#if donationsVisible()}
+                <div class="border-t border-lf-subtle my-1"></div>
 
-            <a href={bmcUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group" role="menuitem">
-                <div class="flex items-center space-x-3">
-                    <Coffee size={18} class="text-amber-600" />
-                    <span>{$_('help.buyMeACoffee')}</span>
-                </div>
-                <ExternalLink size={14} class="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </a>
+                <a href={bmcUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-lf-primary hover:bg-lf-hover transition-colors group" role="menuitem" data-testid="help-donate-link">
+                    <div class="flex items-center space-x-3">
+                        <Coffee size={18} class="text-lf-donate" />
+                        <span>{$_('help.buyMeACoffee')}</span>
+                    </div>
+                    <ExternalLink size={14} class="text-lf-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+            {/if}
         </div>
     {/if}
 </div>

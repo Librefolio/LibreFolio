@@ -15,7 +15,7 @@ related:
 # Decision: French typography applied at build time, not in the sources
 
 > Written by workstream M as a note for the devWiki on 2026-10-11, filed by the historian on 2026-10-12 with its paths
-> and commits checked at `5d0585595`.
+> and commits checked at `9f63eec22`.
 
 ## Context
 
@@ -72,16 +72,16 @@ run of the translation pipeline writes plain spaces, so fixing the sources would
   the hook's own tokenizer.
 - Plain whitespace before `: ; ? ! %` in the French text drops from 6,580 to **0** in pages from a French source. 28
   remain in the English text of English fallback pages, by design.
-- Delivered in batch 15 (`a965956ab`, "feat(docs): French typography at build time"), built on train 37 and merged
-  with train 38 (`9245ffb6f`).
+- Delivered in batch 15 (`76edb470d`, "feat(docs): French typography at build time"), built on train 37 and merged
+  with train 38 (`682cb037d`).
 - **What the hook cannot reach (M-23, 2026-10-12)**: text rendered outside MkDocs. The in-app changelog reads
   `CHANGELOG.fr.md` in the browser (`frontend/src/lib/features/changelog/changelog.ts`, no such rule), so a French line
   there can break before `;` `:` `?` `!` `%` or inside « ». The same rules belong in the modal's renderer, for French,
   with the sources left as they are. Backlog M-23; the coordinator moved it into release 1.2 ([[features/F-109]]).
   *Resolved in 1.2 (M's batch 27, train 69)*: `typesetFrench()` in `changelog.ts` applies the hook's rules to the
-  French chapters, on the Markdown prose before it is cut into chapters (`99aa2f4ec`); fenced code, code spans, link
+  French chapters, on the Markdown prose before it is cut into chapters (`c078fab10`); fenced code, code spans, link
   destinations, images, HTML and URLs keep their text, other languages and the English fallback chapters are
-  untouched, and `CHANGELOG.fr.md` itself is unchanged. Tests ported from the hook's cases (`53673ae9f`).
+  untouched, and `CHANGELOG.fr.md` itself is unchanged. Tests ported from the hook's cases (`514cdbb66`).
 
 ## Links
 

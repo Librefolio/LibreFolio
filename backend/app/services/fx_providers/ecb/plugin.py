@@ -13,8 +13,9 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
-from backend.app.services.provider_registry import FXProviderRegistry, register_provider
+from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateLimitedError, FXRateProvider, FXServiceError, raise_if_fx_rate_limited
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
 
@@ -146,6 +147,7 @@ class ECBProvider(FXRateProvider):
                 return sorted(currencies)
 
         except httpx.HTTPError as e:
+            raise_if_fx_rate_limited(e, self.provider_code)
             logger.exception(f"Failed to fetch available currencies from ECB: {e}")
             raise FXServiceError(f"ECB API error: {e}") from e
         except (KeyError, ValueError) as e:
@@ -222,13 +224,20 @@ class ECBProvider(FXRateProvider):
                             for obs_idx, obs_value in obs_data.items():
                                 idx = int(obs_idx)
                                 rate_date_str = time_periods[idx]["id"]
-                                ecb_rate = Decimal(str(obs_value[0]))
+                                try:
+                                    ecb_rate = Decimal(str(obs_value[0]))
+                                except ArithmeticError:
+                                    # A value that is no number (a null included) loses its day only, never the whole
+                                    # currency, as BOE, SNB and FED skip a line (X-R52, X-R50)
+                                    logger.debug(f"ECB: skipping a value that is no number for {currency} on {rate_date_str}: {obs_value[0]!r}")
+                                    continue
                                 rate_date = date.fromisoformat(rate_date_str)
                                 observations.append((rate_date, self.base_currency, currency, ecb_rate))
 
                     return currency, observations
 
             except httpx.HTTPError as e:
+                raise_if_fx_rate_limited(e, self.provider_code)
                 logger.exception(f"Failed to fetch FX rates for {currency}: {e}")
                 raise FXServiceError(f"ECB API error for {currency}: {e}") from e
             except (KeyError, IndexError, ValueError) as e:
@@ -240,6 +249,8 @@ class ECBProvider(FXRateProvider):
             try:
                 _, observations = await _fetch_one(currency)
                 results[currency] = observations
+            except FXRateLimitedError:
+                raise  # refused for too many requests: stop here, the core pauses the provider
             except Exception as e:
                 logger.warning(f"ECB fetch failed for {currency}, skipping: {e}")
                 results[currency] = []

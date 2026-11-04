@@ -81,7 +81,7 @@ obvious implementation that gives a wrong answer.
 
 - Every optional flag enters the backend L2 cache key, the frontend cache key and `included_features`; the
   frontend passes them as a typed options object, not positional booleans.
-- Bucket labels follow the calendar (commit `8c7b0c0a7`, "P&L periods follow the calendar"), superseding the
+- Bucket labels follow the calendar (commit `3f4d4e4dd`, "P&L periods follow the calendar"), superseding the
   first end-anchored buckets (Round 4, D16).
 
 ## Consequences
@@ -109,8 +109,9 @@ obvious implementation that gives a wrong answer.
 | `get_broker_pnl_history`, report assembly | `backend/app/services/portfolio_service.py` |
 | `get_summary`, the per-broker breakdown (card capital from the engine, lot 41 H) | `backend/app/services/portfolio_service.py` |
 | Report flags (`include_*`) and series schemas | `backend/app/schemas/portfolio.py` |
-| Growth chart (P&L mode, sub-modes, candles, income) | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
-| Axis label planner | `frontend/src/lib/components/dashboard/growthLadderAxis.ts` |
+| Growth chart (P&L mode, sub-modes, candles, income) | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
+| Growth chart P&L series (sign split, candles, reference line) | `frontend/src/lib/features/dashboard/growthChartSeries.ts` |
+| Axis label planner | `frontend/src/lib/features/dashboard/growthLadderAxis.ts` |
 | Engine tests (identity, candles) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_broker_pnl_contributions.py` |
 | Candle tests | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_pnl_candles.py` |
 | Internal flows, filtered views, orphans, aggregate guard (lot 41) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_broker_internal_flows.py` |

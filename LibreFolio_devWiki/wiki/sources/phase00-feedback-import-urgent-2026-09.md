@@ -18,7 +18,7 @@ related:
 ## Summary
 
 Eight files (an incremental plan, five rounds, a review checklist and an integration manifest), shipped in
-`ef722b552` (2026-09-09, closed 2026-09-10) and archived on 2026-10-09. Group E fixed the import defects users hit
+`c8a77dda3` (2026-09-09, closed 2026-09-10) and archived on 2026-10-09. Group E fixed the import defects users hit
 first, added a "recommend LibreFolio" share feature, and replaced the browser-side GHCR probe of the update check.
 
 ## Key takeaways
@@ -66,6 +66,6 @@ The backlog these jobs came from, and where its other areas went: [[sources/phas
 | Round 4 — social boundaries | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound4-SocialBoundaries.prompt.md` |
 | Round 5 — GHCR auth | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound5-GHCRAuth.prompt.md` |
 | Integration manifest | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/manifest-integrazione-E.md` |
-| Asset PATCH | `backend/app/services/asset_sources/crud.py` |
+| Asset PATCH | `backend/app/services/assets/crud.py` |
 | Broker 409 | `backend/app/api/v1/brokers.py` |
-| Share feature | `frontend/src/lib/components/support/SocialShareModal.svelte` |
+| Share feature | `frontend/src/lib/features/support/SocialShareModal.svelte` |

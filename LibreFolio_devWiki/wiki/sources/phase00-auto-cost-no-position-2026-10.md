@@ -42,7 +42,7 @@ P-11 — three texts promise a zero-cost lot when a Manual cost basis is left em
 ## Wiki pages updated
 
 - [[decisions/auto-cost-basis-zero-without-position]] — new (from workstream P's draft note, verified on the code at
-  `083ed26dc`).
+  `fef0203ca`).
 - [[decisions/wac-inline-validate-commit]], [[decisions/financial-math-single-average-cost]] — notes.
 - [[sources/phase00-wac-unification-2026-10]] — the P-1 residual line corrected (it carried the superseded first
   direction).

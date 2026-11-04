@@ -85,8 +85,8 @@ No open problems. The FX domain is fully implemented and stable.
 | FX plugin guide | `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md` |
 | Conversion chain algorithm | `mkdocs_src/docs/developer/frontend/fx-chain-algorithm.md` |
 | User FX docs | `mkdocs_src/docs/user/fx/` |
-| FX API | `backend/app/api/v1/fx.py` |
-| FX service + abstract base | `backend/app/services/fx.py` |
+| FX API | `backend/app/api/v1/fx/` |
+| FX service + abstract base | `backend/app/services/fx/` |
 | FX providers | `backend/app/services/fx_providers/` |
 | DB models (FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | FX pages | `frontend/src/routes/(app)/fx/` |

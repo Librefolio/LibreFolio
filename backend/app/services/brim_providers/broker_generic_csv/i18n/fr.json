@@ -4,5 +4,27 @@
       "name": "CSV générique",
       "description": "Importe les transactions d’un fichier CSV générique. Détecte les colonnes à partir des noms de l’en-tête. Prend en charge divers formats de date et de nombre."
     }
+  },
+  "pluginSettings": {
+    "brim": {
+      "broker_generic_csv": {
+        "label": {
+          "date_order": "Format des dates"
+        },
+        "description": {
+          "date_order": "Comment les dates d'un CSV générique sont écrites : l'ordre du jour, du mois et de l'année, avec l'année sur quatre ou sur deux chiffres (aa : 00–68 donnent 2000–2068, 69–99 donnent 1969–1999). Avec jj/mm/aaaa et mm/jj/aaaa, une date qui ne se lit pas comme choisi se lit dans l'autre sens (25/12/2025 est toujours le 25 décembre) ; une date avec l'année sur quatre chiffres se lit aussi dans les formats à année sur deux chiffres."
+        },
+        "option": {
+          "date_order": {
+            "day_first": "jj/mm/aaaa — 03/04/2025 = 3 avril 2025",
+            "month_first": "mm/jj/aaaa — 03/04/2025 = 4 mars 2025",
+            "day_first_short": "jj/mm/aa — 03/04/26 = 3 avril 2026",
+            "month_first_short": "mm/jj/aa — 03/04/26 = 4 mars 2026",
+            "year_first_short": "aa/mm/jj — 26/04/03 = 3 avril 2026",
+            "year_first": "aaaa-mm-jj — 2026-04-03 = 3 avril 2026"
+          }
+        }
+      }
+    }
   }
 }

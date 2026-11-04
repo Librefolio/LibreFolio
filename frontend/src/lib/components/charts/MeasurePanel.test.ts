@@ -28,10 +28,23 @@
  *     fixed answer below — the responsive pixel behaviour is E2E territory.
  *   - what ECharts draws. MeasurePanel never touches a canvas; it emits plain
  *     data objects, and those are what the assertions read.
+ *
+ * C-97c-3 (the describe after the summary table's): a price keeps its
+ * significant digits — the summary's values under 1, its absolute Δ, and the
+ * pending banner's start value. The banner is read through the catalogue's own
+ * message (`measure.pending`, via `$_`) around the digits the case put in, never
+ * as a literal.
+ *
+ * Y-N65 (the last describe): no measure of a single day — the second click on the
+ * pending start, `updatePendingEnd`'s answer on that day, and the same day clicked
+ * twice in the expanded card's own range picker. Its docblock says how.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import type {ComponentProps} from 'svelte';
+import {flushSync, type ComponentProps} from 'svelte';
+import {get} from 'svelte/store';
 import {cleanup, fireEvent, render, setupI18n, waitFor, within} from '$test/component';
+import {_} from '$lib/i18n';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import MeasurePanel from './MeasurePanel.svelte';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {RenderedSignal} from '$lib/charts/signals';
@@ -77,7 +90,8 @@ interface PanelApi {
     startMeasureMode(): void;
     stopMeasureMode(): void;
     clearMeasures(): void;
-    updatePendingEnd(date: string, value: number): void;
+    /** Y-N65: answers whether `date` is the pending start — the chart's cue for the not-allowed cursor. */
+    updatePendingEnd(date: string, value: number): boolean;
     addPoint(date: string, value: number): void;
     addMeasureFromChartData(): void;
 }
@@ -471,6 +485,102 @@ describe('MeasurePanel — summary table (expanded card)', () => {
     });
 });
 
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits.
+ *
+ * Today the summary table writes a value under 1 with up to six decimals, trimmed (`formatFixed(v, 6, {trim: true})`),
+ * and the absolute Δ with four fixed ones (`formatFixed(v, 4, {signed: true})`); the pending banner writes the start
+ * value with four (`formatFixed(v, 4)`). On an asset priced in millionths the start 0.0000034573 reads `0.000003`, the
+ * end 0.0000035773 `0.000004`, their Δ of 1.2e-7 `+0.0000`, a start of 1.2e-7 `0`, and a pending start `0.0000`. The
+ * contract: a value from 1 keeps four decimals (`{minDecimals: 4}`); below 1 `formatPrice(v, {minDecimals: 0,
+ * floorDecimals: 6})` — up to six decimals where it has them, none forced, and as many as its first four significant
+ * digits need (`priceFractionDigits`, formatFixed.ts); the Δ `formatPrice(v, {minDecimals: 4, signed: true})`; the
+ * pending start value `formatPrice(v, {minDecimals: 4})`. Percentage points do not move (the case above reads them).
+ *
+ * Reds: the main row of a measure in millionths (start, end, Δ), a start of 1.2e-7, and a pending start of 0.0000034573.
+ * Guards, green today and after: a measure from 0.5 to 0.123456789 (`0.5`, `0.123457`, `-0.3765`), and a pending start
+ * of 100 (`100.0000`). A cell is read in the main row (`data-row-id`) by the column DataTable stamps on it
+ * (`data-column-id`), and holds its figure alone; the banner is the panel's text, compared with the catalogue's
+ * `measure.pending` around the expected digits. English UI on jsdom's en-US browser, checked before each case: the
+ * digits are typed.
+ */
+describe('MeasurePanel — a price keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /** baseData's days, priced in millionths: 0.0000034573 → 0.0000035773, a rise of 1.2e-7. */
+    const MILLIONTHS: LineDataPoint[] = [0.0000034573, 0.0000034973, 0.0000035373, 0.0000035773].map((value, index) => ({date: baseData[index].date, value}));
+    /** baseData's days, from 1.2e-7 up to 0.0000034573. */
+    const FROM_TENTH_OF_MILLIONTH: LineDataPoint[] = [0.00000012, 0.0000012, 0.0000024, 0.0000034573].map((value, index) => ({date: baseData[index].date, value}));
+    /** baseData's days, under 1 but from 0.001 up: 0.5 → 0.123456789. */
+    const SUB_UNIT: LineDataPoint[] = [0.5, 0.4, 0.3, 0.123456789].map((value, index) => ({date: baseData[index].date, value}));
+
+    /** The summary's main row once a measure spans `chartData`: its start, end and absolute Δ cells. */
+    async function mainRowOf(chartData: LineDataPoint[]): Promise<{start: string; end: string; delta: string}> {
+        const {api, container} = mount({chartData});
+        api.addMeasureFromChartData(); // auto-expands the new card → DataTable mounts
+        await waitFor(() => expect(rowById(container, 'main')).not.toBeNull());
+        const row = rowById(container, 'main')!;
+        const cell = (columnId: string): string => {
+            const found = row.querySelector<HTMLElement>(`td[data-column-id="${columnId}"]`);
+            if (!found) throw new Error(`no ${columnId} cell in the main row`);
+            return (found.textContent ?? '').trim();
+        };
+        return {start: cell('valueStart'), end: cell('valueEnd'), delta: cell('deltaAbs')};
+    }
+
+    /**
+     * The panel's text once a measure is pending from `value` on 2024-01-01, after a barrier that the pending banner is
+     * shown — the catalogue's `measure.pending` around whatever start value is written — and the banner the catalogue
+     * words around `written`.
+     */
+    function pendingFrom(value: number, written: string): {panel: string; banner: string} {
+        const {api, container} = mount();
+        api.startMeasureMode();
+        vi.spyOn(Date, 'now').mockReturnValue(1000);
+        api.addPoint('2024-01-01', value); // first click → pending start, banner shown
+        flushSync();
+        const panel = container.textContent ?? '';
+        const banner = (startValue: string): string => get(_)('measure.pending', {values: {startDate: '2024-01-01', startValue}});
+        const [before, after] = banner('⟨value⟩').split('⟨value⟩');
+        expect(panel.includes(before) && panel.includes(after), `barrier: the pending banner is shown, around some start value (${before}…${after})`).toBe(true);
+        return {panel, banner: banner(written)};
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the panel writes en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    });
+
+    it('a measure on a price in millionths: start 0.000003457, end 0.000003577, Δ +0.00000012', async () => {
+        const {start, end, delta} = await mainRowOf(MILLIONTHS);
+
+        expect.soft(start, 'the start value (today 0.000003: cut at the sixth decimal)').toBe('0.000003457');
+        expect.soft(end, 'the end value (today 0.000004)').toBe('0.000003577');
+        expect.soft(delta, 'the absolute Δ (today +0.0000)').toBe('+0.00000012');
+    });
+
+    it('a start of 1.2e-7 reads 0.00000012, not 0, and its Δ to 0.0000034573 +0.000003337, not +0.0000', async () => {
+        const {start, delta} = await mainRowOf(FROM_TENTH_OF_MILLIONTH);
+
+        expect.soft(start, 'the start value (today 0: no digit within six decimals)').toBe('0.00000012');
+        expect.soft(delta, 'the absolute Δ (today +0.0000)').toBe('+0.000003337');
+    });
+
+    it('a pending start of 0.0000034573 reads 0.000003457 in the banner, not 0.0000', () => {
+        const {panel, banner} = pendingFrom(0.0000034573, '0.000003457');
+
+        expect(panel, 'the pending banner’s start value (today 0.0000)').toContain(banner);
+    });
+
+    it('guard: a measure under 1 from 0.001 up reads as today — start 0.5, end 0.123457, Δ -0.3765', async () => {
+        expect(await mainRowOf(SUB_UNIT)).toEqual({start: '0.5', end: '0.123457', delta: '-0.3765'});
+    });
+
+    it('guard: a pending start of 100 reads 100.0000 in the banner', () => {
+        const {panel, banner} = pendingFrom(100, '100.0000');
+
+        expect(panel, 'the pending banner’s start value').toContain(banner);
+    });
+});
+
 describe('MeasurePanel — independent instances', () => {
     it('keeps simultaneously mounted Price and Return panels isolated', async () => {
         const price = mount({
@@ -649,5 +759,139 @@ describe('MeasurePanel — card interactions', () => {
         const restored = lastEmit(onmeasureschange);
         const restoredMeasure = restored?.find((signal) => signal.id === 'measure-0');
         expect(restoredMeasure?.data.map((point) => point.date)).toEqual(baseData.map((point) => point.date));
+    });
+});
+
+/**
+ * Y-N65 (decision of the developer, 19/10): no measure of a single day. «On the chart's measuring ruler the second
+ * click on the same point is ignored too», and the expanded card's own range picker refuses the same day twice, like
+ * every range picker of the app (DateRangePicker.test.ts, Y-N65). The contract, after the cure:
+ *   - `addPoint`: a second click on the pending start day (past the 300 ms debounce) is ignored — no measure, measure
+ *     mode stays on, the start stays pending: the next click on another day measures between the two;
+ *   - `updatePendingEnd(date, value)` answers whether `date` is the pending start: `true` there — the chart's cue for
+ *     the not-allowed cursor (PriceChartFull.test.ts, Y-N65) — `false` on any other day, with measure mode off, or with
+ *     no start pending. On the start day it removes a live preview, one emission without `__pending__`; with no preview
+ *     it emits nothing (the «ignores a zero-length preview» case above, unchanged);
+ *   - the card's picker: the same day clicked twice leaves the measure and both its fields on the measure's dates.
+ *
+ * Read through what the panel hands its parent (`onmeasureschange`, `onmeasuremodechange`), the method's answer, the
+ * summary's main row (`data-row-id`, its cells by `data-column-id`), and the card picker's fields (`date-range-input-*`).
+ * The debounce is crossed as the cases above cross it: `Date.now` stubbed, each click 400 ms after the last.
+ */
+describe('MeasurePanel — no measure of a single day (Y-N65)', () => {
+    /** The measure `addMeasureFromChartData` places on baseData: its first and last day. */
+    const MEASURE_DATES = {start: '2024-01-01', end: '2024-01-31'};
+    /** A day inside the measure, clicked twice in the card's picker. */
+    const SAME_DAY = '2024-01-11';
+
+    /** A day of the card picker's calendar, in its first grid: both grids show January 2024 for MEASURE_DATES. */
+    function cardDay(container: HTMLElement, iso: string): HTMLButtonElement {
+        const [grid] = within(container).getAllByTestId('calendar-month');
+        const cell = grid?.querySelector<HTMLButtonElement>(`[data-testid="calendar-day"][data-iso="${iso}"]`);
+        if (!cell) throw new Error(`no day cell for ${iso} in the card picker's first grid`);
+        return cell;
+    }
+
+    /** A cell of the summary's main row, by the column DataTable stamps on it. */
+    function mainCell(container: HTMLElement, columnId: string): string | undefined {
+        return rowById(container, 'main')?.querySelector(`td[data-column-id="${columnId}"]`)?.textContent?.trim();
+    }
+
+    it('a second click on the pending start day is ignored: no measure, measure mode stays on, and the next day clicked measures from that start', () => {
+        // Today: the second click makes a measure of one day (2024-01-11 → 2024-01-11) and leaves measure mode — so the
+        // click on the 31st that follows is ignored, and no measure from the 11th to the 31st is ever made.
+        const {api, onmeasureschange, onmeasuremodechange} = mount();
+        api.startMeasureMode();
+        const now = vi.spyOn(Date, 'now');
+        now.mockReturnValue(1000);
+        api.addPoint(SAME_DAY, 108); // first click → the pending start
+        now.mockReturnValue(1400); // past the debounce
+        api.addPoint(SAME_DAY, 108); // the same day again
+
+        expect({emissions: onmeasureschange.mock.calls.length, modes: onmeasuremodechange.mock.calls.map(([active]) => active)}, 'the second click on the start day made a measure of one day, and left measure mode').toEqual({emissions: 0, modes: [true]});
+
+        now.mockReturnValue(1800);
+        api.addPoint('2024-01-31', 121); // another day
+        const emitted = lastEmit(onmeasureschange);
+        expect(
+            emitted?.map((signal) => signal.id),
+            'the start did not stay pending: no measure from it',
+        ).toEqual(['measure-0']);
+        expect(emitted?.[0]?.data.map((point) => point.date)).toEqual(['2024-01-11', '2024-01-21', '2024-01-31']);
+        expect(onmeasuremodechange).toHaveBeenLastCalledWith(false);
+    });
+
+    it('updatePendingEnd answers true on the pending start day — the chart’s cue for the not-allowed cursor — and false on another day, with measure mode off, or with no start pending', () => {
+        // Today: it answers nothing — undefined, whatever the day.
+        const {api} = mount();
+        const answers: Record<string, unknown> = {};
+        answers.modeOff = api.updatePendingEnd(SAME_DAY, 108);
+        api.startMeasureMode();
+        answers.noStart = api.updatePendingEnd(SAME_DAY, 108);
+        vi.spyOn(Date, 'now').mockReturnValue(1000);
+        api.addPoint(SAME_DAY, 108); // the pending start
+        answers.otherDay = api.updatePendingEnd('2024-01-31', 121);
+        answers.startDay = api.updatePendingEnd(SAME_DAY, 108);
+
+        expect(answers).toEqual({modeOff: false, noStart: false, otherDay: false, startDay: true});
+    });
+
+    it('hovering back onto the start day removes the live preview — one emission, without __pending__ — and the start stays pending', () => {
+        // Today: the hover on the start day returns early, so the preview to the 31st stays drawn — no emission at all.
+        const {api, onmeasureschange} = mount();
+        api.startMeasureMode();
+        vi.spyOn(Date, 'now').mockReturnValue(1000);
+        api.addPoint(SAME_DAY, 108);
+        api.updatePendingEnd('2024-01-31', 121);
+        expect(
+            lastEmit(onmeasureschange)?.map((signal) => signal.id),
+            'precondition: the preview to the 31st is drawn',
+        ).toEqual(['__pending__']);
+        onmeasureschange.mockClear();
+
+        api.updatePendingEnd(SAME_DAY, 108);
+
+        expect(onmeasureschange, 'the preview stayed drawn while the pointer is back on the start day').toHaveBeenCalledTimes(1);
+        expect(lastEmit(onmeasureschange)).toEqual([]);
+        // The start is still pending: another day previews again.
+        api.updatePendingEnd('2024-01-21', 115);
+        expect(lastEmit(onmeasureschange)?.map((signal) => signal.id)).toEqual(['__pending__']);
+    });
+
+    it('the same day clicked twice in the expanded card’s picker leaves the measure and both its fields on the measure’s dates', async () => {
+        // Today (the N65 defect): the second click closes the range SAME_DAY–SAME_DAY in the picker, which shows it in both
+        // fields, while the panel refuses it (`updateMeasureDates`: a measure needs two days) and keeps the measure on
+        // 2024-01-01 → 2024-01-31 — the fields read 2024-01-11 / 2024-01-11 over a measure that did not move.
+        const {api, container, onmeasureschange} = mount({storageKeyPrefix: 'test-n65-card-picker'});
+        const panel = within(container);
+        api.addMeasureFromChartData(); // auto-expands the new card: its picker and its summary mount
+        await waitFor(() => expect(rowsById(container, 'main')).toHaveLength(1));
+        const startInput = panel.getByTestId('date-range-input-start') as HTMLInputElement;
+        const endInput = panel.getByTestId('date-range-input-end') as HTMLInputElement;
+        const fields = () => ({start: startInput.value, end: endInput.value});
+        expect(fields(), 'precondition: the card’s picker shows the measure’s dates').toEqual(MEASURE_DATES);
+
+        await fireEvent.focus(startInput); // opens the card picker's calendar
+        expect(panel.getByTestId('date-range-picker-root'), 'precondition: the calendar opened').toHaveAttribute('data-open', 'true');
+        await fireEvent.click(cardDay(container, SAME_DAY)); // first click: the pending day
+        await fireEvent.click(cardDay(container, SAME_DAY)); // second click, on the same day
+        const afterClicks = fields();
+        await fireEvent.click(document.body); // the user leaves the picker
+        const afterLeaving = fields();
+
+        expect(
+            {
+                afterClicks,
+                afterLeaving,
+                measure: lastEmit(onmeasureschange)?.map((signal) => ({id: signal.id, dates: signal.data.map((point) => point.date)})),
+                row: {start: mainCell(container, 'valueStart'), end: mainCell(container, 'valueEnd')},
+            },
+            'the picker shows a range of one day the measure never took',
+        ).toEqual({
+            afterClicks: MEASURE_DATES,
+            afterLeaving: MEASURE_DATES,
+            measure: [{id: 'measure-0', dates: baseData.map((point) => point.date)}],
+            row: {start: '100.0000', end: '121.0000'},
+        });
     });
 });

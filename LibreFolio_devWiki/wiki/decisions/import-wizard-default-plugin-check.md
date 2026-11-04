@@ -54,7 +54,7 @@ only report sets.
 ## Consequences
 
 - After the developer's test, the modal shows the assigned broker with its icon and «cannot read it», «Notes from the
-  plugin», and the destinations as cards, with radio buttons when there is more than one (`2046b7419`, 2026-10-10).
+  plugin», and the destinations as cards, with radio buttons when there is more than one (`ec837a197`, 2026-10-10).
 - Tests: `TestPluginSaysWhyWithACode` (the contract, for every plugin and sample), the endpoint's
   `TestPluginCheckEndpoint` (RS-PC01…07), Vitest `defaultPluginCheck.test.ts` and `ImportBrokerMismatchModal.test.ts`,
   E2E `tx-import-broker-mismatch.spec.ts` (M1–M4).
@@ -74,12 +74,12 @@ only report sets.
 
 | Role | Path |
 |------|------|
-| `cannot_parse_detail`, `check_file_with_plugin` | `backend/app/services/brim_provider.py` |
+| `cannot_parse_detail`, `check_file_with_plugin` | `backend/app/services/brim/brim_provider.py` |
 | `BRIMRefusal`, `BRIMPluginCheck` | `backend/app/schemas/brim.py` |
 | The `plugin-check` endpoint | `backend/app/api/v1/brokers.py` |
-| `findDefaultPluginMismatch`, `resolveParseRefusalMessage` | `frontend/src/lib/utils/brim/defaultPluginCheck.ts` |
-| The modal | `frontend/src/lib/components/transactions/modals/ImportBrokerMismatchModal.svelte` |
-| `reviewDefaultPluginMismatches`, `step1Continuing` | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| `findDefaultPluginMismatch`, `resolveParseRefusalMessage` | `frontend/src/lib/features/transactions/import/defaultPluginCheck.ts` |
+| The modal | `frontend/src/lib/features/transactions/import/ImportBrokerMismatchModal.svelte` |
+| `reviewDefaultPluginMismatches`, `step1Continuing` | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
 | Contract tests | `backend/test_scripts/test_external/test_brim_providers.py` |
 | E2E | `frontend/e2e/transactions/tx-import-broker-mismatch.spec.ts` |
 | BRIM guide, «Saying why with a code» | `mkdocs_src/docs/developer/architecture/patterns/brim_plugin_guide.md` |

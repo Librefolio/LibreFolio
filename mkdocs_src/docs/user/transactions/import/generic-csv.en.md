@@ -26,6 +26,18 @@ them by their names: there is nothing to map by hand.
     its own `currency`; you can also split a broker's history into several files, one per year
     for example, and import them together.
 
+!!! tip "Several date columns? Use the operation date"
+
+    LibreFolio reads **one** date column per file, never two. If the header holds several columns
+    with an accepted date name (for example `trade_date` and `settlement_date`, see the
+    [column reference](#column-reference)), it takes the **first one, reading from left to right**,
+    and ignores the others. A column with another name, such as `order date`, is not read at all.
+
+    Put in the date column the **operation date**: the day the trade or the transaction was made, not
+    the settlement or the booking day, which can come days later. This matters most when you write
+    the CSV by hand or have another AI write it for you: tell it to use the operation date, and to
+    leave the other dates out of the file.
+
 ### 🧯 If Something Goes Wrong
 
 - **"required column 'date' not found"** (or `type`): the first row lacks that column, or names it
@@ -34,7 +46,42 @@ them by their names: there is nothing to map by hand.
   an empty `currency` — are skipped and listed among the warnings of the **Parse** step; rows with
   a wrong sign appear as validation issues. Fix them in the file and upload it again.
 - **The bulk workspace asks for a cost on an `ADJUSTMENT` row**: enter the cost of **one** unit,
-  not the total value of the position.
+  not the total value of the position. Only a row that adds units asks for it: one that removes
+  units (a negative quantity) has no value.
+
+### 📅 Date format {: #day-month-order }
+
+A date such as `03/04/2025` can mean 3 April or 4 March, and a year can be written with two digits
+(`03/04/26`). LibreFolio lets you choose how the Generic CSV importer reads the dates of your files. The
+choice is yours alone: other people of the same LibreFolio keep their own.
+
+Open **Settings › Plugins**, find **Broker imports**, and set **Date format**. Each option shows the
+shape of the date and a complete example:
+
+| Option | Example |
+|--------|---------|
+| `dd/mm/yyyy` (the default) | `03/04/2025` = **3 April 2025** |
+| `mm/dd/yyyy` | `03/04/2025` = **4 March 2025**, as written in the United States |
+| `dd/mm/yy` | `03/04/26` = **3 April 2026** |
+| `mm/dd/yy` | `03/04/26` = **4 March 2026** |
+| `yy/mm/dd` | `26/04/03` = **3 April 2026** |
+| `yyyy-mm-dd` | `2026-04-03` = **3 April 2026** |
+
+`dd/mm/yyyy` is how LibreFolio always read the dates, so nothing changes if you never open the setting.
+With `dd/mm/yyyy` and `mm/dd/yyyy`, a date that only one order can read is always read right: `25/12/2025`
+is 25 December, because there is no month 25. With the two-digit-year options the order you chose is the
+only one used, and `yy` follows the usual rule: `00`–`68` are 2000–2068, `69`–`99` are 1969–1999. Dates
+written like `2025-12-25`, `20251225` or `25 Dec 2025` have a single meaning and never move.
+
+A row whose date cannot be read in the chosen format is left out, and the analysis says so for each row
+(*Row 4: 25/12/26 is not a valid date in the format mm/dd/yy…*), with where to fix it: correct the date
+in the file, or change the **Date format** in **Settings › Plugins** and press **Re-parse all**. After the
+twentieth such row one note counts the rest.
+
+!!! tip "Parse the file again after changing it"
+
+    A file you already parsed keeps the dates it was read with. After you change the setting, the file
+    shows the notice that it must be **parsed again**: parse it again, then review the rows.
 
 ---
 

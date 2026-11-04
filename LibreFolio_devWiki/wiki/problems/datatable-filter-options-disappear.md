@@ -46,6 +46,9 @@ return enumOptions
 ## Affected File
 
 - `frontend/src/lib/components/table/DataTable.svelte` (W73/C18, Round 1)
+- Today the option logic (`getEnumOptionsWithCounts` and its siblings) lives in
+  `frontend/src/lib/components/table/dataTableLogic.ts`, and the filter popover that asks for it in
+  `frontend/src/lib/components/table/DataTableColumnHeader.svelte` (cut out of `DataTable.svelte` in release 1.3, Y2).
 
 ## Source
 

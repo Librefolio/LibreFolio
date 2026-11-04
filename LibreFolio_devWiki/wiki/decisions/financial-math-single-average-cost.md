@@ -205,10 +205,10 @@ average cost comes from this one function.
 
 - ~~The **FIFO lot** conversions in `lots_analysis_service.py` still fall back to the unconverted amount when a rate is
   missing — e.g. `fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost` in
-  `_build_value_history` and `_build_return_history`.~~ *Resolved 2026-10-11* by workstream T (B3a, `82c1d3ab9`, "no
+  `_build_value_history` and `_build_return_history`.~~ *Resolved 2026-10-11* by workstream T (B3a, `04f091944`, "no
   native fallback on missing FX"): a lot amount without a rate is unavailable, never the native amount. Since T-1 the two
   functions are `build_value_history()` and `build_return_history()` in `financial_math/lots/histories.py`.
-- `oversold_movement_ids` is computed, but no caller surfaces it yet (still true at `5d0585595`).
+- `oversold_movement_ids` is computed, but no caller surfaces it yet (still true at `9f63eec22`).
 - ~~`roi_utils.py` and `valuation_utils.py` still live in `backend/app/utils/financial/` until the separate migration
   into the layer.~~ *Resolved 2026-10-12* by T-1: `financial_math/returns.py` and `financial_math/valuation.py`
   ([[decisions/financial-math-one-home]]).
@@ -239,15 +239,15 @@ average cost comes from this one function.
 | Lots WAC lines and gaps | `backend/app/services/lots_analysis_service.py` |
 | Lots WAC line math (since 2026-10-12) | `backend/app/services/financial_math/lots/average_cost_lines.py` |
 | Lot value and return histories, no native fallback (since 2026-10-11/12) | `backend/app/services/financial_math/lots/histories.py` |
-| Broker summary holdings cost | `backend/app/services/broker_service.py` |
-| FX service (`convert_bulk`) | `backend/app/services/fx.py` |
+| Broker summary holdings cost | `backend/app/services/brokers/summary.py` |
+| FX service (`convert_bulk`) | `backend/app/services/fx/conversion.py` |
 | `MISSING_COST_BASIS`, `UnrealizedBreakdownRow` | `backend/app/schemas/portfolio.py` |
 | `BRAssetHolding.total_cost`, `BRSummary.missing_fx_pairs` | `backend/app/schemas/brokers.py` |
 | Facade output (`WACPreviewResultItem`, `WACQualifyingTX`) | `backend/app/schemas/wac.py` |
-| PAC planner (passes T as override) | `backend/app/services/portfolio_allocation_source.py` |
+| PAC planner (passes T as override) | `backend/app/services/pac_allocator/source/wac.py` |
 | `POST /portfolio/wac` | `backend/app/api/v1/portfolio_api.py` |
-| Batch auto cost basis | `backend/app/services/transaction_service.py` |
-| Dashboard tooltip | `frontend/src/lib/components/dashboard/KpiSection.svelte` |
+| Batch auto cost basis | `backend/app/services/transactions/auto_cost.py` |
+| Dashboard tooltip | `frontend/src/lib/features/dashboard/KpiSection.svelte` |
 | AI Export provenance v2 | `backend/app/services/ai_export/components/portfolio_financial.py` |
 | AI Export provenance v2 (broker) | `backend/app/services/ai_export/components/broker_financial.py` |
 | AI Export component catalogue (both provenances declared `version=2`) | `backend/app/services/ai_export/components/catalog.py` |

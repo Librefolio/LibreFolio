@@ -16,27 +16,43 @@
  * Uses the "Cost basis override" info tooltip in the ADJUSTMENT transaction
  * form as a real, already-present trigger — no dedicated test page needed.
  */
-import {expect, test, type Page} from './fixtures/playwright';
+import {expect, test, type Locator, type Page} from './fixtures/playwright';
 import {login} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
+import {validateRuns, waitForValidateRun} from './fixtures/app-events';
+import {canEdit, listBrokers, seededAssetId} from './fixtures/owned-pair';
+import {optionsClosed} from './fixtures/probe';
+
+/** Open a SearchSelect inside `wrap` and pick the option whose value is `value` — by id, never by position. */
+async function pickOption(page: Page, wrap: Locator, value: number | string) {
+    await wrap.locator("button, [role='combobox']").first().click();
+    const option = wrap.getByTestId(`search-select-option-${value}`);
+    await expect(option).toBeVisible({timeout: 5_000});
+    await option.click();
+    await optionsClosed(page);
+}
 
 async function openAdjustmentCostBasisTooltipTrigger(page: Page) {
+    // A broker the signed-in user can write on and a seeded asset, read from the API rather than taken from the
+    // top of a dropdown that other specs keep adding to.
+    const broker = (await listBrokers(page)).find(canEdit);
+    if (!broker) throw new Error(`${TEST_USER.username} has no editable broker — check populate_mock_data.py`);
+    const assetId = await seededAssetId(page, 'AAPL');
+
     await page.goto('/transactions');
     await page.getByTestId('tx-add-button').click();
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+    const root = page.getByTestId('tx-form-modal-root');
 
-    await page.getByTestId('tx-form-type').click();
-    await page.getByTestId('search-select-option-ADJUSTMENT').click();
+    await pickOption(page, page.getByTestId('tx-form-type'), 'ADJUSTMENT');
+    await pickOption(page, page.getByTestId('tx-form-broker-wrap'), broker.id);
+    await pickOption(page, page.getByTestId('tx-form-asset-wrap'), assetId);
 
-    const brokerWrap = page.getByTestId('tx-form-broker-wrap');
-    await brokerWrap.locator("button, [role='combobox']").first().click();
-    await page.locator("[data-testid^='search-select-option-']").first().click();
-
-    const assetWrap = page.getByTestId('tx-form-asset-wrap');
-    await assetWrap.locator("button, [role='combobox']").first().click();
-    await page.locator("[data-testid^='search-select-option-']").first().click();
-
+    // The quantity triggers a validation whose issue banner lands above the section and shifts the trigger down
+    // (~100 px): measure only once that run has answered and the form is idle, or the mouse hovers empty space.
+    const runsBefore = await validateRuns(root);
     await page.getByTestId('tx-form-quantity').fill('5');
+    await waitForValidateRun(root, runsBefore);
 
     const costBasisWrap = page.getByTestId('tx-form-cost-basis-inline');
     await expect(costBasisWrap).toBeVisible({timeout: 3_000});

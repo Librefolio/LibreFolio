@@ -1,0 +1,169 @@
+<script lang="ts">
+    import {AlertTriangle, Info} from 'lucide-svelte';
+
+    import {_ as t} from '$lib/i18n';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
+    import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
+
+    import AssetChip from '../AssetChip.svelte';
+
+    import type {ResultHealth, ResultReason} from './levelHelpers';
+    import {analyticNameKey} from './partialNotice';
+
+    /**
+     * What is partial, and why, said once above the levels (developer's decision of 24/09/2026),
+     * cause first and effect after it (developer's decision of 30/09/2026).
+     *
+     * The levels used to repeat it one by one, so the same carried-over price or excluded asset
+     * read as four separate problems. The reasons come first because they are what the reader can
+     * act on; the measurements they cost follow, grouped under the question of the level that
+     * shows them, so the reader knows where on the page to read them with care. The title names
+     * the cause when there is one to name; otherwise it says partial, or — for a note on complete
+     * results, still worth reading — notes.
+     */
+    type Level = 1 | 2 | 3;
+
+    interface Props {
+        partial: ResultHealth[];
+        reasons: ResultReason[];
+        /**
+         * The level that renders each measurement, by instance id, built by the panel from the
+         * slices the levels render. A measurement with no level is still named, in a group of its
+         * own at the end: dropped, it would read as whole.
+         */
+        levelOf?: Readonly<Record<string, Level>>;
+    }
+
+    let {partial, reasons, levelOf = {}}: Props = $props();
+
+    /**
+     * Informative only when every reason states the one permanent cause (developer's decision of
+     * 29/09/2026): a holding with no price source and no price ever recorded reads the same
+     * tomorrow, a standing fact about the portfolio rather than a fault of this answer. Amber for
+     * anything else — and `every` over a non-empty list, so a reason stating no cause (a
+     * data-quality note, or merged warnings that disagreed and lost theirs) never passes for one.
+     */
+    let tone = $derived<'info' | 'warning'>(reasons.length > 0 && reasons.every((entry) => entry.reason === 'no_price_source') ? 'info' : 'warning');
+
+    /** Same shade weights in both tones; blue and `Info` as the app's `InfoBanner` pairs them. */
+    const TONE_CLASSES = {
+        info: 'border-lf-info-line bg-lf-info-soft text-lf-info-on-soft',
+        warning: 'border-lf-warning-line bg-lf-warning-soft text-lf-warning-on-soft',
+    } as const;
+    /** The icon of the title in the state's own colour (designer, round 3). */
+    const ICON_CLASSES = {
+        info: 'text-lf-info',
+        warning: 'text-lf-warning',
+    } as const;
+    /** A measurement is a pill, no control: the banner chip of round 3 (proposal a), without its hover. */
+    const CHIP_CLASSES = {
+        info: STATUS_TONES.bannerChip.info.base,
+        warning: STATUS_TONES.bannerChip.warning.base,
+    } as const;
+
+    let title = $derived(partial.length === 0 ? $t('risk.levels.notice.notesTitle') : tone === 'info' ? $t('risk.levels.notice.noPriceSourceTitle') : $t('risk.levels.notice.partialTitle'));
+
+    /** The partial measurements under the level that shows them, in page order; unplaced ones last. */
+    let groups = $derived.by(() => {
+        const byLevel = new Map<Level | null, ResultHealth[]>();
+        for (const entry of partial) {
+            const level = levelOf[entry.instanceId] ?? null;
+            byLevel.set(level, [...(byLevel.get(level) ?? []), entry]);
+        }
+        return ([1, 2, 3, null] as const).filter((level) => byLevel.has(level)).map((level) => ({level, entries: byLevel.get(level) ?? []}));
+    });
+
+    /** The level's question, as its frame titles it on the page. One literal key per level. */
+    function levelTitle(level: Level): string {
+        if (level === 1) return $t('risk.levels.l1.title');
+        if (level === 2) return $t('risk.levels.l2.title');
+        return $t('risk.levels.l3.title');
+    }
+
+    /**
+     * The short sentence of an exclusion, with the count of the assets it names (developer's decisions of 29/09 and 31/10/2026): the cause
+     * once, and the assets as badges beside it. `null` — so the backend's own sentence stays, whole — when the reason is not an
+     * exclusion (its key starts with the warning's code), states a cause with no short sentence here, or names no asset (merged warnings
+     * that disagreed lose theirs): a reason nobody can badge is never dropped. One literal key per branch, for the i18n audit.
+     */
+    function shortExclusion(entry: ResultReason): string | null {
+        const count = entry.assetIds?.length ?? 0;
+        if (count === 0 || !entry.key.startsWith('assets_excluded:')) return null;
+        const values = {values: {count}};
+        switch (entry.reason) {
+            case 'missing_price':
+                return $t('risk.levels.notice.excluded.missing_price', values);
+            case 'missing_fx':
+                return $t('risk.levels.notice.excluded.missing_fx', values);
+            case 'invalid_currency':
+                return $t('risk.levels.notice.excluded.invalid_currency', values);
+            case 'insufficient_history':
+                return $t('risk.levels.notice.excluded.insufficient_history', values);
+            case 'no_price_source':
+                return $t('risk.levels.notice.excluded.no_price_source', values);
+            default:
+                return null;
+        }
+    }
+
+    /** An asset as the badge shows it: the cache's icon, type and name, else its id. The cache is read, never loaded here. */
+    function chipAsset(assetId: number): {id: number; display_name: string; icon_url: string | null; asset_type: string | null} {
+        void $assetStoreVersion;
+        const info = getAssetInfo(assetId);
+        return {id: assetId, display_name: info?.display_name ?? `#${assetId}`, icon_url: info?.icon_url ?? null, asset_type: info?.asset_type ?? null};
+    }
+
+    function measurementName(entry: ResultHealth): string {
+        return entry.label ? $t(entry.label) : $t(analyticNameKey(entry.code), {default: entry.code});
+    }
+</script>
+
+{#if partial.length > 0 || reasons.length > 0}
+    <div class="rounded-lg border px-3 py-2 text-xs {TONE_CLASSES[tone]}" data-testid="risk-partial-notice" data-partial-count={partial.length} data-tone={tone}>
+        <p class="flex items-center gap-1.5 font-medium" data-testid="risk-partial-title">
+            {#if tone === 'info'}
+                <Info size={14} class="shrink-0 {ICON_CLASSES.info}" />
+            {:else}
+                <AlertTriangle size={14} class="shrink-0 {ICON_CLASSES.warning}" />
+            {/if}
+            {title}
+        </p>
+        {#if reasons.length > 0}
+            <ul class="mt-1 list-disc space-y-0.5 pl-5" data-testid="risk-partial-reasons" data-count={reasons.length}>
+                {#each reasons as reason (reason.key)}
+                    {@const short = shortExclusion(reason)}
+                    <li data-testid="risk-partial-reason" data-occurrences={reason.occurrences}>
+                        {#if short !== null}
+                            {short}
+                            <span class="mt-1 flex flex-wrap items-center gap-1.5" data-testid="risk-partial-reason-assets">
+                                {#each reason.assetIds ?? [] as assetId (assetId)}
+                                    <AssetChip asset={chipAsset(assetId)} variant="excluded" testId="risk-partial-reason-asset" data-asset-id={assetId} />
+                                {/each}
+                            </span>
+                        {:else}
+                            {reason.message}
+                        {/if}
+                    </li>
+                {/each}
+            </ul>
+        {/if}
+        {#if partial.length > 0}
+            <!-- Per instance, never per analytic code: the two VaR horizons share a code and are told
+                 apart by their label. `data-count` publishes how many measurements are partial — one
+                 chip each, since a measurement two levels read is placed once, under the first. -->
+            <div class="mt-2 space-y-1" data-testid="risk-partial-measurements" data-count={partial.length}>
+                <p class="font-medium">{$t('risk.levels.notice.affected')}</p>
+                {#each groups as group (group.level ?? 'none')}
+                    <div class="flex flex-wrap items-center gap-1.5" data-testid="risk-partial-level" data-level={group.level ?? 'none'}>
+                        {#if group.level !== null}
+                            <span>{levelTitle(group.level)}</span>
+                        {/if}
+                        {#each group.entries as entry (entry.instanceId)}
+                            <span class="rounded-full border px-2 py-0.5 {CHIP_CLASSES[tone]}" data-testid="risk-partial-measurement" data-instance={entry.instanceId}>{measurementName(entry)}</span>
+                        {/each}
+                    </div>
+                {/each}
+            </div>
+        {/if}
+    </div>
+{/if}

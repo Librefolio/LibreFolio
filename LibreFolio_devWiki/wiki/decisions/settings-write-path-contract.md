@@ -108,11 +108,11 @@ characterisation tests ([[concepts/characterisation-test-latch]]).
 
 | Role | Path |
 |------|------|
-| Save orchestration | `frontend/src/lib/components/settings/SettingsLayout.svelte` — `saveField`, `saveAll` |
-| Preferences tab (C2, C1) | `frontend/src/lib/components/settings/tabs/PreferencesTab.svelte` |
-| Global settings tab (C5) | `frontend/src/lib/components/settings/tabs/GlobalSettingsTab.svelte` |
-| Controls missing `isSaving` (C7) | `frontend/src/lib/components/settings/SettingCurrency.svelte`, `SettingSelect.svelte`, `SettingTheme.svelte` |
-| Controls that have it | `frontend/src/lib/components/settings/SettingNumber.svelte`, `SettingToggle.svelte` |
-| Unwired helper (C8) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` (~2280), `resolveFormItemsFromOps` |
+| Save orchestration | `frontend/src/lib/features/settings/SettingsLayout.svelte` — `saveField`, `saveAll` |
+| Preferences tab (C2, C1) | `frontend/src/lib/features/settings/tabs/PreferencesTab.svelte` |
+| Global settings tab (C5) | `frontend/src/lib/features/settings/tabs/GlobalSettingsTab.svelte` |
+| Controls missing `isSaving` (C7) | `frontend/src/lib/features/settings/SettingCurrency.svelte`, `SettingSelect.svelte`, `SettingTheme.svelte` |
+| Controls that have it | `frontend/src/lib/features/settings/SettingNumber.svelte`, `SettingToggle.svelte` |
+| Unwired helper (C8) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` (~2280), `resolveFormItemsFromOps` |
 | Settings API | `backend/app/api/v1/settings.py` |
 | mkdocs | `mkdocs_src/docs/user/settings/index.en.md` |

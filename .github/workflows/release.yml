@@ -16,6 +16,8 @@ on:
 permissions:
   contents: write     # Required to push to the gh-pages branch with mkdocs gh-deploy
   packages: write     # Required to push images to GHCR
+  id-token: write     # Required to sign the build attestation of the images (keyless: GitHub OIDC + Sigstore)
+  attestations: write # Required to store the build attestation of the images
 
 jobs:
   release-pipeline:
@@ -63,6 +65,7 @@ jobs:
           fetch-depth: 0 # Required for mkdocs gh-deploy (history and branches)
 
       - name: Setup Python
+        id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -86,13 +89,14 @@ jobs:
       - name: Expose the runner image for cache keys
         run: echo "RUNNER_IMAGE_OS=${ImageOS:-unknown}" >> "$GITHUB_ENV"
 
+      # The virtualenv links to the exact Python of the runner: a patch bump breaks it, so it is in the key.
       - name: Cache Pipenv
         uses: actions/cache@v5
         with:
           path: ~/.local/share/virtualenvs
-          key: ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
+          key: ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-py${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-pipenv-
+            ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-py${{ steps.setup-python.outputs.python-version }}-pipenv-
 
       - name: Cache NPM
         uses: actions/cache@v5
@@ -133,11 +137,13 @@ jobs:
 
       - name: Freeze the app version for the frontend builds
         # The sidebar's version is not read from VERSION: frontend/vite.config.ts computes
-        # it at every frontend build of this job — the build below, the gallery
-        # webServer's debug rebuild, the production rebuild for the images — each after
-        # steps that may write tracked files, so `git describe --dirty` there read
-        # "-dirty" (the 1.1 screenshots, the nightlies). LF_APP_VERSION, frozen from
-        # VERSION here, takes precedence over git describe in vite.config.ts.
+        # it at every frontend build of this job — the build below, the debug rebuild in
+        # the gallery's build step (`dev.py server --test --build-only`), the production
+        # rebuild for the images — each after steps that may write tracked files, so
+        # `git describe --dirty` there read "-dirty" (the 1.1 screenshots, the nightlies).
+        # LF_APP_VERSION, frozen from VERSION here, takes precedence over git describe in
+        # vite.config.ts, and in the backend's get_git_version() too: the gallery's servers
+        # report the same version.
         run: echo "LF_APP_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
 
       - name: "[INFO] Environment summary before install"
@@ -192,12 +198,13 @@ jobs:
 
       - name: Build MkDocs Documentation
         id: build-mkdocs
-        # BEFORE the gallery: the Playwright webServer (`dev.py server --test`)
-        # serves /mkdocs and builds the 4-language site on startup when site/ is
-        # missing — ~40s+ of the webServer start-up budget (120 s then, 300 s since
-        # 2026-10-06), which is what made the gallery time out on 2026-09-04 after
-        # the docs growth (57 new translated files). With site/ already built, the
-        # server starts in seconds.
+        # BEFORE the gallery. Its test server serves /mkdocs, and the gallery's build
+        # step (`dev.py server --test --build-only`, run before Playwright starts the
+        # webServer) builds the 4-language site when site/ is missing or stale: built
+        # here, it is already up to date there. Until 2026-10-15 that build ran inside
+        # the webServer's start-up budget (~40s+ of it; 120 s then, 300 s since
+        # 2026-10-06), which is what made the gallery time out on 2026-09-04 after the
+        # docs growth (57 new translated files).
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs build
 
@@ -226,17 +233,18 @@ jobs:
         run: sh scripts/ci/warn_if_tree_changed.sh "the gallery"
 
       - name: Rebuild SvelteKit Frontend (production, for the images)
-        # The gallery's Playwright webServer is `dev.py server --test`, which
-        # rebuilds frontend/build/ in DEBUG mode (no minification, sourcemaps).
+        # The gallery's build step (`dev.py server --test --build-only`, before its
+        # Playwright webServer `dev.py server --test` starts) rebuilds frontend/build/
+        # in DEBUG mode (no minification, sourcemaps), the kind the test server serves.
         # The images copy frontend/build/, so it is rebuilt for production here;
         # the Dockerfile's frontend stage refuses a debug build.
         run: pipenv run ./dev.py front build
 
       - name: Rebuild MkDocs Documentation (with the gallery screenshots)
         id: rebuild-mkdocs
-        # The site was built before the gallery (fast webServer start), so it has
-        # no screenshots yet. Rebuilt here, the full image ships them; the light
-        # image's docs stage strips them again.
+        # The site was built before the gallery, so it has no screenshots yet.
+        # Rebuilt here, the full image ships them; the light image's docs stage
+        # strips them again.
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs build
 
@@ -297,6 +305,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Labels go to the image config; a multi-arch image is an index, and GHCR shows
+      # title, description and source only from the index annotations: both are written.
       # Tags (user guide, "Image Variants"): `latest` is the LIGHT variant; a release
       # publishes the full variant as `X.Y.Z` and the light one as `X.Y.Z-light`;
       # nightlies are `nightly` (full) and `nightly-light`. metadata-action adds
@@ -306,6 +316,8 @@ jobs:
       - name: Extract Docker Metadata (Version)
         id: meta
         uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ghcr.io/librefolio/librefolio
           flavor: |
@@ -327,6 +339,8 @@ jobs:
       - name: Extract Docker Metadata (Light Variant)
         id: meta-light
         uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ghcr.io/librefolio/librefolio
           flavor: |
@@ -352,29 +366,102 @@ jobs:
       # pushing that tag last means `latest` and `X.Y.Z-light` already exist when
       # the prompt appears. If the light build fails, `X.Y.Z` is never pushed and
       # no admin is told to update to an image they cannot get from `latest`.
+      # Multi-arch: linux/amd64 + linux/arm64. arm64 runs natively on Raspberry Pi 4/5
+      # and Apple Silicon, without emulation. Here it is built under QEMU, so the build
+      # is slower. The first tag is the real test: the check steps below verify both
+      # platforms in every pushed manifest.
       - name: Build and Push Docker Image (Light Variant)
+        id: build-light
         if: steps.meta-light.outputs.tags != ''
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
             DOCS_VARIANT=light
           tags: ${{ steps.meta-light.outputs.tags }}
           labels: ${{ steps.meta-light.outputs.labels }}
+          annotations: ${{ steps.meta-light.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Build attestation (SLSA provenance) of the light image, signed keyless with the OIDC token of this run and
+      # Sigstore: no secret to keep. It is attached to the image digest in GHCR, so it covers every tag of the
+      # variant. Verify with `gh attestation verify oci://ghcr.io/librefolio/librefolio@sha256:<digest> --owner Librefolio`
+      # (docs: admin/docker_advanced, «Verify the Image You Pull»). v4 wraps actions/attest; the storage record is
+      # off because it asks for one more permission (artifact-metadata) that nothing here uses.
+      - name: Attest the Light Image (build provenance)
+        if: steps.build-light.outputs.digest != ''
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/librefolio/librefolio
+          subject-digest: ${{ steps.build-light.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      # Same platforms as the light variant (arm64 notes above).
       - name: Build and Push Docker Image
+        id: build-full
         if: steps.meta.outputs.tags != ''
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # The same attestation for the full image.
+      - name: Attest the Full Image (build provenance)
+        if: steps.build-full.outputs.digest != ''
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/librefolio/librefolio
+          subject-digest: ${{ steps.build-full.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      # Fail the job when a pushed tag lacks a platform. Tags come from the metadata step,
+      # passed through env (not inline in the script).
+      - name: Check the light image manifests (amd64 and arm64)
+        if: steps.meta-light.outputs.tags != ''
+        env:
+          TAGS: ${{ steps.meta-light.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            manifest="$(docker buildx imagetools inspect "$tag")"
+            for platform in linux/amd64 linux/arm64; do
+              if ! grep -q "$platform" <<<"$manifest"; then
+                echo "::error::Tag $tag lacks platform $platform in its manifest" >&2
+                exit 1
+              fi
+            done
+            echo "OK: $tag has linux/amd64 and linux/arm64"
+          done <<<"$TAGS"
+
+      - name: Check the image manifests (amd64 and arm64)
+        if: steps.meta.outputs.tags != ''
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            manifest="$(docker buildx imagetools inspect "$tag")"
+            for platform in linux/amd64 linux/arm64; do
+              if ! grep -q "$platform" <<<"$manifest"; then
+                echo "::error::Tag $tag lacks platform $platform in its manifest" >&2
+                exit 1
+              fi
+            done
+            echo "OK: $tag has linux/amd64 and linux/arm64"
+          done <<<"$TAGS"
 
       # ==========================================
       # 5. GITHUB PAGES DEPLOY

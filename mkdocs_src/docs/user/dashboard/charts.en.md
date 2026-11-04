@@ -8,7 +8,13 @@ Below the KPI cards, the **Portfolio Growth** chart and the **Asset Allocation**
 
 The growth chart shows how your portfolio evolved over the selected period: the **Abs / % / P&L** toggle in its top-right corner switches between absolute values, rates of return, and the money actually earned.
 
-The chart remembers your last view, P&L sub-view included, in this browser and for each user, and shares it with the broker pages. It starts on **Abs**. Without rate-of-return data, **%** is greyed out and the chart shows **Abs**; your choice comes back the next time you open the chart with data to draw.
+On a long period the chart groups the days to stay readable: into weeks, then months, and, for a history of many decades, years. A **Weekly**, **Monthly** or **Yearly** badge at the top left of the chart says which. When nothing is grouped, there is no badge.
+
+### 〰️ How the lines are drawn {: #line-shape }
+
+Every chart joins its points in one of three shapes: **Segments** (the default, a straight line between two points), **Steps** (each value holds until the next one) or **Smooth curve** (a soft line that never goes above or below the two neighbouring points, so it draws no value that never existed). You pick the shape on the first page of the welcome tour and later in **Settings → Preferences**; it applies to every chart in this browser. On the asset and FX detail pages the chart settings also have a **Line shape** row, to give that one chart its own shape. The shape changes only how the points are joined: a day's value in the tooltip is always the one the report holds for that day. Where a chart shows weeks or months, the points are not steps, so **Steps** draws segments there.
+
+The chart remembers your last view, P&L sub-view included, in this browser and for each user, and shares it with the broker pages. It starts on **Abs**. Without rate-of-return data, **%** is greyed out and the chart shows **Abs**, but keeps your choice: **%** comes back as soon as there is data to draw — after you change the period or the broker, or the next time you open the chart — unless you pick another view in the meantime.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Absolute Mode" alt="Growth Chart — Absolute Mode">
@@ -39,6 +45,8 @@ The chart remembers your last view, P&L sub-view included, in this browser and f
 
 **Assets valued at their purchase price**, such as P2P loans with no live market price, keep NAV close to Purchase Cost, so the gap can be thin: read **Total P&L** in the tooltip.
 
+**Money from a broker outside the view.** On a broker's page, or with the broker filter on, money received from a broker outside the view is **Capital**, as a deposit would be — or **Returns** again, if it brings back returns you withdrew earlier. Money sent to a broker outside the view leaves **Capital** first, then **Returns**, as a withdrawal does. The same goes for the half of a transfer whose other half was deleted or unlinked, in every view.
+
 🔗 **Theory**: [Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) · [Cash Decomposition](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
 
 ### 📉 % — rate of return
@@ -51,7 +59,7 @@ Each line is the return accumulated since the start of the selected period:
 | **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | Pure asset strategy return, ignoring when you deposited |
 | **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | Raw return on net invested capital |
 
-The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md). If the [Data Quality banner](index.md#data-quality-banner) says **MWRR chart unavailable**, the MWRR line is hidden; TWRR and ROI stay.
+The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md). The MWRR line has a gap on the days that have no MWRR — a value of zero or less, or net withdrawals that leave no invested capital — by the same rule as the MWRR cards ([MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)). The TWRR line has a gap on the days your portfolio is worth zero or less, for example after you sold everything and withdrew the cash, by the same rule as the TWRR card; after new deposits it picks up again from where it stood ([When No TWRR Is Shown](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md#when-no-twrr)). The ROI line has no gap. When the last day of the period has none, the [Data Quality banner](index.md#data-quality-banner) says *MWRR cannot be calculated for this period*.
 
 ### 💰 P&L — the money you made {: #pnl-mode }
 
@@ -80,8 +88,8 @@ A second toggle, at the top-left of the plot, picks how to draw it (icons only o
 
 - **In transit** — until the transfer arrives, the value and its price or exchange-rate moves stay with the broker it left.
 - **Different ownership shares** — when the two brokers have different [ownership shares](../brokers/sharing.md), the receiving line keeps a step on the arrival day: the same step the total shows.
-- **No value on the arrival day** — if the security has no price yet, or an exchange rate is missing, the jump stays: nothing is guessed.
-- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day, not as a gain or a loss; money counts as a deposit or a withdrawal. The same goes for the half left behind when the other broker of a transfer is deleted.
+- **No value on the arrival day** — if an exchange rate is missing, or the security has no price yet and no cost was recorded on its arrival, the jump stays: nothing is guessed. A security with no price at all moves at the cost the receiving broker records for it, the value LibreFolio gives it there; if part of what that broker paid for the asset was already unknown, its own line takes the gap.
+- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day — at their cost if they have no price at all — not as a gain or a loss; money counts as a deposit or a withdrawal. When the other broker of a transfer is deleted, the half left behind is no longer a transfer: securities become an adjustment, counted as capital at their cost rather than their market value, and money a deposit or a withdrawal (see [Edit or delete a broker](../brokers/index.md)). Only securities sent whose average cost needs a missing exchange rate stay a transfer, counted at market value.
 
 With one broker, or on a broker's page, only the total is drawn.
 
@@ -127,7 +135,7 @@ The tooltip gives the period, **Open**, **Close**, **High**, and **Low**, plus a
 
 How to read it:
 
-- **New capital or reinvested.** A purchase first spends the returns already held as cash at that broker (**Reinvested**, green as in **Abs**); the rest is **New capital** (blue). Sales are never drawn.
+- **New capital or reinvested.** A purchase first spends the returns already held as cash at that broker (**Reinvested**, green as in **Abs**); the rest is **New capital** (blue). Money moved to or from a broker outside the view changes that cash as a deposit or a withdrawal would, as in **Abs** above. Sales are never drawn.
 - **Signs are kept.** A negative correction on a past dividend shrinks the dividend bar; fees and taxes stay below zero.
 - **It matches the KPIs.** For the same dates and brokers, **Dividend** and **Interest** add up exactly to the **Dividends & interest** row of the [Period P&L card](kpi-cards.md#card-1-period-pl).
 - **One legend entry.** Both purchase zones are named **Purchase Cost**: one click hides both, and the **Abs** area of the same name too.
@@ -151,7 +159,7 @@ In **Candles** and **Income**, the buttons in the top-right corner of the plot, 
 
 ## 🥧 Allocation Panel {: #allocation-panel }
 
-The **Asset Allocation** panel shows how your portfolio is split, today and over time. Pick a dimension with the **By Type**, **By Sector**, and **Geographic** tabs, and a view with the two buttons in the top-right corner: the pie for **Now**, the area chart for **History**.
+The **Asset Allocation** panel shows how your portfolio is split, today and over time. Pick a dimension with the **By Type**, **By Sector**, **Geographic** and **By Asset** tabs, and a view with the two buttons in the top-right corner: the pie for **Now**, the area chart for **History**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active alloc-crop-container" data-title="By Type (Current)" alt="Allocation by Type — Current">
@@ -181,6 +189,7 @@ The **Asset Allocation** panel shows how your portfolio is split, today and over
 | **By Type** | What each holding is — its [asset type](../../financial-theory/instruments/asset-types/index.md), such as Stock, ETF, Bond, Fund, or Crypto — plus **Liquidity** for your cash. Subtypes count with their [family](../../financial-theory/instruments/asset-types/index.md#families-and-subtypes), such as an **Equity ETF** with your other ETFs. |
 | **By Sector** | Industry sector: 💻 Technology, 🏦 Financials, 💊 Health Care, etc. |
 | **Geographic** | Where your assets are invested, country by country, according to each asset's geographic distribution |
+| **By Asset** | How much each single asset weighs: one slice per asset, with **Liquidity** for your cash. See [By Asset](#allocation-by-asset). |
 
 ### 🕰️ Now and History
 
@@ -188,6 +197,14 @@ The **Asset Allocation** panel shows how your portfolio is split, today and over
 - **History** — a 100% stacked area chart of how the allocation shifted over time, handy to see rebalancing. By type, each family is one area; hovering a date lists its subtypes, such as *Generic ETF* and *Equity ETF*.
 
 The panel remembers the view and the tab in this browser, for each user, and shares them with the broker pages.
+
+### 🧩 By Asset {: #allocation-by-asset }
+
+Which single assets weigh most? **By Asset** splits the portfolio asset by asset instead of by category.
+
+- **Now** — a pie with the weight of every asset on the last day of the selected range.
+- **History** — how the distribution by asset changed over time. **Closed positions are included**, so an asset you sold still shows in the days you held it.
+- **Colours** follow the weight today: the heaviest asset gets the first colour, then the others by weight, then the closed assets, the most recently closed first. The pie and the history use the same colour for the same asset.
 
 ### 🍩 Two rings by type {: #allocation-type-rings }
 
@@ -202,7 +219,15 @@ With no subtype at all, the donut keeps a single ring.
 
 ### 💵 Cash as Liquidity
 
-Your cash is the **Liquidity** slice of **By Type** and **By Sector**; the **Geographic** map leaves it out, as cash belongs to no country. With the broker filter on, the panel shows only the selected brokers' assets and cash.
+Your cash is the **Liquidity** slice of **By Type**, **By Sector** and **By Asset**; the **Geographic** map leaves it out, as cash belongs to no country. With the broker filter on, the panel shows only the selected brokers' assets and cash.
+
+### ➖ Negative cash {: #allocation-negative-cash }
+
+Each slice's percentage is its amount divided by the sum of all the slices, cash included, so negative cash changes the shares:
+
+- **Cash below zero, assets above it** — for example €1,500 of stocks with cash at −€500 on an overdraft: the slices add up to €1,000, so **Liquidity** reads −50% and the stocks 150%. The percentages still add up to 100%.
+- **Nothing left to share** — when the slices add up to zero or less, no slice has a percentage: €500 of stocks bought on an overdraft of −€500, or a portfolio you emptied, whose only slice is **Liquidity** at zero. Each slice shows `—` instead of a percentage and keeps its amount, and the chart has nothing to draw and says so. In **History**, a day on which the slices add up to zero or less has no percentages either.
+- **A tiny leftover** of 0.00001 units or fewer, which a sale of almost every unit can leave, is not a holding: it has no slice.
 
 ---
 

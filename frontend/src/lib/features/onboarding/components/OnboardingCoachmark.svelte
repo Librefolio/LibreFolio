@@ -529,28 +529,28 @@
     >
         {#if backdrop}
             {#if anchorRect && targetStable}
-                <div class="pointer-events-auto fixed left-0 right-0 top-0 bg-black/45" style={`height:${Math.max(anchorRect.top - 8, 0)}px;`} data-testid="onboarding-spotlight-top"></div>
-                <div class="pointer-events-auto fixed bottom-0 left-0 right-0 bg-black/45" style={`top:${Math.min(anchorRect.bottom + 8, viewportHeight)}px;`} data-testid="onboarding-spotlight-bottom"></div>
-                <div class="pointer-events-auto fixed left-0 bg-black/45" style={`top:${Math.max(anchorRect.top - 8, 0)}px;width:${Math.max(anchorRect.left - 8, 0)}px;height:${Math.max(anchorRect.height + 16, 0)}px;`} data-testid="onboarding-spotlight-left"></div>
-                <div class="pointer-events-auto fixed right-0 bg-black/45" style={`top:${Math.max(anchorRect.top - 8, 0)}px;left:${Math.min(anchorRect.right + 8, viewportWidth)}px;height:${Math.max(anchorRect.height + 16, 0)}px;`} data-testid="onboarding-spotlight-right"></div>
+                <div class="pointer-events-auto fixed left-0 right-0 top-0 bg-lf-overlay" style={`height:${Math.max(anchorRect.top - 8, 0)}px;`} data-testid="onboarding-spotlight-top"></div>
+                <div class="pointer-events-auto fixed bottom-0 left-0 right-0 bg-lf-overlay" style={`top:${Math.min(anchorRect.bottom + 8, viewportHeight)}px;`} data-testid="onboarding-spotlight-bottom"></div>
+                <div class="pointer-events-auto fixed left-0 bg-lf-overlay" style={`top:${Math.max(anchorRect.top - 8, 0)}px;width:${Math.max(anchorRect.left - 8, 0)}px;height:${Math.max(anchorRect.height + 16, 0)}px;`} data-testid="onboarding-spotlight-left"></div>
+                <div class="pointer-events-auto fixed right-0 bg-lf-overlay" style={`top:${Math.max(anchorRect.top - 8, 0)}px;left:${Math.min(anchorRect.right + 8, viewportWidth)}px;height:${Math.max(anchorRect.height + 16, 0)}px;`} data-testid="onboarding-spotlight-right"></div>
             {:else}
-                <div class="pointer-events-auto absolute inset-0 bg-black/45" data-testid="onboarding-coachmark-backdrop"></div>
+                <div class="pointer-events-auto absolute inset-0 bg-lf-overlay" data-testid="onboarding-coachmark-backdrop"></div>
             {/if}
         {/if}
 
         {#if anchorRect && targetStable && highlight === 'pulse'}
-            <div class="absolute animate-pulse rounded-xl border-4 border-emerald-400 bg-transparent shadow-[0_0_0_5px_rgba(52,211,153,0.4),0_0_28px_rgba(52,211,153,0.95)] motion-reduce:animate-none" style={highlightStyle} data-testid="onboarding-coachmark-highlight"></div>
+            <div class="absolute animate-pulse rounded-xl border-4 border-lf-focus bg-transparent shadow-[0_0_0_5px_var(--lf-tour-glow),0_0_28px_var(--lf-tour-glow)] motion-reduce:animate-none" style={highlightStyle} data-testid="onboarding-coachmark-highlight"></div>
         {/if}
 
         {#if pointer === 'cursor' && anchorRect && targetStable}
-            <div class="pointer-events-none fixed z-[82] animate-bounce rounded-full bg-white/70 p-1.5 text-libre-green/80 shadow-lg motion-reduce:animate-none dark:bg-slate-800/70 dark:text-emerald-300/80" style={pointerStyle} aria-hidden="true" data-testid="onboarding-coachmark-pointer">
+            <div class="pointer-events-none fixed z-[82] animate-bounce rounded-full bg-lf-card/70 p-1.5 text-lf-link/80 shadow-lg motion-reduce:animate-none" style={pointerStyle} aria-hidden="true" data-testid="onboarding-coachmark-pointer">
                 <MousePointer2 size={18} />
             </div>
         {/if}
 
         <div
             bind:this={panel}
-            class="pointer-events-auto fixed z-[83] rounded-2xl border border-gray-200 p-4 shadow-2xl outline-none transition-colors duration-500 motion-reduce:transition-none dark:border-slate-700 {panelSubdued ? 'bg-white/80 backdrop-blur-sm dark:bg-slate-800/80' : 'bg-white dark:bg-slate-800'}"
+            class="pointer-events-auto fixed z-[83] rounded-2xl border border-lf-raised p-4 text-lf-primary shadow-2xl shadow-lf-shadow outline-none transition-colors duration-500 motion-reduce:transition-none {panelSubdued ? 'bg-lf-card/80 backdrop-blur-sm' : 'bg-lf-card'}"
             style={panelStyle}
             role="dialog"
             aria-modal="false"
@@ -574,7 +574,7 @@
                 {#if showSkip}
                     <button
                         type="button"
-                        class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:opacity-50 dark:text-gray-300 dark:hover:bg-slate-700"
+                        class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:opacity-50"
                         onclick={onskip}
                         disabled={busy}
                         data-testid="onboarding-coachmark-skip"
@@ -588,7 +588,7 @@
                 {#if showClose}
                     <button
                         type="button"
-                        class="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:opacity-50 dark:text-gray-300 dark:hover:bg-slate-700"
+                        class="rounded-lg p-1.5 text-lf-muted hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:opacity-50"
                         aria-label={closeLabel}
                         onclick={onclose}
                         disabled={busy}
@@ -599,18 +599,18 @@
                 {/if}
             </div>
             {#if progressLabel}
-                <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-libre-green dark:text-emerald-300" data-testid="onboarding-coachmark-progress">
+                <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-lf-link" data-testid="onboarding-coachmark-progress">
                     {progressLabel}
                 </p>
             {/if}
-            <h2 id={titleId} class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <h2 id={titleId} class="text-lg font-semibold text-lf-primary">
                 {title}
             </h2>
-            <p id={descriptionId} class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+            <p id={descriptionId} class="mt-2 text-sm leading-6 text-lf-secondary">
                 {error ?? (guideState === 'stalled' ? stalledLabel : guideState === 'waiting' ? busyLabel : description)}
             </p>
             {#if actionHint && guideState === 'anchored' && !error}
-                <p class="mt-3 flex items-center gap-2 text-xs font-medium text-libre-green dark:text-emerald-300" data-testid="onboarding-coachmark-action-hint">
+                <p class="mt-3 flex items-center gap-2 text-xs font-medium text-lf-link" data-testid="onboarding-coachmark-action-hint">
                     <MousePointer2 size={14} />
                     {actionHint}
                 </p>
@@ -622,7 +622,7 @@
                         {#if showBack}
                             <button
                                 type="button"
-                                class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:opacity-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700"
+                                class="inline-flex items-center gap-1.5 rounded-lg border border-lf-input px-3 py-2 text-sm text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:opacity-50"
                                 onclick={onback}
                                 disabled={busy || backDisabled}
                                 data-testid="onboarding-coachmark-back"
@@ -636,7 +636,7 @@
                         {#if showNext}
                             <button
                                 type="button"
-                                class="inline-flex items-center gap-1.5 rounded-lg bg-libre-green px-4 py-2 text-sm font-medium text-white hover:bg-libre-green/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:opacity-50"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:opacity-50"
                                 onclick={onnext}
                                 disabled={busy}
                                 data-testid="onboarding-coachmark-next"

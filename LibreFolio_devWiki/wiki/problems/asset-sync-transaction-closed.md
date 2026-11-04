@@ -145,6 +145,6 @@ async def bulk_op(items, session):
 
 | Role | Path |
 |------|------|
-| Fixed implementation | `backend/app/services/asset_source.py` (bulk_refresh_prices) |
+| Fixed implementation | `backend/app/services/assets/refresh.py` (bulk_refresh_prices) |
 | Test suite | `backend/test_scripts/test_services/test_asset_source_refresh.py` (7 tests) |
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step2/plan-phase06Step2cSyncDeleteRefactor.prompt.md` |

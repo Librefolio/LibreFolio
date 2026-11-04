@@ -25,8 +25,8 @@ Le misure non vengono salvate: ricaricare la pagina svuota il pannello. **Prezzi
 La tabella ha una riga per l'asset (una seconda riga nella sua valuta quando il grafico è convertito) e una per ogni linea tracciata sull'asse dei prezzi, come un asset di confronto o una media mobile. Accanto ai valori **Inizio** e **Fine**:
 
 - **Δ Ass** — la differenza $V_{end} - V_{start}$, nell'unità della linea.
-- **Δ %** — la variazione $\frac{V_{end} - V_{start}}{V_{start}}$ → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/anno** — la stessa variazione come tasso annuo sui $d$ giorni di calendario tra i punti, $(1 + \Delta\%)^{365/d} - 1$ → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
+- **Δ %** — la variazione $\frac{V_{end} - V_{start}}{V_{start}}$, oppure `—` quando la linea parte da 0 → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/anno** — la stessa variazione come tasso annuo sui $d$ giorni di calendario tra i punti, $(1 + \Delta\%)^{365/d} - 1$, da 30 giorni in su: `—` su un intervallo più breve, senza un **Δ %**, o quando la linea finisce dall'altra parte dello zero → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
 
 La riga di riepilogo della misura aggiunge il numero di giorni.
 

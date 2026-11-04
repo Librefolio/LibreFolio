@@ -25,7 +25,7 @@ is simply wrong. The hand-written list sat one layer above the backend's gate, w
 
 ## Solution
 
-`a5f6776aa` («fix(risk): derive the stress buckets from the AssetType enum»): every bucket an `asset_class` shock can
+`fa920c9c8` («fix(risk): derive the stress buckets from the AssetType enum»): every bucket an `asset_class` shock can
 name now comes from the backend enum itself, pinned by `stressBuckets.test.ts`.
 
 ## Prevention
@@ -36,7 +36,7 @@ A list that mirrors a backend enum is derived from it, never typed again — the
 
 | Role | Path |
 |------|------|
-| Buckets from the enum | `frontend/src/lib/risk/riskRequest.ts` |
-| Test | `frontend/src/lib/risk/stressBuckets.test.ts` |
-| The stress editor (legacy panel) | `frontend/src/lib/components/risk/RiskAnalysisPanel.svelte` |
+| Buckets from the enum | `frontend/src/lib/features/risk/riskRequest.ts` |
+| Test | `frontend/src/lib/features/risk/stressBuckets.test.ts` |
+| The stress editor (legacy panel) | `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` |
 | Journal (R5) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md` |

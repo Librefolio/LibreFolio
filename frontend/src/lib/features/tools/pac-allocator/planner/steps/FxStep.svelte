@@ -19,11 +19,14 @@
     import type {DraftFx, PlannerDraft} from '../draft.svelte';
     import {formatPlannerDate, formatPlannerFxRate} from '../format';
     import {FxRateReader} from '../fxRead.svelte';
+    import {presentSourceIssues} from '../issues';
+    import {listIssue} from '../labels';
     import {loadPairSetups, pairSetup, type PairSetup} from '../fxSetup';
     import {BADGE, BUTTON_LINK, BUTTON_SECONDARY, CARD, HINT, INPUT, INPUT_ADORNMENT, LABEL_ROW, NOTICE} from '../ui';
     import AutoManualToggle from '../shared/AutoManualToggle.svelte';
     import CurrencyCode from '../shared/CurrencyCode.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
+    import IssueList from '../shared/IssueList.svelte';
 
     const KEY = 'tools.pacAllocator.planner.fx';
 
@@ -213,7 +216,7 @@
 </script>
 
 <div class="space-y-4" data-testid="pac-planner-fx" aria-busy={reader.busy} data-busy={reader.busy ? 'true' : 'false'}>
-    <p class="flex flex-wrap items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
+    <p class="flex flex-wrap items-center gap-1 text-sm text-lf-secondary">
         {$t(`${KEY}.intro`, {default: 'The rates the calculation needs, one for each pair of currencies in play. «Auto» uses the rate stored in LibreFolio, «Manual» a rate of your own.'})}
         <HelpTip
             label={$t('tools.pacAllocator.planner.mode.auto', {default: 'Auto'})}
@@ -246,11 +249,12 @@
                 {@const manual = fx?.manual ?? false}
                 {@const rate = fx?.rate.trim() ?? ''}
                 {@const status = readState(pair)}
+                {@const pairIssues = manual ? [] : presentSourceIssues(reader.issues(draft, pair), draft, reader.load.data).map(listIssue)}
                 <section class={CARD} data-testid="pac-planner-fx-pair" data-pair={pair} data-purpose={draft.fxPurpose(pair)} data-mode={manual ? 'manual' : 'auto'} data-rate={rate === '' ? 'missing' : 'set'} data-read={status}>
                     <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h3 class="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900 dark:text-gray-100" data-testid="pac-planner-fx-pair-title">
+                        <h3 class="flex flex-wrap items-center gap-1.5 font-semibold text-lf-primary" data-testid="pac-planner-fx-pair-title">
                             <CurrencyCode code={base} />
-                            <span class="text-sm font-normal text-gray-400 dark:text-gray-500" aria-hidden="true">→</span>
+                            <span class="text-sm font-normal text-lf-muted" aria-hidden="true">→</span>
                             <CurrencyCode code={quote} />
                         </h3>
                         <AutoManualToggle {manual} label={pairLabel(pair)} testid="pac-planner-fx-mode" onchange={(next) => switchMode(pair, next)} />
@@ -275,7 +279,7 @@
                             </div>
                         {:else if rate !== '' && fx}
                             <p class="flex flex-wrap items-center gap-2" data-testid="pac-planner-fx-rate-value">
-                                <span class="flex flex-wrap items-center gap-1 tabular-nums text-gray-900 dark:text-gray-100">
+                                <span class="flex flex-wrap items-center gap-1 tabular-nums text-lf-primary">
                                     1 <CurrencyCode code={base} testid="pac-planner-fx-rate-base" /> = <span class="font-semibold">{formatPlannerFxRate(rate)}</span>
                                     <CurrencyCode code={quote} testid="pac-planner-fx-rate-quote" />
                                 </span>
@@ -288,13 +292,13 @@
                                 <LoaderCircle class="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />{$t(`${KEY}.reading`, {default: 'Reading the rate stored in LibreFolio…'})}
                             </span>
                         {:else if status === 'ownerless'}
-                            <p class="text-amber-800 dark:text-amber-200" data-testid="pac-planner-fx-no-rate">
+                            <p class="text-lf-warning-on-soft" data-testid="pac-planner-fx-no-rate">
                                 {$t(`${KEY}.ownerless`, {default: 'LibreFolio reads its stored rates through a Broker you own, and you own none: switch to «Manual» and type the rate.'})}
                             </p>
                         {:else if status === 'not-stored'}
                             {@const setup = setups ? pairSetup(setups, base, quote) : null}
                             <div class="space-y-2" data-testid="pac-planner-fx-no-rate" data-setup={setup ?? 'loading'}>
-                                <p class="flex flex-wrap items-center gap-1 text-amber-800 dark:text-amber-200">
+                                <p class="flex flex-wrap items-center gap-1 text-lf-warning-on-soft">
                                     {setupText(setup)}
                                     {#if setup}
                                         <HelpTip label={pairLabel(pair)} help={setupHelp(setup)} testid="pac-planner-fx-no-rate-help" />
@@ -318,6 +322,10 @@
                             <p class={HINT} data-testid="pac-planner-fx-no-rate">{$t(`${KEY}.readLater`, {default: 'Read from LibreFolio just before the calculation.'})}</p>
                         {/if}
                     </div>
+                    {#if pairIssues.length > 0}
+                        <!-- X-R45b: what the read said about this pair, such as a saved rate skipped for an older one -->
+                        <div class="mt-2"><IssueList items={pairIssues} testid="pac-planner-fx-issues" /></div>
+                    {/if}
                 </section>
             {/each}
         </div>

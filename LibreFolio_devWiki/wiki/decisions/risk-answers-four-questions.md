@@ -38,7 +38,7 @@ investor rarely says aloud: does all this complexity earn more than a single wor
 
 ## Consequences
 
-- The Risk tab of the Dashboard and broker pages renders the four levels (`bf34f3a0a`, [[features/F-111]]); the Lab
+- The Risk tab of the Dashboard and broker pages renders the four levels (`ffb204c62`, [[features/F-111]]); the Lab
   reuses them for a selection of assets ([[features/F-112]]).
 - A metric with no question has no home: tracking error and the information ratio stay only on the legacy Asset Detail
   panel ([[features/F-113]]) and in the deferrals.
@@ -49,5 +49,5 @@ investor rarely says aloud: does all this complexity earn more than a single wor
 | Role | Path |
 |------|------|
 | The thesis | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/01-tesi-e-quattro-domande.md` |
-| The four levels | `frontend/src/lib/components/risk/levels/RiskLevelsPanel.svelte` |
-| L3, the outward question | `frontend/src/lib/components/risk/levels/L3RiskAdjusted.svelte` |
+| The four levels | `frontend/src/lib/features/risk/levels/RiskLevelsPanel.svelte` |
+| L3, the outward question | `frontend/src/lib/features/risk/levels/L3RiskAdjusted.svelte` |

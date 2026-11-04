@@ -86,11 +86,8 @@ from backend.app.services.pac_allocator.constraints import (
     order_prices,
     valuation_rate,
 )
-from backend.app.services.pac_allocator.evaluator import (
-    build_exact_policy_view,
-    evaluate_exact_candidate,
-    exact_decision_id,
-)
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.ledger import _ROUNDED_FAMILIES
 from backend.app.services.pac_allocator.models import ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.objectives import build_canonical_tie_stages

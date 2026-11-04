@@ -26,7 +26,7 @@ noticed it while migrating the maths: «invisibile a occhio, e quindi permanente
   `pinned_edge`, which is guaranteed to appear among the edges exactly; every bin keeps the same width, and the grid is
   extended to include the cut when it falls outside the data. The bin cap is checked as an actual count (a first cap of
   200 produced 201 bins).
-- **An oracle before the migration** (`f5fe80d44`, «test(risk): pin the hand-written risk maths against an oracle»):
+- **An oracle before the migration** (`3b4a8a1f9`, «test(risk): pin the hand-written risk maths against an oracle»):
   the same mandate wrote the numerical oracle and migrated the maths under it; any correction meant to move the numbers
   came later and alone, so every shifted number had one possible cause.
 

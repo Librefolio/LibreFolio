@@ -83,8 +83,8 @@ All asset providers use the **Provider Registry Pattern** ([[F-059]]): decorated
 
 | Role | Path |
 |------|------|
-| Asset API | `backend/app/api/v1/assets.py` |
-| Asset service / abstract base | `backend/app/services/asset_source.py` |
+| Asset API | `backend/app/api/v1/assets/` |
+| Asset service / abstract base | `backend/app/services/assets/` |
 | DB model (Asset, PriceHistory, AssetEvent) | `backend/app/db/models.py` |
 | Asset pages | `frontend/src/routes/(app)/assets/` |
 | Asset components | `frontend/src/lib/components/assets/` |

@@ -35,16 +35,24 @@
  * Selection. The dialog by its role, the modal by its `data-testid`; the size is the one leaf of the
  * dialog whose whole text is a number and a unit, as the modal publishes no handle of its own for it.
  * jsdom's browser is en-US, so the English UI keeps en-US notation.
+ *
+ * The scope of the upload (decision 36), first block. The modal takes an optional `scope` and hands it to
+ * `uploadFile` as its third argument; without it, nothing — the server decides. `uploadFile` is therefore
+ * a spy, while `formatBytes`, this file's other subject, stays the real one from the same module. That
+ * block runs first and loads no language, so the French test still finds its catalogue unloaded.
  */
-import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
 import {dictionary, locale, waitLocale} from 'svelte-i18n';
 
-// `uploadFile` shares the module of `formatBytes`; nothing here uploads, and the API client stays out of the graph.
+// Nothing here reaches the network: `uploadFile` is a spy (the scope block asserts what it is called with), and
+// `formatBytes`, from the same module, stays real; the API client stays out of the graph.
 vi.mock('$lib/api', () => ({axiosInstance: {post: vi.fn()}}));
+const uploads = vi.hoisted(() => ({uploadFile: vi.fn()}));
+vi.mock('$lib/utils/files/upload', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/utils/files/upload')>()), uploadFile: uploads.uploadFile}));
 
-import {render, screen, setupI18n, within} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import enCatalogue from '$lib/i18n/en.json';
 import frCatalogue from '$lib/i18n/fr.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -127,6 +135,40 @@ beforeAll(async () => {
 afterEach(async () => {
     // The language is module-level state shared by every test of the file.
     await switchLanguage('en');
+});
+
+describe('FileEditModal — the scope it uploads with (decision 36)', () => {
+    beforeEach(() => {
+        uploads.uploadFile.mockReset().mockResolvedValue('/uploads/statement.pdf');
+    });
+
+    /** Mount on a PDF, confirm, and answer the arguments `uploadFile` got; the modal completes with its url. */
+    async function confirmUpload(props: Record<string, unknown>): Promise<unknown[]> {
+        const complete = vi.fn();
+        const file = new File(['%PDF-1.4'], 'statement.pdf', {type: 'application/pdf'});
+        render(FileEditModal, {props: {open: true, file, ...props}, events: {complete: (event: CustomEvent) => complete(event)}});
+
+        await fireEvent.click(screen.getByTestId('file-edit-confirm'));
+
+        await waitFor(() => expect(uploads.uploadFile).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
+        expect(complete.mock.calls[0][0].detail.url).toBe('/uploads/statement.pdf');
+        const args = uploads.uploadFile.mock.calls[0];
+        expect((args[0] as File).name, 'the file it renames').toBe('statement.pdf');
+        return args;
+    }
+
+    it.each(['personal', 'common'] as const)('hands scope %s to uploadFile as its third argument', async (scope) => {
+        const [, , passed] = await confirmUpload({scope});
+
+        expect(passed).toBe(scope);
+    });
+
+    it('passes no scope when it is given none: the server decides (control: today’s call)', async () => {
+        const [, , passed] = await confirmUpload({});
+
+        expect(passed).toBeUndefined();
+    });
 });
 
 describe('FileEditModal — the file size in the UI language, in a legacy component (M-18)', () => {

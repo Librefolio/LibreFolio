@@ -14,6 +14,8 @@
     import type {AxisScaleMode, AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import LineShapePicker from './LineShapePicker.svelte';
+    import type {LineShape} from './lineShape';
     // =========================================================================
     // Props
     // =========================================================================
@@ -23,6 +25,8 @@
         areaFill?: boolean;
         gridLines?: boolean;
         staleGradient?: boolean;
+        /** The shape of this chart's lines (FB-3). The row is shown only when the page passes `onlineshapechange`. */
+        lineShape?: LineShape;
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number | undefined;
         yAxisMax?: number | undefined;
@@ -34,6 +38,8 @@
             label: string;
             settings: AxisScaleSettings;
         }>;
+        /** Called when the user picks a shape. A page that keeps no per-chart shape leaves it out and the row is not shown. */
+        onlineshapechange?: (shape: LineShape) => void;
         /** Called when one contextual axis profile changes. */
         onaxischange?: (key: string, settings: AxisScaleSettings) => void;
         /** Fields that don't apply in current chart type — rendered greyed out and non-interactive */
@@ -51,6 +57,8 @@
         onchange,
         axisRows,
         onaxischange,
+        lineShape = 'segments',
+        onlineshapechange,
         disabledFields = new Set<string>(),
     }: Props = $props();
 
@@ -95,20 +103,20 @@
     }
 </script>
 
-<div>
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{$t('common.aesthetics')}</h3>
+<div class="text-lf-primary">
+    <h3 class="text-sm font-semibold text-lf-secondary mb-3">{$t('common.aesthetics')}</h3>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <!-- Color by baseline -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('colorByBaseline') ? 'opacity-40 pointer-events-none' : ''}">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle {disabledFields.has('colorByBaseline') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.baselineColors')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.baselineColorsDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.baselineColors')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.baselineColorsDesc')}</span>
             </span>
             <button
                 aria-label={$t('chartSettings.baselineColors')}
                 data-testid="chart-aesthetic-baseline"
                 aria-pressed={colorByBaseline}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                 disabled={disabledFields.has('colorByBaseline')}
                 onclick={() => {
                     colorByBaseline = !colorByBaseline;
@@ -116,21 +124,21 @@
                 }}
                 type="button"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {colorByBaseline ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {colorByBaseline ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 
         <!-- Area fill -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('areaFill') ? 'opacity-40 pointer-events-none' : ''}">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle {disabledFields.has('areaFill') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.areaFill')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.areaFillDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.areaFill')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.areaFillDesc')}</span>
             </span>
             <button
                 aria-label={$t('chartSettings.areaFill')}
                 data-testid="chart-aesthetic-area-fill"
                 aria-pressed={areaFill}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                 disabled={disabledFields.has('areaFill')}
                 onclick={() => {
                     areaFill = !areaFill;
@@ -138,42 +146,42 @@
                 }}
                 type="button"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {areaFill ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {areaFill ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 
         <!-- Grid lines -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.gridLines')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.gridLinesDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.gridLines')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.gridLinesDesc')}</span>
             </span>
             <button
                 aria-label={$t('chartSettings.gridLines')}
                 data-testid="chart-aesthetic-grid-lines"
                 aria-pressed={gridLines}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                 onclick={() => {
                     gridLines = !gridLines;
                     emitChange();
                 }}
                 type="button"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {gridLines ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {gridLines ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 
         <!-- Stale gradient -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('staleGradient') ? 'opacity-40 pointer-events-none' : ''}">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle {disabledFields.has('staleGradient') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.staleGradient')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.staleGradientDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.staleGradient')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.staleGradientDesc')}</span>
             </span>
             <button
                 aria-label={$t('chartSettings.staleGradient')}
                 data-testid="chart-aesthetic-stale-gradient"
                 aria-pressed={staleGradient}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                 disabled={disabledFields.has('staleGradient')}
                 onclick={() => {
                     staleGradient = !staleGradient;
@@ -181,27 +189,38 @@
                 }}
                 type="button"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {staleGradient ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {staleGradient ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 
+        {#if onlineshapechange}
+            <!-- Line shape (FB-3) -->
+            <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle sm:col-span-2 flex-wrap" data-testid="chart-aesthetic-line-shape-row">
+                <span>
+                    <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.lineShape')}</span>
+                    <span class="block text-xs text-lf-muted">{$t('chartSettings.lineShapeDesc')}</span>
+                </span>
+                <LineShapePicker value={lineShape} onchange={onlineshapechange} testIdPrefix="chart-aesthetic-line-shape" />
+            </div>
+        {/if}
+
         <!-- Contextual Y-axis scale modes -->
-        <div class="p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 sm:col-span-2 space-y-2">
+        <div class="p-2.5 rounded-lg border border-lf-subtle sm:col-span-2 space-y-2">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.yAxisScale')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.yAxisScaleDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.yAxisScale')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.yAxisScaleDesc')}</span>
             </span>
             <div class="space-y-2">
                 {#each effectiveAxisRows as row (row.key)}
                     <div class="flex items-center justify-between gap-3 flex-wrap" data-testid={`chart-axis-row-${axisTestId(row.key)}`}>
                         {#if row.label}
-                            <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{row.label}</span>
+                            <span class="text-xs font-medium text-lf-secondary">{row.label}</span>
                         {/if}
                         <div class="flex items-center gap-2 flex-wrap {row.label ? '' : 'ml-auto'}">
-                            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                            <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
                                 {#each ['auto', 'include0', 'custom'] as mode}
                                     <button
-                                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {row.settings.mode === mode ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {row.settings.mode === mode ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                                         data-testid={`chart-axis-${axisTestId(row.key)}-${mode}`}
                                         aria-pressed={row.settings.mode === mode}
                                         onclick={() => updateAxis(row.key, row.settings, {mode: mode as AxisScaleMode})}
@@ -213,12 +232,12 @@
                             </div>
                             {#if row.settings.mode === 'custom'}
                                 <div class="flex items-center gap-1.5 text-sm sm:text-xs">
-                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">{$t('common.min')}</span>
+                                    <span class="text-xs sm:text-[10px] text-lf-muted">{$t('common.min')}</span>
                                     <input
                                         type="number"
                                         use:numericArrows
                                         data-testid={`chart-axis-${axisTestId(row.key)}-min`}
-                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-lf-input rounded bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                                         step="any"
                                         value={row.settings.min ?? ''}
                                         oninput={(event) => {
@@ -229,12 +248,12 @@
                                         }}
                                         placeholder="—"
                                     />
-                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">{$t('common.max')}</span>
+                                    <span class="text-xs sm:text-[10px] text-lf-muted">{$t('common.max')}</span>
                                     <input
                                         type="number"
                                         use:numericArrows
                                         data-testid={`chart-axis-${axisTestId(row.key)}-max`}
-                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-lf-input rounded bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                                         step="any"
                                         value={row.settings.max ?? ''}
                                         oninput={(event) => {

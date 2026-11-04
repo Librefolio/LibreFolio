@@ -3,18 +3,23 @@
 
   Three modes:
   1. URL - Enter a URL directly
-  2. Existing - Browse existing uploaded files (grid/table)
+  2. Existing - Browse existing uploaded files (grid/table): the common ones and the user's own personal ones. A personal
+     file picked here becomes common, with a notice: the picked image is shown to other users (decision 36)
   3. Upload - Upload a new file (opens ImageEditModal for images)
 
   Returns the selected URL or uploaded file URL.
 -->
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
+    import {get} from 'svelte/store';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
+    import {currentUser} from '$lib/stores/app/auth';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {setUploadScope} from '$lib/utils/files/upload';
     import {File as FileIcon, FolderOpen, Image as ImageIcon, LayoutGrid, Link, List, Search, Upload, X} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
-    import FileGrid from '$lib/components/files/FileGrid.svelte';
+    import FileGrid from '$lib/features/files/FileGrid.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import type {ColumnDef} from '$lib/components/table';
     import {DataTable} from '$lib/components/table';
@@ -78,8 +83,11 @@
         }
     }
 
-    // Load files when tab is 'existing' and modal is open
-    $: if (open && activeTab === 'existing' && existingFiles.length === 0) {
+    // Load files when tab is 'existing' and modal is open: once per opening. An empty list must not load again
+    // and again (each assignment of existingFiles re-ran this statement).
+    let existingLoaded = false;
+    $: if (open && activeTab === 'existing' && !existingLoaded) {
+        existingLoaded = true;
         loadExistingFiles();
     }
 
@@ -87,6 +95,7 @@
     $: if (open) {
         selectedFile = null;
         searchQuery = '';
+        existingLoaded = false;
         // Set URL input and tab based on initialUrl
         urlInput = initialUrl || '';
         if (initialUrl) {
@@ -103,6 +112,9 @@
         try {
             const data = await zodiosApi.list_files_api_v1_uploads_get();
             let files = (data.items || []) as UploadedFile[];
+            // Common files and the user's own: an admin is listed every file, but picks only what others see already or his own
+            const userId = get(currentUser)?.id;
+            files = files.filter((f) => f.scope === 'common' || f.uploaded_by_user_id === userId);
             // Filter to images if required
             if (filterImages) {
                 files = files.filter((f) => f.mime_type?.startsWith('image/'));
@@ -119,7 +131,10 @@
         selectedFile = file;
     }
 
-    function confirmSelection() {
+    /** True while a personal file picked here is being made common */
+    let confirming = false;
+
+    async function confirmSelection() {
         if (activeTab === 'url') {
             if (urlValid) {
                 dispatch('select', {url: urlInput});
@@ -130,7 +145,22 @@
                 close();
             }
         } else if (activeTab === 'existing' && selectedFile) {
-            dispatch('select', {url: selectedFile.url});
+            const picked = selectedFile;
+            if (picked.scope === 'personal') {
+                // The picked image is shown to other users (an icon, a logo, a photo): it becomes common first
+                if (confirming) return;
+                confirming = true;
+                try {
+                    await setUploadScope(picked.id, 'common');
+                } catch {
+                    notify({name: 'file.scope.change.failed', detail: {fileId: picked.id, scope: 'common'}, toast: {variant: 'error', message: $_('uploads.scope.changeFailed')}});
+                    return;
+                } finally {
+                    confirming = false;
+                }
+                notify({name: 'file.scope.shared-on-pick', detail: {fileId: picked.id}, toast: {variant: 'info', message: $_('uploads.scope.sharedOnPick', {values: {name: picked.original_name}})}});
+            }
+            dispatch('select', {url: picked.url});
             close();
         }
     }
@@ -219,7 +249,7 @@
 
     function handleRowDoubleClick(row: UploadedFile) {
         selectedFile = row;
-        confirmSelection();
+        void confirmSelection();
     }
 </script>
 
@@ -262,7 +292,7 @@
                             <button
                                 type="button"
                                 class="btn btn-secondary"
-                                style="white-space:nowrap; padding:0.375rem 0.75rem; font-size:0.8125rem; color:#dc2626;"
+                                style="white-space:nowrap; padding:0.375rem 0.75rem; font-size:0.8125rem; color:var(--lf-danger);"
                                 on:click={() => {
                                     urlInput = '';
                                 }}
@@ -349,7 +379,7 @@
             <button class="btn btn-secondary" data-testid="asset-picker-cancel" on:click={close} type="button">
                 {$_('common.cancel') || 'Cancel'}
             </button>
-            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile)} on:click={confirmSelection} type="button">
+            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile) || confirming} on:click={confirmSelection} type="button">
                 {$_('uploads.useSelected') || 'Use Selected'}
             </button>
         </div>
@@ -371,22 +401,14 @@
         align-items: center;
         justify-content: space-between;
         padding: 0.75rem 1rem;
-        border-bottom: 1px solid #e5e7eb;
-    }
-
-    :global(.dark) .picker-header {
-        border-bottom-color: #374151;
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .picker-title {
         font-size: 1rem;
         font-weight: 600;
         margin: 0;
-        color: #1f2937;
-    }
-
-    :global(.dark) .picker-title {
-        color: #f3f4f6;
+        color: var(--lf-text-primary);
     }
 
     .close-btn {
@@ -398,30 +420,21 @@
         border: none;
         border-radius: 0.375rem;
         background: transparent;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         cursor: pointer;
     }
 
     .close-btn:hover {
-        background: #f3f4f6;
-        color: #1f2937;
-    }
-
-    :global(.dark) .close-btn:hover {
-        background: #374151;
-        color: #f3f4f6;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     /* Tabs */
     .picker-tabs {
         display: flex;
         gap: 0;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--lf-border-subtle);
         padding: 0 0.5rem;
-    }
-
-    :global(.dark) .picker-tabs {
-        border-bottom-color: #374151;
     }
 
     .tab-btn {
@@ -434,31 +447,18 @@
         border: none;
         border-bottom: 2px solid transparent;
         background: transparent;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .tab-btn:hover {
-        color: #1f2937;
+        color: var(--lf-text-primary);
     }
 
     .tab-btn.active {
-        color: #1a4031;
-        border-bottom-color: #1a4031;
-    }
-
-    :global(.dark) .tab-btn {
-        color: #9ca3af;
-    }
-
-    :global(.dark) .tab-btn:hover {
-        color: #f3f4f6;
-    }
-
-    :global(.dark) .tab-btn.active {
-        color: #10b981;
-        border-bottom-color: #10b981;
+        color: var(--lf-link);
+        border-bottom-color: var(--lf-focus);
     }
 
     .hidden-input {
@@ -483,51 +483,36 @@
     .url-label {
         font-size: 0.75rem;
         font-weight: 500;
-        color: #6b7280;
-    }
-
-    :global(.dark) .url-label {
-        color: #9ca3af;
+        color: var(--lf-text-muted);
     }
 
     .url-input {
         padding: 0.5rem 0.75rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.375rem;
         font-size: 0.8125rem;
         outline: none;
-        background: white;
-        color: #1f2937;
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
+    }
+
+    .url-input::placeholder {
+        color: var(--lf-text-placeholder);
     }
 
     .url-input:focus {
-        border-color: #1a4031;
-    }
-
-    :global(.dark) .url-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
-    }
-
-    :global(.dark) .url-input:focus {
-        border-color: #10b981;
+        border-color: var(--lf-focus);
     }
 
     .url-preview {
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
         overflow: hidden;
         max-height: 250px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #f9fafb;
-    }
-
-    :global(.dark) .url-preview {
-        border-color: #374151;
-        background: #1a2332;
+        background: var(--lf-surface-panel);
     }
 
     .url-preview-img-wrapper {
@@ -573,20 +558,16 @@
         width: min(100%, 200px);
         aspect-ratio: 1;
         border-radius: 50%;
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-        border: 2px solid rgba(255, 255, 255, 0.6);
+        box-shadow: 0 0 0 9999px var(--lf-surface-overlay);
+        border: 2px solid color-mix(in oklab, var(--lf-on-overlay) 60%, transparent);
         flex-shrink: 0;
     }
 
     .url-hint {
         font-size: 0.6875rem;
-        color: #9ca3af;
+        color: var(--lf-text-muted);
         margin-top: 0.25rem;
         font-style: italic;
-    }
-
-    :global(.dark) .url-hint {
-        color: #6b7280;
     }
 
     /* Existing tab */
@@ -608,15 +589,20 @@
         align-items: center;
         gap: 0.375rem;
         padding: 0.375rem 0.5rem;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.375rem;
-        background: white;
-        color: #9ca3af;
+        background: var(--lf-surface-field);
+        color: var(--lf-text-muted);
     }
 
-    :global(.dark) .search-box {
-        background: #374151;
-        border-color: #4b5563;
+    /* A field's edge (as FileGrid's search): the input border, darker under the pointer (D-T18), the focus
+       colour while its input has the focus — the input itself draws no outline. */
+    .search-box:hover {
+        border-color: var(--lf-border-input-hover);
+    }
+
+    .search-box:focus-within {
+        border-color: var(--lf-focus);
     }
 
     .search-input {
@@ -625,11 +611,11 @@
         outline: none;
         background: transparent;
         font-size: 0.8125rem;
-        color: #374151;
+        color: var(--lf-text-primary);
     }
 
-    :global(.dark) .search-input {
-        color: #f3f4f6;
+    .search-input::placeholder {
+        color: var(--lf-text-placeholder);
     }
 
     .search-clear {
@@ -639,15 +625,10 @@
         width: 16px;
         height: 16px;
         border: none;
-        background: #e5e7eb;
+        background: var(--lf-surface-neutral);
         border-radius: 50%;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         cursor: pointer;
-    }
-
-    :global(.dark) .search-clear {
-        background: #4b5563;
-        color: #9ca3af;
     }
 
     .view-toggle {
@@ -661,33 +642,21 @@
         justify-content: center;
         width: 28px;
         height: 28px;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.25rem;
-        background: white;
-        color: #6b7280;
+        background: var(--lf-surface-card);
+        color: var(--lf-text-muted);
         cursor: pointer;
     }
 
     .toggle-btn:hover {
-        background: #f3f4f6;
+        background: var(--lf-surface-hover);
     }
 
     .toggle-btn.active {
-        background: #1a4031;
-        color: white;
-        border-color: #1a4031;
-    }
-
-    :global(.dark) .toggle-btn {
-        background: #374151;
-        border-color: #4b5563;
-        color: #9ca3af;
-    }
-
-    :global(.dark) .toggle-btn.active {
-        background: #10b981;
-        border-color: #10b981;
-        color: white;
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
+        border-color: var(--lf-checked);
     }
 
     .empty-state {
@@ -695,7 +664,7 @@
         align-items: center;
         justify-content: center;
         padding: 2rem;
-        color: #9ca3af;
+        color: var(--lf-text-muted);
         font-size: 0.875rem;
     }
 
@@ -705,12 +674,8 @@
     .list-table-wrapper {
         max-height: 320px;
         overflow-y: auto;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.375rem;
-    }
-
-    :global(.dark) .list-table-wrapper {
-        border-color: #374151;
     }
 
     /* Make DataTable compact inside picker */
@@ -728,11 +693,7 @@
         justify-content: flex-end;
         gap: 0.5rem;
         padding: 0.75rem 1rem;
-        border-top: 1px solid #e5e7eb;
-    }
-
-    :global(.dark) .picker-footer {
-        border-top-color: #374151;
+        border-top: 1px solid var(--lf-border-subtle);
     }
 
     .btn {
@@ -754,37 +715,22 @@
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: #143326;
-    }
-
-    :global(.dark) .btn-primary {
-        background: #10b981;
-    }
-
-    :global(.dark) .btn-primary:hover:not(:disabled) {
-        background: #059669;
+        background: var(--lf-action-hover);
     }
 
     .btn-secondary {
-        background: #e5e7eb;
-        color: #374151;
+        background: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
+        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: #d1d5db;
-    }
-
-    :global(.dark) .btn-secondary {
-        background: #374151;
-        color: #d1d5db;
-    }
-
-    :global(.dark) .btn-secondary:hover:not(:disabled) {
-        background: #4b5563;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 </style>

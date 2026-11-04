@@ -13,7 +13,7 @@ Also covers:
   construction regardless of the departure broker's real ownership share;
   ScopeAwareTransactionClassifier.classify() must now override it from
   broker_shares right after building the interval).
-- Broker-scoped in-kind ADJUSTMENT capital routing (pre-frame + frame code paths).
+- Broker-scoped in-kind ADJUSTMENT capital routing (before date_from and inside the emitted states).
 - EngineEndState.cumulative_cash_by_broker / cumulative_ecf_by_broker.
 - DerivedViewsBuilder.build_broker_pnl_history().
 
@@ -22,7 +22,7 @@ mirroring the conventions in test_cash_decomposition.py / test_daily_state_build
 / test_scope_classifier.py in this directory.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -33,6 +33,7 @@ from backend.app.services.financial_math.portfolio.daily_state import DailyState
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import BrokerDailyContribution, ClassifiedTransaction, DailyPortfolioState, PortfolioCalculationResult
 from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.series_steps import value_at
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
@@ -374,26 +375,32 @@ class TestScenarioBInTransitShareFix:
 
 
 # =============================================================================
-# In-kind ADJUSTMENT — broker-scoped capital routing (pre-frame + frame paths)
+# In-kind ADJUSTMENT — broker-scoped capital routing (before date_from + emitted days)
 # =============================================================================
 
 
 class TestInKindAdjustmentBrokerAttribution:
-    """A priced in-kind ADJUSTMENT (opening/transfer/succession) is a capital
-    contribution/distribution, not profit — its cost must move
-    cumulative_ecf_by_broker for the SPECIFIC broker that carries it, symmetric to
-    the scope-aggregate cumulative_ecf, whether the transaction falls in the
-    pre-frame accounting-only window or inside the fully-evaluated frame.
+    """A priced in-kind ADJUSTMENT-in (opening/transfer/succession) is a capital
+    contribution, not profit — its cost moves cumulative_ecf_by_broker for the
+    SPECIFIC broker that carries it, symmetric to the scope-aggregate cumulative_ecf,
+    whether the transaction falls before date_from (replayed, not emitted) or on an
+    emitted day. J1: one replay with the same rules every day; before J1 the first
+    case ran in a separate pre-frame.
+
+    An ADJUSTMENT-out has no value (N78-1, the developer's decision, 21/10/2026),
+    whatever cost it stores: it moves no capital and realizes 0 − the cost the pool
+    gives up, at the broker that carries it. Before N78-1 it was the mirror capital
+    distribution at its stored value.
     """
 
-    def test_preframe_in_and_frame_out_track_broker_ecf(self):
-        # Broker 10: opening in-kind ADJUSTMENT-in, dated BEFORE frame_start (pre-frame path).
+    def test_in_before_date_from_moves_broker_capital_and_out_after_realizes_minus_its_cost(self):
+        # Broker 10: opening in-kind ADJUSTMENT-in, dated BEFORE date_from (replayed, not emitted).
         adj_in = _tx(id=1, broker_id=10, type="ADJUSTMENT", dt="2025-01-02", quantity="10", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
-        # Broker 20: unrelated external deposit (also pre-frame) — isolation control:
+        # Broker 20: unrelated external deposit (also before date_from) — isolation control:
         # its own capital baseline must stay untouched by broker 10's in-kind event.
         dep20 = _tx(id=2, broker_id=20, type="DEPOSIT", dt="2025-01-03", amount="500")
-        # Broker 10: in-kind ADJUSTMENT-out INSIDE the frame (frame path), same
-        # qty/cost -> fully unwinds the capital contributed above.
+        # Broker 10: ADJUSTMENT-out on an emitted day storing the same cost: no value since
+        # N78-1 -> the capital stays, the 1000 of cost are realized as a loss at broker 10.
         adj_out = _tx(id=3, broker_id=10, type="ADJUSTMENT", dt="2025-01-12", quantity="-10", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
 
         txs = [_ctxn(adj_in), _ctxn(dep20), _ctxn(adj_out)]
@@ -403,13 +410,12 @@ class TestInKindAdjustmentBrokerAttribution:
             classified_txs=txs,
             external_cash_flows=ecfs,
             asset_currencies={100: "EUR"},
-            date_from=date(2025, 1, 1),
-            frame_start=date(2025, 1, 10),
+            date_from=date(2025, 1, 10),
             date_to=date(2025, 1, 15),
         )
         result = builder.build()
 
-        # First frame day: the pre-frame ADJUSTMENT-in has already been carried into
+        # First emitted day: the ADJUSTMENT-in before date_from has already been carried into
         # cumulative_ecf_by_broker[10], alongside broker 20's unrelated deposit.
         first = result.daily_states[0]
         assert first.date == date(2025, 1, 10)
@@ -418,13 +424,15 @@ class TestInKindAdjustmentBrokerAttribution:
         assert first.cumulative_external_cash_flow == Decimal("1500")
         _assert_broker_contribution_invariant(first)
 
-        # After the frame-path ADJUSTMENT-out: broker 10's in-kind capital fully
-        # unwinds; broker 20 is untouched (isolation control holds).
+        # After the ADJUSTMENT-out: broker 10's capital stays 1000 and its P&L is −1000 (before N78-1:
+        # capital 0, P&L 0); broker 20 is untouched (isolation control holds).
         last = result.daily_states[-1]
-        assert last.broker_contributions[10].capital_contribution == Decimal("0")
+        assert (last.broker_contributions[10].capital_contribution, last.broker_contributions[10].pnl_contribution) == (Decimal("1000"), Decimal("-1000"))
         assert last.broker_contributions[20].capital_contribution == Decimal("500")
-        assert last.cumulative_external_cash_flow == Decimal("500")
+        assert last.cumulative_external_cash_flow == Decimal("1500")
         _assert_broker_contribution_invariant(last)
+        # The exit's realized: 0 − the 1000 the pool gives up, at broker 10 (before N78-1: proceeds 1000, cost 1000).
+        assert [(sale.broker_id, sale.proceeds, sale.cost) for sale in result.realized_sales if sale.transaction_id == 3] == [(10, Decimal("0"), Decimal("1000"))]
 
         _assert_invariant_every_day(result.daily_states)
 
@@ -469,8 +477,9 @@ class TestEngineEndStatePerBroker:
 
 
 class TestBrokerPnlHistory:
-    """Per-broker additive P&L history: broker_id -> [{date, total_pnl}, ...],
-    derived from DailyPortfolioState.broker_contributions.
+    """Per-broker additive P&L history in steps (D-P4): broker_id -> [{date, through, total_pnl}, ...], each step holding
+    from its ``date`` to its ``through`` and maximal for that broker, derived from DailyPortfolioState.broker_contributions.
+    A day's value is ``value_at(points, day)``.
     """
 
     def test_shape_and_sum_reproduces_aggregate_every_day(self):
@@ -479,18 +488,25 @@ class TestBrokerPnlHistory:
         history = DerivedViewsBuilder(states, "EUR").build_broker_pnl_history()
 
         assert set(history.keys()) == {10, 20}
+        first_day, last_day = states[0].date, states[-1].date
         for points in history.values():
-            assert len(points) == len(states)
             for point in points:
-                assert set(point.keys()) == {"date", "total_pnl"}
+                assert set(point.keys()) == {"date", "through", "total_pnl"}
                 assert isinstance(point["total_pnl"], CurrencySchema)
                 assert point["total_pnl"].code == "EUR"
+                assert first_day <= point["date"] <= point["through"] <= last_day
+            for before, after in zip(points, points[1:], strict=False):
+                assert before["through"] < after["date"], f"steps overlap or are out of order: {before['date']}..{before['through']}, {after['date']}"
+                if before["through"] + timedelta(days=1) == after["date"]:
+                    assert before["total_pnl"].amount.as_tuple() != after["total_pnl"].amount.as_tuple(), f"two consecutive steps of one broker hold the same P&L ({before['total_pnl'].amount}): not maximal"
 
+        # Both brokers exist on every day of this scenario: a step holds each state's day.
         # Sum across brokers reproduces the aggregate DailyPortfolioState.total_pnl,
-        # for EVERY date — not just the last one.
-        points_by_broker_date = {bid: {p["date"]: p["total_pnl"].amount for p in points} for bid, points in history.items()}
+        # for EVERY date — not just the last one (each day read from its step).
         for s in states:
-            total = sum(points_by_broker_date[bid][s.date] for bid in history)
+            steps = {bid: value_at(points, s.date) for bid, points in history.items()}
+            assert all(step is not None for step in steps.values()), f"{s.date}: a broker has no step holding the day"
+            total = sum(step["total_pnl"].amount for step in steps.values())
             assert total == s.total_pnl, f"{s.date}: sum(broker total_pnl)={total} != aggregate total_pnl={s.total_pnl}"
 
     def test_final_day_matches_golden_numbers(self):
@@ -499,8 +515,8 @@ class TestBrokerPnlHistory:
         history = DerivedViewsBuilder(states, "EUR").build_broker_pnl_history()
         last_date = states[-1].date
 
-        final_10 = next(p["total_pnl"].amount for p in history[10] if p["date"] == last_date)
-        final_20 = next(p["total_pnl"].amount for p in history[20] if p["date"] == last_date)
+        final_10 = value_at(history[10], last_date)["total_pnl"].amount
+        final_20 = value_at(history[20], last_date)["total_pnl"].amount
 
         assert final_10 == Decimal("1450")
         assert final_20 == Decimal("600")

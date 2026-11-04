@@ -143,6 +143,61 @@ class TestInvalidCurrency:
 
 
 # ============================================================================
+# R13-SEC7-3 — THE AMOUNT'S EXPONENT IS BOUNDED AT THE BOUNDARY
+# ============================================================================
+#
+# E's R13-SEC7, finding 3 (MEDIUM 8/10). ``validate_amount`` only does ``Decimal(str(v))``, and pydantic accepts
+# ``1E+999999999`` because it is finite; the services then call ``format(v, "f")`` on it (the broker's initial
+# balances, the promotion's quantity and cost basis) and write a billion digits on the event loop.
+#
+# The contract: an amount whose ``Decimal.adjusted()`` — the exponent of its leading digit — lies outside [-100, 100]
+# is refused when the ``Currency`` is built, a pydantic ``ValidationError`` on ``amount`` (a 422 at the routes, before
+# any work). The bound holds whatever form the amount arrives in: the string of the wire, or a ``Decimal`` built in
+# process. Inside it, nothing changes.
+#
+# Reds today (accepted): the first list. Guards, green today and after: the second.
+
+#: Past the bound: just past either end, a negative amount (the sign does not count), and the attack of the finding.
+AMOUNTS_PAST_THE_EXPONENT_BOUND = ["1E+101", "1E-101", "-1E+101", "1E+999999999"]
+#: Within it: both ends, and ordinary amounts.
+AMOUNTS_WITHIN_THE_EXPONENT_BOUND = ["1E+100", "1E-100", "123.45", "-0.000001", "0"]
+AMOUNT_FORMS = ("str", "Decimal")
+
+
+def _as_form(amount: str, form: str) -> str | Decimal:
+    """``amount`` as the wire sends it (a string) or as code in process builds it (a ``Decimal``)."""
+    return amount if form == "str" else Decimal(amount)
+
+
+class TestCurrencyAmountExponentBound:
+    """R13-SEC7-3: ``Currency.validate_amount`` refuses an amount whose ``adjusted()`` lies outside [-100, 100]."""
+
+    @pytest.mark.parametrize("form", AMOUNT_FORMS)
+    @pytest.mark.parametrize("amount", AMOUNTS_PAST_THE_EXPONENT_BOUND)
+    def test_an_amount_past_the_exponent_bound_is_refused_on_its_amount(self, amount, form):
+        """Red today: accepted. Contract: a ``ValidationError`` whose errors include one on ``amount``.
+
+        The built ``Currency`` is never bound nor printed: its amount, expanded, is what the bound protects against.
+        """
+        sent = _as_form(amount, form)
+        try:
+            Currency(code="EUR", amount=sent)
+        except ValidationError as exc:
+            locs = [tuple(error["loc"]) for error in exc.errors()]
+            assert ("amount",) in locs, f"R13-SEC7-3: Currency(code='EUR', amount={sent!r}) was refused, but not on its amount: {locs}"
+            return
+        pytest.fail(f"R13-SEC7-3: Currency(code='EUR', amount={sent!r}) was accepted (adjusted() = {Decimal(amount).adjusted()}); an amount whose exponent lies outside [-100, 100] must be refused when it is built: a 422 at the routes, before format(v, 'f') can expand it")
+
+    @pytest.mark.parametrize("form", AMOUNT_FORMS)
+    @pytest.mark.parametrize("amount", AMOUNTS_WITHIN_THE_EXPONENT_BOUND)
+    def test_guard_an_amount_within_the_exponent_bound_is_kept_as_sent(self, amount, form):
+        """Guard: green today and after. Both ends of the bound and ordinary amounts build, their value unchanged."""
+        built = Currency(code="EUR", amount=_as_form(amount, form))
+
+        assert built.amount == Decimal(amount), f"R13-SEC7-3: Currency(code='EUR', amount={amount!r}) must keep its value; it holds {built.amount!r}"
+
+
+# ============================================================================
 # ARITHMETIC TESTS
 # ============================================================================
 

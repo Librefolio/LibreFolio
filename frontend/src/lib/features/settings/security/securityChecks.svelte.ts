@@ -1,0 +1,118 @@
+/**
+ * The state of the «Security» checks (lot A8b): one read of `GET /security/checks` per page load, shared by the tab and
+ * by the badge of its tab and of the «Administration» group, which the Settings page asks for before the tab is
+ * opened (`prefetch` of the registry).
+ *
+ * - `ensureLoaded()` reads once: nothing while a read is under way or after one succeeded; again after a failure.
+ *   Concurrent calls share one request.
+ * - `reload()` reads again (the tab's «check again»); the last checks stay listed meanwhile, and after a failure.
+ * - `findings`, `attentionCount` and `attentionSeverity` follow the checks and what the browser knows (the public
+ *   configuration and the host of the page); before the first answer they are empty.
+ * - `reset()` forgets the answer (the account changed): idle, nothing listed; a request still on the way for the
+ *   account that left lands nowhere. The app's store resets itself at every change of account.
+ * - The sidebar's connection line asks for them on every page an administrator opens, and draws the dot of
+ *   `attentionSeverity`; the phone's menu button reads the same (N69-1).
+ */
+import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+import {readBlockedScripts} from '$lib/features/security/cspNotice';
+import {getClientSessionGeneration, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {fetchSecurityChecks, type SecurityCheck} from './securityChecksApi';
+import {attentionCount, attentionSeverity, securityFindings, type BrowserSecurityState, type SecurityFindings} from './securityFindings';
+
+export type SecurityChecksStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface SecurityChecksDependencies {
+    fetch?: () => Promise<SecurityCheck[]>;
+    browser?: () => BrowserSecurityState;
+}
+
+/** The public configuration once the server gave it (before, an open instance would warn for nothing), the host, and
+ * the scripts the Content-Security-Policy blocked in this tab. */
+function browserState(): BrowserSecurityState {
+    const accounts = instanceConfig.loaded ? instanceConfig.config.accounts : null;
+    return {
+        registrationMode: accounts?.registration_mode ?? '',
+        registrationLocked: accounts?.registration_locked === true,
+        hostname: typeof window === 'undefined' ? '' : window.location.hostname,
+        blockedScripts: readBlockedScripts(),
+    };
+}
+
+const NO_FINDINGS: SecurityFindings = {attention: [], passed: []};
+
+export function createSecurityChecks(dependencies: SecurityChecksDependencies = {}) {
+    const fetchChecks = dependencies.fetch ?? fetchSecurityChecks;
+    const browser = dependencies.browser ?? browserState;
+
+    let status = $state<SecurityChecksStatus>('idle');
+    let checks = $state<SecurityCheck[]>([]);
+    let answered = $state(false);
+    let pending: Promise<void> | null = null;
+
+    function read(): Promise<void> {
+        if (pending) return pending;
+        status = 'loading';
+        const generation = getClientSessionGeneration();
+        const attempt = fetchChecks()
+            .then(
+                (items) => {
+                    if (!isClientSessionCurrent(generation)) return;
+                    checks = items;
+                    answered = true;
+                    status = 'ready';
+                },
+                () => {
+                    if (!isClientSessionCurrent(generation)) return;
+                    status = 'error';
+                },
+            )
+            .finally(() => {
+                if (pending === attempt) pending = null;
+            });
+        pending = attempt;
+        return attempt;
+    }
+
+    return {
+        get status(): SecurityChecksStatus {
+            return status;
+        },
+        get checks(): SecurityCheck[] {
+            return checks;
+        },
+        /** True once the server answered: the findings and the badge are real from then on. */
+        get answered(): boolean {
+            return answered;
+        },
+        get findings(): SecurityFindings {
+            return answered ? securityFindings(checks, browser()) : NO_FINDINGS;
+        },
+        get attentionCount(): number {
+            return answered ? attentionCount(securityFindings(checks, browser())) : 0;
+        },
+        /** The dot's state: an error before a warning; null before the first answer, or with nothing to see. */
+        get attentionSeverity(): 'error' | 'warning' | null {
+            return answered ? attentionSeverity(securityFindings(checks, browser())) : null;
+        },
+        ensureLoaded(): Promise<void> {
+            if (status === 'ready') return Promise.resolve();
+            return read();
+        },
+        reload(): Promise<void> {
+            return read();
+        },
+        /** The account changed: forget the answer; a request under way for the account that left is dropped. */
+        reset(): void {
+            pending = null;
+            checks = [];
+            answered = false;
+            status = 'idle';
+        },
+    };
+}
+
+export type SecurityChecksStore = ReturnType<typeof createSecurityChecks>;
+
+export const securityChecks = createSecurityChecks();
+
+registerClientSessionReset('securityChecks', () => securityChecks.reset());

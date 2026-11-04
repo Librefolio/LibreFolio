@@ -36,16 +36,72 @@ def schemas_common(verbose: bool = False, test_names: list = None) -> bool:
 def schemas_assets(verbose: bool = False, test_names: list = None) -> bool:
     """Test asset-related Pydantic schemas."""
     print_section("Schemas: Assets (FAGeographicArea, FAInterestRatePeriod, etc.)")
-    print_info("Testing: backend/app/schemas/assets.py")
+    print_info("Testing: backend/app/schemas/assets/ (scheduled_investment.py, metadata.py, assets.py)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_asset_schemas.py", test_names)
     return run_command(cmd, "Asset schemas tests", verbose=verbose)
 
 
+def schemas_scheduled_investment_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC7-2: the bounds of a scheduled investment schedule."""
+    print_section("Schemas: Scheduled Investment Bounds (R13-SEC7-2)")
+    print_info("Testing: backend/app/schemas/assets/scheduled_investment.py (dates, span, periods, grace), ScheduledInvestmentProvider.validate_params")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_scheduled_investment_bounds.py", test_names)
+    return run_command(cmd, "Scheduled investment bounds tests", verbose=verbose)
+
+
+def schemas_secret_validator_messages(verbose: bool = False, test_names: list = None) -> bool:
+    """A-38: a validator of a secret field never puts the value in its message."""
+    print_section("Schemas: Secret Validator Messages (A-38)")
+    print_info("Testing: backend/app/schemas/*.py read as source (ast): no field_validator of a password, token, secret, key or credential formats the value")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_secret_validator_messages.py", test_names)
+    return run_command(cmd, "Secret validator messages tests", verbose=verbose)
+
+
+def schemas_period_changes_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC8 (MF-P2b): the as_of floor of a fixed-period changes item."""
+    print_section("Schemas: Period Changes Bounds (R13-SEC8, MF-P2b)")
+    print_info("Testing: backend/app/schemas/prices.py (FAPeriodChangesQueryItem), backend/app/schemas/fx.py (FXPeriodChangesRequest)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_period_changes_bounds.py", test_names)
+    return run_command(cmd, "Period changes bounds tests", verbose=verbose)
+
+
+def schemas_price_write_point(verbose: bool = False, test_names: list = None) -> bool:
+    """N92 (i): the write model of a manual price ("clear" | number | null) and an answer model that checks no sign."""
+    print_section("Schemas: Price Write Point (N92)")
+    print_info("Testing: backend/app/schemas/prices.py (FAPriceWritePoint, FAUpsert, FAPricePoint)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_price_write_point.py", test_names)
+    return run_command(cmd, "Price write point tests", verbose=verbose)
+
+
+def schemas_currency_write_strict(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SEC9b (E-18): strict ISO 4217 codes on the write paths, tolerant reads."""
+    print_section("Schemas: Currency Write Strict (MF-SEC9b, E-18)")
+    print_info("Testing: backend/app/schemas/common.py (iso_currency_code, IsoCurrencyCode, IsoCurrencyAmount) and the write schemas")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_currency_write_strict.py", test_names)
+    return run_command(cmd, "Currency write strict tests", verbose=verbose)
+
+
+def schemas_currency_suggestion(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19a: the ISO code a stored currency value stands for, the 422 naming it, a user's base currency strict."""
+    print_section("Schemas: Currency Suggestion (E-19a)")
+    print_info("Testing: backend/app/schemas/common.py (suggested_iso_currency, iso_currency_code's text), schemas/settings.py (base_currency)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_currency_suggestion.py", test_names)
+    return run_command(cmd, "Currency suggestion tests", verbose=verbose)
+
+
+def schemas_currency_candidates(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19b1: the ISO codes a stored currency value may stand for, the public base of the suggestion."""
+    print_section("Schemas: Currency Candidates (E-19b1)")
+    print_info("Testing: backend/app/schemas/common.py (iso_currency_candidates, suggested_iso_currency)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_currency_candidates.py", test_names)
+    return run_command(cmd, "Currency candidates tests", verbose=verbose)
+
+
 def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Test transaction Pydantic schemas."""
     print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
-    print_info("Testing: backend/app/schemas/transactions.py")
+    print_info("Testing: backend/app/schemas/transactions/transactions.py")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_transaction_schemas.py", test_names)
 
@@ -116,6 +172,15 @@ def schemas_tools(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Tool schemas tests", verbose=verbose)
 
 
+def schemas_openapi_client_text(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the texts the API client generator pastes unescaped into the TypeScript client (backlog E-5)."""
+    print_section("Schemas: OpenAPI Client Text")
+    print_info("Testing: app.openapi() texts openapi-zod-client 1.18.3 writes unescaped into frontend/src/lib/api/generated.ts")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_openapi_client_text.py", test_names)
+    return run_command(cmd, "OpenAPI client text tests", verbose=verbose)
+
+
 def schemas_all(verbose: bool = False) -> bool:
     """Run all schema validation tests."""
     if _common.nothing_left_to_run("schemas"):
@@ -168,6 +233,71 @@ Tests for Pydantic/SQLModel schema validation:
         schemas_tools,
         name="Tool Schemas",
         desc="Strict transport, required metadata, correlation IDs, resource policies and platform outcomes",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "openapi-client-text",
+        schemas_openapi_client_text,
+        name="OpenAPI Client Text",
+        desc="Text the API client generator writes unescaped: describe(), endpoint descriptions, JSDoc",
+        # No isolation= on purpose, so the category's write-scoped holds: no row, no server, no network, but importing
+        # backend.app.main (the real document, read as api sync reads it) runs configure_logging, which creates
+        # <data dir>/logs/ and opens librefolio.log there, the lane's log that the shared backend writes too.
+    )
+    add_test(cat, "scheduled-investment-bounds", schemas_scheduled_investment_bounds, name="Scheduled Investment Bounds", desc="R13-SEC7-2 (N73): period dates 1900-2200, span ≤ 36 525 days, ≤ 1 200 periods, grace ≤ 36 525 days")
+    add_test(
+        cat,
+        "secret-validator-messages",
+        schemas_secret_validator_messages,
+        name="Secret Validator Messages",
+        desc="A-38: no field_validator of a secret field (password, token, secret, key, credential) puts the value in its message: the 422 keeps msg and ctx",
+        # PURE: reads the schemas' source with ast; no import of the app, no row, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "period-changes-bounds",
+        schemas_period_changes_bounds,
+        name="Period Changes Bounds",
+        desc="X5-6 (R13-SEC8 withdrawn): the as_of and range_start of an asset or FX period-changes item are any day of the calendar (0001-01-01 …, no floor, no upper bound); range_start not after as_of",
+        # PURE: imports schemas.prices and schemas.fx only and validates items; no row, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "price-write-point",
+        schemas_price_write_point,
+        name="Price Write Point",
+        desc="N92 (i): a manual price's open, high, low and volume take a number of 0 or more, 'clear' (empty the stored value) or null (leave it); -1, any other text, a value not finite and a boolean refused on their field (422); close above 0; FAUpsert reads write points; FAPricePoint, the provider's and the answer's model, checks no sign",
+        # PURE: imports schemas.prices only and validates items; no row, no server, no network, no file.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "currency-write-strict",
+        schemas_currency_write_strict,
+        name="Currency Write Strict",
+        desc="MF-SEC9b (E-18): write paths take ISO 4217 alpha-3 codes only; read paths stay tolerant",
+        # PURE: schemas and plain functions only; no row, no server, no network, no file.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "currency-suggestion",
+        schemas_currency_suggestion,
+        name="Currency Suggestion",
+        desc="E-19a: the ISO code a stored currency value stands for (none when ambiguous or a subunit), the 422 naming it, base_currency strict",
+        # PURE: schemas and plain functions over pycountry's data; no row, no server, no network, no file.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "currency-candidates",
+        schemas_currency_candidates,
+        name="Currency Candidates",
+        desc="E-19b1: the ISO codes a stored currency value may stand for (VED and VES for Bolívar Soberano), the base of the suggestion",
+        # PURE: plain functions over pycountry's data; no row, no server, no network, no file.
         isolation="pure",
     )
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")

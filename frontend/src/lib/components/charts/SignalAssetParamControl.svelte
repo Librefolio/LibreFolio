@@ -46,7 +46,7 @@
         onLoadError={() => (loadFailed = true)}
     />
     {#if loadFailed}
-        <p class="mt-1 text-[10px] text-red-500" data-testid="signal-comparison-asset-error">
+        <p class="mt-1 text-[10px] text-lf-danger" data-testid="signal-comparison-asset-error">
             {$t('signals.comparisonAsset.loadError')}
         </p>
     {/if}

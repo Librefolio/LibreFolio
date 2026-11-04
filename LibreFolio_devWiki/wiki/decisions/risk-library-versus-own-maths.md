@@ -32,7 +32,7 @@ libreria» non equivale a «usare il C». riskfolio-lib serves first as the **te
 
 ## Consequences
 
-Checked on the code at `b4acfb250`:
+Checked on the code at `a7424a4fa`:
 
 - `historical_var_cvar` returns the empirical VaR and the coherent CVaR (Acerbi-Tasche / Rockafellar-Uryasev) in
   `metrics.py`;
@@ -44,6 +44,6 @@ Checked on the code at `b4acfb250`:
 | Role | Path |
 |------|------|
 | VaR, CVaR, histogram | `backend/app/services/risk/metrics.py` |
-| Rolling signals | `backend/app/services/risk/signal_helpers.py` |
+| Rolling signals | `backend/app/services/signals/risk_adapters.py` |
 | riskfolio-lib in its process | `backend/app/services/risk/quant/riskfolio_worker.py` |
 | Journal | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/06-matematica-librerie-e-reimplementazioni.md` |

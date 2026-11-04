@@ -9,8 +9,8 @@ import uuid
 import httpx
 import pytest
 
-from backend.app.api.v1.assets import list_asset_signal_catalog
-from backend.app.api.v1.fx import list_fx_signal_catalog
+from backend.app.api.v1.assets.prices import list_asset_signal_catalog
+from backend.app.api.v1.fx.currencies import list_fx_signal_catalog
 from backend.app.config import get_settings
 from backend.app.schemas.signals import SignalCatalogResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -39,10 +39,14 @@ ASSET_CODES = {
     "MFI",
     "RISK_DRAWDOWN",
     "RISK_ROLLING_BETA",
-    "RISK_ROLLING_RETURN",
     "RISK_ROLLING_SHARPE",
     "RISK_ROLLING_VOLATILITY",
+    # Developer's decision 29 (CP-10a): ONE Rolling Return, measured in calendar days. The
+    # observation-count RISK_ROLLING_RETURN is gone; the calendar plugin takes its place in the catalog.
+    "ASSET_CALENDAR_ROLLING_RETURN",
 }
+CALENDAR_SIGNAL_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
+REMOVED_SIGNAL_CODE = "RISK_ROLLING_RETURN"
 FX_CODES = {
     "EMA",
     "SMA",
@@ -53,6 +57,8 @@ FX_CODES = {
     "STOCH_RSI",
     "KAMA",
     "PPO",
+    # Z-29fx (the FX half of Y-40, V-9 of 20/10): the calendar rolling return works on an FX pair's rates too.
+    "ASSET_CALENDAR_ROLLING_RETURN",
 }
 
 
@@ -150,6 +156,45 @@ async def test_asset_and_fx_catalogs_are_static_and_filtered(
 
 
 @pytest.mark.asyncio
+async def test_the_one_rolling_return_is_the_calendar_one_with_an_open_ended_window(
+    test_server,
+):
+    """Decision 29 (CP-10a): the Asset catalog serves ONE Rolling Return, the calendar one.
+
+    Its window counts calendar days from a floor of one (``minimum: 1``, inclusive) and has no ceiling: the
+    asset page sends long custom windows. The FX catalog serves the calendar one too since Z-29fx (an FX pair's rates
+    are a resolved daily series), never the removed one.
+    """
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset = await client.get(
+            f"{API_BASE}/assets/prices/signals",
+            timeout=TIMEOUT,
+        )
+        fx = await client.get(
+            f"{API_BASE}/fx/currencies/signals",
+            timeout=TIMEOUT,
+        )
+
+    assert asset.status_code == 200
+    assert fx.status_code == 200
+    asset_by_code = {item["signal_code"]: item for item in asset.json()["items"]}
+    fx_codes = {item["signal_code"] for item in fx.json()["items"]}
+
+    assert sorted(code for code in asset_by_code if "ROLLING_RETURN" in code) == [CALENDAR_SIGNAL_CODE]
+    assert REMOVED_SIGNAL_CODE not in fx_codes and CALENDAR_SIGNAL_CODE in fx_codes
+
+    calendar = asset_by_code[CALENDAR_SIGNAL_CODE]
+    window_schema = calendar["params_schema"]["properties"]["window_days"]
+    bounds = {key: window_schema[key] for key in ("minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum") if key in window_schema}
+    assert bounds == {"minimum": 1}
+    assert window_schema["type"] == "integer"
+    assert window_schema["default"] == 30
+    assert calendar["default_params"] == {"window_days": 30}
+    assert calendar["compatible_domains"] == ["asset", "fx"]
+
+
+@pytest.mark.asyncio
 async def test_catalog_shape_is_schema_driven_without_availability(
     test_server,
 ):
@@ -188,4 +233,4 @@ async def test_catalog_handlers_have_no_db_or_history_dependency():
     asset = await list_asset_signal_catalog(_current_user=object())
     fx = await list_fx_signal_catalog(_current_user=object())
     assert len(asset.items) == 22
-    assert len(fx.items) == 9
+    assert len(fx.items) == 10  # Z-29fx: the calendar rolling return joined the FX catalog

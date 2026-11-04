@@ -83,7 +83,7 @@ Gli indicatori di rischio trasformano la serie dei prezzi stessa in una lettura 
 
 | Indicatore | Domanda principale | Dati | Dettagli |
 |---|---|---|---|
-| **Drawdown sott'acqua** | Di quanto il prezzo è al di sotto del massimo progressivo? | Chiusura | [📖](../risk-metrics/max-drawdown.md) |
+| **Drawdown sott'acqua** | Di quanto il prezzo è al di sotto del massimo progressivo? | Chiusura | [📖](../risk-metrics/current-drawdown.md) |
 | **Rendimento mobile** | A quanto ammonta il rendimento composto dell'ultima finestra? | Chiusura | [📖](../../fundamentals/returns.md) |
 | **Volatilità rolling** | Quanto sono dispersi i rendimenti recenti? | Chiusura | [📖](../risk-metrics/volatility.md) |
 | **Rapporto di Sharpe rolling** | Il rendimento in eccesso compensa il rischio corso? | Chiusura | [📖](../risk-metrics/sharpe-ratio.md) |

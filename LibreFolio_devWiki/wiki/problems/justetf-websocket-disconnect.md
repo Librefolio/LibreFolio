@@ -37,4 +37,4 @@ The implemented workaround:
 | Role | Path |
 |------|------|
 | JustETF provider | `backend/app/services/asset_source_providers/justetf/plugin.py` |
-| Provider shutdown pattern | `backend/app/services/asset_source.py` |
+| Provider shutdown pattern | `backend/app/services/assets/base.py` |

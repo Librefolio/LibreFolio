@@ -12,8 +12,8 @@ related: [features/F-107, decisions/pac-scip-searches-exact-replay-certifies, de
 > The PAC allocator ([[features/F-107]]; Release 2 workstream D, a Tool in `backend/app/services/pac_allocator/`) plans which assets to
 > buy with the available cash, across brokers and currencies, with SCIP as the search engine and a Decimal-exact
 > replay (`evaluate_exact_candidate`) as the only referee of feasibility and of every reported number. This page
-> records the rounding contract fixed on 2026-10-09 (plan *PacRoundingDirectionFix*, merged in `b81b92fd1`, train 26;
-> the plan folder `Phase_0/13_pacAllocator/` is still active). Checked against the code at `083ed26dc`.
+> records the rounding contract fixed on 2026-10-09 (plan *PacRoundingDirectionFix*, merged in `18a10e98e`, train 26;
+> the plan folder `Phase_0/13_pacAllocator/` is still active). Checked against the code at `fef0203ca`.
 
 ## Context — the optimizer was mining the rounding
 
@@ -130,7 +130,7 @@ percentage already computed — [[features/F-107]].
 |------|------|
 | Posting families, `_PLAN_ROUNDING`, `_validate_posting` | `backend/app/services/pac_allocator/ledger.py` |
 | SCIP rows (`_posted_units_term`, `FX_CREDIT_POSITIVE`, modelled families) | `backend/app/services/pac_allocator/constraints.py` |
-| Exact replay, `rounding_bound`, top-ups | `backend/app/services/pac_allocator/evaluator.py` |
+| Exact replay, `rounding_bound`, top-ups | `backend/app/services/pac_allocator/evaluation/evaluator.py`, `backend/app/services/pac_allocator/evaluation/economics.py` |
 | Rate band β, `allocation.fx_rate_inconsistent` | `backend/app/services/pac_allocator/normalize.py` |
 | `post_floor`, `post_ceiling`, `calculate_planning_fx_rate` | `backend/app/services/pac_allocator/numeric.py` |
 | `ExactReplayRejectedError` → `execution_failed` | `backend/app/services/pac_allocator/planner.py` |

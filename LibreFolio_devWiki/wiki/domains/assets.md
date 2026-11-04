@@ -1,7 +1,7 @@
 ---
 title: "Domain: ASSETS"
 category: domain
-features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036, F-114]
+features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036, F-095, F-114]
 status: stable
 mkdocs: "developer/backend/assets/architecture.md"
 ---
@@ -35,6 +35,7 @@ The asset detail page is the richest view in LibreFolio: a full price history ch
 | [[F-034]] | Scheduled Investment Provider (synthetic yield) | backend | support — loan/structured product price synthesis | implemented |
 | [[F-035]] | CSS Scraper Provider (arbitrary web scraping) | backend | support — scrapes any web page for a price | implemented |
 | [[F-036]] | Provider Comparison Modal (diff provider vs DB) | frontend | support — shows diff between provider data and stored data | implemented |
+| [[F-095]] | Asset Delete — Transaction Count Link | fullstack | support — a blocked delete shows the transaction count and links to them | documented |
 
 ## Architecture at a glance
 
@@ -70,6 +71,7 @@ graph TD
 - [[decisions/data-editor-unification]] — the inline data editor was unified into a generic `DataEditor` component set shared by both the FX and Asset detail pages, eliminating duplicated logic for click-to-edit, CSV import, and bulk save.
 - [[decisions/price-currency-hard-reject]] — Phase 7 Part 3: hard-400 on any price-currency mismatch in `upsert_prices_bulk`; HTTP 409 on `Asset.currency` PATCH while price/event history exists.
 - [[decisions/policy-d-currency-wipe]] — when the user accepts the 409, currency change is destructive: prices + events wiped symmetrically, transactions preserved with `asset_event_id = NULL`. Pre-confirm snapshots via [[entities/backup-router]] (`/api/v1/backup/asset/{id}/{prices,events}`).
+- [[decisions/asset-event-saves-all-or-nothing]] — release 1.3, decisions 20–23. An events save is one transaction that refuses whole and says where. «+ New event» never overwrites (409 `EVENT_EXISTS`). The `DELETE` names its asset, and the editor's deletions travel inside its save. An unknown type is refused, and the stored ones are repaired by a post-migration fix.
 
 ## Known problems / limitations
 
@@ -78,6 +80,7 @@ graph TD
 - [[problems/asset-currency-mismatch]] — asset price currency may differ from `Asset.currency` (e.g. a EUR-denominated ETF with prices returned in USD by yfinance); per-row currency column added in 2026-04 (still present as forensic canary), now superseded at the API contract level by [[decisions/price-currency-hard-reject]].
 - [[problems/assets-wipe-error-attr-mismatch]] — Policy D wipe handlers used non-existent `e.code` attribute; fixed in G-batch6 (one residual occurrence flagged).
 - [[problems/babel-currency-symbol-echo]] — `normalize_currency` echoed unknown garbage via babel; fixed via strict pycountry lookup in G-batch7.
+- [[problems/provider-event-dated-today-not-synced]] — a sync reads the history up to yesterday, and today's point (the current value) carries no events: a provider event dated today arrives with the first sync of a later day. Open.
 
 ## What comes next
 
@@ -85,7 +88,6 @@ graph TD
 - [[F-029]] Metadata Refresh — already implemented but not yet documented; mkdocs page planned.
 - [[F-036]] Provider Comparison Modal — already implemented; mkdocs page planned.
 - [[F-094]] Sync Date Range Dialog — let users choose the historical range when syncing.
-- [[F-095]] Asset Delete — Transaction Count Link — show transaction count before delete confirmation.
 - [[F-096]] Scheduled Investment — Decoupled Frequencies + Anchor Day — idea for finer-grained schedule control.
 
 ## See also
@@ -102,8 +104,8 @@ graph TD
 | Database pricing mkdocs | `mkdocs_src/docs/developer/architecture/database/assets_pricing.md` |
 | User assets docs | `mkdocs_src/docs/user/assets/` |
 | Scheduled investment docs | `mkdocs_src/docs/developer/backend/assets/provider_scheduled_investment.md` |
-| Asset API | `backend/app/api/v1/assets.py` |
-| Asset service + abstract base | `backend/app/services/asset_source.py` |
+| Asset API | `backend/app/api/v1/assets/` |
+| Asset service + abstract base | `backend/app/services/assets/` |
 | Asset providers | `backend/app/services/asset_source_providers/` |
 | DB models (Asset, PriceHistory, AssetEvent) | `backend/app/db/models.py` |
 | Asset pages | `frontend/src/routes/(app)/assets/` |

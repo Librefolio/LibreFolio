@@ -72,7 +72,19 @@ curl -s http://localhost:6040/api/v1/auth/me \
 ```bash
 curl http://localhost:6040/api/v1/system/health
 # Returns: {"status":"ok"}
+
+# Readiness: does the database answer, is its schema at the head revision? (-i shows the status code)
+curl -i http://localhost:6040/api/v1/system/ready
+# 200: {"status":"ready","checks":{"database":"ok","migrations":"ok"},"database_revision":"<revision>","mode":"normal","app_version":"<version>"}
+# 503: {"status":"not_ready","checks":{"database":"ok","migrations":"behind"},"database_revision":"<revision>","mode":"normal","app_version":"<version>"}
+
+# System info: the app version only without the cookie, everything with it
+curl http://localhost:6040/api/v1/system/info
+# Returns: {"app_version":"v1.2.0"}
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/system/info
 ```
+
+The codes of `/system/ready` are listed in [System Information and Readiness](../architecture/security.md#system-info-and-readiness).
 
 ### 👤 User Management
 
@@ -80,11 +92,14 @@ curl http://localhost:6040/api/v1/system/health
 # Get current user
 curl -b /tmp/cookies.txt http://localhost:6040/api/v1/auth/me
 
-# Update preferences
-curl -X PATCH -b /tmp/cookies.txt \
+# Read your settings (language, base currency, theme, avatar)
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/settings/user
+
+# Update them: every field is optional (language, base_currency, theme, avatar_url), an omitted one stays as it is
+curl -X PUT -b /tmp/cookies.txt \
   -H "Content-Type: application/json" \
-  -d '{"language":"it","currency":"EUR"}' \
-  http://localhost:6040/api/v1/auth/users/me/preferences
+  -d '{"language":"it","base_currency":"EUR"}' \
+  http://localhost:6040/api/v1/settings/user
 ```
 
 ### 🏦 Brokers
@@ -112,10 +127,11 @@ curl -b /tmp/cookies.txt "http://localhost:6040/api/v1/brokers/import/files?stat
 # Filter by broker IDs
 curl -b /tmp/cookies.txt "http://localhost:6040/api/v1/brokers/import/files?broker_ids=1&broker_ids=2"
 
-# Upload a file (requires broker_id)
+# Upload a file (broker_id is a required form field)
 curl -b /tmp/cookies.txt \
   -F "file=@/path/to/report.csv" \
-  "http://localhost:6040/api/v1/brokers/import/upload?broker_id=1"
+  -F "broker_id=1" \
+  http://localhost:6040/api/v1/brokers/import/upload
 
 # Get available plugins
 curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers/import/plugins
@@ -168,8 +184,10 @@ curl http://localhost:6041/api/v1/system/health
 
 ## 📖 API Documentation
 
-For complete API documentation, visit:
+For complete API documentation, start the server with `./dev.py server --debug` and visit:
 
 - **Swagger UI**: http://localhost:6040/api/v1/docs
 - **ReDoc**: http://localhost:6040/api/v1/redoc
 - **OpenAPI JSON**: http://localhost:6040/api/v1/openapi.json
+
+These three exist only in debug mode (`LIBREFOLIO_API_DOCS`) and in test mode (port 6041); on any other instance they answer `404`. `./dev.py api schema` exports the schema without a running server.

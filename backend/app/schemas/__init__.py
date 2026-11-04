@@ -6,12 +6,15 @@ and standardize data exchange between components.
 
 **Organization by Domain**:
 - common.py: Shared schemas (BackwardFillInfo, DateRangeModel, OldNew, BaseBulkResponse, BaseDeleteResult)
-- assets.py: Asset-related schemas (FAPricePoint, ScheduledInvestment*, etc.)
+- assets/: Asset schemas — assets.py (CRUD, patch, merge, provider assignment), metadata.py (distributions,
+  classification, metadata refresh), scheduled_investment.py (financial enums, ScheduledInvestment*), events.py (event
+  point, event CRUD)
 - provider.py: Provider assignment schemas (FA + FX)
 - prices.py: FA price operation schemas (upsert, delete, query)
 - refresh.py: FA refresh + FX sync operational schemas
 - fx.py: FX-specific schemas (conversion, upsert, delete, pair sources)
-- transactions.py: Transaction CRUD schemas (TX prefix)
+- transactions/: Transaction schemas (TX prefix) — transactions.py (validators, CRUD, query), batch.py (unified batch,
+  validation codes and issues), event_suggest.py, promotion.py, type_metadata.py
 - brokers.py: Broker CRUD schemas
 
 **Naming Conventions**:
@@ -30,29 +33,29 @@ from importlib import import_module as _import_module
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from backend.app.schemas.assets import (
-        # Distribution models
-        BaseDistribution,
-        FAAinfoFiltersRequest,
+    from backend.app.schemas.assets.assets import (
         # Asset CRUD
+        FAAinfoFiltersRequest,
         FAAssetCreateItem,
         FAAssetCreateResult,
         FAAssetDeleteResult,
-        FAAssetEventPoint,
-        FAAssetMetadataResponse,
         FAAssetPatchItem,
         FAAssetPatchResult,
         FAAssetProviderAssignment,
         FABulkAssetCreateResponse,
         FABulkAssetDeleteResponse,
         FABulkAssetPatchResponse,
+        FAinfoResponse,
+    )
+    from backend.app.schemas.assets.events import FAAssetEventPoint
+    from backend.app.schemas.assets.metadata import (
+        # Distribution models
+        BaseDistribution,
+        # Metadata & classification
+        FAAssetMetadataResponse,
         FABulkMetadataRefreshResponse,
         FAClassificationParams,
-        FACurrentValue,
-        # Metadata & classification
         FAGeographicArea,
-        FAHistoricalData,
-        FAinfoResponse,
         FAMetadataRefreshResult,
         FASectorArea,
     )
@@ -87,7 +90,6 @@ if TYPE_CHECKING:
         BRAccessBulkResponse,
         BRAccessItem,
         BRAccessListResponse,
-        BRAssetHolding,
         BRBulkCreateResponse,
         BRBulkDeleteResponse,
         BRBulkUpdateResponse,
@@ -134,8 +136,11 @@ if TYPE_CHECKING:
         FAAssetDelete,
         FABulkDeleteResponse,
         FABulkUpsertResponse,
+        FACurrentValue,
+        FAHistoricalData,
         FAPriceDeleteResult,
         FAPricePoint,
+        FAPriceWritePoint,
         FAUpsert,
         FAUpsertResult,
     )
@@ -145,6 +150,10 @@ if TYPE_CHECKING:
         FAProviderAssignmentItem,
         FAProviderAssignmentReadItem,
         FAProviderAssignmentResult,
+        FAProviderImpactRequest,
+        FAProviderImpactResponse,
+        FAProviderImpactResult,
+        FAProviderImpactSplit,
         FAProviderInfo,
         FAProviderRefreshFieldsDetail,
         FAProviderRemovalResult,
@@ -230,7 +239,24 @@ if TYPE_CHECKING:
         PluginDiscoveryFailureInfo,
         SystemInfoResponse,
     )
-    from backend.app.schemas.transactions import (
+    from backend.app.schemas.transactions.batch import (
+        TXBatchResponse,
+        TXBatchResultItem,
+        TXDeleteResult,
+        TXMixedBatch,
+        TXValidationIssue,
+    )
+    from backend.app.schemas.transactions.transactions import (
+        TXCreateItem,
+        TXDeleteItem,
+        TXQueryParams,
+        TXReadItem,
+        TXUpdateItem,
+        tags_to_csv,
+        # Shared utilities
+        validate_tags_list,
+    )
+    from backend.app.schemas.transactions.type_metadata import (
         TX_TYPE_METADATA,
         FieldMode,
         PairFieldConstraint,
@@ -240,20 +266,7 @@ if TYPE_CHECKING:
         # Type aliases
         SignType,
         SplitMeta,
-        TXBatchResponse,
-        TXBatchResultItem,
-        TXCreateItem,
-        TXDeleteItem,
-        TXDeleteResult,
-        TXMixedBatch,
-        TXQueryParams,
-        TXReadItem,
         TXTypeMetadata,
-        TXUpdateItem,
-        TXValidationIssue,
-        tags_to_csv,
-        # Shared utilities
-        validate_tags_list,
     )
 
 __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
@@ -269,7 +282,6 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "BRCreateItem",
     "BRReadItem",
     "BRSummary",
-    "BRAssetHolding",
     "BRUpdateItem",
     "BRDeleteItem",
     "BRDeleteResult",
@@ -340,11 +352,16 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "FAProviderAssignmentItem",
     "FAProviderAssignmentReadItem",
     "FAProviderAssignmentResult",
+    "FAProviderImpactRequest",
+    "FAProviderImpactResponse",
+    "FAProviderImpactResult",
+    "FAProviderImpactSplit",
     "FAProviderRemovalResult",
     "FAProviderRefreshFieldsDetail",
     # Prices
     "FAUpsert",
-    "FAPricePoint",  # Note: FAUpsertItem merged into FAPricePoint
+    "FAPricePoint",
+    "FAPriceWritePoint",  # N92: the write model apart again (FAUpsertItem had been merged into FAPricePoint)
     "FAAssetDelete",
     "FABulkUpsertResponse",
     "FABulkDeleteResponse",
@@ -467,26 +484,26 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
 ]
 
 _EXPORT_GROUPS = {
-    "assets": (
-        "BaseDistribution",
+    "assets.assets": (
         "FAAinfoFiltersRequest",
         "FAAssetCreateItem",
         "FAAssetCreateResult",
         "FAAssetDeleteResult",
-        "FAAssetEventPoint",
-        "FAAssetMetadataResponse",
         "FAAssetPatchItem",
         "FAAssetPatchResult",
         "FAAssetProviderAssignment",
         "FABulkAssetCreateResponse",
         "FABulkAssetDeleteResponse",
         "FABulkAssetPatchResponse",
+        "FAinfoResponse",
+    ),
+    "assets.events": ("FAAssetEventPoint",),
+    "assets.metadata": (
+        "BaseDistribution",
+        "FAAssetMetadataResponse",
         "FABulkMetadataRefreshResponse",
         "FAClassificationParams",
-        "FACurrentValue",
         "FAGeographicArea",
-        "FAHistoricalData",
-        "FAinfoResponse",
         "FAMetadataRefreshResult",
         "FASectorArea",
     ),
@@ -513,7 +530,6 @@ _EXPORT_GROUPS = {
         "BRAccessBulkResponse",
         "BRAccessItem",
         "BRAccessListResponse",
-        "BRAssetHolding",
         "BRBulkCreateResponse",
         "BRBulkDeleteResponse",
         "BRBulkUpdateResponse",
@@ -560,8 +576,11 @@ _EXPORT_GROUPS = {
         "FAAssetDelete",
         "FABulkDeleteResponse",
         "FABulkUpsertResponse",
+        "FACurrentValue",
+        "FAHistoricalData",
         "FAPriceDeleteResult",
         "FAPricePoint",
+        "FAPriceWritePoint",
         "FAUpsert",
         "FAUpsertResult",
     ),
@@ -571,6 +590,10 @@ _EXPORT_GROUPS = {
         "FAProviderAssignmentItem",
         "FAProviderAssignmentReadItem",
         "FAProviderAssignmentResult",
+        "FAProviderImpactRequest",
+        "FAProviderImpactResponse",
+        "FAProviderImpactResult",
+        "FAProviderImpactSplit",
         "FAProviderInfo",
         "FAProviderRefreshFieldsDetail",
         "FAProviderRemovalResult",
@@ -656,7 +679,23 @@ _EXPORT_GROUPS = {
         "PluginDiscoveryFailureInfo",
         "SystemInfoResponse",
     ),
-    "transactions": (
+    "transactions.batch": (
+        "TXBatchResponse",
+        "TXBatchResultItem",
+        "TXDeleteResult",
+        "TXMixedBatch",
+        "TXValidationIssue",
+    ),
+    "transactions.transactions": (
+        "TXCreateItem",
+        "TXDeleteItem",
+        "TXQueryParams",
+        "TXReadItem",
+        "TXUpdateItem",
+        "tags_to_csv",
+        "validate_tags_list",
+    ),
+    "transactions.type_metadata": (
         "TX_TYPE_METADATA",
         "FieldMode",
         "PairFieldConstraint",
@@ -665,19 +704,7 @@ _EXPORT_GROUPS = {
         "PromoteRule",
         "SignType",
         "SplitMeta",
-        "TXBatchResponse",
-        "TXBatchResultItem",
-        "TXCreateItem",
-        "TXDeleteItem",
-        "TXDeleteResult",
-        "TXMixedBatch",
-        "TXQueryParams",
-        "TXReadItem",
         "TXTypeMetadata",
-        "TXUpdateItem",
-        "TXValidationIssue",
-        "tags_to_csv",
-        "validate_tags_list",
     ),
 }
 _EXPORTS = {name: f"{__name__}.{module}" for module, names in _EXPORT_GROUPS.items() for name in names}

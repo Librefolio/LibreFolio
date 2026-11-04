@@ -56,8 +56,20 @@ zero silently** — hence the dedicated coverage test.
 
 ### Conventions
 
-- **Decimal columns**: `Numeric(18, 6)` for precision
-- **Timestamps**: UTC via `utcnow()` helper
+- **Decimal columns** (C-97): amounts and event values `RealDecimal(18, 6)` (W-B60); quantities `RealDecimal(22, 10)`;
+  prices and the per-unit cost basis `RealDecimal(24, 12)` (`db/real_decimal.py`: the SQLite REAL read back as
+  the decimal written, at most 15 significant digits; reading never raises — a stored ±inf reads `None` — and a
+  value a double cannot hold is refused on write); FX rates `Numeric(24, 10)`. A value typed or read from a
+  file over its column's limit is refused, never rounded (`db/precision.decimal_limit_issue`: decimal places,
+  15 significant digits, and the digits before the decimal point, `max_integer_digits` — 15 for a quantity and a
+  transaction amount, decision N63, otherwise precision − scale); a value LibreFolio
+  or a plugin computes is rounded explicitly (`db/precision.round_computed_value`); provider prices are truncated
+  (`truncate_priceHistory`), and one no column can keep is skipped (`storable_value`, `storable_price`, W-B58).
+  Never sum these columns in SQL: `SUM` adds the stored doubles — sum in Python with
+  `financial_math` (`position_quantities`, `native_balances`)
+- **Timestamps**: UTC via `utcnow()` helper, stored without an offset: every `datetime` field declares
+  `sa_type=DateTime` (SQLModel >= 0.0.48 would map it to its `UTCDateTime`, which refuses naive values); a value read
+  back is naive UTC (`ensure_utc()`). See the developer docs, Database Schema «Timestamps»
 - **Daily-point policy**: one record per day for prices and FX rates
 - **Foreign keys**: enforced with `PRAGMA foreign_keys=ON`
 - **Currency validation**: via `Currency.validate_code()` from schemas
@@ -91,11 +103,12 @@ before committing, while the migration is still unreleased:
 ```
 001_initial.py                  002_identifier_other_json_list.py
 003_scheduler_timezone.py       004_release_1_2_0_schema.py
+005_release_1_3_0_schema.py
 ```
 
 - **Zero-padded sequential prefix** (`00N_`) so the chain reads in order on disk.
 - After the prefix, either the **target release version** it ships in
-  (`004_release_1_2_0_schema` → v1.2.0) or the **functional scope** when the migration is a
+  (`004_release_1_2_0_schema` → v1.2.0, `005_release_1_3_0_schema` → v1.3.0) or the **functional scope** when the migration is a
   single self-contained change (`003_scheduler_timezone`).
 - The `revision` string inside the file equals the filename without `.py`.
 - ⚠️ **Keep the id at 32 characters or fewer.** Alembic's own `alembic_version.version_num`
@@ -117,20 +130,53 @@ git cat-file -e <tag>:backend/alembic/versions/<file>   # is it inside a release
 
 Anything inside a released tag stays in the chain. Anything not released may be consolidated.
 
+**One migration per release** (confirmed 24/10/2026). During the cycle a schema change edits the release's file
+directly; branches developed in parallel each edit it and are merged into it at integration, never into a second
+revision. Before a release, any unreleased migrations of the cycle are folded into one
+`00N_release_<version>_schema`: 004 for 1.2, and `005_release_1_3_0_schema` for 1.3 (decision of 19/10/2026).
+The folded file must give the same schema as the chain it replaces: freeze that schema before deleting
+the chain, and test the new file against it (`test_migration_005_release_1_3.py`). A database stamped with a
+retired id comes from an unreleased build only: it is brought forward by hand (the developer journal holds the
+procedure), never by code in the app, and a backup at such an id is refused as from a newer LibreFolio.
+When SQL lines by hand would be long or fragile (rebuilding a table to change a CHECK, say), the procedure may use a
+repair script — **ask the developer first** (his decision, 28/10/2026). The script lives in the developer journal next
+to its procedure (`repair_005_owner_columns.py`: standard library only, a copy of the file before it writes, one
+transaction, an integrity check, a no-op when run again), and is run by hand on a file the developer names: never
+imported by the app, never a `dev.py` command, never run at startup.
+
 ### One head, always — never `alembic merge`
 
 Two migrations authored in parallel that declare the same `down_revision` produce **no Git
 conflict** and a fork that only bites on a fresh install. Resolve it by re-parenting one onto
 the other, not with a merge node.
 
-This is not a style preference. `main.py:_alembic_head_revision()` calls
+This is not a style preference. `alembic_head_revision()` (`services/platform/readiness.py`,
+read at startup by `database_bootstrap.ensure_database_exists()` and by `GET /system/ready`) calls
 `ScriptDirectory.get_current_head()` (singular), which **raises `CommandError` on multiple
 heads**; the caller swallows it and returns `None`, so the pending-migration check at startup
 silently evaluates to false and **the server boots without migrating** — the exact failure the
 check exists to prevent. A fork therefore disables auto-upgrade for every install while
-leaving only a warning in the log.
+leaving only a warning in the log, and `/system/ready` answering `migrations: unknown`.
 
 `db_schema_validate.py` enforces `len(ScriptDirectory.get_heads()) == 1`.
+
+### Indexes: only the ones a query uses
+
+The developer's rule (19/10/2026), after an analysis found 13 indexes nobody needed (dropped by
+`005_release_1_3_0_schema`; `001_initial.py` stays as released):
+
+- **A `UNIQUE` constraint already creates its index** (`sqlite_autoindex_<table>_<n>`). Never add an `Index`,
+  `index=True` or `CREATE INDEX` on the same columns. In a model, `Field(unique=True)` or a `UniqueConstraint`
+  alone: `unique=True, index=True` makes `create_all` build a unique index where a migration writes the
+  constraint, and a migration that wrote both left six duplicates in the 1.2 schema.
+- **No index that is the left prefix of another.** `(broker_id, date, id)` already serves every query on
+  `broker_id`, and SQLite's foreign-key checks on it.
+- **Every new index has a query that uses it, proven with `EXPLAIN QUERY PLAN`**: name the query in the
+  migration's docstring, with the plan line (`SEARCH <table> USING INDEX <name> (...)`). An index nobody reads
+  costs space and every write.
+- **The guard**: `db validate` (`db_schema_validate.py`) fails on an index equal to, or a left prefix of, another
+  index of the same table, automatic ones included. A `UNIQUE` prefix of a longer index, a partial index and an
+  expression index are not redundancy.
 
 ### Standard Commands
 

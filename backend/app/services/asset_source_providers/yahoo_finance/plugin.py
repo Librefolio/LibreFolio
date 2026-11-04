@@ -8,11 +8,14 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+import math
+import re
 import time as _time_mod
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
@@ -29,27 +32,40 @@ except ImportError:
     pd = None
     YFINANCE_AVAILABLE = False
 
+try:
+    from yfinance.exceptions import YFRateLimitError
+except ImportError:  # pragma: no cover — yfinance missing, or a version without it: the message words still count
+    YFRateLimitError = None
+
 from datetime import UTC
 from datetime import datetime as _dt
 
-from backend.app.schemas.assets import (
-    FAAssetEventPoint,
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.events import FAAssetEventPoint
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
-    FACurrentValue,
-    FAHistoricalData,
-    FAPricePoint,
     FASectorArea,
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
-from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.schemas.prices import (
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+)
+from backend.app.schemas.provider import FAQuoteBaseSuggestion, FAVolumeKind
+from backend.app.services.assets.base import AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.currency_units import minor_unit_factor
 
 logger = get_logger(__name__)
 
 # ── Retry helpers for transient yfinance errors ─────────────────────────
+
+# «Too many requests» is never retried in the thread: the core pauses the provider (decision 34, release 1.3).
+# A whole-word 429, so a ticker such as 4290.T in a message is no refusal.
+_RATE_LIMIT_PATTERN = re.compile(r"\b429\b|too many requests|rate limit")
 
 # Keywords that indicate transient network/API errors worth retrying
 _TRANSIENT_KEYWORDS = frozenset(
@@ -63,9 +79,6 @@ _TRANSIENT_KEYWORDS = frozenset(
         "nonetype",
         "temporary",
         "503",
-        "429",
-        "too many requests",
-        "rate limit",
         "ssl",
         "eof",
         "broken pipe",
@@ -75,6 +88,13 @@ _TRANSIENT_KEYWORDS = frozenset(
 
 _YF_MAX_RETRIES = 3
 _YF_BASE_DELAY = 1.5  # seconds
+
+
+def _is_rate_limited(exc: Exception) -> bool:
+    """True for a «too many requests» refusal: yfinance's ``YFRateLimitError``, or its words in the message."""
+    if YFRateLimitError is not None and isinstance(exc, YFRateLimitError):
+        return True
+    return _RATE_LIMIT_PATTERN.search(str(exc).lower()) is not None
 
 
 def _is_transient(exc: Exception) -> bool:  # pragma: no cover
@@ -87,8 +107,9 @@ def _yf_with_retry(fn, *, label: str = "yfinance"):
     """
     Execute a yfinance operation with retry on transient errors.
 
-    Uses simple exponential backoff (1.5s → 3s → 6s).
-    Non-transient errors are raised immediately.
+    Up to three attempts, with exponential backoff between them (1.5 s, then 3 s).
+    Non-transient errors are raised immediately. A «too many requests» refusal is raised at once as
+    ``AssetRateLimitedError``, never retried: the call boundary pauses the provider (``core.call_provider``).
 
     Args:
         fn: Zero-arg callable that performs the yfinance operation
@@ -98,13 +119,16 @@ def _yf_with_retry(fn, *, label: str = "yfinance"):
         Result of fn()
 
     Raises:
-        The last exception if all retries are exhausted or non-transient
+        AssetRateLimitedError on a refusal for too many requests; otherwise the last exception if all retries are
+        exhausted or non-transient
     """
     last_exc: Exception | None = None
     for attempt in range(1, _YF_MAX_RETRIES + 1):
         try:
             return fn()
         except Exception as e:
+            if _is_rate_limited(e):
+                raise AssetRateLimitedError(f"Yahoo Finance refused for too many requests ({label})") from e
             last_exc = e
             if not _is_transient(e) or attempt == _YF_MAX_RETRIES:
                 raise
@@ -112,6 +136,144 @@ def _yf_with_retry(fn, *, label: str = "yfinance"):
             logger.warning(f"{label} transient error (attempt {attempt}/{_YF_MAX_RETRIES}): {e}, " f"retrying in {delay:.1f}s")
             _time_mod.sleep(delay)
     raise last_exc  # pragma: no cover – safety net
+
+
+# ── Fund data (lot #50) ──────────────────────────────────────────────────
+
+#: The ``quoteType`` values whose ``Ticker.funds_data`` is read besides ``info``.
+_FUND_QUOTE_TYPES = frozenset({"etf", "mutualfund"})
+
+#: The longest ``short_description`` the metadata keeps.
+_DESCRIPTION_LIMIT = 500
+
+#: Yahoo's eleven fund sectors (``funds_data.sector_weightings`` keys, written with underscores) on the standard
+#: sectors. ``FinancialSector.from_string`` does not know these spellings: through it they would all land in «Other».
+_YAHOO_FUND_SECTORS = {
+    "realestate": "Real Estate",
+    "consumer_cyclical": "Consumer Discretionary",
+    "basic_materials": "Basic Materials",
+    "consumer_defensive": "Consumer Staples",
+    "technology": "Technology",
+    "communication_services": "Telecommunication",
+    "financial_services": "Financials",
+    "utilities": "Utilities",
+    "industrials": "Industrials",
+    "energy": "Energy",
+    "healthcare": "Health Care",
+}
+
+
+@dataclass(frozen=True)
+class _FundExtras:
+    """What ``funds_data`` adds to a fund's metadata; each piece is None when Yahoo has none or it could not be read."""
+
+    sector_area: FASectorArea | None = None
+    description: str | None = None
+    ter: str | None = None  # already formatted, «0.03»: a percentage
+    issuer: str | None = None
+
+
+def _read_fund_piece(read, *, identifier: str, piece: str):
+    """One piece of a fund's data, or None when it is missing or cannot be read.
+
+    A «too many requests» refusal is the exception: it leaves as ``AssetRateLimitedError`` (the core pauses the
+    provider), the rule of every other Yahoo call. Any other failure (a fund Yahoo has no profile for, a field that is
+    absent, a malformed answer) costs only this piece: it is isolation by design, so the asset's metadata still comes
+    back, and the failure is logged where it is caught.
+    """
+    try:
+        return _yf_with_retry(read, label=f"fund_{piece}({identifier})")
+    except AssetRateLimitedError:
+        raise
+    except Exception as exc:  # isolation boundary: fund data is best effort, never a reason to lose the metadata
+        logger.warning("Fund data unavailable from Yahoo Finance", identifier=identifier, piece=piece, exc_info=exc)
+        return None
+
+
+def _fund_sector_area(weightings, identifier: str) -> FASectorArea | None:
+    """Yahoo's sector weightings as a ``FASectorArea``: names on the standard sectors, weights renormalised to 1.
+
+    A key Yahoo adds that is not in the table goes to «Other», as an unknown sector of any provider does. A weight that
+    is not a positive finite number is dropped.
+    """
+    if not weightings:
+        return None
+    distribution: dict[str, Decimal] = {}
+    for key, raw in dict(weightings).items():
+        try:
+            weight = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(weight) or weight <= 0:
+            continue
+        sector = _YAHOO_FUND_SECTORS.get(str(key).strip().lower())
+        if sector is None:
+            logger.warning("Unknown sector from provider, mapped to Other", provider_code="yfinance", identifier=identifier, original_sector=str(key), mapped_to="Other")
+            sector = "Other"
+        distribution[sector] = distribution.get(sector, Decimal("0")) + Decimal(str(weight))
+    total = sum(distribution.values(), Decimal("0"))
+    if total <= 0:
+        return None
+    return FASectorArea(distribution={sector: share / total for sector, share in distribution.items()})
+
+
+def _fund_ter(operations) -> str | None:
+    """The annual report expense ratio as a percentage string («0.03»), or None when Yahoo has none.
+
+    Yahoo gives a fraction (0.0003 = 0.03 %): it is shown as a percentage, rounded to two decimals. A missing value
+    (``None``, ``NaN``), or one that is not positive, is left out.
+    """
+    if operations is None or len(operations) == 0:
+        return None
+    try:
+        ratio = float(operations.iloc[0, 0])
+    except (TypeError, ValueError, IndexError):
+        return None
+    if not math.isfinite(ratio) or ratio <= 0:
+        return None
+    percentage = (Decimal(str(ratio)) * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return format(percentage.normalize(), "f") if percentage > 0 else None
+
+
+def _read_fund_extras(ticker, identifier: str) -> _FundExtras:
+    """Read a fund's sectors, description, expense ratio and issuer from ``Ticker.funds_data`` (lot #50).
+
+    Every piece is read apart, so the one Yahoo lacks (VWCE.DE has no expense ratio and an empty description) does not
+    cost the others. Runs in the core's thread, like every provider call: the sync yfinance reads are safe here.
+    """
+    funds_data = _read_fund_piece(lambda: ticker.funds_data, identifier=identifier, piece="funds_data")
+    if funds_data is None:
+        return _FundExtras()
+    weightings = _read_fund_piece(lambda: funds_data.sector_weightings, identifier=identifier, piece="sectors")
+    overview = _read_fund_piece(lambda: funds_data.fund_overview, identifier=identifier, piece="overview")
+    operations = _read_fund_piece(lambda: funds_data.fund_operations, identifier=identifier, piece="operations")
+    description = _read_fund_piece(lambda: funds_data.description, identifier=identifier, piece="description")
+
+    issuer = overview.get("family") if isinstance(overview, dict) else None
+    return _FundExtras(
+        sector_area=_fund_sector_area(weightings, identifier),
+        description=description.strip() if isinstance(description, str) and description.strip() else None,
+        ter=_fund_ter(operations),
+        issuer=issuer.strip() if isinstance(issuer, str) and issuer.strip() else None,
+    )
+
+
+def _fund_description(head: str, extras: _FundExtras) -> str:
+    """The description with the expense ratio and the issuer after it («head | TER: 0.03% | Issuer: X»).
+
+    The 500-character cap cuts the head, never the tail: the figures are the point of the addition.
+    """
+    tail = ""
+    if extras.ter:
+        tail += f" | TER: {extras.ter}%"
+    if extras.issuer:
+        tail += f" | Issuer: {extras.issuer}"
+    if not tail:
+        return head[:_DESCRIPTION_LIMIT]
+    room = _DESCRIPTION_LIMIT - len(tail)
+    if len(head) > room:
+        head = head[: max(room - 3, 0)] + "..."
+    return head + tail
 
 
 @dataclass(frozen=True)
@@ -122,10 +284,39 @@ class _YahooHistoryAcquisition:
     splits: object | None
 
 
+#: The unknown Area/Location names ``_exchange_zone`` already logged, once per name and process
+_UNKNOWN_ZONES_LOGGED: set[str] = set()
+
+
+def _exchange_zone(name: str | None) -> ZoneInfo | None:
+    """Yahoo's ``exchangeTimezoneName`` as a ``ZoneInfo``, or None when it is empty or names no known zone.
+
+    An Area/Location name (``Europe/Rome``) the server's timezone database does not know is logged once per name and
+    process: on a host without one (Windows without the ``tzdata`` package, a minimal container) the current value is
+    then dated in UTC, the day before for a session that crosses UTC midnight (backlog Z-36). A fixed offset or another
+    name without an area is not logged.
+    """
+    if not name or not name.strip():
+        return None
+    key = name.strip()
+    try:
+        return ZoneInfo(key)
+    except ZoneInfoNotFoundError:
+        if "/" in key and key not in _UNKNOWN_ZONES_LOGGED:
+            _UNKNOWN_ZONES_LOGGED.add(key)
+            logger.warning("Exchange timezone unknown to this server's timezone database: the current value is dated in UTC", timezone=key[:64])
+        return None
+    except ValueError:
+        return None
+
+
 def _normalize_yahoo_date(index_value) -> date:
-    """Convert a Yahoo index value to the canonical UTC calendar date."""
-    if hasattr(index_value, "tz_convert"):
-        return index_value.tz_convert("UTC").date()
+    """The calendar date of a Yahoo index value, in its own timezone.
+
+    yfinance stamps a daily bar, a dividend or a split at midnight in the exchange's timezone (``scrapers/history.py``:
+    ``tz_localize(tz_exchange)``), so the wall date is the session's date. Converting to UTC first gave the day before
+    for every exchange east of UTC (Z-33).
+    """
     return index_value.date()
 
 
@@ -135,10 +326,16 @@ def _acquire_history_data(
     start_date: AssetHistoryStartDate,
     end_date: date,
 ) -> _YahooHistoryAcquisition:
-    """Fetch Yahoo history plus best-effort metadata/event series."""
+    """Fetch Yahoo history plus best-effort metadata/event series.
+
+    The closes are asked unadjusted (``auto_adjust=False``, Z-35): yfinance's default rewrites every close for the
+    dividends paid since, as of the day it is read, so a row saved today and one saved last month carried different
+    adjustments, and the dividends (kept as events) counted twice in a return. Yahoo's ``Close`` stays adjusted for splits
+    in either mode; the splits themselves come as events.
+    """
     if start_date == "min":
         history = _yf_with_retry(
-            lambda: ticker.history(period="max"),
+            lambda: ticker.history(period="max", auto_adjust=False),
             label=f"history-max({identifier})",
         )
     else:
@@ -147,6 +344,7 @@ def _acquire_history_data(
             lambda: ticker.history(
                 start=start_date.isoformat(),
                 end=remote_end,
+                auto_adjust=False,
             ),
             label=f"history({identifier})",
         )
@@ -187,6 +385,13 @@ def _acquire_history_data(
         dividends=dividends,
         splits=splits,
     )
+
+
+def _quote_base_suggestion(currency: str | None) -> FAQuoteBaseSuggestion | None:
+    """Z-32 (d): a line Yahoo quotes in a minor unit (``GBp``, pence) has one price per 100 units, the factor of
+    ``MINOR_UNIT_FACTORS``; None for any other currency, or none."""
+    factor = minor_unit_factor(currency)
+    return FAQuoteBaseSuggestion(quantity=factor, quote_currency=currency.strip()) if factor and currency else None
 
 
 def _map_history_prices(
@@ -262,10 +467,16 @@ def _parse_dividend_events(
     start_date: AssetHistoryStartDate,
     end_date: date,
 ) -> list[FAAssetEventPoint]:
-    """Map positive, in-range Yahoo dividends to canonical events."""
+    """Map positive, in-range Yahoo dividends to canonical events.
+
+    A line quoted in a minor unit (``GBp``, pence) has its dividends in that unit too: the event is an amount of money,
+    so it is divided by the unit's factor (1.9542 pence is 0.019542 GBP, Z-32). The prices of such a line are kept as
+    Yahoo gives them: the asset's quote base divides them.
+    """
     if dividends is None or dividends.empty:
         return []
 
+    factor = Decimal(minor_unit_factor(currency) or 1)
     events: list[FAAssetEventPoint] = []
     for index_value, amount in dividends.items():
         if not pd.notna(amount) or amount <= 0:
@@ -281,7 +492,7 @@ def _parse_dividend_events(
                 type="DIVIDEND",
                 value=CurrencyAmount(
                     code=currency,
-                    amount=Decimal(str(amount)),
+                    amount=Decimal(str(amount)) / factor,
                 ),
                 notes=f"Yahoo Finance dividend for {identifier}",
             )
@@ -336,26 +547,27 @@ class YahooFinanceProvider(AssetSourceProvider):
         self._currency_cache = get_ttl_cache("yfinance_currency", maxsize=2000, ttl=86400)
 
     def _fetch_currency(self, symbol: str) -> str | None:
-        """
-        Fetch currency for a symbol using yfinance fast_info.
-        Uses cache to avoid repeated API calls.
+        """The currency Yahoo gives for ``symbol`` (``fast_info``), e.g. ``USD`` or ``GBp``; None when Yahoo has none or
+        the read failed.
 
-        Returns:
-            Currency code (e.g., 'USD', 'EUR') or None if not available
+        Only an answer is cached, 24 h: a currency, or Yahoo answering without one. A refusal for too many requests is
+        raised at once as ``AssetRateLimitedError``, with no retry and nothing cached, so that the call boundary pauses
+        the provider («never swallow a refusal»): the whole search leaves as rate limited. Any other error gives None,
+        not cached, so the next call asks again (Z-39).
         """
         cached, ok = self._currency_cache.get(symbol)
         if ok:
             return cached
 
         try:
-            ticker = yf.Ticker(symbol)
-            currency = ticker.fast_info.get("currency")
-            self._currency_cache.set(symbol, currency)
-            return currency
+            currency = yf.Ticker(symbol).fast_info.get("currency")
         except Exception as e:
+            if _is_rate_limited(e):
+                raise AssetRateLimitedError(f"Yahoo Finance refused for too many requests (currency({symbol}))") from e
             logger.debug(f"Could not fetch currency for {symbol}: {e}")
-            self._currency_cache.set(symbol, None)
             return None
+        self._currency_cache.set(symbol, currency)
+        return currency
 
     @property
     def provider_code(self) -> str:
@@ -465,10 +677,12 @@ class YahooFinanceProvider(AssetSourceProvider):
 
             currency = info.get("currency") or info.get("financialCurrency") or "USD"
 
-            # Date from regularMarketTime (Unix timestamp) or today
+            # Date from regularMarketTime (Unix timestamp), in the exchange's timezone (Z-33: a session that crosses UTC
+            # midnight, Sydney's or Auckland's, belongs to its local day; UTC when the timezone is unknown), or today
+            zone = _exchange_zone(info.get("exchangeTimezoneName"))
             rmt = info.get("regularMarketTime")
             if rmt:
-                as_of_date = _dt.fromtimestamp(rmt, tz=UTC).date()
+                as_of_date = _dt.fromtimestamp(rmt, tz=zone or UTC).date()
             else:
                 as_of_date = date.today()
 
@@ -608,7 +822,8 @@ class YahooFinanceProvider(AssetSourceProvider):
 
         Returns:
             List of matching tickers with metadata.
-            Each result: {identifier, display_name, currency, type}
+            Each result: {identifier, display_name, currency, type}, and quote_base_suggestion for a line quoted in a
+            minor unit (GBp: 100 units per price, Z-32 d).
 
         Raises:
             AssetSourceError: If yfinance not available or search fails
@@ -657,22 +872,39 @@ class YahooFinanceProvider(AssetSourceProvider):
                 raw_type = (quote.get("quoteType", "Unknown") or "").lower()
                 normalized_type = search_type_map.get(raw_type, "OTHER")
 
-                results.append(
-                    {
-                        "identifier": symbol,
-                        "identifier_type": IdentifierType.TICKER,  # YFinance uses ticker symbols
-                        "display_name": quote.get("longname", quote.get("shortname", symbol)),
-                        "currency": currency,
-                        "type": normalized_type,
-                    }
-                )
+                item = {
+                    "identifier": symbol,
+                    "identifier_type": IdentifierType.TICKER,  # YFinance uses ticker symbols
+                    "display_name": quote.get("longname", quote.get("shortname", symbol)),
+                    "currency": currency,
+                    "type": normalized_type,
+                }
+                suggestion = _quote_base_suggestion(currency)
+                if suggestion is not None:
+                    item["quote_base_suggestion"] = suggestion.model_dump()
+                results.append(item)
 
             logger.debug(f"Search for '{query}': found {len(results)} results")
             return results
 
+        except AssetRateLimitedError:
+            raise  # the core pauses the provider: not an empty result
         except Exception as e:
             logger.warning(f"Search failed for '{query}': {e}")
             return []
+
+    async def suggest_quote_base(
+        self,
+        identifier: str,
+        identifier_type: IdentifierType,
+        provider_params: Dict | None = None,
+    ) -> FAQuoteBaseSuggestion | None:
+        """Z-32 (d): 100 units per price for a line Yahoo quotes in pence (``GBp``), read from the currency of
+        ``fast_info`` (``_fetch_currency``, cached 24 h, the one the search reads); None otherwise. The core runs it in
+        the provider's thread, like ``search``."""
+        if not YFINANCE_AVAILABLE or not identifier:
+            return None
+        return _quote_base_suggestion(self._fetch_currency(identifier))
 
     def validate_params(self, params: Dict | None) -> None:
         """
@@ -756,27 +988,35 @@ class YahooFinanceProvider(AssetSourceProvider):
             }
             asset_type = asset_type_map.get(quote_type, "OTHER")
 
+            # A fund (ETF, mutual fund) also has its own data: sectors, description, expense ratio, issuer (lot #50)
+            extras = _read_fund_extras(t, identifier) if quote_type in _FUND_QUOTE_TYPES else None
+
             # Get description (truncate to 500 chars)
             long_business_summary = info.get("longBusinessSummary", "")
             short_name = info.get("shortName", "")
             long_name = info.get("longName", "")
 
-            # Prefer longBusinessSummary, fallback to names
+            # Prefer longBusinessSummary, then the fund's own description, fallback to names
             if long_business_summary:
-                short_description = long_business_summary[:500]
+                short_description = long_business_summary
+            elif extras is not None and extras.description:
+                short_description = extras.description
             elif long_name:
                 short_description = long_name
             elif short_name:
                 short_description = short_name
             else:
                 short_description = f"{identifier} from Yahoo Finance"
+            short_description = _fund_description(short_description, extras) if extras is not None else short_description[:_DESCRIPTION_LIMIT]
 
             # Get sector
             sector = info.get("sector")
 
             # Build FAClassificationParams
             classification_data = {"short_description": short_description}
-            if sector:
+            if extras is not None and extras.sector_area is not None:
+                classification_data["sector_area"] = extras.sector_area
+            elif sector:
                 # Log warning if sector is not in standard classification
                 if not validate_sector(sector):
                     logger.warning(
@@ -813,6 +1053,8 @@ class YahooFinanceProvider(AssetSourceProvider):
             logger.debug(f"Fetched metadata from yfinance for {identifier}: asset_type={asset_type}, sector={sector}")
             return patch_item
 
+        except AssetRateLimitedError:
+            raise  # the core pauses the provider: not "no metadata"
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier}: {e}")
             return None

@@ -1,4 +1,4 @@
-"""Classify a client address for the connection-security indicator.
+"""Classify a client address: for the connection-security indicator, and wherever an address must be known as local.
 
 Only the class ever leaves the server: the address itself is neither returned nor logged.
 """
@@ -24,8 +24,9 @@ _LAN_NETWORKS = (
 )
 
 
-def _parse_ip(text: str | None) -> IPAddress | None:
-    """An address from a header or a socket: brackets, a port and a zone id stripped; IPv4-mapped as IPv4."""
+def parse_ip(text: str | None) -> IPAddress | None:
+    """An address from a header or a socket: brackets, a port and a zone id stripped; IPv4-mapped as IPv4; ``None``
+    for anything else. uvicorn reads the values of ``X-Forwarded-For`` the same way (``client_address.py``, H-36)."""
     candidate = (text or "").strip()
     if candidate.startswith("["):
         candidate = candidate[1:].split("]", 1)[0]
@@ -49,7 +50,7 @@ def classify_ip(address: str | None) -> ClientClass:
     ranges), ``public`` for every other address, ``unknown`` when there is none or it cannot be
     read. Brackets, a zone id and an IPv4-mapped IPv6 form are normalised first.
     """
-    ip = _parse_ip(address)
+    ip = parse_ip(address)
     if ip is None or ip.is_unspecified or ip.is_multicast:
         return "unknown"
     if ip.is_loopback:
@@ -69,7 +70,7 @@ def client_address(forwarded_for: str | None, peer: str | None) -> str | None:
     """
     values = [value.strip() for value in (forwarded_for or "").split(",") if value.strip()]
     if values:
-        last = _parse_ip(values[-1])
+        last = parse_ip(values[-1])
         if last is not None:
             return str(last)
     return peer

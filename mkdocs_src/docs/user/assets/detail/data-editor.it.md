@@ -24,7 +24,7 @@ Finché non salvi, i prezzi nuovi e modificati vengono mostrati sul grafico come
 
 ## 💰 Scheda Prezzi
 
-- **Chiusura** è obbligatoria e deve essere un numero positivo; **Apertura**, **Massimo**, **Minimo** e **Volume** sono opzionali, e la gomma in una cella cancella il suo valore.
+- **Chiusura** è obbligatoria e deve essere maggiore di 0; **Apertura**, **Massimo**, **Minimo** e **Volume** sono opzionali, 0 o più, e la gomma in una cella cancella il suo valore. LibreFolio non tiene prezzi negativi: una riga con uno, che solo un file importato può portare, non si salva e conta fra le saltate.
 - I prezzi sono nella valuta dell'asset, mostrata accanto alle schede (*Prezzi in USD*).
 - Le **righe obsolete** sono giorni privi di un prezzo proprio, riempiti con l'ultimo conosciuto. Quando ce ne sono alcune, compaiono un conteggio ⚠️ e un interruttore: attivalo per nasconderle.
 
@@ -67,7 +67,7 @@ Ogni riga ha un **Tipo** (Dividendo, Interesse, Split, Rettifica Prezzo o Scaden
 
     `value` è accettato al posto di `amount`, così un file di eventi esportato da LibreFolio (il backup offerto quando [cambi la valuta di un asset](../create-edit.md#editing-an-asset)) si reimporta, con le sue altre colonne ignorate. Tieni presente due limiti:
 
-    - **Un evento per data**: le righe che condividono una data vengono tutte escluse come duplicati, perciò importa tali eventi da file separati.
+    - **Un evento per data e tipo**: le righe che condividono sia la data sia il tipo vengono tutte escluse come duplicati; un dividendo e uno split dello stesso giorno si importano insieme.
     - **Ogni riga diventa un tuo evento**, inclusi quelli di un provider: ometti le righe il cui `source` è `PROVIDER` se il provider le invierà di nuovo, altrimenti compariranno due volte.
 
 - Le date sono nel formato `YYYY-MM-DD`, e i decimali possono usare `.` o `,`.

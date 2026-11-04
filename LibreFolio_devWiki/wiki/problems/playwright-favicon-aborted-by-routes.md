@@ -32,7 +32,7 @@ Every one of those `<img>` failed.
 
 ## Solution
 
-`keepFaviconImagesLoading` (`73680c052`, 2026-10-08), an init script installed before the first navigation, writes
+`keepFaviconImagesLoading` (`bcedd48bc`, 2026-10-08), an init script installed before the first navigation, writes
 those URLs with a query, `…/favicon.ico?lf-gallery`: Playwright no longer takes them for the favicon, and every host
 involved answers with the same bytes. It rewrites only the URL written into an image — the `src` property,
 `setAttribute('src', …)` and `src` attributes in HTML set through `innerHTML` — so each logo is the same live image

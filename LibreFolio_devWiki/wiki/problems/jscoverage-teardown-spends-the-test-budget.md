@@ -27,7 +27,7 @@ The slot is also shared with the other fixtures' teardowns.
 
 ## Solution
 
-V-28 (`d1a149afa`, 2026-10-13, train 87): the fixture declares its own budget, `{scope: 'test', auto: true,
+V-28 (`6ccfacba9`, 2026-10-13, train 87): the fixture declares its own budget, `{scope: 'test', auto: true,
 timeout: JS_COVERAGE_TIMEOUT_MS}` with `JS_COVERAGE_TIMEOUT_MS = 120_000`. Its teardown now has a slot of its own: a
 collection that is really too slow fails by name, «Fixture "jsCoverage" timeout of 120000ms», instead of eating the
 after-hooks.
@@ -37,7 +37,7 @@ The proof, at one worker with a delay injected into the collection and then remo
 Under load, `--fresh-run --coverage js --workers 4 front-fx all` was green: 103 E2E, no teardown timeout, the longest
 test 9.6 s.
 
-*Note (2026-10-14, R's final run on `10e646f79`)*: 0 reds, but at an average load of 8.9 against 37.9 on 12/10 —
+*Note (2026-10-14, R's final run on `058b76dcf`)*: 0 reds, but at an average load of 8.9 against 37.9 on 12/10 —
 the cure is proven at normal load only; a run under high load is backlog C-82.
 
 ## Prevention

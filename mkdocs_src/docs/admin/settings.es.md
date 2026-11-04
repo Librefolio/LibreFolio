@@ -48,7 +48,7 @@ Solo los administradores (superusuarios) tienen el candado; todos los demás obt
 |---|---|---|---|
 | ⏳ Sesión | **Duración de Sesión** | 24 horas | Cuánto tiempo permanecen los usuarios con la sesión iniciada. Redúcela en dispositivos compartidos; un nuevo valor se aplica a partir del siguiente inicio de sesión de cada usuario. |
 | 🛡️ Seguridad | **Habilitar registro** | Activado | Permite que se registren nuevas personas. Desactívalo cuando todos tengan una cuenta, sobre todo si se puede acceder a la instancia desde internet. La primera cuenta de una instancia nueva siempre se puede crear. |
-| 🛡️ Seguridad | **Verificación Email Requerida** | Desactivado | Aún no está activo: el envío de correos es una función planificada, por lo que el interruptor es de solo lectura y está marcado como **Próximamente**. |
+| 🛡️ Seguridad | **Verificación Email Requerida** | Desactivado | Las cuentas nuevas deben abrir un enlace enviado por correo a su dirección antes de poder iniciar sesión; la primera cuenta nunca espera, y las cuentas existentes no cambian. Solo se activa mientras el correo funciona y `LIBREFOLIO_PUBLIC_URL` se puede usar: hasta entonces el interruptor aparece en gris. Consulta *Email Verification* en [Correo](email.md). |
 | 🔄 Tarea de actualización | **Planificador Activado** | Activado | Activa o desactiva las actualizaciones automáticas de precios y tipos de cambio: consulta [Planificador de datos de mercado](#market-data-scheduler). |
 | 🧠 Memoria | **Tamaño Máx. Subida** | 10 MB | El archivo más grande que los usuarios pueden subir, incluidos los informes del bróker. Auméntalo si se rechaza una exportación grande. |
 | 🌍 Predeterminados | **Divisa predeterminada** | `EUR` | La moneda en la que informan los nuevos usuarios. |
@@ -68,8 +68,14 @@ El planificador mantiene actualizados por sí solo los precios y los tipos de ca
 - 💰 **Actualización de Precios Actuales** — cada pocos minutos, el último precio de cada activo que tenga
   un proveedor de precios.
 - 📊 **Sincronización Histórica** — en los días y horas que elijas, los precios diarios de esos activos y los
-  tipos de cada par FX con un proveedor, durante el **Horizonte de recuperación**, para rellenar cualquier hueco. Los pares
-  que solo tienen tipos manuales se omiten.
+  tipos de cada par FX con un proveedor, durante al menos el **Horizonte de recuperación**, para rellenar cualquier
+  hueco. Para un activo o un par cuyo último precio o tipo guardado es más antiguo, se remonta hasta ese día, como
+  máximo un año; un activo sin ningún precio guardado solo recibe el horizonte, porque el planificador nunca descarga
+  un historial completo. Los pares que solo tienen tipos manuales se omiten.
+
+Si el servidor está apagado o en suspensión a una hora de sincronización, la sincronización histórica
+que se ha perdido se ejecuta en cuanto el servidor vuelve, sin esperar a la siguiente hora de sincronización: un
+servidor apagado durante semanas rellena todo su hueco.
 
 ### ⚙️ Configurar la programación
 
@@ -86,7 +92,7 @@ El diálogo tiene su propio botón **Guardar**.
 | **Actualizar cada** | 10 minutos | Con qué frecuencia se actualizan los precios actuales, de 1 a 1440 minutos. |
 | **Horarios de sincronización** | `06:00`, `23:00` | Cuándo se ejecuta la sincronización del historial; **Agregar horario** añade una franja. |
 | **Días de sincronización** | Lun a Sáb | Los días de la sincronización del historial. |
-| **Horizonte de recuperación** | 14 días | Cuántos días pasados comprueba cada sincronización del historial, de 1 a 365. |
+| **Horizonte de recuperación** | 14 días | Cuántos días pasados comprueba como mínimo cada sincronización del historial, de 1 a 365. Se remonta más atrás, hasta un año, cuando el último precio o tipo guardado de un activo o de un par es más antiguo. |
 
 Mantén al menos una hora y un día. Consejo: una sincronización del historial después del cierre de los mercados (por ejemplo,
 `22:00`) obtiene los datos más completos.
@@ -100,6 +106,9 @@ Mantén al menos una hora y un día. Consejo: una sincronización del historial 
 ### 📜 Leer el registro del planificador
 
 La fila **Estado del planificador** muestra la última actualización del precio actual, con un punto para su resultado.
+Mientras haya un reintento pendiente, una línea más indica su hora: **Fallido: nuevo intento a las …** tras una
+actualización que no pudo terminar; si no, **Elementos en pausa reintentados a las …** para los precios aplazados
+porque su proveedor está en pausa.
 Haz clic en la fila (o en **Detalles…**) para abrir el **Registro de ejecución del planificador**. Solo los administradores pueden
 leer el estado y el registro.
 
@@ -108,9 +117,13 @@ leer el estado y el registro.
 </div>
 
 - Cada entrada es una ejecución: tarea, hora, duración y cuántos elementos se completaron correctamente. 🟢 **OK**: todos,
-  o nada que hacer; 🟡 **Parcial**: algunos fallaron; 🔴 **Error**: ninguno se completó correctamente.
+  o nada que hacer; 🟡 **Parcial**: algunos fallaron, o se aplazaron porque su proveedor está en pausa tras demasiadas
+  solicitudes; 🔴 **Error**: ninguno se completó correctamente y ninguno se aplazó.
 - Haz clic en una entrada para ver cada activo o par FX, su proveedor y los precios modificados (**Delta**).
   Pasa el cursor sobre un error para leerlo completo; haz doble clic en él (mantén pulsado en un teléfono) para copiarlo.
+- Un elemento aplazado muestra un icono de pausa y **Aplazado: proveedor en pausa**: pasa el cursor sobre la etiqueta
+  para leer el mensaje del proveedor. La entrada cuenta los elementos aplazados con ⏸, junto a ✓ y ✗ (por ejemplo
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), y **Reintento a las …** en su encabezado indica la hora fijada para reintentarlos.
 - Filtra por tarea, estado o periodo, desde la última hora hasta los últimos 30 días. Solo se conservan las ejecuciones
   más recientes.
 

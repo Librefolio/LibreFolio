@@ -15,7 +15,7 @@
  */
 
 import type {LineDataPoint} from './LineChart.svelte';
-import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 
 /**
@@ -87,14 +87,14 @@ export function isBullishBar(d: LineDataPoint): boolean {
  * Format a price for the tooltip. Percentage mode → signed two-decimal percent (a
  * zero carries no sign). Absolute mode scales precision to magnitude: ≥100 → 2 dp,
  * ≥1 → 4 dp, otherwise up to 6 dp with trailing zeros trimmed, keeping at least one
- * (0 is "0.0"). Written in the interface locale (`formatPercent`, `formatFixed`, M-18).
+ * (0 is "0.0"), and more when 4 significant digits need them, so a price under 0.001
+ * does not read as zeros (`formatPrice`, C-97c). Written in the interface locale (M-18).
  */
 export function formatCandlePrice(v: number, isPercentage: boolean): string {
     if (isPercentage) return formatPercent(v);
-    if (Math.abs(v) >= 100) return formatFixed(v, 2);
-    if (Math.abs(v) >= 1) return formatFixed(v, 4);
-    const decimals = Math.abs(v).toFixed(6).replace(/0+$/, '').split('.')[1]?.length ?? 0;
-    return formatFixed(v, Math.max(1, decimals));
+    if (Math.abs(v) >= 100) return formatPrice(v);
+    if (Math.abs(v) >= 1) return formatPrice(v, {minDecimals: 4});
+    return formatPrice(v, {minDecimals: 1, floorDecimals: 6});
 }
 
 /** Compact volume label: millions → "…M", thousands → "…K", otherwise integer; in the interface locale. */

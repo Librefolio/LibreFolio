@@ -42,11 +42,11 @@ The issue: the 3-step icon chain `icon_url → portal_url/favicon → plugin_ico
 
 Both forms are closed in the places where they were seen in June:
 
-- **Form A** — commit `7bae73b74` (2026-06-25, the QA session that found it): `files/+page.svelte` awaits
+- **Form A** — commit `102413232` (2026-06-25, the QA session that found it): `files/+page.svelte` awaits
   `ensurePluginIconsLoaded()`, and `BrokerInfo` gained `default_import_plugin`, so a broker known only by its plugin
   reaches the plugin step.
 - **Form B** — the transactions page awaits the cache and then sets `pluginIconsReady` (option 2 above). The other
-  icons go through the shared reactive chain `brokerIconChain.svelte.ts` (`ddffb5273`, 2026-06-26), which updates its
+  icons go through the shared reactive chain `brokerIconChain.svelte.ts` (`fc1f7ccd1`, 2026-06-26), which updates its
   own state when the cache arrives, so the derived URL list is computed again. `ensureBrokersLoaded()` and
   `refreshAllBrokers()` in `brokerStore.ts` start the cache for every consumer — the app-level call that Prevention
   asks for.
@@ -66,7 +66,7 @@ the broker and merges it into the store; but its icon chain reads only the props
 `pluginCode`), so the store fills up and the props never change. Assigned to workstream I, in the UI polish lot.
 
 *Update (train 72)*: both symptoms had another cause. A late `error` event from a replaced `<img>` marked the plugin
-icon as failed, and the plugin state started from `null` even with a warm cache; fixed in `2412c3fe4` —
+icon as failed, and the plugin state started from `null` even with a warm cache; fixed in `9b2d731cd` —
 [[problems/late-img-error-marked-the-visible-icon-failed]]. The diagnosis above was not the cause; it survives as the
 latent C-56 below.
 
@@ -92,10 +92,10 @@ Visual only — colored dots instead of brand icons. Confusing UX when users hav
 | Role | Path |
 |------|------|
 | brokerHelpers | `frontend/src/lib/utils/broker/brokerHelpers.ts` |
-| FilesTable | `frontend/src/lib/components/files/FilesTable.svelte` |
+| FilesTable | `frontend/src/lib/features/files/FilesTable.svelte` |
 | files page (missing call) | `frontend/src/routes/(app)/files/+page.svelte` |
 | transactions page (race) | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | dashboard page (race) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | The shared reactive icon chain (Form B fix) | `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts` |
 | The store that starts the plugin-icon cache; `ensureBrokerIconFieldsLoaded` | `frontend/src/lib/stores/reference/brokerStore.ts` |
-| C-56, latent: the chain reads only the props | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |
+| C-56, latent: the chain reads only the props | `frontend/src/lib/components/ui/display/BrokerIcon.svelte` |

@@ -319,35 +319,31 @@
                 },
             };
 
-            // In edit mode, delete all existing routes for this pair first
-            // to ensure stale routes don't persist (e.g., when user removes all providers).
-            // The backend auto-reinstates a MANUAL sentinel if no routes remain after delete.
-            if (editing) {
-                const deleteResult = await trySave(() => zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{base, quote}]), {toast: false, fallback: get(_)('fx.addPair.createFailed')});
+            // An edit replaces the pair's own routes in one request (X-R75): the server keeps exactly the routes posted, in
+            // one transaction, so a refused or lost save leaves the pair as it was. With no route selected, mainItems is
+            // the MANUAL item, and the pair becomes manual. Deleting the routes first, as before, lost them whenever the
+            // POST that followed failed, and a whole-pair delete never brings the MANUAL route back.
+            // Its intermediate pairs go first, in a plain request (X-R79): `replace` applies to every pair a request
+            // names, so a leg another tab configured meanwhile lost its other routes. The plain upsert keeps them; it
+            // still rewrites the leg's priority 1, as a creation does. Legs refused: nothing is written. Legs written and
+            // the pair refused: the pair is as it was, and the legs stay, configured. A creation stays one request.
+            const requests = editing
+                ? [...(intermediateItems.length > 0 ? [() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(intermediateItems)] : []), () => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(mainItems, {queries: {replace: true}})]
+                : [() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems])];
+            for (const request of requests) {
+                const createResult = await trySave(request, {toast: false, fallback: get(_)('fx.addPair.createFailed')});
                 if (!sameSession()) return;
-                if (deleteResult.status === 'error') {
-                    reportConfigurationError(deleteResult.message);
+                if (createResult.status === 'error') {
+                    // A 409 is the concurrent-write conflict, and it is the one case
+                    // where the backend's own sentence must not reach the screen:
+                    // `extractErrorMessage` returns `detail` verbatim, and for a long
+                    // time that meant the user read a driver traceback with the INSERT
+                    // statement and its bound parameters in it. The conflict is also
+                    // the only failure here the user can do something about, so it is
+                    // the one that deserves a translated sentence telling them to.
+                    reportConfigurationError(createResult.status_code === 409 ? get(_)('fx.addPair.createConflict') : createResult.message);
                     return;
                 }
-                // If user removed all providers, backend already reinstated MANUAL — skip POST
-                if (routes.length === 0) {
-                    void finishFxPairCreation(context);
-                    return;
-                }
-            }
-
-            const createResult = await trySave(() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]), {toast: false, fallback: get(_)('fx.addPair.createFailed')});
-            if (!sameSession()) return;
-            if (createResult.status === 'error') {
-                // A 409 is the concurrent-write conflict, and it is the one case
-                // where the backend's own sentence must not reach the screen:
-                // `extractErrorMessage` returns `detail` verbatim, and for a long
-                // time that meant the user read a driver traceback with the INSERT
-                // statement and its bound parameters in it. The conflict is also
-                // the only failure here the user can do something about, so it is
-                // the one that deserves a translated sentence telling them to.
-                reportConfigurationError(createResult.status_code === 409 ? get(_)('fx.addPair.createConflict') : createResult.message);
-                return;
             }
 
             void finishFxPairCreation(context);
@@ -389,11 +385,11 @@
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
-        <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+        <div class="flex items-center justify-between p-5 pb-4 border-b border-lf-subtle shrink-0">
+            <h2 class="text-lg font-semibold text-lf-primary">
                 {editMode ? $_('fx.addPair.titleEdit') : $_('fx.addPair.title')}
             </h2>
-            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={saving} onclick={handleClose}>
+            <button class="p-2 text-lf-muted hover:text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors disabled:opacity-50" disabled={saving} onclick={handleClose}>
                 <X size={20} />
             </button>
         </div>
@@ -413,7 +409,7 @@
             <div class="space-y-1.5">
                 <div class="flex flex-col sm:flex-row items-stretch gap-2" use:guideAnchor={'fx.currencies'} data-testid="fx-tour-pair-selectors">
                     <div class="flex-1 min-w-0" data-testid="fx-add-pair-base">
-                        <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        <div class="block text-xs font-medium text-lf-muted mb-1">
                             {$_('fx.addPair.baseCurrency')}
                         </div>
                         <CurrencySearchSelect
@@ -434,17 +430,17 @@
                         />
                     </div>
                     <!-- Arrow: ↔ on desktop, ↕ on mobile -->
-                    <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:flex flex-col items-center">
+                    <div class="text-lf-muted flex-shrink-0 hidden sm:flex flex-col items-center">
                         <div aria-hidden="true" class="text-xs font-medium invisible mb-1 select-none">&nbsp;</div>
                         <div class="flex-1 flex items-center justify-center px-1">
                             <ArrowLeftRight size={18} />
                         </div>
                     </div>
-                    <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:hidden">
+                    <div class="text-lf-muted flex-shrink-0 flex items-center justify-center sm:hidden">
                         <ArrowDownUp size={18} />
                     </div>
                     <div bind:this={quoteSelectRef} class="flex-1 min-w-0" data-testid="fx-add-pair-quote">
-                        <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        <div class="block text-xs font-medium text-lf-muted mb-1">
                             {$_('fx.addPair.quoteCurrency')}
                         </div>
                         <CurrencySearchSelect bind:value={quoteCurrency} disabled={saving || editMode} excludedCurrencies={editMode ? new Set() : excludedForQuote} placeholder={$_('fx.addPair.quoteCurrency')} />
@@ -467,13 +463,13 @@
             <!-- Route Selection (DFS pathfinding) -->
             <!-- ========================================================= -->
             <div class="space-y-2 {!hasCurrencies ? 'opacity-50 pointer-events-none' : ''}" use:guideAnchor={'fx.providers'} data-testid="fx-tour-providers">
-                <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide">
+                <h3 class="text-xs font-semibold text-lf-secondary uppercase tracking-wide">
                     {$_('fx.route.title')}
                 </h3>
 
                 <!-- Hint when currencies not selected -->
                 {#if !hasCurrencies}
-                    <div class="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 text-xs text-gray-400 dark:text-gray-500">
+                    <div class="flex items-center gap-2 p-2.5 bg-lf-panel rounded-lg border border-dashed border-lf-subtle text-xs text-lf-muted">
                         <Lock size={12} />
                         {$_('fx.addPair.providerDisabledHint')}
                     </div>
@@ -484,11 +480,11 @@
 
                 <!-- Create intermediate pairs checkbox (visible only when chain routes are selected) -->
                 {#if hasChainRoutes}
-                    <label class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors">
-                        <input type="checkbox" bind:checked={createIntermediatePairs} disabled={saving} data-testid="fx-add-pair-intermediates" class="mt-0.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green" />
-                        <div class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                    <label class="flex items-start gap-2 p-2.5 bg-lf-info-soft rounded-lg border border-lf-info-line cursor-pointer hover:bg-lf-info-line/50 transition-colors">
+                        <input type="checkbox" bind:checked={createIntermediatePairs} disabled={saving} data-testid="fx-add-pair-intermediates" class="mt-0.5 rounded border-lf-input text-lf-link focus:ring-lf-focus" />
+                        <div class="text-xs text-lf-info-on-soft leading-relaxed">
                             <span class="font-medium">{$_('fx.addPair.createIntermediatePairs')}</span>
-                            <p class="text-blue-500 dark:text-blue-400 mt-0.5">{$_('fx.addPair.createIntermediatePairsHint')}</p>
+                            <p class="text-lf-info mt-0.5">{$_('fx.addPair.createIntermediatePairsHint')}</p>
                         </div>
                     </label>
                 {/if}
@@ -509,13 +505,13 @@
         <!-- ============================================================= -->
         <!-- Footer -->
         <!-- ============================================================= -->
-        <div class="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0">
-            <button class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" disabled={saving} onclick={handleClose} type="button">
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-lf-subtle shrink-0">
+            <button class="px-3 py-1.5 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" disabled={saving} onclick={handleClose} type="button">
                 {$_('common.cancel')}
             </button>
             {#if !tourPreview}
                 <button
-                    class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    class="px-3 py-1.5 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                     data-testid="fx-add-pair-save"
                     disabled={!isValid || pairAlreadyExists || saving}
                     onclick={handleSave}

@@ -54,6 +54,11 @@ function problem(overrides: Partial<SignalProblem> & Pick<SignalProblem, 'code'>
         selectedStartDate: null,
         selectedEndDate: null,
         excludedPoints: null,
+        unavailablePoints: null,
+        unavailableStart: null,
+        unavailableEnd: null,
+        resyncStart: null,
+        resyncEnd: null,
         message: null,
         ...overrides,
     };
@@ -193,6 +198,32 @@ describe('formatSignalProblem', () => {
         const fallback = recordingTranslate();
         expect(formatSignalProblem(problem({code: 'partial_undefined_metric', message: null}), fallback.fn, echoFieldLabel)).toBe('chartSettings.signalProblems.partialResult');
         expect(fallback.calls).toEqual([{key: 'chartSettings.signalProblems.partialResult', values: undefined}]);
+    });
+
+    describe('the undefined window of the calendar return (Z5-F1)', () => {
+        const WINDOW = {unavailablePoints: 3, unavailableStart: '2026-02-03', unavailableEnd: '2026-02-05', resyncStart: '2025-12-01', resyncEnd: '2026-02-05'};
+
+        it('partial_undefined_metric with the days: says them from the catalogue, not from the plugin’s English sentence', () => {
+            const t = recordingTranslate();
+            const text = formatSignalProblem(problem({code: 'partial_undefined_metric', message: 'One or more calendar-return points are unavailable', ...WINDOW}), t.fn, echoFieldLabel);
+
+            expect(text).toBe('chartSettings.signalProblems.undefinedWindowPartial');
+            expect(t.calls).toEqual([{key: 'chartSettings.signalProblems.undefinedWindowPartial', values: {count: '3', start: '2026-02-03', end: '2026-02-05', resyncStart: '2025-12-01', resyncEnd: '2026-02-05'}}]);
+        });
+
+        it('undefined_metric with the days: the same, in the unavailable form', () => {
+            const t = recordingTranslate();
+            formatSignalProblem(problem({code: 'undefined_metric', status: 'unavailable', message: 'Calendar return is undefined for every point in the selected range', ...WINDOW}), t.fn, echoFieldLabel);
+
+            expect(t.calls).toEqual([{key: 'chartSettings.signalProblems.undefinedWindowUnavailable', values: {count: '3', start: '2026-02-03', end: '2026-02-05', resyncStart: '2025-12-01', resyncEnd: '2026-02-05'}}]);
+        });
+
+        it('a window without its days keeps the old rule: the backend message, else the generic sentence', () => {
+            const t = recordingTranslate();
+
+            expect(formatSignalProblem(problem({code: 'partial_undefined_metric', message: 'backend sentence', ...WINDOW, unavailableStart: null}), t.fn, echoFieldLabel)).toBe('backend sentence');
+            expect(t.calls).toEqual([]);
+        });
     });
 
     it('incomplete_warmup: renders used/required counts', () => {

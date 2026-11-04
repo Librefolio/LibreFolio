@@ -32,7 +32,7 @@ All new numeric inputs in editable cells and form modals should follow this patt
 
 | Role | Path |
 |------|------|
-| Reference component | `frontend/src/lib/components/ui/display/CompactCashCell.svelte` |
-| FormModal application | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| BulkModal application | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Reference component | `frontend/src/lib/features/transactions/form/CompactCashCell.svelte` |
+| FormModal application | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` (the nonce) and its sections in `frontend/src/lib/features/transactions/form/` (the inputs) |
+| BulkModal application | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 

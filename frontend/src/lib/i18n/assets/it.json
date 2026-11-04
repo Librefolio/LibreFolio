@@ -37,8 +37,8 @@
     "originalValue": "Valore Originale",
     "currencyChange": {
       "title": "Cambia valuta asset ({from} → {to})",
-      "autoSyncInfo": "Dopo la cancellazione, i prezzi verranno auto-sincronizzati dal provider a partire da {from}.",
-      "noProviderInfo": "Nessun provider assegnato — dopo la cancellazione dovrai re-importare i prezzi manualmente.",
+      "autoSyncInfo": "Dopo il cambio, i prezzi verranno sincronizzati di nuovo dal provider a partire da {from}.",
+      "noProviderInfo": "Nessun provider assegnato — dopo il cambio dovrai importare di nuovo i prezzi manualmente.",
       "backupTitle": "Scarica un backup prima di procedere",
       "confirm": "Elimina e cambia valuta",
       "working": "In corso…",
@@ -46,17 +46,16 @@
       "progressSync": "Ri-sincronizzazione prezzi da {from}…",
       "failed": "Cambio valuta fallito",
       "changedTo": "Valuta cambiata da {from} a {to}",
-      "summaryPrices": "{n} record di prezzo verranno eliminati ({oldest} → {newest}).",
-      "summaryEvents": "{manual} eventi manuali + {provider} eventi generati dal provider verranno eliminati.",
-      "summaryLinkedTx": "{n} transazioni verranno SCOLLEGATE dai loro eventi (le transazioni stesse sono preservate).",
+      "summaryPrices": "{n, plural, one {# punto prezzo} other {# punti prezzo}} ({oldest} → {newest}) verranno eliminati.",
+      "summaryEvents": "{manual} eventi manuali e {provider} eventi generati dal provider verranno eliminati.",
+      "summaryLinkedTx": "{n, plural, one {# transazione perde il collegamento a un evento cancellato} other {# transazioni perdono il collegamento a un evento cancellato}} (le transazioni restano).",
       "exportPricesCsv": "Esporta prezzi (CSV)",
       "exportPricesJson": "Esporta prezzi (JSON)",
       "exportEventsCsv": "Esporta eventi (CSV)",
       "exportEventsJson": "Esporta eventi (JSON)",
-      "progressWipe": "Cancellazione di {prices} prezzi + {events} eventi e scollegamento di {linkedTx} transazioni…",
-      "wipeSuccess": "Eliminati {prices} prezzi, {events} eventi; scollegate {linkedTx} transazioni",
-      "bodyIntro": "Il cambio valuta richiede la cancellazione di tutti i dati di mercato memorizzati (vedi riepilogo sotto). LibreFolio proverà poi a ri-sincronizzare prezzi ed eventi dal provider nella nuova valuta.",
-      "bodyCaveat": "Le transazioni collegate agli eventi cancellati verranno scollegate — sarà tua responsabilità ricollegarle ai nuovi eventi se necessario."
+      "bodyIntro": "Cambiare la valuta cancella i dati di mercato memorizzati nella vecchia (vedi il riepilogo sotto). LibreFolio poi sincronizza di nuovo i prezzi dal provider, nella nuova valuta.",
+      "bodyCaveat": "Gli split restano, con le transazioni collegate. Anche le altre transazioni restano, ma perdono il collegamento a un evento cancellato: ricollegale da Transazioni con «Ricollega eventi».",
+      "summarySplitsKept": "{n, plural, one {# evento split resta, con le transazioni collegate.} other {# eventi split restano, con le transazioni collegate.}}"
     },
     "pricesInCurrency": "Prezzi in {currency}",
     "eventsInCurrency": "Eventi in {currency}",
@@ -70,7 +69,8 @@
     },
     "notFound": "Asset n. {id} non trovato",
     "loadFailed": "Impossibile caricare i dati dell'asset",
-    "pricesLoadFailed": "Impossibile caricare i prezzi"
+    "pricesLoadFailed": "Impossibile caricare i prezzi",
+    "manualChip": "Manuale"
   },
   "assets": {
     "create": "Nuovo asset",
@@ -94,19 +94,25 @@
       "toastFailed": "Sincronizzazione fallita per {name}",
       "modalTitle": "Sincronizza Prezzi",
       "modalDescription": "Sincronizza i prezzi dai provider configurati per l'intervallo di date selezionato.",
-      "assetsCount": "asset"
+      "assetsCount": "asset",
+      "confirmTitle": "Sincronizzare {name}?",
+      "confirmMessage": "{stored, plural, one {# prezzo salvato} other {# prezzi salvati}} in questo intervallo {stored, plural, one {sarà sostituito} other {saranno sostituiti}} con i valori del provider.",
+      "confirmManual": "Di questi, {manual, plural, one {# è stato inserito a mano e sarà sostituito} other {# sono stati inseriti a mano e saranno sostituiti}} comunque.",
+      "confirmAction": "Sincronizza",
+      "overwriteManual": "{manual, plural, one {# è stato inserito a mano} other {# sono stati inseriti a mano}}."
     },
     "delete": {
       "confirmQuestion": "Eliminare \"{name}\"?",
-      "confirmWarning": "Assegnazioni provider e storico prezzi verranno rimossi. ⚠️",
+      "confirmWarning": "Assegnazioni provider, storico prezzi ed eventi (dividendi, split…) verranno rimossi. ⚠️",
       "toastOk": "{name} eliminato",
       "toastFailed": "Impossibile eliminare {name}",
       "hasTransactions": "Impossibile eliminare \"{name}\": ha transazioni esistenti",
       "bulkOk": "{n} asset eliminati",
       "bulkPartial": "{failed} asset non eliminabili (hanno transazioni)",
-      "bulkConfirmMessage": "Eliminare {n} asset? Le assegnazioni dei provider e lo storico prezzi verranno rimossi.",
+      "bulkConfirmMessage": "Eliminare {n, plural, one {# asset} other {# asset}}? Le assegnazioni dei provider, lo storico prezzi e gli eventi (dividendi, split…) verranno rimossi.",
       "resultDeleted": "eliminato",
-      "resultHasTransactions": "ha transazioni esistenti"
+      "resultHasTransactions": "ha transazioni esistenti",
+      "itemsLabel": "{count, plural, one {# asset} other {# asset}}"
     },
     "merge": {
       "title": "Unisci asset",
@@ -195,12 +201,6 @@
       "saveSuccess": "\"{name}\" aggiornato con successo",
       "moreInfo": "Ulteriori Info",
       "createSuccessProviderFailed": "Asset \"{name}\" creato, ma assegnazione provider fallita. Assegna manualmente.",
-      "scheduledRegenTitle": "Rigenerare i Prezzi?",
-      "scheduledRegenMessage": "La modifica di questi parametri cancellerà lo storico dei prezzi esistente e lo rigenererà con la nuova pianificazione. Questa azione non può essere annullata. Continuare?",
-      "scheduledRegenConfirm": "Rigenera",
-      "parametricSwitchTitle": "Eliminare la serie generata?",
-      "parametricSwitchMessage": "Lo storico prezzi di questo asset è stato generato da {from}. Passando a {to} viene eliminato: {prices} punto/i prezzo e {events} evento/i generato/i saranno rimossi, e {to} ricostruirà lo storico da zero. Gli eventi manuali restano. L'operazione non è reversibile. Continuare?",
-      "parametricSwitchConfirm": "Cambia provider",
       "saveFailed": "Salvataggio asset fallito",
       "quoteBaseQuantity": "Unità per singolo prezzo",
       "quoteBaseTooltip": "Specifica a quanti titoli o quote fa riferimento il prezzo di mercato. Per ETF o azioni è tipicamente 1, le obbligazioni tendenzialmente sono quotate su base 100.",
@@ -213,7 +213,25 @@
       "currencyHelp": "Valuta in cui vengono salvati i prezzi dell'asset.",
       "currencyHelpLabel": "Informazioni sulla valuta dell’asset",
       "nameRequired": "Inserisci il nome dell'asset per continuare.",
-      "descriptionPlaceholder": "Breve descrizione dell'asset…"
+      "descriptionPlaceholder": "Breve descrizione dell'asset…",
+      "planSplitAdjustmentsWithoutCost": "Il provider non è stato cambiato né tolto: lo split del {date}, generato dal provider, ha {n, plural, one {# rettifica collegata} other {# rettifiche collegate}} senza costo d'acquisto{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}{more, plural, =0 {} one {, e anche # altro split} other {, e anche altri # split}}. Cambiare i parametri o il provider, o toglierlo, cancella gli eventi che ha generato, e quelle unità conterebbero come comprate a un prezzo sconosciuto: dai prima un costo d'acquisto alle rettifiche.",
+      "providerRemovalConflict": "Il provider non è stato tolto: alcuni dati si riferiscono ancora agli eventi che ha generato. Ricarica la pagina e riprova.",
+      "quoteBaseSuggested": "{provider} quota questa linea in {currency}: un prezzo ogni {quantity, plural, one {# unità} other {# unità}}. Verifica prima di salvare.",
+      "quoteBaseSuggestedPlain": "{provider} quota questa linea ogni {quantity, plural, one {# unità} other {# unità}}. Verifica prima di salvare.",
+      "providerImpact": {
+        "pricesPart": "{n, plural, one {# punto prezzo} other {# punti prezzo}}",
+        "eventsPart": "{n, plural, one {# evento generato dal provider} other {# eventi generati dal provider}}",
+        "unlinkedSentence": "{n, plural, one {# transazione perde il collegamento a un evento cancellato} other {# transazioni perdono il collegamento a un evento cancellato}} (le transazioni restano).",
+        "regenerateTitle": "Rigenerare i prezzi?",
+        "regenerateMessage": "La modifica di questi parametri cancella {what}. {unlinked} Il provider ricostruirà lo storico con i nuovi parametri. Gli eventi manuali restano. L'operazione non è reversibile. Continuare?",
+        "regenerateConfirm": "Rigenera",
+        "switchTitle": "Eliminare la serie generata?",
+        "switchMessage": "Lo storico di questo asset è stato generato da {from}. Passando a {to} si cancella {what}. {unlinked} {to} ricostruirà lo storico da zero. Gli eventi manuali restano. L'operazione non è reversibile. Continuare?",
+        "switchConfirm": "Cambia provider",
+        "removeTitle": "Togliere il provider?",
+        "removeMessage": "Togliere il provider cancella {what}. {unlinked} I prezzi già salvati restano, come gli eventi manuali. L'operazione non è reversibile. Continuare?",
+        "removeConfirm": "Togli provider"
+      }
     },
     "provider": {
       "assignment": "Assegnazione Provider",
@@ -281,7 +299,8 @@
       "notTested": "Non testato",
       "totalTime": "Totale",
       "copyErrorDetail": "Copia il dettaglio dell'errore",
-      "points": "{count, plural, one {{n} punto} other {{n} punti}}"
+      "points": "{count, plural, one {{n} punto} other {{n} punti}}",
+      "scopeNote": "Il test legge solo gli ultimi giorni: un asset nuovo riceve tutto lo storico dei prezzi quando viene creato."
     },
     "identifiers": {
       "askProvider": "Chiedi al Provider",
@@ -325,7 +344,23 @@
       "placeholder": "Cerca per nome, ticker, ISIN...",
       "searching": "Ricerca in corso...",
       "timeout": "Ricerca scaduta. Riprova.",
-      "rankHint": "Posizione nella ricerca web (metaricerca su più motori) — il primo risultato è la corrispondenza più probabile"
+      "rankHint": "Posizione nella ricerca web (metaricerca su più motori) — il primo risultato è la corrispondenza più probabile",
+      "notConfigured": "{provider} va configurato prima di poter cercare",
+      "crownLegend": "👑 la valuta del fondo",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "Nessun risultato dalle fonti premium.",
+      "communitySection": "Fonti non premium (community) · {count, plural, one {# risultato} other {# risultati}}",
+      "communityWarning": "Fonti di terzi: LibreFolio non garantisce i loro prezzi né i loro dati. La scelta vale solo per questo asset.",
+      "reportQuestion": "Non lo trovi?",
+      "reportAction": "Segnalacelo",
+      "reportVia": {
+        "mailto": "Apre la tua app di posta con i dettagli di questa ricerca",
+        "page": "Apre la pagina di supporto e copia i dettagli di questa ricerca, da incollare lì",
+        "github": "Apre una issue pubblica su GitHub con i dettagli di questa ricerca: rileggila prima di inviarla"
+      },
+      "reportCopied": "Dettagli della ricerca copiati: incollali nella pagina di supporto.",
+      "reportCopyFailed": "Impossibile copiare i dettagli della ricerca: descrivi la tua ricerca nella pagina di supporto.",
+      "failed": "La ricerca non è riuscita. Riprova."
     },
     "comparison": {
       "title": "Confronto Dati Provider",
@@ -373,13 +408,42 @@
     "typeSelect": {
       "searchPlaceholder": "Cerca un tipo",
       "noMatches": "Nessun tipo corrispondente"
+    },
+    "dataEditor": {
+      "saved": "Dati dell'asset: {details}",
+      "pricesSaved": "{count, plural, one {# prezzo salvato} other {# prezzi salvati}}",
+      "pricesDeleted": "{count, plural, one {# prezzo eliminato} other {# prezzi eliminati}}",
+      "pricesSkipped": "{count, plural, one {# riga scartata (non valida)} other {# righe scartate (non valide)}}",
+      "eventsSaved": "{count, plural, one {# evento salvato} other {# eventi salvati}}",
+      "pricesRefused": "{count, plural, one {# prezzo rifiutato} other {# prezzi rifiutati}}"
     }
   },
   "events": {
-    "deleteSuccess": "{n} evento/i eliminato/i",
-    "deleteNotFound": "Evento/i non trovato/i: {ids}",
-    "deleteBlocked": "Impossibile eliminare: {n} evento/i ancora in uso da transazioni ({accessible} visibili a te, {hidden} nei portafogli di altri utenti)",
-    "fxBannerContext": "per eventi dividendi/cassa"
+    "deleteSuccess": "{n, plural, one {# evento eliminato} other {# eventi eliminati}}",
+    "fxBannerContext": "per eventi dividendi/cassa",
+    "exists": {
+      "title": "Questo evento esiste già",
+      "hint": "L'asset ha già un evento di questo tipo in questa data: usalo, oppure modificalo. Non è stato salvato nulla.",
+      "use": "Usa questo",
+      "edit": "Modifica questo",
+      "fromProvider": "Dal fornitore dei dati",
+      "manual": "Inserito a mano",
+      "linked": "{n, plural, =0 {non collegato a transazioni} one {collegato a # transazione} other {collegato a # transazioni}}",
+      "providerNotEditable": "Il fornitore dei dati aggiorna i suoi eventi: questo non si modifica da qui."
+    },
+    "saveError": {
+      "currencyMismatch": "Non è stato salvato nulla: l'evento del {date} ({type}) è in {currency}, ma l'asset è in {expected}. Convertine l'importo o togli la riga{more, plural, =0 {} one { (e # altro)} other { (e altri #)}}.",
+      "keyConflict": "Non è stato salvato nulla: due eventi manuali di tipo {type} cadrebbero il {date}. Cambia la data o il tipo di uno dei due.",
+      "notEditable": "Non è stato salvato nulla: uno degli eventi non esiste più o non si può modificare da qui. Ricarica i dati e riprova.",
+      "assetNotFound": "Non è stato salvato nulla: l'asset non esiste più. Ricarica la pagina.",
+      "unknownType": "Non è stato salvato nulla: «{value}» (riga del {date}) non è un tipo di evento. Usa DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT o MATURITY_SETTLEMENT.",
+      "generic": "Non è stato salvato nulla: {message}",
+      "inUse": "Non è stato salvato nulla: l'evento {type} del {date} è collegato a {n, plural, one {# transazione} other {# transazioni}} e non si può cancellare. Togli prima il collegamento dalle transazioni{more, plural, =0 {} one { (e un altro evento)} other { (e altri # eventi)}}.",
+      "notDeletable": "Non è stato salvato nulla: uno degli eventi da cancellare non esiste più o non si può cancellare da qui. Ricarica i dati e riprova.",
+      "tooManyDigits": "Non è stato salvato nulla: il valore dell'evento {type} del {date}{more, plural, =0 {} one { (e # altro)} other { (e altri #)}} ha troppe cifre. Il valore di un evento ha al massimo {max} decimali, {significant} cifre significative e {integer} cifre prima della virgola.",
+      "invalidSplitRatio": "Non è stato salvato nulla: l'evento {type} del {date}{more, plural, =0 {} one { (e # altro)} other { (e altri #)}} ha un rapporto di {ratio}. Il rapporto di un frazionamento deve essere un numero maggiore di 0: 2 per un frazionamento 2 a 1, 0,5 per un raggruppamento 1 a 2.",
+      "splitAdjustmentsWithoutCost": "Non è stato salvato nulla: l'evento {type} del {date} ha {n, plural, one {# rettifica collegata} other {# rettifiche collegate}} senza costo d'acquisto{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}. Senza lo split quelle unità conterebbero come comprate a un prezzo sconosciuto: dai prima un costo d'acquisto alle rettifiche, poi cambia il tipo dell'evento."
+    }
   },
   "providerErrors": {
     "NO_DATA": "Nessun dato disponibile per questo strumento sul provider.",
@@ -391,6 +455,14 @@
     "MISSING_PARAMS": "Alla configurazione del provider mancano parametri obbligatori.",
     "PARSE_ERROR": "La risposta del provider non è stata interpretabile.",
     "SCRAPE_ERROR": "La pagina del provider non è stata leggibile.",
-    "UNSUPPORTED_PAGE": "Il provider ha trovato questo strumento ma la sua pagina di mercato non è ancora leggibile. Apri una issue su GitHub (Librefolio/LibreFolio) segnalando questo ISIN così possiamo aggiungere il supporto."
+    "UNSUPPORTED_PAGE": "Il provider ha trovato questo strumento ma la sua pagina di mercato non è ancora leggibile. Apri una issue su GitHub (Librefolio/LibreFolio) segnalando questo ISIN così possiamo aggiungere il supporto.",
+    "RATE_LIMITED": "In pausa per troppe richieste fino alle {time}",
+    "RATE_LIMITED_NO_TIME": "Troppe richieste: riprova più tardi",
+    "RATE_LIMITED_DAY": "In pausa per troppe richieste fino al {time}",
+    "NOT_CONFIGURED": "Questo provider va configurato prima dell'uso",
+    "PROVIDER_ERROR": "Il provider ha restituito un errore: {detail}",
+    "PROBE_RATE_LIMITED": "Troppe verifiche: riprova alle {time}",
+    "PROBE_RATE_LIMITED_DAY": "Troppe verifiche: riprova il {time}",
+    "PROBE_RATE_LIMITED_NO_TIME": "Troppe verifiche: riprova tra un minuto"
   }
 }

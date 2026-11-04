@@ -13,14 +13,18 @@
      * Uses Svelte 5 runes. Replaces old FxEditSection with FxDataEditorSection.
      */
     import {onMount, tick, untrack} from 'svelte';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
-    import {zodiosApi} from '$lib/api';
+    import {axiosInstance, zodiosApi} from '$lib/api';
+    import {parseFxConvertWithSignalIsolation, type FxConvertAnswer} from '$lib/components/fx/fxDetailConvertQuery';
+    import {canonicalCacheKey, comparisonSeriesAnswers, fxSignalAnswers} from '$lib/stores/signalResultCache';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -42,8 +46,7 @@
         getSignalProblem,
         getLocalSignalDefinitions,
         mapSignalInstanceResults,
-        renderBackendSignalResult,
-        signalFromConfig,
+        renderedSignalPointCount,
         SignalResultState,
         type BackendSignalResult,
         type RenderedSignal,
@@ -51,12 +54,16 @@
         type SignalDefinition,
         type SignalInstanceResult,
     } from '$lib/charts/signals';
-    import {DEFAULT_AXIS_SCALE, getSettingsForPair, normalizeAxisScaleSettings, setPairSettings, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, effectiveCalendarReturnWindow, getGlobalLineShape, getSettingsForPair, normalizeAxisScaleSettings, resolveLineShape, setPairSettings, type AxisScaleSettings, type ChartPrimaryView} from '$lib/stores/chartSettingsStore.svelte';
+    import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {apiResultsToCanonicalFxDataPoints, displayFxDelta, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {fetchFxPeriodChanges} from '$lib/utils/periodChanges';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
@@ -64,7 +71,18 @@
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
+    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, earliestComparisonDate, type ComparisonAssetsLoadResult, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {detailPageSignalSources} from '$lib/charts/chartPageSignals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {buildAssetComparisonQuery} from '$lib/charts/crossTypeCalendar';
+    import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/charts/fxDetailCalendar';
+    import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
+    import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
+    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
+    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
+    import {emptyCalendarReturnView, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -82,6 +100,11 @@
     import {subscribeFxCreationSyncCompleted} from '$lib/services/fxCreationSync';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
+
+    /** Chart toolbar toggle at rest (measure, editor, aesthetics): the card, quiet text, a step into the page on hover. */
+    const TOOLBAR_TOGGLE_IDLE_CLASS = 'bg-lf-card/80 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary';
+    /* The measure toggle keeps the violet of the measure tool (categorical: no role yet), so it lives in its own literal. */
+    const MEASURE_TOGGLE_ACTIVE_CLASS = 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700';
 
     // =========================================================================
     // Page data
@@ -153,9 +176,30 @@
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
+    /**
+     * Where the comparisons are asked from (Y2-CMP). With «All» a comparison starts on its own first price — the server resolves `min` per asset —
+     * and not on the day this pair starts: a comparison older than the page's own series is drawn from where it begins.
+     */
+    let comparisonStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
 
     // View mode is parent-owned so chart, signals, tooltips, and measures stay aligned.
     let viewMode: ViewMode = $state('percentage');
+
+    // X5-F1 — the rolling return of the pair: a second primary mode of the chart, saved with the pair's chart settings
+    // (`primaryView: 'calendar-return'`), asked of `POST /fx/currencies/convert` when the page is in it. Prices stay in the
+    // FX store, so going back to them asks nothing.
+    let primaryMode: AssetChartPrimaryMode = $state('price');
+    let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
+    let calendarTargetViews: Map<string, CalendarReturnView> = $state(new Map());
+    // FB-11: the rolling return of the assets its `asset-comparison` signals compare, by asset id
+    let calendarAssetViews: Map<number, CalendarReturnView> = $state(new Map());
+    let calendarRequestGeneration = 0;
+    let calendarCustomAmount = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customAmount);
+    let calendarCustomUnit: CalendarReturnWindowUnit = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customUnit);
+    let calendarCustomEditing = $state(false);
+    let calendarWindowHydratedFor: string | null = null;
+    /** The price view the pair had before the rolling return (what the list card shows again when the user comes back to prices). */
+    let priceViewBeforeCalendar: ChartPrimaryView = 'absolute';
 
     // Provider config
     let providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}> = $state([]);
@@ -183,6 +227,10 @@
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
     let settings = $derived(getSettingsForPair(data.canonicalSlug, 'fx'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
+    let calendarRangeDays = $derived(calendarReturnRangeDays(dateStart, dateEnd));
+    /** The window in force: the one chosen for this pair, else the largest preset that fits the period on screen (Y-40). */
+    let calendarWindowSelection: CalendarReturnWindowSelection = $derived(effectiveCalendarReturnWindow(settings, calendarRangeDays));
+    let calendarWindowDays = $derived(calendarReturnWindowDays(calendarWindowSelection) ?? 30);
     let signalDefinitions = $state<SignalDefinition[]>([]);
     let signalInstanceResults = $state<SignalInstanceResult[]>([]);
     let signalCatalogFailed = $state(false);
@@ -206,7 +254,7 @@
     let allConfiguredSlugs: string[] = $state([]);
 
     // All assets (for asset comparison signals in ChartSignalsSection)
-    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}> = $state([]);
+    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string; is_benchmark?: boolean}> = $state([]);
 
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -214,6 +262,13 @@
     let refreshRequestGeneration = 0;
     let comparisonAppliedFingerprint: string | null = null;
     let comparisonInFlight: {fingerprint: string; promise: Promise<void>} | null = null;
+    /**
+     * N64 (Q1): whether the last call of `loadChartData` / `maybeLoadComparison` asked the server. Set before their first
+     * await, so the trigger reads it right after the call: the busy token goes with a request, never with a load the
+     * caches answered whole (`trackChartLoad`, `trackComparisonLoad`, `trackChartAndComparison`).
+     */
+    let lastChartLoadAskedServer = false;
+    let lastComparisonLoadAskedServer = false;
     const assetSyncRequestGenerations = new Map<number, number>();
     const activeAssetSyncRequests = new Map<number, number>();
     let syncingComparisonAssetIds = $state<Set<number>>(new Set());
@@ -271,6 +326,10 @@
         return items;
     });
 
+    /** The sync dialog's pairs whose shown rates hold a stored row in its range (C-66), for its warning: this pair from
+     * its chart, a compared pair from its rate store; a comparison asset is not counted. */
+    let syncFxPairsWithData = $derived(showPageSyncModal ? syncAllFxPairs.filter((slug) => hasStoredPointInRange(slug === data.canonicalSlug ? chartData : getFxStore(slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) : []);
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -285,20 +344,38 @@
         return displayFxRate(last.rate, inverted);
     });
 
-    let deltaPercent = $derived.by(() => {
-        if (chartData.length < 2) return null;
-        return displayFxDelta(chartData[0].rate, chartData[chartData.length - 1].rate, inverted)?.pct ?? null;
-    });
+    // The pair's Δ over the range on screen, both ways, from the backend (X-R59). Asked again when the pair or the range
+    // changes, and after a refresh, a sync or a session change (`rangeDeltaRefresh`); a Δ of another range is cleared
+    // at once, so the summary never shows one next to this range's rate. It completes what the page is doing, so it joins
+    // the page's token (N55): the Refresh button waits for it after the user's request, never after a sync (P3).
+    let rangeDeltas = $state<{direct: RangeDelta; inverse: RangeDelta} | null>(null);
+    let rangeDeltaRefresh = $state(0);
+    let rangeDeltaVersion = 0;
+    let rangeDeltasKey: string | null = null;
 
-    function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
-        const rate = displayFxRate(point.rate, inverted);
-        return {
-            date: point.date,
-            value: rate ?? 0,
-            missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
-        };
+    let deltaPercent = $derived((inverted ? rangeDeltas?.inverse : rangeDeltas?.direct)?.pct ?? null);
+
+    async function loadRangeDeltas(base: string, quote: string, start: string, end: string): Promise<void> {
+        const version = ++rangeDeltaVersion;
+        const sessionGeneration = getClientSessionGeneration();
+        const key = `${base}/${quote} ${start}…${end}`;
+        if (key !== rangeDeltasKey) rangeDeltas = null;
+        try {
+            const result = await fetchFxPeriodChanges([{base, quote}], end, start);
+            if (version !== rangeDeltaVersion || !isClientSessionCurrent(sessionGeneration)) return;
+            rangeDeltas = result.rangeDeltasByPair.get(`${base}/${quote}`) ?? null;
+            rangeDeltasKey = key;
+        } catch (requestError) {
+            if (version !== rangeDeltaVersion) return;
+            console.error('Failed to fetch the change of the pair over the range:', requestError);
+        }
     }
+
+    $effect(() => {
+        const [base, quote, start, end] = [data.canonicalBase, data.canonicalQuote, dateStart, dateEnd];
+        void rangeDeltaRefresh;
+        untrack(() => void pageBusy.join('fx-detail-range-delta', () => loadRangeDeltas(base, quote, start, end)));
+    });
 
     let lineData: LineDataPoint[] = $derived(chartData.map((d) => fxPointToLineDataPoint(d, inverted)));
 
@@ -328,72 +405,68 @@
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
-    let backendOverlaySignals: RenderedSignal[] = $derived.by(() => {
-        const rendered: RenderedSignal[] = [];
-        for (const item of signalInstanceResults) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const currentConfig = signals.find((config) => config.id === item.config.id) ?? item.config;
-            const definition = signalDefinitionsByType.get(currentConfig.signalType);
-            if (!definition || definition.source !== 'backend') {
-                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
-                continue;
-            }
-            const outcome = renderBackendSignalResult(item.result, currentConfig, {
-                baseData: lineData,
-                viewMode,
-                definition,
-                translate: (key) => $t(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
-    });
+    let backendOverlaySignals: RenderedSignal[] = $derived(renderBackendResults(signals, signalInstanceResults, signalDefinitionsByType, lineData, viewMode, (key) => $t(key)));
 
-    // Computed overlay signals from settings
+    // Overlay signals: the saved local signals, drawn by the one renderer with the page's data (Y-42), then the backend results.
+    // FX pairs come from the store, straight (the signal's own `_inverted` turns them); a comparison reads the series
+    // loadComparisonAssetsData wrote into its config, and an asset the page does not know is named by the catalogue fallback.
+    let signalSources: SignalDataSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (pairSlug) => (activePreset === 'MAX' ? getFxStore(pairSlug).getAllSorted() : getFxStore(pairSlug).getRange(dateStart, dateEnd).data)}));
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         void overlayDataVersion; // trigger recomputation when overlay data changes
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of signals) {
-            const definition = signalDefinitionsByType.get(cfg.signalType);
-            if (!definition || definition.source === 'backend') continue;
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-
-            // For FxPairSignal: resolve data from the TimeSeriesStore before rendering
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                try {
-                    const store = getFxStore(pairSlug);
-                    const storeData = store.getAllSorted();
-                    if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => fxPointToLineDataPoint(d, false));
-                } catch {
-                    continue; // Store not available for this pair
-                }
-            }
-
-            // For AssetComparisonSignal: resolve data injected by loadComparisonAssetsData
-            if (cfg.signalType === 'asset-comparison') {
-                const targetId = Number(cfg.params.assetId);
-                if (!targetId) continue;
-                const targetAsset = allAssets.find((a) => a.id === targetId);
-                instance.params._assetDisplayName = targetAsset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(targetId)}});
-                instance.params._assetIconUrl = targetAsset?.icon_url ?? null;
-                instance.params._assetType = targetAsset?.asset_type ?? null;
-                if (!instance.params._resolvedData) continue;
-            }
-
-            const results = instance.renderMulti(lineData, viewMode);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
-        }
-        return [...rendered, ...backendOverlaySignals];
+        return [...renderLocalSignals(signals, signalDefinitionsByType, lineData, viewMode, signalSources, {unionAxis: true}), ...backendOverlaySignals];
     });
 
     /** Combined overlay signals: computed from settings + measure signals */
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
+
+    // X5-F1 — what the chart draws in the rolling-return mode: the pair's return and the compared pairs' lines
+    let calendarOverlaySignals: RenderedSignal[] = $derived([
+        ...renderCalendarPairComparisons(signals, calendarTargetViews),
+        ...renderCalendarComparisons(
+            signals,
+            calendarAssetViews,
+            (assetId) => {
+                const asset = allAssets.find((candidate) => candidate.id === assetId);
+                return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url ?? null, assetType: asset.asset_type ?? null} : null;
+            },
+            (assetId) => $t('chartSettings.signals.assetFallback', {values: {id: String(assetId)}}),
+        ),
+    ]);
+    /** The assets compared in the rolling return by the state of their view (asset ids). */
+    let calendarAssetComparisonState = $derived.by(() => {
+        const byState: Record<'ready' | 'partial' | 'unavailable' | 'error', number[]> = {ready: [], partial: [], unavailable: [], error: []};
+        for (const [assetId, view] of calendarAssetViews) {
+            if (view.state === 'ready' || view.state === 'partial' || view.state === 'unavailable' || view.state === 'error') byState[view.state].push(assetId);
+        }
+        for (const ids of Object.values(byState)) ids.sort((left, right) => left - right);
+        return byState;
+    });
+    /** The state of the rolling return as the page shows it: before the first answer it is loading, not idle. */
+    let calendarChartState = $derived(calendarReturnView.state === 'idle' ? 'loading' : calendarReturnView.state);
+    /** The `fx-pair` signals by the state of their rolling return (config ids). */
+    let calendarComparisonState = $derived.by(() => {
+        const byState: Record<'ready' | 'partial' | 'unavailable' | 'error', string[]> = {ready: [], partial: [], unavailable: [], error: []};
+        for (const target of pairTargetsOf(signals)) {
+            if (target.pairSlug === data.canonicalSlug) continue;
+            const state = calendarTargetViews.get(target.configId)?.state;
+            if (state === 'ready' || state === 'partial' || state === 'unavailable' || state === 'error') byState[state].push(target.configId);
+        }
+        return byState;
+    });
+    let calendarProblemMessage = $derived(
+        calendarReturnView.problem
+            ? formatSignalProblem(
+                  calendarReturnView.problem,
+                  (key, values) => (values ? $t(key, {values}) : $t(key)),
+                  (field) => $t(`signals.dataFields.${field}`),
+              )
+            : null,
+    );
+    let chartSeriesState = $derived.by(() => {
+        if (primaryMode === 'calendar-return') return calendarChartState;
+        if (loading) return 'loading';
+        return lineData.length > 0 ? 'ready' : error ? 'error' : 'unavailable';
+    });
     let activePrimaryAxisKind = $derived<'absolute' | 'percentage'>(viewMode === 'percentage' ? 'percentage' : 'absolute');
     let activePrimaryAxisScale = $derived(settings.axisScales[activePrimaryAxisKind]);
     let activeSecondaryAxes = $derived(collectConfigurableSecondaryAxes(allOverlaySignals));
@@ -429,6 +502,7 @@
     });
 
     let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
+    let calendarOverlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(calendarOverlaySignals));
 
     // Event markers for the chart (comparison asset events — FX pairs don't have own events)
     let chartEventMarkers: EventMarker[] = $derived.by(() => {
@@ -463,7 +537,7 @@
                 const rendered = backendOverlaySignals.filter((signal) => signal.id === cfg.id || signal.id.startsWith(`${cfg.id}:`));
                 const dates = rendered.flatMap((signal) => signal.data.map((point) => point.date)).sort();
                 result.set(cfg.id, {
-                    pointCount: rendered.reduce((maximum, signal) => Math.max(maximum, signal.data.length), 0),
+                    pointCount: renderedSignalPointCount(rendered),
                     eventCounts: {},
                     firstDate: dates[0] ?? null,
                     problem: getSignalProblem(instanceById.get(cfg.id)) ?? undefined,
@@ -527,6 +601,14 @@
         return value.map((item) => backendSignalSchemas.result.parse(item));
     }
 
+    type FxConvertBulkBody = Parameters<typeof zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post>[0];
+
+    /** X-R16: the conversion read with signal isolation, as on the asset page, so an invalid signal result keeps the rates. */
+    async function convertBulkWithSignalIsolation(body: FxConvertBulkBody): Promise<FxConvertAnswer> {
+        const response = await axiosInstance.post<unknown>('/api/v1/fx/currencies/convert', body);
+        return parseFxConvertWithSignalIsolation(response.data);
+    }
+
     function applyBackendSignalResults(configs: SignalConfig[], requestVersion: number, results: BackendSignalResult[]) {
         const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
         const mapped = mapSignalInstanceResults(configs, plan, results);
@@ -579,7 +661,7 @@
                 .map((config) => ({configId: config.id, assetId: Number(config.params.assetId)}))
                 .filter((peer) => Number.isSafeInteger(peer.assetId) && peer.assetId > 0)
                 .sort((left, right) => left.configId.localeCompare(right.configId)),
-            start: dateStart,
+            start: comparisonStart,
             end: dateEnd,
         });
     }
@@ -593,8 +675,10 @@
     }
 
     async function retryBackendSignals() {
-        await loadFxSignalDefinitions(true);
-        await loadChartData();
+        await pageBusy.track('fx-detail-signals-retry', async () => {
+            await loadFxSignalDefinitions(true);
+            await loadChartData();
+        });
     }
 
     function connectCreationCompletion() {
@@ -619,6 +703,7 @@
                 if (!pageMounted || !isClientSessionCurrent(sessionGeneration) || data.canonicalSlug !== slug) return;
                 signalDefinitionsReady = true;
             }
+            rangeDeltaRefresh++;
             await loadChartData(signals, true);
         });
     }
@@ -630,6 +715,11 @@
         try {
             // Persist URL inversion so FxCard reflects it on back-navigation.
             setCardInverted(data.canonicalSlug, data.inverted);
+            // X5-F1: the pair opens in the mode saved with its settings (a card of the list in the rolling return opens it).
+            primaryMode = openingMode();
+            calendarReturnView = emptyCalendarReturnView();
+            calendarTargetViews = new Map();
+            calendarAssetViews = new Map();
             void loadFxAiExportCompatibility();
 
             await (initialSignalDefinitions ??= loadFxSignalDefinitions());
@@ -645,6 +735,8 @@
             if (!current()) return;
             flagVersion++;
             await maybeLoadComparison();
+            await loadSignalFxPairs();
+            await loadCalendarReturn();
         } catch (initializationError) {
             if (!current() || initialLoadVersion !== chartLoadVersion) return;
             console.error('Failed to initialize FX detail:', initializationError);
@@ -657,7 +749,8 @@
     onMount(() => {
         pageMounted = true;
         const initializeAndStartGuide = async () => {
-            await initializePage();
+            // The first load holds the page's Refresh button (Y11).
+            await pageBusy.track('fx-detail-first-load', () => initializePage());
             if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
         };
         let initialSession = true;
@@ -665,11 +758,18 @@
             connectCreationCompletion();
             if (!initialSession && getClientSessionUserId() !== null) {
                 invalidateComparisonState();
+                rangeDeltaRefresh++;
                 if (signalDefinitionsReady) {
-                    void loadChartData().then(async () => {
-                        await maybeLoadComparison();
-                        if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
-                    });
+                    void pageBusy
+                        .track('fx-detail-session', async () => {
+                            await loadChartData();
+                            await maybeLoadComparison();
+                            await loadSignalFxPairs();
+                            await loadCalendarReturn();
+                        })
+                        .then(() => {
+                            if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
+                        });
                 } else void initializeAndStartGuide();
             }
             initialSession = false;
@@ -685,6 +785,18 @@
         };
     });
 
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, Z-14b): the chart on screen is asked again, in silence — the stale points stay up,
+    // nothing says the page is busy — and outside `pageBusy`: it is not the user's Refresh. The comparisons and the compared pairs follow it.
+    onMount(() =>
+        onPricesCaughtUp(async () => {
+            if (!pageMounted) return;
+            await loadChartData(signals, false, true);
+            if (!pageMounted) return;
+            await maybeLoadComparison(signals, true);
+            await loadSignalFxPairs();
+        }),
+    );
+
     let previousDisplayOrientation = $state('');
     $effect(() => {
         const orientation = `${data.urlBase}-${data.urlQuote}`;
@@ -698,7 +810,7 @@
                 connectCreationCompletion();
                 invalidateComparisonState();
                 if (signalDefinitionsReady) {
-                    void loadChartData().then(() => maybeLoadComparison());
+                    void trackChartAndComparison('fx-detail-orientation');
                 }
             }
         }
@@ -735,12 +847,19 @@
      */
     function rearmMaxPendingBeforeReload() {
         if (activePreset !== 'MAX') return;
+        // FB-7b: a sync, a catch-up or Refresh may have moved the pair's first day: it is asked again
+        forgetFirstDate('fx', data.canonicalSlug);
         isMaxPending = true;
         dateStart = resolveDateSentinel('min');
         displayDateStart = 'min';
     }
 
-    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+    /**
+     * `silent`: the reload after a price catch-up (Y5-1) — the chart and the signals on screen stay as they are and nothing says
+     * the page is busy (no `loading`, no `signalsLoading`): it is not a load the user asked for.
+     */
+    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false, silent = false) {
+        lastChartLoadAskedServer = false;
         if (!pageMounted) return;
         const slug = data.canonicalSlug;
         const base = data.urlBase;
@@ -748,6 +867,18 @@
         const inverted = data.inverted;
         const canonicalBase = data.canonicalBase;
         const canonicalQuote = data.canonicalQuote;
+        // FB-7b: «All» still pending and the pair's first day already known this session: start from it, and from the cache
+        if (isMaxPending) {
+            const knownFirstDay = firstDateOf('fx', slug);
+            if (knownFirstDay !== undefined) {
+                dateStart = knownFirstDay;
+                displayDateStart = knownFirstDay;
+                isMaxPending = false;
+            }
+        }
+        // FB-7b: «All» pending, its first day unknown: the rates are asked from the sentinel `min` (the server answers the pair's first
+        // stored day, whatever its year), never from a made-up start; the store cannot answer a start it does not know
+        const askedFromMin = isMaxPending;
         const start = dateStart;
         const end = dateEnd;
         const sessionGeneration = getClientSessionGeneration();
@@ -760,8 +891,12 @@
         };
         error = null;
         const store = getFxStore(slug);
-        const gaps = store.getMissingIntervals(start, end);
+        const gaps = askedFromMin ? [{start, end}] : store.getMissingIntervals(start, end);
         const hasCachedRange = gaps.length === 0;
+        // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
+        // are asked in background, with no loading state.
+        const staleHeld = !hasCachedRange && store.isStale ? store.getRange(start, end).data : [];
+        const staleShown = staleHeld.length > 0;
         const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
         const withSignals = requestPlan.requests.length > 0;
@@ -770,6 +905,9 @@
             chartData = store.getRange(start, end).data;
             if (chartData.length === 0) error = '_i18n:fxDetail.noData';
             resolveMaxStartFromChartData();
+        } else if (staleShown && (!silent || chartData.length === 0)) {
+            // A silent reload of the range already on screen leaves the chart alone; a return to the page, or another range, shows them.
+            chartData = staleHeld;
         }
 
         if (!withSignals && hasCachedRange) {
@@ -780,30 +918,61 @@
             return;
         }
 
-        loading = !hasCachedRange;
-        signalRequestFailed = false;
-        signalsLoading = withSignals;
         // Keep gap requests canonical; only signal requests follow the displayed orientation.
         const ranges = withSignals ? [{start, end}] : gaps;
+        const requestBody: FxConvertBulkBody = ranges.map((range) => ({
+            from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
+            to: withSignals ? quote : canonicalQuote,
+            date_range: {start: askedFromMin ? ('min' as const) : range.start, end: range.end},
+            ...(withSignals ? {signals: requestPlan.requests} : {}),
+        }));
+        // N64: the same signal request, answered over the same rates (the generation of the pair's store, read now), comes
+        // back from the signal cache while the rates cover the range: no request, no spinner, no token (Q1). Any
+        // invalidation of the store — Refresh, a sync, a catch-up marking it stale (Q2) — misses.
+        const answerKey = withSignals ? canonicalCacheKey(requestBody) : null;
+        const answerGenerations = [store.generation];
+        const cachedSignalResults = answerKey !== null && hasCachedRange ? fxSignalAnswers.get(answerKey, answerGenerations) : null;
+        if (cachedSignalResults !== null) {
+            applyBackendSignalResults(requestedSignalConfigs, requestVersion, cachedSignalResults);
+            signalRequestFailed = false;
+            loading = false;
+            signalsLoading = false;
+            return;
+        }
+
+        if (!silent) loading = !hasCachedRange && !staleShown;
+        signalRequestFailed = false;
+        signalsLoading = !silent && withSignals;
+        lastChartLoadAskedServer = true;
         try {
-            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(
-                ranges.map((range) => ({
-                    from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
-                    to: withSignals ? quote : canonicalQuote,
-                    date_range: {start: range.start, end: range.end},
-                    ...(withSignals ? {signals: requestPlan.requests} : {}),
-                })),
-            );
+            const response = await convertBulkWithSignalIsolation(requestBody);
             if (discardObsoleteResponse()) return;
             const canonicalPoints = apiResultsToCanonicalFxDataPoints(response.results, withSignals && inverted);
             if (canonicalPoints.length > 0) {
                 store.merge(canonicalPoints);
             }
-            for (const range of ranges) store.markFetched(range.start, range.end);
-            chartData = store.getRange(start, end).data;
+            // From the first day the server held, when the rates were asked from `min`: nothing exists before it, and the placeholder
+            // start the page waits on was never asked
+            const firstDay = askedFromMin && canonicalPoints.length > 0 ? canonicalPoints.reduce((earliest, point) => (point.date < earliest ? point.date : earliest), canonicalPoints[0].date) : null;
+            for (const range of ranges) store.markFetched(firstDay ?? range.start, range.end);
+            if (firstDay !== null) rememberFirstDate('fx', slug, firstDay);
+            chartData = store.getRange(firstDay ?? start, end).data;
 
             const signalGroup = withSignals ? response.signal_results?.find((group) => group.request_index === 0) : undefined;
-            applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(signalGroup?.signals));
+            // X-R16: an invalid signal result fails the signals only, as a failed request does: nothing applied, the banner
+            // says so. The rates are already in the cache (the answer is read with signal isolation), and «All» resolves below.
+            let signalResults: BackendSignalResult[] | null = null;
+            try {
+                signalResults = parseBackendSignalResults(signalGroup?.signals);
+            } catch (signalError) {
+                console.error('Invalid FX signal results:', signalError);
+                signalRequestFailed = withSignals;
+            }
+            if (signalResults !== null) {
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, signalResults);
+                // N64: only valid signal results are kept, never a failed request or an invalid answer.
+                if (answerKey !== null) fxSignalAnswers.set(answerKey, answerGenerations, signalResults);
+            }
             if (chartData.length === 0 && !error) {
                 error = '_i18n:fxDetail.noData';
             }
@@ -881,10 +1050,24 @@
                 display_name: a.display_name,
                 icon_url: a.icon_url ?? null,
                 asset_type: a.asset_type ?? null,
+                // N64b: a comparison series is cached over the peer's price store, named by the asset's own currency.
+                currency: a.currency ?? undefined,
+                // The comparison picker lists the benchmarks first (Y5-F4, X5-F4b).
+                is_benchmark: a.is_benchmark === true,
             }));
         } catch (e) {
             console.error('Failed to load asset list:', e);
         }
+    }
+
+    /**
+     * With «All», the From the date picker shows is the older of this series' first day and the oldest comparison's (Y2-CMP): the chart starts
+     * there. Only the label moves: the queries of this series keep its own first day. `null`: no comparison is on the chart.
+     */
+    function showEarliestStart(loaded: ComparisonAssetsLoadResult | null) {
+        if (activePreset !== 'MAX' || isMaxPending) return;
+        const oldest = loaded === null ? null : earliestComparisonDate(loaded);
+        displayDateStart = oldest !== null && oldest < dateStart ? oldest : dateStart;
     }
 
     /**
@@ -896,8 +1079,10 @@
         const base = data.urlBase;
         const quote = data.urlQuote;
         const sessionGeneration = getClientSessionGeneration();
+        lastComparisonLoadAskedServer = false;
         const requestedFingerprint = comparisonLoadFingerprint(requestedSignalConfigs);
         if (!force && comparisonInFlight?.fingerprint === requestedFingerprint) {
+            lastComparisonLoadAskedServer = true;
             return comparisonInFlight.promise;
         }
         if (!force && comparisonAppliedFingerprint === requestedFingerprint) {
@@ -914,18 +1099,38 @@
         const requestedAssetIds = comparisonAssetIds(requestedSignalConfigs);
         if (requestedAssetIds.length === 0) {
             comparisonAppliedFingerprint = requestedFingerprint;
+            showEarliestStart(null);
             return Promise.resolve();
         }
         if (lineData.length === 0) return Promise.resolve();
+        // N64b: the same request over the same price data comes back from the cache, in this very tick: nothing is asked, no
+        // busy token opens (`lastComparisonLoadAskedServer` stays false). A peer's invalidated store, a sync of a peer, a
+        // refresh (forced) miss.
+        const answerKey = comparisonAnswerKey(requestedAssetIds, {start: comparisonStart, end: dateEnd});
+        const answerGenerations = comparisonAnswerGenerations(requestedAssetIds, allAssets);
+        const cachedLoad = !force && answerGenerations !== null ? comparisonSeriesAnswers.get(answerKey, answerGenerations) : null;
+        if (cachedLoad !== null) {
+            comparisonEvents = applyComparisonAssetsData(
+                signals.filter((signal) => signal.signalType === 'asset-comparison'),
+                cachedLoad,
+            );
+            comparisonAppliedFingerprint = requestedFingerprint;
+            showEarliestStart(cachedLoad);
+            overlayDataVersion++;
+            return Promise.resolve();
+        }
+        lastComparisonLoadAskedServer = true;
         const promise = (async () => {
             try {
-                const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets);
+                const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: comparisonStart, end: dateEnd}, allAssets);
                 if (!current()) return;
+                if (answerGenerations !== null && comparisonAnswerIsCacheable(loaded)) comparisonSeriesAnswers.set(answerKey, answerGenerations, loaded);
                 comparisonEvents = applyComparisonAssetsData(
                     signals.filter((signal) => signal.signalType === 'asset-comparison'),
                     loaded,
                 );
                 comparisonAppliedFingerprint = requestedFingerprint;
+                showEarliestStart(loaded);
                 overlayDataVersion++;
             } catch (error) {
                 if (!current()) return;
@@ -939,6 +1144,180 @@
         void promise.then(clearInFlight, clearInFlight);
         return promise;
     }
+
+    /**
+     * Y-41: load into the FX store the rates of the other pairs the saved `fx-pair` signals name, over the period on screen,
+     * then redraw. A signal draws from the store, which only a sync or a refresh filled before: on a clean load, or on a pair
+     * just chosen, it said «no data». The store finds its own gaps, so a pair it already holds asks nothing; the page's own
+     * pair is loaded by the chart. Never throws (`ensureSignalFxPairs`).
+     */
+    async function loadSignalFxPairs(requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        if (fxPairSlugsOf(requestedSignalConfigs, data.canonicalSlug).length === 0) return;
+        const slug = data.canonicalSlug;
+        const sessionGeneration = getClientSessionGeneration();
+        const range = {start: dateStart, end: dateEnd};
+        await ensureSignalFxPairs(requestedSignalConfigs, slug, range, activePreset === 'MAX');
+        if (!pageMounted || data.canonicalSlug !== slug || !isClientSessionCurrent(sessionGeneration) || dateStart !== range.start || dateEnd !== range.end) return;
+        overlayDataVersion++;
+    }
+
+    /** N64 (Q1): the chart load under the page's busy token only when it asks the server; one the caches answer runs without. */
+    function trackChartLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        const running = loadChartData(requestedSignalConfigs);
+        return lastChartLoadAskedServer ? pageBusy.track(label, () => running) : running;
+    }
+
+    /** N64 (Q1): the comparisons under the busy token only when they ask the server; their memo answers without. */
+    function trackComparisonLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        const running = maybeLoadComparison(requestedSignalConfigs);
+        return lastComparisonLoadAskedServer ? pageBusy.track(label, () => running) : running;
+    }
+
+    /**
+     * N64 (Q1): the chart, then the comparisons, as a change of period or orientation always loaded them, with one busy
+     * token if either asks the server: a period already seen changes the chart at once, with no token.
+     */
+    async function trackChartAndComparison(label: string): Promise<void> {
+        const chart = loadChartData();
+        if (lastChartLoadAskedServer) {
+            await pageBusy.track(label, async () => {
+                await chart;
+                await maybeLoadComparison();
+                await loadSignalFxPairs();
+                await loadCalendarReturn();
+            });
+            return;
+        }
+        await chart;
+        await trackComparisonLoad(label);
+        await loadSignalFxPairs();
+        if (primaryMode === 'calendar-return') await trackCalendarLoad(label);
+    }
+
+    // =========================================================================
+    // Rolling return (X5-F1)
+    // =========================================================================
+
+    /** The FX pairs the page's `fx-pair` signals compare, each the way its signal shows it. */
+    function pairTargetsOf(configs: readonly SignalConfig[]): Array<{configId: string; pairSlug: string; inverted: boolean}> {
+        return configs.filter((config) => config.signalType === 'fx-pair' && config.params.pairSlug).map((config) => ({configId: config.id, pairSlug: String(config.params.pairSlug), inverted: Boolean(config.params._inverted)}));
+    }
+
+    /**
+     * Ask the rolling return of the pair, and of the pairs its `fx-pair` signals compare, over the period on screen
+     * (`buildFxDetailCalendarQuery`: the daily return, one signal each); the view is `loading` (a spinner) until the answer lands. A request the page has moved past is dropped. Never throws: a failure is the `error` state of the view.
+     */
+    async function loadCalendarReturn(requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        if (!pageMounted || primaryMode !== 'calendar-return') return;
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestVersion = ++calendarRequestGeneration;
+        const current = () => pageMounted && primaryMode === 'calendar-return' && requestVersion === calendarRequestGeneration && isClientSessionCurrent(sessionGeneration) && data.canonicalSlug === slug && data.urlBase === base && data.urlQuote === quote;
+        const entries = buildFxDetailCalendarQuery({ownSlug: slug, base, quote, start: dateStart, end: dateEnd, windowDays: calendarWindowDays, pairTargets: pairTargetsOf(requestedSignalConfigs)});
+        calendarReturnView = {...calendarReturnView, state: 'loading'};
+        try {
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(entries.map((entry) => entry.request));
+            if (!current()) return;
+            const views = fxDetailCalendarViews(response, entries);
+            calendarReturnView = views.own;
+            calendarTargetViews = views.targets;
+        } catch (error) {
+            if (!current()) return;
+            console.error('Failed to load the FX rolling return:', error);
+            calendarReturnView = emptyCalendarReturnView('error');
+            calendarTargetViews = new Map();
+        }
+        await loadCalendarAssetComparisons(requestedSignalConfigs, current);
+    }
+
+    /**
+     * FB-11: the rolling return of the assets the `asset-comparison` signals compare, each asked of `POST /assets/prices/query`
+     * (no prices, no events, the asset's own currency). A failure marks each asset `error`; it never touches the pair's own view.
+     */
+    async function loadCalendarAssetComparisons(requestedSignalConfigs: SignalConfig[], current: () => boolean): Promise<void> {
+        const assetIds = comparisonAssetIds(requestedSignalConfigs);
+        if (assetIds.length === 0) {
+            calendarAssetViews = new Map();
+            return;
+        }
+        try {
+            const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(buildAssetComparisonQuery({start: dateStart, end: dateEnd, windowDays: calendarWindowDays, assetIds}));
+            if (!current()) return;
+            calendarAssetViews = extractCalendarReturnViewsByAsset((response as {items?: unknown}).items, assetIds);
+        } catch (error) {
+            if (!current()) return;
+            console.error('Failed to load the rolling return of the compared assets:', error);
+            calendarAssetViews = new Map(assetIds.map((assetId) => [assetId, emptyCalendarReturnView('error')]));
+        }
+    }
+
+    /** The rolling return under the page's busy token: it always asks the server. */
+    function trackCalendarLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        return pageBusy.track(label, () => loadCalendarReturn(requestedSignalConfigs));
+    }
+
+    /** The mode the pair opens in: the rolling return when its saved view is that one (from the list card too), else prices. */
+    function openingMode(): AssetChartPrimaryMode {
+        const view = getSettingsForPair(data.canonicalSlug, 'fx').primaryView;
+        if (view !== 'calendar-return') priceViewBeforeCalendar = view;
+        return view === 'calendar-return' ? 'calendar-return' : 'price';
+    }
+
+    /** The view the page saves with the pair's settings: the rolling return, or the price view the pair had. */
+    function persistPrimaryView(): void {
+        const view: ChartPrimaryView = primaryMode === 'calendar-return' ? 'calendar-return' : priceViewBeforeCalendar;
+        if (settings.primaryView === view) return;
+        setPairSettings(data.canonicalSlug, {...settings, primaryView: view, signals: [...signals]});
+    }
+
+    function setPrimaryMode(mode: AssetChartPrimaryMode): void {
+        if (mode === primaryMode) return;
+        measurePanel?.stopMeasureMode();
+        primaryMode = mode;
+        persistPrimaryView();
+        if (mode === 'calendar-return') {
+            void trackCalendarLoad('fx-detail-mode');
+        } else {
+            calendarCustomEditing = false;
+            calendarRequestGeneration += 1; // an answer still on its way is no longer wanted
+        }
+    }
+
+    function persistCalendarWindow(selection: CalendarReturnWindowSelection): void {
+        setPairSettings(data.canonicalSlug, {
+            ...settings,
+            calendarReturnWindow: {...selection},
+            // Y-40: a window picked here is chosen, no longer the automatic one — also when it equals the window saved before.
+            calendarReturnWindowAuto: false,
+            signals: [...signals],
+        });
+    }
+
+    function setCalendarPreset(preset: CalendarReturnPresetKey): void {
+        if (!CALENDAR_RETURN_PRESETS.some((candidate) => candidate.key === preset)) return;
+        if (calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset) return;
+        calendarCustomEditing = false;
+        persistCalendarWindow({...calendarWindowSelection, kind: 'preset', preset});
+        if (primaryMode === 'calendar-return') void trackCalendarLoad('fx-detail-calendar-window');
+    }
+
+    function setCalendarCustom(customAmount: number, customUnit: CalendarReturnWindowUnit): void {
+        const selection: CalendarReturnWindowSelection = {...calendarWindowSelection, kind: 'custom', customAmount, customUnit};
+        if (calendarReturnWindowDays(selection) === null) return;
+        const changed = calendarWindowSelection.kind !== 'custom' || calendarWindowSelection.customAmount !== customAmount || calendarWindowSelection.customUnit !== customUnit;
+        persistCalendarWindow(selection);
+        if (changed && primaryMode === 'calendar-return') void trackCalendarLoad('fx-detail-calendar-window');
+    }
+
+    $effect(() => {
+        const scope = `${getClientSessionGeneration()}:${data.canonicalSlug}`;
+        if (calendarWindowHydratedFor === scope) return;
+        calendarCustomAmount = settings.calendarReturnWindow.customAmount;
+        calendarCustomUnit = settings.calendarReturnWindow.customUnit;
+        calendarWindowHydratedFor = scope;
+    });
 
     // =========================================================================
     // Actions
@@ -966,8 +1345,11 @@
             urlDateEnd === requestedUrlEnd &&
             signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
         if (!current()) return;
+        // N64b: a refresh asks everything again, the comparison series of every period seen included.
+        comparisonSeriesAnswers.clear();
         const store = getFxStore(slug);
         store.invalidateRange(dateStart, dateEnd);
+        rangeDeltaRefresh++;
         await loadChartData(requestedSignals);
         if (!current()) return;
         // Also invalidate overlay pair stores so comparison signals refresh
@@ -983,6 +1365,7 @@
         }
         overlayDataVersion++;
         await maybeLoadComparison(requestedSignals, true);
+        await loadCalendarReturn(requestedSignals);
     }
 
     async function loadFxAiExportCompatibility() {
@@ -1039,8 +1422,7 @@
         // stays meaningful across reloads/shares and the "All" badge doesn't
         // look stuck on a specific historical date.
         replaceHistoryDateRange(newStart, newEnd);
-        await loadChartData();
-        await maybeLoadComparison();
+        await trackChartAndComparison('fx-detail-period');
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -1056,6 +1438,11 @@
             staleGradient: values.staleGradient,
             signals: [...signals],
         });
+    }
+
+    /** A shape equal to the global one is no override: the chart keeps following the global choice (FB-3). */
+    function handleLineShapeChange(shape: LineShape) {
+        setPairSettings(data.canonicalSlug, {...settings, lineShape: shape === getGlobalLineShape() ? undefined : shape, signals: [...signals]});
     }
 
     function handleAxisScaleChange(key: string, scale: AxisScaleSettings) {
@@ -1082,10 +1469,19 @@
     function handleSignalsChange(newSignals: SignalConfig[]) {
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         const shouldReloadComparison = comparisonLoadFingerprint(signals) !== comparisonLoadFingerprint(newSignals);
+        const shouldLoadFxPairs = fxPairSlugsOf(signals, data.canonicalSlug).join() !== fxPairSlugsOf(newSignals, data.canonicalSlug).join();
+        // Read before `setPairSettings`, which makes `signals` the new list at once (FB-11: the calendar targets were read after it, so a comparison added from the panel never loaded)
+        const calendarTargetsFingerprint = (configs: SignalConfig[]) =>
+            pairTargetsOf(configs)
+                .map((t) => `${t.configId}:${t.pairSlug}:${t.inverted}`)
+                .join() + `|${comparisonAssetIds(configs).join()}`;
+        const shouldReloadCalendarTargets = calendarTargetsFingerprint(signals) !== calendarTargetsFingerprint(newSignals);
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
-        if (shouldReloadComparison) void maybeLoadComparison(newSignals);
+        if (shouldLoadFxPairs) void loadSignalFxPairs(newSignals);
+        if (primaryMode === 'calendar-return' && shouldReloadCalendarTargets) void trackCalendarLoad('fx-detail-calendar-pairs', newSignals);
+        if (shouldReloadComparison) void trackComparisonLoad('fx-detail-comparison', newSignals);
         if (shouldReloadBackend) {
-            void loadChartData(newSignals);
+            void trackChartLoad('fx-detail-signals', newSignals);
         }
     }
 
@@ -1165,6 +1561,9 @@
                     date_range: {start: requestedStart, end: requestedEnd},
                 },
             ]);
+            // N64b: the synced asset's prices may have changed under every kept comparison series, even when this answer finds
+            // the page moved on: each is asked again.
+            comparisonSeriesAnswers.clear();
             if (!current()) return;
             const r = (response as any)?.results?.[0];
             const tr = get(t);
@@ -1221,21 +1620,21 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="fx-detail-page" data-busy={loading} data-chart-pair={data.canonicalSlug} data-chart-last-rate={chartData.at(-1)?.rate ?? ''} data-discarded-chart-loads={discardedChartLoads}>
+<div class="space-y-4 text-lf-primary" data-testid="fx-detail-page" data-busy={loading} data-chart-pair={data.canonicalSlug} data-chart-last-rate={chartData.at(-1)?.rate ?? ''} data-discarded-chart-loads={discardedChartLoads}>
     <!-- ======================================================================= -->
     <!-- Header: pair info + back button -->
     <!-- ======================================================================= -->
     <div class="flex items-center gap-3" data-testid="fx-detail-header" use:guideAnchor={'fx.detail.header'}>
-        <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors" data-testid="fx-detail-back-btn" onclick={() => goBack('/fx')} title={$t('fxDetail.backToList')}>
+        <button class="p-2 rounded-lg hover:bg-lf-hover text-lf-muted transition-colors" data-testid="fx-detail-back-btn" onclick={() => goBack('/fx')} title={$t('fxDetail.backToList')}>
             <ArrowLeft size={20} />
         </button>
         <div class="flex items-center gap-2" data-testid="fx-detail-pair-label">
             <span class="text-2xl">{baseFlag}</span>
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayBase}</h2>
-            <span class="text-gray-400 dark:text-gray-500 text-lg">→</span>
+            <h2 class="text-xl font-bold text-lf-primary">{displayBase}</h2>
+            <span class="text-lf-muted text-lg">→</span>
             <span class="text-2xl">{quoteFlag}</span>
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayQuote}</h2>
-            <button class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" data-testid="fx-detail-swap-btn" onclick={handleSwapDirection} title={$t('common.swapDirection')}>
+            <h2 class="text-xl font-bold text-lf-primary">{displayQuote}</h2>
+            <button class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted hover:text-lf-secondary transition-colors" data-testid="fx-detail-swap-btn" onclick={handleSwapDirection} title={$t('common.swapDirection')}>
                 <ArrowLeftRight size={16} />
             </button>
         </div>
@@ -1243,9 +1642,9 @@
 
     <!-- Error banner (not data-quality — dismissible runtime error) -->
     {#if error}
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+        <div class="bg-lf-warning-soft border border-lf-warning-line rounded-xl p-4 text-sm text-lf-warning-on-soft flex items-center gap-2">
             <span>⚠️</span> <span>{errorMessage}</span>
-            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => (error = null)}>{$t('common.close')}</button>
+            <button class="ml-auto text-xs px-2 py-1 bg-lf-warning-line/50 rounded hover:bg-lf-warning-line" onclick={() => (error = null)}>{$t('common.close')}</button>
         </div>
     {/if}
 
@@ -1295,7 +1694,7 @@
                 onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
             />
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                 data-testid="fx-detail-provider-btn"
                 use:guideAnchor={'fx.detail.provider'}
                 onclick={() => (showProviderModal = true)}
@@ -1304,7 +1703,7 @@
                 {#if showActionLabels}<span>{$t('common.providers')}</span>{/if}
             </button>
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors
                            {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
                 data-testid="fx-detail-sync-btn"
                 disabled={isManualOnly}
@@ -1315,12 +1714,13 @@
                 {#if showActionLabels}<span>{$t('common.sync')}</span>{/if}
             </button>
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
                 data-testid="fx-detail-refresh-btn"
-                disabled={loading}
-                onclick={handleRefresh}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
+                disabled={pageBusy.busy}
+                onclick={() => void pageBusy.track('fx-detail-refresh', handleRefresh)}
             >
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
+                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
         {/snippet}
@@ -1329,26 +1729,28 @@
     <!-- ======================================================================= -->
     <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle">
         <div class="relative">
-            <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="fx-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
+            <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-lf-hover" data-testid="fx-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
             <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="fx-detail-signals-header">
-                <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
-                    <TrendingUp class="text-blue-500" size={15} />
+                <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-lf-secondary">
+                    <!-- colour: closest role, to review: the signals icon is a blue accent, not a state; info chosen, alternative text-lf-link -->
+                    <TrendingUp class="text-lf-info" size={15} />
                     {$t('common.signals')}
                 </span>
                 <div class="flex-1"></div>
-                <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="fx-detail-signals-chevron">
+                <span class="flex items-center px-1 py-1 text-lf-secondary" data-testid="fx-detail-signals-chevron">
                     <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
                 </span>
             </div>
         </div>
         {#if showSignals}
-            <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+            <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-lf-subtle pt-3">
                 <ChartSignalsSection
                     signals={signalPanelConfigs}
                     definitions={signalDefinitions}
-                    backendError={signalBackendError}
+                    allowedSignalTypes={primaryMode === 'calendar-return' ? ['fx-pair', 'asset-comparison'] : undefined}
+                    backendError={primaryMode === 'price' ? signalBackendError : null}
                     {signalsLoading}
                     onretrybackend={retryBackendSignals}
                     availablePairs={allConfiguredSlugs}
@@ -1370,127 +1772,171 @@
     <!-- ======================================================================= -->
     <!-- Chart with left toolbar -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart" data-view-mode={viewMode} use:guideAnchor={'fx.detail.chart'}>
-        {#if loading && lineData.length === 0}
+    <div
+        class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4"
+        data-testid="fx-detail-chart"
+        data-view-mode={viewMode}
+        data-primary-mode={primaryMode}
+        data-window-days={primaryMode === 'calendar-return' ? calendarWindowDays : undefined}
+        data-series-state={chartSeriesState}
+        data-calendar-comparison-ready={primaryMode === 'calendar-return' ? calendarComparisonState.ready.join(',') : undefined}
+        data-calendar-comparison-partial={primaryMode === 'calendar-return' ? calendarComparisonState.partial.join(',') : undefined}
+        data-calendar-comparison-unavailable={primaryMode === 'calendar-return' ? calendarComparisonState.unavailable.join(',') : undefined}
+        data-calendar-comparison-error={primaryMode === 'calendar-return' ? calendarComparisonState.error.join(',') : undefined}
+        data-calendar-asset-comparison-ready={primaryMode === 'calendar-return' ? calendarAssetComparisonState.ready.join(',') : undefined}
+        data-calendar-asset-comparison-partial={primaryMode === 'calendar-return' ? calendarAssetComparisonState.partial.join(',') : undefined}
+        data-calendar-asset-comparison-unavailable={primaryMode === 'calendar-return' ? calendarAssetComparisonState.unavailable.join(',') : undefined}
+        data-calendar-asset-comparison-error={primaryMode === 'calendar-return' ? calendarAssetComparisonState.error.join(',') : undefined}
+        use:guideAnchor={'fx.detail.chart'}
+    >
+        {#if primaryMode === 'price' && loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
-                    <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
-                    <p class="text-sm text-gray-500 dark:text-gray-400">{$t('fxDetail.loadingRates')}</p>
+                    <RefreshCw size={24} class="animate-spin text-lf-link mx-auto mb-2" />
+                    <p class="text-sm text-lf-muted">{$t('fxDetail.loadingRates')}</p>
                 </div>
             </div>
-        {:else if lineData.length > 0}
+        {:else if (primaryMode === 'price' && lineData.length > 0) || primaryMode === 'calendar-return'}
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="fx-chart-primary-controls">
+                <AssetChartModeToggle {primaryMode} onselect={setPrimaryMode} idPrefix="fx" />
+                {#if primaryMode === 'calendar-return'}
+                    <AssetCalendarWindowControls selection={calendarWindowSelection} bind:customAmount={calendarCustomAmount} bind:customUnit={calendarCustomUnit} bind:customEditing={calendarCustomEditing} onpreset={setCalendarPreset} oncustom={setCalendarCustom} idPrefix="fx" />
+                {/if}
+            </div>
+
             <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
             {#if showAesthetics}
-                <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
-                    <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
+                <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-lf-subtle relative">
+                    <button class="absolute top-0 right-0 p-1 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                         <X size={16} />
                     </button>
-                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
+                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} lineShape={resolveLineShape(settings)} onlineshapechange={handleLineShapeChange} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
                 </div>
             {/if}
 
-            <div class="relative">
-                <!-- Right toolbar -->
-                <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
-                    <button
-                        data-testid="fx-detail-measure-btn"
-                        class="p-1.5 rounded-lg transition-colors {measureMode
-                            ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={async () => {
-                            if (measureMode) {
-                                measurePanel?.stopMeasureMode();
-                            } else {
-                                showMeasures = true;
-                                await tick();
-                                measurePanel?.startMeasureMode();
-                            }
-                        }}
-                        title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
-                    >
-                        <Ruler size={16} />
-                    </button>
-                    <button
-                        data-testid="fx-detail-edit-btn"
-                        use:guideAnchor={'fx.detail.editor'}
-                        class="p-1.5 rounded-lg transition-colors {showDataEditor
-                            ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={() => {
-                            if (showDataEditor) {
-                                showDataEditor = false;
-                                pendingPreviewSignal = null;
-                                if (savedPanelStates) {
-                                    showAesthetics = savedPanelStates.aesthetics;
-                                    showMeasures = savedPanelStates.measures;
-                                    showSignals = savedPanelStates.signals;
-                                    savedPanelStates = null;
-                                }
-                            } else {
-                                savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
-                                showAesthetics = false;
-                                showMeasures = false;
-                                showSignals = false;
-                                showDataEditor = true;
-                            }
-                        }}
-                        title={showDataEditor ? $t('common.closeEditor') : $t('fxDetail.editRates')}
-                    >
-                        <Pencil size={16} />
-                    </button>
-                    <button
-                        data-testid="fx-detail-aesthetics-toggle"
-                        aria-expanded={showAesthetics}
-                        class="p-1.5 rounded-lg transition-colors {showAesthetics
-                            ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={() => (showAesthetics = !showAesthetics)}
-                        title={$t('common.aesthetics')}
-                    >
-                        <Settings size={16} />
-                    </button>
+            {#if primaryMode === 'calendar-return' && calendarChartState === 'loading'}
+                <div class="h-96 flex items-center justify-center" data-testid="fx-calendar-return-loading">
+                    <RefreshCw size={24} class="animate-spin text-lf-link" />
                 </div>
+            {:else if primaryMode === 'calendar-return' && calendarChartState === 'unavailable'}
+                <div class="h-96 flex items-center justify-center text-sm text-lf-muted" data-testid="fx-calendar-return-unavailable">
+                    <span data-testid="fx-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
+                        {calendarProblemMessage ?? $t('chartSettings.signalProblems.unavailable')}
+                    </span>
+                </div>
+            {:else if primaryMode === 'calendar-return' && calendarChartState === 'error'}
+                <div class="h-96 flex items-center justify-center text-sm text-lf-danger" data-testid="fx-calendar-return-error">
+                    <span data-testid="fx-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
+                        {calendarProblemMessage ?? $t('chartSettings.signalResultsUnavailable')}
+                    </span>
+                </div>
+            {:else}
+                <div class="relative">
+                    <!-- Right toolbar -->
+                    <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
+                        {#if primaryMode === 'price'}
+                            <button
+                                data-testid="fx-detail-measure-btn"
+                                class="p-1.5 rounded-lg transition-colors {measureMode ? MEASURE_TOGGLE_ACTIVE_CLASS : TOOLBAR_TOGGLE_IDLE_CLASS}"
+                                onclick={async () => {
+                                    if (measureMode) {
+                                        measurePanel?.stopMeasureMode();
+                                    } else {
+                                        showMeasures = true;
+                                        await tick();
+                                        measurePanel?.startMeasureMode();
+                                    }
+                                }}
+                                title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
+                            >
+                                <Ruler size={16} />
+                            </button>
+                            <!-- colour: closest role, to review: the editor toggle's amber is the warning tint (as the editor panel it opens); no role for a toolbar accent -->
+                            <button
+                                data-testid="fx-detail-edit-btn"
+                                use:guideAnchor={'fx.detail.editor'}
+                                class="p-1.5 rounded-lg transition-colors {showDataEditor ? 'bg-lf-warning-soft text-lf-warning-on-soft ring-1 ring-lf-warning-line' : TOOLBAR_TOGGLE_IDLE_CLASS}"
+                                onclick={() => {
+                                    if (showDataEditor) {
+                                        showDataEditor = false;
+                                        pendingPreviewSignal = null;
+                                        if (savedPanelStates) {
+                                            showAesthetics = savedPanelStates.aesthetics;
+                                            showMeasures = savedPanelStates.measures;
+                                            showSignals = savedPanelStates.signals;
+                                            savedPanelStates = null;
+                                        }
+                                    } else {
+                                        savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
+                                        showAesthetics = false;
+                                        showMeasures = false;
+                                        showSignals = false;
+                                        showDataEditor = true;
+                                    }
+                                }}
+                                title={showDataEditor ? $t('common.closeEditor') : $t('fxDetail.editRates')}
+                            >
+                                <Pencil size={16} />
+                            </button>
+                        {/if}
+                        <!-- colour: closest role, to review: the aesthetics toggle's emerald is an accent, not a state; success tint chosen, alternative bg-lf-selected text-lf-link -->
+                        <button
+                            data-testid="fx-detail-aesthetics-toggle"
+                            aria-expanded={showAesthetics}
+                            class="p-1.5 rounded-lg transition-colors {showAesthetics ? 'bg-lf-success-soft text-lf-success-on-soft ring-1 ring-lf-success-line' : TOOLBAR_TOGGLE_IDLE_CLASS}"
+                            onclick={() => (showAesthetics = !showAesthetics)}
+                            title={$t('common.aesthetics')}
+                        >
+                            <Settings size={16} />
+                        </button>
+                    </div>
 
-                <PriceChartFull
-                    data={lineData}
-                    currency={displayQuote}
-                    mainSeriesLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
-                    chartHeight="400px"
-                    overlaySignals={allOverlaySignals}
-                    eventMarkers={chartEventMarkers}
-                    {overlaySignalInfoMap}
-                    colorByBaseline={settings.colorByBaseline}
-                    areaFill={settings.areaFill}
-                    showGridLines={settings.gridLines}
-                    showGradient={settings.staleGradient}
-                    yAxisMode={activePrimaryAxisScale.mode}
-                    yAxisMin={activePrimaryAxisScale.min}
-                    yAxisMax={activePrimaryAxisScale.max}
-                    secondaryAxisScales={settings.axisScales.secondary}
-                    {measureMode}
-                    onMeasureClick={handleMeasureClick}
-                    onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
-                    hideToolbar={true}
-                    disableCandlestick={true}
-                    externalViewMode={viewMode}
-                    onViewModeChange={(mode) => {
-                        viewMode = mode;
-                    }}
-                    editMode={showDataEditor}
-                    onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
-                    staleLabel={$t('chart.tooltip.stale')}
-                    fxStaleLabel={$t('chart.tooltip.fxStale')}
-                />
-            </div>
+                    <PriceChartFull
+                        data={primaryMode === 'price' ? lineData : calendarReturnView.points}
+                        currency={primaryMode === 'price' ? displayQuote : ''}
+                        mainSeriesLabel={primaryMode === 'price' ? `${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}` : `${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote} · ${$t('signals.riskRollingReturn.name')}`}
+                        chartHeight="400px"
+                        overlaySignals={primaryMode === 'price' ? allOverlaySignals : calendarOverlaySignals}
+                        eventMarkers={primaryMode === 'price' ? chartEventMarkers : []}
+                        overlaySignalInfoMap={primaryMode === 'price' ? overlaySignalInfoMap : calendarOverlaySignalInfoMap}
+                        colorByBaseline={settings.colorByBaseline}
+                        areaFill={settings.areaFill}
+                        showGridLines={settings.gridLines}
+                        showGradient={settings.staleGradient}
+                        lineShape={resolveLineShape(settings)}
+                        yAxisMode={activePrimaryAxisScale.mode}
+                        yAxisMin={activePrimaryAxisScale.min}
+                        yAxisMax={activePrimaryAxisScale.max}
+                        secondaryAxisScales={settings.axisScales.secondary}
+                        measureMode={primaryMode === 'price' && measureMode}
+                        onMeasureClick={handleMeasureClick}
+                        onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
+                        hideToolbar={true}
+                        disableCandlestick={true}
+                        externalViewMode={primaryMode === 'price' ? viewMode : 'absolute'}
+                        onViewModeChange={(mode) => {
+                            viewMode = mode;
+                        }}
+                        editMode={primaryMode === 'price' && showDataEditor}
+                        valueUnit={primaryMode === 'calendar-return' ? 'percentage' : 'price'}
+                        hideViewModeToggle={primaryMode === 'calendar-return'}
+                        showMainDelta={primaryMode === 'price'}
+                        mainPointContext={primaryMode === 'calendar-return' ? calendarReturnView.contextByDate : undefined}
+                        onPointClick={(date, _value) => primaryMode === 'price' && fxDataEditorRef?.scrollToDate(date)}
+                        staleLabel={(days) => $t('chart.tooltip.stale', {values: {days}})}
+                        fxStaleLabel={$t('chart.tooltip.fxStale')}
+                    />
+                </div>
+            {/if}
         {:else}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
                     {#if isManualOnly}
-                        <p class="text-gray-400 dark:text-gray-500 mb-3">
+                        <p class="text-lf-muted mb-3">
                             {$t('fxDetail.noDataManual')}
                         </p>
                         <button
-                            class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                            class="px-4 py-2 text-sm bg-lf-warning text-lf-on-status rounded-lg hover:bg-lf-warning-hover transition-colors"
                             onclick={() => {
                                 showDataEditor = true;
                             }}
@@ -1498,13 +1944,13 @@
                             {$t('fxDetail.insertManually')}
                         </button>
                     {:else}
-                        <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('fxDetail.noData')}</p>
+                        <p class="text-lf-muted mb-3">{$t('fxDetail.noData')}</p>
                         <div class="flex items-center gap-2 justify-center">
-                            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync}>
+                            <button class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" onclick={handleSync}>
                                 {$t('fxDetail.syncRates')}
                             </button>
                             <button
-                                class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors"
                                 data-testid="fx-detail-add-rates-manually"
                                 onclick={() => {
                                     showDataEditor = true;
@@ -1524,14 +1970,14 @@
     <!-- Data Editor (shown only when toggled via pencil button) -->
     <!-- ======================================================================= -->
     {#if showDataEditor}
-        <div data-testid="fx-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
-                <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+        <div data-testid="fx-detail-editor-panel" class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-warning-line">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-lf-warning-line bg-lf-warning-soft rounded-t-xl">
+                <span class="flex items-center gap-2 text-sm font-medium text-lf-warning-on-soft">
                     <Pencil size={15} />
                     {$t('fxDetail.editRates')}
                 </span>
                 <button
-                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    class="text-lf-muted hover:text-lf-secondary transition-colors"
                     onclick={() => {
                         showDataEditor = false;
                         pendingPreviewSignal = null;
@@ -1546,7 +1992,7 @@
                     >✕
                 </button>
             </div>
-            <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
+            <p class="px-4 pt-2 text-xs text-lf-warning-on-soft/70">
                 💡 {pageLayoutMode === 'oneColumn' ? $t('dataEditor.editorTipMobile') : $t('dataEditor.editorTipDesktop')}
             </p>
             <div class="px-4 pb-4 pt-3">
@@ -1592,9 +2038,9 @@
     <!-- ======================================================================= -->
     <!-- Foldable Panel: Measures (below DataEditor, above Signals) -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle">
         <div class="flex items-center justify-between px-4 py-2.5">
-            <button class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white transition-colors" data-testid="fx-detail-measures-toggle" onclick={() => (showMeasures = !showMeasures)}>
+            <button class="flex items-center gap-2 text-sm font-medium text-lf-secondary hover:text-lf-primary transition-colors" data-testid="fx-detail-measures-toggle" onclick={() => (showMeasures = !showMeasures)}>
                 <Ruler class="text-violet-500" size={15} />
                 {$t('common.measures')}
                 {#if measureMode}
@@ -1620,7 +2066,7 @@
             </button>
         </div>
         <!-- Single MeasurePanel instance — always mounted, hidden via CSS to preserve state -->
-        <div class={showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="fx-detail-measures-panel">
+        <div class={showMeasures ? 'px-4 pb-4 border-t border-lf-subtle pt-3' : 'hidden'} data-testid="fx-detail-measures-panel">
             <MeasurePanel bind:this={measurePanel} chartData={lineData} onmeasuremodechange={(active) => (measureMode = active)} onmeasureschange={(m) => (measureSignals = m)} {overlaySignals} {mainSignalInfo} {viewMode} />
         </div>
     </div>
@@ -1648,5 +2094,5 @@
     />
 
     <!-- Page Sync Modal (sync all FX pairs + assets present on page) -->
-    <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
+    <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} fxPairsWithDataInRange={syncFxPairsWithData} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
 </div>

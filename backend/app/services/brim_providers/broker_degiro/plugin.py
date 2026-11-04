@@ -63,12 +63,13 @@ import structlog
 from pydantic import ValidationError
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMExtractedAssetInfo, BRIMNotice, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMExtractedAssetInfo, BRIMNotice, BRIMParseOutput, BRIMRefusal, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers._brim_io import read_rows, to_decimal_it, to_decimal_plain
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -493,7 +494,7 @@ class _StatementReader:
             if not rows:
                 continue
             evidence = BRIMEvidence(title=texts["evidence_title"], headers=headers, rows=[list(row.cells) for row in rows], row_numbers=[row.line for row in rows])
-            notices.append(BRIMNotice(severity="warning", code=code, message=texts[code].format(n=len(rows)), evidence=[evidence], context={"language": self.language, "count": len(rows)}))
+            notices.append(BRIMNotice(severity="warning", code=code, message=texts[code].format(n=len(rows)), evidence=[evidence], context={"language": self.language, "count": len(rows), "report_issue": True}))
         return notices
 
     def _flag(self, code: str, row: _Row) -> None:
@@ -649,8 +650,8 @@ class DegiroBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        """2.0.0: columns read by position in any language, amounts and currencies per row, FX pairs."""
-        return "2.0.0"
+        """2.0.0: columns read by position in any language, amounts and currencies per row, FX pairs. 2.1.0: every note about rows left out asks for an issue (W-B86)."""
+        return "2.1.0"
 
     @property
     def docs_url(self) -> Optional[str]:
@@ -665,22 +666,30 @@ class DegiroBrokerProvider(BRIMProvider):
         """The Account Statement, or the orders list (recognised to point to the statement)."""
         return self._inspect(file_path)[0] is not None
 
-    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
-        """Why ``can_parse`` refuses a file; ``None`` exactly when it accepts it."""
+    def cannot_parse_detail(self, file_path: Path) -> Optional[BRIMRefusal]:
+        """Why ``can_parse`` refuses a file, with a code the import wizard translates; ``None`` exactly when it accepts it."""
         return self._inspect(file_path)[1]
 
-    def _inspect(self, file_path: Path) -> Tuple[Optional[str], Optional[str]]:
+    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
+        """Why ``can_parse`` refuses a file; ``None`` exactly when it accepts it."""
+        detail = self.cannot_parse_detail(file_path)
+        return detail.message if detail else None
+
+    def _inspect(self, file_path: Path) -> Tuple[Optional[str], Optional[BRIMRefusal]]:
         if file_path.suffix.lower() != ".csv":
-            return None, "only the CSV export is read: download the Account Statement as CSV"
+            return None, BRIMRefusal(code="degiro_csv_only", message="only the CSV export is read: download the Account Statement as CSV")
         try:
             head = list(csv.reader(io.StringIO(self._read_file_head(file_path, num_lines=8)), delimiter=self.detect_csv_delimiter(file_path)))
         except Exception:  # noqa: BLE001 — can_parse never raises: an unreadable file is just not ours
-            return None, "the file could not be read"
+            return None, BRIMRefusal(code="file_unreadable", message="the file could not be read")
         if len(head) < 2:
-            return None, "the file has no movement rows"
+            return None, BRIMRefusal(code="no_movement_rows", message="the file has no movement rows")
         layout = _layout(head[0], head[1:])
         if layout is None:
-            return None, "this is not a DEGIRO Account Statement: expected 12 columns with the ISIN fifth, unnamed amount columns ninth and eleventh, and dates as DD-MM-YYYY"
+            return None, BRIMRefusal(
+                code="degiro_not_account_statement",
+                message="this is not a DEGIRO Account Statement: expected 12 columns with the ISIN fifth, unnamed amount columns ninth and eleventh, and dates as DD-MM-YYYY",
+            )
         return layout, None
 
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
@@ -692,7 +701,7 @@ class DegiroBrokerProvider(BRIMProvider):
         if layout == "orders":
             return _orders_list_output(language, sum(1 for row in rows[1:] if any(cell.strip() for cell in row)))
         if layout != "statement":
-            raise BRIMParseError("Not a DEGIRO Account Statement", details={"file": file_path.name})
+            raise BRIMParseError("Not a DEGIRO Account Statement", details={"file": file_path.name, "code": "degiro_not_account_statement"})
         output = _StatementReader(self, broker_id, header, language, rows).run()
         logger.info("DEGIRO file parsed", transaction_count=len(output.transactions), notice_count=len(output.warnings), asset_count=len(output.extracted_assets), language=language)
         return output
@@ -701,10 +710,10 @@ class DegiroBrokerProvider(BRIMProvider):
         try:
             rows = read_rows(file_path, delimiter=self.detect_csv_delimiter(file_path))
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as e:
-            raise BRIMParseError(f"Error reading file: {e}") from e
+            raise BRIMParseError(f"Error reading file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
         rows = [[str(cell) for cell in row] for row in rows]
         if not rows:
-            raise BRIMParseError("The file is empty", details={"file": file_path.name})
+            raise BRIMParseError("The file is empty", details={"file": file_path.name, "code": "file_empty"})
         return rows

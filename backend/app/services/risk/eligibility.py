@@ -33,8 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, PriceHistory
 from backend.app.schemas.common import Currency
 from backend.app.schemas.risk import RiskEligibilityLevel, RiskEligibilityReason, RiskHistoricalReplayExclusionReason
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 
 
 @dataclass(frozen=True, slots=True)

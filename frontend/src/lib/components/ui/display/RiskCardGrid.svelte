@@ -2,7 +2,7 @@
   RiskCardGrid — the one way risk cards are laid out.
 
   This is a component and not a documented class string, and the reason is a
-  measurement rather than a preference: `components/risk/` already contains 20
+  measurement rather than a preference: `features/risk/` already contains 20
   grid declarations in 12 distinct variants, including
   `RiskAnalysisPanel:632` → `grid-cols-1 sm:grid-cols-2 xl:grid-cols-5`. That is
   the very `1 → sm:2 → xl:5` jump the RiskMetricCard header denounces, still in

@@ -6,10 +6,11 @@
  * their average cost nor their P&L can be known: the dashboard has to say so, and name the asset to fix.
  *
  * Why a Python helper writes the rows. Today the app refuses to save a TRANSFER, or an ADJUSTMENT adding
- * quantity, without `cost_basis_override` (COST_BASIS_REQUIRED: `transaction_service.py`,
- * `transaction_batch_stages.py`), so such rows exist only in data written by older versions. The one path
- * left inside the app — P-10, an ADJUSTMENT linked to a SPLIT whose event is then retyped — is covered by
- * `data-quality-real.spec.ts`. Here `backend/test_scripts/test_db/legacy_cost_rows.py` writes the rows
+ * quantity, without `cost_basis_override` (COST_BASIS_REQUIRED: `transactions/batch_costs.py`), so such rows
+ * exist only in data written by older versions. The last path the
+ * app left — P-10, an ADJUSTMENT linked to a SPLIT, saved in Auto without a cost, whose event was then retyped —
+ * is closed too: the retype is refused while the row has no cost (EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, pinned by
+ * E2 of `data-quality-real.spec.ts`). Here `backend/test_scripts/test_db/legacy_cost_rows.py` writes the rows
  * straight into the lane's test database, the way an old version stored them: a TRANSFER pair linked both
  * ways and an ADJUSTMENT, with no cost basis and no cash. The helper accepts only this lane's test database
  * (TEST_PORT and LIBREFOLIO_TEST_DATA_DIR, exported by playwright.config.ts and inherited by the child
@@ -23,7 +24,11 @@
  *   2. the yellow banner shows that row with exactly one link per asset, each carrying the asset's name;
  *   3. the positions table shows «—» for P&L, P&L % and average cost on both rows at B, digits on A;
  *   4. the lots panel of the transferred asset, opened from the URL, raises the same warning;
- *   5. the adjusted asset's link opens that asset's page.
+ *   5. the adjusted asset's link opens that asset's page;
+ *   6. the page of broker B shows the same «—» on both of its rows;
+ *   7. an explicit cost of 0 per unit on the ADJUSTMENT takes its asset off the warning, which then names the
+ *      transferred asset alone: the adjusted units have an average cost of 0 and a P&L of 5 × 40, digits in
+ *      the positions — and still no P&L %, since a cost of 0 is no base for one (`gain_loss_ratio`).
  *
  * Ownership. A disposable account owns the whole dashboard — brokers A and B, the DEPOSIT and the BUY, the
  * helper's three rows — so no neighbour's data enters any count asserted here. Assets and prices are global
@@ -32,21 +37,18 @@
  * assets with their prices, then the account. Nothing is routed or mocked: every response read is real.
  */
 
-import {execFileSync} from 'child_process';
-import * as path from 'path';
-import {fileURLToPath} from 'url';
 import {expect, test as base, type APIRequestContext, type Locator, type Page, type Request} from '../fixtures/playwright';
 import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
+import {writeLegacyRows} from '../fixtures/legacy-cost-rows';
+import type {LegacyRows} from '../fixtures/legacy-cost-rows';
 import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
 const REPORT_PATH = `${API}/portfolio/report`;
 const LOTS_PATH = `${API}/portfolio/lots/analysis`;
-const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const HELPER_MODULE = 'backend.test_scripts.test_db.legacy_cost_rows';
 /** d0: the deposit; d1: the purchase, priced at its cost; d2: the legacy rows, and the last price. */
 const DEPOSIT_DAYS_AGO = 60;
 const BUY_DAYS_AGO = 50;
@@ -60,7 +62,6 @@ const COST_COLUMNS = ['pnl', 'pnl-percent', 'pmc'] as const;
 
 type Owned = {user: DisposableUser | null; brokerIds: number[]; assetIds: number[]};
 type Seeded = {brokerA: number; brokerB: number; assetT: number; assetJ: number; nameT: string; nameJ: string};
-type LegacyRows = {transfer_out: number; transfer_in: number; adjustment_in: number};
 type Decimalish = string | number | null | undefined;
 type ReportIssue = {code: string; severity: string; cta_action?: string | null; message_params?: Record<string, unknown> | null; affected_asset_ids?: number[]; affected_asset_names?: string[]};
 type ReportHolding = {asset_id: number; broker_id: number | null; quantity: Decimalish; wac_per_unit?: Decimalish; gain_loss?: Decimalish; gain_loss_percent?: Decimalish};
@@ -150,7 +151,7 @@ const test = base.extend<{owned: Owned}>({
     },
 });
 
-test.setTimeout(150_000);
+test.setTimeout(180_000);
 
 /** A broker owned by the signed-in account; its id is recorded for cleanup before it is checked. */
 async function createOwnedBroker(page: Page, owned: Owned, name: string): Promise<number> {
@@ -211,59 +212,6 @@ async function seedThroughTheApi(page: Page, owned: Owned, suffix: string): Prom
     );
     expect(committed.committed, `the owned transactions were rolled back: ${JSON.stringify(committed.issues ?? [])}`).toBe(true);
     return {brokerA, brokerB, assetT, assetJ, nameT, nameJ};
-}
-
-type LegacyRequest = {userId: number; sourceBroker: number; destBroker: number; transferAsset: number; adjustmentAsset: number; date: string; marker: string};
-
-/**
- * Write the legacy rows with `legacy_cost_rows.py`, the way global-setup.ts runs Python: from the repo
- * root, with this process's environment — TEST_PORT and LIBREFOLIO_TEST_DATA_DIR, so the helper resolves
- * this lane's database and nothing else. When the runner's `pipenv run` has already activated the
- * environment (VIRTUAL_ENV), its interpreter is called directly — no `pipenv`, which could create an
- * environment of its own; otherwise `pipenv run python`, as global-setup.ts does. Arguments travel as an
- * argv array, never through a shell. A non-zero exit fails with the helper's own explanation.
- */
-function writeLegacyRows(legacy: LegacyRequest): LegacyRows {
-    const helperArgs = [
-        '-m',
-        HELPER_MODULE,
-        '--user-id',
-        String(legacy.userId),
-        '--source-broker',
-        String(legacy.sourceBroker),
-        '--dest-broker',
-        String(legacy.destBroker),
-        '--transfer-asset',
-        String(legacy.transferAsset),
-        '--adjustment-asset',
-        String(legacy.adjustmentAsset),
-        '--date',
-        legacy.date,
-        '--transfer-qty',
-        String(TRANSFER_QTY),
-        '--adjustment-qty',
-        String(ADJUSTMENT_QTY),
-        '--marker',
-        legacy.marker,
-    ];
-    const venv = process.env.VIRTUAL_ENV;
-    const command = venv ? path.join(venv, 'bin', 'python') : 'pipenv';
-    const argv = venv ? helperArgs : ['run', 'python', ...helperArgs];
-    let stdout: string;
-    try {
-        stdout = execFileSync(command, argv, {cwd: PROJECT_ROOT, env: process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 90_000});
-    } catch (error) {
-        const failed = error as {status?: number | null; signal?: string | null; stdout?: string; stderr?: string; message?: string};
-        throw new Error(`legacy_cost_rows (${command}) exited with ${failed.status ?? failed.signal ?? 'no status'}:\n${failed.stderr || failed.message || ''}\n${failed.stdout ?? ''}`);
-    }
-    // The helper's contract is one line of JSON on stdout; anything else is a failure worth reading.
-    const lines = stdout.split('\n').filter((line) => line.trim() !== '');
-    expect(lines, `legacy_cost_rows prints one line of JSON; it printed:\n${stdout}`).toHaveLength(1);
-    const rows = JSON.parse(lines[0]) as LegacyRows;
-    expect(rows, `legacy_cost_rows printed ${lines[0]}`).toEqual({transfer_out: expect.any(Number), transfer_in: expect.any(Number), adjustment_in: expect.any(Number)});
-    // For the run log: which interpreter wrote the rows, and their ids.
-    console.log(`legacy_cost_rows ran with ${venv ? `VIRTUAL_ENV ${command}` : 'the pipenv fallback (pipenv run python)'}: ${lines[0]}`);
-    return rows;
 }
 
 /**
@@ -345,7 +293,7 @@ async function revealColumn(page: Page, panel: Locator, table: Locator, columnId
 }
 
 test.describe('MISSING_COST_BASIS from legacy rows — dashboard (item 22)', () => {
-    test('a TRANSFER pair and an ADJUSTMENT stored without cost basis by an older version reach the banner, the positions and the lots panel', async ({page, request, owned}) => {
+    test('a TRANSFER pair and an ADJUSTMENT stored without cost basis by an older version reach the banner, the positions, the lots panel and the broker page — and a cost of 0 takes the ADJUSTMENT off the banner', async ({page, request, owned}) => {
         // The account owns the whole dashboard; its guides are skipped so no overlay covers the banner.
         const user = await registerDisposableUser(request, 'legacy');
         owned.user = user;
@@ -357,7 +305,7 @@ test.describe('MISSING_COST_BASIS from legacy rows — dashboard (item 22)', () 
         // What the app no longer accepts, written as an old version left it.
         const legacyDate = daysAgoIso(LEGACY_DAYS_AGO);
         const marker = `legacy-cost-rows ${suffix}`;
-        const legacy = writeLegacyRows({userId: user.id, sourceBroker: brokerA, destBroker: brokerB, transferAsset: assetT, adjustmentAsset: assetJ, date: legacyDate, marker});
+        const legacy = writeLegacyRows({userId: user.id, sourceBroker: brokerA, destBroker: brokerB, transferAsset: assetT, adjustmentAsset: assetJ, date: legacyDate, transferQty: TRANSFER_QTY, adjustmentQty: ADJUSTMENT_QTY, marker});
         await expectLegacyShape(page, legacy, seeded, legacyDate, marker);
 
         // Full load: a fresh document, so neither the report nor the lots analysis can come from a client
@@ -404,24 +352,12 @@ test.describe('MISSING_COST_BASIS from legacy rows — dashboard (item 22)', () 
         await expect(row.getByTestId(`data-quality-nav-asset-${assetT}`)).toHaveText(nameT);
         await expect(row.getByTestId(`data-quality-nav-asset-${assetJ}`)).toHaveText(nameJ);
 
-        // 3. The positions, holdings × table (both controls are setters, not toggles).
-        const panel = page.getByTestId('positions-panel');
-        await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 25_000});
-        await panel.getByTestId('positions-toggle-holdings').click();
-        await panel.getByTestId('positions-toggle-table').click();
-        const table = panel.getByTestId('exposure-table');
-        await expect(table.getByTestId('dt-header-pnl')).toBeVisible({timeout: 10_000});
-        await revealColumn(page, panel, table, 'pmc');
-        const cell = (assetId: number, brokerId: number, columnId: string) => table.locator(`tbody tr[data-row-id="${assetId}-${brokerId}"] td[data-column-id="${columnId}"]`);
-        for (const columnId of COST_COLUMNS) {
-            await expect(cell(assetT, brokerB, columnId), `${columnId} of the units transferred to B`).toHaveText(UNKNOWN);
-            await expect(cell(assetJ, brokerB, columnId), `${columnId} of the units adjusted in at B`).toHaveText(UNKNOWN);
-            await expect(cell(assetT, brokerA, columnId), `${columnId} of the units A paid for`).toHaveText(/\d/);
-        }
-
-        // 4. The lots panel of T, opened by the `asset` parameter: the same warning, from the same rows.
+        // 4. The lots panel of T, opened by the `asset` parameter: the same warning, from the same rows. The URL opens
+        //    the lot detail below the positions (FB-12b): the positions panel is on the page all along (step 3 closes the detail).
         const lotsPanel = page.getByTestId('lots-analysis-panel');
+        const panel = page.getByTestId('positions-panel');
         await expect(lotsPanel).toBeVisible({timeout: 15_000});
+        await expect(panel, 'the lot detail opens below the positions: the panel stays (FB-12b)').toBeVisible();
         const lots = await jsonFrom<LotsBody>(lotsResponse, 'lots analysis of the transferred asset');
         const lotIssues = (lots.data_quality?.issues ?? []).filter((issue) => issue.code === 'MISSING_COST_BASIS');
         // The analysis covers one asset of this test's own: one issue is a count it created.
@@ -439,10 +375,90 @@ test.describe('MISSING_COST_BASIS from legacy rows — dashboard (item 22)', () 
         await expandStrict(lotBanner.getByTestId('lot-data-quality-toggle'));
         await expect(lotBanner.getByTestId('lot-data-quality-issue-MISSING_COST_BASIS')).toBeVisible();
 
+        // 3. The positions, holdings × table (both controls are setters, not toggles). The lot detail opens below the
+        //    positions (FB-12b): its ✕ takes the lots panel off the page, the positions panel stays.
+        await page.getByTestId('lots-analysis-panel-close').click();
+        await expect(lotsPanel).toBeHidden({timeout: 15_000});
+        await expect(panel).toBeVisible({timeout: 15_000});
+        await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 25_000});
+        await panel.getByTestId('positions-toggle-holdings').click();
+        await panel.getByTestId('positions-toggle-table').click();
+        const table = panel.getByTestId('exposure-table');
+        await expect(table.getByTestId('dt-header-pnl')).toBeVisible({timeout: 10_000});
+        await revealColumn(page, panel, table, 'pmc');
+        const cell = (assetId: number, brokerId: number, columnId: string) => table.locator(`tbody tr[data-row-id="${assetId}-${brokerId}"] td[data-column-id="${columnId}"]`);
+        for (const columnId of COST_COLUMNS) {
+            await expect(cell(assetT, brokerB, columnId), `${columnId} of the units transferred to B`).toHaveText(UNKNOWN);
+            await expect(cell(assetJ, brokerB, columnId), `${columnId} of the units adjusted in at B`).toHaveText(UNKNOWN);
+            await expect(cell(assetT, brokerA, columnId), `${columnId} of the units A paid for`).toHaveText(/\d/);
+        }
+
         // 5. The adjusted asset's link opens its page.
         await expandStrict(banner.getByTestId('data-quality-toggle'));
         await row.getByTestId(`data-quality-nav-asset-${assetJ}`).click();
         await expect(page).toHaveURL(new RegExp(`/assets/${assetJ}(?:[/?#]|$)`), {timeout: 15_000});
         await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 15_000});
+
+        // 6. The page of broker B: the same «—» on both of its rows, in the positions panel of its own holdings.
+        await page.goto(`/brokers/${brokerB}?tab=posizioni`);
+        await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 15_000});
+        // Disabled while the broker or its report is loading: the page's busy state.
+        await expect(page.getByTestId('broker-refresh')).toBeEnabled({timeout: 25_000});
+        const brokerPanel = page.getByTestId('broker-holdings').getByTestId('positions-panel');
+        await expect(brokerPanel).toHaveAttribute('data-busy', 'false', {timeout: 25_000});
+        await brokerPanel.getByTestId('positions-toggle-holdings').click();
+        await brokerPanel.getByTestId('positions-toggle-table').click();
+        const brokerTable = brokerPanel.getByTestId('exposure-table');
+        await expect(brokerTable.getByTestId('dt-header-pnl')).toBeVisible({timeout: 10_000});
+        await revealColumn(page, brokerPanel, brokerTable, 'pmc');
+        const brokerCell = (assetId: number, columnId: string) => brokerTable.locator(`tbody tr[data-row-id="${assetId}-${brokerB}"] td[data-column-id="${columnId}"]`);
+        for (const columnId of COST_COLUMNS) {
+            await expect(brokerCell(assetT, columnId), `broker page, ${columnId} of the units transferred to B`).toHaveText(UNKNOWN);
+            await expect(brokerCell(assetJ, columnId), `broker page, ${columnId} of the units adjusted in at B`).toHaveText(UNKNOWN);
+        }
+
+        // 7. The fix the banner asks for: an explicit cost of 0 per unit on the ADJUSTMENT. J leaves the warning,
+        //    which then names T alone; J's units get an average cost (0) and a P&L (5 × 40), and still no P&L %:
+        //    a cost of 0 is no base for one (`gain_loss_ratio`), so that cell keeps its «—».
+        const fix = await jsonFrom<{committed: boolean; issues?: unknown[]}>(
+            await page.request.post(`${API}/transactions/commit`, {data: {updates: [{id: legacy.adjustment_in, cost_basis_override: {code: 'EUR', amount: '0'}, cost_basis_mode: 'manual'}]}}),
+            'set a purchase cost of 0 per unit on the legacy ADJUSTMENT',
+        );
+        expect(fix.committed, `the cost of 0 was rolled back: ${JSON.stringify(fix.issues ?? [])}`).toBe(true);
+        const fixedRows = await jsonFrom<TxRead[]>(await page.request.get(`${API}/transactions?ids=${legacy.adjustment_in}`), 'read the legacy ADJUSTMENT back');
+        const storedCost = fixedRows.find((tx) => tx.id === legacy.adjustment_in)?.cost_basis_override as {code?: string; amount?: string} | null | undefined;
+        expect({code: storedCost?.code, amount: storedCost?.amount == null ? null : Number(storedCost.amount)}, 'precondition: the cost is stored, and it is zero').toEqual({code: 'EUR', amount: 0});
+
+        // A fresh document again: no response awaited below can predate the cost.
+        await page.goto('about:blank');
+        const fixedReportWait = page.waitForResponse((response) => isSummaryReport(response.request()), {timeout: 30_000});
+        await page.goto(`/dashboard?tab=posizioni&start=${daysAgoIso(90)}&end=${todayIso()}`);
+        const fixedSummary = (await jsonFrom<ReportBody>(await fixedReportWait, 'dashboard report after the cost of 0')).summary;
+        const fixedIssues = fixedSummary?.data_quality?.issues ?? [];
+        const fixedCostIssues = fixedIssues.filter((issue) => issue.code === 'MISSING_COST_BASIS');
+        // Still the account's own dashboard: one issue is a count this test created.
+        expect(fixedCostIssues, `the report must still carry one MISSING_COST_BASIS issue, for T; it carries ${JSON.stringify(fixedIssues.map((issue) => issue.code))}`).toHaveLength(1);
+        expect(fixedCostIssues[0]).toMatchObject({severity: 'warning', cta_action: 'navigate_asset', affected_asset_ids: [assetT], affected_asset_names: [nameT]});
+        expect(fixedCostIssues[0].message_params).toEqual({count: 1});
+        const fixedHoldings = fixedSummary?.holdings ?? [];
+        expect(figures(holdingAt(fixedHoldings, assetJ, brokerB)), 'the 5 units adjusted in at B cost 0 now: an average of 0, a P&L of 5 × 40, no P&L % on a base of 0').toEqual({quantity: ADJUSTMENT_QTY, wac_per_unit: 0, gain_loss: 200, gain_loss_percent: null});
+        expect(figures(holdingAt(fixedHoldings, assetT, brokerB)), 'the 4 units transferred to B are still of unknown cost').toEqual({quantity: TRANSFER_QTY, wac_per_unit: null, gain_loss: null, gain_loss_percent: null});
+
+        // The banner: the same row, with T's link alone.
+        await waitForSettled(dashboard, 25_000);
+        await expandStrict(banner.getByTestId('data-quality-toggle'));
+        await expect(row).toBeVisible({timeout: 10_000});
+        await expect(links).toHaveCount(1);
+        await expect(row.getByTestId(`data-quality-nav-asset-${assetT}`)).toHaveText(nameT);
+        // The positions: J's average cost and P&L are figures, its P&L % still «—»; T's three still «—».
+        await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 25_000});
+        await panel.getByTestId('positions-toggle-holdings').click();
+        await panel.getByTestId('positions-toggle-table').click();
+        await expect(table.getByTestId('dt-header-pnl')).toBeVisible({timeout: 10_000});
+        await revealColumn(page, panel, table, 'pmc');
+        await expect(cell(assetJ, brokerB, 'pmc'), 'the average cost of the units adjusted in at B: 0, a figure').toHaveText(/\d/);
+        await expect(cell(assetJ, brokerB, 'pnl'), 'the P&L of the units adjusted in at B: a figure').toHaveText(/\d/);
+        await expect(cell(assetJ, brokerB, 'pnl-percent'), 'the P&L % of the units adjusted in at B: no base on a cost of 0').toHaveText(UNKNOWN);
+        for (const columnId of COST_COLUMNS) await expect(cell(assetT, brokerB, columnId), `${columnId} of the units transferred to B: still unknown`).toHaveText(UNKNOWN);
     });
 });

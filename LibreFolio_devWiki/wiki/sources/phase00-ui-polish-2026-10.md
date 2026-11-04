@@ -20,25 +20,25 @@ related:
 ## Summary
 
 Five fixes asked by the developer and the coordinator on 2026-10-12, before the 1.2 tag, each proved red before and
-green after, and integrated in train 72 (2026-10-12, `0071b9703`). The work stopped with the developer's STOP at 18:26
+green after, and integrated in train 72 (2026-10-12, `1f5334583`). The work stopped with the developer's STOP at 18:26
 and resumed at 19:24.
 
 ## Key takeaways
 
-- **The broker icon** (`2412c3fe4`): a late `error` event from a replaced `<img>` marked the visible plugin icon as
+- **The broker icon** (`9b2d731cd`): a late `error` event from a replaced `<img>` marked the visible plugin icon as
   failed — [[problems/late-img-error-marked-the-visible-icon-failed]]. C-56 and C-57 stay in the backlog
   ([[problems/broker-icon-race-condition]]).
-- **The wrong-broker modal of the import** (`0a69eb007`): the developer, verbatim, «i bottoni hanno i testi che vanno
+- **The wrong-broker modal of the import** (`cada13e1f`): the developer, verbatim, «i bottoni hanno i testi che vanno
   a capo e restano larghi, magari il rimuovi può essere accorciato, e anche lo sposta può diventare senza il nome del
   broker» ("the buttons' texts wrap and stay wide; maybe 'remove' can be shortened, and 'move' can lose the broker's
   name"). The buttons now read Remove and Move in the four languages, never wrap inside, and the footer wraps as a
   whole at 375 px. Written against the old catalogue paths, the change reached `base/` through U-2's pure rename
   ([[decisions/plugin-folders-and-split-i18n]]). The import guide that quotes the old labels goes to workstream M.
-- **The security details** (`5e9eff52d`) close by themselves after 30 s —
+- **The security details** (`673b68028`) close by themselves after 30 s —
   [[decisions/security-details-close-after-30-seconds]].
-- **The copy buttons** (`65d20910e`, M-20 and C-63) go through one helper, kept there by a gate —
+- **The copy buttons** (`367ae7d56`, M-20 and C-63) go through one helper, kept there by a gate —
   [[decisions/clipboard-through-one-helper-with-a-gate]].
-- **The Spanish toolbar** (`7f8febd9d`, V-19): the thresholds compare the bar's width, and a 15 px gap between two
+- **The Spanish toolbar** (`a91ffd892`, V-19): the thresholds compare the bar's width, and a 15 px gap between two
   measurements was the scrollbar gutter — [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]].
 
 ## Not ingested
@@ -53,6 +53,6 @@ and resumed at 19:24.
 | Role | Path |
 |------|------|
 | Plan 48 | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |
-| The wrong-broker modal | `frontend/src/lib/components/transactions/modals/ImportBrokerMismatchModal.svelte` |
+| The wrong-broker modal | `frontend/src/lib/features/transactions/import/ImportBrokerMismatchModal.svelte` |
 | Its E2E | `frontend/e2e/transactions/tx-import-broker-mismatch.spec.ts` |
 | Backlog (48-1, C-56, C-57, C-63) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

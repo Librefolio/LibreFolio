@@ -21,6 +21,7 @@ const progressItemSchema = z
             'asset_page_guide',
             'asset_guide',
             'asset_detail_guide',
+            'tools_page_guide',
         ]),
         status: z.enum(['pending', 'completed', 'skipped']),
         version: z.number().int().positive(),

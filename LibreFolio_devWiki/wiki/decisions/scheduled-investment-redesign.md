@@ -39,6 +39,10 @@ Phase 6 Step 3 Round 12 identified a critical circular dependency in the origina
 - `generate_interest=True` → automatic interest events at maturation dates
 - `FALateInterestConfig` for post-maturity penalty rates
 - Financial math functions (day count, simple/compound interest) live in `scheduled_investment/plugin.py` itself
+  - *2026-10-17, CP-14a (U10, D-8):* the day count conventions and simple interest moved, unchanged, into the
+    financial-math home, `financial_math/interest.py` ([[decisions/financial-math-one-home]]); the maturation dates and
+    the accrual stay in the provider, now one day-by-day walk (`_accrual_days`) for the history curve and the value on
+    one day, pinned by a golden test.
 
 ### Caching
 - 48h TTL cache keyed by hash of canonical `provider_params` — same params reuse computation
@@ -53,6 +57,8 @@ Phase 6 Step 3 Round 12 identified a critical circular dependency in the origina
 | Role | Path |
 |------|------|
 | ScheduledInvestment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
+| Day count and simple interest (U10) | `backend/app/services/financial_math/interest.py` |
+| Accrual golden (every number pinned) | `backend/test_scripts/fixtures/scheduled_investment/accrual_golden.json` |
 | Phase 6 Round 12 plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md` |
 | Maturation engine plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12Finale-MaturationEngine.prompt.md` |
 | DB models | `backend/app/db/models.py` |

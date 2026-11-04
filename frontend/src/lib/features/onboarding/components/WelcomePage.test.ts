@@ -24,8 +24,11 @@
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 
-vi.mock('$lib/components/settings/SettingCurrency.svelte', async () => ({
+vi.mock('$lib/features/settings/SettingCurrency.svelte', async () => ({
     default: (await import('$test/harness/SettingCurrencyProbe.svelte')).default,
+}));
+vi.mock('$lib/components/charts/LineShapePreview.svelte', async () => ({
+    default: (await import('$test/harness/LineShapePreviewProbe.svelte')).default,
 }));
 
 vi.mock('$lib/components/ui/media/ImagePickerWrapper.svelte', async () => ({

@@ -12,6 +12,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {CLEARED_CELL} from '$lib/components/ui/data-editor/DataEditorTypes';
     import {Save, X, DollarSign, CalendarClock} from 'lucide-svelte';
     import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
@@ -19,14 +20,22 @@
     import type {ColumnDef, DataRow} from '$lib/components/ui/data-editor/DataEditorTypes';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {assetDataSaveSummary, type AssetDataSaveCounts} from './assetDataSaveSummary';
     import PriceDataImportModal from './PriceDataImportModal.svelte';
     import EventDataImportModal from './EventDataImportModal.svelte';
+    import DataExportModal from '$lib/components/ui/data-editor/DataExportModal.svelte';
+    import {downloadAssetBackup} from '$lib/api/backupDownload';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {eventSaveErrorMessage} from '$lib/features/transactions/events/eventSaveError';
+    import {rejectedMessage, saveErrorText, type Rejection} from '$lib/api/writeRefusal';
     import {_ as t, locale} from '$lib/i18n';
-    import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/utils/transactions/eventTypes';
+    import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/features/transactions/events/eventTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
+    import type {ParsedRow} from '$lib/components/ui/data-editor/CsvEditor.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Props
@@ -45,6 +54,8 @@
         saving?: boolean;
         /** Number of dirty rows across both tabs — exposed for parent */
         dirtyCount?: number;
+        /** The asset has a data provider: an imported event marked PROVIDER is left out, the provider writes it (W-B16) */
+        hasProvider?: boolean;
         /** Called after successful save, with optional expanded date range */
         onsave?: (expandedRange?: {start: string; end: string}) => void;
         /** Called when edit is cancelled */
@@ -53,7 +64,10 @@
         onpendingchange?: (previewSignal: RenderedSignal | null) => void;
     }
 
-    let {assetId, currency, chartData, events, saving = $bindable(false), dirtyCount = $bindable(0), onsave, oncancel, onpendingchange}: Props = $props();
+    let {assetId, currency, chartData, events, hasProvider = false, saving = $bindable(false), dirtyCount = $bindable(0), onsave, oncancel, onpendingchange}: Props = $props();
+
+    /** How long a save's warning about refused prices stays (X-R46): it names dates to enter again. */
+    const REFUSAL_TOAST_MS = 20000;
 
     // Currency flag emoji for tab labels (I-bis #3). Empty when currency missing.
     let currencyFlag = $derived(currency ? getCurrencyInfo(currency).flag_emoji : '');
@@ -77,9 +91,9 @@
     ]);
 
     // F.5 — OHLC/volume columns are flagged `erasable: true`. DataEditor renders
-    //   ErasableNumberCell, whose eraser emits the sentinel `-1` at once, with no
-    //   confirm: the row's Revert action is the undo. The save path sends `-1` and the
-    //   backend reads it as SET NULL in the MERGE upsert. `Delete` on an empty input
+    //   ErasableNumberCell, whose eraser sets 'clear' (CLEARED_CELL, N92) at once, with no
+    //   confirm: the row's Revert action is the undo. The save path sends 'clear' and the
+    //   backend empties the column in the MERGE upsert. `Delete` on an empty input
     //   does the same. NULL values render as an italic "not set" placeholder.
     //   i18n keys: `dataEditor.cell.{notSet,clearField}` (4 langs).
 
@@ -167,6 +181,32 @@
                 notes: typeof ev.notes === 'string' ? ev.notes : Array.isArray(ev.notes) ? (ev.notes[0] ?? '') : '',
             },
         }));
+    }
+
+    /**
+     * The imported event lines the editor adds (W-B16): the events export marks each line MANUAL or PROVIDER. With a
+     * provider on the asset, a PROVIDER line is left out and the lot is told once, because the provider writes that event
+     * at its next sync (a line kept here would come back as a second, manual one). Without a provider nothing else
+     * will write it, so the line is added. A line never carries `source` into the editor's rows.
+     */
+    function withoutProviderEvents(imported: ParsedRow[]): ParsedRow[] {
+        let left = 0;
+        const kept: ParsedRow[] = [];
+        for (const line of imported) {
+            const {source, ...values} = line.values;
+            if (
+                hasProvider &&
+                String(source ?? '')
+                    .trim()
+                    .toUpperCase() === 'PROVIDER'
+            ) {
+                left += 1;
+                continue;
+            }
+            kept.push({...line, values});
+        }
+        if (left > 0) toasts.warning($t('dataEditor.importProviderEventsLeftOut', {values: {n: left}}));
+        return kept;
     }
 
     /** The DB id of a saved event row; null for a row the server has never seen, whose
@@ -268,9 +308,13 @@
 
         saving = true;
         error = null;
+        // A save is up to three requests (prices, deleted prices, events): one that fails after another wrote leaves the
+        // asset partly saved, and the message says so (X-R39). Kept outside the `try` for the `catch`.
+        const counts: AssetDataSaveCounts = {pricesSaved: 0, pricesRefused: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 0};
 
         try {
-            const parts: string[] = [];
+            let refusedPrices: Rejection[] = [];
+            let unexplained: string | null = null;
 
             // ─── PRICES ─────────────────────────────────────
             if (dirtyPrices.length > 0) {
@@ -280,22 +324,26 @@
                 // Filter valid upserts (close must be valid)
                 // Post-Blocco I: currency is NOT part of the payload anymore — backend
                 // derives it from asset.currency and rejects any mismatch defensively.
+                // N92: a row whose open, high, low or volume is a negative number (only an imported file can bring one) is not
+                // sent, as a close of 0 or less is not: LibreFolio keeps no negative price
+                const negativeOptional = (v: unknown): boolean => v !== undefined && v !== null && v !== '' && v !== CLEARED_CELL && Number(v) < 0;
                 const validUpserts = upsertPrices.filter((r) => {
                     const close = Number(r.values.close);
-                    return !isNaN(close) && close > 0;
+                    return !isNaN(close) && close > 0 && !(['open', 'high', 'low', 'volume'] as const).some((key) => negativeOptional(r.values[key]));
                 });
                 const invalidCount = upsertPrices.length - validUpserts.length;
 
                 if (validUpserts.length > 0) {
-                    // F.5 — sentinel semantics for optional OHLC/volume fields:
-                    //   undefined/null → omit (backend preserves existing DB value)
-                    //   -1             → send -1 (backend MERGE upsert interprets as SET NULL)
+                    // N92 — optional OHLC/volume fields:
+                    //   undefined/null → omit (the server keeps the stored value)
+                    //   'clear'        → send 'clear' (the server empties the stored value)
                     //   other number   → send as-is
-                    const optionalField = (v: unknown): number | undefined => {
+                    const optionalField = (v: unknown): number | typeof CLEARED_CELL | undefined => {
                         if (v === undefined || v === null || v === '') return undefined;
+                        if (v === CLEARED_CELL) return CLEARED_CELL;
                         const n = Number(v);
                         if (isNaN(n)) return undefined;
-                        return n; // includes -1 sentinel
+                        return n;
                     };
                     const priceItems = validUpserts.map((r) => ({
                         date: r.date,
@@ -305,13 +353,20 @@
                         low: optionalField(r.values.low),
                         volume: optionalField(r.values.volume),
                     }));
-                    await zodiosApi.upsert_prices_bulk_api_v1_assets_prices_post([
+                    // X-R46: the server may leave single dates out (`rejected`: a close outside low–high once merged
+                    // with the stored row); only `count` prices are saved
+                    const response = await zodiosApi.upsert_prices_bulk_api_v1_assets_prices_post([
                         {
                             asset_id: assetId,
                             prices: priceItems,
                         },
                     ]);
-                    parts.push(`${validUpserts.length} prices saved`);
+                    const result = response.results.find((item) => item.asset_id === assetId);
+                    counts.pricesSaved = result?.count ?? 0;
+                    refusedPrices = (result?.rejected ?? []).map(({date, reason}) => ({date: String(date), reason}));
+                    counts.pricesRefused = refusedPrices.length;
+                    // Rows neither saved nor named (the asset gone meanwhile): the server's own sentence says why
+                    if (result !== undefined && result.count + refusedPrices.length < validUpserts.length) unexplained = result.message;
                 }
 
                 if (deletePrices.length > 0) {
@@ -340,10 +395,10 @@
                             date_ranges: ranges,
                         },
                     ]);
-                    parts.push(`${deletePrices.length} prices deleted`);
+                    counts.pricesDeleted = deletePrices.length;
                 }
 
-                if (invalidCount > 0) parts.push(`${invalidCount} skipped (invalid)`);
+                counts.pricesSkipped = invalidCount;
             }
 
             // ─── EVENTS ─────────────────────────────────────
@@ -351,98 +406,68 @@
                 const upsertEvents = dirtyEvents.filter((r) => r.status === 'edited' || r.status === 'appended');
                 const deleteEvents = dirtyEvents.filter((r) => r.status === 'deleted');
 
-                if (upsertEvents.length > 0) {
-                    const validEvents = upsertEvents.filter((r) => {
-                        const amount = Number(r.values.amount);
-                        return !isNaN(amount) && r.values.type;
+                // Only saved events are deleted on the server. A new row deleted before its
+                // first save just goes: its rowId is a date, never an id.
+                const idsToDelete = deleteEvents.map((r) => dbEventId(r)).filter((id): id is number => id !== null);
+                const validEvents = upsertEvents.filter((r) => {
+                    const amount = Number(r.values.amount);
+                    return !isNaN(amount) && r.values.type;
+                });
+
+                if (idsToDelete.length > 0 || validEvents.length > 0) {
+                    // #R5-3 (Policy D): an event is in the asset's currency. A row imported from a CSV keeps the
+                    // currency it was written in (I-11c): one in another currency is refused by the server, with
+                    // its row, instead of being relabelled in silence — its amount would be wrong.
+                    const eventCurrency = currency || 'USD';
+                    const eventItems = validEvents.map((r) => ({
+                        // A saved event travels with its id: the server edits that row
+                        // in place, its type included, instead of matching (date, type).
+                        id: dbEventId(r) ?? undefined,
+                        date: r.date,
+                        type: String(r.values.type),
+                        value: {
+                            code: r.values.currency ? String(r.values.currency) : eventCurrency,
+                            amount: Number(r.values.amount),
+                        },
+                        notes: r.values.notes ? String(r.values.notes) : undefined,
+                    }));
+                    // One request, one transaction (decision 22): the server deletes first, so an edit can take the
+                    // date and type of an event deleted in the same save (I-10), and a refusal keeps nothing — the
+                    // deletions included — and says which row stopped it.
+                    const resp = await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([{asset_id: assetId, delete_ids: idsToDelete, events: eventItems}]).catch((err: unknown) => {
+                        throw new Error(
+                            eventSaveErrorMessage(
+                                err,
+                                $t,
+                                eventItems,
+                                (type) => $t(`assetDetail.eventType.${type}`) || type,
+                                (iso) => formatDay(iso),
+                            ),
+                        );
                     });
 
-                    if (validEvents.length > 0) {
-                        // #R5-3 (Policy D): use ``asset.currency`` for every event
-                        // instead of letting the user pick per-row.
-                        // The Zodios ``Currency_Input`` schema requires ``code`` as a
-                        // non-optional string, so we populate it from the ``currency``
-                        // prop (same value shown in the tab label). The backend
-                        // validates ``event.currency == asset.currency`` anyway
-                        // (``EVENT_CURRENCY_MISMATCH`` hard-400) so sending the
-                        // matching code is always safe.
-                        const eventCurrency = currency || 'USD';
-                        const eventItems = validEvents.map((r) => ({
-                            // A saved event travels with its id: the server edits that row
-                            // in place, its type included, instead of matching (date, type).
-                            id: dbEventId(r) ?? undefined,
-                            date: r.date,
-                            type: String(r.values.type),
-                            value: {
-                                code: eventCurrency,
-                                amount: Number(r.values.amount),
-                            },
-                            notes: r.values.notes ? String(r.values.notes) : undefined,
-                        }));
-                        await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([
-                            {
-                                asset_id: assetId,
-                                events: eventItems,
-                            },
-                        ]);
-                        parts.push(`${validEvents.length} events saved`);
-                    }
-                }
-
-                if (deleteEvents.length > 0) {
-                    // Only saved events are deleted on the server. A new row deleted before its
-                    // first save just goes: its rowId is a date, never an id.
-                    const idsToDelete = deleteEvents.map((r) => dbEventId(r)).filter((id): id is number => id !== null);
-                    if (idsToDelete.length > 0) {
-                        // Single bulk call; backend returns per-item status (deleted/not_found/in_use).
-                        const bulkResp = await zodiosApi.delete_events_bulk_api_v1_assets_events_delete(undefined, {
-                            queries: {ids: idsToDelete},
-                        });
-                        const allResults = bulkResp.results ?? [];
-
-                        const deletedIds = new Set<number>(allResults.filter((r: any) => r.status === 'deleted').map((r: any) => r.event_id));
-                        const blocked = allResults.filter((r: any) => r.status === 'in_use');
-                        const notFound = allResults.filter((r: any) => r.status === 'not_found');
-
+                    const deletedIds = new Set<number>(resp.results?.[0]?.deleted_ids ?? []);
+                    if (deletedIds.size > 0) {
                         // Remove the deleted rows from the in-memory table so they don't linger.
                         eventRows = eventRows.filter((row) => {
                             const id = dbEventId(row);
                             return id === null || !deletedIds.has(id);
                         });
-
-                        if (deletedIds.size > 0) {
-                            parts.push($t('events.deleteSuccess', {values: {n: deletedIds.size}}));
-                        }
-                        if (blocked.length > 0) {
-                            const totalVisible = blocked.reduce((sum: number, b: any) => sum + b.accessible_transactions.length, 0);
-                            const totalHidden = blocked.reduce((sum: number, b: any) => sum + (b.hidden_transactions_count || 0), 0);
-                            toasts.warning(
-                                $t('events.deleteBlocked', {
-                                    values: {
-                                        n: blocked.length,
-                                        accessible: totalVisible,
-                                        hidden: totalHidden,
-                                    },
-                                }),
-                            );
-                        }
-                        if (notFound.length > 0) {
-                            toasts.warning(
-                                $t('events.deleteNotFound', {
-                                    values: {ids: notFound.map((r: any) => r.event_id).join(', ')},
-                                }),
-                            );
-                        }
+                        counts.eventsDeleted = deletedIds.size;
+                    }
+                    if (validEvents.length > 0) {
+                        counts.eventsSaved = validEvents.length;
                     }
                 }
             }
 
-            // Only show success toast when there's something to report. Avoids the
-            // empty "Asset data:    " toast when an attempted delete was fully blocked
-            // by RESTRICT (in_use) — the warning toast already informs the user.
-            if (parts.length > 0) {
-                toasts.success(`Asset data: ${parts.join(', ')}`);
-            }
+            // The event always; the toast only when there is something to report (O-8). A delete fully blocked by
+            // RESTRICT (in_use) reports nothing here: the warning toast already informs the user.
+            const summary = assetDataSaveSummary(counts, $t);
+            // A refused price is named, with its date and reason, in a warning instead of a success (X-R46)
+            const refusals = [rejectedMessage(refusedPrices, $t), unexplained].filter((part): part is string => !!part);
+            const toast = refusals.length > 0 ? {variant: 'warning' as const, message: [summary, ...refusals].filter(Boolean).join('\n'), duration: REFUSAL_TOAST_MS} : summary === null ? undefined : {variant: 'success' as const, message: summary};
+            notify({name: 'assets.data.saved', detail: {...counts}, toast});
 
             // Compute expanded date range from appended price rows
             const appendedPrices = priceRows.filter((r) => r.status === 'appended');
@@ -462,9 +487,12 @@
             onsave?.(expandedRange);
         } catch (e: any) {
             console.error('Failed to save asset data:', e);
-            const msg = e?.message || 'unknown error';
-            error = 'Failed to save: ' + msg;
-            toasts.error(`Save failed: ${msg}`);
+            // X-R46: what the server refused, in the interface language when coded; never Axios's «Request failed …».
+            // The events' refusal arrives as an Error already worded by eventSaveErrorMessage, and keeps its text.
+            const msg = saveErrorText(e, $t);
+            const written = counts.pricesSaved > 0 || counts.pricesDeleted > 0;
+            error = $t('dataEditor.saveFailed', {values: {error: msg}}) + (written ? `\n${$t('dataEditor.savePartial', {values: {saved: counts.pricesSaved, deleted: counts.pricesDeleted}})}` : '');
+            notify({name: 'assets.data.saveFailed', detail: {error: msg, pricesSaved: counts.pricesSaved, pricesDeleted: counts.pricesDeleted}, toast: {variant: 'error', message: error}});
         } finally {
             saving = false;
         }
@@ -504,7 +532,7 @@
 <div class="space-y-3">
     <!-- Error banner -->
     {#if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2 text-sm text-red-600 dark:text-red-400">
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft whitespace-pre-line" data-testid="asset-editor-error">
             {error}
         </div>
     {/if}
@@ -534,7 +562,7 @@
 
         <!-- I-bis #3 — Currency label aligned right: "Prices in USD 🇺🇸" / "Events in USD 🇺🇸" -->
         {#if currency}
-            <div class="ml-auto flex items-center gap-1 px-3 py-2 text-xs text-gray-500 dark:text-gray-400" data-testid="asset-editor-currency-label">
+            <div class="ml-auto flex items-center gap-1 px-3 py-2 text-xs text-lf-muted" data-testid="asset-editor-currency-label">
                 {#if activeTab === 'prices'}
                     {$t('assetDetail.pricesInCurrency', {values: {currency}})}
                 {:else}
@@ -548,6 +576,9 @@
     <!-- Data Editor: Prices -->
     {#if activeTab === 'prices'}
         <DataEditor bind:rows={priceRows} bind:this={priceEditor} columns={priceColumns} onchange={handlePriceDataChange}>
+            {#snippet exportModal({open, setOpen})}
+                <DataExportModal {open} title={$t('dataEditor.exportPrices')} onexport={(format) => downloadAssetBackup(assetId, 'prices', format)} onclose={() => setOpen(false)} />
+            {/snippet}
             {#snippet importModal({open, setOpen, onimport})}
                 <PriceDataImportModal {open} {currency} {onimport} onclose={() => setOpen(false)} />
             {/snippet}
@@ -557,19 +588,22 @@
     <!-- Data Editor: Events -->
     {#if activeTab === 'events'}
         <DataEditor bind:rows={eventRows} bind:this={eventEditor} columns={eventColumns} importMatchKeys={['type']}>
+            {#snippet exportModal({open, setOpen})}
+                <DataExportModal {open} title={$t('dataEditor.exportEvents')} onexport={(format) => downloadAssetBackup(assetId, 'events', format)} onclose={() => setOpen(false)} />
+            {/snippet}
             {#snippet importModal({open, setOpen, onimport})}
-                <EventDataImportModal {open} {onimport} onclose={() => setOpen(false)} />
+                <EventDataImportModal {open} onimport={(imported) => onimport(withoutProviderEvents(imported))} onclose={() => setOpen(false)} />
             {/snippet}
         </DataEditor>
     {/if}
 
     <!-- Save / Cancel bar -->
     <div class="flex items-center justify-end gap-2 px-1">
-        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave} data-testid="asset-editor-save-btn">
+        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave} data-testid="asset-editor-save-btn">
             <Save size={15} />
             {saving ? $t('dataEditor.saving') : $t('dataEditor.save', {values: {n: _dirtyCount}})}
         </button>
-        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors" onclick={handleCancel} data-testid="asset-editor-cancel-btn">
+        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" onclick={handleCancel} data-testid="asset-editor-cancel-btn">
             <X size={15} />
             {$t('common.cancel')}
         </button>

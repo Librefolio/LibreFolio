@@ -9,7 +9,10 @@ what a user hits when the portal misbehaves — lives here:
   * a currency the portal does not know (skipped, empty series);
   * an HTTP error on the data endpoint → ``FXServiceError``;
   * the JSON parser fed monthly points, month-end (10-char) dates, out-of-range
-    points, a zero value, a multiplier > 1, and an unrecognised timeseries key.
+    points, a zero value, a multiplier > 1, and an unrecognised timeseries key;
+  * X-R50 (E's review R13-SEC5 on X-R38): a point whose value is no number
+    (``"abc"``, ``"1.2.3"``) → skipped, logged at debug, every other point
+    parsed (see its block at the end).
 
 Every call that would reach the network is replaced by a fake ``httpx`` bound
 into the ``snb`` module only (the global ``httpx`` is left untouched), so the
@@ -24,8 +27,9 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from structlog.testing import capture_logs
 
-from backend.app.services.fx import FXServiceError
+from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx_providers.snb import plugin as snb_mod
 from backend.app.services.fx_providers.snb.plugin import SNBProvider
 
@@ -323,6 +327,85 @@ def test_extract_d1_from_key_variants():
     assert SNBProvider._extract_d1_from_key("EPB@SNB.devkum{M0,CNY100}") == "CNY100"
     assert SNBProvider._extract_d1_from_key("no braces") is None
     assert SNBProvider._extract_d1_from_key("{onlyone}") is None
+
+
+# ── X-R50: a point whose value is no number ─────────────────────────────────
+#
+# Measured before the cure (E's review R13-SEC5 on X-R38): _parse_json reads a point's value with Decimal(str(value))
+# inside a per-point try that catches ValueError and ZeroDivisionError, which is how a point whose month it cannot read
+# is skipped, logged at debug. A value that is no number ("abc", "1.2.3") makes Decimal raise decimal.InvalidOperation,
+# which is not a ValueError: it escapes the per-point try and the parser, which fetch_rates calls outside its own try,
+# so fetch_rates raises it as it is: the whole SNB answer is lost, every currency of the fetch with it.
+#
+# Contract (X-R50): the point is skipped like the other invalid points, logged at debug naming it; every other point of
+# the answer is parsed, of every currency; nothing raises.
+
+_XR50_BARRIER = "X-R50 capture barrier"
+#: What ``_xr50_answer`` parses to without its point under test: EUR's January and March, CNY's February (÷ 100).
+_XR50_EXPECTED = {
+    "EUR": [(date(1999, 1, 1), "EUR", "CHF", Decimal("1.6")), (date(1999, 3, 1), "EUR", "CHF", Decimal("1.62"))],
+    "CNY": [(date(1999, 2, 1), "CNY", "CHF", Decimal("0.195"))],
+}
+
+
+def _xr50_answer(point: dict) -> dict:
+    """An SNB answer for EUR and CNY over the first quarter of 1999, ``point`` between EUR's January and March."""
+    return {
+        "timeseries": [
+            {"metadata": {"key": "EPB@SNB.devkum{M0,EUR1}"}, "values": [{"date": "1999-01", "value": 1.6}, point, {"date": "1999-03", "value": 1.62}]},
+            {"metadata": {"key": "EPB@SNB.devkum{M0,CNY100}"}, "values": [{"date": "1999-02", "value": 19.5}]},
+        ]
+    }
+
+
+def _xr50_parsed(point: dict, story: str) -> tuple[dict, list[dict]]:
+    """``_parse_json`` of ``_xr50_answer(point)`` over the first quarter of 1999, on a provider with the EUR and CNY map,
+    the snb module's log captured: (what it parsed, the events). An exception fails the test naming it."""
+    provider = SNBProvider()
+    _preload_map(provider)
+    with capture_logs() as events:
+        snb_mod.logger.debug(_XR50_BARRIER)
+        try:
+            parsed = provider._parse_json(_xr50_answer(point), date(1999, 1, 1), date(1999, 3, 31))
+        except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+            pytest.fail(f"{story} raised {exc!r}: fetch_rates raises it as it is, and the whole SNB answer is lost, every currency of the fetch (X-R50: the point is skipped, the others parsed)")
+    assert any(event.get("event") == _XR50_BARRIER and event.get("log_level") == "debug" for event in events), f"barrier: the log capture saw no debug event of the snb module's logger: {events}"
+    return parsed, events
+
+
+def _xr50_debug_naming(events: list[dict], text: str) -> list[dict]:
+    """The debug events naming ``text``, the barrier left out."""
+    return [event for event in events if event.get("log_level") == "debug" and event.get("event") != _XR50_BARRIER and text in str(event)]
+
+
+@pytest.mark.parametrize("bad", [pytest.param("abc", id="abc"), pytest.param("1.2.3", id="1.2.3")])
+def test_xr50_parse_json_skips_a_value_that_is_no_number_and_parses_the_others(bad):
+    """Red today: ``Decimal("abc")`` raises ``decimal.InvalidOperation``, which is not a ``ValueError``: it escapes the
+    per-point ``try`` and ``_parse_json``, and ``fetch_rates``, which calls the parser outside its own ``try``, raises it
+    as it is: one bad point and the whole SNB answer is lost, CNY's rate with EUR's.
+
+    Contract (X-R50): the point is skipped like the other invalid points, logged at debug naming it; EUR's January and
+    March and CNY's February are parsed, as they are; nothing raises.
+    """
+    point = {"date": "1999-02", "value": bad}
+    story = f"SNB's parser on an answer whose EUR point {point} sits between two valid ones, a CNY point beside them"
+
+    parsed, events = _xr50_parsed(point, story)
+
+    assert parsed == _XR50_EXPECTED, f"{story} parsed {parsed}: expected every other point, {_XR50_EXPECTED} (X-R50: skip the bad point, parse the others)"
+    assert _xr50_debug_naming(events, bad), f"{story} logged no debug event naming {bad!r}: expected the skip logged at debug, like the other invalid points (X-R50): {events}"
+
+
+def test_xr50_guard_parse_json_skips_a_month_it_cannot_read_and_parses_the_others():
+    """Guard: green today and after. A point whose month the parser cannot read (``1999-13``) raises ``ValueError`` in the
+    per-point ``try``: skipped, logged at debug naming it, every other point parsed. The frame the red above is held to."""
+    point = {"date": "1999-13", "value": 1.61}
+    story = f"SNB's parser on an answer whose EUR point {point} sits between two valid ones, a CNY point beside them"
+
+    parsed, events = _xr50_parsed(point, story)
+
+    assert parsed == _XR50_EXPECTED, f"{story} parsed {parsed}: expected every other point, {_XR50_EXPECTED}"
+    assert _xr50_debug_naming(events, "1999-13"), f"{story} logged no debug event naming 1999-13: expected the skip logged at debug: {events}"
 
 
 if __name__ == "__main__":

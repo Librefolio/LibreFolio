@@ -11,6 +11,7 @@
 import {fromStore} from 'svelte/store';
 import {_} from '$lib/i18n';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+import {SIGNAL_DEFAULT_PALETTE} from '$lib/theme/chartPalettes';
 
 const trackCatalogue = () => fromStore(_);
 /** The catalogue's formatter, tracked like `uiLocale()`; created on the first label, so a module that never labels a signal never reads svelte-i18n. */
@@ -173,7 +174,7 @@ export interface SignalStyle {
  * Backend technical configs remain plain transported state and are rendered
  * generically from backend results.
  *
- * Local runtime data such as `params._resolvedData` is excluded by `toConfig()`.
+ * Local runtime data such as `params._resolvedData` and `params._basePoint` is excluded by `toConfig()`.
  */
 export interface SignalConfig {
     /** Unique instance ID (UUID) */
@@ -191,7 +192,7 @@ export interface SignalConfig {
 }
 
 /** Default color palette — cycled when adding new signals */
-export const DEFAULT_SIGNAL_COLORS = ['#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+export const DEFAULT_SIGNAL_COLORS = SIGNAL_DEFAULT_PALETTE;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RENDERED SIGNAL — Output format for chart components
@@ -240,6 +241,13 @@ export interface RenderedSignal {
     barColorMode?: 'signed' | 'single';
     /** Whether ECharts may connect gaps in sparse overlay series. Default preserves legacy true. */
     connectNulls?: boolean;
+    /**
+     * A comparison's line asks the chart to reach its days even where the main series has none: a chart with a category axis (the detail pages
+     * of an asset and of an FX pair, which render their comparisons with `_unionAxis`) lays its axis on the union of the main days and the days of
+     * the signals that say so, so a comparison older than the main series is drawn from its first day and the main line is empty before its own.
+     * Indicators, benchmarks and the comparisons of a card do not say so: they follow the main series' days.
+     */
+    extendsAxis?: boolean;
     /**
      * Band data for confidence-band rendering (seriesType === 'band').
      * Contains parallel arrays for upper, middle, lower values aligned to `data[].date`.
@@ -294,6 +302,12 @@ export interface RenderedSignal {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ABSTRACT BASE CLASS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Params the page injects for one render and `toConfig()` never stores: the comparison data
+ * (`_resolvedData`) and the comparison's base point (`_basePoint`, AssetComparisonSignal, Z-29d-0).
+ */
+const TRANSIENT_PARAMS: ReadonlySet<string> = new Set(['_resolvedData', '_basePoint', '_unionAxis']);
 
 /**
  * Abstract base class for all chart overlay signals.
@@ -377,12 +391,13 @@ export abstract class ChartSignal {
 
     /**
      * Serialize to storable config.
-     * Excludes `_resolvedData` (transient runtime data injected by the modal for FxPairSignal).
+     * Excludes the transient runtime data the page injects (`TRANSIENT_PARAMS`: `_resolvedData`,
+     * and AssetComparisonSignal's `_basePoint`).
      * Other `_` prefixed params (e.g. MACD's `_signalColor`, `_signalLineType`)
      * are persistent style overrides and must be included.
      */
     toConfig(): SignalConfig {
-        const serializableParams = Object.fromEntries(Object.entries(this.params).filter(([k]) => k !== '_resolvedData'));
+        const serializableParams = Object.fromEntries(Object.entries(this.params).filter(([k]) => !TRANSIENT_PARAMS.has(k)));
         return {
             id: this.id,
             signalType: (this.constructor as typeof ChartSignal).signalType,

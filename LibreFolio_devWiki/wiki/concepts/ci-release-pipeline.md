@@ -131,7 +131,7 @@ boundary.
   capture procedure in its docstring). A stale capture made the shots render an empty dashboard
   from 2026-09-11 (`yield_on_cost` became required) until R12; the Vitest guard
   `frontend/src/lib/api/dashboardReportFixture.test.ts` now fails in seconds instead.
-- The normalizer scales amounts and per-unit prices only: since `a08e208b4` (2026-10-14) a never-scale rule
+- The normalizer scales amounts and per-unit prices only: since `f4af2d554` (2026-10-14) a never-scale rule
   (`NEVER_SCALE_RE`) and exceptions by path (`NOT_MONEY_PATH_RE`) keep the ratios — allocation shares, Yield on Cost,
   the one-day change — as captured, and invariants are checked before anything is written. Until then the
   allocation-history stacks of the shots stopped short of 100 % —
@@ -148,8 +148,8 @@ boundary.
 | Package lock | `frontend/package-lock.json` |
 | Docker compose (end users) | `docker-compose.prod.yml` |
 | Dockerfile | `Dockerfile` |
-| GHCR image-availability probe | `backend/app/services/container_registry.py` |
-| Same-origin system endpoint | `backend/app/api/v1/system.py` |
+| GHCR image-availability probe | `backend/app/services/platform/container_registry.py` |
+| Same-origin system endpoint | `backend/app/api/v1/system/container_image.py` |
 | Image status schema | `backend/app/schemas/system.py` |
 | Release metadata and image gating | `frontend/src/lib/features/update-check/updateCheck.ts` |
 | GHCR probe regressions | `backend/test_scripts/test_services/test_container_registry.py` |

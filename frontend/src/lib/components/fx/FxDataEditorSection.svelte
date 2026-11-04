@@ -19,8 +19,11 @@
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {rejectedMessage, saveErrorText, type Rejection} from '$lib/api/writeRefusal';
     import {t} from '$lib/i18n';
     import FxDataImportModal from './FxDataImportModal.svelte';
+    import DataExportModal from '$lib/components/ui/data-editor/DataExportModal.svelte';
+    import {downloadFxRatesBackup} from '$lib/api/backupDownload';
 
     // =========================================================================
     // Props
@@ -73,6 +76,8 @@
     let rows: DataRow[] = $state([]);
     let error: string | null = $state(null);
     let prevChartData: FxDataPoint[] | null = null;
+    /** How long a save's warning about refused rates stays (X-R46): it names dates to enter again. */
+    const REFUSAL_TOAST_MS = 20000;
 
     // =========================================================================
     // Convert FxDataPoint[] → DataRow[]
@@ -172,6 +177,7 @@
 
             let upsertedCount = 0;
             let deletedCount = 0;
+            let refused: Rejection[] = [];
 
             if (validUpserts.length > 0) {
                 // Normalize base/quote to alphabetical order (backend convention)
@@ -185,8 +191,10 @@
                     date: r.date,
                     rate: isInverted ? 1 / Number(r.values.rate) : Number(r.values.rate),
                 }));
-                await zodiosApi.upsert_rates_endpoint_api_v1_fx_currencies_rate_post(rateItems);
-                upsertedCount = validUpserts.length;
+                // X-R46: the server may leave single rates out (`rejected`); only the answered ones are saved
+                const response = await zodiosApi.upsert_rates_endpoint_api_v1_fx_currencies_rate_post(rateItems);
+                upsertedCount = response.results.length;
+                refused = (response.rejected ?? []).map(({date, reason}) => ({date: String(date), reason}));
             }
 
             if (deleteRows.length > 0) {
@@ -223,9 +231,14 @@
             // Toast success
             const parts: string[] = [];
             if (upsertedCount > 0) parts.push($t('fxDetail.savedCount', {values: {n: upsertedCount}}));
+            if (refused.length > 0) parts.push($t('fxDetail.refusedCount', {values: {n: refused.length}}));
             if (deletedCount > 0) parts.push($t('fxDetail.deletedCount', {values: {n: deletedCount}}));
             if (invalidCount > 0) parts.push($t('fxDetail.skippedCount', {values: {n: invalidCount}}));
-            toasts.success($t('fxDetail.savedSummary', {values: {details: parts.join(', ')}}));
+            const summary = $t('fxDetail.savedSummary', {values: {details: parts.join(', ')}});
+            // A refused rate is named, with its date and reason, in a warning instead of a success
+            const refusal = rejectedMessage(refused, $t);
+            if (refusal === null) toasts.success(summary);
+            else toasts.warning(`${summary}\n${refusal}`, REFUSAL_TOAST_MS);
 
             // Compute expanded date range if appended rows fall outside current chart range
             const appendedRows = dirty.filter((r) => r.status === 'appended');
@@ -245,7 +258,8 @@
             onsave?.(expandedRange);
         } catch (e: any) {
             console.error('Failed to save rates:', e);
-            const msg = e?.message || $t('common.unknownError');
+            // X-R46: what the server refused, in the interface language when coded; never Axios's «Request failed …»
+            const msg = saveErrorText(e, $t);
             error = $t('dataEditor.saveFailed', {values: {error: msg}});
             toasts.error($t('fxDetail.saveFailed', {values: {error: msg}}));
         } finally {
@@ -284,13 +298,16 @@
 <div class="space-y-3">
     <!-- Error banner -->
     {#if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2 text-sm text-red-600 dark:text-red-400">
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft" data-testid="fx-editor-error">
             {error}
         </div>
     {/if}
 
     <!-- Data Editor -->
     <DataEditor bind:rows bind:this={dataEditor} columns={fxColumns} onchange={handleDataChange}>
+        {#snippet exportModal({open, setOpen})}
+            <DataExportModal {open} title={$t('dataEditor.exportRates')} onexport={(format) => downloadFxRatesBackup(base, quote, format)} onclose={() => setOpen(false)} />
+        {/snippet}
         {#snippet importModal({open, setOpen, onimport})}
             <FxDataImportModal
                 {open}
@@ -315,11 +332,11 @@
 
     <!-- Save / Cancel bar -->
     <div class="flex items-center justify-end gap-2 px-1">
-        <button data-testid="fx-editor-save-btn" class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave}>
+        <button data-testid="fx-editor-save-btn" class="flex items-center gap-1.5 px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave}>
             <Save size={15} />
             {saving ? $t('dataEditor.saving') : $t('dataEditor.save', {values: {n: _dirtyCount}})}
         </button>
-        <button data-testid="fx-editor-cancel-btn" class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors" onclick={handleCancel}>
+        <button data-testid="fx-editor-cancel-btn" class="flex items-center gap-1.5 px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" onclick={handleCancel}>
             <X size={15} />
             {$t('common.cancel')}
         </button>

@@ -49,7 +49,7 @@ Esta sección responde a la pregunta *¿cuáles de estos se mueven juntos?* — 
 
 **Cómo leerlo**
 
-- **Un cuadrado por par**: azul cuando los dos activos se mueven juntos, rojo cuando se mueven en direcciones opuestas, pálido cuando se mueven de forma independiente. Pasa el cursor o toca para ver el valor en palabras.
+- **Un cuadrado por par**: azul cuando los dos activos se mueven juntos, rojo cuando se mueven en direcciones opuestas, gris cuando se mueven de forma independiente. Pasa el cursor o toca para ver el valor en palabras.
 - **Empieza por las dos listas**: **Los más parecidos** nombra los pares que son casi la misma exposición, **Los que se compensan** los pares que se amortiguan mutuamente. Una lista vacía es un hallazgo. Haz clic en un par para encontrarlo en la matriz.
 - **Un guion no es un cero**: el par no se pudo medir — demasiado poca historia, o un precio que nunca se movió.
 - **Los botones de orden** reorganizan la matriz; nunca cambian un valor.

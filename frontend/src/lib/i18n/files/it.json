@@ -76,7 +76,21 @@
     "uploader": "Caricato da",
     "uploaderHint": "Utente che ha caricato il file.",
     "noUploader": "Utente non indicato",
-    "uploaderLookupFailed": "Impossibile caricare i nomi degli utenti. I file restano disponibili con gli ID utente."
+    "uploaderLookupFailed": "Impossibile caricare i nomi degli utenti. I file restano disponibili con gli ID utente.",
+    "scope": {
+      "column": "Visibilità",
+      "columnHint": "I file condivisi li vede ogni utente; quelli personali solo chi li ha caricati e gli amministratori.",
+      "common": "Condiviso",
+      "personal": "Personale",
+      "share": "Condividi con tutti",
+      "makePersonal": "Rendi personale",
+      "makePersonalConfirm": "Gli altri utenti non vedranno più questo file, neanche dove fa da icona o da foto.",
+      "nowShared": "{name} ora è visibile a ogni utente",
+      "nowPersonal": "{name} ora è visibile solo a chi l'ha caricato e agli amministratori",
+      "changeFailed": "Non è stato possibile cambiare la visibilità del file",
+      "sharedOnPick": "{name} era personale: ora è visibile a ogni utente, perché tutti lo vedano qui"
+    },
+    "deleteSkipped": "I file che non puoi eliminare sono rimasti al loro posto"
   },
   "files": {
     "deleteFailed": "Impossibile eliminare il file"

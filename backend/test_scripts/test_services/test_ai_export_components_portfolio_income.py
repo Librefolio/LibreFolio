@@ -9,6 +9,13 @@ distinction, surfaced conversion failure (per-row + summary status),
 component-local monotonic detail policy (Compact aggregate / Standard bounded /
 Full all), and multi-broker + duplicate-asset handling.
 
+MF-F2 (D-MF3, backlog B9/O3): income keeps its sign and the report's share rule
+(``native_cash.effective_share``: an owner's share, the whole broker for an
+editor or a viewer), so a negative DIVIDEND/INTEREST correction lowers every
+total exactly like the report's ``period_income``; the component is version 2.
+Those tests drive the real loader through the stub session, and through the
+real builder when a total is under test.
+
 The ledger loader and ``convert_bulk`` are exercised through targeted seams: the
 permission/scope/date-bound/share tests drive the *real* ``_load_income_records``
 loader against a stubbed session (asserting the compiled SQL and the resulting
@@ -19,6 +26,7 @@ a fixed ledger snapshot and stub ``convert_bulk`` - mirroring the existing
 
 from __future__ import annotations
 
+from collections import namedtuple
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -28,8 +36,9 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 import backend.app.services.ai_export.components.portfolio_income as income_module
-from backend.app.db.models import TransactionType
+from backend.app.db.models import TransactionType, UserRole
 from backend.app.schemas.common import Currency
+from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.portfolio_income import (
     REASON_CONVERSION_FAILED,
     REASON_LEDGER_QUERY_FAILED,
@@ -159,7 +168,11 @@ class _StubResult:
 
 
 class _StubSession:
-    """Records executed statements and returns queued results in order."""
+    """Records executed statements and returns queued results in order.
+
+    A queued item may be a factory taking the executed statement, for a result
+    whose shape depends on what the loader selected (see `_access_result`).
+    """
 
     def __init__(self, queued):
         self._queued = list(queued)
@@ -167,10 +180,35 @@ class _StubSession:
 
     async def execute(self, statement):
         self.statements.append(statement)
-        return self._queued.pop(0)
+        queued = self._queued.pop(0)
+        return queued(statement) if callable(queued) else queued
 
 
-async def _run_loader(monkeypatch, scope, *, accessible, shares, txns, assets=None, brokers=None):
+def _access_result(accesses):
+    """The broker-access query's result, shaped by the columns the loader actually selected.
+
+    Rows are built from ``statement.selected_columns`` so the stub answers a
+    ``(broker_id, share_percentage)`` select and a ``(broker_id, role,
+    share_percentage)`` one alike, in any column order: these tests pin the
+    recorded amounts, not the query's shape.
+    """
+
+    def _answer(statement):
+        names = [getattr(column, "key", None) or column.name for column in statement.selected_columns]
+        row_type = namedtuple("AccessRow", names, rename=True)
+        rows = [row_type(*(access.get(name) for name in names)) for access in accesses]
+        return _StubResult(rows=rows, scalar_items=[SimpleNamespace(**access) for access in accesses])
+
+    return _answer
+
+
+def _loader_context(monkeypatch, scope, *, accessible, shares, txns, roles=None, assets=None, brokers=None):
+    """A context whose session answers the real loader's two queries from plain data.
+
+    ``shares`` is ``[(broker_id, stored share_percentage)]``; every access is an
+    ``OWNER`` unless ``roles`` (``{broker_id: UserRole}``) says otherwise.
+    """
+
     async def _fake_accessible(session, user_id):  # noqa: ARG001
         return list(accessible)
 
@@ -184,13 +222,24 @@ async def _run_loader(monkeypatch, scope, *, accessible, shares, txns, assets=No
     monkeypatch.setattr(income_module, "load_asset_metadata", _fake_assets)
     monkeypatch.setattr(income_module, "load_broker_metadata", _fake_brokers)
 
-    stub = _StubSession([_StubResult(rows=shares), _StubResult(scalar_items=txns)])
+    roles = roles or {}
+    accesses = [{"user_id": scope.user_id, "broker_id": broker_id, "role": roles.get(broker_id, UserRole.OWNER), "share_percentage": share} for broker_id, share in shares]
+    stub = _StubSession([_access_result(accesses), _StubResult(scalar_items=txns)])
     context = _make_context(scope, session=_make_async_session())
     # Route the loader's own queries through the stub while keeping a real
     # AsyncSession for BuildContext's isinstance/db_resource plumbing.
     context._session.execute = stub.execute  # type: ignore[method-assign]
+    return context, stub
+
+
+async def _run_loader(monkeypatch, scope, *, accessible, shares, txns, roles=None, assets=None, brokers=None):
+    context, stub = _loader_context(monkeypatch, scope, accessible=accessible, shares=shares, txns=txns, roles=roles, assets=assets, brokers=brokers)
     data = await _load_income_records(context, scope)
     return data, stub
+
+
+def _tx(day, *, amount, broker_id=1, asset_id=5, income_type=TransactionType.DIVIDEND, currency="EUR"):
+    return SimpleNamespace(date=day, asset_id=asset_id, broker_id=broker_id, type=income_type, amount=Decimal(str(amount)), currency=currency)
 
 
 @pytest.mark.asyncio
@@ -542,3 +591,169 @@ def test_row_rejects_unconverted_without_reason():
 def test_payload_forbids_extra_fields():
     with pytest.raises(ValidationError):
         IncomeTimelinePayload(status=IncomeTimelineStatus.FAILED, detail_level="full", reason_code="x", message="y", bogus=1)
+
+
+# =============================================================================
+# MF-F2 — income keeps its sign and the report's share rule (D-MF3, B9/O3)
+# =============================================================================
+
+# A payment and a later legacy negative correction of the same kind, same broker,
+# same month. EUR natives, converted to USD at 1.5, so the native and the target
+# side are pinned separately.
+_CORRECTIONS = [
+    pytest.param(TransactionType.DIVIDEND, 5, "10", "-4", id="dividend"),
+    pytest.param(TransactionType.INTEREST, None, "8", "-3", id="interest"),
+]
+# Net of each pair, as the report's `period_income` counts it: (native EUR, target USD).
+_NET = {
+    TransactionType.DIVIDEND: (Decimal("6"), Decimal("9")),
+    TransactionType.INTEREST: (Decimal("5"), Decimal("7.5")),
+}
+_PAID_ON = date(2024, 3, 1)
+_CORRECTED_ON = date(2024, 3, 15)
+_EUR_USD = {("EUR", "USD"): (Decimal("1.5"), date(2024, 2, 29), False)}
+
+
+def _correction_ledger(income_type, asset_id, paid, correction):
+    return [
+        _tx(_PAID_ON, income_type=income_type, asset_id=asset_id, amount=paid),
+        _tx(_CORRECTED_ON, income_type=income_type, asset_id=asset_id, amount=correction),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("income_type", "asset_id", "paid", "correction"), _CORRECTIONS)
+async def test_negative_income_correction_keeps_its_sign(monkeypatch, income_type, asset_id, paid, correction):
+    """Before MF-F2: ``abs(amount) * share`` — the correction was recorded as +4 (dividend) / +3 (interest)."""
+    data, _stub = await _run_loader(monkeypatch, _scope(), accessible=[1], shares=[(1, Decimal("1"))], txns=_correction_ledger(income_type, asset_id, paid, correction))
+
+    assert {record.date: record.amount for record in data.records} == {_PAID_ON: Decimal(paid), _CORRECTED_ON: Decimal(correction)}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("income_type", "asset_id", "paid", "correction"), _CORRECTIONS)
+async def test_negative_income_correction_is_a_negative_dated_row(monkeypatch, income_type, asset_id, paid, correction):
+    """Before MF-F2: the correction row read +4 EUR / +6 USD (dividend), +3 EUR / +4.5 USD (interest)."""
+    context, _stub = _loader_context(monkeypatch, _scope(detail_level=DetailLevel.FULL), accessible=[1], shares=[(1, Decimal("1"))], txns=_correction_ledger(income_type, asset_id, paid, correction))
+    monkeypatch.setattr(income_module, "convert_bulk", _make_convert(_EUR_USD))
+
+    payload = await _build_portfolio_income_timeline(context, {})
+
+    rows = {row.date: (row.income_type, row.native_amount, row.target_amount) for row in payload.rows}
+    assert rows == {
+        _PAID_ON: (income_type.value, Currency(code="EUR", amount=Decimal(paid)), Currency(code="USD", amount=Decimal(paid) * Decimal("1.5"))),
+        _CORRECTED_ON: (income_type.value, Currency(code="EUR", amount=Decimal(correction)), Currency(code="USD", amount=Decimal(correction) * Decimal("1.5"))),
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("income_type", "asset_id", "paid", "correction"), _CORRECTIONS)
+async def test_negative_income_correction_nets_every_total(monkeypatch, income_type, asset_id, paid, correction):
+    """The summary (per period) and the COMPACT ``(month, asset, type)`` bucket (per asset) net the correction.
+
+    Before MF-F2: the correction was added — 10 + 4 = 14 EUR / 21 USD (dividend), 8 + 3 = 11 EUR /
+    16.5 USD (interest) — where the report's ``period_income`` nets it to 6 / 5.
+    """
+    net_native, net_target = _NET[income_type]
+    context, _stub = _loader_context(monkeypatch, _scope(detail_level=DetailLevel.COMPACT), accessible=[1], shares=[(1, Decimal("1"))], txns=_correction_ledger(income_type, asset_id, paid, correction))
+    monkeypatch.setattr(income_module, "convert_bulk", _make_convert(_EUR_USD))
+
+    payload = await _build_portfolio_income_timeline(context, {})
+
+    assert payload.status is IncomeTimelineStatus.OK
+    assert payload.summary.transaction_count == 2
+    assert payload.summary.native_totals == (Currency(code="EUR", amount=net_native),)
+    assert payload.summary.conversion_status is ConversionStatus.COMPLETE
+    assert payload.summary.target_total == Currency(code="USD", amount=net_target)
+    bucket = next(row for row in payload.aggregated_rows if (row.month, row.asset_id, row.income_type) == ("2024-03", asset_id, income_type.value))
+    assert bucket.transaction_count == 2
+    assert bucket.native_amounts == (Currency(code="EUR", amount=net_native),)
+    assert bucket.target_amount == Currency(code="USD", amount=net_target)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("role", "stored_share", "factor"),
+    [
+        pytest.param(UserRole.VIEWER, Decimal("0"), Decimal("1"), id="viewer-stored-zero-counts-whole-broker"),
+        pytest.param(UserRole.EDITOR, Decimal("0.5"), Decimal("1"), id="editor-stored-half-counts-whole-broker"),
+        pytest.param(UserRole.OWNER, Decimal("0.5"), Decimal("0.5"), id="control-owner-half"),
+        pytest.param(UserRole.OWNER, None, Decimal("1"), id="control-owner-no-share-counts-whole-broker"),
+        pytest.param(UserRole.OWNER, Decimal("0"), Decimal("0"), id="control-owner-zero"),
+    ],
+)
+async def test_share_follows_the_report_rule(monkeypatch, role, stored_share, factor):
+    """``native_cash.effective_share``: an owner counts its own share (the whole broker when none is
+    recorded), an editor or a viewer the whole broker.
+
+    Before MF-F2: the raw stored share for every role — the viewer counted × 0, the editor × 0.5.
+    The three owner cases are controls, green before and after. Amounts are positive so the
+    controls do not depend on the sign rule.
+    """
+    data, _stub = await _run_loader(
+        monkeypatch,
+        _scope(),
+        accessible=[1],
+        shares=[(1, stored_share)],
+        roles={1: role},
+        txns=[
+            _tx(date(2024, 3, 1), amount="100"),
+            _tx(date(2024, 4, 1), income_type=TransactionType.INTEREST, asset_id=None, amount="40"),
+        ],
+    )
+
+    assert {record.income_type: record.amount for record in data.records} == {
+        TransactionType.DIVIDEND: Decimal("100") * factor,
+        TransactionType.INTEREST: Decimal("40") * factor,
+    }
+
+
+@pytest.mark.asyncio
+async def test_summary_total_follows_the_report_period_income_rule(monkeypatch):
+    """Sign and share together, as the report's ``period_income`` counts them: an owner at 0.5 on
+    broker 1 (+100 → 50), a viewer with a stored 0 on broker 2 (+40 − 10 → 30): 80.
+
+    Before MF-F2: 50 — the viewer's broker counted × 0, its payment and its correction alike.
+    """
+    context, _stub = _loader_context(
+        monkeypatch,
+        _scope(detail_level=DetailLevel.FULL),
+        accessible=[1, 2],
+        shares=[(1, Decimal("0.5")), (2, Decimal("0"))],
+        roles={1: UserRole.OWNER, 2: UserRole.VIEWER},
+        txns=[
+            _tx(date(2024, 2, 1), broker_id=1, asset_id=5, amount="100", currency="USD"),
+            _tx(date(2024, 2, 10), broker_id=2, asset_id=6, amount="40", currency="USD"),
+            _tx(date(2024, 2, 20), broker_id=2, asset_id=6, amount="-10", currency="USD"),
+        ],
+    )
+    monkeypatch.setattr(income_module, "convert_bulk", _make_convert({}))
+
+    payload = await _build_portfolio_income_timeline(context, {})
+
+    assert {(row.broker_id, row.date): row.native_amount.amount for row in payload.rows} == {
+        (1, date(2024, 2, 1)): Decimal("50"),
+        (2, date(2024, 2, 10)): Decimal("40"),
+        (2, date(2024, 2, 20)): Decimal("-10"),
+    }
+    assert payload.summary.native_totals == (Currency(code="USD", amount=Decimal("80")),)
+    assert payload.summary.target_total == Currency(code="USD", amount=Decimal("80"))
+
+
+def test_income_timeline_is_component_version_2_in_the_production_catalog():
+    """Before MF-F2: version 1. The payload shape is unchanged (schema_version 1), which is what
+    keeps the Snapshot Data renderer on its compact path for version 2."""
+    spec = build_component_registry().get("portfolio.income_timeline")
+
+    assert (spec.version, spec.schema_version, spec.output_model) == (2, 1, IncomeTimelinePayload)
+
+
+@pytest.mark.asyncio
+async def test_income_timeline_envelope_is_component_version_2_schema_version_1(monkeypatch):
+    """Before MF-F2: component_version 1."""
+    _patch_ledger(monkeypatch, _data([]))
+    context = _make_context(_scope())
+
+    envelope = await context.resolve("portfolio.income_timeline", required=True)
+
+    assert (envelope.component_id, envelope.component_version, envelope.schema_version) == ("portfolio.income_timeline", 2, 1)

@@ -89,8 +89,8 @@ worked examples — **always read the developer guide**, which is the source of 
   (reference implementer of `provider_params` + `resolve_url` — funds by internal code)
 - **Instructions** — `.github/instructions/backend-providers-asset.instructions.md`
   (base class, thread isolation, the 5-cache table, provider inventory)
-- **Reference code** — `backend/app/services/asset_source.py`
-  (base class `AssetSourceProvider` + the manager/orchestration), and the providers
+- **Reference code** — `backend/app/services/assets/`
+  (base class `AssetSourceProvider` in `base.py` + the manager/orchestration), and the providers
   `yahoo_finance/plugin.py`, `justetf/plugin.py`, `borsa_italiana/plugin.py` (with its `i18n/`),
   `css_scraper/plugin.py`.
 

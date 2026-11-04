@@ -292,7 +292,7 @@ export async function getOrBuildGraph(): MultiDirectedGraph {
 }
 ```
 
-**Why this works**: provider capabilities (`GET /fx/providers`) and currency lists (`GET /utilities/currencies`) are constant for the entire server session — they only change on server restart. No cache invalidation is needed.
+**Why this works**: the currency list (`GET /utilities/currencies`, built from `pycountry`) and the FX providers with their base currencies do not change while the server runs. Each provider's `target_currencies` in `GET /fx/providers` come from a 24 h backend cache (`backend/app/services/fx/catalog.py`): when the provider's fetch fails or takes longer than 5 s, the backend answers with the last list that provider returned in this process (empty before its first success) and retries after 5 minutes. `currencyGraphStore.ts` has no invalidation API: it keeps the graph in module state until the page is reloaded — client-side navigation reuses it, a full reload fetches both endpoints again, and a failed request is not kept (the next use retries). Until that reload the graph keeps the lists it was built with, including an empty one served before a provider's first successful fetch.
 
 ## Route Sorting in the UI
 
@@ -348,8 +348,19 @@ No transformation is needed between the DFS output and the API request body.
   whose pair is neither configured yet nor the main pair, a 1-step route at `priority` 1,
   deduplicated across chains.
 - A pair that is already configured cannot be created again: the save button is disabled, and
-  before posting the modal reloads the configured routes and drops the save if the pair appeared
-  meanwhile.
-- In edit mode (**Providers** on the pair page) the modal first deletes all the pair's routes,
-  then posts the new list. With an empty list it posts nothing and keeps the `MANUAL` sentinel the
-  backend reinstates on delete.
+  before posting the modal checks the configured pairs it holds and drops the save if the pair is
+  among them. It does not reload them: `ensureFxRoutesLoaded()` (`fxRoutesStore.ts`) answers from
+  the store until `invalidateFxRoutes()` empties it (after a save of this tab), so a pair another
+  tab configured since the last load is not seen.
+- In edit mode (**Providers** on the pair page) the modal posts the new list in one request with
+  `?replace=true` (X-R75): the backend keeps exactly those routes for the pair, in one transaction,
+  so a save that fails or never arrives leaves the pair as it was. With an empty list it posts the
+  `MANUAL` item, and the pair becomes manual. Before X-R75 the modal deleted all the pair's routes
+  first, so a failed post left the pair with no route, and an empty list deleted the pair: a
+  whole-pair delete never reinstates the `MANUAL` sentinel.
+- In edit mode, the intermediate pairs go first, in a plain request, then the pair alone with
+  `?replace=true` (X-R79): `replace` applies to every pair a request names, so a leg another tab
+  configured meanwhile would lose its other routes. The plain request keeps them, though it still
+  rewrites the leg's `priority` 1, as a creation does. Legs refused: nothing is written. Legs
+  written and the pair refused: the pair is as it was, and the legs stay configured. A creation
+  posts the pair and its intermediate pairs in one plain request.

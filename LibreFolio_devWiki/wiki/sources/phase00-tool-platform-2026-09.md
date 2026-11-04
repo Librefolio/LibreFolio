@@ -23,15 +23,15 @@ days, frozen, then reshaped by its first real consumer before reaching `dev_rele
 | File | Dates | What it adds |
 |------|-------|--------------|
 | `16_toolPlatform/plan-phase00ToolPlatform.prompt.md` | 2026-09-08 → 10-10 | The developer's decisions (§1), steps 1–6, the initial policy (§3, superseded), the merge with the runtime lanes (§4) and the hardening (§4.1); «Cosa resta aperto»: nothing of C |
-| `16_toolPlatform/manifest-integrazione-C.md` | 2026-09-10 → 10-09 | Inventory of the checkpoint (55 files), the generated files that must never be committed, the conflict of the merge `bb0cdc334`, the gates |
-| `16_toolPlatform/dossier-piattaforma-tool.md` | 2026-09-11 | A standalone review by the platform's session, written at `8e7259ecc` for the developer and for the next plugin author: decisions, refusals with reasons, the ABI, traps, risks |
+| `16_toolPlatform/manifest-integrazione-C.md` | 2026-09-10 → 10-09 | Inventory of the checkpoint (55 files), the generated files that must never be committed, the conflict of the merge `931c3e0a2`, the gates |
+| `16_toolPlatform/dossier-piattaforma-tool.md` | 2026-09-11 | A standalone review by the platform's session, written at `91070f6bd` for the developer and for the next plugin author: decisions, refusals with reasons, the ABI, traps, risks |
 | `16_toolPlatform/handoff-pac-D.md` | 2026-09-10 → 10-05 | The hand-off to the PAC workstream: §1–§7 the P1 pilot (superseded on 2026-09-24), §0 the live contract of the PAC planner, maintained by D |
-| `13_pacAllocator/implementation/plan-phase00Step1Round1-ToolPlatformCapacity.prompt.md` | 2026-09-16 | The capacity round: per-operation budgets, the engine window, per-job memory (`4a38b9061`) |
+| `13_pacAllocator/implementation/plan-phase00Step1Round1-ToolPlatformCapacity.prompt.md` | 2026-09-16 | The capacity round: per-operation budgets, the engine window, per-job memory (`97dde9bf3`) |
 
 ## Key Takeaways
 
-- **The platform never merged on its own.** It went into the PAC branch (`570beb386`) and reached `dev_release2`
-  inside the PAC merge `3913fe217` on 2026-09-19. The dossier checked it (`git rev-list --left-right --count` →
+- **The platform never merged on its own.** It went into the PAC branch (`2217fa366`) and reached `dev_release2`
+  inside the PAC merge `67ee437a0` on 2026-09-19. The dossier checked it (`git rev-list --left-right --count` →
   `82 0`) and warned that the code under review «non è quello che ho congelato io»: after the freeze the plugin ABI
   went from `ToolPlugin[InputT, OutputT]`, one Tool per class, to a package of one to sixteen `ToolService`s with
   `compute(tool_code, parameters, context)`, and `resources.py` arrived (891 insertions, 271 deletions on 15 files).
@@ -46,11 +46,11 @@ days, frozen, then reshaped by its first real consumer before reaching `dev_rele
   2026-09-16, which replaced a fixed scenario cap with a growth curve and an anti-abuse envelope. The dossier then
   reviewed, as a reader, an envelope its author had designed but not written.
 - **The first pilot was thrown away.** The hand-off described P1 `analyze`: two services (PAC and Rebalancer) on
-  one plugin, 5 s budgets. P1 was removed on 2026-09-21 (`b82e59ffa`) on the developer's instruction «togli p1 e poi
+  one plugin, 5 s budgets. P1 was removed on 2026-09-21 (`704ba66a3`) on the developer's instruction «togli p1 e poi
   lavora su v2»; since 2026-09-24 every historical section carries «⚠️ Superato → §0.x», and §0 states the planner's
   live contract ([[decisions/pac-p1-prototype-removed]]; the PAC itself is ingested in
   [[sources/phase00-pac-implementation-2026-10]]): «Se il codice cambia, prevale il codice».
-- **The dossier's risks, checked today** (`8abce8e87`): the user page no longer publishes the old budgets (§5.5,
+- **The dossier's risks, checked today** (`0fa0f3704`): the user page no longer publishes the old budgets (§5.5,
   fixed); the memory mode is still invisible in the UI (§5.1) and the client still waits the platform's timeout
   rather than the operation's (§5.4); `claim_engine_window()` still fails at once on the default operation budgets
   (§5.3) — recorded in [[features/F-106]].

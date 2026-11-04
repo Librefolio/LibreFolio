@@ -24,7 +24,7 @@ Hasta que guardes, los precios nuevos y modificados se muestran en el gráfico c
 
 ## 💰 Pestaña Precios
 
-- **Cierre** es obligatorio y debe ser un número positivo; **Apertura**, **Máximo**, **Mínimo** y **Volumen** son opcionales, y la goma de borrar en una celda limpia su valor.
+- **Cierre** es obligatorio y debe ser mayor que 0; **Apertura**, **Máximo**, **Mínimo** y **Volumen** son opcionales, 0 o más, y la goma de borrar en una celda limpia su valor. LibreFolio no guarda precios negativos: una fila con uno, que solo un archivo importado puede traer, no se guarda y cuenta entre las omitidas.
 - Los precios están en la moneda del activo, que se muestra junto a las pestañas (*Precios en USD*).
 - Las **filas obsoletas** son días sin un precio propio, rellenados con el último conocido. Cuando las hay, aparecen un contador ⚠️ y un interruptor: actívalo para ocultarlas.
 
@@ -67,7 +67,7 @@ Cada fila tiene un **Tipo** (Dividendo, Interés, Desdoblamiento, Ajuste de prec
 
     Se acepta `value` en lugar de `amount`, por lo que un archivo de eventos exportado por LibreFolio (la copia de seguridad que se ofrece cuando [cambias la moneda de un activo](../create-edit.md#editing-an-asset)) se puede volver a importar, ignorando sus otras columnas. Ten en cuenta dos límites:
 
-    - **Un evento por fecha**: las filas que comparten una fecha se omiten todas por ser duplicados, así que importa esos eventos desde archivos separados.
+    - **Un evento por fecha y tipo**: las filas que comparten a la vez la fecha y el tipo se omiten todas por ser duplicados; un dividendo y un desdoblamiento del mismo día se importan juntos.
     - **Cada fila se convierte en tu propio evento**, incluidos los de un proveedor: omite las filas cuyo `source` sea `PROVIDER` si el proveedor las volverá a enviar, o aparecerán dos veces.
 
 - Las fechas son `YYYY-MM-DD`, y los decimales pueden usar `.` o `,`.

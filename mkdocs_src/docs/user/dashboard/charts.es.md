@@ -8,7 +8,7 @@ Debajo de las tarjetas KPI, el gráfico de **Crecimiento de la Cartera** y el pa
 
 El gráfico de crecimiento muestra cómo evolucionó tu cartera durante el período seleccionado: el interruptor **Abs / % / P&L** en su esquina superior derecha alterna entre valores absolutos, tasas de rentabilidad y el dinero realmente ganado.
 
-El gráfico recuerda tu última vista, incluida la subvista de P&L, en este navegador y para cada usuario, y la comparte con las páginas de brókeres. Comienza en **Abs**. Sin datos de tasa de rentabilidad, **%** aparece en gris y el gráfico muestra **Abs**; tu elección vuelve la próxima vez que abras el gráfico con datos que dibujar.
+El gráfico recuerda tu última vista, incluida la subvista de P&L, en este navegador y para cada usuario, y la comparte con las páginas de brókeres. Comienza en **Abs**. Sin datos de tasa de rentabilidad, **%** aparece en gris y el gráfico muestra **Abs**, pero conserva tu elección: **%** vuelve en cuanto haya datos que dibujar — al cambiar el período o el bróker, o la próxima vez que abras el gráfico — salvo que elijas otra vista mientras tanto.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Modo absoluto" alt="Gráfico de crecimiento — Modo absoluto">

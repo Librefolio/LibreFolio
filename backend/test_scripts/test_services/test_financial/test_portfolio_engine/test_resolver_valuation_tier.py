@@ -1,10 +1,15 @@
 """Holding valuation is routed through the unified price resolver (``LAST_TRADE_PRICE``).
 
 The resolver is the single valuation brain: an asset with no asset-system quote on/before a day
-is valued from the resolver's observed-trade mark (BUY/SELL/priced ADJUSTMENT, same-day average,
-LOCF carry with staleness) — the SAME unified source the FIFO price line consumes. There is no
-legacy ``LAST_BUY_PRICE`` / ``LAST_SEED_COST`` cascade and no feature flag: when the resolver has
-no observation on/before a day the holding is ``MISSING``.
+is valued from the resolver's observed-trade mark (BUY/SELL, same-day average, LOCF carry with
+staleness) — the SAME unified source the FIFO price line consumes. There is no legacy
+``LAST_BUY_PRICE`` / ``LAST_SEED_COST`` cascade and no feature flag: when the resolver has no
+observation on/before a day the holding has no mark (the builder then values it at its book cost
+when that cost is fully known, ``ESTIMATED_AT_COST``, else MISSING — see
+``test_daily_state_builder.py::TestValuedAtCostWithoutObservation``).
+
+Before J-17: a priced ADJUSTMENT was a trade mark too (BUY/SELL/priced ADJUSTMENT), and a holding
+with no observation was always MISSING.
 
 These tests exercise the resolver path by injecting a ``mark_series`` directly into the pure
 builder (mirroring what ``PortfolioCalculationEngine.calculate`` does).
@@ -141,6 +146,22 @@ def test_no_mark_series_is_missing() -> None:
 
     assert valuation.source is ValuationSource.MISSING
     assert valuation.market_value is None
+
+
+def test_priced_adjustment_gives_the_resolver_no_mark() -> None:
+    """J-17: a priced ADJUSTMENT carries a cost, not a price, so a series built from it alone has no
+    observation and the resolver tier has no mark: MISSING (the builder then values a held position of
+    known cost at that cost, see test_daily_state_builder.py::TestValuedAtCostWithoutObservation).
+
+    Before J-17: LAST_TRADE_PRICE at the override, 5.00 a unit → 500 for 100 units, reference 2024-03-01.
+    """
+    series = _series([_tx(id=8, type="ADJUSTMENT", dt="2024-03-01", quantity="100", cost_basis_override="5")])
+    builder = _builder(mark_series={_ASSET: series})
+
+    valuation = builder._market_value_for(_ASSET, Decimal("100"), date(2024, 3, 1))
+
+    assert valuation.source is ValuationSource.MISSING, valuation
+    assert (valuation.market_value, valuation.reference_date, valuation.effective_unit_price) == (None, None, None)
 
 
 def test_bond_quote_base_scale_preserved() -> None:

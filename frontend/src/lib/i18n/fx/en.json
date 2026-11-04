@@ -46,7 +46,8 @@
       "timeoutAfter": "Timeout after {seconds}s",
       "requestTimedOut": "Request timed out after {seconds}s. Increase the timeout and retry.",
       "failed": "Sync failed",
-      "retryFailed": "Retry {n} failed"
+      "retryFailed": "Retry {n} failed",
+      "overwriteWarning": "{existing, plural, one {# of {total} already has} other {# of {total} already have}} data stored in this range: syncing replaces it with the provider's values, manual edits included."
     },
     "route": {
       "title": "Conversion Routes",
@@ -99,6 +100,7 @@
     "savedCount": "{n} saved",
     "deletedCount": "{n} deleted",
     "skippedCount": "{n} skipped (invalid)",
-    "saveFailed": "FX save failed: {error}"
+    "saveFailed": "FX save failed: {error}",
+    "refusedCount": "{n} refused"
   }
 }

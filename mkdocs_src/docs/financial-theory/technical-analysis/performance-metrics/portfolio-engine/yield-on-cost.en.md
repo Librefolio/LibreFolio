@@ -1,6 +1,6 @@
 # 💸 Yield on Cost (YOC)
 
-Yield on Cost (YOC) measures the **non-negative gross recorded income produced per current unit over the trailing 365 calendar dates**, relative to the open position's average purchase price per unit ([Weighted Average Cost, or WAC](../weighted-average-cost.md)).
+Yield on Cost (YOC) measures the **gross recorded income produced per current unit over the trailing 365 calendar dates**, relative to the open position's average purchase price per unit ([Weighted Average Cost, or WAC](../weighted-average-cost.md)). Each income amount counts with its sign, so a recorded correction lowers the income instead of adding to it.
 
 LibreFolio computes it separately for every $(a,b)$ pair:
 
@@ -12,7 +12,7 @@ The same asset held at two brokers therefore has two independent YOC values.
 
 !!! warning "Gross recorded income — not a tax-net return"
 
-    YOC uses only non-negative cash amounts from asset-linked `DIVIDEND` and `INTEREST` transactions. Exact zero is accepted; negative income amounts are not supported. Separate `TAX` and `FEE` transactions are not subtracted, so the result must not be read as after-tax or net income performance.
+    YOC uses only the cash amounts of asset-linked `DIVIDEND` and `INTEREST` transactions, each with its sign. A new negative amount is refused, but older rows can still hold one: such a correction lowers the income, as it does on the Dashboard. Separate `TAX` and `FEE` transactions are not subtracted, so the result must not be read as after-tax or net income performance.
 
 ---
 
@@ -26,15 +26,15 @@ $$
 
 This window contains 365 calendar dates and is **independent of the report start date**. Moving the start of a dashboard report does not change YOC when $T$ remains unchanged.
 
-Only non-negative, asset-linked entries from the personal transaction ledger qualify:
+Only asset-linked entries from the personal transaction ledger qualify:
 
 | Included | Excluded |
 |---|---|
-| Asset-linked `Transaction` rows of type `DIVIDEND` or `INTEREST`, with cash amount equal to or greater than zero | Separate `TAX`, `FEE`, and `ADJUSTMENT` transactions |
-| The non-negative cash amount, currency, date, asset, and paying broker | Provider or manual `AssetEvent` income |
+| Asset-linked `Transaction` rows of type `DIVIDEND` or `INTEREST`, whatever the sign of their cash amount | Separate `TAX`, `FEE`, and `ADJUSTMENT` transactions |
+| The signed cash amount, currency, date, asset, and paying broker | Provider or manual `AssetEvent` income |
 | Income assigned to the exact $(a,b)$ pair | Income without an asset |
 
-The transaction schema accepts an exact-zero `DIVIDEND` or `INTEREST` cash amount but rejects a negative one. An `ADJUSTMENT` can affect replayed quantity, WAC, or linked-split inputs, but it never enters the YOC income numerator.
+The transaction schema accepts an exact-zero `DIVIDEND` or `INTEREST` cash amount but refuses a new negative one. A negative row saved earlier still qualifies and counts with its sign. An `ADJUSTMENT` can affect replayed quantity, WAC, or linked-split inputs, but it never enters the YOC income numerator.
 
 The calculation has no asset-class allowlist. It applies to every open long holding type represented by the portfolio engine, including crypto and manual assets, provided the required ledger, WAC, split, and FX inputs are valid.
 
@@ -47,7 +47,7 @@ For each qualifying income transaction $j$:
 | Symbol | Meaning |
 |---|---|
 | $D_j$ | Transaction date |
-| $I_j$ | Non-negative gross transaction cash amount in currency $c_j$, with $I_j\geq0$ |
+| $I_j$ | Gross transaction cash amount in currency $c_j$, with its sign: $I_j<0$ for an older negative correction |
 | $C^*$ | Selected report currency |
 | $q_j$ | Eligible long quantity at the paying broker at end of day $D_j-1$ |
 | $s_j$ | Product of linked split ratios dated from $D_j$ through $T$, inclusive |
@@ -99,7 +99,7 @@ $$
 }
 $$
 
-The API value is a fraction, and the Holdings table renders it as a percentage. An available value may be positive or exactly zero.
+The API value is a fraction, and the Holdings table renders it as a percentage. An available value may be positive or exactly zero. When $g_{a,b,T}<0$ — the window's corrections exceed its income — LibreFolio shows no YOC at all (see the availability rules below).
 
 ---
 
@@ -111,7 +111,8 @@ The eligible quantity $q_j$ is deliberately evaluated at **end of day before pay
 - a same-day **BUY is excluded**;
 - a same-day **SELL is included**, because those units existed at end of day $D_j-1$;
 - broker custody is respected throughout transfer replay;
-- an in-transit fragment still counts for its source broker, never for the destination before arrival.
+- an in-transit fragment still counts for its source broker, never for the destination before arrival;
+- units that arrive from a broker you cannot see — as a co-owner of the receiving broker, for example — count from their arrival: the other broker is never replayed, and their cost is the arriving transfer's own cost basis, part of the average purchase price (without one, YOC is unavailable).
 
 Income remains attached to the broker that recorded it. Moving units from broker A to broker B does **not** automatically carry A's historical income into B's YOC. Later income recorded at B uses B's eligible prior-day quantity and B's average purchase price.
 
@@ -160,9 +161,9 @@ YOC distinguishes a valid absence of income from a calculation that cannot be tr
 
 | State | Meaning | Holdings cell |
 |---|---|---|
-| **Available** | At least one qualifying income transaction exists and every required input is valid. The result is positive when any qualifying amount is positive; it is exactly zero when one or more qualifying rows are recorded at amount zero and none has a positive amount. Provenance marks that exact-zero case with `net_zero=true`. No minimum pair age applies. | Percentage with two decimals: for example, `2.50%` or `0.00%`. |
+| **Available** | At least one qualifying income transaction exists, every required input is valid, and the signed income per unit $g_{a,b,T}$ is zero or more. The result is positive when $g_{a,b,T}>0$; it is exactly zero when $g_{a,b,T}=0$ — for example when every qualifying row is recorded at amount zero, or a correction exactly offsets the income. Provenance marks that exact-zero case with `net_zero=true`. No minimum pair age applies. | Percentage with two decimals: for example, `2.50%` or `0.00%`. |
 | **No income** | No qualifying income row exists in the window, and the pair has a full 365-date ledger history. The API value is zero, but this state is distinct from an available zero. | `-` with explanatory tooltip and no warning icon. |
-| **Unavailable** | The no-income pair is too young, or a required ledger/calculation input failed validation. Its value is `null` and its reason identifies the failure. | `-` with an info icon and custom reason tooltip. |
+| **Unavailable** | The no-income pair is too young, a required ledger/calculation input failed validation, or corrections leave the income per unit below zero. Its value is `null` and its reason identifies the cause. | `-` with an info icon and custom reason tooltip. |
 
 The outer `yield_on_cost` field is required and non-null for every holding. An unavailable result is therefore represented by the result object's `unavailable` status and null `value`, not by a missing or null outer field.
 
@@ -185,6 +186,8 @@ The calculation fails closed for any of these conditions:
 - average purchase price (WAC) is missing or non-positive — missing includes an acquisition whose cost could not be converted or has no cost basis.
 
 One bad required input makes the entire pair unavailable. There is no partial sum, asset-event substitute, provider-income fallback, or current-quantity approximation.
+
+A negative income is not a bad input, but it leaves no yield to show. When every input is valid and $g_{a,b,T}<0$ — the corrections recorded in the window exceed its income — the pair is unavailable with reason `negative_net_income`, and the Holdings tooltip reads *Corrections exceed the income of the last year.* Its provenance keeps the negative income per unit (`gross_income_per_unit`). A sum of exactly zero is not this case: it stays available at `0.00%`, with `net_zero=true`.
 
 ---
 

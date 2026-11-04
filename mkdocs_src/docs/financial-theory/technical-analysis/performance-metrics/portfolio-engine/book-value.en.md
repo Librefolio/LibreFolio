@@ -15,10 +15,10 @@ $$
 Where Open Cost Basis:
 
 $$
-\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w^{C^*}(a,b,t)
+\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 10^{-5}}} q(a,b,t) \cdot w^{C^*}(a,b,t)
 $$
 
-Here $w^{C^*}(a,b,t)$ is the [WAC](../weighted-average-cost.md) kept directly in the requested currency $C^*$: each acquisition entered it at the rate of its own date $d_i$, as $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ for an amount $P_i$ actually paid. OCB therefore uses **no exchange rate at the valuation date** $t$: it is the sum of historical costs — what was paid — and it does not move when exchange rates move.
+The sum runs over the positions held: a position left with $10^{-5}$ units or fewer is not held ([Portfolio Engine — §3](index.md#3-position-state)). Here $w^{C^*}(a,b,t)$ is the [WAC](../weighted-average-cost.md) kept directly in the requested currency $C^*$: each acquisition entered it at the rate of its own date $d_i$, as $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ for an amount $P_i$ actually paid. OCB therefore uses **no exchange rate at the valuation date** $t$: it is the sum of historical costs — what was paid — and it does not move when exchange rates move.
 
 Cash, instead, is each broker's cash kept in the currencies it was recorded in and valued at the rate of $t$:
 

@@ -2,9 +2,13 @@
 Test 3: FX Conversion Logic
 Tests currency conversion using rates from the database.
 Verifies direct, inverse, cross-currency, and forward-fill conversions.
+
+X-R38 (the FX side of W-B58): a stored rate no column can keep reads as a missing rate, and compute_chain_rate answers
+None for a date whose leg is unusable (see the X-R38 block below).
 """
 
 import asyncio
+import re
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
@@ -21,7 +25,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -29,7 +33,8 @@ from sqlmodel import select
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.services.fx import RateNotFoundError, compute_chain_rate, convert_bulk
+from backend.app.services.fx.base import RateNotFoundError
+from backend.app.services.fx.conversion import compute_chain_rate, convert_bulk
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,
@@ -647,6 +652,153 @@ async def test_bulk_raise_on_error():
             print_info("  (Note: Error message could include failing index)")
 
 
+# ============================================================================
+# X-R38 (the FX side of W-B58): a stored rate no column can keep reads as missing
+# ============================================================================
+#
+# Measured before the cure: convert_bulk multiplies or divides by the stored rate as it reads it. A legacy 0 converts
+# GNF → IRR to 0, and IRR → GNF raises DivisionByZero ("Conversion 0 failed: …"); a legacy inf converts GNF → IRR to an
+# infinite amount, which Currency refuses ("Conversion 0 failed: … finite number"), and IRR → GNF to 0; a legacy rate of
+# 20 digits before the decimal point converts to absurd amounts. compute_chain_rate divides by a leg of 0
+# (DivisionByZero) and multiplies through an infinite one.
+#
+# Contract (X-R38): reads never raise. A stored rate storable_fx_rate refuses is a missing rate for its date, with the
+# missing-rate behaviour that exists: backward-filled from the latest usable rate before it, else "No FX rate found for
+# GNF/IRR on or before <date>" (a RateNotFoundError with raise_on_error, a None and that error without). Never a
+# division by zero, never an infinite amount. compute_chain_rate answers None for a date whose leg is unusable.
+#
+# GNF/IRR is this block's own: no seed and no other test uses the pair. The rates are planted with raw SQL, past the
+# model, in the test's session and never committed: the session rolls them back.
+
+XR38_EARLIER = date(1987, 6, 8)
+XR38_DAY = date(1987, 6, 10)
+XR38_LATER = date(1987, 6, 11)
+_XR38_UNUSABLE = [
+    pytest.param(float("inf"), id="inf"),
+    pytest.param(0.0, id="0"),
+    pytest.param(1e19, id="1e19-20-integer-digits"),
+]
+_XR38_DIRECTIONS = [
+    pytest.param("GNF", "IRR", id="direct-multiplies"),
+    pytest.param("IRR", "GNF", id="inverse-divides"),
+]
+
+
+async def _xr38_plant(session, day: date, rate: float) -> None:
+    """A GNF/IRR rate written with raw SQL, past the model, in ``session`` and not committed: what an older release could leave."""
+    await session.execute(text("INSERT INTO fx_rates (date, base, quote, rate, source, fetched_at) VALUES (:day, 'GNF', 'IRR', :rate, 'X-R38', CURRENT_TIMESTAMP)"), {"day": day.isoformat(), "rate": rate})
+
+
+async def _xr38_check_the_pair_is_free(session) -> None:
+    """Precondition, checked not assumed: no committed GNF/IRR rate on or before the last date of this block, which a
+    backward fill could reach."""
+    leftover = (await session.execute(select(FxRate.date).where(FxRate.base == "GNF", FxRate.quote == "IRR", FxRate.date <= XR38_LATER))).scalars().all()
+    if leftover:
+        pytest.fail(f"Precondition failed: X-R38 needs GNF/IRR without rates on or before {XR38_LATER}, found {', '.join(str(day) for day in leftover)}")
+
+
+async def _xr38_convert(session, conversions: list, raise_on_error: bool, story: str):
+    """``convert_bulk``: ``((results, errors), None)``, or ``(None, the RateNotFoundError)``. Any other exception fails the
+    test, naming it."""
+    try:
+        return await convert_bulk(session, conversions, raise_on_error=raise_on_error), None
+    except RateNotFoundError as missing:
+        return None, missing
+    except Exception as exc:  # noqa: BLE001 — any other exception is the defect under test
+        pytest.fail(f"{story}: convert_bulk raised {exc!r} (X-R38: reads never raise)")
+
+
+def _xr38_missing() -> re.Pattern:
+    """The missing-rate error of GNF/IRR on ``XR38_DAY`` as convert_bulk words it (``POST /fx/currencies/convert``
+    compresses its errors by that wording)."""
+    return re.compile(rf"No FX rate found for GNF/IRR on or before {XR38_DAY.isoformat()}\. ")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("from_code", "to_code"), _XR38_DIRECTIONS)
+@pytest.mark.parametrize("planted", _XR38_UNUSABLE)
+async def test_xr38_a_stored_rate_no_column_can_keep_raises_the_missing_rate_error(planted, from_code, to_code):
+    """Red today: 0 converts GNF → IRR to 0 and makes IRR → GNF raise ``DivisionByZero``; inf converts IRR → GNF to 0 and
+    GNF → IRR to an infinite amount Currency refuses; 1e19 converts to absurd amounts. What raises is wrapped into a
+    RateNotFoundError "Conversion 0 failed: …", never the missing-rate one.
+
+    Contract (X-R38): with ``raise_on_error`` and no usable rate on or before the date, the RateNotFoundError of a missing
+    rate, "No FX rate found for GNF/IRR on or before 1987-06-10".
+    """
+    story = f"converting 100 {from_code} to {to_code} on {XR38_DAY}, the only GNF/IRR rate a legacy {planted!r}"
+    async with AsyncSession(get_async_engine()) as session:
+        await _xr38_check_the_pair_is_free(session)
+        try:
+            await _xr38_plant(session, XR38_DAY, planted)
+            converted, missing = await _xr38_convert(session, [(Currency(code=from_code, amount=Decimal("100")), to_code, XR38_DAY)], True, story)
+        finally:
+            await session.rollback()
+
+    assert missing is not None, f"{story} converted as {converted}: expected the missing-rate RateNotFoundError (X-R38)"
+    assert _xr38_missing().search(str(missing)), f"{story} raised {missing!r}: expected the missing-rate error, 'No FX rate found for GNF/IRR on or before {XR38_DAY}' (X-R38)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("from_code", "to_code"), _XR38_DIRECTIONS)
+@pytest.mark.parametrize("planted", _XR38_UNUSABLE)
+async def test_xr38_a_stored_rate_no_column_can_keep_is_collected_as_a_missing_rate(planted, from_code, to_code):
+    """Red today: as with ``raise_on_error``, an amount of 0 or an absurd one, or the error "Conversion 0 failed: …".
+
+    Contract (X-R38): without ``raise_on_error``, None for the conversion and its missing-rate error, "Conversion 0: No FX
+    rate found for GNF/IRR on or before 1987-06-10. …", the wording ``POST /fx/currencies/convert`` compresses.
+    """
+    story = f"converting 100 {from_code} to {to_code} on {XR38_DAY} without raise_on_error, the only GNF/IRR rate a legacy {planted!r}"
+    async with AsyncSession(get_async_engine()) as session:
+        await _xr38_check_the_pair_is_free(session)
+        try:
+            await _xr38_plant(session, XR38_DAY, planted)
+            converted, missing = await _xr38_convert(session, [(Currency(code=from_code, amount=Decimal("100")), to_code, XR38_DAY)], False, story)
+        finally:
+            await session.rollback()
+
+    assert missing is None, f"{story} raised {missing!r}: without raise_on_error nothing raises"
+    results, errors = converted
+    assert results == [None], f"{story} converted as {results}: expected None, a missing rate (X-R38)"
+    assert len(errors) == 1 and errors[0].startswith("Conversion 0: ") and _xr38_missing().search(errors[0]), f"{story} reports {errors}: expected 'Conversion 0: No FX rate found for GNF/IRR on or before {XR38_DAY}. …' (X-R38)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("from_code", "to_code", "on_the_day", "the_day_after"),
+    [
+        pytest.param("GNF", "IRR", "250", "400", id="direct-multiplies"),
+        pytest.param("IRR", "GNF", "40", "25", id="inverse-divides"),
+    ],
+)
+@pytest.mark.parametrize("planted", _XR38_UNUSABLE)
+async def test_xr38_a_stored_rate_no_column_can_keep_is_backward_filled_over(planted, from_code, to_code, on_the_day, the_day_after):
+    """Red today: the legacy rate of 1987-06-10 is used as it is (an amount of 0, an absurd one, or a refusal) instead of
+    the usable rate of two days before.
+
+    Contract (X-R38): a missing rate for its date, with the missing-rate behaviour that exists: 1987-06-10 is
+    backward-filled from the usable 2.5 of 1987-06-08 (``backward_fill_applied``), as a date without a row would be, and
+    1987-06-11 keeps its own 4. Derived from "treat it as a missing rate for that date": the backward fill must see past
+    the unusable row, which today also anchors the window convert_bulk loads.
+    """
+    story = f"converting 100 {from_code} to {to_code} on {XR38_DAY} and {XR38_LATER}, GNF/IRR 2.5 on {XR38_EARLIER}, a legacy {planted!r} on {XR38_DAY}, 4 on {XR38_LATER}"
+    amount = Currency(code=from_code, amount=Decimal("100"))
+    async with AsyncSession(get_async_engine()) as session:
+        await _xr38_check_the_pair_is_free(session)
+        try:
+            await _xr38_plant(session, XR38_EARLIER, 2.5)
+            await _xr38_plant(session, XR38_DAY, planted)
+            await _xr38_plant(session, XR38_LATER, 4.0)
+            converted, missing = await _xr38_convert(session, [(amount, to_code, XR38_DAY), (amount, to_code, XR38_LATER)], True, story)
+        finally:
+            await session.rollback()
+
+    assert missing is None, f"{story} raised {missing!r}: expected {on_the_day} {to_code} on {XR38_DAY}, backward-filled from the rate of {XR38_EARLIER} (X-R38)"
+    results, _errors = converted
+    found = [(item[0].code, item[0].amount, item[1], item[2]) for item in results]
+    expected = [(to_code, Decimal(on_the_day), XR38_EARLIER, True), (to_code, Decimal(the_day_after), XR38_LATER, False)]
+    assert found == expected, f"{story} converted as {found}: expected {expected}, the legacy rate missing for its date (X-R38)"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
 
@@ -714,3 +866,38 @@ class TestComputeChainRate:
         """Empty steps list → composite rate = 1 (identity)."""
         result = compute_chain_rate([], {}, date(2025, 1, 1))
         assert result == Decimal("1")
+
+    @pytest.mark.parametrize("position", [pytest.param("EUR-GBP", id="inverse-leg"), pytest.param("EUR-USD", id="direct-leg")])
+    @pytest.mark.parametrize(
+        "unusable",
+        [
+            pytest.param(Decimal("0"), id="0"),
+            pytest.param(Decimal("Infinity"), id="Infinity"),
+            pytest.param(Decimal("1E+19"), id="20-integer-digits"),
+            pytest.param(Decimal("NaN"), id="derived-NaN"),
+        ],
+    )
+    def test_xr38_a_date_whose_leg_is_unusable_gives_none(self, unusable, position):
+        """Red today: a leg of 0 in inverse order raises ``DivisionByZero`` (the sync of the pair fails), in direct order
+        gives 0; an infinite leg gives 0 or Infinity; a leg of 20 digits before the decimal point an absurd rate; NaN, NaN.
+
+        Contract (X-R38): None for the date whose leg is unusable (no column can keep it), as for a date whose leg is
+        missing; the other date, whose legs are usable, computes as before.
+        """
+        steps = [{"from": "GBP", "to": "EUR"}, {"from": "EUR", "to": "USD"}]
+        bad, good = date(2025, 1, 1), date(2025, 1, 2)
+        leg_rates = {
+            ("EUR", "GBP", bad): unusable if position == "EUR-GBP" else Decimal("0.84"),
+            ("EUR", "USD", bad): unusable if position == "EUR-USD" else Decimal("1.07"),
+            ("EUR", "GBP", good): Decimal("0.84"),
+            ("EUR", "USD", good): Decimal("1.07"),
+        }
+        try:
+            found = compute_chain_rate(steps, leg_rates, bad)
+        except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+            pytest.fail(f"compute_chain_rate with the {position} leg at {unusable!r} raised {exc!r}: the sync of the pair fails (X-R38: None for that date)")
+
+        assert found is None, f"compute_chain_rate with the {position} leg at {unusable!r} = {found!r}: expected None, a date without a usable leg (X-R38)"
+        other = compute_chain_rate(steps, leg_rates, good)
+        expected = (Decimal("1") / Decimal("0.84")) * Decimal("1.07")
+        assert other is not None and abs(other - expected) < Decimal("0.0001"), f"the other date, whose legs are usable, computes {other!r}: expected {expected}"
