@@ -21,7 +21,6 @@ from backend.app.schemas.settings import (
     CacheStatusResponse,
     GlobalSettingBulkUpdate,
     GlobalSettingRead,
-    GlobalSettingsInitializeResponse,
     GlobalSettingsListResponse,
     OnboardingProgressItem,
     OnboardingProgressResponse,
@@ -46,9 +45,7 @@ from backend.app.services.accounts.settings_service import (
     GlobalSettingUnavailableError,
     GlobalSettingValueError,
     get_all_global_settings,
-    get_global_setting,
     get_or_create_user_settings,
-    initialize_global_settings,
     update_global_settings,
     update_user_settings,
 )
@@ -309,19 +306,6 @@ async def list_global_settings(
     return GlobalSettingsListResponse(items=settings)
 
 
-@router.get("/global/{key}", response_model=GlobalSettingRead)
-async def get_global_setting_endpoint(key: str, _current_user: Annotated[User, Depends(get_current_user)], session: AsyncSession = Depends(get_session_generator)) -> GlobalSettingRead:
-    """
-    Get a specific global setting by key.
-
-    Any signed-in user may read it (decision 36).
-    """
-    setting = await get_global_setting(key, session)
-    if not setting:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{key}' not found")
-    return setting
-
-
 @router.patch("/global/bulk", response_model=list[GlobalSettingRead])
 async def bulk_update_global_settings(
     update: GlobalSettingBulkUpdate,
@@ -345,20 +329,6 @@ async def bulk_update_global_settings(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": exc.code, "message": str(exc), "key": exc.key}) from None
     except GlobalSettingValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from None
-
-
-@router.post("/global/initialize", status_code=status.HTTP_200_OK, response_model=GlobalSettingsInitializeResponse)
-async def initialize_global_settings_endpoint(
-    admin: Annotated[User, Depends(require_admin)],
-    session: AsyncSession = Depends(get_session_generator),
-) -> dict:
-    """
-    Initialize global settings with default values.
-
-    Admin only. Creates only missing settings.
-    """
-    created = await initialize_global_settings(session)
-    return {"message": f"Initialized {created} global settings"}
 
 
 @router.get("/scheduler/state", response_model=SchedulerStateResponse)

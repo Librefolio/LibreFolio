@@ -159,9 +159,12 @@ async function deleteOwnedBrokers(page: Page, owned: OwnedBroker[]): Promise<voi
                 failures.push(`broker "${broker.brokerName}" (${broker.brokerId}): HTTP ${response.status()} ${JSON.stringify(body)}`);
                 continue;
             }
-            for (const fileId of broker.fileIds) {
-                const file = await page.request.get(`${API}/brokers/import/files/${fileId}`);
-                if (file.status() !== 404) failures.push(`file ${fileId} outlived broker "${broker.brokerName}" (${broker.brokerId}): HTTP ${file.status()}`);
+            const after = await page.request.get(`${API}/brokers/import/files`);
+            if (after.ok()) {
+                const remaining = new Set(((await after.json()) as Array<{file_id: string}>).map((file) => file.file_id));
+                for (const fileId of broker.fileIds) if (remaining.has(fileId)) failures.push(`file ${fileId} outlived broker "${broker.brokerName}" (${broker.brokerId})`);
+            } else {
+                failures.push(`list the files after deleting broker "${broker.brokerName}" (${broker.brokerId}): HTTP ${after.status()}`);
             }
         } catch (error) {
             failures.push(`broker "${broker.brokerName}" (${broker.brokerId}): ${String(error)}`);

@@ -6,7 +6,7 @@ implementation**: `compute_average_costs()` in
 `backend/app/services/financial_math/average_cost.py`. The Dashboard's purchase
 cost, realized sales and unrealized P&L, the Holdings table's average cost and
 Yield on Cost, the WAC lines of the lots analysis, the broker summary, the
-transaction preview, the automatic cost basis, `POST /portfolio/wac` and the PAC
+transaction preview, the automatic cost basis, the WAC series of `POST /portfolio/lots/analysis` and the PAC
 planner all read it.
 
 The cost it returns is **historical**: each acquisition costs what was actually
@@ -21,7 +21,6 @@ flowchart LR
     PS["PortfolioService<br/>summary · contribution · holdings"]
     Facade["compute_wac_iterative()<br/>facade"]
     Batch["Batch auto modes"]
-    WacApi["POST /portfolio/wac"]
     Pac["PAC planner"]
     Lots["LotsAnalysisService<br/>WAC lines"]
     Broker["BrokerService.get_summary()<br/>holding cost"]
@@ -29,7 +28,6 @@ flowchart LR
     AC -->|"one batched call"| FX
     PS --> Engine --> AC
     Batch --> Facade
-    WacApi --> Facade
     Pac --> Facade
     Facade --> AC
     Lots --> AC
@@ -522,14 +520,13 @@ provenance: `fx_info` (rate date and days back), `original_unit_cost`,
 | Caller | `as_of_date` | Target currency |
 |--------|--------------|-----------------|
 | Batch auto modes (`TransactionService._compute_wac_for_auto_items()`) | The row's date; the partner's date for the receiving side of a `TRANSFER`. The batch costs its Auto rows in the order of this date (see [Inline Batch Auto Modes](#inline-batch-auto-modes)) | The `cost_basis_override.code` sent as a hint, or the last acquisition's currency |
-| `POST /portfolio/wac` (`portfolio_api.py`) | The query's end date, or today | The last acquisition's currency |
 | PAC planner (`portfolio_allocation_source.py`) | The planner's date | The planner's target currency, as override, with `use_cache=False` |
 
 !!! note "Two target-currency rules"
 
     The documented decision *WAC target currency = last acquisition's currency*
     (devWiki: `decisions/wac-target-currency-last-acquisition`) still holds for the
-    transaction preview, the automatic cost basis and `POST /portfolio/wac`. The
+    transaction preview and the automatic cost basis. The
     Dashboard and everything the portfolio engine produces use the report currency.
 
 ---
@@ -603,7 +600,7 @@ unknown cost therefore comes from:
   [Parametric Provider Change](../assets/events.md#parametric-provider-change));
   once the row has a cost, 0 included, both go through
   (`test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`
-  in `backend/test_scripts/test_api/test_portfolio_wac.py` for the retype;
+  in `backend/test_scripts/test_api/test_lots_wac_history.py` for the retype;
   `test_provider_wipe_split_guard.py` in `backend/test_scripts/test_services/` for
   the provider change). The market-data wipe of a currency change needs no such
   refusal since N68: it never deletes a `SPLIT`, so the adjustments keep their link
@@ -792,7 +789,7 @@ carries the count only, never a transaction id: the pool can be another user's
 broker, since the receiving side of a `TRANSFER` averages its partner's.
 
 The guard is `_auto_cost()`'s, so it covers the costs written on rows — Auto rows,
-and the Auto cost a broker deletion writes on a received leg; `POST /portfolio/wac` and the PAC planner
+and the Auto cost a broker deletion writes on a received leg; the PAC planner
 call `compute_wac_iterative()` directly, without it. Where it raises, nothing
 averaged from that pool is written:
 
@@ -829,7 +826,7 @@ is appended to the list passed as `nothing_to_average` (without a list,
 issue `code` on its row — field `cost_basis_override`, no `params`, no transaction id,
 since the pool can be another user's. The batch is not saved. The user can still
 enter 0 by hand, for units that really came free. Only the batch's Auto rows are
-checked: `delete_by_broker()`, `POST /portfolio/wac` and the PAC
+checked: `delete_by_broker()` and the PAC
 planner keep the facade's 0. A pool whose cost is only partly unknown gives an
 understated average, written as before (J-58, a decision of the developer). Tests:
 `./dev.py test services transaction-cost-basis-rule N88`.
@@ -872,11 +869,11 @@ other row:
 
 ## 🔍 Preview and Response Data
 
-Committed WAC analytics are exposed through:
-
-```text
-POST /portfolio/wac
-```
+The committed WAC series is read through `POST /portfolio/lots/analysis`, by asking for
+the `BROKER_WAC_HISTORY` component (one `BrokerWACHistoryPoint` per step and broker: `wac`
+and `pool_qty`) and the `CUMULATIVE_WAC_HISTORY` component (one `CumulativeWACHistoryPoint`
+per step across the requested brokers); see
+[Lots Analysis Service](lots_analysis_service.md). There is no stand-alone WAC route.
 
 Inline batch results use the same `WACPreviewResultItem` schema and additionally
 populate `operation`, `index`, and `source_broker_id`. The main fields are:

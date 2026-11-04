@@ -4,7 +4,6 @@ Tests for utilities API endpoints.
 Tests the /api/v1/utilities endpoints:
 - GET /utilities/sectors - List standard financial sectors, with the allocation buckets and the fallback emoji
 - GET /utilities/countries - List all countries with ISO codes and flag emoji
-- GET /utilities/currencies/normalize - Normalize currency name/code/symbol
 """
 
 import httpx
@@ -223,71 +222,6 @@ async def test_list_countries_italian(test_server):
 
         print_info(f"  Found {len(countries)} countries (Italian names)")
         print_success("✓ Countries list with Italian names")
-
-
-# ============================================================
-# GET /utilities/currencies/normalize Tests
-# ============================================================
-
-
-@pytest.mark.asyncio
-async def test_normalize_currency_iso_code(test_server):
-    """Test 10: GET /utilities/currencies/normalize - ISO code."""
-    print_section("Test 10: Normalize Currency - ISO Code")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "USD"}, timeout=TIMEOUT)
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["query"] == "USD"
-        assert "USD" in data["iso_codes"]
-        assert data["match_type"] == "exact"
-
-        print_info(f"  USD -> {data['iso_codes']}")
-        print_success("✓ Currency ISO code normalized correctly")
-
-
-@pytest.mark.asyncio
-async def test_normalize_currency_symbol(test_server):
-    """Test 11: GET /utilities/currencies/normalize - Currency symbol."""
-    print_section("Test 11: Normalize Currency - Symbol")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "€"}, timeout=TIMEOUT)
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["query"] == "€"
-        # Symbol may resolve to the symbol itself or EUR depending on implementation
-        assert len(data["iso_codes"]) > 0
-
-        print_info(f"  € -> {data['iso_codes']}")
-        print_success("✓ Currency symbol normalized correctly")
-
-
-@pytest.mark.asyncio
-async def test_normalize_currency_passthrough(test_server):
-    """Test 12: GET /utilities/currencies/normalize - Unknown input is passed through."""
-    print_section("Test 12: Normalize Currency - Passthrough")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "xyznotacurrency123"}, timeout=TIMEOUT)
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["query"] == "xyznotacurrency123"
-        # API returns the input uppercased as "exact" match (passthrough behavior)
-        assert len(data["iso_codes"]) >= 0  # may or may not find a match
-
-        print_info(f"  xyznotacurrency123 -> match_type={data['match_type']}, codes={data['iso_codes']}")
-        print_success("✓ Unknown currency handled correctly")
 
 
 class TestListCurrenciesEndpoint:

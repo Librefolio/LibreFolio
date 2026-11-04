@@ -716,23 +716,6 @@ async def list_files(
     return [BRIMFileListItem(**file.model_dump(), can_delete=file.target_broker_id in editable if file.target_broker_id is not None else True) for file in files]
 
 
-@brim_router.get("/files/{file_id}", response_model=BRIMFileInfo)
-async def get_file(
-    file_id: str,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session_generator),
-) -> BRIMFileInfo:
-    """
-    Get details for a specific file.
-
-    Any role on the file's broker; a file with no broker (uploaded by an older version) only its uploader. The
-    administrator reaches every file; anyone else gets 403. An id that is not a UUID is a 404 (decision 36).
-    """
-    file_info = await _get_brim_file_with_access(file_id, current_user, session)
-    await apply_settings_staleness([file_info], current_user.id)
-    return file_info
-
-
 @brim_router.get("/files/{file_id}/preview", response_model=FilePreviewResponse)
 async def get_brim_file_preview(
     file_id: str,
@@ -833,22 +816,6 @@ async def download_file(
         content_disposition_type="inline" if inline else "attachment",
         headers={"X-Content-Type-Options": "nosniff"},
     )
-
-
-@brim_router.get("/files/{file_id}/last-parse")
-async def get_last_parse_result(
-    file_id: str,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session_generator),
-) -> Optional[dict]:
-    """
-    Get the cached result from the last successful parse.
-
-    Useful for reloading a preview without re-parsing the file.
-    Returns None if no parse result is cached.
-    """
-    file_info = await _get_brim_file_with_access(file_id, current_user, session)
-    return file_info.last_parse_result
 
 
 @brim_router.get("/files/{file_id}/plugin-check", response_model=BRIMPluginCheck)

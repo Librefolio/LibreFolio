@@ -53,10 +53,8 @@ if TYPE_CHECKING:
         BaseDistribution,
         # Metadata & classification
         FAAssetMetadataResponse,
-        FABulkMetadataRefreshResponse,
         FAClassificationParams,
         FAGeographicArea,
-        FAMetadataRefreshResult,
         FASectorArea,
     )
     from backend.app.schemas.brim import (
@@ -332,8 +330,6 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "FASectorArea",
     "FAClassificationParams",
     "FAAssetMetadataResponse",
-    "FAMetadataRefreshResult",
-    "FABulkMetadataRefreshResponse",
     "FABulkAssetPatchResponse",
     "FAAssetPatchResult",
     # Assets: CRUD
@@ -501,10 +497,8 @@ _EXPORT_GROUPS = {
     "assets.metadata": (
         "BaseDistribution",
         "FAAssetMetadataResponse",
-        "FABulkMetadataRefreshResponse",
         "FAClassificationParams",
         "FAGeographicArea",
-        "FAMetadataRefreshResult",
         "FASectorArea",
     ),
     "brim": (

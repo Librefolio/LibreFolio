@@ -47,7 +47,7 @@ import {uniqueSuffix} from '../fixtures/unique';
 const API = '/api/v1';
 const COMMIT_PATH = `${API}/transactions/commit`;
 const REPORT_PATH = `${API}/portfolio/report`;
-const WAC_PATH = `${API}/portfolio/wac`;
+const LOTS_PATH = `${API}/portfolio/lots/analysis`;
 const UI_TIMEOUT = 15_000;
 /** The dashboard period: it starts before the first movement and ends today. */
 const PERIOD_START_DAYS_AGO = 90;
@@ -108,7 +108,7 @@ type CommitBody = {
 };
 type SentCreate = Record<string, unknown>;
 type TransactionRead = {id: number; broker_id: number; asset_id?: number | null; type: string; date: string; quantity: string; related_transaction_id?: number | null; cost_basis_override?: Money | null};
-type WacBody = {results: Array<{broker_id: number; asset_id: number; currency: string; series: Array<{date: string; wac: string; pool_qty: string}>}>};
+type WacBody = {asset_id: number; target_currency: string; broker_wac_history: Array<{broker_id: number; date: string; through: string; wac: string; pool_qty: string}> | null};
 type ReportHolding = {asset_id: number; broker_id?: number | null; quantity: string; wac_per_unit?: string | null; current_value?: string | null; gain_loss?: string | null};
 type ReportBody = {metadata?: {target_currency?: string} | null; summary?: {holdings?: ReportHolding[]} | null};
 type ReportRequestBody = {include_summary?: boolean; include_positions_contribution?: boolean; date_range?: {start?: string; end?: string} | null};
@@ -203,15 +203,15 @@ async function commitLedger(page: Page, from: Broker, asset: Asset, marker: stri
     expect(body.committed, `the ledger of broker A rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
 }
 
-/** The average-cost series of `broker` for `asset`, one point per movement: date, average and units after it. */
+/** The average-cost line of `broker` for `asset` (BROKER_WAC_HISTORY of the lots analysis), one step per change: date, average and units. */
 async function averageSeries(page: Page, broker: Broker, asset: Asset): Promise<Array<{date: string; wac: number; pool_qty: number}>> {
-    const query = {queries: [{broker_id: broker.id, asset_id: asset.id}]};
-    schemas.WACAnalyticsRequest.parse(query);
-    const body = await jsonFrom<WacBody>(await page.request.post(WAC_PATH, {data: query}), `the average cost of ${broker.name}`);
-    const result = body.results.find((item) => item.broker_id === broker.id && item.asset_id === asset.id);
-    if (!result) throw new Error(`POST /portfolio/wac answered nothing for broker ${broker.id}: ${JSON.stringify(body)}`);
-    expect(result.currency, 'the average is in the asset currency').toBe('EUR');
-    return result.series.map((point) => ({date: point.date, wac: Number(point.wac), pool_qty: Number(point.pool_qty)}));
+    const query = {asset_id: asset.id, broker_ids: [broker.id], target_currency: 'EUR', requested_analyses: ['BROKER_WAC_HISTORY']};
+    schemas.LotsAnalysisQuery.parse(query);
+    const body = await jsonFrom<WacBody>(await page.request.post(LOTS_PATH, {data: query}), `the average cost of ${broker.name}`);
+    expect(body.asset_id, 'the lots analysis answers for the asked asset').toBe(asset.id);
+    expect(body.target_currency, 'the average is in the asset currency').toBe('EUR');
+    const line = (body.broker_wac_history ?? []).filter((point) => point.broker_id === broker.id);
+    return line.sort((a, b) => a.date.localeCompare(b.date)).map((point) => ({date: point.date, wac: Number(point.wac), pool_qty: Number(point.pool_qty)}));
 }
 
 async function ledgerOf(page: Page, broker: Broker): Promise<TransactionRead[]> {

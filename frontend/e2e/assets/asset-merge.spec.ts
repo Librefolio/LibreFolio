@@ -215,8 +215,8 @@ test.describe('Assets — merge', () => {
         await page.getByTestId('asset-merge-confirm').click();
         await expect(page.getByTestId('asset-merge-modal')).toBeHidden({timeout: 15_000});
 
-        // Only `/assets/all` carries the identifier block; the bulk read is metadata only.
-        const survivor = await page.request.get(`${API}/assets/all`);
+        // Only the asset query (`FAinfoResponse`) carries the identifier block; the bulk read is metadata only.
+        const survivor = await page.request.get(`${API}/assets/query?active=true`);
         expect(survivor.ok(), await survivor.text()).toBeTruthy();
         const asset = ((await survivor.json()) as {id: number}[]).find((a) => a.id === pair.targetId) as {identifier_isin?: string; identifier_other?: string[]} | undefined;
         expect(asset, 'the surviving asset must still be readable').toBeTruthy();

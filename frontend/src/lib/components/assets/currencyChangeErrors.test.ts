@@ -2,8 +2,8 @@
 /**
  * currencyChangeErrors — unit test (Vitest, node). Workstream X, lots X-R48, X-R49 and X-R62 (the last written by H, for X).
  *
- * Why. A currency change that market data blocks goes through `AssetCurrencyChangeModal`: its confirm wipes the
- * asset's prices and events (`POST /assets/{id}/market-data/wipe`), then patches the currency. Since X-R48 the wipe
+ * Why. A currency change that market data blocks goes through `AssetCurrencyChangeModal`: its confirm used to wipe the
+ * asset's prices and events (a route since removed), then patched the currency. Since X-R48 the wipe
  * refuses, before writing anything, when a SPLIT of the asset has linked incoming adjustments without a purchase cost:
  * deleting the split would turn those units into purchases of unknown cost. The answer is 409 with
  * `detail = {error_code: 'MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST', message, params: {splits: [{event_id, date,

@@ -405,17 +405,6 @@ def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Transactions API tests", verbose=verbose)
 
 
-def api_transfer_promotion(verbose: bool = False, test_names: list = None) -> bool:
-    """Run Transfer Promotion API tests."""
-    print_section("Transfer Promotion API Tests")
-    print_info("Testing POST /transactions/transfers/promote (Block H.4)")
-    print_info("Tests: DEPOSIT/WITHDRAWAL → TRANSFER / FX_CONVERSION atomic promotion")
-    print_info("Note: Server will be automatically started and stopped by test")
-
-    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transfer_promotion.py", test_names)
-    return run_command(cmd, "Transfer Promotion API tests", verbose=verbose)
-
-
 def api_transactions_validate(verbose: bool = False, test_names: list = None) -> bool:
     """Run POST /transactions/validate dry-run tests."""
     print_section("Transactions Validate (C.1) API Tests")
@@ -444,16 +433,6 @@ def api_broker_overdraft_off_refused(verbose: bool = False, test_names: list = N
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_broker_overdraft_off_refused.py", test_names)
     return run_command(cmd, "Broker overdraft off refused tests", verbose=verbose)
-
-
-def api_events_suggest(verbose: bool = False, test_names: list = None) -> bool:
-    """Run POST /transactions/events/suggest tests."""
-    print_section("Events Suggest (C.2) API Tests")
-    print_info("Testing POST /transactions/events/suggest — candidate events within tolerance")
-    print_info("Note: Server will be automatically started and stopped by test")
-
-    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_events_suggest.py", test_names)
-    return run_command(cmd, "Events suggest tests", verbose=verbose)
 
 
 def api_batch_split_promote(verbose: bool = False, test_names: list = None) -> bool:
@@ -1020,14 +999,14 @@ def api_portfolio(verbose: bool = False, test_names: list[str] | None = None) ->
     return run_command(cmd, "Portfolio API tests", verbose=verbose)
 
 
-def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None) -> bool:
-    """Run portfolio WAC API tests."""
-    print_section("Portfolio WAC API Tests")
-    print_info("Testing POST /api/v1/portfolio/wac endpoint (A1-A8)")
+def api_lots_wac_history(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the average-cost (WAC) history tests of the lots analysis."""
+    print_section("Lots WAC History API Tests")
+    print_info("Testing POST /api/v1/portfolio/lots/analysis BROKER_WAC_HISTORY: average-cost line, split rescale, SPLIT retype")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_portfolio_wac.py", test_names)
-    return run_command(cmd, "Portfolio WAC API tests", verbose=verbose)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_lots_wac_history.py", test_names)
+    return run_command(cmd, "Lots WAC history API tests", verbose=verbose)
 
 
 def api_email(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -1388,11 +1367,9 @@ Tests for REST API endpoints (server auto-started):
         isolation="pure",
     )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
-    add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
     add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
-    add_test(api, "events-suggest", api_events_suggest, name="Events Suggest", desc="Candidate events within tolerance")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
     add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets/{id} field-level updates")
@@ -1669,7 +1646,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
-    add_test(api, "portfolio-wac", api_portfolio_wac, name="Portfolio WAC API", desc="POST /portfolio/wac endpoint (A1-A8)")
+    add_test(api, "lots-wac-history", api_lots_wac_history, name="Lots WAC History API", desc="BROKER_WAC_HISTORY of the lots analysis (average-cost line, split)")
     add_test(
         api,
         "email",

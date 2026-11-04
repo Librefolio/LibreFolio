@@ -232,7 +232,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
 | | User Settings | Global Settings |
 |---|---|---|
 | Storage | **Typed columns** on the per-user `UserSettings` row | **Key-value rows** in the `GlobalSetting` table |
-| Who reads | The user themselves (`GET /api/v1/settings/user`) | Any signed-in user (`GET /api/v1/settings/global`, `GET /api/v1/settings/global/{key}`): `401` without a session. The app reads them for every user — the `globalSettings` store loaded at bootstrap (the default currency, the upload limit of the Files page), the instance defaults of the Preferences tab — although only administrators have the **Global Settings** tab since lot N69-2. The login page reads none of them: what it needs before sign-in is in [`GET /system/instance`](#public-instance-configuration) |
+| Who reads | The user themselves (`GET /api/v1/settings/user`) | Any signed-in user (`GET /api/v1/settings/global`): `401` without a session. The app reads them for every user — the `globalSettings` store loaded at bootstrap (the default currency, the upload limit of the Files page), the instance defaults of the Preferences tab — although only administrators have the **Global Settings** tab since lot N69-2. The login page reads none of them: what it needs before sign-in is in [`GET /system/instance`](#public-instance-configuration) |
 | Who writes | The user themselves (`PUT /api/v1/settings/user`) | Admins only (**Global Settings** tab of Settings › Administration, or `PATCH /api/v1/settings/global/bulk`) |
 | Examples | `language`, `base_currency`, `theme`, `avatar_url` | `session_ttl_hours`, `registration_mode`, `scheduler_*`, `default_currency` … |
 
@@ -268,7 +268,7 @@ idempotent seeding is available from the CLI:
 ./dev.py user init-settings        # creates only missing keys (INSERT ... ON CONFLICT DO NOTHING)
 ```
 
-or via `POST /api/v1/settings/global/initialize` (admin only, same idempotent semantics).
+There is no API route for it: global settings are initialised at application start and from the CLI only.
 
 How global values behave at runtime:
 

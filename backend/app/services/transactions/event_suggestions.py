@@ -14,7 +14,7 @@ from backend.app.utils.datetime_utils import shift_date
 
 
 class TransactionEventSuggestionsMixin:
-    """The asset events a transaction can link to, near its date (``POST /transactions/events/suggest``).
+    """The asset events a transaction can link to, near its date (used by ``GET /transactions/event-reconciliation``).
 
     Mixed into ``TransactionService`` (``transaction_service.py``), which provides ``session``.
     """

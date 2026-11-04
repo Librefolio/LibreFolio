@@ -12,7 +12,6 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.events import (
     FABulkEventUpsertResponse,
-    FAEventBulkDeleteResponse,
     FAEventQueryItem,
     FAEventQueryResponse,
     FAEventUpsert,
@@ -115,34 +114,6 @@ async def upsert_events_bulk(
     except Exception as e:
         logger.exception(f"Error in bulk upsert events: {e}")
         raise HTTPException(status_code=500, detail="Internal error while saving events") from e
-
-
-@event_router.delete("", response_model=FAEventBulkDeleteResponse)
-async def delete_events_bulk(
-    asset_id: int = Query(..., description="The asset whose events are deleted: an id of another asset answers not_found"),
-    ids: List[int] = Query(..., description="Event IDs to delete"),
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-):
-    """Bulk delete the events of one asset with RESTRICT-aware response.
-
-    ``asset_id`` is required (decision 21): only that asset's events are deleted.
-
-    For each id, returns one of:
-    - ``deleted``: event removed
-    - ``not_found``: id didn't match any event of the asset
-    - ``in_use``: blocked by FK because referenced by transactions; response
-      includes ``accessible_transactions`` (tx ids current user can access)
-      and ``hidden_transactions_count`` (refs owned by other users).
-
-    Always returns HTTP 200. Successful deletions are committed even if others
-    are blocked (no partial rollback). Frontend inspects per-item ``results``.
-    """
-    try:
-        return await AssetSourceManager.delete_events_bulk(asset_id, ids, session, current_user)
-    except Exception as e:
-        logger.exception(f"Error in bulk delete events: {e}")
-        raise HTTPException(status_code=500, detail="Internal error while deleting events") from e
 
 
 @event_router.post("/query", response_model=FAEventQueryResponse)

@@ -139,26 +139,6 @@ async def patch_assets_bulk(
         raise HTTPException(status_code=500, detail="Internal error while updating assets") from e
 
 
-@crud_router.get("/all", response_model=List[FAinfoResponse], tags=["FA CRUD"])
-async def get_all_assets(session: AsyncSession = Depends(get_session_generator), current_user: User = Depends(get_current_user)):
-    """
-    Get all active assets without filters.
-
-    Simple endpoint for frontend to load complete asset list.
-    Returns all active assets with identifier info.
-
-    **Response Fields**:
-    - `identifier`: Asset identifier (ticker, ISIN, etc.) if provider assigned
-    - `identifier_type`: Type of identifier (TICKER, ISIN, UUID, OTHER)
-    """
-    try:
-        filters = FAAinfoFiltersRequest(active=True)
-        return await AssetCRUDService.list_assets(filters, session, user_id=current_user.id)
-    except Exception as e:
-        logger.exception(f"Error getting all assets: {e}")
-        raise HTTPException(status_code=500, detail="Internal error while listing assets") from e
-
-
 @crud_router.get("/query", response_model=List[FAinfoResponse], tags=["FA CRUD"])
 async def list_assets(
     currency: Optional[str] = Query(None, description="Filter by currency (ISO 4217, e.g., USD)"),

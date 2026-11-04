@@ -46,7 +46,7 @@ linked to the SPLIT, whoever's broker it is on, and any user can trigger it on a
 file's own rule (``_delete_item_events`` answers counts, never transaction ids: they may belong to other users). The
 cure's contract: ``bulk_upsert_events(data, session, *, current_user_id=None)``, and ``POST /assets/events`` passes the
 caller. With a ``current_user_id``, ``transaction_ids`` keeps the transactions that user can see — a ``BrokerUserAccess``
-row for the transaction's broker, as ``delete_events_bulk`` decides ``accessible_transactions`` — sorted, and a new key,
+row for the transaction's broker, as the removed bulk delete decided ``accessible_transactions`` — sorted, and a new key,
 ``hidden_transactions_count``, counts the others; the message keeps the total count only. X-R47b (E's security review
 of 8ceb96aff: fail closed, where R13-SEC7's cure still named every id without a caller): the details always carry both
 keys, and without a ``current_user_id`` no transaction is named — ``transaction_ids`` is [] and

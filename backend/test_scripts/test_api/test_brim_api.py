@@ -4,13 +4,12 @@ BRIM API Tests.
 Tests for Broker Report Import Manager API endpoints:
 - POST /brokers/import/upload: Upload broker report file (optional batch_id: report sets)
 - GET /brokers/import/files: List uploaded files
-- GET /brokers/import/files/{id}: Get file details
 - DELETE /brokers/import/files/{id}: Delete file
 - POST /brokers/import/files/{id}/parse: Parse file
 - GET /brokers/import/plugins: List available plugins
 - POST /brokers/import/sets/preview and /sets/combine: report sets (phase A2)
 - POST /brokers/import/gap-fix: the corrections that align LibreFolio with the bank (phase A3)
-- GET /brokers/import/files and /files/{id} detect again the plugins of a file detected
+- GET /brokers/import/files detects again the plugins of a file detected
   before item 8, whose sidecar has no detection signature (step 5, item 8: Category 13)
 - DELETE /brokers/import/files/{id} waiting for the broker's metadata lock leaves its backend
   process responsive (step 5, item 8 + F1: Category 14)
@@ -274,24 +273,18 @@ class TestFileStorage:
             )
             file_id = upload_response.json()["file_id"]
 
-            # Get file info
-            response = await client.get(
-                f"{API_BASE}/brokers/import/files/{file_id}",
-                timeout=TIMEOUT,
-            )
-
-            assert response.status_code == 200
-            data = response.json()
+            # Get file info (from the list)
+            data = await _required_file_info(client, file_id)
             assert data["file_id"] == file_id
             assert data["filename"] == "info_test.csv"
 
     @pytest.mark.asyncio
     async def test_get_file_not_found(self, test_server):
-        """FS-006: 404 for non-existent file."""
+        """FS-006: 404 for non-existent file (on its preview, the per-file read route)."""
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             response = await client.get(
-                f"{API_BASE}/brokers/import/files/nonexistent-uuid",
+                f"{API_BASE}/brokers/import/files/nonexistent-uuid/preview",
                 timeout=TIMEOUT,
             )
 
@@ -324,8 +317,9 @@ class TestFileStorage:
             assert delete_response.json()["success"] is True
 
             # Verify file is gone
+            assert await _file_info(client, file_id) is None
             get_response = await client.get(
-                f"{API_BASE}/brokers/import/files/{file_id}",
+                f"{API_BASE}/brokers/import/files/{file_id}/preview",
                 timeout=TIMEOUT,
             )
             assert get_response.status_code == 404
@@ -1014,68 +1008,13 @@ class TestMultiUserBRIM:
             parse_data = parse_response.json()
 
             # Get file info - should have cached result
-            file_response = await client.get(
-                f"{API_BASE}/brokers/import/files/{file_id}",
-                timeout=TIMEOUT,
-            )
-            assert file_response.status_code == 200
-            file_data = file_response.json()
+            file_data = await _required_file_info(client, file_id)
 
             # last_parse_result should contain the cached data
             assert file_data.get("last_parse_result") is not None
             cached = file_data["last_parse_result"]
             assert "transactions" in cached
             assert len(cached["transactions"]) == len(parse_data["transactions"])
-
-    @pytest.mark.asyncio
-    async def test_get_last_parse_endpoint(self, test_server, sample_csv_content):
-        """MU-007: GET /files/{id}/last-parse returns cached parse result."""
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            broker_id = await create_test_broker(client)
-
-            # Upload file
-            files = {"file": ("last_parse_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
-            upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload",
-                files=files,
-                data={"broker_id": broker_id},
-                timeout=TIMEOUT,
-            )
-            assert upload_response.status_code == 200
-            file_id = upload_response.json()["file_id"]
-
-            # Before parse - should return null/empty
-            last_parse_before = await client.get(
-                f"{API_BASE}/brokers/import/files/{file_id}/last-parse",
-                timeout=TIMEOUT,
-            )
-            assert last_parse_before.status_code == 200
-            # Before parsing, result should be null
-            assert last_parse_before.json() is None
-
-            # Parse file
-            parse_response = await client.post(
-                f"{API_BASE}/brokers/import/files/{file_id}/parse",
-                json={
-                    "plugin_code": "broker_generic_csv",
-                    "broker_id": broker_id,
-                },
-                timeout=TIMEOUT,
-            )
-            assert parse_response.status_code == 200
-
-            # After parse - should return cached result
-            last_parse_after = await client.get(
-                f"{API_BASE}/brokers/import/files/{file_id}/last-parse",
-                timeout=TIMEOUT,
-            )
-            assert last_parse_after.status_code == 200
-            cached = last_parse_after.json()
-
-            assert cached is not None
-            assert "transactions" in cached
-            assert "warnings" in cached
 
     @pytest.mark.asyncio
     async def test_editor_can_upload_and_parse(self, test_server, sample_csv_content):
@@ -1178,6 +1117,22 @@ async def _files_on(client: httpx.AsyncClient, broker_id: int) -> list:
     return [info for info in response.json() if info.get("target_broker_id") == broker_id]
 
 
+async def _file_info(client: httpx.AsyncClient, file_id: str) -> Optional[dict]:
+    """The file's info: its item of the unfiltered list as ``client``'s user sees it, ``None`` when it is not listed (there is no per-file read route)."""
+    response = await client.get(f"{API_BASE}/brokers/import/files", timeout=TIMEOUT)
+    assert response.status_code == 200, response.text
+    matching = [item for item in response.json() if item["file_id"] == file_id]
+    assert len(matching) <= 1, f"file {file_id} listed {len(matching)} times"
+    return matching[0] if matching else None
+
+
+async def _required_file_info(client: httpx.AsyncClient, file_id: str) -> dict:
+    """``_file_info`` of a file that must be listed."""
+    info = await _file_info(client, file_id)
+    assert info is not None, f"file {file_id} is not in the list"
+    return info
+
+
 def _set_url(endpoint: str) -> str:
     return f"{API_BASE}/brokers/import/sets/{endpoint}"
 
@@ -1187,7 +1142,7 @@ class TestUploadBatchId:
 
     @pytest.mark.asyncio
     async def test_batch_id_is_stored_and_returned(self, test_server, sample_csv_content):
-        """RS-001: two files uploaded with one batch_id carry it in the upload response, in GET /files/{id} and in GET /files."""
+        """RS-001: two files uploaded with one batch_id carry it in the upload response and in GET /files."""
         print_section("RS-001: upload batch_id is stored and returned")
         batch = str(uuid.uuid4())
         async with httpx.AsyncClient() as client:
@@ -1200,9 +1155,7 @@ class TestUploadBatchId:
             file_ids = [response.json()["file_id"] for response in uploads]
             assert [response.json()["batch_id"] for response in uploads] == [batch, batch]
             for file_id in file_ids:
-                detail = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-                assert detail.status_code == 200, detail.text
-                assert detail.json()["batch_id"] == batch
+                assert (await _required_file_info(client, file_id))["batch_id"] == batch
             listed = {info["file_id"]: info for info in await _files_on(client, broker_id)}
             assert {file_id: listed[file_id]["batch_id"] for file_id in file_ids} == dict.fromkeys(file_ids, batch)
             print_success("✓ batch_id stored and returned")
@@ -1427,11 +1380,9 @@ class TestParseReportSetFields:
             data = parsed.json()
             assert len(data["transactions"]) == 2
             assert {key: data[key] for key in empty} == empty
-            cached = await client.get(f"{API_BASE}/brokers/import/files/{file_id}/last-parse", timeout=TIMEOUT)
-            assert cached.status_code == 200, cached.text
-            assert {key: cached.json()[key] for key in empty} == empty
-            info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-            assert info.json()["status"] == "parsed"
+            info = await _required_file_info(client, file_id)
+            assert {key: info["last_parse_result"][key] for key in empty} == empty
+            assert info["status"] == "parsed"
 
 
 # ============================================================================
@@ -1855,7 +1806,7 @@ class TestDanskeReportSetEndToEnd:
                 refused = await client.post(f"{API_BASE}/brokers/import/files/{member}/parse", json={"plugin_code": DANSKE_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
                 assert refused.status_code == 422, refused.text
                 assert refused.json()["detail"]["code"] == "set_required"
-                assert (await client.get(f"{API_BASE}/brokers/import/files/{member}", timeout=TIMEOUT)).json()["status"] == "uploaded"
+                assert (await _required_file_info(client, member))["status"] == "uploaded"
 
                 parsed = await client.post(f"{API_BASE}/brokers/import/files/{combined['file_id']}/parse", json={"plugin_code": DANSKE_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
                 assert parsed.status_code == 200, parsed.text
@@ -2187,9 +2138,8 @@ async def _forced_parse(client: httpx.AsyncClient, broker_id: int, content: byte
 
 async def _assert_failed_with(client: httpx.AsyncClient, file_id: str, message: str) -> None:
     """The refused file is ``failed`` and keeps ``message`` (English, diagnostic) as its stored ``error_message``."""
-    info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-    assert info.status_code == 200, info.text
-    assert (info.json()["status"], info.json()["error_message"]) == ("failed", message), f"the failed file keeps the English text as its diagnostic: {info.json()}"
+    info = await _required_file_info(client, file_id)
+    assert (info["status"], info["error_message"]) == ("failed", message), f"the failed file keeps the English text as its diagnostic: {info}"
 
 
 class TestParseRefusalReason:
@@ -2310,7 +2260,7 @@ class TestParseRefusalReason:
 # either, so its uploads are detected again but form no set (guarded at service level, in
 # test_services/test_brim_report_sets.py). The sidecar is rewritten in this lane's test data directory
 # (``get_test_data_dir``: the runner exports ``--data-dir`` to the backend under test and to pytest alike), then the
-# test reads the file through the list and through the file endpoint. The rules of the detection are tested at service
+# test reads the file through the list. The rules of the detection are tested at service
 # level, in test_services/test_brim_parse_race.py. The test deletes the file and the broker it created.
 
 DANSKE_CASH_NAME = "danske_bank-cash.csv"
@@ -2335,13 +2285,12 @@ def _as_detected_before_item_8(sidecar: Path) -> None:
 
 
 class TestPluginRedetection:
-    """Item 8 — the file list and the file endpoint give today's plugins for a file detected before item 8, and save them."""
+    """Item 8 — the file list gives today's plugins for a file detected before item 8, and save them."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("endpoint", ["list", "file"])
-    async def test_a_danske_export_detected_before_item_8_is_detected_again(self, test_server, endpoint):
-        """RS-I801: the Danske cash statement, its sidecar left without the detection signature, read through ``GET /files`` or ``GET /files/{id}``: Danske."""
-        print_section(f"RS-I801: a Danske export detected before item 8, read through the {endpoint} endpoint")
+    async def test_a_danske_export_detected_before_item_8_is_detected_again(self, test_server):
+        """RS-I801: the Danske cash statement, its sidecar left without the detection signature, read through ``GET /files``: Danske."""
+        print_section("RS-I801: a Danske export detected before item 8, read through the list")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_id = await create_test_broker(client)
@@ -2357,20 +2306,15 @@ class TestPluginRedetection:
                 assert sidecar.is_file(), f"premise: the test reaches the data directory of the backend under test: no sidecar at {sidecar}"
                 _as_detected_before_item_8(sidecar)
 
-                if endpoint == "list":
-                    listed = [info for info in await _files_on(client, broker_id) if info["file_id"] == file_id]
-                    assert len(listed) == 1, f"{file_id} listed {len(listed)} times"
-                    read = listed[0]
-                else:
-                    response = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-                    assert response.status_code == 200, response.text
-                    read = response.json()
+                listed = [info for info in await _files_on(client, broker_id) if info["file_id"] == file_id]
+                assert len(listed) == 1, f"{file_id} listed {len(listed)} times"
+                read = listed[0]
 
-                assert read["compatible_plugins"] == [DANSKE_CODE], f"the {endpoint} endpoint still gives the plugins stored before item 8: {read['compatible_plugins']}"
+                assert read["compatible_plugins"] == [DANSKE_CODE], f"the list still gives the plugins stored before item 8: {read['compatible_plugins']}"
                 stored = json.loads(sidecar.read_text())
                 assert stored["compatible_plugins"] == [DANSKE_CODE], f"the detection is not saved: {stored['compatible_plugins']}"
                 assert isinstance(stored.get("plugins_signature"), str) and stored["plugins_signature"], f"the detection is saved without the catalogue's signature: {sorted(stored)}"
-                print_success(f"✓ the {endpoint} endpoint detects again the plugins of a file detected before item 8")
+                print_success("✓ the list detects again the plugins of a file detected before item 8")
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
@@ -2813,9 +2757,7 @@ async def _upload_for_check(client: httpx.AsyncClient, broker_id: int, content: 
 async def _upload_scalable_deposit(client: httpx.AsyncClient, broker_id: int, file_ids: list) -> str:
     """Upload the overnight account's sample; the premise is that the test backend reads it with the overnight account's plugin, not the broker's."""
     file_id = await _upload_for_check(client, broker_id, SCALABLE_DEPOSIT_SAMPLE.read_bytes(), SCALABLE_DEPOSIT_SAMPLE.name, file_ids)
-    info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-    assert info.status_code == 200, info.text
-    compatible = info.json()["compatible_plugins"]
+    compatible = (await _required_file_info(client, file_id))["compatible_plugins"]
     if SCALABLE_DEPOSIT_CODE not in compatible or SCALABLE_BROKER_CODE in compatible:
         pytest.fail(f"premise: the test backend reads {SCALABLE_DEPOSIT_SAMPLE.name} with {SCALABLE_DEPOSIT_CODE} and not with {SCALABLE_BROKER_CODE}: compatible {compatible} (37_brimScalable, plan §4)", pytrace=False)
     return file_id
@@ -2823,9 +2765,7 @@ async def _upload_scalable_deposit(client: httpx.AsyncClient, broker_id: int, fi
 
 async def _assert_still_uploaded(client: httpx.AsyncClient, file_id: str) -> None:
     """The file as the upload left it: ``uploaded``, no parse result, no error, no parsing plugin."""
-    info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-    assert info.status_code == 200, info.text
-    data = info.json()
+    data = await _required_file_info(client, file_id)
     assert (data["status"], data["last_parse_result"], data["error_message"], data["parsed_plugin_code"]) == ("uploaded", None, None, None), f"the plugin check changed the file: {data}"
 
 
@@ -2989,7 +2929,7 @@ class TestPluginCheckEndpoint:
 # ============================================================================
 #
 # Decision 36 (developer, 15/10): a broker's files — list, preview, download — only to users with at least VIEWER on that
-# broker. The per-file routes (``GET /files/{id}``, ``/preview``, ``/download``, ``/last-parse``, ``/plugin-check``: VIEWER+;
+# broker. The per-file routes (``/preview``, ``/download``, ``/plugin-check``: VIEWER+;
 # ``POST /files/{id}/parse`` and ``DELETE /files/{id}``: EDITOR+) all start with ``_get_brim_file_with_access``, which looks
 # at the broker only ``if file_info.target_broker_id and not current_user.is_superuser``: a file with NO broker skips every
 # check, for anyone signed in, its parse and its delete included (W-B3). And ``brim_provider.list_files`` keeps
@@ -3079,10 +3019,8 @@ class _FileRoute:
 
 
 FILE_ROUTES = (
-    _FileRoute("info", "GET", "", True),
     _FileRoute("preview", "GET", "/preview", True),
     _FileRoute("download", "GET", "/download", True),
-    _FileRoute("last-parse", "GET", "/last-parse", True),
     _FileRoute("plugin-check", "GET", "/plugin-check", True),
     _FileRoute("parse", "POST", "/parse", False),
     _FileRoute("delete", "DELETE", "", False),
@@ -3281,9 +3219,8 @@ def _on_broker(planter: _Planter, broker_id: int, uploader_id: int, file_id: str
 async def _assert_reads_without_broker(client: httpx.AsyncClient, report: _Planted, uploader_id: Optional[int]) -> None:
     """``client``'s user — the uploader, or the administrator — reads the planted file with no broker as it was written: the premise
     that the test reached the data directory of the backend under test, and the presence barrier of the negatives that follow."""
-    response = await _ask(client, ROUTE["info"], report.file_id)
-    assert response.status_code == 200, f"premise: the file with no broker planted in the root of uploaded/ in {get_test_data_dir()} is read by its uploader or the administrator: {_answer(response)} — the test did not reach the data directory of the backend under test"
-    info = response.json()
+    info = await _file_info(client, report.file_id)
+    assert info is not None, f"premise: the file with no broker planted in the root of uploaded/ in {get_test_data_dir()} is listed for its uploader or the administrator — the test did not reach the data directory of the backend under test"
     read = (info["file_id"], info["target_broker_id"], info["uploaded_by_user_id"], info["status"])
     assert read == (report.file_id, None, uploader_id, "uploaded"), f"premise: the file as planted: {info}"
 
@@ -3365,7 +3302,7 @@ class TestReportsWithoutBroker:
     @pytest.mark.asyncio
     async def test_a_file_with_neither_broker_nor_uploader_is_the_administrators_only(self, test_server, planter):
         """F36-03: a file from before 2d2319450 (neither ``target_broker_id`` nor ``uploaded_by_user_id``): a regular user does not list
-        it, gets 403 on ``GET /files/{id}`` and on ``DELETE``, and the file stays. Barrier: the administrator reads and lists it. Red
+        it, gets 403 on ``/preview`` and on ``DELETE``, and the file stays. Barrier: the administrator reads and lists it. Red
         today: listed, 200, and the delete removes it."""
         print_section("F36-03: a file with neither broker nor uploader is the administrator's only")
         async with httpx.AsyncClient() as admin, httpx.AsyncClient() as user:
@@ -3376,18 +3313,18 @@ class TestReportsWithoutBroker:
             assert orphan.file_id in await _listed(admin), "presence barrier: the administrator lists it"
 
             listed = orphan.file_id in await _listed(user)
-            info = await _ask(user, ROUTE["info"], orphan.file_id)
+            preview = await _ask(user, ROUTE["preview"], orphan.file_id)
             delete = await _ask(user, ROUTE["delete"], orphan.file_id)
 
-            seen = {"listed": listed, "info": info.status_code, "delete": delete.status_code, "on disk": planter.where(orphan)}
-            assert seen == {"listed": False, "info": 403, "delete": 403, "on disk": planter.as_planted(orphan)}, f"a regular user on a file with neither broker nor uploader: {seen} (info {_answer(info)}; delete {_answer(delete)})"
+            seen = {"listed": listed, "preview": preview.status_code, "delete": delete.status_code, "on disk": planter.where(orphan)}
+            assert seen == {"listed": False, "preview": 403, "delete": 403, "on disk": planter.as_planted(orphan)}, f"a regular user on a file with neither broker nor uploader: {seen} (preview {_answer(preview)}; delete {_answer(delete)})"
             print_success("✓ a file with neither broker nor uploader is the administrator's only")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("reader", ["uploader", "administrator"])
     async def test_its_uploader_and_the_administrator_list_and_read_it(self, test_server, planter, reader):
         """F36-04 (guard, green today): U's file with no broker is in the list of ``reader`` (U, or the administrator), and every read
-        route answers 200: the info as planted, the preview of this file, the download with the planted bytes, no last parse, the
+        route answers 200: the preview of this file, the download with the planted bytes, the
         generic CSV's plugin check."""
         print_section(f"F36-04: the {reader} lists and reads a file with no broker")
         async with httpx.AsyncClient() as uploader, httpx.AsyncClient() as admin:
@@ -3405,7 +3342,6 @@ class TestReportsWithoutBroker:
             assert {name: response.status_code for name, response in answers.items()} == dict.fromkeys(answers, 200), {name: _answer(response) for name, response in answers.items()}
             assert answers["preview"].json()["download_url"].endswith(f"/files/{legacy.file_id}/download"), answers["preview"].text
             assert answers["download"].content == legacy.content, "the download is not the planted file"
-            assert answers["last-parse"].json() is None, answers["last-parse"].text
             assert answers["plugin-check"].json()["plugin_code"] == GENERIC_CSV_CODE, answers["plugin-check"].text
             print_success(f"✓ the {reader} lists and reads a file with no broker")
 
@@ -3429,7 +3365,7 @@ class TestReportsWithoutBroker:
             assert response.status_code == 200 and response.json() == {"success": True, "file_id": legacy.file_id}, _answer(response)
             assert planter.where(legacy) == [], f"the delete left the file on disk: {planter.where(legacy)}"
             assert legacy.file_id not in await _listed(client), f"the {deleter} still lists the deleted file"
-            gone = await _ask(client, ROUTE["info"], legacy.file_id)
+            gone = await _ask(client, ROUTE["preview"], legacy.file_id)
             assert gone.status_code == 404, _answer(gone)
             print_success(f"✓ the {deleter} deletes a file with no broker")
 
@@ -3499,7 +3435,7 @@ class TestReportsOfABroker:
     @pytest.mark.asyncio
     async def test_a_user_without_access_does_not_list_it_and_is_refused_everywhere(self, test_server):
         """F36-07 (guard, green today): a user with no role on the broker does not list its file (the owner does: the barrier) and
-        gets 403 on all seven per-file routes; the file stays ``uploaded`` with no parse."""
+        gets 403 on all five per-file routes; the file stays ``uploaded`` with no parse."""
         print_section("F36-07: a user without access does not list a broker's file and is refused on every route")
         async with httpx.AsyncClient() as owner, httpx.AsyncClient() as stranger:
             await _regular_user(owner)
@@ -3538,7 +3474,7 @@ class TestReportsOfABroker:
 
                 assert response.status_code == 200 and response.json() == {"success": True, "file_id": file_id}, _answer(response)
                 assert file_id not in await _listed(owner), "the owner still lists the deleted file"
-                gone = await _ask(owner, ROUTE["info"], file_id)
+                gone = await _ask(owner, ROUTE["preview"], file_id)
                 assert gone.status_code == 404, _answer(gone)
                 print_success("✓ an EDITOR deletes a broker's file")
             finally:
@@ -3598,7 +3534,7 @@ class TestFileIdsAreUuids:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("kind", NON_UUID_KINDS)
     async def test_a_file_id_that_is_not_a_uuid_answers_404_on_every_route(self, test_server, kind):
-        """F36-10: ``not-a-uuid``, ``..``, 300 characters, a UUID with a suffix, on the seven per-file routes, as a regular user with a
+        """F36-10: ``not-a-uuid``, ``..``, 300 characters, a UUID with a suffix, on the five per-file routes, as a regular user with a
         broker of their own (the parse imports into it): 404 everywhere. Today: guards for ``not-a-uuid``, ``dot-dot`` and
         ``uuid-with-suffix`` (the lookup finds nothing: 404); red for ``over-long`` (the lookup raises ENAMETOOLONG: 500)."""
         print_section(f"F36-10: a file id that is not a UUID answers 404 on every route ({kind})")
@@ -3619,7 +3555,7 @@ class TestFileIdsAreUuids:
     async def test_a_file_named_by_an_id_that_is_not_a_uuid_is_never_looked_up(self, test_server, planter):
         """F36-11: in the user's own broker folder, a file named ``<uuid>-1`` (its sidecar says so) next to a twin named by a plain
         UUID. The twin is served (the barrier: the planted files reach the backend's data directory); ``<uuid>-1`` answers 404 on
-        all seven routes, although the user owns the broker, and stays where it was planted. Red today: the lookup finds it, and
+        all five routes, although the user owns the broker, and stays where it was planted. Red today: the lookup finds it, and
         every route serves it (200), the parse moving it to ``parsed/``, the delete removing it."""
         print_section("F36-11: a file named by an id that is not a UUID is never looked up")
         async with httpx.AsyncClient() as client:
@@ -3628,8 +3564,8 @@ class TestFileIdsAreUuids:
             try:
                 twin = _on_broker(planter, broker_id, owner_id, str(uuid.uuid4()))
                 suffixed = _on_broker(planter, broker_id, owner_id, f"{uuid.uuid4()}-1")
-                served = await _ask(client, ROUTE["info"], twin.file_id)
-                assert served.status_code == 200 and served.json()["file_id"] == twin.file_id, f"premise: a file planted in the owner's broker folder under a plain UUID is served: {_answer(served)} — the test did not reach the data directory of the backend under test"
+                served = await _ask(client, ROUTE["preview"], twin.file_id)
+                assert served.status_code == 200, f"premise: a file planted in the owner's broker folder under a plain UUID is served: {_answer(served)} — the test did not reach the data directory of the backend under test"
 
                 answers = {route.name: await _ask(client, route, suffixed.file_id, broker_id) for route in FILE_ROUTES}
 
@@ -3642,7 +3578,7 @@ class TestFileIdsAreUuids:
 
     @pytest.mark.asyncio
     async def test_the_upper_cased_id_of_an_existing_file_answers_404_on_every_route(self, test_server):
-        """F36-15: a file the user uploaded to their own broker, its id upper-cased, on the seven per-file routes: 404 everywhere,
+        """F36-15: a file the user uploaded to their own broker, its id upper-cased, on the five per-file routes: 404 everywhere,
         although the user owns the broker and, on a case-insensitive disk, the spelling names the file. The file stays ``uploaded``
         with no parse, and its own id serves it, before and after (the barrier). A file id is the canonical, lower-case UUID an
         upload writes. Platform-dependent today. Red on a case-insensitive file system (macOS's default, this lane): the format
@@ -3660,8 +3596,8 @@ class TestFileIdsAreUuids:
                 shouted = file_id.upper()
                 assert str(uuid.UUID(file_id)) == file_id, f"premise: an upload writes its id as a canonical UUID, lower-case: {file_id}"
                 assert shouted != file_id, f"premise: the id has a letter to upper-case: {file_id}"
-                served = await _ask(client, ROUTE["info"], file_id)
-                assert served.status_code == 200 and served.json()["file_id"] == file_id, f"barrier: the file's own id serves it: {_answer(served)}"
+                served = await _ask(client, ROUTE["preview"], file_id)
+                assert served.status_code == 200, f"barrier: the file's own id serves it: {_answer(served)}"
 
                 answers = {route.name: await _ask(client, route, shouted, broker_id) for route in FILE_ROUTES}
 

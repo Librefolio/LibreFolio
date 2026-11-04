@@ -206,12 +206,12 @@ async def _tx_rows(client: httpx.AsyncClient, ids: list[int]) -> dict[int, dict[
 
 
 async def _wac_pool(client: httpx.AsyncClient, broker_id: int, asset_id: int) -> str:
-    """The pool quantities of the position's WAC series as text (nothing else: the cash is in another currency), and
-    the whole answer must not mention a missing cost basis."""
-    resp = await client.post(f"{API_BASE}/portfolio/wac", json={"queries": [{"broker_id": broker_id, "asset_id": asset_id}]}, timeout=TIMEOUT)
+    """The pool quantities of the position's average-cost line (``BROKER_WAC_HISTORY`` of the lots analysis) as text
+    (nothing else: the cash is in another currency), and the whole answer must not mention a missing cost basis."""
+    resp = await client.post(f"{API_BASE}/portfolio/lots/analysis", json={"asset_id": asset_id, "broker_ids": [broker_id], "requested_analyses": ["BROKER_WAC_HISTORY"]}, timeout=TIMEOUT)
     assert resp.status_code == 200, resp.text
     assert "MISSING_COST_BASIS" not in resp.text, resp.text
-    series = resp.json()["results"][0]["series"]
+    series = sorted((point for point in resp.json()["broker_wac_history"] or [] if point["broker_id"] == broker_id), key=lambda point: point["date"])
     return ",".join(str(Decimal(point["pool_qty"])) for point in series)
 
 
@@ -224,12 +224,12 @@ async def _patch_currency(client: httpx.AsyncClient, items: list[FAAssetPatchIte
 
 
 async def _currency(client: httpx.AsyncClient, asset_id: int) -> str:
-    resp = await client.get(f"{API_BASE}/assets/all", timeout=TIMEOUT)
+    resp = await client.get(f"{API_BASE}/assets/query", params={"active": True}, timeout=TIMEOUT)
     assert resp.status_code == 200, resp.text
     for a in resp.json():
         if a["id"] == asset_id:
             return a["currency"]
-    raise AssertionError(f"asset {asset_id} not in /assets/all")
+    raise AssertionError(f"asset {asset_id} not in /assets/query?active=true")
 
 
 def _assert_all_patched(resp: httpx.Response, asset_ids: list[int]) -> dict[int, dict]:

@@ -1434,12 +1434,11 @@ class TestBrokerImportEndpoints:
                 "tx_likely_duplicates",
             }
 
-            last_parse_resp = await client.get(
-                f"{API_BASE}/brokers/import/files/{file_id}/last-parse",
-                timeout=TIMEOUT,
-            )
-            assert last_parse_resp.status_code == 200, last_parse_resp.text
-            assert last_parse_resp.json()["plugin_code"] == "broker_generic_csv"
+            listing = await client.get(f"{API_BASE}/brokers/import/files", params={"broker_ids": broker_id}, timeout=TIMEOUT)
+            assert listing.status_code == 200, listing.text
+            item = next((entry for entry in listing.json() if entry["file_id"] == file_id), None)
+            assert item is not None, f"file {file_id} not in the listing of broker {broker_id}"
+            assert item["last_parse_result"]["plugin_code"] == "broker_generic_csv"
 
             print_success("✓ BRIM parse auto fallback returned cached generic CSV result")
 

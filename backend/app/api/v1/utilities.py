@@ -16,7 +16,6 @@ from backend.app.schemas.utilities import (
     CountryListResponse,
     CurrencyListItem,
     CurrencyListResponse,
-    CurrencyNormalizationResponse,
     CurrencySuggestionResponse,
     SectorItem,
     SectorListResponse,
@@ -27,9 +26,6 @@ from backend.app.utils.asset.geo import (
 from backend.app.utils.asset.sector import ALLOCATION_BUCKETS, SECTOR_EMOJI_FALLBACK, FinancialSector, sector_emoji
 from backend.app.utils.fx.currency import (
     list_currencies as list_currencies_util,
-)
-from backend.app.utils.fx.currency import (
-    normalize_currency,
 )
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
@@ -176,56 +172,6 @@ async def list_currencies(language: str = Query("en", description="Language for 
     currencies = [CurrencyListItem(**c) for c in currencies_data]
 
     return CurrencyListResponse(items=currencies, language=language)
-
-
-@router.get("/currencies/normalize", response_model=CurrencyNormalizationResponse)
-async def normalize_currency_endpoint(
-    name: str = Query(..., min_length=1, description="Currency code, symbol, or name to normalize"),
-    language: str = Query("en", description="Language for name matching (default: en)"),
-):
-    """
-    Normalize currency name/code/symbol to ISO 4217 format.
-
-    Accepts:
-    - ISO 4217 codes (e.g., USD, EUR)
-    - Currency symbols (e.g., $, €, £)
-    - Currency names in requested language (e.g., "Dollar", "Euro")
-
-    **Example Requests**:
-    ```
-    GET /api/v1/utilities/currencies/normalize?name=USD
-    GET /api/v1/utilities/currencies/normalize?name=$
-    GET /api/v1/utilities/currencies/normalize?name=Dollar&language=en
-    ```
-
-    **Response for exact match**:
-    ```json
-    {
-      "query": "EUR",
-      "iso_codes": ["EUR"],
-      "match_type": "exact",
-      "error": null
-    }
-    ```
-
-    **Response for ambiguous symbol**:
-    ```json
-    {
-      "query": "$",
-      "iso_codes": ["USD", "CAD", "AUD", "NZD", "HKD", "SGD", "MXN"],
-      "match_type": "symbol_ambiguous",
-      "error": "Symbol '$' matches multiple currencies"
-    }
-    ```
-    """
-    result = normalize_currency(name, language)
-
-    return CurrencyNormalizationResponse(
-        query=result["query"],
-        iso_codes=result["iso_codes"],
-        match_type=result["match_type"],
-        error=result.get("error"),
-    )
 
 
 #: The longest value the suggestion reads (E-19b1): every ISO 4217 name (at most 65 characters) fits, with room.

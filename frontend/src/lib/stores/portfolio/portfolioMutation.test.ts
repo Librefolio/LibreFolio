@@ -10,10 +10,9 @@ describe('portfolio mutation classification', () => {
         ['PATCH', '/api/v1/brokers/42'],
         ['PUT', '/api/v1/brokers/42/access'],
         ['PATCH', '/api/v1/assets'],
-        ['POST', '/api/v1/assets/42/market-data/wipe'],
         ['POST', '/api/v1/assets/prices/current'],
         ['POST', '/api/v1/assets/prices/sync'],
-        ['DELETE', '/api/v1/assets/events'],
+        ['POST', '/api/v1/assets/events'],
         ['POST', '/api/v1/fx/currencies/sync'],
         ['DELETE', '/api/v1/fx/providers/routes'],
     ])('invalidates after %s %s', (method, path) => {

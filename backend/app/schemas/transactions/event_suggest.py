@@ -1,5 +1,5 @@
 """
-Event suggestions (``POST /transactions/events/suggest``): the request, the candidate asset event and the result.
+Event suggestions (used by ``GET /transactions/event-reconciliation``): the request, the candidate asset event and the result.
 Event reconciliation (``GET /transactions/event-reconciliation``): a transaction without its event and the events it could link.
 """
 

@@ -273,23 +273,6 @@ async def list_files(
     return UploadListResponse(items=visible)
 
 
-@router.get("/{file_id}", response_model=UploadFileInfo)
-async def get_file_info(
-    file_id: str,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
-):
-    """
-    Get metadata for a specific file.
-
-    Args:
-        file_id: File UUID
-
-    Returns:
-        File metadata
-    """
-    return _for_user(await _visible_upload(file_id, current_user), current_user)
-
-
 @router.get("/{file_id}/preview", response_model=FilePreviewResponse)
 async def get_upload_file_preview(
     file_id: str,

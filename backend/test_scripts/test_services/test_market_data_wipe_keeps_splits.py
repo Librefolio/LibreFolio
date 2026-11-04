@@ -105,10 +105,6 @@ def _day(offset: int) -> date:
     return BASE_DATE + timedelta(days=offset)
 
 
-def _wipe_path(asset_id: int) -> str:
-    return f"/api/v1/assets/{asset_id}/market-data/wipe"
-
-
 def _summary_path(asset_id: int) -> str:
     return f"/api/v1/assets/{asset_id}/market-data/summary"
 
@@ -566,29 +562,26 @@ async def test_the_wipe_keeps_manual_and_provider_splits_and_removes_provider_di
 
 
 @pytest.mark.asyncio
-async def test_the_wipe_endpoint_answers_200_to_every_caller_and_keeps_the_splits(owned):
-    """Red today (X-R48): 409 ``MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`` with the caller's view of the adjustments.
+async def test_the_currency_patch_keeps_a_split_whose_costless_adjustments_sit_on_two_brokers(owned):
+    """Red today (X-R48): the wipe was refused with ``MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`` with the caller's view of
+    the adjustments.
 
-    Contract: ``POST /assets/{id}/market-data/wipe`` as user A (in process), the asset holding a price and a SPLIT of 2 with
-    a costless ADJUSTMENT +10 on broker B, then one on broker A (user A sees one of them only): 200, exactly 1 price, no
-    NON-SPLIT event, ``splits_kept`` 1, ``linked_tx`` 0; the price is gone, the SPLIT and both adjustments stay linked,
-    whoever asks. The same call as user B answers 200 again, now with nothing to delete (idempotent) and ``splits_kept``
-    still 1. Neither answer carries the old code."""
+    Contract: the asset holds a price and a SPLIT of 2 with a costless ADJUSTMENT +10 on broker B, then one on broker A
+    (two users, each sees one of them only). ``patch_assets_bulk`` for the currency USD answers success, no token; the
+    price is gone, the SPLIT and both adjustments stay linked, whoever asks (the PATCH route has no wipe of its own to
+    call first any more). A summary afterwards reads ``splits_kept`` 1 and nothing else."""
     split_id, on_b, on_a = await _split_on_two_brokers(owned, 70)
     await _price(owned.asset_id, 69, "100")
     before = await _committed(owned)
-    story = f"POST /assets/{owned.asset_id}/market-data/wipe, the SPLIT {split_id} linked to the costless adjustments {on_b} (broker B, user B's) and {on_a} (broker A, user A's)"
+    story = f"the currency PATCH of the asset whose SPLIT {split_id} is linked to the costless adjustments {on_b} (broker B, user B's) and {on_a} (broker A, user A's)"
 
-    first = await _route(owned.user_a_id, "POST", _wipe_path(owned.asset_id))
+    response = await _patch_currency([owned.asset_id], "USD")
 
-    assert first.status_code != 409 and OLD_CODE not in first.text, f"{story} as user A answers {first.status_code} {first.text}: expected 200, never the refusal {OLD_CODE} (N68)"
-    expected_first = _summary(prices=1, manual=0, kept=1, linked=0, priced=69, dry_run=False)
-    assert (first.status_code, _body(first)) == (200, expected_first), f"{story} as user A answers {first.status_code} {first.text}: expected 200 and {expected_first}"
+    _assert_patched(response, [owned.asset_id], story)
+    assert OLD_CODE not in response.model_dump_json(), f"{story} answers the refusal {OLD_CODE} (N68)"
     await _assert_wiped_keeping(owned, before, story, kept_events=[split_id], disconnected=set())
-    second = await _route(owned.user_b_id, "POST", _wipe_path(owned.asset_id))
-    expected_second = _summary(prices=0, manual=0, kept=1, linked=0, priced=None, dry_run=False)
-    assert (second.status_code, _body(second)) == (200, expected_second), f"{story} as user B, the second time, answers {second.status_code} {second.text}: expected 200 and {expected_second}"
-    await _assert_wiped_keeping(owned, before, story, kept_events=[split_id], disconnected=set())
+    summary = await _wipe_counters(owned, f"the summary after {story}", dry_run=True)
+    assert summary == _summary(prices=0, manual=0, kept=1, linked=0, priced=None, dry_run=True), f"the summary after {story} reads {summary}"
 
 
 @pytest.mark.asyncio
@@ -657,11 +650,11 @@ async def test_a_reverse_split_with_an_outgoing_costless_adjustment_is_kept_too(
 
 
 @pytest.mark.asyncio
-async def test_the_endpoint_keeps_a_split_nothing_links_to_and_disconnects_a_dividend(owned):
+async def test_the_wipe_keeps_a_split_nothing_links_to_and_disconnects_a_dividend(owned):
     """Red today (counters): a SPLIT of 2 nothing links to (day 100), a DIVIDEND of 1.5 EUR (day 101) linked to a DIVIDEND
     transaction on broker A, and a price. Today the answer is 200 with 2 manual events; the SPLIT is deleted.
 
-    Contract: ``POST .../market-data/wipe`` as user A (in process): 200, 1 price, 1 manual event, ``splits_kept`` 1,
+    Contract: the wipe: 1 price, 1 manual event, ``splits_kept`` 1,
     ``linked_tx`` 1; the dividend and the price gone, the SPLIT kept, the dividend's transaction kept and disconnected."""
     split_id = await _event(owned.asset_id, 100, AssetEventType.SPLIT, "2")
     dividend_id = await _event(owned.asset_id, 101, AssetEventType.DIVIDEND, "1.5")
@@ -669,12 +662,12 @@ async def test_the_endpoint_keeps_a_split_nothing_links_to_and_disconnects_a_div
     await _price(owned.asset_id, 99, "100")
     await _barrier_costless([split_id, dividend_id], {}, "a SPLIT nothing links to, beside a linked dividend")
     before = await _committed(owned)
-    story = f"POST /assets/{owned.asset_id}/market-data/wipe as user A, the SPLIT {split_id} linked to nothing, the dividend {dividend_id} linked to the transaction {dividend_tx_id}"
+    story = f"the wipe of the asset whose SPLIT {split_id} linked to nothing, the dividend {dividend_id} linked to the transaction {dividend_tx_id}"
 
-    response = await _route(owned.user_a_id, "POST", _wipe_path(owned.asset_id))
+    counters = await _wipe_counters(owned, story)
 
     expected = _summary(prices=1, manual=1, kept=1, linked=1, priced=99, dry_run=False)
-    assert (response.status_code, _body(response)) == (200, expected), f"{story} answers {response.status_code} {response.text}: expected 200 and {expected}"
+    assert counters == expected, f"{story} answers {counters}: expected {expected}"
     await _assert_wiped_keeping(owned, before, story, kept_events=[split_id], disconnected={dividend_tx_id})
 
 
@@ -780,16 +773,16 @@ async def test_guard_a_patch_with_the_same_currency_changes_nothing(owned):
 
 
 @pytest.mark.asyncio
-async def test_guard_an_unknown_asset_is_asset_not_found_and_both_routes_answer_404(owned):
+async def test_guard_an_unknown_asset_is_asset_not_found_and_the_summary_route_answers_404(owned):
     """Guard: green today and after. An asset id no asset has (the unit's third asset, created and deleted: an id never
-    reused): the wipe and its dry run raise ASSET_NOT_FOUND, and ``POST .../market-data/wipe`` and ``GET
-    .../market-data/summary`` as user A (in process) answer 404 with the string detail, the service's message."""
+    reused): the wipe and its dry run raise ASSET_NOT_FOUND, and ``GET
+    .../market-data/summary`` as user A (in process) answers 404 with the string detail, the service's message."""
     ghost = owned.ghost_asset_id
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         assert await session.get(Asset, ghost) is None, f"barrier: the asset {ghost}, created and deleted by this unit, exists"
 
     errors = {"wipe": await _not_found(ghost, f"the wipe of the unknown asset {ghost}", dry_run=False), "dry run": await _not_found(ghost, f"the dry run of the unknown asset {ghost}", dry_run=True)}
-    answers = {"POST": await _route(owned.user_a_id, "POST", _wipe_path(ghost)), "GET": await _route(owned.user_a_id, "GET", _summary_path(ghost))}
+    answers = {"GET": await _route(owned.user_a_id, "GET", _summary_path(ghost))}
 
     for name, error in errors.items():
         assert error.error_code == "ASSET_NOT_FOUND", f"the {name} of the unknown asset {ghost} raised {error.error_code} ({error.message}): expected ASSET_NOT_FOUND"

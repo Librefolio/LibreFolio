@@ -294,37 +294,6 @@ operation `promote`, with the promote's index and `ref_id` set to that row. See
 
 ---
 
-## 🛣️ Legacy Live Promote Endpoint
-
-`POST /transactions/transfers/promote` remains a separate live endpoint with a
-different contract:
-
-- request: `from_tx_id`, `to_tx_id`, `new_type`, and the optional
-  `asset_id`, `quantity`, and `cost_basis_override` fields needed for
-  `TRANSFER`; a `quantity`, or a `cost_basis_override` amount, whose exponent is
-  outside ±100 is refused with a 422 before any work (R13-SEC7-3, see
-  [Decimal Columns](../../architecture/database/index.md#decimal-columns)). An
-  `FX_CONVERSION` promotion that sets `cost_basis_override` is refused before the
-  deletes, as one that sets `asset_id` is: `rolled_back` true, with the error
-  `FX_CONVERSION promotion must not set cost_basis_override` (W-B72, night decision
-  N78). Its cash legs take no cost basis; before, the value was dropped in silence;
-- implementation: snapshot the two `DEPOSIT`/`WITHDRAWAL` rows, delete them,
-  build two replacement create payloads with a shared `link_uuid`, and call
-  `execute_batch()` with those deletes and creates. The payloads are raw dicts:
-  a `TRANSFER`'s quantity and cost basis go in their short form, `str(v)`, with
-  the signs from `copy_abs()` and `copy_negate()`. Neither a fixed-point
-  expansion (`format(v, "f")`) nor a decimal context is involved (`abs()` of
-  `1E+1000000` raises `decimal.Overflow`), so the batch refuses a value past its
-  column's limits (R13-SEC7-3); and
-- response: `TXTransferPromoteResponse`, whose fields include the legacy
-  `rolled_back`, `new_from_tx_id`, `new_to_tx_id`, and `errors`.
-
-This delete-and-create behavior applies only to the legacy endpoint. It must not
-be used to describe `promotes[]` in `/transactions/validate` or
-`/transactions/commit`.
-
----
-
 ## 🧯 Errors and Rollback
 
 Split/promote row failures are accumulated as `TXValidationIssue` entries while

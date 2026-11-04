@@ -342,7 +342,6 @@ export async function keepTempDataHiddenUnder(page: Page, alias: string, lane: s
  *
  * Pressed on purpose only — aborted, recorded in `syncs`, and a red at the end of the test (no scenario presses one):
  * - `POST /api/v1/assets/prices/sync` — a price history sync: fetches, and writes prices and events;
- * - `POST /api/v1/assets/provider/refresh` — a metadata refresh: fetches, and writes the asset's classification;
  * - `POST /api/v1/assets/provider/probe` — a provider dry run (Test configuration, Ask the provider): fetches;
  * - `POST /api/v1/fx/currencies/sync` — an exchange-rate sync: fetches, and writes rates.
  *
@@ -394,7 +393,7 @@ const LIVE_PRICES = `${API}/assets/prices/current`;
 const PROVIDER_CATALOGUE = `${API}/fx/providers`;
 const PROVIDER_SEARCH = `${API}/assets/provider/search`;
 const PROVIDER_SEARCH_STREAM = `${API}/assets/provider/search/stream`;
-const PROVIDER_CALLS = new Set([`${API}/assets/prices/sync`, `${API}/assets/provider/refresh`, `${API}/assets/provider/probe`, `${API}/fx/currencies/sync`]);
+const PROVIDER_CALLS = new Set([`${API}/assets/prices/sync`, `${API}/assets/provider/probe`, `${API}/fx/currencies/sync`]);
 /** What each provider reports, as the search stream does for a provider that raised (services/assets/search.py). */
 const OFFLINE_SEARCH_ERROR = 'provider not reached: the gallery runs offline';
 

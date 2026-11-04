@@ -96,18 +96,19 @@ export default async function globalSetup() {
         }
     }
 
-    // 3. Initialize global settings via API
+    // 3. Check the global settings exist
     await initGlobalSettings();
 
     console.log('');
 }
 
 /**
- * Re-create the global settings through the admin API.
+ * Check the global settings are in the database.
  *
  * `populate --force` wipes the `global_settings` table, but the server only
- * seeds it at startup — so anything that repopulates mid-run has to put those
- * rows back. Exported because the transaction-hygiene fixture repopulates when
+ * seeds it at startup and no API route re-creates the rows any more — so a
+ * repopulate mid-run needs the seeder itself to put them back. Exported because
+ * the transaction-hygiene fixture repopulates when
  * a spec file destroys shared rows, and it must not reinvent this.
  *
  * Both calls carry a deadline. A backend that accepts the connection but never
@@ -127,17 +128,22 @@ export async function initGlobalSettings(): Promise<void> {
         });
         if (loginRes.ok) {
             const cookie = loginRes.headers.getSetCookie?.()?.join('; ') || '';
-            // Call initialize endpoint
-            const initRes = await fetch(`${BASE_URL}/api/v1/settings/global/initialize`, {
-                method: 'POST',
+            // The backend seeds the global settings at startup (no HTTP route re-creates them), so this only
+            // proves they are there.
+            const listRes = await fetch(`${BASE_URL}/api/v1/settings/global`, {
                 headers: {Cookie: cookie},
                 signal: AbortSignal.timeout(SETUP_FETCH_TIMEOUT_MS),
             });
-            if (initRes.ok) {
-                const data = await initRes.json();
-                console.log(`   ✅ Global settings initialized (${data.message})`);
+            if (listRes.ok) {
+                const data = await listRes.json();
+                const count = Array.isArray(data.items) ? data.items.length : 0;
+                if (count > 0) {
+                    console.log(`   ✅ Global settings present (${count})`);
+                } else {
+                    console.error('   ⚠️  Global settings table is empty: restart the backend to seed it');
+                }
             } else {
-                console.error(`   ⚠️  Global settings init failed: ${initRes.status}`);
+                console.error(`   ⚠️  Global settings check failed: ${listRes.status}`);
             }
         } else {
             console.error(`   ⚠️  Admin login failed: ${loginRes.status} (global settings may be missing)`);
