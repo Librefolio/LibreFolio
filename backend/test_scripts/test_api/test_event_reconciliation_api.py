@@ -15,7 +15,7 @@ Contract:
 - Item (a ``StrictModel`` in ``schemas/transactions/``): ``transaction_id``, ``broker_id``, ``asset_id``, ``date``,
   ``type``, ``status`` in {``unique``, ``none``, ``several``}, ``candidates`` (a list of the existing
   ``TXEventSuggestCandidate``).
-- Candidates: the rule of ``TransactionEventSuggestionsMixin.suggest_events_bulk`` with ``tolerance_days=0``: same asset,
+- Candidates: the rule of ``TransactionEventSuggestionsMixin.suggest_events_bulk``: same asset,
   SAME DATE (no window), the event type that corresponds (DIVIDEND -> DIVIDEND, INTEREST -> INTEREST, ADJUSTMENT ->
   PRICE_ADJUSTMENT or SPLIT). ``unique`` = exactly one candidate, ``none`` = zero, ``several`` = more than one, all listed.
 - The endpoint writes nothing and never links by itself. Linking is the existing batch update

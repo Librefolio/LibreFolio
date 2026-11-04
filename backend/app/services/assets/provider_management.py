@@ -314,7 +314,6 @@ class ProviderManagementOperations:
                 asset_id=assignment.asset_id,
                 success=True,
                 message=f"Provider {assignment.provider_code} assigned",
-                fields_detail=None,
             )
 
             results.append(result)

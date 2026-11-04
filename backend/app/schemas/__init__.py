@@ -153,7 +153,6 @@ if TYPE_CHECKING:
         FAProviderImpactResult,
         FAProviderImpactSplit,
         FAProviderInfo,
-        FAProviderRefreshFieldsDetail,
         FAProviderRemovalResult,
         FAVolumeKind,
     )
@@ -353,7 +352,6 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "FAProviderImpactResult",
     "FAProviderImpactSplit",
     "FAProviderRemovalResult",
-    "FAProviderRefreshFieldsDetail",
     # Prices
     "FAUpsert",
     "FAPricePoint",
@@ -589,7 +587,6 @@ _EXPORT_GROUPS = {
         "FAProviderImpactResult",
         "FAProviderImpactSplit",
         "FAProviderInfo",
-        "FAProviderRefreshFieldsDetail",
         "FAProviderRemovalResult",
         "FAVolumeKind",
     ),

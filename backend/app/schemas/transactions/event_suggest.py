@@ -24,13 +24,12 @@ from backend.app.schemas.common import (
 class TXEventSuggestRequestItem(StrictModel):
     """
     Single suggest request: given (asset_id, date, type), find candidate
-    AssetEvent rows within +/- tolerance_days whose type maps to the tx type.
+    AssetEvent rows of the same day whose type maps to the tx type.
     """
 
     asset_id: int = Field(..., gt=0)
     date: date_type
     type: TransactionType
-    tolerance_days: int = Field(0, ge=0, le=7, description="Days window (+/-) around date")
 
 
 class TXEventSuggestCandidate(StrictModel):
