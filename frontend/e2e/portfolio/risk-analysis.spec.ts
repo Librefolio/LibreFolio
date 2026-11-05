@@ -2039,12 +2039,24 @@ test.describe('Risk analysis functional integration', () => {
         // in — the one conversion the unit tests cannot see. Without it the same stub prints
         // «−210.0%», which does not contain «−2.1%». The figure is not translated.
         await expect(panel.getByTestId('risk-l1-histogram-cut')).toContainText(loss('2.1%'));
-        // The axis ends, read off the stub's first lower bound (−0.06) and last upper bound
-        // (0.04): positions, one decimal. The two spans carry no testid, so each is found by its
-        // exact text inside the histogram — exact, because «4.0%» is also a substring of «−4.0%».
+        // The axis ends, read off the stub's first lower bound (−0.06) and last upper bound (0.04): positions, one decimal.
+        // The chart is a canvas since F-5, so the section publishes the two ends as text (the same `axisPercent` the axis labels
+        // use), and the bars' tooltips as the entries of a hidden list: this is what a test, and a screen reader, can read.
         const histogram = panel.getByTestId('risk-l1-histogram');
-        await expect(histogram.getByText(loss('6.0%'), {exact: true})).toBeVisible();
-        await expect(histogram.getByText('4.0%', {exact: true})).toBeVisible();
+        await expect(histogram.getByTestId('risk-l1-histogram-axis-min')).toHaveText(loss('6.0%'));
+        await expect(histogram.getByTestId('risk-l1-histogram-axis-max')).toHaveText('4.0%');
+        // The chart itself is drawn, by ECharts, and says when it is done.
+        await expect(histogram.getByTestId('risk-l1-histogram-chart')).toHaveAttribute('data-chart-ready', 'true');
+        // What it drew, read off the instance the chart publishes (`__lfChart`): one bar per bin of the stub, and the threshold
+        // line at the stub's cut (−0.021, written in percent units).
+        const drawn = await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => {
+            const chart = (element as unknown as {__lfChart: {getOption(): {series: {data: unknown[]; markLine?: {data?: ({xAxis?: number} | {xAxis?: number}[])[]}}[]}}}).__lfChart;
+            const series = chart.getOption().series[0];
+            const line = series.markLine?.data?.[0];
+            return {bars: series.data.length, cut: (Array.isArray(line) ? line[0] : line)?.xAxis ?? null};
+        });
+        expect(drawn.bars, 'the chart drew a different number of bars than the engine binned').toBe(7);
+        expect(drawn.cut, 'the chart has no threshold line at the cut').toBeCloseTo(-2.1, 6);
 
         // Nothing came back degraded, so nothing is disclosed. The mirror of the
         // two-entry assertion in the unavailable test: without this half, a
