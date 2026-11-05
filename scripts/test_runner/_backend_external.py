@@ -32,8 +32,8 @@ _CODE_RE = re.compile(
 
 _PROVIDER_FOLDERS = {
     "asset": "asset_source_providers",
-    "fx":    "fx_providers",
-    "brim":  "brim_providers",
+    "fx": "fx_providers",
+    "brim": "brim_providers",
 }
 
 
@@ -106,45 +106,36 @@ def _get_external_extra_args() -> list[tuple]:
     asset_codes = get_asset_provider_codes()
     fx_codes = get_fx_provider_codes()
     brim_codes = get_brim_provider_codes()
-    provider_help = (
-        "Only test these provider(s). "
-        f"Asset: {', '.join(asset_codes) or '(none)'}. "
-        f"FX: {', '.join(fx_codes) or '(none)'}. "
-        f"BRIM: {', '.join(brim_codes) or '(none)'}. "
-        "If omitted, ALL providers are tested."
-    )
-    exclude_help = (
-        "Exclude these provider(s) from testing. "
-        f"Asset: {', '.join(asset_codes) or '(none)'}. "
-        f"FX: {', '.join(fx_codes) or '(none)'}. "
-        f"BRIM: {', '.join(brim_codes) or '(none)'}."
-    )
+    provider_help = "Only test these provider(s). " f"Asset: {', '.join(asset_codes) or '(none)'}. " f"FX: {', '.join(fx_codes) or '(none)'}. " f"BRIM: {', '.join(brim_codes) or '(none)'}. " "If omitted, ALL providers are tested."
+    exclude_help = "Exclude these provider(s) from testing. " f"Asset: {', '.join(asset_codes) or '(none)'}. " f"FX: {', '.join(fx_codes) or '(none)'}. " f"BRIM: {', '.join(brim_codes) or '(none)'}."
     return [
         (
-            "--providers", {
-            "nargs": "+",
-            "dest": "providers",
-            "metavar": "CODE",
-            "help": provider_help,
-            "default": None,
-            }
-            ),
+            "--providers",
+            {
+                "nargs": "+",
+                "dest": "providers",
+                "metavar": "CODE",
+                "help": provider_help,
+                "default": None,
+            },
+        ),
         (
-            "--exclude-providers", {
-            "nargs": "+",
-            "dest": "exclude_providers",
-            "metavar": "CODE",
-            "help": exclude_help,
-            "default": None,
-            }
-            ),
+            "--exclude-providers",
+            {
+                "nargs": "+",
+                "dest": "exclude_providers",
+                "metavar": "CODE",
+                "help": exclude_help,
+                "default": None,
+            },
+        ),
     ]
 
 
 # ── Test functions ──────────────────────────────────────────────────────
 
-def external_fx_providers(verbose: bool = False, test_names: list = None,
-                          providers: list = None, exclude_providers: list = None) -> bool:
+
+def external_fx_providers(verbose: bool = False, test_names: list = None, providers: list = None, exclude_providers: list = None) -> bool:
     """Run FX providers external tests (network-dependent)."""
     print_section("External: FX Providers Tests (including multi-unit)")
     print_info("Testing: All registered FX providers (ECB, FED, BOE, etc.)")
@@ -163,13 +154,11 @@ def external_fx_providers(verbose: bool = False, test_names: list = None,
     if provider_expr:
         effective_names.append(provider_expr)
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_fx_providers.py",
-                            effective_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_fx_providers.py", effective_names or None)
     return run_command(cmd, "FX providers external tests", verbose=verbose)
 
 
-def external_asset_providers(verbose: bool = False, test_names: list = None,
-                             providers: list = None, exclude_providers: list = None) -> bool:
+def external_asset_providers(verbose: bool = False, test_names: list = None, providers: list = None, exclude_providers: list = None) -> bool:
     """Test all registered asset pricing providers."""
     print_section("External: Asset Providers Tests")
     print_info("Testing: All registered asset pricing providers")
@@ -187,8 +176,7 @@ def external_asset_providers(verbose: bool = False, test_names: list = None,
     if provider_expr:
         effective_names.append(provider_expr)
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_asset_providers.py",
-                            effective_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_asset_providers.py", effective_names or None)
     return run_command(cmd, "Asset providers tests", verbose=verbose)
 
 
@@ -199,13 +187,11 @@ def external_justetf_multicurrency(verbose: bool = False, test_names: list = Non
     print_info("Tests: Current price (EUR-only), history (all 4), search (4× results), params validation")
     print_info("⚠️  WARNING: Requires internet connection")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_justetf_multicurrency.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_justetf_multicurrency.py", test_names or None)
     return run_command(cmd, "JustETF multi-currency tests", verbose=verbose)
 
 
-def external_brim_providers(verbose: bool = False, test_names: list = None,
-                            providers: list = None, exclude_providers: list = None) -> bool:
+def external_brim_providers(verbose: bool = False, test_names: list = None, providers: list = None, exclude_providers: list = None) -> bool:
     """Test BRIM providers."""
     print_section("External: BRIM Providers Tests")
     print_info("Testing: Broker Report Import Manager (BRIM) plugins")
@@ -222,8 +208,7 @@ def external_brim_providers(verbose: bool = False, test_names: list = None,
     if provider_expr:
         effective_names.append(provider_expr)
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_providers.py",
-                            effective_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_providers.py", effective_names or None)
     return run_command(cmd, "BRIM providers tests", verbose=verbose)
 
 
@@ -233,8 +218,7 @@ def external_brim_danske_bank(verbose: bool = False, test_names: list = None) ->
     print_info("Testing: broker_danske_bank — recognition, reading, classification, rule M, pairing")
     print_info("Tests: zones and outcomes, truth points, combined format, parse of the combined file, sample facts")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_danske_bank.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_danske_bank.py", test_names or None)
     return run_command(cmd, "BRIM Danske Bank tests", verbose=verbose)
 
 
@@ -244,8 +228,7 @@ def external_brim_credit_agricole(verbose: bool = False, test_names: list = None
     print_info("Testing: broker_credit_agricole — rows, testata, classes, rule M, pairing, balances, truth points")
     print_info("Tests: reading, roles, describe member/set, outcomes, holes and gaps, in-flight cash, opening positions, zones")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_credit_agricole.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_credit_agricole.py", test_names or None)
     return run_command(cmd, "BRIM Crédit Agricole tests", verbose=verbose)
 
 
@@ -255,8 +238,7 @@ def external_brim_degiro(verbose: bool = False, test_names: list = None) -> bool
     print_info("Testing: broker_degiro — recognition, reading by position, types, FX pairs, numbers, messages")
     print_info("Tests: Dutch and English samples row by row, orders list, warnings with evidence")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_degiro.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_degiro.py", test_names or None)
     return run_command(cmd, "BRIM DEGIRO tests", verbose=verbose)
 
 
@@ -266,8 +248,7 @@ def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: broker_scalable and broker_scalable_deposit — recognition by header, refusals with a code, mapping, legs, notices")
     print_info("Tests: PRIME and exporter samples row by row, mirrored internal transfers, synthetic edge cases")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_scalable.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_scalable.py", test_names or None)
     return run_command(cmd, "BRIM Scalable Capital tests", verbose=verbose)
 
 
@@ -277,8 +258,7 @@ def external_brim_row_skips(verbose: bool = False, test_names: list = None) -> b
     print_info("Testing: the shared RowSkips helper, the rows each stable plugin leaves out, the contract over every registered plugin, the catalogue keys")
     print_info("Tests: one file per case (a sample plus one row), report_issue, silent rows, versions, samples, plugin classification")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_row_skips.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_row_skips.py", test_names or None)
     return run_command(cmd, "BRIM row skips tests", verbose=verbose)
 
 
@@ -288,8 +268,7 @@ def external_brim_operation_date(verbose: bool = False, test_names: list = None)
     print_info("Testing: the transaction date is the day of the operation, not the value / settlement date")
     print_info("Tests: rows whose two dates differ, per plugin; the Disnat settlement-date fallback for rows with no trade date")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_operation_date.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_operation_date.py", test_names or None)
     return run_command(cmd, "BRIM operation date tests", verbose=verbose)
 
 
@@ -299,8 +278,7 @@ def external_brim_economic_rows(verbose: bool = False, test_names: list = None) 
     print_info("Testing: overnight fees, SDRT, forex pairs and stock splits become transactions; the rows that cannot are still listed")
     print_info("Tests: eToro FEE and TAX, Swissquote FX_CONVERSION pairs, Revolut and Trading 212 ADJUSTMENT with a possible_split todo")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_economic_rows.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_economic_rows.py", test_names or None)
     return run_command(cmd, "BRIM economic rows tests", verbose=verbose)
 
 
@@ -310,27 +288,23 @@ def external_brim_date_order(verbose: bool = False, test_names: list = None) -> 
     print_info("Testing: broker_generic_csv parse_date(value, order), the date_order setting and its declaration")
     print_info("Tests: day_first is the old behaviour bit for bit, month_first mirrors the slash, dash and dot dates, the plugin declares the field")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_date_order.py",
-                            test_names or None)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_date_order.py", test_names or None)
     return run_command(cmd, "BRIM date order tests", verbose=verbose)
 
 
-def external_all(verbose: bool = False,
-                 providers: list = None, exclude_providers: list = None) -> bool:
+def external_all(verbose: bool = False, providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
     return _run_test_suite(
         suite_name="External Tests",
-        tests=_get_category_tests_for_all(
-            "external", verbose, providers=providers, exclude_providers=exclude_providers
-        ),
+        tests=_get_category_tests_for_all("external", verbose, providers=providers, exclude_providers=exclude_providers),
         verbose=verbose,
         info_msgs=[
             "Testing external provider integrations",
             "⚠️  WARNING: Requires internet connection for FX/Asset providers",
             "⚠️  WARNING: May be slow",
-            ],
-            resume=_common._RESUME_MODE,
-        )
+        ],
+        resume=_common._RESUME_MODE,
+    )
 
 
 def populate_registry(registry: dict) -> None:
@@ -344,46 +318,69 @@ These tests verify external API integrations:
   • No backend server required
   • Tests network calls to external APIs
   • May be slow or fail if external services are down
-""")
-    add_test(cat, "fx-providers", external_fx_providers, name="FX Providers",
-             desc="Test FX rate providers (ECB, FED, BOE, SNB)", prereq="Internet connection",
-             tests="ECB, FED, BOE, SNB API calls")
-    add_test(cat, "asset-providers", external_asset_providers, name="Asset Providers",
-             desc="Test asset pricing providers", prereq="Internet connection",
-             tests="yfinance, cssscraper, etc.")
-    add_test(cat, "justetf-multicurrency", external_justetf_multicurrency, name="JustETF Multi-Currency",
-             desc="Test JustETF provider with EUR/USD/CHF/GBP currencies", prereq="Internet connection",
-             tests="Current price, history, search, params validation")
-    add_test(cat, "brim-providers", external_brim_providers, name="BRIM Providers",
-             desc="Test broker report import plugins", prereq="Sample files in test fixtures",
-             tests="Plugin discovery, file parsing, auto-detection")
-    add_test(cat, "brim-danske-bank", external_brim_danske_bank, name="BRIM Danske Bank",
-             desc="Test the Danske Bank report-set plugin", prereq="Sample files in test fixtures",
-             tests="Roles, combine (zones, pairing, truth points), parse of the combined file")
-    add_test(cat, "brim-credit-agricole", external_brim_credit_agricole, name="BRIM Crédit Agricole",
-             desc="Test the Crédit Agricole report-set modules", prereq="None (synthetic files)",
-             tests="Rows and testata, roles, rule M, classes, pairing, balances, holes, truth points, in-flight cash",
-             isolation="pure")
-    add_test(cat, "brim-degiro", external_brim_degiro, name="BRIM DEGIRO",
-             desc="Test the DEGIRO plugin", prereq="Sample files in test fixtures",
-             tests="Recognition, reading by position, types, FX pairs, numbers, messages, orders list")
-    add_test(cat, "brim-scalable", external_brim_scalable, name="BRIM Scalable Capital",
-             desc="Test the Scalable Capital plugins (broker and overnight account)", prereq="Sample files in test fixtures",
-             tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases")
-    add_test(cat, "brim-row-skips", external_brim_row_skips, name="BRIM Row Skips",
-             desc="Test the rows BRIM plugins leave out (known quietly, unknown loudly)", prereq="Sample files in test fixtures",
-             tests="RowSkips helper, report_issue per plugin, silent rows, versions, plugin classification, catalogue keys")
-    add_test(cat, "brim-operation-date", external_brim_operation_date, name="BRIM Operation Date",
-             desc="Test that BRIM plugins date a transaction with the operation date, never the value / settlement date", prereq="Sample files in test fixtures",
-             tests="Directa, DEGIRO, InvestEngine, Saxo, Credit Agricole, Schwab, Disnat (incl. settlement fallback)")
-    add_test(cat, "brim-economic-rows", external_brim_economic_rows, name="BRIM Economic Rows",
-             desc="Test that eToro, Swissquote, Revolut and Trading 212 import the rows with an economic effect", prereq="Sample files in test fixtures",
-             tests="eToro overnight fee and SDRT, Swissquote forex pairs, Revolut and Trading 212 stock splits, rows still listed")
-    add_test(cat, "brim-date-order", external_brim_date_order, name="BRIM Date Order",
-             desc="Test the generic CSV plugin's date_order field (CP12, W5-8): day_first parity with the old behaviour, month_first, the declaration", prereq="Sample files in test fixtures",
-             tests="parse_date parity with a frozen reference, generic samples with and without day_first bound, month_first on slash/dash/dot, field declared as the contract says",
-             isolation="pure")
-    add_test(cat, "all", external_all, test_names=False, name="All External Tests",
-             desc="Run all external tests")
+""",
+    )
+    add_test(cat, "fx-providers", external_fx_providers, name="FX Providers", desc="Test FX rate providers (ECB, FED, BOE, SNB)", prereq="Internet connection", tests="ECB, FED, BOE, SNB API calls")
+    add_test(cat, "asset-providers", external_asset_providers, name="Asset Providers", desc="Test asset pricing providers", prereq="Internet connection", tests="yfinance, cssscraper, etc.")
+    add_test(cat, "justetf-multicurrency", external_justetf_multicurrency, name="JustETF Multi-Currency", desc="Test JustETF provider with EUR/USD/CHF/GBP currencies", prereq="Internet connection", tests="Current price, history, search, params validation")
+    add_test(cat, "brim-providers", external_brim_providers, name="BRIM Providers", desc="Test broker report import plugins", prereq="Sample files in test fixtures", tests="Plugin discovery, file parsing, auto-detection")
+    add_test(cat, "brim-danske-bank", external_brim_danske_bank, name="BRIM Danske Bank", desc="Test the Danske Bank report-set plugin", prereq="Sample files in test fixtures", tests="Roles, combine (zones, pairing, truth points), parse of the combined file")
+    add_test(
+        cat,
+        "brim-credit-agricole",
+        external_brim_credit_agricole,
+        name="BRIM Crédit Agricole",
+        desc="Test the Crédit Agricole report-set modules",
+        prereq="None (synthetic files)",
+        tests="Rows and testata, roles, rule M, classes, pairing, balances, holes, truth points, in-flight cash",
+        isolation="pure",
+    )
+    add_test(cat, "brim-degiro", external_brim_degiro, name="BRIM DEGIRO", desc="Test the DEGIRO plugin", prereq="Sample files in test fixtures", tests="Recognition, reading by position, types, FX pairs, numbers, messages, orders list")
+    add_test(
+        cat,
+        "brim-scalable",
+        external_brim_scalable,
+        name="BRIM Scalable Capital",
+        desc="Test the Scalable Capital plugins (broker and overnight account)",
+        prereq="Sample files in test fixtures",
+        tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases",
+    )
+    add_test(
+        cat,
+        "brim-row-skips",
+        external_brim_row_skips,
+        name="BRIM Row Skips",
+        desc="Test the rows BRIM plugins leave out (known quietly, unknown loudly)",
+        prereq="Sample files in test fixtures",
+        tests="RowSkips helper, report_issue per plugin, silent rows, versions, plugin classification, catalogue keys",
+    )
+    add_test(
+        cat,
+        "brim-operation-date",
+        external_brim_operation_date,
+        name="BRIM Operation Date",
+        desc="Test that BRIM plugins date a transaction with the operation date, never the value / settlement date",
+        prereq="Sample files in test fixtures",
+        tests="Directa, DEGIRO, InvestEngine, Saxo, Credit Agricole, Schwab, Disnat (incl. settlement fallback)",
+    )
+    add_test(
+        cat,
+        "brim-economic-rows",
+        external_brim_economic_rows,
+        name="BRIM Economic Rows",
+        desc="Test that eToro, Swissquote, Revolut and Trading 212 import the rows with an economic effect",
+        prereq="Sample files in test fixtures",
+        tests="eToro overnight fee and SDRT, Swissquote forex pairs, Revolut and Trading 212 stock splits, rows still listed",
+    )
+    add_test(
+        cat,
+        "brim-date-order",
+        external_brim_date_order,
+        name="BRIM Date Order",
+        desc="Test the generic CSV plugin's date_order field (CP12, W5-8): day_first parity with the old behaviour, month_first, the declaration",
+        prereq="Sample files in test fixtures",
+        tests="parse_date parity with a frozen reference, generic samples with and without day_first bound, month_first on slash/dash/dot, field declared as the contract says",
+        isolation="pure",
+    )
+    add_test(cat, "all", external_all, test_names=False, name="All External Tests", desc="Run all external tests")
     registry["external"] = cat
-

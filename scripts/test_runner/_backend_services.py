@@ -1475,7 +1475,9 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
     """Run the AssetSourceManager integrity guards and event FX conversion tests."""
     print_section("Services: Asset Source Guards")
     print_info("Testing: backend/app/services/assets/ (bulk_upsert_prices, get_prices_bulk, list_assets)")
-    print_info("Tests: OHLC rejection policy (X-R78: a manual lone bound on the wrong side of the close is refused, a provider's widens), close-only bound widening, identifier filters, event FX pass, X-R65 stored date bounds, X-R70 the refresh does not count refused candles, X-R29 stored-price counts")
+    print_info(
+        "Tests: OHLC rejection policy (X-R78: a manual lone bound on the wrong side of the close is refused, a provider's widens), close-only bound widening, identifier filters, event FX pass, X-R65 stored date bounds, X-R70 the refresh does not count refused candles, X-R29 stored-price counts"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
 
