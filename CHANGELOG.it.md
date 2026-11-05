@@ -30,6 +30,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Contributo delle posizioni: una riga chiusa nel periodo dice come si è chiusa (una vendita, un trasferimento, con il broker ricevente quando puoi vederlo, o una rettifica).
 - **La Dashboard e la pagina del broker seguono i prezzi correnti**: ogni minuto mentre le usi, importi, KPI e posizioni si aggiornano da soli; si fermano quando la scheda è nascosta o dopo due minuti senza input («Aggiornamenti in pausa») e riprendono alla tua azione successiva.
 - **Avvisi sulla qualità dei dati nella pagina del broker:** prezzi obsoleti, tassi di cambio mancanti o obsoleti e i relativi pulsanti di sincronizzazione compaiono anche lì, per ogni ruolo.
+- **Grafico delle posizioni: scegli la finestra della vista Mobile.** Una settimana, un mese, tre mesi, un anno o una finestra personalizzata; si parte da quella automatica.
 
 #### 📈 Grafici
 
@@ -77,6 +78,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - `GET /api/v1/brokers/import/files`: ogni file porta `can_delete`, vero quando chi chiama può eliminarlo.
 - **Pagina File: una colonna Visibilità** mostra se ogni file è condiviso con tutti gli utenti o personale. Dal menu della riga o da una scheda della griglia puoi condividere un file con tutti o renderlo di nuovo personale, con una conferma, poiché gli altri lo perdono.
 - **Una barra nella pagina File mostra agli amministratori lo spazio occupato dall'istanza** (database, file caricati, report dei broker, backup), rispetto al disco o a un limite che possono impostare; un provider di hosting può fissare il limite con `LIBREFOLIO_STORAGE_LIMIT_MB`.
+- **La barra dello spazio e la sua legenda si evidenziano insieme** quando passi sull'una o sull'altra.
 
 #### 💾 Backup e ripristino
 
@@ -219,6 +221,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **La pagina broker mostra gli importi interi del broker**, non più la tua quota, rischio incluso; per le cifre ridotte alla tua quota usa la Dashboard filtrata su quel broker.
 - **La pagina di un broker è ora la Dashboard con quel broker già scelto:** gli stessi controlli, la valuta con «Crea forex», liquidità e importi del periodo scelto, il dettaglio dei lotti che si chiude con Indietro, il badge «Aggiornamenti in pausa» e le transazioni del periodo scelto (prima era l'intera cronologia).
 - **Lotti: un trasferimento con un broker esterno al pannello ora viene mostrato come trasferimento.** Nella Cronologia di un lotto, in Ciclo di vita e custodia del lotto e nei marcatori Costo medio / Prezzo di mercato, le unità spostate da o verso un broker non compreso nel pannello venivano mostrate come rettifiche. Ora vengono mostrate come trasferimenti (TRANSFER+ / TRANSFER- nella Cronologia, Trasferimento in entrata / Trasferimento in uscita sui marcatori), senza indicare il nome dell'altro broker. Nessun valore numerico cambia.
+- **«Aggiornamento in pausa» prende il posto di Aggiorna** sulla Dashboard e sulla pagina del broker: nella pagina non si sposta nulla, e un clic fa ripartire gli aggiornamenti. Ripartono comunque da soli quando torni.
+- **Grafico delle posizioni**: i badge mostrano il nome dell'asset, che scorre se è lungo, e il selettore delle viste usa le icone dell'elenco Asset.
 
 #### 📈 Grafici
 
@@ -276,6 +280,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - API: `POST /api/v1/uploads` accetta `scope`; `PATCH /api/v1/uploads/{id}` lo modifica; le informazioni sul file riportano `scope` e `can_delete`. Un file personale di un altro utente risponde 404, come uno mancante.
 - Un file caricato dalla pagina File è personale; le immagini caricate tramite un selettore di immagini (icona dell'asset, icona del broker, avatar) sono condivise. Scegliere una delle tue immagini personali in un selettore la condivide, con un avviso.
 - Nella pagina File e nei file del report del broker, Elimina compare solo sui file che puoi eliminare; un'eliminazione multipla lascia gli altri al loro posto, con un avviso.
+- **File di sistema**: le icone create all'installazione mostrano «di sistema» come autore, invece di un numero utente.
+- **File, per gli amministratori**: il limite di spazio sta in un pannello chiuso «Avanzate» e si chiama Spazio totale di LibreFolio; superarlo avvisa soltanto. Anche «Pulizia automatica» è un pannello chiuso, e dice che le regole si applicano entro un'ora. Il salvataggio di entrambi mostra una conferma verde, e il promemoria sullo stesso disco ora è una semplice nota.
 
 #### 💱 Codici di valuta
 
@@ -309,6 +315,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - **Gli intervalli di date coprono sempre due giorni diversi.** In ogni selettore di intervallo di date, il giorno cliccato per primo mostra il cursore di divieto e un secondo clic su di esso viene ignorato; una data digitata uguale all'altro estremo diventa rossa; i tasti freccia la saltano. Una data digitata mentre l'altro estremo è vuoto lascia quell'estremo aperto: nel filtro data di una tabella, il solo **Da** mantiene le righe da quel giorno in poi (prima manteneva solo quel giorno). Gli intervalli di un solo giorno salvati in precedenza funzionano ancora.
 - Le notifiche vengono annunciate dai lettori di schermo (gli errori subito, le altre in modo cortese), e il loro pulsante di chiusura ha un nome nella tua lingua.
+- **Una freccia indietro su Broker, Transazioni, Asset e Forex** quando ci arrivi da un link dell'app: ti riporta indietro con filtri e periodo. Non compare dalla barra laterale o da un indirizzo digitato.
 
 #### 👥 Account e accesso
 
@@ -334,6 +341,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - Un segreto vuoto o composto solo da spazi equivale a non impostato, come se la variabile fosse assente.
 - `GET /api/v1/system/info` senza sessione restituisce solo la versione dell'app; gli utenti connessi ricevono ancora il report completo.
+- **Controlli di sicurezza**: «Controlla di nuovo» sta sulla riga del titolo, e il controllo della chiave delle sessioni dice che è casuale e come restare connessi dopo un riavvio.
 
 #### 🏢 Provider di hosting e istanze gestite
 
@@ -525,6 +533,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Asset: eliminare un asset che le transazioni usano apre la sua conferma già sul risultato (quante transazioni, con il link ad esse) invece di chiedere prima; la conferma dice anche che gli eventi dell'asset vanno con esso; e il messaggio di errore della ricerca, il titolo dell'origine, il badge «Manuale» e il conteggio degli asset da eliminare seguono la tua lingua.
 - API: convertire un importo di 0 (`POST /api/v1/fx/currencies/convert`) risponde 0 con il tasso del giorno invece di un errore del server.
 - Un provider che consegna un giorno con un prezzo di 0 o inferiore non fa più fallire l'intero download dei prezzi dell'asset: quel giorno viene saltato e la sincronizzazione lo dice. Un prezzo corrente di 0 o inferiore da un provider viene rifiutato come inutilizzabile: resta l'ultimo prezzo memorizzato.
+- **Una nuova coppia FX subito dopo un riavvio**: EUR/RON e le altre coppie coperte solo da ECB non dicono più «nessun percorso di conversione» quando ECB risponde lentamente. Se la lista di un provider resta illeggibile, il modale chiede di riprovare fra poco; il secondo banner giallo non c'è più.
 
 #### 🗓️ Eventi degli asset e Investimenti programmati
 
@@ -617,6 +626,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Un ripristino che non può essere confermato, annullato o riavviato per un problema del disco ora lo dice nella scheda Backup, con la causa nel log del server, invece di un errore generico.
 - `dev.py backup decrypt` eseguito tramite `docker compose exec` scrive uno zip di proprietà dell'utente del server, come gli altri comandi di backup; un archivio che non riesce a leggere ora lo dice.
 - **La password di un backup** non viene più proposta dal browser come password del tuo account.
+- **Il browser non propone più di salvare la password di un backup**: i campi password di backup e ripristino sono testo mascherato, fuori dal gestore delle password.
 
 #### 🏢 Provider di hosting e istanze gestite
 
