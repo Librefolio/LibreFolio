@@ -58,8 +58,10 @@ Le immagini del profilo si aprono con **Avatar**, le icone broker con **Icona** 
 
 ## ✅ Conferma o annulla
 
-- **Ritaglia e carica** salva l'immagine e la utilizza. Nella pagina File, **Ritaglia** la mette invece nella lista
-  di caricamento (**Ripristina originale** ↺ riporta l'originale), e **Carica** invia la lista.
+- **Ritaglia e carica** salva l'immagine e la utilizza. L'immagine è **condivisa**: tutti gli utenti possono vederla,
+  come tuo avatar o come icona che hai scelto. Nella pagina File, **Ritaglia** la mette invece nella lista
+  di caricamento (**Ripristina originale** ↺ riporta l'originale), e **Carica** invia la lista: quei
+  file sono personali (vedi [Condiviso o personale](../files/index.md#visibility)).
 - **Annulla** o **✕** chiude lo strumento — dopo aver chiesto conferma, se hai modifiche non salvate
   (**Annulla e Chiudi**). Dal selettore di immagini, torni al selettore.
 

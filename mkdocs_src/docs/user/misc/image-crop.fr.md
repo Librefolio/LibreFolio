@@ -58,8 +58,10 @@ Les photos de profil s'ouvrent avec **Avatar**, les icônes de courtier avec **I
 
 ## ✅ Confirmer ou annuler
 
-- **Recadrer et téléverser** enregistre l'image et l'utilise. Sur la page Fichiers, **Recadrer** l'ajoute plutôt à la liste de téléversement
-  (**Restaurer l'original** ↺ ramène l'original), et **Téléverser** envoie la liste.
+- **Recadrer et téléverser** enregistre l'image et l'utilise. L'image est **partagée** : tous les utilisateurs peuvent la voir,
+  comme votre avatar ou comme l'icône que vous avez choisie. Sur la page Fichiers, **Recadrer** l'ajoute plutôt à la liste de téléversement
+  (**Restaurer l'original** ↺ ramène l'original), et **Téléverser** envoie la liste : ces
+  fichiers sont personnels (voir [Partagé ou personnel](../files/index.md#visibility)).
 - **Annuler** ou **✕** ferme l'outil — après demande, si vous avez des modifications non enregistrées
   (**Annuler et Fermer**). Depuis le sélecteur d'image, vous revenez au sélecteur.
 
