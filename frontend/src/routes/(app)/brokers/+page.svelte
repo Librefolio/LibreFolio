@@ -8,6 +8,7 @@
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {Briefcase, Plus, RefreshCw} from 'lucide-svelte';
+    import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
     import BrokerCard from '$lib/features/brokers/BrokerCard.svelte';
     import BrokerDiscoveryCard from '$lib/features/brokers/BrokerDiscoveryCard.svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
@@ -358,9 +359,12 @@
          header row has room. Plain `flex-wrap` reacts to the row's OWN available width instead
          (see fx/+page.svelte's equivalent header for the full note). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div use:guideAnchor={'broker.page.overview'} data-testid="broker-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-lf-secondary">{$_('brokers.title')}</h2>
-            <p class="text-lf-muted text-sm">{$_('brokers.subtitle')}</p>
+        <div class="flex items-center gap-3">
+            <PageBackButton fallback="/dashboard" testId="brokers-back-btn" />
+            <div use:guideAnchor={'broker.page.overview'} data-testid="broker-page-overview-guide-target">
+                <h2 class="text-lg font-semibold text-lf-secondary">{$_('brokers.title')}</h2>
+                <p class="text-lf-muted text-sm">{$_('brokers.subtitle')}</p>
+            </div>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 justify-end">
