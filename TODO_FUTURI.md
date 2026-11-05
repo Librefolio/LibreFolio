@@ -385,56 +385,22 @@ Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere i
 
 ## 💸 PAC/Rebalancer — Profili Commissionali Avanzati per Broker e Mercato
 
-**Data aggiunta**: 15 Settembre 2026
-**Status**: 📋 FUTURO — estensione successiva al primo planner operativo
-**Priorità**: Media
+**Data aggiunta**: 15 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: Media
 
-**Target v1 correlato:** [suite PAC/Rebalancer — piano maestro](LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
+Oggi il planner ha due profili indipendenti, `fee_buy` e `fee_sell`, con parte fissa, parte percentuale e minimo e massimo
+facoltativi.
 
-### Confine della Prima Versione
+**Estensioni.**
+- Profili per mercato, sede o classe di strumento.
+- Profili degressivi che dipendono dal numero di eseguiti del giorno. Esempio Directa, per alcuni mercati: 8 € il primo, a
+  scendere fino a 3 € dal 6° al 25°, 2 € dal 26° al 50°, 1,50 € dal 51°
+  ([commissioni](https://www.directa.it/commissioni), 15/09/2026).
+- Calendario, fuso, valuta, validità e provenienza del tariffario; regole per eseguiti parziali e ordini annullati.
+- Nel solver: una tariffa legata al numero d'ordine rende il costo non separabile, quindi vanno ottimizzati anche sequenza e
+  numero degli ordini.
 
-Il primo planner PAC/Rebalancer deve mantenere due profili indipendenti,
-`fee_buy` e `fee_sell`. Ciascuno supporta:
-
-- componente fissa;
-- componente percentuale sul controvalore;
-- minimo e massimo opzionali per la componente percentuale;
-- valore `0` valido.
-
-Questa separazione copre i PAC con acquisti gratuiti e vendite soggette alle normali
-commissioni. Non implica ancora regole diverse per mercato o formule dipendenti dalla
-sequenza giornaliera degli ordini.
-
-### Estensioni Future
-
-- Override dei profili per mercato, sede di negoziazione o classe di strumento.
-- Profili dinamici/degressivi nei quali la fee dipende dal numero progressivo degli
-  eseguiti nella giornata.
-- Calendario, timezone, valuta, data di validità e provenance del tariffario.
-- Regole esplicite per eseguiti parziali, ordini annullati e conteggi condivisi fra
-  mercati/strumenti.
-- Integrazione nel solver: una tariffa dipendente dal numero d'ordine rende il costo
-  non separabile e richiede di ottimizzare anche sequenza e numero degli ordini.
-
-Directa documenta, per alcuni mercati, un profilo dinamico giornaliero che parte da
-8 EUR sul primo eseguito, scende progressivamente fino a 3 EUR dal 6° al 25°, passa a
-2 EUR dal 26° al 50° e a 1,50 EUR dal 51°; disponibilità e valori dipendono dal mercato.
-Questa famiglia di policy non rientra nella prima versione.
-
-### Gate Futuri
-
-- Nessuna tariffa implicita o scelta automaticamente senza conferma utente.
-- Distinguere ordine pianificato da eseguito reale: il planner non deve fingere di
-  conoscere il contatore giornaliero.
-- Mostrare profilo, mercato, data e assunzioni usate nel costo stimato.
-- Testare discontinuità delle soglie, min/max, BUY/SELL e pareggi fra Broker.
-
-### Riferimenti
-
-- [Directa — Commissioni](https://www.directa.it/commissioni), consultato il
-  15 settembre 2026.
-
----
+**Gate.** Nessuna tariffa scelta senza conferma; il planner non finge di conoscere il contatore giornaliero; profilo, mercato,
+data e assunzioni restano visibili; test su soglie, min/max, BUY/SELL e pareggi fra broker.
 
 ## 🧭 PAC/Rebalancer — Profili Persistenti e Strategie Estese
 
