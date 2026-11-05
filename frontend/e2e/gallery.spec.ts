@@ -131,6 +131,7 @@ import {
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
+import {openAiExportPanel, selectAiExportSelection} from './ai-export/helpers';
 import {serveGalleryBackupList, serveGalleryStorage} from './fixtures/galleryFilesBackups';
 import {GALLERY_PREMIUM_QUERY, serveGalleryPremiumSearch} from './fixtures/galleryAssetSearch';
 import {serveGalleryWhatsNew} from './fixtures/galleryWhatsNew';
@@ -1670,6 +1671,30 @@ test.describe('Gallery Screenshots', () => {
                 await page.getByTestId('dashboard-tab-posizioni').click();
                 await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
                 await screenshotPositionsYoc(page, viewport, lang, theme, 'dashboard');
+            });
+        });
+
+        test('dashboard AI export dialog with a dataset - all languages and themes', async ({page}, testInfo) => {
+            // The AI Export panel of the Dashboard with a dataset chosen: the category, the selection, the detail level, the period
+            // and the notes. Nothing is exported: the panel is opened, filled and closed, no snapshot is asked.
+            test.setTimeout(420_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                const panel = await openAiExportPanel(page);
+                await selectAiExportSelection(page, 'dataset', 'portfolio.overview_and_history');
+                await expect(page.getByTestId('ai-export-category-dataset')).toHaveAttribute('aria-pressed', 'true');
+                await expect(panel.options).toBeVisible();
+                await waitForMotionSettled(panel.menu, 'the AI Export panel');
+                await screenshot(page, viewport, lang, theme, 'ai-export', 'dialog-dataset');
+                await page.keyboard.press('Escape');
+                await expect(panel.menu).toBeHidden();
             });
         });
 
