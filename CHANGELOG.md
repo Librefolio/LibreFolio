@@ -173,6 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Failed API calls in the browser console.** The web app writes one line per unexpected API failure: status, path, request id, never the data of the request. With `LOG_LEVEL` at `DEBUG` or `TRACE` it writes the 4xx answers too (`client_log_level` in `GET /api/v1/system/instance`).
 - **Self-hosting: `LIBREFOLIO_DEFAULT_CURRENCY` and `LIBREFOLIO_DEFAULT_TIMEZONE`** set the default currency and the timezone at the first start, until an administrator saves the setting; an invalid value stops the start and names the variable.
 - `./dev.py db check --integrity` checks the database without changing it: integrity, broken references, text that is not UTF-8 and the schema revision.
+- In the Docker image, **Tab completes `./dev.py`** in an interactive shell (the Portainer console, `docker exec -it … bash`), as root or as LibreFolio's user.
 
 #### 🖥️ The app and its notices
 
@@ -354,6 +355,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The documentation site draws its diagrams with its own copy of Mermaid, with no request to a third party; the ELK layout is no longer available.
 - **The documentation site uses the same colours as the app**, in the light and the dark theme.
 - **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
+- **The documentation header keeps the theme switch beside the language selector**, as in the app; the 🚀 link to the app, shown when LibreFolio is running, takes the place the theme switch had.
 
 ### 🧹 Repository cleanup
 
