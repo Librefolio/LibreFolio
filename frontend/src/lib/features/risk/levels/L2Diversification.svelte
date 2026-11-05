@@ -304,13 +304,14 @@
                 <p class="text-xs text-lf-muted" data-testid="risk-l2-rows-caption">{$t('risk.levels.l2.rowsCaption')}</p>
                 <ul class="space-y-3" data-testid="risk-l2-rows">
                     {#each shown as row (row.assetId)}
-                        <li class="space-y-1" data-testid="risk-l2-row-{row.assetId}">
+                        <li class="@container space-y-1" data-testid="risk-l2-row-{row.assetId}">
                             <!-- One bar, two directions, one shared scale. The gap
                                  IS the answer, so the gap is what gets drawn;
                                  weight and contribution stay underneath as the two
                                  numbers it was computed from. -->
                             <KpiDivergingFlowBar
-                                layout="inline"
+                                layout="responsive"
+                                scrollLabel
                                 label={name(row.assetId)}
                                 value={points(row.divergence)}
                                 valueTestId="risk-l2-divergence-{row.assetId}"
@@ -321,7 +322,8 @@
                                 valueClass="tabular-nums font-semibold"
                                 testId="risk-l2-divergence-bar-{row.assetId}"
                             />
-                            <div class="flex justify-end gap-4 text-xs text-lf-muted">
+                            <!-- Under the bar: on a narrow row the two figures spread to its ends, on a wide one they sit at the right. -->
+                            <div class="flex justify-between gap-4 text-xs text-lf-muted @[26rem]:justify-end" data-testid="risk-l2-figures-{row.assetId}">
                                 <span>
                                     {$t('risk.levels.l2.weight')}
                                     <span class="tabular-nums text-lf-secondary" data-testid="risk-l2-weight-{row.assetId}">{share(row.weight)}</span>

@@ -11,6 +11,7 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskVarCvarBin,
     RiskVarCvarOutput,
+    RiskWorstHorizonWindow,
 )
 from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
@@ -22,7 +23,7 @@ from backend.app.services.risk.base import (
     RiskSeriesInputs,
     RiskUnavailableError,
 )
-from backend.app.services.risk.metrics import historical_var_cvar, return_distribution_histogram
+from backend.app.services.risk.metrics import historical_var_cvar, return_distribution_histogram, worst_horizon_window
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
@@ -55,6 +56,8 @@ class HistoricalVarParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class HistoricalVarAnalytic(RiskAnalytic):
     analytic_code = "historical_var"
+    # 3.2.0 — F-6: the worst compounded window the series lived through (`worst_horizon`), with its
+    # dates, beside the tail average. VaR, CVaR and the histogram do not move.
     # 3.1.0 — D380: a window whose interquartile range is zero is binned at the Sturges
     # width instead of one bar cut in two by the pin. VaR and CVaR do not move.
     # 3.0.0 — the horizon is in calendar days, compounded over the observations the
@@ -64,7 +67,7 @@ class HistoricalVarAnalytic(RiskAnalytic):
     # 2.0.0 — M2: coherent Acerbi-Tasche tail estimator (published VaR/CVaR move) plus
     # the return histogram of K1. 1.x published the plug-in estimator, which understated
     # CVaR by a measured 0.27 %.
-    algorithm_version = "3.1.0"
+    algorithm_version = "3.2.0"
     name_i18n_key = "risk.analytics.historicalVar.name"
     description_i18n_key = "risk.analytics.historicalVar.description"
     output_kind = RiskOutputKind.VAR_CVAR
@@ -78,7 +81,7 @@ class HistoricalVarAnalytic(RiskAnalytic):
     series_inputs = RiskSeriesInputs.PRIMARY
 
     def compute(self, params, context):
-        _dates, returns = require_primary_returns(context)
+        dates, returns = require_primary_returns(context)
         horizon_observations = calendar_days_to_observations(params.horizon_days, require_annualization_factor(context))
         windows = len(returns) - horizon_observations + 1
         if windows < self.min_observations:
@@ -102,6 +105,7 @@ class HistoricalVarAnalytic(RiskAnalytic):
         var_bin_edge = -summary.value_at_risk
         histogram = return_distribution_histogram(summary.horizon_returns, pinned_edge=var_bin_edge)
         return_bins = [RiskVarCvarBin(lower_bound=lower, upper_bound=upper, count=count) for lower, upper, count in zip(histogram.edges[:-1], histogram.edges[1:], histogram.counts, strict=True)]
+        worst = worst_horizon_window(summary.horizon_returns, horizon_observations)
         return RiskComputation(
             output=RiskVarCvarOutput(
                 confidence_level=params.confidence_level,
@@ -112,6 +116,7 @@ class HistoricalVarAnalytic(RiskAnalytic):
                 conditional_value_at_risk=summary.conditional_value_at_risk,
                 return_bins=return_bins,
                 var_bin_edge=var_bin_edge,
+                worst_horizon=None if worst is None else RiskWorstHorizonWindow(compounded_return=worst.compounded_return, start_date=dates[worst.start_index], end_date=dates[worst.end_index]),
             ),
             method="historical_simulation_acerbi_tasche",
         )

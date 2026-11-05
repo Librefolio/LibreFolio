@@ -60,6 +60,13 @@ export interface AssetSetHurtRow {
     worstFall: number | null;
     /** Calendar days the deepest fall lasted. */
     worstFallDays: number | null;
+    /** The peak the deepest fall started at and the trough it reached, as ISO dates (F-6); null when the backend names neither. */
+    worstFallPeriod: {from: string; to: string} | null;
+    /**
+     * The worst compounded month this asset really went through (F-6): the loss as a positive fraction, and its first and last day.
+     * The `badMonth` figure is the average of the worst 5 % of the windows; this is the one window a reader can look up.
+     */
+    worstMonth: {loss: number; from: string; to: string} | null;
     /** Whether the deepest fall has been recovered, and when. */
     recovery: string | null;
     /** How far below its own peak the asset sits today, as a negative fraction. */
@@ -151,6 +158,11 @@ function num(value: number | null | undefined | readonly (number | null)[]): num
     return typeof single === 'number' && Number.isFinite(single) ? single : null;
 }
 
+/** A pair of ISO dates from the payload, in order, or null: a lone date would point at a stretch nobody stated. */
+function datePeriod(from: string | null | undefined, to: string | null | undefined): {from: string; to: string} | null {
+    return typeof from === 'string' && typeof to === 'string' && from <= to ? {from, to} : null;
+}
+
 /**
  * The display name of an asset, degrading to `#id` rather than to a blank.
  *
@@ -183,6 +195,11 @@ export function buildAssetSetHurtRows(assetIds: readonly number[], names: Readon
 
     return assetIds.map((assetId) => {
         const fall = falls.get(assetId);
+        // The generated client widens every optional field to «a value or a list of them»; `singleValue` unwraps it.
+        const month = singleValue(monthly.get(assetId)?.worst_horizon);
+        const monthLoss = month ? num(month.compounded_return) : null;
+        const monthFrom = singleValue(month?.start_date);
+        const monthTo = singleValue(month?.end_date);
         return {
             assetId,
             name: label(assetId, names),
@@ -190,6 +207,9 @@ export function buildAssetSetHurtRows(assetIds: readonly number[], names: Readon
             badMonth: num(monthly.get(assetId)?.conditional_value_at_risk),
             worstFall: num(fall?.maximum_drawdown),
             worstFallDays: num(fall?.maximum_drawdown_duration_days),
+            worstFallPeriod: datePeriod(singleValue(fall?.maximum_drawdown_peak_date), singleValue(fall?.maximum_drawdown_trough_date)),
+            // Named only beside a loss: a window with no loss in it is not a «worst month».
+            worstMonth: monthLoss !== null && monthLoss < 0 && monthFrom && monthTo ? {loss: Math.abs(monthLoss), ...(datePeriod(monthFrom, monthTo) ?? {from: monthFrom, to: monthTo})} : null,
             recovery: fall?.maximum_drawdown_recovery_status ?? null,
             currentFall: num(fall?.current_drawdown),
             toPeak: num(fall?.remaining_to_peak_ratio),

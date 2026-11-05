@@ -23,9 +23,10 @@ Cada bloque a continuación sigue un patrón: qué responde, una captura de pant
 **Herramientas mostradas**
 
 - **Un mal día**, **Un mal mes** — tu pérdida promedio en el peor 5% de los días, o de los períodos de un mes → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Umbral de VaR** — en *Distribución de los rendimientos diarios*: la pérdida diaria que solo el peor 5% de los días superó → [Valor en riesgo](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **Umbral de VaR** — en *Distribución de los rendimientos diarios*: la pérdida diaria que solo el peor 5% de los días superó; una línea discontinua la marca en el gráfico, y al pasar sobre una barra se ve cuántos días cayeron en ella y si queda más allá del umbral → [Valor en riesgo](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
 - **El peor día realmente visto** — el peor día del período → [Peor realización](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
-- **La peor caída** — la caída más profunda desde un máximo hasta un mínimo posterior → [Caída máxima](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **El peor mes realmente vivido** — bajo *Un mal mes*: el peor período de un mes que la cartera realmente atravesó, con su primer y su último día. *Un mal mes* es en cambio un promedio del peor 5%, que ningún mes mostró nunca por sí solo
+- **La peor caída** — la caída más profunda desde un máximo hasta un mínimo posterior, con las fechas del máximo y del mínimo → [Caída máxima](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Caída en riesgo** — cuán por debajo de su pico estuvo la cartera, dejando de lado su peor 5% de días → [Caída en riesgo](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Media más allá de ese umbral** — cuán por debajo de su pico estuvo, en promedio, en esos peores días → [Caída en riesgo condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
 - **Actualmente por debajo del máximo** — cuán por debajo de su último máximo está la cartera hoy → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
@@ -110,7 +111,7 @@ El riesgo vale la pena solo si paga. Este bloque compara el rendimiento de tu ca
 - **Añade una herramienta** con los botones **Añadir:**; su **×** la cierra y descarta su resultado. Las herramientas que dejes abiertas vuelven la próxima vez, en este navegador.
 - **Repetición histórica**: elige una crisis en **Preajuste**, o tu propio **Período**, y luego pulsa **Ejecutar repetición**. Las posiciones sin precios para ese período se excluyen, y un botón puede ofrecer un período en el que todas tengan precios.
 - **Choque hipotético**: haz clic en un escenario, como *Equity crash*, para ejecutarlo; **Mostrar el choque por grupo** te permite cambiar sus supuestos.
-- **Simulación**: elige un modo — *Historial remezclado* es el recomendado — y un horizonte, luego **Simular**. Lee el cono como un rango de posibilidades, no como un pronóstico.
+- **Simulación**: elige un modo — *Historial remezclado* es el recomendado — y un horizonte, en días o como años, meses y días (`2a3m5d`), luego **Simular**. Lee el cono como un rango de posibilidades, no como un pronóstico.
 
 !!! note "La simulación sigue en beta"
 

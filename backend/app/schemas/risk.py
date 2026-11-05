@@ -1093,6 +1093,27 @@ class RiskVarCvarBin(StrictModel):
         return self
 
 
+class RiskWorstHorizonWindow(StrictModel):
+    """The worst stretch of one horizon the series actually went through.
+
+    The VaR and the CVaR are statistics of the whole distribution of compounded windows; this is
+    the single lowest window, the one a reader can look up. `compounded_return` is the holding-period
+    return of the window (a loss when negative). `start_date` and `end_date` are the dates of the
+    first and of the last daily return compounded in it, both inclusive, so the stretch ran from the
+    close before `start_date` to the close of `end_date`.
+    """
+
+    compounded_return: FiniteFloat = Field(..., ge=-1)
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> RiskWorstHorizonWindow:
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must not precede start_date")
+        return self
+
+
 class RiskVarCvarOutput(StrictModel):
     """Historical VaR and CVaR at one confidence level and one horizon.
 
@@ -1114,6 +1135,7 @@ class RiskVarCvarOutput(StrictModel):
     conditional_value_at_risk: FiniteFloat = Field(..., ge=0)
     return_bins: List[RiskVarCvarBin] = Field(default_factory=list)
     var_bin_edge: Optional[FiniteFloat] = None
+    worst_horizon: Optional[RiskWorstHorizonWindow] = None
 
     @model_validator(mode="after")
     def validate_tail_ordering(self) -> RiskVarCvarOutput:
@@ -1446,6 +1468,7 @@ class RiskAssetSetVarCvarItem(StrictModel):
     asset_id: PositiveInt
     value_at_risk: FiniteFloat = Field(..., ge=0)
     conditional_value_at_risk: FiniteFloat = Field(..., ge=0)
+    worst_horizon: Optional[RiskWorstHorizonWindow] = None
 
     @model_validator(mode="after")
     def validate_tail_ordering(self) -> RiskAssetSetVarCvarItem:

@@ -72,6 +72,7 @@ from backend.app.schemas.risk import (
     RiskStressOutput,
     RiskVarCvarBin,
     RiskVarCvarOutput,
+    RiskWorstHorizonWindow,
 )
 from backend.app.schemas.risk_scenarios import (
     RISK_SCENARIO_OFFICIAL_LANGUAGES,
@@ -1643,6 +1644,24 @@ def test_return_bins_are_policed_for_strictly_ascending_lower_bounds():
         RiskVarCvarBin(lower_bound=-0.031, upper_bound=-0.031, count=1)
     with pytest.raises(ValidationError, match="upper_bound must be greater than lower_bound"):
         RiskVarCvarBin(lower_bound=0.0, upper_bound=-0.031, count=1)
+
+
+def test_var_cvar_worst_horizon_is_additive_and_orders_its_dates():
+    # F-6: the worst compounded window, with its first and last day, beside the tail average. Additive like the
+    # chart fields: a producer or a mock that does not know it keeps validating.
+    assert RiskVarCvarOutput(**_chart_var_cvar_payload()).worst_horizon is None
+
+    window = RiskWorstHorizonWindow(compounded_return=-0.0412, start_date=date(2026, 3, 2), end_date=date(2026, 3, 30))
+    output = RiskVarCvarOutput(**_chart_var_cvar_payload(), worst_horizon=window)
+    assert output.worst_horizon is not None
+    assert output.model_dump(mode="json")["worst_horizon"] == {"compounded_return": -0.0412, "start_date": "2026-03-02", "end_date": "2026-03-30"}
+
+    # One day is a window of one day; a total loss is a window of exactly -1; a stretch cannot end before it starts.
+    assert RiskWorstHorizonWindow(compounded_return=-1.0, start_date=date(2026, 3, 2), end_date=date(2026, 3, 2)).compounded_return == -1.0
+    with pytest.raises(ValidationError):
+        RiskWorstHorizonWindow(compounded_return=-0.04, start_date=date(2026, 3, 30), end_date=date(2026, 3, 2))
+    with pytest.raises(ValidationError):
+        RiskWorstHorizonWindow(compounded_return=-1.2, start_date=date(2026, 3, 2), end_date=date(2026, 3, 30))
 
 
 def test_var_cvar_chart_fields_are_omissible_because_the_additive_design_rests_on_it():

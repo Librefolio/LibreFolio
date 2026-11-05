@@ -719,6 +719,10 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     // fixture sitting exactly on an edge would pass under both the
                     // half-open rule and the closed one it exists to distinguish.
                     var_bin_edge: longHorizon ? null : -0.021,
+                    // F-6: the worst compounded window the series really lived through, dated; only the month states one
+                    // (the day has the worst realization's date). −0,121 is worse than the 0,094 average of the worst 5 %,
+                    // as a worst window always is.
+                    ...(longHorizon ? {worst_horizon: {compounded_return: -0.121, start_date: '2023-11-14', end_date: '2023-12-14'}} : {}),
                 },
             };
         }
@@ -1973,6 +1977,14 @@ test.describe('Risk analysis functional integration', () => {
         // read as a positive magnitude of 8,7%, not as a dropped contradiction.
         await expect(panel.getByTestId('risk-l1-card-worst-value')).toHaveText(loss('8.7%'));
         await expect(panel.getByTestId('risk-l1-duration-worst')).toBeVisible();
+        // F-6: which one it was. The worst fall from its peak to its trough, and the worst month the series really
+        // went through beside the average of the worst 5 % the card prints; the day has its own date (below).
+        await expect(panel.getByTestId('risk-l1-period-worst')).toHaveAttribute('data-from', '2023-11-14');
+        await expect(panel.getByTestId('risk-l1-period-worst')).toHaveAttribute('data-to', '2023-12-03');
+        await expect(panel.getByTestId('risk-l1-worst-month')).toContainText(loss('12.1%'));
+        await expect(panel.getByTestId('risk-l1-period-month')).toHaveAttribute('data-from', '2023-11-14');
+        await expect(panel.getByTestId('risk-l1-period-month')).toHaveAttribute('data-to', '2023-12-14');
+        await expect(panel.getByTestId('risk-l1-period-day')).toHaveCount(0);
         await expect(panel.getByTestId('risk-l1-recovery-worst')).toBeVisible();
         // Where the portfolio stands now is a different question from its worst
         // moment, and the drawdown summary is what answers it.
@@ -2027,12 +2039,24 @@ test.describe('Risk analysis functional integration', () => {
         // in — the one conversion the unit tests cannot see. Without it the same stub prints
         // «−210.0%», which does not contain «−2.1%». The figure is not translated.
         await expect(panel.getByTestId('risk-l1-histogram-cut')).toContainText(loss('2.1%'));
-        // The axis ends, read off the stub's first lower bound (−0.06) and last upper bound
-        // (0.04): positions, one decimal. The two spans carry no testid, so each is found by its
-        // exact text inside the histogram — exact, because «4.0%» is also a substring of «−4.0%».
+        // The axis ends, read off the stub's first lower bound (−0.06) and last upper bound (0.04): positions, one decimal.
+        // The chart is a canvas since F-5, so the section publishes the two ends as text (the same `axisPercent` the axis labels
+        // use), and the bars' tooltips as the entries of a hidden list: this is what a test, and a screen reader, can read.
         const histogram = panel.getByTestId('risk-l1-histogram');
-        await expect(histogram.getByText(loss('6.0%'), {exact: true})).toBeVisible();
-        await expect(histogram.getByText('4.0%', {exact: true})).toBeVisible();
+        await expect(histogram.getByTestId('risk-l1-histogram-axis-min')).toHaveText(loss('6.0%'));
+        await expect(histogram.getByTestId('risk-l1-histogram-axis-max')).toHaveText('4.0%');
+        // The chart itself is drawn, by ECharts, and says when it is done.
+        await expect(histogram.getByTestId('risk-l1-histogram-chart')).toHaveAttribute('data-chart-ready', 'true');
+        // What it drew, read off the instance the chart publishes (`__lfChart`): one bar per bin of the stub, and the threshold
+        // line at the stub's cut (−0.021, written in percent units).
+        const drawn = await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => {
+            const chart = (element as unknown as {__lfChart: {getOption(): {series: {data: unknown[]; markLine?: {data?: ({xAxis?: number} | {xAxis?: number}[])[]}}[]}}}).__lfChart;
+            const series = chart.getOption().series[0];
+            const line = series.markLine?.data?.[0];
+            return {bars: series.data.length, cut: (Array.isArray(line) ? line[0] : line)?.xAxis ?? null};
+        });
+        expect(drawn.bars, 'the chart drew a different number of bars than the engine binned').toBe(7);
+        expect(drawn.cut, 'the chart has no threshold line at the cut').toBeCloseTo(-2.1, 6);
 
         // Nothing came back degraded, so nothing is disclosed. The mirror of the
         // two-entry assertion in the unavailable test: without this half, a
@@ -4236,6 +4260,109 @@ test.describe('Risk analysis functional integration', () => {
         });
         expect(captionStyle.whiteSpace, 'the uncovered caption is held on one line: its style does not let it wrap').not.toBe('nowrap');
         expect(captionStyle.lineClamp, 'the uncovered caption has no two-line clamp: a longer sentence would run past two lines').toBe('2');
+    });
+
+    /**
+     * F-7 (testlist 1.3): on a narrow screen the rows of «Sono diversificato come credo?» stack — the name above, then the bar,
+     * then the weight and the contribution — and no row leaves the screen. Wide, they stay as they were: name, bar and
+     * figure on one line. The switch follows the room the row has (a container query), so it is read on boxes, not on a width.
+     */
+    test('F-7: an L2 row stacks on a phone and no row leaves the screen; wide, it stays on one line', async ({page}) => {
+        await installRiskMocks(page, {concentration: true});
+        const panel = await openDashboardRisk(page);
+        const level2 = panel.getByTestId('risk-level-2');
+        const rows = level2.locator('[data-testid^="risk-l2-divergence-bar-"]');
+        await expect(rows.first(), 'the stub draws no L2 row').toBeVisible({timeout: 10_000});
+
+        /** The three boxes of the first row, read together: the name cell, the bar's track and the figures line. */
+        const geometry = () =>
+            level2.evaluate((section) => {
+                const bar = section.querySelector<HTMLElement>('[data-testid^="risk-l2-divergence-bar-"]');
+                const item = bar?.closest('li');
+                if (!bar || !item) return null;
+                const id = bar.getAttribute('data-testid')!.replace('risk-l2-divergence-bar-', '');
+                const label = bar.querySelector<HTMLElement>('[title]');
+                const track = bar.querySelector<HTMLElement>('.rounded-l-full')?.parentElement?.parentElement;
+                const figures = section.querySelector<HTMLElement>(`[data-testid="risk-l2-figures-${id}"]`);
+                if (!label || !track || !figures) return null;
+                const top = (element: Element) => Math.round(element.getBoundingClientRect().top);
+                const middle = (element: Element) => Math.round(element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2);
+                return {
+                    labelTop: top(label),
+                    labelBottom: Math.round(label.getBoundingClientRect().bottom),
+                    trackTop: top(track),
+                    trackMiddle: middle(track),
+                    figuresTop: top(figures),
+                    itemOverflow: item.scrollWidth - item.clientWidth,
+                    pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                    itemRight: Math.round(item.getBoundingClientRect().right),
+                    viewport: window.innerWidth,
+                };
+            });
+
+        // Desktop first: one line for the name and the bar, the figures under them.
+        const wide = await geometry();
+        expect(wide, 'the first L2 row has no name, bar or figures line').not.toBeNull();
+        // Beside the name: the bar's middle falls within the name's own line (the cells are centred, so their tops differ).
+        expect(wide!.trackMiddle, 'wide, the bar is not beside the name').toBeGreaterThanOrEqual(wide!.labelTop);
+        expect(wide!.trackMiddle, 'wide, the bar is not beside the name').toBeLessThanOrEqual(wide!.labelBottom);
+        expect(wide!.figuresTop, 'the figures are not under the bar').toBeGreaterThan(wide!.trackTop);
+
+        await page.setViewportSize({width: 375, height: 812});
+        await expect
+            .poll(
+                async () => {
+                    const narrow = await geometry();
+                    return narrow !== null && narrow.trackTop >= narrow.labelBottom - 1;
+                },
+                {message: 'at 375 px the bar is not under the name'},
+            )
+            .toBe(true);
+        const narrow = (await geometry())!;
+        expect(narrow.figuresTop, 'at 375 px the figures are not under the bar').toBeGreaterThan(narrow.trackTop);
+        expect(narrow.itemOverflow, 'an L2 row is wider than its box at 375 px').toBeLessThanOrEqual(1);
+        expect(narrow.pageOverflow, 'the page scrolls sideways at 375 px').toBeLessThanOrEqual(1);
+        expect(narrow.itemRight, 'a row leaves the screen at 375 px').toBeLessThanOrEqual(narrow.viewport);
+    });
+
+    /**
+     * F-8 (testlist 1.3): the simulation horizon takes a number of days as before, and also years, months and days in the
+     * interface language (`2y3m5d` in English), as a fixed sum: a year is 365 days, a month 30. The days it comes to are written under the field, a text that is no horizon is an
+     * error of the field and keeps the run button off, and what goes to the engine is always calendar days. The unit letters
+     * are read from the catalogue of the language the page is drawn in, never written here.
+     */
+    test('F-8: the simulation horizon accepts 1y, shows its days, refuses a bad text and sends calendar days', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        const panel = await openDashboardRisk(page);
+        const level4 = await openLevel4(panel);
+        const horizon = level4.getByTestId('risk-simulation-horizon');
+        await expect(horizon).toHaveValue('365');
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '365');
+
+        const year = await catalogueSentence(page, 'risk.params.horizonExpr.units.year');
+        const month = await catalogueSentence(page, 'risk.params.horizonExpr.units.month');
+
+        await horizon.fill(`1${year}6${month}`);
+        // A fixed sum (developer's decision, 05/11/2026): a year is 365 days and a month 30, so a year and six months are 545.
+        const days = Number(await level4.getByTestId('risk-simulation-horizon-days').getAttribute('data-days'));
+        expect(days).toBe(545);
+        await expect(horizon).toHaveAttribute('aria-invalid', 'false');
+
+        await level4.getByTestId('risk-simulation-run').click();
+        await expect.poll(() => requests.some((request) => request.analytics.some((analytic) => analytic.analytic_code === 'simulation' && analytic.parameters?.horizon_days === days)), {message: 'the run did not send the days the field showed', timeout: 10_000}).toBe(true);
+
+        // A text that is no horizon: the error is in the field, the run button is off.
+        await horizon.fill('1x');
+        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveAttribute('data-error', 'format');
+        await expect(horizon).toHaveAttribute('aria-invalid', 'true');
+        await expect(level4.getByTestId('risk-simulation-run')).toBeDisabled();
+
+        // Past the engine's ten years: its own error, not a request the engine would refuse.
+        await horizon.fill('3651');
+        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveAttribute('data-error', 'tooLong');
+        await horizon.fill('30');
+        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveCount(0);
+        await expect(level4.getByTestId('risk-simulation-run')).toBeEnabled();
     });
 
     /**

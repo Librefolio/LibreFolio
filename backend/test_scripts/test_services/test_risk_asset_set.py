@@ -960,8 +960,31 @@ def test_asset_set_var_counts_its_history_floor_in_horizon_observations():
     assert (details["horizon_days"], details["horizon_observations"], details["observations"], details["required"]) == (30, 21, 19, analytic.min_observations)
 
 
+def test_asset_set_var_names_each_assets_worst_window_with_its_dates():
+    """F-6: per asset, the lowest compounded window the asset really went through, and the days it spans."""
+    prepared = weekday_prepared_set(8)
+
+    output = compute_asset_set_var(prepared, 30)
+
+    assert [item.asset_id for item in output.items] == [CHOPPY_ASSET_ID, STEADY_ASSET_ID]
+    for item, series in zip(output.items, prepared.series, strict=True):
+        returns = [float(point.value) for point in series.returns.points]
+        dates = [point.date for point in series.returns.points]
+        horizon = output.horizon_observations
+        windows = []
+        for start in range(len(returns) - horizon + 1):
+            wealth = 1.0
+            for value in returns[start : start + horizon]:
+                wealth *= 1.0 + value
+            windows.append((wealth - 1.0, start))
+        expected_return, start = min(windows)
+        assert item.worst_horizon is not None
+        assert item.worst_horizon.compounded_return == pytest.approx(expected_return, rel=1e-12)
+        assert (item.worst_horizon.start_date, item.worst_horizon.end_date) == (dates[start], dates[start + horizon - 1])
+
+
 def test_asset_set_var_calendar_horizon_is_a_new_algorithm_version():
-    assert AssetSetVarAnalytic.algorithm_version == "2.0.0"
+    assert AssetSetVarAnalytic.algorithm_version == "2.1.0"
 
 
 def test_asset_set_drawdown_states_one_window_once_and_one_episode_per_asset():

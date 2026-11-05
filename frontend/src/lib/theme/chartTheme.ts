@@ -120,6 +120,8 @@ export function chartNeutrals(dark: boolean, scope?: Element | null) {
         price: {baseline: input, pendingEditPointRing: card},
         /** The risk-return scatter chart: its axes and the capital market line. Its points: `RISK_RETURN_COLORS`. */
         riskReturn: {axis: subtle, axisText: secondary, capitalMarketLine: input},
+        /** The returns histogram: the bars outside the tail and the cut, the axis, and the band behind the bar under the pointer. The cut and the tail: `RETURN_HISTOGRAM_COLORS`. */
+        returnHistogram: {bar: roles.color('--lf-surface-neutral'), axis: subtle, axisText: muted, hoverBand: translucent(muted, 0.16, 0.14), hitArea: translucent(muted, 0)},
         /** The allocation charts: the gap between slices and rings, the captions outside the outer ring, the labels on the history's areas and their halo. */
         allocation: {sliceBorder: card, caption: secondary, historyAreaLabel: primary, historyAreaLabelShadow: card},
         /**
@@ -197,6 +199,15 @@ export const RISK_RETURN_COLORS = {
     other: rolePair('--lf-cat-other'),
     /** The selected point: the green of a selected control. */
     selected: rolePair('--lf-checked'),
+} as const;
+
+/**
+ * The returns histogram's bars: the bar holding the VaR cut is the warning, the bars lying beyond it are the loss at 80 %
+ * (the weight the CSS bars gave it, `SIGN_BAR.histogram.loss`), the rest is the neutral surface (`chartNeutrals().returnHistogram`).
+ */
+export const RETURN_HISTOGRAM_COLORS = {
+    cut: rolePair('--lf-warning'),
+    tail: rolePairAlpha('--lf-loss', 0.8),
 } as const;
 
 /** The allocation charts: pie and donut, allocation history. Their category colours: `./chartCategories`; their neutrals: `chartNeutrals().allocation`. */

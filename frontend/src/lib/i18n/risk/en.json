@@ -18,7 +18,23 @@
       "includeFrontier": "Include frontier",
       "frontierPoints": "Frontier points",
       "includeSensitivity": "Include sensitivity",
-      "optimizationSolver": "Solver"
+      "optimizationSolver": "Solver",
+      "horizonExpr": {
+        "units": {
+          "year": "y",
+          "month": "m",
+          "day": "d"
+        },
+        "hint": "Type the days (365) or years, months and days: 2y3m5d is 2 years, 3 months and 5 days, 825 days (a year counts 365 days, a month 30).",
+        "hintLabel": "How to write the horizon",
+        "resultDays": "{days, plural, one {# day} other {# days}}",
+        "errors": {
+          "empty": "Enter the horizon.",
+          "format": "Not a valid horizon: write days (365) or, in this order, years, months and days (2y3m5d).",
+          "tooShort": "The horizon must be at least 1 day.",
+          "tooLong": "The horizon cannot exceed {max} days."
+        }
+      }
     },
     "title": "Risk",
     "dashboardTitle": "Portfolio risk",
@@ -411,7 +427,8 @@
           "drawdownAtRisk": "Drawdown at risk ({confidence})",
           "conditionalDrawdownAtRisk": "Average beyond that threshold",
           "ulcerIndex": "Ulcer index {value}",
-          "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer"
+          "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer",
+          "worstMonth": "The worst month actually seen"
         },
         "underwater": {
           "title": "Time spent below the peak",
@@ -423,8 +440,15 @@
           "cut": "VaR threshold at {value}",
           "noCut": "No threshold published for this window.",
           "empty": "No return distribution available for this period.",
-          "bin": "{range}: {count, plural, one {# day} other {# days}} ({share})"
-        }
+          "bin": "{range}: {count, plural, one {# day} other {# days}} ({share})",
+          "cutLine": "VaR {value}",
+          "position": {
+            "beyond": "Beyond the VaR threshold ({value}): days the VaR describes",
+            "holds": "Holds the VaR threshold ({value})",
+            "above": "Above the VaR threshold ({value})"
+          }
+        },
+        "period": "from {from} to {to}"
       },
       "l2": {
         "title": "Am I as diversified as I think?",

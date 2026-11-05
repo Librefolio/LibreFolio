@@ -11,6 +11,7 @@
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 
     import {addDays} from '../../riskAnalysisHelpers';
+    import SimulationHorizonField from '../../SimulationHorizonField.svelte';
     import SimulationProvenance from '../SimulationProvenance.svelte';
     import {buildSimulationProvenance} from '../simulationProvenance';
     import {buildDriftUncertainty} from './driftUncertainty';
@@ -48,6 +49,7 @@
 
     let mode = $state<SimulationMode>(DEFAULT_SIMULATION_MODE);
     let horizonDays = $state(365);
+    let horizonValid = $state(true);
     let paths = $state(8192);
     let sampling = $state<'mc' | 'qmc'>('mc');
     let randomSeed = $state(123456);
@@ -171,17 +173,7 @@
     </fieldset>
 
     <div class="flex flex-wrap items-end gap-3 text-xs text-lf-muted">
-        <label class="flex flex-col gap-1">
-            {$t('risk.params.horizonDays')}
-            <input
-                type="number"
-                min="1"
-                bind:value={horizonDays}
-                onchange={invalidate}
-                class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
-                data-testid="risk-simulation-horizon"
-            />
-        </label>
+        <SimulationHorizonField bind:days={horizonDays} bind:valid={horizonValid} onchange={invalidate} />
         <label class="flex flex-col gap-1">
             {$t('risk.params.paths')}
             <input type="number" min="1" bind:value={paths} onchange={invalidate} class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" data-testid="risk-simulation-paths" />
@@ -211,7 +203,7 @@
                 <input type="number" bind:value={randomSeed} onchange={invalidate} class="w-28 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" data-testid="risk-simulation-seed" />
             </label>
         {/if}
-        <button type="button" class="rounded-lg bg-lf-action px-3 py-1.5 text-sm text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={run} disabled={controller.simulationLoading} data-testid="risk-simulation-run">
+        <button type="button" class="rounded-lg bg-lf-action px-3 py-1.5 text-sm text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={run} disabled={controller.simulationLoading || !horizonValid} data-testid="risk-simulation-run">
             {$t('risk.actions.simulate')}
         </button>
     </div>

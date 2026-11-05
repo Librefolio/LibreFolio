@@ -576,10 +576,10 @@ function marqueeOf(cell: HTMLElement): HTMLElement {
     return spans[0];
 }
 
-/** What a value cell draws as its figure, the worst fall's duration sub-line set aside. */
+/** What a value cell draws as its figure, its sub-lines set aside: the worst fall's duration and period, the worst month's days (F-6). */
 function figureText(cell: HTMLElement): string {
     const copy = cell.cloneNode(true) as HTMLElement;
-    copy.querySelectorAll('[data-testid="risk-asset-set-l1-worstFall-days"]').forEach((node) => node.remove());
+    copy.querySelectorAll('[data-testid="risk-asset-set-l1-worstFall-days"], [data-testid="risk-asset-set-l1-worstFall-period"], [data-testid$="-detail"]').forEach((node) => node.remove());
     return normalize(copy.textContent);
 }
 
@@ -841,6 +841,40 @@ describe('AssetSetLossComparisonSection — the value cells keep their contract'
         }
         expect(within(blank).getByTestId('risk-asset-set-l1-worstFall')).toHaveAttribute('data-recovery', '');
         expect(within(blank).queryByTestId('risk-asset-set-l1-worstFall-days'), 'no duration for a fall nobody measured').toBeNull();
+    });
+});
+
+// F-6 (testlist 1.3): the table says which fall and which month it is talking about, under the figure, in the cell.
+describe('AssetSetLossComparisonSection — which stretch the figure is about (F-6)', () => {
+    const WITH_WINDOW = ok('invented-monthly-var-window', 'asset_set_var', {
+        kind: 'var_cvar_set',
+        confidence_level: 0.95,
+        horizon_days: 30,
+        horizon_observations: 21,
+        observations: 732,
+        items: [
+            {asset_id: OPEN_ASSET, value_at_risk: 0.118, conditional_value_at_risk: 0.171, worst_horizon: {compounded_return: -0.213, start_date: '2025-03-03', end_date: '2025-04-01'}},
+            {asset_id: RECOVERED_ASSET, value_at_risk: 0.047, conditional_value_at_risk: 0.069},
+        ],
+    });
+
+    it('names the peak and the trough under the worst fall, and the days of the worst month under the monthly figure', () => {
+        mountWith({assetIds: SELECTION, assetLabels: LABELS, assetIcons: ICONS, dailyVar: DAILY_VAR, monthlyVar: WITH_WINDOW, drawdown: DRAWDOWN});
+
+        const open = rowOf(OPEN_ASSET);
+        const period = within(within(open).getByTestId('risk-asset-set-l1-worstFall')).getByTestId('risk-asset-set-l1-worstFall-period');
+        expect(period.textContent).toContain('2023-10-20');
+        expect(period.textContent).toContain('2024-04-19');
+        expect(within(open).getByTestId('risk-asset-set-l1-badMonth-detail').textContent).toContain('2025-03-03');
+        expect(within(open).getByTestId('risk-asset-set-l1-badMonth-detail').textContent).toContain('2025-04-01');
+        // The figure itself is the average, untouched by the detail beside it.
+        expect(figureText(within(open).getByTestId('risk-asset-set-l1-badMonth'))).toBe('\u221217.1%');
+    });
+
+    it('says nothing under a monthly figure whose payload names no window', () => {
+        mountWith({assetIds: SELECTION, assetLabels: LABELS, assetIcons: ICONS, dailyVar: DAILY_VAR, monthlyVar: WITH_WINDOW, drawdown: DRAWDOWN});
+
+        expect(within(rowOf(RECOVERED_ASSET)).queryByTestId('risk-asset-set-l1-badMonth-detail')).toBeNull();
     });
 });
 
