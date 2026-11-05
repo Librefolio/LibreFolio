@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A date before 1900 asks for a confirmation once**, in the transaction form, the bulk editor and the import review: such a date is usually a typo.
 - **Managed instances: `./dev.py user reassign-owner <username>`** gives the administrator account back to the owner's address after a wrong confirmation: a new password link, the old password and the sessions revoked. `user set-email` also cancels an address-change link still waiting.
 - **More users than the plan allows** (a smaller plan, or a restored backup): at the first sign-in the administrator chooses who keeps access, before any other page, and can download the full backup first. The others are deactivated, never deleted, and wait with a clear message. A restore says so in its report instead of refusing.
-- The portfolio's data-quality report lists the exchange rates it values your holdings with that are more than 7 days old (`stale_fx_pairs`), like the stale prices. There is no banner for it yet.
+- The portfolio's data-quality report lists the exchange rates it values your holdings with that are more than 7 days old (`stale_fx_pairs`), like the stale prices, and a banner warns about them.
 - **Hosting panel: `instance_key: ok|mismatch`** in the panel status. With a wrong instance key the panel's backup jobs stop (409 `backup_instance_key_mismatch`) and resume by themselves once the right key is back; `LIBREFOLIO_INSTANCE_KEY_ACCEPT=1` accepts a wanted key change for one start. The instance stays open.
 - After an update, each user sees once what changed since their last version: the new changelog chapters, in their language where translated. New accounts never see it, and it never opens over a guide or another window. Same on self-hosted and managed instances.
 - `./dev.py db currencies` lists stored currency codes that are not ISO codes (names or numbers saved by earlier versions), and the server warns about them at every start.
@@ -130,6 +130,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Risk: the partial-results notice counts the excluded assets** and shows each one as a badge; the return histogram's bars show their days and share.
 - Positions contribution: a row closed in the period says how it closed (a sale, a transfer, with the receiving broker when you can see it, or an adjustment).
 - **The Dashboard and the broker page follow the current prices**: every minute while you use them, amounts, KPIs and positions update by themselves; they stop when the tab is hidden or after two minutes without input («Updates paused») and resume at your next action.
+- **Choose the shape of your chart lines** in your settings: segments (the default), steps or a smooth spline, for every chart.
+- **Chart tooltips show the day of the week** after the date, and the pointer stops on days, never between two.
+- **«Relink events» creates what is missing:** event names are translated, with their emoji; you can create the missing event on the asset for one row or in bulk, and filter the table by asset and broker.
+- **An «Export» button next to «Import CSV»**, in the edit panel of an asset's prices and of an FX pair's rates.
+- **Help that fits the problem:** a check the administrator can solve links the guide; one that only the host can solve offers «Contact support», with an email already written.
+- **Data-quality warnings on the broker page:** old prices, missing or old exchange rates and their sync buttons appear there too, for every role.
 
 ### 🔄 Changed
 
@@ -224,6 +230,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI Export from a broker page gives the broker's full amounts**, like the page, with a note on your role and ownership stake; the broker-versus-portfolio comparison says it counts every broker whole. Converted prices may differ by one unit of the sixth decimal.
 - **AI Export: the exchange result on foreign cash appears on its own, broker by broker**, in the portfolio export, recognised by a fixed code instead of its English label.
 - AI Export: a concentration or allocation share that cannot be computed (a total of zero or less) is reported as not available instead of a reversed number.
+- **A broker's page is now the Dashboard with that broker already chosen:** the same controls, the currency with «Create forex», cash and amounts of the chosen period, the lots detail that closes with Back, the «Updates paused» badge, and the transactions of the chosen period (it used to be the whole history).
+- **AI Export from a broker page** tells the AI that amounts are the broker's whole figures, not your share, and where your role and ownership stake are in the export.
+- **The documentation site uses the same colours as the app**, in the light and the dark theme.
+- **Syncing from an asset card asks for a confirmation** when it would write over stored prices.
 
 #### 🎨 A new colour palette
 
@@ -481,6 +491,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The stale-price tooltip counts days in your language (1 day, 3 days), and «Reset layout», the share cap and the brokers refresh button are translated.
 - The PAC Targets and Review steps fit a phone screen, with no sideways scrolling.
 - The import guide no longer points to a button that may be missing when no file was read.
+- **Users:** the list has a Reload button and refreshes when you come back to the tab, so an accepted invitation shows up without reloading the page.
+- **Sign-up:** a validation or server message already on screen follows the language you pick.
+- **Transactions on the Dashboard:** the page-size selector works.
+- **An address that does not exist** keeps you where you were, or takes you to the Dashboard or the sign-in page, instead of an error page.
 
 #### 🔒 Security
 
@@ -566,6 +580,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/system/ready` says `behind` or `ahead` instead of `mismatch`** for a database whose migration is not this version's (`checks.migrations`), and adds `database_revision` and `app_version`. `GET /api/v1/panel/status` adds `instance_key` and `users_over_limit`: a client that checks its exact keys must accept them.
 
 ---
+- **Removed unused or superseded API routes, with no deprecation period:** `POST /transactions/transfers/promote` (use `POST /transactions/commit` with `promotes[]`), `POST /transactions/events/suggest` (use `GET /transactions/event-reconciliation`), `DELETE /assets/events` (use `POST /assets/events` with `delete_ids`), `GET /assets/all` (use `GET /assets/query?active=true`), `POST /assets/provider/refresh` (use `POST /assets/provider/probe`), `POST /assets/{id}/market-data/wipe` (the currency `PATCH /assets` does it), `POST /portfolio/wac` (use `POST /portfolio/lots/analysis`), `GET /settings/global/{key}` (use `GET /settings/global`), `POST /settings/global/initialize` (done at startup), `GET /uploads/{file_id}` (use `GET /uploads`), `GET /brokers/import/files/{file_id}` and `…/last-parse` (use `GET /brokers/import/files`), `GET /utilities/currencies/normalize` (use `GET /utilities/currencies/suggest`), `GET /brokers/{id}/summary` (read the broker with `GET /brokers/{id}`, its cash and positions with `POST /portfolio/report`).
 
 ## [1.2.1] - 2026-10-15
 
