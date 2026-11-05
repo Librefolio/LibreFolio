@@ -7039,8 +7039,10 @@ test.describe('Gallery Screenshots', () => {
                 await expect(run).toBeEnabled({timeout: 30_000});
                 await expect(replay.getByTestId('risk-replay-nothing')).toHaveCount(0);
                 const tornado = replay.getByTestId('risk-replay-tornado');
-                await expect(tornado.getByTestId('risk-replay-tornado-row')).toHaveCount(injection.rows);
-                await expect(tornado.getByTestId('risk-replay-tornado-contribution')).toHaveCount(injection.rows);
+                // The tornado table pages its rows (RISK_PAGE_SIZE = 5, riskTablePaging.ts): its first page holds at most five.
+                const firstPage = Math.min(injection.rows, 5);
+                await expect(tornado.getByTestId('risk-replay-tornado-row')).toHaveCount(firstPage);
+                await expect(tornado.getByTestId('risk-replay-tornado-contribution')).toHaveCount(firstPage);
 
                 // From the top of the block: its title, the Add: buttons, the crisis, its period and the total sentence in frame
                 // on every screen; on the desktop, the table's first row as well.
