@@ -772,12 +772,13 @@ test.describe('Gallery Screenshots', () => {
                     await expect(form.getByTestId('welcome-skip')).toBeEnabled();
                     await expect(form.getByTestId('welcome-continue')).toBeEnabled();
                     await expect(form.getByTestId('welcome-error')).toHaveCount(0);
-                    await frameWelcome(page);
+                    await frameWelcome(page, `${viewport}/${lang}/${theme}/onboarding/welcome-setup`);
                     await parkPointer(page);
                     await freezeAnimations(page);
                     await waitForMotionSettled(welcome, 'the Welcome page');
                     await expectNoToast(page);
                     await screenshot(page, viewport, lang, theme, 'onboarding', 'welcome-setup');
+                    await restoreTallScreen(page);
                 }
             }
         });
