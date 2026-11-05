@@ -4,11 +4,13 @@
   The second representation that was in the contract and in the generated client
   with zero readers: `return_bins` and `var_bin_edge`.
 
-  ⚠️ WHY CSS BARS AND NOT A CHART LIBRARY.
-  A histogram of pre-binned counts needs no axis engine, no tooltip layer and no
-  resize observer: the server has already done the binning, so the whole drawing
-  is "width from the bounds, height from the count". Reaching for ECharts here
-  would add a catalogue registration and a bundle cost to render forty divs.
+  ⚠️ WHY A CHART NOW (developer, 05/11/2026). This used to be forty CSS bars, and the
+  comment that stood here argued a chart would add a registration and a bundle cost to
+  render them. Both reasons were wrong: ECharts is imported whole in this app, nothing is
+  registered, and what the bars lacked is exactly what a chart gives — an axis with the
+  return thresholds (not only the two ends), a threshold line, and a tooltip that can say
+  more than the interval. So the drawing is `ReturnHistogramChart` (`components/charts`),
+  from the same data, and this file is the section around it.
 
   ⚠️ WHAT THE TWO SHADINGS MEAN — and why they are two.
   - `holdsCut` — the single bar the threshold falls inside. It says *where the
@@ -20,40 +22,57 @@
 
   Without the second shading a VaR is a marker with nothing behind it; without the
   first it is a region with no number. Both are computed in `l1Helpers`, under test.
+  The tooltip says the same in words (where the bar lies against the threshold), because
+  a colour alone is not a reading.
+
+  ⚠️ A CANVAS SAYS NOTHING TO A TEST, so the section publishes what it drew: the bars'
+  container carries `data-bin-count`, and a visually hidden list holds one entry per bin
+  (`risk-l1-histogram-bin-<i>`, with `data-count`, `data-holds-cut`, `data-below-cut`)
+  and the two ends of the axis. The list is also what a screen reader reads.
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4.
 -->
 <script lang="ts">
+    import ReturnHistogramChart from '$lib/components/charts/ReturnHistogramChart.svelte';
+    import type {HistogramBin} from '$lib/components/charts/returnHistogramChartHelpers';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
-    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
-    import {SIGN_BAR} from '$lib/theme/toneClasses';
 
     import {formatShare} from '../shareFormat';
-    import {axisPercent, figurePercent, type ReturnBin, type ReturnHistogram} from './l1Helpers';
+    import {axisPercent, figurePercent, type ReturnHistogram} from './l1Helpers';
 
     interface Props {
         histogram: ReturnHistogram | null;
         height?: string;
     }
 
-    let {histogram, height = '120px'}: Props = $props();
+    let {histogram, height = '140px'}: Props = $props();
 
     /**
-     * What a bar's tooltip says (D-B6a, 31/10/2026): the interval it covers, written as the axis ends are, how many days fell in it
-     * and their share of the observed days, written by the share rule. The share is a plain ratio of counts, the bar's own over the
-     * histogram's total: it is not a financial quantity and nothing else reads it.
+     * What a bar's tooltip says (D-B6a, 31/10/2026; F-5, 05/11/2026): the interval it covers, written as the axis ends are, how many days
+     * fell in it and their share of the observed days, written by the share rule; and, when a threshold was published, where the
+     * bar lies against it. The share is a plain ratio of counts, the bar's own over the histogram's total: it is not a financial
+     * quantity and nothing else reads it.
+     *
+     * A derived function, so a language switch (the `$t` store changing) hands the chart a new one and redraws its tooltip.
      */
-    function binTooltip(bin: ReturnBin, observations: number): string {
-        const range = `${axisPercent(bin.lowerBound)} … ${axisPercent(bin.upperBound)}`;
-        return $t('risk.levels.l1.histogram.bin', {values: {range, count: bin.count, share: formatShare(observations > 0 ? bin.count / observations : 0, 1)}});
-    }
+    const tooltipLines = $derived.by(() => {
+        const observations = histogram?.observations ?? 0;
+        const cut = histogram?.cut ?? null;
+        const say = $t;
+        return (bin: HistogramBin): string[] => {
+            const range = `${axisPercent(bin.lowerBound)} … ${axisPercent(bin.upperBound)}`;
+            const lines = [say('risk.levels.l1.histogram.bin', {values: {range, count: bin.count, share: formatShare(observations > 0 ? bin.count / observations : 0, 1)}})];
+            if (cut !== null) {
+                const where = bin.holdsCut ? 'holds' : bin.belowCut ? 'beyond' : 'above';
+                lines.push(say(`risk.levels.l1.histogram.position.${where}`, {values: {value: figurePercent(cut / 100)}}));
+            }
+            return lines;
+        };
+    });
 
-    function barClass(bin: {holdsCut: boolean; belowCut: boolean}): string {
-        if (bin.holdsCut) return 'bg-lf-warning';
-        if (bin.belowCut) return SIGN_BAR.histogram.loss;
-        return 'bg-lf-neutral';
-    }
+    /** The threshold's label on the chart: a figure, not a position, so a cut of −0.04% keeps its sign (D380). */
+    const cutLabel = $derived(histogram?.cut == null ? '' : $t('risk.levels.l1.histogram.cutLine', {values: {value: figurePercent(histogram.cut / 100)}}));
 </script>
 
 <section class="space-y-1" data-testid="risk-l1-histogram">
@@ -65,26 +84,18 @@
     {#if !histogram}
         <p class="text-xs text-lf-muted" data-testid="risk-l1-histogram-empty">{$t('risk.levels.l1.histogram.empty')}</p>
     {:else}
-        <div class="flex items-end gap-px" style="height: {height};" data-testid="risk-l1-histogram-bars" data-bin-count={histogram.bins.length}>
-            {#each histogram.bins as bin, index (index)}
-                <!-- Width from the real bounds, not from a constant: the schema
-                     guarantees only that lower bounds ascend, so a non-uniform
-                     grid must draw correctly rather than draw evenly. -->
-                <div class="flex h-full items-end" style="flex: {bin.upperBound - bin.lowerBound} 1 0%;" data-testid="risk-l1-histogram-bin-{index}" data-holds-cut={bin.holdsCut} data-below-cut={bin.belowCut} data-count={bin.count}>
-                    <!-- The app's tooltip, not the browser's `title` (B6): it reads in the dark theme, opens on touch, and an
-                         empty bin has one too — a bin with nothing in it and a bin that is not there must not look alike. -->
-                    <Tooltip text={binTooltip(bin, histogram.observations)} position="top" interactiveChild wrapperClass="h-full w-full items-end" testId="risk-l1-histogram-bin-{index}-tip">
-                        <!-- A bar with observations never rounds away to nothing: an
-                             invisible bar and an empty bin must not look the same. -->
-                        <div class="w-full rounded-t-sm {barClass(bin)}" style="height: {bin.count > 0 ? Math.max(bin.share * 100, 2) : 0}%;"></div>
-                    </Tooltip>
-                </div>
-            {/each}
-        </div>
-
-        <div class="flex justify-between text-[10px] text-lf-muted tabular-nums">
-            <span>{axisPercent(histogram.bins[0].lowerBound)}</span>
-            <span>{axisPercent(histogram.bins[histogram.bins.length - 1].upperBound)}</span>
+        <div data-testid="risk-l1-histogram-bars" data-bin-count={histogram.bins.length}>
+            <ReturnHistogramChart bins={histogram.bins} cut={histogram.cut} formatAxis={axisPercent} {cutLabel} {tooltipLines} {height} testId="risk-l1-histogram-chart" />
+            <!-- What the canvas drew, as text: for a screen reader, and for a test that cannot read pixels. -->
+            <ul class="sr-only" data-testid="risk-l1-histogram-bins">
+                {#each histogram.bins as bin, index (index)}
+                    <li data-testid="risk-l1-histogram-bin-{index}" data-holds-cut={bin.holdsCut} data-below-cut={bin.belowCut} data-count={bin.count}>{tooltipLines(bin).join('. ')}</li>
+                {/each}
+            </ul>
+            <p class="sr-only">
+                <span data-testid="risk-l1-histogram-axis-min">{axisPercent(histogram.bins[0].lowerBound)}</span>
+                <span data-testid="risk-l1-histogram-axis-max">{axisPercent(histogram.bins[histogram.bins.length - 1].upperBound)}</span>
+            </p>
         </div>
 
         <p class="text-xs text-lf-muted">
