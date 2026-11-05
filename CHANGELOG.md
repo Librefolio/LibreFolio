@@ -237,6 +237,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The documentation site uses the same colours as the app**, in the light and the dark theme.
 - **Syncing from an asset card asks for a confirmation** when it would write over stored prices.
 - `dev.py backup create` without `--output` keeps the backup in its own folder inside `backups/` and prints its SHA-256.
+- **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
 
 #### 🎨 A new colour palette
 
@@ -499,6 +500,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Transactions on the Dashboard:** the page-size selector works.
 - **An address that does not exist** keeps you where you were, or takes you to the Dashboard or the sign-in page, instead of an error page.
 - **The password of a backup** is no longer offered by the browser as your account password.
+- **Bulk editor:** the 💡 suggestions no longer count a transaction on a broker where you are only a Viewer, which you could not merge anyway.
 
 #### 🔒 Security
 
