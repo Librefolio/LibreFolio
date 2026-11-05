@@ -166,19 +166,10 @@ const BROWSER_FINDINGS: readonly string[] = [OPEN_REGISTRATION_NOTICE_ID, BLOCKE
 
 /**
  * The baseline of the translation ratchet: the `<lang>:<page>#<anchor>` pairs whose it, fr or es page does not write the
- * anchor yet, sorted. Today 3: `settings#open-registration-warning` in the three languages, the English anchor of N70 that the
- * `settings` translations predate. It was 33 until DOC-1 split the long English pages: every guide that pointed into
- * `configuration` and `connection_checks` now points to a page that exists only in English (`configuration_secrets`,
- * `configuration_security`, `configuration_accounts`, `connection_proxy`), which the docs publish in every language
- * (`fallback_to_default`) and which therefore counts for nothing, so the 30 pairs of those anchors left the debt with the
- * move (the debt itself moved to the translation of the new pages: each is untranslated). It only shrinks: the release's Aphra
- * translation takes it to empty, a pair the ratchet reports gone leaves it in the same change, and a new pair comes in only
- * with its reason written beside it.
- *
- * `configuration#main-options` (05/11): the guide of `backup.upload_limit` is the English heading «Main Options»; the it, fr and es
- * headings are untranslated debt until the release's Aphra translation.
+ * anchor yet, sorted. Empty since the translation of 1.3. It only shrinks: a pair the ratchet reports gone leaves it in the
+ * same change, and a new pair comes in only with its reason written beside it.
  */
-const TRANSLATION_DEBT: readonly string[] = ['es:configuration#main-options', 'es:settings#open-registration-warning', 'fr:configuration#main-options', 'fr:settings#open-registration-warning', 'it:configuration#main-options', 'it:settings#open-registration-warning'];
+const TRANSLATION_DEBT: readonly string[] = [];
 
 // =============================================================================
 //  The module under test, and its data
