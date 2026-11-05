@@ -4314,6 +4314,46 @@ test.describe('Risk analysis functional integration', () => {
     });
 
     /**
+     * F-8 (testlist 1.3): the simulation horizon takes a number of days as before, and also years, months and days in the
+     * interface language (`2y3m5d` in English), as a fixed sum: a year is 365 days, a month 30. The days it comes to are written under the field, a text that is no horizon is an
+     * error of the field and keeps the run button off, and what goes to the engine is always calendar days. The unit letters
+     * are read from the catalogue of the language the page is drawn in, never written here.
+     */
+    test('F-8: the simulation horizon accepts 1y, shows its days, refuses a bad text and sends calendar days', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        const panel = await openDashboardRisk(page);
+        const level4 = await openLevel4(panel);
+        const horizon = level4.getByTestId('risk-simulation-horizon');
+        await expect(horizon).toHaveValue('365');
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '365');
+
+        const year = await catalogueSentence(page, 'risk.params.horizonExpr.units.year');
+        const month = await catalogueSentence(page, 'risk.params.horizonExpr.units.month');
+
+        await horizon.fill(`1${year}6${month}`);
+        // A fixed sum (developer's decision, 05/11/2026): a year is 365 days and a month 30, so a year and six months are 545.
+        const days = Number(await level4.getByTestId('risk-simulation-horizon-days').getAttribute('data-days'));
+        expect(days).toBe(545);
+        await expect(horizon).toHaveAttribute('aria-invalid', 'false');
+
+        await level4.getByTestId('risk-simulation-run').click();
+        await expect.poll(() => requests.some((request) => request.analytics.some((analytic) => analytic.analytic_code === 'simulation' && analytic.parameters?.horizon_days === days)), {message: 'the run did not send the days the field showed', timeout: 10_000}).toBe(true);
+
+        // A text that is no horizon: the error is in the field, the run button is off.
+        await horizon.fill('1x');
+        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveAttribute('data-error', 'format');
+        await expect(horizon).toHaveAttribute('aria-invalid', 'true');
+        await expect(level4.getByTestId('risk-simulation-run')).toBeDisabled();
+
+        // Past the engine's ten years: its own error, not a request the engine would refuse.
+        await horizon.fill('3651');
+        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveAttribute('data-error', 'tooLong');
+        await horizon.fill('30');
+        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveCount(0);
+        await expect(level4.getByTestId('risk-simulation-run')).toBeEnabled();
+    });
+
+    /**
      * V3, on the cards L1 and L2 still draw (developer's decision of 05/10/2026, «a capo come la
      * didascalia»): a card's title and subtitle are read whole, as its caption is (the test above) —
      * they wrap, stop at two lines, and carry no native tooltip. They were cut to one line, the rest
