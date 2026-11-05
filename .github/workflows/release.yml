@@ -292,6 +292,15 @@ jobs:
       # ==========================================
       # 4. DOCKER BUILD & PUSH (light and full variants)
       # ==========================================
+      - name: Free disk space for the image builds
+        # After the gallery the runner has little disk left: when a new base image voids the Docker
+        # cache, the two architectures build from scratch and fill it (nightly of 05/11/2026, "No space
+        # left on device"). These SDKs come with the runner and nothing here uses them.
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+          df -h /
+
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v4
 
