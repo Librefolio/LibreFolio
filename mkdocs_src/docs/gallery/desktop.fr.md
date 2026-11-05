@@ -789,6 +789,14 @@ Créez un nouvel actif avec son nom, son type, sa devise, ses identifiants, son 
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Depuis l'assistant d'importation (pré-rempli)" alt="Créer un actif depuis l'assistant d'importation">
 </div>
 
+### ⭐ Rechercher en Ligne — Sources premium
+
+Les résultats des sources premium apparaissent en premier, dans une section à part.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Rechercher en Ligne — Sources premium">
+</div>
+
 ### 🧬 Sélecteur de type d'actif
 
 Le menu de types à deux niveaux avec recherche ouvert, avec la famille ETF déployée et des icônes composites.
