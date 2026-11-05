@@ -295,126 +295,38 @@ questi»): affianca `risk_contribution`, si fa in poche righe di NumPy e non ric
 
 ## 🎲 Risk Analysis — Monte Carlo avanzato: regimi calibrati e volatilità stocastica
 
-**Data aggiunta**: 16 Settembre 2026
-**Status**: 📋 FUTURO — livelli **2, 4 e 5** della scaletta simulazione
-**Priorità**: 🔽 BASSA
+**Data aggiunta**: 16 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: 🔽 Bassa
 
-### Contesto
+La simulazione fa il livello 1 (block bootstrap) e il livello 3 (preset di regime dichiarati). Questi sono i livelli rinviati.
 
-La riorganizzazione Risk prevede di rilavorare la simulazione ai **livelli 1 e 3**
-della scaletta seguente, e di rinviare i livelli 2, 4 e 5:
+### Livello 2 — GJR-GARCH
 
-| #   | Approccio                                                         | Stato                                               |
-| --- | ----------------------------------------------------------------- | --------------------------------------------------- |
-| 1   | Block bootstrap (rimescolo a blocchi della storia reale)          | ✅ in scope                                          |
-| 2   | GJR-GARCH (cluster di volatilità + effetto leva)                  | 📋 **rinviato — non calibrabile da QuantLib** (D88) |
-| 3   | Preset di regime **prescritti** (ipotesi dichiarate, non stimate) | ✅ in scope                                          |
-| 4   | Markov-switching / HMM **calibrato**                              | 📋 rinviato — questo TODO                           |
-| 5   | Heston / Bates / Merton (volatilità stocastica, salti)            | 📋 rinviato — questo TODO                           |
+Non si calibra con QuantLib (misurato su 1.43, D88): `GJRGARCHModel.calibrate()` vuole quotazioni di opzioni, `ql.Garch11` non è
+esposto in Python, e `GJRGARCHProcess` ha due fattori e non entra in `StochasticProcessArray`.
 
-### Livello 2 — GJR-GARCH: perché è uscito dalla v1
-
-**Data**: 17 Settembre 2026 · misurato su QuantLib 1.43, non dedotto.
-
-Il piano dava per scontato che il GJR-GARCH fosse «nativo QuantLib, calibrabile
-dalla sola serie prezzi». **È falso.** Misura eseguita sul runtime reale:
-
-```text
-hasattr(ql, 'Garch11')                              -> False
-GJRGARCHModel.calibrate(self, CalibrationHelperVector, OptimizationMethod, ...)
-issubclass(GJRGARCHProcess, ql.StochasticProcess1D) -> False    factors() -> 2
-```
-
-Due fatti, entrambi bloccanti:
-
-1. `ql.GJRGARCHModel` è un modello di **pricing di opzioni**: il suo
-   `calibrate()` accetta `CalibrationHelperVector`, cioè quotazioni di opzioni —
-   la stessa identica API di `HestonModel`. `GJRGARCHProcess` **pretende**
-   `v0, omega, alpha, beta, gamma, lambda` già stimati. L'obiezione con cui
-   questo stesso documento rinvia il livello 5 («richiede una superficie di
-   volatilità implicita da opzioni») si applica **identica** al livello 2.
-2. `ql.Garch11` — l'unica classe QuantLib che calibra per massima verosimiglianza
-   da una serie di **rendimenti** — non è esposta nei binding Python SWIG.
-   Esiste in C++, non nel nostro runtime.
-3. Anche avendo i parametri, `GJRGARCHProcess` non entra nell'architettura
-   attuale: non è un `StochasticProcess1D` e ha due fattori, mentre il motore
-   costruisce `StochasticProcessArray`, che accetta **solo** componenti 1-D.
-
-### La strada, quando si riaprirà
-
-La libreria `arch` fa esattamente ciò che serve: un GJR-GARCH(1,1,1) su 1 250
-osservazioni si stima in **22 ms**. È già presente nell'ambiente come
-**dipendenza transitiva** di `riskfolio-lib` (`arch>=7.0`), ma **non è dichiarata
-nel `Pipfile`**.
-
-Nessuna delle due scorciatoie è accettabile:
-
-- **appoggiarsi alla transitiva** significa che il giorno in cui `riskfolio-lib`
-  smette di dipendere da `arch`, il nostro GARCH sparisce **senza che nulla
-  fallisca** in modo visibile;
-- **promuoverla al volo** tocca l'ambiente Python condiviso da tutte le lane di
-  sviluppo attive, e va fatto dal developer a lane congelate.
-
-Precondizione per riprendere il livello 2: `arch` promossa a dipendenza diretta
-in `Pipfile` con lock rigenerato. Da lì il lavoro è contenuto — univariato
-sull'aggregato di portafoglio, innestato sul campionatore esistente.
+**La strada**: la libreria `arch` stima un GJR-GARCH(1,1,1) su 1 250 osservazioni in 22 ms, ma oggi è solo una dipendenza
+transitiva di `riskfolio-lib`. Precondizione: dichiararla nel `Pipfile`, con il lock rigenerato dal developer a corsie ferme.
+Poi il lavoro è contenuto: univariato sull'aggregato del portafoglio, sul campionatore esistente.
 
 ### Preset di crisi — la forma preferita per il seguito
 
-Il preset «crisi prolungata» consegnato in v1 usa un **pavimento scalare**:
-oscillazioni ×2,5 e deriva −20% annuo applicate ai blocchi ricampionati. È
-onesto — l'ipotesi è dichiarata a schermo con i suoi numeri — ma i numeri sono
-**prescritti**, non osservati.
+Il preset «crisi prolungata» usa numeri prescritti (oscillazioni ×2,5, deriva −20 % annuo). La forma preferita è il
+**ricampionamento condizionato**: blocchi estratti solo dal decile peggiore della storia del portafoglio. L'ipotesi a schermo
+non conterrebbe numeri dichiarati e la correlazione salirebbe perché è salita davvero.
 
-La forma preferita, quando si riaprirà, è il **ricampionamento condizionato**:
-estrarre i blocchi **solo** dalle finestre del decile peggiore della storia
-reale del portafoglio. Il vantaggio non è di precisione, è di natura:
-
-- l'ipotesi a schermo non conterrebbe **nessun numero dichiarato** — direbbe
-  «ricampionati i tuoi periodi peggiori», e sarebbe verificabile dall'utente;
-- la correlazione salirebbe **perché è salita davvero** nelle crisi vissute da
-  quel portafoglio, invece di restare invariata come impone una trasformazione
-  scalare (vedi la nota su `resampling.py`: su un ricampionamento congiunto
-  scalare e traslare lasciano la correlazione di Pearson matematicamente
-  invariata).
-
-Condizione vincolante, da rispettare il giorno in cui si implementa: se la
-storia disponibile **non contiene** un periodo abbastanza severo, il risultato
-**si dichiara**, non si fabbrica. Un decile peggiore calcolato su tre anni di
-mercato toro non è una crisi, ed è esattamente il tipo di numero che questa
-campagna esiste per non produrre.
+Condizione vincolante: se la storia non contiene un periodo abbastanza severo, il risultato **lo dichiara**. Un decile peggiore
+su tre anni di mercato toro non è una crisi.
 
 ### Livello 4 — Markov-switching calibrato
 
-Concettualmente è la risposta esatta a «simula i cambi di fase di mercato»: due o tre
-regimi (calma / stress / crisi), ciascuno con media, volatilità e matrice di
-correlazione proprie, più una matrice di probabilità di transizione stimata dai dati.
-
-Rinviato perché con la storia tipicamente disponibile a un privato (3-5 anni) la stima
-EM **overfitta**: i regimi trovati esistono solo nel campione e cambiano se sposti la
-finestra. Richiederebbe inoltre `hmmlearn` o `statsmodels` (QuantLib non lo supporta
-nativamente).
-
-Precondizioni per riprenderlo: storia lunga e verificata, diagnostica di stabilità dei
-regimi fra finestre diverse, e una presentazione che dichiari l'incertezza della stima
-invece di nasconderla.
+Regimi (calma, stress, crisi) con transizioni stimate dai dati. Rinviato perché con 3-5 anni di storia la stima EM overfitta, e
+richiede `hmmlearn` o `statsmodels`. Precondizioni: storia lunga, diagnostica di stabilità dei regimi fra finestre diverse,
+incertezza dichiarata.
 
 ### Livello 5 — Heston / Bates / Merton
 
-QuantLib li supporta nativamente (`HestonProcess`, `BatesProcess`, `Merton76Process`),
-ma la loro calibrazione richiede una **superficie di volatilità implicita da opzioni**,
-dato che LibreFolio non ha e non prevede di avere. Usarli con parametri inventati
-produce sofisticazione apparente senza contenuto informativo.
-
-Da riprendere **solo** se in futuro esistesse una fonte dati di opzioni; altrimenti
-resta fuori scope in modo permanente.
-
-### Riferimenti
-
-- `backend/app/services/risk/quant/quantlib_worker.py`
-- `backend/app/services/risk_plugins/simulation/plugin.py`
-
----
+QuantLib li supporta, ma la calibrazione vuole una superficie di volatilità implicita da opzioni, dato che LibreFolio non ha. Con
+parametri inventati è sofisticazione senza contenuto: fuori scope, salvo una futura fonte di dati sulle opzioni.
 
 ## 🔒 Ripensare struttura di accesso ai broker Utente-SuperUtente per essere GDPR compliant
 
