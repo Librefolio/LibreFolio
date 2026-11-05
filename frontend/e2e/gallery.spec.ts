@@ -3048,6 +3048,33 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('backups tab - all languages and themes', async ({page}, testInfo) => {
+            // Files › Backups (administrators): the list of kept backups and the settings of their clean-up. The list is a fixture
+            // (galleryFilesBackups.ts): no archive of the lane is listed, none is downloaded or deleted.
+            test.setTimeout(120_000);
+            const viewport = getViewport(testInfo);
+            const url = '/files?tab=backup';
+            await serveGalleryBackupList(page);
+            await openFilesPage(page, url);
+
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
+                const panel = page.getByTestId('files-backup-panel');
+                await expect(panel).toBeVisible({timeout: 15_000});
+                const list = panel.getByTestId('backup-list');
+                await expect(list, 'the list of kept backups is read').toHaveAttribute('data-state', 'ready', {timeout: 15_000});
+                await expect(list).toHaveAttribute('data-busy', 'false');
+                await expect(list.locator('tr[data-row-id="5c9e2f1a7b3d48e6a0f4c2d19b7e3a85"]'), 'the fixture lists its backups').toBeVisible();
+                const cleanup = panel.getByTestId('backup-cleanup');
+                await expect(cleanup).toBeVisible();
+                await expect(cleanup, 'the clean-up settings are read').not.toHaveAttribute('data-state', 'loading', {timeout: 15_000});
+                await expect(page.getByTestId('storage-bar')).toHaveAttribute('data-state', 'ready', {timeout: 15_000});
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('files-page'), `desktop/${lang}/${theme}/files/backups`);
+                await shootFiles(page, viewport, lang, theme, 'backups', panel);
+                await restoreTallScreen(page);
+            });
+        });
+
         test('storage bar - all languages and themes', async ({page}, testInfo) => {
             // The administrators' space bar, from a fixture (galleryFilesBackups.ts): the data folder's parts against a 2 GB limit.
             test.setTimeout(90_000);
