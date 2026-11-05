@@ -483,6 +483,22 @@ Parcourez les fichiers visuellement avec des aperçus d'images en disposition de
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vue grille des fichiers statiques">
 </div>
 
+### 💾 Sauvegardes (administrateur)
+
+Les administrateurs voient les sauvegardes conservées et règlent leur nettoyage automatique.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Sauvegardes (administrateur)">
+</div>
+
+### 📊 Espace occupé (administrateur)
+
+Une barre montre comment l'espace se répartit entre la base de données, les fichiers envoyés, les rapports et les sauvegardes, par rapport à la limite fixée.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="storage-bar" alt="Espace occupé (administrateur)">
+</div>
+
 ### 📋 Rapports de courtier (BRIM)
 
 Importez et gérez les rapports de transactions des courtiers.
