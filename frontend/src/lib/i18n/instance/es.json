@@ -6,7 +6,7 @@
     "checks": {
       "jwtSecret": {
         "ok": "Las sesiones se firman con una clave definida por el administrador.",
-        "ephemeral": "No hay ninguna clave de firma de sesiones: cada reinicio cierra la sesión de todos los usuarios.",
+        "ephemeral": "La clave de las sesiones es aleatoria: cada reinicio desconecta a todos. Para seguir conectado, define JWT_SECRET.",
         "short": "La clave de firma de sesiones de {source} tiene {length} caracteres: usa al menos {minimum} caracteres aleatorios.",
         "unreadable": "No se puede leer la clave de firma de sesiones: {reason}"
       },

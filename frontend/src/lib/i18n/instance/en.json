@@ -6,7 +6,7 @@
     "checks": {
       "jwtSecret": {
         "ok": "Sessions are signed with a key set by the administrator.",
-        "ephemeral": "No session signing key is set: every restart signs every user out.",
+        "ephemeral": "The session key is random: every restart signs everyone out. To stay signed in, set JWT_SECRET.",
         "short": "The session signing key from {source} is {length} characters long: use at least {minimum} random characters.",
         "unreadable": "The session signing key cannot be read: {reason}"
       },

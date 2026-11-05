@@ -508,6 +508,15 @@ def test_check_jwt_secret_with_jwt_secret_file(configuration, jwt_secret, conten
     print_success(f"JWT_SECRET={jwt_secret!r}, JWT_SECRET_FILE {content!r:.30}: {severity} {result.i18n_key}")
 
 
+def test_the_summary_of_an_unset_jwt_secret_says_the_key_is_random_and_what_to_set(configuration):
+    """(a) K-9: the key stays random without JWT_SECRET; the log line says so and names the variable that keeps users signed in."""
+    result = check_jwt_secret()
+
+    expected = "The session key is random: every restart signs everyone out. To stay signed in, set JWT_SECRET."
+    assert result.summary == expected, f"the summary of an unset JWT secret:\n  expected {expected!r}\n  got      {result.summary!r}"
+    print_success(result.summary)
+
+
 @pytest.mark.parametrize("source", ["variable", "file"])
 def test_the_summary_of_a_short_jwt_secret_names_where_it_comes_from(configuration, source):
     """(a) The log line of a short signing key says where the admin set it: the variable, or the file variable with its path."""
