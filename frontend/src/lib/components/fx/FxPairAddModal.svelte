@@ -147,7 +147,6 @@
     // =========================================================================
 
     let hasCurrencies = $derived(!!baseCurrency && !!quoteCurrency && baseCurrency !== quoteCurrency);
-    let hasRoutes = $derived(selectedRoutes.length > 0);
     let hasChainRoutes = $derived(selectedRoutes.some((r) => r.length > 1));
     let isValid = $derived(hasCurrencies);
     let isDirty = $derived.by(() => {
@@ -490,17 +489,6 @@
                 {/if}
             </div>
         </div>
-
-        <!-- ============================================================= -->
-        <!-- No-provider warning -->
-        <!-- ============================================================= -->
-        {#if hasCurrencies && !hasRoutes}
-            <div class="mx-5 mb-0 mt-2">
-                <InfoBanner variant="warning">
-                    {$_('fx.addPair.noProviderWarning')}
-                </InfoBanner>
-            </div>
-        {/if}
 
         <!-- ============================================================= -->
         <!-- Footer -->

@@ -27,7 +27,7 @@ from backend.app.schemas.fx import (
     FXProviderInfo,
     FXRouteStep,
 )
-from backend.app.services.fx.catalog import get_supported_currencies_cached
+from backend.app.services.fx.catalog import get_supported_currencies_status
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx.runtime import configured_fx_provider
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
@@ -95,7 +95,7 @@ async def list_providers(
             base_currencies = instance.base_currencies
 
             # Target currencies: cached 24 h; the last known list when the provider fails (services/fx/catalog.py)
-            target_currencies = await get_supported_currencies_cached(code, instance)
+            supported = await get_supported_currencies_status(code, instance)
 
             result.append(
                 FXProviderInfo(
@@ -103,7 +103,8 @@ async def list_providers(
                     name=provider_dict["name"],
                     base_currency=instance.base_currency,
                     base_currencies=base_currencies,
-                    target_currencies=sorted(target_currencies),
+                    target_currencies=sorted(supported.currencies),
+                    currencies_unavailable=supported.unavailable,
                     description=getattr(instance, "description", f'{provider_dict["name"]} FX rate provider'),
                     description_i18n=getattr(instance, "description_i18n", {}),
                     warning_i18n=getattr(instance, "warning_i18n", {}),

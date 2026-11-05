@@ -5,8 +5,10 @@ currencies whenever that fetch failed. ``get_supported_currencies_cached`` answe
 these tests pin what that design promises:
 
   * a list that came back is sorted, cached for 24 hours and handed out as a copy;
-  * a fetch that fails or exceeds ``timeout`` answers with the last list that provider returned (empty before its first
-    success), cached for 5 minutes so the next requests neither retry nor wait;
+  * a fetch that fails or exceeds ``timeout`` answers with the last list that provider returned, cached for 5 minutes so
+    the next requests neither retry nor wait;
+  * before the provider's first success (a restart) it answers with the provider's own ``fallback_currencies`` (empty for
+    a provider without one) and is asked again after 30 seconds: the ECB list is never empty after a slow start (B-4);
   * clearing the cache from the cache panel forces a new fetch but keeps the last known lists;
   * concurrent calls on an empty cache fetch once, in every event loop of the process;
   * the cache is registered as ``fx_provider_currencies``, so the cache panel lists and clears it.
@@ -29,6 +31,7 @@ from datetime import timedelta
 import pytest
 
 from backend.app.services.fx import catalog
+from backend.app.services.fx_providers.ecb.plugin import ECBProvider
 from backend.app.utils.runtime.cache import clear_cache, list_caches
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -48,8 +51,9 @@ PROMPT_BOUND_S = 5.0
 class _FakeProvider:
     """An FX provider reduced to ``get_supported_currencies``: it counts its calls, then answers, fails or is slow."""
 
-    def __init__(self, currencies: list[str] | None = None, *, error: Exception | None = None) -> None:
+    def __init__(self, currencies: list[str] | None = None, *, error: Exception | None = None, fallback: list[str] | None = None) -> None:
         self.currencies = list(currencies or [])
+        self.fallback_currencies = list(fallback or [])
         self.error = error
         self.delay_s = 0.0
         self.gate: asyncio.Event | None = None
@@ -182,18 +186,20 @@ async def test_first_call_fetches_a_sorted_list_then_the_cache_answers_with_copi
 
 
 @pytest.mark.asyncio
-async def test_failure_without_a_last_known_list_answers_empty_and_is_not_retried_for_five_minutes(monkeypatch):
-    """X-R8: before any success a failing provider answers [] with one warning, and is not asked again until that expires."""
-    print_section("X-R8: failure before any success")
+async def test_failure_without_a_last_known_list_or_fallback_answers_empty_and_is_retried_after_thirty_seconds(monkeypatch):
+    """X-R8: a provider with no earlier answer and no built-in list answers [] with one warning, kept only 30 seconds."""
+    print_section("X-R8: failure before any success, no fallback")
     log = _record_warnings(monkeypatch)
+    observed = _observe_cache(monkeypatch)
     provider = _FakeProvider(error=RuntimeError("ECB unreachable"))
 
     assert await catalog.get_supported_currencies_cached("XR8_DOWN", provider) == []
     assert provider.calls == 1
     assert len(log.warnings) == 1, log.warnings
     assert "XR8_DOWN" in log.warnings[0] and "ECB unreachable" in log.warnings[0], log.warnings
+    assert observed.kept_for["XR8_DOWN"] == timedelta(seconds=catalog.RETRY_AFTER_NO_LIST_S)
 
-    # While the 5-minute fallback entry lives it answers: no retry, and no second warning.
+    # While the short fallback entry lives it answers: no retry, and no second warning.
     assert await catalog.get_supported_currencies_cached("XR8_DOWN", provider) == []
     assert provider.calls == 1, "a failed provider was asked again while its fallback entry was cached"
     assert len(log.warnings) == 1, log.warnings
@@ -205,6 +211,108 @@ async def test_failure_without_a_last_known_list_answers_empty_and_is_not_retrie
     assert await catalog.get_supported_currencies_cached("XR8_DOWN", provider) == ["CHF", "NOK"]
     assert provider.calls == 2
     print_success("[] and one warning; no retry while the fallback is cached; retried once it expired")
+
+
+@pytest.mark.asyncio
+async def test_failure_without_a_last_known_list_answers_the_provider_fallback_until_the_live_list_arrives(monkeypatch):
+    """B-4: right after a restart a failing provider lists its built-in currencies, then the live list replaces them."""
+    print_section("B-4: built-in list after a restart")
+    log = _record_warnings(monkeypatch)
+    observed = _observe_cache(monkeypatch)
+    provider = _FakeProvider(error=TimeoutError(), fallback=["USD", "RON", "EUR"])
+
+    assert await catalog.get_supported_currencies_cached("XR8_COLD", provider) == ["EUR", "RON", "USD"]
+    assert len(log.warnings) == 1 and "built-in list" in log.warnings[0], log.warnings
+    assert observed.kept_for["XR8_COLD"] == timedelta(seconds=catalog.RETRY_AFTER_NO_LIST_S)
+
+    answer = await catalog.get_supported_currencies_cached("XR8_COLD", provider)
+    answer.append("XXX")  # callers get a copy
+    assert await catalog.get_supported_currencies_cached("XR8_COLD", provider) == ["EUR", "RON", "USD"]
+    assert provider.calls == 1, "the provisional list was not kept for the retry delay"
+
+    catalog._currencies_cache.delete("XR8_COLD")  # the 30 s entry expires; the provider is back
+    provider.error = None
+    provider.currencies = ["EUR", "RON", "USD", "PLN"]
+    assert await catalog.get_supported_currencies_cached("XR8_COLD", provider) == ["EUR", "PLN", "RON", "USD"]
+    assert observed.kept_for["XR8_COLD"] == timedelta(hours=24)
+    print_success("Built-in list while the first fetch fails, the live list (kept 24 h) as soon as one arrives")
+
+
+@pytest.mark.asyncio
+async def test_ecb_after_a_restart_with_a_timed_out_discovery_still_lists_the_ron(monkeypatch):
+    """B-4 regression: the real ECB plugin, first discovery after a restart times out, then answers.
+
+    The user adds EUR/RON right after a restart: the first discovery timed out (``TimeoutError``, logged as
+    «unavailable»), the catalog answered an empty list for five minutes and the add-pair modal found no path to RON.
+    X-R8 never saw it: its tests pinned «empty before the first success» as the wanted behaviour, and used fake providers
+    that have no list of their own.
+    """
+    print_section("B-4: ECB timeout after a restart, then back")
+    log = _record_warnings(monkeypatch)
+    ecb = ECBProvider()
+    outage = {"on": True}
+
+    async def discovery() -> list[str]:
+        if outage["on"]:
+            await asyncio.sleep(SLOW_PROVIDER_S)  # the slow first call: abandoned at the timeout
+        return ["EUR", "RON", "USD", "ZZZ"]
+
+    monkeypatch.setattr(ecb, "get_supported_currencies", discovery)
+
+    started = time.monotonic()
+    during = await catalog.get_supported_currencies_cached("B4_ECB", ecb, timeout=FAST_TIMEOUT_S)
+    assert time.monotonic() - started < PROMPT_BOUND_S, "GET /fx/providers was made to wait for the slow discovery"
+    assert "RON" in during and "EUR" in during and "USD" in during, "EUR/RON has no path right after a restart"
+    assert len(log.warnings) == 1 and "built-in list" in log.warnings[0], log.warnings
+
+    outage["on"] = False
+    catalog._currencies_cache.delete("B4_ECB")  # the 30 s retry entry expires
+    after = await catalog.get_supported_currencies_cached("B4_ECB", ecb, timeout=FAST_TIMEOUT_S)
+    assert after == ["EUR", "RON", "USD", "ZZZ"], "the live list did not replace the built-in one"
+    print_success("RON listed at once after the timeout, the live list takes over when ECB answers")
+
+
+@pytest.mark.asyncio
+async def test_status_flags_only_a_list_that_is_empty_because_the_fetch_failed(monkeypatch):
+    """B-4: ``unavailable`` tells the client «could not read the list, retry shortly» from «this provider covers nothing»."""
+    print_section("B-4: unavailable flag")
+    _record_warnings(monkeypatch)
+    down = _FakeProvider(error=TimeoutError())
+    status = await catalog.get_supported_currencies_status("B4_NONE", down)
+    assert status.currencies == [] and status.unavailable is True
+    assert (await catalog.get_supported_currencies_status("B4_NONE", down)).unavailable is True, "the cached fallback lost the flag"
+
+    covers_nothing = _FakeProvider([])
+    status = await catalog.get_supported_currencies_status("B4_EMPTY", covers_nothing)
+    assert status.currencies == [] and status.unavailable is False, "a list that came back empty is not an outage"
+
+    with_fallback = _FakeProvider(error=TimeoutError(), fallback=["EUR", "RON"])
+    status = await catalog.get_supported_currencies_status("B4_FALLBACK", with_fallback)
+    assert status.currencies == ["EUR", "RON"] and status.unavailable is False
+
+    flaky = _FakeProvider(["EUR"])
+    await catalog.get_supported_currencies_status("B4_STALE", flaky)
+    catalog._currencies_cache.delete("B4_STALE")
+    flaky.error = TimeoutError()
+    status = await catalog.get_supported_currencies_status("B4_STALE", flaky)
+    assert status.currencies == ["EUR"] and status.unavailable is False
+
+    down.error = None
+    down.currencies = ["CHF"]
+    catalog._currencies_cache.delete("B4_NONE")
+    status = await catalog.get_supported_currencies_status("B4_NONE", down)
+    assert status.currencies == ["CHF"] and status.unavailable is False, "the flag outlived the outage"
+    print_success("Flagged only when the list is empty because the fetch failed; gone once it is fetched")
+
+
+def test_the_ecb_fallback_is_a_sorted_distinct_list_with_the_base_currency_and_the_ron():
+    """B-4: the list the ECB plugin falls back on has what the add-pair modal needs, and no duplicates."""
+    ecb = ECBProvider()
+    fallback = ecb.fallback_currencies
+    assert fallback == sorted(set(fallback))
+    assert {"EUR", "RON", "USD", "GBP", "CHF", "JPY"} <= set(fallback)
+    fallback.clear()
+    assert ecb.fallback_currencies, "the plugin handed out its own list instead of a copy"
 
 
 @pytest.mark.asyncio
@@ -310,20 +418,26 @@ async def test_the_cache_panel_lists_and_clears_the_catalog_cache():
 
 
 @pytest.mark.asyncio
-async def test_a_list_is_kept_for_a_day_and_a_fallback_for_five_minutes(monkeypatch):
-    """X-R8: a fetched list is stored with the cache's 24 h default, a fallback with the 5-minute retry delay.
+async def test_a_list_is_kept_for_a_day_and_a_fallback_for_minutes(monkeypatch):
+    """X-R8: a fetched list is stored with the cache's 24 h default; a fallback with the 5-minute retry delay, or 30 s without a last list.
 
     The TTL of a stored entry is not readable through NamedCache, so this pins the constants and the ttl each write
     asks for (none meaning the cache default), observed through a wrapper around the real cache.
     """
-    print_section("X-R8: 24 h for a list, 5 minutes for a fallback")
+    print_section("X-R8: 24 h for a list, minutes for a fallback")
     assert catalog.SUPPORTED_CURRENCIES_TTL_S == 24 * 3600
     assert catalog.RETRY_AFTER_FAILURE_S == 5 * 60
+    assert catalog.RETRY_AFTER_NO_LIST_S == 30
     _record_warnings(monkeypatch)  # the failure below warns; keep it out of the output
     observed = _observe_cache(monkeypatch)
 
     await catalog.get_supported_currencies_cached("XR8_TTL_OK", _FakeProvider(["EUR"]))
     await catalog.get_supported_currencies_cached("XR8_TTL_KO", _FakeProvider(error=RuntimeError("provider down")))
+    stale = _FakeProvider(["EUR"])
+    await catalog.get_supported_currencies_cached("XR8_TTL_STALE", stale)
+    catalog._currencies_cache.delete("XR8_TTL_STALE")
+    stale.error = RuntimeError("provider down")
+    await catalog.get_supported_currencies_cached("XR8_TTL_STALE", stale)
 
-    assert observed.kept_for == {"XR8_TTL_OK": timedelta(hours=24), "XR8_TTL_KO": timedelta(minutes=5)}
-    print_success("A fetched list is kept 24 h, a fallback 5 minutes")
+    assert observed.kept_for == {"XR8_TTL_OK": timedelta(hours=24), "XR8_TTL_KO": timedelta(seconds=30), "XR8_TTL_STALE": timedelta(minutes=5)}
+    print_success("A fetched list is kept 24 h, a fallback on the last known list 5 minutes, one without it 30 s")
