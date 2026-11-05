@@ -161,21 +161,14 @@ def _collecting(sink):  # noqa: C901 — TODO(P2-refactor): nested module×attr 
 
     # Modules import these symbols by value, so patching the defining module is
     # not enough: every module that already bound them must be patched too.
-    targets = [_common, _frontend_common] + [
-        mod
-        for name, mod in sys.modules.items()
-        if name.startswith("scripts.test_runner._") or name.startswith("test_runner._")
-    ]
+    targets = [_common, _frontend_common] + [mod for name, mod in sys.modules.items() if name.startswith("scripts.test_runner._") or name.startswith("test_runner._")]
 
     saved: list = []
     real_sp_run = subprocess.run
     real_unlink = Path.unlink
 
     def guarded_unlink(self, *args, **kwargs):
-        raise RuntimeError(
-            f"dry-run collection tried to delete {self}. "
-            "Add the owning action to SIDE_EFFECTING in _inventory.py."
-        )
+        raise RuntimeError(f"dry-run collection tried to delete {self}. " "Add the owning action to SIDE_EFFECTING in _inventory.py.")
 
     try:
         Path.unlink = guarded_unlink
@@ -374,20 +367,9 @@ def on_disk() -> dict:
     """Every test file that exists, by engine, in the same shape as the units."""
     frontend = PROJECT_ROOT / "frontend"
     return {
-        "playwright": sorted(
-            f.name
-            for f in (frontend / "e2e").rglob("*.spec.ts")
-            if f.name not in EXCLUDED_SPECS
-        ),
-        "vitest": sorted(
-            str(f.relative_to(frontend)).replace("\\", "/")
-            for f in (frontend / "src").rglob("*.test.ts")
-        ),
-        "pytest": sorted(
-            str(f.relative_to(PROJECT_ROOT / "backend" / "test_scripts")).replace("\\", "/")
-            for d in BACKEND_SUITE_DIRS
-            for f in (PROJECT_ROOT / "backend" / "test_scripts" / d).rglob("test_*.py")
-        ),
+        "playwright": sorted(f.name for f in (frontend / "e2e").rglob("*.spec.ts") if f.name not in EXCLUDED_SPECS),
+        "vitest": sorted(str(f.relative_to(frontend)).replace("\\", "/") for f in (frontend / "src").rglob("*.test.ts")),
+        "pytest": sorted(str(f.relative_to(PROJECT_ROOT / "backend" / "test_scripts")).replace("\\", "/") for d in BACKEND_SUITE_DIRS for f in (PROJECT_ROOT / "backend" / "test_scripts" / d).rglob("test_*.py")),
     }
 
 
