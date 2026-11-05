@@ -537,7 +537,7 @@ error, which names the path), never the value.
 **Managed profile.** With `LIBREFOLIO_PROFILE=managed`, a field a variable sets is left out of the
 catalogue (a plugin left without fields is not listed at all), and a write to it is refused with
 `UNKNOWN_FIELD`, as if it did not exist: the hosting provider sets it, the instance's administrators
-and users never see it ([Hosting for Others](../../../admin/hosting_providers.md#managed-profile)).
+and users never see it.
 
 ---
 

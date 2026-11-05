@@ -12,15 +12,9 @@ LibreFolio is an open-source portfolio tracker that gives you a complete, privat
 
 Yes! LibreFolio is completely free and open-source under the [AGPL-3.0 license](https://www.gnu.org/licenses/agpl-3.0.html). You can install it on your own server and manage everything yourself at no cost.
 
-!!! info "Coming soon: hosted platform ☁️"
-
-    We're working on an online platform for those who don't have the time, interest, or technical skills to self-host. The hosted version will offer all features with zero setup, automatic updates, and dedicated support — available as a paid subscription.
-
 ### 🤖 Can I use LibreFolio with an AI assistant?
 
 Yes. **[AI Export](../user/ai-export/index.md)** copies your data as ready-to-paste text, with a focused question if you want one, so you can ask the AI assistant of your choice about your portfolio, a broker, an asset or a currency pair. LibreFolio itself never contacts an AI service.
-
-On the upcoming hosted platform, AI assistants will be fully integrated: ready to use with no configuration, along with premium support.
 
 ### 📊 What assets can I track?
 

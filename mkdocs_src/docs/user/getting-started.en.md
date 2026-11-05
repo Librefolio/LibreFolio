@@ -35,12 +35,7 @@ Fill in your details:
 !!! info "First User = Admin"
 
     The very first account to register becomes the **administrator**: it manages the instance-wide
-    **[Global Settings](../admin/settings.md)** and every admin feature. On an instance whose
-    administrator was created from the server's configuration, by a hosting provider for example,
-    nobody registers first: that administrator receives a setup link, which opens the instance's
-    setup page. There they type the password twice, following the rules shown under the field;
-    once they confirm, they are signed in, and the [Welcome setup](#welcome-setup) opens, as for any
-    new account.
+    **[Global Settings](../admin/settings.md)** and every admin feature.
 
 ### ✉️ If You Received an Invitation Link {: #invitation-link }
 
@@ -139,9 +134,6 @@ form at the top:
   address, or the requests came too close together: try again later, or ask your administrator.
 - 💻 Under the form, a closed panel holds the command your administrator runs on the server to reset
   a password; when your instance cannot send emails, the page shows it open. Either way: ask them.
-- 🏢 On an instance a hosting provider runs for you, the page shows no command. It says *Ask your
-  administrator for a password-reset link: they can create one for your account.* Once you have the
-  link, follow [If an Administrator Sent You a Password-Reset Link](#password-reset-link).
 
 ### 🔑 If an Administrator Sent You a Password-Reset Link {: #password-reset-link }
 

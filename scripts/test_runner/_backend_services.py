@@ -1843,9 +1843,9 @@ def services_hosting_panel_access_tickets(verbose: bool = False, test_names: lis
 
 
 def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
+    """Test the hosting panel's ticket test vectors in their fixture (H-61, L2): the key, the ticket and every verdict, checked against the code."""
     print_section("Services: Hosting Panel Ticket Test Vectors")
-    print_info("Testing: mkdocs_src/docs/admin/hosting_panel_api.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    print_info("Testing: backend/test_scripts/fixtures/hosting_panel/ticket_vectors.json against backend/app/services/platform/hosting_panel/tickets.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
@@ -3782,8 +3782,8 @@ Note: No backend server required.
         "hosting-panel-vectors",
         services_hosting_panel_vectors,
         name="Hosting Panel Ticket Test Vectors",
-        desc="H-61 L2: the JSON block after #panel-api-test-vectors in the admin guide: the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
-        # PURE: reads one docs page from the repository; variables through monkeypatch; no clock, DB or server.
+        desc="H-61 L2: the ticket vectors fixture (backend/test_scripts/fixtures/hosting_panel/ticket_vectors.json): the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
+        # PURE: reads one fixture file from the repository; variables through monkeypatch; no clock, DB or server.
         isolation="pure",
     )
     add_test(

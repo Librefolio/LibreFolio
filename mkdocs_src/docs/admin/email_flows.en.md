@@ -88,10 +88,9 @@ while emails with a link can go out: email **Ready** and a usable `LIBREFOLIO_PU
 form, a panel closed until clicked keeps the command an administrator can run on the server.
 Otherwise the page shows that command, open, under the warning *Email recovery is not available on
 this instance. Reset your password from the server terminal, or ask your administrator for a
-password-reset link.* In the [managed profile](hosting_providers.md#managed-profile), the page shows
-neither the command nor that warning: in their place, *Ask your administrator for a password-reset
-link: they can create one for your account.* When the page cannot read the instance's configuration
-from the server, it shows only that advice, in either profile. An administrator creates that link in
+password-reset link.* When the page cannot read the instance's configuration
+from the server, it shows only the advice *Ask your administrator for a password-reset
+link: they can create one for your account.* An administrator creates that link in
 **Settings › Administration › Users**, even without email
 ([Password-Reset Links](users.md#reset-links)).
 
@@ -250,19 +249,12 @@ address with a link that LibreFolio emails to the account. The switch is in
   in a browser that runs scripts, and if opening were enough, the filter would activate the account
   in place of its owner. Such an opening spends nothing; the link stays valid for its owner.
   Someone who opens a link without having signed up has only to close the page.
-- **While a hosting provider blocks the instance**, the page of the link says so, once its owner
-  clicks **Confirm my email address**, and offers no retry: the link is not used up, and works
-  again once the instance is unblocked, as long as it has not expired; otherwise signing in offers
-  a new one ([Hosting for Others](hosting_instances.md#instance-block)). Signing in still offers
-  **Send the link again**, which then says *This instance is blocked by its hosting provider: try
-  again once it is unblocked.*, never that the password is wrong, and works once the instance is
-  unblocked. Nobody can sign up meanwhile: the registration page says the same.
 
 ### 🔀 Turning It On and Off {: #verification-switch }
 
 - **It turns on only while emails with a link can go out**: email **Ready**
-  ([Settings › Administration › Email](email.md#email-tab)), a usable `LIBREFOLIO_PUBLIC_URL`
-  ([Emails with a Link](#public-url)), and an instance that no hosting provider blocks. Until then,
+  ([Settings › Administration › Email](email.md#email-tab)) and a usable `LIBREFOLIO_PUBLIC_URL`
+  ([Emails with a Link](#public-url)). Until then,
   while it is off, the switch is greyed
   out, with the hint *Needs an email with a link to go out: set up SMTP and LIBREFOLIO_PUBLIC_URL
   first (Settings › Administration › Email).* Should that change between the moment you open the tab and your save,

@@ -44,11 +44,11 @@
     },
     "backup.upload_limit": {
       "kind": "guide",
-      "path": "admin/hosting_panel_backups/#restore-upload-limit"
+      "path": "admin/configuration/#main-options"
     },
     "backup.restore_limit": {
       "kind": "guide",
-      "path": "admin/hosting_panel_backups/#restore-upload-limit"
+      "path": "admin/cli_backup/#backup-restore-dry-run"
     },
     "backup.recipients": {
       "kind": "guide",

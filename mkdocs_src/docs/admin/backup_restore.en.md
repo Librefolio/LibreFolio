@@ -37,10 +37,10 @@ Never in the archive:
 - 🔒 **Keep it private.** A clear archive holds every user's data and is not encrypted: keep it, and every copy, as private as the server itself. A [secure](#secure) one opens only with its password: keep the password apart from it.
 - 🗝️ **Saved secrets and the instance key.** What LibreFolio encrypted with the instance key, such as the API key of a data source saved in the app, can be read only with that key.
     - A [secure backup](#secure) carries the key LibreFolio generated: its restore re-encrypts those secrets with the key of the installation that receives it, and there is nothing to do.
-    - A clear backup leaves the key out, and so does a [sealed](backup_sealed.md#sealed) one, always, and a secure one whose key came from the environment (`LIBREFOLIO_INSTANCE_KEY`, `LIBREFOLIO_INSTANCE_KEY_FILE`) or could not be used. On an installation with another key, LibreFolio keeps those secrets, reports them as unreadable and never uses a wrong value: **Settings › Plugins** says under each one *Saved, but this instance's key cannot read it: enter it again.* If you still have the old key, put it back first, before anyone enters a secret again: stop LibreFolio, put your copy of `secrets/instance.key` in place of the generated one, or set the old value of the variable, and start it again («The Instance Key» in [Environment Variables](configuration.md)). An installation that keeps its own key, such as a hosted one, or one whose own secrets are already under its key, takes the old key at the restore instead: restore from the command line with `--instance-key-file` and your copy of the old key, and the check re-encrypts those secrets with this installation's key («The Instance Key of Another Installation» in [CLI Admin Tools](cli_tools.md)); on an instance someone hosts for you, ask whoever runs it. Enter the secrets again only if the old key is lost: a secret entered under the new key would become unreadable once the old one is back.
+    - A clear backup leaves the key out, and so does a [sealed](backup_sealed.md#sealed) one, always, and a secure one whose key came from the environment (`LIBREFOLIO_INSTANCE_KEY`, `LIBREFOLIO_INSTANCE_KEY_FILE`) or could not be used. On an installation with another key, LibreFolio keeps those secrets, reports them as unreadable and never uses a wrong value: **Settings › Plugins** says under each one *Saved, but this instance's key cannot read it: enter it again.* If you still have the old key, put it back first, before anyone enters a secret again: stop LibreFolio, put your copy of `secrets/instance.key` in place of the generated one, or set the old value of the variable, and start it again («The Instance Key» in [Environment Variables](configuration.md)). An installation that keeps its own key, or one whose own secrets are already under its key, takes the old key at the restore instead: restore from the command line with `--instance-key-file` and your copy of the old key, and the check re-encrypts those secrets with this installation's key («The Instance Key of Another Installation» in [CLI Admin Tools](cli_tools.md)). Enter the secrets again only if the old key is lost: a secret entered under the new key would become unreadable once the old one is back.
     - For the settings of the whole instance, every start also logs the error *Stored plugin secrets that the instance key cannot read: …* with their count, until they are entered again or the old key is back. No plugin shipped with LibreFolio keeps one today.
 - ⚙️ **Bring your configuration.** Keep a copy of your `.env` with the archives: on another installation, set again the options you need, the email ones included ([Where the Configuration Lives](email.md#where-it-lives)).
-- 🏠 **Any installation can take it**, if it runs the same version of LibreFolio or a newer one, whoever made the archive: Settings, the command line or a hosting panel.
+- 🏠 **Any installation can take it**, if it runs the same version of LibreFolio or a newer one, whoever made the archive: Settings or the command line.
 
 ---
 
@@ -50,9 +50,8 @@ Three ways give the same archive:
 
 - **Settings › Administration › Backup**, in the app: the archive downloads to your computer. For administrators.
 - **The command line**, on the server: `backup create`.
-- **A hosting panel**, if someone hosts LibreFolio for you and their panel takes backups: see [Backups for Your Hosting Panel](hosting_panel_backups.md#panel-backups).
 
-From Settings and from the command line, the backup can also be [secure](#secure): the same zip, encrypted with a password you choose. From the command line, it can also be [sealed](backup_sealed.md#sealed): encrypted with a random password that only a private key of yours opens, for backups made without anyone at the keyboard. A hosting panel's backups are clear, or sealed when `LIBREFOLIO_BACKUP_RECIPIENTS` is set.
+From Settings and from the command line, the backup can also be [secure](#secure): the same zip, encrypted with a password you choose. From the command line, it can also be [sealed](backup_sealed.md#sealed): encrypted with a random password that only a private key of yours opens, for backups made without anyone at the keyboard.
 
 In every case LibreFolio keeps working during the backup, and one backup runs at a time, whoever started it.
 
@@ -71,8 +70,7 @@ Good to know:
 - 🔑 **Keep the password of a secure backup.** LibreFolio keeps no copy of it, and without it nobody opens the archive, you included: keep it in a password manager, apart from the archive.
 - 💾 The archive stays on the server until you delete it, or until the [automatic clean-up](#backup-cleanup) you set removes it. A copy on the same disk as your data is not a real backup: download it and store it elsewhere ([Keep Copies Off the Server](#keep-copies)). **Delete from the server** removes it at once, and **Create a new backup** starts another one.
 - ⚠️ **The backup is complete, with warnings** means that the database failed its integrity check or has broken references, and was archived as it is, or that some files were left out, or, for a secure backup, that the instance key could not be used and was left out ([Making a Secure Backup](backup_moving.md#secure-problems)). The archive is written all the same: read the warnings before you rely on it.
-- 🚦 While another backup runs, started from the app, the command line or a hosting panel, the card says so: try again when it ends. One started from this tab, or another tab of the app, whose answer never arrived (the connection dropped while it started) is not lost: the next **Create backup** finds it running, and the card follows it, then offers its download, as if it had just started it. This holds for a clear backup only: a secure one is never followed this way, because only its own password opens its archive, and a followed backup that turns out to be secure is not offered, unless the card had started it itself; in both cases the card says that another backup runs. A card that already offers an archive keeps offering it, and only says that another backup runs. One started from the command line or a hosting panel is not followed: its archive goes elsewhere. The card never says which backup runs; the browser's console does (its id and where it was started), should you need to find it.
-- 🔒 On an instance its hosting provider has [blocked](hosting_instances.md#instance-block), the app shows the block page instead of Settings. Administrators find on it the same backup card, under **Keep a copy of the data**: make the backup and download it there ([What Users See](hosting_instances.md#what-users-see)). The hosting panel ([What Still Answers](hosting_instances.md#what-still-answers)) and the command line on the server can still make one too.
+- 🚦 While another backup runs, started from the app or the command line, the card says so: try again when it ends. One started from this tab, or another tab of the app, whose answer never arrived (the connection dropped while it started) is not lost: the next **Create backup** finds it running, and the card follows it, then offers its download, as if it had just started it. This holds for a clear backup only: a secure one is never followed this way, because only its own password opens its archive, and a followed backup that turns out to be secure is not offered, unless the card had started it itself; in both cases the card says that another backup runs. A card that already offers an archive keeps offering it, and only says that another backup runs. One started from the command line is not followed: its archive goes elsewhere. The card never says which backup runs; the browser's console does (its id and where it was started), should you need to find it.
 
 ### ⌨️ From the Command Line {: #command-line }
 
@@ -121,7 +119,7 @@ docker compose exec librefolio python dev.py backup create --encrypt
 
 ### 🗃️ Backups Kept on the Server {: #kept-backups }
 
-A backup made from the app, the command line or a hosting panel is no longer deleted after an hour: it stays on the server until you delete it, or until the [automatic clean-up](#backup-cleanup) removes it. Each one has a folder of its own in the `backups/` folder of the data directory, named after the moment it was made (in UTC), where it came from (`ui` for the app, `cli` for the command line, `panel` for a hosting panel) and a short code that tells two backups of the same second apart:
+A backup made from the app or the command line is no longer deleted after an hour: it stays on the server until you delete it, or until the [automatic clean-up](#backup-cleanup) removes it. Each one has a folder of its own in the `backups/` folder of the data directory, named after the moment it was made (in UTC), where it came from (`ui` for the app, `cli` for the command line) and a short code that tells two backups of the same second apart:
 
 ```text
 backups/librefolio-backup-20261015-121500-ui-1a2b3c4d/librefolio-backup-20261015-121500.zip
@@ -131,7 +129,7 @@ The archive inside keeps its usual name, `.zip`, `.lfbk` or `.tar`. `backups/.jo
 
 **Settings › Administration › Backup**, under *Backups on this server*, lists every backup kept. **Files**, in its **Backups** tab, shows the same list; only administrators see either. For each backup it gives:
 
-- 📅 the date and time it was made, and where it came from: the app, the command line or a hosting panel;
+- 📅 the date and time it was made, and where it came from: the app or the command line;
 - 🔐 its type: plain, with a password ([secure](#secure)) or [sealed](backup_sealed.md#sealed);
 - 📏 its size, and its SHA-256: click it to copy the whole checksum, and compare it with the one of the file you download;
 - ⬇️ **Download** and 🗑️ **Delete**, which removes the backup from the server at once.
@@ -154,7 +152,6 @@ Kept backups pile up, and they live on the disk of your data. In the same **Back
 - 🛡️ **The latest backup is always kept**, whatever the limits say: an instance never ends up with none.
 - ⏰ The clean-up runs after each backup, when LibreFolio starts and about once an hour.
 - 🏠 **Self-hosted:** both limits are off until you set them.
-- ☁️ **Managed instance** ([hosted for you](hosting_instances.md)): until the administrator saves other values, the limits are 250 MB and 30 days. The size limit cannot be turned off there: the smallest value is 1 MB. The age limit can be turned off with `0`.
 - 🔍 Only the backups of the list are cleaned. Older loose archives in `backups/`, a backup in progress and a failed one are never touched by it.
 - ⌨️ The command line leaves its backups in the same place and the same limits apply: see [Where the Backups Stay](cli_backup.md#backup-kept).
 
@@ -179,7 +176,7 @@ The bar has three looks, depending on whether a limit is set and whether the dis
 **Set the limit** in the same bar, in the **Space limit (MB)** field: a whole number of megabytes, `0` for no limit, then **Save**. It is also the *Space limit* [global setting](settings.md), which is not shown in the Administration tab: this field is the place to change it.
 
 - ⚠️ **Over the limit**, the bar warns that the limit is exceeded and suggests deleting backups or files, or raising the limit. That is all: LibreFolio deletes nothing, and the limit does not stop an upload or a backup.
-- 🔒 **Set by your hosting provider**: when `LIBREFOLIO_STORAGE_LIMIT_MB` is set, its value is the limit, the field is greyed out and a note says who sets it. See [Environment Variables](configuration.md). A value LibreFolio cannot use, one that is not a whole number, is ignored, and the field works as above.
+- 🔒 **Set in the server's configuration**: when `LIBREFOLIO_STORAGE_LIMIT_MB` is set, its value is the limit, the field is greyed out and a note says it is set by whoever hosts the instance. See [Environment Variables](configuration.md). A value LibreFolio cannot use, one that is not a whole number, is ignored, and the field works as above.
 - 🧹 **The clean-up and the bar work together.** Backups are usually the part that grows: the [automatic clean-up](#backup-cleanup) keeps them in check, and every backup you delete in **Settings › Administration › Backup** or in **Files › Backups** shortens **Backups** in the bar. When you are near the limit, start there.
 
 ### 🗄️ Keep Copies Off the Server {: #keep-copies }
@@ -242,7 +239,7 @@ A secure backup is the archive of a clear backup, encrypted with a password you 
 
 - 🛡️ **What it protects: the file at rest.** A lost disk, a stolen laptop, a copy on a cloud drive or a NAS: without the password, nothing in it can be read, neither the data nor the names of the files. A file changed or cut short is detected when it is opened, and refused.
 - 👁️ **What it does not protect.** Whoever knows the password reads everything: the data of every user, and the keys of the data providers. Give it only to whoever may restore the backup, and never keep it with the file.
-- 🗝️ **What it carries.** Besides the data, the instance key, when LibreFolio generated it (`secrets/instance.key`): the saved keys of the data providers travel with the backup, and its restore re-encrypts them with the key of the installation that receives it, which keeps its own. A key you set yourself, with `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`, or that a hosting panel gives the instance, never leaves: whoever set it keeps it.
+- 🗝️ **What it carries.** Besides the data, the instance key, when LibreFolio generated it (`secrets/instance.key`): the saved keys of the data providers travel with the backup, and its restore re-encrypts them with the key of the installation that receives it, which keeps its own. A key you set yourself, with `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`, never leaves: whoever set it keeps it.
 - 🆘 **A lost password cannot be recovered.** LibreFolio keeps no copy of it, and nothing else opens the file.
 - ⏳ **Slow to guess.** The key of the file comes from the password through scrypt, which takes 32 MiB of memory and about a tenth of a second for each try: nothing for one backup, light enough for a small server, but slow for whoever tries passwords one after another. Hence the rules: at least 12 characters, with an uppercase and a lowercase letter, a digit and a symbol.
 - 💽 **On the server, while it is made,** the clear archive is written first, in the work folder of the backup inside `backups/`, which only the server's user can open; it is removed as soon as the `.lfbk` is written, and when the backup fails. A check decrypts the backup the same way, in a private folder of the data directory, and removes the decrypted archive once it has used it. A run killed outright, by a power cut or `kill -9`, cannot clean up: the next start of LibreFolio removes what it left in clear, and a backup cut short that way must be made again. The folder of a `backup inspect` killed that way goes once it is an hour old.
@@ -301,7 +298,7 @@ A restore replaces the data of the installation with the archive's: the database
     - the ledger totals: the same as when the backup was made, different on the lines listed ([how to read them](backup_moving.md#check-refused)), not recorded, recorded by another version of the method, or unreadable;
     - the administrators of the backup, with *After the restore you sign in with one of them, with the password of then; every session open now ends.*
     - *Invitations and links sent before the restore will have expired: send them again if needed.*
-    - the warnings, which let the restore go on, among them a backup with more active accounts than the plan allows ([More Accounts Than the Plan Allows](#users-limit)), and the blocker, which forbids it: a backup without an active administrator;
+    - the warnings, which let the restore go on, and the blocker, which forbids it: a backup without an active administrator;
     - until when the checked copy is kept: 24 hours after the check.
 
     **Drop this archive** drops the check and its copy: nothing is restored.
@@ -327,125 +324,78 @@ While a start applies the restore, the card reads *A start of LibreFolio is appl
 Good to know:
 
 - 👑 Only administrators have the tab, and one restore runs at a time: one archive is checked at a time, wherever the check started, here, in another tab or on the command line (*Another archive is being checked: try again when it ends.*), and a restore waiting takes the place of **Choose an archive…**.
-- 📏 When the installation limits the size of the archives, the card says so, such as *Archives up to 500 MB.*, and refuses a larger file before sending anything. The limit is `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, in megabytes of 1024 × 1024 bytes: none by default on your own installation, 500 MB by default in the managed profile of a hosting provider ([The Upload Limit of a Restore](hosting_panel_backups.md#restore-upload-limit)).
+- 📏 When the installation limits the size of the archives, the card says so, such as *Archives up to 500 MB.*, and refuses a larger file before sending anything. The limit is `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, in megabytes of 1024 × 1024 bytes: none by default on your own installation ([The Upload Limit of a Restore](#restore-upload-limit)).
 - 💽 The disk of the data directory needs room for the archive and, while it is checked, for its copy, and for a secure backup for its decrypted archive too: [Check a Backup](#check) says how much.
 - 🔑 The password of a secure backup goes to the server only with the request that starts the check, which tries it at once: it is never stored, written to the log or sent back. The field empties as soon as you submit it.
 - 🔄 A reload of the page, in the same tab, keeps following the check and its report. The checked copy is kept 24 hours: after that, the confirmation answers *The check is too old: check the archive again.*
-- 🚪 The restore ends every session (but the owner's, in [the one case where the hosting panel keeps their password](#owner-kept)), everyone signs in again with an account of the backup, and the links sent before it stop working: see [What the Next Start Does](#next-start).
+- 🚪 The restore ends every session, everyone signs in again with an account of the backup, and the links sent before it stop working: see [What the Next Start Does](#next-start).
 - ❌ A refused upload, check or confirmation, or a server that does not answer, shows on the card with the reason. **Try again** reads the state of the restore again; to send an archive again, choose it again with **Choose an archive…**. The check refuses the same archives as the command line: see [The Check Refuses the Archive](backup_moving.md#check-refused).
 - 🖥️ With nothing that starts LibreFolio again, such as a host installation started by hand, [start the server](cli_tools.md#start-the-server) yourself once it has stopped: the page waits for it.
-- 🔒 On an instance its hosting provider has [blocked](hosting_instances.md#instance-block), the app shows the block page instead of Settings: there is no restore from the app there. A restore confirmed before the block waits for the unblock: the first start after it applies it. If the start that follows **Restore and restart** finds the instance blocked, the window says why the restore was not applied, and **Back to Backup** leads to the block page.
-- 👑 On an instance a hosting provider runs, the confirmation also asks which account of the backup becomes the owner's: see [The Owner's Account on a Hosted Instance](#owner-account).
 
-### 👑 The Owner's Account on a Hosted Instance {: #owner-account }
+### 📤 The Upload Limit of a Restore {: #restore-upload-limit }
 
-On an instance a hosting provider runs for its users (the `managed` profile, see [The Managed Profile](hosting_providers.md#managed-profile)), the owner is the person whose address the provider set in `LIBREFOLIO_ADMIN_EMAIL`. A backup uploaded from the app may come from anywhere: in it, the owner's account may be missing, no longer an administrator, or have a password someone else knows. So, on such an instance, a restore names the account of the backup that becomes the owner's, and the owner then chooses its password. A restore confirmed from **Settings › Administration › Backup** asks you to choose that account. One confirmed on the command line or from the hosting panel has nobody to ask, so it picks the account itself from the checked copy: see [Without Anyone to Ask](#owner-pick). All this holds where `LIBREFOLIO_ADMIN_EMAIL` is set; on your own installation (`selfhosted`, the default), and on a hosted instance without that variable, no account is named and no password changes.
+To check an archive for a restore, an administrator uploads it to the instance from
+Settings › Administration › Backup
+([Restore from Settings › Administration › Backup](backup_restore.md#restore-settings)), through
+`PUT /api/v1/backup/restore/upload`; the instance then checks it on a copy, as
+`backup restore --dry-run` does on the [command line](cli_tools.md). `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` caps the size of the
+archives an administrator can upload.
 
-- 🖱️ **When it is asked.** When you confirm the restore of an archive you uploaded from the app, after the word is typed, LibreFolio asks you to choose that account. The choice is mandatory: without it the restore is not confirmed. A restore the hosting provider makes from its panel ([Restoring an Instance from Your Panel](hosting_panel_backups.md#panel-restore)) or with `backup restore` on the command line is never asked a choice, and does not accept one: it picks the account itself. On your own installation (`selfhosted`, the default) it is never asked.
-- 👥 **Which accounts are offered.**
-    - If an account of the backup already has the owner's address (the capitals of the letters do not matter), it is the only choice, whatever its role: no other account could take that address.
-    - Otherwise, any active administrator of the backup.
-- 🔄 **What the restore does with it.** At the first start on the restored data, as the restore is kept ([What the Next Start Does](#next-start)):
-    - the password of the chosen account stops working: nobody signs in with the password it had in the backup, and whoever prepared the backup cannot sign in as the owner. As for every account, its sessions end and every link of the backup is revoked;
-    - the account takes the owner's address and becomes an active administrator;
-    - then the owner receives by email a link to choose a new password, valid 30 minutes, and signs in with it. Starting again after a crash is harmless: a new link replaces the old one, which stops working.
-    - if the database is locked at that moment (by another worker of the start, or a backup running), LibreFolio waits and tries again, up to 4 times, 1 second apart, each try waiting up to 30 seconds for the lock. Only if it is still locked after that does the owner's account stay for the next start (`⏳` below).
-- 📮 **Without email.** When the instance cannot send email ([Email](email.md)), no message goes out: LibreFolio writes the link in the log of the instance, and whoever runs the server gives it **only to the owner**: whoever has it sets the password of the owner's account. The link is never in the report of the restore, in `backup pending` or in any answer of the server, because every administrator reads them, including whoever prepared the backup. If the 30 minutes pass before the owner uses it, the owner chooses the password with **Forgot Password?** on the sign-in page, with the owner's address, which is now the account's.
-- 🛡️ **The owner's protection is derived again.** The mark that says which account is the instance's owner, which a backup carries from the instance it was made on, is cleared at every restore. The mark is cleared on every account at every restore, on any profile, and set again only on the account the restore assigns. Where it assigns none (nobody could be picked, or a `selfhosted` instance, or no `LIBREFOLIO_ADMIN_EMAIL`), the owner is the account the instance derives from `LIBREFOLIO_ADMIN_EMAIL` at its start, if that variable is set.
-- 🚫 **No administrator, no restore.** A backup without an active administrator cannot be restored, here as on any instance: the report shows it as a blocker.
-- 🔑 The sentence of the report, *After the restore you sign in with one of them, with the password of then*, holds for the other administrators of the backup: the account chosen for the owner signs in only with the password set through its link.
-
-After a restore that was kept, `backup pending` adds one line about the owner's account (`backup pending --recover owner` prints the same ones):
-
-| Line | What it means |
+| `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` | Largest archive accepted |
 | --- | --- |
-| `✉️ The owner's account is set: a link to choose its password went to the owner's address` | Done: the owner chooses the password from the email |
-| `⚠️ The owner's account is set, but no email could be sent: the link to choose its password is in the log of the instance; give it only to the owner` | No email went out: the line carries no link, which is in the log of the instance; give it only to the owner, and to nobody else |
-| `⏳ The owner's account is set at the next start of the server` | The start has not given the owner the account yet, for instance because the database stayed locked through the tries: the next start does it |
-| `❌ The owner's account could not be set (<CODE>): the server log has the cause` | The account could not be given to the owner: the log of the start names the cause |
-| `⚠️ No owner was assigned at the restore: no account of the backup could be taken for it. Name one with ./dev.py user reassign-owner <username>` | A restore from the command line or the hosting panel found nobody to make the owner: see [Without Anyone to Ask](#owner-pick) |
+| Not set, or empty | No limit |
+| `0` | No limit |
+| A whole number, such as `2048` | That many megabytes, of 1024 × 1024 bytes each |
 
-`backup pending --json` does not carry this line.
-
-When the confirmation is refused, nothing is confirmed and the data stays as it is. The first three codes are those of the app, which asks for a choice. The last two hold for every route: the app, `backup restore` on the command line and the hosting panel, which answers HTTP 409 with the code:
-
-| Code | Why | What to do |
-| --- | --- | --- |
-| `owner_choice_required` | No account was chosen for the owner | Choose one of the accounts offered, then confirm again |
-| `owner_choice_invalid` | The account chosen is not one the restore offers: not an active administrator of the backup, or another one than the account that already has the owner's address | Choose one of the accounts offered |
-| `owner_email_not_set` | The instance has no owner's address: `LIBREFOLIO_ADMIN_EMAIL` is not set | Ask the hosting provider to set it and restart LibreFolio, then choose the archive again to check it |
-| `restore_stage_outdated` | LibreFolio was updated since the check, or the owner's address changed since then: the accounts offered, or picked, were read for the old address | Check the archive again: a new check reads the accounts for the current address |
-| `owner_conflict` | The backup holds two accounts on one address or one name (the capitals of the letters aside), or an account named with the owner's address that does not have that address; or an administrator that still waits for its first-setup link (the initial administrator, never completed) while no account holds the owner's address: the start would give that account the owner's address. The owner's account could not be set safely | For the first causes, such a backup cannot be restored on a hosted instance: on the installation it comes from, remove the duplicate account or free the address (give the accounts at fault their own name and address), make a new backup, and check it again. For the waiting administrator, in the source instance complete that account's setup or delete it, make a new backup and check it again; or have an account hold the owner's address there |
-
-#### 🤖 Without Anyone to Ask {: #owner-pick }
-
-A restore confirmed on the command line (`backup restore`) or by the hosting panel has nobody to ask which account becomes the owner's. So, on a hosted instance with `LIBREFOLIO_ADMIN_EMAIL` set, the confirmation picks it itself from the checked copy, in this order:
-
-1. The account that already holds the owner's address (the capitals of the letters do not matter), whatever its role.
-2. Otherwise the **one** active administrator the backup marks as its owner. The mark is written by whoever prepared the backup: it only suggests which account, and grants nothing (the password of the account picked is closed all the same, and the link goes to `LIBREFOLIO_ADMIN_EMAIL`).
-3. Otherwise nobody: with none marked, with two or more marked, or with a marked account that is not an active administrator. LibreFolio never takes "the first one".
-
-- 👤 **An account picked.** Everything is as in the app: at the restore its password is closed (it stops working and its sessions end), it gets the owner's address, becomes an active administrator and the instance's owner. The first start sends the link to choose a new password to `LIBREFOLIO_ADMIN_EMAIL`, never to an address of the backup; without email, the link is written in the log of the instance, to be given **only to the owner**; if it expires, the owner uses **Forgot Password?**. The report of the command names the account by its username, never by an address. `backup pending` prints the same lines as above.
-- 🚫 **Nobody picked.** The restore goes on without an owner, with a warning in the log. The report of the command and `backup pending` say *No owner* and give the command to name one afterwards, `./dev.py user reassign-owner <username>` ([Giving the Instance Back](hosting_instances.md#owner-reassign)). The instance serves its data meanwhile.
-- 🛑 **A backup with owner conflicts** (two accounts on one address or one name, the owner's address as another account's name, an administrator still waiting for its setup link) is refused here as from the app, with `owner_conflict`: the command prints `❌ <reason> (owner_conflict)` and the panel answers HTTP 409. Remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again.
-- 🔁 **A report read for another owner's address** than the current one is refused with `restore_stage_outdated`: check the archive again.
-- ❌ **If the assignment fails after the swap** (a refusal such as the address already taken), the instance serves nothing but the recovery until `./dev.py backup pending --recover owner` ([Follow or Cancel a Restore](cli_backup.md#backup-pending)): now for a restore from the command line or the panel too, not only from the app.
-
-### 🔑 The Owner Keeps Their Password: Restore from the Hosting Panel {: #owner-kept }
-
-There is one exception to [the owner's password being closed at a restore](#owner-account). When the hosting provider restores the **same instance** from its panel after a fault, the restore must be transparent: the owner comes back with their password and their open sessions, and no email goes out. Nobody has to choose a new password because the provider restored last night's copy.
-
-The exception holds only when **all four** conditions are true together:
-
-1. 🖥️ **The channel is the hosting panel.** A restore confirmed from the app or on the command line never qualifies.
-2. 🏢 **The instance is `managed`** and `LIBREFOLIO_ADMIN_EMAIL` is set.
-3. 🏷️ **Exactly one account of the backup is marked as the instance's owner**, counting every account of any role, active or not, and that account is an **active administrator**. Two marked accounts, or one marked account that is not an active administrator, is not enough.
-4. 📧 **That account holds the address of `LIBREFOLIO_ADMIN_EMAIL`** (the capitals of the letters do not matter).
-
-```mermaid
-flowchart TD
-    A[Restore confirmed] --> B{From the hosting panel?}
-    B -- no --> N[Treatment of the owner's account<br/>and Without Anyone to Ask]
-    B -- yes --> C{managed profile and<br/>LIBREFOLIO_ADMIN_EMAIL set?}
-    C -- no --> N
-    C -- yes --> D{Exactly one account marked as owner,<br/>an active administrator?}
-    D -- no --> N
-    D -- yes --> E{It holds the address of<br/>LIBREFOLIO_ADMIN_EMAIL?}
-    E -- no --> N
-    E -- yes --> F[Owner keeps password and sessions]
-    F --> G{Still true at the commit,<br/>on the restored database?}
-    G -- yes --> H[Nothing is emailed]
-    G -- no --> N
+```bash
+LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 ```
 
-- ✅ **What is kept.** The owner's account keeps its **password**, its own **open sessions** and its **owner mark**. Its role, address and every other field are those of the backup.
-- 🔒 **What is done as always.** The sessions of every other account end. Every one-time link of the backup, the owner's too, is revoked. The other accounts keep their passwords as before, and the owner mark is cleared on every account but the owner's. The restore is kept at the first start like any other ([What the Next Start Does](#next-start)).
-- 📭 **Nothing is sent.** The first start does not give the owner an account or send them a link, and `backup pending` says that the account kept its password ([Follow or Cancel a Restore](cli_backup.md#backup-pending)).
-- 🔁 **The check is made again at the commit.** The conditions are first read on the checked copy, when the panel confirms. At the first start on the restored data, before it serves anything, they are read again on the restored database. If the account no longer fits (it is not an administrator any more, it is disabled, it has another address, a second account is marked, or `LIBREFOLIO_ADMIN_EMAIL` is no longer set), the restore is handled **as one without the exception**: the account's password is closed, and the first start sends the link ([The Owner's Account on a Hosted Instance](#owner-account)).
-- 📝 **The log line.** When the password is really kept, the log of the instance has a warning, `Panel restore: the owner's password and sessions are kept`, with the restore and the account number. It carries no address. The commit's own line then says *Restore committed: every session ended but the owner's, the backup's one-time links revoked*, where every other restore says *every session ended*.
-- 🚫 **Every other case is unchanged.** A restore from the app, `backup restore` on the command line (it never keeps the owner's password), or a panel restore that fails any of the four conditions follows [The Owner's Account on a Hosted Instance](#owner-account) and [Without Anyone to Ask](#owner-pick). The refusals (`owner_conflict`, `restore_stage_outdated`) come first, as for any restore on a hosted instance.
+- Set it in the container's environment or in `.env`, then restart LibreFolio.
+- An archive over the limit answers `413`, with the code `backup_too_large` and the limit in
+  `limit_mb`: before anything is written when the request announces its size, otherwise as soon as
+  the upload goes past the limit. Nothing of it is kept.
+- A proxy in front of LibreFolio must let at least as much through: Nginx with
+  `client_max_body_size`, whose default is only 1 MB (`client_max_body_size 2048m;` matches the
+  example above), and your CDN, if it limits the size of a request. A `413` without the
+  code `backup_too_large` comes from the proxy, not from LibreFolio.
+- A value other than a whole number, such as `500MB` or `-1`, does not stop the server: the start log
+  already has an error, `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB cannot be used: …` (`check` is
+  `backup.upload_limit`), then each upload answers `503` with the code `backup_upload_unavailable`, and
+  the log has an error that names the variable: `The upload limit of a restore cannot be read`.
+- The disk of the data directory needs room for the archive and, while it is checked, for its copy
+  unpacked as well (how much: «Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)): short of
+  space, the upload answers `507` with the code `backup_no_space`, also when the disk reports itself
+  full only at the end of the file, as a network file system or a quota may. The check answers with
+  its own code, `no_space`: a `507` when it cannot even start, a refusal of the archive once it runs.
+  An upload that cannot be written for another reason answers `500` with the code
+  `backup_upload_failed`, and the log has the cause.
+- An administrator reads the limit in force in `upload_limit_mb` of
+  `GET /api/v1/backup/restore/status`: `0` for no limit, `null` when the value cannot be read.
+  Settings › Administration › Backup shows it on its restore card, such as *Archives up to 500 MB.*,
+  and refuses a larger file before sending it.
 
-!!! warning "For the host: the accepted risk"
+The upload limit bounds the archive as it is sent, compressed: a zip can unpack to far more than its
+own size, and the check unpacks it on the disk of the data directory.
+`LIBREFOLIO_BACKUP_MAX_RESTORE_MB` bounds what an archive unpacks to, from the sizes its manifest
+declares, before the check unpacks anything.
 
-    This exception has **no check that the copy comes from this same instance**. The provider's panel cannot show the instance's recipients or its key, and a sealed backup carries neither the instance key nor, as far as the instance can tell, the recipients it was sealed for. So the instance cannot tell its own copy from another.
+| `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` | Largest size an archive unpacks to |
+| --- | --- |
+| Not set, or empty | No limit |
+| `0` | No limit |
+| A whole number, such as `16384` | That many megabytes, of 1024 × 1024 bytes each |
 
-    Whoever can write into the provider's store of copies could fabricate a backup whose owner holds the owner's address and a password they know. A restore from the panel would keep that password, and they would sign in as the owner.
-
-    The developer accepted this risk (decision of 2026-10-26), because an automatic restore of the same instance must be transparent. In return:
-
-    - keep the store of copies **as protected as the instance's keys**: let nobody write into it but the provider's own backup job;
-    - let **only the provider's panel** restore, and keep the panel's credentials as you keep the keys.
-
-    The exception does not apply to a restore from the app or on the command line: those never keep the owner's password.
-
-### 👥 More Accounts Than the Plan Allows {: #users-limit }
-
-A restore is **never refused** because the backup holds more active accounts than `LIBREFOLIO_MAX_USERS` allows. The check only warns you, before you confirm: in the app, in the report of `backup restore` and in the report the hosting panel reads. For instance, a backup that holds *anna*, *bruno*, *carla*, *dario* and *elena* as active accounts, restored on an instance that accepts 3, is confirmed like any other.
-
-- 🧮 **What it counts.** The active accounts of the backup, plus, on a `managed` instance with `LIBREFOLIO_ADMIN_EMAIL` set, the inactive account that holds the owner's address: the restore activates it ([The Owner's Account on a Hosted Instance](#owner-account)). The warning appears when that number is above the limit. It carries the two numbers, the accounts counted and the limit, and no name and no address.
-- 🔢 **A limit that is not a number** stops the server at start, so no restore meets one: fix `LIBREFOLIO_MAX_USERS` first ([Environment Variables](configuration_accounts.md#accounts)). With no limit set, there is nothing to warn about.
-- 🖱️ **In the app,** the report window shows a notice apart from the other warnings, such as *This backup holds 5 active accounts, but this instance accepts 3.* The confirmation does not change: you type the word, and choose the owner's account when it is asked. [From the command line](cli_backup.md#backup-restore), `restore --yes` and `--dry-run` go on as for any other backup.
-- 🪪 **After the restore,** at the first sign-in of an administrator the instance sees more active accounts than the plan allows, and asks that administrator to choose who keeps access. The others are **deactivated**, never deleted: a deactivated account keeps its password and its data, so reactivating it brings it back as it was, when a place is free. The full backup can be downloaded first from that screen.
+- An archive over the limit is refused before anything is unpacked: the check fails with the code
+  `unpacked_too_large`, and nothing of its copy is left. A secure archive is decrypted first, which
+  takes about its own size, then measured the same way.
+- A value you set always wins, `0` included. `backup restore` on the command line follows the same
+  limit; whoever runs the server lifts it for one command with `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0`
+  in front of it («Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)).
+- A value other than a whole number does not stop the server: the start log already has an error,
+  `LIBREFOLIO_BACKUP_MAX_RESTORE_MB cannot be used: …` (`check` is `backup.restore_limit`), then each
+  check, `POST /api/v1/backup/restore/stage`, answers `503` with the code
+  `backup_restore_unavailable`, the archive kept, and the log has an error.
 
 ### ⌨️ Restore from the Command Line {: #restore-command }
 
@@ -484,7 +434,6 @@ You start the restore yourself: with the restart of the command line, or with **
 | --- | --- |
 | Docker Compose | With `restart: unless-stopped`, in both compose files LibreFolio ships |
 | systemd | With `Restart=always` |
-| A Fly.io Machine | With the `always` restart policy, or with `on-fail` where the Fly Proxy wakes the Machine on a request |
 | None | No: start LibreFolio yourself, and the restore, or the way back, happens at that start |
 
 **Restore and restart** stops LibreFolio cleanly: a policy that starts it again only after a failure, such as `on-failure`, does not start it after that stop.
@@ -501,7 +450,6 @@ You start the restore yourself: with the restart of the command line, or with **
 - 👥 **[Users & Invitations](users.md)** — Reactivate or delete accounts, and send new links
 - 📧 **[Email](email.md)** — The email variables, which no archive holds
 - 📝 **[Environment Variables](configuration.md)** — «The Instance Key», and every option of `.env`
-- 🏢 **[Hosting for Others](hosting_providers.md)** — [Backups for Your Hosting Panel](hosting_panel_backups.md#panel-backups) and [The Upload Limit of a Restore](hosting_panel_backups.md#restore-upload-limit)
 - 🧑‍💻 For developers: **[Restoring a Backup](../developer/architecture/security.md#backup-restore)** — The swap, the journal, the rollback and the restart
 - 🧑‍💻 For developers: **[Secure Backups (`.lfbk`)](../developer/architecture/security.md#secure-backups)** — The envelope, the password and the instance key a secure backup carries
 - 🧑‍💻 For developers: **[Sealed Backups (`.tar`)](../developer/architecture/security.md#sealed-backups)** — The three members, age through `pyrage`, and the strict reader

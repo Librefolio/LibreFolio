@@ -44,7 +44,7 @@ description: Free to understand, free to act. LibreFolio brings all your investm
     <div class="premium-badges">
       <span class="badge badge-open-source">100% OPEN SOURCE</span>
       <span class="badge badge-expandable">HIGHLY EXPANDABLE</span>
-      <span class="badge badge-self-hosted">SELF-HOSTED OR CLOUD</span>
+      <span class="badge badge-self-hosted">SELF-HOSTED</span>
     </div>
   </div>
 

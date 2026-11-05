@@ -31,8 +31,6 @@
         "sealed-recipients": "backup_sealed",
         "sealed-rotation": "backup_sealed",
         "secure-problems": "backup_moving",
-        "to-a-hosted-instance": "backup_moving",
-        "to-your-server": "backup_moving",
         "troubleshooting": "backup_moving"
     },
     "cli_tools": {
@@ -98,47 +96,6 @@
         "verification-switch": "email_flows",
         "verification-waiting": "email_flows"
     },
-    "hosting_providers": {
-        "await-restore": "hosting_panel_backups",
-        "await-restore-end": "hosting_panel_backups",
-        "block-variables": "hosting_instances",
-        "deletion-date": "hosting_instances",
-        "initial-admin": "hosting_instances",
-        "initial-admin-active": "hosting_instances",
-        "initial-admin-create": "hosting_instances",
-        "initial-admin-new-link": "hosting_instances",
-        "initial-admin-setup-page": "hosting_instances",
-        "initial-admin-variables": "hosting_instances",
-        "instance-block": "hosting_instances",
-        "owner-email-change": "hosting_instances",
-        "panel-api": "hosting_panel_api",
-        "panel-api-auth": "hosting_panel_api",
-        "panel-api-check": "hosting_panel_api",
-        "panel-api-limit": "hosting_panel_api",
-        "panel-api-log": "hosting_panel_api",
-        "panel-api-refusals": "hosting_panel_api",
-        "panel-api-registry": "hosting_panel_api",
-        "panel-api-rotation": "hosting_panel_api",
-        "panel-api-test-vectors": "hosting_panel_api",
-        "panel-api-ticket-refusals": "hosting_panel_api",
-        "panel-api-tickets": "hosting_panel_api",
-        "panel-api-tokens": "hosting_panel_api",
-        "panel-backups": "hosting_panel_backups",
-        "panel-jobs": "hosting_panel_backups",
-        "panel-refusals": "hosting_panel_backups",
-        "panel-restore": "hosting_panel_backups",
-        "panel-restore-refusals": "hosting_panel_backups",
-        "panel-restore-routes": "hosting_panel_backups",
-        "panel-status": "hosting_panel_api",
-        "panel-token": "hosting_panel_backups",
-        "refused-calls": "hosting_instances",
-        "restore-interrupted": "hosting_panel_backups",
-        "restore-owner": "hosting_instances",
-        "restore-owner-pending": "hosting_panel_backups",
-        "restore-upload-limit": "hosting_panel_backups",
-        "what-still-answers": "hosting_instances",
-        "what-users-see": "hosting_instances"
-    },
     "service_exposure": {
         "3-startup-and-approval": "service_exposure_funnel",
         "enabling-funnel-and-acls-on-the-console": "service_exposure_funnel",
@@ -148,15 +105,6 @@
         "step-1-start-the-funnel-on-the-server": "service_exposure_funnel",
         "step-2-approve-and-wait-for-propagation": "service_exposure_funnel",
         "step-2-configure-docker-compose": "service_exposure_funnel"
-    },
-    "sleep_wake": {
-        "price-refresh": "wake_sync",
-        "wake-sync": "wake_sync",
-        "wake-sync-answer": "wake_sync",
-        "wake-sync-blocked": "wake_sync",
-        "wake-sync-jobs": "wake_sync",
-        "wake-sync-token": "wake_sync",
-        "wake-sync-workers": "wake_sync"
     }
 };
 
