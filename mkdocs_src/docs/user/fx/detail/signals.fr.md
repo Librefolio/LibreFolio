@@ -43,7 +43,7 @@ Le menu déroulant **Indicateurs techniques** est une arborescence groupée par 
 
 ---
 
-## 💱 Comparaison de données
+## 💱 Comparaison de données {: #data-comparison }
 
 - 💱 **Paire FX** — une autre de vos paires, par ex. GBP/USD à côté d'EUR/USD. Dans la liste, 👑 marque la paire de cette page et 📌 une paire déjà utilisée par un autre signal.
 - ↔️ **Comparaison d'actif** — le prix d'un actif à côté du taux, choisi dans le même panneau que la comparaison de risque (zone de recherche, filtres **Type** et **Devise**, benchmarks en premier). Un actif déjà utilisé par une autre comparaison porte un signe d'avertissement mais peut tout de même être choisi.

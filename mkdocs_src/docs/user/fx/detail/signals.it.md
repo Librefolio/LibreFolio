@@ -48,7 +48,7 @@ una casella di ricerca in alto: digita per filtrare tutte le famiglie contempora
 
 ---
 
-## 💱 Confronto dati
+## 💱 Confronto dati {: #data-comparison }
 
 - 💱 **Coppia FX** — un'altra delle tue coppie, ad es. GBP/USD accanto a EUR/USD. Nell'elenco, 👑 contrassegna la
   coppia di questa pagina e 📌 una coppia già usata da un altro segnale.

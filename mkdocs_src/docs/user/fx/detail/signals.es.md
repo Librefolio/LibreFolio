@@ -50,7 +50,7 @@ un cuadro de búsqueda en la parte superior: escribe para filtrar todas las fami
 
 ---
 
-## 💱 Comparación de datos
+## 💱 Comparación de datos {: #data-comparison }
 
 - 💱 **Par FX** — otro de tus pares FX, p. ej. GBP/USD junto a EUR/USD. En la lista, 👑 marca el
   par de esta página y 📌 un par ya usado por otra señal.
