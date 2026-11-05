@@ -18,7 +18,7 @@ related:
 
 ## Symptom
 
-The cloud sizing study of workstream M (its report, items 1 and 7) measured the 1.1 release images:
+A sizing study of workstream M (its report, items 1 and 7) measured the 1.1 release images:
 
 - the frontend inside the image weighed **58 MB instead of 21 MB**, with 103 `.map` files: a debug build, not
   minified and with sourcemaps;
