@@ -566,6 +566,9 @@ describe('StorageBar — the limit editor: saving', () => {
 
         await waitFor(() => expect(events('storage.limit.saved')).toHaveLength(1));
         expect(events('storage.limit.saved')[0].detail).toEqual({limit_mb: 2048});
+        // K-9: the confirmation is a green toast, not a word beside the field.
+        expect(vi.mocked(notify).mock.calls.find(([event]) => event.name === 'storage.limit.saved')?.[0].toast).toEqual({variant: 'success', message: 'storage.limit.saved'});
+        expect(screen.queryByText('storage.limit.saved'), 'nothing beside the field says «saved»').toBeNull();
         await waitFor(() => expect(api.get.mock.calls.length).toBeGreaterThanOrEqual(2));
         await waitFor(() => expect(limitField().value).toBe('2048'));
         expect(bar()).toHaveAttribute('data-mode', 'limit');

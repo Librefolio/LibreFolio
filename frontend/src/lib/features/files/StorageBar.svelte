@@ -14,7 +14,7 @@
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {CircleCheck, HardDrive, LoaderCircle, Lock, RefreshCw, TriangleAlert} from 'lucide-svelte';
+    import {HardDrive, LoaderCircle, Lock, RefreshCw, TriangleAlert} from 'lucide-svelte';
     import {backupFailureCode, getInstanceStorage, saveStorageLimit, storageLimitSaveCode, type InstanceStorage} from '$lib/features/backup/backupApi';
     import {backupListSignal} from '$lib/features/backup/backupList.svelte';
     import {_} from '$lib/i18n';
@@ -99,7 +99,7 @@
             return;
         }
         limitState = 'saved';
-        notify({name: 'storage.limit.saved', detail: {limit_mb: limitMb}});
+        notify({name: 'storage.limit.saved', detail: {limit_mb: limitMb}, toast: {variant: 'success', message: $_('storage.limit.saved')}});
         await load();
     }
 
@@ -197,12 +197,6 @@
                     {/if}
                     {$_('storage.limit.save')}
                 </button>
-                {#if limitState === 'saved'}
-                    <span class="inline-flex items-center gap-1.5 text-sm text-lf-success">
-                        <CircleCheck size={16} aria-hidden="true" />
-                        {$_('storage.limit.saved')}
-                    </span>
-                {/if}
             </div>
             <p class="text-xs text-lf-muted">{$_('storage.limit.hint')}</p>
             {#if locked}
