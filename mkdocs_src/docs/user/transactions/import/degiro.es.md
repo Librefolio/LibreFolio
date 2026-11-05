@@ -43,7 +43,7 @@ DEGIRO registra una conversión como dos filas: el dinero que sale de una divisa
 
 ## 🚫 Qué no se importa
 
-Cada tipo que se indica a continuación aparece en un aviso durante la importación, con sus filas originales, para que puedas comprobarlas:
+Cada tipo que se indica a continuación aparece en un aviso ámbar durante la importación, con sus filas originales, para que puedas comprobarlas. Cada aviso tiene un enlace para abrir una issue en GitHub, por si las filas son movimientos reales que LibreFolio debería leer:
 
 - **Operaciones corporativas** (cambios de producto o ISIN, desdoblamientos, fusiones, dividendos en acciones y sus liquidaciones en efectivo), filas de **fondos del mercado monetario** y **devoluciones de capital**: LibreFolio no las importa automáticamente; comprueba las posiciones a las que afectan.
 - **Filas de retiro de flatex** (`flatex Withdrawal`): LibreFolio no puede saber si el dinero salió realmente de tu cuenta. Si lo hizo, añade el retiro a mano.

@@ -43,7 +43,7 @@ DEGIRO registra una conversione come due righe: il denaro che esce da una valuta
 
 ## 🚫 Cosa non viene importato
 
-Ogni tipo elencato di seguito viene segnalato in un avviso durante l'importazione, con le sue righe originali, così puoi verificarle:
+Ogni tipo elencato di seguito viene segnalato in un avviso ambra durante l'importazione, con le sue righe originali, così puoi verificarle. Ogni avviso ha un link per aprire una issue su GitHub, nel caso in cui le righe siano movimenti reali che LibreFolio dovrebbe leggere:
 
 - **Operazioni societarie** (cambi di prodotto o ISIN, split, fusioni, dividendi in azioni e i relativi regolamenti in contanti), righe di **fondi monetari** e **rimborsi di capitale**: LibreFolio non li importa automaticamente — controlla le posizioni che interessano.
 - **Righe di prelievo flatex** (`flatex Withdrawal`): LibreFolio non può stabilire se il denaro ha davvero lasciato il tuo conto. Se è successo, aggiungi il prelievo manualmente.

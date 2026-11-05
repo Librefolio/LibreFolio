@@ -43,7 +43,7 @@ DEGIRO enregistre une conversion en deux lignes : l'argent quittant une devise e
 
 ## 🚫 Ce qui n'est pas importé
 
-Chaque type ci-dessous est listé dans un avertissement lors de l'import, avec ses lignes d'origine, afin que vous puissiez les vérifier :
+Chaque type ci-dessous est listé dans un avertissement ambre lors de l'import, avec ses lignes d'origine, afin que vous puissiez les vérifier. Chaque avertissement contient un lien pour ouvrir une issue sur GitHub, au cas où les lignes seraient de vrais mouvements que LibreFolio devrait lire :
 
 - **Opérations sur titres** (changements de produit ou d'ISIN, divisions, fusions, dividendes en actions et leurs règlements en espèces), lignes de **fonds monétaires** et **remboursements de capital** : LibreFolio ne les importe pas automatiquement — vérifiez les positions concernées.
 - **Lignes de retrait flatex** (`flatex Withdrawal`) : LibreFolio ne peut pas déterminer si l'argent a réellement quitté votre compte. Si c'est le cas, ajoutez le retrait manuellement.
