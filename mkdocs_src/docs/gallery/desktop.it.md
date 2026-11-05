@@ -483,6 +483,22 @@ Sfoglia i file visivamente con anteprime delle immagini in layout a griglia.
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vista griglia file statici">
 </div>
 
+### 💾 Backup (Admin)
+
+Gli amministratori vedono i backup conservati e impostano la pulizia automatica.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Backup (Admin)">
+</div>
+
+### 📊 Spazio occupato (Admin)
+
+Una barra mostra come si divide lo spazio fra database, file caricati, report e backup, rispetto al limite impostato.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="storage-bar" alt="Spazio occupato (Admin)">
+</div>
+
 ### 📋 Report broker (BRIM)
 
 Importa e gestisci i report delle transazioni del broker.
