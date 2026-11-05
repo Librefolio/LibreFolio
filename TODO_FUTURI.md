@@ -561,6 +561,15 @@ giorno dopo una cedola, a metà ciclo, fra due date di prezzo, e il caso BTP (pr
 float. Se mai si fa: una `SafeORJSONResponse` che passa da `jsonable_encoder` prima di `orjson.dumps()`, con test di output
 identico sugli endpoint `SafeDecimal` e un benchmark su dati reali.
 
+## 💡 Idee sparse (dopo aver visto i concorrenti)
+
+- Provider di prezzo: oltre al CSS selector (da rinominare «web page»), anche JSON API, tabella HTML e CSV.
+- Provider AI: oltre a Ollama e OpenRouter, gli altri per l'installazione locale.
+- Addon che aggiungono tab al frontend, con un marketplace.
+- Nuovi tab di analisi in Dashboard e broker, da definire.
+- «Portafogli»: gruppi di broker, di asset o di entrambi. Si lega a #52, nel «Profilo dei dati dell'asset».
+- Pagine di dettaglio per analizzare trade e fee.
+
 ## 💱 Settlement multicurrency ed esposizione — feedback 2026-09-08
 
 **Status**: FUTURO — progettazione separata, non autorizzata come hotfix del parser.
@@ -613,9 +622,6 @@ o approvate; conservare collegamento alla motivazione e alla riga originaria.
 **Dipendenza:** chiarire il modello F-MC-1 e la distinzione fra ricostruzione documentata
 e simulazione assistita. Nessuna generazione FX automatica autorizzata dai bug E1-E4.
 
-### F-MC-3 — Valuta base dell'asset ed esposizione valutaria economica
-
-Spostata il 18/10/2026 nella voce «🧬 Profilo dei dati dell'asset», in cima al file.
 
 ## Stimatori robusti di covarianza per la matrice di correlazione (Riskfolio)
 
@@ -732,21 +738,15 @@ raggiungibile», mai «irraggiungibile». I 110 siti ora loggano: conviene parti
 2. `except ValueError` in `portfolio_optimization/plugin.py` ha ancora il difetto latente corretto in `simulation/plugin.py`:
    avvolge tutta la costruzione della richiesta, quindi anche un errore del motore diventa «parametri non validi».
 
-# Idea interessante presa da un utente:
+## 💱 L'effetto del cambio sul rendimento (FX Impact)
 
-3. L'effetto del cambio sul rendimento (FX Impact)
-   "Related to my previous feature is how much FX rates change the balance, again not really that import but just interesting to see."
+**Origine**: [discussione #24](https://github.com/Librefolio/LibreFolio/discussions/24#discussioncomment-18584139), un utente
+curioso di vedere quanto del guadagno dipende dal titolo e quanto dal cambio. Non prioritario.
 
-Gli piacerebbe vedere (anche solo per curiosità) quanto del suo guadagno/perdita dipende dal titolo in sé e quanto dalle fluttuazioni del tasso di cambio (il classico spacchettamento tra capital gain e impatto valutario). Ma ribadisce che non è prioritario.
-Discorso originale qui: https://github.com/Librefolio/LibreFolio/discussions/24#discussioncomment-18584139
+**Cosa c'è già**: il tooltip dei KPI della Dashboard separa la variazione non realizzata in effetto dell'asset ed effetto del
+cambio, valuta per valuta (`period_unrealized_breakdown`), e la cassa ha la riga `fx_on_cash`.
 
----
-
-# Feedback del developer — idee e migliorie (lista 06–26/09, smistata il 30/09/2026)
-
-Le voci qui sotto vengono da una lista di appunti del developer. I **difetti** della stessa lista
-sono stati assegnati a un workstream di sviluppo (K, piano dei seguiti di review); qui restano solo
-le migliorie e le funzioni nuove.
+**Cosa resta**: il realizzato, e una vista dedicata invece del solo tooltip.
 
 ## 🤝 Condivisione dei broker — la stessa fetta per più utenti
 
@@ -817,16 +817,11 @@ non serve e i primi 3 sono sufficienti»). Si lega al task notturno qui sopra: p
 
 ## 🔥 Strumenti — calcolatore FIRE e riuso del motore matematico
 
-**Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+**Data aggiunta**: 30 Settembre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
 
-### Contesto
-
-La pagina **Strumenti** esiste: è il posto naturale per un **calcolatore FIRE**. Se il motore
-matematico dei tool (quello del PAC) si presta, può servire anche ad altri calcolatori.
-
-### Azione Futura
-
-Un plugin Tool nuovo (skill `tool-plugin`), con contratto Pydantic e UI compilata, come il PAC.
+Un plugin Tool nuovo nella pagina Strumenti (skill `tool-plugin`), con contratto Pydantic e UI compilata, come il PAC. Non solo
+da oggi al futuro: anche con una data di inizio fissata, per vedere la differenza fra andamento teorico e reale. Se il motore
+matematico del PAC si presta, può servire ad altri calcolatori.
 
 ## 📥 BRIM — riconoscere all'import una posizione chiusa (Directa, CSV generico)
 
