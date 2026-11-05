@@ -411,7 +411,8 @@
           "drawdownAtRisk": "Caída en riesgo ({confidence})",
           "conditionalDrawdownAtRisk": "Media más allá de ese umbral",
           "ulcerIndex": "Índice de Ulcer {value}",
-          "ulcerIndexHint": "profundidad cuadrática media bajo el pico: cuanto más bajo, más tranquilo"
+          "ulcerIndexHint": "profundidad cuadrática media bajo el pico: cuanto más bajo, más tranquilo",
+          "worstMonth": "El peor mes realmente vivido"
         },
         "underwater": {
           "title": "Tiempo bajo el pico",
@@ -424,7 +425,8 @@
           "noCut": "No se ha publicado ningún umbral para esta ventana.",
           "empty": "No hay distribución de rendimientos para este periodo.",
           "bin": "{range}: {count, plural, one {# día} other {# días}} ({share})"
-        }
+        },
+        "period": "del {from} al {to}"
       },
       "l2": {
         "title": "¿Estoy tan diversificado como creo?",

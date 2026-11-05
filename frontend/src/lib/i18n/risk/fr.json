@@ -411,7 +411,8 @@
           "drawdownAtRisk": "Repli à risque ({confidence})",
           "conditionalDrawdownAtRisk": "Moyenne au-delà de ce seuil",
           "ulcerIndex": "Indice d'Ulcer {value}",
-          "ulcerIndexHint": "profondeur quadratique moyenne sous le sommet : plus bas, plus calme"
+          "ulcerIndexHint": "profondeur quadratique moyenne sous le sommet : plus bas, plus calme",
+          "worstMonth": "Le pire mois réellement vécu"
         },
         "underwater": {
           "title": "Temps passé sous le sommet",
@@ -424,7 +425,8 @@
           "noCut": "Aucun seuil publié pour cette fenêtre.",
           "empty": "Aucune distribution des rendements pour cette période.",
           "bin": "{range} : {count, plural, one {# jour} other {# jours}} ({share})"
-        }
+        },
+        "period": "du {from} au {to}"
       },
       "l2": {
         "title": "Suis-je aussi diversifié que je le crois ?",

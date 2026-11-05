@@ -411,7 +411,8 @@
           "drawdownAtRisk": "Drawdown at risk ({confidence})",
           "conditionalDrawdownAtRisk": "Average beyond that threshold",
           "ulcerIndex": "Ulcer index {value}",
-          "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer"
+          "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer",
+          "worstMonth": "The worst month actually seen"
         },
         "underwater": {
           "title": "Time spent below the peak",
@@ -424,7 +425,8 @@
           "noCut": "No threshold published for this window.",
           "empty": "No return distribution available for this period.",
           "bin": "{range}: {count, plural, one {# day} other {# days}} ({share})"
-        }
+        },
+        "period": "from {from} to {to}"
       },
       "l2": {
         "title": "Am I as diversified as I think?",
