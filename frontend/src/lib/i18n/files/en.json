@@ -130,6 +130,9 @@
     "errors": {
       "load": "The space used could not be loaded. Try again."
     },
-    "retry": "Try again"
+    "retry": "Try again",
+    "advanced": {
+      "title": "Advanced"
+    }
   }
 }

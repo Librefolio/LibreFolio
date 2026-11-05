@@ -130,6 +130,9 @@
     "errors": {
       "load": "L'espace occupé n'a pas pu être chargé. Réessayez."
     },
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "advanced": {
+      "title": "Avancé"
+    }
   }
 }

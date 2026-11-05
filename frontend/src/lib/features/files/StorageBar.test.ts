@@ -714,3 +714,20 @@ describe('StorageBar — the bar and its legend are linked (K-2)', () => {
         expect(active('uploads')).toEqual(['false', 'false']);
     });
 });
+
+// =====================================================================================================================
+// K-2 (developer, 05/11) — the limit sits in a closed «Advanced» panel under the bar
+// =====================================================================================================================
+describe('StorageBar — the limit is in a closed «Advanced» panel', () => {
+    it('the panel is there, starts closed, is named by its key, and holds the field, the save button and the hint', async () => {
+        await mountReady(LIMIT_USAGE());
+
+        const panel = screen.getByTestId('storage-advanced') as HTMLDetailsElement;
+        expect(panel.open).toBe(false);
+        expect(panel).toHaveAttribute('data-open', 'false');
+        expect(screen.getByTestId('storage-advanced-toggle')).toHaveTextContent('storage.advanced.title');
+        expect(panel).toContainElement(limitField());
+        expect(panel).toContainElement(saveButton());
+        expect(panel).not.toContainElement(screen.getByTestId('storage-bar-track'));
+    });
+});

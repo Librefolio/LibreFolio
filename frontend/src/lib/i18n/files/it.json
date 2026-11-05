@@ -130,6 +130,9 @@
     "errors": {
       "load": "Non è stato possibile caricare lo spazio occupato. Riprova."
     },
-    "retry": "Riprova"
+    "retry": "Riprova",
+    "advanced": {
+      "title": "Avanzate"
+    }
   }
 }
