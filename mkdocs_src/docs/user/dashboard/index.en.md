@@ -67,7 +67,9 @@ The time range, the broker filter and the target currency stay as you set them f
 
 !!! note "Sharing affects these numbers"
 
-    The dashboard counts only the brokers you **own** with a share above 0%, and every amount from them is **scaled by your ownership share**: an Owner with a 50% share sees half of that broker's value, income, and P&L counted in the totals. Brokers where you are an **Editor** or a **Viewer** — who always carry a 0% share by rule — are left out, like those you own with a 0% share: they are missing from the totals, from the broker filter, from the Positions tab (Period view and lots panel included), from the Risk tab and from the Transactions tab. You see them on their own broker page, where Editors and Viewers get the broker's **full** amounts. See [Broker Sharing](../brokers/sharing.md) for details.
+    The dashboard counts only the brokers you **own** with a share above 0%, and every amount from them is **scaled by your ownership share**: an Owner with a 50% share sees half of that broker's value, income, and P&L counted in the totals. Brokers where you are an **Editor** or a **Viewer** — who always carry a 0% share by rule — are left out, like those you own with a 0% share: they are missing from the totals, from the broker filter, from the Positions tab (Period view and lots panel included), from the Risk tab and from the Transactions tab. You see them on their own broker page, which counts the broker **whole** for every role. See [Broker Sharing](../brokers/sharing.md) for details.
+
+A broker's page is this same Dashboard on one broker, with that broker's own **Info** tab: see [The broker page is the Dashboard on one broker](../brokers/index.md#broker-page-is-dashboard).
 
 ---
 

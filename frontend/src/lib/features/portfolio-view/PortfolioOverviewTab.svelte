@@ -24,21 +24,23 @@
         brokerIds: number[] | undefined;
         /** The chart asks for the synthetic P&L candles when the user first opens that submode. */
         onRequestPnlCandles: () => void;
+        /** The tab's test ids: the Dashboard's and a broker's pages keep their own (`portfolioScopeProfile`). */
+        testIds: {overviewTab: string; cashBalances: string; cashBalance: string};
     }
 
-    let {snapshot, displayCurrency, brokerIds, onRequestPnlCandles}: Props = $props();
+    let {snapshot, displayCurrency, brokerIds, onRequestPnlCandles, testIds}: Props = $props();
 
     const summaryLoading = $derived(snapshot.reportLoading && !snapshot.summary);
     const historyLoading = $derived(snapshot.reportLoading && snapshot.history.length === 0);
 </script>
 
-<div class="space-y-4" data-testid="dashboard-overview-tab">
+<div class="space-y-4" data-testid={testIds.overviewTab}>
     <KpiSection summary={snapshot.summary} history={snapshot.history} loading={summaryLoading} {displayCurrency} />
 
     <!-- Cash Balances — same position as broker detail (right after the KPIs), using
          summary.cash_balances which already aggregates by currency across all brokers
          in scope (all accessible brokers, or the broker-filter subset if active). -->
-    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="dashboard-cash-balances">
+    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid={testIds.cashBalances}>
         <div class="flex items-center space-x-2 text-lf-secondary mb-4">
             <Wallet size={20} />
             <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
@@ -47,7 +49,7 @@
         {#if snapshot.summary?.cash_balances && snapshot.summary.cash_balances.length > 0}
             <div class="flex flex-wrap gap-2">
                 {#each [...snapshot.summary.cash_balances].sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount)) as balance}
-                    <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary" data-testid="dashboard-cash-balance">
+                    <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary" data-testid={testIds.cashBalance}>
                         {@html formatCurrencyAmountHtml(parseFloat(balance.amount), balance.code)}
                     </span>
                 {/each}

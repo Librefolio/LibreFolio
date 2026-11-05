@@ -18,7 +18,20 @@ beforeAll(async () => {
     await setupI18n();
 });
 
-const props = (overrides: Record<string, unknown> = {}) => ({canAsk: false, brokersReady: false, ownedBrokerIds: [] as number[], dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', summary: null, brokerFilterActive: false, refreshVersion: 0, onsynced: () => {}, ...overrides});
+const props = (overrides: Record<string, unknown> = {}) => ({
+    testId: 'dashboard-risk-tab',
+    canAsk: false,
+    brokersReady: false,
+    ownedBrokerIds: [] as number[],
+    dateStart: '2026-01-01',
+    dateEnd: '2026-06-30',
+    targetCurrency: 'EUR',
+    summary: null,
+    brokerFilterActive: false,
+    refreshVersion: 0,
+    onsynced: () => {},
+    ...overrides,
+});
 
 describe('PortfolioRiskTab', () => {
     it('mounts the panel on the owned brokers once they are known', () => {
@@ -41,5 +54,20 @@ describe('PortfolioRiskTab', () => {
         render(PortfolioRiskTab, props());
         expect(screen.getByTestId('dashboard-risk-loading')).toBeInTheDocument();
         expect(mocks.panel).not.toHaveBeenCalled();
+    });
+
+    it('asks the risk of one broker, whole, on a broker page — even before any owned broker is known', () => {
+        mocks.panel.mockClear();
+        const summary = {net_worth: {amount: '1234.5'}, holdings: [{asset_id: 5}, {asset_id: 5}, {asset_id: 6}]};
+        render(PortfolioRiskTab, props({testId: 'broker-risk-tab', broker: {id: 7}, summary}));
+        expect(screen.getByTestId('broker-risk-tab')).toBeInTheDocument();
+        expect(screen.queryByTestId('dashboard-risk-loading')).toBeNull();
+        expect(mocks.panel).toHaveBeenCalledTimes(1);
+        const panelProps = mocks.panel.mock.calls[0][1] as Record<string, unknown>;
+        expect(panelProps.scope).toEqual({kind: 'portfolio', broker_ids: [7]});
+        expect(panelProps.wholeBroker).toBe(true);
+        expect(panelProps.internalSubset).toBe(true);
+        expect(panelProps.scopeValue).toBe(1234.5);
+        expect(panelProps.assetIds).toEqual([5, 6]);
     });
 });

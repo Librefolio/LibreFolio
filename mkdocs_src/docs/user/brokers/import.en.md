@@ -1,12 +1,12 @@
 # 📥 Broker Transactions
 
-The **Transactions** tab of a broker lists all its transactions, newest first. It always shows the broker's whole history: the date range in the toolbar does not filter it.
+The **Transactions** tab of a broker lists its transactions, newest first, for the date range chosen in the toolbar. To see the whole history, choose **All** there.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Broker Transactions Tab">
 </div>
 
-Above the list you find **Uploaded Reports**, **View in Transactions** and the column picker. Owners and Editors also get **Import** and **Add Transaction**.
+Above the list you find **Uploaded Reports**, **View in Transactions** and the column picker. Owners and Editors also get **Import**, **Add Transaction** and, once you tick rows, the bar to edit, clone or delete them. A Viewer sees the table, the uploaded reports and **View in Transactions**.
 
 ---
 
@@ -23,7 +23,8 @@ Nothing is saved before **Save All**: until then you can add more rows, change t
 ## 🔎 Open, edit or delete transactions
 
 - **Double-click** a row to open it read-only.
-- To edit, clone or delete rows, click **View in Transactions**: the [Transactions](../transactions/index.md) page opens, filtered on this broker and on the column filters you set here.
+- Owners and Editors can edit, clone or delete rows here: use the actions of a row, or tick rows and use the bar above the table.
+- **View in Transactions** opens the [Transactions](../transactions/index.md) page, filtered on this broker, on the period of the toolbar and on the column filters you set here.
 
 ---
 

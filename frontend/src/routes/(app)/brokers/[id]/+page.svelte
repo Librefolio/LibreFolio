@@ -1,164 +1,122 @@
 <script lang="ts">
     /**
-     * Broker Detail Page — header + overview/positions/transactions tabs
+     * Broker Detail Page — the Dashboard's page with the broker filter already set (Y6-7, delivery 3).
+     *
+     * The body — toolbar, report, Overview, Positions (with the lot detail), Risk, Transactions — is `PortfolioView` with
+     * `scope: {kind: 'broker', brokerId}`: the same page the Dashboard mounts, counting this broker whole. What is the broker's
+     * own is here and goes in as snippets: its identity (header), the Info tab (details and sharing), the Edit and Share
+     * buttons, and what writes — New, Import, the selection's bulk actions, the bulk workspace, the import history — for who
+     * owns or edits the broker.
      */
-    import {get} from 'svelte/store';
-    import {onDestroy, onMount} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import {getEnd, getStart, historyStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, Copy, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, Trash2, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, Copy, Crown, ExternalLink, Eye, FileText, Pencil, Plus, RefreshCw, Share2, Trash2, Upload, Users} from 'lucide-svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/features/brokers/BrokerImportFilesModal.svelte';
     import BrokerSharingPanel from '$lib/features/brokers/BrokerSharingPanel.svelte';
-    import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
-    import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
-    import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
-    import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
-    import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
-    import {createPortfolioData} from '$lib/features/portfolio-view/portfolioData';
-    import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
-    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
-    import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
+    import PortfolioView from '$lib/features/portfolio-view/PortfolioView.svelte';
     import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
-    import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
-    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
-    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
+    import TransactionBulkModal, {type WorkspaceIntent} from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {txStoreSetAll, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
     import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
-    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
+    import type {TXReadItem} from '$lib/features/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '$lib/features/transactions/filterState';
-    import {
-        invalidate,
-        portfolioError,
-        type AllocationHistoryDimensions,
-        type PortfolioHistoryPoint,
-        type PortfolioRange,
-        type PortfolioMwrrLinePoint,
-        type PortfolioSummary,
-        type PositionsContribution,
-        type PortfolioIncomeHistorySeries,
-        type PortfolioCostHistorySeries,
-        type PortfolioDepositHistorySeries,
-        type PortfolioAcquisitionFundingSeries,
-        type PortfolioPnlCandleSeries,
-    } from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
-    import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
-    import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
-    import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
+    import {buildTabUrl} from '$lib/utils/url/tabUrl';
     import {goto} from '$app/navigation';
     import type {BrokerSummary} from '$lib/types';
-    import {parseCurrencyAmount, safeString} from '$lib/types';
+    import {safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
-    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
-    import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
-    import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
-    import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
-    import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
-    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
-    const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
+    let {data}: {data: {brokerId: number}} = $props();
 
-    export let data: {brokerId: number};
+    let broker = $state<BrokerSummary | null>(null);
+    let loading = $state(true);
+    let error = $state<string | null>(null);
 
-    let broker: BrokerSummary | null = null;
-    let loading = true;
-    let error: string | null = null;
-
-    // The report, the contribution and the candles of this broker, and the way they are asked, are the portfolio data
-    // controller's (Y6-7): this page gives it its scope and reads what it shows through `$portfolioData`. The brokers are
-    // counted whole (MF6-3, D4): the figures here are the broker's, not the owner's share of them, as the Transactions are.
-    let pageAlive = true;
-    const portfolioData = createPortfolioData({
-        scope: () => ({brokerIds: [data.brokerId], start: historyStart(isMaxPending, dateFrom), end: dateTo || undefined, currency: targetCurrency || baseCurrency, fullShare: true}),
-        canAsk: () => true,
-        positionsReady: () => broker !== null,
-        alive: () => pageAlive,
-        wantsBrokerPnlHistory: () => false,
-        rollingPeriod: () => ({start: dateFrom || undefined, end: dateTo || undefined}),
-        onFirstDay: (day) => {
-            if (!isMaxPending || !day) return;
-            dateFrom = day;
-            displayDateFrom = dateFrom;
-            isMaxPending = false;
-        },
-        onRefreshFailed: () => toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`),
-        initialLoading: true,
-    });
-    onDestroy(() => {
-        pageAlive = false;
-        portfolioData.dispose();
-    });
-    let reportLoading = true;
-    let portfolioSummary: PortfolioSummary | null = null;
-    let portfolioHistory: PortfolioHistoryPoint[] = [];
-    /** The days the report's step series cover, and the history's MWRR as true points (D-P4). */
-    let reportRange: PortfolioRange | null = null;
-    let mwrrLine: PortfolioMwrrLinePoint[] = [];
-    let incomeHistory: PortfolioIncomeHistorySeries | undefined = undefined;
-    let costHistory: PortfolioCostHistorySeries | undefined = undefined;
-    let depositHistory: PortfolioDepositHistorySeries | undefined = undefined;
-    let acquisitionFunding: PortfolioAcquisitionFundingSeries | undefined = undefined;
-    let pnlCandles: PortfolioPnlCandleSeries | null = null;
-    let pnlCandlesLoading = false;
-    let allocationHistoryFromReport: AllocationHistoryDimensions | null = null;
-    let positionsContribution: PositionsContribution | null = null;
-    let contributionLoading = false;
-    $: ({
-        summary: portfolioSummary,
-        history: portfolioHistory,
-        range: reportRange,
-        mwrrLine,
-        incomeHistory,
-        costHistory,
-        depositHistory,
-        acquisitionFunding,
-        pnlCandles,
-        pnlCandlesLoading,
-        allocationHistory: allocationHistoryFromReport,
-        positionsContribution,
-        contributionLoading,
-        reportLoading,
-    } = $portfolioData);
-    // The per-position return chart (Y5-2) and its Rolling view (FB-15): the controller owns them and asks again when the
-    // scope or `refreshVersion` moves. The statement lists what the scope reads, for the legacy compiler to run it again.
-    const positionsSeriesCtl = portfolioData.positionsSeries;
-    const positionsRollingCtl = portfolioData.positionsRolling;
-    $: {
-        void [data.brokerId, dateFrom, dateTo, isMaxPending, targetCurrency, baseCurrency, broker];
-        portfolioData.syncPositions(refreshVersion);
-    }
-
-    let editModalOpen = false;
-    let importFilesModalOpen = false;
-    let txViewOpen = false;
-    let txViewItems: FormModalItems | null = null;
+    let view = $state<PortfolioView>();
+    let editModalOpen = $state(false);
+    let importFilesModalOpen = $state(false);
 
     /** Bulk workspace (create / import) — same engine as /transactions, pre-populated
      *  with this page's broker (still editable, never skips a step). */
-    let bulkOpen = false;
-    let bulkIntent: import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent | undefined = undefined;
+    let bulkOpen = $state(false);
+    let bulkIntent = $state<WorkspaceIntent | undefined>(undefined);
+
+    /** The rows ticked in the Transactions tab; the bar below shows only to who can edit this broker. */
+    let txSelectedRows = $state<TXReadItem[]>([]);
+    let txTable = $state<TransactionsTable | undefined>(undefined);
+    let txColumnFilters = $state<Record<string, FilterValue>>({});
+
+    const canEdit = $derived(broker ? ['OWNER', 'EDITOR'].includes(safeString(broker.user_role) || '') : false);
+
+    /** The broker as the panels name it. */
+    const panelBroker = $derived<BrokerLike | null>(
+        broker
+            ? {
+                  id: broker.id,
+                  name: broker.name,
+                  icon_url: safeString(broker.icon_url),
+                  portal_url: safeString(broker.portal_url),
+                  default_import_plugin: safeString(broker.default_import_plugin),
+              }
+            : null,
+    );
+
+    /** Deep-link to the full Transactions page pre-filtered by this broker, the period on screen (the tab keeps to it) and
+     *  whatever header column filters are currently active in the embedded table.
+     *  Navigating via a plain link registers on the nav stack, so browser Back
+     *  returns to this exact broker view (see navigationStore.goBack). */
+    function transactionsPageUrl(period: {start: string | undefined; end: string | undefined}): string {
+        if (!broker) return '/transactions';
+        return buildTransactionsFiltersUrl({...(applyTransactionColumnFilters({}, txColumnFilters) ?? {}), date_start: period.start, date_end: period.end, broker_id: broker.id});
+    }
+
+    async function loadBroker() {
+        loading = true;
+        error = null;
+
+        try {
+            // The cash and holdings of the user's today: a transaction dated later counts in none of them (W-B5)
+            broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}, queries: {as_of: todayIso()}})) as BrokerSummary;
+        } catch (e) {
+            console.error('Failed to load broker:', e);
+            error = $_('brokers.loadFailed');
+        } finally {
+            loading = false;
+        }
+    }
+
+    // The first load (the broker, the report, the two lists) is held by the view; the contextual guide starts after it.
+    function handleFirstLoaded() {
+        if (broker) onboardingGuide.maybeStartContextual('broker_detail_guide');
+    }
+
+    function handleBack() {
+        goBack('/brokers');
+    }
+
+    function openInfoTab() {
+        void goto(buildTabUrl($page.url, 'info'), {replaceState: true, noScroll: true});
+    }
+
+    async function handleUpdated() {
+        await pageBusy.track('broker-reload', loadBroker);
+    }
+
+    // ---- what writes -------------------------------------------------------------------------------------------------
 
     function openImportTransactions() {
         bulkIntent = {action: 'import'};
@@ -171,21 +129,14 @@
     }
 
     /** The bulk workspace from a selection or a row of the Transactions tab (FB-17), as the Transactions page opens it. */
-    function openBulkIntent(intent: import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent) {
+    function openBulkIntent(intent: WorkspaceIntent) {
         bulkIntent = intent;
         bulkOpen = true;
     }
 
-    /** The rows ticked in the Transactions tab; the bar below shows only to who can edit this broker. */
-    let txSelectedRows: TXReadItem[] = [];
-
-    function handleTxSelectionChange(rows: TXReadItem[]) {
-        txSelectedRows = rows;
-    }
-
     /** Empty both selections: the table's own (the checkboxes) and this page's (the bar). */
     function clearTxSelection() {
-        txTableComponent?.getTableRef()?.clearSelection();
+        txTable?.getTableRef()?.clearSelection();
         txSelectedRows = [];
     }
 
@@ -211,309 +162,31 @@
         if (rows) openBulkIntent({action: 'delete', txIds: rows.map((r) => r.id)});
     }
 
-    /** The workspace saved something: the rows the selection pointed at may have changed or gone, and the tab reloads. */
+    /** The workspace saved something: the rows the selection pointed at may have changed or gone, and the page asks again. */
     async function handleBulkCommitted() {
         clearTxSelection();
-        await handleRefresh();
+        await view?.refresh();
     }
 
-    $: txBulkActions = [
+    const txBulkActions = $derived([
         {id: 'edit', icon: Pencil, label: () => $_('common.edit'), onClick: editSelectedTx},
         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone'), onClick: cloneSelectedTx},
         {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger' as const, onClick: deleteSelectedTx},
-    ];
+    ]);
 
-    /** AI export state — dropdown open/position handled internally by AiExportMenu. */
-    let aiExportCompatibility: AiExportCatalogCompatibilityResult = DISABLED_AI_EXPORT_COMPATIBILITY;
-    let aiExportCatalogLoading = true;
-    let aiExportCatalogFailed = false;
-    let aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
-
-    // Transactions tab — full paginated history (not just "recent 10").
-    let txMainRows: TXReadItem[] = [];
-    let txPartnerRows: TXReadItem[] = [];
-    let txEventTooltipMap: Map<number, AssetEvent> = new Map();
-    let txLoading = false;
-    let txLoaded = false;
-    let txCurrentPage = 1;
-    let txPageSize = 50;
-    let txTableComponent: TransactionsTable | undefined;
-    let txColumnFilters: Record<string, FilterValue> = {};
-
-    /** Deep-link to the full Transactions page pre-filtered by this broker plus
-     *  whatever header column filters are currently active in the embedded table.
-     *  The broker-detail transactions tab loads by broker only (it ignores the
-     *  toolbar date range), so only broker + column filters are carried over.
-     *  Navigating via a plain link registers on the nav stack, so browser Back
-     *  returns to this exact broker view (see navigationStore.goBack). */
-    $: transactionsPageUrl = broker ? buildTransactionsFiltersUrl({...(applyTransactionColumnFilters({}, txColumnFilters) ?? {}), broker_id: broker.id}) : '/transactions';
-
-    const BROKER_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni', 'info'] as const;
-    type BrokerTabId = (typeof BROKER_TAB_IDS)[number];
-    const DEFAULT_BROKER_TAB: BrokerTabId = 'panoramica';
-
-    function isBrokerTabId(tabId: string): tabId is BrokerTabId {
-        return BROKER_TAB_IDS.includes(tabId as BrokerTabId);
-    }
-
-    let activeTab: BrokerTabId = DEFAULT_BROKER_TAB;
-    let brokerTabs = [];
-    let panelBrokers: BrokerLike[] = [];
-    let allBrokersForTable: BrokerLike[] = [];
-    $: allBrokersForTable = ($brokerStoreVersion, getAllBrokers());
-    let sharingHasChanges = false; // bound from BrokerSharingPanel (Info tab), for future use (e.g. unsaved-changes guard)
-
-    /** FIFO lots analysis panel (Posizioni tab) — state mirrors `?asset=<id>` in the URL so it's
-     *  bookmarkable/shareable and survives browser back/forward (see plan_ui_broker_holdings.md
-     *  §1ter/§2). Opened by a single click on a row/tile/bar via PositionsPanel's onAnalyze;
-     *  double-click still navigates to asset detail, unchanged. */
-    let activeAssetId: number | null = null;
-    $: {
-        const paramAssetId = getAssetPanelAssetId($page.url.searchParams);
-        if ((paramAssetId ?? null) !== activeAssetId) activeAssetId = paramAssetId ?? null;
-    }
-    $: activeTab = getResolvedTabParam($page.url.searchParams, BROKER_TAB_IDS, DEFAULT_BROKER_TAB);
-
-    /** Reactive asset info for the open panel. Depending on `$assetStoreVersion` re-evaluates once the
-     *  async asset cache resolves, so on a hard reload (F5) the title/currency fill in instead of
-     *  staying stale (getAssetInfo alone is not reactive to the cache). */
-    $: activeAsset = activeAssetId != null && $assetStoreVersion != null ? getAssetInfo(activeAssetId) : undefined;
-
-    function openAssetPanel(assetId: number) {
-        void goto(buildAssetPanelUrl($page.url, assetId), {replaceState: true, noScroll: true});
-    }
-
-    function closeAssetPanel() {
-        void goto(buildAssetPanelUrl($page.url, null), {replaceState: true, noScroll: true});
-    }
-
-    function handleTabChange(tabId: string) {
-        if (!isBrokerTabId(tabId)) return;
-        activeTab = tabId;
-        void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
-    }
-
-    const initialStart = getStart();
-    const initialEnd = getEnd();
-    let isMaxPending = isMaxSentinel(initialStart);
-    let dateFrom = resolveDateSentinel(initialStart);
-    let dateTo = resolveDateSentinel(initialEnd);
-    let displayDateFrom = isMaxPending ? 'min' : dateFrom;
-    let activePreset: any = isMaxPending ? 'MAX' : null;
-
-    let targetCurrency = get(defaultDisplayCurrency);
-    let targetCurrencyManuallySet = false;
-
-    let canEdit = false;
-    $: canEdit = broker ? ['OWNER', 'EDITOR'].includes(safeString(broker.user_role) || '') : false;
-
-    /** Mirrors the DateRangePicker's own effective 2-row max-width, so the single-item Center
-     *  row below it can be capped to the SAME pixel value when filtersStacked. MUST start
-     *  non-undefined (matches DateRangePicker's own maxWidthTwoRow default, 390) — Svelte
-     *  forbids bind:key={undefined} when the child prop has a declared fallback. */
-    let pickerMaxWidth: number = 390;
-    $: panelBrokers = broker
-        ? [
-              {
-                  id: broker.id,
-                  name: broker.name,
-                  icon_url: safeString(broker.icon_url),
-                  portal_url: safeString(broker.portal_url),
-                  default_import_plugin: safeString(broker.default_import_plugin),
-              },
-          ]
-        : [];
-
-    let baseCurrency = 'EUR';
-    $: baseCurrency = $defaultDisplayCurrency;
-    $: if (!targetCurrencyManuallySet && targetCurrency !== baseCurrency) {
-        const hadLoadedData = portfolioSummary !== null || portfolioHistory.length > 0;
-        targetCurrency = baseCurrency;
-        // Guard with !reportLoading: see brokers/+page.svelte for the race this avoids.
-        if (hadLoadedData && !reportLoading) void pageBusy.track('broker-currency', () => loadOverview(true));
-    }
-
-    $: aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
-
-    $: brokerTabs = [
-        {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica', guideAnchor: 'broker.detail.overview'},
-        {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni', guideAnchor: 'broker.detail.positions'},
-        {id: 'rischio', label: $_('risk.title'), icon: Shield, testId: 'broker-tab-risk'},
-        {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'broker-tab-transazioni', guideAnchor: 'broker.detail.transactions'},
-        {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info', guideAnchor: 'broker.detail.info'},
-    ];
-
-    async function loadAiExportCompatibility() {
-        aiExportCatalogLoading = true;
-        try {
-            aiExportCompatibility = await aiExportCatalogLoader.load();
-            aiExportCatalogFailed = false;
-        } catch {
-            aiExportCatalogFailed = true;
-            toasts.error($_('aiExport.catalogUnavailable'));
-        } finally {
-            aiExportCatalogLoading = false;
-        }
-    }
-
-    function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
-        const loadedBroker = broker;
-        if (!loadedBroker || loadedBroker.id !== data.brokerId) return Promise.reject(new Error('Broker is not loaded'));
-        return prepareAiExport({
-            context: {
-                domain: 'broker',
-                brokerId: loadedBroker.id,
-                snapshotAsOf: dateTo,
-                targetCurrency,
-            },
-            options,
-            compatibility: aiExportCompatibility,
-            translate: (key) => $_(key),
-        });
-    }
-
-    function handleAiExportCopied(result: PreparedAiExport) {
-        const messages = getAiExportSuccessMessages($_, result);
-        toasts.success(messages.copied);
-        toasts.info(messages.privacyNotice);
-    }
-
-    onMount(async () => {
-        void loadAiExportCompatibility();
-        // The first load holds the page's Refresh button (Y11).
-        await pageBusy.track('broker-first-load', () => Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]));
-        if (broker) onboardingGuide.maybeStartContextual('broker_detail_guide');
+    /** What the Transactions tab needs of a page that writes: the actions of the rows show only to who can edit this broker. */
+    const transactionsWriter = $derived({
+        hideActions: !canEdit,
+        onSelectionChange: (rows: TXReadItem[]) => (txSelectedRows = rows),
+        onEditRow: (row: TXReadItem) => openBulkIntent({action: 'edit', txIds: [row.id]}),
+        onCloneRow: (row: TXReadItem) => openBulkIntent({action: 'clone', txIds: [row.id]}),
+        onDeleteRow: (row: TXReadItem) => openBulkIntent({action: 'delete', txIds: [row.id]}),
+        onFiltersChange: (filters: Record<string, FilterValue>) => (txColumnFilters = filters),
+        // The bulk workspace reads the originals of a selected row from the store (FB-17), as the Transactions page fills it.
+        onLoaded: (mainRows: TXReadItem[], partnerRows: TXReadItem[]) => txStoreSetAll(mainRows, partnerRows),
     });
 
-    async function loadBroker() {
-        loading = true;
-        error = null;
-
-        try {
-            // The cash and holdings of the user's today: a transaction dated later counts in none of them (W-B5)
-            broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}, queries: {as_of: todayIso()}})) as BrokerSummary;
-        } catch (e) {
-            console.error('Failed to load broker:', e);
-            error = $_('brokers.loadFailed');
-        } finally {
-            loading = false;
-        }
-    }
-
-    /** Bumped by «Aggiorna»: the risk levels and the lots panel ask again too (E4). */
-    let refreshVersion = 0;
-    // Figures already known when a card mounts appear at their value instead of counting up from 0;
-    // the Risk panel sets its own context for its cards.
-    setTweenHydration(() => portfolioSummary !== null);
-
-    /**
-     * Page cache (E1): the overview of the scope on screen comes from the cache at once — stale or
-     * not — and only a stale or missing one is asked again; a refresh that fails keeps it, with a toast.
-     */
-    function loadOverview(force = false) {
-        return portfolioData.loadAll(force);
-    }
-
-    /**
-     * The P&L candles of THIS broker, asked by GrowthChart when the user first opens the candles submode. `$portfolioData` is
-     * read here for GrowthChart's effect to depend on: the candles on screen and the request on its way (Y-24: the retry
-     * falls due). The broker's own scope — never the Dashboard's, which would draw the whole portfolio under one broker's name.
-     */
-    function loadPnlCandles() {
-        void [$portfolioData.pnlCandles, $portfolioData.pnlCandlesLoading];
-        return portfolioData.loadPnlCandles();
-    }
-
-    function loadContribution() {
-        void [$portfolioData.contributionLoading, $portfolioData.contributionRefreshing, $portfolioData.positionsContribution];
-        return portfolioData.loadContribution();
-    }
-
-    /** Full transaction history for this broker, paginated client-side by
-     *  `<TransactionsTable>` — loaded lazily on first visit to the
-     *  Transazioni tab (not upfront, since a prolific broker could have a
-     *  large history). The broker filter is applied server-side (immediate,
-     *  in the query itself) — `loadPartnerRows`/`loadEventTooltipMap` are
-     *  shared helpers (not internal to `TransactionsTable`, which is a pure
-     *  presentational component and never fetches on its own): they cover
-     *  paired transactions (e.g. FX conversion, transfer) whose other leg
-     *  sits on a different broker and would otherwise be missing from this
-     *  broker-filtered set. */
-    async function loadTransactions(force = false) {
-        if (!broker || (txLoaded && !force)) return;
-        txLoading = true;
-        try {
-            const main = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {broker_id: broker.id}})) as TXReadItem[];
-            txMainRows = main ?? [];
-            const [partner, tooltipMap] = await Promise.all([loadPartnerRows(txMainRows), loadEventTooltipMap(txMainRows)]);
-            txPartnerRows = partner;
-            txEventTooltipMap = tooltipMap;
-            // The bulk workspace reads the originals of a selected row from the store (FB-17), as the Transactions page fills it.
-            txStoreSetAll(txMainRows, txPartnerRows);
-            txLoaded = true;
-        } catch (e) {
-            console.error('Failed to load transactions:', e);
-        } finally {
-            txLoading = false;
-        }
-    }
-
-    // Lazy-load the full transaction history the first time the Transazioni tab is opened.
-    $: if (activeTab === 'transazioni' && broker && !txLoaded && !txLoading) {
-        void pageBusy.track('broker-transactions', () => loadTransactions());
-    }
-
-    function handleBack() {
-        goBack('/brokers');
-    }
-
-    function handleEdit() {
-        editModalOpen = true;
-    }
-
-    function handleDateChange(from: string, to: string) {
-        isMaxPending = isMaxSentinel(from);
-        dateFrom = resolveDateSentinel(from);
-        dateTo = resolveDateSentinel(to);
-        displayDateFrom = isMaxPending ? 'min' : dateFrom;
-        setDateRange(from, to);
-        void pageBusy.track('broker-period', () => loadOverview());
-    }
-
-    async function handleRefresh() {
-        // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
-        portfolioData.resetRetries();
-        requestPortfolioRefresh();
-        refreshVersion += 1;
-        await pageBusy.track('broker-refresh', async () => {
-            await Promise.all([loadBroker(), loadOverview(true)]);
-            if (txLoaded) await loadTransactions(true);
-        });
-    }
-
-    /**
-     * The server caught up on prices and updated something (Z5, Z-13): the stale overview is asked again in
-     * background, without force, and the figures stay until the new ones land. `refreshVersion` and
-     * `requestPortfolioRefresh()` are the user's Refresh (Y11): the risk and lots panels keep their stale answers until
-     * they next load. Run after the dispatch, so every store has marked its answers stale first.
-     */
-    function reloadAfterPriceCatchUp() {
-        // Not busy (Z-18): the page keeps its figures and does not say so for a simple price refresh.
-        void portfolioData.loadAll(false, false, {background: true});
-    }
-    onMount(() =>
-        registerPortfolioMutationListener(`broker-page:${data.brokerId}:prices`, (signal) => {
-            if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
-        }),
-    );
-
-    async function handleUpdated() {
-        await pageBusy.track('broker-reload', loadBroker);
-    }
-
-    async function handleRequestAllocationHistory() {
-        await pageBusy.track('broker-allocation-history', () => loadOverview());
-    }
+    // ---- formatting ----------------------------------------------------------------------------------------------------
 
     // In the interface locale (M-18): the template passes `$uiLocaleStore`, read there so it is tracked.
     function formatDate(dateStr: unknown, locale: string): string {
@@ -538,9 +211,11 @@
     }
 </script>
 
-<div class="space-y-6 text-lf-primary" data-testid="broker-detail-page">
+<PortfolioView bind:this={view} bind:transactionsTable={txTable} scope={{kind: 'broker', brokerId: data.brokerId}} broker={panelBroker} gated={!broker} extraLoad={loadBroker} onFirstLoaded={handleFirstLoaded} {actionsBefore} {header} {gate} {infoTab} {transactionsBar} {transactionsWriter} />
+
+{#snippet header()}
     <div class="flex items-center space-x-4" use:guideAnchor={'broker.detail.header'} data-testid="broker-detail-header">
-        <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
+        <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors" data-testid="broker-back-button" onclick={handleBack} title={$_('common.back')}>
             <ArrowLeft size={20} />
         </button>
 
@@ -582,335 +257,122 @@
             </div>
         {/if}
     </div>
+{/snippet}
 
-    {#if loading && !broker}
-        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
-                <RefreshCw class="text-lf-link animate-spin" size={32} />
-            </div>
-            <p class="text-lf-muted">{$_('common.loading')}</p>
-        </div>
-    {:else if error}
+<!-- What stands in place of the toolbar and the tabs until the broker is loaded: its loading, or its failure. -->
+{#snippet gate()}
+    {#if error}
         <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-danger-line">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-danger-soft rounded-full mb-4">
                 <Briefcase class="text-lf-danger" size={32} />
             </div>
             <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('common.error')}</h3>
             <p class="text-lf-muted mb-4">{error}</p>
-            <button on:click={handleRefresh} class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors">
+            <button onclick={() => view?.refresh()} class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors">
                 {$_('common.retry')}
             </button>
         </div>
-    {:else if broker}
-        <!-- Page-global controls: date range + currency + tabs — persist across ALL tabs
-             (previously the date-range picker only rendered inside the Panoramica tab's
-             content, so it disappeared on Posizioni/Transazioni even though those tabs
-             depend on the same date-scoped data). -->
-        <PageToolbar
-            thresholds={{oneRow: 1000, denseRow: 840, stackFilters: 530, oneColumn: 430, labelHideActions: 270, labelHideTabs: 660}}
-            tabs={brokerTabs}
-            {activeTab}
-            ontabchange={handleTabChange}
-            testId="broker-controls"
-            filterRowTestId="broker-overview-controls"
-            layoutDebugName="brokerDetail"
-        >
-            {#snippet filters({layoutMode, filtersStacked})}
-                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" maxWidthTwoRow={470} {layoutMode} debugName="brokerDetail" onchange={handleDateChange} bind:effectiveMaxWidth={pickerMaxWidth} />
-
-                <!-- Single-item row — no second control to spread against, so just center it
-                     once it's stretched to the DateRangePicker's width (stackFilters/oneColumn —
-                     see filtersStacked in PageToolbar). Un-stretched otherwise, this
-                     justify-around is a no-op (natural content width, already centered visually
-                     by the parent's items-center in row mode) — same visual result as
-                     justify-center for a single item, kept as justify-around for consistency:
-                     it's the standard justification for every capped Centro row (Round 13),
-                     regardless of how many elements it holds. Capped to pickerMaxWidth so this
-                     row's right edge lines up with the picker's instead of the wider column.
-                     Round 13 bugfix: label + selector MUST share one wrapper div — they're a
-                     single semantic unit ("Valuta: [selector]"), not two independent items to
-                     spread apart. Without the wrapper, justify-around treats them as 2 separate
-                     flex children and splits them apart with a wide gap in between (same mistake
-                     dashboard's equivalent row never had — compare its currency-override block). -->
-                <div class="flex items-center justify-around gap-1.5 text-xs text-lf-muted {filtersStacked ? 'w-full' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
-                    <div class="flex items-center gap-1.5">
-                        <span class="whitespace-nowrap">{$_('common.currency')}:</span>
-                        <div class="w-28">
-                            <CurrencySearchSelect
-                                bind:value={targetCurrency}
-                                compact={true}
-                                testId="broker-detail-target-currency"
-                                dropdownPosition="bottom"
-                                placeholder={baseCurrency}
-                                onchange={() => {
-                                    targetCurrencyManuallySet = true;
-                                    void pageBusy.track('broker-currency', () => loadOverview());
-                                }}
-                            />
-                        </div>
-                    </div>
-                </div>
-            {/snippet}
-
-            {#snippet actions({showActionLabels})}
-                {#if canEdit}
-                    <button on:click={handleEdit} class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="broker-edit-button">
-                        <Pencil size={14} />
-                        {#if showActionLabels}<span>{$_('common.edit')}</span>{/if}
-                    </button>
-                {/if}
-                <button
-                    on:click={() => handleTabChange('info')}
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
-                    data-testid="broker-share-button"
-                    title={$_('brokers.sharing.title')}
-                >
-                    <Share2 size={14} />
-                    {#if showActionLabels}<span>{$_('brokers.sharing.title')}</span>{/if}
-                </button>
-                <button
-                    on:click={handleRefresh}
-                    disabled={pageBusy.busy}
-                    data-busy={pageBusy.busy ? 'true' : 'false'}
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
-                    title={$_('dashboard.syncData')}
-                    data-testid="broker-refresh"
-                >
-                    <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
-                    {#if showActionLabels}<span>{$_('dashboard.syncData')}</span>{/if}
-                </button>
-
-                <AiExportMenu
-                    domain="broker"
-                    compatibility={aiExportCompatibility}
-                    memoryKey={`broker:${data.brokerId}`}
-                    defaultSelectionId="broker.review"
-                    disabled={aiExportCatalogLoading || aiExportCatalogFailed || broker?.id !== data.brokerId}
-                    labels={aiExportLabels}
-                    showLabel={showActionLabels}
-                    onprepare={handleAiExport}
-                    oncopied={handleAiExportCopied}
-                    onerror={(error) => toasts.error(getAiExportErrorMessage($_, error))}
-                />
-            {/snippet}
-        </PageToolbar>
-
-        {#if activeTab === 'panoramica'}
-            <div class="space-y-4" data-testid="broker-overview-tab">
-                <KpiSection summary={portfolioSummary} history={portfolioHistory} loading={reportLoading && !portfolioSummary} displayCurrency={targetCurrency || baseCurrency} />
-
-                <!-- Cash Balances — moved up right below the KPIs so the "economic position"
-                     (NAV + Gain/Loss + Cash by currency) is visible together at a glance. -->
-                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-cash-balances">
-                    <div class="flex items-center space-x-2 text-lf-secondary mb-4">
-                        <Wallet size={20} />
-                        <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
-                    </div>
-
-                    {#if broker.cash_balances && broker.cash_balances.length > 0}
-                        <div class="flex flex-wrap gap-2">
-                            {#each [...broker.cash_balances].sort((a, b) => parseCurrencyAmount(b.amount) - parseCurrencyAmount(a.amount)) as balance}
-                                <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary">
-                                    <CurrencyAmount amount={parseCurrencyAmount(balance.amount)} code={balance.code} />
-                                </span>
-                            {/each}
-                        </div>
-                    {:else}
-                        <p class="text-lf-muted text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
-                    {/if}
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                    <div class="lg:col-span-3">
-                        <GrowthChart
-                            history={portfolioHistory}
-                            range={reportRange}
-                            {mwrrLine}
-                            {pnlCandles}
-                            onRequestPnlCandles={() => void pageBusy.join('broker-pnl-candles', loadPnlCandles)}
-                            {incomeHistory}
-                            {costHistory}
-                            {depositHistory}
-                            {acquisitionFunding}
-                            loading={reportLoading && portfolioHistory.length === 0}
-                            {pnlCandlesLoading}
-                            baseCurrency={targetCurrency || baseCurrency}
-                        />
-                    </div>
-                    <AllocationPanel
-                        summary={portfolioSummary}
-                        loading={reportLoading && !portfolioSummary}
-                        displayCurrency={targetCurrency || baseCurrency}
-                        brokerIds={[broker.id]}
-                        currentLanguage={$currentLanguage}
-                        allocationHistory={allocationHistoryFromReport}
-                        onRequestAllocationHistory={handleRequestAllocationHistory}
-                    />
-                </div>
+    {:else}
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-        {:else if activeTab === 'posizioni'}
-            <div data-testid="broker-holdings">
-                <PositionsPanel
-                    summary={portfolioSummary}
-                    contribution={positionsContribution}
-                    loading={reportLoading && !portfolioSummary}
-                    {contributionLoading}
-                    assetsHref="/assets"
-                    brokers={panelBrokers}
-                    onRequestContribution={() => void pageBusy.join('broker-contribution', loadContribution)}
-                    onAnalyze={openAssetPanel}
-                    analyzedAssetId={activeAssetId}
-                    {portfolioHistory}
-                    brokerIds={[broker.id]}
-                    currentLanguage={$currentLanguage}
-                    allocationHistory={allocationHistoryFromReport}
-                    onRequestAllocationHistory={handleRequestAllocationHistory}
-                    positionsSeries={$positionsSeriesCtl.response}
-                    positionsSeriesLoading={$positionsSeriesCtl.loading}
-                    positionsSeriesFailed={$positionsSeriesCtl.failed}
-                    onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, portfolioData.positionsSeriesScope(refreshVersion))}
-                    positionsRolling={$positionsRollingCtl}
-                    onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, portfolioData.positionsRollingScope(refreshVersion))}
-                />
-                <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} {refreshVersion} />
-            </div>
-        {:else if activeTab === 'rischio'}
-            <div data-testid="broker-risk-tab">
-                <!-- Same component as Dashboard, same props, one different scope:
-                     that is the whole difference, and it is what makes the two
-                     pages comparable. `portfolioSummary` here is fetched for this
-                     broker alone, so its net worth answers this exact scope. The page
-                     counts the broker whole (`fullShare`, MF6-3, D4), so `wholeBroker`
-                     makes the risk scope ask the same: stress impacts and scope value
-                     then match the net worth printed above. -->
-                <RiskLevelsPanel
-                    scope={{kind: 'portfolio', broker_ids: [broker.id]}}
-                    dateStart={dateFrom}
-                    dateEnd={dateTo}
-                    targetCurrency={targetCurrency || baseCurrency}
-                    assetIds={[...new Set((portfolioSummary?.holdings ?? []).map((holding) => holding.asset_id))]}
-                    scopeValue={portfolioSummary ? parseFloat(portfolioSummary.net_worth.amount) : null}
-                    title={$_('risk.brokerTitle')}
-                    internalSubset={true}
-                    wholeBroker={true}
-                    {refreshVersion}
-                    onsynced={async () => {
-                        invalidate();
-                        await Promise.all([loadBroker(), loadOverview(true)]);
-                    }}
-                />
-            </div>
-        {:else if activeTab === 'transazioni'}
-            <div class="space-y-4" data-testid="broker-transactions-tab">
-                <div class="flex flex-wrap items-center justify-between gap-2" data-testid="broker-transactions-actions">
-                    <div class="flex items-center gap-2">
-                        <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" on:click={() => (importFilesModalOpen = true)} data-testid="broker-show-import-history">
-                            <FileText size={15} />
-                            <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
-                        </button>
-                        <a href={transactionsPageUrl} class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" title={$_('brokers.viewInTransactionsHint')} data-testid="broker-view-in-transactions">
-                            <ArrowRightLeft size={15} />
-                            <span class="hidden sm:inline">{$_('brokers.viewInTransactions')}</span>
-                        </a>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        {#if canEdit && txSelectedRows.length > 0}
-                            <DataTableToolbar selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
-                        {/if}
-                        <ColumnVisibilityToggle tableRef={txTableComponent?.getTableRef()} />
-                        {#if canEdit}
-                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" on:click={openImportTransactions} data-testid="broker-import-transactions">
-                                <Upload size={15} />
-                                <span class="hidden sm:inline">{$_('common.import')}</span>
-                            </button>
-                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" on:click={openNewTransaction} data-testid="broker-new-transaction">
-                                <Plus size={15} />
-                                <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
-                            </button>
-                        {/if}
-                    </div>
-                </div>
-
-                <div data-testid="broker-transactions">
-                    {#if txLoading && !txLoaded}
-                        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center">
-                            <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
-                        </div>
-                    {:else}
-                        <TransactionsTable
-                            bind:this={txTableComponent}
-                            mainRows={txMainRows}
-                            partnerRows={txPartnerRows}
-                            brokers={allBrokersForTable}
-                            eventTooltipMap={txEventTooltipMap}
-                            currentPage={txCurrentPage}
-                            pageSize={txPageSize}
-                            hideActions={!canEdit}
-                            onSelectionChange={handleTxSelectionChange}
-                            onEditRow={(row) => openBulkIntent({action: 'edit', txIds: [row.id]})}
-                            onCloneRow={(row) => openBulkIntent({action: 'clone', txIds: [row.id]})}
-                            onDeleteRow={(row) => openBulkIntent({action: 'delete', txIds: [row.id]})}
-                            onFiltersChange={(f) => (txColumnFilters = f)}
-                            onPageChange={(page) => (txCurrentPage = page)}
-                            onPageSizeChange={(size) => {
-                                txPageSize = size;
-                                txCurrentPage = 1;
-                            }}
-                            onViewRow={(row) => {
-                                txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
-                                txViewOpen = true;
-                            }}
-                        />
-                    {/if}
-                </div>
-            </div>
-        {:else if activeTab === 'info'}
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4" data-testid="broker-info-tab">
-                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-metadata">
-                    <h3 class="font-semibold text-lf-secondary mb-3">{$_('brokers.metadata')}</h3>
-                    <div class="space-y-2 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-lf-muted">{$_('brokers.isActive')}</span>
-                            <span class="font-medium {broker.is_active ? 'text-lf-success' : 'text-lf-danger'}">
-                                {broker.is_active ? '✓ Active' : '✗ Closed'}
-                            </span>
-                        </div>
-                        {#if safeString(broker.opened_at)}
-                            <div class="flex justify-between">
-                                <span class="text-lf-muted">{$_('brokers.openedAt')}</span>
-                                <span class="text-lf-secondary">{formatDate(broker.opened_at, $uiLocaleStore)}</span>
-                            </div>
-                        {/if}
-                        <div class="flex justify-between">
-                            <span class="text-lf-muted">{$_('brokers.allowOverdraft')}</span>
-                            <span class="font-medium {broker.allow_cash_overdraft ? 'text-lf-success' : 'text-lf-muted'}">
-                                {broker.allow_cash_overdraft ? '✓' : '✗'}
-                            </span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-lf-muted">{$_('brokers.allowShorting')}</span>
-                            <span class="font-medium {broker.allow_asset_shorting ? 'text-lf-success' : 'text-lf-muted'}">
-                                {broker.allow_asset_shorting ? '✓' : '✗'}
-                            </span>
-                        </div>
-                        <div class="flex justify-between border-t border-lf-subtle pt-2 mt-2">
-                            <span class="text-lf-muted">{$_('brokers.createdInSystem')}</span>
-                            <span class="text-lf-secondary">{formatDate(broker.created_at, $uiLocaleStore)}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-sharing-section">
-                    <h3 class="font-semibold text-lf-secondary mb-3 flex items-center gap-2">
-                        <Users size={18} class="text-lf-link" />
-                        {$_('brokers.sharing.title')}
-                    </h3>
-                    <BrokerSharingPanel brokerId={broker.id} readOnly={safeString(broker.user_role) !== 'OWNER'} onChanged={handleUpdated} bind:hasChanges={sharingHasChanges} />
-                </div>
-            </div>
-        {/if}
+            <p class="text-lf-muted">{$_('common.loading')}</p>
+        </div>
     {/if}
-</div>
+{/snippet}
+
+{#snippet actionsBefore({showActionLabels}: {showActionLabels: boolean})}
+    {#if canEdit}
+        <button onclick={() => (editModalOpen = true)} class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="broker-edit-button">
+            <Pencil size={14} />
+            {#if showActionLabels}<span>{$_('common.edit')}</span>{/if}
+        </button>
+    {/if}
+    <button onclick={openInfoTab} class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="broker-share-button" title={$_('brokers.sharing.title')}>
+        <Share2 size={14} />
+        {#if showActionLabels}<span>{$_('brokers.sharing.title')}</span>{/if}
+    </button>
+{/snippet}
+
+{#snippet transactionsBar({table, period}: {table: TransactionsTable | undefined; period: {start: string | undefined; end: string | undefined}})}
+    <div class="flex flex-wrap items-center justify-between gap-2" data-testid="broker-transactions-actions">
+        <div class="flex items-center gap-2">
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" onclick={() => (importFilesModalOpen = true)} data-testid="broker-show-import-history">
+                <FileText size={15} />
+                <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
+            </button>
+            <a href={transactionsPageUrl(period)} class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" title={$_('brokers.viewInTransactionsHint')} data-testid="broker-view-in-transactions">
+                <ArrowRightLeft size={15} />
+                <span class="hidden sm:inline">{$_('brokers.viewInTransactions')}</span>
+            </a>
+        </div>
+        <div class="flex items-center gap-2">
+            {#if canEdit && txSelectedRows.length > 0}
+                <DataTableToolbar selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
+            {/if}
+            <ColumnVisibilityToggle tableRef={table?.getTableRef()} />
+            {#if canEdit}
+                <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" onclick={openImportTransactions} data-testid="broker-import-transactions">
+                    <Upload size={15} />
+                    <span class="hidden sm:inline">{$_('common.import')}</span>
+                </button>
+                <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" onclick={openNewTransaction} data-testid="broker-new-transaction">
+                    <Plus size={15} />
+                    <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
+                </button>
+            {/if}
+        </div>
+    </div>
+{/snippet}
+
+{#snippet infoTab()}
+    {#if broker}
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4" data-testid="broker-info-tab">
+            <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-metadata">
+                <h3 class="font-semibold text-lf-secondary mb-3">{$_('brokers.metadata')}</h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-lf-muted">{$_('brokers.isActive')}</span>
+                        <span class="font-medium {broker.is_active ? 'text-lf-success' : 'text-lf-danger'}">
+                            {broker.is_active ? '✓ Active' : '✗ Closed'}
+                        </span>
+                    </div>
+                    {#if safeString(broker.opened_at)}
+                        <div class="flex justify-between">
+                            <span class="text-lf-muted">{$_('brokers.openedAt')}</span>
+                            <span class="text-lf-secondary">{formatDate(broker.opened_at, $uiLocaleStore)}</span>
+                        </div>
+                    {/if}
+                    <div class="flex justify-between">
+                        <span class="text-lf-muted">{$_('brokers.allowOverdraft')}</span>
+                        <span class="font-medium {broker.allow_cash_overdraft ? 'text-lf-success' : 'text-lf-muted'}">
+                            {broker.allow_cash_overdraft ? '✓' : '✗'}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-lf-muted">{$_('brokers.allowShorting')}</span>
+                        <span class="font-medium {broker.allow_asset_shorting ? 'text-lf-success' : 'text-lf-muted'}">
+                            {broker.allow_asset_shorting ? '✓' : '✗'}
+                        </span>
+                    </div>
+                    <div class="flex justify-between border-t border-lf-subtle pt-2 mt-2">
+                        <span class="text-lf-muted">{$_('brokers.createdInSystem')}</span>
+                        <span class="text-lf-secondary">{formatDate(broker.created_at, $uiLocaleStore)}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-sharing-section">
+                <h3 class="font-semibold text-lf-secondary mb-3 flex items-center gap-2">
+                    <Users size={18} class="text-lf-link" />
+                    {$_('brokers.sharing.title')}
+                </h3>
+                <BrokerSharingPanel brokerId={broker.id} readOnly={safeString(broker.user_role) !== 'OWNER'} onChanged={handleUpdated} />
+            </div>
+        </div>
+    {/if}
+{/snippet}
 
 {#if broker}
     <BrokerModal
@@ -931,8 +393,6 @@
         onclose={() => (editModalOpen = false)}
         onupdated={handleUpdated}
     />
-
-    <TransactionFormModal open={txViewOpen} mode="view" items={txViewItems} onClose={() => (txViewOpen = false)} />
 
     <TransactionBulkModal
         open={bulkOpen}
