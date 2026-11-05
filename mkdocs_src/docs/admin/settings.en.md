@@ -362,7 +362,7 @@ findings keep the order of this table.
 
 | Check | A finding when | Its link |
 |---|---|---|
-| Session signing key | ℹ️ No key is set: every restart signs every user out. ⚠️ The key is shorter than 32 characters. ❌ Its `JWT_SECRET_FILE` cannot be read | — |
+| Session signing key | ℹ️ The key is random: every restart signs everyone out; set `JWT_SECRET` to stay signed in. ⚠️ The key is shorter than 32 characters. ❌ Its `JWT_SECRET_FILE` cannot be read | — |
 | Secrets set twice | ⚠️ A secret is set both directly and through its `_FILE` variable: the direct value wins | — |
 | Instance key | ❌ It cannot be used. ⚠️ Its folder or its file is open to other users | — |
 | Session cookie | ⚠️ `SESSION_COOKIE_SECURE=never`: the cookie also travels over plain HTTP | — |

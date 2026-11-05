@@ -361,7 +361,7 @@ hallazgos mantienen el orden de esta tabla.
 
 | Comprobación | Un hallazgo cuando | Su enlace |
 |---|---|---|
-| Clave de firma de sesión | ℹ️ No hay ninguna clave definida: cada reinicio cierra la sesión de todos los usuarios. ⚠️ La clave tiene menos de 32 caracteres. ❌ No se puede leer su `JWT_SECRET_FILE` | — |
+| Clave de firma de sesión | ℹ️ La clave es aleatoria: cada reinicio desconecta a todos; define `JWT_SECRET` para seguir conectado. ⚠️ La clave tiene menos de 32 caracteres. ❌ No se puede leer su `JWT_SECRET_FILE` | — |
 | Secretos definidos dos veces | ⚠️ Un secreto está definido tanto directamente como a través de su variable `_FILE`: prevalece el valor directo | — |
 | Clave de instancia | ❌ No se puede usar. ⚠️ Su carpeta o su archivo está abierto a otros usuarios | — |
 | Cookie de sesión | ⚠️ `SESSION_COOKIE_SECURE=never`: la cookie también viaja por HTTP simple | — |
