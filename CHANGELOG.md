@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Risk: the correlation matrix can be ordered by type, sector and area**, and the bars of the return histogram show the app's tooltip.
 - **Risk tables show five rows per page** (5, 10, 25 or all), in the risk lab and in the risk levels; a click on a point of the risk/return chart opens the page of its row without moving the view.
 - **Risk: the partial-results notice counts the excluded assets** and shows each one as a badge; the return histogram's bars show their days and share.
+- **The simulation horizon takes years, months and days**, such as `2y3m5d` or `24m66d`, as well as a plain number of days: a year counts 365 days and a month 30, and the total shows under the field.
+- **The loss cards say which loss it was**: the worst fall shows from which peak to which low, and the bad month shows the worst stretch of a month actually seen, with its first and last day.
 
 #### 🔌 Price and exchange-rate sources
 
@@ -244,6 +246,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - API: Risk Analysis drawdown results (`drawdown_summary`, `asset_set_drawdown`) carry the gain needed to climb back from the worst fall to the peak before it, `maximum_drawdown_trough_to_peak_ratio` (a 50 % fall needs +100 %); `remaining_to_peak_ratio` is null for a total loss, with a warning that says why, where the analysis used to fail.
 - **Risk: add a missing exchange-rate pair without leaving the analysis.** In the Risk tab of the Dashboard, of a broker and of an asset, and in the risk lab on the Assets page, the button of a pair with no exchange-rate route opens the **Add New Currency Pair** window already filled in with that pair (EUR/USD, for example), instead of taking you to the FX page. Once the pair is saved, and again when its rates are downloaded, the analysis refreshes by itself.
+- **The daily returns histogram is a real chart**: its axis shows the return thresholds, a dashed line marks the VaR threshold, and pointing at a bar tells how many days fell there and where that band stands against the threshold.
 
 #### 🤖 AI Export
 
@@ -569,6 +572,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The risk analysis no longer fails to open when a currency code saved before 1.3 is not a three-letter ISO code: the amount is shown followed by the code as saved.
 - **Risk: the historical replay dates follow the app language**, and a geography group defined by the host shows its name in the shock table instead of its id.
 - Risk: optimizing more than 100 assets reports a size limit instead of an invalid-parameter error.
+- **«Am I as diversified as I think?» on narrow screens**: the rows no longer run off the screen. The name comes first, then the bar, then weight and risk contribution, and a long name scrolls.
 
 #### 🤖 AI Export
 
