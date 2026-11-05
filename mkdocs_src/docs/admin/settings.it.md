@@ -357,7 +357,7 @@ rilevamenti mantengono l'ordine di questa tabella.
 
 | Controllo | Un rilevamento quando | Il suo link |
 |---|---|---|
-| Chiave di firma della sessione | ℹ️ Nessuna chiave è impostata: ogni riavvio disconnette tutti gli utenti. ⚠️ La chiave è più corta di 32 caratteri. ❌ Il suo `JWT_SECRET_FILE` non può essere letto | — |
+| Chiave di firma della sessione | ℹ️ La chiave è casuale: ogni riavvio disconnette tutti; imposta `JWT_SECRET` per restare connessi. ⚠️ La chiave è più corta di 32 caratteri. ❌ Il suo `JWT_SECRET_FILE` non può essere letto | — |
 | Segreti impostati due volte | ⚠️ Un segreto è impostato sia direttamente sia tramite la sua variabile `_FILE`: vince il valore diretto | — |
 | Chiave dell'istanza | ❌ Non può essere usata. ⚠️ La sua cartella o il suo file sono accessibili ad altri utenti | — |
 | Cookie di sessione | ⚠️ `SESSION_COOKIE_SECURE=never`: il cookie viaggia anche su HTTP in chiaro | — |

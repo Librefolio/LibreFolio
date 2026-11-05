@@ -358,6 +358,21 @@ describe('SecurityTab — the store it reads', () => {
     });
 });
 
+describe('SecurityTab — the header (K-9)', () => {
+    it('«check again» is on the title’s own line, after it; the description is not in that line', async () => {
+        await mountTab(SILENT);
+
+        const header = screen.getByTestId('security-header');
+        const title = screen.getByTestId('security-title');
+        const refresh = screen.getByTestId('security-refresh');
+        expect(header).toContainElement(title);
+        expect(header).toContainElement(refresh);
+        expect(title.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING, 'the button comes after the title, at its right').toBeTruthy();
+        expect(header, 'the description runs under both, outside the line').not.toHaveTextContent(say('settings.securityTab.description'));
+        expect(tabRoot()).toHaveTextContent(say('settings.securityTab.description'));
+    });
+});
+
 describe('SecurityTab — waiting for the first answer', () => {
     // red until A8b
     it('security-loading and nothing to read, «check again» disabled; the answer takes the placeholder down', async () => {

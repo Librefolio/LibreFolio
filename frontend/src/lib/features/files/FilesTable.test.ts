@@ -25,6 +25,7 @@ import type {BrimFile, FileData, UploadedFile} from '$lib/types';
 import type {FilterValue} from '$lib/components/table/types';
 import {clientSessionUserId, getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
 import FilesTable from './FilesTable.svelte';
+import en from '$lib/i18n/en.json';
 
 const boundary = vi.hoisted(() => ({
     searchUsers: vi.fn(),
@@ -692,5 +693,19 @@ describe('FilesTable BRIM: no scope, delete behind the same gate (decision 36)',
         expect(menuActions(await openRowMenu(table, 'brim-plain'))).toEqual(['delete', 'download']);
         await closeRowMenu();
         expect(menuActions(await openRowMenu(table, 'brim-locked'))).toEqual(['download']);
+    });
+});
+
+// K-9 (developer, 05/11): user 0 is no account, it is what the installation uploaded (the icons): «System», not «User #0».
+describe.each(['static', 'brim'] as const)('FilesTable %s: the files the installation uploaded (user 0)', (type) => {
+    it("names user 0 by the catalogue's «system» wording, never «#0», and keeps naming any other unknown user by number", async () => {
+        const files = filesFor(type).map((file) => (('id' in file && file.id === 'zephyr') || ('file_id' in file && file.file_id === 'zephyr') ? {...file, uploaded_by_user_id: 0} : file));
+        render(FilesTable, {type, files, onDelete: vi.fn()});
+        const table = await settled(type);
+
+        const system = uploaderCell(table, 'zephyr');
+        expect(system).toHaveTextContent((en as unknown as {uploads: {systemUploader: string}}).uploads.systemUploader);
+        expect(system).not.toHaveTextContent('#0');
+        expect(uploaderCell(table, 'unknown'), 'an unknown account keeps its number').toHaveTextContent('#8080');
     });
 });

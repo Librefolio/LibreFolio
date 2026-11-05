@@ -142,7 +142,7 @@ La liste ne montre que les sauvegardes créées par cette version de LibreFolio.
 
 ### 🧹 Nettoyage automatique {: #backup-cleanup }
 
-Les sauvegardes conservées s'accumulent, et elles résident sur le disque de vos données. Dans la même section **Sauvegardes sur ce serveur** de **Paramètres › Administration › Sauvegarde**, vous définissez deux limites, toutes deux facultatives :
+Les sauvegardes conservées s'accumulent, et elles résident sur le disque de vos données. Dans le panneau fermé **Nettoyage automatique** de la même section **Sauvegardes sur ce serveur**, dans **Paramètres › Administration › Sauvegarde** et dans **Fichiers › Sauvegardes**, vous définissez deux limites, toutes deux facultatives :
 
 | Limite | Ce qu'elle fait | Désactivée |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ Les sauvegardes conservées s'accumulent, et elles résident sur le disque de vo
 | Âge maximal, en jours | Une sauvegarde plus ancienne que cette valeur est supprimée | `0` |
 
 - 🛡️ **La dernière sauvegarde est toujours conservée**, quelles que soient les limites : une instance ne se retrouve jamais sans aucune sauvegarde.
-- ⏰ Le nettoyage s'exécute après chaque sauvegarde, au démarrage de LibreFolio et environ une fois par heure.
+- ⏰ Le nettoyage s'exécute après chaque sauvegarde et au démarrage de LibreFolio, au plus une fois par heure : une modification enregistrée s'applique dans l'heure.
 - 🏠 **Auto-hébergé :** les deux limites sont désactivées jusqu'à ce que vous les définissiez.
 - 🔍 Seules les sauvegardes de la liste sont nettoyées. Les archives isolées plus anciennes dans `backups/`, une sauvegarde en cours et une sauvegarde échouée ne sont jamais touchées par le nettoyage.
 - ⌨️ La ligne de commande laisse ses sauvegardes au même endroit, et les mêmes limites s'y appliquent : voir [Où restent les sauvegardes](cli_backup.md#backup-kept).
@@ -173,7 +173,7 @@ La barre a trois apparences, selon qu'une limite est définie et que le disque e
 - 📏 **Avec une limite** : la barre représente la limite, et les parties de LibreFolio la remplissent à proportion des données. La ligne sous la barre affiche *utilisé sur la limite*.
 - 📁 **Aucune limite et disque inconnu** : LibreFolio ne peut pas interroger le disque, la barre représente donc son propre dossier, réparti en ses parties, sans espace libre.
 
-**Définissez la limite** dans la même barre, dans le champ **Limite d'espace (Mo)** : un nombre entier de mégaoctets, `0` pour aucune limite, puis **Enregistrer**. C'est aussi le [paramètre global](settings.md) *Limite d'espace*, qui n'est pas affiché dans l'onglet Administration : ce champ est l'endroit où le modifier.
+**Définissez la limite** dans le panneau fermé **Avancé** sous la même barre, dans le champ **Espace total de LibreFolio (Mo)** : un nombre entier de mégaoctets, `0` pour aucune limite, puis **Enregistrer** ; un avis vert le confirme. C'est l'espace maximal que LibreFolio devrait occuper au total, et le dépasser n'affiche qu'un avertissement : rien n'est bloqué. C'est aussi le [paramètre global](settings.md) *Limite d'espace*, qui n'est pas affiché dans l'onglet Administration : ce champ est l'endroit où le modifier.
 
 - ⚠️ **Au-delà de la limite**, la barre avertit que la limite est dépassée et suggère de supprimer des sauvegardes ou des fichiers, ou d'augmenter la limite. C'est tout : LibreFolio ne supprime rien, et la limite n'empêche ni un téléversement ni une sauvegarde.
 - 🔒 **Définie dans la configuration du serveur** : lorsque `LIBREFOLIO_STORAGE_LIMIT_MB` est défini, sa valeur constitue la limite, le champ est grisé et une note indique qu'elle est définie par l'hébergeur de l'instance. Voir [Variables d'environnement](configuration.md). Une valeur que LibreFolio ne peut pas utiliser, qui n'est pas un nombre entier, est ignorée, et le champ fonctionne comme ci-dessus.

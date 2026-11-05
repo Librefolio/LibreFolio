@@ -1135,7 +1135,7 @@ describe('B4 — RestoreCard: an envelope and its password', () => {
         expect(card()).toHaveAttribute('data-busy', 'false');
         expect(card()).toHaveAttribute('data-error-code', '');
         const form = screen.getByTestId('restore-password-form');
-        expect(within(form).getByTestId('restore-password')).toHaveAttribute('type', 'password');
+        expect(within(form).getByTestId('restore-password')).toHaveAttribute('data-masked', 'true');
         expect(within(form).getByTestId('restore-password-submit')).toBeInTheDocument();
         expect(within(form).getByTestId('restore-password-cancel')).toBeInTheDocument();
         expect(screen.queryByTestId('restore-password-error'), 'no error before a password was tried').toBeNull();
@@ -1225,22 +1225,24 @@ describe('B4 — RestoreCard: an envelope and its password', () => {
 });
 
 // =====================================================================================================================
-// B4b — the password of an envelope is not the account's (B-25)
+// K-1 — the password of an envelope is never offered to the browser
 // =====================================================================================================================
 
 /*
- * The contract (B4b brief §3, frontend): the restore card's `restore-password` keeps `autocomplete="off"`. The password
- * of an envelope is the one a backup was made with, and `current-password` would have a password manager offer the
- * account's. Green today: the guard that keeps it so.
+ * The password of an envelope is the one a backup was made with, never the account's: the browser must not offer to
+ * save it. So the field is a text input drawn masked by CSS, not `type="password"` (K-1, developer 05/11), with the
+ * eye still working.
  */
 
-describe('B4b — RestoreCard: the password of an envelope keeps autocomplete="off" (B-25)', () => {
-    it('restore-password says autocomplete="off": current-password would offer the password of the account (green today: the guard)', async () => {
+describe('K-1 — RestoreCard: the password of an envelope is a masked text field, never type="password"', () => {
+    it('restore-password is type="text", autocomplete="off" and masked: a browser offers to save only a real password field', async () => {
         await passwordCard();
 
         const field = within(screen.getByTestId('restore-password-form')).getByTestId('restore-password');
-        expect(field, 'precondition: the password field of the envelope').toHaveAttribute('type', 'password');
-        expect(field, "an envelope's password, never the account's").toHaveAttribute('autocomplete', 'off');
+        expect(field, 'a text field: no password field for a browser to save').toHaveAttribute('type', 'text');
+        expect(field).toHaveAttribute('autocomplete', 'off');
+        expect(field).toHaveAttribute('data-masked', 'true');
+        expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0);
     });
 });
 

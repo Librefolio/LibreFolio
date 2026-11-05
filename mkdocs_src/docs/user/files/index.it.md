@@ -128,7 +128,7 @@ Solo gli amministratori vedono quanto segue; gli altri utenti non trovano nessun
 
 ### 📊 Lo spazio utilizzato {: #space-used }
 
-Sopra le schede, una barra mostra quanto spazio occupa l'istanza, suddiviso tra il **database**, i **file caricati**, i **report del broker**, i **backup** e gli **altri file di LibreFolio**. Se non è impostato alcun limite, è disegnata rispetto al disco, con gli altri file del disco in grigio; con un limite, rispetto a quel limite. Nella stessa barra imposti il **Limite di spazio (MB)**, `0` per nessun limite. Quando il limite viene superato, la barra ti avvisa e nulla viene eliminato. La barra si aggiorna con **Aggiorna**. Come leggerla e cosa imposta il limite: [La barra dello spazio](../../admin/backup_restore.md#space-used).
+Sopra le schede, una barra mostra quanto spazio occupa l'istanza, suddiviso tra il **database**, i **file caricati**, i **report del broker**, i **backup** e gli **altri file di LibreFolio**. Se non è impostato alcun limite, è disegnata rispetto al disco, con gli altri file del disco in grigio; con un limite, rispetto a quel limite. Sotto la barra, nel pannello chiuso **Avanzate**, imposti lo **Spazio totale di LibreFolio (MB)**, `0` per nessun limite. Quando il limite viene superato, la barra ti avvisa soltanto: nulla viene bloccato e nulla viene eliminato. La barra si aggiorna con **Aggiorna**. Come leggerla e cosa imposta il limite: [La barra dello spazio](../../admin/backup_restore.md#space-used).
 
 ### 🗃️ La scheda Backup {: #backups-tab }
 

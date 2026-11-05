@@ -16,6 +16,12 @@
     export let testId: string = '';
     /** An icon drawn inside the field on the left, decorative (the lock of the credential forms). */
     export let icon: ComponentType | null = null;
+    /**
+     * A secret that is not an account's password (the password of a backup): the field is a plain text input drawn
+     * masked by CSS, so that the browser and the password managers, which look for `type="password"`, never offer to
+     * save it. The eye still shows it. Account fields (login, change of password) keep the real `type="password"`.
+     */
+    export let neverSaved: boolean = false;
 
     // Internal state
     let showPassword = false;
@@ -31,10 +37,11 @@
     {/if}
     <input
         autocapitalize="none"
-        {autocomplete}
+        autocomplete={neverSaved ? 'off' : autocomplete}
         bind:value
         class="w-full px-4 pr-12 py-3 rounded-lg border bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
         class:pl-12={!!icon}
+        class:lf-masked={neverSaved && !showPassword}
         class:border-lf-input={!hasError}
         class:border-lf-danger={hasError}
         class:hover:border-lf-input-hover={!hasError}
@@ -42,6 +49,11 @@
         class:focus:border-lf-danger={hasError}
         class:focus:ring-lf-focus={!hasError}
         class:focus:ring-lf-danger={hasError}
+        data-1p-ignore={neverSaved ? '' : undefined}
+        data-bwignore={neverSaved ? 'true' : undefined}
+        data-form-type={neverSaved ? 'other' : undefined}
+        data-lpignore={neverSaved ? 'true' : undefined}
+        data-masked={neverSaved ? (showPassword ? 'false' : 'true') : undefined}
         data-testid={testId || undefined}
         {disabled}
         id={id || undefined}
@@ -51,7 +63,7 @@
         on:keydown
         {placeholder}
         spellcheck="false"
-        type={showPassword ? 'text' : 'password'}
+        type={showPassword || neverSaved ? 'text' : 'password'}
     />
     <button
         aria-label={$_(showPassword ? 'auth.hidePassword' : 'auth.showPassword')}
@@ -68,3 +80,10 @@
         {/if}
     </button>
 </div>
+
+<style>
+    /* The dots of a masked text field (every supported browser: Chromium, Firefox, Safari). */
+    .lf-masked {
+        -webkit-text-security: disc;
+    }
+</style>

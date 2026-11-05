@@ -302,6 +302,11 @@ test.describe('Files › storage bar — the limit', () => {
         const original = await readLimitSetting(page.request);
         const field = inputOf(bar, 'storage-limit-mb');
         const save = bar.getByTestId('storage-limit-save');
+        // The limit is in the «Advanced» panel, closed until the administrator opens it.
+        await expect(bar.getByTestId('storage-advanced')).toHaveAttribute('data-open', 'false');
+        await expect(field).toBeHidden();
+        await bar.getByTestId('storage-advanced-toggle').click();
+        await expect(bar.getByTestId('storage-advanced')).toHaveAttribute('data-open', 'true');
         try {
             await expect(field).toHaveValue(String(storage.limit_mb ?? 0));
             await expect(save, 'nothing differs from the server: nothing to save').toBeDisabled();

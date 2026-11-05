@@ -135,6 +135,32 @@ describe('PasswordInput — the attributes a form parser reads', () => {
     });
 });
 
+describe('PasswordInput — neverSaved (K-1): a secret that is not an account password', () => {
+    it('is a text field drawn masked, with autocomplete off whatever token it is given, and no password field for a browser to save', () => {
+        const {input} = setup({neverSaved: true, autocomplete: 'new-password'});
+
+        expect(attributes(input, ['type', 'autocomplete', 'data-masked', 'data-lpignore', 'data-bwignore', 'data-form-type'])).toEqual({type: 'text', autocomplete: 'off', 'data-masked': 'true', 'data-lpignore': 'true', 'data-bwignore': 'true', 'data-form-type': 'other'});
+        expect(input.classList.contains('lf-masked')).toBe(true);
+    });
+
+    it('the eye unmasks it and masks it again, and the field stays type="text" all along', async () => {
+        const {input} = setup({neverSaved: true});
+        const eye = screen.getByRole('button');
+
+        await fireEvent.click(eye);
+        expect(attributes(input, ['type', 'data-masked'])).toEqual({type: 'text', 'data-masked': 'false'});
+        expect(input.classList.contains('lf-masked')).toBe(false);
+        await fireEvent.click(eye);
+        expect(attributes(input, ['type', 'data-masked'])).toEqual({type: 'text', 'data-masked': 'true'});
+    });
+
+    it('without the prop it stays a real password field: the login and account fields are unchanged', () => {
+        const {input} = setup({autocomplete: 'current-password'});
+
+        expect(attributes(input, ['type', 'autocomplete', 'data-masked', 'data-lpignore'])).toEqual({type: 'password', autocomplete: 'current-password', 'data-masked': null, 'data-lpignore': null});
+    });
+});
+
 describe('PasswordInput — keeping the keyboard out of the secret', () => {
     it('turns off autocapitalisation and spell-checking', () => {
         const {input} = setup();

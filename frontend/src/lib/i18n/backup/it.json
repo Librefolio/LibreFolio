@@ -337,7 +337,8 @@
         "network": "Nessuna risposta dal server. Riprova.",
         "unexpected": "Non è stato possibile salvare le impostazioni. Riprova."
       },
-      "hintDays": "Inserisci 0 per tenere i backup finché non li elimini."
+      "hintDays": "Inserisci 0 per tenere i backup finché non li elimini.",
+      "timing": "Le regole si applicano entro un'ora: dopo ogni backup e a ogni avvio, al massimo una volta l'ora."
     }
   }
 }

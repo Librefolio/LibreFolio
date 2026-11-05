@@ -6,7 +6,7 @@
     "checks": {
       "jwtSecret": {
         "ok": "Le sessioni sono firmate con una chiave impostata dall'amministratore.",
-        "ephemeral": "Nessuna chiave di firma delle sessioni è impostata: ogni riavvio disconnette tutti gli utenti.",
+        "ephemeral": "La chiave delle sessioni è casuale: ogni riavvio disconnette tutti. Per restare connessi imposta JWT_SECRET.",
         "short": "La chiave di firma delle sessioni da {source} è lunga {length} caratteri: usane almeno {minimum}, casuali.",
         "unreadable": "La chiave di firma delle sessioni non si può leggere: {reason}"
       },

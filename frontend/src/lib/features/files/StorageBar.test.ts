@@ -566,6 +566,9 @@ describe('StorageBar — the limit editor: saving', () => {
 
         await waitFor(() => expect(events('storage.limit.saved')).toHaveLength(1));
         expect(events('storage.limit.saved')[0].detail).toEqual({limit_mb: 2048});
+        // K-9: the confirmation is a green toast, not a word beside the field.
+        expect(vi.mocked(notify).mock.calls.find(([event]) => event.name === 'storage.limit.saved')?.[0].toast).toEqual({variant: 'success', message: 'storage.limit.saved'});
+        expect(screen.queryByText('storage.limit.saved'), 'nothing beside the field says «saved»').toBeNull();
         await waitFor(() => expect(api.get.mock.calls.length).toBeGreaterThanOrEqual(2));
         await waitFor(() => expect(limitField().value).toBe('2048'));
         expect(bar()).toHaveAttribute('data-mode', 'limit');
@@ -675,5 +678,59 @@ describe('StorageBar — the limit editor: pinned by the environment', () => {
 
         expect(bar()).toHaveAttribute('data-mode', 'limit');
         expect(segment('database')).toHaveAttribute('data-bytes', String(100 * MiB));
+    });
+});
+
+// =====================================================================================================================
+// K-2 (developer, 05/11) — pointing at the bar lights the legend row, and the other way round
+// =====================================================================================================================
+describe('StorageBar — the bar and its legend are linked (K-2)', () => {
+    const active = (id: string) => [segment(id)?.getAttribute('data-active'), legend(id)?.getAttribute('data-active')];
+
+    it('pointing at a segment lights its legend row and dims the other segments; leaving puts everything back', async () => {
+        await mountReady(LIMIT_USAGE());
+        expect(active('backups'), 'nothing lit before the pointer arrives').toEqual(['false', 'false']);
+
+        await fireEvent.pointerEnter(segment('backups')!);
+        expect(active('backups')).toEqual(['true', 'true']);
+        expect(active('database'), 'the others stay unlit').toEqual(['false', 'false']);
+
+        await fireEvent.pointerLeave(segment('backups')!);
+        expect(active('backups')).toEqual(['false', 'false']);
+    });
+
+    it('pointing at a legend row lights its segment, the free space included', async () => {
+        await mountReady(LIMIT_USAGE());
+
+        await fireEvent.pointerEnter(legend('free')!);
+        expect(active('free')).toEqual(['true', 'true']);
+        await fireEvent.pointerLeave(legend('free')!);
+        expect(active('free')).toEqual(['false', 'false']);
+    });
+
+    it('focus inside a legend row counts as pointing at it', async () => {
+        await mountReady(LIMIT_USAGE());
+
+        await fireEvent.focusIn(legend('uploads')!);
+        expect(active('uploads')).toEqual(['true', 'true']);
+        await fireEvent.focusOut(legend('uploads')!);
+        expect(active('uploads')).toEqual(['false', 'false']);
+    });
+});
+
+// =====================================================================================================================
+// K-2 (developer, 05/11) — the limit sits in a closed «Advanced» panel under the bar
+// =====================================================================================================================
+describe('StorageBar — the limit is in a closed «Advanced» panel', () => {
+    it('the panel is there, starts closed, is named by its key, and holds the field, the save button and the hint', async () => {
+        await mountReady(LIMIT_USAGE());
+
+        const panel = screen.getByTestId('storage-advanced') as HTMLDetailsElement;
+        expect(panel.open).toBe(false);
+        expect(panel).toHaveAttribute('data-open', 'false');
+        expect(screen.getByTestId('storage-advanced-toggle')).toHaveTextContent('storage.advanced.title');
+        expect(panel).toContainElement(limitField());
+        expect(panel).toContainElement(saveButton());
+        expect(panel).not.toContainElement(screen.getByTestId('storage-bar-track'));
     });
 });

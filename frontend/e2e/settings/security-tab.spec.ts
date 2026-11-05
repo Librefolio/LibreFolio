@@ -26,6 +26,7 @@
  *              warning still there;
  *   ASEC-E-03  a member has no «Administration» group (N69-2, decision D4 a) — no Security tab, no badge, no read of
  *              the checks —, and `?tab=security` opens Profile without mounting the tab;
+ *   ASEC-E-05  «check again» sits on the title's line, at its right, whole inside the screen on desktop and on a phone (K-9);
  *   ASEC-E-04  the login-limit warning has a «Guide» button (N69d) that opens the guide's page on its anchor in a new tab.
  *
  * Read-only, parallel by default: GET requests, and the sign-ins of the two fixture users of `populate_mock_data.py`,
@@ -200,6 +201,26 @@ test.describe('Settings › Security — an administrator', () => {
             await page.unroute(isChecks, hold);
         }
     });
+    test('ASEC-E-05: «check again» is on the title’s line, at its right, and whole inside the screen (desktop and phone)', async ({page}) => {
+        await login(page, TEST_ADMIN);
+        await navigateTo(page, '/settings?tab=security');
+        const body = page.getByTestId('security-tab');
+        await expect(body, 'the tab settles: GET /security/checks is in').toHaveAttribute('data-status', 'ready', {timeout: LOAD_MS});
+
+        const title = await page.getByTestId('security-title').boundingBox();
+        const refresh = await page.getByTestId('security-refresh').boundingBox();
+        const view = page.viewportSize();
+        if (title === null || refresh === null || view === null) throw new Error('the title, the button and the viewport have a box');
+        // The same line: the button's middle falls between the title's top and bottom.
+        const middle = refresh.y + refresh.height / 2;
+        expect(middle, 'the button is level with the title').toBeGreaterThanOrEqual(title.y);
+        expect(middle, 'the button is level with the title').toBeLessThanOrEqual(title.y + title.height);
+        expect(refresh.x, 'the button is at the right of the title').toBeGreaterThanOrEqual(title.x);
+        // Whole on the screen, with no horizontal scroll.
+        expect(refresh.x + refresh.width, 'the button does not leave the screen').toBeLessThanOrEqual(view.width);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'the page does not scroll sideways').toBe(true);
+    });
+
     test("ASEC-E-04: the login-limit warning has a «Guide» button — a book — that opens the page of the administrator's guide on its anchor, in a new tab", async ({page}) => {
         await login(page, TEST_ADMIN);
         await navigateTo(page, '/settings?tab=security');

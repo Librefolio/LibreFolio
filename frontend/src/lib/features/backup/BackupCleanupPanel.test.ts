@@ -325,6 +325,9 @@ describe('BackupCleanupPanel — saving', () => {
         expect(panel()).toHaveAttribute('data-error-code', '');
         expect(events('backup.cleanup.saved')).toHaveLength(1);
         expect(events('backup.cleanup.saved')[0].detail).toEqual({max_mb: 500, max_days: 14});
+        // K-9: the confirmation is a green toast, not a word beside the button.
+        expect(events('backup.cleanup.saved')[0].toast).toEqual({variant: 'success', message: 'backup.cleanup.saved'});
+        expect(screen.queryByText('backup.cleanup.saved'), 'nothing beside the button says «saved»').toBeNull();
         expect(field('backup-cleanup-max-mb').value).toBe('500');
         expect(field('backup-cleanup-max-days').value).toBe('14');
         expect(saveButton(), 'the saved values are the baseline: nothing differs').toBeDisabled();
@@ -408,5 +411,28 @@ describe('BackupCleanupPanel — a refused save', () => {
         expect(screen.queryByTestId('backup-cleanup-error')).toBeNull();
         expect(api.save).toHaveBeenCalledTimes(2);
         expect(events('backup.cleanup.saved')).toHaveLength(1);
+    });
+});
+
+// =====================================================================================================================
+// K-3 (developer, 05/11) — the clean-up is a panel that starts closed
+// =====================================================================================================================
+describe('BackupCleanupPanel — a panel that starts closed (K-3)', () => {
+    it('is a closed fold named by the panel title, holding both fields and the save button; the state stays on the root', async () => {
+        await mountIdle();
+
+        const fold = screen.getByTestId('backup-cleanup-fold') as HTMLDetailsElement;
+        expect(fold.open).toBe(false);
+        expect(fold).toHaveAttribute('data-open', 'false');
+        expect(screen.getByTestId('backup-cleanup-fold-toggle')).toHaveTextContent('backup.cleanup.title');
+        expect(panel()).toContainElement(fold);
+        for (const element of [field('backup-cleanup-max-mb'), field('backup-cleanup-max-days'), saveButton()]) expect(fold).toContainElement(element);
+    });
+
+    it('says, under the rules, when they apply: within the hour', async () => {
+        await mountIdle();
+
+        expect(screen.getByTestId('backup-cleanup-fold')).toContainElement(screen.getByTestId('backup-cleanup-timing'));
+        expect(screen.getByTestId('backup-cleanup-timing')).toHaveTextContent('backup.cleanup.timing');
     });
 });

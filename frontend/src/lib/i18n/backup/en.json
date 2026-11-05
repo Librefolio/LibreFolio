@@ -337,7 +337,8 @@
         "network": "No answer from the server. Try again.",
         "unexpected": "The settings could not be saved. Try again."
       },
-      "hintDays": "Enter 0 to keep backups until you delete them."
+      "hintDays": "Enter 0 to keep backups until you delete them.",
+      "timing": "The rules apply within an hour: after every backup and at every start, at most once an hour."
     }
   }
 }

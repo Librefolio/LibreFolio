@@ -11,7 +11,7 @@
  *   - the root `backups-section` publishes `data-open="true|false"`;
  *   - `collapsible` (the default) gives a button `backups-section-toggle` with `aria-expanded` that opens and closes the
  *     body; closed, the body is NOT in the DOM (so the list is not even read);
- *   - the body, once open: `backup-same-disk-warning` (`backup.list.sameDisk` — a copy on the same disk as the data is
+ *   - the body, once open: `backup-same-disk-notice` (`backup.list.sameDisk` — a copy on the same disk as the data is
  *     no backup: download the file and keep it elsewhere), then the list (`backup-list`) and the clean-up settings
  *     (`backup-cleanup`);
  *   - `defaultOpen` (default `true`) is the state of a section that has never been folded or opened;
@@ -131,7 +131,7 @@ const section = () => screen.getByTestId('backups-section');
 const toggle = () => screen.getByTestId('backups-section-toggle');
 
 /** Every test id of the body, which a closed section must not have in the DOM. */
-const BODY = ['backup-same-disk-warning', 'backup-list', 'backup-cleanup'] as const;
+const BODY = ['backup-same-disk-notice', 'backup-list', 'backup-cleanup'] as const;
 
 function expectBody(present: boolean) {
     for (const testId of BODY) {
@@ -171,7 +171,11 @@ describe('BackupsSection — foldable (the default)', () => {
         expect(section()).toHaveAttribute('data-open', 'true');
         expect(toggle()).toHaveAttribute('aria-expanded', 'true');
         expectBody(true);
-        expect(screen.getByTestId('backup-same-disk-warning')).toHaveTextContent('backup.list.sameDisk');
+        expect(screen.getByTestId('backup-same-disk-notice')).toHaveTextContent('backup.list.sameDisk');
+        // K-9: a reminder, not a warning: the info colours.
+        expect(screen.getByTestId('backup-same-disk-notice')).toHaveAttribute('data-variant', 'info');
+        expect(screen.getByTestId('backup-same-disk-notice').className).toContain('bg-lf-info-soft');
+        expect(screen.getByTestId('backup-same-disk-notice').className).not.toContain('warning');
     });
 
     it('the toggle is a button', async () => {
@@ -276,7 +280,7 @@ describe('BackupsSection — not foldable', () => {
         expect(section()).toHaveAttribute('data-open', 'true');
         expect(screen.queryByTestId('backups-section-toggle')).toBeNull();
         expectBody(true);
-        expect(screen.getByTestId('backup-same-disk-warning')).toHaveTextContent('backup.list.sameDisk');
+        expect(screen.getByTestId('backup-same-disk-notice')).toHaveTextContent('backup.list.sameDisk');
     });
 
     it('collapsible={false} stays open whatever a foldable section was left as', async () => {
