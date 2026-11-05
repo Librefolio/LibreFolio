@@ -786,22 +786,6 @@ client, non sul server»*.
   - la condivisione: la Web Share API dove esiste, altrimenti il download;
   - la privacy: il documento contiene importi reali, quindi va deciso se la modalità privacy vale anche lì.
 
-### ❌ Non più da fare — FX nel PAC (decisione del developer, 02/10/2026)
-
-Nel PAC/Rebalancer **non si faranno mai**:
-
-- un tasso o uno spread FX per Broker;
-- un margine di sicurezza sul tasso, fisso (`fx_buffer_rate`) o dinamico;
-- una commissione di conversione oltre lo spread;
-- conversioni in più passi (multi-hop).
-
-**Perché**: lo spread globale somma già tutti gli attori della conversione; il multi-hop spetta alla parte FX
-(rotte e provider), non al PAC. I piani di D sono già allineati (R13.11). Debito di contratto collegato: `fx_cost`
-della riga d'ordine, nella voce «🔎 Gate sui campi di contratto senza consumatore».
-
-Profili commissionali per mercato e formule intraday/degressive sono già descritti
-nella sezione precedente e non vengono duplicati qui.
-
 ### Gate Futuri
 
 - Nuova review matematica se cambiano input, vincoli, fiscalità, fee, FX o
@@ -1001,12 +985,6 @@ che va guardato. Vale anche il contrario: rendere irrappresentabile il renderer
 mancante, obbligando a spedire UI e backend insieme.
 
 ---
-
-## 🔍 BRIM Auto-Detect Broker via Account Code
-
-**Status**: ❌ SCARTATA (07/09/2026, decisione utente) — pochi broker rilasciano dati che
-identificano il conto, e l'utente divide già da sé i file in fase di upload. Nessuna azione;
-registrata qui solo perché l'idea non ritorni.
 
 ## 💰 Futura policy cedola (coupon_policy)
 

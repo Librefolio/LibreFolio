@@ -17,6 +17,13 @@ Fatte nel frattempo:
 - **Guide dei segnali**: stanno in Teoria finanziaria (`technical-analysis/indicators/` e `risk-metrics/`), e le pagine
   utente descrivono la scheda con i link.
 
+Scartate, perché l'idea non ritorni:
+
+- **BRIM Auto-Detect del broker dal codice conto** (07/09/2026): pochi broker danno dati che identificano il conto, e
+  l'utente divide già i file all'upload.
+- **FX nel PAC** (02/10/2026): niente tasso o spread per broker, niente margine di sicurezza, niente commissione di
+  conversione oltre lo spread, niente multi-hop. Lo spread globale somma già tutti gli attori della conversione.
+
 ---
 
 ## 📧 Email del server — prova, link per email, password dimenticata, verifica, avviso ✅
