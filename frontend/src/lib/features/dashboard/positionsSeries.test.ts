@@ -152,18 +152,18 @@ describe('positionsSeries — positionLine', () => {
         expect(line.points).toHaveLength(3);
     });
 
-    it('label: the ticker when there is one, then « · » and the broker name', () => {
-        expect(positionLine(series(), 'absolute').label).toBe('ACME · Broker One');
+    it('label: the asset name, never the ticker, then « · » and the broker name (F-1)', () => {
+        expect(positionLine(series(), 'absolute').label).toBe('Acme Corp · Broker One');
     });
 
-    it('label: the asset name when the ticker is absent or null', () => {
+    it('label: the asset name whether the ticker is there, absent or null', () => {
         expect(positionLine(series({asset_ticker: null}), 'absolute').label).toBe('Acme Corp · Broker One');
         expect(positionLine(series({asset_ticker: undefined}), 'absolute').label).toBe('Acme Corp · Broker One');
     });
 
     it('label: no « · » suffix when the broker name is null (a broker-less position)', () => {
         const line = positionLine(series({key: {asset_id: 12, broker_id: null}, broker_name: null}), 'absolute');
-        expect(line.label).toBe('ACME');
+        expect(line.label).toBe('Acme Corp');
         expect(line.label).not.toContain(' · ');
         expect(line.id).toBe('12-0');
     });

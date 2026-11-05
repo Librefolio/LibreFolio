@@ -32,6 +32,8 @@
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {createDateRangeController} from '$lib/features/dashboard/dateRangeController.svelte';
+    import {calendarReturnWindowDays, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
+    import {rollingAutoPreset} from '$lib/features/dashboard/positionsRolling';
     import {createPortfolioData} from './portfolioData';
     import PortfolioToolbar from './PortfolioToolbar.svelte';
     import PortfolioBanners from './PortfolioBanners.svelte';
@@ -98,6 +100,9 @@
     // State
     // =========================================================================
 
+    // The window of the positions chart's Rolling view (F-2): null until the user picks one, which is the automatic window of the period.
+    let rollingSelection = $state<CalendarReturnWindowSelection | null>(null);
+
     // The report, the contribution and the candles of the scope on screen, and the way they are asked, are the
     // portfolio data controller's (Y6-7): this page gives it its scope and reads what it shows. A store, so that
     // `$data` is followed by the lazy loaders' wrappers below.
@@ -110,6 +115,7 @@
         alive: () => pageAlive,
         wantsBrokerPnlHistory: () => wantsBrokerPnlHistory,
         rollingPeriod: () => ({start: dateRangeCtl.start, end: dateRangeCtl.end || undefined}),
+        rollingWindow: () => (rollingSelection ? (calendarReturnWindowDays(rollingSelection) ?? undefined) : undefined),
         onFirstDay: (day) => dateRangeCtl.markMaxResolved(day),
         onRefreshFailed: () => toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`),
         failureMessage: () => $_('common.error'),
@@ -188,6 +194,8 @@
      * that used to be duplicated per-page — see dateRangeController.svelte.ts).
      */
     const dateRangeCtl = createDateRangeController(() => void pageBusy.track(busy('period'), () => loadAll()));
+    // The preset the automatic window is, for the controls to show it picked: the same period the request is asked for.
+    const rollingAutoPresetKey = $derived(rollingAutoPreset(dateRangeCtl.start, dateRangeCtl.end || ''));
 
     /**
      * Sentinel-aware values for building "See all" links (assets/transactions).
@@ -551,6 +559,9 @@
                 onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, data.positionsSeriesScope(refreshVersion))}
                 positionsRolling={$positionsRollingCtl}
                 onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, data.positionsRollingScope(refreshVersion))}
+                {rollingSelection}
+                rollingAutoPreset={rollingAutoPresetKey}
+                onRollingSelectionChange={(selection) => (rollingSelection = selection)}
                 {activeAssetId}
                 {activeAsset}
                 displayCurrency={appliedCurrency}

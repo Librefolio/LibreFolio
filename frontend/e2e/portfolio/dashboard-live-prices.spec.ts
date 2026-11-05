@@ -21,7 +21,8 @@
  * rewrites its net worth in the browser.
  *
  * The page root publishes the poller's state as `data-live-updates` (`running | paused-idle | paused-hidden | stopped`), and the
- * toolbar shows the «Updates paused» pill (`live-updates-status`) only while it is paused for inactivity. In every case the
+ * toolbar's Refresh button takes the look of the «Updates paused» pill (the same button, `data-live-state="paused-idle"`, F-4) only
+ * while it is paused for inactivity. In every case the
  * request counts come first and the published state after, so a red names the behaviour before the attribute.
  *
  * Desktop only: the cadence does not depend on the viewport.
@@ -122,7 +123,8 @@ async function exchanges(page: Page): Promise<Exchange[]> {
 }
 
 const root = (page: Page) => page.getByTestId('dashboard-page');
-const pill = (page: Page) => page.getByTestId('live-updates-status');
+/** The «Updates paused» pill is the toolbar's Refresh button while the prices are paused for inactivity (F-4): one button, no extra element. */
+const pill = (page: Page) => page.locator('[data-testid="sync-button"][data-live-state="paused-idle"]');
 
 const bodyOf = (entry: Exchange): ReportBody | null => {
     try {
@@ -320,6 +322,21 @@ test.describe('Dashboard — the figures follow the current prices (FB-28)', () 
         await expectPolls(page, traffic, 3, 'an input: one poll at once');
         await expect(root(page)).toHaveAttribute('data-live-updates', 'running');
         await expect(pill(page), 'resumed: the pill goes away').toBeHidden();
+    });
+
+    test('the paused button is the Refresh button in its place; a click on it restarts the updates by hand (F-4)', async ({page}) => {
+        test.setTimeout(TEST_TIMEOUT_MS);
+        const {reported} = await openDashboard(page, 'tab=panoramica');
+        await userMoves(page);
+        await runClockTo(page, reported + IDLE_MS + 4 * INTERVAL_MS);
+        await expect(root(page)).toHaveAttribute('data-live-updates', 'paused-idle');
+        await expect(pill(page), 'paused for inactivity: the Refresh button wears the pause look').toBeVisible();
+        await expect(page.getByTestId('sync-button'), 'one button, never two: no second element for the pause').toHaveCount(1);
+        await expect(page.getByTestId('live-updates-status'), 'no separate pill any more').toHaveCount(0);
+
+        await page.getByTestId('sync-button').click();
+        await expect(root(page)).toHaveAttribute('data-live-updates', 'running', {timeout: 15_000});
+        await expect(pill(page), 'clicked: the updates run again, the button is the Refresh one').toBeHidden();
     });
 
     test('a period that ended before today has no current price to follow', async ({page}) => {

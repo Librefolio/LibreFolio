@@ -4,6 +4,7 @@
     "pausedHint": "Les prix en temps réel se remettent à jour dès que vous utilisez à nouveau la page.",
     "priceRefresh": {
       "running": "Mise à jour des prix…"
-    }
+    },
+    "resumeHint": "Cliquez pour actualiser de nouveau les prix"
   }
 }

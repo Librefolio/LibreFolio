@@ -1,6 +1,6 @@
 <!--
-  PortfolioToolbar — the controls of the portfolio view: period, currency, broker filter, «Updates paused», AI Export, Refresh,
-  and the tabs below them (Y6-7, delivery 2, checkpoint 9e; moved out of `PortfolioView.svelte`, markup and `data-testid`s
+  PortfolioToolbar — the controls of the portfolio view: period, currency, broker filter, AI Export, Refresh (which becomes
+  «Updates paused» while the live prices wait for the user, F-4), and the tabs below them (Y6-7, delivery 2, checkpoint 9e; moved out of `PortfolioView.svelte`, markup and `data-testid`s
   kept).
 
   It wraps `PageToolbar`, so the layout state (`layoutMode`, `filtersStacked`, the labels that hide first) and the picker's
@@ -13,7 +13,7 @@
 <script lang="ts">
     import {onMount, type ComponentProps, type Snippet} from 'svelte';
     import {_} from '$lib/i18n';
-    import {RefreshCw} from 'lucide-svelte';
+    import {Pause, RefreshCw} from 'lucide-svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type AiExportRequestContext, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -24,7 +24,7 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
     import type {ActivePollingState} from '$lib/features/live-updates/activePolling';
     import type {DateRangeController} from '$lib/features/dashboard/dateRangeController.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -171,9 +171,6 @@
     {/snippet}
 
     {#snippet actions({showActionLabels})}
-        <!-- «Updates paused» (FB-28): the figures stopped following the prices because nobody used the page for two minutes. -->
-        <LiveUpdatesStatus state={liveState} />
-
         {@render actionsBefore?.({showActionLabels})}
 
         {#if profile.refreshBeforeAiExport}
@@ -202,17 +199,32 @@
 {/snippet}
 
 {#snippet refreshButton(showActionLabels: boolean)}
+    <!-- One button for both: while the prices are paused for inactivity (FB-28: nobody used the page for two minutes) it takes the look of the
+         «Updates paused» pill in the same place, so nothing shifts (F-4). The prices resume by themselves as soon as the user is active; the
+         click is there to restart them by hand, and does what Refresh does. -->
+    {@const paused = liveState === 'paused-idle'}
     <button
-        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
+        class={paused
+            ? `inline-flex items-center justify-center gap-1 px-2 py-0.5 whitespace-nowrap rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${STATUS_TONES.liveUpdates.paused}`
+            : 'flex items-center justify-center gap-1.5 px-2.5 py-1.5 whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50'}
         onclick={onrefresh}
         disabled={pageBusy.busy}
         data-busy={pageBusy.busy ? 'true' : 'false'}
+        data-live-state={liveState}
         data-testid={profile.testIds.refresh}
-        title={$_('dashboard.syncData')}
+        title={paused ? $_('liveUpdates.resumeHint') : $_('dashboard.syncData')}
+        aria-label={paused ? $_('liveUpdates.paused') : undefined}
     >
-        <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
-        {#if showActionLabels}
-            <span>{$_('dashboard.syncData')}</span>
+        {#if paused}
+            <Pause size={12} aria-hidden="true" />
+            {#if showActionLabels}
+                <span>{$_('liveUpdates.paused')}</span>
+            {/if}
+        {:else}
+            <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
+            {#if showActionLabels}
+                <span>{$_('dashboard.syncData')}</span>
+            {/if}
         {/if}
     </button>
 {/snippet}
