@@ -69,6 +69,7 @@ from backend.app.services.risk.metrics import (
     historical_var_cvar,
     pearson_correlation,
     summarize_drawdown,
+    worst_horizon_window,
 )
 from backend.app.services.risk.quant import models as simulation_models
 from backend.app.services.risk.quant import optimization_models
@@ -2582,12 +2583,49 @@ def test_historical_var_missing_both_its_series_and_its_factor_names_the_series_
     assert refused.value.code == RiskErrorCode.DATA_UNAVAILABLE
 
 
+def _brute_force_worst_window(returns, horizon_observations):
+    """The lowest compounded window, found without the helper under test."""
+    best = None
+    for start in range(len(returns) - horizon_observations + 1):
+        wealth = 1.0
+        for value in returns[start : start + horizon_observations]:
+            wealth *= 1.0 + value
+        if best is None or wealth - 1.0 < best[0]:
+            best = (wealth - 1.0, start)
+    return best
+
+
+@pytest.mark.parametrize(("horizon_days", "horizon_observations"), [(30, 21), (1, 1)])
+def test_historical_var_publishes_the_worst_window_it_lived_through_with_its_dates(horizon_days, horizon_observations):
+    """F-6: the monthly VaR is a tail mean, so the card also names the one real stretch that was worst."""
+    context = var_context(VAR_RETURNS, 252.0)
+
+    output = HistoricalVarAnalytic().compute(HistoricalVarParams(horizon_days=horizon_days), context).output
+
+    expected_return, start = _brute_force_worst_window(VAR_RETURNS, horizon_observations)
+    assert output.worst_horizon is not None
+    assert output.worst_horizon.compounded_return == pytest.approx(expected_return, rel=1e-12)
+    assert output.worst_horizon.start_date == context.primary_return_dates[start]
+    assert output.worst_horizon.end_date == context.primary_return_dates[start + horizon_observations - 1]
+    # The worst window is at least as bad as the loss the tail estimates: a mean of the worst windows cannot beat the worst.
+    assert -output.worst_horizon.compounded_return >= output.conditional_value_at_risk - 1e-12
+
+
+def test_worst_horizon_window_keeps_the_earliest_of_equal_windows_and_none_for_no_window():
+    window = worst_horizon_window([0.01, -0.02, 0.0, -0.02], 3)
+
+    assert (window.compounded_return, window.start_index, window.end_index) == (-0.02, 1, 3)
+    assert worst_horizon_window([], 3) is None
+    with pytest.raises(ValueError):
+        worst_horizon_window([0.01], 0)
+
+
 def test_historical_var_sturges_fallback_is_a_new_algorithm_version():
     # 3.1.0 (D380, 08/10/2026): an interquartile range of exactly zero sizes the return
     # histogram's bins with Sturges, where Freedman-Diaconis drew one bar the pin cut in two
     # (pinned in test_risk_metrics_oracle.py, block (f)); VaR and CVaR do not move. 3.0.0 made
     # the horizon calendar days, compounded over the observations they hold (tested above).
-    assert HistoricalVarAnalytic.algorithm_version == "3.1.0"
+    assert HistoricalVarAnalytic.algorithm_version == "3.2.0"
 
 
 # ---------------------------------------------------------------------------
