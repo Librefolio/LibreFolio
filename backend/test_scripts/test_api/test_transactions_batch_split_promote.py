@@ -2275,3 +2275,54 @@ class TestRowsStoredWithoutCostBasis:
             finally:
                 cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=asset_ids)
             assert cleanup_problems == [], f"Cleanup of the test's brokers and asset: {cleanup_problems}"
+
+
+async def login_user_id(client: httpx.AsyncClient) -> int:
+    """The id of the user the client is signed in as."""
+    resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"auth/me failed: {resp.text}"
+    return resp.json()["user"]["id"]
+
+
+@pytest.mark.asyncio
+class TestPromoteSuggestRoles:
+    """W6-9 (C-45): a suggestion is offered only from a broker the asker can edit (the bulk picker disables the rest)."""
+
+    @pytest.fixture(autouse=True)
+    def server(self, test_server):
+        yield
+
+    async def test_suggest_offers_only_candidates_from_editable_brokers(self):
+        print_section("B3.x — Suggest leaves out a broker the asker only views")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as asker:
+            await create_test_user(owner)
+            owner_id = await login_user_id(owner)
+            await create_test_user(asker)
+            asker_id = await login_user_id(asker)
+            shared_broker = await create_broker(owner, "SuggestShared")
+            own_broker = await create_broker(asker, "SuggestOwn")
+            withdrawal = await create_standalone_tx(owner, shared_broker, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date="2026-04-01")
+            asked = [{"id": -1, "type": "DEPOSIT", "broker_id": own_broker, "date": "2026-04-01", "currency": "EUR", "amount": "600"}]
+
+            async def grant(role: str) -> None:
+                resp = await owner.put(
+                    f"{API_BASE}/brokers/{shared_broker}/access",
+                    json=[{"user_id": owner_id, "role": "OWNER", "share_percentage": 0.6}, {"user_id": asker_id, "role": role, "share_percentage": 0}],
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, f"access {role} failed: {resp.text}"
+
+            async def suggested() -> list[int]:
+                resp = await asker.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=asked, timeout=TIMEOUT)
+                assert resp.status_code == 200, resp.text
+                return candidate_ids(resp.json()["results"], -1)
+
+            try:
+                await grant("EDITOR")
+                assert withdrawal in await suggested(), "control: an EDITOR's broker is offered"
+                await grant("VIEWER")
+                assert withdrawal not in await suggested(), "a broker the asker can only view cannot be merged: the bulk picker shows it disabled"
+            finally:
+                problems = await delete_owned(owner, broker_ids=[shared_broker], asset_ids=[])
+                problems += await delete_owned(asker, broker_ids=[own_broker], asset_ids=[])
+                assert not problems, problems

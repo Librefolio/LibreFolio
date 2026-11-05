@@ -127,7 +127,9 @@ class TransactionPromotionMixin:
         user_id: int,
     ) -> TXPromoteSuggestResponse:
         """For each input TX, find DB transactions compatible for promote."""
-        accessible = await self._get_accessible_broker_ids(user_id)
+        # Only brokers the user can edit: a merge changes both rows, so a candidate on a broker the user only views
+        # could never be taken (the bulk editor's picker shows it disabled), and offering it would inflate the 💡 count
+        accessible = await self._get_editable_broker_ids(user_id)
         if not accessible:
             return TXPromoteSuggestResponse(results={})
 
@@ -159,7 +161,7 @@ class TransactionPromotionMixin:
                 results[inp.id] = []
                 continue
 
-            # Query DB: standalone TX with complementary type, date ±tolerance, accessible broker
+            # Query DB: standalone TX with complementary type, date ±tolerance, editable broker
             comp_types = list({ct for ct, _, _ in complementary})
             # W-B71: a draft's date at the calendar's edge narrows the window, never raises (a 500 for the whole request).
             lo = shift_date(inp.date, -tolerance_days)
