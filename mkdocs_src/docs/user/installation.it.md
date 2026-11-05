@@ -4,6 +4,8 @@ Questa guida installa LibreFolio con l'immagine Docker ufficiale precostruita: i
 
 Ti serve solo Docker: niente Python, Node.js o Pipenv, e nulla da compilare.
 
+🍓 L'immagine ufficiale è pubblicata per `amd64` e `arm64`, quindi gira nativamente, senza emulazione, su un Raspberry Pi 4/5 (SO a 64 bit) e sui Mac con Apple Silicon (l'ARM a 32 bit non viene pubblicato).
+
 ---
 
 ## ✅ Prerequisiti
@@ -108,6 +110,7 @@ Lo stack utilizza l'immagine ufficiale dal GitHub Container Registry (GHCR) e co
         environment:
           - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
           - HOST=0.0.0.0
+          - PORT=6040
         healthcheck:
           test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
           interval: 30s
@@ -132,7 +135,7 @@ Docker scarica l'immagine ufficiale da GHCR e avvia LibreFolio. Il tag `latest` 
 
 Apri il browser su **`http://localhost:6040`**.
 
-Alla prima visita, LibreFolio mostra la pagina di registrazione: il primo account che crei diventa automaticamente l'**amministratore**.
+Alla prima visita, LibreFolio mostra la pagina di accesso: clicca **Registrati qui** per creare il tuo account. Il primo account diventa automaticamente l'**amministratore**; per far entrare altre persone, invia loro un [link di invito](../admin/users.md#invitations).
 
 ??? tip "🖥️ Controlla lo stato e i log (facoltativo)"
 
@@ -223,6 +226,7 @@ Le migrazioni del database vengono eseguite automaticamente all'avvio del contai
 
 - Con il tag `latest` ottieni sempre la release più recente, insieme a qualsiasi cambiamento che essa comporta.
 - Per aggiornare solo quando decidi tu, fissa una versione invece di `latest`: `ghcr.io/librefolio/librefolio:1.1.0` (variante full) o `ghcr.io/librefolio/librefolio:1.1.0-light` (variante light). Vedi [Varianti dell'immagine](#image-variants-full-and-light).
+- Dopo l'aggiornamento, ogni utente vede una volta cosa è cambiato rispetto all'ultima versione che ha usato: vedi [Novità dopo un aggiornamento](settings/about.md#whats-new).
 
 ### 🛠️ 1. Aggiornamento manuale {: #manual-update }
 
