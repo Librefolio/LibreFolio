@@ -4,6 +4,17 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 🧹 Voci chiuse o scartate nella pulizia di `TODO_FUTURI.md` ✅
+
+**Data:** 5 Novembre 2026
+
+Fatte nel frattempo:
+
+- **Split nel FIFO**: il motore applica gli split come eventi dell'asset (`financial_math/fifo/engine.py`).
+- **TanStack Table v9**: la libreria non è più nel progetto.
+
+---
+
 ## 📧 Email del server — prova, link per email, password dimenticata, verifica, avviso ✅
 
 **Data completamento:** 16 Ottobre 2026
