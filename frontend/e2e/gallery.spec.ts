@@ -3830,6 +3830,26 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
+        test('broker positions YoC column - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await openBrokerCardByName(page, 'Coinbase');
+                    await selectOneYearDateRange(page);
+                    await page.getByTestId('broker-tab-posizioni').click();
+                    await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
+                    await screenshotPositionsYoc(page, viewport, lang, theme, 'brokers');
+                }
+            }
+        });
+
         test('broker fifo lots panel - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 
