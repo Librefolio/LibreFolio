@@ -963,74 +963,24 @@ Per ora solo FULL_RESET è implementato.
 
 ## 🗄️ Cache Server Centralizzato per Multi-Worker Uvicorn
 
-**Tema correlato (da fare PRIMA o insieme)**: audit del **necessario delle cache** — con il
-pannello admin (P2-4, 03/09) ora si vedono tutte le 16 cache nominali in un colpo d'occhio.
-Prima di investire nella condivisione multi-worker, vale la pena spendere tempo a capire se
-servono tutte o se ci sono refusi storici (cache aggiunte per colli di bottiglia poi spariti,
-TTL mai rivisti, cache mai popolate davvero). Il pannello "Server Caches" in Global Settings
-è lo strumento di osservazione già pronto per questa analisi (size/TTL/hit per nome).
+**Data aggiunta**: 14 Aprile 2026 · **Status**: 📋 Quando si passerà a più worker · **Priorità**: Bassa
 
-**Fuse qui (07/09) le code residue della voce "Web search / link-finder"** (voce eliminata:
-la parte search è completa con `ddgs`): (a) la cache dei risultati del link-finder
-(`web_link_finder._cache`) è un dict in-process → non condivisa tra worker: valutarla dentro
-questo stesso studio (TTL/invalidazione, degradazione graceful al dict in-process se nessuna
-cache esterna è configurata); (b) la Fase B SearXNG resta archiviata
-(`phases/04_webSearchEngine/`) come riferimento se mai servisse un primario self-hosted —
-nessuna azione finché `ddgs` regge.
-**Nota**: questa voce chiede l'analisi, non la soluzione.
+**Il problema.** Le cache in memoria (theine) sono per processo: con `--workers 1`, il default, vanno bene; con più worker
+ognuno ha la sua, compresa `web_link_finder._cache`.
 
-**Data aggiunta**: 14 Aprile 2026  
-**Status**: 📋 PIANIFICATO (quando si passerà a multi-worker)  
-**Priorità**: Bassa (oggi 1 worker è sufficiente con SQLite)
+**Prima, o insieme: l'audit delle cache.** Il pannello «Server Caches» mostra le 16 cache con dimensione, TTL e hit: va
+capito quali servono davvero, prima di investire nella condivisione. Questa voce chiede l'analisi, non la soluzione.
 
-### Contesto
+**Soluzione proposta (~100 righe).** Un processo cache lanciato da `lifespan()` in `main.py`, con theine dentro e un socket
+Unix per i worker (`multiprocessing.managers.BaseManager`, nuovo `utils/cache_server.py`). `NamedCache` in
+`utils/runtime/cache.py` delega al server solo con più worker, e i chiamanti non cambiano.
 
-Le cache in-memory (theine) sono per-processo. Con `--workers 1` (default attuale) funzionano perfettamente. Con `--workers N` (N > 1), ogni worker ha la propria cache isolata: un cache miss su worker 2 non beneficia di un cache hit su worker 1. Uvicorn non garantisce sticky sessions.
+**Costi.** 200–500 μs per operazione contro ~1 μs, irrilevanti per cache di chiamate da secondi. I valori devono essere
+serializzabili. Se il processo cade si perde solo la cache. Alternativa: `diskcache`, ~50 μs, ma persistente.
 
-### Soluzione Proposta
+**Prerequisiti**: PostgreSQL e un bisogno reale di più worker (oltre 50 utenti concorrenti).
 
-Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa theine internamente e espone un'interfaccia socket Unix ai worker via `multiprocessing.managers.BaseManager`:
-
-```
-┌─────────────────────────────────────────────────┐
-│  uvicorn master process                          │
-│  └── lifespan() spawna CacheServer process       │
-│       ├── theine Cache instances (in-memory)     │
-│       └── Unix socket /tmp/librefolio-cache.sock │
-├──────────────────────────────────────────────────┤
-│  Worker 1 ──proxy──┐                             │
-│  Worker 2 ──proxy──┼──► Unix socket ──► CacheServer
-│  Worker N ──proxy──┘                             │
-└──────────────────────────────────────────────────┘
-```
-
-### Implementazione (~100 righe)
-
-1. **`backend/app/utils/cache_server.py`** (nuovo): `CacheManager(BaseManager)` con metodi `cache_get/set/delete/clear/get_or_create` registrati. Il server process usa theine direttamente.
-
-2. **`utils/runtime/cache.py`**: `NamedCache` riceve un flag `_remote_manager`. Se attivo, delega get/set/delete via proxy al cache server. Se non attivo (single-worker), usa theine locale come oggi. Zero cambiamenti nei callsite (`get_ttl_cache()` API invariata).
-
-3. **`main.py` `lifespan()`**: Se `workers > 1`, spawna il cache server subprocess prima di avviare l'app. Passa l'indirizzo socket via env var. Shutdown: termina il subprocess.
-
-### Trade-off
-
-- **Latenza**: ~200-500μs per op (vs ~1μs theine locale). Irrilevante per cache di API call da 1-5s.
-- **Serializzazione**: Valori devono essere pickleable (Pydantic model, dict, list — tutti OK).
-- **Fault tolerance**: Se il cache server crasha, i worker perdono solo la cache (no data loss). Restart automatico possibile.
-- **Alternativa**: `diskcache` (SQLite+filesystem, process-safe, ~50μs, ma persistente — non necessario).
-
-### Prerequisiti
-
-- Passaggio a **PostgreSQL** (SQLite non supporta bene multi-writer)
-- Necessità reale di N > 1 worker (>50 utenti concorrenti)
-
-### File coinvolti
-
-- `backend/app/utils/cache_server.py` (nuovo)
-- `backend/app/utils/runtime/cache.py` (adattare `NamedCache`)
-- `backend/app/main.py` (spawn/shutdown cache process)
-
----
+**Nota**: la Fase B di SearXNG resta archiviata, finché `ddgs` regge.
 
 ## 📅 Scheduled Investment — Frequenze disaccoppiate (prezzi vs cedola) + anchor day
 
