@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
-    import {CircleCheck, Eraser, LoaderCircle, TriangleAlert} from 'lucide-svelte';
+    import {Eraser, LoaderCircle, TriangleAlert} from 'lucide-svelte';
     import {managedConfirmed} from '$lib/features/instance/profile';
     import FoldPanel from '$lib/components/ui/display/FoldPanel.svelte';
     import {_} from '$lib/i18n';
@@ -73,7 +73,7 @@
         }
         saved = settings;
         panelState = 'saved';
-        notify({name: 'backup.cleanup.saved', detail: {max_mb: settings.maxMb, max_days: settings.maxDays}});
+        notify({name: 'backup.cleanup.saved', detail: {max_mb: settings.maxMb, max_days: settings.maxDays}, toast: {variant: 'success', message: $_('backup.cleanup.saved')}});
     }
 
     const fieldClass = 'w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus disabled:opacity-50';
@@ -123,12 +123,6 @@
                 {/if}
                 {$_('backup.cleanup.save')}
             </button>
-            {#if panelState === 'saved'}
-                <span class="inline-flex items-center gap-1.5 text-sm text-lf-success" data-testid="backup-cleanup-saved">
-                    <CircleCheck size={16} aria-hidden="true" />
-                    {$_('backup.cleanup.saved')}
-                </span>
-            {/if}
         </div>
     </FoldPanel>
 </div>

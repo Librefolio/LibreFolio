@@ -325,6 +325,9 @@ describe('BackupCleanupPanel — saving', () => {
         expect(panel()).toHaveAttribute('data-error-code', '');
         expect(events('backup.cleanup.saved')).toHaveLength(1);
         expect(events('backup.cleanup.saved')[0].detail).toEqual({max_mb: 500, max_days: 14});
+        // K-9: the confirmation is a green toast, not a word beside the button.
+        expect(events('backup.cleanup.saved')[0].toast).toEqual({variant: 'success', message: 'backup.cleanup.saved'});
+        expect(screen.queryByText('backup.cleanup.saved'), 'nothing beside the button says «saved»').toBeNull();
         expect(field('backup-cleanup-max-mb').value).toBe('500');
         expect(field('backup-cleanup-max-days').value).toBe('14');
         expect(saveButton(), 'the saved values are the baseline: nothing differs').toBeDisabled();
