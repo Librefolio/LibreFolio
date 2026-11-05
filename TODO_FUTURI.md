@@ -15,15 +15,6 @@ contata due volte e la mora parte dal valore di prima della cedola. La liquidazi
 
 **Decisione del developer (28/10/2026):** non è una priorità della 1.3, resta qui.
 
-## ⚖️ Rebalancer del PAC (28/10/2026)
-
-**Cosa resta.** L'analisi del Rebalancer («riga 14»), gli E2E del PAC, il difetto 1 e l'opzione (e) del backlog di
-`LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/` (i difetti 2 e 5 e C-38 sono chiusi, `57001a928`).
-
-**Decisione del developer (28/10/2026):** nella 1.4.
-
----
-
 ## 🧬 Profilo dei dati dell'asset — composizione, costi, obbligazioni, esposizione e nuove fonti
 
 **Data aggiunta**: 18 Ottobre 2026 · **Status**: 📋 FUTURO — da progettare · **Priorità**: 🔼 Medio-alta
@@ -2053,43 +2044,6 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   Prima di scriverla va deciso se i flussi si reinvestono nell'asset o si sommano come cassa.
 - Usarla nei calcoli di rischio/rendimento: livelli della Dashboard, pagina del broker, laboratorio di Asset Global.
 - Quando arriva: togliere la riga «solo prezzi» dall'interfaccia, l'avviso dal manuale e il TODO dal codice.
-
-## 🔀 PAC/Rebalancer — un solo passo di cambio per broker e coppia
-
-**Data aggiunta**: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — **da fare con urgenza insieme al Rebalancer** ·
-**Priorità**: Alta, quando si apre il Rebalancer
-
-### Contesto
-
-- Reperto della gallery (M, 09/10/2026) e analisi di D (opzione «e»): le decisioni di cambio sono una per rotta d'ordine
-  × valuta del pool (`backend/app/services/pac_allocator/evaluation/bounds.py`, `constraints.py`), quindi il piano può contenere
-  più conversioni separate della stessa coppia sullo stesso broker, che il report poi somma (`planner_report.py`).
-- Con la regola «arrotondamento sempre contro il piano» (crediti per difetto, debiti per eccesso, 1.2) queste
-  conversioni spezzate non creano più valore, ma allungano il piano e lo rendono meno leggibile.
-- Decisione del developer (09/10/2026), testuale: «da fare con urgenza quando si fa anche il ribilanciamento, che
-  probabilmente sarà più soggetto al bug rispetto il pac».
-
-### Azione Futura
-
-- Una sola decisione di cambio per broker × coppia: variabili, vincoli, ledger e report del motore. È un rifacimento
-  ampio.
-- Test di equivalenza sui piani esistenti e oracolo sui casi con vendite (Rebalancer), dove le conversioni in entrambi i
-  versi sono più frequenti.
-
-## Code reordering
-
-Data di aggiunta: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — da fare con urgenza · **Priorità**: Media
-Il progetto è crescuto tantissimo, e sia il backend sia il frontend hanno file di centinaia di righe. La manutenzione è più difficile, e la leggibilità cala. Il developer propone di **riordinare i file** in più moduli,
-Ristrutturando la struttura delle cartelle, fattorizzando le funzioni comuni, e separando le classi e le funzioni in più file. Questo aiuta a trovare più facilmente il codice, a ridurre i conflitti di merge, e a migliorare la navigazione del progetto.
-Un primo esempio è riprodurre la stessa struttura di cartelle per i plugin  di asset, forex e transazioni in signal e il neo nato tools, così da avere un layout coerente.
-Un altro esempio è separare le funzioni di utilità in moduli dedicati, invece di avere tutto in un unico file di servizio.
-La cartella utils è cresciuta tantissimo e vale la pena fare un analisi per capire se alcune funzioni possono essere spostate in moduli più specifici, o se abbia senso creare dei service layer in tal senso.
-
-Discorso simile da fare anche per il frontend, dove i componenti sono cresciuti e vanno raggruppati in cartelle più piccole e coerenti, con nomi chiari e significativi.
-
-
-
-
 
 ## Approfondire protocollo Enable Banking europeo
 
