@@ -186,7 +186,9 @@ Deux actions vous aident à y parvenir :
 
 - **Copier la répartition actuelle** lit combien chacun de ces actifs pèse
   aujourd'hui dans les courtiers que vous cochez, en comptant uniquement ces actifs et non
-  les liquidités. Avec $H_i$ la valeur de marché de l'actif $i$ détenu là-bas aujourd'hui :
+  les liquidités. Avec $H_i$ la valeur de marché de l'actif $i$ détenu là-bas aujourd'hui — ce
+  qu'il vous a coûté, pour un actif sans aucun prix, dont la **Valorisation** indique
+  *valorisé au coût · aucun prix* :
 
     $$
     w_i = \frac{H_i}{\sum_j H_j} \cdot 100\%
