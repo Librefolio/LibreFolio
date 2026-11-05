@@ -173,6 +173,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Llamadas a la API fallidas en la consola del navegador.** La aplicación web escribe una línea por cada fallo inesperado de la API: estado, ruta, id de solicitud, nunca los datos de la solicitud. Con `LOG_LEVEL` en `DEBUG` o `TRACE` también escribe las respuestas 4xx (`client_log_level` en `GET /api/v1/system/instance`).
 - **Autoalojamiento: `LIBREFOLIO_DEFAULT_CURRENCY` y `LIBREFOLIO_DEFAULT_TIMEZONE`** establecen la moneda predeterminada y la zona horaria en el primer inicio, hasta que un administrador guarde la configuración; un valor no válido detiene el inicio y nombra la variable.
 - `./dev.py db check --integrity` comprueba la base de datos sin cambiarla: integridad, referencias rotas, texto que no es UTF-8 y la revisión del esquema.
+- En la imagen Docker, **la tecla Tab completa `./dev.py`** en una shell interactiva (la consola de Portainer, `docker exec -it … bash`), como root o como el usuario de LibreFolio.
 
 #### 🖥️ La aplicación y sus avisos
 
@@ -354,6 +355,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - El sitio de documentación dibuja sus diagramas con su propia copia de Mermaid, sin solicitudes a terceros; el diseño ELK ya no está disponible.
 - **El sitio de documentación usa los mismos colores que la aplicación**, en el tema claro y el oscuro.
 - **La documentación ya no describe cómo ejecutar LibreFolio para otros:** las páginas sobre proveedores de alojamiento, el panel de alojamiento y el despertar programado han desaparecido, y la página de inicio dice «Autoalojado».
+- **La cabecera de la documentación coloca el interruptor del tema junto al selector de idioma**, como en la aplicación; el enlace 🚀 a la aplicación, que se muestra cuando LibreFolio está en ejecución, ocupa el lugar que tenía el interruptor del tema.
 
 ### 🧹 Limpieza del repositorio
 
