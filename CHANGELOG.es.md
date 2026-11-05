@@ -46,6 +46,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Riesgo: la matriz de correlación se puede ordenar por tipo, sector y área**, y las barras del histograma de rentabilidad muestran la información emergente de la aplicación.
 - **Las tablas de riesgo muestran cinco filas por página** (5, 10, 25 o todas), en el laboratorio de riesgo y en los niveles de riesgo; un clic en un punto del gráfico riesgo/rentabilidad abre la página de su fila sin mover la vista.
 - **Riesgo: el aviso de resultados parciales cuenta los activos excluidos** y muestra cada uno como una insignia; las barras del histograma de rentabilidad muestran sus días y su proporción.
+- **El horizonte de la simulación acepta años, meses y días**, como `2a3m5d` o `24m66d`, además de un simple número de días: un año vale 365 días y un mes 30, y el total aparece bajo el campo.
+- **Las tarjetas de pérdidas dicen qué pérdida fue**: la peor caída muestra de qué máximo a qué mínimo, y el mal mes muestra el peor tramo de un mes realmente vivido, con su primer y su último día.
 
 #### 🔌 Fuentes de precios y tipos de cambio
 
@@ -244,6 +246,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 - API: los resultados de caída del análisis de riesgos (`drawdown_summary`, `asset_set_drawdown`) incluyen la ganancia necesaria para recuperarse de la peor caída hasta el pico anterior, `maximum_drawdown_trough_to_peak_ratio` (una caída del 50 % necesita +100 %); `remaining_to_peak_ratio` es null para una pérdida total, con una advertencia que explica por qué, donde antes fallaba el análisis.
 - **Riesgo: añade un par de tipos de cambio faltante sin salir del análisis.** En la pestaña Riesgo del Panel, en la de un bróker y en la de un activo, y en el laboratorio de riesgos de la página Activos, el botón de un par sin ruta de tipos de cambio abre la ventana **Añadir nuevo par de divisas** ya rellenada con ese par (EUR/USD, por ejemplo), en lugar de llevarte a la página FX. Una vez guardado el par, y de nuevo cuando se descargan sus tipos de cambio, el análisis se actualiza por sí solo.
+- **El histograma de rendimientos diarios es un gráfico de verdad**: su eje muestra los umbrales de rendimiento, una línea discontinua marca el umbral VaR, y al pasar por una barra ves cuántos días caen en ella y dónde queda esa franja respecto al umbral.
 
 #### 🤖 Exportación IA
 
@@ -569,6 +572,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - El análisis de riesgos ya no falla al abrirse cuando un código de divisa guardado antes de 1.3 no es un código ISO de tres letras: el importe se muestra seguido del código tal como se guardó.
 - **Riesgo: las fechas de la repetición histórica siguen el idioma de la aplicación**, y un grupo geográfico definido por el host muestra su nombre en la tabla de choques en lugar de su id.
 - Riesgo: optimizar más de 100 activos informa un límite de tamaño en lugar de un error de parámetro inválido.
+- **«¿Estoy tan diversificado como creo?» en pantallas estrechas**: las filas ya no se salen de la pantalla. Primero el nombre, luego la barra, después el peso y la contribución al riesgo, y un nombre largo se desplaza.
 
 #### 🤖 Exportación IA
 
