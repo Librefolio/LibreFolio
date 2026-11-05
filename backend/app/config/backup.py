@@ -156,6 +156,12 @@ def backup_recipients() -> tuple[str, ...] | None:
     return tuple(recipients)
 
 
+#: What the managed profile gives the clean-up of the kept backups until an administrator saves it (FB-24, developer
+#: 04/11/2026): a quarter of the 1 GB volume, and thirty days. The self-hosted default is off (0 and 0).
+MANAGED_CLEANUP_MAX_MB = 250
+MANAGED_CLEANUP_MAX_DAYS = 30
+
+
 def backup_requires_recipients() -> bool:
     """Whether a hosting panel's backup must be sealed: the managed profile never hands out a clear zip (decision D1, L3)."""
     return get_settings().LIBREFOLIO_PROFILE == "managed"

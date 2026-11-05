@@ -171,7 +171,6 @@ from backend.app.services.platform.instance_backup.paths import (
     STATE_FILE,
     checks_dir,
     ensure_private_dir,
-    job_dir,
     jobs_dir,
     restore_dir,
     stage_dir,
@@ -742,7 +741,7 @@ def test_a_backup_started_in_the_background_with_a_password_ends_as_an_envelope(
     first = start_backup(origin="ui", data_dir=data, password=PASSWORD)
     assert (first.status, first.file_name) == ("running", None), f"the first state of a run: {first}"
     job = jobs_cases.wait_until_finished(first.job_id, data)
-    folder = job_dir(data, job.job_id)
+    folder = jobs._locate(data, job.job_id)
     assert (job.status, job.error_code, new_field(job, "encrypted")) == ("done", None, True), f"the run ends done, encrypted: {job}"
     assert ENVELOPE_NAME.fullmatch(job.file_name or ""), f"its archive has an envelope's name: {job.file_name}"
     assert sorted(os.listdir(folder)) == sorted([STATE_FILE, job.file_name]) and env.is_envelope(folder / job.file_name), f"the state and the envelope, nothing else: {sorted(os.listdir(folder))}"
@@ -1656,11 +1655,11 @@ def test_a_secure_backup_carrying_the_generated_key_says_so_in_its_job(tmp_path,
         first = start_backup(origin="ui", data_dir=data, password=PASSWORD)
         job = jobs_cases.wait_until_finished(first.job_id, data)
         assert (job.status, job.error_code) == ("done", None), f"precondition: the secure backup is done: {job}"
-        path = job_dir(data, job.job_id) / job.file_name
+        path = jobs._locate(data, job.job_id) / job.file_name
     opened = open_envelope(env, path, tmp_path / "opened")
     assert KEY_ENTRY in opened.entries and opened.manifest["instance_key"]["included"] is True, f"precondition: the archive carries the key: {sorted(opened.entries)[:5]}, {opened.manifest['instance_key']}"
     assert l3_flag(job) is True, f"the job says its archive carries the key: {job}"
-    written = json.loads((job_dir(data, job.job_id) / STATE_FILE).read_text(encoding="utf-8"))
+    written = json.loads((jobs._locate(data, job.job_id) / STATE_FILE).read_text(encoding="utf-8"))
     assert written.get("instance_key_included", "<missing>") is True, f"state.json records it: {written.get('instance_key_included', '<missing>')!r}"
     assert l3_flag(get_job(job.job_id, data_dir=data)) is True, "get_job reads it back"
     print_success(f"{start}: the key carried, instance_key_included True")
@@ -1677,7 +1676,7 @@ def test_a_secure_backup_without_the_key_entry_says_false_in_its_job(tmp_path, d
     opened = open_envelope(env, path, tmp_path / "opened")
     assert opened.manifest["instance_key"]["included"] is False, f"precondition: no key entry: {opened.manifest['instance_key']}"
     assert l3_flag(job) is False, f"no key carried: {job}"
-    written = json.loads((job_dir(data, job.job_id) / STATE_FILE).read_text(encoding="utf-8"))
+    written = json.loads((jobs._locate(data, job.job_id) / STATE_FILE).read_text(encoding="utf-8"))
     assert written.get("instance_key_included", "<missing>") is False, f"state.json records it: {written.get('instance_key_included', '<missing>')!r}"
 
 
@@ -1686,7 +1685,7 @@ def test_a_backup_without_a_password_never_says_it_carries_the_generated_key(tmp
     says ``instance_key_included`` ``False``."""
     data = source_dir(tmp_path / "source", databases, monkeypatch, key=SOURCE_KEY)
     path = clear_backup(data)
-    job = get_job(path.parent.name, data_dir=data)
+    job = jobs._read_state(path.parent)
     assert zip_contents(path)[1]["instance_key"]["included"] is False, "precondition: a clear zip, no key"
     assert l3_flag(job) is False, f"no password, no key carried: {job}"
 
@@ -1905,7 +1904,7 @@ def test_a_sealed_backup_started_in_the_background_ends_as_a_tar(tmp_path, datab
     first = start_backup(origin="panel", data_dir=data, recipients=(recipient,))
     assert (first.status, first.file_name) == ("running", None), f"the first state of a run: {first}"
     job = jobs_cases.wait_until_finished(first.job_id, data)
-    folder = job_dir(data, job.job_id)
+    folder = jobs._locate(data, job.job_id)
     assert (job.status, job.error_code, l3_2_field(job, "sealed")) == ("done", None, True), f"the run ends done, sealed: {job}"
     assert job.file_name == sealed_name(job) and sorted(os.listdir(folder)) == sorted([STATE_FILE, job.file_name]), f"the state and the tar, nothing else: {sorted(os.listdir(folder))}"
     opened = open_seal(env, read_tar(folder / job.file_name), identity, tmp_path / "opened")

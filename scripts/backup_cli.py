@@ -379,10 +379,11 @@ def _print_warnings(job) -> None:
             print(f"     {_safe(entry)}")
 
 
-def _run_backup(data_dir: Path, password: str | None = None, recipients: tuple[str, ...] | None = None):
-    """Run the backup in this process, printing its phases: the job's end state and its folder, or ``None`` when the
-    run could not start (another backup runs, ``backups/`` is not a plain folder, it cannot be written). ``password``:
-    a secure backup; ``recipients``: a sealed one (L3)."""
+def _run_backup(data_dir: Path, password: str | None = None, recipients: tuple[str, ...] | None = None, keep: bool = True):
+    """Run the backup in this process, printing its phases: the job's end state and the folder its archive is in, or
+    ``None`` when the run could not start (another backup runs, ``backups/`` is not a plain folder, it cannot be written).
+    ``password``: a secure backup; ``recipients``: a sealed one (L3). ``keep``: the instance keeps the backup in its own
+    folder in ``backups/``; without it the caller moves the archive away (``--output``)."""
     from backend.app.services.platform.instance_backup import jobs  # noqa: PLC0415 — keep dev.py's start light
     from backend.app.services.platform.instance_backup.paths import BackupPathError, backups_dir  # noqa: PLC0415
 
@@ -395,8 +396,8 @@ def _run_backup(data_dir: Path, password: str | None = None, recipients: tuple[s
 
     try:
         if recipients:
-            return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress, recipients=recipients)
-        return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress, password=password)
+            return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress, recipients=recipients, keep=keep)
+        return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress, password=password, keep=keep)
     except jobs.BackupBusyError:
         print("❌ Another backup is running (from the web interface or another command): try again when it ends")
     except BackupPathError as exc:
@@ -423,7 +424,7 @@ def cmd_create(args) -> int:
 
     print(f"💾 Backing up {data_dir}")
     started = time.monotonic()
-    result = _run_backup(data_dir, password, recipients)
+    result = _run_backup(data_dir, password, recipients, keep=not args.output)
     if result is None:
         return 1
     job, folder = result
@@ -432,6 +433,8 @@ def cmd_create(args) -> int:
         print(f"❌ Backup failed ({job.error_code}): {reason}")
         shutil.rmtree(folder, ignore_errors=True)
         return 1
+    if not args.output:
+        return _kept_in_place(job, folder, data_dir, started)
 
     target = _output_path(args.output, data_dir, job.file_name)
     if target.name == job.file_name:
@@ -443,6 +446,18 @@ def cmd_create(args) -> int:
         return 1
     shutil.rmtree(folder, ignore_errors=True)
     return _print_written(job, placed, problem, started)
+
+
+def _kept_in_place(job, folder: Path, data_dir: Path, started: float) -> int:
+    """``create`` without ``--output``: the instance keeps the backup in its own folder of ``backups/`` and nothing is moved.
+    When that folder could not be made, the archive is still in its job folder, which expires after an hour: said, exit 1."""
+    from backend.app.services.platform.instance_backup.paths import jobs_dir  # noqa: PLC0415
+
+    archive = folder / job.file_name
+    if folder.parent == jobs_dir(data_dir):
+        print(f"❌ The backup could not be kept in backups/: the archive stays in {archive}. Move it within the hour: the next backup after that removes it.")
+        return 1
+    return _print_written(job, archive, None, started)
 
 
 def _create_protection(args) -> tuple[bool, str | None, tuple[str, ...] | None]:
@@ -464,6 +479,7 @@ def _print_written(job, placed: Path, problem: str | None, started: float) -> in
     else:
         print(f"✅ Backup written: {placed}")
     print(f"   {_human(job.file_size or 0)} in {time.monotonic() - started:.1f} s")
+    print(f"SHA-256: {job.file_sha256}")
     _print_warnings(job)
     if job.sealed:
         print(f"🔏 Sealed for {len(job.sealed_recipients)} key{'s' if len(job.sealed_recipients) != 1 else ''}: only the matching private key opens its password, and this server cannot.")
@@ -1603,7 +1619,7 @@ A relative path starts from the project root, like every path given to dev.py. A
 
     # No abbreviated options: «--password» must never pass for one of the password sources.
     create = commands.add_parser("create", help="Write a backup archive of the instance (safe while the server runs)", allow_abbrev=False)
-    create.add_argument("--output", "-o", metavar="PATH", help="Archive file, or an existing folder for it (default: <data dir>/backups/); checked before the backup starts")
+    create.add_argument("--output", "-o", metavar="PATH", help="Archive file, or an existing folder for it (default: the instance keeps the backup in its own folder of <data dir>/backups/); checked before the backup starts")
     create.add_argument("--encrypt", action="store_true", help="A secure backup: an .lfbk envelope that only its password opens, with the instance key LibreFolio generated (the password is asked twice at the terminal)")
     create.add_argument("--sealed", action="store_true", help="A sealed backup (.tar, L3) for the recipients of LIBREFOLIO_BACKUP_RECIPIENTS: only their private keys open its password")
     create.add_argument("--recipient", action="append", metavar="AGE1…", help="A sealed backup for this age recipient (age1…, as keygen prints it); twice during a change of key")

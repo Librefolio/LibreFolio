@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.config import get_settings
 from backend.app.config.accounts import registration_mode_pinned
 from backend.app.db.models import GlobalSetting, UserSettings
 from backend.app.schemas.settings import (
@@ -272,6 +273,30 @@ async def _refuse_what_cannot_turn_on(rows: dict[str, GlobalSetting], keys: list
                 raise GlobalSettingUnavailableError(key, exc.code) from None
 
 
+def _refused_by_profile(key: str, stored: str) -> str | None:
+    """Why the active profile refuses a valid value, or ``None``: a managed instance cannot switch off the space limit of
+    its kept backups (FB-24), since its volume is fixed. The age may be switched off."""
+    if key == SETTINGS_REGISTRY.global_.BACKUP_CLEANUP_MAX_MB.key and stored == "0" and get_settings().LIBREFOLIO_PROFILE == "managed":
+        return "must be at least 1 on a managed instance"
+    return None
+
+
+def _validated(items: Sequence[tuple[str, str]], rows: dict[str, GlobalSetting]) -> tuple[list[str], list[tuple[str, str]]]:
+    """The value to store for each item, and every (key, reason) a setting or the active profile refuses."""
+    stored_values: list[str] = []
+    errors: list[tuple[str, str]] = []
+    for key, value in items:
+        try:
+            stored = validate_global_setting_value(key, value, rows[key].value_type)
+            refusal = _refused_by_profile(key, stored)
+            if refusal is not None:
+                raise ValueError(refusal)
+            stored_values.append(stored)
+        except ValueError as exc:
+            errors.append((key, str(exc)))
+    return stored_values, errors
+
+
 async def update_global_settings(items: Sequence[tuple[str, str]], user_id: int, session: AsyncSession) -> list[GlobalSettingRead]:
     """Update several global settings at once, all or nothing.
 
@@ -290,13 +315,7 @@ async def update_global_settings(items: Sequence[tuple[str, str]], user_id: int,
         if key in _PINNED_BY_ENV and _PINNED_BY_ENV[key][1]():
             raise GlobalSettingLockedError(key, _PINNED_BY_ENV[key][0])
 
-    stored_values: list[str] = []
-    errors: list[tuple[str, str]] = []
-    for key, value in items:
-        try:
-            stored_values.append(validate_global_setting_value(key, value, rows[key].value_type))
-        except ValueError as exc:
-            errors.append((key, str(exc)))
+    stored_values, errors = _validated(items, rows)
     if errors:
         raise GlobalSettingValueError(errors)
     await _refuse_what_cannot_turn_on(rows, keys, stored_values)

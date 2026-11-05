@@ -20,6 +20,7 @@ import errno
 import os
 import re
 import stat
+from datetime import UTC, datetime
 from pathlib import Path
 
 #: The database entry of an archive: a consistent copy (``VACUUM INTO``), never the live file.
@@ -65,6 +66,8 @@ FAILED_FOLDER = "failed"
 SWAPPED_FOLDERS = ("sqlite", *ARCHIVED_FOLDERS)
 
 _JOB_ID = re.compile(r"[0-9a-f]{32}")
+#: The folder of a finished backup the instance keeps: ``librefolio-backup-<date>-<time>-<origin>-<8 hex of its id>``.
+_KEPT_NAME = re.compile(r"librefolio-backup-\d{8}-\d{6}-[a-z-]+-[0-9a-f]{8}")
 
 
 class BackupPathError(RuntimeError):
@@ -105,6 +108,24 @@ def job_dir(data_dir: Path, job_id: str) -> Path:
     if not is_job_id(job_id):
         raise ValueError("not a backup job id")
     return jobs_dir(data_dir) / job_id
+
+
+def kept_folder_name(created_at: datetime, origin: str, job_id: str) -> str:
+    """The name of the folder a finished backup is kept in, in ``backups/`` (FB-24): readable, unique (the start of the job
+    id), and the date in UTC. The archive inside keeps its own name."""
+    return f"librefolio-backup-{created_at.astimezone(UTC):%Y%m%d-%H%M%S}-{origin}-{job_id[:8]}"
+
+
+def is_kept_name(name: str) -> bool:
+    """Whether ``name`` is a folder name ``kept_folder_name`` makes."""
+    return bool(_KEPT_NAME.fullmatch(name))
+
+
+def kept_dir(data_dir: Path, name: str) -> Path:
+    """The folder of one kept backup. ``ValueError`` for anything that is not a name ``kept_folder_name`` makes."""
+    if not is_kept_name(name):
+        raise ValueError("not a kept backup folder name")
+    return backups_dir(data_dir) / name
 
 
 def restore_dir(data_dir: Path) -> Path:

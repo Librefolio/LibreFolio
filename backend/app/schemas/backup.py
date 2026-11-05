@@ -66,6 +66,22 @@ class InstanceBackupJob(BaseModel):
     sealed_recipients: list[str] = []
 
 
+# origin: who made the backup (the Backup tab, the command line, a hosting panel). The administrators' list of the kept
+# backups (FB-24); the job a hosting panel reads (InstanceBackupJob) has no origin.
+class InstanceBackupEntry(InstanceBackupJob):
+    """A backup the instance keeps: its job, and where it came from."""
+
+    origin: Literal["ui", "cli", "pre-restore", "panel"]
+
+
+class InstanceBackupList(BaseModel):
+    """The backups the instance keeps, the newest first (GET /backup/instance/jobs)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[InstanceBackupEntry]
+
+
 # kind: envelope for a secure backup (.lfbk), whose check needs its password; zip otherwise.
 class RestoreUpload(BaseModel):
     """An archive received for a restore: kept for its check (POST /backup/restore/stage), then removed; a newer upload replaces it."""

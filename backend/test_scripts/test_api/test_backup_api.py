@@ -181,6 +181,17 @@ def content_disposition(header: str) -> tuple[str | None, str | None]:
     return message.get_content_disposition(), message.get_filename()
 
 
+def job_folders_of(job_id: str) -> list[Path]:
+    """Where a job's files are now: ``backups/.jobs/<id>/``, and/or (since FB-24, once a finished backup moved) the kept
+    folder ``backups/librefolio-backup-<date>-<origin>-<id[:8]>/``. Empty once the job is deleted."""
+    data_dir = get_data_dir()
+    found = [paths.job_dir(data_dir, job_id)] if paths.job_dir(data_dir, job_id).exists() else []
+    backups = paths.backups_dir(data_dir)
+    if backups.is_dir():
+        found += sorted(path for path in backups.iterdir() if path.is_dir() and path.name.startswith("librefolio-backup-") and path.name.endswith(f"-{job_id[:8]}"))
+    return found
+
+
 def read_only(db: Path) -> sqlite3.Connection:
     """The SQLite database at ``db``, opened read-only."""
     return sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True)
@@ -462,6 +473,7 @@ def created_jobs(accounts) -> Iterator[list[str]]:
 BACKUP_ROUTES = [
     ("POST", "/backup/instance", "instance.start_instance_backup"),
     ("GET", "/backup/instance/options", "instance.get_instance_backup_options"),
+    ("GET", "/backup/instance/jobs", "instance.list_instance_backups"),
     ("GET", "/backup/instance/jobs/{job_id}", "instance.get_instance_backup_job"),
     ("GET", "/backup/instance/jobs/{job_id}/file", "instance.download_instance_backup"),
     ("DELETE", "/backup/instance/jobs/{job_id}", "instance.delete_instance_backup_job"),
@@ -498,7 +510,7 @@ def test_the_backup_router_registers_its_routes_in_order():
     print_section("BACKUP-001: the /backup router registers its routes in order (C2)")
     contexts = list(iter_route_contexts(backup_module.backup_router.routes))
     served = [(",".join(sorted(ctx.methods or ())), ctx.path, f"{getattr(ctx.endpoint, '__module__', '?').removeprefix(backup_module.__name__ + '.')}.{getattr(ctx.endpoint, '__name__', '?')}") for ctx in contexts]
-    assert served == BACKUP_ROUTES, f"the /backup router changed: it must register the five routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
+    assert served == BACKUP_ROUTES, f"the /backup router changed: it must register the six routes of instance.py (FB-24: the list of the kept backups), the four of panel.py, the nine of restore.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
     tags = [(ctx.path, list(getattr(ctx, "tags", []))) for ctx in contexts]
     assert tags == [
         (path, ["Hosting panel"] if endpoint.startswith(("panel.", "panel_restore.")) else ["Backup & Export"]) for _method, path, endpoint in BACKUP_ROUTES
@@ -608,8 +620,9 @@ class TestInstanceBackup:
             started = await start_backup(admin, created_jobs)
             job = await wait_until_finished(admin, started["job_id"])
             assert job["status"] == "done", f"premise: the job must end done: {job}"
-            folder = paths.job_dir(get_data_dir(), job["job_id"])
-            assert (folder / job["file_name"]).is_file(), f"premise: the archive of the job must be on the server, in {folder}"
+            folders = job_folders_of(job["job_id"])
+            assert len(folders) == 1 and (folders[0] / job["file_name"]).is_file(), f"premise: the archive of the job must be on the server, in one folder (backups/.jobs/<id>, or its kept folder in backups/): {folders}"
+            folder = folders[0]
 
             deleted = await admin.delete(job_url(job["job_id"]))
             read = await admin.get(job_url(job["job_id"]))
@@ -618,7 +631,7 @@ class TestInstanceBackup:
         assert deleted.status_code == 204 and not deleted.content, f"DELETE of a finished job must answer 204, without a body: {describe(deleted)}"
         assert_error(read, 404, "backup_job_not_found")
         assert_error(fetched, 404, "backup_job_not_found")
-        assert not folder.exists(), f"DELETE must remove the job's folder and its archive from the server: {folder} still holds {sorted(path.name for path in folder.iterdir())}"
+        assert job_folders_of(job["job_id"]) == [], f"DELETE must remove the job's folder and its archive from the server: {folder} is still there"
         print_success("204, then 404 backup_job_not_found for the job and its file, the folder gone")
 
     @needs_flock

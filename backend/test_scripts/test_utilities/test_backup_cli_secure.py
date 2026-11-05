@@ -12,7 +12,7 @@ but those ``inspect`` and a dry run already print for a zip (``test_backup_cli.p
     ``create``, ``inspect``, ``restore`` and ``decrypt``; the two together are an argparse error (exit 2), in either
     order. ``--password X`` is an argparse error (exit 2) on each command, and X ends up in no file.
 (b) ``create --password-file F`` (F: the password and a line break; a BOM and a CRLF too) or ``--password-stdin`` (one
-    line), ``--encrypt`` or not: exit 0, one archive in ``<data dir>/backups/``, ``librefolio-backup-YYYYMMDD-HHMMSS.lfbk``,
+    line), ``--encrypt`` or not: exit 0, one archive in its kept folder ``<data dir>/backups/librefolio-backup-<date>-cli-<id[:8]>/`` (FB-24), ``librefolio-backup-YYYYMMDD-HHMMSS.lfbk``,
     0600, its first bytes ``LFBK``, named on a ✅ line. The password without its line break (and BOM) unlocks it, and it
     holds a backup made by the command line that ``check_archive`` accepts. No clear archive is left in the data
     directory, nor a job folder; no file of the data directory holds the password; nothing is asked.
@@ -150,7 +150,7 @@ import pytest
 from backend.app.config import get_data_dir
 from backend.app.services.accounts.password_policy import failed_rules
 from backend.app.services.platform.instance_backup.archive import build_archive, check_archive
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, backups_dir, ensure_private_dir
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, STATE_FILE, backups_dir, ensure_private_dir
 from backend.test_scripts.test_utilities import test_backup_cli as cli
 from backend.test_scripts.test_utils import print_section, print_success
 from scripts import backup_cli
@@ -319,9 +319,9 @@ def holding(root: Path, secret: str) -> list[str]:
 
 
 def written_archives(root: Path) -> list[Path]:
-    """The archives in ``<data dir>/backups/``, its job folder aside."""
-    folder = backups_dir(root)
-    return sorted(path for path in folder.iterdir() if path.is_file()) if folder.is_dir() else []
+    """The archives ``create`` left: since FB-24 (interface §7) the files, ``state.json`` aside, inside the kept folders
+    ``<data dir>/backups/librefolio-backup-<date>-cli-<id[:8]>/`` (the job's folder in ``backups/.jobs`` is gone)."""
+    return sorted(path for kept in cli.kept_folders(root) for path in kept.iterdir() if path.is_file() and path.name != STATE_FILE)
 
 
 def output_path(tmp_path: Path, name: str = "out") -> Path:
@@ -1601,7 +1601,7 @@ def secret_command(name: str, root: Path, tmp_path: Path, request: pytest.Fixtur
     if name == "create":
 
         def created(ran: Ran) -> None:
-            written = sorted(path for path in backups_dir(root).iterdir() if ENVELOPE_NAME.fullmatch(path.name))
+            written = [path for path in written_archives(root) if ENVELOPE_NAME.fullmatch(path.name)]
             assert ran.code == 0 and len(written) == 1, f"create: the password read, one envelope written: {[path.name for path in written]}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
             holds_a_backup_of_the_cli(written[0], PASSWORD, tmp_path / "opened")
 

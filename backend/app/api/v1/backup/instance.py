@@ -4,7 +4,8 @@ Backup of the whole instance (``/backup/instance``): an archive of the data dire
 The archive holds the database (a consistent copy), the uploaded files, the broker reports and the risk scenarios, with
 a manifest: unpacked into an empty data directory it is the instance again. It holds every user's data, so every route
 here is for administrators only. ``POST /backup/instance`` starts a job and answers at once; the client polls the job,
-then downloads its archive, which the server keeps for an hour (or until ``DELETE``). One backup runs at a time.
+then downloads its archive. The server keeps every finished backup in ``backups/`` until it is deleted or the clean-up of
+the administrator's rules removes it (FB-24); ``GET /instance/jobs`` lists them. One backup runs at a time.
 
 With a password, a secure backup (lot B4, decisions 38 and 39): an ``.lfbk`` envelope that only this password opens,
 carrying the instance key when LibreFolio generated it. ``GET /backup/instance/options`` gives the rules the password
@@ -14,7 +15,7 @@ must meet. A 422 never repeats the body (``api/no_echo.py``): it may hold the pa
 hosting panel's routes of ``panel.py`` and the per-series exports of ``exports.py``. The jobs, their views and the
 errors, with their stable ``code`` in ``detail``, are shared with ``panel.py`` (``job_views.py``). The five routes
 (start, options, job, file, delete) stay allowed on an instance its hosting provider blocked
-(``api/v1/instance_block.py``, decision 12).
+(``api/v1/instance_block.py``, decision 12); the list of the kept backups (FB-24) is not among them.
 """
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
@@ -23,10 +24,12 @@ from fastapi.responses import FileResponse
 from backend.app.api.no_echo import NoInputEchoRoute
 from backend.app.api.v1.backup import job_views
 from backend.app.api.v1.settings import require_admin
+from backend.app.config import get_data_dir
 from backend.app.db.models import User
 from backend.app.schemas.auth import PasswordRuleRead
-from backend.app.schemas.backup import InstanceBackupJob, InstanceBackupOptions, InstanceBackupRequest
+from backend.app.schemas.backup import InstanceBackupJob, InstanceBackupList, InstanceBackupOptions, InstanceBackupRequest
 from backend.app.services.accounts.password_policy import password_rules_public
+from backend.app.services.platform.instance_backup import retention
 from backend.app.services.platform.instance_backup.secure import archive_password_problems, archive_password_rules
 
 instance_router = APIRouter(route_class=NoInputEchoRoute)
@@ -52,6 +55,13 @@ def start_instance_backup(body: InstanceBackupRequest | None = Body(default=None
 def get_instance_backup_options(_admin: User = Depends(require_admin)) -> InstanceBackupOptions:
     """What a secure backup asks of its password: the rules of the accounts, with a longer minimum (P12)."""
     return InstanceBackupOptions(password_rules=[PasswordRuleRead(**rule) for rule in password_rules_public(rules=archive_password_rules())])
+
+
+@instance_router.get("/instance/jobs", response_model=InstanceBackupList)
+def list_instance_backups(_admin: User = Depends(require_admin)) -> InstanceBackupList:
+    """The backups this instance keeps, the newest first, each with its origin (the Backup tab, the command line, a hosting
+    panel), its type, its size and its SHA-256. A backup in progress, or one that failed, is not listed. Administrators only."""
+    return InstanceBackupList(items=[job_views.entry_view(item.job) for item in retention.list_kept(get_data_dir())])
 
 
 @instance_router.get("/instance/jobs/{job_id}", response_model=InstanceBackupJob, responses={404: job_views.NOT_FOUND})

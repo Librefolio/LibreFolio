@@ -2131,6 +2131,30 @@ def services_backup_leftovers(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Backup leftovers tests", verbose=verbose)
 
 
+def services_backup_retention(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the kept backups and their clean-up: the names, list_kept, plan_cleanup, apply_cleanup (lot FB-24)."""
+    print_section("Services: Backup Retention")
+    print_info("Testing: backend/app/services/platform/instance_backup/paths.py (kept_folder_name, is_kept_name, kept_dir), retention.py (list_kept, plan_cleanup, apply_cleanup)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_retention.py", test_names)
+    return run_command(cmd, "Backup retention tests", verbose=verbose)
+
+
+def services_backup_cleanup_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the settings of the clean-up of the kept backups and read_policy (lot FB-24)."""
+    print_section("Services: Backup Cleanup Settings")
+    print_info("Testing: schemas/settings.py (backup_cleanup_max_mb, backup_cleanup_max_days), global_settings_service.py, settings_service.py, retention.py (read_policy)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_cleanup_settings.py", test_names)
+    return run_command(cmd, "Backup cleanup settings tests", verbose=verbose)
+
+
+def services_scheduler_backup_cleanup(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hourly clean-up of the kept backups in the scheduler's run (lot FB-24)."""
+    print_section("Services: Scheduler Backup Cleanup")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs), with the fakes of test_scheduler_catchup.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backup_cleanup.py", test_names)
+    return run_command(cmd, "Scheduler backup cleanup tests", verbose=verbose)
+
+
 def services_backup_checks(verbose: bool = False, test_names: list = None) -> bool:
     """Test the backup's configuration checks: the hosting panel's token and the restore's upload limit (lot B-9)."""
     print_section("Services: Backup Configuration Checks")
@@ -3893,7 +3917,7 @@ Note: No backend server required.
         "backup-jobs",
         services_backup_jobs,
         name="Instance Backup Jobs",
-        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed; backup_in_progress (the run lock or the restore checks' lock held by anyone, read only, without fcntl the process's locks)",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed; backup_in_progress (the run lock or the restore checks' lock held by anyone, read only, without fcntl the process's locks); FB-24: a backup that ends done moves to backups/<kept name> before the lock is released (same job id, run_backup answers that folder), the three readers find a job in .jobs/ or in backups/ (by the 8 digits and the state's job id, one retry if the move lands meanwhile), a kept job never expires, a failed one or keep=False stays in .jobs/ and expires after an hour, a move that fails is logged and leaves the job valid, apply_cleanup runs after each kept backup and its errors change nothing",
         # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
         # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
         isolation="pure",
@@ -4027,9 +4051,40 @@ Note: No backend server required.
         "backup-leftovers",
         services_backup_leftovers,
         name="Backup Leftovers",
-        desc="The startup cleanup of what runs killed outright left in clear (lot B4b, B-23, decision N66): a check its server left running ended (restore_interrupted, copy and upload removed); a decrypted archive.zip left in a copy removed while no check runs, never a link, the rest of the copy kept; the inspect folders .decrypt-* older than an hour removed, younger ones, links and files kept; a backup that died with its process ended (backup_interrupted) with its work files removed, also by get_job; nothing touched under a held lock; expired jobs removed; a part that fails logged while the others still run, never raised; quiet on a clean data directory; the step backup-leftovers",
+        desc="The startup cleanup of what runs killed outright left in clear (lot B4b, B-23, decision N66): a check its server left running ended (restore_interrupted, copy and upload removed); a decrypted archive.zip left in a copy removed while no check runs, never a link, the rest of the copy kept; the inspect folders .decrypt-* older than an hour removed, younger ones, links and files kept; a backup that died with its process ended (backup_interrupted) with its work files removed, also by get_job; nothing touched under a held lock; expired jobs removed; a part that fails logged while the others still run, never raised; quiet on a clean data directory; the step backup-leftovers; FB-24: the sweep also applies the clean-up of the kept backups and says how many in backups_cleaned, a clean-up that raises stops nothing",
         # PURE: data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables. No lane DB, no server,
         # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-retention",
+        services_backup_retention,
+        name="Backup Retention",
+        desc="FB-24 (contract B6r-fb24-backend-interface §1, §3): kept_folder_name (UTC date, origin, 8 digits of the job id), is_kept_name (the whole name, every origin) and kept_dir (ValueError otherwise); list_kept: the kept backups of backups/ most recent first with their folder and archive size, never what is in .jobs/, the .decrypt-* folders, loose command-line archives, files or links with a kept name, unreadable, failed or running states, a job id the name does not end with, a missing or linked archive, backups/ a link; plan_cleanup: age (older than the days, exactly the days stays), then space (strictly over the MiB, the oldest until it fits), never the most recent, one backup never removed, 0 and 0 nothing, whatever the order; apply_cleanup: rmtree of the planned kept folders only, the job ids answered as a tuple, never raising (policy, listing or one rmtree failing), the policy of the settings when none is given, nothing else touched, one INFO line per removal (job_id, reason, size_bytes, origin) without a file name or a path",
+        # PURE: every data directory is under tmp_path, every call is given its data_dir, its policy and its now; the archives
+        # are sparse files. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cleanup-settings",
+        services_backup_cleanup_settings,
+        name="Backup Cleanup Settings",
+        desc="FB-24 (contract §4): backup_cleanup_max_mb and backup_cleanup_max_days, global int settings defaulting to 0 (off), 0..1048576 and 0..3650, seeded with no author; the value in force while no administrator wrote the row is 0 on selfhosted and 250 MB / 30 days on managed, as an int, in get_setting_value, get_global_setting, get_all_global_settings and effective_stored_value; an administrator's row wins; managed refuses max_mb 0 (GlobalSettingValueError, nothing written) and accepts max_days 0; selfhosted accepts 0; read_policy reads the two values as a CleanupPolicy of ints, unusable values, a missing table or an engine that fails mean off, never raised",
+        # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings; the profile through
+        # monkeypatch; read_policy reads it through a synchronous engine put in place of the process's. No lane DB, no server,
+        # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-backup-cleanup",
+        services_scheduler_backup_cleanup,
+        name="Scheduler Backup Cleanup",
+        desc="FB-24 (contract §6, decision D3): run_due_jobs applies retention.apply_cleanup on a worker thread inside the busy span, for any reason, at most once an hour by the process's monotonic clock (the first run at once); any error is logged and swallowed; it is no third job: JOB_NAMES, the RunReport fields and the outcomes are unchanged",
+        # PURE: the fakes of test_scheduler_catchup.py (World, Activity, MonotonicClock) set with monkeypatch; apply_cleanup is a
+        # recorder. No DB, no server, no lane port, no network.
         isolation="pure",
     )
     add_test(
