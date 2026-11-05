@@ -92,7 +92,7 @@ Queste cifre sono storia generale di mercato, non una misurazione di LibreFolio,
     Una perdita del 50% richiede un **guadagno del 100%** per recuperare:
 
     $$
-    \text{Guadagno richiesto} = \frac{1}{1 + MDD} - 1
+    \text{Guadagno richiesto} = \frac{1}{1 + MDD} - 1 = \frac{-MDD}{1 + MDD}
     $$
 
     <div style="display: flex; justify-content: center;">
@@ -106,7 +106,11 @@ Queste cifre sono storia generale di mercato, non una misurazione di LibreFolio,
 
     </div>
 
-La tabella sopra è l'aritmetica generale dell'asimmetria, tabulata rispetto alla profondità del drawdown **massimo**. La cifra che il sistema calcola applica invece quella stessa formula al drawdown **attuale**: risponde a quanto guadagno serve per tornare al picco *dal punto in cui il portafoglio si trova oggi*, che è l'unica versione della domanda su cui si può agire. Le due letture coincidono solo quando il portafoglio si trova nel suo punto più profondo di sempre — vedi [Drawdown attuale](current-drawdown.md).
+    Una perdita totale non ha un guadagno di recupero finito: a $MDD = -100\%$ il denominatore $1 + MDD$ è zero, e nessun guadagno riporta indietro un valore che è andato a zero.
+
+La tabella sopra è l'aritmetica generale dell'asimmetria, tabulata rispetto alla profondità del drawdown **massimo**, e il risultato del drawdown riporta quella cifra per la caduta peggiore stessa. Accanto alla sua profondità pubblica il **guadagno da minimo a picco**, $-MDD / (1 + MDD)$: il guadagno necessario per risalire dal minimo peggiore fino al picco che lo precede — $+33,3\%$ da 90 a 120 nell'esempio sopra. La cifra è fornita sia per un episodio aperto sia per uno recuperato, perché descrive quanto è stata profonda la caduta, non se è stata risalita. È zero quando non c'è stato alcun drawdown; una perdita totale la lascia senza un numero, e il risultato porta un avviso che ne spiega il motivo.
+
+La stessa formula, calcolata da un'unica funzione condivisa da entrambe le cifre, si applica anche al drawdown **attuale**: lì risponde a quanto guadagno serve per tornare al picco *dal punto in cui il portafoglio si trova oggi*, che è l'unica versione della domanda su cui si può ancora agire. Le due letture coincidono solo quando il portafoglio si trova nel suo punto più profondo di sempre — vedi [Drawdown attuale](current-drawdown.md#what-it-takes-to-get-back).
 
 ---
 
