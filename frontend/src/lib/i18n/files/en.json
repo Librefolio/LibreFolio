@@ -114,8 +114,8 @@
     },
     "overLimit": "The space limit is exceeded: delete backups or files, or raise the limit.",
     "limit": {
-      "label": "Space limit (MB)",
-      "hint": "Enter 0 for no limit.",
+      "label": "LibreFolio total space (MB)",
+      "hint": "The most space LibreFolio should take in total: database, files, reports and backups. Going over it only shows a warning and blocks nothing. Enter 0 for no limit.",
       "locked": "The space limit is set by whoever hosts this instance.",
       "save": "Save",
       "saved": "Saved.",

@@ -114,8 +114,8 @@
     },
     "overLimit": "La limite d'espace est dépassée : supprimez des sauvegardes ou des fichiers, ou relevez la limite.",
     "limit": {
-      "label": "Limite d'espace (Mo)",
-      "hint": "Saisissez 0 pour aucune limite.",
+      "label": "Espace total de LibreFolio (Mo)",
+      "hint": "L'espace maximal que LibreFolio devrait occuper au total : base de données, fichiers, rapports et sauvegardes. Le dépasser n'affiche qu'un avertissement et ne bloque rien. Saisissez 0 pour aucune limite.",
       "locked": "La limite d'espace est fixée par l'hébergeur de cette instance.",
       "save": "Enregistrer",
       "saved": "Enregistré.",

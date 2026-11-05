@@ -114,8 +114,8 @@
     },
     "overLimit": "Se ha superado el límite de espacio: elimina copias o archivos, o sube el límite.",
     "limit": {
-      "label": "Límite de espacio (MB)",
-      "hint": "Escribe 0 para no poner límite.",
+      "label": "Espacio total de LibreFolio (MB)",
+      "hint": "El espacio máximo que LibreFolio debería ocupar en total: base de datos, archivos, informes y copias de seguridad. Superarlo solo muestra un aviso y no bloquea nada. Escribe 0 para no poner límite.",
       "locked": "El límite de espacio lo fija quien aloja esta instancia.",
       "save": "Guardar",
       "saved": "Guardado.",
