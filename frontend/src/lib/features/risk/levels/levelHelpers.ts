@@ -351,6 +351,22 @@ export interface HurtRow {
      * no recovery: there is no fallback.
      */
     requiredRecovery: number | null;
+    /**
+     * The stretch of days the row's figure is about, when the backend names it (F-6, testlist 1.3): for `worst`, from the
+     * peak the fall started at to its trough; for `month`, the worst window the series really went through (`worst_horizon`),
+     * first and last day. The `day` row has its own date, the worst realization's (`buildTailMeasures`). ISO dates, as they come.
+     */
+    period: {from: string; to: string} | null;
+    /**
+     * `month` only: the compounded return of that worst window as a positive loss. The row's headline is the average of the worst
+     * 5 % of the windows, which no single month ever printed; this is the one a reader can look up in `period`.
+     */
+    worstSeen: number | null;
+}
+
+/** A pair of ISO dates from the payload, in order, or null: a lone date would point at a stretch nobody stated. */
+function datePeriod(from: unknown, to: unknown): {from: string; to: string} | null {
+    return typeof from === 'string' && typeof to === 'string' && from <= to ? {from, to} : null;
 }
 
 /**
@@ -368,6 +384,14 @@ export interface HurtRow {
 export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[] {
     const rows: HurtRow[] = [];
 
+    /** The worst window of a monthly row; the daily row has the worst realization's date instead. */
+    const monthWindow = (id: 'day' | 'month', output: Record<string, unknown>): Pick<HurtRow, 'period' | 'worstSeen'> => {
+        const window = id === 'month' ? record(output.worst_horizon) : {};
+        const worstSeen = lossMagnitude(window.compounded_return, 'negative');
+        // A window with no loss in it is not a "worst month" worth stating: the stretch is only named beside a loss.
+        return worstSeen !== null && worstSeen > 0 ? {period: datePeriod(window.start_date, window.end_date), worstSeen} : {period: null, worstSeen: null};
+    };
+
     const varRow = (id: 'day' | 'month', instanceId: string): void => {
         const output = okOutput(resultByInstance(historicalResults, instanceId));
         if (!output) return;
@@ -383,6 +407,7 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
             secondaryLoss: cvar !== null && value !== null && value !== cvar ? value : null,
             durationDays: null,
             requiredRecovery: null,
+            ...monthWindow(id, output),
         });
     };
 
@@ -406,6 +431,9 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
             // The asymmetry that makes drawdowns expensive (−50% needs +100%), as the backend states it. It belongs to
             // the summary's own depth: none when the depth came from the KPI, nor for a zero fall with nothing to recover.
             requiredRecovery: summaryDepth !== null && loss > 0 ? finite(drawdown?.maximum_drawdown_trough_to_peak_ratio) : null,
+            // From the peak it fell from to the trough it reached: only the summary names them, the KPI fallback does not.
+            period: summaryDepth !== null && loss > 0 ? datePeriod(drawdown?.maximum_drawdown_peak_date, drawdown?.maximum_drawdown_trough_date) : null,
+            worstSeen: null,
         });
     }
 

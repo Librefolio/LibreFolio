@@ -147,7 +147,11 @@
     /** What a dash means, said on the dash itself rather than in a note under the table. */
     const blankExplanation = () => $t('risk.assetSet.levels.blankNote');
 
-    function lossColumn(id: 'badDay' | 'badMonth' | 'currentFall', figure: (row: AssetSetHurtRow) => number | null): ColumnDef<AssetSetHurtRow> {
+    /**
+     * A figure's column; `detail` is a second line under the figure, as small as the worst fall's duration (F-6: the worst
+     * month this asset really went through, with its days, beside the average of the worst 5 % the column is).
+     */
+    function lossColumn(id: 'badDay' | 'badMonth' | 'currentFall', figure: (row: AssetSetHurtRow) => number | null, detail?: (row: AssetSetHurtRow) => string): ColumnDef<AssetSetHurtRow> {
         const width = titleWidth(id);
         return {
             id,
@@ -161,7 +165,9 @@
             getValue: (row) => drawnLoss(figure(row)),
             cell: (row) => {
                 const value = figure(row);
-                return figureCell(cellHtml(id, value !== null, value === null ? '\u2014' : fall(value), LOSS_CLASS), value !== null, blankExplanation);
+                const line = value !== null && detail ? detail(row) : '';
+                const detailHtml = line ? `<span class="block text-[10px] font-normal text-lf-muted" data-testid="risk-asset-set-l1-${id}-detail">${escapeHtml(line)}</span>` : '';
+                return figureCell(cellHtml(id, value !== null, `${value === null ? '\u2014' : fall(value)}${detailHtml}`, LOSS_CLASS), value !== null, blankExplanation);
             },
         };
     }
@@ -185,7 +191,11 @@
             'risk-asset-set-l1',
         ),
         lossColumn('badDay', (row) => row.badDay),
-        lossColumn('badMonth', (row) => row.badMonth),
+        lossColumn(
+            'badMonth',
+            (row) => row.badMonth,
+            (row) => (row.worstMonth ? `${fall(row.worstMonth.loss)} · ${$t('risk.levels.l1.period', {values: {from: row.worstMonth.from, to: row.worstMonth.to}})}` : ''),
+        ),
         {
             id: 'worstFall',
             header: () => $t('risk.assetSet.levels.l1.columns.worstFall'),
@@ -202,8 +212,13 @@
             cell: (row) => {
                 const lastedHtml =
                     row.worstFall !== null && row.worstFallDays !== null ? `<span class="block text-[10px] font-normal text-lf-muted" data-testid="risk-asset-set-l1-worstFall-days">${escapeHtml($t('risk.assetSet.levels.l1.lastedDays', {values: {days: row.worstFallDays}}))}</span>` : '';
+                // From the peak it fell from to the trough it reached (F-6).
+                const periodHtml =
+                    row.worstFall !== null && row.worstFallPeriod
+                        ? `<span class="block text-[10px] font-normal text-lf-muted" data-testid="risk-asset-set-l1-worstFall-period">${escapeHtml($t('risk.levels.l1.period', {values: {from: row.worstFallPeriod.from, to: row.worstFallPeriod.to}}))}</span>`
+                        : '';
                 const text = row.worstFall === null ? '\u2014' : fall(row.worstFall);
-                return figureCell(cellHtml('worstFall', row.worstFall !== null, `${text}${lastedHtml}`, LOSS_CLASS, ` data-recovery="${escapeHtml(row.recovery ?? '')}"`), row.worstFall !== null, blankExplanation);
+                return figureCell(cellHtml('worstFall', row.worstFall !== null, `${text}${periodHtml}${lastedHtml}`, LOSS_CLASS, ` data-recovery="${escapeHtml(row.recovery ?? '')}"`), row.worstFall !== null, blankExplanation);
             },
         },
         lossColumn('currentFall', (row) => row.currentFall),
