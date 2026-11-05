@@ -51,6 +51,7 @@ from translate_docs import (
 # Issue severity
 # ---------------------------------------------------------------------------
 
+
 class Severity:
     ERROR = "❌ ERROR"
     WARN = "⚠️  WARN"
@@ -96,6 +97,7 @@ class ValidationResult:
 # Markdown structure extraction
 # ---------------------------------------------------------------------------
 
+
 def _extract_headings(text: str) -> list[tuple[int, int, str]]:
     """
     Extract markdown headings with line numbers.
@@ -104,24 +106,25 @@ def _extract_headings(text: str) -> list[tuple[int, int, str]]:
     headings = []
     in_code = False
     for i, line in enumerate(text.splitlines(), 1):
-        if line.strip().startswith('```'):
+        if line.strip().startswith("```"):
             in_code = not in_code
             continue
         if in_code:
             continue
-        m = re.match(r'^(#{1,6})\s+(.*)', line)
+        m = re.match(r"^(#{1,6})\s+(.*)", line)
         if m:
             level = len(m.group(1))
             heading_text = m.group(2).strip()
             headings.append((i, level, heading_text))
     return headings
 
+
 def _extract_links(text: str) -> list[tuple[str, str]]:
     """
     Extract markdown links [text](url).
     Returns list of (display_text, url).
     """
-    return re.findall(r'\[([^\]]*)\]\(([^)]+)\)', text)
+    return re.findall(r"\[([^\]]*)\]\(([^)]+)\)", text)
 
 
 _INLINE_CODE_SPAN = re.compile(r"(`+)(?!`)(.+?)(?<!`)\1(?!`)")
@@ -147,7 +150,10 @@ def _inline_code_spans(text: str) -> Counter:
 
 
 def check_inline_code(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Every inline code span of the source must appear verbatim in the translation.
@@ -163,7 +169,8 @@ def check_inline_code(
     return [
         Issue(
             severity=Severity.WARN,
-            file=cache_key, lang=lang,
+            file=cache_key,
+            lang=lang,
             check="inline-code-missing",
             message=f"`{spelling[span]}`{f' ×{n}' if n > 1 else ''} missing or changed in the translation",
         )
@@ -172,7 +179,10 @@ def check_inline_code(
 
 
 def check_link_anchors(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Every `page.md#anchor` link of a translation must land on an anchor of the page it opens.
@@ -213,12 +223,15 @@ def check_link_anchors(
             where = "this page"
         if anchor not in anchors:
             reported.add(url)
-            issues.append(Issue(
-                severity=Severity.ERROR,
-                file=cache_key, lang=lang,
-                check="anchor-missing",
-                message=f"#{anchor} not found in {where} (link {url})",
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key,
+                    lang=lang,
+                    check="anchor-missing",
+                    message=f"#{anchor} not found in {where} (link {url})",
+                )
+            )
     return issues
 
 
@@ -227,26 +240,26 @@ def _extract_code_blocks(text: str) -> list[str]:
     Extract fenced code blocks (``` ... ```).
     Returns list of code block content (including language tag).
     """
-    blocks = re.findall(r'```(\w*)\n(.*?)```', text, re.DOTALL)
+    blocks = re.findall(r"```(\w*)\n(.*?)```", text, re.DOTALL)
     return [f"```{lang}\n{code}```" for lang, code in blocks]
 
 
 def _extract_emojis(text: str) -> list[str]:
     """Extract emoji characters from text."""
     emoji_pattern = re.compile(
-        "[\U0001F600-\U0001F64F"  # emoticons
-        "\U0001F300-\U0001F5FF"  # symbols & pictographs
-        "\U0001F680-\U0001F6FF"  # transport & map
-        "\U0001F1E0-\U0001F1FF"  # flags
-        "\U00002702-\U000027B0"  # dingbats
-        "\U000024C2-\U0001F251"  # enclosed chars
-        "\U0001F900-\U0001F9FF"  # supplemental
-        "\U0001FA00-\U0001FA6F"  # chess symbols
-        "\U0001FA70-\U0001FAFF"  # symbols extended-A
-        "\U00002600-\U000026FF"  # misc symbols
-        "\U0000FE00-\U0000FE0F"  # variation selectors
-        "\U0000200D"             # zero-width joiner
-        "\U00002B50\U00002B55"   # star, circle
+        "[\U0001f600-\U0001f64f"  # emoticons
+        "\U0001f300-\U0001f5ff"  # symbols & pictographs
+        "\U0001f680-\U0001f6ff"  # transport & map
+        "\U0001f1e0-\U0001f1ff"  # flags
+        "\U00002702-\U000027b0"  # dingbats
+        "\U000024c2-\U0001f251"  # enclosed chars
+        "\U0001f900-\U0001f9ff"  # supplemental
+        "\U0001fa00-\U0001fa6f"  # chess symbols
+        "\U0001fa70-\U0001faff"  # symbols extended-A
+        "\U00002600-\U000026ff"  # misc symbols
+        "\U0000fe00-\U0000fe0f"  # variation selectors
+        "\U0000200d"  # zero-width joiner
+        "\U00002b50\U00002b55"  # star, circle
         "]+",
         re.UNICODE,
     )
@@ -255,7 +268,7 @@ def _extract_emojis(text: str) -> list[str]:
 
 def _extract_front_matter(text: str) -> str | None:
     """Extract YAML front-matter (--- ... ---) if present."""
-    m = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
+    m = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
     return m.group(1) if m else None
 
 
@@ -263,8 +276,12 @@ def _extract_front_matter(text: str) -> str | None:
 # Individual checks
 # ---------------------------------------------------------------------------
 
+
 def check_heading_structure(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Compare heading levels between source and translation.
@@ -276,12 +293,15 @@ def check_heading_structure(
 
     # Count mismatch
     if len(src_headings) != len(tr_headings):
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="heading-count",
-            message=f"Source has {len(src_headings)} headings, translation has {len(tr_headings)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="heading-count",
+                message=f"Source has {len(src_headings)} headings, translation has {len(tr_headings)}",
+            )
+        )
 
     # Level-by-level comparison (zip to shorter)
     for idx, (src_h, tr_h) in enumerate(zip(src_headings, tr_headings)):
@@ -289,33 +309,40 @@ def check_heading_structure(
         tr_line, tr_level, tr_text = tr_h
 
         if src_level != tr_level:
-            issues.append(Issue(
-                severity=Severity.ERROR,
-                file=cache_key, lang=lang,
-                check="heading-level",
-                line=tr_line,
-                message=f"Heading #{idx + 1}: source is h{src_level}, translation is h{tr_level} "
-                        f"(src: '{src_text[:40]}', tr: '{tr_text[:40]}')",
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key,
+                    lang=lang,
+                    check="heading-level",
+                    line=tr_line,
+                    message=f"Heading #{idx + 1}: source is h{src_level}, translation is h{tr_level} " f"(src: '{src_text[:40]}', tr: '{tr_text[:40]}')",
+                )
+            )
 
         # Check emoji preservation in heading
         src_emojis = _extract_emojis(src_text)
         tr_emojis = _extract_emojis(tr_text)
         if src_emojis != tr_emojis:
-            issues.append(Issue(
-                severity=Severity.WARN,
-                file=cache_key, lang=lang,
-                check="heading-emoji",
-                line=tr_line,
-                message=f"Heading #{idx + 1}: emoji mismatch — "
-                        f"source {''.join(src_emojis)} vs translation {''.join(tr_emojis)}",
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.WARN,
+                    file=cache_key,
+                    lang=lang,
+                    check="heading-emoji",
+                    line=tr_line,
+                    message=f"Heading #{idx + 1}: emoji mismatch — " f"source {''.join(src_emojis)} vs translation {''.join(tr_emojis)}",
+                )
+            )
 
     return issues
 
 
 def check_links(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Verify all URLs from source are preserved in translation.
@@ -331,37 +358,49 @@ def check_links(
     # Missing URLs
     for url in src_urls:
         if url not in tr_urls:
-            issues.append(Issue(
-                severity=Severity.ERROR,
-                file=cache_key, lang=lang,
-                check="link-missing",
-                message=f"URL missing in translation: {url}",
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key,
+                    lang=lang,
+                    check="link-missing",
+                    message=f"URL missing in translation: {url}",
+                )
+            )
 
     # Extra URLs (less critical — might be legitimate)
     for url in tr_urls:
         if url not in src_urls:
-            issues.append(Issue(
-                severity=Severity.INFO,
-                file=cache_key, lang=lang,
-                check="link-extra",
-                message=f"Extra URL in translation (not in source): {url}",
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.INFO,
+                    file=cache_key,
+                    lang=lang,
+                    check="link-extra",
+                    message=f"Extra URL in translation (not in source): {url}",
+                )
+            )
 
     # Count mismatch (different from missing — could be duplicate)
     if len(src_links) != len(tr_links):
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="link-count",
-            message=f"Source has {len(src_links)} links, translation has {len(tr_links)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="link-count",
+                message=f"Source has {len(src_links)} links, translation has {len(tr_links)}",
+            )
+        )
 
     return issues
 
 
 def check_code_blocks(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Verify code blocks are preserved exactly.
@@ -372,12 +411,15 @@ def check_code_blocks(
     tr_blocks = _extract_code_blocks(translated)
 
     if len(src_blocks) != len(tr_blocks):
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="code-block-count",
-            message=f"Source has {len(src_blocks)} code blocks, translation has {len(tr_blocks)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="code-block-count",
+                message=f"Source has {len(src_blocks)} code blocks, translation has {len(tr_blocks)}",
+            )
+        )
 
     for idx, (src_b, tr_b) in enumerate(zip(src_blocks, tr_blocks)):
         if src_b.strip() != tr_b.strip():
@@ -386,27 +428,27 @@ def check_code_blocks(
             tr_lines = tr_b.strip().splitlines()
             for line_idx, (sl, tl) in enumerate(zip(src_lines, tr_lines)):
                 if sl != tl:
-                    issues.append(Issue(
-                        severity=Severity.LOCALIZED,  # code comments translated
-                        file=cache_key, lang=lang,
-                        check="code-block-modified",
-                        message=(
-                            f"Code block #{idx + 1}, line {line_idx + 1} altered "
-                            f"(check: comments translated):\n"
-                            f"    SRC: {sl[:80]}\n"
-                            f"    TRN: {tl[:80]}"
-                        ),
-                    ))
+                    issues.append(
+                        Issue(
+                            severity=Severity.LOCALIZED,  # code comments translated
+                            file=cache_key,
+                            lang=lang,
+                            check="code-block-modified",
+                            message=(f"Code block #{idx + 1}, line {line_idx + 1} altered " f"(check: comments translated):\n" f"    SRC: {sl[:80]}\n" f"    TRN: {tl[:80]}"),
+                        )
+                    )
                     break
             else:
                 # Length difference
-                issues.append(Issue(
-                    severity=Severity.WARN,
-                    file=cache_key, lang=lang,
-                    check="code-block-modified",
-                    message=f"Code block #{idx + 1}: different line count "
-                            f"({len(src_lines)} vs {len(tr_lines)})",
-                ))
+                issues.append(
+                    Issue(
+                        severity=Severity.WARN,
+                        file=cache_key,
+                        lang=lang,
+                        check="code-block-modified",
+                        message=f"Code block #{idx + 1}: different line count " f"({len(src_lines)} vs {len(tr_lines)})",
+                    )
+                )
 
     return issues
 
@@ -419,7 +461,10 @@ def _indent_levels(block: FencedBlock) -> list[int]:
 
 
 def check_code_block_indent(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Verify translated code blocks keep the source indentation, line by line (fences included).
@@ -430,22 +475,23 @@ def check_code_block_indent(
     issues = []
     for drift in code_indent_issues(source, translated):
         block = drift.translated_block
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="code-block-indent",
-            line=drift.lines[0] + 1,
-            message=(
-                f"Code block ({block.lang or 'plain'}, lines {block.start + 1}-{block.end + 1}): "
-                f"indentation differs from the source on {len(drift.lines)} of {len(block.lines)} lines "
-                f"(source levels {_indent_levels(drift.source_block)} vs translation {_indent_levels(block)})"
-            ),
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="code-block-indent",
+                line=drift.lines[0] + 1,
+                message=(f"Code block ({block.lang or 'plain'}, lines {block.start + 1}-{block.end + 1}): " f"indentation differs from the source on {len(drift.lines)} of {len(block.lines)} lines " f"(source levels {_indent_levels(drift.source_block)} vs translation {_indent_levels(block)})"),
+            )
+        )
     return issues
 
 
 def check_artifacts(
-    translated: str, cache_key: str, lang: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Detect known translation artifacts that should have been cleaned.
@@ -466,104 +512,124 @@ def check_artifacts(
     for i, line in enumerate(lines, 1):
         for pattern in translator_notes_patterns:
             if re.search(pattern, line, re.IGNORECASE):
-                issues.append(Issue(
-                    severity=Severity.ERROR,
-                    file=cache_key, lang=lang,
-                    check="artifact-translator-notes",
-                    line=i,
-                    message=f"Translator notes artifact found: '{line.strip()}'",
-                ))
+                issues.append(
+                    Issue(
+                        severity=Severity.ERROR,
+                        file=cache_key,
+                        lang=lang,
+                        check="artifact-translator-notes",
+                        line=i,
+                        message=f"Translator notes artifact found: '{line.strip()}'",
+                    )
+                )
                 break
 
     # Bold translator notes: **Notas del Traductor**, **Notes du traducteur**
-    _notes_kw = (
-        r"(?:Notas?\s+del?\s+Trad\w+|Notes?\s+du\s+Trad\w+|"
-        r"Note?\s+del\s+Trad\w+|Translator['\u2019]?s?\s+Notes?)"
-    )
-    bold_notes = re.findall(rf'\*\*{_notes_kw}\*\*', translated, re.IGNORECASE)
+    _notes_kw = r"(?:Notas?\s+del?\s+Trad\w+|Notes?\s+du\s+Trad\w+|" r"Note?\s+del\s+Trad\w+|Translator['\u2019]?s?\s+Notes?)"
+    bold_notes = re.findall(rf"\*\*{_notes_kw}\*\*", translated, re.IGNORECASE)
     if bold_notes:
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="artifact-translator-notes-bold",
-            message=f"Translator notes in bold format: {bold_notes[0]}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="artifact-translator-notes-bold",
+                message=f"Translator notes in bold format: {bold_notes[0]}",
+            )
+        )
 
     # HTML translator notes: <h2>Notas del Traductor</h2>
     html_notes = re.findall(
-        rf'<h[1-6]>\s*{_notes_kw}\s*</h[1-6]>', translated, re.IGNORECASE,
+        rf"<h[1-6]>\s*{_notes_kw}\s*</h[1-6]>",
+        translated,
+        re.IGNORECASE,
     )
     if html_notes:
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="artifact-translator-notes-html",
-            message=f"Translator notes in HTML heading: {html_notes[0]}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="artifact-translator-notes-html",
+                message=f"Translator notes in HTML heading: {html_notes[0]}",
+            )
+        )
 
     # <translation> tags
-    if re.search(r'</?translation>', translated):
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="artifact-translation-tag",
-            message="<translation> tag remnant found",
-        ))
+    if re.search(r"</?translation>", translated):
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="artifact-translation-tag",
+                message="<translation> tag remnant found",
+            )
+        )
 
     # Glossary markers [N] not part of links
     # Exclude LaTeX nth-root notation like \sqrt[365]{...} — a legitimate math
     # construct, not a leftover translation glossary marker.
-    glossary_markers = [
-        m.group(1) for m in re.finditer(r'\[(\d+)\](?!\()', translated)
-        if not re.search(r'\\sqrt\s*$', translated[:m.start()])
-    ]
+    glossary_markers = [m.group(1) for m in re.finditer(r"\[(\d+)\](?!\()", translated) if not re.search(r"\\sqrt\s*$", translated[: m.start()])]
     if glossary_markers:
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="artifact-glossary-marker",
-            message=f"Glossary markers found: [{'], ['.join(glossary_markers[:5])}] "
-                    f"({len(glossary_markers)} total)",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="artifact-glossary-marker",
+                message=f"Glossary markers found: [{'], ['.join(glossary_markers[:5])}] " f"({len(glossary_markers)} total)",
+            )
+        )
 
     # Glossary definition block (line starting with [N] followed by term definition)
     for i, line in enumerate(lines, 1):
-        if re.match(r'^\[\d+\]\s+\w+', line.strip()):
-            issues.append(Issue(
-                severity=Severity.WARN,
-                file=cache_key, lang=lang,
-                check="artifact-glossary-block",
-                line=i,
-                message=f"Glossary definition line: '{line.strip()[:60]}'",
-            ))
+        if re.match(r"^\[\d+\]\s+\w+", line.strip()):
+            issues.append(
+                Issue(
+                    severity=Severity.WARN,
+                    file=cache_key,
+                    lang=lang,
+                    check="artifact-glossary-block",
+                    line=i,
+                    message=f"Glossary definition line: '{line.strip()[:60]}'",
+                )
+            )
 
     # Footnote definitions [^N]: (translator notes disguised as footnotes)
-    footnote_defs = re.findall(r'^\[\^\d+\]:.*$', translated, re.MULTILINE)
+    footnote_defs = re.findall(r"^\[\^\d+\]:.*$", translated, re.MULTILINE)
     if footnote_defs:
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="artifact-footnote-defs",
-            message=f"Footnote definitions found ({len(footnote_defs)}): "
-                    f"likely translator notes in footnote format",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="artifact-footnote-defs",
+                message=f"Footnote definitions found ({len(footnote_defs)}): " f"likely translator notes in footnote format",
+            )
+        )
 
     # Inline footnote references [^N]
-    footnote_refs = re.findall(r'\[\^\d+\]', translated)
+    footnote_refs = re.findall(r"\[\^\d+\]", translated)
     if footnote_refs:
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="artifact-footnote-refs",
-            message=f"Inline footnote refs found ({len(footnote_refs)}): "
-                    f"{', '.join(footnote_refs[:5])}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="artifact-footnote-refs",
+                message=f"Inline footnote refs found ({len(footnote_refs)}): " f"{', '.join(footnote_refs[:5])}",
+            )
+        )
 
     return issues
 
 
 def check_admonition_indent(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Check that admonition content lines are properly indented (4 spaces).
@@ -576,26 +642,25 @@ def check_admonition_indent(
 
     # ── 1. Indentation check ──
     for i, line in enumerate(lines):
-        if re.match(r'^!!! \w+', line) or re.match(r'^\?\?\? \w+', line):
+        if re.match(r"^!!! \w+", line) or re.match(r"^\?\?\? \w+", line):
             # Check next non-empty line for proper indentation
             for j in range(i + 1, min(i + 5, len(lines))):
                 next_line = lines[j]
-                if next_line.strip() == '':
+                if next_line.strip() == "":
                     continue
-                if (next_line.startswith('    ')
-                        or next_line.startswith('!!! ')
-                        or next_line.startswith('??? ')
-                        or next_line.startswith('---')):
+                if next_line.startswith("    ") or next_line.startswith("!!! ") or next_line.startswith("??? ") or next_line.startswith("---"):
                     break  # Properly indented or new block
                 if next_line.strip():
-                    issues.append(Issue(
-                        severity=Severity.ERROR,
-                        file=cache_key, lang=lang,
-                        check="admonition-indent",
-                        line=j + 1,
-                        message=f"Admonition content not indented (needs 4 spaces): "
-                                f"'{next_line.strip()[:50]}'",
-                    ))
+                    issues.append(
+                        Issue(
+                            severity=Severity.ERROR,
+                            file=cache_key,
+                            lang=lang,
+                            check="admonition-indent",
+                            line=j + 1,
+                            message=f"Admonition content not indented (needs 4 spaces): " f"'{next_line.strip()[:50]}'",
+                        )
+                    )
                     break
 
     # ── 2. Title preservation ──
@@ -604,71 +669,79 @@ def check_admonition_indent(
     tr_titles = _adm_title_re.findall(translated)
 
     if len(src_titles) != len(tr_titles):
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="admonition-title-count",
-            message=f"Admonition titles: source {len(src_titles)}, "
-                    f"translation {len(tr_titles)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="admonition-title-count",
+                message=f"Admonition titles: source {len(src_titles)}, " f"translation {len(tr_titles)}",
+            )
+        )
 
     for idx, (src_t, tr_t) in enumerate(zip(src_titles, tr_titles)):
         if src_t.strip() and not tr_t.strip():
-            issues.append(Issue(
-                severity=Severity.ERROR,
-                file=cache_key, lang=lang,
-                check="admonition-title-empty",
-                message=f"Admonition #{idx + 1}: title lost "
-                        f"(source: \"{src_t}\")",
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key,
+                    lang=lang,
+                    check="admonition-title-empty",
+                    message=f"Admonition #{idx + 1}: title lost " f'(source: "{src_t}")',
+                )
+            )
 
     # ── 3. Body presence ──
     for i, line in enumerate(lines):
-        if re.match(r'^(?:!!!|[?]{3})\s+\w+', line):
+        if re.match(r"^(?:!!!|[?]{3})\s+\w+", line):
             has_body = False
             for j in range(i + 1, min(i + 10, len(lines))):
                 next_line = lines[j]
-                if next_line.startswith('    ') and next_line.strip():
+                if next_line.startswith("    ") and next_line.strip():
                     has_body = True
                     break
                 # Non-indented non-empty content = body is outside the box
-                if (next_line.strip()
-                        and not next_line.startswith('    ')
-                        and not re.match(r'^(?:!!!|[?]{3})\s+', next_line)
-                        and next_line.strip() != '---'):
+                if next_line.strip() and not next_line.startswith("    ") and not re.match(r"^(?:!!!|[?]{3})\s+", next_line) and next_line.strip() != "---":
                     break
             if not has_body:
-                issues.append(Issue(
-                    severity=Severity.ERROR,
-                    file=cache_key, lang=lang,
-                    check="admonition-body-missing",
-                    line=i + 1,
-                    message=f"Admonition has no indented body content: "
-                            f"'{line.strip()[:60]}'",
-                ))
+                issues.append(
+                    Issue(
+                        severity=Severity.ERROR,
+                        file=cache_key,
+                        lang=lang,
+                        check="admonition-body-missing",
+                        line=i + 1,
+                        message=f"Admonition has no indented body content: " f"'{line.strip()[:60]}'",
+                    )
+                )
 
     # ── 4. Empty line after directive (Prettier-safe) ──
     # Admonitions MUST have an empty line between the directive and the body.
     # Without it, Prettier removes the 4-space indentation, breaking the box.
     for i, line in enumerate(lines):
-        if re.match(r'^(?:!!!|[?]{3})\s+\w+', line):
-            if i + 1 < len(lines) and lines[i + 1].strip() != '':
+        if re.match(r"^(?:!!!|[?]{3})\s+\w+", line):
+            if i + 1 < len(lines) and lines[i + 1].strip() != "":
                 # Next line is NOT empty — check if it's indented body content
-                if lines[i + 1].startswith('    '):
-                    issues.append(Issue(
-                        severity=Severity.WARN,
-                        file=cache_key, lang=lang,
-                        check="admonition-empty-line",
-                        line=i + 1,
-                        message=f"Admonition missing empty line after directive "
-                                f"(Prettier will break it): '{line.strip()[:60]}'",
-                    ))
+                if lines[i + 1].startswith("    "):
+                    issues.append(
+                        Issue(
+                            severity=Severity.WARN,
+                            file=cache_key,
+                            lang=lang,
+                            check="admonition-empty-line",
+                            line=i + 1,
+                            message=f"Admonition missing empty line after directive " f"(Prettier will break it): '{line.strip()[:60]}'",
+                        )
+                    )
 
     return issues
 
 
 def check_file_size(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Flag abnormal size ratios.
@@ -684,35 +757,44 @@ def check_file_size(
     ratio = tr_len / src_len
 
     if ratio < 0.5:
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="size-ratio",
-            message=f"Translation is {ratio:.0%} of source — likely truncated "
-                    f"({tr_len} vs {src_len} chars)",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="size-ratio",
+                message=f"Translation is {ratio:.0%} of source — likely truncated " f"({tr_len} vs {src_len} chars)",
+            )
+        )
     elif ratio < 0.75:
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="size-ratio",
-            message=f"Translation is {ratio:.0%} of source — might be incomplete "
-                    f"({tr_len} vs {src_len} chars)",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="size-ratio",
+                message=f"Translation is {ratio:.0%} of source — might be incomplete " f"({tr_len} vs {src_len} chars)",
+            )
+        )
     elif ratio > 2.0:
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="size-ratio",
-            message=f"Translation is {ratio:.0%} of source — likely has artifacts "
-                    f"({tr_len} vs {src_len} chars)",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="size-ratio",
+                message=f"Translation is {ratio:.0%} of source — likely has artifacts " f"({tr_len} vs {src_len} chars)",
+            )
+        )
 
     return issues
 
 
 def check_front_matter(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """Check YAML front-matter preservation."""
     issues = []
@@ -720,25 +802,34 @@ def check_front_matter(
     tr_fm = _extract_front_matter(translated)
 
     if src_fm and not tr_fm:
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="front-matter-missing",
-            message="Source has YAML front-matter but translation doesn't",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="front-matter-missing",
+                message="Source has YAML front-matter but translation doesn't",
+            )
+        )
     elif not src_fm and tr_fm:
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="front-matter-added",
-            message="Translation has YAML front-matter but source doesn't",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="front-matter-added",
+                message="Translation has YAML front-matter but source doesn't",
+            )
+        )
 
     return issues
 
 
 def check_list_structure(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Compare bullet/numbered list item counts.
@@ -749,60 +840,74 @@ def check_list_structure(
     # Bullet lists
     src_clean = _strip_code_blocks(source)
     tr_clean = _strip_code_blocks(translated)
-    src_bullets = re.findall(r'^\s*[-*+]\s', src_clean, re.MULTILINE)
-    tr_bullets = re.findall(r'^\s*[-*+]\s', tr_clean, re.MULTILINE)
+    src_bullets = re.findall(r"^\s*[-*+]\s", src_clean, re.MULTILINE)
+    tr_bullets = re.findall(r"^\s*[-*+]\s", tr_clean, re.MULTILINE)
     if len(src_bullets) != len(tr_bullets):
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="list-bullet-count",
-            message=f"Bullet items: source {len(src_bullets)}, translation {len(tr_bullets)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="list-bullet-count",
+                message=f"Bullet items: source {len(src_bullets)}, translation {len(tr_bullets)}",
+            )
+        )
 
     # Numbered lists
-    src_numbered = re.findall(r'^\s*\d+\.\s', source, re.MULTILINE)
-    tr_numbered = re.findall(r'^\s*\d+\.\s', translated, re.MULTILINE)
+    src_numbered = re.findall(r"^\s*\d+\.\s", source, re.MULTILINE)
+    tr_numbered = re.findall(r"^\s*\d+\.\s", translated, re.MULTILINE)
     if len(src_numbered) != len(tr_numbered):
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="list-numbered-count",
-            message=f"Numbered items: source {len(src_numbered)}, translation {len(tr_numbered)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="list-numbered-count",
+                message=f"Numbered items: source {len(src_numbered)}, translation {len(tr_numbered)}",
+            )
+        )
 
     return issues
 
 
 def check_admonitions(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Check MkDocs admonition syntax preservation (!!!, ???).
     The type keyword must NOT be translated.
     """
     issues = []
-    src_admonitions = re.findall(r'^(!{3}|[?]{3})\s+(\w+)', source, re.MULTILINE)
-    tr_admonitions = re.findall(r'^(!{3}|[?]{3})\s+(\w+)', translated, re.MULTILINE)
+    src_admonitions = re.findall(r"^(!{3}|[?]{3})\s+(\w+)", source, re.MULTILINE)
+    tr_admonitions = re.findall(r"^(!{3}|[?]{3})\s+(\w+)", translated, re.MULTILINE)
 
     if len(src_admonitions) != len(tr_admonitions):
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="admonition-count",
-            message=f"Admonitions: source {len(src_admonitions)}, "
-                    f"translation {len(tr_admonitions)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="admonition-count",
+                message=f"Admonitions: source {len(src_admonitions)}, " f"translation {len(tr_admonitions)}",
+            )
+        )
 
     for idx, (src_a, tr_a) in enumerate(zip(src_admonitions, tr_admonitions)):
         src_marker, src_type = src_a
         tr_marker, tr_type = tr_a
         if src_type != tr_type:
-            issues.append(Issue(
-                severity=Severity.ERROR,
-                file=cache_key, lang=lang,
-                check="admonition-type",
-                message=f"Admonition #{idx + 1}: type changed from '{src_type}' to '{tr_type}'",
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key,
+                    lang=lang,
+                    check="admonition-type",
+                    message=f"Admonition #{idx + 1}: type changed from '{src_type}' to '{tr_type}'",
+                )
+            )
 
     return issues
 
@@ -831,7 +936,10 @@ def _strip_code(text: str) -> str:
 
 
 def check_html_blocks(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Verify HTML tags/blocks are preserved (gallery pages have heavy HTML).
@@ -845,35 +953,42 @@ def check_html_blocks(
     tr_clean = _strip_code(translated)
 
     # Extract HTML tags (just opening/closing tag names)
-    src_tags = re.findall(r'<(/?\w+)[^>]*>', src_clean)
-    tr_tags = re.findall(r'<(/?\w+)[^>]*>', tr_clean)
+    src_tags = re.findall(r"<(/?\w+)[^>]*>", src_clean)
+    tr_tags = re.findall(r"<(/?\w+)[^>]*>", tr_clean)
 
     if src_tags != tr_tags:
         # Count by tag name
         from collections import Counter
+
         src_counts = Counter(src_tags)
         tr_counts = Counter(tr_tags)
 
         for tag, count in src_counts.items():
             tr_count = tr_counts.get(tag, 0)
             if tr_count != count:
-                issues.append(Issue(
-                    severity=Severity.WARN,
-                    file=cache_key, lang=lang,
-                    check="html-tag-mismatch",
-                    message=f"<{tag}> count: source {count}, translation {tr_count}",
-                ))
+                issues.append(
+                    Issue(
+                        severity=Severity.WARN,
+                        file=cache_key,
+                        lang=lang,
+                        check="html-tag-mismatch",
+                        message=f"<{tag}> count: source {count}, translation {tr_count}",
+                    )
+                )
 
     return issues
-
 
 
 # ---------------------------------------------------------------------------
 # HTML attribute integrity check (technical attrs must not be translated)
 # ---------------------------------------------------------------------------
 
+
 def check_html_attrs(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Verify that technical HTML attributes are preserved verbatim in translations.
@@ -890,10 +1005,17 @@ def check_html_attrs(
     import re
 
     # Attributes that carry human text → legitimately translated
-    TRANSLATABLE_ATTRS = frozenset({
-        "alt", "title", "placeholder", "aria-label", "aria-labelledby",
-        "aria-describedby", "data-title",
-    })
+    TRANSLATABLE_ATTRS = frozenset(
+        {
+            "alt",
+            "title",
+            "placeholder",
+            "aria-label",
+            "aria-labelledby",
+            "aria-describedby",
+            "data-title",
+        }
+    )
 
     def _extract_tag_attrs(text: str) -> list[tuple[str, dict[str, str]]]:
         """Return list of (tag_name, {attr: value}) for every HTML opening tag."""
@@ -950,27 +1072,27 @@ def check_html_attrs(
                 continue  # legitimately translated
             t_val = t_attrs.get(attr)
             if t_val is None:
-                issues.append(Issue(
-                    severity=Severity.WARN,
-                    file=cache_key, lang=lang,
-                    check="html-attr-missing",
-                    message=(
-                        f"<{s_tag}> tag #{idx + 1}: attribute `{attr}` missing "
-                        f"in translation (expected: {s_val!r})"
-                    ),
-                ))
+                issues.append(
+                    Issue(
+                        severity=Severity.WARN,
+                        file=cache_key,
+                        lang=lang,
+                        check="html-attr-missing",
+                        message=(f"<{s_tag}> tag #{idx + 1}: attribute `{attr}` missing " f"in translation (expected: {s_val!r})"),
+                    )
+                )
             elif t_val != s_val:
                 if attr in ("src", "href") and _is_expected_relative_depth_shift(s_val, t_val):
                     continue  # expected extra ../ level for localized doc path
-                issues.append(Issue(
-                    severity=Severity.WARN,
-                    file=cache_key, lang=lang,
-                    check="html-attr-mismatch",
-                    message=(
-                        f"<{s_tag}> tag #{idx + 1}: attribute `{attr}` changed "
-                        f"— source: {s_val!r}, translation: {t_val!r}"
-                    ),
-                ))
+                issues.append(
+                    Issue(
+                        severity=Severity.WARN,
+                        file=cache_key,
+                        lang=lang,
+                        check="html-attr-mismatch",
+                        message=(f"<{s_tag}> tag #{idx + 1}: attribute `{attr}` changed " f"— source: {s_val!r}, translation: {t_val!r}"),
+                    )
+                )
 
     return issues
 
@@ -986,7 +1108,10 @@ _UNTRANSLATED_TEXT_OK = frozenset({"Buy Me a Coffee"})
 
 
 def check_untranslated_text_attrs(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Flag image alt text, `title`, `aria-label` and `data-title` (carousel caption) values copied verbatim from the source.
@@ -995,6 +1120,7 @@ def check_untranslated_text_attrs(
     A value of three words or more that appears unchanged among the source's own values is reported — shorter
     values are mostly names (ETF, Buy, Revolut) that legitimately stay as they are.
     """
+
     def _values(text: str) -> list[str]:
         clean = _strip_code(text)
         found = [m.group(2).strip() for m in _TEXT_ATTR.finditer(clean)]
@@ -1005,12 +1131,15 @@ def check_untranslated_text_attrs(
     issues = []
     for value in _values(translated):
         if value in source_values:
-            issues.append(Issue(
-                severity=Severity.WARN,
-                file=cache_key, lang=lang,
-                check="text-untranslated",
-                message=f"alt/title text left in the source language: {value[:90]!r}",
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.WARN,
+                    file=cache_key,
+                    lang=lang,
+                    check="text-untranslated",
+                    message=f"alt/title text left in the source language: {value[:90]!r}",
+                )
+            )
     return issues
 
 
@@ -1018,8 +1147,12 @@ def check_untranslated_text_attrs(
 # HTML static-path detection (breaks in dev or language subdirectories)
 # ---------------------------------------------------------------------------
 
+
 def check_html_relative_src(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Detect HTML src/href attributes with static resource paths that are
@@ -1043,18 +1176,17 @@ def check_html_relative_src(
     lines = tr_clean.split("\n")
 
     def _add_issue(m, description):
-        pos = tr_clean[:m.start()].count("\n") + 1
+        pos = tr_clean[: m.start()].count("\n") + 1
         line_content = lines[pos - 1][:80] if pos <= len(lines) else ""
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="html-relative-src",
-            message=(
-                f"L{pos}: {description} -- "
-                f"use JS dynamic base pattern instead. "
-                f"Context: {line_content!r}"
-            ),
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="html-relative-src",
+                message=(f"L{pos}: {description} -- " f"use JS dynamic base pattern instead. " f"Context: {line_content!r}"),
+            )
+        )
 
     # Pattern 1: bare relative src/href="static/..." (breaks in /lang/ subdirs)
     for m in re.finditer(r'(?:src|href)="static/', tr_clean, re.IGNORECASE):
@@ -1065,8 +1197,8 @@ def check_html_relative_src(
     #   a) occurrences inside data-title="..." (JS carousel labels, not rendered directly)
     #   b) <img id="..."> followed within ~300 chars by getElementById(id).src = ... (JS override)
     for m in re.finditer(r'(?:src|href)="/LibreFolio/static/', tr_clean, re.IGNORECASE):
-        before_line = tr_clean[:m.start()].split("\n")[-1]
-        after_ctx = tr_clean[m.start():m.start() + 400]
+        before_line = tr_clean[: m.start()].split("\n")[-1]
+        after_ctx = tr_clean[m.start() : m.start() + 400]
 
         # Skip if inside data-title attribute
         if re.search(r'data-title=["\'](?:[^"\']*)', before_line):
@@ -1076,7 +1208,7 @@ def check_html_relative_src(
         id_match = re.search(r'id="([^"]+)"', before_line + after_ctx[:100])
         if id_match:
             elem_id = id_match.group(1)
-            if re.search(re.escape(elem_id) + r'[^<]*\.src\s*=', after_ctx):
+            if re.search(re.escape(elem_id) + r"[^<]*\.src\s*=", after_ctx):
                 continue
 
         _add_issue(m, f"'{m.group(0)}...' hardcodes production base path, breaks in dev (/mkdocs/)")
@@ -1164,8 +1296,11 @@ def check_html_asset_depth(
 # Truncated word detection (common LLM artifact)
 # ---------------------------------------------------------------------------
 
+
 def check_truncated_words(
-    translated: str, cache_key: str, lang: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Detect words that look truncated (partial words that aren't valid).
@@ -1178,7 +1313,7 @@ def check_truncated_words(
     # Words that are suspiciously short and end mid-syllable
     truncation_patterns = [
         # Words with 3+ consonants in a row that aren't common clusters
-        (r'\b[A-Z][a-z]*[bcdfghjklmnpqrstvwxyz]{3,}\b', "consonant cluster"),
+        (r"\b[A-Z][a-z]*[bcdfghjklmnpqrstvwxyz]{3,}\b", "consonant cluster"),
         # Capitalized word fragment followed by space and lowercase continuation
         # e.g. "Critt valute" instead of "Criptovalute"
     ]
@@ -1189,14 +1324,10 @@ def check_truncated_words(
     for line_num, line in enumerate(lines, 1):
         # Look for very short "words" (2-4 chars) that are capitalized and
         # followed by lowercase — possible truncation
-        fragments = re.findall(r'\b([A-Z][a-z]{1,3})\s+([a-z]+)\b', line)
+        fragments = re.findall(r"\b([A-Z][a-z]{1,3})\s+([a-z]+)\b", line)
         for frag, following in fragments:
             # Skip common short words
-            common_short = {"La", "Le", "Lo", "Il", "Un", "De", "El", "En",
-                           "Es", "Se", "Si", "No", "Al", "Da", "Di", "In",
-                           "Su", "Du", "Au", "Les", "Des", "Una", "Per",
-                           "Con", "Del", "Dal", "Che", "Non", "Più",
-                           "Tra", "Fra", "Suo", "Sua", "Poi", "Già"}
+            common_short = {"La", "Le", "Lo", "Il", "Un", "De", "El", "En", "Es", "Se", "Si", "No", "Al", "Da", "Di", "In", "Su", "Du", "Au", "Les", "Des", "Una", "Per", "Con", "Del", "Dal", "Che", "Non", "Più", "Tra", "Fra", "Suo", "Sua", "Poi", "Già"}
             if frag not in common_short and len(frag) <= 4:
                 # Could be truncation — flag as info for manual review
                 pass  # Too many false positives to be useful
@@ -1208,8 +1339,12 @@ def check_truncated_words(
 # LaTeX preservation check
 # ---------------------------------------------------------------------------
 
+
 def check_latex(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Verify LaTeX math expressions are preserved and syntactically valid.
@@ -1220,34 +1355,38 @@ def check_latex(
     def _validate_syntax(math_str: str, is_translation: bool) -> list[Issue]:
         syntax_issues = []
         # Check 1: Raw euro symbol € outside \text{}
-        stripped = re.sub(r'\\text\{[^}]*\}', '', math_str)
-        if '€' in stripped:
+        stripped = re.sub(r"\\text\{[^}]*\}", "", math_str)
+        if "€" in stripped:
             loc_str = f"translated ({lang})" if is_translation else "source (en)"
-            syntax_issues.append(Issue(
-                severity=Severity.ERROR,
-                file=cache_key,
-                lang=lang if is_translation else "en",
-                check="latex-syntax-euro",
-                message=f"Raw Euro symbol '€' found outside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Wrap it in \\text{{€}} or use EUR.",
-            ))
-
-        # Check 2: Ampersand & or \& inside \text{}
-        text_blocks = re.findall(r'\\text\{([^}]*)\}', math_str)
-        for tb in text_blocks:
-            if '&' in tb or '\\&' in tb:
-                loc_str = f"translated ({lang})" if is_translation else "source (en)"
-                syntax_issues.append(Issue(
+            syntax_issues.append(
+                Issue(
                     severity=Severity.ERROR,
                     file=cache_key,
                     lang=lang if is_translation else "en",
-                    check="latex-syntax-ampersand",
-                    message=f"Ampersand '&' or '\\&' found inside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Use \\text{{P}}\\&\\text{{L}} or place \\& outside \\text{{}}.",
-                ))
+                    check="latex-syntax-euro",
+                    message=f"Raw Euro symbol '€' found outside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Wrap it in \\text{{€}} or use EUR.",
+                )
+            )
+
+        # Check 2: Ampersand & or \& inside \text{}
+        text_blocks = re.findall(r"\\text\{([^}]*)\}", math_str)
+        for tb in text_blocks:
+            if "&" in tb or "\\&" in tb:
+                loc_str = f"translated ({lang})" if is_translation else "source (en)"
+                syntax_issues.append(
+                    Issue(
+                        severity=Severity.ERROR,
+                        file=cache_key,
+                        lang=lang if is_translation else "en",
+                        check="latex-syntax-ampersand",
+                        message=f"Ampersand '&' or '\\&' found inside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Use \\text{{P}}\\&\\text{{L}} or place \\& outside \\text{{}}.",
+                    )
+                )
         return syntax_issues
 
     # Display math ($$...$$)
-    src_display = re.findall(r'\$\$(.+?)\$\$', source, re.DOTALL)
-    tr_display = re.findall(r'\$\$(.+?)\$\$', translated, re.DOTALL)
+    src_display = re.findall(r"\$\$(.+?)\$\$", source, re.DOTALL)
+    tr_display = re.findall(r"\$\$(.+?)\$\$", translated, re.DOTALL)
 
     for m in src_display:
         issues.extend(_validate_syntax(m, is_translation=False))
@@ -1255,35 +1394,36 @@ def check_latex(
         issues.extend(_validate_syntax(m, is_translation=True))
 
     if len(src_display) != len(tr_display):
-        issues.append(Issue(
-            severity=Severity.ERROR,
-            file=cache_key, lang=lang,
-            check="latex-display-count",
-            message=f"Display math blocks: source {len(src_display)}, "
-                    f"translation {len(tr_display)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang,
+                check="latex-display-count",
+                message=f"Display math blocks: source {len(src_display)}, " f"translation {len(tr_display)}",
+            )
+        )
 
     for idx, (src_m, tr_m) in enumerate(zip(src_display, tr_display)):
         if src_m.strip() != tr_m.strip():
-            issues.append(Issue(
-                severity=Severity.LOCALIZED,  # \text{} content intentionally localized
-                file=cache_key, lang=lang,
-                check="latex-display-modified",
-                message=(
-                    f"Display math #{idx + 1} altered (check \\text{{}} not formula):\n"
-                    f"    SRC: $${src_m.strip()[:80]}$$\n"
-                    f"    TRN: $${tr_m.strip()[:80]}$$"
-                ),
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.LOCALIZED,  # \text{} content intentionally localized
+                    file=cache_key,
+                    lang=lang,
+                    check="latex-display-modified",
+                    message=(f"Display math #{idx + 1} altered (check \\text{{}} not formula):\n" f"    SRC: $${src_m.strip()[:80]}$$\n" f"    TRN: $${tr_m.strip()[:80]}$$"),
+                )
+            )
 
     # Inline math ($...$) as pymdownx.arithmatex reads it with smart_dollar (the site's default): the
     # opening $ is not followed by a space, the closing $ not preceded by one, and the content holds no
     # unescaped $. So "500 $" or "0,25 $ et 1,50 $" never opens a formula, while "day 3 $A$" does: the
     # former suffix-currency rule (a digit before the $) dropped such formulas from one side only.
     _INLINE_RE = re.compile(r"(?<![\\$])\$(?![\s$])((?:\\.|[^\\$\n])+?)(?<![\s\\])\$(?!\$)")
-    _NON_MATH_CONTENT_RE = re.compile(r'^[\d,.]|^\{')  # prefix currency or bash var
+    _NON_MATH_CONTENT_RE = re.compile(r"^[\d,.]|^\{")  # prefix currency or bash var
     # Markdown bold/italic markup leaked between two $ signs — not real math
-    _MARKDOWN_MARKUP_RE = re.compile(r'\*\*|\*|__')
+    _MARKDOWN_MARKUP_RE = re.compile(r"\*\*|\*|__")
 
     def _extract_inline(text: str) -> list[str]:
         """Extract inline math, filtering out currency and bash-variable false positives."""
@@ -1308,34 +1448,35 @@ def check_latex(
         issues.extend(_validate_syntax(m, is_translation=True))
 
     if len(src_inline) != len(tr_inline):
-        issues.append(Issue(
-            severity=Severity.WARN,
-            file=cache_key, lang=lang,
-            check="latex-inline-count",
-            message=f"Inline math: source {len(src_inline)}, "
-                    f"translation {len(tr_inline)}",
-        ))
+        issues.append(
+            Issue(
+                severity=Severity.WARN,
+                file=cache_key,
+                lang=lang,
+                check="latex-inline-count",
+                message=f"Inline math: source {len(src_inline)}, " f"translation {len(tr_inline)}",
+            )
+        )
 
     for idx, (src_m, tr_m) in enumerate(zip(src_inline, tr_inline)):
         if src_m.strip() != tr_m.strip():
-            issues.append(Issue(
-                severity=Severity.LOCALIZED,  # \text{} or decimal sep intentionally localized
-                file=cache_key, lang=lang,
-                check="latex-inline-modified",
-                message=(
-                    f"Inline math #{idx + 1} altered (check \\text{{}} not formula structure):\n"
-                    f"    SRC: ${src_m}$\n"
-                    f"    TRN: ${tr_m}$"
-                ),
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.LOCALIZED,  # \text{} or decimal sep intentionally localized
+                    file=cache_key,
+                    lang=lang,
+                    check="latex-inline-modified",
+                    message=(f"Inline math #{idx + 1} altered (check \\text{{}} not formula structure):\n" f"    SRC: ${src_m}$\n" f"    TRN: ${tr_m}$"),
+                )
+            )
 
     return issues
-
 
 
 # ---------------------------------------------------------------------------
 # Math block structural position
 # ---------------------------------------------------------------------------
+
 
 def _math_block_positions(text: str) -> list[tuple[int, bool]]:
     """Position of each display-math block: (opening line number, indented-4?)."""
@@ -1355,7 +1496,10 @@ def _math_block_positions(text: str) -> list[tuple[int, bool]]:
 
 
 def check_math_indentation(
-    source: str, translated: str, cache_key: str, lang: str,
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
 ) -> list[Issue]:
     """
     Display-math blocks inside lists/admonitions must keep their 4-space indent.
@@ -1372,16 +1516,15 @@ def check_math_indentation(
 
     for idx, ((src_line, src_ind), (_tr_line, tr_ind)) in enumerate(zip(src_pos, tr_pos)):
         if src_ind and not tr_ind:
-            issues.append(Issue(
-                severity=Severity.ERROR,
-                file=cache_key, lang=lang,
-                check="math-indent-lost",
-                message=(
-                    f"Display math block #{idx + 1} (source line {src_line + 1}) lost its "
-                    f"4-space indentation — the formula renders as raw text instead of "
-                    f"rendering inside its list/admonition."
-                ),
-            ))
+            issues.append(
+                Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key,
+                    lang=lang,
+                    check="math-indent-lost",
+                    message=(f"Display math block #{idx + 1} (source line {src_line + 1}) lost its " f"4-space indentation — the formula renders as raw text instead of " f"rendering inside its list/admonition."),
+                )
+            )
     return issues
 
 
@@ -1390,11 +1533,11 @@ def check_math_indentation(
 # ---------------------------------------------------------------------------
 
 ALL_CHECKS = [
-    ("heading-structure", check_heading_structure, True),   # needs source + translated
+    ("heading-structure", check_heading_structure, True),  # needs source + translated
     ("links", check_links, True),
     ("link-anchors", check_link_anchors, True),
     ("code-blocks", check_code_blocks, True),
-    ("code-block-indent", check_code_block_indent, True),   # pairs blocks by content, not position
+    ("code-block-indent", check_code_block_indent, True),  # pairs blocks by content, not position
     ("inline-code", check_inline_code, True),
     ("list-structure", check_list_structure, True),
     ("admonitions", check_admonitions, True),
@@ -1405,16 +1548,18 @@ ALL_CHECKS = [
     ("html-asset-depth", check_html_asset_depth, True),
     ("front-matter", check_front_matter, True),
     ("latex", check_latex, True),
-    ("math-indentation", check_math_indentation, True),     # positional: indented $$ blocks stay indented
+    ("math-indentation", check_math_indentation, True),  # positional: indented $$ blocks stay indented
     ("file-size", check_file_size, True),
-    ("artifacts", check_artifacts, False),                  # only needs translated
-    ("admonition-indent", check_admonition_indent, True),   # uses source for title comparison
+    ("artifacts", check_artifacts, False),  # only needs translated
+    ("admonition-indent", check_admonition_indent, True),  # uses source for title comparison
 ]
 
 
 def validate_file(
-    source_path: Path, trans_path: Path,
-    cache_key: str, lang: str,
+    source_path: Path,
+    trans_path: Path,
+    cache_key: str,
+    lang: str,
     verbose: bool = False,
 ) -> list[Issue]:
     """Run all checks on a single source/translation pair."""
@@ -1516,8 +1661,7 @@ def run_validate(args) -> int:
             if issues:
                 result.issues.extend(issues)
                 # Filter for display (hide LOCALIZED if requested)
-                visible = [i for i in issues
-                           if not (hide_localized and i.severity == Severity.LOCALIZED)]
+                visible = [i for i in issues if not (hide_localized and i.severity == Severity.LOCALIZED)]
                 if visible:
                     has_errors = any(i.severity == Severity.ERROR for i in visible)
                     has_warnings = any(i.severity == Severity.WARN for i in visible)
@@ -1545,11 +1689,11 @@ def run_validate(args) -> int:
     print(f"   Files missing:  {result.files_missing}")
     print(f"   Errors:         {result.errors}")
     print(f"   Warnings:       {result.warnings}")
-    print(f"   Localized:      {result.localized}"
-          + ("  (hidden — use without --hide-localized to see)" if hide_localized else ""))
+    print(f"   Localized:      {result.localized}" + ("  (hidden — use without --hide-localized to see)" if hide_localized else ""))
 
     # Breakdown by check type
     from collections import Counter
+
     err_counts = Counter(i.check for i in result.issues if i.severity == Severity.ERROR)
     warn_counts = Counter(i.check for i in result.issues if i.severity == Severity.WARN)
     loc_counts = Counter(i.check for i in result.issues if i.severity == Severity.LOCALIZED)
@@ -1583,6 +1727,7 @@ def run_validate(args) -> int:
 # CHANGELOG (changelog.py): the chapters of CHANGELOG.<lang>.md
 # ---------------------------------------------------------------------------
 
+
 def _changelog_source() -> Path:
     """CHANGELOG.md, two levels above DOCS_DIR (mkdocs_src/docs/): a run that points DOCS_DIR elsewhere sees no other."""
     return DOCS_DIR.parent.parent / cl.SOURCE.name
@@ -1607,8 +1752,7 @@ def validate_changelog(lang: str, units: list, released: set[str], hashes: dict,
     issues: list[Issue] = []
     if not path.exists():
         for unit in translated_units:
-            issue = Issue(Severity.ERROR, f"{cl.KEY}#{unit.name}", lang, "changelog-missing",
-                          f"{path.name} does not exist")
+            issue = Issue(Severity.ERROR, f"{cl.KEY}#{unit.name}", lang, "changelog-missing", f"{path.name} does not exist")
             issues.append(issue if unit.name in released else _open(issue))
         return issues if any(i.severity == Severity.ERROR for i in issues) else None
 
@@ -1624,8 +1768,7 @@ def validate_changelog(lang: str, units: list, released: set[str], hashes: dict,
             continue
         positions.append(english_order.index(name))
         if heading != unit.heading:
-            issue = Issue(Severity.ERROR, key, lang, "changelog-chapter",
-                          f"chapter line «{heading}» differs from the English «{unit.heading}»")
+            issue = Issue(Severity.ERROR, key, lang, "changelog-chapter", f"chapter line «{heading}» differs from the English «{unit.heading}»")
             issues.append(issue if name in released else _open(issue))
     for name in {n for n in translation.order if translation.order.count(n) > 1}:
         issues.append(Issue(Severity.ERROR, f"{cl.KEY}#{name}", lang, "changelog-chapter", "chapter written more than once"))
@@ -1642,8 +1785,7 @@ def validate_changelog(lang: str, units: list, released: set[str], hashes: dict,
             found.extend(validate_text(unit.text(), unit.text(body), key, lang))
             stale = [p.key.split("#", 1)[1] for p in unit.pieces if _needs_translation(hashes.get(p.key), p.md5, lang)]
             if stale:
-                found.append(Issue(Severity.ERROR, key, lang, "changelog-stale",
-                                   f"{len(stale)} piece(s) changed since their translation: {', '.join(stale)}"))
+                found.append(Issue(Severity.ERROR, key, lang, "changelog-stale", f"{len(stale)} piece(s) changed since their translation: {', '.join(stale)}"))
         issues.extend(found if unit.name in released else [_open(i) for i in found])
     return issues
 
@@ -1683,6 +1825,7 @@ def _validate_changelog(target_langs: list[str], result: ValidationResult, hide_
 # CLI / dev.py integration
 # ---------------------------------------------------------------------------
 
+
 def register_subparser(mk_sub) -> None:
     """Register 'translate-validate' sub-command under 'mkdocs' in dev.py."""
     target_langs = _detect_target_languages()
@@ -1691,20 +1834,31 @@ def register_subparser(mk_sub) -> None:
         help="Validate translated docs (structural cross-check)",
     )
     vp.add_argument(
-        "--lang", action="extend", nargs="+", choices=target_langs,
+        "--lang",
+        action="extend",
+        nargs="+",
+        choices=target_langs,
         metavar="LANG",
         help=f"Target language(s) to validate. Detected: {target_langs}",
     )
     vp.add_argument(
-        "--file", action="extend", nargs="+", metavar="PATH",
+        "--file",
+        action="extend",
+        nargs="+",
+        metavar="PATH",
         help="Source file(s) to validate (relative to docs/)",
     )
     vp.add_argument(
-        "--verbose", "-v", action="store_true",
+        "--verbose",
+        "-v",
+        action="store_true",
         help="Show OK files and skipped files",
     )
     vp.add_argument(
-        "--hide-localized", "-L", action="store_true", dest="hide_localized",
+        "--hide-localized",
+        "-L",
+        action="store_true",
+        dest="hide_localized",
         help="Hide intentional localization diffs (latex \\text{}, code comments, decimal sep)",
     )
     vp.set_defaults(func=run_validate)
@@ -1717,13 +1871,19 @@ def main():
     )
     target_langs = _detect_target_languages()
     parser.add_argument(
-        "--lang", action="extend", nargs="+", choices=target_langs,
+        "--lang",
+        action="extend",
+        nargs="+",
+        choices=target_langs,
         metavar="LANG",
     )
     parser.add_argument("--file", action="extend", nargs="+", metavar="PATH")
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument(
-        "--hide-localized", "-L", action="store_true", dest="hide_localized",
+        "--hide-localized",
+        "-L",
+        action="store_true",
+        dest="hide_localized",
         help="Hide intentional localization diffs",
     )
     parser.set_defaults(func=run_validate)
@@ -1734,5 +1894,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

@@ -255,12 +255,7 @@ def locate(unit: Unit, translation: Translation | None, hashes: dict, lang: str)
     if not unit.split:
         return {unit.pieces[0].key: body}, ""
     parts = cut_parts(body)
-    indexed = sorted(
-        (entry["langs"][lang]["index"], key)
-        for key in unit_keys(unit.name, hashes)
-        for entry in [hashes[key]]
-        if isinstance(entry.get("langs", {}).get(lang, {}).get("index"), int)
-    )
+    indexed = sorted((entry["langs"][lang]["index"], key) for key in unit_keys(unit.name, hashes) for entry in [hashes[key]] if isinstance(entry.get("langs", {}).get(lang, {}).get("index"), int))
     if indexed:
         if len(indexed) != len(parts):
             return {}, f"{len(parts)} parts for {len(indexed)} recorded pieces"
@@ -291,8 +286,7 @@ def _tag_exists(version: str, repo: Path) -> bool:
         return True
     for tag in tags:
         try:
-            done = subprocess.run(["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"refs/tags/{tag}"],
-                                  capture_output=True, check=False)
+            done = subprocess.run(["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"refs/tags/{tag}"], capture_output=True, check=False)
         except OSError:
             return False
         if done.returncode == 0:
