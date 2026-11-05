@@ -188,103 +188,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+#### 🧾 Transactions and adjustments
+
 - **A broker without the overdraft option can never have a negative cash balance, the starting one included.** The check of a batch (save, import, delete) now also looks at the balance before the first changed day when no transaction follows it: cash at −100 since 10/10, with the only later transaction deleted, is refused instead of passing. With the option on, nothing changes. Turning the option off on a broker whose cash is already negative is still refused, and the broker keeps the option.
+- **An Adjustment that takes units out no longer has a value.** The units only leave the quantity: their cost counts as a realized loss, the same on the Dashboard and in the lots, with no capital flow (so the day's return shows the loss). To record a sale, use a Sell. The value field appears only for units coming in.
+- When a broker is deleted, or a transfer pair is split, the giving leg becomes an Adjustment without a value: it no longer needs an exchange rate to be converted.
+- **Linking two Adjustments as a pair is refused**, with a message in your language pointing to an Asset Transfer. Saved data is not changed.
+
+#### 📥 Broker imports
+
 - **The Fineco importer brings in only settled operations.** An operation whose value date is still ahead (usually the last one or two working days) waits for your next export, commission included; a blue note says how many. A row missing a quantity or an amount is imported as before, with a note that lists it and links to a new GitHub issue.
 - **The Fineco importer is no longer beta**, and its guide is rewritten with the real path in six screenshots (Portafoglio → Reports → Ordini e contabili → filter → Cerca → Esporta excel), a note on commissions and a «Known limitations» section. Screenshots courtesy of [@Xgialippo](https://github.com/Xgialippo) ([#49](https://github.com/Librefolio/LibreFolio/discussions/49)).
 - **Import notices now tell you which rows were left out.** When an importer leaves out a row it does not recognise or cannot read, the warning lists the rows and gives a link to open an issue on GitHub. DEGIRO, Crédit Agricole, Scalable and Directa follow the rule; orders that are pending, cancelled, expired or rejected in a Scalable export are left out quietly.
-- **The chart settings preview looks like the detail chart**: taller, line only, zoom with the mouse wheel.
-- **Asset cards colour their line from where the period starts**, green above and red below, as the detail chart already did.
-- **The Assets list loads lighter charts**: each card asks only for the points it can draw (for five years about 200 instead of about 1 800), and its percent base starts from the first day of the period.
 - **Danske Bank**: trades settled after the cash statement's last day are a blue note instead of a warning; they arrive with the next import.
-- **Settings › Administration is now for administrators only.** Other users no longer see a read-only copy of Global Settings; an old link to it opens their Profile.
-- **Date ranges always span two different days.** In every date-range picker the day clicked first shows the not-allowed cursor and a second click on it is ignored; a typed date equal to the other end turns red; the arrow keys skip it. A date typed while the other end is empty leaves that end open: in a table's date filter, **From** alone keeps the rows from that day on (it used to keep that day only). Ranges of one day saved earlier still work.
-- **Leaner database indexes.** The upgrade to 1.3 removes 13 database indexes no query used: copies of the indexes unique constraints already have, and shorter versions of other indexes. Every new price now updates one index fewer, and price history takes about a fifth less space with its indexes. An existing database file keeps its size: the freed space is reused as new data arrives. Backups are written compact.
-- The same portfolio report requested twice at once (two tabs, a refresh during a slow load) is computed once.
-- **One change over the range, from the server.** The change over the selected range on the Assets cards, in the FX table and cards, on an FX pair's page and on an asset's page is now computed by the server, so the same figure appears everywhere; beside a live price it is the change up to that price. A price written down to 0 shows −100 %, and a change that cannot be computed in the display currency is left out instead of mixing currencies.
-- AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently (unless a null there only means "none", such as an open lot's closing date or a single asset's portfolio weight), so the AI can tell missing data from data that isn't part of the export.
-- A user's base currency is saved only as an ISO 4217 code, and a refused currency now names the ISO code it stands for (`'840'`: USD).
-- Requests that save a currency accept only ISO 4217 alphabetic codes; names such as "Euro" or numeric codes such as "978" are refused (422). Stored data is read as before.
-- After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
-- Testing a provider's settings is limited to 30 times a minute per user (`LIBREFOLIO_PROBE_RATE_LIMIT`, `0` turns it off); a scheduled investment holds at most 10,000 manual events.
-- `./dev.py user deactivate` on the administrator still waiting for its setup cancels its setup link; `./dev.py user demote` refuses it.
-- On very large instances the asset and FX lists load their prices in several requests, each within the server's limits, instead of one oversized request.
-- **Lots with a broken history**: when an asset's lots cannot be rebuilt (for example a sale of more units than were held), the lots panel no longer draws lots it cannot trust. It says why, lists each transaction to fix (day, broker, a link) and keeps only the average-cost lines; AI Export lists the asset as failed instead of adding wrong figures to the totals.
-- On a managed instance (`LIBREFOLIO_PROFILE=managed`) the app no longer invites users to donate (no coffee links, no popup) and never checks for updates (no «Check for updates» in the changelog). «Forgot password?» asks users to contact their administrator instead of showing server commands. None of this shows before the server has said which kind of instance it is.
-- An empty or blank secret counts as not set, as if the variable were absent.
-- Changing your password or your email signs out every other device; the one you changed it from stays signed in.
-- **Changing your email asks for your current password** in Settings › Profile.
-- A password reset from the command line, a deactivation or a demotion signs the account out of every device; reactivating an account does not bring its old sessions back.
 - Import wizard: when a broker's default plugin, DEGIRO or the Generic CSV, cannot read an uploaded file, the wrong-broker prompt gives the reason in your language.
-- `GET /api/v1/system/info` without a session answers only the app version; signed-in users still get the full report.
-- The list of exchange-rate providers no longer waits for the ECB and the SNB every time it opens: each provider's currency list is kept for a day, and a slow or unreachable provider is given up after 5 seconds, showing the last list it gave.
-- «Enable registration» becomes «Registration»: the upgrade keeps an open instance open and a closed one closed. The login page offers «Register here» only when registration is open, or while the instance has no account yet.
-- `./dev.py user create`, `invite` and `activate` warn, then go ahead, when the instance has reached `LIBREFOLIO_MAX_USERS`.
-- `LIBREFOLIO_MAX_USERS` also counts the accounts waiting for their email verification, while their link is live: reactivating one of them, from Settings › Users (`holds_place` in `GET /api/v1/users`) or `./dev.py user activate`, takes no new place even on a full instance. Activating or deactivating an account, through the admin API or the command line, revokes its verification link.
-- API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`, with `first_account_open` true while the instance has no account.
-- Docker: the image exposes only port 6040, and both compose files set `PORT=6040` inside the container; `PORT` in `.env` still chooses the host port. The unused 6041 mapping is gone.
-- **Live prices pause while you are away.** On the Assets page (every minute) and on an asset's page (every 30 seconds), live prices stop refreshing while the tab is in the background or after two minutes without using the page, with a small «Updates paused» label, and start again by themselves as soon as you come back. An asset's page now sends one request per refresh instead of two, and none at all on a date range that ends in the past.
-- **Saving the asset events editor is all or nothing.** The Events tab saves deletions, edits and new rows in one step: if anything is refused, none of them is kept, and the message, in your language, names the event at fault. An event linked to transactions can no longer be deleted together with other changes: the save stops and says which event and how many transactions use it, so remove the link first. Until now the other changes were saved and that deletion was skipped with a warning. Deleting an event and giving its date and type to another in the same save now works.
-- **«+ New event» never overwrites an event.** On a date and type the asset already has, entered by hand or from a data provider, nothing is saved: the form shows the event already there, to use it or, if entered by hand, to edit it. Until now the new event replaced the manual one of that day and type, or added a manual copy next to a provider's.
-- Logs: the startup and shutdown lines are written by the logger `backend.app.services.platform.app_lifespan` (before: `backend.app.main`).
-- `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` and `_MAX` below 1, or not a finite number, take their default. A timeout under a second used to mean no timeout, and `0` still returned one link. A fractional timeout is now honoured, rounded up to whole seconds.
-- **The server stops within 8 seconds.** After a `docker stop`, a restart or Ctrl+C, requests still running after 3 seconds are cancelled and what they had not saved is rolled back; the server's own work (scheduled syncs, workers, caches) gets the rest of the time, and worker processes still alive are ended, so none is left behind. If something still holds the server when the time is up, it ends anyway and its log says what was still running. `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by default: if you raise the budget, give the container more time too (`stop_grace_period`).
-- **Uploaded files have a scope.** Common files (images: icons, logos, asset photos, avatars) are visible to every signed-in user; personal files (every other type) only to their uploader and the administrators. Files uploaded before this version follow the same rule.
-- API: `POST /api/v1/uploads` accepts `scope`; `PATCH /api/v1/uploads/{id}` changes it; file info carries `scope` and `can_delete`. Another user's personal file answers 404, as a missing one.
-- **Yahoo Finance no longer retries a "too many requests" refusal three times**: like every price and exchange-rate provider, it pauses. During a pause the last stored price stays on screen.
-- **Scheduled syncs catch up.** When the server comes back after being stopped or suspended, the scheduler runs at once the history sync of a configured day it missed in the last 7 days, instead of waiting for the next slot. On an instance blocked by the hosting provider no scheduled job runs, so prices stop updating until it is unblocked; the first round after that catches up.
-- A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
-- On the Files page and in a broker's report files, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
-- **Scheduled price and exchange-rate updates respect a provider's pause** after "too many requests": the paused items are retried when the pause ends instead of counting as failures, and a job that fails waits 1, 2, 4… minutes before trying again instead of retrying every minute.
-- **One set of password rules for the app, the API and the command line**: at least 8 characters, an uppercase and a lowercase letter, a digit and a symbol. Letters and digits of any alphabet count (`É`, `é`), and a symbol is any character that is not a letter, a number or a space, so the sign-up form, the password change and `./dev.py user create`/`reset` now accept the same passwords. Passwords already saved keep working.
-- API: `GET /system/instance` carries `accounts.password_rules`, the rules every new password must meet.
-- **The managed profile changes three defaults**: idle risk workers stop after 60 seconds instead of 600, and frame protection and the report-only policy are on. A self-hosted install keeps every default, and a value you set always wins.
-- Settings → scheduler panel: prices deferred by a provider's pause are marked ⏸ "Deferred: provider paused" instead of counting as failures, and the panel shows when they will be retried.
-- Charts: one Rolling Return, measured in calendar days. A saved Rolling Return of N observations becomes N days: on exchanges a 30-observation window (about 42 days) becomes 30 days.
-- Charts: Rolling Volatility, Sharpe and Beta now say their window counts observations (quote days with a return), not days.
-- Live prices on the Assets pages: after a failed refresh the next one waits longer, up to 10 minutes, and while every provider asked about is paused after too many requests, the page waits for the pause to end instead of asking every 30–60 s. Administrators find how provider pauses work in Admin › Sleep and Wake › Provider Pauses.
-- After the server has caught up on prices, an open Dashboard or broker page shows the new figures by itself, in the background, with no need to press Refresh.
-- **An adjustment is no longer a price.** An asset's value comes from its market quotes and from the prices of its buys and sells only; an adjustment (an opening position, a succession, a transfer from a broker LibreFolio does not track) sets the cost and nothing else. A position with no price at all — no quote, no buy or sale, not even an old one — is valued at its book cost and marked «valued at cost»: an estimate, with no unrealized gain or loss, until its first price. An asset with a price provider that still has no price two weeks after it was acquired is listed in a «valued at cost» warning. The PAC planner weighs such a holding at its cost, labelled «valued at cost · no price», and the AI Export declares it the same way, with no unit price.
-- API: Risk Analysis drawdown results (`drawdown_summary`, `asset_set_drawdown`) carry the gain needed to climb back from the worst fall to the peak before it, `maximum_drawdown_trough_to_peak_ratio` (a 50 % fall needs +100 %); `remaining_to_peak_ratio` is null for a total loss, with a warning that says why, where the analysis used to fail.
-- Signing in and «Forgot password» with your email address work whatever capitals you type.
-- Rewriting your own address with other capitals is not an address change: no device is signed out and the address stays verified.
-- API: `PUT /api/v1/auth/profile` with your own address in other capitals needs no `current_password`.
-- Settings › Profile no longer asks for your password when you only change the capitals of your email address: it is the same address, saved as you typed it.
-- API: `POST /api/v1/assets/prices` names each date it leaves out in `results[].rejected` (date and reason), and `POST /api/v1/fx/currencies/rate` in `rejected` (index, date and reason). When every rate is refused, the 400's `detail` is an object (`code: fx_rates_refused`, the same `message`, `rejected`) instead of a string.
 - **Fineco and Danske Bank imports record each trade on the day you made it**, not the day the money moved; the value date only decides whether a trade has settled. Files imported with an earlier version: delete those transactions once (for Danske, the opening and gap corrections too) and import them again.
 - **Danske Bank**: a set whose cash statement starts after the securities export now starts on the day before the securities export, and the trades of those first days are imported on their own day; the balance comparisons count the trades made but not yet paid.
 - **Import: a row that brings units in without a cost starts in Auto.** An Adjustment that adds units, or the receiving side of an Asset Transfer, that the report leaves without a cost is now saved at the average cost of the units already held, instead of staying without a mode. A cost written in the report, 0 included, stays in Manual. The rows the importer flags (Align with the bank, a Danske Bank demerger line, a Generic CSV adjustment without a cost) open in Manual with the cost empty, and stay listed until a cost is typed, even 0.
 - **A refused Auto cost says what to do, and the import grid takes you there.** When there is nothing to average, the message asks you to choose Manual and type what the units cost you (0 for a gift). After the rows arrive, after ⚡ Validate now and after a refused Save All, the grid turns to the oldest refused row.
-- **AI Export: pasted prompts no longer make the AI restate your figures.** An analysis answers its question from them; Export Data ends with the AI confirming it has the data, in your language, or answering the question you add with it. When the data is not enough, the AI is asked to look for recent news.
+- The Fineco importer reports the rows it skips (unreadable, or an operation it does not know), like the other plugins out of beta.
+
+#### 📊 Dashboard, lots and portfolio
+
+- **Lots with a broken history**: when an asset's lots cannot be rebuilt (for example a sale of more units than were held), the lots panel no longer draws lots it cannot trust. It says why, lists each transaction to fix (day, broker, a link) and keeps only the average-cost lines; AI Export lists the asset as failed instead of adding wrong figures to the totals.
+- After the server has caught up on prices, an open Dashboard or broker page shows the new figures by itself, in the background, with no need to press Refresh.
+- **An adjustment is no longer a price.** An asset's value comes from its market quotes and from the prices of its buys and sells only; an adjustment (an opening position, a succession, a transfer from a broker LibreFolio does not track) sets the cost and nothing else. A position with no price at all — no quote, no buy or sale, not even an old one — is valued at its book cost and marked «valued at cost»: an estimate, with no unrealized gain or loss, until its first price. An asset with a price provider that still has no price two weeks after it was acquired is listed in a «valued at cost» warning. The PAC planner weighs such a holding at its cost, labelled «valued at cost · no price», and the AI Export declares it the same way, with no unit price.
+- **Dashboard: the lot detail opens below the positions**, as on the broker page, and the positions chart stays.
+- **An asset that arrived only by a transfer is valued at the transfer's cost** as an estimated price, following each day's exchange rate, until its first quote or any other movement; a quoted security moved between brokers keeps its quote.
+- **The broker page shows the broker's whole amounts**, no longer your share of it, risk included; for the figures reduced by your share use the Dashboard filtered on that broker.
+- **A broker's page is now the Dashboard with that broker already chosen:** the same controls, the currency with «Create forex», cash and amounts of the chosen period, the lots detail that closes with Back, the «Updates paused» badge, and the transactions of the chosen period (it used to be the whole history).
+- **Lots: a transfer with a broker outside the panel now reads as a transfer.** In a lot's History, on Lot Life & Custody and on the Avg. Cost / Market Price markers, units moved to or from a broker the panel doesn't include were shown as adjustments. They now show as transfers (TRANSFER+ / TRANSFER- in the History, Transfer In / Transfer Out on the markers), without naming the other broker. No figure changes.
+
+#### 📈 Charts
+
+- **The chart settings preview looks like the detail chart**: taller, line only, zoom with the mouse wheel.
+- **Asset cards colour their line from where the period starts**, green above and red below, as the detail chart already did.
+- **The Assets list loads lighter charts**: each card asks only for the points it can draw (for five years about 200 instead of about 1 800), and its percent base starts from the first day of the period.
+- **One change over the range, from the server.** The change over the selected range on the Assets cards, in the FX table and cards, on an FX pair's page and on an asset's page is now computed by the server, so the same figure appears everywhere; beside a live price it is the change up to that price. A price written down to 0 shows −100 %, and a change that cannot be computed in the display currency is left out instead of mixing currencies.
+- Charts: one Rolling Return, measured in calendar days. A saved Rolling Return of N observations becomes N days: on exchanges a 30-observation window (about 42 days) becomes 30 days.
+- Charts: Rolling Volatility, Sharpe and Beta now say their window counts observations (quote days with a return), not days.
 - Signals: in the comparison-asset selector a long asset name now scrolls, in the field and in the list, instead of being cut off.
-- **AI Export: missing prices are shown, not hidden.** A held asset whose prices all predate the period is listed with its last stored price instead of counting as covered, and runs of missing prices or exchange rates on market days are shown as merged gaps with the last value stored before them.
-- **Faster portfolio reports on long histories.** The exchange rates a report needs are now read only on the days they change, not one day at a time: on a history that starts in 1900, a one-month report takes about 1.4 s instead of 3–6 s, with the same numbers.
-- **Faster lots analysis on long histories.** The FIFO lots panel now reads the exchange rates it needs only on the days they change, as the portfolio reports already do: on a history that starts in 1900, a one-month analysis in another currency takes about 40 % less time, with the same numbers.
-- **Risk: add a missing exchange-rate pair without leaving the analysis.** In the Risk tab of the Dashboard, of a broker and of an asset, and in the risk lab on the Assets page, the button of a pair with no exchange-rate route opens the **Add New Currency Pair** window already filled in with that pair (EUR/USD, for example), instead of taking you to the FX page. Once the pair is saved, and again when its rates are downloaded, the analysis refreshes by itself.
 - **Asset and FX detail pages: indicators come back instantly.** Going back to a chart mode, Rolling Return window, period or currency you already viewed redraws technical indicators and rolling returns from the browser cache — no new request, no loading spinner. Refresh, a sync or a background price update still fetch them again.
-- **An Adjustment that takes units out no longer has a value.** The units only leave the quantity: their cost counts as a realized loss, the same on the Dashboard and in the lots, with no capital flow (so the day's return shows the loss). To record a sale, use a Sell. The value field appears only for units coming in.
-- When a broker is deleted, or a transfer pair is split, the giving leg becomes an Adjustment without a value: it no longer needs an exchange rate to be converted.
 - API: `POST /api/v1/fx/currencies/convert` can sample a conversion for compact charts (`max_points`, `sample_like`, `sample_bounds`), with its technical signals reduced on the same dates, as `POST /assets/prices/query` already does.
 - Detail pages: going back to a period already seen shows the comparison series at once, without asking the server again; Refresh and Sync still reload them.
-- **Linking two Adjustments as a pair is refused**, with a message in your language pointing to an Asset Transfer. Saved data is not changed.
-- The Fineco importer reports the rows it skips (unreadable, or an operation it does not know), like the other plugins out of beta.
-- Notifications are announced by screen readers (errors at once, the others politely), and their close button is named in your language.
-- **Dashboard: the lot detail opens below the positions**, as on the broker page, and the positions chart stays.
 - **«All» starts at the first stored price or rate, before 2000 too**, in the Asset and FX detail pages and lists. A comparison older than the main series is drawn from its own first day, the main line empty before its own.
-- **An asset that arrived only by a transfer is valued at the transfer's cost** as an estimated price, following each day's exchange rate, until its first quote or any other movement; a quoted security moved between brokers keeps its quote.
-- When a sync of old exchange rates finds no newer rate, the notice says so instead of reporting a success.
-- A new username that differs from an existing one only by capitals is refused.
-- On a managed instance nobody else can register with, or move their profile to, the administrator's address.
-- The documentation site draws its diagrams with its own copy of Mermaid, with no request to a third party; the ELK layout is no longer available.
-- **The broker page shows the broker's whole amounts**, no longer your share of it, risk included; for the figures reduced by your share use the Dashboard filtered on that broker.
+- **Asset and FX chart cards and the Chart Settings preview now draw their saved signals from one shared renderer**, so a card and its preview always show the same signals: a comparison named after its target, FX pairs turned the same way, and no comparison of an asset with itself.
+- **`POST /assets/prices/query` now accepts technical signals on an item asked weekly or monthly** (`max_points`, `resolution`, `sample_like`): the signals are computed on the daily series, then the price series and each signal series are reduced to the same dates, one point per week or month. Annotations and events are still refused with these fields.
+
+#### 📉 Risk Analysis
+
+- API: Risk Analysis drawdown results (`drawdown_summary`, `asset_set_drawdown`) carry the gain needed to climb back from the worst fall to the peak before it, `maximum_drawdown_trough_to_peak_ratio` (a 50 % fall needs +100 %); `remaining_to_peak_ratio` is null for a total loss, with a warning that says why, where the analysis used to fail.
+- **Risk: add a missing exchange-rate pair without leaving the analysis.** In the Risk tab of the Dashboard, of a broker and of an asset, and in the risk lab on the Assets page, the button of a pair with no exchange-rate route opens the **Add New Currency Pair** window already filled in with that pair (EUR/USD, for example), instead of taking you to the FX page. Once the pair is saved, and again when its rates are downloaded, the analysis refreshes by itself.
+
+#### 🤖 AI Export
+
+- AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently (unless a null there only means "none", such as an open lot's closing date or a single asset's portfolio weight), so the AI can tell missing data from data that isn't part of the export.
+- **AI Export: pasted prompts no longer make the AI restate your figures.** An analysis answers its question from them; Export Data ends with the AI confirming it has the data, in your language, or answering the question you add with it. When the data is not enough, the AI is asked to look for recent news.
+- **AI Export: missing prices are shown, not hidden.** A held asset whose prices all predate the period is listed with its last stored price instead of counting as covered, and runs of missing prices or exchange rates on market days are shown as merged gaps with the last value stored before them.
 - **AI Export from a broker page gives the broker's full amounts**, like the page, with a note on your role and ownership stake; the broker-versus-portfolio comparison says it counts every broker whole. Converted prices may differ by one unit of the sixth decimal.
 - **AI Export: the exchange result on foreign cash appears on its own, broker by broker**, in the portfolio export, recognised by a fixed code instead of its English label.
 - AI Export: a concentration or allocation share that cannot be computed (a total of zero or less) is reported as not available instead of a reversed number.
-- **A broker's page is now the Dashboard with that broker already chosen:** the same controls, the currency with «Create forex», cash and amounts of the chosen period, the lots detail that closes with Back, the «Updates paused» badge, and the transactions of the chosen period (it used to be the whole history).
 - **AI Export from a broker page** tells the AI that amounts are the broker's whole figures, not your share, and where your role and ownership stake are in the export.
-- **The documentation site uses the same colours as the app**, in the light and the dark theme.
+
+#### 🔌 Price and exchange-rate sources
+
+- Testing a provider's settings is limited to 30 times a minute per user (`LIBREFOLIO_PROBE_RATE_LIMIT`, `0` turns it off); a scheduled investment holds at most 10,000 manual events.
+- The list of exchange-rate providers no longer waits for the ECB and the SNB every time it opens: each provider's currency list is kept for a day, and a slow or unreachable provider is given up after 5 seconds, showing the last list it gave.
+- **Live prices pause while you are away.** On the Assets page (every minute) and on an asset's page (every 30 seconds), live prices stop refreshing while the tab is in the background or after two minutes without using the page, with a small «Updates paused» label, and start again by themselves as soon as you come back. An asset's page now sends one request per refresh instead of two, and none at all on a date range that ends in the past.
+- **Yahoo Finance no longer retries a "too many requests" refusal three times**: like every price and exchange-rate provider, it pauses. During a pause the last stored price stays on screen.
+- **Scheduled syncs catch up.** When the server comes back after being stopped or suspended, the scheduler runs at once the history sync of a configured day it missed in the last 7 days, instead of waiting for the next slot. On an instance blocked by the hosting provider no scheduled job runs, so prices stop updating until it is unblocked; the first round after that catches up.
+- **Scheduled price and exchange-rate updates respect a provider's pause** after "too many requests": the paused items are retried when the pause ends instead of counting as failures, and a job that fails waits 1, 2, 4… minutes before trying again instead of retrying every minute.
+- Settings → scheduler panel: prices deferred by a provider's pause are marked ⏸ "Deferred: provider paused" instead of counting as failures, and the panel shows when they will be retried.
+- Live prices on the Assets pages: after a failed refresh the next one waits longer, up to 10 minutes, and while every provider asked about is paused after too many requests, the page waits for the pause to end instead of asking every 30–60 s. Administrators find how provider pauses work in Admin › Sleep and Wake › Provider Pauses.
+- API: `POST /api/v1/assets/prices` names each date it leaves out in `results[].rejected` (date and reason), and `POST /api/v1/fx/currencies/rate` in `rejected` (index, date and reason). When every rate is refused, the 400's `detail` is an object (`code: fx_rates_refused`, the same `message`, `rejected`) instead of a string.
+- When a sync of old exchange rates finds no newer rate, the notice says so instead of reporting a success.
 - **Syncing from an asset card asks for a confirmation** when it would write over stored prices.
-- `dev.py backup create` without `--output` keeps the backup in its own folder inside `backups/` and prints its SHA-256.
-- **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
+
+#### 🗓️ Asset events and the data editor
+
+- **Saving the asset events editor is all or nothing.** The Events tab saves deletions, edits and new rows in one step: if anything is refused, none of them is kept, and the message, in your language, names the event at fault. An event linked to transactions can no longer be deleted together with other changes: the save stops and says which event and how many transactions use it, so remove the link first. Until now the other changes were saved and that deletion was skipped with a warning. Deleting an event and giving its date and type to another in the same save now works.
+- **«+ New event» never overwrites an event.** On a date and type the asset already has, entered by hand or from a data provider, nothing is saved: the form shows the event already there, to use it or, if entered by hand, to edit it. Until now the new event replaced the manual one of that day and type, or added a manual copy next to a provider's.
+
+#### 🗂️ Files and storage
+
+- **Uploaded files have a scope.** Common files (images: icons, logos, asset photos, avatars) are visible to every signed-in user; personal files (every other type) only to their uploader and the administrators. Files uploaded before this version follow the same rule.
+- API: `POST /api/v1/uploads` accepts `scope`; `PATCH /api/v1/uploads/{id}` changes it; file info carries `scope` and `can_delete`. Another user's personal file answers 404, as a missing one.
+- A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
+- On the Files page and in a broker's report files, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
+
+#### 💱 Currency codes
+
+- A user's base currency is saved only as an ISO 4217 code, and a refused currency now names the ISO code it stands for (`'840'`: USD).
+- Requests that save a currency accept only ISO 4217 alphabetic codes; names such as "Euro" or numeric codes such as "978" are refused (422). Stored data is read as before.
+
+#### ⚡ Performance
+
+- **Leaner database indexes.** The upgrade to 1.3 removes 13 database indexes no query used: copies of the indexes unique constraints already have, and shorter versions of other indexes. Every new price now updates one index fewer, and price history takes about a fifth less space with its indexes. An existing database file keeps its size: the freed space is reused as new data arrives. Backups are written compact.
+- The same portfolio report requested twice at once (two tabs, a refresh during a slow load) is computed once.
+- On very large instances the asset and FX lists load their prices in several requests, each within the server's limits, instead of one oversized request.
+- **Faster portfolio reports on long histories.** The exchange rates a report needs are now read only on the days they change, not one day at a time: on a history that starts in 1900, a one-month report takes about 1.4 s instead of 3–6 s, with the same numbers.
+- **Faster lots analysis on long histories.** The FIFO lots panel now reads the exchange rates it needs only on the days they change, as the portfolio reports already do: on a history that starts in 1900, a one-month analysis in another currency takes about 40 % less time, with the same numbers.
 
 #### 🎨 A new colour palette
 
@@ -300,10 +303,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
 - **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
 - **More of the app follows the light and dark colour roles**: brokers, settings, the PAC tools, the transactions, the asset and exchange-rate detail pages, switches, badges and status chips, and every chart series. Charts change colour at once when you switch theme, without a reload. Asset-type colours come from one source: the charts read the same colour roles as the badges. Deleted rows in tables no longer let scrolled content show through their fixed columns.
+
+#### 🖥️ Interface and accessibility
+
+- **Date ranges always span two different days.** In every date-range picker the day clicked first shows the not-allowed cursor and a second click on it is ignored; a typed date equal to the other end turns red; the arrow keys skip it. A date typed while the other end is empty leaves that end open: in a table's date filter, **From** alone keeps the rows from that day on (it used to keep that day only). Ranges of one day saved earlier still work.
+- Notifications are announced by screen readers (errors at once, the others politely), and their close button is named in your language.
+
+#### 👥 Accounts and sign-in
+
+- **Settings › Administration is now for administrators only.** Other users no longer see a read-only copy of Global Settings; an old link to it opens their Profile.
+- After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
+- `./dev.py user deactivate` on the administrator still waiting for its setup cancels its setup link; `./dev.py user demote` refuses it.
+- Changing your password or your email signs out every other device; the one you changed it from stays signed in.
+- **Changing your email asks for your current password** in Settings › Profile.
+- A password reset from the command line, a deactivation or a demotion signs the account out of every device; reactivating an account does not bring its old sessions back.
+- «Enable registration» becomes «Registration»: the upgrade keeps an open instance open and a closed one closed. The login page offers «Register here» only when registration is open, or while the instance has no account yet.
+- `./dev.py user create`, `invite` and `activate` warn, then go ahead, when the instance has reached `LIBREFOLIO_MAX_USERS`.
+- `LIBREFOLIO_MAX_USERS` also counts the accounts waiting for their email verification, while their link is live: reactivating one of them, from Settings › Users (`holds_place` in `GET /api/v1/users`) or `./dev.py user activate`, takes no new place even on a full instance. Activating or deactivating an account, through the admin API or the command line, revokes its verification link.
+- API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`, with `first_account_open` true while the instance has no account.
+- **One set of password rules for the app, the API and the command line**: at least 8 characters, an uppercase and a lowercase letter, a digit and a symbol. Letters and digits of any alphabet count (`É`, `é`), and a symbol is any character that is not a letter, a number or a space, so the sign-up form, the password change and `./dev.py user create`/`reset` now accept the same passwords. Passwords already saved keep working.
+- API: `GET /system/instance` carries `accounts.password_rules`, the rules every new password must meet.
+- Signing in and «Forgot password» with your email address work whatever capitals you type.
+- Rewriting your own address with other capitals is not an address change: no device is signed out and the address stays verified.
+- API: `PUT /api/v1/auth/profile` with your own address in other capitals needs no `current_password`.
+- Settings › Profile no longer asks for your password when you only change the capitals of your email address: it is the same address, saved as you typed it.
+- A new username that differs from an existing one only by capitals is refused.
+
+#### 🔐 Security and secrets
+
+- An empty or blank secret counts as not set, as if the variable were absent.
+- `GET /api/v1/system/info` without a session answers only the app version; signed-in users still get the full report.
+
+#### 🏢 Hosting providers and managed instances
+
+- On a managed instance (`LIBREFOLIO_PROFILE=managed`) the app no longer invites users to donate (no coffee links, no popup) and never checks for updates (no «Check for updates» in the changelog). «Forgot password?» asks users to contact their administrator instead of showing server commands. None of this shows before the server has said which kind of instance it is.
+- **The managed profile changes three defaults**: idle risk workers stop after 60 seconds instead of 600, and frame protection and the report-only policy are on. A self-hosted install keeps every default, and a value you set always wins.
+- On a managed instance nobody else can register with, or move their profile to, the administrator's address.
+
+#### 🛠️ Server, API and command line
+
+- Docker: the image exposes only port 6040, and both compose files set `PORT=6040` inside the container; `PORT` in `.env` still chooses the host port. The unused 6041 mapping is gone.
+- Logs: the startup and shutdown lines are written by the logger `backend.app.services.platform.app_lifespan` (before: `backend.app.main`).
+- `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` and `_MAX` below 1, or not a finite number, take their default. A timeout under a second used to mean no timeout, and `0` still returned one link. A fractional timeout is now honoured, rounded up to whole seconds.
+- **The server stops within 8 seconds.** After a `docker stop`, a restart or Ctrl+C, requests still running after 3 seconds are cancelled and what they had not saved is rolled back; the server's own work (scheduled syncs, workers, caches) gets the rest of the time, and worker processes still alive are ended, so none is left behind. If something still holds the server when the time is up, it ends anyway and its log says what was still running. `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by default: if you raise the budget, give the container more time too (`stop_grace_period`).
+- `dev.py backup create` without `--output` keeps the backup in its own folder inside `backups/` and prints its SHA-256.
 - **Several server processes (`--workers`): any of them runs the scheduled jobs**, one at a time through a lock file in the data directory: a scheduled wake-up and a user's return no longer depend on the leader process (Windows keeps the leader).
-- **Lots: a transfer with a broker outside the panel now reads as a transfer.** In a lot's History, on Lot Life & Custody and on the Avg. Cost / Market Price markers, units moved to or from a broker the panel doesn't include were shown as adjustments. They now show as transfers (TRANSFER+ / TRANSFER- in the History, Transfer In / Transfer Out on the markers), without naming the other broker. No figure changes.
-- **Asset and FX chart cards and the Chart Settings preview now draw their saved signals from one shared renderer**, so a card and its preview always show the same signals: a comparison named after its target, FX pairs turned the same way, and no comparison of an asset with itself.
-- **`POST /assets/prices/query` now accepts technical signals on an item asked weekly or monthly** (`max_points`, `resolution`, `sample_like`): the signals are computed on the daily series, then the price series and each signal series are reduced to the same dates, one point per week or month. Annotations and events are still refused with these fields.
+
+#### 📚 Documentation
+
+- The documentation site draws its diagrams with its own copy of Mermaid, with no request to a third party; the ELK layout is no longer available.
+- **The documentation site uses the same colours as the app**, in the light and the dark theme.
+- **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
 
 ### 🧹 Repository cleanup
 
