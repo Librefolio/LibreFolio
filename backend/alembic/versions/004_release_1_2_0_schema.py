@@ -151,9 +151,7 @@ def _upgrade_onboarding_progress(conn: sa.engine.Connection) -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         sa.Column("skipped_at", sa.DateTime(), nullable=True),
-        sa.CheckConstraint(
-            "status IN ('pending', 'completed', 'skipped')", name="ck_user_onboarding_step_progress_status"
-        ),
+        sa.CheckConstraint("status IN ('pending', 'completed', 'skipped')", name="ck_user_onboarding_step_progress_status"),
         sa.CheckConstraint("version >= 1", name="ck_user_onboarding_step_progress_version"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("user_id", "flow", "step_id", name="uq_user_onboarding_step_progress_user_flow_step"),
