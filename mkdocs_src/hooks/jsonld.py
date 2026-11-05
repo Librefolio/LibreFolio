@@ -14,7 +14,6 @@ import json
 import logging
 from urllib.parse import urlsplit
 
-
 log = logging.getLogger("mkdocs.hooks.jsonld")
 
 _SITE_URL = "https://librefolio.github.io/LibreFolio/"
@@ -23,11 +22,7 @@ _SEARCH_URL = f"{_SITE_URL}search/?q="
 
 
 def _inject(html: str, data: dict) -> str:
-    block = (
-        '<script type="application/ld+json">\n'
-        + json.dumps(data, ensure_ascii=False, indent=2)
-        + "\n</script>"
-    )
+    block = '<script type="application/ld+json">\n' + json.dumps(data, ensure_ascii=False, indent=2) + "\n</script>"
     return html.replace("</head>", f"{block}\n</head>", 1)
 
 
@@ -63,11 +58,7 @@ def _software_schema() -> dict:
             "price": "0",
             "priceCurrency": "USD",
         },
-        "description": (
-            "Free, self-hosted, open-source financial portfolio tracker. "
-            "Tracks stocks, ETFs, crypto and bonds with multi-currency support, "
-            "technical analysis (EMA, MACD, RSI, Bollinger) and broker import."
-        ),
+        "description": ("Free, self-hosted, open-source financial portfolio tracker. " "Tracks stocks, ETFs, crypto and bonds with multi-currency support, " "technical analysis (EMA, MACD, RSI, Bollinger) and broker import."),
         "license": "https://opensource.org/licenses/AGPL-3.0",
     }
 
