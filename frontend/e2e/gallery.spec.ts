@@ -417,6 +417,25 @@ async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Lang
     console.log(`  📸 ${shot}.png`);
 }
 
+/**
+ * Bring the app header to the state a scroll down leaves it in (hidden), whatever scroll the frame came from (G-11: es mobile,
+ * `assets/detail-measures`, 1 run in 16 drew the header). The header reads the scroll once per animation frame and compares it
+ * with the previous frame's: a frame taken from the top jumps in one step, and whether that step counts as a scroll down
+ * depended on the frames it fell in. Here the page, standing still at the frame, goes up 24 px — the header must show — and
+ * back down 24 px — the header must hide —, each step read from the header's own state (`data-scroll-state`), and ends where it
+ * was. A page at the top of its range (scroll within the header's height) keeps its header visible by design: nothing to do.
+ */
+async function headerAsScrolledDown(page: Page, shot: string): Promise<void> {
+    const header = page.getByTestId('app-header');
+    const frame = await page.evaluate(() => ({y: window.scrollY, header: document.querySelector('[data-testid="app-header"]')?.getBoundingClientRect().height ?? 0}));
+    if (frame.y <= frame.header + 24) return;
+    await page.evaluate((y) => window.scrollTo({top: y - 24, behavior: 'instant'}), frame.y);
+    await expect(header, `${shot}: scrolled up, the header shows`).toHaveAttribute('data-scroll-state', 'visible');
+    await page.evaluate((y) => window.scrollTo({top: y, behavior: 'instant'}), frame.y);
+    await expect(header, `${shot}: scrolled down again, the header hides`).toHaveAttribute('data-scroll-state', 'hidden');
+    expect(await page.evaluate(() => window.scrollY), `${shot}: the frame is where it was`).toBe(frame.y);
+}
+
 // Helper to run for all languages and themes
 async function forEachLanguageAndTheme(page: Page, callback: (lang: Language, theme: Theme) => Promise<void>) {
     for (const lang of SUPPORTED_LANGUAGES) {
@@ -5924,7 +5943,10 @@ test.describe('Gallery Screenshots', () => {
                     // — es/light at y 491 with the header in one run, at 416 without it in the other (plan 56). There the chart is
                     // framed from the top of the page, 8 px under the screen's edge, or as near as the page's end allows.
                     if (viewport === 'desktop') await detailChart.scrollIntoViewIfNeeded();
-                    else await frameTarget(page, detailChart, `${viewport}/${lang}/${theme}/assets/detail-measures`);
+                    else {
+                        await frameTarget(page, detailChart, `${viewport}/${lang}/${theme}/assets/detail-measures`);
+                        await headerAsScrolledDown(page, `${viewport}/${lang}/${theme}/assets/detail-measures`);
+                    }
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures');
 
                     // Screenshot 2: panel with a measurement added (full date range)
