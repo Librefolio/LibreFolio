@@ -66,6 +66,43 @@ class InstanceBackupJob(BaseModel):
     sealed_recipients: list[str] = []
 
 
+# origin: who made the backup (the Backup tab, the command line, a hosting panel). The administrators' list of the kept
+# backups (FB-24); the job a hosting panel reads (InstanceBackupJob) has no origin.
+class InstanceBackupEntry(InstanceBackupJob):
+    """A backup the instance keeps: its job, and where it came from."""
+
+    origin: Literal["ui", "cli", "pre-restore", "panel"]
+
+
+class InstanceBackupList(BaseModel):
+    """The backups the instance keeps, the newest first (GET /backup/instance/jobs)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[InstanceBackupEntry]
+
+
+# The space the instance takes, in bytes (FB-29): the five parts of its data directory (they sum to data_bytes), the volume
+# it lives on (null when it cannot be asked) and the limit in force. limit_mb null is no limit; limit_locked: its hosting
+# provider sets it, the administrator cannot change it.
+class InstanceStorage(BaseModel):
+    """The space an instance takes, for the space bar of the Files page."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    database_bytes: int = Field(ge=0)
+    uploads_bytes: int = Field(ge=0)
+    broker_reports_bytes: int = Field(ge=0)
+    backups_bytes: int = Field(ge=0)
+    other_bytes: int = Field(ge=0)
+    data_bytes: int = Field(ge=0)
+    volume_total_bytes: int | None = Field(default=None, ge=0)
+    volume_used_bytes: int | None = Field(default=None, ge=0)
+    volume_free_bytes: int | None = Field(default=None, ge=0)
+    limit_mb: int | None = Field(default=None, ge=1)
+    limit_locked: bool
+
+
 # kind: envelope for a secure backup (.lfbk), whose check needs its password; zip otherwise.
 class RestoreUpload(BaseModel):
     """An archive received for a restore: kept for its check (POST /backup/restore/stage), then removed; a newer upload replaces it."""

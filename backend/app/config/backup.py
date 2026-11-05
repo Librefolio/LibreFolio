@@ -124,6 +124,34 @@ def backup_max_restore_mb() -> int:
     return int(raw)
 
 
+#: The variable of the space the instance may take, in megabytes; 0 is no limit (FB-29).
+STORAGE_LIMIT_VARIABLE = "LIBREFOLIO_STORAGE_LIMIT_MB"
+
+
+def storage_limit_pinned() -> bool:
+    """Whether ``LIBREFOLIO_STORAGE_LIMIT_MB`` is set to a usable value: the global setting ``storage_limit_mb`` is then
+    read-only for the administrator (a save would only meet a 409). A blank or an unusable variable pins nothing."""
+    try:
+        return storage_limit_override_mb() is not None
+    except BackupConfigError:
+        return False
+
+
+def storage_limit_override_mb() -> int | None:
+    """``LIBREFOLIO_STORAGE_LIMIT_MB``: the space the instance may take, in megabytes, as its hosting provider sets it; it
+    wins over the ``storage_limit_mb`` setting. ``0`` is no limit.
+
+    ``None`` when unset or blank. Anything but a whole number of ASCII digits raises ``BackupConfigError``, whose message
+    names the variable and the rule, never the value.
+    """
+    raw = os.environ.get(STORAGE_LIMIT_VARIABLE, "").strip()
+    if not raw:
+        return None
+    if not (raw.isascii() and raw.isdigit()):
+        raise BackupConfigError(STORAGE_LIMIT_VARIABLE, "STORAGE_LIMIT_MB_INVALID", "expected a whole number of megabytes, 0 for no limit")
+    return int(raw)
+
+
 def backup_recipients() -> tuple[str, ...] | None:
     """``LIBREFOLIO_BACKUP_RECIPIENTS``: the age recipients a hosting panel's backups are sealed for, in their canonical
     form (``age1…`` in lower case) and the order written; ``None`` when unset or blank.
@@ -154,6 +182,12 @@ def backup_recipients() -> tuple[str, ...] | None:
     if len(recipients) > MAX_RECIPIENTS:
         raise BackupConfigError(RECIPIENTS_VARIABLE, "BACKUP_RECIPIENTS_TOO_MANY", f"expected at most {MAX_RECIPIENTS} recipients, comma-separated")
     return tuple(recipients)
+
+
+#: What the managed profile gives the clean-up of the kept backups until an administrator saves it (FB-24, developer
+#: 04/11/2026): a quarter of the 1 GB volume, and thirty days. The self-hosted default is off (0 and 0).
+MANAGED_CLEANUP_MAX_MB = 250
+MANAGED_CLEANUP_MAX_DAYS = 30
 
 
 def backup_requires_recipients() -> bool:

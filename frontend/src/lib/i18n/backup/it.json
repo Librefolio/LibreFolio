@@ -37,7 +37,7 @@
       "download": "Scarica",
       "delete": "Elimina dal server",
       "deleting": "Eliminazione del backup…",
-      "retention": "L'archivio resta sul server per un'ora, poi viene eliminato.",
+      "retention": "Il backup resta su questo server finché non lo elimini. Scaricalo e conserva una copia altrove.",
       "recheck": "Controlla di nuovo",
       "retry": "Riprova",
       "warningsTitle": "Backup completato, con avvisi",
@@ -280,6 +280,64 @@
       "empty": "Questo backup non ha utenti tra cui scegliere.",
       "confirm": "Conferma e ripristina",
       "cancel": "Annulla"
+    },
+    "list": {
+      "title": "Backup su questo server",
+      "description": "Ogni backup fatto qui resta su questo server finché non lo elimini.",
+      "show": "Mostra i backup",
+      "hide": "Nascondi i backup",
+      "empty": "Nessun backup su questo server per ora.",
+      "columns": {
+        "date": "Data",
+        "origin": "Fatto da",
+        "kind": "Tipo",
+        "size": "Dimensione",
+        "sha256": "SHA-256",
+        "actions": "Azioni"
+      },
+      "origin": {
+        "ui": "App",
+        "cli": "Riga di comando",
+        "pre-restore": "Prima di un ripristino",
+        "panel": "Pannello di hosting"
+      },
+      "kind": {
+        "clear": "Semplice",
+        "password": "Con password",
+        "sealed": "Sigillato"
+      },
+      "actions": {
+        "download": "Scarica",
+        "delete": "Elimina",
+        "copySha": "Copia lo SHA-256"
+      },
+      "deleteConfirm": "Eliminare questo backup dal server? Scaricalo prima se ti serve ancora.",
+      "sha": {
+        "copied": "SHA-256 copiato."
+      },
+      "sameDisk": "Una copia sullo stesso disco dei tuoi dati non è un vero backup: scarica il file e conservalo altrove.",
+      "errors": {
+        "load": "Non è stato possibile caricare l'elenco dei backup. Riprova."
+      },
+      "retry": "Riprova"
+    },
+    "cleanup": {
+      "title": "Pulizia automatica",
+      "description": "Imposta quanto spazio possono occupare i backup su questo server e per quanto restano. Inserisci 0 per spegnere una regola.",
+      "maxMb": "Limite di spazio totale (MB)",
+      "maxDays": "Conserva i backup per (giorni)",
+      "hintSelfhosted": "Inserisci 0 per spegnere questa regola.",
+      "hintManaged": "Inserisci almeno 1: qui questa regola non si può spegnere.",
+      "save": "Salva",
+      "saved": "Salvato.",
+      "latestKept": "L'ultimo backup resta sempre.",
+      "errors": {
+        "invalid": "Inserisci numeri interi da 0 in su; su un'istanza ospitata il limite di spazio deve essere almeno 1.",
+        "forbidden": "Solo gli amministratori possono cambiarlo.",
+        "network": "Nessuna risposta dal server. Riprova.",
+        "unexpected": "Non è stato possibile salvare le impostazioni. Riprova."
+      },
+      "hintDays": "Inserisci 0 per tenere i backup finché non li elimini."
     }
   }
 }

@@ -64,6 +64,11 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
     ``remove_stray_decrypted_archives`` runs (1 decrypted archive, not 6); one of the interrupted jobs started three
     hours ago, and the jobs part ends it before it removes the expired ones, so it is kept an hour, as any job that
     ends now (3 and 4, not 2 and 5).
+(f2) FB-24 (contract ``B6r-fb24-backend-interface`` §6): besides the above, the sweep applies ``retention.apply_cleanup`` to
+    the kept backups of ``backups/``, with the policy of the settings (here ``read_policy`` is replaced). The one INFO
+    line carries the number removed as ``backups_cleaned`` (``COUNTS`` does not list it: its place among the counts is
+    not pinned); a policy of 0 and 0 removes nothing and says nothing; a clean-up that raises does not stop the three
+    parts above, and the sweep still answers ``None``.
 (g) The step ``backup-leftovers`` of ``STARTUP_STEPS``: its awaitable runs ``app_lifespan.sweep_backup_leftovers``
     once, without arguments, in a worker thread. Its place, right after ``restore-commit``, is pinned with the other
     steps in ``test_backup_apply.py`` (j).
@@ -225,6 +230,7 @@ from backend.app.services.platform.instance_backup.staging import STAGE_LIFETIME
 from backend.test_scripts.test_services import test_backup_apply as apply_cases
 from backend.test_scripts.test_services import test_backup_archive as archive_cases
 from backend.test_scripts.test_services import test_backup_jobs as jobs_cases
+from backend.test_scripts.test_services import test_backup_retention as retention_cases
 from backend.test_scripts.test_services import test_backup_staging as cases
 from backend.test_scripts.test_utilities import test_backup_cli_secure as cli_secure
 from backend.test_scripts.test_utils import print_section, print_success
@@ -1201,6 +1207,82 @@ def test_what_the_sweep_removed_and_ended_is_said_once_with_its_counts(tmp_path,
     assert work_done(world) == dict.fromkeys(PARTS, True), f"every part did its work: {work_done(world)}"
     assert [event for event in events if event.get("event") == FAILURE] == [], f"no part failed: {apply_cases.logged(events)}"
     print_success(f"{SUMMARY}: {counts}")
+
+
+# =============================================================================
+# (f2) FB-24: the clean-up of the kept backups
+# =============================================================================
+
+#: The counter of the summary that says how many kept backups the sweep's clean-up removed (contract §6). Not in ``COUNTS``:
+#: its place among the others is not pinned.
+CLEANED = "backups_cleaned"
+
+
+@pytest.fixture(autouse=True)
+def no_lane_cleanup_policy(monkeypatch):
+    """The clean-up of the kept backups reads its policy from the settings (FB-24): here it is off unless a case says
+    otherwise, so that no sweep of this module reaches the lane's database."""
+    try:
+        module = importlib.import_module(retention_cases.RETENTION)
+    except ModuleNotFoundError:
+        return
+    if hasattr(module, "read_policy") and hasattr(module, "CleanupPolicy"):
+        monkeypatch.setattr(module, "read_policy", lambda: module.CleanupPolicy())
+
+
+def with_policy(monkeypatch, max_mb: int = 0, max_days: int = 0) -> None:
+    module = retention_cases.retention_module()
+    retention_cases.new_attr(module, "read_policy")
+    monkeypatch.setattr(module, "read_policy", lambda: retention_cases.cleanup_policy(max_mb, max_days))
+
+
+def test_the_sweep_applies_the_cleanup_of_the_kept_backups_and_says_how_many_in_backups_cleaned(tmp_path, monkeypatch):
+    """(f2) A policy of 30 days: the two kept backups past it go, the recent one stays; the one INFO line of the sweep
+    carries ``backups_cleaned`` 2, and the counts of the other parts stay 0."""
+    print_section("(f2) The sweep applies the clean-up")
+    root = data_root(tmp_path)
+    now = datetime.now(UTC)
+    recent = retention_cases.plant_kept(root, created=now - timedelta(days=1))
+    old = retention_cases.plant_kept(root, created=now - timedelta(days=60))
+    older = retention_cases.plant_kept(root, created=now - timedelta(days=90))
+    with_policy(monkeypatch, max_days=30)
+    with apply_cases.logs(LEFTOVERS) as events:
+        sweep(root)
+    assert recent.folder.is_dir() and not old.folder.exists() and not older.folder.exists(), "the kept backups past the policy are removed, the recent one stays"
+    summaries = [event for event in events if event.get("event") == SUMMARY]
+    assert [event.get("log_level") for event in summaries] == ["info"], f"one INFO line says what the sweep removed: {apply_cases.logged(events)}"
+    assert summaries[0].get(CLEANED) == 2, f"the counter is {CLEANED!r}, 2 here: {summaries[0]}"
+    assert {name: summaries[0][name] for name in COUNTS} == dict.fromkeys(COUNTS, 0), f"and the other counts are 0: {summaries[0]}"
+    print_success(f"{CLEANED}: 2")
+
+
+def test_with_the_policy_off_the_sweep_removes_no_kept_backup(tmp_path):
+    root = data_root(tmp_path)
+    kept = [retention_cases.plant_kept(root, created=datetime.now(UTC) - timedelta(days=days)) for days in (1, 400, 800)]
+    with apply_cases.logs(LEFTOVERS) as events:
+        sweep(root)
+    assert all(planted.folder.is_dir() for planted in kept), "a policy of 0 and 0 removes nothing"
+    assert [event.get(CLEANED, 0) for event in events if event.get("event") == SUMMARY] == [], "and the sweep has nothing to say"
+
+
+def test_a_cleanup_that_raises_does_not_stop_the_sweep(tmp_path, monkeypatch):
+    """(f2) It is one more thing the sweep does and never raises for: the other parts still do their work."""
+    leftovers = leftovers_module()
+    root = data_root(tmp_path)
+    world = everything_left(root, tmp_path)
+    retention = retention_cases.retention_module()
+    reached: list[str] = []
+
+    def failing(*args: Any, **kwargs: Any) -> Any:
+        reached.append("apply_cleanup")
+        raise an_error_of_its_own(root)
+
+    retention_cases.new_attr(retention, "apply_cleanup")
+    replace_everywhere(monkeypatch, retention, "apply_cleanup", failing)
+    outcome = leftovers.sweep_backup_leftovers(root)
+    assert outcome is None, f"the sweep answers None, whatever failed: {outcome!r}"
+    assert reached, "barrier: the sweep reached the clean-up"
+    assert work_done(world) == dict.fromkeys(PARTS, True), f"the three parts did their work: {work_done(world)}"
 
 
 # =============================================================================

@@ -321,6 +321,24 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "int",
         "description": "Max file upload size in MB",
     },
+    # Backup clean-up (FB-24): the kept backups, by total size and by age; 0 switches a rule off. A managed instance
+    # gives rows nobody saved 250 MB and 30 days (global_settings_service), and refuses 0 MB.
+    "backup_cleanup_max_mb": {
+        "value": "0",
+        "type": "int",
+        "description": "Most megabytes the kept backups may take; the oldest go first, the latest is always kept (0 = no limit)",
+    },
+    "backup_cleanup_max_days": {
+        "value": "0",
+        "type": "int",
+        "description": "Days a kept backup stays before it is removed, the latest is always kept (0 = keep for ever)",
+    },
+    # Space of the instance (FB-29): the limit of the space bar; 0 = no limit. LIBREFOLIO_STORAGE_LIMIT_MB wins over it.
+    "storage_limit_mb": {
+        "value": "0",
+        "type": "int",
+        "description": "Most megabytes the instance may take, for the space bar of the Files page (0 = no limit)",
+    },
     # Market Data Scheduler
     "scheduler_enabled": {
         "value": "true",
@@ -391,6 +409,9 @@ class SettingConstraint:
 GLOBAL_SETTINGS_CONSTRAINTS: dict[str, SettingConstraint] = {
     "session_ttl_hours": SettingConstraint(min=1, max=8760),
     "max_file_upload_mb": SettingConstraint(min=1, max=1024),
+    "backup_cleanup_max_mb": SettingConstraint(min=0, max=1048576),
+    "backup_cleanup_max_days": SettingConstraint(min=0, max=3650),
+    "storage_limit_mb": SettingConstraint(min=0, max=10485760),
     "scheduler_current_price_frequency_minutes": SettingConstraint(min=1, max=1440),
     "scheduler_history_sync_times": SettingConstraint(format="hhmm_list"),
     "scheduler_history_sync_days": SettingConstraint(format="weekday_list"),
@@ -570,6 +591,11 @@ class SETTINGS_REGISTRY:
         REQUIRE_EMAIL_VERIFICATION = _global_spec("require_email_verification")
         # File Upload
         MAX_FILE_UPLOAD_MB = _global_spec("max_file_upload_mb")
+        # Backup clean-up
+        BACKUP_CLEANUP_MAX_MB = _global_spec("backup_cleanup_max_mb")
+        BACKUP_CLEANUP_MAX_DAYS = _global_spec("backup_cleanup_max_days")
+        # Space of the instance
+        STORAGE_LIMIT_MB = _global_spec("storage_limit_mb")
         # Market Data Scheduler
         SCHEDULER_ENABLED = _global_spec("scheduler_enabled")
         SCHEDULER_CURRENT_PRICE_FREQUENCY_MINUTES = _global_spec("scheduler_current_price_frequency_minutes")

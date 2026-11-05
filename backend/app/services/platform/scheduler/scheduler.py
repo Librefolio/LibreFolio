@@ -35,7 +35,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
+from backend.app.config import get_data_dir
 from backend.app.config.platform import instance_blocked, scheduler_disabled
+from backend.app.services.platform.instance_backup import retention
 from backend.app.services.platform.scheduler.jobs import run_current_price_refresh, run_history_sync
 from backend.app.services.platform.scheduler.leader import am_i_leader
 from backend.app.services.platform.scheduler.run_lock import LOCK_WAIT_SECONDS, SchedulerRunLockTimeout, cross_process_lock_available, scheduler_run_lock
@@ -71,6 +73,11 @@ PRICE_REFRESH_HEADER = "X-LibreFolio-Price-Refresh"
 PriceRefreshState = Literal["idle", "starting", "running"]
 _SETTLING_REASONS = frozenset({"return", "wake"})
 _DAY_CODES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+#: How often, at most, a run applies the clean-up of the kept backups (FB-24; no job: wake-sync does not report it).
+BACKUP_CLEANUP_INTERVAL_SECONDS = 3600.0
+#: When this process last applied it (``time_module.monotonic()``); ``None`` until its first run.
+_last_backup_cleanup: float | None = None
 
 _shutdown_event: asyncio.Event | None = None
 _run_lock_of_loop: tuple[asyncio.AbstractEventLoop, asyncio.Lock] | None = None
@@ -537,6 +544,20 @@ async def _run_due(reason: str, settings: SchedulerSettings) -> tuple[str, tuple
     return _overall_status(jobs), jobs
 
 
+async def _clean_up_kept_backups() -> None:
+    """Apply the clean-up of the kept backups, at most once an hour in this process, on a worker thread. It is housekeeping
+    of the instance's volume, not a job: it appears in no ``RunReport``. An error is logged and goes no further."""
+    global _last_backup_cleanup
+    now = time_module.monotonic()
+    if _last_backup_cleanup is not None and now - _last_backup_cleanup < BACKUP_CLEANUP_INTERVAL_SECONDS:
+        return
+    _last_backup_cleanup = now
+    try:
+        await asyncio.to_thread(retention.apply_cleanup, get_data_dir())
+    except Exception as exc:  # noqa: BLE001 — isolation boundary: housekeeping never stops the scheduler's run
+        logger.warning("The clean-up of the kept backups failed in the scheduler's run", exc_info=exc)
+
+
 async def run_due_jobs(reason: RunReason) -> RunReport:
     """Run the jobs that are due, one run at a time in this process and for the data directory, and report how each ended.
 
@@ -555,6 +576,7 @@ async def run_due_jobs(reason: RunReason) -> RunReport:
             if reason in _SETTLING_REASONS:
                 await settle_clock()
             result = await _run_within_deadline(reason)
+            await _clean_up_kept_backups()
     finally:
         if catch_up:
             PRICE_REFRESH.run_finished()

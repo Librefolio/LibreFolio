@@ -13,10 +13,10 @@ The rest of the guide starts on [Command-Line Tools](cli_tools.md).
 ### 📦 Create an Archive
 
 ```bash
-# Write an archive into <data dir>/backups/
+# Keep an archive in its own folder of <data dir>/backups/, and print its SHA-256
 pipenv run ./dev.py backup create
 
-# Write it into another folder, which must already exist
+# Copy it into another folder instead, which must already exist
 pipenv run ./dev.py backup create -o /mnt/nas/librefolio/
 
 # Or give the archive a name of your own
@@ -27,14 +27,16 @@ pipenv run ./dev.py backup create --encrypt -o /mnt/nas/librefolio/
 ```
 
 - 🟢 The server keeps working, and writing, during the backup: the database is copied with SQLite's `VACUUM INTO`, a consistent snapshot, then SQLite's integrity check and foreign-key check run on the copy.
-- 🏷️ The archive is named after the moment the backup starts, in UTC: `librefolio-backup-20261015-121500.zip`, or `.lfbk` for a [secure archive](#backup-secure). In a folder that already holds a file with that name, after two backups in the same second for instance, it becomes `librefolio-backup-20261015-121500-2.zip`, then `-3`, and so on: an archive never replaces a file.
+- 🗃️ **Without `--output`, the archive stays on the server**, in a folder of its own in `backups/`, such as `backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip`: the folder is named after the moment, where the backup came from (`cli`) and a short code. Nothing is copied or moved, and the command prints that path, then a line `SHA-256: <64 hexadecimal digits>`, the checksum of the archive. The backup is then in the list of **Settings › Administration › Backup**, and in the automatic clean-up: [Backups Kept on the Server](backup_restore.md#kept-backups).
+- 📋 **With `--output`, the archive is copied there** and nothing stays in `backups/`: the same `SHA-256:` line follows the path of the copy. Compare it with the checksum of the file once it is on another disk.
+- 🏷️ The archive is named after the moment the backup starts, in UTC: `librefolio-backup-20261015-121500.zip`, or `.lfbk` for a [secure archive](#backup-secure). In a folder given with `--output` that already holds a file with that name, after two backups in the same second for instance, it becomes `librefolio-backup-20261015-121500-2.zip`, then `-3`, and so on: an archive never replaces a file.
 - 📁 `--output` (`-o`) is checked before the backup starts, and the command must be able to write there. An existing folder receives the archive under its default name. Any other path is the archive's file, even one that ends with `/`: a folder that does not exist yet becomes the archive's name. That file must not exist yet, and its name is never changed. Its missing folders are created only when the archive is moved there, so a failed backup leaves no empty folder behind. Prefer absolute paths: a relative one starts at the project root, wherever you run the command from.
 - 💽 Before writing anything, the command checks the free space where it builds the archive, in the data directory's `backups/` folder, even with `-o`: about twice the size of the database, plus the files, plus a small margin. When it is short, or when the disk or a quota fills up during the backup all the same, the command stops with `❌ Backup failed (backup_no_space): not enough free space`. When `-o` is on another disk, the space there is checked once the archive is built and its size known.
-- 🛟 If the finished archive cannot go to `-o` (a file with that name appeared meanwhile, its folders cannot be created, the other disk is short of space, a write error), it is put in `backups/` instead, and the command exits with `1`. A move that fails half-way leaves no partial file behind.
+- 🛟 If the finished archive cannot go to `-o` (a file with that name appeared meanwhile, its folders cannot be created, the other disk is short of space, a write error), it is put in `backups/` instead, as a loose file: it is not in the list of kept backups and the automatic clean-up never removes it. The command exits with `1`. A move that fails half-way leaves no partial file behind.
 - 🚦 One backup runs at a time: while another one is running, the command stops and asks you to try again when it ends.
-- ✅ It ends with `✅ Backup written: <path>`, the size and the time taken, any warnings, and a reminder: `🔒 The archive holds every user's data: keep it private.`, or for a secure archive `🔐 Encrypted with your password: only that password opens it, and LibreFolio cannot recover a lost one.` It exits with `0` when the archive is where you asked, warnings included, and `1` otherwise.
+- ✅ It ends with `✅ Backup written: <path>`, the size and the time taken, `SHA-256: <checksum>`, any warnings, and a reminder: `🔒 The archive holds every user's data: keep it private.`, or for a secure archive `🔐 Encrypted with your password: only that password opens it, and LibreFolio cannot recover a lost one.` It exits with `0` when the archive is where you asked, warnings included, and `1` otherwise.
 - 🔒 Without a password, the archive is not encrypted: LibreFolio writes it, like a secure one, so that only its owner can read and write it (`0600`). Keep it, and every copy, as private as the data directory.
-- 🗑️ LibreFolio never deletes the archives it puts in `backups/`: they stay there until you remove them. That folder is on the same disk as the data, so copy them to another disk, a NAS or off-site, or write them there directly with `-o`.
+- 🗑️ The backups kept in `backups/` stay there until you delete them from **Settings › Administration › Backup** or from the folder, or until the [automatic clean-up](backup_restore.md#backup-cleanup) you set removes them, the latest one excepted. LibreFolio never touches the loose `librefolio-backup-*.zip` files that earlier versions left in `backups/`. That folder is on the same disk as the data, so copy the archives to another disk, a NAS or off-site, or write them there directly with `-o`.
 - 🔗 Keep `backups/` a real folder, never a link to a NAS or another disk: every archive is built inside it first, even with `-o`. A link, or a file, in its place stops the command with `❌ <data dir>/backups is not a plain folder (a link, or a file): …`.
 - 🧪 `backup --test-db create` backs up the test data directory instead: a development option.
 
@@ -48,7 +50,7 @@ pipenv run ./dev.py backup create --encrypt -o /mnt/nas/librefolio/
 
     **Not where you asked**: the archive is written, and the command exits with `1`.
 
-    - `⚠️ <reason>: the archive was written to <path> instead`, followed by the usual lines: `-o` could not take the finished archive, so it is in `backups/`. Move it where you want it.
+    - `⚠️ <reason>: the archive was written to <path> instead`, followed by the usual lines: `-o` could not take the finished archive, so it is in `backups/`, as a loose file outside the list of kept backups. Move it where you want it.
     - `❌ <reason>: the archive stays in <path>. Move it within the hour: the next backup after that removes it.`: `backups/` could not take it either. It is still in the backup's work folder, inside `backups/.jobs/`, which the first backup started after that hour, or the first start of LibreFolio after it, removes: move the archive out before then.
 
     **Errors**: no archive is written, and the command exits with `1`.
@@ -58,6 +60,15 @@ pipenv run ./dev.py backup create --encrypt -o /mnt/nas/librefolio/
     - `❌ <data dir>/backups is not a plain folder (a link, or a file): …`: make `backups/` a real folder again. `❌ The backup could not run in <data dir>/backups: <reason>`: the command could not prepare its work folder there, for example because it cannot write into the data directory.
     - `❌ Backup failed (backup_no_space): not enough free space`: the free space was short at the start, or the disk or a quota filled up during the backup, even in the middle of a file. Free some space on the disk of the data directory.
     - `❌ Backup failed (backup_failed): the cause is in the log above`: any other failure. One of them is a file that fails while it is being copied into the archive, such as a read error in the middle of the file: part of a file cannot be taken back out of a zip, so the whole backup stops. A file that fails before its copy starts is left out with the warning above instead.
+
+### 🗃️ Where the Backups Stay {: #backup-kept }
+
+The command, the app and a hosting panel all leave their finished backups in `backups/`, one folder each, named `librefolio-backup-<date>-<time>-<origin>-<id>`, where the origin is `cli` here, `ui` for the app and `panel` for a hosting panel. `backups/.jobs/` holds only a backup in progress or one that failed. What to do with them:
+
+- 📋 List, download and delete them in **Settings › Administration › Backup**, or **Files › Backups** (administrators only): [Backups Kept on the Server](backup_restore.md#kept-backups).
+- 🧹 Set a total size and a maximum age, both optional, so that the oldest go by themselves, the latest never: [Automatic Clean-up](backup_restore.md#backup-cleanup). The command applies them after each backup, as the app does.
+- 💽 A copy on the disk of your data is not a real backup: copy the archive to another disk, or use `--output`.
+- 🔎 To check or restore a kept archive from the command line, give `backup inspect` or `backup restore` the path that `backup create` printed.
 
 ### 🔐 A Secure Archive {: #backup-secure }
 
@@ -503,17 +514,17 @@ Good to know:
 ### 🐳 Back Up with Docker {: #backup-docker }
 
 ```bash
-# Write an archive: on the host, it appears in ./LibreFolio-data/backups/
+# Write an archive: on the host, it appears in its own folder of ./LibreFolio-data/backups/
 docker compose exec librefolio python dev.py backup create
 
 # Check it, with its path inside the container
-docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip
 
 # Try a restore of it on a copy: the instance stays as it is
-docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip --dry-run
+docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip --dry-run
 
 # Restore it: the same check, then type "restore" to confirm
-docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip
 
 # Restart the container: its start applies the restore
 docker compose restart librefolio
@@ -523,10 +534,10 @@ docker compose exec librefolio python dev.py backup pending
 ```
 
 - 👤 `docker compose exec` runs as root: the command switches to the owner of the data directory, `backup decrypt` included, so everything it writes belongs to the server's user. If it cannot switch, it stops and asks you to run it as that user: `docker compose exec --user <uid>:<gid> librefolio python dev.py backup create`, with the numbers from the message.
-- 📂 `-o` and the archives of `inspect` and `restore` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. To check an archive that is on the host, copy it into `LibreFolio-data/` first, such as into `LibreFolio-data/backups/`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
+- 📂 `-o` and the archives of `inspect` and `restore` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. The archive `backup create` printed is in a folder of its own there, such as `/app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/`. To check an archive that is on the host, copy it into `LibreFolio-data/` first, such as into `LibreFolio-data/backups/`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
 - 🔑 `restore` and `decrypt` also read the archive as the server's user: an archive that `backup create` wrote is fine, but one you copied in yourself must be readable by that user, or they stop with `archive_unreadable`. With the official image, `sudo chown 1000:1000 <archive>` on the host gives it to that user.
 - ⌨️ `docker compose exec` gives the command a terminal to ask on. Without one, such as with `docker compose exec -T` in a script, add `--yes`.
-- 🔐 For a [secure archive](#backup-secure), `--encrypt` asks the password on that terminal. With `-T`, from cron for instance, give it with `--password-file` and a Docker secret, such as `/run/secrets/backup_password`: [the example](backup_restore.md#command-line) in Backup, Restore and Moving Your Instance shows the lines to add to `docker-compose.yml`. `backup decrypt` switches to the server's user too, so its zip belongs to that user: give it an `-o` that user can write, in `LibreFolio-data/backups/` or a folder mounted from the host, such as `docker compose exec librefolio python dev.py backup decrypt /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.lfbk -o /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip`.
+- 🔐 For a [secure archive](#backup-secure), `--encrypt` asks the password on that terminal. With `-T`, from cron for instance, give it with `--password-file` and a Docker secret, such as `/run/secrets/backup_password`: [the example](backup_restore.md#command-line) in Backup, Restore and Moving Your Instance shows the lines to add to `docker-compose.yml`. `backup decrypt` switches to the server's user too, so its zip belongs to that user: give it an `-o` that user can write, in `LibreFolio-data/backups/` or a folder mounted from the host, such as `docker compose exec librefolio python dev.py backup decrypt /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.lfbk -o /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip`.
 - 🔏 A [sealed archive](#backup-sealed) needs no terminal: `docker compose exec -T librefolio python dev.py backup create --sealed` reads `LIBREFOLIO_BACKUP_RECIPIENTS` from the container's environment, which `env_file: .env` fills; after a change of `.env`, `docker compose up -d` recreates the container with it. To open one in the container, give `--identity-file` a path inside it; better, open it on your computer, where the private key is ([Open a Sealed Backup](backup_sealed.md#sealed-open)).
 - 🔁 After a first start that fails on the restored data, the container starts again by itself (`restart: unless-stopped`, in both compose files LibreFolio ships), and that start puts the data as it was before back.
 - 🔒 On the host, the archives belong to the container's user, and only that user can read them: if your host user is another one, copy them with `sudo cp -a`.

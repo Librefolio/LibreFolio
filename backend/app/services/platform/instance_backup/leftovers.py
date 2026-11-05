@@ -23,7 +23,7 @@ from pathlib import Path
 
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
-from backend.app.services.platform.instance_backup import jobs, restore_jobs
+from backend.app.services.platform.instance_backup import jobs, restore_jobs, retention
 from backend.app.services.platform.instance_backup.paths import backups_dir, is_plain_dir
 
 logger = get_logger(__name__)
@@ -55,10 +55,11 @@ def remove_stale_decrypt_folders(backups: Path, *, now: datetime | None = None) 
 def sweep_backup_leftovers(data_dir: Path | None = None) -> None:
     """Remove what runs killed outright left in clear: the checks a stopped server left running and the decrypted
     archives in the copies, the ``inspect`` folders older than an hour, the work files of the backups that died with
-    their process, and the backups past their hour. Never raises: a part that fails is logged, and the others still run.
+    their process, the jobs past their hour, and (FB-24) the kept backups the clean-up rules take. Never raises: a part
+    that fails is logged, and the others still run.
     """
     data_dir = data_dir or get_data_dir()
-    counts = {"checks_interrupted": 0, "decrypted_archives": 0, "decrypt_folders": 0, "jobs_interrupted": 0, "jobs_expired": 0}
+    counts = {"checks_interrupted": 0, "decrypted_archives": 0, "decrypt_folders": 0, "jobs_interrupted": 0, "jobs_expired": 0, "backups_cleaned": 0}
 
     def restore() -> None:
         counts["checks_interrupted"] = restore_jobs.prune(data_dir)
@@ -71,7 +72,10 @@ def sweep_backup_leftovers(data_dir: Path | None = None) -> None:
         counts["jobs_interrupted"] = jobs.end_interrupted_jobs(data_dir)
         counts["jobs_expired"] = jobs.remove_expired_jobs(data_dir)
 
-    for part, run in (("restore", restore), ("decrypt_folders", decrypt_folders), ("jobs", backup_jobs)):
+    def kept_backups() -> None:
+        counts["backups_cleaned"] = len(retention.apply_cleanup(data_dir))
+
+    for part, run in (("restore", restore), ("decrypt_folders", decrypt_folders), ("jobs", backup_jobs), ("kept_backups", kept_backups)):
         try:
             run()
         except Exception as exc:

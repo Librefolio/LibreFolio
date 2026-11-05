@@ -212,7 +212,7 @@ With the variable set, `backup create --sealed` makes a sealed backup with no te
 # Host installation: into a folder of a NAS that is mounted
 30 3 * * * cd /path/to/LibreFolio && pipenv run ./dev.py backup create --sealed --output /mnt/nas/librefolio/
 
-# Docker: -T, as cron gives the command no terminal; the archive lands in LibreFolio-data/backups/
+# Docker: -T, as cron gives the command no terminal; the archive stays in its own folder of LibreFolio-data/backups/
 30 3 * * * cd /path/to/librefolio && docker compose exec -T librefolio python dev.py backup create --sealed
 ```
 

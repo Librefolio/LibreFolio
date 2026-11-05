@@ -163,6 +163,8 @@ your users sign in again after each restart. See
   wakes the instance: see [Scheduled Wake-up](wake_sync.md#wake-sync).
 - Optionally, a status token of its own, `LIBREFOLIO_PANEL_STATUS_TOKEN`, if your panel follows the
   setup of the instance's administrator: see [The Setup Status](hosting_panel_api.md#panel-status).
+- Optionally, `LIBREFOLIO_STORAGE_LIMIT_MB`, the space the instance may take, in megabytes (`0` for no limit). The administrator
+  sees it in the space bar of the **Files** page and cannot change it: see [The Space Bar](backup_restore.md#space-used).
 - If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
   managed profile turns frame protection on.
 - Your own support page or email address, `LIBREFOLIO_SUPPORT_URL` (`https://…` or `mailto:…`):

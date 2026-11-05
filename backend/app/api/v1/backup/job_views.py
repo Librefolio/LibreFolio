@@ -9,7 +9,7 @@ from fastapi import HTTPException, Response, status
 from fastapi.responses import FileResponse
 
 from backend.app.logging_config import get_logger
-from backend.app.schemas.backup import InstanceBackupJob
+from backend.app.schemas.backup import InstanceBackupEntry, InstanceBackupJob
 from backend.app.services.platform.instance_backup import jobs
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
@@ -57,6 +57,11 @@ def job_view(job: jobs.BackupJob) -> InstanceBackupJob:
         sealed=job.sealed,
         sealed_recipients=list(job.sealed_recipients),
     )
+
+
+def entry_view(job: jobs.BackupJob) -> InstanceBackupEntry:
+    """A kept backup as the administrators' list shows it: its job (as ``job_view``) and its origin."""
+    return InstanceBackupEntry(**job_view(job).model_dump(), origin=job.origin)
 
 
 def start_job(origin: BackupOrigin, password: str | None = None, recipients: tuple[str, ...] | None = None) -> InstanceBackupJob:

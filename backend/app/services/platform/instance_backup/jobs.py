@@ -5,8 +5,12 @@ lives in a file, ``backups/.jobs/<id>/state.json``, written atomically. One back
 exclusive ``flock`` on ``backups/.jobs/.lock`` from its start to its end, and a second start finds it taken and is
 refused. The lock is what says "running": a state that still says running while nobody holds the lock belongs to a run
 that died with its process (a restart, a crash), and reads as interrupted. The final state is written before the lock is
-released, so a finished run never reads as interrupted. A finished job keeps its archive for an hour: after that a read
-of the job answers that there is none and removes it, and the next start removes every such job.
+released, so a finished run never reads as interrupted. A backup that ends ``done`` is **kept** (FB-24): its folder moves
+in one ``rename`` to ``backups/<kept name>/`` (``paths.kept_folder_name``), where it stays until it is deleted or the
+clean-up of ``retention.py`` removes it; the job id still finds it (``get_job``, ``job_archive``, ``delete_job``). A run
+that failed, or that was asked not to keep its backup (``keep=False``, the command line with ``--output``), stays in
+``.jobs/`` and keeps what it has for an hour: after that a read of the job answers that there is none and removes it, and
+the next start removes every such job.
 
 A secure backup (lot B4, decisions 38 and 39) is the same archive, with the instance key when LibreFolio generated it,
 then encrypted with the password into an ``.lfbk`` envelope; the clear archive is removed with the job's work files. The
@@ -46,12 +50,12 @@ from backend.app.services.platform.instance_backup import sealed as sealed_backu
 from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, build_archive
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX, EncryptedFile, encrypt_file
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
-from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, NotRegularFileError, backups_dir, ensure_private_dir, is_job_id, is_plain_dir, job_dir, jobs_dir, lock_path, read_regular_file, stages_dir
+from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, NotRegularFileError, backups_dir, ensure_private_dir, is_job_id, is_kept_name, is_plain_dir, job_dir, jobs_dir, kept_dir, kept_folder_name, lock_path, read_regular_file, stages_dir
 from backend.app.services.platform.instance_backup.secure import exportable_instance_key, generated_key_unusable
 
 logger = get_logger(__name__)
 
-#: How long a finished job keeps its archive and its state.
+#: How long a job that is not kept (a failed one, or one run with ``keep=False``) keeps its archive and its state.
 JOB_RETENTION = timedelta(hours=1)
 #: How often a running job writes its progress.
 _PROGRESS_INTERVAL_S = 0.5
@@ -285,8 +289,12 @@ def _run(
     progress: Callable[[Phase, int, int], None] | None = None,
     password: str | None = None,
     recipients: tuple[str, ...] | None = None,
+    keep: bool = True,
 ) -> BackupJob:
     """Build the archive of a prepared job, keep its state up to date, and release the lock once the end is recorded.
+
+    A job that ends ``done`` with ``keep`` is moved to ``backups/<kept name>/`` before the lock is released; the clean-up of
+    the kept backups runs once the lock is free (FB-24).
 
     With ``password``, a secure backup: the archive carries the instance key when LibreFolio generated it (decision 39),
     and is encrypted into the job's envelope. With ``recipients``, a sealed backup (L3): a password of its own, never the
@@ -361,12 +369,43 @@ def _run(
             skipped=list(built.skipped[:_SKIPPED_KEPT]),
         )
     finally:
-        try:
-            _remove_work_files(folder, keep=current.file_name)
-            _write_state(folder, current)
-        finally:
-            lock.release()
+        _end_run(data_dir, folder, current, keep, lock)
     return current
+
+
+def _end_run(data_dir: Path, folder: Path, current: BackupJob, keep: bool, lock: _RunLock) -> None:
+    """Record the end of a run: remove its work files, write its final state, move a finished backup to its kept folder
+    when it is to be kept, and release the lock whatever happens; then, for a backup that was kept, the clean-up."""
+    kept = False
+    try:
+        _remove_work_files(folder, keep=current.file_name)
+        _write_state(folder, current)
+        kept = keep and current.status == "done" and _keep(data_dir, folder, current)
+    finally:
+        lock.release()
+    if kept:
+        _clean_up_kept(data_dir, current)
+
+
+def _keep(data_dir: Path, folder: Path, job: BackupJob) -> bool:
+    """Move the folder of a finished job to ``backups/<kept name>/`` in one ``rename``: whether it moved. A move that
+    fails leaves the job where it is, valid, to expire after its hour: the failure is logged, never the backup's."""
+    try:
+        os.rename(folder, kept_dir(data_dir, kept_folder_name(job.created_at, job.origin, job.job_id)))
+    except OSError as exc:
+        logger.error("Instance backup could not be kept: it stays in its job folder", job_id=job.job_id, exc_info=exc)
+        return False
+    return True
+
+
+def _clean_up_kept(data_dir: Path, job: BackupJob) -> None:
+    """The clean-up of the kept backups, after a backup was kept; it never changes how the backup ended."""
+    from backend.app.services.platform.instance_backup import retention  # noqa: PLC0415 — retention reads this module
+
+    try:
+        retention.apply_cleanup(data_dir)
+    except Exception as exc:  # noqa: BLE001 — isolation boundary: a clean-up never fails the backup it follows
+        logger.warning("The clean-up of the kept backups failed after a backup", job_id=job.job_id, exc_info=exc)
 
 
 def _encrypt(folder: Path, name: str, sealed_name: str, password: str, on_progress: Callable[[Phase, int, int], None]) -> EncryptedFile:
@@ -461,15 +500,19 @@ def run_backup(
     progress: Callable[[Phase, int, int], None] | None = None,
     password: str | None = None,
     recipients: tuple[str, ...] | None = None,
+    keep: bool = True,
 ) -> tuple[BackupJob, Path]:
-    """Run a backup in this thread, holding the same lock as the API's jobs: the job's end state and its folder.
+    """Run a backup in this thread, holding the same lock as the API's jobs: the job's end state and the folder its
+    archive is in now (the kept folder; the job's own with ``keep=False``, or when it could not be kept).
 
-    ``password``: a secure backup. ``recipients``: a sealed backup (L3), never with a password.
+    ``password``: a secure backup. ``recipients``: a sealed backup (L3), never with a password. ``keep=False``: the caller
+    takes the archive away itself and removes the folder.
     """
     _one_protection(password, recipients)
     data_dir = data_dir or get_data_dir()
     lock, job = _prepare(data_dir, origin)
-    return _run(data_dir, job, lock, progress, password, recipients), job_dir(data_dir, job.job_id)
+    ended = _run(data_dir, job, lock, progress, password, recipients, keep)
+    return ended, _locate(data_dir, job.job_id)
 
 
 def _one_protection(password: str | None, recipients: tuple[str, ...] | None) -> None:
@@ -478,19 +521,56 @@ def _one_protection(password: str | None, recipients: tuple[str, ...] | None) ->
         raise ValueError("A backup is protected by a password or sealed for recipients, not both")
 
 
+def _locate(data_dir: Path, job_id: str) -> Path:
+    """The folder of a job: its own in ``.jobs/`` while it runs, after a failure, or when it was not kept; otherwise its
+    kept folder in ``backups/``, found by the end of its name and checked against the id in its state. The job's own
+    folder when none holds it (a read of it then says there is none). ``job_id`` must be a job id."""
+    own = job_dir(data_dir, job_id)
+    if is_plain_dir(own):
+        return own
+    root = backups_dir(data_dir)
+    if is_plain_dir(root):
+        try:
+            entries = list(root.iterdir())
+        except OSError:
+            entries = []
+        for path in entries:
+            if not is_kept_name(path.name) or not path.name.endswith(f"-{job_id[:8]}") or not is_plain_dir(path):
+                continue
+            try:
+                if _read_state(path).job_id == job_id:
+                    return path
+            except (BackupJobNotFoundError, OSError):
+                continue
+    return own
+
+
+def _read_located(data_dir: Path, job_id: str) -> tuple[Path, BackupJob]:
+    """The folder of a job and its state. A run's move into ``backups/`` can land between the search and the read: the
+    read is tried once more from the search."""
+    folder = _locate(data_dir, job_id)
+    try:
+        return folder, _read_state(folder)
+    except BackupJobNotFoundError:
+        again = _locate(data_dir, job_id)
+        if again == folder:
+            raise
+        return again, _read_state(again)
+
+
 def get_job(job_id: str, *, data_dir: Path | None = None) -> BackupJob:
     """The state of a job; a run that died with its process reads as failed, ``backup_interrupted``, its work files
-    removed."""
+    removed. A kept backup never expires; a job in ``.jobs/`` that finished more than an hour ago does."""
     data_dir = data_dir or get_data_dir()
     if not is_job_id(job_id):
         raise BackupJobNotFoundError("No such backup job")
-    folder = job_dir(data_dir, job_id)
     try:
-        job = _read_state(folder)
-        if job.finished_at is not None and _now() - job.finished_at > JOB_RETENTION:
+        folder, job = _read_located(data_dir, job_id)
+        in_jobs = folder.parent == jobs_dir(data_dir)
+        if in_jobs and job.finished_at is not None and _now() - job.finished_at > JOB_RETENTION:
             shutil.rmtree(folder, ignore_errors=True)
             raise BackupJobNotFoundError("The backup job has expired")
-        if job.status == "running" and not _run_lock_held(data_dir):
+        if in_jobs and job.status == "running" and not _run_lock_held(data_dir):
             job = _read_state(folder)
             if job.status == "running":
                 job = _end_interrupted(folder, job)
@@ -507,7 +587,7 @@ def job_archive(job_id: str, *, data_dir: Path | None = None) -> tuple[Path, str
     job = get_job(job_id, data_dir=data_dir)
     if job.status != "done" or job.file_name is None:
         raise BackupJobStateError(job.status)
-    path = job_dir(data_dir, job_id) / job.file_name
+    path = _locate(data_dir, job_id) / job.file_name
     if not path.is_file():
         raise BackupJobNotFoundError("The backup archive is gone")
     return path, job.file_name
@@ -519,7 +599,7 @@ def delete_job(job_id: str, *, data_dir: Path | None = None) -> None:
     job = get_job(job_id, data_dir=data_dir)
     if job.status == "running":
         raise BackupJobStateError(job.status)
-    shutil.rmtree(job_dir(data_dir, job_id), ignore_errors=True)
+    shutil.rmtree(_locate(data_dir, job_id), ignore_errors=True)
 
 
 def end_interrupted_jobs(data_dir: Path) -> int:

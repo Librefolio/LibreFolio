@@ -361,6 +361,30 @@ def api_backup_panel(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Backup API panel token tests", verbose=verbose)
 
 
+def api_backup_list(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the list of the kept instance backups (GET /backup/instance/jobs) and the unchanged hosting panel routes, in an app of the test."""
+    print_section("Backup API: the list of kept backups")
+    print_info("Testing: GET /backup/instance/jobs (admins only, origin, SHA-256, encrypted/sealed, newest first, never a running or failed job), the move of a finished backup into backups/<kept name>/, the id after the move, the panel routes unchanged, OpenAPI InstanceBackupList/InstanceBackupEntry")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_list_api.py", test_names)
+    return run_command(cmd, "Backup API list tests", verbose=verbose)
+
+
+def api_backup_storage(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the storage bar's numbers (GET /backup/instance/storage) and the unchanged panel routes and status, in an app of the test."""
+    print_section("Backup API: the storage")
+    print_info("Testing: GET /backup/instance/storage (admins only, the eleven fields, the parts of the planted files, the limit from the row and the variable, a failing measure is never a 500, a plain def outside the blocked-instance lists, OpenAPI InstanceStorage), no new panel route, GET /panel/status unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_storage_api.py", test_names)
+    return run_command(cmd, "Backup API storage tests", verbose=verbose)
+
+
+def api_backup_cleanup_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the two global settings of the backups' cleanup through GET /settings/global and PATCH /settings/global/bulk, on the lane's server."""
+    print_section("Backup API: the cleanup settings")
+    print_info("Testing: backup_cleanup_max_mb and backup_cleanup_max_days exist (int, 0 = off on a self-hosted lane), accepted 0..1048576 and 0..3650 to their edges, 422 naming the key past them, all or nothing; the original values restored")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_cleanup_settings_api.py", test_names)
+    return run_command(cmd, "Backup API cleanup settings tests", verbose=verbose)
+
+
 def api_backup_restore(verbose: bool = False, test_names: list = None) -> bool:
     """Test the check of a backup archive before a restore (/backup/restore), in an app of the test (no server reached)."""
     print_section("Backup API: the restore check")
@@ -1320,6 +1344,38 @@ Tests for REST API endpoints (server auto-started):
         # functions of jobs replaced by a fake under tmp_path; the token variables are set with monkeypatch: no data
         # directory, DB, server or network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-list",
+        api_backup_list,
+        name="Backup API Kept List",
+        desc="Lot FB-24: GET /backup/instance/jobs lists the kept backups, newest first, admins only (401, 403), each with its origin, file_sha256 (the SHA-256 of the download), encrypted and sealed, never a running or failed job nor a loose file; a finished backup moves to backups/librefolio-backup-<date>-<origin>-<id[:8]>/ keeping its job id (GET, file, DELETE still answer, then 404 backup_job_not_found and the entry gone); the hosting panel's four routes unchanged from outside (202, done with file_name/file_size/file_sha256/sealed, the exact bytes, 204 then 404, a ui job 404, no origin in the view); OpenAPI InstanceBackupList of InstanceBackupEntry (job plus origin)",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), a data directory copied from
+        # the staging tests' alembic database under tmp_path is the process's own for the test and its backups run for real
+        # under that directory's own run lock: no lane data directory, DB, server or network is reached (the api category still
+        # starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-storage",
+        api_backup_storage,
+        name="Backup API Storage",
+        desc="Lot FB-29: GET /backup/instance/storage for administrators only (401, 403), exactly the eleven fields of InstanceStorage, the five parts and their sum reflecting the files planted in a data directory (uploads, broker reports, a kept backup folder, the database, a log) read fresh at each request, limit_mb/limit_locked from the storage_limit_mb row (0 is null, unlocked) or from LIBREFOLIO_STORAGE_LIMIT_MB (wins and locks, an invalid one ignored), a measurement that raises is a 200 of zeros and null volume, the route a plain def and in none of the instance_block allowed lists, OpenAPI InstanceStorage with extra forbidden and no panel token; guards: no new route under /backup/panel, PanelStatusResponse keeps its ten keys and has no storage_* one",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory is a folder
+        # under tmp_path configured as the process's, the limit's row lives in a private SQLite file read through a synchronous
+        # engine put in place of the process's: no lane data directory, DB, server or network is reached (the api category still
+        # starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-cleanup-settings",
+        api_backup_cleanup_settings,
+        name="Backup Cleanup Settings API",
+        desc="Lot FB-24: backup_cleanup_max_mb and backup_cleanup_max_days in GET /settings/global (int, 0 = off on a self-hosted lane) and PATCH /settings/global/bulk: 0..1048576 and 0..3650 accepted to their edges and read back, one past an edge, a negative number or a non-integer refused with 422 naming the key, the bulk all or nothing; the original values put back",
+        exclusive_because="rewrites two global_settings rows (backup_cleanup_max_mb, backup_cleanup_max_days), one value for the whole instance: a concurrent unit reading them, or a backup applying the cleanup, would meet the value this one holds; it restores the originals in a finally",
     )
     add_test(
         api,

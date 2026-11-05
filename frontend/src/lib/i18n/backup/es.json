@@ -37,7 +37,7 @@
       "download": "Descargar",
       "delete": "Eliminar del servidor",
       "deleting": "Eliminando la copia de seguridad…",
-      "retention": "El archivo se queda en el servidor una hora y después se elimina.",
+      "retention": "La copia se queda en este servidor hasta que la elimines. Descárgala y guarda una copia en otro sitio.",
       "recheck": "Comprobar de nuevo",
       "retry": "Reintentar",
       "warningsTitle": "Copia completada, con avisos",
@@ -280,6 +280,64 @@
       "empty": "Esta copia no tiene usuarios entre los que elegir.",
       "confirm": "Confirmar y restaurar",
       "cancel": "Cancelar"
+    },
+    "list": {
+      "title": "Copias de seguridad en este servidor",
+      "description": "Cada copia hecha aquí se queda en este servidor hasta que la elimines.",
+      "show": "Mostrar las copias",
+      "hide": "Ocultar las copias",
+      "empty": "Todavía no hay copias en este servidor.",
+      "columns": {
+        "date": "Fecha",
+        "origin": "Hecha desde",
+        "kind": "Tipo",
+        "size": "Tamaño",
+        "sha256": "SHA-256",
+        "actions": "Acciones"
+      },
+      "origin": {
+        "ui": "Aplicación",
+        "cli": "Línea de comandos",
+        "pre-restore": "Antes de una restauración",
+        "panel": "Panel de alojamiento"
+      },
+      "kind": {
+        "clear": "Simple",
+        "password": "Con contraseña",
+        "sealed": "Sellada"
+      },
+      "actions": {
+        "download": "Descargar",
+        "delete": "Eliminar",
+        "copySha": "Copiar el SHA-256"
+      },
+      "deleteConfirm": "¿Eliminar esta copia del servidor? Descárgala antes si aún la necesitas.",
+      "sha": {
+        "copied": "SHA-256 copiado."
+      },
+      "sameDisk": "Una copia en el mismo disco que tus datos no es una copia de seguridad real: descarga el archivo y guárdalo en otro sitio.",
+      "errors": {
+        "load": "No se pudo cargar la lista de copias. Inténtalo de nuevo."
+      },
+      "retry": "Reintentar"
+    },
+    "cleanup": {
+      "title": "Limpieza automática",
+      "description": "Indica cuánto espacio pueden ocupar las copias de este servidor y cuánto tiempo se conservan. Escribe 0 para desactivar una regla.",
+      "maxMb": "Límite de espacio total (MB)",
+      "maxDays": "Conservar las copias (días)",
+      "hintSelfhosted": "Escribe 0 para desactivar esta regla.",
+      "hintManaged": "Escribe al menos 1: aquí esta regla no se puede desactivar.",
+      "save": "Guardar",
+      "saved": "Guardado.",
+      "latestKept": "La última copia se conserva siempre.",
+      "errors": {
+        "invalid": "Escribe números enteros de 0 o más; en una instancia alojada el límite de espacio debe ser al menos 1.",
+        "forbidden": "Solo los administradores pueden cambiarlo.",
+        "network": "Sin respuesta del servidor. Inténtalo de nuevo.",
+        "unexpected": "No se pudieron guardar los ajustes. Inténtalo de nuevo."
+      },
+      "hintDays": "Escribe 0 para conservar las copias hasta que las elimines."
     }
   }
 }

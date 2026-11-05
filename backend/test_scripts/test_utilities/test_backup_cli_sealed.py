@@ -177,7 +177,7 @@ def tar_members(path: Path) -> tuple[list[str], dict[str, bytes]]:
 
 
 def the_tar_written(root: Path, out: str) -> Path:
-    """The one archive ``create`` wrote: a sealed tar in ``<data dir>/backups/``, 0600, named on a ✅ line; no job folder,
+    """The one archive ``create`` wrote: a sealed tar in its kept folder of ``<data dir>/backups/`` (FB-24), 0600, named on a ✅ line; no job folder,
     no envelope or clear archive left in the data directory."""
     archives = secure.written_archives(root)
     assert len(archives) == 1 and SEALED_NAME.fullmatch(archives[0].name), f"one archive in backups/, librefolio-backup-YYYYMMDD-HHMMSS.tar: {[path.name for path in archives]}"

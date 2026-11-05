@@ -7,7 +7,10 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
 (a) ``start_backup`` returns the first state (running, preparing) and builds in a thread; ``get_job`` follows the run to
     done; ``job_archive`` gives the archive (``BackupJobStateError`` until done, ``BackupJobNotFoundError`` once the
     file is gone); ``delete_job`` removes a finished job (``BackupJobStateError`` while it runs). ``run_backup`` is the
-    same run in the calling thread, under the same lock.
+    same run in the calling thread, under the same lock. Since FB-24 a backup that ends ``done`` is a kept backup: its
+    folder moves, under the same job id, from ``backups/.jobs/<id>/`` to ``backups/<kept name>/`` (see (m)); everything
+    that reads a finished backup of a run (the folder ``run_backup`` returns, the final state at the release of the lock)
+    looks there.
 (b) One run at a time: while ``backups/.jobs/.lock`` is held (by a run, or by this test through ``_RunLock``), both
     ``start_backup`` and ``run_backup`` raise ``BackupBusyError`` and create nothing.
 (c) A state that says running while nobody holds the lock belongs to a run that died with its process: ``get_job``
@@ -19,9 +22,10 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     as one of its causes (a ``PartialEntryError`` caused by ``ENOSPC``, the database copy finding the disk full, the
     archive's own writes failing); a file that fails while it is being archived for any other reason (a read error)
     is ``backup_failed``. The partial archive such a build leaves is removed: it was there when the cleanup ran.
-(e) ``remove_expired_jobs`` removes what ended more than ``JOB_RETENTION`` (1 h) ago: finished jobs, dead runs, job
-    folders whose state cannot be read (by the folder's date). It keeps the rest, a running job whose lock is held
-    included, never follows a link and never touches what is not a job folder. The next start removes them as well.
+(e) ``remove_expired_jobs`` removes what ended more than ``JOB_RETENTION`` (1 h) ago from ``backups/.jobs/``: finished
+    jobs (a failed one, or a ``done`` one of a run that was not kept), dead runs, job folders whose state cannot be read
+    (by the folder's date). It keeps the rest, a running job whose lock is held included, never follows a link and never
+    touches what is not a job folder, nor a kept backup. The next start removes them as well.
     A read (``get_job``, and ``job_archive`` through it) of a job that finished more than an hour ago, done or failed,
     answers ``BackupJobNotFoundError`` and removes its folder, archive included; up to the hour included, the job reads
     as written and its archive is served. The age comes from the ``finished_at`` written in ``state.json`` and a fixed
@@ -89,6 +93,17 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     (``()``) by default, ``to_json`` / ``from_json`` keep them, ``get_job`` reads them from ``state.json``; a state
     written before L3-2, without them, reads ``False`` / ``()``. The sealed run itself is ``test_backup_secure.py``'s (k).
 
+(m) FB-24, the kept backups (contract ``B6r-fb24-backend-interface`` §2). A run that ends ``done`` with ``keep=True`` (what
+    ``start_backup`` always does, and ``run_backup`` by default) renames its folder to ``backups/<kept name>`` after the
+    final state is written and before the lock is released; the job id does not change; ``run_backup`` answers that
+    folder. ``get_job``, ``job_archive`` and ``delete_job`` find a job in ``.jobs/<id>`` or in ``backups/``, by the
+    name's ending (the first 8 digits of the id) and the ``job_id`` of the state; a kept job never expires, and
+    ``remove_expired_jobs``, ``end_interrupted_jobs`` and the next start leave it alone. A move that happens between the
+    search and the read is not a 404: the read is tried once more. A run that fails, or ends ``done`` with ``keep=False``
+    (the command line with ``--output``), stays in ``.jobs/`` and expires after an hour. A ``rename`` that fails is logged
+    and leaves the job in ``.jobs/``, valid. After each backup that ended ``done`` the clean-up of the kept backups runs
+    (``retention.apply_cleanup``); an error there changes nothing in the backup's outcome.
+
 Pure: every data directory is in ``tmp_path`` and every call is given its ``data_dir``; ``jobs.get_data_dir`` is
 replaced by a guard that fails the test, so the lane's data directory is never reached (the cases of the routes' views,
 B-50 and B-53, replace it with the test's own). ``LF_APP_VERSION`` is set, so no git process runs. No lane database, no
@@ -106,6 +121,7 @@ which reads badly (``EIO`` after its first block) or is on a disk with a few hun
 from __future__ import annotations
 
 import errno
+import importlib
 import io
 import json
 import os
@@ -120,6 +136,7 @@ from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -144,9 +161,10 @@ from backend.app.services.platform.instance_backup.jobs import (
     run_backup,
     start_backup,
 )
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, STAGE_LOCK_FILE, STATE_FILE, ensure_private_dir, is_job_id, job_dir, jobs_dir, lock_path, stages_dir
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, STAGE_LOCK_FILE, STATE_FILE, backups_dir, ensure_private_dir, is_job_id, job_dir, jobs_dir, lock_path, stages_dir
 from backend.app.services.platform.instance_backup.snapshot import file_digest
 from backend.app.utils.runtime.version import get_git_version
+from backend.test_scripts.test_services import test_backup_retention as retention_cases
 from backend.test_scripts.test_utils import print_section, print_success
 
 POSIX = os.name != "nt"
@@ -229,6 +247,28 @@ def data_dir(tmp_path) -> Path:
 
 def mode(path: Path) -> int:
     return stat.S_IMODE(path.lstat().st_mode)
+
+
+@pytest.fixture(autouse=True)
+def no_lane_cleanup_policy(monkeypatch):
+    """After a backup that ended done the clean-up of the kept backups reads its policy from the settings (FB-24): here it
+    is off, so that no run of this module reaches the lane's database. The cases of the clean-up set their own."""
+    try:
+        module = importlib.import_module(retention_cases.RETENTION)
+    except ModuleNotFoundError:
+        return
+    if hasattr(module, "read_policy") and hasattr(module, "CleanupPolicy"):
+        monkeypatch.setattr(module, "read_policy", lambda: module.CleanupPolicy())
+
+
+def kept_folder(data_dir: Path, job: BackupJob) -> Path:
+    """Where a backup that ended done stays (FB-24, contract §2): ``backups/<kept name>``, the contract's string."""
+    return backups_dir(data_dir) / retention_cases.kept_name(job.created_at, job.origin, job.job_id)
+
+
+def kept_folders(data_dir: Path) -> list[str]:
+    """The kept backups of ``backups/`` by name."""
+    return retention_cases.kept_folders(data_dir)
 
 
 def job_folders(data_dir: Path) -> list[str]:
@@ -350,6 +390,9 @@ class Release:
     held: bool
     states: dict[str, dict]
     listing: dict[str, list[str]]
+    #: The same for the kept backups of ``backups/`` (FB-24): a backup that ended done is moved there before the release.
+    kept_states: dict[str, dict] = field(default_factory=dict)
+    kept_listing: dict[str, list[str]] = field(default_factory=dict)
 
 
 def watch_releases(data_dir: Path, monkeypatch) -> list[Release]:
@@ -360,7 +403,17 @@ def watch_releases(data_dir: Path, monkeypatch) -> list[Release]:
     def release(self) -> None:
         folders = [path for path in jobs_dir(data_dir).iterdir() if path.is_dir()]
         states = {path.name: json.loads((path / STATE_FILE).read_text(encoding="utf-8")) for path in folders if (path / STATE_FILE).is_file()}
-        seen.append(Release(held=self._fd is not None or self._local is not None, states=states, listing={path.name: sorted(os.listdir(path)) for path in folders}))
+        kept = [path for path in backups_dir(data_dir).iterdir() if path.is_dir() and path.name != ".jobs"]
+        kept_states = {path.name: json.loads((path / STATE_FILE).read_text(encoding="utf-8")) for path in kept if (path / STATE_FILE).is_file()}
+        seen.append(
+            Release(
+                held=self._fd is not None or self._local is not None,
+                states=states,
+                listing={path.name: sorted(os.listdir(path)) for path in folders},
+                kept_states=kept_states,
+                kept_listing={path.name: sorted(os.listdir(path)) for path in kept},
+            )
+        )
         real_release(self)
 
     monkeypatch.setattr(jobs._RunLock, "release", release)
@@ -536,20 +589,24 @@ class FailingDiskOs:
 
 
 def test_a_started_backup_runs_in_the_background_to_done(data_dir):
-    """(a) The first state comes back at once; the run ends done, with its archive, 0600, in a 0700 folder of its own."""
+    """(a) The first state comes back at once; the run ends done, with its archive, 0600, in a 0700 folder of its own: the
+    kept folder of ``backups/`` (FB-24), under the same job id, no longer in ``.jobs/``."""
     print_section("start_backup → get_job → job_archive")
     first = start_backup(origin="ui", data_dir=data_dir)
     assert is_job_id(first.job_id), f"the job id must be 32 lowercase hex digits: {first.job_id!r}"
     assert (first.status, first.phase, first.origin, first.done_bytes, first.total_bytes, first.file_name) == ("running", "preparing", "ui", 0, 0, None), f"the first state of a run: {first}"
     job = wait_until_finished(first.job_id, data_dir)
-    folder = job_dir(data_dir, job.job_id)
+    folder = kept_folder(data_dir, job)
+    assert job.job_id == first.job_id, "the job keeps its id when it moves to backups/"
     assert (job.status, job.error_code, job.phase) == ("done", None, None), f"the run must end done: {job}"
     assert job.created_at == first.created_at and job.finished_at >= job.created_at, f"created at the start, finished after: {job.created_at} → {job.finished_at}"
     assert job.file_name == archive_name(job.created_at), f"the archive is named after the run's creation time: {job.file_name}"
     assert (job.file_size, job.file_sha256) == file_digest(folder / job.file_name), "the state gives the archive's size and SHA-256"
     assert job.done_bytes == job.total_bytes > 0, f"a finished run has done all its bytes: {job.done_bytes}/{job.total_bytes}"
     assert (job.warnings, job.skipped) == ((), ()), f"nothing was left out of this data directory: {job.warnings}, {job.skipped}"
-    assert sorted(os.listdir(folder)) == sorted([STATE_FILE, job.file_name]), f"the job folder keeps its state and its archive, nothing else: {sorted(os.listdir(folder))}"
+    assert sorted(os.listdir(folder)) == sorted([STATE_FILE, job.file_name]), f"the kept folder keeps the state and the archive, nothing else: {sorted(os.listdir(folder)) if folder.is_dir() else 'no such folder'}"
+    assert job_folders(data_dir) == [], f"a backup that ended done is no longer in .jobs/: {job_folders(data_dir)}"
+    assert kept_folders(data_dir) == [folder.name], f"it is the one kept backup of backups/: {kept_folders(data_dir)}"
     assert BackupJob.from_json((folder / STATE_FILE).read_text(encoding="utf-8")) == job, "get_job reads the state on disk"
     if POSIX:
         assert (mode(folder), mode(folder / job.file_name), mode(folder / STATE_FILE)) == (0o700, 0o600, 0o600), "the job folder is 0700, its archive and state 0600"
@@ -575,7 +632,7 @@ def test_run_backup_runs_in_the_calling_thread(data_dir):
     phases: list[str] = []
     job, folder = run_backup(origin="cli", data_dir=data_dir, progress=lambda phase, done, total: phases.append(phase))
     assert [thread.name for thread in threading.enumerate() if thread not in before] == [], "run_backup starts no thread"
-    assert (job.status, job.origin, folder) == ("done", "cli", job_dir(data_dir, job.job_id)), f"run_backup returns the end state and the job's folder: {job}, {folder}"
+    assert (job.status, job.origin, folder) == ("done", "cli", kept_folder(data_dir, job)), f"run_backup returns the end state and the folder where the archive is now, the kept one: {job}, {folder}"
     assert get_job(job.job_id, data_dir=data_dir) == job, "the state on disk is the one returned"
     assert phases[0] == "preparing" and phases[-1] == "finalizing" and {"database", "files"} <= set(phases), f"the caller sees every phase: {sorted(set(phases))}"
     assert not jobs._run_lock_held(data_dir), "the lock is free once run_backup returns"
@@ -708,9 +765,17 @@ def test_the_final_state_is_on_disk_before_the_lock_is_released(data_dir, monkey
     held = [release for release in releases if release.held]
     assert held, "the run released no lock it held"
     at_release = held[-1]
-    assert at_release.states == {job.job_id: json.loads(job.to_json())}, f"when the run released its lock, the state on disk must already be the final one: {at_release.states}"
     expected = sorted([STATE_FILE, *([job.file_name] if job.file_name else [])])
-    assert at_release.listing == {job.job_id: expected}, f"and the work files already removed: {at_release.listing}"
+    if outcome == "done":
+        # FB-24: the final state is written, then the folder moves to backups/, and only then is the lock released.
+        name = kept_folder(data_dir, job).name
+        assert at_release.states == {} and at_release.listing == {}, f"a backup that ended done has left .jobs/ when the lock is released: {at_release.states}, {at_release.listing}"
+        assert at_release.kept_states == {name: json.loads(job.to_json())}, f"when the run released its lock, the kept folder holds the final state: {at_release.kept_states}"
+        assert at_release.kept_listing == {name: expected}, f"and the work files already removed: {at_release.kept_listing}"
+    else:
+        assert at_release.states == {job.job_id: json.loads(job.to_json())}, f"when the run released its lock, the state on disk must already be the final one: {at_release.states}"
+        assert at_release.listing == {job.job_id: expected}, f"and the work files already removed: {at_release.listing}"
+        assert at_release.kept_states == {}, f"a failed backup is never kept: {at_release.kept_states}"
     print_success(f"{outcome}: final state written, then the lock released")
 
 
@@ -860,8 +925,9 @@ def test_retention_keeps_a_running_job_whose_lock_is_held(data_dir):
 def test_the_next_backup_removes_the_jobs_that_expired(data_dir):
     real_now = datetime.now(UTC)
     expired = write_job(data_dir, status="done", created=real_now - 3 * JOB_RETENTION, finished=real_now - 2 * JOB_RETENTION)
-    job, _ = run_backup(data_dir=data_dir)
-    assert job_folders(data_dir) == [job.job_id], f"the next start removed the job that finished two hours ago ({expired.job_id}): {job_folders(data_dir)}"
+    job, folder = run_backup(data_dir=data_dir)
+    assert job_folders(data_dir) == [], f"the next start removed the job that finished two hours ago ({expired.job_id}), and the new backup is kept elsewhere: {job_folders(data_dir)}"
+    assert kept_folders(data_dir) == [folder.name], f"the new backup is in backups/: {kept_folders(data_dir)}"
     print_success("expired job removed by the next start")
 
 
@@ -1786,7 +1852,8 @@ def test_a_backup_starts_past_a_job_whose_state_cannot_be_read_and_its_folder_ex
     old = plant_unreadable(shape, now=now, dated=now - 2 * JOB_RETENTION)
     made = backup_made(start, data_dir)
     assert isinstance(made, BackupJob) and made.status == "done", f"{start.__name__} must make a backup past a job whose state is {shape}: {made}"
-    assert job_folders(data_dir) == sorted([young, made.job_id]), f"the start keeps the unreadable folder dated 5 min ago ({young}) and removes the one dated 2 h ago ({old}): {job_folders(data_dir)}"
+    assert job_folders(data_dir) == [young], f"the start keeps the unreadable folder dated 5 min ago ({young}) and removes the one dated 2 h ago ({old}); the new backup is a kept one: {job_folders(data_dir)}"
+    assert kept_folders(data_dir) == [kept_folder(data_dir, made).name], f"the new backup is in backups/: {kept_folders(data_dir)}"
     print_success(f"{shape}, {start.__name__}: done; the unreadable folder kept until it is an hour old")
 
 
@@ -2047,7 +2114,8 @@ def test_a_backup_starts_past_a_job_whose_state_is_a_fifo_and_its_folder_expires
     passed = threading.Event()
     made = unblocked(lambda: backup_past_fifos(start, data_dir, passed), fifos, passed=passed)
     assert isinstance(made, BackupJob) and made.status == "done", f"{start.__name__} must go past the job folders whose state is a FIFO within {FIFO_DEADLINE_S}s and make its backup: {made}"
-    assert job_folders(data_dir) == sorted([young, made.job_id]), f"the start keeps the FIFO's folder dated 5 min ago ({young}) and removes the one dated 2 h ago ({old}): {job_folders(data_dir)}"
+    assert job_folders(data_dir) == [young], f"the start keeps the FIFO's folder dated 5 min ago ({young}) and removes the one dated 2 h ago ({old}); the new backup is a kept one: {job_folders(data_dir)}"
+    assert kept_folders(data_dir) == [kept_folder(data_dir, made).name], f"the new backup is in backups/: {kept_folders(data_dir)}"
     print_success(f"{start.__name__}: past the FIFOs, done; the FIFO's folder kept until it is an hour old")
 
 
@@ -2243,3 +2311,248 @@ def test_a_sealed_state_is_written_and_read_back(data_dir):
     read = get_job(job.job_id, data_dir=data_dir)
     assert (seal_fields(read), read) == ((True, (RECIPIENT,)), sealed), f"get_job reads the seal back: {read}"
     print_success("sealed True and its recipient written and read back")
+
+
+# =============================================================================
+# (m) FB-24: the kept backups
+# =============================================================================
+
+DAY = timedelta(days=1)
+
+
+@pytest.mark.parametrize("origin", ["ui", "cli", "panel", "pre-restore"])
+def test_a_backup_that_ended_done_is_a_kept_folder_named_by_its_origin_and_its_job_id(data_dir, origin):
+    """(m) ``backups/librefolio-backup-<UTC date>-<origin>-<8 digits of the id>``, the job id unchanged, the archive inside
+    under the name it always had; the product's ``kept_folder_name`` says the same."""
+    print_section(f"A kept backup, origin {origin}")
+    job, folder = run_backup(origin=origin, data_dir=data_dir)
+    assert job.status == "done" and folder == kept_folder(data_dir, job), f"the folder the run answers is the kept one: {folder}"
+    assert folder.name == f"librefolio-backup-{job.created_at.astimezone(UTC):%Y%m%d-%H%M%S}-{origin}-{job.job_id[:8]}", f"the contract's name: {folder.name}"
+    assert (folder / job.file_name).is_file() and job.file_name == archive_name(job.created_at), "the archive keeps its name"
+    assert not job_dir(data_dir, job.job_id).exists(), "and the job's folder of .jobs/ is gone"
+    named = retention_cases.new_attr(retention_cases.paths_module(), "kept_folder_name")(job.created_at, origin, job.job_id)
+    assert named == folder.name, f"kept_folder_name gives the same name: {named}"
+    print_success(folder.name)
+
+
+def test_a_kept_job_is_found_by_its_id_by_the_three_readers_and_deleting_it_touches_no_other(data_dir):
+    """(m) ``get_job``, ``job_archive`` and ``delete_job`` look in ``.jobs/`` and in ``backups/``; ``delete_job`` removes the
+    kept folder, archive included, and only that one."""
+    first, first_folder = run_backup(data_dir=data_dir)
+    second, second_folder = run_backup(data_dir=data_dir)
+    assert first.job_id != second.job_id and first_folder != second_folder, "precondition: two kept backups"
+    assert get_job(first.job_id, data_dir=data_dir) == first and get_job(second.job_id, data_dir=data_dir) == second
+    assert job_archive(first.job_id, data_dir=data_dir) == (first_folder / first.file_name, first.file_name), "the archive is served from the kept folder"
+    second_before = sorted(os.listdir(second_folder))
+    delete_job(first.job_id, data_dir=data_dir)
+    assert not first_folder.exists(), "the kept folder is removed, archive with it"
+    for call in (get_job, job_archive, delete_job):
+        with pytest.raises(BackupJobNotFoundError):
+            call(first.job_id, data_dir=data_dir)
+    assert sorted(os.listdir(second_folder)) == second_before and get_job(second.job_id, data_dir=data_dir) == second, "the other kept backup is untouched"
+    print_success("found by id, deleted alone")
+
+
+def test_a_kept_job_never_expires_by_age(data_dir, monkeypatch):
+    """(m) Ten days on, a kept job still reads and serves its archive; neither ``remove_expired_jobs``, nor
+    ``end_interrupted_jobs``, nor the next start touches it."""
+    job, folder = run_backup(data_dir=data_dir)
+    later = datetime.now(UTC) + 10 * DAY
+    monkeypatch.setattr(jobs, "_now", lambda: later)
+    assert get_job(job.job_id, data_dir=data_dir) == job, "ten days on, the kept job reads as written"
+    assert job_archive(job.job_id, data_dir=data_dir) == (folder / job.file_name, job.file_name), "and its archive is served"
+    assert remove_expired_jobs(data_dir, now=later) == 0, "the removal of expired jobs counts and removes nothing"
+    assert end_interrupted_jobs(data_dir) == 0
+    following, following_folder = run_backup(data_dir=data_dir)
+    assert folder.is_dir() and following_folder.is_dir() and following_folder != folder, "the next start leaves it alone"
+    print_success("a kept job does not expire")
+
+
+def test_a_kept_job_written_by_hand_with_an_old_end_reads_and_serves(data_dir, frozen_now):
+    """(m) Not only what this process kept: a state two days old in ``backups/`` is a job."""
+    planted = retention_cases.plant_kept(data_dir, created=frozen_now - 2 * DAY, size=300)
+    assert get_job(planted.job.job_id, data_dir=data_dir) == planted.job, "two days after its end, the job reads as written"
+    assert job_archive(planted.job.job_id, data_dir=data_dir) == (planted.archive, planted.job.file_name)
+
+
+def test_the_job_is_found_by_the_id_of_its_state_not_by_the_start_of_it(data_dir):
+    """(m) Two kept backups whose ids begin with the same 8 digits: each id finds its own, and an id that is nobody's, with
+    the same start, is not found."""
+    first_id, second_id, stranger_id = ("1a2b3c4d" + tail * 24 for tail in ("0", "f", "7"))
+    first = retention_cases.plant_kept(data_dir, created=datetime(2026, 10, 1, 8, 0, tzinfo=UTC), job_id=first_id)
+    second = retention_cases.plant_kept(data_dir, created=datetime(2026, 10, 2, 8, 0, tzinfo=UTC), job_id=second_id)
+    assert first.folder.name.endswith("-1a2b3c4d") and second.folder.name.endswith("-1a2b3c4d"), "precondition: the two names end alike"
+    assert get_job(first_id, data_dir=data_dir) == first.job and get_job(second_id, data_dir=data_dir) == second.job
+    assert job_archive(second_id, data_dir=data_dir)[0] == second.archive, "the archive of the second is the second's"
+    for call in (get_job, job_archive, delete_job):
+        with pytest.raises(BackupJobNotFoundError):
+            call(stranger_id, data_dir=data_dir)
+    delete_job(second_id, data_dir=data_dir)
+    assert not second.folder.exists() and first.folder.is_dir(), "deleting the second leaves the first"
+
+
+def test_a_failed_backup_stays_in_jobs_and_expires_after_an_hour(data_dir, monkeypatch):
+    """(m) Nothing failed is kept: it stays in ``.jobs/<id>`` as today."""
+    monkeypatch.setattr(jobs, "build_archive", BrokenBuild(jobs.build_archive))
+    job, _folder = run_backup(data_dir=data_dir)
+    assert job.status == "failed" and job_folders(data_dir) == [job.job_id], f"the failed job is in .jobs/: {job_folders(data_dir)}"
+    assert kept_folders(data_dir) == [], "and nothing is kept"
+    monkeypatch.setattr(jobs, "_now", lambda: job.finished_at + JOB_RETENTION - timedelta(minutes=1))
+    assert get_job(job.job_id, data_dir=data_dir) == job, "59 minutes on, it still reads"
+    monkeypatch.setattr(jobs, "_now", lambda: job.finished_at + JOB_RETENTION + timedelta(minutes=1))
+    expect_not_found(get_job, job.job_id, data_dir)
+    assert job_folders(data_dir) == [], "an hour and a minute on, it is gone"
+
+
+def test_a_backup_run_without_keeping_stays_in_jobs_is_served_for_an_hour_and_expires(data_dir, monkeypatch):
+    """(m) ``run_backup(keep=False)`` (the command line with ``--output``): done, in ``.jobs/<id>``, no kept folder, the
+    folder answered is the job's."""
+    job, folder = run_backup(data_dir=data_dir, keep=False)
+    assert job.status == "done" and folder == job_dir(data_dir, job.job_id), f"the folder answered is the job's folder: {folder}"
+    assert (folder / job.file_name).is_file() and kept_folders(data_dir) == [], "the archive is in .jobs/ and nothing is kept"
+    monkeypatch.setattr(jobs, "_now", lambda: job.finished_at + JOB_RETENTION - timedelta(minutes=1))
+    assert job_archive(job.job_id, data_dir=data_dir) == (folder / job.file_name, job.file_name), "59 minutes on, the archive is served"
+    monkeypatch.setattr(jobs, "_now", lambda: job.finished_at + JOB_RETENTION + timedelta(minutes=1))
+    expect_not_found(job_archive, job.job_id, data_dir)
+    assert not folder.exists(), "an hour and a minute on, the folder is gone"
+
+
+def refuse_the_move_into_backups(monkeypatch, data_dir: Path) -> list[str]:
+    """Every way to move a folder into ``backups/`` (``os.rename``, ``os.replace``, ``shutil.move``, which ``Path.rename``
+    and ``Path.replace`` go through) fails with ``EACCES``; any other move is the real one. The names refused, in order."""
+    refused: list[str] = []
+    backups = backups_dir(data_dir)
+
+    def wrap(owner, name: str) -> None:
+        real = getattr(owner, name)
+
+        def wrapper(source, destination, *args, **kwargs):
+            try:
+                into_backups = Path(os.fspath(destination)).parent == backups
+            except TypeError:
+                into_backups = False
+            if into_backups:
+                refused.append(name)
+                raise os_error(errno.EACCES)
+            return real(source, destination, *args, **kwargs)
+
+        monkeypatch.setattr(owner, name, wrapper)
+
+    for owner, name in ((os, "rename"), (os, "replace"), (jobs.shutil, "move")):
+        wrap(owner, name)
+    return refused
+
+
+def test_a_move_that_fails_leaves_the_job_in_jobs_valid_and_is_logged(data_dir, monkeypatch):
+    """(m) The ``rename`` fails: the run still ends ``done``, its folder stays in ``.jobs/`` as before FB-24, readable and
+    served, the lock is released, and one error is logged for it."""
+    print_section("A move that fails")
+    refused = refuse_the_move_into_backups(monkeypatch, data_dir)
+    with jobs_logs() as events:
+        job, folder = run_backup(data_dir=data_dir)
+    assert refused, "barrier: the run tried to move its folder into backups/"
+    assert job.status == "done", f"a move that fails does not fail the backup: {job}"
+    assert folder == job_dir(data_dir, job.job_id) and sorted(os.listdir(folder)) == sorted([STATE_FILE, job.file_name]), f"the folder stays in .jobs/ with its state and archive: {folder}"
+    assert kept_folders(data_dir) == [], "nothing was moved"
+    assert get_job(job.job_id, data_dir=data_dir) == job and job_archive(job.job_id, data_dir=data_dir)[0] == folder / job.file_name, "the job is valid: it reads and serves"
+    assert not jobs._run_lock_held(data_dir), "the lock is released"
+    assert [event for event in events if event.get("log_level") in ("error", "critical") and event.get("job_id") == job.job_id], f"one error names the job: {[(event.get('log_level'), event.get('event')) for event in events]}"
+    print_success("move refused: done, valid, in .jobs/")
+
+
+@pytest.mark.parametrize("reader", [get_job, job_archive, delete_job], ids=lambda reader: reader.__name__)
+def test_a_move_between_the_search_and_the_read_is_not_a_404(data_dir, monkeypatch, reader):
+    """(m) The run's ``rename`` lands just as the reader opens ``.jobs/<id>``: the read is tried once more, in
+    ``backups/``, and finds the job."""
+    job, folder = finished_job(data_dir, finished=datetime.now(UTC) - timedelta(minutes=1))
+    moved_to = kept_folder(data_dir, job)
+    real_read = jobs._read_state
+    moved: list[bool] = []
+
+    def read_as_the_move_lands(path: Path) -> BackupJob:
+        if path == folder and not moved:
+            moved.append(True)
+            moved_to.parent.mkdir(exist_ok=True)
+            os.rename(folder, moved_to)
+            raise BackupJobNotFoundError("No such backup job")
+        return real_read(path)
+
+    monkeypatch.setattr(jobs, "_read_state", read_as_the_move_lands)
+    answer = reader(job.job_id, data_dir=data_dir)
+    assert moved, "barrier: the reader opened the state in .jobs/ and the move landed"
+    if reader is get_job:
+        assert answer == job
+    elif reader is job_archive:
+        assert answer == (moved_to / job.file_name, job.file_name)
+    else:
+        assert not moved_to.exists(), "delete_job removed the folder the move brought"
+
+
+class CleanupSpy:
+    """``apply_cleanup`` in place of the product's, set on ``retention`` and on any module that bound it (``raising=False``):
+    what it saw when called, and, when asked, the error it raises."""
+
+    def __init__(self, data_dir: Path, error: BaseException | None = None) -> None:
+        self.data_dir = data_dir
+        self.error = error
+        self.calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.seen: list[dict[str, Any]] = []
+
+    def __call__(self, *args: Any, **kwargs: Any) -> tuple[str, ...]:
+        self.calls.append((args, kwargs))
+        self.seen.append({"kept": kept_folders(self.data_dir), "jobs": job_folders(self.data_dir), "lock_held": jobs._run_lock_held(self.data_dir)})
+        if self.error is not None:
+            raise self.error
+        return ()
+
+
+def spy_on_cleanup(monkeypatch, data_dir: Path, error: BaseException | None = None) -> CleanupSpy:
+    module = retention_cases.retention_module()
+    retention_cases.new_attr(module, "apply_cleanup")
+    spy = CleanupSpy(data_dir, error=error)
+    monkeypatch.setattr(module, "apply_cleanup", spy)
+    monkeypatch.setattr(jobs, "apply_cleanup", spy, raising=False)
+    return spy
+
+
+@pytest.mark.parametrize("start", [start_backup, run_backup], ids=["start_backup", "run_backup"])
+def test_after_a_backup_that_ended_done_the_cleanup_runs_once_when_the_folder_is_kept(data_dir, monkeypatch, start):
+    """(m) Called for this data directory, after the move (the kept folder is there, ``.jobs/`` holds none); not for a
+    backup that failed."""
+    spy = spy_on_cleanup(monkeypatch, data_dir)
+    made = backup_made(start, data_dir)
+    assert isinstance(made, BackupJob) and made.status == "done", f"precondition: {made}"
+    assert len(spy.calls) == 1, f"one clean-up after one backup: {spy.calls}"
+    args, kwargs = spy.calls[0]
+    assert data_dir in args or kwargs.get("data_dir") == data_dir, f"for the data directory of the run: {args} {kwargs}"
+    assert spy.seen[0]["kept"] == [kept_folder(data_dir, made).name] and spy.seen[0]["jobs"] == [], f"after the move: {spy.seen[0]}"
+    monkeypatch.setattr(jobs, "build_archive", BrokenBuild(jobs.build_archive))
+    failed = backup_made(start, data_dir)
+    assert isinstance(failed, BackupJob) and failed.status == "failed", f"precondition: the next build fails: {failed}"
+    assert len(spy.calls) == 1, "and none after a failed backup"
+
+
+@pytest.mark.parametrize("start", [start_backup, run_backup], ids=["start_backup", "run_backup"])
+def test_a_cleanup_that_raises_changes_nothing_in_the_outcome_of_the_backup(data_dir, monkeypatch, start):
+    """(m) An error there is logged and swallowed: the backup is done and kept, the lock is free."""
+    spy = spy_on_cleanup(monkeypatch, data_dir, error=RuntimeError("the clean-up broke"))
+    with jobs_logs() as events:
+        made = backup_made(start, data_dir)
+    assert spy.calls, "barrier: the clean-up ran"
+    assert isinstance(made, BackupJob) and made.status == "done" and made.error_code is None, f"the outcome is the backup's own: {made}"
+    assert kept_folders(data_dir) == [kept_folder(data_dir, made).name], "the backup is kept"
+    assert get_job(made.job_id, data_dir=data_dir) == made and not jobs._run_lock_held(data_dir), "it reads, and the lock is free"
+    assert {str(event.get("log_level")) for event in events} & {"warning", "error", "critical"}, f"the error is logged: {[(event.get('log_level'), event.get('event')) for event in events]}"
+
+
+@pytest.mark.parametrize("start", [start_backup, run_backup], ids=["start_backup", "run_backup"])
+def test_the_cleanup_after_a_backup_removes_the_kept_backups_the_policy_names_and_never_the_new_one(data_dir, monkeypatch, start):
+    """(m) With a policy of one day, a kept backup ten days old goes after the next backup; the new one stays."""
+    module = retention_cases.retention_module()
+    retention_cases.new_attr(module, "read_policy")
+    monkeypatch.setattr(module, "read_policy", lambda: retention_cases.cleanup_policy(0, 1))
+    old = retention_cases.plant_kept(data_dir, created=datetime.now(UTC) - 10 * DAY, size=500)
+    made = backup_made(start, data_dir)
+    assert isinstance(made, BackupJob) and made.status == "done", f"precondition: {made}"
+    assert not old.folder.exists(), "the old kept backup was removed by the clean-up of the run"
+    assert kept_folders(data_dir) == [kept_folder(data_dir, made).name], f"the new backup stays: {kept_folders(data_dir)}"

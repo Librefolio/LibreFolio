@@ -92,6 +92,20 @@ vi.mock('./backupApi', async () => {
         deleteInstanceBackupJob: vi.fn(),
         // B4: the card may read the options as soon as it mounts: every case of this file gets the same answer.
         getInstanceBackupOptions: vi.fn(() => Promise.resolve(b4.options)),
+        // FB-24: the BackupTab mounts the section of the kept backups, whose list and clean-up settings read these two.
+        listInstanceBackups: vi.fn(() => Promise.resolve([])),
+        getCleanupSettings: vi.fn(() => Promise.resolve({maxMb: 0, maxDays: 0})),
+    };
+});
+
+// FB-24: the section of the kept backups keeps its folded state, and its table its column preferences, under the user's
+// storage keys, whose real module reaches the authentication store; an in-memory one stands in.
+vi.mock('$lib/utils/storage', () => {
+    const store = new Map<string, string>();
+    return {
+        getUserStorageKey: (key: string) => `backup-card-test-${key}`,
+        getUserStorage: (key: string, fallback: string) => store.get(key) ?? fallback,
+        setUserStorage: (key: string, value: string) => void store.set(key, value),
     };
 });
 
@@ -1124,6 +1138,79 @@ describe('B4b — BackupDownloadCard: the password fields of a secure backup are
 });
 
 // =====================================================================================================================
+// FB-20 — the backup password is not offered to the browser as the user's own (written red first)
+// =====================================================================================================================
+
+/*
+ * Today the two password fields sit outside any `<form>` and have no user field beside them, so the browser takes the
+ * pair for a password change and offers to save the backup password as the account's. The fix is the shape password
+ * managers expect: a `<form>` holding a fixed user field («backup») and the two new-password fields. The user field is
+ * not `type="hidden"` (managers skip those): a text input kept off the screen, out of the tab order and away from
+ * assistive technology. The form never submits (the buttons stay `type="button"`). Whether a given browser then stops
+ * offering to save is seen by hand: this file pins the markup.
+ */
+describe('FB-20 — BackupDownloadCard: the password fields are a form with a fixed user field', () => {
+    const form = () => screen.getByTestId('backup-password-form') as HTMLFormElement;
+    const userField = () => screen.getByTestId('backup-password-username') as HTMLInputElement;
+
+    it('the two password fields and the user field are in one <form> that exists only in secure mode', async () => {
+        render(BackupDownloadCard);
+        expect(screen.queryByTestId('backup-password-form'), 'clear mode: no form').toBeNull();
+        await chooseSecure();
+
+        expect(form().tagName).toBe('FORM');
+        expect(form()).toContainElement(userField());
+        expect(form()).toContainElement(passwordField());
+        expect(form()).toContainElement(confirmField());
+    });
+
+    it('the user field is a fixed, read-only text input called «backup», for a password manager to pair with the new password', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+
+        expect(userField().getAttribute('type'), 'not "hidden": password managers skip hidden fields').toBe('text');
+        expect(userField().value).toBe('backup');
+        expect(userField()).toHaveAttribute('autocomplete', 'username');
+        expect(userField()).toHaveAttribute('readonly');
+        expect(userField().getAttribute('name')).toBeTruthy();
+    });
+
+    it('the user field is out of the way: no tab stop, hidden from assistive technology, and it comes before the passwords', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+
+        expect(userField()).toHaveAttribute('tabindex', '-1');
+        expect(userField()).toHaveAttribute('aria-hidden', 'true');
+        // A manager pairs a password with the user field that comes before it.
+        expect(userField().compareDocumentPosition(passwordField()) & Node.DOCUMENT_POSITION_FOLLOWING, 'the user field precedes the password').toBeTruthy();
+    });
+
+    it('the form never submits: submitting it is cancelled and starts no backup; the buttons stay outside as type="button"', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+        await typePasswords(PASSWORD);
+
+        const submitted = fireEvent.submit(form());
+        await settle();
+        expect(api.start, 'a submit starts nothing').not.toHaveBeenCalled();
+        expect(await submitted, 'the submit event is cancelled').toBe(false);
+        expect(createButton().getAttribute('type')).toBe('button');
+        expect(form().querySelectorAll('button[type="submit"], input[type="submit"]')).toHaveLength(0);
+    });
+
+    it('the form asks the common password managers to leave it alone', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+
+        expect(form()).toHaveAttribute('autocomplete', 'off');
+        expect(form()).toHaveAttribute('data-lpignore', 'true');
+        expect(form()).toHaveAttribute('data-1p-ignore');
+        expect(form()).toHaveAttribute('data-bwignore', 'true');
+        expect(form()).toHaveAttribute('data-form-type', 'other');
+    });
+});
+
+// =====================================================================================================================
 // B-8, developer 19/10 — on screen only «busy»; the console names the backup that runs (workstream B; written red first)
 // =====================================================================================================================
 
@@ -1532,5 +1619,126 @@ describe('L3-2 — BackupDownloadCard: the phase sealing', () => {
         expect(progress, 'the label of the phase sealing').toHaveTextContent('backup.download.phase.sealing');
         expect(progress, 'not the fallback of a job with no phase').not.toHaveTextContent('backup.download.creating');
         expect(progressBar()).toHaveAttribute('aria-valuenow', '50');
+    });
+});
+
+// =====================================================================================================================
+// FB-24 — the card tells the table of kept backups when the archives change; the tab mounts that table (written red first)
+// =====================================================================================================================
+
+/*
+ * The contract (B6r-fb24-frontend-interface.md §6):
+ *   - `BackupDownloadCard` calls `notifyBackupListChanged()` (backupList.svelte.ts) when a backup it follows is done
+ *     (`onDone`) and when it has deleted one — the deleted archive, or one the server no longer had — so that the table
+ *     reads the list again. A backup that fails, a delete that is refused, and a card that only mounts say nothing;
+ *   - the retention note keeps its test id and its key: `backup-retention` / `backup.download.retention` (the sentence
+ *     itself changes in the four catalogues: the archive stays on the server until the user deletes it);
+ *   - `BackupTab` mounts `<BackupsSection />` — foldable and open — between the backup card and the restore card.
+ *
+ * The signal is read through a dynamic import of the real module, so that while it does not exist each case fails on its
+ * own instead of this whole file on a missing import. Red today: the card never calls it, and the tab has no section.
+ */
+
+const SIGNAL_MODULE: string = './backupList.svelte';
+
+/** The signal the card writes and the table reads: how many times it has said «read again». */
+async function listVersion(): Promise<number> {
+    // A variable path: a literal one would fail this whole file at transform time while the module is missing.
+    const {backupListSignal} = await import(/* @vite-ignore */ SIGNAL_MODULE);
+    return backupListSignal.version;
+}
+
+describe('FB-24 — BackupDownloadCard: telling the list of kept backups', () => {
+    it('a mounted card that has done nothing says nothing', async () => {
+        const before = await listVersion();
+
+        render(BackupDownloadCard);
+        await settle();
+
+        expect(await listVersion()).toBe(before);
+    });
+
+    it('a backup that ends done: the list is told once', async () => {
+        const before = await listVersion();
+
+        await mountWithArchive();
+
+        expect(await listVersion()).toBe(before + 1);
+    });
+
+    it('a backup that fails: the list is not told (a failed backup is not listed)', async () => {
+        const before = await listVersion();
+
+        await failedWhileRunning('backup_failed')();
+
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        expect(await listVersion()).toBe(before);
+    });
+
+    it.each<[string, () => unknown]>([
+        ['the server deletes it', () => api.remove.mockResolvedValueOnce(undefined)],
+        ['the server no longer has it', () => api.remove.mockRejectedValueOnce(refusal(404, 'backup_job_not_found'))],
+    ])('the archive is deleted (%s): the list is told, once more', async (_case, answer) => {
+        await mountWithArchive();
+        const afterDone = await listVersion();
+        answer();
+
+        await fireEvent.click(screen.getByTestId('backup-delete'));
+        await settle();
+
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(await listVersion()).toBe(afterDone + 1);
+    });
+
+    it('a delete the server refuses: the archive is still there, the list is not told', async () => {
+        await mountWithArchive();
+        const afterDone = await listVersion();
+        api.remove.mockRejectedValueOnce(noAnswer());
+
+        await fireEvent.click(screen.getByTestId('backup-delete'));
+        await settle();
+
+        expect(card()).toHaveAttribute('data-state', 'done');
+        expect(await listVersion()).toBe(afterDone);
+    });
+
+    it('the retention note keeps its test id and its key (the wording changes in the catalogues, not here)', async () => {
+        await mountWithArchive();
+
+        expect(within(screen.getByTestId('backup-ready')).getByTestId('backup-retention')).toHaveTextContent(exactly('backup.download.retention'));
+    });
+});
+
+describe('FB-24 — BackupTab: the section of kept backups', () => {
+    it('mounts BackupsSection, foldable and open', async () => {
+        render(BackupTab);
+        await settle();
+
+        const tab = screen.getByTestId('backup-tab');
+        const section = within(tab).getByTestId('backups-section');
+        expect(section).toHaveAttribute('data-open', 'true');
+        expect(within(section).getByTestId('backups-section-toggle')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('puts it after the backup card and before the restore card', async () => {
+        render(BackupTab);
+        await settle();
+
+        const tab = screen.getByTestId('backup-tab');
+        const downloadCard = within(tab).getByTestId('backup-download-card');
+        const section = within(tab).getByTestId('backups-section');
+        const restoreCard = within(tab).getByTestId('restore-card');
+        expect(downloadCard.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING, 'the section follows the backup card').toBeTruthy();
+        expect(section.compareDocumentPosition(restoreCard) & Node.DOCUMENT_POSITION_FOLLOWING, 'the restore card follows the section').toBeTruthy();
+        expect(tab.contains(section) && !downloadCard.contains(section) && !restoreCard.contains(section), 'a block of its own, inside neither card').toBe(true);
+    });
+
+    it('is the one place that mounts the table and the clean-up settings, once each', async () => {
+        render(BackupTab);
+        await settle();
+
+        const tab = screen.getByTestId('backup-tab');
+        expect(within(tab).getAllByTestId('backup-list')).toHaveLength(1);
+        expect(within(tab).getAllByTestId('backup-cleanup')).toHaveLength(1);
     });
 });
