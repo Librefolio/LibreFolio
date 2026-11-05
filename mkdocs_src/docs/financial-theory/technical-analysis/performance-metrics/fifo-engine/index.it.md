@@ -55,7 +55,8 @@ LibreFolio riproduce ogni transazione per un asset **in ordine cronologico**, cl
 |-------|--------|
 | ACQUISTO | Prima chiude eventuali lotti SHORT aperti su quel broker; eventuale residuo apre un nuovo lotto LONG |
 | VENDITA | Chiude i lotti LONG aperti in ordine FIFO su quel broker; eventuale residuo apre un nuovo lotto SHORT solo dove il broker consente lo short |
-| Rettifica in / out | Stessa logica di abbinamento di ACQUISTO/VENDITA, a costo zero |
+| Rettifica in | Stessa logica di abbinamento di ACQUISTO, al costo di carico per unità della rettifica (zero se assente): l'eventuale residuo apre un nuovo lotto LONG a quel costo — nella valuta del costo di carico, se ne ha una |
+| Rettifica out | Chiude i lotti LONG aperti in ordine FIFO su quel broker, come una VENDITA, a zero: non ha valore, quindi ogni lotto realizza meno il costo delle unità che cede; non apre mai un lotto SHORT |
 | SPLIT | Ridimensiona quantità e costo unitario per ogni lotto aperto dell'asset |
 | Trasferimento (partenza / arrivo) | Sposta la custodia della quantità aperta di un lotto da un broker all'altro |
 
@@ -83,7 +84,11 @@ $$
 \text{PnLRealizzato}_{\text{SHORT}} = \text{QuantitàAbbinata} \times (\text{CostoUnitarioLotto} - \text{PrezzoChiusura})
 $$
 
+$\text{PrezzoChiusura}$ è il prezzo unitario dell'operazione per una VENDITA, o per un ACQUISTO che chiude un lotto SHORT. Una rettifica non scambia nulla: una rettifica in entrata chiude al proprio **override del costo di carico** per unità, oppure a **zero** se assente. Una rettifica in uscita non ha valore: chiude sempre a **zero**, quindi ogni lotto che consuma realizza meno il costo di quelle unità, qualunque costo di carico abbia la riga (vedi [Rettifiche in uscita](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)).
+
 Ecco perché due lotti dello stesso asset, acquistati a tempi e prezzi diversi, possono mostrare risultati realizzati molto diversi anche se successivamente vengono abbinati lo stesso giorno allo stesso prezzo — vedi l'esempio pratico in [Analisi dei Lotti FIFO](fifo-lot-analysis.md).
+
+Entrambe le formule prendono i due prezzi nella valuta propria del lotto. Nella valuta di destinazione dell'analisi, ogni gamba della chiusura viene convertita alla propria data — il costo del lotto alla data di apertura, il prezzo di chiusura, nella sua valuta, alla data di chiusura — e il P&L realizzato è la loro differenza (vedi [Lotti in un'altra valuta](fifo-lot-analysis.md#lots-in-another-currency)).
 
 ---
 
