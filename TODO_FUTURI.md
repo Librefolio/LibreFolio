@@ -404,136 +404,49 @@ data e assunzioni restano visibili; test su soglie, min/max, BUY/SELL e pareggi 
 
 ## 🧭 PAC/Rebalancer — Profili Persistenti e Strategie Estese
 
-**Data aggiunta**: 15 Settembre 2026
-**Status**: 📋 FUTURO — fuori dal primo planner operativo
-**Priorità**: Media
+**Data aggiunta**: 15 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: Media
 
-**Target v1 correlato:** [suite PAC/Rebalancer — piano maestro](LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
+Il Tool resta atomico: riceve sempre uno snapshot completo e non legge impostazioni salvate.
 
-### Confine della Prima Versione
+### Persistenza da valutare
 
-La prima versione mantiene nello snapshot del singolo calcolo:
+- **Profilo operativo del broker**, per utente×broker (valute, modo FX, frazioni, step, min/max, fee, regime, minus pregresse):
+  solo come precompilazione modificabile, mai come lookup del worker. I broker manuali restano per scenario.
+- **Aliquota plusvalenze sull'asset**: un campo configurabile e versionabile, con origine e data visibili e override per calcolo.
+  Default, permessi e migrazione vanno definiti prima della colonna.
 
-- parametri operativi dei Broker;
-- fee BUY/SELL;
-- supporto agli ordini frazionati e relativo step monetario;
-- regime fiscale e minusvalenze pregresse;
-- aliquota sulle plusvalenze per Asset, pre-popolata al `26%` e modificabile;
-- route Asset×Broker e priorità;
-- trasferimenti dichiarati, gratuiti e immediati;
-- FX single-hop, con lo spread globale. ~~`fx_buffer_rate` esplicito (label UI “Margine di sicurezza FX”)~~ —
-  ❌ **non più da fare**, decisione del developer del 02/10/2026: non esiste e non esisterà (vedi «Non più da
-  fare» più sotto).
+### Strategie future
 
-Questi dati non diventano automaticamente impostazioni persistenti. Il Tool resta
-atomico e riceve sempre uno snapshot completo.
+- Distribuzione proporzionale degli acquisti fra broker (oggi: target globali per asset e priorità delle route) e vendita
+  proporzionale fra custodie.
+- Chiusura di un broker e consolidamento verso uno o più broker.
+- Minimizzazione delle plusvalenze, compensazione delle minus, tax-loss harvesting, bucket di minus per categoria e scadenza.
+- Fee, limiti e tempi di settlement dei trasferimenti; persistenza facoltativa delle fonti manuali.
 
-### Persistenza da Valutare
+### PAC `min_fragmentation` — differita (21/09/2026)
 
-1. **Profilo operativo personale del Broker**
-   - salvare per utente×Broker valute operative, FX mode, supporto frazioni,
-     step monetario, min/max, fee BUY/SELL, regime e minus pregresse;
-   - usare il profilo solo come prefill modificabile del singolo scenario;
-   - non trasformarlo in un lookup del worker Tool;
-   - mantenere i Broker manuali scenario-only salvo futura azione di salvataggio
-     esplicita.
-2. **Aliquota plusvalenze sull'Asset**
-   - aggiungere un campo Asset configurabile e versionabile;
-   - pre-popolare il planner dal dato persistito, con origine/data visibili;
-   - mantenere override per-run;
-   - definire default, permessi, provenienza e migrazione prima di aggiungere la
-     colonna.
+Quarta policy di `PlannerPolicy`: la cascata obiettivo è scritta e testata in aritmetica esatta, e l'oracolo la risolve sui domini
+piccoli. Manca la compilazione dello stage `split_asset_count` verso SCIP. Il rinvio è di priorità, non di disegno. Alternativa da
+decidere: pesare la frammentazione per valore invece che per conteggio.
 
-### Strategie Future
+### Salvare l'analisi — sul client, non sul server (02/10/2026)
 
-- Distribuzione proporzionale esplicita degli acquisti fra più Broker.
-- Vendita proporzionale dello stesso Asset fra più custodie.
-- Chiusura Broker: svuotamento controllato di una custodia.
-- Consolidamento: trasferire il portafoglio verso uno o più Broker scelti.
-- Minimizzazione delle plusvalenze realizzate.
-- Compensazione di minusvalenze pregresse con plus compatibili.
-- Tax-loss harvesting e minimizzazione del realizzo fiscale.
-- Bucket di minusvalenze per categoria, compensabilità e scadenza.
+Il risultato del planner diventa un documento che l'utente stampa, salva o condivide dal suo dispositivo, senza nulla sul
+server. Da decidere: stampa del browser o PDF generato nel client, contenuto (input, risultato, data, versione del contratto),
+Web Share API o download, e se la modalità privacy vale anche lì.
 
-#### PAC `min_fragmentation` — differita (decisione developer, 21/09/2026)
+### Gate futuri
 
-**Status**: 📋 DIFFERITA — non entra nella prima versione operativa.
+- Nuova review matematica se cambiano input, vincoli, fiscalità, fee, FX o obiettivi.
+- Nessuna compensazione fiscale senza categoria, compensabilità, scadenza, regime e perimetro broker espliciti.
+- Nessun profilo salvato diventa un default silenzioso.
+- Chiusura e consolidamento non introducono short, leva, BUY+SELL dello stesso asset o vendite oltre l'inventario.
 
-Quarta policy dichiarata nel contratto (`PlannerPolicy`,
-`backend/app/services/pac_allocator/models.py`) e **già specificata**: la sua
-cascata obiettivo esiste ed è scorata in aritmetica esatta
-(`evaluator.py`, ordine `fixed_l2 → shortfall → split_asset_count →
-active_order_rows → route_priority → explicit_cost`). Oggi è risolvibile
-**provatamente** dall'oracolo esaustivo sui domini piccoli; manca solo la
-compilazione dello stage `split_asset_count` verso SCIP, quindi
-`compiler._require_supported_scope` la rifiuta.
+### Riuso del solver discreto
 
-**Perché è differita e non "da progettare"**: la funzione obiettivo non è una
-domanda aperta — è scritta e testata. Il rinvio è di priorità: la decisione
-developer del 21/09 mette il **Rebalancer completo** davanti a tutto, perché il
-PAC ne è il caso particolare a distribuzione iniziale nulla.
-
-**Se si volesse ridiscutere l'obiettivo**: `split_asset_count` minimizza il
-numero di Asset spezzati fra più route. Un'alternativa sensata sarebbe pesare la
-frammentazione per valore anziché per conteggio, così che spezzare un Asset da
-10 € non costi quanto spezzarne uno da 10 000 €. È una proposta, non una
-raccomandazione: richiede una decisione di prodotto.
-
-### Modello Operativo Futuro
-
-- Fee, limiti e tempi di settlement dei trasferimenti.
-- ~~Route FX multi-hop, solo con protezioni anti-ciclo e anti-arbitraggio.~~ ❌ non più da fare nel PAC (02/10/2026).
-- ~~Buffer FX dinamico per Asset/volatilità invece del solo `fx_buffer_rate`
-  esplicito.~~ ❌ non più da fare (02/10/2026).
-- Persistenza opzionale delle fonti manuali.
-
-### Salvare l'analisi — sul client, non sul server (richiesta del developer, 02/10/2026)
-
-**Status**: 📋 FUTURO · **Priorità**: da stabilire
-
-Il developer, testuale (riportato dal workstream D): *«salvare l'analisi: stampa PDF e condivisione/salvataggio sul
-client, non sul server»*.
-
-- **Cosa**: il risultato del planner (KPI, esposizioni, piano operativo, prova) diventa un documento che l'utente
-  stampa in PDF, salva o condivide dal proprio dispositivo.
-- **Vincolo**: niente salvataggio sul server. Il Tool resta atomico e senza stato (vedi «Confine della Prima
-  Versione»): l'analisi vive solo sul client.
-- **Da decidere alla ripresa**:
-  - il formato: la stampa del browser con un foglio di stile dedicato, oppure un PDF generato nel client;
-  - il contenuto: gli input dello scenario, il risultato, la data e la versione del contratto;
-  - la condivisione: la Web Share API dove esiste, altrimenti il download;
-  - la privacy: il documento contiene importi reali, quindi va deciso se la modalità privacy vale anche lì.
-
-### Gate Futuri
-
-- Nuova review matematica se cambiano input, vincoli, fiscalità, fee, FX o
-  obiettivi.
-- Nessuna compensazione fiscale senza categoria dello strumento, regole di
-  compensabilità, scadenza, regime e perimetro Broker espliciti.
-- Nessun profilo persistito può diventare un default silenzioso: provenance,
-  data e override per-run restano visibili.
-- Le strategie di chiusura/consolidamento non possono introdurre short, leverage,
-  BUY+SELL dello stesso Asset o vendite oltre inventario.
-
-### Riuso futuro del solver discreto — senza migrazione Riskfolio
-
-PySCIPOpt/SCIP è il candidato additivo approvato per il planner fixed-L2
-(primo tier MIQP, tier lessicografici successivi convex-MIQCP); la dipendenza non
-è ancora installata e resta subordinata al freeze coordinato, all'update
-developer-owned/autorizzato e ai gate packaging/capacità. Dopo l'adozione
-effettiva, valutarne il riuso solo
-per nuovi problemi realmente misto-interi: cardinalità, lotti minimi, turnover,
-costi fissi, distribuzione proporzionale BUY/SELL fra Broker, chiusura o
-consolidamento di custodie, strategie fiscali discrete, fee dipendenti dalla
-sequenza e routing operativo di trasferimenti, settlement e FX.
-
-Riskfolio-Lib resta il motore di dominio per covariance, risk parity, frontiera
-efficiente e analisi rischio; SciPy resta disponibile per XIRR e calcolo numerico.
-Non reimplementare queste funzioni per eliminare una dipendenza. Un eventuale
-secondo backend richiede spike separato, parità completa degli output esistenti e
-benchmark che dimostri un vantaggio misurabile di capacità, latenza o memoria.
-
----
+PySCIPOpt/SCIP serve il planner: valutarne il riuso solo per problemi davvero misto-interi (cardinalità, lotti minimi, costi
+fissi, chiusura di custodie, fee legate alla sequenza). Riskfolio-Lib resta il motore per covarianza, risk parity e frontiera;
+SciPy per XIRR. Un secondo backend richiede uno spike e un vantaggio misurato.
 
 ## 🤖 QuarkAI — Assistente AI (MCP Server)
 
