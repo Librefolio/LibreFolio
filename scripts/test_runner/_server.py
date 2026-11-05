@@ -128,10 +128,7 @@ def test_port() -> int:
 
 def health_url(port: int | None = None) -> str:
     query = urllib.parse.urlencode({"token": ensure_test_lane_id()})
-    return (
-        f"http://localhost:{port or test_port()}"
-        f"/api/v1/system/test-lane-health?{query}"
-    )
+    return f"http://localhost:{port or test_port()}" f"/api/v1/system/test-lane-health?{query}"
 
 
 def is_healthy(port: int | None = None, timeout: float = 2.0) -> bool:
@@ -145,11 +142,7 @@ def is_healthy(port: int | None = None, timeout: float = 2.0) -> bool:
         opener = urllib.request.build_opener(NoRedirect())
         with opener.open(health_url(port), timeout=timeout) as resp:
             returned_lane = resp.headers.get(TEST_LANE_HEADER, "")
-            return (
-                resp.status == 200
-                and bool(returned_lane)
-                and secrets.compare_digest(returned_lane, lane_id)
-            )
+            return resp.status == 200 and bool(returned_lane) and secrets.compare_digest(returned_lane, lane_id)
     except (urllib.error.URLError, OSError, ValueError):
         return False
 
@@ -253,11 +246,7 @@ class SharedTestServer:
         self.coverage = coverage
         #: An explicit ``workers`` wins; otherwise the backend is sized to the
         #: number of clients that will be hitting it at once.
-        self.workers = (
-            max(1, int(workers))
-            if workers
-            else server_workers_for(client_workers, per_server)
-        )
+        self.workers = max(1, int(workers)) if workers else server_workers_for(client_workers, per_server)
         self.client_workers = max(1, int(client_workers or 1))
         self.verbose = verbose
         self._requested_log_path = Path(log_path) if log_path is not None else None
@@ -364,10 +353,7 @@ class SharedTestServer:
     def start(self) -> bool:
         holders = port_holders(self.port)
         if holders:
-            print_error(
-                f"Test port {self.port} is already owned by PID(s) "
-                f"{', '.join(holders)}; refusing to reuse or terminate another lane"
-            )
+            print_error(f"Test port {self.port} is already owned by PID(s) " f"{', '.join(holders)}; refusing to reuse or terminate another lane")
             return False
 
         # Build first, outside the deadline below. The port was free a moment ago; if another lane
@@ -378,12 +364,7 @@ class SharedTestServer:
             return False
 
         self.log_path = None if self.verbose else (self._requested_log_path or shared_backend_log_path())
-        print_info(
-            f"Starting shared test backend on port {self.port}"
-            f"{' (coverage)' if self.coverage else ''}"
-            f" — {self.workers} uvicorn worker(s) for {self.client_workers} client(s)"
-            f"{f' — log: {self.log_path}' if self.log_path else ''}"
-        )
+        print_info(f"Starting shared test backend on port {self.port}" f"{' (coverage)' if self.coverage else ''}" f" — {self.workers} uvicorn worker(s) for {self.client_workers} client(s)" f"{f' — log: {self.log_path}' if self.log_path else ''}")
         # Its own process group keeps teardown scoped to the server this runner
         # created. An occupied port is rejected above; the runner never reuses or
         # force-kills a process that may belong to another worktree.
@@ -422,16 +403,10 @@ class SharedTestServer:
                     return False
                 if is_healthy(self.port):
                     holders = port_holders(self.port)
-                    if (
-                        (not holders or self._owns_listener(holders))
-                        and self.proc.poll() is None
-                    ):
+                    if (not holders or self._owns_listener(holders)) and self.proc.poll() is None:
                         print_success(f"Shared backend ready on port {self.port}")
                         return True
-                    print_error(
-                        f"Port {self.port} became healthy under an unowned PID; "
-                        "refusing to attach to another lane"
-                    )
+                    print_error(f"Port {self.port} became healthy under an unowned PID; " "refusing to attach to another lane")
                     self.stop()
                     return False
                 time.sleep(0.5)
@@ -485,15 +460,8 @@ class SharedTestServer:
         holders = port_holders(self.port)
         if holders:
             owned_holders = self._owned_listeners(holders)
-            owner = (
-                "owned PID(s)"
-                if len(owned_holders) == len(holders)
-                else "foreign PID(s) or mixed ownership"
-            )
-            print_error(
-                f"Port {self.port} still held by {owner}: "
-                f"{', '.join(holders)} after shutdown"
-            )
+            owner = "owned PID(s)" if len(owned_holders) == len(holders) else "foreign PID(s) or mixed ownership"
+            print_error(f"Port {self.port} still held by {owner}: " f"{', '.join(holders)} after shutdown")
         elif self.coverage:
             print_success("Shared backend stopped; coverage flushed")
         self.proc = None
