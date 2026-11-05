@@ -124,7 +124,7 @@ Les importateurs sans étiquette sont bien testés et fiables pour les formats q
     <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Fineco">
     <span class="card-title" style="margin: 0;">Fineco</span>
     </div>
-    <span class="card-desc">🧪 Bêta · L'export au format CSV « Movimenti Dossier Titoli »</span>
+    <span class="card-desc">La liste de titres « Ordini e contabili », enregistrée au format CSV</span>
     </a>
     <a href="intesa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
