@@ -5,7 +5,7 @@ Carico*) — is LibreFolio's blended, per-unit cost-basis method. It has **one
 implementation**: `compute_average_costs()` in
 `backend/app/services/financial_math/average_cost.py`. The Dashboard's purchase
 cost, realized sales and unrealized P&L, the Holdings table's average cost and
-Yield on Cost, the WAC lines of the lots analysis, the broker summary, the
+Yield on Cost, the WAC lines of the lots analysis, the
 transaction preview, the automatic cost basis, the WAC series of `POST /portfolio/lots/analysis` and the PAC
 planner all read it.
 
@@ -23,7 +23,6 @@ flowchart LR
     Batch["Batch auto modes"]
     Pac["PAC planner"]
     Lots["LotsAnalysisService<br/>WAC lines"]
-    Broker["BrokerService.get_summary()<br/>holding cost"]
 
     AC -->|"one batched call"| FX
     PS --> Engine --> AC
@@ -31,7 +30,6 @@ flowchart LR
     Pac --> Facade
     Facade --> AC
     Lots --> AC
-    Broker --> AC
 ```
 
 !!! info "What it replaced"
@@ -42,7 +40,7 @@ flowchart LR
     no longer exist: `compute_average_costs()` in `financial_math/average_cost.py`
     replaced them all. The engine used to keep each pool in the asset currency and
     convert it at the valuation date, the lots analysis fell back to the unconverted
-    cost when a rate was missing, and the broker summary summed BUY amounts. They now
+    cost when a rate was missing, and the former broker summary summed BUY amounts. They now
     share the rules below.
 
 ---
@@ -330,7 +328,6 @@ with the layer's command:
 | `PortfolioCalculationEngine.calculate()` (`financial_math/portfolio/engine.py`) | `build_cost_positions()`: one per `(asset_id, broker_id)` | The report's target currency | `True` |
 | `compute_wac_iterative()` (`portfolio_service.py`) | The one `(broker, asset)` asked for | The override, or `determine_target_currency()` | `False` |
 | `LotsAnalysisService` (`lots_analysis_service.py`) | One per broker, plus `"__all__"` pooling every broker in scope | The analysis `target_currency` | `False` |
-| `BrokerService.get_summary()` (`brokers/summary.py`) | One per asset held at the broker | The asset's own currency, one call per currency | `False` |
 
 ### ⚙️ Portfolio engine {: #portfolio-engine }
 
@@ -431,18 +428,18 @@ page explains how both reach the Dashboard.
 `compute_average_costs()` call and reports their gaps (missing rates, unknown costs); see
 [Lots Analysis Service — WAC lines](lots_analysis_service.md#wac-lines).
 
-### 🏦 Broker summary {: #broker-summary }
+### 🏦 Broker page {: #broker-summary }
 
-`GET /brokers/{broker_id}/summary` (`BrokerService.get_summary()`) answers the broker's
-cash balances, the caller's role and share, and nothing about positions: the holdings, their
-cost and value, and the pairs missing for that cost come from the portfolio report
-(`POST /portfolio/report`, scoped to the broker). Until release 1.3.0 the summary also listed
-`holdings` and `missing_fx_pairs`; both are gone (MF-L), and no page read them.
+There is no broker summary route any more: `GET /brokers/{broker_id}/summary`, its schema and
+`BrokerService.get_summary()` were removed (release 1.3.0, no deprecation period). The broker
+page reads the broker's own fields, with the caller's `user_role` and `user_share_percentage`,
+from `GET /brokers/{broker_id}`. Its cash per currency and its positions (quantity, cost, value
+and the pairs missing for that cost) come from the portfolio report (`POST /portfolio/report`,
+scoped to the broker: `summary.by_broker[].cash_balances`). The cost is the engine's, so it is
+computed by `compute_average_costs()` like every other figure of this page.
 
-`as_of`, a query parameter, is the day the summary describes: the user's day, which the broker
-page sends as `todayIso()`; when it is omitted, `date.today()` on the server. Cash
-([Balance Queries](service.md#balance-queries)) counts only the transactions dated up to
-`as_of`: one dated later counts in none of the balances (W-B5).
+`TransactionService.get_cash_balances()` stays, and sums the cash through the financial-math layer
+([Balance Queries](service.md#balance-queries)).
 
 ---
 

@@ -17,12 +17,6 @@ import {schemas} from '$lib/api/generated';
  */
 export type Broker = z.infer<typeof schemas.BRReadItem>;
 
-/**
- * Broker with summary data including cash balances and holdings.
- * Retrieved from GET /brokers/:id/summary
- */
-export type BrokerSummary = z.infer<typeof schemas.BRSummary>;
-
 // =============================================================================
 // FRONTEND-ONLY TYPES
 // =============================================================================

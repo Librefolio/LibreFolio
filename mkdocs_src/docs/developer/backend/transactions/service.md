@@ -671,7 +671,7 @@ BR-U-081…085) and `./dev.py test services user-profile` (`TestDeleteUser`, the
 ## ⚖️ Balance Queries
 
 The service exposes two public query methods (`TransactionBalancesMixin`,
-`balances.py`); the broker summary reads the first:
+`balances.py`):
 
 ```python
 await svc.get_cash_balances(broker_id, as_of=None)   # Dict[currency, Decimal]
@@ -691,8 +691,8 @@ Both count the broker's rows dated up to `as_of`, inclusive, and every row when
 - **Holdings** come from the layer too: `financial_math.ledger_totals.position_quantities()`
   sums the `quantity` of the broker's rows per asset, with the same date cut (see
   [Ledger Control Totals](../financial_math.md#ledger-totals)). It skips a row of
-  quantity 0, so an asset whose rows all have quantity 0 has no line: the broker
-  summary reads a missing line as zero.
+  quantity 0, so an asset whose rows all have quantity 0 has no line: read a missing
+  line as zero.
 
 Both sums run in Python, exactly, over the rows the query returns; the query keeps
 only the filters. `get_balances_at_end_of()` sums the same way, through
@@ -707,7 +707,7 @@ without its excluded ids — and so does the asset list's set of held assets
 the decimals — `0.1 + 0.2 − 0.3` gives `2.8e-17`, not 0 — an error the read at 6
 decimals used to hide. Summed in Python, a zero balance is exactly zero.
 
-The broker summary no longer lists holdings: a position's quantity, cost and value come from the
+The broker page does not call these two methods: its cash and its positions come from the
 portfolio report (see [WAC & Cost Basis](wac.md#broker-summary)).
 
 ---

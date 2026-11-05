@@ -96,7 +96,6 @@ if TYPE_CHECKING:
         BRDeleteItem,
         BRDeleteResult,
         BRReadItem,
-        BRSummary,
         BRUpdateItem,
         BRUpdateResult,
     )
@@ -278,7 +277,6 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     # Brokers (BR prefix)
     "BRCreateItem",
     "BRReadItem",
-    "BRSummary",
     "BRUpdateItem",
     "BRDeleteItem",
     "BRDeleteResult",
@@ -530,7 +528,6 @@ _EXPORT_GROUPS = {
         "BRDeleteItem",
         "BRDeleteResult",
         "BRReadItem",
-        "BRSummary",
         "BRUpdateItem",
         "BRUpdateResult",
     ),

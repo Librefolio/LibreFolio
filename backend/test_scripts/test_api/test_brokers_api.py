@@ -5,7 +5,6 @@ Tests for Broker endpoints:
 - POST /brokers: Create brokers (with optional initial deposits)
 - GET /brokers: List all brokers
 - GET /brokers/{id}: Get broker details
-- GET /brokers/{id}/summary: Get broker with balances (the positions are the portfolio report's)
 - PATCH /brokers/{id}: Update broker
 - DELETE /brokers: Bulk delete brokers
 
@@ -18,7 +17,7 @@ Reference: backend/app/api/v1/brokers.py
 """
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -98,16 +97,6 @@ async def create_brokers(client: httpx.AsyncClient, *prefixes: str, allow_cash_o
     return [results[name]["broker_id"] for name in names]
 
 
-async def create_assets(client: httpx.AsyncClient, *prefixes: str, currency: str = "EUR") -> list[int]:
-    """One STOCK asset per prefix, uniquely named: their ids, in the order of ``prefixes``."""
-    names = [unique_name(prefix) for prefix in prefixes]
-    resp = await client.post(f"{API_BASE}/assets", json=[{"display_name": name, "asset_type": "STOCK", "currency": currency} for name in names], timeout=TIMEOUT)
-    assert resp.status_code in (200, 201), resp.text
-    results = {result["display_name"]: result for result in resp.json()["results"]}
-    assert all(results.get(name, {}).get("success") for name in names), resp.text
-    return [results[name]["asset_id"] for name in names]
-
-
 async def commit_creates(client: httpx.AsyncClient, creates: list[dict]) -> list[int]:
     """Commit ``creates`` in one batch: the new transaction ids, in the order of ``creates``."""
     resp = await client.post(f"{API_BASE}/transactions/commit", json={"creates": creates}, timeout=TIMEOUT)
@@ -126,26 +115,21 @@ async def read_transactions(client: httpx.AsyncClient, tx_ids: list[int]) -> dic
     return {transaction["id"]: transaction for transaction in resp.json()}
 
 
-async def get_summary(client: httpx.AsyncClient, broker_id: int, as_of: Optional[date] = None) -> dict:
-    """GET /brokers/{id}/summary as of ``as_of``; without it, as of the server's today."""
-    params = {} if as_of is None else {"as_of": as_of.isoformat()}
-    resp = await client.get(f"{API_BASE}/brokers/{broker_id}/summary", params=params, timeout=TIMEOUT)
-    assert resp.status_code == 200, f"Summary of broker {broker_id} as of {as_of}: {resp.status_code} {resp.text}"
-    summary = resp.json()
-    assert summary["id"] == broker_id, summary
-    return summary
+async def report_cash(client: httpx.AsyncClient, broker_id: int) -> dict[str, Decimal]:
+    """The broker's cash per currency, native: POST /portfolio/report ``summary.by_broker[].cash_balances``, whole (no ownership share)."""
+    body = {"broker_ids": [broker_id], "include_summary": True, "include_history": False, "include_allocation_history": False, "include_breakdown": True, "apply_ownership_share": False}
+    resp = await client.post(f"{API_BASE}/portfolio/report", json=body, timeout=TIMEOUT)
+    assert resp.status_code == 200, f"Report of broker {broker_id}: {resp.status_code} {resp.text}"
+    entries = [entry for entry in resp.json()["summary"]["by_broker"] if entry["broker_id"] == broker_id]
+    assert len(entries) == 1, f"Broker {broker_id} missing from by_broker: {resp.text}"
+    codes = [balance["code"] for balance in entries[0]["cash_balances"]]
+    assert len(codes) == len(set(codes)), f"One cash line per currency: {entries[0]['cash_balances']}"
+    return {balance["code"]: Decimal(str(balance["amount"])) for balance in entries[0]["cash_balances"]}
 
 
 def money(value: Optional[dict]) -> Optional[tuple[str, Decimal]]:
     """An API ``{code, amount}`` object as (code, Decimal amount), compared by value whatever its JSON form; None when absent."""
     return None if value is None else (value["code"], Decimal(str(value["amount"])))
-
-
-def cash_by_currency(summary: dict) -> dict[str, Decimal]:
-    """A summary's cash lines, by currency."""
-    codes = [balance["code"] for balance in summary["cash_balances"]]
-    assert len(codes) == len(set(codes)), f"One cash line per currency: {summary['cash_balances']}"
-    return {balance["code"]: Decimal(str(balance["amount"])) for balance in summary["cash_balances"]}
 
 
 async def remove_owned(client: httpx.AsyncClient, broker_ids: list[int], asset_ids: list[int]) -> list[str]:
@@ -294,9 +278,7 @@ class TestBrokerCreate:
             assert data["results"][0]["deposits_created"] == 0
 
             broker_id = data["results"][0]["broker_id"]
-            summary_response = await client.get(f"{API_BASE}/brokers/{broker_id}/summary", timeout=TIMEOUT)
-            assert summary_response.status_code == 200
-            assert summary_response.json()["cash_balances"] == []
+            assert await report_cash(client, broker_id) == {}
 
             print_success("✓ Created broker without deposit for zero initial balance")
 
@@ -564,17 +546,16 @@ class TestBrokerRead:
             print_success("✓ Got 404 as expected")
 
     @pytest.mark.asyncio
-    async def test_get_broker_summary(self, test_server):
-        """BR-A-013: GET /brokers/{id}/summary returns full summary."""
-        print_section("Test BR-A-013: GET /brokers/{id}/summary")
+    async def test_get_broker_returns_metadata_and_role_without_cash_or_holdings(self, test_server):
+        """BR-A-013: GET /brokers/{id} returns the broker's metadata and the caller's role, no cash and no holdings."""
+        print_section("Test BR-A-013: GET /brokers/{id} - metadata and role")
 
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
 
-            # Create broker with balance
             payload = [
                 {
-                    "name": unique_name("Summary Broker"),
+                    "name": unique_name("Detail Broker"),
                     "initial_balances": [{"code": "EUR", "amount": "1000"}],
                 }
             ]
@@ -585,32 +566,31 @@ class TestBrokerRead:
             )
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
-            # Get summary
             response = await client.get(
-                f"{API_BASE}/brokers/{broker_id}/summary",
+                f"{API_BASE}/brokers/{broker_id}",
                 timeout=TIMEOUT,
             )
 
             assert response.status_code == 200
             data = response.json()
             assert data["id"] == broker_id
-            assert "cash_balances" in data
+            assert data["name"] == payload[0]["name"]
+            assert data["user_role"] == "OWNER"
+            assert "cash_balances" not in data
             assert "holdings" not in data
             assert "missing_fx_pairs" not in data
-            assert len(data["cash_balances"]) == 1
-            assert data["cash_balances"][0]["code"] == "EUR"
 
-            print_success(f"✓ Got summary for broker {broker_id}")
+            print_success(f"✓ Got broker {broker_id} without cash or holdings")
 
     @pytest.mark.asyncio
-    async def test_get_broker_summary_with_a_position_has_cash_and_user_metadata_only(self, test_server):
-        """BR-A-013B: GET /brokers/{id}/summary after a BUY returns the cash and user metadata, no holdings (MF-L)."""
-        print_section("Test BR-A-013B: GET /brokers/{id}/summary - cash and user metadata")
+    async def test_report_cash_after_a_buy_is_the_native_cash_of_the_broker(self, test_server):
+        """BR-A-013B: after a DEPOSIT and a BUY, the portfolio report's by_broker cash is the broker's native cash (MF-L: the cash is the report's, not the broker route's)."""
+        print_section("Test BR-A-013B: POST /portfolio/report - by_broker cash after a BUY")
 
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
 
-            broker_name = unique_name("Summary Holdings Broker")
+            broker_name = unique_name("Report Cash Broker")
             create_resp = await client.post(
                 f"{API_BASE}/brokers",
                 json=[{"name": broker_name, "allow_cash_overdraft": True}],
@@ -619,7 +599,7 @@ class TestBrokerRead:
             assert create_resp.status_code == 200, create_resp.text
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
-            asset_name = unique_name("Summary Asset")
+            asset_name = unique_name("Report Cash Asset")
             asset_resp = await client.post(
                 f"{API_BASE}/assets",
                 json=[{"display_name": asset_name, "asset_type": "STOCK", "currency": "EUR"}],
@@ -653,22 +633,9 @@ class TestBrokerRead:
             assert tx_resp.status_code == 200, tx_resp.text
             assert tx_resp.json()["committed"] is True
 
-            response = await client.get(
-                f"{API_BASE}/brokers/{broker_id}/summary",
-                timeout=TIMEOUT,
-            )
+            assert await report_cash(client, broker_id) == {"EUR": Decimal("3800")}
 
-            assert response.status_code == 200, response.text
-            data = response.json()
-            assert data["id"] == broker_id
-            assert data["user_role"] == "OWNER"
-            assert Decimal(str(data["user_share_percentage"])) == Decimal("1")
-            assert any(balance["code"] == "EUR" for balance in data["cash_balances"])
-
-            assert cash_by_currency(data) == {"EUR": Decimal("3800")}
-            assert "holdings" not in data
-
-            print_success(f"✓ Got cash summary, no holdings, for broker {broker_id}")
+            print_success(f"✓ Report cash for broker {broker_id} is 3800 EUR")
 
 
 # ============================================================================
@@ -1441,159 +1408,3 @@ class TestBrokerImportEndpoints:
             assert item["last_parse_result"]["plugin_code"] == "broker_generic_csv"
 
             print_success("✓ BRIM parse auto fallback returned cached generic CSV result")
-
-
-# ============================================================================
-# BROKER API - SUMMARY AS OF A DAY (W-B5)
-# ============================================================================
-#
-# GET /brokers/{id}/summary describes the broker on one day: ``as_of`` (YYYY-MM-DD), the user's
-# today; the server's date when omitted. A transaction dated later counts in none of its figures:
-# cash per currency. The API accepts future-dated transactions, which is how
-# the broker page came to count them as today's cash (W-B5). Same semantics as the service tests
-# test_broker_service.py::TestGetSummaryAsOf (BR-U-090..093).
-#
-# Every row is dated from date.today(), read once per test. Only BR-A-070 reads the server's day
-# (no as_of), and it checks that the day did not change while it ran.
-
-# (day offset from today, type, currency, amount): EUR deposited two days ago and tomorrow; USD in
-# and out before today, so that its movements cancel out.
-AS_OF_CASH_ROWS = (
-    (-2, "DEPOSIT", "EUR", "1000"),
-    (-2, "DEPOSIT", "USD", "100"),
-    (-1, "WITHDRAWAL", "USD", "-100"),
-    (1, "DEPOSIT", "EUR", "250"),  # tomorrow: a future-dated row
-)
-# The broker's cash as of each day offset, counting the rows dated up to that day inclusive.
-AS_OF_CASH_VIEWS = {
-    -3: {},  # the day before every row: no currency has a line
-    -2: {"EUR": "1000", "USD": "100"},  # the first rows' own day: they count
-    0: {"EUR": "1000", "USD": "0"},  # today: not tomorrow's deposit; USD, whose movements cancel out, keeps its line at zero
-    1: {"EUR": "1250", "USD": "0"},  # tomorrow: every row
-}
-
-
-def as_of_cash_creates(broker_id: int, today: date) -> list[dict]:
-    """The AS_OF_CASH_ROWS of a broker, dated from ``today``."""
-    return [{"broker_id": broker_id, "type": tx_type, "date": (today + timedelta(days=offset)).isoformat(), "cash": {"code": code, "amount": amount}} for offset, tx_type, code, amount in AS_OF_CASH_ROWS]
-
-
-def as_of_cash_view(offset: int) -> dict[str, Decimal]:
-    """The cash AS_OF_CASH_VIEWS expects as of ``today + offset``."""
-    return {code: Decimal(amount) for code, amount in AS_OF_CASH_VIEWS[offset].items()}
-
-
-class TestBrokerSummaryAsOf:
-    """GET /brokers/{id}/summary as of a day: the caller's ``as_of``; without it, the server's today."""
-
-    @pytest.mark.asyncio
-    async def test_summary_without_as_of_reads_the_server_today(self, test_server):
-        """BR-A-070: Without as_of the summary is the server's today: the EUR deposit of two days ago counts, tomorrow's does not; it reads exactly as as_of=today."""
-        print_section("Test BR-A-070: GET /brokers/{id}/summary - without as_of, the server's today")
-
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            broker_ids: list[int] = []
-            try:
-                broker_ids += await create_brokers(client, "Summary AsOf Default")
-                (broker_id,) = broker_ids
-                today = date.today()
-                await commit_creates(client, as_of_cash_creates(broker_id, today))
-
-                omitted = await get_summary(client, broker_id)
-                assert date.today() == today, f"Precondition broken: the server's day moved from {today} to {date.today()} during the test — rerun it"
-                explicit = await get_summary(client, broker_id, as_of=today)
-
-                assert cash_by_currency(omitted) == as_of_cash_view(0), "Tomorrow's deposit must not count in today's cash (W-B5)"
-                assert omitted == explicit, "Without as_of the summary must read exactly as as_of=today"
-
-                print_success("✓ Without as_of, tomorrow's deposit is not in today's cash")
-            finally:
-                cleanup_errors = await remove_owned(client, broker_ids, [])
-                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
-
-    @pytest.mark.asyncio
-    async def test_summary_as_of_counts_the_rows_up_to_that_day_inclusive(self, test_server):
-        """BR-A-071: as_of decides, not the server's date: as of tomorrow both EUR deposits count; as of the first rows' day they count; as of the day before every row no currency has a line."""
-        print_section("Test BR-A-071: GET /brokers/{id}/summary?as_of - cash up to that day inclusive")
-
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            broker_ids: list[int] = []
-            try:
-                broker_ids += await create_brokers(client, "Summary AsOf Cash")
-                (broker_id,) = broker_ids
-                today = date.today()
-                await commit_creates(client, as_of_cash_creates(broker_id, today))
-
-                views = {offset: cash_by_currency(await get_summary(client, broker_id, as_of=today + timedelta(days=offset))) for offset in AS_OF_CASH_VIEWS}
-
-                assert views == {offset: as_of_cash_view(offset) for offset in AS_OF_CASH_VIEWS}
-
-                print_success("✓ as_of counts the rows up to that day inclusive, and none after")
-            finally:
-                cleanup_errors = await remove_owned(client, broker_ids, [])
-                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
-
-    @pytest.mark.asyncio
-    async def test_summary_as_of_leaves_out_a_future_purchase(self, test_server):
-        """BR-A-072: A BUY dated tomorrow is not in today's cash and is in it as of its own day."""
-        print_section("Test BR-A-072: GET /brokers/{id}/summary?as_of - cash paid for a future purchase")
-
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            broker_ids: list[int] = []
-            asset_ids: list[int] = []
-            try:
-                broker_ids += await create_brokers(client, "Summary AsOf Holdings", allow_cash_overdraft=True)
-                (broker_id,) = broker_ids
-                asset_ids += await create_assets(client, "Summary AsOf Held", "Summary AsOf Future")
-                held, future_only = asset_ids
-                today = date.today()
-                tomorrow = today + timedelta(days=1)
-                await commit_creates(
-                    client,
-                    [
-                        # 10 @ 100, two days ago
-                        {"broker_id": broker_id, "asset_id": held, "type": "BUY", "date": (today - timedelta(days=2)).isoformat(), "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                        # 10 more @ 300, tomorrow
-                        {"broker_id": broker_id, "asset_id": held, "type": "BUY", "date": tomorrow.isoformat(), "quantity": "10", "cash": {"code": "EUR", "amount": "-3000"}},
-                        # 4 @ 200, tomorrow: the only row of this asset
-                        {"broker_id": broker_id, "asset_id": future_only, "type": "BUY", "date": tomorrow.isoformat(), "quantity": "4", "cash": {"code": "EUR", "amount": "-800"}},
-                    ],
-                )
-
-                views = {}
-                for label, as_of in (("today", today), ("tomorrow", tomorrow)):
-                    summary = await get_summary(client, broker_id, as_of=as_of)
-                    views[label] = cash_by_currency(summary)
-
-                assert views == {"today": {"EUR": Decimal("-1000")}, "tomorrow": {"EUR": Decimal("-4800")}}
-
-                print_success("✓ Tomorrow's purchases are out of today's cash, and in tomorrow's")
-            finally:
-                cleanup_errors = await remove_owned(client, broker_ids, asset_ids)
-                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
-
-    @pytest.mark.asyncio
-    async def test_summary_as_of_not_a_date_is_rejected(self, test_server):
-        """BR-A-073: as_of=not-a-date answers 422 on the as_of query parameter, where the same broker as of a real day answers 200."""
-        print_section("Test BR-A-073: GET /brokers/{id}/summary?as_of=not-a-date - 422")
-
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            broker_ids: list[int] = []
-            try:
-                broker_ids += await create_brokers(client, "Summary AsOf Invalid")
-                (broker_id,) = broker_ids
-                await get_summary(client, broker_id, as_of=date.today())
-
-                response = await client.get(f"{API_BASE}/brokers/{broker_id}/summary", params={"as_of": "not-a-date"}, timeout=TIMEOUT)
-
-                assert response.status_code == 422, response.text
-                assert [error["loc"] for error in response.json()["detail"]] == [["query", "as_of"]], response.text
-
-                print_success("✓ as_of=not-a-date rejected with 422 on as_of")
-            finally:
-                cleanup_errors = await remove_owned(client, broker_ids, [])
-                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"

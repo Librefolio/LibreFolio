@@ -13,7 +13,6 @@
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import {todayIso} from '$lib/utils/dateOnly';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Copy, Crown, ExternalLink, Eye, FileText, Pencil, Plus, RefreshCw, Share2, Trash2, Upload, Users} from 'lucide-svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
@@ -33,7 +32,7 @@
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {buildTabUrl} from '$lib/utils/url/tabUrl';
     import {goto} from '$app/navigation';
-    import type {BrokerSummary} from '$lib/types';
+    import type {Broker} from '$lib/types';
     import {safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -42,7 +41,7 @@
 
     let {data}: {data: {brokerId: number}} = $props();
 
-    let broker = $state<BrokerSummary | null>(null);
+    let broker = $state<Broker | null>(null);
     let loading = $state(true);
     let error = $state<string | null>(null);
 
@@ -88,8 +87,8 @@
         error = null;
 
         try {
-            // The cash and holdings of the user's today: a transaction dated later counts in none of them (W-B5)
-            broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}, queries: {as_of: todayIso()}})) as BrokerSummary;
+            // The broker itself and the caller's role on it: the cash and the positions are the portfolio report's
+            broker = (await zodiosApi.get_broker_api_v1_brokers__broker_id__get({params: {broker_id: data.brokerId}})) as Broker;
         } catch (e) {
             console.error('Failed to load broker:', e);
             error = $_('brokers.loadFailed');

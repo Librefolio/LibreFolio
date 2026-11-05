@@ -47,7 +47,6 @@ from backend.app.schemas.brokers import (
     BRBulkDeleteResponse,
     BRCreateItem,
     BRDeleteItem,
-    BRSummary,
     BRUpdateItem,
 )
 from backend.app.schemas.common import Currency
@@ -452,90 +451,20 @@ class TestGetOperations:
 
 
 # ============================================================================
-# 4.4 GET_SUMMARY
+# 4.4 GET_BY_ID — IMPERSONATED ROLE
 # ============================================================================
 
 
-class TestGetSummary:
-    """Test broker summary retrieval."""
+class TestGetByIdImpersonation:
+    """Test the role a broker read carries for an impersonated user."""
 
     @pytest.mark.asyncio
-    async def test_get_summary_basic(self, session, test_user):
-        """BR-U-030: Get summary returns BRSummary."""
+    async def test_get_by_id_impersonated_user_role(self, session, test_user):
+        """BR-U-034: Reading a broker as another user carries that user's role."""
         service = BrokerService(session)
-
-        items = [BRCreateItem(name=f"Summary Broker {utcnow().timestamp()}")]
-        response = await service.create_bulk(items, user_id=test_user.id)
-        broker_id = response.results[0].broker_id
-
-        summary = await service.get_summary(broker_id, user_id=test_user.id)
-
-        assert summary is not None
-        assert summary.id == broker_id
-
-    @pytest.mark.asyncio
-    async def test_get_summary_cash_balances(self, session, test_user):
-        """BR-U-031: Summary includes cash balances after deposits."""
-        service = BrokerService(session)
-
-        items = [
-            BRCreateItem(
-                name=f"Cash Summary Broker {utcnow().timestamp()}",
-                initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
-            )
-        ]
-        response = await service.create_bulk(items, user_id=test_user.id)
-        broker_id = response.results[0].broker_id
-
-        summary = await service.get_summary(broker_id, user_id=test_user.id)
-
-        assert len(summary.cash_balances) == 1
-        assert summary.cash_balances[0].code == "EUR"
-        assert summary.cash_balances[0].amount == Decimal("1000")
-
-    @pytest.mark.asyncio
-    async def test_get_summary_has_no_holdings_and_no_holdings_cost_gaps(self, session, test_user, test_asset):
-        """BR-U-032 (MF-L): after a BUY the summary answers cash only — the positions, their cost and the gaps in it are the portfolio report's."""
-        service = BrokerService(session)
-        tx_service = TransactionService(session)
-        items = [
-            BRCreateItem(
-                name=f"Holdings Broker {utcnow().timestamp()}",
-                initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
-            )
-        ]
-        response = await service.create_bulk(items, user_id=test_user.id)
-        broker_id = response.results[0].broker_id
-        buy_items = [
-            TXCreateItem(
-                broker_id=broker_id,
-                asset_id=test_asset.id,
-                type=TransactionType.BUY,
-                date=date.today(),
-                quantity=Decimal("10"),
-                cash=Currency(code="EUR", amount=Decimal("-500")),
-            )
-        ]
-        await create_bulk(tx_service, buy_items)
-
-        summary = await service.get_summary(broker_id, user_id=test_user.id)
-
-        assert summary is not None
-        assert {balance.code: balance.amount for balance in summary.cash_balances} == {"EUR": Decimal("9500")}
-        dumped = summary.model_dump()
-        assert "holdings" not in dumped
-        assert "missing_fx_pairs" not in dumped
-        assert "holdings" not in BRSummary.model_fields
-        assert "missing_fx_pairs" not in BRSummary.model_fields
-
-    @pytest.mark.asyncio
-    async def test_get_summary_impersonated_user_role_and_share(self, session, test_user, test_asset):
-        """BR-U-034: Summary of an impersonated user carries that user's role and share."""
-        service = BrokerService(session)
-        tx_service = TransactionService(session)
         other_user = User(
-            username=f"summaryuser_{utcnow().timestamp()}",
-            email=f"summary_{utcnow().timestamp()}@test.com",
+            username=f"roleuser_{utcnow().timestamp()}",
+            email=f"role_{utcnow().timestamp()}@test.com",
             hashed_password="fakehash",
             is_active=True,
             is_superuser=False,
@@ -545,17 +474,8 @@ class TestGetSummary:
         session.add(other_user)
         await session.flush()
 
-        response = await service.create_bulk(
-            [
-                BRCreateItem(
-                    name=f"Priced Summary Broker {utcnow().timestamp()}",
-                    initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
-                )
-            ],
-            user_id=test_user.id,
-        )
+        response = await service.create_bulk([BRCreateItem(name=f"Role Broker {utcnow().timestamp()}")], user_id=test_user.id)
         broker_id = response.results[0].broker_id
-
         session.add(
             BrokerUserAccess(
                 user_id=other_user.id,
@@ -568,50 +488,16 @@ class TestGetSummary:
         )
         await session.flush()
 
-        await create_bulk(
-            tx_service,
-            [
-                TXCreateItem(
-                    broker_id=broker_id,
-                    asset_id=test_asset.id,
-                    type=TransactionType.BUY,
-                    date=date.today(),
-                    quantity=Decimal("10"),
-                    cash=Currency(code="EUR", amount=Decimal("-500")),
-                )
-            ],
-        )
+        item = await service.get_by_id(broker_id, user_id=test_user.id, as_user_id=other_user.id)
 
-        summary = await service.get_summary(
-            broker_id,
-            user_id=test_user.id,
-            as_user_id=other_user.id,
-        )
-
-        assert summary is not None
-        assert summary.user_role == UserRole.VIEWER.value
-        assert summary.user_share_percentage == Decimal("0.40")
-
-    @pytest.mark.asyncio
-    async def test_get_summary_not_found(self, session, test_user):
-        """BR-U-035: Get summary for non-existent broker returns None."""
-        service = BrokerService(session)
-
-        summary = await service.get_summary(999999, user_id=test_user.id)
-
-        assert summary is None
+        assert item is not None
+        assert item.user_role == UserRole.VIEWER.value
+        assert item.user_share_percentage == Decimal("0.40")
 
 
 # ============================================================================
-# 4.4b GET_SUMMARY — HOLDING COST = AVERAGE COST IN THE ASSET CURRENCY (#32)
+# 4.4b TEST HELPERS — ROWS WRITTEN STRAIGHT INTO THE SESSION
 # ============================================================================
-#
-# get_summary computes each holding's total_cost with financial_math.average_cost, in the asset
-# currency: every purchase converted at its own date, every sale removing its share of the
-# average cost, transfers and adjustments in at their cost_basis_override. When part of the cost
-# cannot be known (no rate for a purchase, an acquisition without cost basis) total_cost,
-# average_cost_per_unit and the unrealized P&L are None, and a missing pair is listed with the
-# purchase dates that needed it.
 #
 # Rows are written straight into the session — no balance validation, these brokers hold no
 # cash on purpose — and never committed: the session fixture rolls back. FX: the only rates
@@ -661,20 +547,14 @@ async def _add(session: AsyncSession, *rows) -> None:
 
 
 # ============================================================================
-# 4.4c GET_SUMMARY — AS OF A DAY (W-B5: B15, D-J16)
+# 4.4c GET_CASH_BALANCES — AS OF A DAY (W-B5: B15, D-J16)
 # ============================================================================
 #
-# The broker summary is a picture as of one day: the caller's, passed as ``as_of``; when it is
-# omitted, the server's (``date.today()``, the Dashboard's default: portfolio_service.py,
-# ``date_to or today``). A transaction dated after that day counts in none of the cash balances,
-# the cash; one dated on that day counts.
-#
-# A currency whose only movement comes after that day is not listed. The summary lists a
-# currency for its history — even at 0, "as long as it has transaction history" (summary.py) —
-# and as of that day the currency has none.
-#
-# The rows straddle the server's today, so every case anchors on ``date.today()``, read once at
-# seeding. Rows are written straight into the session and never committed, as in 4.4b.
+# ``TransactionService.get_cash_balances(broker_id, as_of)`` is a picture as of one day: a
+# transaction dated after ``as_of`` counts in none of the balances, one dated on that day counts;
+# without ``as_of`` every row counts. A currency whose only movement comes after that day is not
+# listed. The rows straddle the server's today, so every case anchors on ``date.today()``, read
+# once at seeding. Rows are written straight into the session and never committed, as in 4.4b.
 
 # One deposit and one purchase of 10 units a day, each at a price of its own, so that every
 # cut-off gives a different cash, quantity and average cost:
@@ -687,12 +567,12 @@ AS_OF_DAYS = (
 )
 AS_OF_USD_DAY = 1  # +250 USD: the broker's only USD movement
 
-# The cash the summary shows when it counts the rows up to the offset given, inclusive.
+# The cash get_cash_balances shows when it counts the rows up to the offset given, inclusive.
 AS_OF_VIEWS = {
     -1: {"EUR": "4000"},  # 5000 − 1000
     0: {"EUR": "3000"},  # + 1000 − 2000
     1: {"EUR": "1000", "USD": "250"},  # + 4000 − 6000
-    2: {"EUR": "1500", "USD": "250"},  # + 10500 − 10000: every row, today's summary
+    2: {"EUR": "1500", "USD": "250"},  # + 10500 − 10000: every row, every row
 }
 
 
@@ -715,77 +595,41 @@ async def _seed_as_of(session: AsyncSession, user: User, anchor: date, *, last_d
     return broker_id, asset
 
 
-def _cash_of(summary: BRSummary | None) -> dict:
-    assert summary is not None
-    return {balance.code: balance.amount for balance in summary.cash_balances}
-
-
 def _expected_as_of(*, through: int) -> dict:
     return {code: Decimal(amount) for code, amount in AS_OF_VIEWS[through].items()}
 
 
-def _assert_same_server_day(anchor: date) -> None:
-    """Precondition of a case read without ``as_of``: midnight did not pass between seeding and reading."""
-    assert date.today() == anchor, f"precondition broken: the server's day moved from {anchor} to {date.today()} during the test — rerun it"
-
-
-class TestGetSummaryAsOf:
-    """The summary as of a day: the caller's ``as_of``; without it, the server's ``date.today()``."""
-
-    @pytest.mark.asyncio
-    async def test_get_summary_without_as_of_leaves_out_the_rows_dated_after_the_server_date(self, session, test_user):
-        """BR-U-090 (RED, whatever the signature): rows from the server's yesterday to two days ahead, no ``as_of`` → yesterday's and today's count, nothing later."""
-        anchor = date.today()
-        broker_id, _asset = await _seed_as_of(session, test_user, anchor)
-
-        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
-
-        _assert_same_server_day(anchor)
-        # Not the USD: its only deposit is tomorrow's.
-        assert _cash_of(summary) == _expected_as_of(through=0)
+class TestGetCashBalancesAsOf:
+    """The cash of a broker as of a day: the caller's ``as_of``; without it, every row."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "offset",
         [
-            # The user's day is the server's yesterday: the row dated the server's today does not count yet.
-            pytest.param(-1, id="user-a-day-behind-the-server"),
-            pytest.param(0, id="user-on-the-server-day"),
-            # The user's day is the server's tomorrow: a row dated then is the user's today and counts; the day after does not.
-            pytest.param(1, id="user-a-day-ahead-of-the-server"),
+            pytest.param(-1, id="day-before-the-anchor"),
+            pytest.param(0, id="anchor-day"),
+            # A row dated tomorrow counts when as_of is tomorrow; the day after does not.
+            pytest.param(1, id="day-after-the-anchor"),
         ],
     )
-    async def test_get_summary_as_of_counts_the_rows_up_to_that_day_inclusive(self, session, test_user, offset):
-        """BR-U-091 (RED): the caller's day passed as ``as_of`` decides, not the server's date — its rows count, later ones do not."""
+    async def test_get_cash_balances_as_of_counts_the_rows_up_to_that_day_inclusive(self, session, test_user, offset):
+        """BR-U-091: the day passed as ``as_of`` decides — its rows count, later ones do not."""
         anchor = date.today()
         broker_id, _asset = await _seed_as_of(session, test_user, anchor)
 
-        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id, as_of=anchor + timedelta(days=offset))
+        balances = await TransactionService(session).get_cash_balances(broker_id, as_of=anchor + timedelta(days=offset))
 
-        assert _cash_of(summary) == _expected_as_of(through=offset)
+        assert balances == _expected_as_of(through=offset)
 
     @pytest.mark.asyncio
-    async def test_get_summary_as_of_defaults_to_the_server_date(self, session, test_user):
-        """BR-U-092 (RED until ``as_of`` exists, then the guard of its default): omitting it reads exactly as ``as_of=date.today()``."""
+    async def test_get_cash_balances_without_as_of_counts_every_row(self, session, test_user):
+        """BR-U-093: no ``as_of`` → every row counts, the future-dated ones included."""
         anchor = date.today()
         broker_id, _asset = await _seed_as_of(session, test_user, anchor)
-        service = BrokerService(session)
 
-        omitted = await service.get_summary(broker_id, user_id=test_user.id)
-        explicit = await service.get_summary(broker_id, user_id=test_user.id, as_of=anchor)
+        balances = await TransactionService(session).get_cash_balances(broker_id)
 
-        _assert_same_server_day(anchor)
-        assert omitted == explicit
-
-    @pytest.mark.asyncio
-    async def test_get_summary_without_future_rows_counts_every_row_today_included(self, session, test_user):
-        """BR-U-093 (guard): rows of the server's yesterday and today only, no ``as_of`` → every row counts, today's included, as before."""
-        anchor = date.today()
-        broker_id, _asset = await _seed_as_of(session, test_user, anchor, last_day=0)
-
-        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
-
-        assert _cash_of(summary) == _expected_as_of(through=0)
+        assert balances == _expected_as_of(through=2)
 
 
 # ============================================================================
@@ -1439,15 +1283,15 @@ class TestDeleteBulkCrossBrokerPair:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("kind", "deleted"), _CROSS_PAIR_SIDES)
     async def test_delete_bulk_leaves_the_cash_of_the_surviving_broker_unchanged(self, session, test_user, kind, deleted):
-        """BR-U-075 (guard): the surviving broker's summary — cash per currency — reads the same before and after."""
+        """BR-U-075 (guard): the surviving broker's cash per currency reads the same before and after."""
         pair = await _seed_cross_pair(session, test_user, kind)
         survivor_broker = pair.brokers[CrossPair.survivor_of(deleted)]
-        service = BrokerService(session)
-        before = _cash_of(await service.get_summary(survivor_broker, user_id=test_user.id))
+        service = TransactionService(session)
+        before = await service.get_cash_balances(survivor_broker)
 
         await _delete_broker(session, test_user, pair.brokers[deleted])
 
-        after = _cash_of(await service.get_summary(survivor_broker, user_id=test_user.id))
+        after = await service.get_cash_balances(survivor_broker)
         expected = _expected_survivor_summary(kind, deleted)
         assert {"before": before, "after": after} == {"before": expected, "after": expected}
 

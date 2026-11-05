@@ -2,13 +2,12 @@
 Tests for computed properties and methods at 0% coverage across schemas.
 
 Covers:
-- BRSummary: currencies
 - BaseBulkResponse: total_count
 - FXUpsertResult: date_str
 - TXCreateItem / TXUpdateItem: _validate_tags, get_tags_csv
 """
 
-from datetime import UTC, date, datetime
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -17,46 +16,6 @@ from backend.app.schemas.common import BaseBulkResponse, Currency
 from backend.app.schemas.fx import FXUpsertResult
 from backend.app.schemas.prices import FAPricePoint
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem
-
-# Helper for creating BRSummary with all required fields
-_NOW = datetime.now(UTC)
-_BR_BASE = {
-    "id": 1,
-    "name": "Test",
-    "allow_cash_overdraft": False,
-    "allow_asset_shorting": False,
-    "is_active": True,
-    "created_at": _NOW,
-    "updated_at": _NOW,
-}
-
-
-# ============================================================================
-# BRSummary computed properties
-# ============================================================================
-
-
-class TestBRSummaryComputed:
-    """Test BRSummary computed properties (currencies)."""
-
-    def test_currencies_from_cash_balances(self):
-        from backend.app.schemas.brokers import BRSummary  # noqa: PLC0415 — test setup — imports after sys.path/db config
-
-        summary = BRSummary(
-            **_BR_BASE,
-            cash_balances=[
-                Currency(code="EUR", amount=Decimal("100")),
-                Currency(code="USD", amount=Decimal("50")),
-            ],
-        )
-        assert summary.currencies == ["EUR", "USD"]
-
-    def test_currencies_empty(self):
-        from backend.app.schemas.brokers import BRSummary  # noqa: PLC0415 — test setup — imports after sys.path/db config
-
-        summary = BRSummary(**_BR_BASE, cash_balances=[])
-        assert summary.currencies == []
-
 
 # ============================================================================
 # BaseBulkResponse

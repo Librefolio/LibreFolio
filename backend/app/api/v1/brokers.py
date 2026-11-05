@@ -5,7 +5,6 @@ Provides RESTful endpoints for broker management:
 - POST /brokers: Create brokers (with optional initial deposits)
 - GET /brokers: List all brokers
 - GET /brokers/{id}: Get broker details
-- GET /brokers/{id}/summary: Get broker with its cash balances
 - PATCH /brokers/{id}: Update broker
 - DELETE /brokers: Bulk delete brokers
 
@@ -80,7 +79,6 @@ from backend.app.schemas.brokers import (
     BRReadItem,
     BRSelfAccessResponse,
     BRSelfRoleUpdate,
-    BRSummary,
     BRUpdateItem,
 )
 from backend.app.schemas.uploads import FilePreviewResponse
@@ -227,7 +225,6 @@ async def list_brokers(
     Superusers can use as_user_id to impersonate another user or see all brokers.
 
     Returns basic broker information without balances.
-    Use GET /brokers/{id}/summary for full details.
 
     Returns:
         List of brokers ordered by name
@@ -253,7 +250,6 @@ async def get_broker(
     Superusers can use as_user_id to impersonate another user.
 
     Returns basic broker information without balances.
-    Use GET /brokers/{id}/summary for full details.
 
     Args:
         broker_id: Broker ID
@@ -270,46 +266,6 @@ async def get_broker(
 
     service = BrokerService(session)
     result = await service.get_by_id(broker_id, user_id=current_user.id, as_user_id=as_user_id)
-
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found")
-
-    return result
-
-
-@broker_router.get("/{broker_id}/summary", response_model=BRSummary)
-async def get_broker_summary(
-    broker_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
-    as_of: Optional[date] = Query(None, description="The user's today (YYYY-MM-DD); the server date when omitted. Cash counts the transactions dated up to that day."),
-    session: AsyncSession = Depends(get_session_generator),
-) -> BRSummary:
-    """
-    Get broker with full summary.
-
-    Superusers can use as_user_id to impersonate another user.
-
-    Includes:
-    - Basic broker info
-    - Cash balances per currency
-    - The caller's role and share on the broker (the positions are `POST /portfolio/report`'s)
-
-    Args:
-        broker_id: Broker ID
-
-    Returns:
-        BRSummary with full details
-
-    Raises:
-        HTTPException 404: If broker not found or not accessible
-    """
-    # Validate as_user_id permission
-    if as_user_id is not None and not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
-
-    service = BrokerService(session)
-    result = await service.get_summary(broker_id, user_id=current_user.id, as_user_id=as_user_id, as_of=as_of)
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found")
