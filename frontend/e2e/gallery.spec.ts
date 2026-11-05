@@ -4017,7 +4017,22 @@ test.describe('Gallery Screenshots', () => {
                         await expect(page.getByTestId('import-wizard-next')).toBeEnabled({timeout: 5_000});
                         await page.getByTestId('import-wizard-next').click();
                         const step2 = page.getByTestId('import-wizard-step2');
-                        await step2.waitFor({state: 'visible', timeout: 10_000});
+                        // The generic CSV sits on a broker whose default plugin cannot read it: the wizard asks, file by file, where it
+                        // belongs (ImportBrokerMismatchModal). The shot keeps it where the step above put it, so every question is
+                        // answered «Keep it here» until step 2 is on screen.
+                        await expect
+                            .poll(
+                                async () => {
+                                    const keep = page.getByTestId('import-broker-mismatch-keep');
+                                    if (await keep.isVisible()) {
+                                        await keep.click();
+                                        return 'asked';
+                                    }
+                                    return (await step2.isVisible()) ? 'step2' : 'waiting';
+                                },
+                                {message: 'step 2 opens once every broker question is answered', timeout: 30_000},
+                            )
+                            .toBe('step2');
                         await expect(step2).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
                         // The three uploads are known by id: the cleanup deletes by these, and step 3 is checked against them.
                         await expect.poll(() => uploadedFileIds.size, {message: 'the three demo uploads must be recorded by id', timeout: 5_000}).toBe(3);
