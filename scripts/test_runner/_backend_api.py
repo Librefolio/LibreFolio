@@ -525,7 +525,7 @@ def api_prices_sync_delta(verbose: bool = False, test_names: list = None) -> boo
 def api_market_data_wipe(verbose: bool = False, test_names: list = None) -> bool:
     """Run market-data wipe endpoint tests."""
     print_section("Market-Data Wipe (R3-3) API Tests")
-    print_info("Testing GET /assets/{id}/market-data/summary + POST /wipe (N68: SPLITs survive, splits_kept)")
+    print_info("Testing GET /assets/{id}/market-data/summary + the currency PATCH wipe (N68: SPLITs survive, splits_kept)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_market_data_wipe.py", test_names)
     return run_command(cmd, "Market-data wipe tests", verbose=verbose)
@@ -1385,7 +1385,7 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(api, "asset-prices-export", api_asset_prices_export, name="Asset Prices Export", desc="CSV/JSON export + round-trip")
     add_test(api, "prices-sync-delta", api_prices_sync_delta, name="Prices Sync Delta", desc="changed_points payload")
-    add_test(api, "market-data-wipe", api_market_data_wipe, name="Market Data Wipe", desc="Summary + wipe; N68: SPLITs survive, summary/wipe keys include splits_kept, never a 409")
+    add_test(api, "market-data-wipe", api_market_data_wipe, name="Market Data Wipe", desc="Summary + currency-change wipe; N68: SPLITs survive, summary/wipe keys include splits_kept, never a 409")
     add_test(
         api,
         "event-reconciliation",

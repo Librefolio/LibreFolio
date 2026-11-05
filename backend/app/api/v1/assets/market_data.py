@@ -41,5 +41,3 @@ async def market_data_summary(
     except Exception as e:
         logger.exception(f"Error in market-data summary for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal error while reading the asset's market data") from e
-
-
