@@ -225,7 +225,7 @@ test.describe('Files › Backups — who gets the tab', () => {
         const section = panel.getByTestId('backups-section');
         await expect(section).toHaveAttribute('data-open', 'true');
         await expect(section.getByTestId('backups-section-toggle'), 'on the Files page the section does not fold').toHaveCount(0);
-        await expect(section.getByTestId('backup-same-disk-warning')).toBeVisible();
+        await expect(section.getByTestId('backup-same-disk-notice')).toBeVisible();
         await expect(section.getByTestId('backup-list')).toHaveAttribute('data-state', 'ready', {timeout: PAGE_MS});
         await expect(section.getByTestId('backup-cleanup')).toBeVisible();
         await expect(section.getByTestId('backup-cleanup')).toHaveAttribute('data-state', /^(idle|saved)$/, {timeout: PAGE_MS});
