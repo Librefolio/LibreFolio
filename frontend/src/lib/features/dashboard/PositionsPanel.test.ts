@@ -663,6 +663,49 @@ describe('PositionsPanel — the Rolling view (FB-15)', () => {
         expect(onRequestPositionsRolling).not.toHaveBeenCalled();
     });
 
+    describe('the window of the view (F-2)', () => {
+        const windowControls = () => screen.queryByTestId('positions-calendar-window-controls');
+        const preset = (key: string) => screen.getByTestId(`positions-calendar-window-${key}`);
+
+        it('the controls are there in the Rolling view only, with the automatic preset picked at the start', async () => {
+            await mountOnRolling({rollingAutoPreset: '3m'});
+            expect(windowControls()).not.toBeNull();
+            expect(preset('3m')).toHaveAttribute('aria-pressed', 'true');
+            for (const other of ['1w', '1m', '1y']) expect(preset(other)).toHaveAttribute('aria-pressed', 'false');
+
+            await fireEvent.click(screen.getByTestId('positions-chart-view-percentage'));
+            expect(windowControls()).toBeNull();
+        });
+
+        it('another view has no controls from the start', async () => {
+            await mountPanel();
+            expect(windowControls()).toBeNull();
+            await fireEvent.click(screen.getByTestId('positions-chart-view-rolling'));
+            expect(windowControls()).not.toBeNull();
+        });
+
+        it('picking a preset tells the page the window, and the component stays controlled', async () => {
+            const onRollingSelectionChange = vi.fn();
+            await mountOnRolling({rollingAutoPreset: '3m', onRollingSelectionChange});
+            await fireEvent.click(preset('1y'));
+            expect(onRollingSelectionChange).toHaveBeenCalledTimes(1);
+            expect(onRollingSelectionChange).toHaveBeenCalledWith(expect.objectContaining({kind: 'preset', preset: '1y'}));
+            expect(preset('3m'), 'the page has not answered: the pick shown is still its own').toHaveAttribute('aria-pressed', 'true');
+        });
+
+        it('shows the window the page holds, over the automatic one', async () => {
+            await mountOnRolling({rollingAutoPreset: '3m', rollingSelection: {kind: 'preset', preset: '1w', customAmount: 3, customUnit: 'years'}});
+            expect(preset('1w')).toHaveAttribute('aria-pressed', 'true');
+            expect(preset('3m')).toHaveAttribute('aria-pressed', 'false');
+        });
+
+        it('a custom window is shown as the custom one, with no preset picked', async () => {
+            await mountOnRolling({rollingAutoPreset: '3m', rollingSelection: {kind: 'custom', preset: '3m', customAmount: 2, customUnit: 'months'}});
+            expect(screen.getByTestId('positions-calendar-window-custom')).toBeInTheDocument();
+            for (const key of ['1w', '1m', '3m', '1y']) expect(preset(key)).toHaveAttribute('aria-pressed', 'false');
+        });
+    });
+
     it('ticking positions asks the rolling return of their assets, once each', async () => {
         const onRequestPositionsRolling = vi.fn();
         await mountOnRolling({onRequestPositionsRolling});

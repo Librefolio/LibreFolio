@@ -19,11 +19,12 @@
   - loading / failed: the states of the request
   - portfolioLabel: overrides the portfolio line's label in the legend and the tooltip
   - note: the caption under the legend that says what the portfolio line is
+  - windowControls: the choice of the Rolling view's window, drawn in that view only
 
   Pattern: Svelte 5 runes, ECharts, dark mode, privacy masking (see .claude/rules/frontend.md).
 -->
 <script lang="ts">
-    import {onMount, tick} from 'svelte';
+    import {onMount, tick, type Snippet} from 'svelte';
     import * as echarts from 'echarts';
     import {Flag, TriangleAlert} from 'lucide-svelte';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
@@ -65,6 +66,8 @@
         failed?: boolean;
         portfolioLabel?: string;
         note?: string;
+        /** The window of the Rolling view (F-2): the page's controls, shown only in that view, between the legend and the plot. */
+        windowControls?: Snippet;
         /** CSS height of the chart area. */
         height?: string;
     }
@@ -75,7 +78,7 @@
         value?: unknown;
     }
 
-    let {lines, view, onviewchange, hiddenIds = new Set<string>(), ontoggle, colorOf, currency, loading = false, failed = false, portfolioLabel, note, height = '18rem'}: Props = $props();
+    let {lines, view, onviewchange, hiddenIds = new Set<string>(), ontoggle, colorOf, currency, loading = false, failed = false, portfolioLabel, note, windowControls, height = '18rem'}: Props = $props();
 
     const VIEWS: ReadonlyArray<PositionsChartView> = ['absolute', 'percentage', 'rolling'];
 
@@ -403,6 +406,12 @@
                     {/if}
                 </button>
             {/each}
+        </div>
+    {/if}
+
+    {#if view === 'rolling' && windowControls}
+        <div data-testid="positions-chart-window">
+            {@render windowControls()}
         </div>
     {/if}
 

@@ -40,6 +40,8 @@
     import PerformanceChart from './PerformanceChart.svelte';
     import PositionsReturnChart from './PositionsReturnChart.svelte';
     import AllocationPanel from './AllocationPanel.svelte';
+    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
+    import {DEFAULT_CALENDAR_RETURN_WINDOW, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionLine, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
     import {rollingLine, type PositionsRollingState} from './positionsRolling';
 
@@ -77,6 +79,12 @@
         positionsRolling?: PositionsRollingState | null;
         /** Asks the rolling return of these assets (each once); called when the Rolling view is on and the selection changes, never with none. */
         onRequestPositionsRolling?: (assetIds: number[]) => void;
+        /** The window of the Rolling view the user chose; null (the start): the automatic one, the largest preset that fits the period (F-2). */
+        rollingSelection?: CalendarReturnWindowSelection | null;
+        /** The preset the automatic window is, for the controls to show it picked. */
+        rollingAutoPreset?: CalendarReturnPresetKey;
+        /** The user picked a window; the page asks the views again with it. */
+        onRollingSelectionChange?: (selection: CalendarReturnWindowSelection) => void;
         /** The Dashboard's own history: the chart's portfolio line (its return, not the positions' P&L). */
         portfolioHistory?: ReadonlyArray<HistoryPointLike>;
         /** The allocation by asset beside the chart (FB-12): the same inputs the Dashboard's allocation panel takes. */
@@ -102,6 +110,9 @@
         onRequestPositionsSeries,
         positionsRolling = null,
         onRequestPositionsRolling,
+        rollingSelection = null,
+        rollingAutoPreset = DEFAULT_CALENDAR_RETURN_WINDOW.preset,
+        onRollingSelectionChange,
         portfolioHistory = [],
         brokerIds,
         currentLanguage = 'en',
@@ -232,6 +243,24 @@
         onRequestPositionsRolling?.([...new Set(selectedRows.map((row) => row.assetId))]);
     });
 
+    // The window of the Rolling view (F-2): what the controls show is the user's choice or, before one, the automatic preset.
+    let customAmount = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customAmount);
+    let customUnit = $state<CalendarReturnWindowUnit>(DEFAULT_CALENDAR_RETURN_WINDOW.customUnit);
+    let customEditing = $state(false);
+    let windowShown = $derived<CalendarReturnWindowSelection>(rollingSelection ?? {...DEFAULT_CALENDAR_RETURN_WINDOW, kind: 'preset', preset: rollingAutoPreset});
+
+    function pickWindowPreset(preset: CalendarReturnPresetKey) {
+        customEditing = false;
+        onRollingSelectionChange?.({kind: 'preset', preset, customAmount, customUnit});
+    }
+
+    function pickWindowCustom(amount: number, unit: CalendarReturnWindowUnit) {
+        customEditing = false;
+        customAmount = amount;
+        customUnit = unit;
+        onRollingSelectionChange?.({kind: 'custom', preset: windowShown.preset, customAmount: amount, customUnit: unit});
+    }
+
     /** A ticked position's name for the legend of the Rolling view: its asset's name, then the broker, as the positions' own lines say it. */
     function rollingLabel(row: SelectedRow): string {
         const open = holdings.find((holding) => holding.asset_id === row.assetId && (safeNumberOrNull(holding.broker_id) ?? null) === row.brokerId);
@@ -285,6 +314,10 @@
     let showPerformanceEmpty = $derived(semanticMode === 'performance' && (!contribution || (contributionPositions.length === 0 && otherEffects.length === 0)));
 </script>
 
+{#snippet rollingWindowControls()}
+    <AssetCalendarWindowControls selection={windowShown} bind:customAmount bind:customUnit bind:customEditing onpreset={pickWindowPreset} oncustom={pickWindowCustom} idPrefix="positions" />
+{/snippet}
+
 {#snippet chartSection()}
     <!-- The return chart (3/5) beside the allocation by asset (2/5): the proportions and the look of the Dashboard's Growth and Allocation (FB-12). -->
     <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-5" data-testid="positions-chart-section">
@@ -302,6 +335,7 @@
                 failed={chartFailed}
                 portfolioLabel={$_('dashboard.positionsChart.portfolio')}
                 note={$_('dashboard.positionsChart.portfolioNote')}
+                windowControls={rollingWindowControls}
             />
         </div>
         <AllocationPanel {summary} {loading} {displayCurrency} {brokerIds} {currentLanguage} {allocationHistory} {onRequestAllocationHistory} lockedTab="asset" viewStorageKey="dashboard-positions-allocation-view" />

@@ -37,6 +37,10 @@
         onRequestPositionsSeries: PanelProps['onRequestPositionsSeries'];
         positionsRolling: PanelProps['positionsRolling'];
         onRequestPositionsRolling: PanelProps['onRequestPositionsRolling'];
+        /** The window of the Rolling view the user chose (null: the automatic one), the preset the automatic one is, and the choice (F-2). */
+        rollingSelection: PanelProps['rollingSelection'];
+        rollingAutoPreset: PanelProps['rollingAutoPreset'];
+        onRollingSelectionChange: PanelProps['onRollingSelectionChange'];
         /** The asset whose lot detail is open (`?asset=`), its name and currency. */
         activeAssetId: number | null;
         activeAsset: {currency?: string | null; display_name?: string | null} | null | undefined;
@@ -46,7 +50,7 @@
         refreshVersion: number;
     }
 
-    let {testId, snapshot, brokers, brokerIds, canAsk, assetsHref, onRequestContribution, positionsSeries, positionsSeriesLoading, positionsSeriesFailed, onRequestPositionsSeries, positionsRolling, onRequestPositionsRolling, activeAssetId, activeAsset, displayCurrency, onAnalyze, onCloseAnalysis, refreshVersion}: Props = $props();
+    let {testId, snapshot, brokers, brokerIds, canAsk, assetsHref, onRequestContribution, positionsSeries, positionsSeriesLoading, positionsSeriesFailed, onRequestPositionsSeries, positionsRolling, onRequestPositionsRolling, rollingSelection, rollingAutoPreset, onRollingSelectionChange, activeAssetId, activeAsset, displayCurrency, onAnalyze, onCloseAnalysis, refreshVersion}: Props = $props();
 
     const summaryLoading = $derived(snapshot.reportLoading && !snapshot.summary);
 </script>
@@ -73,6 +77,9 @@
         {onRequestPositionsSeries}
         {positionsRolling}
         {onRequestPositionsRolling}
+        {rollingSelection}
+        {rollingAutoPreset}
+        {onRollingSelectionChange}
     />
     <LotsAnalysisPanel
         open={activeAssetId != null}
