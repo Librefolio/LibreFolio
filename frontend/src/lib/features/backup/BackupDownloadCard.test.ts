@@ -976,8 +976,9 @@ describe('B4 — BackupDownloadCard: clear or secure', () => {
         await chooseSecure();
 
         expect(modeClear()).not.toBeChecked();
-        expect(passwordField()).toHaveAttribute('type', 'password');
-        expect(confirmField()).toHaveAttribute('type', 'password');
+        // K-1: text fields drawn masked, never `type="password"` (see the K-1 block below).
+        expect(passwordField()).toHaveAttribute('data-masked', 'true');
+        expect(confirmField()).toHaveAttribute('data-masked', 'true');
 
         await typePasswords(ELEVEN, '');
 
@@ -1113,76 +1114,59 @@ describe('B4 — BackupDownloadCard: clear or secure', () => {
 });
 
 // =====================================================================================================================
-// B4b — the password of a secure backup is a new password (B-25; written red first)
+// K-1 (developer, 05/11) — the backup password is never offered to the browser, under any name
 // =====================================================================================================================
 
 /*
- * The contract (B4b brief §3, frontend): both password fields of a secure backup say `autocomplete="new-password"`, so
- * that a password manager offers to make a new password there and never fills in the account's own. `off` does not
- * say so: password managers commonly ignore it on a password field. Red today: both fields say `off`.
+ * FB-20 and B-25 tried to steer the browser: a fixed user field «backup» before two `new-password` fields. The browser
+ * then offered to save the password for an account called «backup», which is still wrong: it must not be offered at
+ * all. Browsers and password managers look for `type="password"`, so the two fields are plain text inputs drawn masked
+ * by CSS (`-webkit-text-security`), with the eye still showing them, and no user field. Whether a given browser then
+ * stays quiet is seen by hand (Chromium and Firefox): this file pins the markup.
  */
+describe('K-1 — BackupDownloadCard: the password fields are masked text fields, never type="password"', () => {
+    const form = () => screen.getByTestId('backup-password-form') as HTMLFormElement;
 
-describe('B4b — BackupDownloadCard: the password fields of a secure backup are new-password fields (B-25)', () => {
-    it('backup-password and backup-password-confirm say autocomplete="new-password": a password manager fills in no account password there', async () => {
+    it('backup-password and backup-password-confirm are type="text", autocomplete="off", masked, and no password manager is asked to look', async () => {
         render(BackupDownloadCard);
         await chooseSecure();
         const fields = [passwordField(), confirmField()];
 
         expect(
             fields.map((field) => field.getAttribute('type')),
-            'precondition: the two password fields of a secure backup',
-        ).toEqual(['password', 'password']);
-        // One object, so that a red shows both fields at once.
-        expect(Object.fromEntries(fields.map((field) => [field.getAttribute('data-testid'), field.getAttribute('autocomplete')])), "new passwords, never the account's").toEqual({'backup-password': 'new-password', 'backup-password-confirm': 'new-password'});
-    });
-});
-
-// =====================================================================================================================
-// FB-20 — the backup password is not offered to the browser as the user's own (written red first)
-// =====================================================================================================================
-
-/*
- * Today the two password fields sit outside any `<form>` and have no user field beside them, so the browser takes the
- * pair for a password change and offers to save the backup password as the account's. The fix is the shape password
- * managers expect: a `<form>` holding a fixed user field («backup») and the two new-password fields. The user field is
- * not `type="hidden"` (managers skip those): a text input kept off the screen, out of the tab order and away from
- * assistive technology. The form never submits (the buttons stay `type="button"`). Whether a given browser then stops
- * offering to save is seen by hand: this file pins the markup.
- */
-describe('FB-20 — BackupDownloadCard: the password fields are a form with a fixed user field', () => {
-    const form = () => screen.getByTestId('backup-password-form') as HTMLFormElement;
-    const userField = () => screen.getByTestId('backup-password-username') as HTMLInputElement;
-
-    it('the two password fields and the user field are in one <form> that exists only in secure mode', async () => {
-        render(BackupDownloadCard);
-        expect(screen.queryByTestId('backup-password-form'), 'clear mode: no form').toBeNull();
-        await chooseSecure();
-
-        expect(form().tagName).toBe('FORM');
-        expect(form()).toContainElement(userField());
-        expect(form()).toContainElement(passwordField());
-        expect(form()).toContainElement(confirmField());
+            'a real password field is what a browser offers to save',
+        ).toEqual(['text', 'text']);
+        expect(fields.map((field) => field.getAttribute('autocomplete'))).toEqual(['off', 'off']);
+        expect(fields.map((field) => field.getAttribute('data-masked'))).toEqual(['true', 'true']);
+        for (const field of fields) {
+            expect(field).toHaveAttribute('data-lpignore', 'true');
+            expect(field).toHaveAttribute('data-1p-ignore');
+            expect(field).toHaveAttribute('data-bwignore', 'true');
+        }
+        expect(document.querySelectorAll('input[type="password"]'), 'no password field anywhere on the card').toHaveLength(0);
     });
 
-    it('the user field is a fixed, read-only text input called «backup», for a password manager to pair with the new password', async () => {
+    it('there is no user field beside them: nothing on the card looks like an account and its password', async () => {
         render(BackupDownloadCard);
         await chooseSecure();
 
-        expect(userField().getAttribute('type'), 'not "hidden": password managers skip hidden fields').toBe('text');
-        expect(userField().value).toBe('backup');
-        expect(userField()).toHaveAttribute('autocomplete', 'username');
-        expect(userField()).toHaveAttribute('readonly');
-        expect(userField().getAttribute('name')).toBeTruthy();
+        expect(screen.queryByTestId('backup-password-username')).toBeNull();
+        expect(form().querySelectorAll('input[autocomplete="username"], input[name*="user"]')).toHaveLength(0);
     });
 
-    it('the user field is out of the way: no tab stop, hidden from assistive technology, and it comes before the passwords', async () => {
+    it('the eye shows the text and hides it again; the value is the same typed text all along', async () => {
         render(BackupDownloadCard);
         await chooseSecure();
+        await typePasswords(PASSWORD);
+        expect(passwordField().value).toBe(PASSWORD);
+        expect(passwordField()).toHaveAttribute('data-masked', 'true');
 
-        expect(userField()).toHaveAttribute('tabindex', '-1');
-        expect(userField()).toHaveAttribute('aria-hidden', 'true');
-        // A manager pairs a password with the user field that comes before it.
-        expect(userField().compareDocumentPosition(passwordField()) & Node.DOCUMENT_POSITION_FOLLOWING, 'the user field precedes the password').toBeTruthy();
+        const eye = within(form()).getAllByRole('button')[0];
+        await fireEvent.click(eye);
+        expect(passwordField()).toHaveAttribute('data-masked', 'false');
+        expect(passwordField().value).toBe(PASSWORD);
+        await fireEvent.click(eye);
+        expect(passwordField()).toHaveAttribute('data-masked', 'true');
     });
 
     it('the form never submits: submitting it is cancelled and starts no backup; the buttons stay outside as type="button"', async () => {

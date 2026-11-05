@@ -123,7 +123,7 @@
             </p>
             <div class="space-y-2">
                 <label class="block text-sm font-medium text-lf-secondary" for="restore-password">{$_('backup.restore.password.label')}</label>
-                <PasswordInput autocomplete="off" bind:value={restorePassword} disabled={controller.submitting} hasError={controller.errorCode !== null} id="restore-password" name="restore-password" testId="restore-password" />
+                <PasswordInput neverSaved bind:value={restorePassword} disabled={controller.submitting} hasError={controller.errorCode !== null} id="restore-password" name="restore-password" testId="restore-password" />
             </div>
             {#if controller.errorCode !== null}
                 <p class="flex items-start gap-2 text-sm text-lf-danger" role="alert" data-testid="restore-password-error" data-error-code={controller.errorCode}>
