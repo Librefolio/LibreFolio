@@ -9,6 +9,7 @@ Usage:
     python list_api_endpoints.py --openapi-file [path]  # Export to file
     python list_api_endpoints.py --tool-contracts-file [path]  # Schema-only Tool export
 """
+
 import argparse
 import json
 import sys
@@ -39,9 +40,7 @@ def list_endpoints():
             endpoint_count += 1
             description = operation.get("summary") or str(operation.get("description", "")).strip().split("\n")[0]
             for tag in operation.get("tags") or ["default"]:
-                routes_by_tag.setdefault(tag, []).append(
-                    {"methods": [method.upper()], "path": path, "description": description}
-                )
+                routes_by_tag.setdefault(tag, []).append({"methods": [method.upper()], "path": path, "description": description})
 
     # Print routes grouped by tag
     for tag in sorted(routes_by_tag.keys()):
@@ -91,21 +90,12 @@ Examples:
   python list_api_endpoints.py --openapi-file frontend/src/lib/api/openapi.json
   python list_api_endpoints.py --tool-contracts-file frontend/src/lib/api/tool-contracts.openapi.json
         """,
-        )
+    )
 
-    parser.add_argument(
-        "--list", "-l", action="store_true", help="List all API endpoints with descriptions"
-        )
-    parser.add_argument(
-        "--openapi", "-o", action="store_true", help="Export OpenAPI schema to stdout"
-        )
-    parser.add_argument(
-        "--openapi-file", "-f", type=str, metavar="PATH", help="Export OpenAPI schema to file"
-        )
-    parser.add_argument(
-        "--tool-contracts-file", type=str, metavar="PATH",
-        help="Export schema-only Tool contracts without importing the API application"
-        )
+    parser.add_argument("--list", "-l", action="store_true", help="List all API endpoints with descriptions")
+    parser.add_argument("--openapi", "-o", action="store_true", help="Export OpenAPI schema to stdout")
+    parser.add_argument("--openapi-file", "-f", type=str, metavar="PATH", help="Export OpenAPI schema to file")
+    parser.add_argument("--tool-contracts-file", type=str, metavar="PATH", help="Export schema-only Tool contracts without importing the API application")
 
     args = parser.parse_args()
 

@@ -80,6 +80,7 @@ def _hard_fail(name: str, reason: str) -> None:
     consumer = CONSUMERS.get(vendor_key) if vendor_key else None
     _HARD_FAILURES.append(_Failure(f"{name}: {reason}", consumer))
 
+
 # Libraries to cache
 # type="js"   → single file download
 # type="font" → fetch CSS from Google Fonts, parse woff2 URLs, download all
@@ -143,11 +144,7 @@ def get_file_hash(content: bytes) -> str:
 def get_remote_headers(url: str, timeout: int = 10) -> Optional[dict]:
     """Get headers from URL using HEAD request (no download)."""
     try:
-        req = urllib.request.Request(
-            url,
-            method="HEAD",
-            headers={"User-Agent": "LibreFolio-CacheManager/1.0"}
-            )
+        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "LibreFolio-CacheManager/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return dict(response.headers)
     except Exception:
@@ -157,10 +154,7 @@ def get_remote_headers(url: str, timeout: int = 10) -> Optional[dict]:
 def download_file(url: str, timeout: int = 30, ua: str = "LibreFolio-CacheManager/1.0") -> Optional[bytes]:
     """Download file from URL, return content or None on failure."""
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": ua}
-            )
+        req = urllib.request.Request(url, headers={"User-Agent": ua})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return response.read()
     except Exception as e:
@@ -204,7 +198,7 @@ def should_skip_check(manifest: dict) -> bool:
         return False
 
     try:
-        last_check_dt = datetime.fromisoformat(last_check.replace('Z', '+00:00'))
+        last_check_dt = datetime.fromisoformat(last_check.replace("Z", "+00:00"))
         if last_check_dt.tzinfo is None:
             last_check_dt = last_check_dt.replace(tzinfo=UTC)
         hours_since = (datetime.now(UTC) - last_check_dt).total_seconds() / 3600
@@ -227,10 +221,12 @@ def _parse_google_fonts_css(css_text: str):
         url_match = re.search(r"src:\s*url\(([^)]+)\)", block)
         range_match = re.search(r"unicode-range:\s*([^;]+);", block)
         if url_match and range_match:
-            subsets.append({
-                "src_url": url_match.group(1).strip(),
-                "unicode_range": range_match.group(1).strip(),
-            })
+            subsets.append(
+                {
+                    "src_url": url_match.group(1).strip(),
+                    "unicode_range": range_match.group(1).strip(),
+                }
+            )
     return subsets
 
 
@@ -247,9 +243,7 @@ def _kept_ranges_fingerprint(config: dict) -> Optional[list[str]]:
     return sorted({_normalise_unicode_range(r) for r in keep})
 
 
-def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, no nested logic
-    vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False
-) -> bool:
+def _download_font_resource(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat download/manifest pipeline, no nested logic
     """
     Download a Google Fonts resource (CSS + woff2 files).
 
@@ -275,8 +269,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
     # Fetch CSS from Google Fonts (need a modern User-Agent to get woff2)
     css_bytes = download_file(
         config["css_url"],
-        ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-           "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     )
     if css_bytes is None:
         if file_exists:
@@ -343,18 +336,20 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
         total_size += len(woff2_content)
 
         # Build CSS block
-        local_css_lines.extend([
-            f"/* Subset {i} */",
-            "@font-face {",
-            f"\tfont-family: '{font_family}';",
-            "\tfont-style: normal;",
-            "\tfont-weight: 400;",
-            "\tfont-display: swap;",
-            f"\tsrc: url('./{local_filename}') format('woff2');",
-            f"\tunicode-range: {subset['unicode_range']};",
-            "}",
-            "",
-        ])
+        local_css_lines.extend(
+            [
+                f"/* Subset {i} */",
+                "@font-face {",
+                f"\tfont-family: '{font_family}';",
+                "\tfont-style: normal;",
+                "\tfont-weight: 400;",
+                "\tfont-display: swap;",
+                f"\tsrc: url('./{local_filename}') format('woff2');",
+                f"\tunicode-range: {subset['unicode_range']};",
+                "}",
+                "",
+            ]
+        )
 
     if failed_subsets:
         # Do not write a partial CSS/manifest: the cached previous version (if
@@ -390,12 +385,14 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
     manifest["libraries"][name]["subset_count"] = len(subsets)
     manifest["libraries"][name]["total_size"] = total_size
     manifest["libraries"][name]["updated_at"] = datetime.now(UTC).isoformat()
-    manifest["libraries"][name]["versions"].append({
-        "hash": css_hash,
-        "downloaded_at": datetime.now(UTC).isoformat(),
-        "subset_count": len(subsets),
-        "total_size": total_size,
-    })
+    manifest["libraries"][name]["versions"].append(
+        {
+            "hash": css_hash,
+            "downloaded_at": datetime.now(UTC).isoformat(),
+            "subset_count": len(subsets),
+            "total_size": total_size,
+        }
+    )
 
     cleanup_old_versions(vendor_dir, manifest, name)
     print(f"  ✅ Updated {len(subsets)} subsets ({total_size / 1024:.0f} KB total)")
@@ -500,11 +497,7 @@ def _update_js_file(vendor_dir: Path, manifest: dict, name: str, config: dict, f
     manifest["libraries"][name]["size"] = len(content)
     manifest["libraries"][name]["etag"] = etag
     manifest["libraries"][name]["updated_at"] = datetime.now(UTC).isoformat()
-    manifest["libraries"][name]["versions"].append({
-        "hash": content_hash,
-        "downloaded_at": datetime.now(UTC).isoformat(),
-        "size": len(content)
-        })
+    manifest["libraries"][name]["versions"].append({"hash": content_hash, "downloaded_at": datetime.now(UTC).isoformat(), "size": len(content)})
 
     # Cleanup old versions
     cleanup_old_versions(vendor_dir, manifest, name)
@@ -560,8 +553,7 @@ def _update_companions(vendor_dir: Path, manifest: dict, name: str, config: dict
     for file_name in names:
         path = target_dir / file_name
         if path.exists() and not refresh:
-            files[file_name] = record.get("files", {}).get(file_name) or {
-                "hash": get_file_hash(path.read_bytes()), "size": path.stat().st_size}
+            files[file_name] = record.get("files", {}).get(file_name) or {"hash": get_file_hash(path.read_bytes()), "size": path.stat().st_size}
             continue
         content = download_file(base_url + file_name)
         if not _usable(file_name, content):
@@ -575,14 +567,12 @@ def _update_companions(vendor_dir: Path, manifest: dict, name: str, config: dict
 
     if missing:
         print(f"  ❌ {len(missing)} of {len(names)} companion file(s) not downloaded and not cached")
-        _hard_fail(name, f"{len(missing)} of {len(names)} companion file(s) not downloaded, no cached copy: "
-                         f"{', '.join(missing)}")
+        _hard_fail(name, f"{len(missing)} of {len(names)} companion file(s) not downloaded, no cached copy: " f"{', '.join(missing)}")
         return written > 0
     removed = 0
     if target_dir.exists():
         # Only what the pattern names is a companion: the folder may hold the script itself, or other files.
-        for stale in sorted(p for p in target_dir.iterdir()
-                            if p.is_file() and re.fullmatch(spec["pattern"], p.name) and p.name not in names):
+        for stale in sorted(p for p in target_dir.iterdir() if p.is_file() and re.fullmatch(spec["pattern"], p.name) and p.name not in names):
             stale.unlink()
             removed += 1
     if kept:
@@ -630,19 +620,14 @@ def update_all_libraries(force: bool = False):
 
 def add_arguments(parser) -> None:
     """Add arguments to a parser (reusable for both standalone and subparser)."""
-    parser.add_argument("--force", "-f", action="store_true",
-                        help="Force re-download even if cached")
-    parser.add_argument("--required-for", action="append", choices=sorted(set(CONSUMERS.values())),
-                        metavar="CONSUMER",
-                        help="Only fail for resources this build ships (repeatable). "
-                             "Default: every consumer, so a standalone cache refresh "
-                             "still reports everything.")
+    parser.add_argument("--force", "-f", action="store_true", help="Force re-download even if cached")
+    parser.add_argument("--required-for", action="append", choices=sorted(set(CONSUMERS.values())), metavar="CONSUMER", help="Only fail for resources this build ships (repeatable). " "Default: every consumer, so a standalone cache refresh " "still reports everything.")
 
 
 def run_from_args(args) -> int:
     """Execute the command from parsed args."""
     try:
-        update_all_libraries(force=getattr(args, 'force', False))
+        update_all_libraries(force=getattr(args, "force", False))
         required = set(getattr(args, "required_for", None) or CONSUMERS.values())
         fatal, deferred = [], []
         for failure in _HARD_FAILURES:
@@ -680,11 +665,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="JS Library Cache Manager",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
-    )
+    parser = argparse.ArgumentParser(description="JS Library Cache Manager", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     add_arguments(parser)
     args = parser.parse_args()
     sys.exit(run_from_args(args))
