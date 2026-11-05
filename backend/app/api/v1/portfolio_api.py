@@ -10,7 +10,6 @@ Legacy standalone endpoints (/summary, /history, /allocation-history) removed â€
 all data is available via /report with include_* flags.
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 

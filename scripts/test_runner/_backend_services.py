@@ -3480,7 +3480,7 @@ Note: No backend server required.
         "market-data-wipe-keeps-splits",
         services_market_data_wipe_keeps_splits,
         name="Market Data Wipe Keeps Splits",
-        desc="N68 (X5-3, policy A): the market-data wipe (POST /assets/{id}/market-data/wipe) and the currency PATCH delete the prices and every NON-SPLIT event (manual and provider), set asset_event_id to NULL on the transactions linked to those, and keep every SPLIT event, manual or provider, with the transactions linked to it (a costless incoming ADJUSTMENT stays linked and costless); never a refusal for it (X-R48's MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST and the token CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA are gone). Answer and summary keys: prices, events_manual, events_provider (non-split), splits_kept, linked_tx, oldest, newest, dry_run",
+        desc="N68 (X5-3, policy A): the currency PATCH (the market-data wipe route is gone) deletes the prices and every NON-SPLIT event (manual and provider), set asset_event_id to NULL on the transactions linked to those, and keep every SPLIT event, manual or provider, with the transactions linked to it (a costless incoming ADJUSTMENT stays linked and costless); never a refusal for it (X-R48's MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST and the token CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA are gone). Answer and summary keys: prices, events_manual, events_provider (non-split), splits_kept, linked_tx, oldest, newest, dry_run",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
     )

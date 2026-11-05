@@ -527,5 +527,3 @@ async def test_xr74_guard_an_authored_refusal_answers_as_before(monkeypatch, sit
     assert isinstance(outcome, HTTPException), outcome
     assert (outcome.status_code, outcome.detail) == (status, answered(error))
     print_success(f"{outcome.status_code} {outcome.detail!r}")
-
-
