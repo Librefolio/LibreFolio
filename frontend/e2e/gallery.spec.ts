@@ -1616,14 +1616,11 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
                     await setPositionsView(page, 'holdings', 'table');
 
-                    // Target "Apple Inc." specifically instead of `.first()` (highest
-                    // current value). Holdings sort by value desc (ExposureTable.svelte),
-                    // which currently puts "RE Loan Milano" first — but that asset has
-                    // exactly ONE PriceHistory row ever (see populate_mock_data.py
-                    // populate_price_history() loan_price_points), so its WAC/Market
-                    // chart renders empty. Apple has the richest lot history in the mock
-                    // dataset (buys across 3 brokers/currencies + a partial sell +
-                    // dividend + 3-year price history) — a proper FIFO/WAC demo.
+                    // Target "Apple Inc." specifically instead of `.first()`: holdings sort by value
+                    // desc (ExposureTable.svelte), so the first row is whatever is worth most, not a
+                    // chosen demo. Apple has the richest lot history in the mock dataset (buys across
+                    // 3 brokers/currencies + a partial sell + dividend + 3-year price history) — a
+                    // proper FIFO/WAC demo.
                     const positionsPanel = page.getByTestId('positions-panel');
                     const appleRow = positionsPanel.locator('tr[data-row-id]').filter({hasText: 'Apple'}).first();
                     await clickRowAction(page, appleRow, 'analyze-lots');
