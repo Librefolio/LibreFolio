@@ -566,57 +566,11 @@ giorno dopo una cedola, a metà ciclo, fra due date di prezzo, e il caso BTP (pr
 
 ## ⚡ Migrazione a ORJSONResponse per performance JSON
 
-**Data aggiunta**: 11 Giugno 2026
-**Priority**: P4 (ottimizzazione, non urgente)
-**Scope**: Backend (`app/main.py`, serializzazione)
+**Data aggiunta**: 11 Giugno 2026 · **Priorità**: P4
 
-### Contesto
-
-`orjson` è un serializzatore JSON scritto in Rust, 5–10× più veloce di `json` stdlib per la serializzazione e 2–3× per la deserializzazione. FastAPI supporta nativamente `ORJSONResponse` come `default_response_class`.
-
-### Problema attuale: incompatibilità con `SafeDecimal`
-
-Il progetto usa `SafeDecimal = Annotated[Decimal, PlainSerializer(..., when_used="json")]` su tutti gli schemi di transazioni, FX e portafoglio. Questo `PlainSerializer` garantisce che i `Decimal` arrivino al frontend come stringhe senza notazione scientifica (es. `"0.00500000"` invece di `5e-3`).
-
-**`orjson` bypassa i `PlainSerializer` di Pydantic** quando serializza direttamente, convertendo i `Decimal` in float nativi — con rischio di perdita di precisione e notazione scientifica silenziosa sul frontend.
-
-### Come implementarlo correttamente
-
-Non è sicuro usare `ORJSONResponse` come `default_response_class` senza prima risolvere questo punto. Le opzioni:
-
-1. **Subclass `ORJSONResponse`** che chiama `model.model_dump(mode='json')` prima di passare a `orjson` → applica i `PlainSerializer` prima della serializzazione Rust.
-2. **Custom `orjson` default function** che intercetta `Decimal` e lo serializza come stringa.
-3. **Rendere `orjson` l'encoder di Pydantic v2** via `model_config = ConfigDict(json_encoders=...)` — ma deprecato in v2.
-
-**Approccio consigliato**: opzione 1. Creare `SafeORJSONResponse(ORJSONResponse)` che fa `jsonable_encoder(content)` prima di `orjson.dumps()`, e usarla come `default_response_class`.
-
-### Benefici attesi
-
-Endpoint pesanti (bulk import, FIFO calc, portfolio summary) potrebbero guadagnare 20–50ms su payload grandi. Serializzazione nativa di `datetime`, `UUID`, `Enum` senza `jsonable_encoder`.
-
-### Prerequisiti
-
-- Test coverage sugli endpoint con campi `SafeDecimal` per verificare output identico
-- Benchmark prima/dopo su `/api/v1/transactions` con dataset reale
-
----
-
-Aree di miglioramento dopo aver visto compeditor:
-Tra i provider di prezzo, oltre ai siti da aumentare, ha senso fare olgre al css selector (che potrebbe essere rinominato web page) anche json api, html table e csv
-aggiungere i provider AI, olre a ollama e openrouter, anche tutti gli altri per l'installazione locale.
-pensare un sistema di addon che permetta al forontend di aggiungere tab. Capendo come creare un market place.
-aggiungere nella dashboard e nei broker dei tab che fanno anche altri tipi di analisi oltre quelli pensati. Altri tipi di analisi restano da definire (allocazione % con quadrettoni/treemap già fatta, vedi TODO_Completati.md).
-La vecchia idea di target allocation per Broker è ora precisata nella sezione
-“PAC/Rebalancer — Profili Persistenti e Strategie Estese”: la v1 usa target
-globali per Asset e route/priorità; una distribuzione proporzionale esplicita per
-Broker resta futura.
-Aggiungere la possibilità di creare "Portafogli" che dovrebbero essere gruppi di broker o asset o entrambi, da approfondire.
-Fare delle pagine di dettaglio per analizzare i trade, le fee 
-Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una data di inizio per aver modo di vedere la differenza tra andamento teorico e reale.
-
----
-
----
+`orjson` guadagnerebbe 20–50 ms sui payload grandi, ma scavalca il `PlainSerializer` di `SafeDecimal` e trasforma i `Decimal` in
+float. Se mai si fa: una `SafeORJSONResponse` che passa da `jsonable_encoder` prima di `orjson.dumps()`, con test di output
+identico sugli endpoint `SafeDecimal` e un benchmark su dati reali.
 
 ## 💱 Settlement multicurrency ed esposizione — feedback 2026-09-08
 
@@ -987,56 +941,22 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 
 ## ⚡ Motore del portafoglio — caricare solo i prezzi che servono
 
-**Data aggiunta**: 1 Ottobre 2026 · **Status**: 📋 FUTURO — PR #30 (ex #28) entrata il 05/10/2026 ·
-**Priorità**: Media (prima va misurata)
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 📋 FUTURO · **Priorità**: Media, prima va misurata
 
-### Contesto
+La PR [#30](https://github.com/Librefolio/LibreFolio/pull/30) ha corretto `convert_bulk` (finestra [ultimo cambio ≤ prima data,
+ultima data] e `bisect`: la ricerca passa da 120–200 ms a meno di 1 ms). Una ricerca O(1) è stata valutata e scartata: meno
+dell'1 %.
 
-- La PR [#30](https://github.com/Librefolio/LibreFolio/pull/30) di Martin Sova (msov19), che sostituisce la
-  [#28](https://github.com/Librefolio/LibreFolio/pull/28), corregge `convert_bulk`.
-  La query dei cambi aveva solo il limite superiore e a ogni chiamata caricava tutta la storia della
-  coppia. Ora carica la finestra [ultimo cambio ≤ prima data richiesta, ultima data richiesta] e
-  cerca con `bisect`.
-- Banco di prova del coordinatore (01/10, 10 anni di cambi, 3.650 conversioni giornaliere):
-  - la ricerca passa da 120–200 ms a meno di 1 ms;
-  - nel `convert_bulk` completo (~17 ms) il `bisect` pesa ~4%; il resto è la query e la creazione
-    degli oggetti `Currency`.
-  - **Valutato e scartato**: sostituire il `bisect` con una ricerca O(1) (dizionario per data con
-    passo indietro, dizionario pre-riempito per ogni giorno, cursore). Risparmierebbe meno dell'1%;
-    il cursore non aiuta perché `portfolio_engine` passa le date in ordine sparso (le raccoglie in
-    un `set`).
-- Lo stesso schema della query dei cambi c'è nel motore del portafoglio:
-  - `backend/app/services/financial_math/portfolio/engine.py:312` precarica i prezzi con solo `date <= actual_to`,
-    come oggetti ORM completi (`select(PriceHistory)`);
-  - quindi legge tutta la storia di ogni asset posseduto, anche gli anni prima del primo acquisto o
-    del periodo richiesto (`actual_from = date_from or first_tx_date`, `:246`).
-- A cosa servono i prezzi caricati:
-  - il calcolo dei giorni che cambiano (`daily_state.py:366`), che dei prezzi precedenti a `frame_start` usa solo
-    l'ultimo;
-  - il resolver `AssetPriceSeries` (`backend/app/services/financial_math/price_marks.py:146`), che con `bisect`
-    trova l'ultima osservazione ≤ data.
-- `get_prices_bulk` (`backend/app/services/assets/price_query.py:149`), il corrispettivo di
-  `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
+Lo stesso schema c'è in `backend/app/services/financial_math/portfolio/engine.py`: precarica i prezzi con solo `date <= actual_to`,
+come oggetti ORM, quindi legge tutta la storia di ogni asset. `get_prices_bulk` ha già la finestra.
 
-### Azione Futura
-
-- **Prima misurare**, su una copia dei dati reali: righe lette e tempo della query a `:312` rispetto
-  al calcolo intero, con e senza `date_from`.
-- Se conviene:
-  - limitare la query a [ultimo prezzo ≤ `frame_start` per asset, `actual_to`], con la stessa
-    sottoquery «ancora» della PR #30;
-  - leggere solo le colonne usate (data, close, valuta; open/high/low solo con le candele), invece
-    degli oggetti ORM.
-- Da verificare prima: nessuno deve chiedere al resolver una data precedente a `frame_start`
-  (periodo pre-frame, intervalli in transito, prezzi alle date dei BUY). Altrimenti l'ancora va
-  presa dalla prima di quelle date.
-- Test:
-  - confronto differenziale del risultato del motore, prima e dopo, su più utenti e periodi, come
-    quello fatto per la PR #28;
-  - poi `services portfolio-engine`, `services roi-fifo-utils`, `api portfolio`.
-- Minori, solo se la misura lo giustifica, in `get_prices_bulk`: la finestra è unica per tutte le
-  richieste (minimo e massimo globali), e il prezzo «seme» si cerca con una query per asset. Si
-  possono fare per asset, in una query sola, come nella PR #30.
+**Azione.**
+1. Misurare su una copia dei dati reali: righe e tempo di quella query rispetto al calcolo intero, con e senza `date_from`.
+2. Se conviene: limitarla a [ultimo prezzo ≤ `frame_start`, `actual_to`] con la sottoquery «ancora» della PR #30, e leggere solo
+   le colonne usate.
+3. Prima, verificare che nessuno chieda al resolver una data precedente a `frame_start`.
+4. Test: confronto differenziale del motore prima e dopo, su più utenti e periodi; poi `services portfolio-engine`,
+   `services roi-fifo-utils`, `api portfolio`.
 
 ## 💡 Traccia rischio/rendimento nel tempo («snail trail»)
 
