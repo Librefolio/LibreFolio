@@ -440,7 +440,13 @@
           "cut": "Soglia VaR a {value}",
           "noCut": "Nessuna soglia pubblicata per questa finestra.",
           "empty": "Nessuna distribuzione dei rendimenti per questo periodo.",
-          "bin": "{range}: {count, plural, one {# giorno} other {# giorni}} ({share})"
+          "bin": "{range}: {count, plural, one {# giorno} other {# giorni}} ({share})",
+          "cutLine": "VaR {value}",
+          "position": {
+            "beyond": "Oltre la soglia VaR ({value}): giorni che il VaR descrive",
+            "holds": "Contiene la soglia VaR ({value})",
+            "above": "Sopra la soglia VaR ({value})"
+          }
         },
         "period": "dal {from} al {to}"
       },

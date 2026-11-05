@@ -440,7 +440,13 @@
           "cut": "Umbral VaR en {value}",
           "noCut": "No se ha publicado ningún umbral para esta ventana.",
           "empty": "No hay distribución de rendimientos para este periodo.",
-          "bin": "{range}: {count, plural, one {# día} other {# días}} ({share})"
+          "bin": "{range}: {count, plural, one {# día} other {# días}} ({share})",
+          "cutLine": "VaR {value}",
+          "position": {
+            "beyond": "Más allá del umbral VaR ({value}): días que el VaR describe",
+            "holds": "Contiene el umbral VaR ({value})",
+            "above": "Por encima del umbral VaR ({value})"
+          }
         },
         "period": "del {from} al {to}"
       },
