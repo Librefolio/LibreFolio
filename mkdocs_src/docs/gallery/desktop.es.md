@@ -131,6 +131,8 @@ Cambia entre Cartera y Periodo, luego compara datos en vistas de tabla o mapa, a
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Cartera / Mapa" alt="Posiciones — Mapa de la cartera">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Periodo / Tabla" alt="Posiciones — Tabla del período">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Periodo / Mapa" alt="Posiciones — Mapa del período">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-yoc" data-title="💰 Rendimiento sobre coste" alt="Posiciones — Rendimiento sobre coste">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-fx-on-cash" data-title="💱 Efecto del tipo de cambio sobre el efectivo" alt="Posiciones — Efecto del tipo de cambio sobre el efectivo">
 </div>
 
 ### 💸 Pestaña de transacciones
@@ -185,6 +187,14 @@ El panel con el modo privacidad activado: el botón del ojo en el encabezado y c
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Modo privacidad">
+</div>
+
+### 🤖 Exportación IA
+
+Elige qué exportar para tu asistente de IA: la categoría, el conjunto de datos, el nivel de detalle, el período y tus notas.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="ai-export" data-name="dialog-dataset" alt="Exportación IA">
 </div>
 
 ---
@@ -542,6 +552,7 @@ Cambia entre Cartera y Periodo, luego compara datos en vistas de tabla o mapa.
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Cartera / Mapa" alt="Posiciones del bróker — Mapa de la cartera">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo / Tabla" alt="Posiciones del bróker — Tabla del período">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo / Mapa" alt="Posiciones del bróker — Mapa del período">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-yoc" data-title="💰 Rendimiento sobre coste" alt="Posiciones del bróker — Rendimiento sobre coste">
 </div>
 
 ### ℹ️ Información del bróker
