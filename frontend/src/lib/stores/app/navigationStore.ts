@@ -11,6 +11,12 @@
  *  - Sidebar top-level buttons call `resetNavDepth()` on click to clear stale
  *    deep-link chains (the user wants to jump to a root section).
  *  - Detail pages call `goBack(fallbackPath)` from the back button.
+ *  - The main pages (Brokers, Transactions, Assets, FX) show their ← only while `canGoBack` is true:
+ *    there is a page below the current one, i.e. the user came from an in-app link. A sidebar click
+ *    (`resetNavDepth()`) or a direct address (`enter`) leaves one entry, and ← would lead nowhere.
+ *  - `beforeNavigate()` in the same layout calls `syncCurrentLocation()`: the page being left may have
+ *    changed its URL behind SvelteKit's back (`history.replaceState`), and ← must bring it back as it
+ *    was left, with its filters and period.
  *
  * Why an explicit stack (and not just history.back()):
  *  - Various pages use `history.replaceState(...)` to sync URL query params
@@ -22,9 +28,25 @@
  *    of how many replaceState calls happened in between.
  */
 import {goto} from '$app/navigation';
+import {writable} from 'svelte/store';
 import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 let stack: string[] = [];
+
+/** `canGoBack` writes here, after every change of the stack. */
+const canGoBackState = writable(false);
+
+/** Whether a page is stacked below the current one: the reactive twin of `hasPreviousPage()`. */
+export const canGoBack = {subscribe: canGoBackState.subscribe};
+
+function publishCanGoBack() {
+    canGoBackState.set(stack.length > 1);
+}
+
+/** Whether ← has a page to return to (the user arrived from an in-app link), not just a fallback. */
+export function hasPreviousPage(): boolean {
+    return stack.length > 1;
+}
 
 /**
  * Pathname of a navigation announced as a replacement (`expectReplaceNavigation`): when the next
@@ -40,6 +62,11 @@ let expectedReplacePathname: string | null = null;
  */
 export function trackNavigation(navigationType: string | undefined, fullUrl: string | undefined) {
     if (!fullUrl) return;
+    applyNavigation(navigationType, fullUrl);
+    publishCanGoBack();
+}
+
+function applyNavigation(navigationType: string | undefined, fullUrl: string) {
     // An announced replacement covers the next navigation only, wherever it goes.
     const replacePathname = expectedReplacePathname;
     expectedReplacePathname = null;
@@ -92,6 +119,7 @@ export function goBack(fallbackPath: string) {
     if (stack.length > 1) {
         // Remove current page, goto the previous one explicitly.
         stack.pop();
+        publishCanGoBack();
         const prev = stack[stack.length - 1];
         // Use goto (push) rather than history.back() for determinism. A new
         // history entry is cheap; browser Back still works because SvelteKit
@@ -109,6 +137,21 @@ export function goBack(fallbackPath: string) {
 export function resetNavDepth() {
     stack = [];
     expectedReplacePathname = null;
+    publishCanGoBack();
+}
+
+/**
+ * Record where the current page really is, just before it is left. A page may change its own URL (period,
+ * filters) with a bare `history.replaceState`, which SvelteKit does not report: the top entry would still
+ * hold the address the page was entered with, and ← would bring back the page without its period.
+ * Only the same page is updated: `fullUrl` must have the pathname of the top entry.
+ *
+ * @param fullUrl - `window.location.pathname + window.location.search`
+ */
+export function syncCurrentLocation(fullUrl: string | undefined) {
+    if (!fullUrl || stack.length === 0) return;
+    const top = stack.length - 1;
+    if (stack[top].split('?')[0] === fullUrl.split('?')[0]) stack[top] = fullUrl;
 }
 
 registerClientSessionReset('navigationStore', resetNavDepth);
