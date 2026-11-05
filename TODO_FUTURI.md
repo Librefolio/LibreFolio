@@ -1064,27 +1064,6 @@ mancante, obbligando a spedire UI e backend insieme.
 
 ---
 
-## 📁 Template per Nuovi TODO
-
-```markdown
-## 📌 [Titolo]
-
-**Data aggiunta**: [Data]  
-**Status**: [⏳ IN ATTESA | 📋 PIANIFICATO | 🔄 IN CORSO | ✅ COMPLETATO]  
-**Priorità**: [Alta | Media | Bassa]
-
-### Contesto
-[Descrizione del problema o motivazione]
-
-### Azione Futura
-[Passi da eseguire quando sarà il momento]
-
-### Riferimenti
-[Link a documentazione, issue, PR]
-```
-
----
-
 ## 🔍 BRIM Auto-Detect Broker via Account Code
 
 **Status**: ❌ SCARTATA (07/09/2026, decisione utente) — pochi broker rilasciano dati che
