@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
 from backend.app.config.accounts import default_currency, default_language, default_timezone
-from backend.app.config.backup import MANAGED_CLEANUP_MAX_DAYS, MANAGED_CLEANUP_MAX_MB
+from backend.app.config.backup import MANAGED_CLEANUP_MAX_DAYS, MANAGED_CLEANUP_MAX_MB, storage_limit_override_mb
 from backend.app.db.models import GlobalSetting
 from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS, SETTINGS_REGISTRY
 
@@ -55,6 +55,21 @@ _VARIABLE_READERS: dict[str, Callable[[], str | None]] = {
 }
 
 
+def _storage_limit_pin() -> str | None:
+    """``LIBREFOLIO_STORAGE_LIMIT_MB`` as the value of ``storage_limit_mb``, whatever an administrator saved; ``None`` when
+    it is unset, blank or not usable (an unusable variable stands for nothing: the row speaks)."""
+    try:
+        value = storage_limit_override_mb()
+    except ValueError:
+        return None
+    return None if value is None else str(value)
+
+
+#: The global settings an environment variable stands behind **always**, an administrator's save included: the hosting
+#: provider's value wins and the setting is locked (FB-29).
+_ALWAYS_PINNED: dict[str, Callable[[], str | None]] = {SETTINGS_REGISTRY.global_.STORAGE_LIMIT_MB.key: _storage_limit_pin}
+
+
 def effective_stored_value(key: str, setting: GlobalSetting | None) -> str | None:
     """The value a global setting has now, when an environment variable stands behind it: ``None`` when none does.
 
@@ -64,6 +79,9 @@ def effective_stored_value(key: str, setting: GlobalSetting | None) -> str | Non
     the default). From the administrator's first save on, the row wins, even when it says the default again. An unusable
     variable is the audit's to stop at the start; here it stands for nothing.
     """
+    always = _ALWAYS_PINNED.get(key)
+    if always is not None:
+        return always()
     read = _VARIABLE_READERS.get(key)
     if read is None or (setting is not None and setting.updated_by_user_id is not None):
         return None

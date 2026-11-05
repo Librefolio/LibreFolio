@@ -95,5 +95,41 @@
   },
   "files": {
     "deleteFailed": "Failed to delete file"
+  },
+  "storage": {
+    "title": "Space used",
+    "parts": {
+      "database": "Database",
+      "uploads": "Uploaded files",
+      "brokerReports": "Broker reports",
+      "backups": "Backups",
+      "dataOther": "Other LibreFolio files",
+      "disk": "Other on the disk",
+      "free": "Free"
+    },
+    "summary": {
+      "limit": "{used} of {limit} used",
+      "volume": "LibreFolio uses {used} of a {total} disk",
+      "data": "LibreFolio uses {used}"
+    },
+    "overLimit": "The space limit is exceeded: delete backups or files, or raise the limit.",
+    "limit": {
+      "label": "Space limit (MB)",
+      "hint": "Enter 0 for no limit.",
+      "locked": "The space limit is set by whoever hosts this instance.",
+      "save": "Save",
+      "saved": "Saved.",
+      "errors": {
+        "invalid": "Enter a whole number of 0 or more.",
+        "forbidden": "Only administrators can change this.",
+        "locked": "The space limit is set by whoever hosts this instance: you cannot change it here.",
+        "network": "No answer from the server. Try again.",
+        "unexpected": "The limit could not be saved. Try again."
+      }
+    },
+    "errors": {
+      "load": "The space used could not be loaded. Try again."
+    },
+    "retry": "Try again"
   }
 }

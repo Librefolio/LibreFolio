@@ -95,5 +95,41 @@
   },
   "files": {
     "deleteFailed": "Impossibile eliminare il file"
+  },
+  "storage": {
+    "title": "Spazio occupato",
+    "parts": {
+      "database": "Database",
+      "uploads": "File caricati",
+      "brokerReports": "Report dei broker",
+      "backups": "Backup",
+      "dataOther": "Altri file di LibreFolio",
+      "disk": "Altro sul disco",
+      "free": "Libero"
+    },
+    "summary": {
+      "limit": "{used} usati su {limit}",
+      "volume": "LibreFolio usa {used} di un disco da {total}",
+      "data": "LibreFolio usa {used}"
+    },
+    "overLimit": "Il limite di spazio è superato: elimina backup o file, oppure alza il limite.",
+    "limit": {
+      "label": "Limite di spazio (MB)",
+      "hint": "Inserisci 0 per nessun limite.",
+      "locked": "Il limite di spazio lo imposta chi ospita questa istanza.",
+      "save": "Salva",
+      "saved": "Salvato.",
+      "errors": {
+        "invalid": "Inserisci un numero intero da 0 in su.",
+        "forbidden": "Solo gli amministratori possono cambiarlo.",
+        "locked": "Il limite di spazio lo imposta chi ospita questa istanza: qui non si può cambiare.",
+        "network": "Nessuna risposta dal server. Riprova.",
+        "unexpected": "Non è stato possibile salvare il limite. Riprova."
+      }
+    },
+    "errors": {
+      "load": "Non è stato possibile caricare lo spazio occupato. Riprova."
+    },
+    "retry": "Riprova"
   }
 }

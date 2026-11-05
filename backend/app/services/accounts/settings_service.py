@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
 from backend.app.config.accounts import registration_mode_pinned
+from backend.app.config.backup import STORAGE_LIMIT_VARIABLE, storage_limit_pinned
 from backend.app.db.models import GlobalSetting, UserSettings
 from backend.app.schemas.settings import (
     GLOBAL_SETTINGS_DEFAULTS,
@@ -236,6 +237,7 @@ class GlobalSettingLockedError(PermissionError):
 # The global settings an environment variable pins when it is set: the row then stays as it is.
 _PINNED_BY_ENV: dict[str, tuple[str, Callable[[], bool]]] = {
     "registration_mode": ("LIBREFOLIO_REGISTRATION", registration_mode_pinned),
+    "storage_limit_mb": (STORAGE_LIMIT_VARIABLE, storage_limit_pinned),
 }
 
 

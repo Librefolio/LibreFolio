@@ -18,6 +18,8 @@ errors, with their stable ``code`` in ``detail``, are shared with ``panel.py`` (
 (``api/v1/instance_block.py``, decision 12); the list of the kept backups (FB-24) is not among them.
 """
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 from fastapi.responses import FileResponse
 
@@ -26,11 +28,15 @@ from backend.app.api.v1.backup import job_views
 from backend.app.api.v1.settings import require_admin
 from backend.app.config import get_data_dir
 from backend.app.db.models import User
+from backend.app.logging_config import get_logger
 from backend.app.schemas.auth import PasswordRuleRead
-from backend.app.schemas.backup import InstanceBackupJob, InstanceBackupList, InstanceBackupOptions, InstanceBackupRequest
+from backend.app.schemas.backup import InstanceBackupJob, InstanceBackupList, InstanceBackupOptions, InstanceBackupRequest, InstanceStorage
 from backend.app.services.accounts.password_policy import password_rules_public
+from backend.app.services.platform import storage_usage
 from backend.app.services.platform.instance_backup import retention
 from backend.app.services.platform.instance_backup.secure import archive_password_problems, archive_password_rules
+
+logger = get_logger(__name__)
 
 instance_router = APIRouter(route_class=NoInputEchoRoute)
 
@@ -62,6 +68,20 @@ def list_instance_backups(_admin: User = Depends(require_admin)) -> InstanceBack
     """The backups this instance keeps, the newest first, each with its origin (the Backup tab, the command line, a hosting
     panel), its type, its size and its SHA-256. A backup in progress, or one that failed, is not listed. Administrators only."""
     return InstanceBackupList(items=[job_views.entry_view(item.job) for item in retention.list_kept(get_data_dir())])
+
+
+@instance_router.get("/instance/storage", response_model=InstanceStorage)
+def get_instance_storage(_admin: User = Depends(require_admin)) -> InstanceStorage:
+    """The space the instance takes: the database, the uploaded files, the broker reports, the backups and the rest of its
+    data directory, in bytes, the volume it lives on and the space limit in force (``limit_mb`` null is none;
+    ``limit_locked``: its hosting provider sets it). A measure that fails answers zeros, never an error. Administrators only."""
+    limit_mb, limit_locked = storage_usage.read_limit()
+    try:
+        usage = storage_usage.measure_storage(get_data_dir(), limit_mb=limit_mb, limit_locked=limit_locked)
+    except Exception as exc:  # noqa: BLE001 — isolation boundary: the space bar never turns a failed measure into an error
+        logger.warning("The space the instance takes could not be measured", exc_info=exc)
+        usage = storage_usage.StorageUsage(0, 0, 0, 0, 0, 0, None, None, None, limit_mb, limit_locked)
+    return InstanceStorage(**asdict(usage))
 
 
 @instance_router.get("/instance/jobs/{job_id}", response_model=InstanceBackupJob, responses={404: job_views.NOT_FOUND})

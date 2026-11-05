@@ -95,5 +95,41 @@
   },
   "files": {
     "deleteFailed": "Échec de la suppression du fichier"
+  },
+  "storage": {
+    "title": "Espace occupé",
+    "parts": {
+      "database": "Base de données",
+      "uploads": "Fichiers téléversés",
+      "brokerReports": "Relevés des courtiers",
+      "backups": "Sauvegardes",
+      "dataOther": "Autres fichiers de LibreFolio",
+      "disk": "Autres sur le disque",
+      "free": "Libre"
+    },
+    "summary": {
+      "limit": "{used} utilisés sur {limit}",
+      "volume": "LibreFolio utilise {used} d'un disque de {total}",
+      "data": "LibreFolio utilise {used}"
+    },
+    "overLimit": "La limite d'espace est dépassée : supprimez des sauvegardes ou des fichiers, ou relevez la limite.",
+    "limit": {
+      "label": "Limite d'espace (Mo)",
+      "hint": "Saisissez 0 pour aucune limite.",
+      "locked": "La limite d'espace est fixée par l'hébergeur de cette instance.",
+      "save": "Enregistrer",
+      "saved": "Enregistré.",
+      "errors": {
+        "invalid": "Saisissez un nombre entier d'au moins 0.",
+        "forbidden": "Seuls les administrateurs peuvent modifier ceci.",
+        "locked": "La limite d'espace est fixée par l'hébergeur de cette instance : vous ne pouvez pas la modifier ici.",
+        "network": "Pas de réponse du serveur. Réessayez.",
+        "unexpected": "La limite n'a pas pu être enregistrée. Réessayez."
+      }
+    },
+    "errors": {
+      "load": "L'espace occupé n'a pas pu être chargé. Réessayez."
+    },
+    "retry": "Réessayer"
   }
 }

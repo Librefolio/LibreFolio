@@ -95,5 +95,41 @@
   },
   "files": {
     "deleteFailed": "Error al eliminar el archivo"
+  },
+  "storage": {
+    "title": "Espacio ocupado",
+    "parts": {
+      "database": "Base de datos",
+      "uploads": "Archivos subidos",
+      "brokerReports": "Informes de brókeres",
+      "backups": "Copias de seguridad",
+      "dataOther": "Otros archivos de LibreFolio",
+      "disk": "Otros en el disco",
+      "free": "Libre"
+    },
+    "summary": {
+      "limit": "{used} usados de {limit}",
+      "volume": "LibreFolio usa {used} de un disco de {total}",
+      "data": "LibreFolio usa {used}"
+    },
+    "overLimit": "Se ha superado el límite de espacio: elimina copias o archivos, o sube el límite.",
+    "limit": {
+      "label": "Límite de espacio (MB)",
+      "hint": "Escribe 0 para no poner límite.",
+      "locked": "El límite de espacio lo fija quien aloja esta instancia.",
+      "save": "Guardar",
+      "saved": "Guardado.",
+      "errors": {
+        "invalid": "Escribe un número entero de 0 o más.",
+        "forbidden": "Solo los administradores pueden cambiarlo.",
+        "locked": "El límite de espacio lo fija quien aloja esta instancia: aquí no se puede cambiar.",
+        "network": "Sin respuesta del servidor. Inténtalo de nuevo.",
+        "unexpected": "No se pudo guardar el límite. Inténtalo de nuevo."
+      }
+    },
+    "errors": {
+      "load": "No se pudo cargar el espacio ocupado. Inténtalo de nuevo."
+    },
+    "retry": "Reintentar"
   }
 }

@@ -2147,6 +2147,22 @@ def services_backup_cleanup_settings(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Backup cleanup settings tests", verbose=verbose)
 
 
+def services_storage_usage(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what the data directory weighs: folder_bytes, measure_storage, read_limit (lot FB-29)."""
+    print_section("Services: the storage usage")
+    print_info("Testing: backend/app/services/platform/storage_usage.py (folder_bytes, measure_storage, read_limit)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_storage_usage.py", test_names)
+    return run_command(cmd, "Storage usage tests", verbose=verbose)
+
+
+def services_storage_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the limit of the storage bar: the variable, the setting and the lock (lot FB-29)."""
+    print_section("Services: the storage limit settings")
+    print_info("Testing: config/backup.py (storage_limit_override_mb), schemas/settings.py (storage_limit_mb), global_settings_service.py, settings_service.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_storage_limit_settings.py", test_names)
+    return run_command(cmd, "Storage limit settings tests", verbose=verbose)
+
+
 def services_scheduler_backup_cleanup(verbose: bool = False, test_names: list = None) -> bool:
     """Test the hourly clean-up of the kept backups in the scheduler's run (lot FB-24)."""
     print_section("Services: Scheduler Backup Cleanup")
@@ -4075,6 +4091,26 @@ Note: No backend server required.
         # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings; the profile through
         # monkeypatch; read_policy reads it through a synchronous engine put in place of the process's. No lane DB, no server,
         # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "storage-usage",
+        services_storage_usage,
+        name="Storage Usage",
+        desc="FB-29 (contract B6r-fb29-interface §3): folder_bytes sums the files of a tree (lstat), a link counts for itself and is never followed (file, folder, dangling, the folder asked being a link), a missing folder 0, an entry that vanishes or a folder that cannot be read 0 while the rest counts; measure_storage: a frozen StorageUsage whose five parts (sqlite/, custom-uploads/, broker_reports/, backups/ whole, the rest) add up to data_bytes, the volume from shutil.disk_usage(data_dir) or three None when it raises, a missing data directory zero, limit_mb and limit_locked handed through; read_limit: LIBREFOLIO_STORAGE_LIMIT_MB set and valid decides without the database ((value, True), 0 is (None, True)), invalid or blank ignored and the row read unlocked, otherwise the row through the synchronous engine, 0, garbage, no row, no table or a failing engine mean (None, False), never raised",
+        # PURE: data directories under tmp_path, shutil.disk_usage replaced; read_limit reads a private SQLite file under tmp_path
+        # through a synchronous engine put in place of the process's. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "storage-limit-settings",
+        services_storage_limit_settings,
+        name="Storage Limit Settings",
+        desc="FB-29 (contract §1, §2): storage_limit_override_mb (unset or blank None, a whole number of ASCII digits an int with 0 included, anything else BackupConfigError STORAGE_LIMIT_MB_INVALID naming the variable and never quoting the value); storage_limit_mb, a global int defaulting to 0, 0..10485760, in the registry as STORAGE_LIMIT_MB and seeded with no author; the variable set and valid is always the value in force (an int, over a row an administrator saved too, 0 included) in effective_stored_value, get_setting_value, get_global_setting and get_all_global_settings; unset, blank or invalid it pins nothing and the row speaks; a save with the variable set is GlobalSettingLockedError naming the key and the variable, nothing written, the other setting of the same save neither; without it the save works",
+        # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings (the fixtures of
+        # test_backup_cleanup_settings.py); the variable and the profile through monkeypatch. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

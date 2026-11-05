@@ -26,6 +26,7 @@
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {auth} from '$lib/stores/app/auth';
     import BackupsSection from '$lib/features/backup/BackupsSection.svelte';
+    import StorageBar from '$lib/features/files/StorageBar.svelte';
     import {notifyBackupListChanged} from '$lib/features/backup/backupList.svelte';
     import {formatBytes, setUploadScope, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
@@ -345,13 +346,12 @@
         error = null;
 
         try {
-            if (activeTab === 'backup') {
-                // The table of kept backups reads its own list; the page's Refresh asks it to read again.
-                notifyBackupListChanged();
-            } else if (activeTab === 'static') {
+            // The table of kept backups and the space bar read their own data; the page's Refresh asks them to read again.
+            notifyBackupListChanged();
+            if (activeTab === 'static') {
                 const data = await zodiosApi.list_files_api_v1_uploads_get();
                 staticFiles = (data.items || []) as UploadedFile[];
-            } else {
+            } else if (activeTab === 'brim') {
                 // Fetch ALL accessible files — broker filter is applied client-side
                 brimFiles = (await zodiosApi.list_files_api_v1_brokers_import_files_get()) as BrimFile[];
             }
@@ -803,6 +803,11 @@
             </button>
         </div>
     </header>
+
+    <!-- The space the instance takes (administrators), whatever the tab -->
+    {#if isAdmin}
+        <StorageBar />
+    {/if}
 
     <!-- Tabs -->
     <div class="mb-6 flex items-center gap-2">

@@ -369,6 +369,14 @@ def api_backup_list(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Backup API list tests", verbose=verbose)
 
 
+def api_backup_storage(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the storage bar's numbers (GET /backup/instance/storage) and the unchanged panel routes and status, in an app of the test."""
+    print_section("Backup API: the storage")
+    print_info("Testing: GET /backup/instance/storage (admins only, the eleven fields, the parts of the planted files, the limit from the row and the variable, a failing measure is never a 500, a plain def outside the blocked-instance lists, OpenAPI InstanceStorage), no new panel route, GET /panel/status unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_storage_api.py", test_names)
+    return run_command(cmd, "Backup API storage tests", verbose=verbose)
+
+
 def api_backup_cleanup_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the two global settings of the backups' cleanup through GET /settings/global and PATCH /settings/global/bulk, on the lane's server."""
     print_section("Backup API: the cleanup settings")
@@ -1367,6 +1375,18 @@ Tests for REST API endpoints (server auto-started):
         # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), a data directory copied from
         # the staging tests' alembic database under tmp_path is the process's own for the test and its backups run for real
         # under that directory's own run lock: no lane data directory, DB, server or network is reached (the api category still
+        # starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-storage",
+        api_backup_storage,
+        name="Backup API Storage",
+        desc="Lot FB-29: GET /backup/instance/storage for administrators only (401, 403), exactly the eleven fields of InstanceStorage, the five parts and their sum reflecting the files planted in a data directory (uploads, broker reports, a kept backup folder, the database, a log) read fresh at each request, limit_mb/limit_locked from the storage_limit_mb row (0 is null, unlocked) or from LIBREFOLIO_STORAGE_LIMIT_MB (wins and locks, an invalid one ignored), a measurement that raises is a 200 of zeros and null volume, the route a plain def and in none of the instance_block allowed lists, OpenAPI InstanceStorage with extra forbidden and no panel token; guards: no new route under /backup/panel, PanelStatusResponse keeps its ten keys and has no storage_* one",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory is a folder
+        # under tmp_path configured as the process's, the limit's row lives in a private SQLite file read through a synchronous
+        # engine put in place of the process's: no lane data directory, DB, server or network is reached (the api category still
         # starts the lane's backend around it).
         isolation="pure",
     )

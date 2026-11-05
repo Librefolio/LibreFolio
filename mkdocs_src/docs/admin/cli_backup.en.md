@@ -10,7 +10,7 @@ The rest of the guide starts on [Command-Line Tools](cli_tools.md).
 
 `backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. With `--encrypt`, it makes a [secure archive](#backup-secure), encrypted with a password you choose, which `backup decrypt` turns back into its zip. With `--sealed` or `--recipient`, it makes a [sealed archive](#backup-sealed), whose password only a private key of yours opens, for backups that run on their own. `backup inspect` checks an archive and shows what it holds, `backup restore --dry-run` tries a restore of it on a copy, leaving the instance as it is, and `backup restore` restores it at the next start of the server. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
 
-### 📦 Create an Archive {: #backup-create }
+### 📦 Create an Archive
 
 ```bash
 # Keep an archive in its own folder of <data dir>/backups/, and print its SHA-256

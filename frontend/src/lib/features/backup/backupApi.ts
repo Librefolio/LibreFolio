@@ -101,6 +101,49 @@ export function cleanupSaveCode(error: unknown): 'invalid' | 'forbidden' | 'netw
     return error.response.status === 403 ? 'forbidden' : 'unexpected';
 }
 
+// =============================================================================
+// The space the instance takes (lot FB-29)
+// =============================================================================
+
+/**
+ * The space the instance takes, in bytes: the five parts of its data directory (they sum to `data_bytes`), the volume it
+ * lives on (null when it cannot be asked) and the limit in force (`limit_mb` null: none; `limit_locked`: its hosting
+ * provider sets it). Written by hand: the client's explicit type widens every nullable field.
+ */
+export interface InstanceStorage {
+    database_bytes: number;
+    uploads_bytes: number;
+    broker_reports_bytes: number;
+    backups_bytes: number;
+    other_bytes: number;
+    data_bytes: number;
+    volume_total_bytes: number | null;
+    volume_used_bytes: number | null;
+    volume_free_bytes: number | null;
+    limit_mb: number | null;
+    limit_locked: boolean;
+}
+
+/** The space the instance takes (`GET /backup/instance/storage`, administrators only). */
+export function getInstanceStorage(): Promise<InstanceStorage> {
+    return zodiosApi.get_instance_storage_api_v1_backup_instance_storage_get() as Promise<InstanceStorage>;
+}
+
+/** Save the space limit, in megabytes (0: no limit): the global setting `storage_limit_mb`. A refusal goes through as it came. */
+export async function saveStorageLimit(limitMb: number): Promise<void> {
+    await zodiosApi.bulk_update_global_settings_api_v1_settings_global_bulk_patch({items: [{key: 'storage_limit_mb', value: String(limitMb)}]});
+}
+
+/** Why a save of the space limit failed: as `cleanupSaveCode`, and a 409 `SETTING_LOCKED_BY_ENV` (its hosting provider sets it) is `locked`. */
+export function storageLimitSaveCode(error: unknown): 'invalid' | 'forbidden' | 'locked' | 'network' | 'unexpected' {
+    if (isAxiosError(error) && error.response?.status === 409) {
+        const detail: unknown = error.response.data?.detail;
+        const code = detail !== null && typeof detail === 'object' ? (detail as {error_code?: unknown}).error_code : undefined;
+        return code === 'SETTING_LOCKED_BY_ENV' ? 'locked' : 'unexpected';
+    }
+    return cleanupSaveCode(error);
+}
+
 /** Where the archive of a finished job downloads from: same origin, so the session cookie goes with the link. */
 export function instanceBackupFileUrl(jobId: string): string {
     return `/api/v1/backup/instance/jobs/${encodeURIComponent(jobId)}/file`;

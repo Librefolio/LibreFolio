@@ -1,0 +1,214 @@
+<!--
+  The space bar of the Files page (lot FB-29), for administrators: how much room the instance takes.
+
+  With a limit, the space used against it; without one, LibreFolio's parts (database, uploaded files, broker reports,
+  backups, the rest) against the disk, the other files of the disk in grey and the free space empty; with neither, the
+  parts against LibreFolio's own folder. The limit is a setting of the administrator, unless the hosting provider sets
+  it, which locks the field.
+
+  Self-contained: reads when it mounts and again whenever the backup list changes (`backupListSignal`, which the Files
+  page also nudges on its Refresh), so the bar follows the backups that come and go.
+
+  Published state: `data-state` (`loading`, `ready`, `error`), `data-mode` (`limit`, `volume`, `data`), `data-busy`.
+  Event: `storage.limit.saved`.
+-->
+<script lang="ts">
+    import {untrack} from 'svelte';
+    import {CircleCheck, HardDrive, LoaderCircle, Lock, RefreshCw, TriangleAlert} from 'lucide-svelte';
+    import {backupFailureCode, getInstanceStorage, saveStorageLimit, storageLimitSaveCode, type InstanceStorage} from '$lib/features/backup/backupApi';
+    import {backupListSignal} from '$lib/features/backup/backupList.svelte';
+    import {_} from '$lib/i18n';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {formatBytes} from '$lib/utils/files/upload';
+    import {storageBarModel, type StorageSegmentId} from './storageBar';
+
+    // The fill of each part: a role of the design system, never a colour written by hand.
+    const FILL: Record<StorageSegmentId | 'free', string> = {
+        database: 'bg-lf-brand',
+        uploads: 'bg-lf-info',
+        brokerReports: 'bg-lf-success',
+        backups: 'bg-lf-warning',
+        dataOther: 'bg-lf-checked',
+        disk: 'bg-lf-neutral',
+        free: 'bg-transparent',
+    };
+
+    let usage = $state<InstanceStorage | null>(null);
+    let failed = $state(false);
+    let errorCode = $state('');
+    let reading = $state(0);
+    // Only the answer of the latest read counts.
+    let latestRead = 0;
+
+    const model = $derived(usage === null ? null : storageBarModel(usage));
+    const barState = $derived(failed ? 'error' : usage === null ? 'loading' : 'ready');
+
+    async function load() {
+        const read = ++latestRead;
+        reading += 1;
+        try {
+            const answer = await getInstanceStorage();
+            if (read !== latestRead) return;
+            usage = answer;
+            failed = false;
+            errorCode = '';
+            limitText = String(answer.limit_mb ?? 0);
+        } catch (error) {
+            if (read !== latestRead) return;
+            failed = true;
+            errorCode = backupFailureCode(error);
+        } finally {
+            reading -= 1;
+        }
+    }
+
+    // The first read, and one more at every change of the signal.
+    $effect(() => {
+        void backupListSignal.version;
+        untrack(() => void load());
+    });
+
+    // --- The limit ---------------------------------------------------------------------------------------------------
+    type LimitState = 'idle' | 'saving' | 'saved' | 'error';
+    let limitText = $state('0');
+    let limitState = $state<LimitState>('idle');
+    let limitErrorCode = $state('');
+
+    const typedLimit = $derived(/^\d+$/.test(limitText.trim()) ? Number.parseInt(limitText.trim(), 10) : null);
+    const limitInForce = $derived(usage?.limit_mb ?? 0);
+    const locked = $derived(usage?.limit_locked === true);
+    const canSave = $derived(usage !== null && !locked && limitState !== 'saving' && typedLimit !== null && typedLimit !== limitInForce);
+
+    function limitEdited() {
+        if (limitState === 'saved') limitState = 'idle';
+    }
+
+    async function saveLimit() {
+        if (!canSave || typedLimit === null) return;
+        const limitMb = typedLimit;
+        limitState = 'saving';
+        limitErrorCode = '';
+        try {
+            await saveStorageLimit(limitMb);
+        } catch (error) {
+            limitErrorCode = storageLimitSaveCode(error);
+            limitState = 'error';
+            return;
+        }
+        limitState = 'saved';
+        notify({name: 'storage.limit.saved', detail: {limit_mb: limitMb}});
+        await load();
+    }
+
+    function size(bytes: number): string {
+        return formatBytes(bytes, $_);
+    }
+
+    const summary = $derived.by(() => {
+        if (model === null || usage === null) return '';
+        if (model.mode === 'limit') return $_('storage.summary.limit', {values: {used: size(model.usedBytes), limit: size(model.totalBytes)}});
+        if (model.mode === 'volume') return $_('storage.summary.volume', {values: {used: size(usage.data_bytes), total: size(model.totalBytes)}});
+        return $_('storage.summary.data', {values: {used: size(usage.data_bytes)}});
+    });
+
+    const fieldClass = 'w-32 rounded-lg border border-lf-input bg-lf-field px-3 py-1.5 text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50';
+</script>
+
+<section class="mb-4 space-y-3 rounded-xl border border-lf-subtle bg-lf-panel p-4 text-lf-primary" data-testid="storage-bar" data-state={barState} data-mode={model?.mode ?? ''} data-busy={reading > 0 ? 'true' : 'false'} aria-busy={reading > 0}>
+    <header class="flex items-center gap-2">
+        <HardDrive class="shrink-0 text-lf-secondary" size={18} aria-hidden="true" />
+        <h2 class="text-sm font-semibold text-lf-primary">{$_('storage.title')}</h2>
+        {#if reading > 0}
+            <LoaderCircle class="animate-spin text-lf-muted" size={14} aria-hidden="true" />
+        {/if}
+    </header>
+
+    {#if barState === 'error'}
+        <div class="flex flex-wrap items-center gap-3 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="storage-error" data-error-code={errorCode}>
+            <TriangleAlert class="shrink-0" size={16} aria-hidden="true" />
+            <span class="min-w-0 flex-1">{$_('storage.errors.load')}</span>
+            <button
+                class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                type="button"
+                data-testid="storage-retry"
+                onclick={() => void load()}
+            >
+                <RefreshCw size={14} aria-hidden="true" />
+                {$_('storage.retry')}
+            </button>
+        </div>
+    {:else if model !== null && usage !== null}
+        <div class="flex h-3 w-full overflow-hidden rounded-full border border-lf-subtle bg-lf-field" data-testid="storage-bar-track" role="img" aria-label={summary}>
+            {#each model.segments as segment (segment.id)}
+                <div class="h-full {FILL[segment.id]}" data-testid="storage-segment-{segment.id}" data-bytes={segment.bytes} style:width="{segment.percent}%"></div>
+            {/each}
+            {#if model.mode !== 'data'}
+                <div class="h-full {FILL.free}" data-testid="storage-segment-free" data-bytes={model.freeBytes} style:width="{model.freePercent}%"></div>
+            {/if}
+        </div>
+
+        <p class="text-sm text-lf-secondary" data-testid="storage-summary">{summary}</p>
+
+        <ul class="grid gap-x-6 gap-y-1 text-xs text-lf-secondary sm:grid-cols-2 lg:grid-cols-3">
+            {#each model.segments as segment (segment.id)}
+                <li class="flex items-center gap-2" data-testid="storage-legend-{segment.id}">
+                    <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-lf-subtle {FILL[segment.id]}" aria-hidden="true"></span>
+                    <span class="min-w-0 flex-1">{$_(`storage.parts.${segment.id}`)}</span>
+                    <span class="tabular-nums text-lf-primary">{size(segment.bytes)}</span>
+                </li>
+            {/each}
+            {#if model.mode !== 'data'}
+                <li class="flex items-center gap-2" data-testid="storage-legend-free">
+                    <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-lf-subtle" aria-hidden="true"></span>
+                    <span class="min-w-0 flex-1">{$_('storage.parts.free')}</span>
+                    <span class="tabular-nums text-lf-primary">{size(model.freeBytes)}</span>
+                </li>
+            {/if}
+        </ul>
+
+        {#if model.overLimit}
+            <p class="flex items-start gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="storage-over-limit">
+                <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
+                <span>{$_('storage.overLimit')}</span>
+            </p>
+        {/if}
+
+        <div class="flex flex-wrap items-end gap-3 border-t border-lf-subtle pt-3">
+            <div class="space-y-1">
+                <label class="block text-sm font-medium text-lf-secondary" for="storage-limit-mb">{$_('storage.limit.label')}</label>
+                <input class={fieldClass} id="storage-limit-mb" data-testid="storage-limit-mb" type="number" inputmode="numeric" min="0" step="1" value={limitText} disabled={locked} oninput={(event) => ((limitText = event.currentTarget.value), limitEdited())} />
+            </div>
+            <button
+                class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                data-testid="storage-limit-save"
+                disabled={!canSave}
+                onclick={() => void saveLimit()}
+            >
+                {#if limitState === 'saving'}
+                    <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
+                {/if}
+                {$_('storage.limit.save')}
+            </button>
+            {#if limitState === 'saved'}
+                <span class="inline-flex items-center gap-1.5 text-sm text-lf-success">
+                    <CircleCheck size={16} aria-hidden="true" />
+                    {$_('storage.limit.saved')}
+                </span>
+            {/if}
+        </div>
+        <p class="text-xs text-lf-muted">{$_('storage.limit.hint')}</p>
+        {#if locked}
+            <p class="flex items-center gap-2 text-xs text-lf-secondary" data-testid="storage-limit-locked">
+                <Lock size={14} aria-hidden="true" />
+                {$_('storage.limit.locked')}
+            </p>
+        {/if}
+        {#if limitState === 'error'}
+            <p class="flex items-center gap-2 text-sm text-lf-danger-on-soft" role="alert" data-testid="storage-limit-error" data-error-code={limitErrorCode}>
+                <TriangleAlert class="shrink-0" size={16} aria-hidden="true" />
+                {$_(`storage.limit.errors.${limitErrorCode}`)}
+            </p>
+        {/if}
+    {/if}
+</section>
