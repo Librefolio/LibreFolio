@@ -349,6 +349,10 @@ test.describe('Files › Backups — the clean-up settings', () => {
         try {
             const cleanup = panel.getByTestId('backup-cleanup');
             await expect(cleanup).toHaveAttribute('data-state', 'idle', {timeout: PAGE_MS});
+            // The clean-up is a panel that starts closed (K-3).
+            await expect(cleanup.getByTestId('backup-cleanup-fold')).toHaveAttribute('data-open', 'false');
+            await cleanup.getByTestId('backup-cleanup-fold-toggle').click();
+            await expect(cleanup.getByTestId('backup-cleanup-fold')).toHaveAttribute('data-open', 'true');
             await expect(inputOf(cleanup, 'backup-cleanup-max-mb')).toHaveValue(original.maxMb);
             await expect(inputOf(cleanup, 'backup-cleanup-max-days')).toHaveValue(original.maxDays);
             await expect(cleanup.getByTestId('backup-cleanup-latest-kept')).toBeVisible();

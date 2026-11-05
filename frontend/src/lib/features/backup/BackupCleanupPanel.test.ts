@@ -410,3 +410,19 @@ describe('BackupCleanupPanel — a refused save', () => {
         expect(events('backup.cleanup.saved')).toHaveLength(1);
     });
 });
+
+// =====================================================================================================================
+// K-3 (developer, 05/11) — the clean-up is a panel that starts closed
+// =====================================================================================================================
+describe('BackupCleanupPanel — a panel that starts closed (K-3)', () => {
+    it('is a closed fold named by the panel title, holding both fields and the save button; the state stays on the root', async () => {
+        await mountIdle();
+
+        const fold = screen.getByTestId('backup-cleanup-fold') as HTMLDetailsElement;
+        expect(fold.open).toBe(false);
+        expect(fold).toHaveAttribute('data-open', 'false');
+        expect(screen.getByTestId('backup-cleanup-fold-toggle')).toHaveTextContent('backup.cleanup.title');
+        expect(panel()).toContainElement(fold);
+        for (const element of [field('backup-cleanup-max-mb'), field('backup-cleanup-max-days'), saveButton()]) expect(fold).toContainElement(element);
+    });
+});
