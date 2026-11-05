@@ -131,6 +131,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/chartSignalsHelpers.test.ts",
             "src/lib/components/charts/lineChartHelpers.sessionGaps.test.ts",
             "src/lib/components/charts/scatterChartHelpers.test.ts",
+            "src/lib/components/charts/returnHistogramChartHelpers.test.ts",
             "src/lib/features/risk/horizonExpression.test.ts",
             "src/lib/features/risk/SimulationHorizonField.test.ts",
             "src/lib/features/risk/riskAnalysisHelpers.test.ts",
