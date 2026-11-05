@@ -37,6 +37,14 @@ Luego añade los periodos con **Añadir Primer Período**, y **Añadir Período*
 Los periodos deben sucederse, sin huecos ni solapamientos. **Dividir** corta un periodo en dos; selecciona
 periodos vecinos y haz clic en **Fusionar** para unirlos.
 
+!!! note "Límites de un calendario"
+
+    Cada periodo debe estar comprendido entre el 1 de enero de 1900 y el 31 de diciembre de 2200, y todo el
+    calendario puede abarcar como máximo 100 años, con un máximo de 1.200 periodos. Los días de gracia del
+    [interés de demora](#late-interest) son también como máximo 100 años (36.525 días). Un calendario fuera
+    de estos límites se rechaza: **Probar Configuración** y el cálculo del precio (**Recalcular** en la
+    página del activo) informan de parámetros no válidos.
+
 ### ⚡ Interés de demora {: #late-interest }
 
 Para un préstamo reembolsado con retraso, activa **⚡ Interés de demora** debajo de los periodos: el activo sigue creciendo
@@ -56,6 +64,7 @@ Cada evento cuenta desde su fecha en adelante.
 |---|---|
 | **Interés** | Un pago de intereses que recibiste: el valor disminuye en esa cantidad |
 | **Ajuste de precio** | Una reducción (negativa) o un aumento (positivo) |
+| **Liquidación al Vencimiento** | El activo llega al vencimiento y devuelve su capital; su valor deja de cambiar. **Generar cupón** añade uno en la última fecha de vencimiento |
 
 ## 🧮 Cómo se calcula el valor {: #how-value-is-calculated }
 

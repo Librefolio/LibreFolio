@@ -39,6 +39,14 @@ pour les suivantes :
 Les périodes doivent se suivre, sans lacunes ni chevauchements. **Diviser** coupe une période en
 deux ; sélectionnez des périodes voisines et cliquez sur **Fusionner** pour les réunir.
 
+!!! note "Limites d'un calendrier"
+
+    Chaque période doit se situer entre le 1er janvier 1900 et le 31 décembre 2200, et l'ensemble du
+    calendrier peut s'étendre sur 100 ans au maximum, avec au plus 1 200 périodes. Les jours de grâce des
+    [intérêts de retard](#late-interest) sont eux aussi limités à 100 ans (36 525 jours). Un calendrier
+    en dehors de ces limites est refusé : **Tester la Configuration** et le calcul du prix (**Recalculer**
+    sur la page de l'actif) signalent des paramètres invalides.
+
 ### ⚡ Intérêts de retard {: #late-interest }
 
 Pour un prêt remboursé en retard, activez **⚡ Intérêts de retard** sous les périodes : l'actif
@@ -59,6 +67,7 @@ Ajoutez des événements ponctuels avec **Ajouter un événement** : une **Date*
 |---|---|
 | **Intérêt** | Un versement d'intérêts que vous avez reçu : la valeur diminue de ce montant |
 | **Ajustement de prix** | Une dépréciation (négative) ou une revalorisation (positive) |
+| **Règlement à Échéance** | L'actif arrive à échéance et rembourse son capital ; sa valeur cesse de changer. **Générer Coupon** en ajoute un à la dernière date d'échéance |
 
 ## 🧮 Comment la valeur est calculée {: #how-value-is-calculated }
 
