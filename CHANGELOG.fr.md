@@ -46,6 +46,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Risque : la matrice de corrélation peut être ordonnée par type, secteur et zone**, et les barres de l'histogramme des rendements affichent l'infobulle de l'application.
 - **Les tableaux de risque affichent cinq lignes par page** (5, 10, 25 ou tout), dans le laboratoire de risques et dans les niveaux de risque ; un clic sur un point du graphique risque/rendement ouvre la page de sa ligne sans déplacer la vue.
 - **Risque : l'avis de résultats partiels compte les actifs exclus** et affiche chacun sous forme de badge ; les barres de l'histogramme des rendements indiquent leurs jours et leur part.
+- **L'horizon de la simulation accepte années, mois et jours**, comme `2a3m5j` ou `24m66j`, en plus d'un simple nombre de jours : une année vaut 365 jours et un mois 30, et le total s'affiche sous le champ.
+- **Les cartes de pertes disent de quelle perte il s'agit** : la pire baisse indique de quel sommet à quel creux, et le mauvais mois indique la pire période d'un mois réellement vécue, avec son premier et son dernier jour.
 
 #### 🔌 Sources de prix et de taux de change
 
@@ -244,6 +246,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - API : les résultats de repli de l’analyse des risques (`drawdown_summary`, `asset_set_drawdown`) contiennent le gain nécessaire pour remonter de la pire baisse jusqu’au sommet qui la précède, `maximum_drawdown_trough_to_peak_ratio` (une baisse de 50 % nécessite +100 %) ; `remaining_to_peak_ratio` vaut null en cas de perte totale, avec un avertissement qui en explique la raison, là où l’analyse échouait auparavant.
 - **Risque : ajoutez une paire de taux de change manquante sans quitter l’analyse des risques.** Dans l’onglet Risque du tableau de bord, d’un courtier et d’un actif, ainsi que dans le laboratoire de risque de la page des actifs, le bouton d’une paire sans route de taux de change ouvre la fenêtre **Ajouter une nouvelle paire de devises** déjà remplie avec cette paire (EUR/USD, par exemple), au lieu de vous emmener sur la page FX. Une fois la paire enregistrée, et de nouveau lorsque ses taux sont téléchargés, l’analyse s’actualise d’elle-même.
+- **L'histogramme des rendements quotidiens est un vrai graphique** : son axe affiche les seuils de rendement, une ligne en pointillés marque le seuil VaR, et pointer une barre indique combien de jours y tombent et où se situe cette tranche par rapport au seuil.
 
 #### 🤖 Export IA
 
@@ -569,6 +572,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - L'analyse des risques n'échoue plus à s'ouvrir lorsqu'un code de devise enregistré avant la 1.3 n'est pas un code ISO à trois lettres : le montant est affiché suivi du code tel qu'enregistré.
 - **Risque : les dates de rejeu historique suivent la langue de l'application**, et un groupe géographique défini par l'hôte affiche son nom dans le tableau des chocs au lieu de son identifiant.
 - Risque : optimiser plus de 100 actifs signale une limite de taille au lieu d'une erreur de paramètre invalide.
+- **« Suis-je aussi diversifié que je le crois ? » sur écran étroit** : les lignes ne sortent plus de l'écran. Le nom d'abord, puis la barre, puis le poids et la contribution au risque, et un nom long défile.
 
 #### 🤖 Export IA
 
