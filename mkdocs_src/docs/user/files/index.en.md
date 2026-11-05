@@ -128,7 +128,7 @@ Only administrators see what follows; other users find neither on the page.
 
 ### 📊 The space used {: #space-used }
 
-Above the tabs, a bar shows how much room the instance takes, split into the **database**, the **uploaded files**, the **broker reports**, the **backups** and the **other LibreFolio files**. With no limit set it is drawn against the disk, with the other files of the disk in grey; with a limit, against that limit. In the same bar you set the **Space limit (MB)**, `0` for no limit. When the limit is passed, the bar warns you, and nothing is deleted. The bar reads again with **Refresh**. How to read it, and what sets the limit: [The Space Bar](../../admin/backup_restore.md#space-used).
+Above the tabs, a bar shows how much room the instance takes, split into the **database**, the **uploaded files**, the **broker reports**, the **backups** and the **other LibreFolio files**. With no limit set it is drawn against the disk, with the other files of the disk in grey; with a limit, against that limit. Under the bar, in the closed **Advanced** panel, you set **LibreFolio total space (MB)**, `0` for no limit. When the limit is passed, the bar only warns you: nothing is blocked and nothing is deleted. The bar reads again with **Refresh**. How to read it, and what sets the limit: [The Space Bar](../../admin/backup_restore.md#space-used).
 
 ### 🗃️ The Backups tab {: #backups-tab }
 
