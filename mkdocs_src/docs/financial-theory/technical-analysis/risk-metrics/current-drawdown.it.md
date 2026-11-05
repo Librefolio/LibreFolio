@@ -53,11 +53,13 @@ $$
 \text{Guadagno richiesto} = \frac{1}{1 + DD} - 1 = \frac{-DD}{1 + DD}
 $$
 
-Le due forme sono la stessa espressione — la seconda è la prima con la frazione combinata — e il [Drawdown massimo](max-drawdown.md) spiega l'asimmetria che questo crea, con i valori calcolati.
+Le due forme sono la stessa espressione — la seconda è la prima con la frazione combinata — e il [Drawdown massimo](max-drawdown.md) spiega l'asimmetria che questo crea, con i valori calcolati. La seconda forma è quella valutata: su un piccolo drawdown mantiene preciso il guadagno, mentre la prima perde cifre sottraendo $1$ da un numero molto vicino a $1$. La cifra mancante al picco e il [guadagno da minimo a picco](max-drawdown.md#recovery-time) del drawdown massimo sono calcolati da un'unica funzione condivisa, quindi non possono mai seguire formule diverse.
+
+Una perdita totale non ha un guadagno di recupero finito: a $DD = -100\%$ il denominatore $1 + DD$ è zero. La cifra mancante al picco resta allora senza un numero invece di averne uno infinito, e il risultato porta un avviso che ne spiega il motivo.
 
 !!! warning "La stessa formula, applicata a una domanda diversa"
 
-    Quell'asimmetria è una lezione generale, ed è insegnata nella pagina del drawdown massimo. La grandezza calcolata qui la applica invece al drawdown **attuale**, e la differenza non è cosmetica:
+    Quell'asimmetria è una lezione generale, ed è insegnata nella pagina del drawdown massimo. La grandezza calcolata qui la applica invece al drawdown **attuale**, mentre il guadagno da minimo a picco la applica al drawdown **massimo**, e la differenza non è cosmetica:
 
     - applicata al **massimo**, è un'affermazione storica — *quanto sarebbe servito per recuperare, nel punto peggiore mai raggiunto*;
     - applicata al drawdown **attuale**, è un'affermazione presente — *quanto serve per recuperare da dove si trova oggi il portafoglio*.
