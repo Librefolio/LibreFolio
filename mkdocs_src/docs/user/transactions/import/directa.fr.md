@@ -23,5 +23,6 @@ Enregistrez le fichier et importez-le dans LibreFolio. Si vous choisissez le CSV
 - Prise en charge des transactions d'actions, d'obligations et d'ETF, des dividendes, des impôts (*ritenute fiscali*) et des frais de transaction.
 - Les formats **CSV** et **XLSX** (Excel) sont pris en charge — pas ods.
 - Les opérations de compte sont libellées en EUR.
+- Les lignes que LibreFolio ne peut pas lire (trop peu de colonnes, une date qu'il ne comprend pas, un type d'opération manquant ou inconnu) ne sont pas importées : elles sont listées dans un avertissement ambre lors de l'import, avec un lien pour ouvrir une issue sur GitHub.
 - L'exportation couvre jusqu'à 3 000 lignes par fichier. Pour des historiques plus longs, exportez plusieurs périodes et importez-les successivement.
 
