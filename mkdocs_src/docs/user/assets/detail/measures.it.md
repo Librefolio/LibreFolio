@@ -10,11 +10,13 @@ Lo strumento Misure risponde alla domanda: *quanto è cambiato tra questi due gi
 
 ## 🛠️ Effettua una misura
 
-1. Clicca **📏 Aggiungi misura** in alto a destra del grafico: il pannello **Misure** si apre sotto di esso.
-2. Clicca il punto **iniziale** sul grafico, poi il punto **finale**.
+1. Clicca **📏 Aggiungi misura** in alto a destra del grafico: il pannello **Misure** si apre sotto di esso, e sopra il grafico il puntatore diventa un mirino.
+2. Clicca il punto **iniziale** sul grafico: una linea tratteggiata segue il puntatore da lì. Poi clicca il punto **finale**, in un altro giorno.
 3. La nuova misura si apre con la sua tabella, e il grafico la disegna con il suo colore.
 
-Il pulsante **+ Aggiungi misura** nell'intestazione del pannello, invece, misura l'intero grafico, dal primo all'ultimo punto: comodo sul telefono. L'intestazione di ogni misura contiene il suo colore e 🗑️ per rimuoverla; espandi la misura per modificarne le date.
+Una misura richiede due giorni diversi. Tornando sul giorno del punto iniziale, la linea tratteggiata scompare e il puntatore mostra il segnale di *non consentito* (🚫): un secondo clic lì non fa nulla, e il punto iniziale resta scelto.
+
+Il pulsante **+ Aggiungi misura** nell'intestazione del pannello, invece, misura l'intero grafico, dal primo all'ultimo punto: comodo sul telefono. L'intestazione di ogni misura contiene il suo colore e 🗑️ per rimuoverla; espandi la misura per modificarne le date, sempre due giorni diversi.
 
 Le misure non vengono salvate: ricaricare la pagina svuota il pannello. **Prezzi** e **Rendimento mobile** mantengono misure separate.
 
