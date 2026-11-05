@@ -131,7 +131,12 @@ import {
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
-import {expectGallerySecurityServed, gallerySecurityReads, serveGallerySecurityChecks} from './fixtures/gallerySecurity';
+import {openAiExportPanel, selectAiExportSelection} from './ai-export/helpers';
+import {serveGalleryBackupList, serveGalleryStorage} from './fixtures/galleryFilesBackups';
+import {GALLERY_PREMIUM_QUERY, serveGalleryPremiumSearch} from './fixtures/galleryAssetSearch';
+import {serveGalleryWhatsNew} from './fixtures/galleryWhatsNew';
+import {backToRestoreCard, rollBackRestoreOverlay, serveGalleryRestore} from './fixtures/galleryRestore';
+import {expectGallerySecurityServed, GALLERY_SECURITY_ATTENTION_COUNT, GALLERY_SECURITY_FINDING_IDS, gallerySecurityReads, serveGallerySecurityChecks, serveGallerySecurityFindings} from './fixtures/gallerySecurity';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
@@ -415,6 +420,25 @@ async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Lang
     ensureDir(dir);
     await captureShot(page, path.join(dir, `${name}.png`), shot);
     console.log(`  📸 ${shot}.png`);
+}
+
+/**
+ * Bring the app header to the state a scroll down leaves it in (hidden), whatever scroll the frame came from (G-11: es mobile,
+ * `assets/detail-measures`, 1 run in 16 drew the header). The header reads the scroll once per animation frame and compares it
+ * with the previous frame's: a frame taken from the top jumps in one step, and whether that step counts as a scroll down
+ * depended on the frames it fell in. Here the page, standing still at the frame, goes up 24 px — the header must show — and
+ * back down 24 px — the header must hide —, each step read from the header's own state (`data-scroll-state`), and ends where it
+ * was. A page at the top of its range (scroll within the header's height) keeps its header visible by design: nothing to do.
+ */
+async function headerAsScrolledDown(page: Page, shot: string): Promise<void> {
+    const header = page.getByTestId('app-header');
+    const frame = await page.evaluate(() => ({y: window.scrollY, header: document.querySelector('[data-testid="app-header"]')?.getBoundingClientRect().height ?? 0}));
+    if (frame.y <= frame.header + 24) return;
+    await page.evaluate((y) => window.scrollTo({top: y - 24, behavior: 'instant'}), frame.y);
+    await expect(header, `${shot}: scrolled up, the header shows`).toHaveAttribute('data-scroll-state', 'visible');
+    await page.evaluate((y) => window.scrollTo({top: y, behavior: 'instant'}), frame.y);
+    await expect(header, `${shot}: scrolled down again, the header hides`).toHaveAttribute('data-scroll-state', 'hidden');
+    expect(await page.evaluate(() => window.scrollY), `${shot}: the frame is where it was`).toBe(frame.y);
 }
 
 // Helper to run for all languages and themes
@@ -753,12 +777,13 @@ test.describe('Gallery Screenshots', () => {
                     await expect(form.getByTestId('welcome-skip')).toBeEnabled();
                     await expect(form.getByTestId('welcome-continue')).toBeEnabled();
                     await expect(form.getByTestId('welcome-error')).toHaveCount(0);
-                    await frameWelcome(page);
+                    await frameWelcome(page, `${viewport}/${lang}/${theme}/onboarding/welcome-setup`);
                     await parkPointer(page);
                     await freezeAnimations(page);
                     await waitForMotionSettled(welcome, 'the Welcome page');
                     await expectNoToast(page);
                     await screenshot(page, viewport, lang, theme, 'onboarding', 'welcome-setup');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -1234,6 +1259,46 @@ test.describe('Gallery Screenshots', () => {
         }
     }
 
+    /**
+     * The Yield on Cost column of the holdings table (`positions-yoc`): the panel framed as the other positions shots are, the
+     * table narrowed with its own column selector (the eye) to the asset and YoC (and the value, on the desktop) — the table is wider than the panel, and
+     * scrolled to the column it would leave the rows without their asset — and read back: the three headers on the screen. The
+     * choice is the table's own, kept in the page's storage; the test's page goes with it.
+     */
+    async function screenshotPositionsYoc(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string) {
+        const shot = `${viewport}/${lang}/${theme}/${category}/positions-yoc`;
+        // A phone's panel holds the asset and YoC columns; the desktop's a third, the value.
+        const keep = viewport === 'mobile' ? ['asset', 'yield-on-cost'] : ['asset', 'yield-on-cost', 'value'];
+        await expect(page.getByTestId('positions-panel')).toBeVisible({timeout: 5_000});
+        await setPositionsView(page, 'holdings', 'table');
+        const toggle = page.getByTestId('positions-panel').getByTestId('column-visibility-toggle');
+        await expect(toggle, `${shot}: the table's column selector`).toBeVisible();
+        await toggle.click();
+        const dropdown = page.getByTestId('column-visibility-dropdown');
+        await expect(dropdown).toBeVisible();
+        const ids = await dropdown.locator('[data-testid^="column-visibility-item-"]').evaluateAll((items) => items.map((item) => (item.getAttribute('data-testid') ?? '').replace('column-visibility-item-', '')));
+        expect(ids, `${shot}: the selector offers the Yield on Cost column`).toContain('yield-on-cost');
+        for (const id of ids.filter((column) => !keep.includes(column))) {
+            // A column hidden by default has no header: ask for the state, click only when it is shown.
+            if ((await page.getByTestId(`dt-header-${id}`).count()) === 0) continue;
+            await dropdown.getByTestId(`column-visibility-item-${id}`).click();
+            await expect(page.getByTestId(`dt-header-${id}`), `${shot}: ${id} is hidden`).toHaveCount(0);
+        }
+        // Closed by its backdrop (a layer over the page, which a second click on the toggle would meet).
+        await page.mouse.click(2, 2);
+        await expect(dropdown, `${shot}: the selector is closed`).toBeHidden();
+        await frameTarget(page, page.getByTestId('positions-panel'), shot);
+        // A phone's table is still wider than its panel: scrolled sideways, by the least that brings the YoC header whole into view.
+        await page.getByTestId('dt-header-yield-on-cost').evaluate((element) => {
+            const scroller = element.closest('[data-testid="dt-scroll"]');
+            if (!scroller) return;
+            const over = element.getBoundingClientRect().right - scroller.getBoundingClientRect().right;
+            if (over > 0) scroller.scrollLeft += over + 8;
+        });
+        for (const id of viewport === 'mobile' ? ['yield-on-cost'] : keep) await expect(page.getByTestId(`dt-header-${id}`), `${shot}: ${id} is on the screen`).toBeInViewport({ratio: 1});
+        await screenshot(page, viewport, lang, theme, category, 'positions-yoc');
+    }
+
     const LOTS_SCREENSHOT_VARIANTS = [
         {testId: 'lot-wac-price-chart', name: 'fifo-lots-wac-chart'},
         {testId: 'lot-gantt-chart', name: 'fifo-lots-gantt-chart'},
@@ -1592,6 +1657,75 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('dashboard positions YoC column - all languages and themes', async ({page}, testInfo) => {
+            test.setTimeout(420_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                await page.getByTestId('dashboard-tab-posizioni').click();
+                await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
+                await screenshotPositionsYoc(page, viewport, lang, theme, 'dashboard');
+            });
+        });
+
+        test('dashboard AI export dialog with a dataset - all languages and themes', async ({page}, testInfo) => {
+            // The AI Export panel of the Dashboard with a dataset chosen: the category, the selection, the detail level, the period
+            // and the notes. Nothing is exported: the panel is opened, filled and closed, no snapshot is asked.
+            test.setTimeout(420_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                const panel = await openAiExportPanel(page);
+                await selectAiExportSelection(page, 'dataset', 'portfolio.overview_and_history');
+                await expect(page.getByTestId('ai-export-category-dataset')).toHaveAttribute('aria-pressed', 'true');
+                await expect(panel.options).toBeVisible();
+                await waitForMotionSettled(panel.menu, 'the AI Export panel');
+                await screenshot(page, viewport, lang, theme, 'ai-export', 'dialog-dataset');
+                await page.keyboard.press('Escape');
+                await expect(panel.menu).toBeHidden();
+            });
+        });
+
+        test('dashboard positions FX on cash - all languages and themes', async ({page}, testInfo) => {
+            // M-12: the exchange result on foreign cash, a row of the Performance view's secondary table (`other_effects`, code
+            // `fx_on_cash`). The captured snapshot holds none, so this one row is made up and added to the date-shifted COPY the
+            // page is served (setupDashboardMockReport's `adjust`, never the file): the report's own schema, an invented amount.
+            test.setTimeout(420_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page, (report) => {
+                const contribution = (report as unknown as {positions_contribution: {other_effects: Array<Record<string, unknown>>}}).positions_contribution;
+                contribution.other_effects.push({description: 'FX on cash', code: 'fx_on_cash', category: 'Other', period_pnl: '-84.20', broker_id: 1, broker_name: 'directa'});
+            });
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                await page.getByTestId('dashboard-tab-posizioni').click();
+                await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
+                await setPositionsView(page, 'performance', 'table');
+                const effects = page.getByTestId('other-period-effects-table');
+                await expect(effects, 'the secondary table of the period effects is on the page').toBeVisible();
+                await expect(effects.locator('[data-testid^="other-period-effects-row-effect-"][data-testid*="-Other-"]'), 'the made-up exchange result on cash is a row').toHaveCount(1);
+                await frameTarget(page, effects, `${viewport}/${lang}/${theme}/dashboard/positions-fx-on-cash`, 160);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'positions-fx-on-cash');
+            });
+        });
+
         test('dashboard fifo lots panel - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
             // Deliberately NOT using setupDashboardMockReport here: that fixture is a static,
@@ -1616,14 +1750,11 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
                     await setPositionsView(page, 'holdings', 'table');
 
-                    // Target "Apple Inc." specifically instead of `.first()` (highest
-                    // current value). Holdings sort by value desc (ExposureTable.svelte),
-                    // which currently puts "RE Loan Milano" first — but that asset has
-                    // exactly ONE PriceHistory row ever (see populate_mock_data.py
-                    // populate_price_history() loan_price_points), so its WAC/Market
-                    // chart renders empty. Apple has the richest lot history in the mock
-                    // dataset (buys across 3 brokers/currencies + a partial sell +
-                    // dividend + 3-year price history) — a proper FIFO/WAC demo.
+                    // Target "Apple Inc." specifically instead of `.first()`: holdings sort by value
+                    // desc (ExposureTable.svelte), so the first row is whatever is worth most, not a
+                    // chosen demo. Apple has the richest lot history in the mock dataset (buys across
+                    // 3 brokers/currencies + a partial sell + dividend + 3-year price history) — a
+                    // proper FIFO/WAC demo.
                     const positionsPanel = page.getByTestId('positions-panel');
                     const appleRow = positionsPanel.locator('tr[data-row-id]').filter({hasText: 'Apple'}).first();
                     await clickRowAction(page, appleRow, 'analyze-lots');
@@ -2168,7 +2299,64 @@ test.describe('Gallery Screenshots', () => {
                 await freezeAnimations(page);
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as the email shot frames it.
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/backup-ready`);
+                // MOBILE — scrolled to the restore card, which stands under the first screen (decision 16/10): the backup card above it
+                // is drawn in the desktop shot.
+                if (viewport === 'mobile') {
+                    await expect(page.getByTestId('restore-card')).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+                    await frameTarget(page, page.getByTestId('restore-card'), `mobile/${lang}/${theme}/settings/backup-ready`);
+                }
                 await screenshot(page, viewport, lang, theme, 'settings', 'backup-ready');
+                await restoreTallScreen(page);
+            });
+        });
+
+        test('restore rolled back (admin) - all languages and themes', async ({page}, testInfo) => {
+            // A restore that was rolled back, played in the page (galleryRestore.ts): the overlay that says why, then the card's
+            // last result. Nothing is uploaded, restored or restarted; the success is never photographed (P8).
+            const viewport = getViewport(testInfo);
+            await serveGalleryRestore(page);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await rollBackRestoreOverlay(page, async () => {
+                    await navigateTo(page, '/settings?tab=backup');
+                    await expect(page.getByTestId('settings-tab-backup')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                    await freezeAnimations(page);
+                });
+                // The restore card behind the overlay is busy (restarting) by design: the overlay is the subject, not a loading page.
+                await screenshot(page, viewport, lang, theme, 'settings', 'restore-rolled-back', {allowLoaders: true});
+                await backToRestoreCard(page);
+                await freezeAnimations(page);
+                await frameTarget(page, page.getByTestId('restore-card'), `${viewport}/${lang}/${theme}/settings/restore-last-result`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'restore-last-result');
+            });
+        });
+
+        test('security tab with findings (admin) - all languages and themes', async ({page}, testInfo) => {
+            // The Security tab with checks to look at, from a fixture routed after the gallery's all-ok one (gallerySecurity.ts):
+            // the list of findings, one with its help action, the passed checks folded below, and the badge on «Administration».
+            // The hosts are local: the browser adds no finding of its own.
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+            await serveGallerySecurityFindings(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const reads = gallerySecurityReads(page);
+                await navigateTo(page, '/settings?tab=security');
+                await expectGallerySecurityServed(page, reads);
+                const body = page.getByTestId('security-tab');
+                await expect(body, 'the tab settles: the checks are in').toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+                await expect(body).toHaveAttribute('data-busy', 'false');
+                for (const id of GALLERY_SECURITY_FINDING_IDS) {
+                    await expect(body.locator(`[data-testid="security-finding"][data-check-id="${id}"]`), `${id} is listed as a finding`).toBeVisible();
+                }
+                await expect(body.getByTestId('security-finding-action').first(), 'a finding offers its help').toBeVisible();
+                await expect(body.getByTestId('security-passed'), 'the passed checks are folded below the findings').toBeVisible();
+                await expect(body.getByTestId('security-all-clear')).toHaveCount(0);
+                await expect(page.getByTestId('settings-tab-administration').getByTestId('tab-badge'), "«Administration»'s badge counts the errors and warnings").toHaveAttribute('data-badge', String(GALLERY_SECURITY_ATTENTION_COUNT));
+                await freezeAnimations(page);
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/security`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'security');
                 await restoreTallScreen(page);
             });
         });
@@ -2423,6 +2611,30 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(200);
                 }
             }
+        });
+
+        test('whats new modal - all languages and themes', async ({page}, testInfo) => {
+            // «What's new since your last version»: the user payload of the page says there is a release to read (galleryWhatsNew.ts,
+            // as layout/whats-new.spec.ts does); closing it posts «seen», answered there too. e2e_test_user is an ordinary member whose
+            // onboarding is complete, so no guide holds the popup back. The routes go in after the sign-in, which lands untouched.
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_USER);
+            await serveGalleryWhatsNew(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Not navigateTo(): its hydration barrier waits for a visible <html>, which the modal's scroll lock may hide.
+                await page.goto('/dashboard');
+                await expect(page.locator('html')).toHaveAttribute('data-i18n-ready', 'true', {timeout: 15_000});
+                const modal = page.getByTestId('whats-new-modal');
+                await expect(modal, 'the modal shows once per load').toBeVisible({timeout: 30_000});
+                await expect(page.getByTestId('deferred-app-popups')).toHaveAttribute('data-active-popup', 'whats-new');
+                await expect(modal.getByTestId('whats-new-chapter').first(), 'the release chapter is in').toBeVisible();
+                await expect(modal.getByTestId('whats-new-full-changelog')).toBeVisible();
+                await freezeAnimations(page);
+                await screenshot(page, viewport, lang, theme, 'settings', 'whats-new-modal');
+                await modal.getByTestId('whats-new-close').click();
+                await expect(modal).toBeHidden();
+            });
         });
 
         test('cache panel - all languages and themes', async ({page}, testInfo) => {
@@ -2836,6 +3048,8 @@ test.describe('Gallery Screenshots', () => {
         test.beforeEach(async ({page}) => {
             // Use TEST_ADMIN since db populate assigns brokers to admin
             await login(page, TEST_ADMIN);
+            // The administrators' space bar is on every tab: its sizes come from a fixture, never from the lane's data folder.
+            await serveGalleryStorage(page);
         });
 
         // One page load per language (after the one the first switch is made on), its two themes switched in place, every
@@ -2941,6 +3155,50 @@ test.describe('Gallery Screenshots', () => {
             await eachLanguageAndTheme(page, url, async (lang, theme) => {
                 await filesTableReady(page, table, `${viewport}/${lang}/${theme}/files/brim-tab`);
                 await shootFiles(page, viewport, lang, theme, 'brim-tab', table);
+            });
+        });
+
+        test('backups tab - all languages and themes', async ({page}, testInfo) => {
+            // Files › Backups (administrators): the list of kept backups and the settings of their clean-up. The list is a fixture
+            // (galleryFilesBackups.ts): no archive of the lane is listed, none is downloaded or deleted.
+            test.setTimeout(120_000);
+            const viewport = getViewport(testInfo);
+            const url = '/files?tab=backup';
+            await serveGalleryBackupList(page);
+            await openFilesPage(page, url);
+
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
+                const panel = page.getByTestId('files-backup-panel');
+                await expect(panel).toBeVisible({timeout: 15_000});
+                const list = panel.getByTestId('backup-list');
+                await expect(list, 'the list of kept backups is read').toHaveAttribute('data-state', 'ready', {timeout: 15_000});
+                await expect(list).toHaveAttribute('data-busy', 'false');
+                await expect(list.locator('tr[data-row-id="5c9e2f1a7b3d48e6a0f4c2d19b7e3a85"]'), 'the fixture lists its backups').toBeVisible();
+                const cleanup = panel.getByTestId('backup-cleanup');
+                await expect(cleanup).toBeVisible();
+                await expect(cleanup, 'the clean-up settings are read').not.toHaveAttribute('data-state', 'loading', {timeout: 15_000});
+                await expect(page.getByTestId('storage-bar')).toHaveAttribute('data-state', 'ready', {timeout: 15_000});
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('files-page'), `desktop/${lang}/${theme}/files/backups`);
+                await shootFiles(page, viewport, lang, theme, 'backups', panel);
+                await restoreTallScreen(page);
+            });
+        });
+
+        test('storage bar - all languages and themes', async ({page}, testInfo) => {
+            // The administrators' space bar, from a fixture (galleryFilesBackups.ts): the data folder's parts against a 2 GB limit.
+            test.setTimeout(90_000);
+            const viewport = getViewport(testInfo);
+            const url = '/files?tab=static';
+            await openFilesPage(page, url);
+
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
+                const bar = page.getByTestId('storage-bar');
+                await expect(bar, 'the bar has read the space the instance takes').toHaveAttribute('data-state', 'ready', {timeout: 15_000});
+                await expect(bar).toHaveAttribute('data-mode', 'limit');
+                await expect(bar).toHaveAttribute('data-busy', 'false');
+                await expect(bar.getByTestId('storage-legend-database')).toBeVisible();
+                await shootFiles(page, viewport, lang, theme, 'storage-bar', bar);
             });
         });
 
@@ -3625,6 +3883,26 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
+        test('broker positions YoC column - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await openBrokerCardByName(page, 'Coinbase');
+                    await selectOneYearDateRange(page);
+                    await page.getByTestId('broker-tab-posizioni').click();
+                    await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
+                    await screenshotPositionsYoc(page, viewport, lang, theme, 'brokers');
+                }
+            }
+        });
+
         test('broker fifo lots panel - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 
@@ -4017,7 +4295,22 @@ test.describe('Gallery Screenshots', () => {
                         await expect(page.getByTestId('import-wizard-next')).toBeEnabled({timeout: 5_000});
                         await page.getByTestId('import-wizard-next').click();
                         const step2 = page.getByTestId('import-wizard-step2');
-                        await step2.waitFor({state: 'visible', timeout: 10_000});
+                        // The generic CSV sits on a broker whose default plugin cannot read it: the wizard asks, file by file, where it
+                        // belongs (ImportBrokerMismatchModal). The shot keeps it where the step above put it, so every question is
+                        // answered «Keep it here» until step 2 is on screen.
+                        await expect
+                            .poll(
+                                async () => {
+                                    const keep = page.getByTestId('import-broker-mismatch-keep');
+                                    if (await keep.isVisible()) {
+                                        await keep.click();
+                                        return 'asked';
+                                    }
+                                    return (await step2.isVisible()) ? 'step2' : 'waiting';
+                                },
+                                {message: 'step 2 opens once every broker question is answered', timeout: 30_000},
+                            )
+                            .toBe('step2');
                         await expect(step2).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
                         // The three uploads are known by id: the cleanup deletes by these, and step 3 is checked against them.
                         await expect.poll(() => uploadedFileIds.size, {message: 'the three demo uploads must be recorded by id', timeout: 5_000}).toBe(3);
@@ -5912,7 +6205,10 @@ test.describe('Gallery Screenshots', () => {
                     // — es/light at y 491 with the header in one run, at 416 without it in the other (plan 56). There the chart is
                     // framed from the top of the page, 8 px under the screen's edge, or as near as the page's end allows.
                     if (viewport === 'desktop') await detailChart.scrollIntoViewIfNeeded();
-                    else await frameTarget(page, detailChart, `${viewport}/${lang}/${theme}/assets/detail-measures`);
+                    else {
+                        await frameTarget(page, detailChart, `${viewport}/${lang}/${theme}/assets/detail-measures`);
+                        await headerAsScrolledDown(page, `${viewport}/${lang}/${theme}/assets/detail-measures`);
+                    }
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures');
 
                     // Screenshot 2: panel with a measurement added (full date range)
@@ -6018,6 +6314,45 @@ test.describe('Gallery Screenshots', () => {
                     await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('Asset search with premium results - all languages and themes', async ({page}, testInfo) => {
+            // Search Online with a provider made premium: its results lead in a section of their own, the report row follows,
+            // the community section stays closed (galleryAssetSearch.ts, as asset-modal.spec.ts routes it). Nothing is created.
+            const viewport = getViewport(testInfo);
+            const {premium} = await serveGalleryPremiumSearch(page);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await page.getByTestId('assets-add-button').click();
+                    const dialog = page.getByTestId('asset-modal');
+                    await expect(dialog.getByTestId('asset-modal-form')).toBeVisible({timeout: 5_000});
+                    await expect(dialog.getByTestId(`asset-search-provider-${premium}`), 'Search Online asks the provider made premium').toHaveAttribute('data-selected', 'true', {timeout: 15_000});
+                    // Its input has no test id: it is the one text field of the search block.
+                    await dialog.locator('[data-search-autocomplete] input[type="text"]').fill(GALLERY_PREMIUM_QUERY);
+                    const results = dialog.getByTestId('asset-search-results');
+                    await expect(results, 'the search ends with results').toHaveAttribute('data-state', 'results', {timeout: 15_000});
+                    const section = results.getByTestId('asset-search-premium-section');
+                    await expect(section.getByTestId('asset-search-premium-badge')).toBeVisible();
+                    await expect(section.getByTestId('asset-search-result-0')).toBeVisible();
+                    await expect(section.getByTestId('asset-search-result-1')).toBeVisible();
+                    await expect(results.getByTestId('asset-search-report-row')).toBeVisible();
+                    await expect(results.getByTestId('asset-search-community-toggle')).toHaveAttribute('aria-expanded', 'false');
+                    await waitForMotionSettled(dialog, 'the asset modal');
+                    // DESKTOP — the tall-screen rule (galleryTallShots.ts): the dialog whole, results included.
+                    if (viewport === 'desktop') await fitScreenToDialog(page, dialog, `desktop/${lang}/${theme}/assets/search-premium`, {body: page.getByTestId('asset-modal-form').locator('..')});
+                    await screenshot(page, viewport, lang, theme, 'assets', 'search-premium');
+                    await restoreTallScreen(page);
+                    await page.keyboard.press('Escape');
+                    await expect(dialog).toBeHidden();
                 }
             }
         });
@@ -7039,8 +7374,10 @@ test.describe('Gallery Screenshots', () => {
                 await expect(run).toBeEnabled({timeout: 30_000});
                 await expect(replay.getByTestId('risk-replay-nothing')).toHaveCount(0);
                 const tornado = replay.getByTestId('risk-replay-tornado');
-                await expect(tornado.getByTestId('risk-replay-tornado-row')).toHaveCount(injection.rows);
-                await expect(tornado.getByTestId('risk-replay-tornado-contribution')).toHaveCount(injection.rows);
+                // The tornado table pages its rows (RISK_PAGE_SIZE = 5, riskTablePaging.ts): its first page holds at most five.
+                const firstPage = Math.min(injection.rows, 5);
+                await expect(tornado.getByTestId('risk-replay-tornado-row')).toHaveCount(firstPage);
+                await expect(tornado.getByTestId('risk-replay-tornado-contribution')).toHaveCount(firstPage);
 
                 // From the top of the block: its title, the Add: buttons, the crisis, its period and the total sentence in frame
                 // on every screen; on the desktop, the table's first row as well.
