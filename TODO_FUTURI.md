@@ -19,7 +19,7 @@ contata due volte e la mora parte dal valore di prima della cedola. La liquidazi
 
 **Data aggiunta**: 18 Ottobre 2026 · **Status**: 📋 FUTURO — da progettare · **Priorità**: 🔼 Medio-alta
 **Origine**: fusione di F16 (feedback Giuseppe + Alfy, 07/08/2026), F-MC-3 (feedback utente 08/09/2026), le voci
-C-86, C-87 e C-88 del backlog (utente C, chat del 04/09), due note sciolte (extraETF, aziende) e le richieste GitHub
+C-86 e C-87 del backlog (utente C, chat del 04/09), due note sciolte (extraETF, aziende) e le richieste GitHub
 #50, #51 e #52 di @Xgialippo (17/10/2026). Skill di riferimento: `asset-plugin`.
 
 ### Perché un punto solo
@@ -116,9 +116,6 @@ un'architettura unica, pensata bene prima di scrivere codice.
 - **Interactive Brokers** (ex C-86): prezzo corrente e storico letti con le API e la chiave dell'utente; serve un
   account per le prove. Dettagli:
   `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/feedback-early-user-C-20261014.md`, voce 4.
-- **Un pacchetto di dati di qualità in abbonamento** (ex C-88): prezzi storici e composizioni dei fondi a pagamento,
-  per chi li vuole, anche come sostegno al progetto. Da valutare licenze, costi e convivenza con il self-hosted.
-  Stessa mappatura, voce 14.
 
 ### Licenze e uso commerciale
 
@@ -126,15 +123,13 @@ un'architettura unica, pensata bene prima di scrivere codice.
   limitano l'uso automatico dei loro dati.
 - In self-hosted ogni istanza interroga per il suo utente, a basso volume e senza ridistribuire: rischio basso, tollerato
   nei fatti.
-- In un **servizio ospitato a pagamento** diventa uso commerciale: servono dati con licenza (il fornitore a pagamento
-  F06) o la chiave dell'utente.
 
 ### Collegamenti
 
 - Piano in pausa: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md`
   (identità asset, identificativi).
 - `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md` (#50, #51, #52).
-- Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, C-88, spostate qui.
+- Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, spostate qui.
 - Qui sotto, «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
 
 ---
