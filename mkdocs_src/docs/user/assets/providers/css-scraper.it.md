@@ -64,6 +64,7 @@ Fai clic su **Testa Configurazione**: **Prezzo Attuale** deve mostrare il numero
 | **Elemento del prezzo non trovato** | Il layout della pagina potrebbe essere cambiato: copia di nuovo il selettore. |
 | **Impossibile interpretare il prezzo** | Controlla `decimal_format`. L'elemento deve contenere solo il numero: gli spazi, €, $, £, ¥ e % vengono ignorati, mentre i caratteri alfabetici come `EUR` non vengono ignorati. |
 | **Errore HTTP** o **Richiesta non riuscita** | Controlla l'URL; aumenta `timeout` per un sito lento. L'errore 403 significa che il sito rifiuta le visite automatizzate. |
+| **In pausa per troppe richieste fino a …** | Il sito ha rifiutato perché LibreFolio lo ha visitato troppo spesso: LibreFolio lo lascia in pace fino a quel momento. Gli altri tuoi siti non sono interessati. |
 | Un numero errato | Il selettore corrisponde a un altro elemento (LibreFolio usa la prima corrispondenza): rendilo più specifico. |
 
 ## ⚠️ Limiti
