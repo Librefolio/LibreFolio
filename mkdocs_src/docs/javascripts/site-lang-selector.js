@@ -202,6 +202,12 @@
             var headerInner = document.querySelector('.md-header__inner');
             if (headerInner) headerInner.appendChild(selector);
         }
+        // The theme toggle goes right before the language selector, as in the app's header (theme, then language).
+        // Material's palette component keeps its listeners on the form, so moving the node is safe.
+        var palette = document.querySelector('.md-header__inner [data-md-component="palette"]');
+        if (palette && selector.parentNode) {
+            selector.parentNode.insertBefore(palette, selector);
+        }
     }
 
     // ── Styles ──────────────────────────────────────────────────
