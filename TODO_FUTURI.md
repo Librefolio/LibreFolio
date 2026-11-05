@@ -885,61 +885,32 @@ Spostata il 18/10/2026 nella voce «🧬 Profilo dei dati dell'asset», in cima 
 
 ## Stimatori robusti di covarianza per la matrice di correlazione (Riskfolio)
 
-**Priorità:** 🔽 bassa — dopo che la pagina correlazioni avrà una direzione chiara.
+**Priorità**: 🔽 Bassa, dopo che la pagina correlazioni avrà una direzione chiara.
 
-`riskfolio.src.ParamsEstimation.covar_matrix` espone quindici stimatori oltre a quello
-storico: `ledoit`, `oas`, `shrunk`, `gl`, `jlogo`, `gerber1/2`, `ewma1/2`, `semi`, più
-tre metodi di denoising. Servono quando gli asset sono molti e le osservazioni poche —
-con cento asset e 750 giorni si stimano 5 050 parametri da 75 000 osservazioni, e la
-matrice campionaria diventa instabile: piccole variazioni nei dati muovono molto il
-risultato.
-
-**Perché non ora:** è un miglioramento di *qualità della stima*, non di prestazioni.
-Misurato: Ledoit-Wolf 25,4 ms contro 0,2 ms di `np.cov`, scarto massimo 1,2e-05.
-La migrazione M3 (vedi `02_riskfolioIntegration/06`) è deliberatamente a comportamento
-invariato: cambia il tempo, non i numeri mostrati. Mescolare le due cose renderebbe
-impossibile dire quale delle due ha causato una differenza.
-
-**Gate:** decidere prima se la pagina correlazioni serve la domanda L2 («sono
-diversificato come credo?») o una domanda di ottimizzazione. Se resta descrittiva, lo
-stimatore storico è quello onesto da mostrare. Se diventa prescrittiva, uno stimatore
-restretto è obbligatorio, e va dichiarato in UI con link alla wiki.
+`riskfolio.src.ParamsEstimation.covar_matrix` offre quindici stimatori oltre a quello storico (`ledoit`, `oas`, `gerber1/2`,
+`ewma1/2`, denoising…), utili con molti asset e poche osservazioni. Migliorano la qualità della stima, non il tempo
+(Ledoit-Wolf 25 ms contro 0,2 ms). Se la pagina resta descrittiva, lo stimatore storico è quello onesto; se diventa
+prescrittiva, uno stimatore ristretto è obbligatorio e va dichiarato nella UI.
 
 ## 🔄 Rivalutare le otto misure reimplementate da N contro riskfolio-lib
 
-**Posizione dello sviluppatore, 18 Set 2026** — da riprendere nel prossimo sprint:
+**Priorità**: Media, non blocca il rilascio.
 
-> *« Anche se è un wrapper di NumPy, è meglio usare una libreria collaudata, anche perché
-> nel tempo, se arrivano migliorie, le abbiamo **for free**. »*
+Il developer, 18/09/2026: «Anche se è un wrapper di NumPy, è meglio usare una libreria collaudata, anche perché nel tempo, se
+arrivano migliorie, le abbiamo for free».
 
-**Stato attuale**: `backend/app/services/risk/acquired.py` reimplementa otto misure
-(`worst_realization`, `maximum_drawdown`, `drawdown_at_risk`, `conditional_drawdown_at_risk`,
-`ulcer_index`, `effective_number_of_assets`, `diversification_ratio`) che **esistono già nel
-catalogo di riskfolio**.
+`backend/app/services/risk/acquired.py` reimplementa misure che esistono in riskfolio (`maximum_drawdown`, `ulcer_index`,
+`drawdown_at_risk`…), perché riskfolio si importa solo nel worker e le analitiche sono sincrone.
 
-**La ragione data da N**: riskfolio è importabile **solo dentro il worker spawnato**
-(`risk/quant/riskfolio_worker.py`, decisione devWiki `risk-quant-engine-process-boundary`),
-mentre le analitiche che consumano queste misure implementano `RiskAnalytic.compute()`
-**sincrono**. Non si può chiamare un processo separato da lì.
+**Le domande vere.**
+1. Il confine processo/worker è ancora quello giusto?
+2. Quanto costa l'import (~340 MB nativi) in un processo che già carica NumPy e SciPy?
+3. Le due convenzioni nostre (il segno e la baseline della serie underwater) stanno in un adattatore sottile?
 
-**La domanda vera da porsi, quindi, non è «reimplementare o delegare» ma**:
+La rete c'è già: `test_risk_metrics_oracle.py` confronta le due implementazioni.
 
-1. Il confine processo/worker è ancora quello giusto, o si può allargare?
-2. Quanto costa davvero l'import (~340 MB nativi) in un processo che già carica NumPy/SciPy?
-3. Le due convenzioni piegate da N — **segno** (perdite negative) e **baseline** (la serie
-   underwater porta un elemento pre-rendimento che `MDD`/`UCI` consumano e `DaR`/`CDaR` no) —
-   sono esprimibili come adattatore sottile sopra la libreria, invece che come reimplementazione?
-
-⚠️ **Da non perdere nella rivalutazione**: `test_risk_metrics_oracle.py` **già confronta** le
-nostre implementazioni con riskfolio. **La rete per fare il passaggio in sicurezza esiste già** —
-è lo stesso oracolo, usato in direzione opposta.
-
-🔴 **E un divieto che resta valido comunque** (D130/D244): `riskfolio.SemiDeviation` **non** è la
-nostra deviazione di ribasso. Misura lo scarto dalla **propria media**, non da un MAR fisso: su
-un portafoglio che perde lo 0,5 % ogni giorno vale **esattamente zero**. **Quella sostituzione
-resta vietata indipendentemente dall'esito di questa rivalutazione.**
-
-**Priorità**: media. **Non blocca il rilascio** — è un lavoro di miglioramento.
+🔴 **Divieto che resta** (D130/D244): `riskfolio.SemiDeviation` non è la nostra deviazione di ribasso, perché misura lo scarto
+dalla propria media e non da un MAR fisso.
 
 ## Il generatore di dati di prova non onora i bersagli `end_price`, e lo scarto è sistematico
 
