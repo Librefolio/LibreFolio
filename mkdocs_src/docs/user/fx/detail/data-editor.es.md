@@ -44,6 +44,8 @@ guardes.
 Tus cambios se muestran en el gráfico como una línea **Vista previa** morada. **Guardar (N)** los guarda todos;
 **Cancelar** los descarta. Un tipo de cambio debe ser mayor que cero: uno con valor cero, negativo o vacío se omite.
 
+Si el servidor rechaza algunos de tus tipos de cambio, por ejemplo uno demasiado grande o demasiado pequeño para almacenarse, guarda los demás. Un aviso nombra entonces hasta cinco fechas rechazadas, cada una con su motivo, y cuenta el resto; permanece 20 segundos, para que puedas anotarlas e introducirlas de nuevo. Si rechaza el guardado completo, por ejemplo porque una fecha es posterior a mañana, o porque ninguno de los tipos de cambio puede almacenarse, no se guarda nada: el mensaje explica el motivo y el editor permanece abierto con tus cambios.
+
 !!! warning "Los datos sincronizados sobrescriben las ediciones manuales"
 
     Una sincronización posterior de las mismas fechas reemplaza tus valores con los del proveedor. Para tener control

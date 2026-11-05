@@ -38,6 +38,8 @@ Fai clic sull'icona 🗑️ di una riga, oppure seleziona le righe e fai clic su
 
 Le modifiche vengono mostrate sul grafico come una linea **Anteprima** viola. **Salva (N)** le scrive tutte; **Annulla** le scarta. Un tasso deve essere maggiore di zero: uno pari a zero, negativo o vuoto viene ignorato.
 
+Se il server rifiuta alcuni dei tuoi tassi, per esempio un tasso troppo grande o troppo piccolo per essere memorizzato, salva gli altri. Un avviso elenca allora fino a cinque date rifiutate, ciascuna con il suo motivo, e conta le restanti; resta visibile per 20 secondi, così puoi annotarle e inserirle di nuovo. Se rifiuta l'intero salvataggio, per esempio perché una data è successiva a domani, o perché nessuno dei tassi può essere memorizzato, non viene salvato nulla: il messaggio ne spiega il motivo e l'editor resta aperto con le tue modifiche.
+
 !!! warning "I dati sincronizzati sovrascrivono le modifiche manuali"
 
     Una successiva sincronizzazione delle stesse date sostituisce i tuoi valori con quelli del provider. Per avere il pieno controllo manuale, usa una coppia senza provider — vedi [Configurazione provider](provider.md).

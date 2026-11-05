@@ -37,6 +37,8 @@ Cliquez sur 🗑️ sur une ligne, ou sélectionnez des lignes et cliquez sur la
 
 Vos modifications apparaissent sur le graphique sous forme de ligne **Aperçu** violette. **Enregistrer (N)** les écrit toutes ; **Annuler** les abandonne. Un taux doit être supérieur à zéro : un taux nul, négatif ou vide est ignoré.
 
+Si le serveur refuse certains de vos taux, par exemple un taux trop grand ou trop petit pour être stocké, il enregistre les autres. Un avertissement nomme alors jusqu'à cinq dates refusées, chacune avec son motif, et compte les autres ; il reste affiché 20 secondes, afin que vous puissiez les noter et les saisir à nouveau. S'il refuse l'enregistrement entier, par exemple parce qu'une date est postérieure à demain, ou parce qu'aucun des taux ne peut être stocké, rien n'est enregistré : le message en donne la raison, et l'éditeur reste ouvert avec vos modifications.
+
 !!! warning "Les données synchronisées écrasent les modifications manuelles"
 
     Une synchronisation ultérieure des mêmes dates remplace vos valeurs par celles du fournisseur. Pour un contrôle entièrement manuel, utilisez une paire sans fournisseur — voir [Configuration du fournisseur](provider.md).
