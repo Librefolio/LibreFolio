@@ -23,14 +23,11 @@ What is pinned (W E1a is not written yet; each test says how it fails before the
   manual or provider, is EVENT_EXISTS listing the stored events. Before: no ``mode`` field.
 * event_ids (I-10 S4) -- each item result names, in request order, the row each event wrote.
   Before: no ids, so the mini modal re-reads the day and may link the provider event.
-* Delete scoped by asset (decision 21, I-12a) -- ``delete_events_bulk(asset_id, event_ids,
-  session, current_user)``: an id of another asset is "not_found" and stays. Before: no
-  ``asset_id`` parameter.
 * Deletions inside the upsert (lot E1b, decision of 15/10 16:20) -- ``FAEventUpsert.delete_ids``:
   the editor saves in ONE request, deletions first, so an edit may take the key a deletion frees
   (I-10) and a refusal anywhere keeps the deletions too (decision 22). Any event of the item's
   asset can be deleted, manual or provider (correction of 15/10 17:49: the 1.2 editor deleted a
-  provider event through ``DELETE``, and the next sync writes it back); an id that is not an event
+  provider event through the removed ``DELETE /assets/events``, and the next sync writes it back); an id that is not an event
   of that asset is EVENT_NOT_DELETABLE, and an event a transaction realises, provider ones
   included, is EVENT_IN_USE. Before: ``delete_ids`` is an unknown field.
 * Retyping a SPLIT (workstream J, lot CP-14a, P-10, developer decision 27 option A) -- an edit
@@ -519,7 +516,7 @@ async def test_a_lower_case_type_is_stored_upper_case_and_reads_back(owned):
 # Before the fix ``bulk_upsert_events`` committed each item on its own (and
 # ``_upsert_asset_events`` each chunk), so a refused item left the items before it saved.
 # Within ONE item the edits by id were already validated before the first write
-# (fbc95f3f9): the single-item tests below fail on ``details`` only.
+# (e99e4bfce): the single-item tests below fail on ``details`` only.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -883,59 +880,6 @@ async def test_event_ids_never_name_the_provider_event_on_the_same_key(owned):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Delete scoped by asset (decision 21, I-12a)
-#
-# The delete names the asset, and only that asset's events can go. Own ids behave as
-# before: deleted, not_found, or in_use with the accessible/hidden breakdown, and no
-# rollback of the deletions that succeeded (decision 22 is about upserts).
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-async def _delete(owned: _Owned, asset_id: int, event_ids: list[int]):
-    """``DELETE /assets/events?asset_id=...&ids=...`` minus HTTP, as this unit's user."""
-    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        user = await session.get(User, owned.user_id)
-        return await AssetSourceManager.delete_events_bulk(asset_id=asset_id, event_ids=event_ids, session=session, current_user=user)
-
-
-@pytest.mark.asyncio
-async def test_delete_is_scoped_to_the_asset(owned):
-    """An id of another asset is "not_found" for this asset, and that event stays.
-
-    Before: TypeError -- ``delete_events_bulk`` takes no ``asset_id``, and deletes any id it is given.
-    Contract: own id deleted; the other asset's id not_found and still stored; an unknown id not_found.
-    """
-    own_id = await _add_manual(owned.asset_id, 100, AssetEventType.DIVIDEND, "1.00")
-    foreign_id = await _add_manual(owned.other_asset_id, 100, AssetEventType.DIVIDEND, "1.00")
-    unknown_id = await _unknown_event_id()
-
-    response = await _delete(owned, owned.asset_id, [own_id, foreign_id, unknown_id])
-
-    assert {item.event_id: item.status for item in response.results} == {own_id: "deleted", foreign_id: "not_found", unknown_id: "not_found"}
-    assert (response.deleted_count, response.not_found_count, response.in_use_count) == (1, 2, 0)
-    stored = await _snapshot(owned)
-    assert own_id not in stored
-    assert foreign_id in stored, f"event {foreign_id} of asset {owned.other_asset_id} was deleted through asset {owned.asset_id}"
-
-
-@pytest.mark.asyncio
-async def test_delete_keeps_the_in_use_breakdown_of_its_own_events(owned):
-    """Scoping changes nothing for the asset's own ids: a linked event stays, with its breakdown.
-
-    This unit's user has no access to the broker of the transaction, so the link counts as hidden.
-    Before: TypeError (no ``asset_id`` parameter).
-    Contract: in_use, accessible [] and hidden 1; the event still stored.
-    """
-    linked_id = await _add_manual(owned.asset_id, 101, AssetEventType.DIVIDEND, "1.00")
-    await _link_tx(owned, linked_id, 101)
-
-    response = await _delete(owned, owned.asset_id, [linked_id])
-
-    assert [(item.event_id, item.status, item.accessible_transactions, item.hidden_transactions_count) for item in response.results] == [(linked_id, "in_use", [], 1)]
-    assert linked_id in await _snapshot(owned)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Deletions inside the upsert: ``delete_ids`` (lot E1b)
 #
 # The editor used to save in two requests, upserts then ``DELETE``: an edit could not take the
@@ -946,8 +890,8 @@ async def test_delete_keeps_the_in_use_breakdown_of_its_own_events(owned):
 # transaction realises (else EVENT_IN_USE, ``events`` with ``linked_transactions``: counts, never
 # transaction ids); then the rows are deleted and flushed, so the key checks and a later ``create``
 # see the freed keys. Any refusal keeps the deleted events: all or nothing (decision 22). The
-# result adds ``deleted_ids``, in request order. The separate ``DELETE /assets/events`` stays as it
-# is (pinned above). Provider events are deletable since the correction of 15/10 17:49: the 1.2
+# result adds ``deleted_ids``, in request order. The separate ``DELETE /assets/events`` is gone: this is
+# the only way to delete. Provider events are deletable since the correction of 15/10 17:49: the 1.2
 # editor deleted them through that ``DELETE``, and the next sync writes them back.
 #
 # Before E1b ``delete_ids`` is an unknown field: the schema tests fail on it, and the database
@@ -1100,7 +1044,7 @@ async def test_an_id_that_is_not_an_event_of_the_asset_is_not_deletable(owned):
 async def test_a_provider_event_of_the_asset_is_deleted_like_a_manual_one(owned):
     """``delete_ids`` takes any event of the item's asset, manual or provider (correction of 15/10 17:49).
 
-    The 1.2 editor deleted a provider event through ``DELETE /assets/events``, which still allows it;
+    The 1.2 editor deleted a provider event through the (since removed) ``DELETE /assets/events``;
     the next sync writes it back. P (provider), M1 and M2 (manual); one item deletes P and M1.
     Before the correction: EVENT_NOT_DELETABLE naming P, nothing deleted.
     Contract: ``deleted_ids == [P, M1]`` (request order), ``event_ids == []``; only M2 left.
@@ -1296,7 +1240,7 @@ async def test_a_create_item_sees_the_key_an_earlier_item_freed(owned):
 #
 # Allowed, before and after P-10 (the GUARD tests): an incoming adjustment with a known cost, 0
 # included; a reverse split's outgoing row, which never carries a cost and, retyped, becomes a plain
-# reduction at average cost (test A4 of test_portfolio_wac.py); a SPLIT nothing links to; an edit that
+# reduction at average cost (test A4 of test_lots_wac_history.py); a SPLIT nothing links to; an edit that
 # keeps the type SPLIT.
 #
 # Before P-10 every retype is accepted: the reds fail in ``_upsert_refused`` («accepted a request it
@@ -1419,7 +1363,7 @@ async def test_guard_a_split_whose_incoming_adjustment_has_a_cost_can_be_retyped
 @pytest.mark.asyncio
 async def test_guard_a_reverse_split_whose_outgoing_adjustment_has_no_cost_can_be_retyped(owned):
     """GUARD (green before and after P-10): a reverse split's −q row never carries a cost, and retyped it becomes a plain
-    reduction at average cost — intended (test A4 of test_portfolio_wac.py).
+    reduction at average cost — intended (test A4 of test_lots_wac_history.py).
 
     Contract: accepted; the event, under its id, is a PRICE_ADJUSTMENT; the ADJUSTMENT as it was.
     """

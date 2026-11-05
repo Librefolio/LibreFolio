@@ -12,8 +12,8 @@ related: [features/F-107, decisions/pac-scip-searches-exact-replay-certifies, de
 > The PAC allocator ([[features/F-107]]; Release 2 workstream D, a Tool in `backend/app/services/pac_allocator/`) plans which assets to
 > buy with the available cash, across brokers and currencies, with SCIP as the search engine and a Decimal-exact
 > replay (`evaluate_exact_candidate`) as the only referee of feasibility and of every reported number. This page
-> records the rounding contract fixed on 2026-10-09 (plan *PacRoundingDirectionFix*, merged in `18a10e98e`, train 26;
-> the plan folder `Phase_0/13_pacAllocator/` is still active). Checked against the code at `fef0203ca`.
+> records the rounding contract fixed on 2026-10-09 (plan *PacRoundingDirectionFix*, merged in `fb122bb30`, train 26;
+> the plan folder `Phase_0/13_pacAllocator/` is still active). Checked against the code at `111c2c8f3`.
 
 ## Context — the optimizer was mining the rounding
 

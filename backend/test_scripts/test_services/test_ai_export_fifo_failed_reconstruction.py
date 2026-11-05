@@ -24,7 +24,7 @@ says so instead (journal of J, «J-12 — backend e AI Export», 17/10 11:55–1
   (``test_ai_export_components_portfolio_broker_financial.py``) and
   ``test_lot_detail_component_is_versioned_v4_in_registry_and_placeholder`` (``test_ai_export_components_asset.py``).
 
-TODAY (base ``7814d25fe``) none of the new fields exists, ``*.fifo_lots`` is version 2 and ``asset.lot_detail`` version 3,
+TODAY (base ``673077274``) none of the new fields exists, ``*.fifo_lots`` is version 2 and ``asset.lot_detail`` version 3,
 and the FAILED asset is exported like any other, with the figures of its unreliable replay: a row in ``assets``, its lots
 in ``lots``, its part in the scope totals. Each red says what it read.
 

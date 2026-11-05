@@ -3,7 +3,7 @@ BRIM API: the personal ``date_order`` of the generic CSV plugin, end to end (CP1
 
 The user's own order of day and month (``PATCH /settings/plugins/bulk``, family ``brim``) reaches the parse
 (``POST /brokers/import/files/{id}/parse``), and a change of it makes the cached parse stale
-(``GET /brokers/import/files`` and ``GET /brokers/import/files/{id}``: ``parse_is_stale``), without the API ever showing the
+(``GET /brokers/import/files``: ``parse_is_stale``), without the API ever showing the
 fingerprint the stale rule compares.
 
 - DO-A01: the plugin's card is in the catalogue of the plugin settings, for a member: ``date_order``, a select on ``day_first``.
@@ -79,9 +79,12 @@ async def _parse(client: httpx.AsyncClient, file_id: str, broker_id: int) -> dic
 
 
 async def _file(client: httpx.AsyncClient, file_id: str) -> dict:
-    response = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+    """The file's info: its item of the (unfiltered) listing, found by id (there is no per-file read route)."""
+    response = await client.get(f"{API_BASE}/brokers/import/files", timeout=TIMEOUT)
     assert response.status_code == 200, response.text
-    return response.json()
+    matching = [item for item in response.json() if item["file_id"] == file_id]
+    assert len(matching) == 1, f"file {file_id} not found in the listing"
+    return matching[0]
 
 
 async def _listed(client: httpx.AsyncClient, broker_id: int, file_id: str) -> dict:

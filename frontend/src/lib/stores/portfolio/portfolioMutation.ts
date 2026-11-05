@@ -75,7 +75,7 @@ export function isPortfolioAffectingMutation(method: string | undefined, url: st
 
     const path = normalizedPath(url);
 
-    if (normalizedMethod === 'POST' && (path === '/api/v1/transactions/commit' || path === '/api/v1/transactions/transfers/promote')) {
+    if (normalizedMethod === 'POST' && path === '/api/v1/transactions/commit') {
         return true;
     }
 
@@ -96,9 +96,6 @@ export function isPortfolioAffectingMutation(method: string | undefined, url: st
     if (normalizedMethod === 'POST' && path === '/api/v1/assets/merge') {
         return asRecord(data)?.dry_run !== true;
     }
-    if (normalizedMethod === 'POST' && /^\/api\/v1\/assets\/\d+\/market-data\/wipe$/.test(path)) {
-        return true;
-    }
     if (path.startsWith('/api/v1/assets/prices')) {
         if (path === '/api/v1/assets/prices/query') return false;
         // The Δ columns' period changes only read the stored prices (X-R53).
@@ -110,7 +107,7 @@ export function isPortfolioAffectingMutation(method: string | undefined, url: st
     }
     if (path.startsWith('/api/v1/assets/events')) {
         if (path === '/api/v1/assets/events/query') return false;
-        return ['POST', 'DELETE'].includes(normalizedMethod);
+        return normalizedMethod === 'POST';
     }
     if (path.startsWith('/api/v1/assets/provider')) {
         if (path === '/api/v1/assets/provider/probe') return false;

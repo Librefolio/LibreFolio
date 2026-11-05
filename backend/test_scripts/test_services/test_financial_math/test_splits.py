@@ -14,7 +14,7 @@ Each copy reads its own columns of the join today:
 * ``lots_analysis_service.py``, ``_load_split_ratios``: transaction id → event value, nothing checked;
 * ``financial_math/yield_on_cost.py``, ``_load_split_records``: ten columns into ``_SplitRecord``, ordered by
   transaction id, a row whose transaction has no asset dropped;
-* ``portfolio_service.py`` and ``brokers/summary.py``: the transaction ids only (a later lot).
+* ``portfolio_service.py`` (and the broker summary, since removed): the transaction ids only (a later lot).
 
 The contract pinned here, agreed for MF-I1:
 

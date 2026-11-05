@@ -2,12 +2,13 @@
     /**
      * Files Page - Manage static uploads and broker reports
      *
-     * Two tabs:
+     * Two tabs, and a third for administrators:
      * 1. Static Resources - User uploaded files (/api/v1/uploads)
      * 2. Broker Reports - BRIM files (/api/v1/brokers/import/files)
+     * 3. Backups (administrators only) - the backups the instance keeps (/api/v1/backup/instance/jobs)
      *
      * URL Deep-Linking:
-     * - ?tab=static|brim - Active tab
+     * - ?tab=static|brim|backup - Active tab (backup: administrators only, anyone else gets the static tab)
      * - ?filename=... - Text filter on filename
      * - ?uploader=... - Uploader filter
      * - ?broker=1,2,3 - Filter by broker IDs (BRIM only)
@@ -23,6 +24,10 @@
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+    import {auth} from '$lib/stores/app/auth';
+    import BackupsSection from '$lib/features/backup/BackupsSection.svelte';
+    import StorageBar from '$lib/features/files/StorageBar.svelte';
+    import {notifyBackupListChanged} from '$lib/features/backup/backupList.svelte';
     import {formatBytes, setUploadScope, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
@@ -53,7 +58,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
-    type Tab = 'static' | 'brim';
+    type Tab = 'static' | 'brim' | 'backup';
     type PreviewTarget = {source: 'static'; file: UploadedFile} | {source: 'brim'; file: BrimFile};
 
     // URL filter configuration - defines which columns can be filtered via URL
@@ -81,9 +86,10 @@
         setUserStorage(STORAGE_KEY_VIEW_MODE, mode);
     }
 
-    // Load active tab from user-scoped localStorage (default: static)
+    // Load active tab from user-scoped localStorage (default: static). The backup tab is the administrators' only.
     function loadActiveTab(): Tab {
         const stored = getUserStorage(STORAGE_KEY_ACTIVE_TAB, 'static');
+        if (stored === 'backup' && isAdmin) return 'backup';
         return stored === 'brim' ? 'brim' : 'static';
     }
 
@@ -94,6 +100,9 @@
     // Load broker filter from user-scoped localStorage
 
     let activeTab: Tab = 'static';
+    // The tab of the backups the instance keeps is for administrators (FB-24); the server refuses everyone else anyway.
+    $: isAdmin = $auth.user?.is_superuser ?? false;
+    $: tabs = [{id: 'static', label: $t('uploads.staticResources'), testId: 'files-tab-static'}, {id: 'brim', label: $t('uploads.brokerReports'), testId: 'files-tab-brim'}, ...(isAdmin ? [{id: 'backup', label: $t('uploads.backups'), testId: 'files-tab-backup'}] : [])];
     let staticFiles: UploadedFile[] = [];
     let brimFiles: BrimFile[] = [];
     let loading = true;
@@ -174,7 +183,7 @@
 
             // Tab from URL or localStorage
             const tabParam = params.get('tab');
-            if (tabParam === 'static' || tabParam === 'brim') {
+            if (tabParam === 'static' || tabParam === 'brim' || (tabParam === 'backup' && isAdmin)) {
                 activeTab = tabParam;
             } else {
                 activeTab = loadActiveTab();
@@ -337,10 +346,12 @@
         error = null;
 
         try {
+            // The table of kept backups and the space bar read their own data; the page's Refresh asks them to read again.
+            notifyBackupListChanged();
             if (activeTab === 'static') {
                 const data = await zodiosApi.list_files_api_v1_uploads_get();
                 staticFiles = (data.items || []) as UploadedFile[];
-            } else {
+            } else if (activeTab === 'brim') {
                 // Fetch ALL accessible files — broker filter is applied client-side
                 brimFiles = (await zodiosApi.list_files_api_v1_brokers_import_files_get()) as BrimFile[];
             }
@@ -793,18 +804,15 @@
         </div>
     </header>
 
+    <!-- The space the instance takes (administrators), whatever the tab -->
+    {#if isAdmin}
+        <StorageBar />
+    {/if}
+
     <!-- Tabs -->
     <div class="mb-6 flex items-center gap-2">
-        <TabBar
-            tabs={[
-                {id: 'static', label: $t('uploads.staticResources'), testId: 'files-tab-static'},
-                {id: 'brim', label: $t('uploads.brokerReports'), testId: 'files-tab-brim'},
-            ]}
-            bind:activeTab
-            onchange={(tabId) => setActiveTab(tabId as Tab)}
-            class="flex-1"
-        />
-        {#if viewMode === 'list'}
+        <TabBar {tabs} bind:activeTab onchange={(tabId) => setActiveTab(tabId as Tab)} class="flex-1" />
+        {#if viewMode === 'list' && activeTab !== 'backup'}
             <SelectionBar
                 selectedCount={selectedFileIds.length}
                 actions={[
@@ -878,6 +886,11 @@
                     onScopeChange={requestScopeChange}
                 />
             {/if}
+        {:else if activeTab === 'backup'}
+            <!-- The backups the instance keeps (administrators) -->
+            <div data-testid="files-backup-panel">
+                <BackupsSection collapsible={false} />
+            </div>
         {:else}
             <!-- BRIM Files -->
             {#if brimFiles.length === 0}

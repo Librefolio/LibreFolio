@@ -426,7 +426,7 @@ class TestTheRunnerChecksTheFrontendToolsFirst:
     not fail: it fetches whatever the registry serves, not the version the lock pins (C-94 stopped the build path only).
     ``_run_passes`` is the one entry every ``./dev.py test`` run goes through, so the check stands there, once, before the
     exclusive setups, the shared backend and the dispatch. A backend-only category does not need the tools and is not asked.
-    Read on 22/10/2026 (base ``8505761da``): 23 ``"npx"`` calls in 10 runner files, none behind a check.
+    Read on 22/10/2026 (base ``ee771d9be``): 23 ``"npx"`` calls in 10 runner files, none behind a check.
     """
 
     FRONTEND_RUNS = ("front-user", "front-utility", "front-portfolio", "all-frontend", "all")

@@ -8,7 +8,7 @@
  * `$derived(localizedChangelog.peek(uiLanguage) ?? …)` — and while the cache was a plain `Map`, that `$derived` could not
  * see it fill: a window closed while its translation loaded and reopened after the fill kept a stale `undefined`, «the
  * changelog stuck on loading» (M1 in `ChangelogModal.test.ts`), or the English of a failed load after another consumer
- * had loaded the translation (M2). The cure, commit 79aea05e7: the cache `merged` is a `SvelteMap`. The component tests
+ * had loaded the translation (M2). The cure, commit 3335a6097: the cache `merged` is a `SvelteMap`. The component tests
  * drive a faithful fake of this module whose cache is a `SvelteMap` too, so they stay green if `changelog.ts` goes back
  * to `new Map`; this file drives the real `createLocalizedChangelog` and closes that gap. Written for the A-CL1 review:
  * red with `new Map`, green with `SvelteMap`.

@@ -1,6 +1,6 @@
 /**
  * tx-bulk-promote-cost-basis.spec.ts — the bulk editor's side of a promote that leaves the
- * receiving side of an asset TRANSFER without a cost basis (1076fa994).
+ * receiving side of an asset TRANSFER without a cost basis (48c3f52a9).
  *
  * `validate_cost_basis` (`backend/app/services/transactions/transaction_batch_stages.py`) checks promoted
  * pairs: once two ADJUSTMENTs are promoted into a TRANSFER, the receiving side (quantity > 0)
@@ -393,8 +393,8 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
     }
     for (const ownedEvent of owned.events) {
         await attempt(`event ${ownedEvent.id}`, async () => {
-            const result = await jsonFrom<{results: Array<{event_id: number; status: string}>}>(await page.request.delete(`${API}/assets/events?asset_id=${ownedEvent.assetId}&ids=${ownedEvent.id}`), 'delete the owned event');
-            expect(result.results.find((item) => item.event_id === ownedEvent.id)?.status).toBe('deleted');
+            const result = await jsonFrom<{results: Array<{asset_id: number; deleted_ids?: number[]}>}>(await page.request.post(`${API}/assets/events`, {data: [{asset_id: ownedEvent.assetId, delete_ids: [ownedEvent.id]}]}), 'delete the owned event');
+            expect(result.results.find((item) => item.asset_id === ownedEvent.assetId)?.deleted_ids).toEqual([ownedEvent.id]);
         });
     }
     for (const assetId of owned.assetIds) {

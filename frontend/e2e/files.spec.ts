@@ -268,9 +268,12 @@ async function runRowAction(page: Page, row: Locator, fileId: string, action: st
 
 /** The scope the server holds for a static file: the ground truth behind the badge and the event. */
 async function storedScope(page: Page, fileId: string): Promise<string> {
-    const response = await page.request.get(`${API}/uploads/${fileId}`);
-    expect(response.ok(), `read the static resource ${fileId}: HTTP ${response.status()}`).toBe(true);
-    return ((await response.json()) as {scope: string}).scope;
+    const response = await page.request.get(`${API}/uploads`);
+    expect(response.ok(), `list the uploads to read the static resource ${fileId}: HTTP ${response.status()}`).toBe(true);
+    const items = ((await response.json()) as {items: {id: string; scope: string}[]}).items;
+    const item = items.find((file) => file.id === fileId);
+    expect(item, `the static resource ${fileId} is listed`).toBeTruthy();
+    return item!.scope;
 }
 
 /**

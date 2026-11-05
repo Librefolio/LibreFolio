@@ -79,6 +79,7 @@ header to unlock it. Only administrators (superusers) have this tab.
 | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before they can sign in; the first account never waits, and existing accounts are not affected. It turns on only while email works and `LIBREFOLIO_PUBLIC_URL` can be used: until then the switch is greyed out. See *Email Verification* in [Email](email.md). |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
+| — (not shown in this tab) | **Space limit (MB)** | `0`, no limit | The most megabytes the instance may take, shown as the line the space bar of **Files** is drawn against. `0` is no limit: the bar then shows the disk. You edit it in that bar, which only administrators see, not in this tab. `LIBREFOLIO_STORAGE_LIMIT_MB`, when set, wins and locks it ([Environment Variables](configuration.md)). See [The Space Bar](backup_restore.md#space-used). |
 | 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. Until you save it for the first time, `LIBREFOLIO_DEFAULT_CURRENCY` in the `.env` file, if set, decides; from your first save, your value wins, even when it is `EUR` again ([Environment Variables](configuration_accounts.md#accounts)). |
 | 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. It is also the language of the emails sent to people who have no account yet. Until you save it for the first time, `LIBREFOLIO_DEFAULT_LANGUAGE` in the `.env` file, if set, decides; from your first save, your value wins, even when it is English again ([Environment Variables](configuration_accounts.md#accounts)). |
 | 🌍 Defaults | **Default Theme** | `auto` | ☀️ `light`, 🌙 `dark`, or 🖥️ `auto`, which follows the device. |
@@ -249,6 +250,76 @@ read the status and the log.
 
 ---
 
+## ⏸️ Provider Pauses {: #provider-pauses }
+
+LibreFolio asks outside services for prices and exchange rates: its price providers, such as Yahoo
+Finance or the European Central Bank. When one of them answers «too many requests» (HTTP 429),
+LibreFolio pauses it: until the pause ends, no request reaches that provider, whether the
+[market data scheduler](settings.md#market-data-scheduler) or a user asks. A pause holds for every
+user and every job of the server.
+
+The pauses are on by default: an exception to the rule that a new option leaves an install as it
+was, by developer decision 34 (15 October 2026). `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS=0`
+turns them off, as before release 1.3.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` | `60` | The first pause, in seconds, doubled at each refusal in a row: a whole number from `0` to `86400` (one day). `0` turns the pauses off. |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` | `3600` | The longest pause the doubling reaches, in seconds: a whole number from `1` to `86400`, and not below the first pause while the pauses are on. A provider's `Retry-After` may still ask for more, up to one day. |
+
+Set them in `.env` or in the container's environment, then restart LibreFolio: with Docker Compose,
+`docker compose up -d`. A value LibreFolio cannot use does not stop the server: the log has an
+error ([In the Log](#provider-pauses-log)), and both defaults apply, 60 and 3600, so the pauses stay
+on. With the pauses off, every request goes to the provider again; the scheduler still counts a
+refused one as deferred ([below](#provider-pauses-effects)).
+
+### ⏱️ How Long a Pause Lasts {: #provider-pauses-length }
+
+- **The first refusal** pauses the provider for `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`, 60
+  seconds by default.
+- **Each refusal in a row** doubles the pause, up to `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`.
+  With the defaults: 2 minutes, then 4, 8, 16 and 32, then an hour at each further refusal.
+  Requests refused together count as one refusal.
+- **A `Retry-After`**, when the provider sends one, is the shortest pause LibreFolio takes: it is
+  honoured beyond the longest pause, up to one day.
+- **A random extra** of up to 10 % is added to each pause, never past one day.
+- **When a pause ends**, one request goes through to try the provider, and the others still count
+  as paused until it has an outcome, a minute at most. An answer ends the series: the next refusal
+  starts again from the first pause, and so does a refusal that comes more than the longest pause
+  after the previous pause ended.
+- **A pause holds for the whole provider**, except with the CSS Scraper: a site that refuses pauses
+  only the pages of that site, and the other sites are still read.
+
+### 👀 Who Waits, and What You See {: #provider-pauses-effects }
+
+| Where | During a pause |
+| --- | --- |
+| 🕐 [Market data scheduler](settings.md#market-data-scheduler) | The assets and FX pairs of a paused provider are **deferred**: counted neither as updated nor as failed, and their job is **Partial**. The job runs again when the first of those pauses ends, or at its regular time if that comes first. In **Global Settings**, the **Scheduler Status** row reads **Paused items retried at …** for the current price refresh; the **Scheduler Execution Log** counts the deferred items with ⏸, marks each one with a pause icon and **Deferred: provider paused**, and shows **Retry at …** in the entry's header: see «Read the scheduler log» on that page. |
+| 💰 Live prices, on the Assets list and on an asset's page | The last stored price stays, with no new message. When every asset the page asks about has its provider paused, the page asks again by itself only once the first of those pauses is over; while one provider still answers, the refresh goes on, and LibreFolio does not call the paused ones. After a refresh that fails, the next one waits twice as long, and so on up to ten minutes, until one works again. |
+| 🔌 **Test Configuration**, in the asset dialog | ⚠️ *Paused for too many requests until …*, with the time the pause ends; the test still passes. See [Connect a price provider](../user/assets/create-edit.md). |
+| 🔎 Asset search | A paused provider brings no result until its pause ends; the other providers answer as usual. |
+| 💱 Exchange rates | A paused provider counts as a route that failed: a pair with another route gets its rate there, as when a central bank does not answer ([Provider Configuration](../user/fx/detail/provider.md)). Otherwise the scheduler defers the pair, as it does an asset. |
+
+### 💤 In Memory {: #provider-pauses-memory }
+
+- **Each server process keeps its pauses in memory.** A restart forgets them, a deploy included.
+  With several server processes (`--workers N`), each one learns a pause from a refusal of its own;
+  the Docker image runs one.
+
+### 📋 In the Log {: #provider-pauses-log }
+
+| Level | The log says | When |
+| --- | --- | --- |
+| ⚠️ `warning` | `Provider refused for too many requests: paused`, with `domain` (`asset` or `fx`), `provider`, `scope` (the site, with the CSS Scraper), `wait_s`, the seconds of pause ahead, and `retry_after`, the wait the provider asked for, if any | A provider refused a request |
+| ℹ️ `info` | `Provider answering again after a pause`, with `refusals`, the refusals in a row before it | The first answer after a pause |
+| ❌ `error` | `Provider pause settings cannot be used: the defaults apply`, with `variable`, `code` (`PROVIDER_COOLDOWN_BASE_INVALID` or `PROVIDER_COOLDOWN_MAX_INVALID`) and `reason` | One of the two variables has a value that cannot be used: once per server process, the first time LibreFolio is about to call a provider |
+
+At `DEBUG` level, `Provider call skipped: paused after too many requests`, with `wait_s`, marks each
+request a pause kept from the provider. The scheduler's own lines, `Scheduler: current-price refresh`
+and `Scheduler: history sync`, give the deferred items in `deferred`, with `retry_at`.
+
+---
+
 ## 🗄️ Server Caches {: #server-caches }
 
 To stay fast, LibreFolio keeps recent provider answers and computed results in memory. The
@@ -296,14 +367,10 @@ findings keep the order of this table.
 | Instance key | ❌ It cannot be used. ⚠️ Its folder or its file is open to other users | — |
 | Session cookie | ⚠️ `SESSION_COOKIE_SECURE=never`: the cookie also travels over plain HTTP | — |
 | Visitor's address | ⚠️ Since the start, requests came through a reverse proxy that LibreFolio does not trust: the limits per visitor's address do not apply to them. ℹ️ Since the start, forwarding headers from a public address were ignored. What to do: [The Visitor's Address](connection_proxy.md#client-address) | — |
-| Frame protection | ⚠️ `LIBREFOLIO_FRAME_PROTECTION` is off in the `managed` profile: any site can show LibreFolio in a frame | — |
-| Report-only policy | ℹ️ `LIBREFOLIO_CSP_REPORT_ONLY` is off in the `managed` profile: browsers list nothing it would block | — |
 | Log level | ℹ️ `DEBUG` or `TRACE` | — |
-| Hosting panel's wake-up and status tokens | ❌ `LIBREFOLIO_WAKE_TOKEN` or `LIBREFOLIO_PANEL_STATUS_TOKEN`, which the finding names, is too short (at least 32 random characters), holds characters a request header cannot carry as written (spaces, tabs or characters outside visible ASCII), or cannot be read from its file: the scheduled wake-up or the panel's status route answers `503` until it is fixed. Passed when neither token is set, both routes off, or when each one that is set can be used | — |
 | Test mode | ❌ `LIBREFOLIO_TEST_MODE` is on outside LibreFolio's own test runs: data providers that exist only for the tests are served, and the data are kept in the test data folder | — |
-| Hosting panel's backup token | ❌ `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` is too short (at least 32 random characters), holds characters a request header cannot carry as written (spaces, tabs or characters outside visible ASCII), or cannot be read from its file: the panel's backup routes answer `503` until it is fixed. Passed when no token is set, the panel's backup routes off, or when the token can be used | — |
-| Upload limit of a restore | ❌ `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` cannot be used (a whole number of megabytes, `0` for no limit), or LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type: restore uploads are refused until it is fixed. Passed with a limit, such as *A restore accepts archives of up to 500 MB.*, or with none | — |
-| Unpacked size of a restore | ❌ `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` cannot be used (a whole number of megabytes, `0` for no limit), or, while it is unset in the managed profile, the `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` it follows, which the finding then names; or LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type: restore checks are refused until it is fixed. Passed with a limit, such as *A restore check accepts archives that unpack to up to 4000 MB.*, or with none | — |
+| Upload limit of a restore | ❌ `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` cannot be used (a whole number of megabytes, `0` for no limit): restore uploads are refused until it is fixed. Passed with a limit, such as *A restore accepts archives of up to 500 MB.*, or with none | — |
+| Unpacked size of a restore | ❌ `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` cannot be used (a whole number of megabytes, `0` for no limit): restore checks are refused until it is fixed. Passed with a limit, such as *A restore check accepts archives that unpack to up to 4000 MB.*, or with none | — |
 | Failed sign-ins | ⚠️ The limit is off: `LIBREFOLIO_LOGIN_LIMIT=off` | — |
 | Email server | ❌ A `LIBREFOLIO_SMTP_*` value cannot be used: email stays off until it is fixed | **Open the Email tab** |
 | Email encryption | ⚠️ Emails, their links and the SMTP password travel unencrypted to a server outside your local network | **Open the Email tab** |
@@ -317,17 +384,6 @@ Every row has a help button, and which one depends on who can solve the check:
 - 📖 **Guide**: you can solve it alone, on the server. The button, shown on passed checks too, opens
   the page of this guide which explains that check, in a new tab and in your language when it is
   translated.
-- 🛟 **Contact support**: only whoever hosts the instance can solve it. Three checks are like that:
-  `platform.hosting_panel`, `backup.panel_token` and `accounts.owner_email_change`. The button opens
-  a message to the support address of the instance, `LIBREFOLIO_SUPPORT_URL`: your email app with a
-  `mailto:` address, or the support page in a new tab when it is a web page, which receives the
-  message as `title` and `body` in its address (see «Main Options» in
-  [Configuration](configuration.md)). The message holds the check's code, how serious it
-  is, the address of the instance, the LibreFolio version and the date, and nothing personal or
-  secret. A passed check has nothing to report, so it shows no button. When the instance has no
-  support address that LibreFolio can use, there is no button, only a line that tells you to
-  contact whoever provides the service. LibreFolio never opens a public GitHub issue for these
-  checks, since it would publish your instance's address.
 
 A check that has no page of its own and no support has no button.
 

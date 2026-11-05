@@ -361,6 +361,30 @@ def api_backup_panel(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Backup API panel token tests", verbose=verbose)
 
 
+def api_backup_list(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the list of the kept instance backups (GET /backup/instance/jobs) and the unchanged hosting panel routes, in an app of the test."""
+    print_section("Backup API: the list of kept backups")
+    print_info("Testing: GET /backup/instance/jobs (admins only, origin, SHA-256, encrypted/sealed, newest first, never a running or failed job), the move of a finished backup into backups/<kept name>/, the id after the move, the panel routes unchanged, OpenAPI InstanceBackupList/InstanceBackupEntry")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_list_api.py", test_names)
+    return run_command(cmd, "Backup API list tests", verbose=verbose)
+
+
+def api_backup_storage(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the storage bar's numbers (GET /backup/instance/storage) and the unchanged panel routes and status, in an app of the test."""
+    print_section("Backup API: the storage")
+    print_info("Testing: GET /backup/instance/storage (admins only, the eleven fields, the parts of the planted files, the limit from the row and the variable, a failing measure is never a 500, a plain def outside the blocked-instance lists, OpenAPI InstanceStorage), no new panel route, GET /panel/status unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_storage_api.py", test_names)
+    return run_command(cmd, "Backup API storage tests", verbose=verbose)
+
+
+def api_backup_cleanup_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the two global settings of the backups' cleanup through GET /settings/global and PATCH /settings/global/bulk, on the lane's server."""
+    print_section("Backup API: the cleanup settings")
+    print_info("Testing: backup_cleanup_max_mb and backup_cleanup_max_days exist (int, 0 = off on a self-hosted lane), accepted 0..1048576 and 0..3650 to their edges, 422 naming the key past them, all or nothing; the original values restored")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_cleanup_settings_api.py", test_names)
+    return run_command(cmd, "Backup API cleanup settings tests", verbose=verbose)
+
+
 def api_backup_restore(verbose: bool = False, test_names: list = None) -> bool:
     """Test the check of a backup archive before a restore (/backup/restore), in an app of the test (no server reached)."""
     print_section("Backup API: the restore check")
@@ -405,17 +429,6 @@ def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Transactions API tests", verbose=verbose)
 
 
-def api_transfer_promotion(verbose: bool = False, test_names: list = None) -> bool:
-    """Run Transfer Promotion API tests."""
-    print_section("Transfer Promotion API Tests")
-    print_info("Testing POST /transactions/transfers/promote (Block H.4)")
-    print_info("Tests: DEPOSIT/WITHDRAWAL → TRANSFER / FX_CONVERSION atomic promotion")
-    print_info("Note: Server will be automatically started and stopped by test")
-
-    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transfer_promotion.py", test_names)
-    return run_command(cmd, "Transfer Promotion API tests", verbose=verbose)
-
-
 def api_transactions_validate(verbose: bool = False, test_names: list = None) -> bool:
     """Run POST /transactions/validate dry-run tests."""
     print_section("Transactions Validate (C.1) API Tests")
@@ -444,16 +457,6 @@ def api_broker_overdraft_off_refused(verbose: bool = False, test_names: list = N
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_broker_overdraft_off_refused.py", test_names)
     return run_command(cmd, "Broker overdraft off refused tests", verbose=verbose)
-
-
-def api_events_suggest(verbose: bool = False, test_names: list = None) -> bool:
-    """Run POST /transactions/events/suggest tests."""
-    print_section("Events Suggest (C.2) API Tests")
-    print_info("Testing POST /transactions/events/suggest — candidate events within tolerance")
-    print_info("Note: Server will be automatically started and stopped by test")
-
-    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_events_suggest.py", test_names)
-    return run_command(cmd, "Events suggest tests", verbose=verbose)
 
 
 def api_batch_split_promote(verbose: bool = False, test_names: list = None) -> bool:
@@ -546,7 +549,7 @@ def api_prices_sync_delta(verbose: bool = False, test_names: list = None) -> boo
 def api_market_data_wipe(verbose: bool = False, test_names: list = None) -> bool:
     """Run market-data wipe endpoint tests."""
     print_section("Market-Data Wipe (R3-3) API Tests")
-    print_info("Testing GET /assets/{id}/market-data/summary + POST /wipe (N68: SPLITs survive, splits_kept)")
+    print_info("Testing GET /assets/{id}/market-data/summary + the currency PATCH wipe (N68: SPLITs survive, splits_kept)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_market_data_wipe.py", test_names)
     return run_command(cmd, "Market-data wipe tests", verbose=verbose)
@@ -1020,14 +1023,14 @@ def api_portfolio(verbose: bool = False, test_names: list[str] | None = None) ->
     return run_command(cmd, "Portfolio API tests", verbose=verbose)
 
 
-def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None) -> bool:
-    """Run portfolio WAC API tests."""
-    print_section("Portfolio WAC API Tests")
-    print_info("Testing POST /api/v1/portfolio/wac endpoint (A1-A8)")
+def api_lots_wac_history(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the average-cost (WAC) history tests of the lots analysis."""
+    print_section("Lots WAC History API Tests")
+    print_info("Testing POST /api/v1/portfolio/lots/analysis BROKER_WAC_HISTORY: average-cost line, split rescale, SPLIT retype")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_portfolio_wac.py", test_names)
-    return run_command(cmd, "Portfolio WAC API tests", verbose=verbose)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_lots_wac_history.py", test_names)
+    return run_command(cmd, "Lots WAC history API tests", verbose=verbose)
 
 
 def api_email(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -1344,6 +1347,38 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(
         api,
+        "backup-list",
+        api_backup_list,
+        name="Backup API Kept List",
+        desc="Lot FB-24: GET /backup/instance/jobs lists the kept backups, newest first, admins only (401, 403), each with its origin, file_sha256 (the SHA-256 of the download), encrypted and sealed, never a running or failed job nor a loose file; a finished backup moves to backups/librefolio-backup-<date>-<origin>-<id[:8]>/ keeping its job id (GET, file, DELETE still answer, then 404 backup_job_not_found and the entry gone); the hosting panel's four routes unchanged from outside (202, done with file_name/file_size/file_sha256/sealed, the exact bytes, 204 then 404, a ui job 404, no origin in the view); OpenAPI InstanceBackupList of InstanceBackupEntry (job plus origin)",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), a data directory copied from
+        # the staging tests' alembic database under tmp_path is the process's own for the test and its backups run for real
+        # under that directory's own run lock: no lane data directory, DB, server or network is reached (the api category still
+        # starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-storage",
+        api_backup_storage,
+        name="Backup API Storage",
+        desc="Lot FB-29: GET /backup/instance/storage for administrators only (401, 403), exactly the eleven fields of InstanceStorage, the five parts and their sum reflecting the files planted in a data directory (uploads, broker reports, a kept backup folder, the database, a log) read fresh at each request, limit_mb/limit_locked from the storage_limit_mb row (0 is null, unlocked) or from LIBREFOLIO_STORAGE_LIMIT_MB (wins and locks, an invalid one ignored), a measurement that raises is a 200 of zeros and null volume, the route a plain def and in none of the instance_block allowed lists, OpenAPI InstanceStorage with extra forbidden and no panel token; guards: no new route under /backup/panel, PanelStatusResponse keeps its ten keys and has no storage_* one",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory is a folder
+        # under tmp_path configured as the process's, the limit's row lives in a private SQLite file read through a synchronous
+        # engine put in place of the process's: no lane data directory, DB, server or network is reached (the api category still
+        # starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-cleanup-settings",
+        api_backup_cleanup_settings,
+        name="Backup Cleanup Settings API",
+        desc="Lot FB-24: backup_cleanup_max_mb and backup_cleanup_max_days in GET /settings/global (int, 0 = off on a self-hosted lane) and PATCH /settings/global/bulk: 0..1048576 and 0..3650 accepted to their edges and read back, one past an edge, a negative number or a non-integer refused with 422 naming the key, the bulk all or nothing; the original values put back",
+        exclusive_because="rewrites two global_settings rows (backup_cleanup_max_mb, backup_cleanup_max_days), one value for the whole instance: a concurrent unit reading them, or a backup applying the cleanup, would meet the value this one holds; it restores the originals in a finally",
+    )
+    add_test(
+        api,
         "backup-restore",
         api_backup_restore,
         name="Backup API Restore Check",
@@ -1388,11 +1423,9 @@ Tests for REST API endpoints (server auto-started):
         isolation="pure",
     )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
-    add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
     add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
-    add_test(api, "events-suggest", api_events_suggest, name="Events Suggest", desc="Candidate events within tolerance")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
     add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets/{id} field-level updates")
@@ -1408,7 +1441,7 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(api, "asset-prices-export", api_asset_prices_export, name="Asset Prices Export", desc="CSV/JSON export + round-trip")
     add_test(api, "prices-sync-delta", api_prices_sync_delta, name="Prices Sync Delta", desc="changed_points payload")
-    add_test(api, "market-data-wipe", api_market_data_wipe, name="Market Data Wipe", desc="Summary + wipe; N68: SPLITs survive, summary/wipe keys include splits_kept, never a 409")
+    add_test(api, "market-data-wipe", api_market_data_wipe, name="Market Data Wipe", desc="Summary + currency-change wipe; N68: SPLITs survive, summary/wipe keys include splits_kept, never a 409")
     add_test(
         api,
         "event-reconciliation",
@@ -1669,7 +1702,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
-    add_test(api, "portfolio-wac", api_portfolio_wac, name="Portfolio WAC API", desc="POST /portfolio/wac endpoint (A1-A8)")
+    add_test(api, "lots-wac-history", api_lots_wac_history, name="Lots WAC History API", desc="BROKER_WAC_HISTORY of the lots analysis (average-cost line, split)")
     add_test(
         api,
         "email",

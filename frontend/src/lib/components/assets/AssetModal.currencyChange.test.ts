@@ -85,7 +85,6 @@ const ASSET_ID = 7;
 
 const patchFn = () => vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch as never) as ReturnType<typeof vi.fn>;
 const summaryFn = () => vi.mocked(zodiosApi.market_data_summary_api_v1_assets__asset_id__market_data_summary_get as never) as ReturnType<typeof vi.fn>;
-const wipeFn = () => vi.mocked(zodiosApi.wipe_market_data_api_v1_assets__asset_id__market_data_wipe_post as never) as ReturnType<typeof vi.fn>;
 const syncFn = () => vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post as never) as ReturnType<typeof vi.fn>;
 const saveBtn = () => screen.getByTestId('asset-modal-save') as HTMLButtonElement;
 
@@ -147,7 +146,6 @@ describe('AssetModal — a currency change with something to lose', () => {
         expect(summaryFn()).toHaveBeenCalledTimes(1);
         expect(summaryFn()).toHaveBeenCalledWith({params: {asset_id: ASSET_ID}});
         expect(patchFn(), 'the question comes before any write').not.toHaveBeenCalled();
-        expect(wipeFn()).not.toHaveBeenCalled();
         expect(onupdated).not.toHaveBeenCalled();
         // The modal got the impact: the lines of what is lost, and the splits that stay.
         expect(screen.getByTestId('currency-change-summary-prices')).toBeInTheDocument();
@@ -167,14 +165,13 @@ describe('AssetModal — a currency change with something to lose', () => {
 
         await waitFor(() => expect(screen.queryByTestId('currency-change-modal')).toBeNull());
         expect(patchFn()).not.toHaveBeenCalled();
-        expect(wipeFn()).not.toHaveBeenCalled();
         expect(syncFn()).not.toHaveBeenCalled();
         expect(onupdated).not.toHaveBeenCalled();
         expect(screen.getByTestId('asset-modal-form'), 'the draft is still there').toBeInTheDocument();
         expect(within(screen.getByTestId('asset-modal-currency-group')).getByRole('combobox'), 'with the currency the user chose').toHaveTextContent('EUR');
     });
 
-    it('confirm sends ONE patch with the edited currency and the asset id, never the wipe, then reports onupdated', async () => {
+    it('confirm sends ONE patch with the edited currency and the asset id, then reports onupdated', async () => {
         summaryFn().mockResolvedValue(SOMETHING_TO_LOSE as never);
         const {onupdated} = await mountEdit();
         await chooseCurrency('EUR');
@@ -186,7 +183,6 @@ describe('AssetModal — a currency change with something to lose', () => {
         await waitFor(() => expect(onupdated).toHaveBeenCalledTimes(1));
         expect(patchFn()).toHaveBeenCalledTimes(1);
         expect(patchFn()).toHaveBeenCalledWith([expect.objectContaining({asset_id: ASSET_ID, currency: 'EUR'})]);
-        expect(wipeFn(), 'the patch deletes by itself').not.toHaveBeenCalled();
         expect(summaryFn(), 'the dry run is not asked again by the confirm').toHaveBeenCalledTimes(1);
         // No provider on this asset: nothing to resync.
         expect(syncFn()).not.toHaveBeenCalled();
@@ -222,7 +218,6 @@ describe('AssetModal — a currency change with nothing to lose', () => {
         expect(patchFn()).toHaveBeenCalledTimes(1);
         expect(patchFn()).toHaveBeenCalledWith([expect.objectContaining({asset_id: ASSET_ID, currency: 'EUR'})]);
         expect(summaryFn().mock.invocationCallOrder[0], 'the question precedes the write').toBeLessThan(patchFn().mock.invocationCallOrder[0]);
-        expect(wipeFn()).not.toHaveBeenCalled();
     });
 });
 

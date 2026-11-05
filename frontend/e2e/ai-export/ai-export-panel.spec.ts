@@ -26,7 +26,7 @@ test.describe('AI Export panel', () => {
             // the desktop viewport. PageToolbar picks a tier from its bar's content width and publishes it on
             // window.__lfLayouts.dashboard; only "stackFilters" stacks the actions in one column (`actionsStacked`,
             // PageToolbar.svelte), every other tier lays them out as a two-column grid, one row for these two. At 1280 px
-            // the bar is ~942 px wide, under the Dashboard's denseRow threshold since 51de5dc75: AI Export above Refresh.
+            // the bar is ~942 px wide, under the Dashboard's denseRow threshold since 27a2d45d2: AI Export above Refresh.
             // The reading is taken once the toolbar's ResizeObserver has reported the bar's current width (the readiness
             // check of layout/toolbar-width-sweep.spec.ts): until then the published tier is the pre-attach default.
             await expect(trigger).toBeVisible();

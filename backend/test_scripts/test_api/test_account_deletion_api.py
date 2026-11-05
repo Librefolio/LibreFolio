@@ -332,10 +332,9 @@ async def _assert_scenario_in_place(client_a: httpx.AsyncClient, client_b: httpx
     assert legs[s.x_leg]["related_transaction_id"] == s.y_leg and legs[s.y_leg]["related_transaction_id"] == s.x_leg, f"Precondition: the legs must be linked: {legs}"
     assert legs[s.y_leg]["partner_broker_id"] == s.x and _cost_basis(legs[s.y_leg]) == TRANSFER_COST_BASIS, f"Precondition: incoming leg {legs[s.y_leg]}"
 
-    # 403 is how B sees a file that exists in a broker B cannot access: after the deletion, 404 means gone.
-    for client, file_id, status in ((client_a, s.x_file, 200), (client_b, s.x_file, 403), (client_b, s.z_file, 200)):
-        resp = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-        assert resp.status_code == status, f"Precondition: file {file_id} expected {status}, got {resp.status_code} {resp.text}"
+    # The listing holds the files of the brokers the user has a role on: B does not list X's file (no role on X), lists Z's.
+    for client, file_id, listed in ((client_a, s.x_file, True), (client_b, s.x_file, False), (client_b, s.z_file, True)):
+        assert (file_id in await _listed_file_ids(client)) is listed, f"Precondition: file {file_id} listed={listed} expected"
     assert await asyncio.to_thread(brim_provider.get_file_info, s.x_file) is not None, "Precondition: pytest must see the backend's broker_reports directory, where the cleanup fallback removes leftover files"
 
     resp = await client_b.get(f"{API_BASE}/brokers/{s.z}", timeout=TIMEOUT)
@@ -385,12 +384,19 @@ async def _deleted_broker_violations(client_b: httpx.AsyncClient, engine: AsyncE
     return violations
 
 
+async def _listed_file_ids(client: httpx.AsyncClient) -> set[str]:
+    """The ids of the import files the user's listing holds (there is no per-file read route)."""
+    resp = await client.get(f"{API_BASE}/brokers/import/files", timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return {item["file_id"] for item in resp.json()}
+
+
 async def _file_violations(client_b: httpx.AsyncClient, s: _Scenario) -> list[str]:
     """The BRIM files of a deleted broker go after the commit, before the endpoint answers (as the two existing callers do)."""
     violations: list[str] = []
     for label, file_id in (("X", s.x_file), ("Z", s.z_file)):
-        resp = await client_b.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-        _expect(violations, resp.status_code == 404, f"[new] {label}'s BRIM file {file_id} must be deleted with its broker: GET as B answered {resp.status_code} (403 = still on disk, 200 = still readable)")
+        resp = await client_b.get(f"{API_BASE}/brokers/import/files/{file_id}/preview", timeout=TIMEOUT)
+        _expect(violations, resp.status_code == 404, f"[new] {label}'s BRIM file {file_id} must be deleted with its broker: GET preview as B answered {resp.status_code} (403 = still on disk, 200 = still readable)")
     return violations
 
 

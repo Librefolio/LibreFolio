@@ -184,39 +184,9 @@ async def test_complete_e2e_flow_justetf(test_server):  # noqa: C901 — sequent
         print_success(f"  Provider {provider_code} assigned")
 
         # =====================================================================
-        # STEP 4: REFRESH METADATA
+        # STEP 4: VERIFY THE ASSET (the metadata refresh route is gone: the web modal asks the probe)
         # =====================================================================
-        print("\n[STEP 4] Refresh metadata from provider...")
-
-        response = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids": asset_id}, timeout=TIMEOUT)
-
-        # Metadata refresh may fail with 500 if the provider name already exists in the DB
-        # (UNIQUE constraint on display_name) from a previous test run. This is a test-isolation
-        # issue with the shared test DB — treat it as a non-fatal warning; the asset and
-        # provider assignment are already complete. Steps 5-6 (prices) are the real E2E test.
-        if response.status_code != 200:
-            print_info(f"  Metadata refresh returned {response.status_code} (non-fatal — display_name conflict?)")
-        else:
-            refresh_data = response.json()
-
-            assert "results" in refresh_data
-            result = refresh_data["results"][0]
-
-            if result.get("success"):
-                print_success("  Metadata refreshed successfully")
-
-                # Check for fields_detail with OldNew format
-                fields_detail = result.get("fields_detail")
-                if fields_detail:
-                    print_info(f"  Fields detail: {fields_detail}")
-                    refreshed_fields = fields_detail.get("refreshed_fields", [])
-                    for change in refreshed_fields:
-                        # Should be OldNew format
-                        assert "old" in change, "OldNew should have 'old' field"
-                        assert "new" in change, "OldNew should have 'new' field"
-                        print_info(f"    Changed: {change.get('info', 'unknown')} - old={change['old']}, new={change['new']}")
-            else:
-                print_info(f"  Metadata refresh message: {result.get('error', 'unknown')}")
+        print("\n[STEP 4] Verify asset...")
 
         # Verify asset has metadata
         response = await client.get(f"{API_BASE}/assets", params={"asset_ids": asset_id}, timeout=TIMEOUT)
@@ -376,14 +346,6 @@ async def test_complete_e2e_flow_yfinance(test_server):
 
         assert response.status_code == 200
         print_success(f"  Provider {provider_code} assigned")
-
-        # STEP 4: METADATA
-        print("\n[STEP 4] Refresh metadata...")
-
-        response = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids": asset_id}, timeout=TIMEOUT)
-
-        assert response.status_code == 200
-        print_success("  Metadata refreshed")
 
         # STEP 5: PRICES (today only for speed)
         print("\n[STEP 5] Get current price...")

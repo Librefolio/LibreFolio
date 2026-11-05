@@ -36,7 +36,7 @@ their ``emoji`` must be None or absent (``build_allocation_history``'s component
 view's carry ``"emoji": None``, as ``build_allocation_current``'s do); with no state the current view is ``[]``.
 Amounts are distinct in every case, so «descending» never depends on how ties are broken.
 
-RED on HEAD ebc5c87a8, by absence: ``DailyPortfolioState`` has no ``by_asset`` (the builder tests fail with
+RED on HEAD e40bb5154, by absence: ``DailyPortfolioState`` has no ``by_asset`` (the builder tests fail with
 ``AttributeError``, the hand-made states with ``TypeError``), ``DerivedViewsBuilder`` has no asset views
 (``AttributeError``), the schemas refuse ``id`` and lack the two fields (``ValidationError`` / ``KeyError`` /
 ``AttributeError``). The module collects.

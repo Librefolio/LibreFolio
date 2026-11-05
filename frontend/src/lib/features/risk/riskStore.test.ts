@@ -117,7 +117,7 @@ describe('riskStore', () => {
 
     it('gives a portfolio slice its own request key, apart from another slice and from the whole', () => {
         transitionClientSession(105);
-        // The alarm planted at `ffb204c62` has fired, and this is the invariant it asked
+        // The alarm planted at `4573c9e2a` has fired, and this is the invariant it asked
         // for. Before the field landed, `canonicalizeRiskRequest` ended in
         // `schemas.RiskQueryRequest.parse(...)`, Zod dropped `asset_ids` as an unknown
         // key, and every slice collapsed onto the unsliced portfolio's key. The danger

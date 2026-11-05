@@ -55,8 +55,8 @@
     const ownerAssignment = $derived(reason === 'owner_assignment');
 
     /** The page of the recovery, in the interface language (the docs' rule: English at the root): the CLI's section for an
-     *  unreadable state, the panel guide's section on the owner's account for the owner's. */
-    const docsHref = $derived(`/mkdocs/${$currentLanguage && $currentLanguage !== 'en' ? `${$currentLanguage}/` : ''}admin/${ownerAssignment ? 'hosting_panel_backups/#restore-owner-pending' : 'cli_backup/#backup-pending-unreadable'}`);
+     *  unreadable state. The owner's account (`owner_assignment`) has no guide: no «Guide» button there. */
+    const docsHref = $derived(`/mkdocs/${$currentLanguage && $currentLanguage !== 'en' ? `${$currentLanguage}/` : ''}admin/cli_backup/#backup-pending-unreadable`);
 
     async function defaultFetchInterrupted(): Promise<boolean | undefined> {
         return (await zodiosApi.get_instance_config_api_v1_system_instance_get()).restore_interrupted;
@@ -102,7 +102,7 @@
             <p class="mt-3 text-sm text-lf-secondary" data-testid="instance-restore-interrupted-support-missing">{$_('instance.restoreInterrupted.supportMissing')}</p>
         {/if}
         <div class="mt-5 flex flex-wrap items-center justify-end gap-2">
-            {#if selfHosted}
+            {#if selfHosted && !ownerAssignment}
                 <a href={docsHref} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-lf-link hover:bg-lf-hover hover:underline" data-testid="instance-restore-interrupted-docs">
                     {$_('instance.restoreInterrupted.docs')}
                     <ExternalLink class="h-4 w-4" aria-hidden="true" />

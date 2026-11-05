@@ -2,7 +2,7 @@
 
 Module under test: ``backend/app/services/financial_math/portfolio/contributions.py``.
 
-What changed (HEAD ``8ebdb3857`` → the working tree): ``closed_flight_too_short(opened, closed, date_from)`` is new. It
+What changed (HEAD ``33b66ba1c`` → the working tree): ``closed_flight_too_short(opened, closed, date_from)`` is new. It
 says whether a position closed in the period was held in it under the 30 days ``cumulative_to_annualized`` needs: the
 flight runs from its first opening, clamped to ``date_from``, to its last close, and the floor is
 ``returns.annualizes``, the same predicate the annualization uses. The service uses it on a fully sold row whose closed
@@ -16,7 +16,7 @@ Guards, unchanged on HEAD and on the tree: the closed row of 100 units bought at
 2025-04-20 annualizes −10 % over its 100 days of flight, −0.319254 (``closed_position_annualized``); under 30 days the
 closed rule gives None, which is what the service's general-rule fallback used to see.
 
-Red on HEAD ``8ebdb3857`` (the module of that commit, extracted with ``git archive``): the whole file fails at
+Red on HEAD ``33b66ba1c`` (the module of that commit, extracted with ``git archive``): the whole file fails at
 collection, ``ImportError: cannot import name 'closed_flight_too_short' from
 'backend.app.services.financial_math.portfolio.contributions'`` — new API.
 

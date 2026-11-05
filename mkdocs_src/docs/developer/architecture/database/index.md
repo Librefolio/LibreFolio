@@ -133,8 +133,7 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   at the boundary (R13-SEC7-3): `check_decimal_exponent()` (`backend/app/schemas/common.py`)
   refuses a value whose exponent, `Decimal.adjusted()`, is outside ±100
   (`MAX_DECIMAL_EXPONENT`), a zero included (`0E-999999999`). Every `Currency` amount goes
-  through it (`Currency.validate_amount()`), and so does the `quantity` of
-  `POST /transactions/transfers/promote`: a 422 where a request schema reads the value; a
+  through it (`Currency.validate_amount()`): a 422 where a request schema reads the value; a
   `value_error` issue on its field (`cash.amount`, no `params`) where the transaction
   batch's lenient parse does, and that batch is not committed. No column comes near ±100
   (24 digits before the decimal point at most, 12 after), so below the bound the limits

@@ -69,7 +69,8 @@
     const otherCategory: Category = {id: 'other', icon: CircleEllipsis, keys: []};
 
     // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
-    const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone']);
+    // Same for the clean-up of the kept backups (FB-24), which the Backup section edits, and the space limit (FB-29), which the space bar of the Files page edits.
+    const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone', 'backup_cleanup_max_mb', 'backup_cleanup_max_days', 'storage_limit_mb']);
 
     // Placeholder settings: rendered read-only with a "Coming soon" badge until the feature lands
     const PLACEHOLDER_KEYS = new Set<string>();

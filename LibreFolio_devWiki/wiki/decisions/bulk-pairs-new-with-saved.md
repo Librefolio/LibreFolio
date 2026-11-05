@@ -26,7 +26,7 @@ meet ([[decisions/scalable-two-accounts-two-plugins]]).
 
 Plan 37, §8, and its steps 11, 12b and 12f:
 
-- **New + saved** (`9f20b8119`, 2026-10-09). `promote-suggest` also receives the new, unlinked rows, with negative ids
+- **New + saved** (`b7b54a50f`, 2026-10-09). `promote-suggest` also receives the new, unlinked rows, with negative ids
   (`newRowSuggestId`), when they have a type, a broker, a date and a non-zero amount or quantity (`isSuggestable`);
   without an amount the backend would skip the opposite-amounts check and return every deposit in the window. The 💡
   and the banner offer the mixed pairs (`mixedPromotePairs`, `importableSuggestions` in `promoteSuggest.ts`), merged
@@ -34,8 +34,8 @@ Plan 37, §8, and its steps 11, 12b and 12f:
 - **A reminder at save**, when some suggestions were never looked at (the 💡 never opened, the banner never touched),
   with «Show the suggestions» and «Save anyway»; and **«Merge all»** in the banner, beyond one pair, with one choice for
   every pair (`PromoteAllModal`: all left, all right, combine). It counts and merges only pairs that share no row
-  (`ec837a197`, 2026-10-10).
-- **Securities pairs only when they cancel** (the coordinator's decision, `e537a275b`, 2026-10-10): a TRANSFER pair is
+  (`0b5644ab5`, 2026-10-10).
+- **Securities pairs only when they cancel** (the coordinator's decision, `754d4f4ab`, 2026-10-10): a TRANSFER pair is
   offered only for the same asset with opposite, non-zero quantities equal in **exact decimal arithmetic**
   (`assetQuantitiesCancel`, on `exactDecimalSign` and `exactDecimalEqual`), as the backend checks it. A first version
   with a relative tolerance of 1e-9 let through pairs the backend would refuse.
@@ -47,14 +47,14 @@ Plan 37, §8, and its steps 11, 12b and 12f:
 - Fixed on the way: in the new + new branch the sign was lost when the type became `CASH_TRANSFER` or `FX_CONVERSION`
   (the editor shows absolute amounts and leaves the sign to the type), and `collapseIntoPaired` picked the «from» side
   at random. The sign now goes into the amount before the type changes.
-- Reported by S to workstream P on 2026-10-10 and closed by P's lot 42 (`af4463c5f`, train 34): exact cash
+- Reported by S to workstream P on 2026-10-10 and closed by P's lot 42 (`ff449bffe`, train 34): exact cash
   cancellation in `cashAmountsCancel`, one asset and exactly opposite quantities for a TRANSFER pair
   (`pairAssetMismatch`, `pairQuantityMismatch`), and no merge of a row linked to an asset event
   (`eventTypeIncompatible`).
 - A spec that saves the bulk editor on the shared E2E user with an unseen suggestion now stops on the reminder.
 - The pairs it offers follow lot 42's rules: one asset in exactly opposite quantities ([[decisions/transfer-pair-same-asset-opposite-quantity]]),
   and no row linked to an asset event its new type does not admit ([[decisions/promote-respects-asset-event-link]]).
-- C-47 (2026-10-11, `a892717de`): the *Max Δ days* slider reached 0 while `/promote-suggest` wanted at least 1, and
+- C-47 (2026-10-11, `25210ff16`): the *Max Δ days* slider reached 0 while `/promote-suggest` wanted at least 1, and
   moving it did not search again. The endpoint accepts 0 (the same day only), and the window is part of the 💡's search
   key.
 - The cost check on promotes is lot 40's ([[problems/promote-skipped-cost-basis-check]]); S's spec

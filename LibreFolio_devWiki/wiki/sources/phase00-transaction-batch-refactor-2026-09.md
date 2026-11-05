@@ -15,7 +15,7 @@ related:
 
 ## Summary
 
-One plan (~480 lines), shipped in `103317ab2` (2026-09-11; journal closed in `8ad355a8f`) and archived on 2026-10-09.
+One plan (~480 lines), shipped in `fa1a2db04` (2026-09-11; journal closed in `fa1a2db04`) and archived on 2026-10-09.
 An internal decomposition only: `TransactionService.execute_batch` became an orchestrator over thirteen named stages
 sharing a `TransactionBatchContext`; no API, schema, policy or frontend change. It closed backlog P4-2 (alias S6 6.8)
 and realigned five developer pages (service, balance validation, split/promote, WAC, lint gates).

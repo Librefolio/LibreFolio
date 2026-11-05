@@ -15,7 +15,7 @@ related:
 
 ## Summary
 
-One plan (~440 lines), shipped in `36fc57005` (2026-09-11; journal closed in `311a81210`) and archived on 2026-10-09.
+One plan (~440 lines), shipped in `9e5afa4c6` (2026-09-11; journal closed in `45bc04fa3`) and archived on 2026-10-09.
 It split the monolithic asset pricing service into the `asset_sources/` package behind a permanent thin facade,
 without changing any contract; it closed backlog items P4-1, P4-4 and S6 6.4.
 
@@ -29,7 +29,7 @@ without changing any contract; it closed backlog items P4-1, P4-4 and S6 6.4.
 
 ## Residuals
 
-`get_prices_bulk` keeps a `noqa: C901 — TODO(P2-refactor)` (verified at `249f5a9aa`).
+`get_prices_bulk` keeps a `noqa: C901 — TODO(P2-refactor)` (verified at `b0635b0cf`).
 
 ## Wiki pages updated
 

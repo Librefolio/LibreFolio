@@ -54,7 +54,7 @@ The books (pure: the builder fed by hand, helpers copied from ``test_engine_stat
 - ``transfer`` (March, two brokers): the same asset held on two brokers, a security transfer between them with three
   days in transit, ``date_from`` after the first movements (no frame before it; the first frames start on it).
 
-RED on HEAD ebc5c87a8, by absence: ``PositionFrame`` does not exist, the module fails at collection with
+RED on HEAD e40bb5154, by absence: ``PositionFrame`` does not exist, the module fails at collection with
 ``ImportError``. After a cure without ``compute_position_frames`` every builder test fails with ``TypeError``.
 
 Runs in ``./dev.py test services financial-math`` (the runner collects the whole ``test_financial_math/`` directory).

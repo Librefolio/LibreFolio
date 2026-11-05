@@ -21,7 +21,7 @@ Batches 11 and 12 changed ``mkdocs_src/aphra-pipeline/validate_translations.py``
 * ``_structural_diff`` counts blank-line-separated blocks for ``LINE_COUNT``, not lines: a paragraph the translation
   keeps on one line while the EN wraps it at 80 columns is not dropped content.
 
-Red phase, against the pipeline at 42ace5dd3 (before batch 11), staged outside the worktree and imported first:
+Red phase, against the pipeline at 353d9a76c (before batch 11), staged outside the worktree and imported first:
 64 red, 7 green.
 
 * red on behaviour (17): ``_strip_code_blocks`` leaves the code of a titled, a tilde, a "``` python" and a 4-backtick
@@ -48,7 +48,7 @@ its first heading and rendered its front matter. ``inline-code-missing`` now nam
 in-page links), ``check_inline_code`` and ``page_anchors`` itself (a byte-order mark is not content; a file is
 rendered again once it changes, and only then).
 
-Red phase of batch 13, against the pipeline at 61e598b8a (HEAD), staged outside the worktree and imported first, with
+Red phase of batch 13, against the pipeline at 61eaaaef2 (HEAD), staged outside the worktree and imported first, with
 ``page_anchors``, which HEAD lacks, taken from the worktree: 12 red, 84 green.
 
 * red, on behaviour (12): every anchor case of ``TestLinkAnchorsReadTheRender`` (an explicit id in its three
@@ -74,7 +74,7 @@ and HTML comments are not HTML; a comment keeps its lines. Batch 14 also made ``
 pymdownx.arithmatex does (smart dollar: no space after the opening ``$`` nor before the closing one, no unescaped
 ``$`` nor line break inside). The rule it replaced took a digit before a ``$`` for a price, and dropped the formula of
 «on day 3 $A$'s line» from the English while the translation, worded otherwise, kept it: a false
-``latex-inline-count`` on deposited-capital in it, fr and es. Red phase, against the pipeline at 1d27be53e (HEAD),
+``latex-inline-count`` on deposited-capital in it, fr and es. Red phase, against the pipeline at 046df7818 (HEAD),
 staged outside the worktree and imported first: 24 red, 106 green.
 
 * red on a missing function (18): every case of ``TestHtmlAssetDepth``;

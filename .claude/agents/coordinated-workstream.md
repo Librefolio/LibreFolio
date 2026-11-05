@@ -178,9 +178,13 @@ the coordinator gives you a working copy: your own copy, its own port, never a
 
 ## Planning and progress
 
-Create the approved plan at the full repo-relative path supplied in the kickoff,
-normally:
-`LibreFolio_developer_journal/Release_2/Phase_0/<NN_area>/...`.
+The journal is a separate local repository, shared by every workstream and outside your
+worktree (see «Developer Journal & Plan Methodology» in `CLAUDE.md`). Write only your own
+plan and backlog lines there, never run Git in it, and list the files you touched in your
+checkpoint: the coordinator commits them.
+
+Create the approved plan at the full path supplied in the kickoff, normally:
+`../LibreFolio_developer_journal/Release_2/Phase_0/<NN_area>/...`.
 
 After every completed step, immediately update the plan:
 
@@ -193,7 +197,7 @@ Do not wait until the end. The plan is the durable recovery point if context res
 
 ### Post-release backlog index
 
-`LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` is the single index of
+`../LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` is the single index of
 the work left after the release. When a checkpoint leaves something for later — a residual,
 a defect found outside the scope, a follow-up — add one line to **your own workstream's
 section** in the same checkpoint: `- **ID · title** — weight; origin (who, date). Details:

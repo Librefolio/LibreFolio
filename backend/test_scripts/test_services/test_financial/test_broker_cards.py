@@ -7,7 +7,7 @@ Since MF-B a card's ``net_worth`` is ``last_state.broker_contributions[broker].n
 ``total_gain_loss`` (``total_pnl``) on the valuation date, which add up to them by construction. ``cash_total`` is
 unchanged: the broker's native cash valued at the valuation date's rates.
 
-Before MF-B (HEAD a8d2486ae) the card summed it itself: the ``current_value`` of the broker's holdings — the end
+Before MF-B (HEAD 0fcbeb310) the card summed it itself: the ``current_value`` of the broker's holdings — the end
 positions above ``QUANTITY_DUST_THRESHOLD`` (0.00001) only — plus its cash (``native_cash.value_at``) plus its value
 in transit (``in_transit_contribution``), and ``gain_loss`` = that − the broker's capital. Same numbers, but for one
 case: a dust position (0 < quantity ≤ 0.00001) that the headline counted and the card did not. MF-B made the card add

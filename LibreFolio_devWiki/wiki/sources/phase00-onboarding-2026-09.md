@@ -35,9 +35,9 @@ flows, a coachmark engine, per-step progress, positions in the browser and a rep
 | Round 4 — geometry and milestones | 2026-09-11 → 09-14 | Collision-safe placement, cursor, per-step presentation; three Bulk flows (the developer's choice); the Import first-mount fix |
 | Round 5 — step progress | 2026-09-12 → 09-14 | `user_onboarding_step_progress` and the step endpoints; Import and Bulk back to one flow each; X skips the current step only; all compatibility layers removed |
 | Round 6 — final UX | 2026-09-14 | Intro at 8 s, Bulk checkpoint navigation, the 3 s panel fade; the developer's OK «…mi piace!» |
-| Round 7 — anchor stall | 2026-09-21 | The 3 s stall with **Continue anyway** (`18bc11a4f`); the dossier's grandfathering correction |
+| Round 7 — anchor stall | 2026-09-21 | The 3 s stall with **Continue anyway** (`446d31327`); the dossier's grandfathering correction |
 | Round 8 — post-review | 2026-09-23 → 10-11 | The requested update check, positions in `localStorage`, resume at the step, cross-tab close, the layout flash, hidden anchors, the copy gate, the skill; the developer's review of 2026-09-24 (points 11–17); C7 closed on 2026-10-11 |
-| `onboarding-review-dossier.md` | 2026-09-21 → 10-09 | A standalone review written by J about `ce718ca49` (`24a5dff6c`): the arc, «the decisions nobody authorised» (§2), backend, frontend, coverage gaps, what is not done; partly superseded on 2026-10-09 |
+| `onboarding-review-dossier.md` | 2026-09-21 → 10-09 | A standalone review written by J about `89f0c401d` (`b8999cad1`): the arc, «the decisions nobody authorised» (§2), backend, frontend, coverage gaps, what is not done; partly superseded on 2026-10-09 |
 
 ## Key Takeaways
 
@@ -51,15 +51,15 @@ flows, a coachmark engine, per-step progress, positions in the browser and a rep
   behaviour; the dossier recorded it as «an unvalidated decision that happens to be correct» —
   [[decisions/onboarding-existing-users-seeded-skipped]].
 - **The work entered `dev_release2` folded inside another branch**: the foundation and Rounds 1–6 arrived with the PAC
-  merge `67ee437a0` (2026-09-19), «which is why it has never been described on its own terms» (dossier).
+  merge `b8999cad1` (2026-09-19), «which is why it has never been described on its own terms» (dossier).
 - **Never-shipped migrations are edited, then consolidated**: `003_user_onboarding_progress` was edited in place
-  through Round 5 and absorbed into `004_release_1_2_0_schema.py` on 2026-09-22 (`126cfc0b4`) —
+  through Round 5 and absorbed into `004_release_1_2_0_schema.py` on 2026-09-22 (`7cb1474ee`) —
   [[decisions/onboarding-versioned-progress-per-flow]].
 - **Anchors are the fragile part** (dossier §4.3): a step must stall visibly rather than wait forever, and a hidden
   anchor is an absent one — [[problems/guide-anchor-never-resolves]]; measure only after the container stops moving —
   [[problems/coachmark-measured-mid-modal-transition]].
 - **Legacy components and runes state**: the layout flash ([[problems/legacy-layout-gate-missed-runes-state]]) and the
-  privacy toggle that legacy broker components ignored (R20, `865509a12`) are one family —
+  privacy toggle that legacy broker components ignored (R20, `7c4a6ffab`) are one family —
   [[problems/legacy-component-language-untracked]].
 - **The developer's review of 2026-09-24** fixed three product rules: positions survive logout (point 14, reversed),
   the cross-tab close stays («era più di quello che avevo chiesto, teniamola»), and no text announces another guide

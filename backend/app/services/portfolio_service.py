@@ -161,7 +161,7 @@ async def compute_wac_iterative(
     """Compute inventory-aware WAC (PMC) for an asset at a broker up to a date.
 
     Facade over :func:`~backend.app.services.financial_math.average_cost.compute_average_costs`
-    for the transaction preview, ``POST /portfolio/wac`` and the planner: it loads the rows,
+    for the transaction preview and the planner: it loads the rows,
     detects split-linked adjustments, picks the target currency (the override, or the currency
     of the last acquisition) and maps the average-cost timeline to ``WACPreviewResultItem``.
     Each acquisition is converted into the target currency at its own date; when one

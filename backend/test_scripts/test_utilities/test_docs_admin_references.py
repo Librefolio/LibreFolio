@@ -64,11 +64,7 @@ NEW_PAGES = [
     "email_flows",
     "email_troubleshooting",
     "service_exposure_funnel",
-    "wake_sync",
     "connection_proxy",
-    "hosting_instances",
-    "hosting_panel_api",
-    "hosting_panel_backups",
     "backup_sealed",
     "backup_moving",
     "cli_backup",
@@ -402,7 +398,7 @@ class TestRepositoryReferences:
             if extra:
                 disagreements.append(f"{name}: defined by the reader, not in the render: {extra}")
         assert disagreements == [], "\n".join(disagreements)
-        assert len(REAL.pages()) >= 14 + len(NEW_PAGES), "barrier: the admin pages (the old ones and the new) were all rendered"
+        assert len(REAL.pages()) >= 12 + len(NEW_PAGES), "barrier: the admin pages (the old ones and the new) were all rendered"
 
     def test_new_pages_exist(self) -> None:
         assert [page for page in NEW_PAGES if REAL.page(page) is None] == []
@@ -477,7 +473,7 @@ class TestMovedAnchors:
         assert all(isinstance(target, str) for entries in moved.values() for target in entries.values())
 
     def test_the_fixture_is_the_eight_old_pages(self) -> None:
-        assert sorted(FIXTURE_PAGES) == ["backup_restore", "cli_tools", "configuration", "connection_checks", "email", "hosting_providers", "service_exposure", "sleep_wake"]
+        assert sorted(FIXTURE_PAGES) == ["backup_restore", "cli_tools", "configuration", "connection_checks", "email", "service_exposure"]
         assert all(anchors == sorted(anchors) and len(anchors) == len(set(anchors)) for anchors in FIXTURE_PAGES.values())
         assert sum(len(anchors) for anchors in FIXTURE_PAGES.values()) >= 100, "the fixture lists the old anchors, not a sample"
 

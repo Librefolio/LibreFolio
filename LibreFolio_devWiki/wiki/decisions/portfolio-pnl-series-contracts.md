@@ -81,7 +81,7 @@ obvious implementation that gives a wrong answer.
 
 - Every optional flag enters the backend L2 cache key, the frontend cache key and `included_features`; the
   frontend passes them as a typed options object, not positional booleans.
-- Bucket labels follow the calendar (commit `3f4d4e4dd`, "P&L periods follow the calendar"), superseding the
+- Bucket labels follow the calendar (commit `86b392454`, "P&L periods follow the calendar"), superseding the
   first end-anchored buckets (Round 4, D16).
 
 ## Consequences

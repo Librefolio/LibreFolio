@@ -2194,7 +2194,7 @@ async def test_contribution_and_risk_return_name_the_excluded_weight_inside_cash
     assert results["risk_return"].metadata.algorithm_version == "1.2.0"
 
 
-# Captured on `30866c47e`, before `excluded_weight` existed, from exactly the current-composition
+# Captured on `8e8e282c9`, before `excluded_weight` existed, from exactly the current-composition
 # inputs of `query_unpriced_holding`. Publishing the split must not move any of them. The relative
 # tolerance only absorbs BLAS differences in `np.cov` between machines.
 GOLDEN_REL = 1e-12

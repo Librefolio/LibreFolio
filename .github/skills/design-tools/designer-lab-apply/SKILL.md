@@ -10,7 +10,7 @@ the list of changes. The export is the hand-off to an agent: what changes, from 
 lives in the code** (file, line, and for stylesheets the selector and property), from the colour catalogue the Lab was
 built with.
 
-Read the design first when the context is new: `LibreFolio_developer_journal/Release_2/Phase_0/55_colorSystem/design-designerLab.md`
+Read the design first when the context is new: `../LibreFolio_developer_journal/Release_2/Phase_0/55_colorSystem/design-designerLab.md`
 (§5 layers, §7 export, §8 limits) and the developer page `mkdocs_src/docs/developer/frontend/designer-lab.md`.
 
 ## Rules that do not bend

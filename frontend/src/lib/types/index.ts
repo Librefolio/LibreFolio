@@ -14,7 +14,7 @@
  * - asset.ts: Financial asset types
  *
  * Usage:
- *   import type { Broker, BrokerSummary } from '$lib/types';
+ *   import type { Broker } from '$lib/types';
  *   import type { AuthUser, UserSettings } from '$lib/types';
  *   import type { BrimFile, UploadedFile } from '$lib/types';
  *

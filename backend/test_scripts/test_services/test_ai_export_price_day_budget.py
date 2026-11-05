@@ -6,7 +6,7 @@ Workstream J «Numeri e analisi», release 1.3. Z-25 (N77) made ``AssetSourceMan
 (``components/asset_resources.py::load_asset_market_prices``) for the period, and the technical components
 (``components/technical_shared.py``) with their signals' warm-up.
 
-TODAY (base ``066780b81``) a REQUIRED component that raises it becomes ``RequiredComponentBuildError`` →
+TODAY (base ``9ad5b06b8``) a REQUIRED component that raises it becomes ``RequiredComponentBuildError`` →
 ``AiExportSnapshotSourceError`` (``runtime_service.py``, ``build_snapshot``) → 503 ``snapshot_source_failure`` with
 ``reason_code`` None: «a source is unavailable, try again later», for a request that fails the same way every time.
 

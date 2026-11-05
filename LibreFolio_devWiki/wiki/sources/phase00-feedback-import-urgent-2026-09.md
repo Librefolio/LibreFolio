@@ -18,7 +18,7 @@ related:
 ## Summary
 
 Eight files (an incremental plan, five rounds, a review checklist and an integration manifest), shipped in
-`c8a77dda3` (2026-09-09, closed 2026-09-10) and archived on 2026-10-09. Group E fixed the import defects users hit
+`31ce0dfef` (2026-09-09, closed 2026-09-10) and archived on 2026-10-09. Group E fixed the import defects users hit
 first, added a "recommend LibreFolio" share feature, and replaced the browser-side GHCR probe of the update check.
 
 ## Key takeaways

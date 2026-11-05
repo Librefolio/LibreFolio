@@ -38,7 +38,7 @@ investor rarely says aloud: does all this complexity earn more than a single wor
 
 ## Consequences
 
-- The Risk tab of the Dashboard and broker pages renders the four levels (`ffb204c62`, [[features/F-111]]); the Lab
+- The Risk tab of the Dashboard and broker pages renders the four levels (`4573c9e2a`, [[features/F-111]]); the Lab
   reuses them for a selection of assets ([[features/F-112]]).
 - A metric with no question has no home: tracking error and the information ratio stay only on the legacy Asset Detail
   panel ([[features/F-113]]) and in the deferrals.

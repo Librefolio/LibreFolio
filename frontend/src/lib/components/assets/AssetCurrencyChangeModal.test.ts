@@ -7,8 +7,8 @@
  * that are not SPLITs, and the link of the transactions that pointed to a deleted event. Since N68 (developer decision
  * 19/10/2026) the change is no longer blocked: `PATCH /assets/patch` always succeeds and does the deleting itself, in the
  * same call, keeping the SPLIT events and the transactions linked to them. So the modal is no longer the middle of a chain
- * «wipe → patch → sync»: its confirm is ONE `patch_assets_bulk_api_v1_assets_patch([patchPayload])` — `wipe_market_data_…`
- * is never called — followed, when the asset has a provider and had prices, by the price sync from the oldest price to today.
+ * «wipe → patch → sync»: its confirm is ONE `patch_assets_bulk_api_v1_assets_patch([patchPayload])` — the route that wiped the
+ * market data no longer exists — followed, when the asset has a provider and had prices, by the price sync from the oldest price to today.
  * What is visible state is the progress element (`currency-change-progress-step`, whose `data-step` is `patch` and then
  * `sync`: there is no `wipe` step any more) and the summary lines; the rest is an API call and two callbacks, which is what a
  * component test pins down.
@@ -20,7 +20,7 @@
  * shown only when `splitsKept > 0`.
  *
  * The dependencies are mocked at the module boundary:
- *   - `$lib/api` — the endpoints. `wipe_market_data_…` is present only to be proven never called.
+ *   - `$lib/api` — the endpoints.
  *   - `$lib/api/backupDownload` — the export buttons; we assert the (kind, format) pair handed to it.
  *   - `$lib/stores/app/toastStore.svelte` — asserted by **variant** (`success` / `error`), never by message.
  *   - `$lib/utils/sync/syncToastHelpers` — returns a fixed `{variant, message}`.
@@ -43,8 +43,6 @@ import {get} from 'svelte/store';
 
 vi.mock('$lib/api', () => ({
     zodiosApi: {
-        // N68: the interface no longer calls the wipe; the spy is here to prove it.
-        wipe_market_data_api_v1_assets__asset_id__market_data_wipe_post: vi.fn(),
         patch_assets_bulk_api_v1_assets_patch: vi.fn(),
         sync_prices_bulk_api_v1_assets_prices_sync_post: vi.fn(),
     },
@@ -62,7 +60,6 @@ import {zodiosApi} from '$lib/api';
 import {downloadAssetBackup} from '$lib/api/backupDownload';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 
-const wipe = vi.mocked(zodiosApi.wipe_market_data_api_v1_assets__asset_id__market_data_wipe_post);
 const patch = vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch);
 const sync = vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post);
 const download = vi.mocked(downloadAssetBackup);
@@ -105,7 +102,6 @@ function deferred<T = unknown>() {
 beforeEach(async () => {
     await setupI18n();
     vi.clearAllMocks();
-    wipe.mockResolvedValue(undefined as never);
     patch.mockResolvedValue(patchSuccessResponse as never);
     sync.mockResolvedValue({results: [{status: 'ok'}]} as never);
     download.mockResolvedValue(undefined as never);
@@ -203,14 +199,13 @@ describe('AssetCurrencyChangeModal — conditional rendering', () => {
 });
 
 describe('AssetCurrencyChangeModal — the confirm sequence', () => {
-    it('sends ONE patch, then the sync, then closes and confirms — and never the wipe', async () => {
+    it('sends ONE patch, then the sync, then closes and confirms', async () => {
         const {onconfirmed} = mount({providerAssigned: true});
         await fireEvent.click(screen.getByTestId('currency-change-confirm'));
 
         await waitFor(() => expect(onconfirmed).toHaveBeenCalledTimes(1));
         expect(patch).toHaveBeenCalledTimes(1);
         expect(sync).toHaveBeenCalledTimes(1);
-        expect(wipe, 'the patch deletes by itself: the interface no longer wipes').not.toHaveBeenCalled();
         expect(patch.mock.invocationCallOrder[0]).toBeLessThan(sync.mock.invocationCallOrder[0]);
         await waitFor(() => expect(screen.queryByTestId('currency-change-modal')).toBeNull());
     });
@@ -238,7 +233,6 @@ describe('AssetCurrencyChangeModal — the confirm sequence', () => {
         await waitFor(() => expect(onconfirmed).toHaveBeenCalled());
         expect(patch).toHaveBeenCalledTimes(1);
         expect(sync).not.toHaveBeenCalled();
-        expect(wipe).not.toHaveBeenCalled();
     });
 
     it('skips sync when a provider is assigned but there were no prices (nothing to resume from)', async () => {
@@ -259,7 +253,6 @@ describe('AssetCurrencyChangeModal — the confirm sequence', () => {
         expect(toasts.error, 'one error toast').toHaveBeenCalledTimes(1);
         expect(vi.mocked(toasts.error).mock.calls[0][0], 'the generic sentence carries the error’s own words').toContain('boom');
         expect(sync).not.toHaveBeenCalled();
-        expect(wipe).not.toHaveBeenCalled();
         expect(onconfirmed).not.toHaveBeenCalled();
         // The destructive step failed — the modal is still there to retry.
         expect(screen.getByTestId('currency-change-modal')).toBeInTheDocument();
@@ -333,7 +326,7 @@ describe('AssetCurrencyChangeModal — in-progress lock and the steps', () => {
         await waitFor(() => expect(screen.queryByTestId('currency-change-modal')).toBeNull());
     });
 
-    it('moves to data-step="sync" once the patch is in, and there is never a wipe step', async () => {
+    it('moves to data-step="sync" once the patch is in', async () => {
         const patchGate = deferred();
         const syncGate = deferred();
         patch.mockReturnValueOnce(patchGate.promise as never);
@@ -351,7 +344,6 @@ describe('AssetCurrencyChangeModal — in-progress lock and the steps', () => {
 
         syncGate.resolve({results: [{status: 'ok'}]});
         await waitFor(() => expect(onconfirmed).toHaveBeenCalledTimes(1));
-        expect(wipe).not.toHaveBeenCalled();
     });
 
     it('shows no progress element before the confirm', () => {
@@ -377,14 +369,13 @@ describe('AssetCurrencyChangeModal — exports and cancel', () => {
         await waitFor(() => expect(toasts.error).toHaveBeenCalled());
     });
 
-    it('cancels via the footer button: no patch, no sync, no wipe', async () => {
+    it('cancels via the footer button: no patch, no sync', async () => {
         const {oncanceled} = mount();
         await fireEvent.click(screen.getByTestId('currency-change-cancel'));
         expect(oncanceled).toHaveBeenCalledTimes(1);
         await waitFor(() => expect(screen.queryByTestId('currency-change-modal')).toBeNull());
         expect(patch).not.toHaveBeenCalled();
         expect(sync).not.toHaveBeenCalled();
-        expect(wipe).not.toHaveBeenCalled();
     });
 
     it('cancels via the header X: nothing is sent', async () => {
@@ -392,6 +383,5 @@ describe('AssetCurrencyChangeModal — exports and cancel', () => {
         await fireEvent.click(screen.getByTestId('currency-change-close-x'));
         expect(oncanceled).toHaveBeenCalledTimes(1);
         expect(patch).not.toHaveBeenCalled();
-        expect(wipe).not.toHaveBeenCalled();
     });
 });

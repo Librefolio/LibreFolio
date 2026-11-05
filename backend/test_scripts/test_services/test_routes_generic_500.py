@@ -1,6 +1,6 @@
 """X-R74 (release 1.3, workstream X) — a 500 of the asset and FX routes names no error; the error is logged instead.
 
-The defect, on HEAD 0fa46aaa8. R13-SEC9-3 cured ``api/v1/assets/prices.py``: a 500 there answered ``detail=str(e)``, and
+The defect, on HEAD c164d410b. R13-SEC9-3 cured ``api/v1/assets/prices.py``: a 500 there answered ``detail=str(e)``, and
 an SQL error echoes its statement, naming the schema. The same answer stands at 26 sites of six route files —
 ``detail=str(e)`` in ``api/v1/assets/providers.py`` (7), ``crud.py`` (7), ``events.py`` (5) and ``market_data.py`` (2);
 ``f"…: {e!s}"`` in ``api/v1/fx/providers.py`` (4) and ``currencies.py`` (1, ``sync_rates``). The probe and the five FX
@@ -13,8 +13,7 @@ The cure's contract, pinned here:
    ``logger.exception(...)`` in the ``except`` block (``error``/``critical`` with ``exc_info`` count too). The shape
    ``prices.py`` and ``fx/currencies.py``'s ``delete_rates_endpoint`` already have («Internal error while …»).
 2. Guards, what the cure keeps: the authored refusals answer as they do — the probe's 400 with the error's message; the
-   409 ``{"error_code", "message", "params"}`` of ``assign_providers_bulk`` and ``remove_providers_bulk`` (N68 removed
-   ``wipe_market_data``'s: the wipe keeps the SPLITs and no longer refuses); an upsert's coded status (``_REFUSAL_STATUS``, here ``EVENT_IN_USE``); ``wipe_market_data``'s 404
+   409 ``{"error_code", "message", "params"}`` of ``assign_providers_bulk`` and ``remove_providers_bulk``; an upsert's coded status (``_REFUSAL_STATUS``, here ``EVENT_IN_USE``); ``market_data_summary``'s 404
    ``ASSET_NOT_FOUND`` with the error's text; the FX sync's 502 «Failed to sync rates: …».
 3. One more leak, through a 400: ``merge_assets``. ``AssetCRUDService.merge_assets`` rolls back whatever stops a merge,
    logs it with its exception on the service module's ``logger`` and re-raises it as
@@ -44,7 +43,7 @@ place of ``FXProviderRegistry``), whatever FX plugins the checkout installs — 
 session. The asset provider bodies are real ones for ``scheduled_investment`` without parameters, which its plugin
 validates offline (as ``test_probe_rate_limit.py`` builds them).
 
-Red on HEAD 0fa46aaa8: ``test_xr74_a_500_names_no_error_and_logs_it``, all 26 cases — the detail echoes the error; the
+Red on HEAD c164d410b: ``test_xr74_a_500_names_no_error_and_logs_it``, all 26 cases — the detail echoes the error; the
 probe and the five FX cases, besides, log nothing. ``test_xr74_a_failed_merge_names_no_error_and_logs_it`` too: the 400
 reads «Merge failed: SELECT secret_column FROM secret_table» (the service already logs the error). Green before and after:
 ``test_xr74_guard_an_authored_refusal_answers_as_before`` (7 cases).
@@ -219,23 +218,19 @@ PROBE = _Site(asset_provider_routes, lambda _session: asset_provider_routes.prob
 ASSIGN = _Site(asset_provider_routes, lambda session: asset_provider_routes.assign_providers_bulk(assignments=[_assignment()], session=session, _current_user=USER), AssetSourceManager, "bulk_assign_providers")
 REMOVE = _Site(asset_provider_routes, lambda session: asset_provider_routes.remove_providers_bulk(asset_ids=[1, 2], session=session, _current_user=USER), AssetSourceManager, "bulk_remove_providers")
 ASSIGNMENTS = _Site(asset_provider_routes, lambda session: asset_provider_routes.get_provider_assignments(asset_ids=[1, 2], session=session, _current_user=USER))
-REFRESH = _Site(asset_provider_routes, lambda session: asset_provider_routes.refresh_assets_from_provider(asset_ids=[1, 2], session=session, _current_user=USER), AssetSourceManager, "refresh_assets_from_provider")
 # api/v1/assets/crud.py
 CREATE_ASSETS = _Site(crud_routes, lambda session: crud_routes.create_assets_bulk(assets=[FAAssetCreateItem(display_name="X-R74 asset", currency="EUR")], session=session, _current_user=USER), AssetCRUDService, "create_assets_bulk")
 PATCH_ASSETS = _Site(crud_routes, lambda session: crud_routes.patch_assets_bulk(assets=[FAAssetPatchItem(asset_id=1, display_name="X-R74 asset")], session=session, _current_user=USER), AssetCRUDService, "patch_assets_bulk")
-ALL_ASSETS = _Site(crud_routes, lambda session: crud_routes.get_all_assets(session=session, current_user=USER), AssetCRUDService, "list_assets")
 QUERY_ASSETS = _Site(crud_routes, _list_assets, AssetCRUDService, "list_assets")
 DELETE_ASSETS = _Site(crud_routes, lambda session: crud_routes.delete_assets_bulk(asset_ids=[1, 2], session=session, _current_user=USER), AssetCRUDService, "delete_assets_bulk")
 MERGE_ASSETS = _Site(crud_routes, lambda session: crud_routes.merge_assets(payload=FAAssetMergeRequest(source_asset_id=1, target_asset_id=2, dry_run=True), session=session, _current_user=USER), AssetCRUDService, "merge_assets")
 READ_ASSETS = _Site(crud_routes, lambda session: crud_routes.read_assets_bulk(asset_ids=[1, 2], session=session, _current_user=USER))
 # api/v1/assets/events.py
 UPSERT_EVENTS = _Site(event_routes, lambda session: event_routes.upsert_events_bulk(assets=[FAEventUpsert(asset_id=1, delete_ids=[3])], session=session, _current_user=USER), AssetSourceManager, "bulk_upsert_events")
-DELETE_EVENTS = _Site(event_routes, lambda session: event_routes.delete_events_bulk(asset_id=1, ids=[3, 4], session=session, current_user=USER), AssetSourceManager, "delete_events_bulk")
 QUERY_EVENTS = _Site(event_routes, lambda session: event_routes.query_events_bulk(requests=[FAEventQueryItem(asset_id=1, date_range=DateRangeModel(start=WEEK_START, end=WEEK_END))], session=session, _current_user=USER), AssetSourceManager, "query_events_bulk")
 EVENTS_BY_IDS = _Site(event_routes, lambda session: event_routes.get_events_by_ids(ids=[3, 4], session=session, _current_user=USER), AssetSourceManager, "get_events_by_ids")
 # api/v1/assets/market_data.py
 MARKET_DATA_SUMMARY = _Site(market_data_routes, lambda session: market_data_routes.market_data_summary(asset_id=1, session=session, _current_user=USER), AssetSourceManager, "wipe_market_data_for_currency_change")
-WIPE = _Site(market_data_routes, lambda session: market_data_routes.wipe_market_data(asset_id=1, session=session, _current_user=USER), AssetSourceManager, "wipe_market_data_for_currency_change")
 # api/v1/fx/providers.py
 FX_PROVIDERS = _Site(fx_provider_routes, lambda _session: fx_provider_routes.list_providers(providers=None, _current_user=USER), fx_provider_routes, "configured_fx_provider", prepare=_one_fx_provider)
 FX_ROUTES = _Site(fx_provider_routes, lambda session: fx_provider_routes.list_routes(session=session, _current_user=USER))
@@ -310,11 +305,9 @@ SITES_500 = [
     pytest.param(REMOVE, _unknown_code_error, id="assets_providers-remove_providers_bulk-unknown_code"),
     pytest.param(REMOVE, _sql_error, id="assets_providers-remove_providers_bulk-exception"),
     pytest.param(ASSIGNMENTS, _sql_error, id="assets_providers-get_provider_assignments"),
-    pytest.param(REFRESH, _sql_error, id="assets_providers-refresh_assets_from_provider"),
     # api/v1/assets/crud.py
     pytest.param(CREATE_ASSETS, _sql_error, id="assets_crud-create_assets_bulk"),
     pytest.param(PATCH_ASSETS, _sql_error, id="assets_crud-patch_assets_bulk"),
-    pytest.param(ALL_ASSETS, _sql_error, id="assets_crud-get_all_assets"),
     pytest.param(QUERY_ASSETS, _sql_error, id="assets_crud-list_assets"),
     pytest.param(DELETE_ASSETS, _sql_error, id="assets_crud-delete_assets_bulk"),
     pytest.param(MERGE_ASSETS, _sql_error, id="assets_crud-merge_assets"),
@@ -322,12 +315,10 @@ SITES_500 = [
     # api/v1/assets/events.py
     pytest.param(UPSERT_EVENTS, _unknown_code_error, id="assets_events-upsert_events_bulk-unknown_code"),
     pytest.param(UPSERT_EVENTS, _sql_error, id="assets_events-upsert_events_bulk-exception"),
-    pytest.param(DELETE_EVENTS, _sql_error, id="assets_events-delete_events_bulk"),
     pytest.param(QUERY_EVENTS, _sql_error, id="assets_events-query_events_bulk"),
     pytest.param(EVENTS_BY_IDS, _sql_error, id="assets_events-get_events_by_ids"),
     # api/v1/assets/market_data.py
     pytest.param(MARKET_DATA_SUMMARY, _sql_error, id="assets_market_data-market_data_summary"),
-    pytest.param(WIPE, _sql_error, id="assets_market_data-wipe_market_data"),
     # api/v1/fx/providers.py
     pytest.param(FX_PROVIDERS, _sql_error, id="fx_providers-list_providers"),
     pytest.param(FX_ROUTES, _sql_error, id="fx_providers-list_routes"),
@@ -346,7 +337,7 @@ async def test_xr74_a_500_names_no_error_and_logs_it(monkeypatch, site, make_err
     route answers 500 with a non-empty detail that holds no word of the error (``SELECT``, ``secret``, ``FROM``, the
     error's class, the code), and the error is logged with its exception on the route module's ``logger``.
 
-    Red on HEAD 0fa46aaa8, every case: the detail echoes the error (``detail=str(e)``; ``f"…: {e!s}"`` at the FX sites).
+    Red on HEAD c164d410b, every case: the detail echoes the error (``detail=str(e)``; ``f"…: {e!s}"`` at the FX sites).
     The probe and the five FX cases, besides, log nothing.
     """
     error = make_error()
@@ -406,7 +397,7 @@ async def test_xr74_a_failed_merge_names_no_error_and_logs_it(monkeypatch):
     holds no word of the error, and the error is logged with its exception on the service module's ``logger``; the route
     does not log on this path.
 
-    Red on HEAD 0fa46aaa8: the 400 reads «Merge failed: SELECT secret_column FROM secret_table» — the service wraps
+    Red on HEAD c164d410b: the 400 reads «Merge failed: SELECT secret_column FROM secret_table» — the service wraps
     ``{e!s}`` into its ``AssetSourceError`` and the route answers ``detail=str(e)``. The log is already there. Green with
     the cure: «Merge failed: internal error», the status, the code and the log unchanged.
     """
@@ -510,7 +501,7 @@ GUARDS = [
     pytest.param(ASSIGN, _wipe_refusal, 409, _coded, id="assets_providers-assign_providers_bulk-409"),
     pytest.param(REMOVE, _removal_refusal, 409, _coded, id="assets_providers-remove_providers_bulk-409"),
     pytest.param(UPSERT_EVENTS, _event_in_use, 409, _coded, id="assets_events-upsert_events_bulk-409"),
-    pytest.param(WIPE, _asset_not_found, 404, _its_text, id="assets_market_data-wipe_market_data-404"),
+    pytest.param(MARKET_DATA_SUMMARY, _asset_not_found, 404, _its_text, id="assets_market_data-market_data_summary-404"),
     pytest.param(SYNC, _provider_failure, 502, _sync_failed, id="fx_currencies-sync_rates-502"),
 ]
 
@@ -519,11 +510,11 @@ GUARDS = [
 @pytest.mark.parametrize("site, make_error, status, answered", GUARDS)
 async def test_xr74_guard_an_authored_refusal_answers_as_before(monkeypatch, site, make_error, status, answered):
     """The call on the site's path raises the refusal its service authors. The barrier first: that call was made. Then
-    the route answers it as it does on HEAD 0fa46aaa8 — that status, that detail: the probe's 400 with the message, a 409
+    the route answers it as it does on HEAD c164d410b — that status, that detail: the probe's 400 with the message, a 409
     ``{"error_code", "message", "params"}``, the 404 ``ASSET_NOT_FOUND`` with the error's text, the sync's 502 «Failed to
     sync rates: …». The cure changes the 500s only.
 
-    Guard: green on HEAD 0fa46aaa8 too.
+    Guard: green on HEAD c164d410b too.
     """
     error = make_error()
     print_section(f"X-R74 guard: {site.failing_call} refuses with {getattr(error, 'error_code', type(error).__name__)}")
@@ -536,27 +527,3 @@ async def test_xr74_guard_an_authored_refusal_answers_as_before(monkeypatch, sit
     assert isinstance(outcome, HTTPException), outcome
     assert (outcome.status_code, outcome.detail) == (status, answered(error))
     print_success(f"{outcome.status_code} {outcome.detail!r}")
-
-
-@pytest.mark.asyncio
-async def test_n68_the_wipe_route_has_no_409_branch_any_more(monkeypatch):
-    """N68: ``wipe_market_data`` has no 409 for ``MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`` any more (the wipe keeps the
-    SPLITs; the code, the service's guard and the route's branch are gone). An ``AssetSourceError`` of that code, were
-    the service to raise it, is any other service error to the route: 400, the error's text as a string detail.
-
-    Red today (X-R48): the route answers it 409 with ``{"error_code", "message", "params"}``.
-    """
-    error = AssetSourceError(
-        "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST: 1 split(s) of this asset have 2 linked adjustment(s) without a purchase cost",
-        "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST",
-        {"splits": [{"event_id": 41, "date": "2025-06-02", "transaction_ids": [17], "hidden_transactions_count": 1}]},
-    )
-    print_section("N68: the wipe route has no 409 branch")
-    failing = _Failing(error)
-    session = _install(monkeypatch, WIPE, failing)
-
-    outcome = await _outcome(lambda: WIPE.call(session))
-
-    assert failing.calls, f"barrier: {WIPE.failing_call} was never called, the route stopped before it ({_shown(outcome)})"
-    assert isinstance(outcome, HTTPException), outcome
-    assert (outcome.status_code, outcome.detail) == (400, str(error)), f"the wipe route answers {outcome.status_code} {outcome.detail!r}: expected the generic 400 with the error's text, no 409 branch (N68)"

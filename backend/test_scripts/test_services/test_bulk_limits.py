@@ -34,7 +34,7 @@ Isolation: PURE — no lane database, no server, no network. The price queries r
 the conversion handler is called directly, ``convert_bulk`` replaced by an in-process converter that records what it is
 handed; the market holiday table is an empty one.
 
-Red before the change (HEAD da059b1c7), each for the reason its docstring gives ("Red before Z-25"): BL-001, BL-002,
+Red before the change (HEAD ea125c4a3), each for the reason its docstring gives ("Red before Z-25"): BL-001, BL-002,
 BL-I01…I03, BL-A01, BL-A03…A07, BL-F01…F03. Green then too — behaviour the change has to keep: BL-I04, BL-A02.
 
 Z-30 (coordinator decision, 17/10; X-R65's D3) bounds how far back a full-history item loads. No write of a price or a
@@ -61,7 +61,7 @@ Z-30 still bounds that load at 1900-01-01, whatever rows lie before it. The cont
 
 The old rows are written through the ORM, straight into the private database, as an older version stored them; since
 N83's revision the upsert would take their dates as well.
-Red before Z-30 (HEAD 59987e852), each for the reason its docstring gives ("Red before Z-30"): BL-L01…L03. Green then
+Red before Z-30 (HEAD 71162f131), each for the reason its docstring gives ("Red before Z-30"): BL-L01…L03. Green then
 too — behaviour the change has to keep: BL-L04…L07. Red under the full history first narrowed (from the earlier of
 1900-01-01 and the visible start, in place of the finite warm-up): BL-L01's three cases at or before the floor, and
 BL-L07.
@@ -1005,7 +1005,7 @@ async def test_bll07_a_full_history_never_shortens_a_finite_warmup_beside_it(pri
 # The question (lot X6, «tetto di span»): does a huge visible span get read before the budget checks it? The answer, pinned
 # here: the read is one indexed range over the stored rows, so it costs what the asset stores, not the span; a fill costs
 # its days, and ``_fill_span`` counts them from the dates alone, before ``_build_backward_filled_series`` runs. So no cap of
-# the span itself is needed. Both cases are GUARDS, green on HEAD 7e431b634 (no cure).
+# the span itself is needed. Both cases are GUARDS, green on HEAD 0089949ce (no cure).
 
 
 @pytest.mark.asyncio

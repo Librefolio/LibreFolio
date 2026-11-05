@@ -36,12 +36,16 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
 
 WIKI = Path(__file__).resolve().parent
 REPO = WIKI.parent
+# The journal is a repository of its own, beside the main checkout: resolved through Git so that a worktree finds it too.
+GIT_COMMON = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--path-format=absolute", "--git-common-dir"], capture_output=True, text=True, check=True).stdout.strip()
+JOURNAL_PARENT = Path(GIT_COMMON).parent.parent
 
 # A path cited inside a markdown table cell, wrapped in backticks. Cells that
 # carry prose rather than a path are filtered out by the heuristics below.
@@ -86,6 +90,8 @@ def cited_paths(page: Path) -> list[tuple[int, str]]:
 
 
 def resolve(p: str) -> bool:
+    if p.startswith("LibreFolio_developer_journal"):
+        return (JOURNAL_PARENT / p).exists()
     candidate = (REPO / p) if not p.startswith("LibreFolio_devWiki") else (REPO / p)
     if candidate.exists():
         return True

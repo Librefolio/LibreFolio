@@ -21,7 +21,7 @@ related:
 
 Two plans of workstream L, born from two defects that plan 33 found while chasing flaky import tests: deleting an
 account orphaned the brokers it alone owned (A), and SQLite reused the ids of deleted rows (B). Step 1 (train 12,
-merge `78b285bdc`) fixed both at the root; step 2 (train 22, merge `eb15f6ed9`) guarded the last active administrator
+merge `84d7afa2d`) fixed both at the root; step 2 (train 22, merge `5a1fd6ba3`) guarded the last active administrator
 and closed three neighbouring defects of the CLI and the session.
 
 ## Key takeaways

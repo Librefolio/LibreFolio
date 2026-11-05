@@ -1,7 +1,7 @@
 """R13-SEC9-1, -3, -4 (security review by E; lands with X-R59) — ``POST /assets/prices/current``: one fetch per distinct
 asset, 1 000 ids at most, a ``range_start`` up to tomorrow (and no floor, X5-6), and no 500 that echoes its error.
 
-The defects, on HEAD 2c3e4d452:
+The defects, on HEAD 5a3df79a9:
 
 - SEC9-1 (MEDIUM, DoS). The route took any number of ids — E measured 8 000 copies of one id: 7.9 s and +382 MB — and
   ``PriceQueryOperations.get_current_prices_bulk`` fetched every requested id, duplicates included. ``_live_quote_item``
@@ -56,7 +56,7 @@ handles a request — goes through the price router mounted on a fresh ``FastAPI
 process by ``httpx.ASGITransport`` (no server, no port), its session and user dependencies overridden; the same
 recorders behind it. ``latest_range_end`` is held at the real tomorrow for the test.
 
-Red on HEAD 2c3e4d452, each for the reason its docstring gives: ``test_sec9_1_a_repeated_id_asks_its_provider_once``,
+Red on HEAD 5a3df79a9, each for the reason its docstring gives: ``test_sec9_1_a_repeated_id_asks_its_provider_once``,
 ``test_sec9_1_a_repeated_id_writes_todays_row_once``,
 ``test_sec9_1_lookups_of_one_cache_key_waiting_for_the_slot_make_one_provider_call``,
 ``test_sec9_1_more_than_1000_ids_refused_before_any_read``, ``test_sec9_1_the_range_change_is_computed_once_per_distinct_id``,
@@ -69,14 +69,14 @@ Green before and after — what the cure keeps:
 ``test_sec9_4_range_start_up_to_tomorrow_accepted``, ``test_xr59_guard_the_quotes_stand_when_the_range_change_fails``,
 ``test_d1_guard_without_target_currency_the_change_is_native``,
 ``test_d1_guard_target_currency_without_range_start_changes_nothing``.
-Red on HEAD 89cdc2e0e (X5-6): ``test_sec9_4_range_start_before_1900_accepted`` (every case: refused with the parameter's 422).
+Red on HEAD eb5f0ba01 (X5-6): ``test_sec9_4_range_start_before_1900_accepted`` (every case: refused with the parameter's 422).
 
 Isolation: PURE — no lane database, no server, no network. Every row is written to the test's own in-memory database,
 closed and disposed at teardown; the cache, the provider lookup, the service's today, the route's service, change and
 ceiling are replaced for the test only (``monkeypatch``); the app the requests reach is built per test and touches the
 process's app nowhere.
 
-MF-SEC9c, on HEAD 255c56d40: the database fallback of ``get_current_prices_bulk`` read the session from inside the
+MF-SEC9c, on HEAD 10602d52a: the database fallback of ``get_current_prices_bulk`` read the session from inside the
 parallel lookups. ``_fetch_one`` ran per distinct id in ``asyncio.gather`` and, without a live quote (no provider, a
 provider that failed, one paused), awaited ``_last_readable_price(session, asset_id)`` there: several tasks on ONE
 ``AsyncSession`` at once, which SQLAlchemy does not support (sporadic «This session is provisioning a new connection;
@@ -99,7 +99,7 @@ meanwhile runs, so an overlap the code allows is an overlap observed, whatever t
 written as ``test_current_price_storable.py`` writes it: raw SQL over a row the ORM wrote (``9e999``, a REAL +inf),
 checked as the file holds it.
 
-Red on HEAD 255c56d40, each for the reason its docstring gives: ``test_mf_sec9c_the_session_is_never_used_concurrently``
+Red on HEAD 10602d52a, each for the reason its docstring gives: ``test_mf_sec9c_the_session_is_never_used_concurrently``
 and ``test_mf_sec9c_the_fallbacks_are_one_grouped_read``. Green before and after:
 ``test_mf_sec9c_guard_the_latest_close_that_reads_is_served``,
 ``test_mf_sec9c_guard_a_paused_provider_falls_back_with_its_refusal``,
@@ -295,7 +295,7 @@ async def test_sec9_1_a_repeated_id_asks_its_provider_once(session, quotes):
     """``[a, a, b, a]``: the provider is asked once for a and once for b; the answer holds 4 items in request order, the
     three of a equal, each with its asset's quote from the provider.
 
-    Red on HEAD 2c3e4d452: a's three lookups all start before the first answer, all miss the cache: a asked 3 times.
+    Red on HEAD 5a3df79a9: a's three lookups all start before the first answer, all miss the cache: a asked 3 times.
     """
     print_section("R13-SEC9-1: a repeated id, one provider call")
     a = await _assigned_asset(session, quotes, "SEC9A")
@@ -316,7 +316,7 @@ async def test_sec9_1_a_repeated_id_asks_its_provider_once(session, quotes):
 async def test_sec9_1_a_repeated_id_writes_todays_row_once(session, quotes):
     """``[a, a, b, a]``: exactly one row on ``TODAY`` for a and one for b, each holding its quote; nothing raised.
 
-    Red on HEAD 2c3e4d452: one row was added per requested id; the three of a broke the commit (UNIQUE asset_id + date),
+    Red on HEAD 5a3df79a9: one row was added per requested id; the three of a broke the commit (UNIQUE asset_id + date),
     and the rollback lost b's row too: no row at all.
     """
     print_section("R13-SEC9-1: a repeated id, one row written back")
@@ -338,7 +338,7 @@ async def test_sec9_1_lookups_of_one_cache_key_waiting_for_the_slot_make_one_pro
     answers only once both asked for it), then finds the first one's quote in the cache. ONE provider call; both items
     carry the quote, and both assets get today's row.
 
-    Red on HEAD 2c3e4d452: the cache was read before the slot only: 2 provider calls.
+    Red on HEAD 5a3df79a9: the cache was read before the slot only: 2 provider calls.
     """
     print_section("R13-SEC9-1: one cache key, two lookups waiting for the slot, one provider call")
     first = await _assigned_asset(session, quotes, "SEC9SHARED")
@@ -362,7 +362,7 @@ async def test_sec9_1_guard_lookups_of_distinct_keys_each_ask_their_provider(ses
     """Guard: the same scene with two identifiers — two cache keys — makes two provider calls, each asset its own quote.
     The cache read after the slot never lends one key's quote to another.
 
-    Green on HEAD 2c3e4d452 too.
+    Green on HEAD 5a3df79a9 too.
     """
     print_section("R13-SEC9-1 guard: two cache keys, two provider calls")
     first = await _assigned_asset(session, quotes, "SEC9X")
@@ -509,7 +509,7 @@ async def test_mf_sec9c_the_session_is_never_used_concurrently(watched, quotes):
     the lookups interleave with one another and with whatever else runs meanwhile, as in production. Every one of the 13
     asked its provider once (verified).
 
-    Red on HEAD 255c56d40: each lookup read its fallback from inside the gather — all 20 statements in flight at once on
+    Red on HEAD 10602d52a: each lookup read its fallback from inside the gather — all 20 statements in flight at once on
     one ``AsyncSession``, the watcher's yield or not (aiosqlite hands each statement to a thread of its own).
     """
     print_section("MF-SEC9c: 20 fallbacks, the session never used by two at once")
@@ -546,7 +546,7 @@ async def test_mf_sec9c_the_fallbacks_are_one_grouped_read(watched, quotes):
     reads all 9, then lookups alone of the 2 unreadable — no statement reads a readable or row-less asset by itself.
     Each item is the asset's latest close that reads.
 
-    Red on HEAD 255c56d40: one paged read per asset, alone — 6 statements read the 6 readable fallbacks.
+    Red on HEAD 10602d52a: one paged read per asset, alone — 6 statements read the 6 readable fallbacks.
     """
     print_section("MF-SEC9c: the fallbacks, one grouped read")
     expected: dict[int, Served] = {}
@@ -589,7 +589,7 @@ async def test_mf_sec9c_guard_the_latest_close_that_reads_is_served(session):
     and a full page of older ones), or the latest of two that read; an asset whose closes are all ±inf, and one with no
     row, answer "No price data available".
 
-    Green on HEAD 255c56d40 too.
+    Green on HEAD 10602d52a too.
     """
     print_section("MF-SEC9c guard: the latest close that reads")
     one_over = await _unassigned_asset(session, "one over")
@@ -613,7 +613,7 @@ async def test_mf_sec9c_guard_a_paused_provider_falls_back_with_its_refusal(sess
     """Guard: a paused provider's asset falls back to its stored close with ``RATE_LIMITED`` and the pause's
     ``retry_after``, or answers "No price data available" with them; a failed provider's, the same without them.
 
-    Green on HEAD 255c56d40 too.
+    Green on HEAD 10602d52a too.
     """
     print_section("MF-SEC9c guard: a paused provider's fallback says why")
     assets: dict[str, int] = {}
@@ -641,7 +641,7 @@ async def test_mf_sec9c_guard_live_quotes_and_fallbacks_in_request_order(session
     order: the live quote, the stored close, "Asset not found", "No price data available", the paused provider's stored
     close with its refusal; each repeated id answered alike, its provider asked once.
 
-    Green on HEAD 255c56d40 too.
+    Green on HEAD 10602d52a too.
     """
     print_section("MF-SEC9c guard: live quotes and fallbacks, in request order")
     live = await _assigned_asset(session, quotes, "SEC9CL")
@@ -775,7 +775,7 @@ async def test_sec9_1_more_than_1000_ids_refused_before_any_read(route):
     """1 001 copies of one id: 422 ``bulk_too_many_items``, ``max_items`` 1 000, ``items`` 1 001 — the ids as sent, the
     duplicates counted —; the service never called, no statement read.
 
-    Red on HEAD 2c3e4d452: no cap on this route; the service was called with the 1 001 ids.
+    Red on HEAD 5a3df79a9: no cap on this route; the service was called with the 1 001 ids.
     """
     print_section("R13-SEC9-1: POST /prices/current, 1 001 ids")
     service, _changes = route
@@ -796,7 +796,7 @@ async def test_sec9_1_more_than_1000_ids_refused_before_any_read(route):
 async def test_sec9_1_exactly_1000_ids_pass(route):
     """Exactly 1 000 ids pass the cap: the service is called once with them, 1 000 results come back.
 
-    Green on HEAD 2c3e4d452 too: the edge the cap must keep open.
+    Green on HEAD 5a3df79a9 too: the edge the cap must keep open.
     """
     print_section("R13-SEC9-1: POST /prices/current, 1 000 ids")
     service, _changes = route
@@ -814,7 +814,7 @@ async def test_sec9_1_the_range_change_is_computed_once_per_distinct_id(route, t
     """``[7, 7, 9, 7]`` with a ``range_start``: ``live_range_changes`` is handed one item per distinct id (7 and 9), once;
     the 4 results come back in request order, each with its id's change.
 
-    Red on HEAD 2c3e4d452: it was handed every requested item, 7 three times.
+    Red on HEAD 5a3df79a9: it was handed every requested item, 7 three times.
     """
     print_section("R13-SEC9-1: the whole-range change, once per distinct id")
     _service, changes = route
@@ -870,7 +870,7 @@ async def test_sec9_4_range_start_after_tomorrow_refused(client, route, tomorrow
     """A ``range_start`` after tomorrow (the day after, and 9999-12-31): the parameter's 422, before the route body —
     the service never called, no statement read.
 
-    Red on HEAD 2c3e4d452: accepted, 200 (only a day before 1900 was refused).
+    Red on HEAD 5a3df79a9: accepted, 200 (only a day before 1900 was refused).
     """
     (http, session), (service, changes) = client, route
     range_start = date(9999, 12, 31) if days_after_tomorrow is None else tomorrow + timedelta(days=days_after_tomorrow)
@@ -889,7 +889,7 @@ async def test_sec9_4_range_start_before_1900_accepted(client, route, tomorrow, 
     """A ``range_start`` before 1900-01-01 — down to ``date.min`` — is accepted (X5-6, D-P4 L4: the 1900 floor is withdrawn):
     200, the service called once, the change asked for that day, the quote and its change answered.
 
-    Red on HEAD 89cdc2e0e: the parameter's 422 (``value_error`` at ``query.range_start``), nothing read.
+    Red on HEAD eb5f0ba01: the parameter's 422 (``value_error`` at ``query.range_start``), nothing read.
     """
     (http, _session), (service, changes) = client, route
     print_section(f"X5-6: range_start {range_start} accepted")
@@ -908,7 +908,7 @@ async def test_sec9_4_range_start_before_1900_accepted(client, route, tomorrow, 
 async def test_sec9_4_range_start_up_to_tomorrow_accepted(client, route, tomorrow, which):
     """A ``range_start`` on the old floor, today, or the ceiling (tomorrow) is accepted: 200, the quote and its change.
 
-    Green on HEAD 2c3e4d452 too; the days before 1900 are ``test_sec9_4_range_start_before_1900_accepted``'s (X5-6).
+    Green on HEAD 5a3df79a9 too; the days before 1900 are ``test_sec9_4_range_start_before_1900_accepted``'s (X5-6).
     """
     (http, _session), (service, changes) = client, route
     range_start = {"1900-01-01": EARLIEST, "today": tomorrow - timedelta(days=1), "tomorrow": tomorrow}[which]
@@ -928,7 +928,7 @@ async def test_sec9_4_range_start_is_checked_before_the_item_cap(client, route, 
     """1 001 ids AND a ``range_start`` after tomorrow: the parameter's 422, not ``bulk_too_many_items`` — FastAPI validates
     the parameters before the route body, where the cap is. Nothing read either way.
 
-    Red on HEAD 2c3e4d452: neither bound existed, 200 with the 1 001 ids.
+    Red on HEAD 5a3df79a9: neither bound existed, 200 with the 1 001 ids.
     """
     (http, session), (service, changes) = client, route
     print_section("R13-SEC9-4: range_start refused before the 1 000-item cap is counted")
@@ -956,7 +956,7 @@ async def test_d1_target_currency_reaches_the_range_change_normalized(client, ro
     """``target_currency`` with ``range_start``: ``live_range_changes`` is asked it, normalized (``usd`` → ``USD``), once;
     the quotes stay in their own currency, as the service answered them; each result carries its change.
 
-    Red on HEAD 2c3e4d452: the parameter does not exist — ignored, the change asked without a target (None).
+    Red on HEAD 5a3df79a9: the parameter does not exist — ignored, the change asked without a target (None).
     """
     (http, _session), (service, changes) = client, route
     print_section(f"Y's D1: target_currency {sent!r}")
@@ -976,7 +976,7 @@ async def test_d1_target_currency_reaches_the_range_change_normalized(client, ro
 async def test_d1_guard_without_target_currency_the_change_is_native(client, route, tomorrow):
     """Guard: without ``target_currency`` the change is asked without one (None), as before Y's D1.
 
-    Green on HEAD 2c3e4d452 too.
+    Green on HEAD 5a3df79a9 too.
     """
     (http, _session), (_service, changes) = client, route
     print_section("Y's D1 guard: no target_currency")
@@ -994,7 +994,7 @@ async def test_d1_invalid_target_currency_refused_by_its_parameter(client, route
     """A ``target_currency`` that is no ISO 4217 code: the parameter's 422 at ``["query", "target_currency"]``, before the
     route body — the service never called, no statement read.
 
-    Red on HEAD 2c3e4d452: the parameter does not exist — ignored, 200.
+    Red on HEAD 5a3df79a9: the parameter does not exist — ignored, 200.
     """
     (http, session), (service, changes) = client, route
     print_section(f"Y's D1: target_currency {sent!r} refused")
@@ -1011,7 +1011,7 @@ async def test_d1_guard_target_currency_without_range_start_changes_nothing(clie
     """Guard: ``target_currency`` alone asks no change — ``live_range_changes`` never called, every ``range_change``
     null — and the quotes come back as the service answered them.
 
-    Green on HEAD 2c3e4d452 too (the parameter ignored there).
+    Green on HEAD 5a3df79a9 too (the parameter ignored there).
     """
     (http, _session), (service, changes) = client, route
     print_section("Y's D1 guard: target_currency without range_start")
@@ -1037,7 +1037,7 @@ async def test_xr59_guard_the_quotes_stand_when_the_range_change_fails(route, to
     result's ``range_change`` is the empty one, ``reference_date``, ``change_abs`` and ``change_ratio`` null. The failure
     is logged.
 
-    Guard (X's review, point 1): green on HEAD 2c3e4d452 too — the try/except entered with X-R59.
+    Guard (X's review, point 1): green on HEAD 5a3df79a9 too — the try/except entered with X-R59.
     """
     print_section("X-R59 guard: the range change fails, the quotes stand")
     service, _changes = route
@@ -1098,7 +1098,7 @@ async def test_sec9_3_a_failure_answers_500_without_echoing_it(monkeypatch, serv
     """The route's service raises an error naming the schema (``LEAK``): the route answers 500 with a detail that holds
     none of it; the error itself is logged, with its exception.
 
-    Red on HEAD 2c3e4d452: ``detail=str(e)``, the SQL echoed to the caller.
+    Red on HEAD 5a3df79a9: ``detail=str(e)``, the SQL echoed to the caller.
     """
     print_section(f"R13-SEC9-3: {service_name} fails")
     monkeypatch.setattr(AssetSourceManager, service_name, staticmethod(_failing))

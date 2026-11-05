@@ -1,12 +1,12 @@
 """
-Test Suite: Market-Data Wipe Endpoints (R3-3 Policy D direct API, N68 "policy A")
+Test Suite: Market-Data Wipe Summary Endpoint (R3-3 Policy D direct API, N68 "policy A")
 
 - ``GET  /api/v1/assets/{id}/market-data/summary``  -> dry-run counters.
-- ``POST /api/v1/assets/{id}/market-data/wipe``     -> destructive wipe.
 
-Both delegate to ``AssetSourceManager.wipe_market_data_for_currency_change``.
+It delegates to ``AssetSourceManager.wipe_market_data_for_currency_change`` (dry run). The destructive wipe
+has no route of its own: it runs inside ``PATCH /assets`` on a currency change (``test_asset_currency_change.py``).
 
-Contract after N68 (lot X5-3): SPLIT events survive the wipe. The answer, and the summary's, are exactly
+Contract after N68 (lot X5-3): SPLIT events survive the wipe. The summary's answer is exactly
 ``{prices, events_manual, events_provider, splits_kept, linked_tx, oldest, newest, dry_run}``:
 
 - ``events_manual`` / ``events_provider`` count the NON-SPLIT events that go;
@@ -19,8 +19,6 @@ Tests:
 - summary on empty asset -> all counters zero (``splits_kept`` included), dry_run=true.
 - summary on populated asset -> counters reflect prices + manual events, oldest/newest are ISO dates.
 - summary counts a SPLIT as kept, not as an event that goes; exact key set.
-- wipe removes prices + non-split events, returns dry_run=false, re-call is idempotent.
-- wipe keeps a SPLIT and its costless ADJUSTMENT linked (200, not 409); the dividend's transaction is unlinked, not deleted.
 - 404 when asset id does not exist (ASSET_NOT_FOUND mapping).
 - summary never mutates.
 
@@ -41,7 +39,7 @@ from backend.app.schemas.assets.events import FAAssetEventPoint, FAEventUpsert
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAPricePoint, FAUpsert
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
+from backend.test_scripts.test_utils import print_section, print_success, unique_id
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -165,56 +163,17 @@ async def test_summary_reflects_prices_and_events(test_server):
 
 
 @pytest.mark.asyncio
-async def test_wipe_destructive_removes_data_and_is_idempotent(test_server):
-    """G-batch6.3 — POST /wipe deletes prices+events; second call sees zeros."""
-    print_section("G-batch6.3 — destructive wipe + idempotency")
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id = await _create_asset(client, "WB6.3")
-        start = date.today() - timedelta(days=7)
-        await _seed_prices(client, asset_id, start, 4)
-        await _seed_events(client, asset_id, start, 2)
-
-        # First wipe — destructive, returns the pre-wipe counters.
-        wipe1 = await client.post(f"{API_BASE}/assets/{asset_id}/market-data/wipe", timeout=TIMEOUT)
-        assert wipe1.status_code == 200, wipe1.text
-        body1 = wipe1.json()
-        assert body1["prices"] == 4, body1
-        assert body1["events_manual"] == 2, body1
-        assert body1["splits_kept"] == 0, body1
-        assert body1["dry_run"] is False
-        print_info(f"First wipe deleted prices={body1['prices']}, events={body1['events_manual']}")
-
-        # Summary after wipe → all zero.
-        summary = await client.get(f"{API_BASE}/assets/{asset_id}/market-data/summary", timeout=TIMEOUT)
-        assert summary.status_code == 200
-        s = summary.json()
-        assert s["prices"] == 0 and s["events_manual"] == 0 and s["oldest"] is None
-
-        # Second wipe — idempotent: nothing left to delete, all counters zero.
-        wipe2 = await client.post(f"{API_BASE}/assets/{asset_id}/market-data/wipe", timeout=TIMEOUT)
-        assert wipe2.status_code == 200, wipe2.text
-        body2 = wipe2.json()
-        assert body2["prices"] == 0 and body2["events_manual"] == 0
-        assert body2["dry_run"] is False
-        print_success("Wipe is destructive on first call, no-op on second (idempotent)")
-
-
-@pytest.mark.asyncio
-async def test_wipe_unknown_asset_returns_404(test_server):
-    """G-batch6.4 — wipe / summary on unknown asset → 404 (ASSET_NOT_FOUND)."""
+async def test_summary_unknown_asset_returns_404(test_server):
+    """G-batch6.4 — summary on unknown asset → 404 (ASSET_NOT_FOUND)."""
     print_section("G-batch6.4 — unknown asset → 404")
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         ghost_id = 999_999_999
 
-        for method, path in (
-            ("GET", f"/assets/{ghost_id}/market-data/summary"),
-            ("POST", f"/assets/{ghost_id}/market-data/wipe"),
-        ):
-            resp = await client.request(method, f"{API_BASE}{path}", timeout=TIMEOUT)
-            assert resp.status_code == 404, f"{method} {path} → {resp.status_code}: {resp.text}"
-        print_success("Unknown asset id correctly mapped to 404 on both endpoints")
+        path = f"/assets/{ghost_id}/market-data/summary"
+        resp = await client.get(f"{API_BASE}{path}", timeout=TIMEOUT)
+        assert resp.status_code == 404, f"GET {path} → {resp.status_code}: {resp.text}"
+        print_success("Unknown asset id correctly mapped to 404")
 
 
 @pytest.mark.asyncio
@@ -238,7 +197,8 @@ async def test_summary_dry_run_does_not_mutate(test_server):
 
 
 # ============================================================================
-# N68 — SPLIT events survive the wipe
+# N68 — the summary counts SPLIT events as kept (the wipe itself runs through the currency PATCH:
+# see test_asset_currency_change.py)
 # ============================================================================
 
 
@@ -359,40 +319,5 @@ async def test_summary_counts_a_split_as_kept_not_as_an_event_that_goes(test_ser
             assert body["dry_run"] is True
             assert len(await _prices_of(client, case["asset_id"], case["start"], 2)) == 2, "the summary wrote nothing"
             print_success(f"Summary: {body}")
-        finally:
-            await _drop(client, [case["broker_id"]], [case["asset_id"]])
-
-
-@pytest.mark.asyncio
-async def test_wipe_keeps_the_split_and_its_costless_adjustment_and_unlinks_the_dividend(test_server):
-    """N68.2 — POST /wipe on an asset whose SPLIT has a costless incoming ADJUSTMENT: 200 (never the old 409), prices and
-    the dividend gone, the SPLIT kept, the ADJUSTMENT untouched and still linked, the dividend's transaction kept and
-    unlinked; a second wipe is idempotent (nothing to delete, ``splits_kept`` still 1)."""
-    print_section("N68.2 — wipe keeps the split")
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        case = await _split_case(client)
-        try:
-            tx_ids = [case["buy_tx"], case["adjustment_tx"], case["dividend_tx"]]
-            before = await _tx_rows(client, tx_ids)
-            assert before[case["adjustment_tx"]]["asset_event_id"] == case["split_event"], "precondition: the adjustment is linked to its SPLIT"
-
-            wipe = await client.post(f"{API_BASE}/assets/{case['asset_id']}/market-data/wipe", timeout=TIMEOUT)
-
-            assert wipe.status_code == 200, f"{wipe.status_code} {wipe.text}. Red today (X-R48): 409 MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST"
-            body = wipe.json()
-            assert (body["prices"], body["events_manual"], body["events_provider"], body["splits_kept"], body["linked_tx"], body["dry_run"]) == (2, 1, 0, 1, 1, False), body
-            assert [e["id"] for e in await _events_of(client, case["asset_id"])] == [case["split_event"]], "only the SPLIT stays"
-            assert await _prices_of(client, case["asset_id"], case["start"], 2) == []
-            after = await _tx_rows(client, tx_ids)
-            assert after[case["adjustment_tx"]] == before[case["adjustment_tx"]], "the SPLIT's adjustment is untouched, link included"
-            assert after[case["buy_tx"]] == before[case["buy_tx"]]
-            assert after[case["dividend_tx"]]["asset_event_id"] is None, "the dividend's transaction is unlinked, not deleted"
-
-            again = await client.post(f"{API_BASE}/assets/{case['asset_id']}/market-data/wipe", timeout=TIMEOUT)
-            assert again.status_code == 200, again.text
-            second = again.json()
-            assert (second["prices"], second["events_manual"], second["events_provider"], second["splits_kept"], second["linked_tx"]) == (0, 0, 0, 1, 0), second
-            print_success("Wipe: 200, SPLIT and its adjustment kept, dividend tx unlinked, second wipe idempotent")
         finally:
             await _drop(client, [case["broker_id"]], [case["asset_id"]])

@@ -23,11 +23,11 @@ The title is the step name followed by an intro span; the space before the dash 
 span: `<span data-testid="pac-planner-routing-intro"> – …</span>`. Svelte 5 removes the whitespace at the start and
 the end of a tag, so the span rendered «– …» glued to the name. The capital letters come from the step title's class
 (`SECTION_TITLE`, `uppercase`), which made the missing space more visible. The line arrived with the review rounds
-(`ffe03f7fc`).
+(`1248c0380`).
 
 ## Solution
 
-`6c3143cea` (2026-10-10): the span opens with an expression, `{' '}`, which the compiler keeps — the same idiom
+`237b14806` (2026-10-10): the span opens with an expression, `{' '}`, which the compiler keeps — the same idiom
 `ExposureMaps.svelte` already used. Proved with the lockfile's compiler (Svelte 5.48.0) on the file before and
 after: the span renders «– …» before and « – …» after, in both the client and the SSR output. No other tag of the
 PAC planner had the same shape. The fix holds in all four languages.

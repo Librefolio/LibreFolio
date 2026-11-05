@@ -32,11 +32,11 @@ themes, and every later change of the designer, with no `dark:` at all.
   focus green, a step brighter in dark, for focus, links and selected controls; amber for warnings and the donation
   link; a violet for the AI functions; four state families with explicit tints.
 - **Where they come from:** the designer's round 2, 15/10/2026
-  ([`designer-feedback/2026-10-15-round2-palette/`](../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md)),
+  ([`designer-feedback/2026-10-15-round2-palette/`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md)),
   approved whole by the developer (D-T17), with his later corrections (D-T18, D-T23–D-T26). The English names are the
   ones of the `CHANGELOG.md`; `tokens.css` keeps the Italian ones in its comments.
 - **Round 3, 17/10/2026**
-  ([`designer-feedback/2026-10-17-round3-grafici/decisioni.md`](../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-17-round3-grafici/decisioni.md)),
+  ([`designer-feedback/2026-10-17-round3-grafici/decisioni.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-17-round3-grafici/decisioni.md)),
   approved by the developer with the designer: the colours of the categories (the charts, and the asset types'
   badges on the roles `--lf-cat-*`), the toasts as tints, the chips inside a banner, how serious a problem is; and
   her confirmation of the state values of round 2.
@@ -398,15 +398,15 @@ draw. Owner: DV.
 
 The sources:
 - **T:** the decisions table of the plan
-  [`T-tokensTheme/plan-phase01TokensTheme.prompt.md`](../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md);
+  [`T-tokensTheme/plan-phase01TokensTheme.prompt.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md);
 - **the designer's round 2:**
-  [`designer-feedback/2026-10-15-round2-palette/README.md`](../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md),
+  [`designer-feedback/2026-10-15-round2-palette/README.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md),
   with its analysis `analisi.md`;
 - **the designer's round 3:**
-  [`designer-feedback/2026-10-17-round3-grafici/decisioni.md`](../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-17-round3-grafici/decisioni.md);
+  [`designer-feedback/2026-10-17-round3-grafici/decisioni.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-17-round3-grafici/decisioni.md);
 - **the programme:**
-  [`plan-phase00ColorSystemThemeLab.prompt.md`](../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/plan-phase00ColorSystemThemeLab.prompt.md);
-- **DV:** [`DV-chartColors/plan-phase00ChartColors.prompt.md`](../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md).
+  [`plan-phase00ColorSystemThemeLab.prompt.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/plan-phase00ColorSystemThemeLab.prompt.md);
+- **DV:** [`DV-chartColors/plan-phase00ChartColors.prompt.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md).
 
 | Code | Decision | Source |
 |---|---|---|

@@ -53,7 +53,6 @@ describe('the redirect of a moved anchor', () => {
         ['/mkdocs/admin/configuration/', '#login-limit', '../configuration_accounts/#login-limit'],
         ['/mkdocs/admin/connection_checks/', '#untrusted-proxy', '../connection_proxy/#untrusted-proxy'],
         ['/mkdocs/admin/email/', '#forgot-password', '../email_flows/#forgot-password'],
-        ['/mkdocs/admin/sleep_wake/', '#wake-sync', '../wake_sync/#wake-sync'],
         ['/mkdocs/admin/service_exposure/', '#3-startup-and-approval', '../service_exposure_funnel/#3-startup-and-approval'],
     ])('%s%s → %s', (pathname, hash, target) => {
         openPage(pathname, hash);

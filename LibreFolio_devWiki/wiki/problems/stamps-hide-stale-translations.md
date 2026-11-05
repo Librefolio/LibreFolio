@@ -15,7 +15,7 @@ related:
 # Problem: stamps hide stale translations
 
 > Written by workstream M (translations and gallery) as a note for the devWiki on 2026-10-11, filed by the historian
-> on 2026-10-12 with its paths and commits checked at `9f63eec22`.
+> on 2026-10-12 with its paths and commits checked at `4bc7be91b`.
 
 ## Symptom
 
@@ -62,7 +62,7 @@ round's only stamp (`user/brokers/index`) had ported everything.
 - A stamp is a promise that all three translations already say what the English says. Port first, in every
   language, then stamp; send anything beyond a few lines to the pipeline instead.
 - `translate-validate` now has `inline-code-missing` (every inline code span of the English must be in the
-  translation; commit `0c56b678c`): it catches identifier-level drift — it found the stale `none`/`unavailable` and
+  translation; commit `7b929298a`): it catches identifier-level drift — it found the stale `none`/`unavailable` and
   several identifiers the model had translated — but not prose.
 - Run the stamp audit after each translation round. Making it a `translate-validate` option is backlog item M-3.
 
@@ -72,7 +72,7 @@ Before batch 11, an analysis moved an entry's MD5 to the new English but kept `l
 failed, was interrupted or was left out by `--lang` stayed «done», with its old translation, exactly like an unported
 stamp. Now an entry's MD5 is the English version its `langs_done` were translated or stamped from: a changed MD5
 empties `langs_done`, a failure never marks a language done, and a stamp keeps the other languages only for an
-unchanged MD5 (`_cache_*` helpers of `translate_docs.py`, commit `750403f28`; tests `./dev.py test utils
+unchanged MD5 (`_cache_*` helpers of `translate_docs.py`, commit `95410bc98`; tests `./dev.py test utils
 translation-cache`).
 
 ## Impact

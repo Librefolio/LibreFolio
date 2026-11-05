@@ -3,7 +3,7 @@
 Decision 28 (developer, 15/10): «bisogna ricalcolare ogni volta che cambia uno dei termini della
 formula» — recompute whenever any term of the formula changes.
 
-The defect (``DailyStateBuilder.build``, frame loop, @ 4505c3e6f). The frame evaluates the "dirty"
+The defect (``DailyStateBuilder.build``, frame loop, @ cf8e83737). The frame evaluates the "dirty"
 days only and copies the previous state on every other day. A day is dirty for its cash deltas, its
 position transactions, the external and internal flows, the rate-change days of foreign CASH
 (``NativeCash.rate_change_days``), the in-transit edges, a market close different from the previous

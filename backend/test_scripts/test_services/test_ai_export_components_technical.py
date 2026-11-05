@@ -2845,7 +2845,7 @@ class TestQuoteDayWarmup:
 # The valuation gives a held asset a value even without a stored price, so it is
 # eligible (not fully sold, non-zero end value). Its price query then answers
 # `FAPriceQueryResult(prices=[])` (never None), or points in two currencies, and
-# on HEAD e91a3a3dc `{portfolio,broker}.technical_prices` and `asset.ohlc_returns`
+# on HEAD a182bf82d `{portfolio,broker}.technical_prices` and `asset.ohlc_returns`
 # write `coherent_price_currency(result)`, None, into a required `CurrencyCode`:
 # a ValidationError, a RequiredComponentBuildError, the 503
 # `snapshot_source_failure` without a reason_code.

@@ -26,12 +26,6 @@ The **Support LibreFolio** card offers two ways to help the project:
 - Below **Or share**, one button per social network: **X**, **Reddit**, **Facebook**,
   **Instagram**, and **TikTok**.
 
-!!! note "🏢 On an instance run by a hosting provider"
-
-    If a hosting provider runs LibreFolio for you, there is no **Buy Me a Coffee** in this card, in
-    the page header, in the **Help & Support** menu or on the sign-in pages, and no donation popup.
-    The card keeps its share buttons.
-
 A share button opens a **Share on …** dialog with a **Suggested message** written for that
 network, in the language of the interface. Whatever the language, every message ends with the
 same five hashtags: `#LibreFolio #OpenSource #SelfHosted #PortfolioTracker #PersonalFinance`.
@@ -60,8 +54,7 @@ yours to review and publish on the social network.
 ### ☕ The donation popup {: #donation-popup }
 
 Every now and then, right after you sign in, LibreFolio reminds you that you can support the
-project, with the same coffee link and share buttons. It never does on an instance a hosting
-provider runs for you.
+project, with the same coffee link and share buttons.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="support" data-name="donation-popup" alt="Donation popup after sign-in, with Buy Me a Coffee, the five share buttons and Maybe later">
@@ -154,9 +147,6 @@ that the automatic check keeps for an hour), and compares the two. A newer relea
 once its Docker image is available on the registry, so a release whose build is still in progress
 is not offered yet — see [Update Notifications](../../admin/index.md#update-notifications).
 
-On an instance a hosting provider runs for you, the button is not there: your provider keeps
-LibreFolio up to date.
-
 A check started here always tells you how it went:
 
 - If LibreFolio is **up to date**, a confirmation toast appears, with the version detected online.
@@ -189,8 +179,6 @@ the version now running.
 - It waits until no guide and no other window is open, and comes before the
   [donation popup](#donation-popup) and the update notice.
 - A new account never sees it: it starts with the version it was created on.
-- It shows the same way on an instance a hosting provider runs for you: there, it is how you learn
-  that your instance was updated.
 
 ---
 

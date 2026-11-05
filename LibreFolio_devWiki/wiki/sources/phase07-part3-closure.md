@@ -59,7 +59,7 @@ The manual testing session on 2026-04-22 produced 26 I-bis follow-up issues. Not
 
 When `PATCH /assets/{id}` changes `currency` and the asset has price/event history,
 the chosen semantics is **Policy D — destructive symmetric wipe + transaction
-disconnection** (commit `fdc6cb2e0`, 2026-04-24):
+disconnection** (commit `4dc4ac8da`, 2026-04-24):
 
 - All `price_history` rows for the asset → DELETED
 - All `asset_events` rows for the asset → DELETED (manual + provider-generated)

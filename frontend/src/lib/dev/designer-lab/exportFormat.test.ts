@@ -19,7 +19,7 @@ import {changeId, emptyState} from './store';
 import type {CatalogLiteral, ColorCatalog, LabAnchor, LabChange, LabState} from './types';
 
 const HASH = 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-const APP = '1.2.0-test+4beec1e2';
+const APP = '1.2.0-test+80bee759';
 const NOW = new Date(2026, 9, 20, 15, 2, 11);
 
 const APP_CSS = 'src/app.css';

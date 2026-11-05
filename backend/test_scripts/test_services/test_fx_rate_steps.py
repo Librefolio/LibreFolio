@@ -45,7 +45,7 @@ bounds; both directions of one stored pair and a pair without rows in one reques
 1 035 pairs in one request; the ``ValueError``s; the empty request. Rows of EUR/GBP and GBP/USD, each sharing a currency
 with EUR/USD, are planted around every EUR/USD calendar: none of them is its step.
 
-RED on HEAD 665b775dd, every case for one reason: ``UnitRateSteps`` and ``unit_rate_steps`` do not exist yet, so the
+RED on HEAD 29f167e2e, every case for one reason: ``UnitRateSteps`` and ``unit_rate_steps`` do not exist yet, so the
 import of this module fails at collection (``ImportError``). ``convert_bulk``, the oracle's other half, is unchanged.
 Before the hand-over the oracle, the calendars and the planting were run on ``convert_bulk`` alone, through a temporary
 reference built only from its answers (since removed): all 63 cases passed. References made wrong on purpose turned red

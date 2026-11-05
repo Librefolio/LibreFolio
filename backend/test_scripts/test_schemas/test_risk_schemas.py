@@ -288,7 +288,7 @@ def test_risk_result_metadata_enforces_observed_annualization_and_mode():
 # function of the layer — instead of writing ``n_observations * 365 / calendar_days`` a second and third time. Equal
 # values cannot tell a call from a copy, so the guard replaces the name the validators read with a stub answering a
 # different factor: the contract carrying the true factor must then be REFUSED, the one carrying the stub's ACCEPTED.
-# Red on HEAD (2c3e4d452): ``schemas/risk.py`` has no such name, so ``monkeypatch.setattr`` (raising=True) fails.
+# Red on HEAD (5a3df79a9): ``schemas/risk.py`` has no such name, so ``monkeypatch.setattr`` (raising=True) fails.
 
 _GUARD_N_OBSERVATIONS = 3
 _GUARD_CALENDAR_DAYS = 7

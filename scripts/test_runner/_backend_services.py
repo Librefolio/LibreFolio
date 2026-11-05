@@ -254,7 +254,7 @@ def services_price_query_observations(verbose: bool = False, test_names: list = 
     """X-Q1/Q2/S1 («formule veloci»): the price query reads a series by observation and converts once for each stretch of unchanged price row and rate row."""
     print_section("Services: Price Query Observations (X-Q1, X-Q2)")
     print_info("Testing: observed_prices (observe, series_points, ObservedPrices), PriceQueryOperations.observed_prices, get_prices_bulk")
-    print_info("Parity: the public points and conversion errors equal the 61a6c828b pipeline's (a copy in the test), on 18 asset/target/window cases and 7 signal cases (EMA, calendar rolling return, drawdown)")
+    print_info("Parity: the public points and conversion errors equal the 14bb7d59e pipeline's (a copy in the test), on 18 asset/target/window cases and 7 signal cases (EMA, calendar rolling return, drawdown)")
     print_info("Count: convert_bulk is handed one conversion for each stretch of unchanged price row and rate row, not one for each day")
     print_info("Object: first_point_date, observation_dates and point_on(day), the point the public series has on that day (J's R1)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_price_query_observations.py", test_names)
@@ -1520,7 +1520,7 @@ def services_market_data_wipe_keeps_splits(verbose: bool = False, test_names: li
     """Run N68: the market-data wipe and the currency change keep the SPLIT events."""
     print_section("Services: Market Data Wipe Keeps Splits")
     print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/services/assets/crud.py (patch_assets_bulk), backend/app/api/v1/assets/market_data.py")
-    print_info("Tests: the wipe and the currency PATCH delete the prices and the non-split events, unlink their transactions and keep every SPLIT with the transactions linked to it, never refusing; summary keys incl. splits_kept")
+    print_info("Tests: the wipe service and the currency PATCH delete the prices and the non-split events, unlink their transactions and keep every SPLIT with the transactions linked to it, never refusing; summary keys incl. splits_kept")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_keeps_splits.py", test_names)
     return run_command(cmd, "Market data wipe keeps splits tests", verbose=verbose)
 
@@ -1529,7 +1529,7 @@ def services_routes_generic_500(verbose: bool = False, test_names: list = None) 
     """Run X-R74: the asset and FX routes answer a generic 500, the error logged, never echoed."""
     print_section("Services: Routes Generic 500")
     print_info("Testing: backend/app/api/v1/assets/{providers,crud,events,market_data}.py, backend/app/api/v1/fx/{providers,currencies}.py")
-    print_info("Tests: each of the 26 failure paths answers 500 with a message naming no error, the error logged with its exception; the authored refusals unchanged")
+    print_info("Tests: each of the 22 failure paths answers 500 with a message naming no error, the error logged with its exception; the authored refusals unchanged")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_routes_generic_500.py", test_names)
     return run_command(cmd, "Routes generic 500 tests", verbose=verbose)
 
@@ -1843,9 +1843,9 @@ def services_hosting_panel_access_tickets(verbose: bool = False, test_names: lis
 
 
 def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
+    """Test the hosting panel's ticket test vectors in their fixture (H-61, L2): the key, the ticket and every verdict, checked against the code."""
     print_section("Services: Hosting Panel Ticket Test Vectors")
-    print_info("Testing: mkdocs_src/docs/admin/hosting_panel_api.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    print_info("Testing: backend/test_scripts/fixtures/hosting_panel/ticket_vectors.json against backend/app/services/platform/hosting_panel/tickets.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
@@ -2129,6 +2129,46 @@ def services_backup_leftovers(verbose: bool = False, test_names: list = None) ->
     print_info("Testing: backend/app/services/platform/instance_backup/leftovers.py, restore_jobs.py, jobs.py (lot B4b)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_leftovers.py", test_names)
     return run_command(cmd, "Backup leftovers tests", verbose=verbose)
+
+
+def services_backup_retention(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the kept backups and their clean-up: the names, list_kept, plan_cleanup, apply_cleanup (lot FB-24)."""
+    print_section("Services: Backup Retention")
+    print_info("Testing: backend/app/services/platform/instance_backup/paths.py (kept_folder_name, is_kept_name, kept_dir), retention.py (list_kept, plan_cleanup, apply_cleanup)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_retention.py", test_names)
+    return run_command(cmd, "Backup retention tests", verbose=verbose)
+
+
+def services_backup_cleanup_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the settings of the clean-up of the kept backups and read_policy (lot FB-24)."""
+    print_section("Services: Backup Cleanup Settings")
+    print_info("Testing: schemas/settings.py (backup_cleanup_max_mb, backup_cleanup_max_days), global_settings_service.py, settings_service.py, retention.py (read_policy)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_cleanup_settings.py", test_names)
+    return run_command(cmd, "Backup cleanup settings tests", verbose=verbose)
+
+
+def services_storage_usage(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what the data directory weighs: folder_bytes, measure_storage, read_limit (lot FB-29)."""
+    print_section("Services: the storage usage")
+    print_info("Testing: backend/app/services/platform/storage_usage.py (folder_bytes, measure_storage, read_limit)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_storage_usage.py", test_names)
+    return run_command(cmd, "Storage usage tests", verbose=verbose)
+
+
+def services_storage_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the limit of the storage bar: the variable, the setting and the lock (lot FB-29)."""
+    print_section("Services: the storage limit settings")
+    print_info("Testing: config/backup.py (storage_limit_override_mb), schemas/settings.py (storage_limit_mb), global_settings_service.py, settings_service.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_storage_limit_settings.py", test_names)
+    return run_command(cmd, "Storage limit settings tests", verbose=verbose)
+
+
+def services_scheduler_backup_cleanup(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hourly clean-up of the kept backups in the scheduler's run (lot FB-24)."""
+    print_section("Services: Scheduler Backup Cleanup")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs), with the fakes of test_scheduler_catchup.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backup_cleanup.py", test_names)
+    return run_command(cmd, "Scheduler backup cleanup tests", verbose=verbose)
 
 
 def services_backup_checks(verbose: bool = False, test_names: list = None) -> bool:
@@ -2566,7 +2606,7 @@ Note: No backend server required.
         "price-query-observations",
         services_price_query_observations,
         name="Price Query Observations",
-        desc="X-Q1/Q2/S1: get_prices_bulk reads a series by observation and converts once for each stretch of unchanged price row and rate row; the public points and conversion errors equal the 61a6c828b pipeline's (18 cases, 7 with signals); convert_bulk handed the stretches, not the days; ObservedPrices (first_point_date, observation_dates, point_on) for the risk",
+        desc="X-Q1/Q2/S1: get_prices_bulk reads a series by observation and converts once for each stretch of unchanged price row and rate row; the public points and conversion errors equal the 14bb7d59e pipeline's (18 cases, 7 with signals); convert_bulk handed the stretches, not the days; ObservedPrices (first_point_date, observation_dates, point_on) for the risk",
         # PURE: a private SQLite file under tmp_path built with create_all; the market holiday table replaced by monkeypatch; no lane DB, no server, no network.
         isolation="pure",
     )
@@ -3296,7 +3336,7 @@ Note: No backend server required.
         "closed-by",
         services_closed_by,
         name="Closed By",
-        desc="MF-CB: a Performance row closed by period end says how — closed_by SELL, TRANSFER or ADJUSTMENT, the type of the move of its last close (holding_window.closing_move, a split's never), and with a TRANSFER closed_to_broker_id, the paired leg's broker when the user has access to it (also outside broker_ids), never another user's nor an orphan's; 6 transferred then 4 sold says SELL, the reverse TRANSFER; same-day exits, the later id; an open row and an income-only row (None, None); a row sold before the period and listed by a dividend in it says SELL; get_report carries the fields; every figure equals HEAD 8e70ec493's",
+        desc="MF-CB: a Performance row closed by period end says how — closed_by SELL, TRANSFER or ADJUSTMENT, the type of the move of its last close (holding_window.closing_move, a split's never), and with a TRANSFER closed_to_broker_id, the paired leg's broker when the user has access to it (also outside broker_ids), never another user's nor an orphan's; 6 transferred then 4 sold says SELL, the reverse TRANSFER; same-day exits, the later id; an open row and an income-only row (None, None); a row sold before the period and listed by a dividend in it says SELL; get_report carries the fields; every figure equals HEAD bb6085662's",
         # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that the file runs once there.
         in_all=False,
@@ -3480,7 +3520,7 @@ Note: No backend server required.
         "market-data-wipe-keeps-splits",
         services_market_data_wipe_keeps_splits,
         name="Market Data Wipe Keeps Splits",
-        desc="N68 (X5-3, policy A): the market-data wipe (POST /assets/{id}/market-data/wipe) and the currency PATCH delete the prices and every NON-SPLIT event (manual and provider), set asset_event_id to NULL on the transactions linked to those, and keep every SPLIT event, manual or provider, with the transactions linked to it (a costless incoming ADJUSTMENT stays linked and costless); never a refusal for it (X-R48's MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST and the token CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA are gone). Answer and summary keys: prices, events_manual, events_provider (non-split), splits_kept, linked_tx, oldest, newest, dry_run",
+        desc="N68 (X5-3, policy A): the currency PATCH (the market-data wipe route is gone) deletes the prices and every NON-SPLIT event (manual and provider), set asset_event_id to NULL on the transactions linked to those, and keep every SPLIT event, manual or provider, with the transactions linked to it (a costless incoming ADJUSTMENT stays linked and costless); never a refusal for it (X-R48's MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST and the token CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA are gone). Answer and summary keys: prices, events_manual, events_provider (non-split), splits_kept, linked_tx, oldest, newest, dry_run",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
     )
@@ -3742,8 +3782,8 @@ Note: No backend server required.
         "hosting-panel-vectors",
         services_hosting_panel_vectors,
         name="Hosting Panel Ticket Test Vectors",
-        desc="H-61 L2: the JSON block after #panel-api-test-vectors in the admin guide: the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
-        # PURE: reads one docs page from the repository; variables through monkeypatch; no clock, DB or server.
+        desc="H-61 L2: the ticket vectors fixture (backend/test_scripts/fixtures/hosting_panel/ticket_vectors.json): the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
+        # PURE: reads one fixture file from the repository; variables through monkeypatch; no clock, DB or server.
         isolation="pure",
     )
     add_test(
@@ -3893,7 +3933,7 @@ Note: No backend server required.
         "backup-jobs",
         services_backup_jobs,
         name="Instance Backup Jobs",
-        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed; backup_in_progress (the run lock or the restore checks' lock held by anyone, read only, without fcntl the process's locks)",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed; backup_in_progress (the run lock or the restore checks' lock held by anyone, read only, without fcntl the process's locks); FB-24: a backup that ends done moves to backups/<kept name> before the lock is released (same job id, run_backup answers that folder), the three readers find a job in .jobs/ or in backups/ (by the 8 digits and the state's job id, one retry if the move lands meanwhile), a kept job never expires, a failed one or keep=False stays in .jobs/ and expires after an hour, a move that fails is logged and leaves the job valid, apply_cleanup runs after each kept backup and its errors change nothing",
         # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
         # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
         isolation="pure",
@@ -4027,9 +4067,60 @@ Note: No backend server required.
         "backup-leftovers",
         services_backup_leftovers,
         name="Backup Leftovers",
-        desc="The startup cleanup of what runs killed outright left in clear (lot B4b, B-23, decision N66): a check its server left running ended (restore_interrupted, copy and upload removed); a decrypted archive.zip left in a copy removed while no check runs, never a link, the rest of the copy kept; the inspect folders .decrypt-* older than an hour removed, younger ones, links and files kept; a backup that died with its process ended (backup_interrupted) with its work files removed, also by get_job; nothing touched under a held lock; expired jobs removed; a part that fails logged while the others still run, never raised; quiet on a clean data directory; the step backup-leftovers",
+        desc="The startup cleanup of what runs killed outright left in clear (lot B4b, B-23, decision N66): a check its server left running ended (restore_interrupted, copy and upload removed); a decrypted archive.zip left in a copy removed while no check runs, never a link, the rest of the copy kept; the inspect folders .decrypt-* older than an hour removed, younger ones, links and files kept; a backup that died with its process ended (backup_interrupted) with its work files removed, also by get_job; nothing touched under a held lock; expired jobs removed; a part that fails logged while the others still run, never raised; quiet on a clean data directory; the step backup-leftovers; FB-24: the sweep also applies the clean-up of the kept backups and says how many in backups_cleaned, a clean-up that raises stops nothing",
         # PURE: data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables. No lane DB, no server,
         # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-retention",
+        services_backup_retention,
+        name="Backup Retention",
+        desc="FB-24 (contract B6r-fb24-backend-interface §1, §3): kept_folder_name (UTC date, origin, 8 digits of the job id), is_kept_name (the whole name, every origin) and kept_dir (ValueError otherwise); list_kept: the kept backups of backups/ most recent first with their folder and archive size, never what is in .jobs/, the .decrypt-* folders, loose command-line archives, files or links with a kept name, unreadable, failed or running states, a job id the name does not end with, a missing or linked archive, backups/ a link; plan_cleanup: age (older than the days, exactly the days stays), then space (strictly over the MiB, the oldest until it fits), never the most recent, one backup never removed, 0 and 0 nothing, whatever the order; apply_cleanup: rmtree of the planned kept folders only, the job ids answered as a tuple, never raising (policy, listing or one rmtree failing), the policy of the settings when none is given, nothing else touched, one INFO line per removal (job_id, reason, size_bytes, origin) without a file name or a path",
+        # PURE: every data directory is under tmp_path, every call is given its data_dir, its policy and its now; the archives
+        # are sparse files. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cleanup-settings",
+        services_backup_cleanup_settings,
+        name="Backup Cleanup Settings",
+        desc="FB-24 (contract §4): backup_cleanup_max_mb and backup_cleanup_max_days, global int settings defaulting to 0 (off), 0..1048576 and 0..3650, seeded with no author; the value in force while no administrator wrote the row is 0 on selfhosted and 250 MB / 30 days on managed, as an int, in get_setting_value, get_global_setting, get_all_global_settings and effective_stored_value; an administrator's row wins; managed refuses max_mb 0 (GlobalSettingValueError, nothing written) and accepts max_days 0; selfhosted accepts 0; read_policy reads the two values as a CleanupPolicy of ints, unusable values, a missing table or an engine that fails mean off, never raised",
+        # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings; the profile through
+        # monkeypatch; read_policy reads it through a synchronous engine put in place of the process's. No lane DB, no server,
+        # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "storage-usage",
+        services_storage_usage,
+        name="Storage Usage",
+        desc="FB-29 (contract B6r-fb29-interface §3): folder_bytes sums the files of a tree (lstat), a link counts for itself and is never followed (file, folder, dangling, the folder asked being a link), a missing folder 0, an entry that vanishes or a folder that cannot be read 0 while the rest counts; measure_storage: a frozen StorageUsage whose five parts (sqlite/, custom-uploads/, broker_reports/, backups/ whole, the rest) add up to data_bytes, the volume from shutil.disk_usage(data_dir) or three None when it raises, a missing data directory zero, limit_mb and limit_locked handed through; read_limit: LIBREFOLIO_STORAGE_LIMIT_MB set and valid decides without the database ((value, True), 0 is (None, True)), invalid or blank ignored and the row read unlocked, otherwise the row through the synchronous engine, 0, garbage, no row, no table or a failing engine mean (None, False), never raised",
+        # PURE: data directories under tmp_path, shutil.disk_usage replaced; read_limit reads a private SQLite file under tmp_path
+        # through a synchronous engine put in place of the process's. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "storage-limit-settings",
+        services_storage_limit_settings,
+        name="Storage Limit Settings",
+        desc="FB-29 (contract §1, §2): storage_limit_override_mb (unset or blank None, a whole number of ASCII digits an int with 0 included, anything else BackupConfigError STORAGE_LIMIT_MB_INVALID naming the variable and never quoting the value); storage_limit_mb, a global int defaulting to 0, 0..10485760, in the registry as STORAGE_LIMIT_MB and seeded with no author; the variable set and valid is always the value in force (an int, over a row an administrator saved too, 0 included) in effective_stored_value, get_setting_value, get_global_setting and get_all_global_settings; unset, blank or invalid it pins nothing and the row speaks; a save with the variable set is GlobalSettingLockedError naming the key and the variable, nothing written, the other setting of the same save neither; without it the save works",
+        # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings (the fixtures of
+        # test_backup_cleanup_settings.py); the variable and the profile through monkeypatch. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-backup-cleanup",
+        services_scheduler_backup_cleanup,
+        name="Scheduler Backup Cleanup",
+        desc="FB-24 (contract §6, decision D3): run_due_jobs applies retention.apply_cleanup on a worker thread inside the busy span, for any reason, at most once an hour by the process's monotonic clock (the first run at once); any error is logged and swallowed; it is no third job: JOB_NAMES, the RunReport fields and the outcomes are unchanged",
+        # PURE: the fakes of test_scheduler_catchup.py (World, Activity, MonotonicClock) set with monkeypatch; apply_cleanup is a
+        # recorder. No DB, no server, no lane port, no network.
         isolation="pure",
     )
     add_test(

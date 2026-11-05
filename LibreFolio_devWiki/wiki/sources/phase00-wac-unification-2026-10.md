@@ -22,8 +22,8 @@ related:
 Two plans of workstream P, archived on 2026-10-09. The main one answered issue #32 (a foreign asset bought with a
 zero cost in the report currency) not with a patch but with **one average-cost function**, `compute_average_costs()`,
 in a new `backend/app/services/financial_math/` layer, used by the engine, the WAC facade, the lots analysis and the
-broker summary (P0–P12, `6f13e1ba4`, 2026-10-07). The second makes the global settings bulk write validate every
-value and commit all or nothing (`58972c8b9`, 2026-10-09). The #32 work was filed in the wiki on 2026-10-07, while it
+broker summary (P0–P12, `ad6af7184`, 2026-10-07). The second makes the global settings bulk write validate every
+value and commit all or nothing (`910bbb0e7`, 2026-10-09). The #32 work was filed in the wiki on 2026-10-07, while it
 landed; this page indexes it and adds what was not filed then.
 
 ## Key takeaways
@@ -51,7 +51,7 @@ fallback for Auto when the data is missing, and the user corrects that transacti
 "entering and leaving the field accepts the 0", was superseded) · P-2 WAC preview mislabels split rows, dead `add_at_wac` branch ·
 P-3 per-position contribution drops unconverted dividends/costs without a signal · P-4 IANA timezone database in the
 Docker image · P-5 migrate `roi_utils`/`valuation_utils` into `financial_math` (decision D1: "later we factor the
-others"; ✅ closed on 2026-10-12 by T-1, `775a3dd41` — [[decisions/financial-math-one-home]]) · **P-6 the graph update for the 2026-10-07 pages — still pending: the graph has not been rebuilt since
+others"; ✅ closed on 2026-10-12 by T-1, `5dcfdec4f` — [[decisions/financial-math-one-home]]) · **P-6 the graph update for the 2026-10-07 pages — still pending: the graph has not been rebuilt since
 2026-09-09** · P-7 close issues #32 and #35 at release · P-8 stale header comment in `tx-clone.spec.ts` · P-9 Black on two
 API test files.
 

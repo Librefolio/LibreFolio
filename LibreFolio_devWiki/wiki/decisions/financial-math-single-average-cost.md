@@ -205,10 +205,10 @@ average cost comes from this one function.
 
 - ~~The **FIFO lot** conversions in `lots_analysis_service.py` still fall back to the unconverted amount when a rate is
   missing — e.g. `fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost` in
-  `_build_value_history` and `_build_return_history`.~~ *Resolved 2026-10-11* by workstream T (B3a, `04f091944`, "no
+  `_build_value_history` and `_build_return_history`.~~ *Resolved 2026-10-11* by workstream T (B3a, `f8eb42aff`, "no
   native fallback on missing FX"): a lot amount without a rate is unavailable, never the native amount. Since T-1 the two
   functions are `build_value_history()` and `build_return_history()` in `financial_math/lots/histories.py`.
-- `oversold_movement_ids` is computed, but no caller surfaces it yet (still true at `9f63eec22`).
+- `oversold_movement_ids` is computed, but no caller surfaces it yet (still true at `4bc7be91b`).
 - ~~`roi_utils.py` and `valuation_utils.py` still live in `backend/app/utils/financial/` until the separate migration
   into the layer.~~ *Resolved 2026-10-12* by T-1: `financial_math/returns.py` and `financial_math/valuation.py`
   ([[decisions/financial-math-one-home]]).

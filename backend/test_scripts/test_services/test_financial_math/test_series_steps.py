@@ -21,7 +21,7 @@ Module under test: ``backend/app/services/financial_math/series_steps.py`` (new)
 And in ``backend/app/schemas/common.py``: ``DateSpan`` (``start``/``end``, ``end >= start``) and ``StepSpan``
 (``date``/``through``, ``through >= date``), both ``StrictModel``; ``StepSpan`` is the base of every series point.
 
-The new names are looked up inside each test, so the file collects on HEAD ``3424bc0db`` (where none of them exists)
+The new names are looked up inside each test, so the file collects on HEAD ``110454fe6`` (where none of them exists)
 and every test fails there by naming what is missing.
 """
 

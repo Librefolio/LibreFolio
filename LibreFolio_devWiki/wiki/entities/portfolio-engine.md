@@ -39,7 +39,7 @@ The core computational layer of the LibreFolio portfolio system. Accepts raw tra
 
 ## Location
 
-`backend/app/services/financial_math/portfolio/` (since 2026-10-12), one module per step — line counts at `9f63eec22`:
+`backend/app/services/financial_math/portfolio/` (since 2026-10-12), one module per step — line counts at `4bc7be91b`:
 
 | Module | Lines | Holds |
 |--------|------:|-------|
@@ -52,8 +52,8 @@ The core computational layer of the LibreFolio portfolio system. Accepts raw tra
 | `engine.py` | 555 | `PortfolioCalculationEngine`: loading, FX preload, average costs, native cash, blob cache |
 
 Until 2026-10-12 it was one file, `backend/app/services/portfolio_engine.py` (2 714 lines on 2026-10-07, 2 872 before
-the move). Workstream T moved it with a rename commit (`775a3dd41`, so `git log --follow` on `engine.py` still reaches
-the engine's first commit) and cut it in a second one (`7d1ddc50f`) — [[decisions/financial-math-one-home]].
+the move). Workstream T moved it with a rename commit (`5dcfdec4f`, so `git log --follow` on `engine.py` still reaches
+the engine's first commit) and cut it in a second one (`94901d98a`) — [[decisions/financial-math-one-home]].
 
 ## 4-Layer Architecture
 
@@ -141,7 +141,7 @@ The LAST_BUY_PRICE fallback is broker-scope-independent. Example: if VWCE's last
 > **Drift note (2026-10-07):** the code's `ValuationSource` enum today is `MARKET_PRICE | LAST_TRADE_PRICE | MISSING`,
 > resolved by the unified price resolver (`AssetPriceSeries` per held asset, `mark_series` in `DailyStateBuilder`,
 > `backend/app/services/financial_math/price_marks.py` since 2026-10-12, before that `services/price_resolver.py`);
-> `last_buy_prices` no longer exists. Commit `ed862f20f` (2026-07-31,
+> `last_buy_prices` no longer exists. Commit `c770c3f7a` (2026-07-31,
 > "remove legacy valuation engine — resolver is the single brain") made that change. This section still describes the
 > earlier LAST_BUY_PRICE design and was not realigned here: valuation was not part of workstream P.
 > **J-17 (2026-10-16):** the enum gained `ESTIMATED_AT_COST` (no quote, BUY or SELL on or before the day: book
@@ -310,7 +310,7 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 - **SELL order matters for 3-pool**: always read WAC before reducing pool. Reversing this causes full-exit K/R split bug.
 - **LAST_BUY_PRICE uses V(u) not S**: this is intentional — asset price is not broker-specific. *(LAST_BUY_PRICE design — see the drift note under Valuation Hierarchy.)*
 - **Pre-frame has no daily states**: you cannot extract chart points for dates before t0 from a single run.
-- **`position_states_end` is the date-aware holdings snapshot**: computed by the engine exactly at `date_to`. `PortfolioService.get_summary()` reads this directly (see [[concepts/holdings-performance-panel]]) — the older "get_summary() wiring incomplete" gap is resolved as of commit `d2cf5287d` (2026-07-06).
+- **`position_states_end` is the date-aware holdings snapshot**: computed by the engine exactly at `date_to`. `PortfolioService.get_summary()` reads this directly (see [[concepts/holdings-performance-panel]]) — the older "get_summary() wiring incomplete" gap is resolved as of commit `35c2740c4` (2026-07-06).
 - **No reconciliation with [[entities/fifo-lot-engine]]'s per-lot fee/tax/income figures**: as of the FIFO v4 FEE/TAX work (2026-07-22), asset-linked costs/income are allocated per-lot inside the FIFO engine, while this engine still computes its own independent fee/tax/income accumulators for portfolio-level (assetless, `asset_id = null`) amounts. Cross-engine runtime reconciliation and new pre-share absolute accumulators were **deliberately deferred**, not implemented — this file has two existing accumulator paths and share-application logic scattered across multiple call sites, judged too risky to touch in the same release. No displayed value changes as a result, but the two engines' totals are not currently cross-checked against each other. See [[decisions/fifo-v4-validation-and-scope]]. *Update 2026-10-11: the engine's own income/fee accumulators are gone (B13, lot 41 F) and the share rule has one copy (`effective_share()`); period income and costs now come from the native cash's flows. The cross-check with the FIFO engine's per-lot figures is still not done.*
 
 ## History
@@ -326,9 +326,9 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 | 2026-07-15 | Phase 09 Milestone 3 (Broker UI v2 redesign) archived to `phases/phase-09-subplan/Milestone_3/`; reuses this engine's unified `/portfolio/report` output (`BrokerBreakdown.cash_balances` added natively, see [[decisions/broker-card-aggregation-no-n-plus-one]]) for per-broker cards — no engine-internals changes. See [[sources/phase09-m3-broker-redesign-2026-07]]. |
 | 2026-07-22 | FIFO v4 FEE/TAX integration landed in [[entities/fifo-lot-engine]] (per-lot economic allocation). This file was **not** part of that change — cross-engine reconciliation with FIFO's new per-lot fee/tax/income figures was explicitly scoped out/deferred. See [[decisions/fifo-v4-validation-and-scope]], [[sources/fifo-v4-fee-tax-integration]]. |
 | 2026-10-07 | **Workstream P (issue #32)**: the engine's own cost pools (asset currency, re-converted daily, silent zero on a missing rate) replaced by one `compute_average_costs()` call per run and a replay of its steps; `DailyStateBuilder(average_costs=...)` required; `wac` in the target currency + `wac_asset` / `cost_complete`; `realized_sales`, `missing_fx`, `unrealized_by_currency`; in-transit cost at the arrival date; `MISSING_COST_BASIS` issue. See [[decisions/financial-math-single-average-cost]], [[problems/zero-purchase-cost-foreign-asset-paid-in-report-currency]]. |
-| 2026-10-11 (`15eab38cd`) | **Lot 41, broker lines**: internal transfers become zero-sum capital flows between broker lines on the arrival day (`_internal_transfer_flows()`); filtered views and orphans (`_transfer_leg_capital()`, D2/D5); FX preload for TRANSFER legs dated before `date_from`. Combined-view aggregates byte-identical. See [[decisions/portfolio-pnl-series-contracts]]. |
-| 2026-10-11 (`04522e123`) | **Lot 41, F**: `native_cash` step 10c and required builder argument; foreign cash revalued on rate-change days (k2); B13 accumulators removed; `effective_share()`. See [[decisions/native-cash-daily-revaluation]], [[problems/foreign-cash-never-revalued]]. |
-| 2026-10-12 (`775a3dd41`, `7d1ddc50f`) | **T-1**: moved to `financial_math/portfolio/engine.py` by a rename commit, then cut into six modules; `build_data_quality_report` a function, one public `normalize_fx_pair_slug`. See [[decisions/financial-math-one-home]]. |
+| 2026-10-11 (`a6d3220d2`) | **Lot 41, broker lines**: internal transfers become zero-sum capital flows between broker lines on the arrival day (`_internal_transfer_flows()`); filtered views and orphans (`_transfer_leg_capital()`, D2/D5); FX preload for TRANSFER legs dated before `date_from`. Combined-view aggregates byte-identical. See [[decisions/portfolio-pnl-series-contracts]]. |
+| 2026-10-11 (`23cbffea9`) | **Lot 41, F**: `native_cash` step 10c and required builder argument; foreign cash revalued on rate-change days (k2); B13 accumulators removed; `effective_share()`. See [[decisions/native-cash-daily-revaluation]], [[problems/foreign-cash-never-revalued]]. |
+| 2026-10-12 (`5dcfdec4f`, `94901d98a`) | **T-1**: moved to `financial_math/portfolio/engine.py` by a rename commit, then cut into six modules; `build_data_quality_report` a function, one public `normalize_fx_pair_slug`. See [[decisions/financial-math-one-home]]. |
 
 ## Source files
 

@@ -34,7 +34,7 @@ Browsers expose the Clipboard API only to secure contexts. The app has a shared 
 | `features/files/FilePreviewModal.svelte` | the text of the file in preview |
 | `components/assets/ProviderAssignmentSection.svelte` | a provider's error detail |
 
-Still the case at `cf205e285`.
+Still the case at `d73ac21a6`.
 
 ## Solution
 
@@ -43,7 +43,7 @@ warning on the Tailscale-over-HTTP case, which as a risk is equal to HTTPS ([[fe
 assigned by the coordinator to workstream I, in the UI polish batch of release 1.2: route the five buttons through the
 shared helper.
 
-*Update (train 72)*: fixed in `367ae7d56`. The five buttons, and the two of the file list and grid that had their
+*Update (train 72)*: fixed in `8395c0287`. The five buttons, and the two of the file list and grid that had their
 own fallback (C-63, done in the same commit), go through `writeTextToClipboard()`, which now copies on plain HTTP; a
 gate keeps every other copy out — [[decisions/clipboard-through-one-helper-with-a-gate]].
 

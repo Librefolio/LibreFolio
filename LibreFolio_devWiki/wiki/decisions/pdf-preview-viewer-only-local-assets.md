@@ -34,7 +34,7 @@ The developer, through the coordinator, during M's batch 7 (2026-10-09), verbati
 | The viewer's own «Open Document» path | «lasciamolo ora e per sempre, mi pare un caso troppo limite, apuntiamocelo per evitare di tornarci in futuro, direttametne nel codice» |
 | An empty viewer | «Chiudi l'anteprima quando il visore resta vuoto» |
 
-Delivered in `b17579305` («fix(files): local, viewer-only PDF preview»):
+Delivered in `da6665fb9` («fix(files): local, viewer-only PDF preview»):
 
 - **Local first.** `pdfViewerAssets.ts` ships the engine (`LOCAL_PDF_ENGINE`) and the Latin, Arabic and Hebrew
   fallback fonts (`LOCAL_FONT_FILES`) as build assets; the CDN is asked only when the local engine does not answer.
@@ -60,11 +60,11 @@ Delivered in `b17579305` («fix(files): local, viewer-only PDF preview»):
 
 - The image grows by about 7 MB. The CJK fallback fonts, 30–40 MB each, are still fetched on demand.
 - EmbedPDF, PDFium and the Noto fonts are listed in `THIRD_PARTY_LICENSES.md`.
-- `pdfPreviewState.ts` (`2619baae6`) publishes when the PDF has finished drawing (`data-state`, `aria-busy`), so the
+- `pdfPreviewState.ts` (`3dcb45450`) publishes when the PDF has finished drawing (`data-state`, `aria-busy`), so the
   gallery and the tests wait for the page itself, not for the preview's fetch.
 - **A fallback loop found on the way.** A unit guard found the viewer started 11 times when its start throws: the
   `!host` branch cleared `pdfError` whenever it ran, so the iframe fallback replaced the stage, the effect ran again,
-  and the viewer failed again, round after round. It dated from `e743fea43` (2026-06-04), so it was in v1.1.0. The fix
+  and the viewer failed again, round after round. It dated from `f22ddec9e` (2026-06-04), so it was in v1.1.0. The fix
   clears the error only when there is no source (`if (!sourceUrl) pdfError = null`); the fallback now starts the
   viewer once and the iframe stays.
 - The user guide says the preview is read-only and that a protected PDF's password stays in the browser.

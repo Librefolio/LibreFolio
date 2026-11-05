@@ -1079,7 +1079,7 @@ class TestPromoteOfARowStoredWithoutCost:
         update. A cure that skips notes-only updates must still see this one — its type changes, ADJUSTMENT to
         TRANSFER — or stop the promote check from skipping it. Either issue is accepted: on the update or on the
         promote, both at index 0, with ``ref_id`` the +5. Otherwise a TRANSFER without a cost is committed, the
-        defect closed by 1076fa994 (devWiki problems/promote-skipped-cost-basis-check).
+        defect closed by 48c3f52a9 (devWiki problems/promote-skipped-cost-basis-check).
         """
         session = world.session
         giving = _stored_row(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("-5"))

@@ -28,7 +28,7 @@ D2     value 450, capital 450, P&L 0             value 400, capital 450, P&L -50
 D3     value 450, capital 450, P&L 0             value 350, capital 450, P&L -100
 =====  ========================================  ===========================================
 
-RED on HEAD ``0d6eb0df7``: ``test_valued_at_the_transfer_cost_converted_at_each_days_rate``,
+RED on HEAD ``75fa757f2``: ``test_valued_at_the_transfer_cost_converted_at_each_days_rate``,
 ``test_the_asset_is_transaction_implied`` and ``test_the_closing_position_reports_the_transfer_cost_as_its_price`` of
 both classes (HEAD: ``ESTIMATED_AT_COST`` 450 every day, the implied set empty, no effective price). Declared parity
 guards, green on HEAD and after the fix: ``test_the_transfer_is_neutral_on_its_day`` of both classes (capital = value =

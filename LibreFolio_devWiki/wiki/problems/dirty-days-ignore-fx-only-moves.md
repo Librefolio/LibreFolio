@@ -31,7 +31,7 @@ price changes and the splits — but not from the dates of the exchange rates.
 
 ## Status
 
-- **Cash: fixed** by lot 41 part F (`04522e123`, 2026-10-11). Every day on which the rate of a currency held as cash
+- **Cash: fixed** by lot 41 part F (`23cbffea9`, 2026-10-11). Every day on which the rate of a currency held as cash
   changes (`NativeCash.rate_change_days()`) is a dirty day in the frame, and is replayed in the pre-frame, so foreign
   cash and cash in transit follow the rate. In case 3, P_A at d2 is now +10, as the lot's table expected.
 - **Securities: fixed** by workstream J, lot CP-6 (release 1.3, 2026-10-16), under developer decision 28: «recompute

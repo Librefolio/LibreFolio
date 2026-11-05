@@ -14,15 +14,13 @@ What LibreFolio sends:
   login page: [Forgotten Passwords](email_flows.md#forgot-password).
 - **The setup link of the initial administrator**, once, when LibreFolio creates that administrator
   from `LIBREFOLIO_ADMIN_EMAIL` and generates the link itself: see
-  [Hosting for Others](hosting_instances.md#initial-admin).
+  [The Initial Administrator](configuration_accounts.md#initial-admin).
 - **A link to confirm the email address of a new account**, when **Require Email Verification** is
   on: see [Email Verification](email_flows.md#verification).
 - **A notice to the old address** when someone changes the email address of their account:
   [Email Address Changes](email_flows.md#email-change-notice).
 
 The emails with a link also need `LIBREFOLIO_PUBLIC_URL`: see [Emails with a Link](email_flows.md#public-url).
-While a hosting provider blocks the instance, LibreFolio sends no email at all
-([Hosting for Others](hosting_instances.md#instance-block)).
 
 To set it up:
 
@@ -54,7 +52,7 @@ secret file.
   does not, which variable to fix; of the `LIBREFOLIO_SMTP_*` values, it shows only the hourly limit.
 - **Public: only whether email is ready.** `/api/v1/system/instance`, which anyone who can reach the
   server may read, says whether this instance can send email: `"available": true` when the state is
-  **Ready** and no hosting provider blocks the instance, and `"links": true` when, on top of that,
+  **Ready**, and `"links": true` when, on top of that,
   emails can carry a link ([Emails with a Link](email_flows.md#public-url)). Nothing else about email is there.
 - **Read from the environment.** `./dev.py` and Docker Compose (`env_file: .env`) put the values of
   `.env` there, so these variables go in `.env` like the other [options](configuration.md).

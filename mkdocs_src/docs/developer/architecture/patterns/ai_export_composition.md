@@ -96,6 +96,19 @@ Focused semantic datasets such as `portfolio.asset_comparison` and
 `fx.market_context` are internal projections. They remain excluded from
 `*.all_data` to avoid exporting both the complete series and a duplicate summary.
 
+Every dataset of the broker domain, public or internal, requires `broker.provenance` as its last section: it carries
+the user's role, the owner's stake and the amounts basis (`whole_broker`), so any export of a broker states them. The
+composer keeps one copy when several datasets of one request ask for it.
+
+Two fields state which amounts a number is, so the AI does not apply a share twice:
+
+- `ownership.amounts_basis` of `broker.provenance` is always `whole_broker`: the export of a broker gives the broker's
+  full amounts, as the broker page does, whatever the role. An owner's own part is one multiplication away
+  (`owner_stake_ratio`); an editor or a viewer has no stake to apply.
+- `amounts_basis` of the `broker.concentration_comparison` (inside `broker.concentration_evidence`) is always
+  `all_brokers_whole`: both sides, the broker and the portfolio, count every broker whole. It is not the Dashboard's
+  portfolio, where an owner's share reduces each broker.
+
 Each `*.all_data` union is composed only from its domain's canonical complete
 datasets:
 
@@ -322,6 +335,11 @@ Each evidence dataset is bound to its task analysis and complements — never
 replaces — the retained aggregates (for example `portfolio.income_evidence` uses
 the same `(start, end]` window as `portfolio.flows_income` so they cannot
 contradict each other).
+
+`portfolio.flows_income` (version 2) has two lists of `EffectRow`, each row with a `code`. `income_effects` holds the
+income rows (category `Income`). `fx_on_cash_effects` holds each broker's exchange result on foreign cash, one row per
+broker, recognized by the code `fx_on_cash`. It is not income: it belongs to the period's other result, so it stays out
+of `income_effects` and out of `period_income`, and the two lists never repeat a row.
 
 `portfolio.income_evidence` and `broker.cost_efficiency_evidence` read ledger rows
 and count each broker at the report's share (`native_cash.effective_share()`: an

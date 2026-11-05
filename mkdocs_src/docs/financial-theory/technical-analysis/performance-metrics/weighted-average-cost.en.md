@@ -159,7 +159,7 @@ The target currency depends on where the WAC is shown:
 |-------|---------------------|
 | Dashboard, Positions table, realized sales, Yield on Cost | The display (report) currency |
 | Lots analysis WAC lines | The currency of the analysis |
-| Transaction preview, automatic cost basis, WAC series (`POST /portfolio/wac`) | The currency picked in the preview, otherwise the currency of the **latest acquisition** |
+| Transaction preview, automatic cost basis | The currency picked in the preview, otherwise the currency of the **latest acquisition** |
 | PAC planner | The planner's currency |
 
 The latest acquisition's currency is the currency paid by the most recent transaction that added quantity — a deterministic rule; on a tie, the first one recorded wins. A split, or an acquisition of unknown cost, falls back to the asset's own currency.

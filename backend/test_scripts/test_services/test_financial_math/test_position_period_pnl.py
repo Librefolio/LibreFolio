@@ -31,7 +31,7 @@ contract: ``Decimal("10.50")`` is not ``Decimal("10.5")``).
 
 Pure: no database, no server, no network. The service's parity with this function is proved elsewhere (no AST test).
 
-RED on HEAD ebc5c87a8, by absence: ``PositionPeriodPnl`` and ``position_period_pnl`` do not exist in
+RED on HEAD e40bb5154, by absence: ``PositionPeriodPnl`` and ``position_period_pnl`` do not exist in
 ``contributions.py``; the module fails at collection with ``ImportError``.
 
 Runs in ``./dev.py test services financial-math`` (the runner collects the whole ``test_financial_math/`` directory).

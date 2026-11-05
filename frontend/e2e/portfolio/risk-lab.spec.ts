@@ -1343,7 +1343,7 @@ async function answerEligibility(page: Page, verdictFor: (assetId: number) => Ve
  *
  * 🔴 Never the last question alone. The panel asks the engine twice: about the
  * catalogue, after its 300 ms pause, and about the selection alone, for the
- * common-period offer (`0ca71a3aa`). The two answers land in either order, and read
+ * common-period offer (`9c15f30a8`). The two answers land in either order, and read
  * off the last one the list was the selection whenever its question came last — a
  * broker preset then expected two of the three holdings it loaded, red on a full
  * run and green alone. The selection is a subset of the catalogue, so the union of

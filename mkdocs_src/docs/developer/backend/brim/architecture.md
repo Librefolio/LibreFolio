@@ -143,7 +143,7 @@ reaches every file; anyone else gets 403.
 
 | Route | A file of a broker | A file with no broker |
 |-------|--------------------|-----------------------|
-| `GET /files/{file_id}`, `…/preview`, `…/download`, `…/last-parse`, `…/plugin-check` | Any role on that broker (VIEWER+) | Its uploader |
+| `…/preview`, `…/download`, `…/plugin-check` | Any role on that broker (VIEWER+) | Its uploader |
 | `POST /files/{file_id}/parse`, `DELETE /files/{file_id}` | EDITOR or OWNER of that broker | Its uploader |
 
 - **On a file of a broker, the role decides alone**: having uploaded the file grants nothing, so an
@@ -607,7 +607,7 @@ value, and a token set after the parse makes the file stale too.
 - `backend/app/schemas/brim.py`, `BRIMFileInfo.parsed_settings_fingerprint`: filled from the metadata, with
   `exclude=True`, so it is compared in memory and never serialised in the API.
 - `backend/app/services/brim/brim_file_settings.py`, `apply_settings_staleness(files, user_id)`: called by
-  `GET /brokers/import/files` and `GET /brokers/import/files/{file_id}` in `brokers.py`, in the async route, for the
+  `GET /brokers/import/files` in `brokers.py`, in the async route, for the
   signed-in user. It resolves `current` once per plugin and sets `parse_is_stale = True` through
   `settings_changed_since(...)`; a file that is not `PARSED`, a plugin without fields and a file already stale are
   left alone. The existing stale banner already tells the user to parse again.

@@ -28,7 +28,7 @@ and the banner appeared. The retry worked because the cache was warm by then.
 
 ## Solution
 
-`7f352b0de` (03/09/2026; its subject says «docs(journal)», but the commit carries this code):
+`c51989964` (03/09/2026; its subject says «docs(journal)», but the commit carries this code):
 
 - the conversion errors are deduplicated **once per job**, against a set;
 - the list is **capped at ten**, followed by one summary line («… and N more FX conversion failures»); the frontend

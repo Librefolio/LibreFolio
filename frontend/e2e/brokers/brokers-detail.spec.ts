@@ -357,9 +357,48 @@ test.describe('Broker Detail Page', () => {
             expect(new URL(page.url()).pathname, 'the lots panel is a section of the page, not another page').toBe(pathBefore);
             await expect(page.getByTestId('broker-holdings')).toBeVisible();
             const lots = page.getByTestId('lots-analysis-panel');
-            await expect
-                .poll(() => lots.evaluate((el) => Math.round(el.getBoundingClientRect().top)), {message: 'the view scrolls to the start of the lots panel', timeout: 10_000})
-                .toBeLessThanOrEqual(120);
+            try {
+                await expect.poll(() => lots.evaluate((el) => Math.round(el.getBoundingClientRect().top)), {message: 'the view scrolls to the start of the lots panel', timeout: 10_000}).toBeLessThanOrEqual(120);
+            } catch (error) {
+                // This red was seen twice on a loaded machine and not reproduced alone, with a 2.5 s answer or a CPU 30x slower:
+                // say where the view was, so the next one is explained and not guessed.
+                const state = await page.evaluate(() => {
+                    const panel = document.querySelector('[data-testid="lots-analysis-panel"]');
+                    let scroller: Element | null = panel?.parentElement ?? null;
+                    while (scroller && scroller.scrollHeight <= scroller.clientHeight + 1) scroller = scroller.parentElement;
+                    return {
+                        url: location.search,
+                        panelTop: panel ? Math.round(panel.getBoundingClientRect().top) : null,
+                        panelHeight: panel ? Math.round(panel.getBoundingClientRect().height) : null,
+                        scrollerTag: scroller?.tagName ?? null,
+                        scrollTop: scroller?.scrollTop ?? null,
+                        scrollHeight: scroller?.scrollHeight ?? null,
+                        clientHeight: scroller?.clientHeight ?? null,
+                        loading: !!document.querySelector('[data-testid="lots-analysis-panel-loading"]'),
+                    };
+                });
+                throw new Error(`${(error as Error).message}\nview state: ${JSON.stringify(state)}`);
+            }
+            expect(await lots.evaluate((el) => el.getBoundingClientRect().top), 'the start of the section is not scrolled past').toBeGreaterThanOrEqual(-2);
+        });
+
+        test('the lots panel stays at the start of the view when its data arrives after the scroll', async ({page}) => {
+            // The panel opens at once, with its loading skeleton, and its data lands later (a slow answer, a loaded machine):
+            // the section is taller then than when the view scrolled to it, and the view must still start at the section.
+            await page.route('**/api/v1/portfolio/lots/analysis', async (route) => {
+                await new Promise((resolve) => setTimeout(resolve, 2_500));
+                await route.continue();
+            });
+            await goToBrokerWithHoldings(page);
+            const row = await firstHoldingRow(page);
+
+            await clickRowAction(page, row, 'analyze-lots');
+            await expectLotsPanelOpen(page);
+
+            const lots = page.getByTestId('lots-analysis-panel');
+            // The data is in when the loading skeleton has gone; only then is the answer about the settled layout.
+            await expect(page.getByTestId('lots-analysis-panel-loading')).toBeHidden({timeout: 20_000});
+            await expect.poll(() => lots.evaluate((el) => Math.round(el.getBoundingClientRect().top)), {message: 'the view is at the start of the lots panel once its data is in', timeout: 10_000}).toBeLessThanOrEqual(120);
             expect(await lots.evaluate((el) => el.getBoundingClientRect().top), 'the start of the section is not scrolled past').toBeGreaterThanOrEqual(-2);
         });
 
@@ -616,7 +655,7 @@ test.describe('Broker Detail Page', () => {
         // ── The comparison chart's presentation controls ─────────────────────────────────────
         //
         // What these two replace: a test pressing an Aggregate / Per-lot pair (`lots-value-*`) that
-        // left the component in 9d086041b, when Value mode became aggregate-only. Its
+        // left the component in 0196980ff, when Value mode became aggregate-only. Its
         // `if (!visible) return` then ended it on every run — green without testing anything — and
         // it picked its lot by a CSS class.
         //
@@ -875,8 +914,8 @@ async function lotsAnalysis(page: Page, body: {asset_id: number; broker_ids: num
 
 /**
  * The open holdings of one broker with their asset names, as the portfolio report gives them (`summary.holdings`, each
- * with the broker that holds it). They used to come from `GET /brokers/{id}/summary`, which no longer carries them (MF-L:
- * no page read the field, and the report is where a position's cost and value are calculated).
+ * with the broker that holds it). They used to come from `GET /brokers/{id}/summary`, a route that no longer exists (the
+ * report is where a position's cost and value are calculated).
  */
 async function brokerHoldings(page: Page, brokerId: number): Promise<{asset_id: number; asset_name: string}[]> {
     const response = await page.request.post('/api/v1/portfolio/report', {

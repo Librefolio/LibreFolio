@@ -9,7 +9,7 @@ related: [entities/devpy-cli, features/F-063, features/F-064, decisions/port-604
 
 ## Definition
 
-Since 2026-09-10 (`63cfb55d1`) several LibreFolio servers and test runs can work side by side — one per worktree,
+Since 2026-09-10 (`4588506b9`) several LibreFolio servers and test runs can work side by side — one per worktree,
 per agent or per test campaign — each in its own **lane**: a unique **port** and a unique **data directory**. The data
 directory holds everything a run writes: the SQLite database, uploads, broker reports, logs. A lane is valid only if
 **both** are unique (the default ports follow [[decisions/port-6040-scheme]]); a shared port collides at bind time, a shared data directory corrupts silently.

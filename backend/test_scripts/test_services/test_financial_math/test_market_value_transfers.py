@@ -42,7 +42,7 @@ What is tested here (pure — no database, no server, no network):
   a priced in-kind ADJUSTMENT give none; a leg before date_from is recorded; the owner's share scales both figures;
   the order is the replay's.
 
-Red by absence on HEAD 91268d748: neither ``MarketValueTransfer``, ``market_value_transfer_results`` nor the result's
+Red by absence on HEAD 4f13e73c9: neither ``MarketValueTransfer``, ``market_value_transfer_results`` nor the result's
 ``market_value_transfers`` exist. Names are looked up while each test runs (never at import), so the file collects and
 every test fails on its own with the missing name — except the spy's guard, which pins today's
 ``_transfer_leg_capital`` values and is green before and after the cure.

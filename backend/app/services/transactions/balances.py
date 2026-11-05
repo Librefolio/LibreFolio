@@ -198,7 +198,7 @@ class TransactionBalancesMixin:
         return await self._get_balances_before_date(broker_id, as_of, exclude_tx_ids, through=True)
 
     # =========================================================================
-    # BALANCE QUERIES (for BRSummary)
+    # BALANCE QUERIES
     # =========================================================================
 
     async def get_cash_balances(self, broker_id: int, as_of: Optional[date_type] = None) -> Dict[str, Decimal]:

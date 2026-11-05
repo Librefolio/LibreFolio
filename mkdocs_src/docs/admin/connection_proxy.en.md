@@ -113,7 +113,7 @@ LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP
   never the value itself: check how your proxy sets the header.
 - **Another proxy in front of Fly.io**, such as Cloudflare: `Fly-Client-IP` then holds that proxy's
   address, not the visitor's.
-- **No profile sets it**, the [managed profile](hosting_providers.md#managed-profile) included: the
+- **No profile sets it**: the
   header depends on the proxy in front of each instance.
 - **The indicator does not use it**: it keeps reading `X-Forwarded-For`, as
   [The Server's View](connection_checks.md#server-view) explains.

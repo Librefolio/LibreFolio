@@ -194,6 +194,17 @@ def _stable_seed(*parts: object) -> int:
     return int(hashlib.sha256(payload).hexdigest()[:16], 16)
 
 
+def seed_missing_global_settings(session: Session) -> None:
+    """Create the global-settings rows that are missing, as the server does at startup (no route does it any more)."""
+    created = 0
+    for key, config in GLOBAL_SETTINGS_DEFAULTS.items():
+        if session.get(GlobalSetting, key) is None:
+            session.add(GlobalSetting(key=key, value=config["value"], value_type=config["type"], description=config.get("description"), updated_at=utcnow()))
+            created += 1
+    session.commit()
+    print(f"  ✅ Global settings defaults present ({created} created)")
+
+
 def open_lane_registration(session: Session) -> None:
     """Registration open on the test database: the API and E2E tests register accounts of their own.
 
@@ -2599,7 +2610,7 @@ def link_transactions_to_events(session: Session):  # noqa: C901 — sequential 
 
     This produces fixture data needed to test the RESTRICT-aware delete flow on
     AssetEvent (Phase 7 Part 1):
-    - The linked AssetEvent cannot be deleted via DELETE /assets/events?ids=...
+    - The linked AssetEvent cannot be deleted (event delete / asset market-data wipe)
       and the response must include the referencing transaction id in
       `accessible_transactions` (since the referencing tx belongs to a broker
       the test user can access).
@@ -3891,6 +3902,7 @@ def main():  # noqa: C901 — sequential populate step driver
     with Session(engine) as session:
         try:
             cleanup_all_tables(session)
+            seed_missing_global_settings(session)
             open_lane_registration(session)
 
             populate_brokers(session)

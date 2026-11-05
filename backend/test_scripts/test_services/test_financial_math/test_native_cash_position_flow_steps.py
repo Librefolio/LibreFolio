@@ -31,7 +31,7 @@ side — ``flows``' own zero (``_ZERO``), compared by ``as_tuple()``.
 
 Pure: no database, no server, no network; ``unit_rates`` is empty (no balance is valued here).
 
-RED on HEAD ebc5c87a8, by absence: ``NativeCash`` has no ``position_flow_steps``; every test fails with
+RED on HEAD e40bb5154, by absence: ``NativeCash`` has no ``position_flow_steps``; every test fails with
 ``AttributeError`` (the module collects).
 
 Runs in ``./dev.py test services financial-math`` (the runner collects the whole ``test_financial_math/`` directory).

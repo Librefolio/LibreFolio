@@ -33,7 +33,7 @@ move into ``period.py`` too.
 
 * ``period_identity_residual(pnl, ugl_delta, realized, income, fees_taxes, other_result)``:
   ``pnl − (ugl_delta + realized + income − fees_taxes + other_result)``, in that association. It
-  replaces the two copies the AI Export's reconciliation wrote in line at ``e7f3f5d81``,
+  replaces the two copies the AI Export's reconciliation wrote in line at ``74ae873f7``,
   ``portfolio_financial._build_portfolio_reconciliation`` (``:491``) and
   ``broker_financial._build_broker_reconciliation`` (``:432``); its oracle is
   ``_identity_residual_today``.
@@ -231,20 +231,20 @@ def _other_result_today(period_pnl_val: Decimal, period_ugl_delta: Decimal, peri
 
 def _positions_other_result_today(period_pnl_total: Decimal, period_ugl_delta: Decimal, total_realized: Decimal, total_income: Decimal, total_fees: Decimal) -> Decimal:
     """``get_positions_contribution``'s term that closes the period identity, ``portfolio_service.py:1854`` at
-    ``e7f3f5d81``, as written (J-14)."""
+    ``74ae873f7``, as written (J-14)."""
     return period_pnl_total - period_ugl_delta - total_realized - total_income + total_fees
 
 
 def _identity_residual_today(pnl: Decimal, ugl_delta: Decimal, realized: Decimal, income: Decimal, fees_taxes: Decimal, other_result: Decimal) -> Decimal:
     """What the AI Export's reconciliation left of the identity, ``portfolio_financial.py:491`` and
-    ``broker_financial.py:432`` at ``e7f3f5d81``, as written: each ``summary.period_*.amount`` is named
+    ``broker_financial.py:432`` at ``74ae873f7``, as written: each ``summary.period_*.amount`` is named
     by its argument (J-14)."""
     return pnl - (ugl_delta + realized + income - fees_taxes + other_result)
 
 
 def _reconciled_today(residual_amount: Decimal) -> bool:
     """The tolerance both components applied to that residual, ``portfolio_financial.py:495`` and
-    ``broker_financial.py:436`` at ``e7f3f5d81``, as written (J-14)."""
+    ``broker_financial.py:436`` at ``74ae873f7``, as written (J-14)."""
     return abs(residual_amount) < CONVERSION_DUST
 
 
@@ -759,7 +759,7 @@ class TestIsReconciled:
 
 class TestPeriodOtherResultInPositionsContribution:
     """J-14: ``get_positions_contribution`` wrote ``period_other_result``'s expression in line a second time
-    (``portfolio_service.py:1854`` at ``e7f3f5d81``) and now calls the function: the same association, so the same
+    (``portfolio_service.py:1854`` at ``74ae873f7``) and now calls the function: the same association, so the same
     figure to its last digit. A characterization lock, green before J-14 too: ``period_other_result`` was already
     there."""
 

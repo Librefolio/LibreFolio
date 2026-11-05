@@ -528,8 +528,8 @@ test.describe('«+ New event» never overwrites', () => {
         await expect(modal.getByTestId('event-create-notes')).toHaveValue(`${marker} stored`);
 
         // Meanwhile the event goes — another tab, another user. The save by id is now refused (EVENT_NOT_EDITABLE).
-        const removed = await jsonFrom<{results: Array<{event_id: number; status: string}>}>(await page.request.delete(`${EVENTS_PATH}?asset_id=${asset.id}&ids=${storedId}`), 'delete the stored event behind the modal');
-        expect(removed.results.find((r) => r.event_id === storedId)?.status).toBe('deleted');
+        const removed = await jsonFrom<{results: Array<{asset_id: number; deleted_ids?: number[]}>}>(await page.request.post(EVENTS_PATH, {data: [{asset_id: asset.id, delete_ids: [storedId]}]}), 'delete the stored event behind the modal');
+        expect(removed.results.find((r) => r.asset_id === asset.id)?.deleted_ids).toEqual([storedId]);
 
         const amountInput = modal.getByTestId('event-create-amount');
         await amountInput.fill('3.00');

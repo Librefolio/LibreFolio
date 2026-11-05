@@ -97,7 +97,7 @@ graph TD
 
 ## Known problems / limitations
 
-- [[problems/tanstack-svelte5-incompatibility]] — TanStack Table v8's official Svelte adapter is incompatible with Svelte 5 runes; a workaround is in place. [[F-075]] will address this when TanStack v9 ships a Svelte 5 adapter. *Resolved by removal on 2026-08-05: TanStack left the frontend (`61c24e05c`), so F-075 is superseded (lint 2026-10-12).*
+- [[problems/tanstack-svelte5-incompatibility]] — TanStack Table v8's official Svelte adapter is incompatible with Svelte 5 runes; a workaround is in place. [[F-075]] will address this when TanStack v9 ships a Svelte 5 adapter. *Resolved by removal on 2026-08-05: TanStack left the frontend (`cd7b24bb4`), so F-075 is superseded (lint 2026-10-12).*
 - [[problems/event-loop-blocking]] — the original provider calls (sync I/O in async handlers) froze the entire uvicorn event loop; resolved by F-060 thread isolation.
 
 ## What comes next

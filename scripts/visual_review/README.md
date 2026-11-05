@@ -211,12 +211,12 @@ G's plan, «Galleria del giro 3»:
 
 | Snapshot | Commit | Captured | Tests |
 |---|---|---|---|
-| `g-r3-prima-80a1ca0e0-full` | `80a1ca0e0`, the target just before round 3 | 02:00–02:34 | 31.1 min |
-| `g-r3-dopo-574c23cf0-full` | `574c23cf0`, round 3 complete | 02:36–03:10 | 29.4 min, after a 143 s build |
-| `g-r3-dopo2-574c23cf0-full` | `574c23cf0` again | 03:10–03:42 | 29.3 min |
+| `g-r3-prima-795f2bb16-full` | `795f2bb16`, the target just before round 3 | 02:00–02:34 | 31.1 min |
+| `g-r3-dopo-c293e3121-full` | `c293e3121`, round 3 complete | 02:36–03:10 | 29.4 min, after a 143 s build |
+| `g-r3-dopo2-c293e3121-full` | `c293e3121` again | 03:10–03:42 | 29.3 min |
 
 - **The reference is this trio.** It was kept on 19/10, when every older snapshot and diff was deleted to free the disk.
-  - **Noise masks and stability:** `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-574c23cf0` (`masks/`,
+  - **Noise masks and stability:** `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-c293e3121` (`masks/`,
     `stability.json`), the same commit twice on the same day. Pass them to `diff` with `--ignore-masks` and
     `--stability`.
   - **For the eye on another day:** the three snapshots. A pixel diff still needs a reference captured on the
@@ -239,7 +239,7 @@ G's plan, «Galleria del giro 3»:
   noise, negligibly or in unstable shots; 495 changed beyond the noise; none is of another size. The designer's sheet,
   by area of the round: `sheets/r3-2026-10-18/index.html`.
 
-## Known gallery behaviour (16/10/2026, commit `c85ecd330`, G-13)
+## Known gallery behaviour (16/10/2026, commit `c36ccefc4`, G-13)
 
 History: the snapshots and diffs named in this section and in the next one were deleted on 19/10/2026. The analyses
 in G's evidence remain.
@@ -266,7 +266,7 @@ Three full runs of the same commit at 6 workers (`g-ref13-r1`/`r2`/`r3`). The an
   `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html` and `visible.json`. Of 182 shots, by median visible change:
   91 at 10 % or more (dialogs and wizards), 53 at 1–10 %, 20 at 0.1–1 %, 18 under 0.1 %.
 
-## Known gallery behaviour (15/10/2026, commit `2ddbf77f7`)
+## Known gallery behaviour (15/10/2026, commit `e560e3120`)
 
 Two full runs of the same commit (`g-final3-r1`/`r2`, 6 workers, both clean for `live_price_check`). The analysis of
 every unstable and medium shot is in G's evidence:

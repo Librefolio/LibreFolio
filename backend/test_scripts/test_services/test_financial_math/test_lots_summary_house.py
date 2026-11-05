@@ -20,7 +20,7 @@ The summary's other figures move into the house as well (``lot_summary_figures``
 file does not pin: their parity is the existing lots-analysis service tests' (``services lots-analysis-pure``,
 ``test_financial/test_lots_analysis_service.py`` in ``services roi-fifo-utils``), unchanged.
 
-Each old formula is written inline below, as it stood at HEAD (3bde7df80), and compared with the new
+Each old formula is written inline below, as it stood at HEAD (01dac3f64), and compared with the new
 function on ``str()`` — value *and* exponent: the move must not change a digit. ``residual_cost`` is
 also compared with the live ``lot_residual_cost_basis``, the AI Export's entry point, so its delegation
 cannot drift either.

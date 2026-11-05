@@ -42,11 +42,11 @@ The issue: the 3-step icon chain `icon_url → portal_url/favicon → plugin_ico
 
 Both forms are closed in the places where they were seen in June:
 
-- **Form A** — commit `102413232` (2026-06-25, the QA session that found it): `files/+page.svelte` awaits
+- **Form A** — commit `521d88bf1` (2026-06-25, the QA session that found it): `files/+page.svelte` awaits
   `ensurePluginIconsLoaded()`, and `BrokerInfo` gained `default_import_plugin`, so a broker known only by its plugin
   reaches the plugin step.
 - **Form B** — the transactions page awaits the cache and then sets `pluginIconsReady` (option 2 above). The other
-  icons go through the shared reactive chain `brokerIconChain.svelte.ts` (`fc1f7ccd1`, 2026-06-26), which updates its
+  icons go through the shared reactive chain `brokerIconChain.svelte.ts` (`18399d90c`, 2026-06-26), which updates its
   own state when the cache arrives, so the derived URL list is computed again. `ensureBrokersLoaded()` and
   `refreshAllBrokers()` in `brokerStore.ts` start the cache for every consumer — the app-level call that Prevention
   asks for.
@@ -66,7 +66,7 @@ the broker and merges it into the store; but its icon chain reads only the props
 `pluginCode`), so the store fills up and the props never change. Assigned to workstream I, in the UI polish lot.
 
 *Update (train 72)*: both symptoms had another cause. A late `error` event from a replaced `<img>` marked the plugin
-icon as failed, and the plugin state started from `null` even with a warm cache; fixed in `9b2d731cd` —
+icon as failed, and the plugin state started from `null` even with a warm cache; fixed in `db0277a99` —
 [[problems/late-img-error-marked-the-visible-icon-failed]]. The diagnosis above was not the cause; it survives as the
 latent C-56 below.
 

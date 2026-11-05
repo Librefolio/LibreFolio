@@ -50,10 +50,10 @@ each rule proven in both halves.
 
 Result on the same tree: **180 dead** instead of 250, none of them alive; the tool also caught two
 keys the manual review had wrongly kept (`aiExport.additionalData.reason.{fifoDetail,performanceContext}`,
-no producer since `371d29997`). Remaining limit: the backend vocabulary is shared by all families, so
+no producer since `7f4f59bc7`). Remaining limit: the backend vocabulary is shared by all families, so
 a common word can still make a dead key look used (`…planner.result.sections.assets`).
 
-### Second pass on the release tip (same day, `5f3509536`)
+### Second pass on the release tip (same day, `d0e7eb405`)
 
 With the dashboard (N) and risk (A13) work merged, 78 live keys still read «not verified», and a
 component nobody imported (`planner/shared/AgeLabel.svelte`) still proved its five keys «used».
@@ -74,7 +74,7 @@ Five more rules, each again proven in both halves (94 new gate cases, 195 in all
 Result: **0 dead, 3 not verified**, all live: `chartSettings.params.{amplitude,histogramScale}`, whose
 member sits two imports away, and `transactions.fields.cash_code`, built from the validation path
 `cash.code` of a Pydantic field the vocabulary cannot see. A fourth, `onboarding.settings.groups.contextual`,
-was dead in fact — its group was replaced in `ce718ca49` — and only a per-key check could tell: the tool
+was dead in fact — its group was replaced in `89f0c401d` — and only a per-key check could tell: the tool
 rightly refuses to call an unnamed member of a narrow family dead. It was removed with the batch.
 `AgeLabel.svelte` went with its keys; `onboardingTourSurfaces.svelte.ts` and `stores/core/EditBuffer.ts`
 are unreferenced too, but read no key (knip backlog).

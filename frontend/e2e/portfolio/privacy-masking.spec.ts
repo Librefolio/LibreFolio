@@ -296,7 +296,7 @@ async function ownedBrokers(page: Page): Promise<BrokerListItem[]> {
 async function pricedPositions(page: Page): Promise<Position[]> {
     const positions: Position[] = [];
     for (const broker of await ownedBrokers(page)) {
-        // The open holdings of the broker come from the portfolio report (`summary.holdings`): `GET /brokers/{id}/summary` no longer carries them (MF-L).
+        // The open holdings of the broker come from the portfolio report (`summary.holdings`): the route `GET /brokers/{id}/summary` no longer exists.
         const report = await postJson<PortfolioReport>(page, '/api/v1/portfolio/report', {broker_ids: [broker.id], include_summary: true, include_history: false, include_allocation_history: false, include_breakdown: false, include_positions_contribution: false});
         for (const holding of (report.summary?.holdings ?? []).filter((candidate) => candidate.broker_id == null || candidate.broker_id === broker.id)) {
             if (Number(holding.quantity) > 0 && holding.current_price != null) {

@@ -13,10 +13,10 @@ The rest of the guide starts on [Command-Line Tools](cli_tools.md).
 ### 📦 Create an Archive
 
 ```bash
-# Write an archive into <data dir>/backups/
+# Keep an archive in its own folder of <data dir>/backups/, and print its SHA-256
 pipenv run ./dev.py backup create
 
-# Write it into another folder, which must already exist
+# Copy it into another folder instead, which must already exist
 pipenv run ./dev.py backup create -o /mnt/nas/librefolio/
 
 # Or give the archive a name of your own
@@ -27,14 +27,16 @@ pipenv run ./dev.py backup create --encrypt -o /mnt/nas/librefolio/
 ```
 
 - 🟢 The server keeps working, and writing, during the backup: the database is copied with SQLite's `VACUUM INTO`, a consistent snapshot, then SQLite's integrity check and foreign-key check run on the copy.
-- 🏷️ The archive is named after the moment the backup starts, in UTC: `librefolio-backup-20261015-121500.zip`, or `.lfbk` for a [secure archive](#backup-secure). In a folder that already holds a file with that name, after two backups in the same second for instance, it becomes `librefolio-backup-20261015-121500-2.zip`, then `-3`, and so on: an archive never replaces a file.
+- 🗃️ **Without `--output`, the archive stays on the server**, in a folder of its own in `backups/`, such as `backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip`: the folder is named after the moment, where the backup came from (`cli`) and a short code. Nothing is copied or moved, and the command prints that path, then a line `SHA-256: <64 hexadecimal digits>`, the checksum of the archive. The backup is then in the list of **Settings › Administration › Backup**, and in the automatic clean-up: [Backups Kept on the Server](backup_restore.md#kept-backups).
+- 📋 **With `--output`, the archive is copied there** and nothing stays in `backups/`: the same `SHA-256:` line follows the path of the copy. Compare it with the checksum of the file once it is on another disk.
+- 🏷️ The archive is named after the moment the backup starts, in UTC: `librefolio-backup-20261015-121500.zip`, or `.lfbk` for a [secure archive](#backup-secure). In a folder given with `--output` that already holds a file with that name, after two backups in the same second for instance, it becomes `librefolio-backup-20261015-121500-2.zip`, then `-3`, and so on: an archive never replaces a file.
 - 📁 `--output` (`-o`) is checked before the backup starts, and the command must be able to write there. An existing folder receives the archive under its default name. Any other path is the archive's file, even one that ends with `/`: a folder that does not exist yet becomes the archive's name. That file must not exist yet, and its name is never changed. Its missing folders are created only when the archive is moved there, so a failed backup leaves no empty folder behind. Prefer absolute paths: a relative one starts at the project root, wherever you run the command from.
 - 💽 Before writing anything, the command checks the free space where it builds the archive, in the data directory's `backups/` folder, even with `-o`: about twice the size of the database, plus the files, plus a small margin. When it is short, or when the disk or a quota fills up during the backup all the same, the command stops with `❌ Backup failed (backup_no_space): not enough free space`. When `-o` is on another disk, the space there is checked once the archive is built and its size known.
-- 🛟 If the finished archive cannot go to `-o` (a file with that name appeared meanwhile, its folders cannot be created, the other disk is short of space, a write error), it is put in `backups/` instead, and the command exits with `1`. A move that fails half-way leaves no partial file behind.
+- 🛟 If the finished archive cannot go to `-o` (a file with that name appeared meanwhile, its folders cannot be created, the other disk is short of space, a write error), it is put in `backups/` instead, as a loose file: it is not in the list of kept backups and the automatic clean-up never removes it. The command exits with `1`. A move that fails half-way leaves no partial file behind.
 - 🚦 One backup runs at a time: while another one is running, the command stops and asks you to try again when it ends.
-- ✅ It ends with `✅ Backup written: <path>`, the size and the time taken, any warnings, and a reminder: `🔒 The archive holds every user's data: keep it private.`, or for a secure archive `🔐 Encrypted with your password: only that password opens it, and LibreFolio cannot recover a lost one.` It exits with `0` when the archive is where you asked, warnings included, and `1` otherwise.
+- ✅ It ends with `✅ Backup written: <path>`, the size and the time taken, `SHA-256: <checksum>`, any warnings, and a reminder: `🔒 The archive holds every user's data: keep it private.`, or for a secure archive `🔐 Encrypted with your password: only that password opens it, and LibreFolio cannot recover a lost one.` It exits with `0` when the archive is where you asked, warnings included, and `1` otherwise.
 - 🔒 Without a password, the archive is not encrypted: LibreFolio writes it, like a secure one, so that only its owner can read and write it (`0600`). Keep it, and every copy, as private as the data directory.
-- 🗑️ LibreFolio never deletes the archives it puts in `backups/`: they stay there until you remove them. That folder is on the same disk as the data, so copy them to another disk, a NAS or off-site, or write them there directly with `-o`.
+- 🗑️ The backups kept in `backups/` stay there until you delete them from **Settings › Administration › Backup** or from the folder, or until the [automatic clean-up](backup_restore.md#backup-cleanup) you set removes them, the latest one excepted. LibreFolio never touches the loose `librefolio-backup-*.zip` files that earlier versions left in `backups/`. That folder is on the same disk as the data, so copy the archives to another disk, a NAS or off-site, or write them there directly with `-o`.
 - 🔗 Keep `backups/` a real folder, never a link to a NAS or another disk: every archive is built inside it first, even with `-o`. A link, or a file, in its place stops the command with `❌ <data dir>/backups is not a plain folder (a link, or a file): …`.
 - 🧪 `backup --test-db create` backs up the test data directory instead: a development option.
 
@@ -48,7 +50,7 @@ pipenv run ./dev.py backup create --encrypt -o /mnt/nas/librefolio/
 
     **Not where you asked**: the archive is written, and the command exits with `1`.
 
-    - `⚠️ <reason>: the archive was written to <path> instead`, followed by the usual lines: `-o` could not take the finished archive, so it is in `backups/`. Move it where you want it.
+    - `⚠️ <reason>: the archive was written to <path> instead`, followed by the usual lines: `-o` could not take the finished archive, so it is in `backups/`, as a loose file outside the list of kept backups. Move it where you want it.
     - `❌ <reason>: the archive stays in <path>. Move it within the hour: the next backup after that removes it.`: `backups/` could not take it either. It is still in the backup's work folder, inside `backups/.jobs/`, which the first backup started after that hour, or the first start of LibreFolio after it, removes: move the archive out before then.
 
     **Errors**: no archive is written, and the command exits with `1`.
@@ -58,6 +60,15 @@ pipenv run ./dev.py backup create --encrypt -o /mnt/nas/librefolio/
     - `❌ <data dir>/backups is not a plain folder (a link, or a file): …`: make `backups/` a real folder again. `❌ The backup could not run in <data dir>/backups: <reason>`: the command could not prepare its work folder there, for example because it cannot write into the data directory.
     - `❌ Backup failed (backup_no_space): not enough free space`: the free space was short at the start, or the disk or a quota filled up during the backup, even in the middle of a file. Free some space on the disk of the data directory.
     - `❌ Backup failed (backup_failed): the cause is in the log above`: any other failure. One of them is a file that fails while it is being copied into the archive, such as a read error in the middle of the file: part of a file cannot be taken back out of a zip, so the whole backup stops. A file that fails before its copy starts is left out with the warning above instead.
+
+### 🗃️ Where the Backups Stay {: #backup-kept }
+
+The command and the app both leave their finished backups in `backups/`, one folder each, named `librefolio-backup-<date>-<time>-<origin>-<id>`, where the origin is `cli` here and `ui` for the app. `backups/.jobs/` holds only a backup in progress or one that failed. What to do with them:
+
+- 📋 List, download and delete them in **Settings › Administration › Backup**, or **Files › Backups** (administrators only): [Backups Kept on the Server](backup_restore.md#kept-backups).
+- 🧹 Set a total size and a maximum age, both optional, so that the oldest go by themselves, the latest never: [Automatic Clean-up](backup_restore.md#backup-cleanup). The command applies them after each backup, as the app does.
+- 💽 A copy on the disk of your data is not a real backup: copy the archive to another disk, or use `--output`.
+- 🔎 To check or restore a kept archive from the command line, give `backup inspect` or `backup restore` the path that `backup create` printed.
 
 ### 🔐 A Secure Archive {: #backup-secure }
 
@@ -122,7 +133,7 @@ Everything else stays out: `secrets/` (but `secrets/instance.key` in a secure ar
 ??? info "📋 `manifest.json` — what it records"
 
     - the format, `librefolio-backup`, and its version;
-    - the LibreFolio version that made the archive, how (`cli` for this command, `ui` for the web interface, `panel` for a [hosting panel](hosting_panel_backups.md#panel-backups)) and when, in UTC;
+    - the LibreFolio version that made the archive, how (`cli` for this command, `ui` for the web interface) and when, in UTC;
     - the database: its migration (Alembic) revision, the result of SQLite's integrity check, the number of foreign-key violations, the rows in each table and the ledger's control totals, the cash of every broker in each currency and the quantity of every position (an archive made before them has none);
     - every entry, the database first, with its path, its size and its SHA-256;
     - whether the archive carries the instance key, and the SHA-256 of that entry: only a secure archive does.
@@ -210,13 +221,13 @@ It shows the steps as it goes (`… decrypting` for a secure archive, `… check
     - `⚠️ Ledger totals: could not be read on the copy`.
 - 👑 The administrators, and what a restore will mean for everyone: `After a restore you sign in with one of them, with the password of then; every session open now ends.` and `Invitations and links sent before the restore will have expired: send them again if needed.`
 - ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, `The upgrade added broken references to the copy`, `The ledger's totals differ from those the backup recorded (listed above)`, `The ledger's totals could not be read on the copy` or `Some currency codes in the backup are not ISO 4217 codes, names or numbers an earlier version saved: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them after the restore)`, which [Currency Codes That Are Not ISO Codes](cli_tools.md) explains.
-- 👥 A backup with more active accounts than `LIBREFOLIO_MAX_USERS` allows adds one line, printed once, which names no account and no address: `⚠️  The backup holds <n> active accounts; this instance accepts <m> (LIBREFOLIO_MAX_USERS): at the first sign-in the administrator chooses who keeps access, the others are deactivated (not deleted)`. It only informs: `backup restore --yes` confirms and `--dry-run` exits with `0`, as for any backup. What happens next is in [More Accounts Than the Plan Allows](backup_restore.md#users-limit).
+- 👥 A backup with more active accounts than `LIBREFOLIO_MAX_USERS` allows adds one line, printed once, which names no account and no address: `⚠️  The backup holds <n> active accounts; this instance accepts <m> (LIBREFOLIO_MAX_USERS): at the first sign-in the administrator chooses who keeps access, the others are deactivated (not deleted)`. It only informs: `backup restore --yes` confirms and `--dry-run` exits with `0`, as for any backup.
 - ⛔ The blocker, which forbids it: `❌ The backup has no active administrator: after a restore nobody could manage the instance`.
 
 It ends with `✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.` and exits with `0`. It exits with `1` when the archive is refused or the restore blocked. A refusal is one line, the reason followed by a code in parentheses, such as `❌ The file is not a LibreFolio backup (not_a_backup)`, and nothing of the copy is left.
 
 - 💽 The copy needs free space on the disk of the data directory: everything the archive holds once unpacked, plus twice the size of its database for the upgrade, plus 64 MB. `backup inspect` shows those sizes; the archive itself is read where it is, never copied. A secure archive also needs room for its decrypted archive, about its own size, until it is unpacked. When the space is short, the check stops before it unpacks anything, with the number of bytes it needs (`no_space`); a disk that fills up during the check stops it too.
-- 📦 What the archive unpacks to has a limit when `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` sets one, and in the `managed` profile of a hosting provider, where it is 8 times the upload limit while it is not set («Main Options» in [Environment Variables](configuration.md)). The sizes the manifest declares are added up before the free space is checked, and an archive over the limit is refused with `unpacked_too_large`, before anything is unpacked. `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0` in front of the command lifts it for that command: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0 pipenv run ./dev.py backup restore <archive>`, or `docker compose exec -e LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0 librefolio python dev.py backup restore <archive>` with Docker. A limit that cannot be read stops the command before `🔎 Checking … on a copy`, with exit code `1`: `❌ LIBREFOLIO_BACKUP_MAX_RESTORE_MB: expected a whole number of megabytes, 0 for no limit (backup_restore_unavailable)`, or, in the `managed` profile while it is not set, the same line about `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, which the limit follows.
+- 📦 What the archive unpacks to has a limit when `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` sets one («Main Options» in [Environment Variables](configuration.md)). The sizes the manifest declares are added up before the free space is checked, and an archive over the limit is refused with `unpacked_too_large`, before anything is unpacked. `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0` in front of the command lifts it for that command: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0 pipenv run ./dev.py backup restore <archive>`, or `docker compose exec -e LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0 librefolio python dev.py backup restore <archive>` with Docker. A limit that cannot be read stops the command before `🔎 Checking … on a copy`, with exit code `1`: `❌ LIBREFOLIO_BACKUP_MAX_RESTORE_MB: expected a whole number of megabytes, 0 for no limit (backup_restore_unavailable)`.
 - 🚦 One archive is checked at a time: while another check runs, the command stops with `❌ Another archive is being checked (from the web interface or another command): try again when it ends`.
 - 🆕 It never uses the database of the instance: any installation can check an archive, a new one included, as long as its data directory exists (otherwise `❌ No data directory at <path>`). As with `-o`, a relative path starts at the project root.
 - 🔗 Keep `.restore/` and `.restore/stage/` real folders: a link, or a file, in their place stops the command with `❌ <path> is not a plain folder (a link, or a file): the copy is made in a folder of the data directory`.
@@ -239,7 +250,7 @@ It ends with `✅ The archive can be restored. Dry run: the instance was left as
     | `not_a_file`, `encrypted_entry`, `unsupported_entry` | An entry is a folder or a link, is encrypted, or uses a compression LibreFolio does not write |
     | `too_many_entries` | The archive holds more than 500,000 entries |
     | `checksum_mismatch` | An entry's size or SHA-256 differs from the manifest: the archive is damaged or was changed |
-    | `unpacked_too_large` | Unpacked, the archive would be larger than this installation accepts for a restore, from the sizes its manifest declares: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, or, while it is not set in the `managed` profile, 8 times the upload limit. Nothing is unpacked |
+    | `unpacked_too_large` | Unpacked, the archive would be larger than this installation accepts for a restore, from the sizes its manifest declares: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`. Nothing is unpacked |
     | `no_space` | Not enough free space for the copy |
     | `stage_failed` | The copy could not be written: the error printed just above gives the cause |
     | `database_damaged` | The backup's database fails SQLite's integrity check, before or after the upgrade, SQLite cannot read its schema, or it holds text that is not UTF-8 (another program wrote to it, or it was changed) |
@@ -275,8 +286,6 @@ Once confirmed, the command exits with `0` and says:
    ./dev.py backup pending shows it; ./dev.py backup pending --cancel drops it.
 ```
 
-On an instance a hosting provider runs (the `managed` profile) with `LIBREFOLIO_ADMIN_EMAIL` set, the report of the check and the confirmation add one line about the owner's account: see [The Owner's Account on a Restore from the Command Line](#backup-restore-owner).
-
 Nothing has changed yet: the server keeps running on its data, and the checked copy waits in `.restore/stage/<id>/`, however long it takes. Restart LibreFolio when it suits you: stop the whole server, then [start it](cli_tools.md#start-the-server) again; with Docker, `docker compose restart librefolio` ([Back Up with Docker](#backup-docker)). If the server is stopped, its next start applies the restore.
 
 That start applies it before it reads any data:
@@ -296,29 +305,12 @@ After the restore:
 
 Good to know:
 
-- 🔒 On an instance its hosting provider blocked (`LIBREFOLIO_BLOCKED`), the command confirms all the same, and adds `⚠️ The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)`: the first start after the unblock applies it.
 - 🚦 One restore at a time: while one waits or is being applied, `backup restore` stops before the check with `❌ A restore already waits for the next start: ./dev.py backup pending --cancel drops it (restore_already_pending)` and exits with `1`. It stops there too when it cannot read the state of the restore, since it cannot tell whether one waits: `❌ The state of the restore cannot be read: <reason> (restore_state_unreadable)`, exit code `1`, nothing checked. `--dry-run` still works.
-- ❌ If the confirmation itself is refused, the command prints one line that ends with a code, removes the copy and exits with `1`: `restore_stage_outdated` when LibreFolio was updated between the check and the confirmation (or, on a hosted instance, when the owner's address changed since the check), `restore_stage_expired` when the question waited more than 24 hours, `restore_already_pending` when another restore was confirmed meanwhile, `owner_conflict` for a backup that cannot give the owner their account (below). Run the command again; after `owner_conflict` or `restore_stage_outdated`, check the archive again.
+- ❌ If the confirmation itself is refused, the command prints one line that ends with a code, removes the copy and exits with `1`: `restore_stage_outdated` when LibreFolio was updated between the check and the confirmation, `restore_stage_expired` when the question waited more than 24 hours, `restore_already_pending` when another restore was confirmed meanwhile. Run the command again; after `restore_stage_outdated`, check the archive again.
 - 📍 Run it where the server runs, in the container with Docker: the restore is recorded for the path of the data directory, and a server that finds its data directory under another path does not apply it.
 - 🔗 Keep the four folders real folders of the data directory: one that is a link, or that is mounted on its own, cannot be swapped. The start then leaves the data as it is, and records the restore as rolled back with `swap_failed`.
 - 💽 The swap needs no space of its own: the copy the check made becomes the instance's data, and the former data is removed once the first start completes.
 - 🗝️ The restore keeps this installation's instance key. When the archive carries the key of the installation that made it (a [secure archive](#backup-secure), when LibreFolio generated that key), the check has already re-encrypted its saved secrets with this installation's key. From any other archive of another installation, give that installation's key with `--instance-key-file`, and the check re-encrypts them too ([The Instance Key of Another Installation](#backup-restore-instance-key)). Otherwise they cannot be read here: the report counts them, to enter again after the restore, unless you put that installation's key back first ([Saved Secrets and the Instance Key](configuration_secrets.md#plugin-secrets)). See «The instance key is in a secure archive only» above.
-
-### 👑 The Owner's Account on a Restore from the Command Line {: #backup-restore-owner }
-
-Only on a `managed` instance with `LIBREFOLIO_ADMIN_EMAIL` set. On your own installation (`selfhosted`, the default), or on a hosted instance without that variable, nothing changes: no owner is picked, nothing is refused, and every password stays as it is. A restore confirmed here has nobody to ask which account of the backup becomes the owner's, so the confirmation picks it from the checked copy, in this order:
-
-1. The account that already holds the owner's address, whatever its role.
-2. Otherwise the **one** active administrator the backup marks as its owner. The mark is written by whoever prepared the backup: it only suggests which account, and grants nothing.
-3. Otherwise nobody: none marked, two or more marked, or a marked account that is not an active administrator. Never "the first one".
-
-- 👤 **An account picked.** The report says `👤 The owner's account will be <username>: …`, by its username, never by an address. At the restore its password is closed (unusable, sessions ended), it gets the owner's address, becomes an active administrator and the instance's owner. The first start sends the link to choose a new password to `LIBREFOLIO_ADMIN_EMAIL`, never to an address of the backup; without email, the link is written in the log of the instance, to be given only to the owner. If it expires, the owner uses **Forgot Password?**. [Follow or Cancel a Restore](#backup-pending) shows how it went.
-- 🚫 **Nobody picked.** The restore goes on without an owner, with a warning in the log. The report says `⚠️ No owner: no account of the backup can be taken for it. The restore goes on; name one afterwards with ./dev.py user reassign-owner <username>`, and `backup pending` says it again. [`user reassign-owner`](hosting_instances.md#owner-reassign) names the owner afterwards.
-- 🛑 **Owner conflicts.** A backup with two accounts on one address or one name, the owner's address as another account's name, or an administrator still waiting for its setup link is refused, as from the app: the check prints `❌ The backup cannot give the owner their account: …` and the confirmation ends with `owner_conflict`. Remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again.
-- ❌ **If the assignment fails after the swap**, for instance because the address is taken, the instance serves nothing but the recovery until `./dev.py backup pending --recover owner` ([Follow or Cancel a Restore](#backup-pending)).
-- 🧹 The mark that says which account is the instance's owner, which a backup carries from the instance it was made on, is cleared on every account at every restore, on any profile, and set only on the account that is assigned.
-
-The hosting panel restores in the same way and has the same refusals: the panel receives HTTP 409 with the code ([The Owner's Account on a Hosted Instance](backup_restore.md#owner-account)).
 
 ### 🗝️ The Instance Key of Another Installation {: #backup-restore-instance-key }
 
@@ -349,9 +341,6 @@ pipenv run ./dev.py backup pending --cancel
 # When the state of the restore cannot be read: put the data of before back (LibreFolio stopped)
 pipenv run ./dev.py backup pending --recover previous
 
-# When the owner's account could not be set after a restore on a managed instance: clear the error and try again
-pipenv run ./dev.py backup pending --recover owner
-
 # For a script: the state as one JSON line, and the same actions with fixed exit codes
 pipenv run ./dev.py backup pending --json
 pipenv run ./dev.py backup pending --recover cancel --json
@@ -367,16 +356,11 @@ pipenv run ./dev.py backup pending --recover cancel --json
 | `✅ The last restore was applied on <date> UTC: backup made by LibreFolio <version> on <date> UTC` | The restore is done |
 | `⚠️ The last restore was rolled back on <date> UTC, the data is as it was before: <reason> (<code>)` | The restore was undone, for the reason below |
 
-After `✅ The last restore was applied …`, a restore that gave the owner an account on a `managed` instance adds one line about it, whichever route confirmed it (the app, this command or the hosting panel): `✉️ The owner's account is set: …`, `⏳ The owner's account is set at the next start of the server`, or the other lines of [the owner's account](backup_restore.md#owner-account). A restore that found nobody for the owner adds `⚠️ No owner was assigned at the restore: no account of the backup could be taken for it. Name one with ./dev.py user reassign-owner <username>`: [the order in which the account is picked](#backup-restore-owner).
-
-A restore from the hosting panel that left the owner's password alone adds `🔑 The owner's account kept its password and its open sessions (restore from the hosting panel)`: no link was sent, because none was needed. This is the one exception to the closed password, with four conditions: see [The Owner Keeps Their Password](backup_restore.md#owner-kept). `backup restore` on the command line never takes it: the account it picks has its password closed, as described above. `--json` is unchanged: it carries no line about the owner.
-
 When a start found a restore waiting and did not apply it, one more line says why, and the restore keeps waiting:
 
 - `⚠️ At the last start a backup was running: the next start applies it (backup_running)`: a backup was running when the server started, a `backup create` from the command line for instance.
 - `⚠️ It was confirmed for another data directory (<path>): this one does not apply it (other_data_directory)`: the server found its data directory under another path than the one where the restore was confirmed, such as a copy of the data directory. Drop it with `--cancel`, then run `backup restore` where the server runs.
 - `⚠️ At the last start another server process was serving the data directory: restart the whole server to apply it (server_running)`: a worker was started again while the others kept serving (`--workers`), or another server uses the same data directory. Restart the whole server.
-- `⚠️ The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)`: the last start found the instance blocked (`LIBREFOLIO_BLOCKED`), or it is blocked now, and a restore is never applied on a blocked instance. The first start after the unblock applies it, and migrates it first if LibreFolio was updated meanwhile. Until then its checked copy keeps its disk space: `--cancel` drops the restore and frees it.
 
 | Code | `<reason>` | What to do |
 | --- | --- | --- |
@@ -413,8 +397,8 @@ A script, or a machine that reaches the server over `ssh`, reads the state with 
 | Key | Value |
 | --- | --- |
 | `state` | `none`, `pending`, `in_progress`, `committed`, `rolled_back` or `unreadable` |
-| `reason` | Why: the rollback reason of a `rolled_back` state (`first_start_failed`, `swap_interrupted`, `swap_failed`, `stage_missing`), or `io`, `not_a_file`, `invalid` for an `unreadable` one, or `owner_assignment` for a `committed` one whose owner's account could not be set; `null` otherwise |
-| `waiting` | Why a start did not apply a restore that waits: `backup_running`, `other_data_directory`, `server_running`, `instance_blocked`, or `null` |
+| `reason` | Why: the rollback reason of a `rolled_back` state (`first_start_failed`, `swap_interrupted`, `swap_failed`, `stage_missing`), or `io`, `not_a_file`, `invalid` for an `unreadable` one; `null` otherwise |
+| `waiting` | Why a start did not apply a restore that waits: `backup_running`, `other_data_directory`, `server_running`, or `null` |
 | `backup_created_at` | When the backup of the restore was made, as `2026-10-23T03:00:12Z` (UTC); `null` with no state, or an unreadable one |
 | `safety_copy` | `{"present": true, "at": "<date>Z"}` when the data of before a swap is kept in `.restore/previous/`, otherwise `{"present": false, "at": null}` |
 | `choices` | The words `--recover` accepts now, in the table below |
@@ -426,33 +410,28 @@ After a `--recover`, the line describes the state **after** it and adds `recover
 | `none` | No restore was confirmed, or the last one was dropped | none |
 | `pending` | A restore waits for the next start | `cancel` |
 | `in_progress` | A start is applying it, or has applied it and has not completed yet | none |
-| `committed` | The last restore is done. With `reason` `owner_assignment`, the owner's account could not be set (a restore on a managed instance, from the app, the command line or the hosting panel): the restore guard keeps the instance closed, and the server log has the code | `owner` with that `reason`, otherwise none |
+| `committed` | The last restore is done | none |
 | `rolled_back` | The last restore was undone, with its `reason` | none |
 | `unreadable` | The state of the restore cannot be read: [An Unreadable Restore State](#backup-pending-unreadable) | `previous` |
 
 ```json
 {"state":"unreadable","reason":"invalid","waiting":null,"backup_created_at":null,"safety_copy":{"present":true,"at":"2026-10-23T03:00:12Z"},"choices":["previous"]}
-{"state":"pending","reason":null,"waiting":"instance_blocked","backup_created_at":"2026-10-22T21:30:05Z","safety_copy":{"present":false,"at":null},"choices":["cancel"]}
+{"state":"pending","reason":null,"waiting":"server_running","backup_created_at":"2026-10-22T21:30:05Z","safety_copy":{"present":false,"at":null},"choices":["cancel"]}
 ```
 
 The line never holds a username, an email, a path or an identifier: who confirmed the restore, the data directory and the checked copy are not in it. `safety_copy.at` is the moment the restore was applied, or, with an unreadable state, when `.restore/previous/` last changed.
 
-**The exit codes.** `--recover previous` puts the data of before back when the state cannot be read, with LibreFolio stopped; `--recover cancel` drops the restore waiting, with its checked copy; `--recover owner` tries again an owner's account that could not be set. The exit codes are the same with or without `--json`:
+**The exit codes.** `--recover previous` puts the data of before back when the state cannot be read, with LibreFolio stopped; `--recover cancel` drops the restore waiting, with its checked copy. The exit codes are the same with or without `--json`:
 
 | Exit | When | `error` in the line |
 | --- | --- | --- |
-| `0` | Done: the data of before is back, the restore waiting was dropped, or the owner's account was set, or cleared and left pending (the line says which) | none |
+| `0` | Done: the data of before is back, or the restore waiting was dropped | none |
 | `2` | A usage error: `--recover` without a choice, `--recover` with `--cancel`, or `--json` with `--cancel` (use `--recover cancel`) | none: the line is not written |
-| `3` | Nothing to recover: no restore state, or the choice was already done. For `--recover owner`: there is no failed assignment left to try again, because another reset won the race, or no restore | `nothing_to_recover` |
-| `4` | The choice is not valid in this state, such as `previous` while the state can be read, `cancel` while it cannot, `owner` when the state offers no `owner` (a second run, after it worked, too), or a word that is not a choice: nothing changes | `choice_not_valid` |
-| `5` | It failed: LibreFolio is running on this data directory (`restore_in_use`), a folder could not be moved back (`restore_apply_failed`), the restore could not be dropped (`failed`): nothing is claimed done. For `--recover owner`, `restore_in_use` also means another process is setting the owner's account right now: run it again in a moment; `owner_assignment_failed` means the account was refused again. With a data directory that is missing, `5` too, but no line is written: stdout stays empty and stderr says why | `restore_in_use`, `restore_apply_failed`, `owner_assignment_failed` or `failed` |
+| `3` | Nothing to recover: no restore state, or the choice was already done. | `nothing_to_recover` |
+| `4` | The choice is not valid in this state, such as `previous` while the state can be read, `cancel` while it cannot, or a word that is not a choice: nothing changes | `choice_not_valid` |
+| `5` | It failed: LibreFolio is running on this data directory (`restore_in_use`), a folder could not be moved back (`restore_apply_failed`), the restore could not be dropped (`failed`): nothing is claimed done. With a data directory that is missing, `5` too, but no line is written: stdout stays empty and stderr says why | `restore_in_use`, `restore_apply_failed` or `failed` |
 
-**`--recover owner`.** When a restore of a managed instance, confirmed from the app, the command line or the hosting panel, could not set the owner's account, the restore guard keeps the instance closed and the server log has the code. `backup pending` prints the error with its way out: `❌ The owner's account could not be set (<code>): the server log has the cause; ./dev.py backup pending --recover owner tries again`. `--recover owner` clears that error and tries again at once when LibreFolio is stopped; when LibreFolio runs, it only clears the error, and the account is set at its next start. Then:
-
-- ✅ Exit `0`, and one line says which case: the account is set, or the error is cleared and the account is set at the next start. When no email could be sent (`link_only`), the line says so and that the link to choose the account's password is in the log of the instance: give it only to the owner. The line never carries the link. With `--json`, that line goes to stderr, and the JSON line never holds a link, a name, an address or an identifier.
-- 🔁 Exit `5` with `owner_assignment_failed` when the account was refused again: the line has the code. Fix the cause, for instance an address already taken, then run it again.
-
-Run again, a choice changes nothing: the second `--recover previous` finds no unreadable state, moves no folder, adds nothing to `.restore/failed/`, and exits with `3`; so does a second `--recover cancel`. A second `--recover owner` finds no failed assignment and exits with `4`. A script may therefore repeat `previous` or `cancel` until it reads `0` or `3`, and `owner` until it reads `0` or `4`.
+Run again, a choice changes nothing: the second `--recover previous` finds no unreadable state, moves no folder, adds nothing to `.restore/failed/`, and exits with `3`; so does a second `--recover cancel`. A script may therefore repeat `previous` or `cancel` until it reads `0` or `3`.
 
 A script that reads the state and recovers, on a server where LibreFolio is stopped:
 
@@ -503,17 +482,17 @@ Good to know:
 ### 🐳 Back Up with Docker {: #backup-docker }
 
 ```bash
-# Write an archive: on the host, it appears in ./LibreFolio-data/backups/
+# Write an archive: on the host, it appears in its own folder of ./LibreFolio-data/backups/
 docker compose exec librefolio python dev.py backup create
 
 # Check it, with its path inside the container
-docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip
 
 # Try a restore of it on a copy: the instance stays as it is
-docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip --dry-run
+docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip --dry-run
 
 # Restore it: the same check, then type "restore" to confirm
-docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip
 
 # Restart the container: its start applies the restore
 docker compose restart librefolio
@@ -523,10 +502,10 @@ docker compose exec librefolio python dev.py backup pending
 ```
 
 - 👤 `docker compose exec` runs as root: the command switches to the owner of the data directory, `backup decrypt` included, so everything it writes belongs to the server's user. If it cannot switch, it stops and asks you to run it as that user: `docker compose exec --user <uid>:<gid> librefolio python dev.py backup create`, with the numbers from the message.
-- 📂 `-o` and the archives of `inspect` and `restore` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. To check an archive that is on the host, copy it into `LibreFolio-data/` first, such as into `LibreFolio-data/backups/`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
+- 📂 `-o` and the archives of `inspect` and `restore` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. The archive `backup create` printed is in a folder of its own there, such as `/app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/`. To check an archive that is on the host, copy it into `LibreFolio-data/` first, such as into `LibreFolio-data/backups/`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
 - 🔑 `restore` and `decrypt` also read the archive as the server's user: an archive that `backup create` wrote is fine, but one you copied in yourself must be readable by that user, or they stop with `archive_unreadable`. With the official image, `sudo chown 1000:1000 <archive>` on the host gives it to that user.
 - ⌨️ `docker compose exec` gives the command a terminal to ask on. Without one, such as with `docker compose exec -T` in a script, add `--yes`.
-- 🔐 For a [secure archive](#backup-secure), `--encrypt` asks the password on that terminal. With `-T`, from cron for instance, give it with `--password-file` and a Docker secret, such as `/run/secrets/backup_password`: [the example](backup_restore.md#command-line) in Backup, Restore and Moving Your Instance shows the lines to add to `docker-compose.yml`. `backup decrypt` switches to the server's user too, so its zip belongs to that user: give it an `-o` that user can write, in `LibreFolio-data/backups/` or a folder mounted from the host, such as `docker compose exec librefolio python dev.py backup decrypt /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.lfbk -o /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip`.
+- 🔐 For a [secure archive](#backup-secure), `--encrypt` asks the password on that terminal. With `-T`, from cron for instance, give it with `--password-file` and a Docker secret, such as `/run/secrets/backup_password`: [the example](backup_restore.md#command-line) in Backup, Restore and Moving Your Instance shows the lines to add to `docker-compose.yml`. `backup decrypt` switches to the server's user too, so its zip belongs to that user: give it an `-o` that user can write, in `LibreFolio-data/backups/` or a folder mounted from the host, such as `docker compose exec librefolio python dev.py backup decrypt /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.lfbk -o /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip`.
 - 🔏 A [sealed archive](#backup-sealed) needs no terminal: `docker compose exec -T librefolio python dev.py backup create --sealed` reads `LIBREFOLIO_BACKUP_RECIPIENTS` from the container's environment, which `env_file: .env` fills; after a change of `.env`, `docker compose up -d` recreates the container with it. To open one in the container, give `--identity-file` a path inside it; better, open it on your computer, where the private key is ([Open a Sealed Backup](backup_sealed.md#sealed-open)).
 - 🔁 After a first start that fails on the restored data, the container starts again by itself (`restart: unless-stopped`, in both compose files LibreFolio ships), and that start puts the data as it was before back.
 - 🔒 On the host, the archives belong to the container's user, and only that user can read them: if your host user is another one, copy them with `sudo cp -a`.

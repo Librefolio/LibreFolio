@@ -455,6 +455,34 @@ describe('GlobalSettingsTab — loading the list', () => {
         expect(textInput('scheduler_timezone')).toBeNull();
         expect(textInput('scheduler_history_sync_days')).toBeNull();
     });
+
+    it('hides the two backup clean-up keys: the Backup section edits them, as one pair, and the raw fields would be a second way', async () => {
+        // FB-24. `backup_cleanup_max_mb` and `backup_cleanup_max_days` are ints, so they would be number boxes: neither
+        // a row of the list, nor a field with the key as its id. The first row is the control — an int the tab does show —
+        // so the absence is not the tab having drawn nothing.
+        await mount([setting('session_ttl_hours', '24', 'int'), setting('backup_cleanup_max_mb', '250', 'int'), setting('backup_cleanup_max_days', '30', 'int')]);
+
+        expect(screen.getByTestId('global-setting-session_ttl_hours'), 'control: an ordinary int is a row').toBeInTheDocument();
+        expect(screen.queryByTestId('global-setting-backup_cleanup_max_mb')).toBeNull();
+        expect(screen.queryByTestId('global-setting-backup_cleanup_max_days')).toBeNull();
+        expect(textInput('backup_cleanup_max_mb')).toBeNull();
+        expect(textInput('backup_cleanup_max_days')).toBeNull();
+        expect(screen.getAllByRole('spinbutton'), 'only the control is a number box').toHaveLength(1);
+    });
+
+    it('hides storage_limit_mb: the storage bar of the Files page edits it, and the environment can pin it', async () => {
+        // FB-29. An int, so it would be a number box with the key as its id: neither a row nor a field. The first row is
+        // the control — an int the tab does show — so the absence is not the tab having drawn nothing; the clean-up keys
+        // beside it are still hidden, and a key that merely starts like it is still a row.
+        await mount([setting('session_ttl_hours', '24', 'int'), setting('storage_limit_mb', '1024', 'int'), setting('backup_cleanup_max_mb', '250', 'int'), setting('storage_limit_mb_note', '7', 'int')]);
+
+        expect(screen.getByTestId('global-setting-session_ttl_hours'), 'control: an ordinary int is a row').toBeInTheDocument();
+        expect(screen.getByTestId('global-setting-storage_limit_mb_note'), 'control: a key that only starts like it is a row').toBeInTheDocument();
+        expect(screen.queryByTestId('global-setting-storage_limit_mb')).toBeNull();
+        expect(textInput('storage_limit_mb')).toBeNull();
+        expect(screen.queryByTestId('global-setting-backup_cleanup_max_mb')).toBeNull();
+        expect(screen.getAllByRole('spinbutton'), 'the two controls are the only number boxes').toHaveLength(2);
+    });
 });
 
 // =========================================================================

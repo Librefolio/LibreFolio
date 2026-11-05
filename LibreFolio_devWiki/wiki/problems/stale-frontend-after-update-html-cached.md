@@ -22,7 +22,7 @@ FastAPI served the SvelteKit build's HTML entry points with no `Cache-Control`. 
 freshness* from `Last-Modified` and reuse their cached HTML — which names the hashed JS/CSS chunks of the **old**
 build, still cached as immutable. Nothing told the browser to ask again.
 
-## Solution (2026-10-08, `082196482`)
+## Solution (2026-10-08, `74e246e5e`)
 
 Every HTML document of a build is served with `Cache-Control: no-cache, must-revalidate` (`REVALIDATE_HTML`,
 `_revalidated_file()` in `backend/app/services/platform/static_site.py`): the browser revalidates the entry point on each load and picks up a

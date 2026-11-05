@@ -32,7 +32,7 @@ libreria» non equivale a «usare il C». riskfolio-lib serves first as the **te
 
 ## Consequences
 
-Checked on the code at `a7424a4fa`:
+Checked on the code at `ef563d91c`:
 
 - `historical_var_cvar` returns the empirical VaR and the coherent CVaR (Acerbi-Tasche / Rockafellar-Uryasev) in
   `metrics.py`;

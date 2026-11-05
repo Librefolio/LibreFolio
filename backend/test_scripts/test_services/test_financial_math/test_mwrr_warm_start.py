@@ -25,7 +25,7 @@ through ``period_mwrr_series`` (the line) and ``calculate_mwrr_series``; and its
 ``_changes_sign_at``, ``_bracketed_xirr_at``, ``_npv_noise_floor``, ``_opposite_signs``, ``_is_xirr_root`` and
 ``_is_bracketed_xirr_root``.
 
-Before P1 (f2c555f9c) every point is ``_solve_xirr(flows, 0.1)``: Newton from 0.1, kept only where the NPV vanishes;
+Before P1 (4d2ce6b6c) every point is ``_solve_xirr(flows, 0.1)``: Newton from 0.1, kept only where the NPV vanishes;
 otherwise a scan of the 801 grid points (1 + r from 1e-12 to 1e4), Brent in every interval where the NPV changes sign or
 an exact zero on a grid point, and the verified root nearest 0.1. On a portfolio a century long Newton from 0.1 overflows
 and the scan runs at almost every point: about 550 NPV evaluations a point (20 s for the 46 000 points of a 1900 history).
@@ -63,19 +63,19 @@ Sections:
 5. Why each guard: on the data where it decides, a warm start answers something else than today's solve.
 6. The two weaknesses, fixed (P1b): the root of the product-underflow and ill-conditioned families, the lines that had
    no rate, the vanishing NPV, the 1900 case's false root giving way to the true one, the warm path keeping the
-   interval's root or, where Newton keeps HEAD's test, running the scan. Red on P1's HEAD (9f6aec205). And what P1b
+   interval's root or, where Newton keeps HEAD's test, running the scan. Red on P1's HEAD (f954dc2e8). And what P1b
    leaves as it was: a sign in the noise brackets nothing (the 1720 period's noise interval); Newton keeps HEAD's
    test (a three-root account keeps HEAD's −0.019580). Green on HEAD, red on P1b's first design.
 7. The false exact zero, removed (P1c): the 1720 period, whose HEAD answer 12.803843 was a grid point where every NPV
    term underflows, has no rate.
 
-«HEAD» in P1's texts (sections 2 to 5, and the cost figures) is f2c555f9c, before P1; in P1b's (section 6, the units and
-cases marked P1b) it is 9f6aec205, with P1, before P1b.
+«HEAD» in P1's texts (sections 2 to 5, and the cost figures) is 4d2ce6b6c, before P1; in P1b's (section 6, the units and
+cases marked P1b) it is f954dc2e8, with P1, before P1b.
 
 The parity oracle. A point of HEAD's series is, by its code, the card on its prefix: ``_mwrr_point`` from the first
 snapshot, solved cold. Here the oracle is ``period_mwrr`` (the line) and ``calculate_mwrr`` (the plain series) from the
 first snapshot to each point, which P1 still solves through ``_solve_xirr`` from 0.1. Before P1 was committed the oracle
-was compared with the HEAD of the time (f2c555f9c, ``returns.py`` loaded from git into its own module) on every case
+was compared with the HEAD of the time (4d2ce6b6c, ``returns.py`` loaded from git into its own module) on every case
 below: identical, by ``str()`` of every point. P1b changes the oracle itself, by design: the points of section 6.
 Rates are compared by ``str()``, the exponent included; None with None.
 
@@ -90,7 +90,7 @@ Measured in a harness (plain Python, outside the repository) before writing this
   second (cold Newton first, then the warm root itself as the answer) differed from HEAD on 212 of 3000 ill-conditioned
   series (section 6) and at the grid's overflow edge (section 5): the warm Newton root passed the verification where
   the scan's Brent root, 6e-16 away, did not. As built: 0 differences on all of them.
-* P1b against P1 (9f6aec205), cold solve, card and line, with every value checked at 60 digits (a sign change of the
+* P1b against P1 (f954dc2e8), cold solve, card and line, with every value checked at 60 digits (a sign change of the
   NPV within half a quantum of the 6 decimals shown): no change on the inputs of the existing test files and the
   database scenarios; on the P1 families, a rate where P1 had none on 34 points (product underflow 13, ill-conditioned
   7, vanishing NPV 14) and the true root instead of the grid's false one on 3 points of the 1900 case; on 1000 random
@@ -230,7 +230,7 @@ OUT_OF_GRID_DAY = date(2020, 1, 18)
 
 # The developer's 1900 case, in small: the period opens on 1 January 1900 at value 0 (a BUY of 1900 with no value yet),
 # and every flow comes 125.5 years later. From a rate of 379.189396 (the grid point 10^(129/50) − 1) up, every NPV
-# term underflows: the NPV is exactly 0.0 there, and the scan keeps those grid points as roots. HEAD's answer (9f6aec205)
+# term underflows: the NPV is exactly 0.0 there, and the scan keeps those grid points as roots. HEAD's answer (f954dc2e8)
 # on 4-10 July was that grid point; the first P1 design, starting from the previous rate, stayed on it to the end. P1b
 # (section 6): on 4, 9 and 10 July the scan now also sees the true root (the NPVs around it are tiny, of opposite signs,
 # their product 0.0), nearer 0.1, and keeps it; on 5-8 July the true root lies above 379.19, where every term
@@ -262,7 +262,7 @@ OVERFLOW_EDGE = _case("1850-01-01 1000  1999-11-25 1.0131043591955372E-303  1999
 # Ill-conditioned (weakness 2, fixed by P1b, section 6): 1000 in 1700, 10 000 deposited 240 years later, then about
 # −8.75 % a year. The NPV's terms (~1e13) cancel at the root, and whether a root passes |NPV| ≤ 1e-7 · Σ|amounts| depends
 # on its last bits: on several points Newton's root passes and the scan's Brent root, a few ulps away, does not. HEAD
-# (9f6aec205) had no rate on 7 of the 11 points; P1b accepts a bracketed root across which the NPV changes sign
+# (f954dc2e8) had no rate on 7 of the 11 points; P1b accepts a bracketed root across which the NPV changes sign
 # (``_is_bracketed_xirr_root``), and has all 11. Newton's answer keeps HEAD's test: on 3 points the warm Newton root misses
 # it, and the scan runs (section 6).
 ILL_CONDITIONED = _case(
@@ -1438,7 +1438,7 @@ class TestWhereAWarmStartWouldAnswerSomethingElse:
 class TestTheTwoWeaknessesFixed:
     """P1 reproduced two weaknesses of the solve on purpose (its contract was HEAD's answer); P1b fixes them in the solve
     itself, so the cold solve, the card and the line change together, and the warm path still keeps the cold solve's
-    rate bit for bit (section 2). Red on HEAD (9f6aec205).
+    rate bit for bit (section 2). Red on HEAD (f954dc2e8).
 
     1. The sign product. The scan tested a sign change with ``previous_npv * npv < 0.0``, P1's interval and
        ``_changes_sign_at`` the same way; with both NPVs tiny the product underflows to −0.0 and a true root was missed.
@@ -1582,7 +1582,7 @@ class TestTheTwoWeaknessesFixed:
 
 class TestWhatP1bLeavesAsItWas:
     """Two answers of P1b's first design that were not HEAD's, and should not have changed (the developer's review of the
-    P1b harness): green on HEAD (9f6aec205), red on that first design.
+    P1b harness): green on HEAD (f954dc2e8), red on that first design.
 
     1. A sign in the noise. Reading the signs of two NPVs, it trusted the sign of a subnormal one, which is rounding: on
        a period opening at value 0 in 1720, it bracketed a root where there is none. ``_opposite_signs`` now asks both

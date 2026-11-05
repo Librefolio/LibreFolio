@@ -54,7 +54,7 @@ only report sets.
 ## Consequences
 
 - After the developer's test, the modal shows the assigned broker with its icon and «cannot read it», «Notes from the
-  plugin», and the destinations as cards, with radio buttons when there is more than one (`ec837a197`, 2026-10-10).
+  plugin», and the destinations as cards, with radio buttons when there is more than one (`0b5644ab5`, 2026-10-10).
 - Tests: `TestPluginSaysWhyWithACode` (the contract, for every plugin and sample), the endpoint's
   `TestPluginCheckEndpoint` (RS-PC01…07), Vitest `defaultPluginCheck.test.ts` and `ImportBrokerMismatchModal.test.ts`,
   E2E `tx-import-broker-mismatch.spec.ts` (M1–M4).

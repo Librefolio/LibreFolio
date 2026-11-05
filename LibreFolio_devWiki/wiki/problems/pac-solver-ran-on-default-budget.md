@@ -32,12 +32,12 @@ stated the rule; the code broke it fifty lines later.
 
 ## Solution
 
-`d4ccbe38d` (2026-09-22, «propagate the declared engine budget»): the plugin claims the window with
+`bb6fcae06` (2026-09-22, «propagate the declared engine budget»): the plugin claims the window with
 `claim_engine_window(post_engine_reserve_ms=2_000)` and passes `window.timeout_ms / 1000` as
 `plan_pac_allocation(solver_time_budget_seconds=…)`, down through `_search` to SCIP. A spy confirmed that SCIP
 receives 30.0 s. At 30 s both reference scenarios completed the cascade in 8 runs out of 8, using 0.016 % and
 0.009 % of the budget, with one candidate. The reported settings lost a misleading `limits/time` entry, and
-`75940eac9` corrected two measured claims about the solver's cost in the docs.
+`d65d60dee` corrected two measured claims about the solver's cost in the docs.
 
 ## Prevention
 
@@ -50,7 +50,7 @@ receives 30.0 s. At 30 s both reference scenarios completed the cascade in 8 run
 
 ## Impact
 
-No release shipped with it: `plan` had been wired the day before (`704ba66a3`, 2026-09-21), and the fix followed on
+No release shipped with it: `plan` had been wired the day before (`a538ee94d`, 2026-09-21), and the fix followed on
 2026-09-22. In between, repeated runs of one scenario could publish different plans.
 
 ## Source files

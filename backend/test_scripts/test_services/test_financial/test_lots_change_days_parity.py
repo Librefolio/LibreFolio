@@ -92,7 +92,7 @@ over 1 Dec 1936 – 31 Jan 1939 are this file's own — a row a neighbour commit
 transaction and comes back with the rollback —, and VND's absence is owned the same way (``_own_no_rate``), as
 ``test_lots_market_price_history.py`` owns it.
 
-TODAY (HEAD ``6552f96c1``): both reds fail on their assertion; every PARITY case is green.
+TODAY (HEAD ``ae52a1d7c``): both reds fail on their assertion; every PARITY case is green.
 
 J5-5 (steps, contract MF-P4b §1.3, §8): the seven histories become STEPS (``date`` .. ``through``) and the answer carries
 ``range``. The reds at the end of the file (RED until the cure): ``test_red_every_history_is_a_list_of_steps`` (shape,

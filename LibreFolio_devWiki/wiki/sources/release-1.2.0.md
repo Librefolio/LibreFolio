@@ -15,17 +15,17 @@ related:
 
 # Source: release 1.2.0
 
-> **Released on 2026-10-14**: tag `v1.2.0` on `943b61597` (`main`), the same tree as `d7104b51b` on `dev_release2`.
-> Every count on this page is the state of `dev_release2` at `c8bcd1a12`.
+> **Released on 2026-10-14**: tag `v1.2.0` on `0a7c2c612` (`main`), the same tree as `556e68405` on `dev_release2`.
+> Every count on this page is the state of `dev_release2` at `bcf9ed49b`.
 
 ## Summary
 
 1.2.0 is the second feature release after 1.0, built on `dev_release2` after `v1.1.0` (2026-09-07) and dated
 2026-10-14. Its chapter in `CHANGELOG.md` was checked line by line against the code and against `v1.1.0`
-(`a57d306a0`, under the rules of [[decisions/changelog-entry-rules]]), then completed up to the release. At
-`c8bcd1a12` it holds **25 ✨ Added** entries (with 27 sub-items), **152 🐛 Fixed** in 13 groups (9 of them 🔒
+(`ed85502e2`, under the rules of [[decisions/changelog-entry-rules]]), then completed up to the release. At
+`bcf9ed49b` it holds **25 ✨ Added** entries (with 27 sub-items), **152 🐛 Fixed** in 13 groups (9 of them 🔒
 Security), **32 🔄 Changed** and **7 ⚠️ Breaking changes**, under the header `## [1.2.0] - 2026-10-14`. The line
-«Preparing v1.2.0» gave way to the approved introduction (`c8bcd1a12`), quoted here as it stands in the chapter:
+«Preparing v1.2.0» gave way to the approved introduction (`bcf9ed49b`), quoted here as it stands in the chapter:
 
 > What 1.2 adds to 1.1:
 >
@@ -44,7 +44,7 @@ Security), **32 🔄 Changed** and **7 ⚠️ Breaking changes**, under the head
 | | |
 |---|---|
 | Version | 1.2.0 |
-| Tag | `v1.2.0`, 2026-10-14, on `943b61597` — the merge of PR #46 (`dev` into `main`) |
+| Tag | `v1.2.0`, 2026-10-14, on `0a7c2c612` — the merge of PR #46 (`dev` into `main`) |
 | Previous release | `v1.1.0`, 2026-09-07 |
 | Database | one Alembic revision, `004_release_1_2_0_schema` (benchmark flag, widened taxonomy, onboarding progress); at the first start an existing database rebuilds six tables so that ids are never reused — [[problems/reused-ids-after-delete]] |
 | AI Export | at most one version step per component over 1.1.0 — [[decisions/ai-export-version-bump-once-per-release]] |
@@ -75,11 +75,11 @@ with the commit or the train.
   the 1.1.0 image ([[problems/devpy-unusable-in-docker-image]]); the 1.1 images with a debug frontend
   ([[problems/release-images-shipped-debug-frontend]]); event markers lost in the last, open period at weekly or monthly
   resolution, since v1.0.0 (R-5, [[problems/event-markers-lost-in-the-last-partial-period]]; its 🐛 line, with the open
-  period's tooltip and every chart's running period, is in the chapter since `b9f03ec0a`, `d5873f5d3` and `058b76dcf`);
+  period's tooltip and every chart's running period, is in the chapter since `02a2080da`, `29de8c014` and `2a48d6529`);
   the transaction form that saved a refused date and said *valid* next to a red field, since v1.1.0
-  ([[problems/transaction-form-saved-a-refused-date]], V-37, two 🐛 lines in `a3cb0f0a2`).
+  ([[problems/transaction-form-saved-a-refused-date]], V-37, two 🐛 lines in `ee16ebe5b`).
 - **🔄 Changed**: besides the three lines in the table, the risk API, `/api/v1/risk`, leaves beta with the panels: from
-  1.2 it changes only with a major version, except the simulation (`6bb1b58ce`); the figures of CVaR and Sharpe change
+  1.2 it changes only with a major version, except the simulation (`a3c1dab57`); the figures of CVaR and Sharpe change
   on purpose, so they stay in 🔄; ids are never reused after the database conversion; the server compresses its responses
   ([[decisions/http-gzip-in-the-app]]).
 - **⚠️ Breaking changes (7)**: the cost fields of `GET /brokers/{id}/summary` and the amounts of
@@ -152,28 +152,28 @@ stay `planned` ([[features/F-077]], [[features/F-079]], [[features/F-081]], [[fe
 
 ## Verification
 
-- **R's final run with coverage** (evening of 2026-10-13, on `058b76dcf`: train 97 plus the CHANGELOG): **0 reds**,
+- **R's final run with coverage** (evening of 2026-10-13, on `2a48d6529`: train 97 plus the CHANGELOG): **0 reds**,
   15 of 15 categories green, no retry, 2 h 44 min. pytest **12 936**, vitest **11 515** and Playwright **1 221**
   passed. Coverage: backend 91.54 % from its tests (91.55 % combined with the E2E), frontend 71.17 % of statements,
   a lower bound for its E2E part while the coverage fixture loses counters (C-69); 78.34 % without
   `features/tools`. The load was low — 8.9 on average, against 37.9 on 12/10 —, so the load cures are proven at
-  normal load only (C-82). Between `058b76dcf` and `c8bcd1a12` no application code changed: only the gallery's
+  normal load only (C-82). Between `2a48d6529` and `bcf9ed49b` no application code changed: only the gallery's
   fixture, its normalizer and their tests, the gallery spec, the documentation and the CHANGELOGs.
-- **R's run before it** (2026-10-12, train 68, `78101574b`) — [[sources/r-full-run-coverage-2026-10-12]]:
+- **R's run before it** (2026-10-12, train 68, `3c8ea2c8b`) — [[sources/r-full-run-coverage-2026-10-12]]:
   pytest 12 627 and vitest 10 760 passed with no red; Playwright 1 163 passed and 29 failed, 27 of them load and 2
   already cured. Coverage: backend 91.51 % from its tests, frontend 71.24 % of statements (78.4 % without
   `features/tools`, where the PAC planner lives).
 - **The gallery** ([[decisions/gallery-is-a-release-gate-with-real-data]]): M's full run of 2026-10-13 on train 80
-  (`fb90dd5e3`), with the frontend built as `v1.2.0`: 242 passed, 9 failed, 1 skipped by design, in 1.4 hours. Four
+  (`db6ee71d3`), with the frontend built as `v1.2.0`: 242 passed, 9 failed, 1 skipped by design, in 1.4 hours. Four
   causes: Schwab's favicon (4, first read as the environment, then found to be our own favicon mark in the gallery,
-  cured in `30d1b44fe` — [[problems/schwab-favicon-blocked-by-orb]]), a test hook that read `data-dist-pct` in the
-  interface language (2, cured in `f571b5199` — [[problems/test-hooks-read-the-localized-text]]), and two fixed waits
-  (1 and 2, the clock, cured in `30d1b44fe`). The targeted rerun of the touched tests passed 42 of 42. M's report is
-  kept outside the repository. **The final gallery** (2026-10-13, on `ac3cc5ae7`, frontend built as `v1.2.0`): 251
+  cured in `ae7da021c` — [[problems/schwab-favicon-blocked-by-orb]]), a test hook that read `data-dist-pct` in the
+  interface language (2, cured in `d9aa8be8f` — [[problems/test-hooks-read-the-localized-text]]), and two fixed waits
+  (1 and 2, the clock, cured in `ae7da021c`). The targeted rerun of the touched tests passed 42 of 42. M's report is
+  kept outside the repository. **The final gallery** (2026-10-13, on `f5bb8ec7d`, frontend built as `v1.2.0`): 251
   passed, 0 failed, 1 skipped; after I's lot 52 the nine groups it changed were shot again: 20 passed, 0 failed
   ([[sources/phase00-translation-round12-2026-10]]). One defect lived in the shots only, never in the app: the
   allocation-history stacks — [[problems/gallery-fixture-normalizer-scaled-ratios]]; after its cure, M shot the
-  allocation and positions groups again (2026-10-14, on `a40d14a78`): 10 passed, 0 failed, the stacks at 100 %.
+  allocation and positions groups again (2026-10-14, on `3f3502b42`): 10 passed, 0 failed, the stacks at 100 %.
   **The fixture**: the developer decided on 2026-10-14 — option (a) — that it is published as it is.
 - **The gates**: `./dev.py test utils` runs five — `gate-i18n-catalog`, `gate-i18n-usage`,
   `gate-plugin-i18n-ownership`, `gate-plugin-layout`, `gate-docs-links` — and vitest runs the `*.gate.test.ts` files
@@ -187,13 +187,13 @@ Filled on 2026-10-14; the last two rows after the publication.
 | Item | State |
 |---|---|
 | Tag date | 2026-10-14 |
-| R's final run (counts, coverage, reds and their triage) | done: `058b76dcf`, 0 reds, pytest 12 936, vitest 11 515, Playwright 1 221 (above) |
+| R's final run (counts, coverage, reds and their triage) | done: `2a48d6529`, 0 reds, pytest 12 936, vitest 11 515, Playwright 1 221 (above) |
 | Gates | green in R's final run; no application code changed after it |
-| Gallery | green: 251 passed, 0 failed, 1 skipped (2026-10-13, `ac3cc5ae7`); the nine groups changed by I's lot 52, 20 of 20; the allocation and positions groups after I-M30, 10 of 10 (2026-10-14, `a40d14a78`) |
+| Gallery | green: 251 passed, 0 failed, 1 skipped (2026-10-13, `f5bb8ec7d`); the nine groups changed by I's lot 52, 20 of 20; the allocation and positions groups after I-M30, 10 of 10 (2026-10-14, `3f3502b42`) |
 | First pipeline after the push (the dirty version) | done: run 77, on PR #42's merge into `main`, reports `v1.1.0-1648-g1ee978788`, no `-dirty` — question 11 closed ([[problems/release-shots-show-dirty-version]]) |
-| CHANGELOG counts and header date at the tag | done: `## [1.2.0] - 2026-10-14`; 25 ✨ (27 sub-items), 152 🐛 in 13 groups, 32 🔄, 7 ⚠️ at `c8bcd1a12` |
-| The tagged commit (SHA) | `943b61597` on `main`, the merge of PR #46; its tree is the tree of `d7104b51b` on `dev_release2`. The GitHub release was published at 09:07 UTC |
-| The release pipeline's run | run 38540086298, «Release v1.2.0»: success, finished at 10:40 UTC. Images `1.2.0`, `1.2.0-light` and `latest` on GHCR, their `docker pull` lines appended to the GitHub release, the docs site deployed from `943b61597` |
+| CHANGELOG counts and header date at the tag | done: `## [1.2.0] - 2026-10-14`; 25 ✨ (27 sub-items), 152 🐛 in 13 groups, 32 🔄, 7 ⚠️ at `bcf9ed49b` |
+| The tagged commit (SHA) | `0a7c2c612` on `main`, the merge of PR #46; its tree is the tree of `556e68405` on `dev_release2`. The GitHub release was published at 09:07 UTC |
+| The release pipeline's run | run 38540086298, «Release v1.2.0»: success, finished at 10:40 UTC. Images `1.2.0`, `1.2.0-light` and `latest` on GHCR, their `docker pull` lines appended to the GitHub release, the docs site deployed from `0a7c2c612` |
 
 ## Source files
 

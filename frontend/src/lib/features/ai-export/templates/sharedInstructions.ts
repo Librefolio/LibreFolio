@@ -34,7 +34,11 @@ export function aiExportReplyInstructions(dataReceived: string): string {
 
 export const AI_EXPORT_DOMAIN_NOTES: Readonly<Record<AiExportDomain, readonly string[]>> = {
     portfolio: ['Portfolio values use the selected target currency and the active broker scope.', 'FIFO lots are runtime economic calculations; allocation currency is not look-through exposure.'],
-    broker: ['Broker data covers only the selected accessible broker, not necessarily the whole portfolio.', 'FIFO and performance sections use their declared runtime methodologies.'],
+    broker: [
+        'Broker data covers only the selected accessible broker, not necessarily the whole portfolio.',
+        'FIFO and performance sections use their declared runtime methodologies.',
+        "Every amount is the broker's whole figure, not the user's share of it; the user's role and ownership stake are in the provenance section, so apply the stake only when the user's own part is needed.",
+    ],
     asset: ['Position context is limited to accessible brokers in scope.', 'Provider/user descriptions are context; measured market and portfolio facts remain separate.'],
     fx: ['Rates are quote currency per one unit of base currency.', 'Direct exposure links are cash/trading/valuation-currency links, not look-through economic exposure.'],
 };

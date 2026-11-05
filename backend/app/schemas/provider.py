@@ -32,7 +32,7 @@ from typing import Any, List, Literal, Optional
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from backend.app.db.models import IdentifierType, ProviderInputType
-from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNew, SafeDecimal, StrictModel
+from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, SafeDecimal, StrictModel
 from backend.app.utils.json_utils import ensure_json_safe
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
@@ -295,38 +295,12 @@ class FAProviderAssignmentReadItem(StrictModel):
     provider_url: Optional[str] = Field(None, description="Auto-generated URL to provider page")
 
 
-class FAProviderRefreshFieldsDetail(StrictModel):
-    """Field-level details for provider refresh operation.
-
-    Provides granular information about which fields were updated during refresh,
-    including old and new values for each changed field.
-
-    Examples:
-        >>> detail = FAProviderRefreshFieldsDetail(
-        ...     refreshed_fields=[
-        ...         OldNew(info="sector", old="Technology", new="Industrials"),
-        ...         OldNew(old=None, new="Test Corp")  # First time set
-        ...     ],
-        ...     missing_data_fields=["currency"],
-        ...     ignored_fields=[]
-        ... )
-    """
-
-    refreshed_fields: List[OldNew[str | None]] = Field(
-        ...,
-        description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.",
-    )
-    missing_data_fields: List[str] = Field(..., description="Fields provider couldn't fetch (no data available)")
-    ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
-
-
 class FAProviderAssignmentResult(StrictModel):
-    """Result of single FA provider assignment or refresh."""
+    """Result of single FA provider assignment."""
 
     asset_id: int
     success: bool
     message: str
-    fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(None, description="Field-level refresh details (for refresh operations)")
 
 
 class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):

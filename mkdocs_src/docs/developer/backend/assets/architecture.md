@@ -408,7 +408,7 @@ the scheduler's first [history sync](../scheduler.md#history-sync) fetches its w
 The remedy, for a user who asks: delete both events, then sync their dates again; an event linked
 to a transaction is deleted only once unlinked (`EVENT_IN_USE`). A clean price history takes the
 [market-data wipe](events.md#market-data-wipe)
-(`POST /api/v1/assets/{asset_id}/market-data/wipe`), then a sync of the whole history. The wipe
+(the wipe a currency `PATCH /api/v1/assets` performs), then a sync of the whole history. The wipe
 also deletes the asset's events that are not `SPLIT`s, manual ones included, and unlinks the
 transactions from them; the `SPLIT`s stay with their linked transactions, and the wipe is never
 refused since N68.
@@ -1166,7 +1166,7 @@ pause registry, `backend/app/services/platform/provider_cooldown.py`:
   called as it is.
 
 Each process keeps its own pauses, in memory. They are on by default:
-[Provider Pauses](../../../admin/sleep_wake.md#provider-pauses), in the admin guide, and `.env.example`
+[Provider Pauses](../../../admin/settings.md), in the admin guide, and `.env.example`
 (section «Sleep and Wake») list the two variables that tune them, `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`
 and `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`. With the pauses turned off, nothing is skipped, and a
 refusal still reaches the caller as `RATE_LIMITED`, with the provider's own `Retry-After` (or none).
@@ -1181,7 +1181,6 @@ What a caller returns while a provider is paused, or after it refused:
 | Refresh, `POST /assets/prices/sync` (`FARefreshResult`) | `error_code="RATE_LIMITED"` and `retry_after` on every item whose history or today's quote was refused, whatever its status: `failed` when nothing came back, `partial` or `ok` when the other call brought prices, which are saved. With two refusals, the longer wait |
 | Probe, `POST /assets/provider/probe` | A refused or skipped operation fails with `error_code="RATE_LIMITED"`, and `retry_after` both on the operation result and in `error_details`: **Test Configuration** shows a ⚠️ with the time the pause ends ([Provider Probe](#provider-probe)) |
 | Search | The standard endpoint lists the provider in `providers_with_errors`, as for any error; the stream's `provider_error` event adds `error_code` and `retry_after`. In the link-finder fallback, a refused `resolve_url` only skips its URL: the provider is paused, and the search goes on without an error for it |
-| Metadata refresh, `POST /assets/provider/refresh` | The item fails (`success: false`), with the refusal in `message` |
 
 ---
 
@@ -1240,20 +1239,17 @@ cost unknown it stays `MISSING`.
 | `POST /api/v1/assets` | POST | Bulk create assets |
 | `PATCH /api/v1/assets` | PATCH | Bulk update assets. An item that changes the currency deletes, in the same call and transaction, the asset's prices and non-`SPLIT` events and unlinks their transactions; never refused (N68) |
 | `GET /api/v1/assets` | GET | Bulk read by IDs (with metadata) |
-| `GET /api/v1/assets/all` | GET | All active assets |
-| `GET /api/v1/assets/query` | GET | Filtered list (search, type, currency, active) |
+| `GET /api/v1/assets/query` | GET | Filtered list (search, type, currency, active); `active=true` lists all active assets |
 | `DELETE /api/v1/assets` | DELETE | Bulk delete (cascade provider+prices) |
 | `GET /api/v1/assets/{asset_id}/market-data/summary` | GET | Dry run of what a currency change deletes: `{prices, events_manual, events_provider, splits_kept, linked_tx, oldest, newest, dry_run}`; the `events_*` count the non-`SPLIT` events that go, `splits_kept` the `SPLIT`s that stay; without writing |
-| `POST /api/v1/assets/{asset_id}/market-data/wipe` | POST | The same deletion on its own, for a caller that wants it without a `PATCH`: prices and non-`SPLIT` events deleted, their transactions unlinked, `SPLIT`s and their transactions kept; same keys as the summary; never a 409 ([Market-Data Wipe](events.md#market-data-wipe)) |
 | `GET /api/v1/assets/provider` | GET | List providers (with `params_schema`) |
 | `GET /api/v1/assets/provider/search` | GET | Multi-provider parallel search |
 | `GET /api/v1/assets/provider/search/stream` | GET | SSE streaming search results |
-| `POST /api/v1/assets/provider/probe` | POST | Dry-run provider config test |
+| `POST /api/v1/assets/provider/probe` | POST | Dry-run provider config test; also the metadata request of the asset modal's "Ask the provider" flow, whose result the user reviews before saving |
 | `POST /api/v1/assets/provider` | POST | Bulk assign providers. New `provider_params` for a parametric provider (Scheduled Investment), or leaving one, deletes every price of the asset and the events that assignment generated, their transactions unlinked; a 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`, nothing of the request written, while a `SPLIT` among those events has linked incoming adjustments without a cost; `params` names the refused item (`asset_id`, `item_index`) and, in `splits`, only the transactions the caller can see ([Parametric Provider Change](events.md#parametric-provider-change)) |
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers (`asset_ids` in the query): sets `asset_event_id` to `NULL` on the transactions linked to the events each assignment generated (the transactions stay), then deletes the assignment and, with it, those events; prices and manual events stay. A 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`, nothing of the request removed, while a `SPLIT` among those events has linked incoming adjustments without a cost; `params` names the refused asset (`asset_id`, `item_index`) and, in `splits`, only the transactions the caller can see; a 409 `PROVIDER_REMOVAL_CONFLICT`, nothing removed and no SQL in the answer, when a link appears between the check and the delete ([Provider Removal](events.md#provider-removal)) |
 | `POST /api/v1/assets/provider/impact` | POST | Dry run of the two rows above, writes nothing. Body `{assignments: [item of POST /provider], removals: [asset_id]}`; one result per assignment, then per removal: `reason` (`none`, `params_changed`, `provider_changed`, `provider_removed`), `prices_deleted`, `events_deleted`, `transactions_unlinked` (total, hidden ones included, never named) and `blocking_splits` (not empty: the real call is refused). Its numbers are what the operation then does ([Provider Change Impact](events.md#provider-change-impact)) |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
-| `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
 | `POST /api/v1/assets/prices` | POST | Bulk upsert prices, each point an `FAPriceWritePoint` (N92): `open`, `high`, `low` and `volume` take a number of 0 or more, `"clear"` to empty the stored value, or `null` (or no field) to keep it, and `close` a number above 0; a negative number (`-1` included), a text that is neither `"clear"` nor a number, a value that is not finite or a boolean is a 422 on its field (see [the F.4 merge](#price-write-merge)); a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date after tomorrow (422 `date_out_of_range`, see [the last storable date](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written; a date left out of a written call is named, with its reason, in its asset's `results[].rejected` (see [dates left out](#rejected-price-dates)) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
@@ -1262,7 +1258,6 @@ cost unknown it stays `MISSING`.
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 | `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
 | `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only; a value over 12 digits before the decimal point, 6 decimal places or 15 significant digits is a 400 `EVENT_TOO_MANY_DIGITS`); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
-| `DELETE /api/v1/assets/events` | DELETE | Bulk delete the events of one asset (`asset_id` required, with `ids`): an id of another asset comes back `not_found`, an event a transaction uses `in_use` |
 | `POST /api/v1/assets/events/query` | POST | Bulk event query, each event with its `id` and `is_auto` flag |
 | `GET /api/v1/assets/events` | GET | Events by id |
 

@@ -22,7 +22,7 @@ The barrier, ``test_barrier_this_sqlite_refuses_one_or_of_that_many_pairs``: on 
 ORing that many pairs is refused, «Expression tree is too large». Without it a SQLite built with a higher limit would
 make the two tests above pass without testing anything; with it, «no raise» means the chunks.
 
-Red on HEAD 2c3e4d452 (``OperationalError``: Expression tree is too large): both cases of
+Red on HEAD 5a3df79a9 (``OperationalError``: Expression tree is too large): both cases of
 ``test_convert_bulk_answers_every_conversion_of_that_many_pairs`` and of
 ``test_first_rate_days_inside_answers_that_many_pairs``. Green before and after: the barrier.
 
@@ -128,7 +128,7 @@ async def test_convert_bulk_answers_every_conversion_of_that_many_pairs(session,
     """``convert_bulk`` with ``count`` distinct pairs, each converted both ways on ``AS_OF``: every conversion answered,
     the seeded pairs at their rate, every other one ``None`` with its «no rate» error; nothing raised.
 
-    Red on HEAD 2c3e4d452: ``OperationalError`` «Expression tree is too large» (one OR of every pair).
+    Red on HEAD 5a3df79a9: ``OperationalError`` «Expression tree is too large» (one OR of every pair).
     """
     print_section(f"R13-SEC9-2: convert_bulk, {count} pairs both ways")
     pairs = _pairs(count)
@@ -161,7 +161,7 @@ async def test_first_rate_days_inside_answers_that_many_pairs(session, count):
     """``_first_rate_days_inside`` with ``count`` stored pairs: the first rate day inside ``(AFTER, UNTIL]`` of the three
     seeded pairs, nothing for the others; nothing raised. A rate on ``AFTER``, or after ``UNTIL``, is outside.
 
-    Red on HEAD 2c3e4d452: ``OperationalError`` «Expression tree is too large» (one OR of every pair).
+    Red on HEAD 5a3df79a9: ``OperationalError`` «Expression tree is too large» (one OR of every pair).
     """
     print_section(f"R13-SEC9-2: _first_rate_days_inside, {count} pairs")
     pairs = _pairs(count)

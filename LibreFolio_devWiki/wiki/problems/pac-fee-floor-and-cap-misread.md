@@ -38,9 +38,9 @@ Found by workstream D on 2026-09-24/25, while making SCIP's status the proof (D-
 
 ## Solution
 
-- `148515efb` (2026-09-25, «bound the solver fee by its minimum»): the fee's upper bound never falls below the
+- `24cfb0e6c` (2026-09-25, «bound the solver fee by its minimum»): the fee's upper bound never falls below the
   minimum.
-- `6129d7f23` (2026-09-25, «model the solver fee cap exactly»): an exact binary for the capped regime
+- `c5fd5b76e` (2026-09-25, «model the solver fee cap exactly»): an exact binary for the capped regime
   (`_fee_clamp_upper`, `_fee_cap_excess`), added only where the cap can actually bind; with it the bound becomes
   `max(floor, min(rate · notional_upper, cap))`. The developer, on QX1-a: «sì, modelliamolo subito».
 

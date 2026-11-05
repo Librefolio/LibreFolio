@@ -18,7 +18,7 @@ import {renderSnapshotDataText} from '../templates/snapshotDataRenderer';
  * compact renderer gives the new fields — the failed asset by its prompt ref (A#), never its database id; its codes; the
  * status — and no prompt wording: texts are placeholders, cells are read by column header, rows found by what they hold.
  *
- * Today (base `7814d25fe`) `COMPACT_COMPONENT_VERSIONS` lists the FIFO lots {1, 2} and the lot detail {1, 2, 3}: a v3
+ * Today (base `673077274`) `COMPACT_COMPONENT_VERSIONS` lists the FIFO lots {1, 2} and the lot detail {1, 2, 3}: a v3
  * FIFO lots section and a v4 lot detail section render as `PAYLOAD YAML FALLBACK`. The FIFO summary v3 is compact
  * already, so its case is a guard.
  */

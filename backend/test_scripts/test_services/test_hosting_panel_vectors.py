@@ -1,15 +1,14 @@
 """
-H-61 checkpoint 2 · level L2 of the hosting panel (LibreFolio 1.3, workstream H, platform): the test vectors of the admin
-documentation, checked by a test that reads them. The contract is H-61 CP2's, §6: «The vectors of the docs, checked by a
-test that reads them».
+H-61 checkpoint 2 · level L2 of the hosting panel (LibreFolio 1.3, workstream H, platform): the test vectors of the signed
+tickets, checked by a test that reads them. The contract is H-61 CP2's, §6: «The vectors of the docs, checked by a test that
+reads them»; since 05/11/2026 the vectors live in a fixture, not in a page: the hosting guide left the documentation.
 
-Under test: the page ``mkdocs_src/docs/admin/hosting_panel_api.en.md``, the heading carrying the attribute
-``{: #panel-api-test-vectors }``, and the first fenced block opened with ``json`` after it. A hosting provider that writes
-its own panel (not the one LibreFolio ships) is given that block to check its signer against: a published test key, a
-ticket, and what an instance answers to that ticket at several moments, in several scopes, for several public addresses.
-A vector that is wrong is worse than none, so this file makes the page and the code answer to each other.
+Under test: the fixture ``backend/test_scripts/fixtures/hosting_panel/ticket_vectors.json``. A hosting provider that writes
+its own panel (not the one LibreFolio ships) checks its signer against it: a published test key, a ticket, and what an
+instance answers to that ticket at several moments, in several scopes, for several public addresses. A vector that is wrong
+is worse than none, so this file makes the fixture and the code answer to each other.
 
-The block is one JSON object: ``private_key_seed_hex`` and ``public_key`` (the test key, published: never a real one),
+The file is one JSON object: ``private_key_seed_hex`` and ``public_key`` (the test key, published: never a real one),
 ``environment`` (``LIBREFOLIO_PANEL_PUBLIC_KEYS``, ``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS``, as
 an operator writes them), ``header`` and ``payload`` (what the ticket holds), ``ticket`` (the compact JWS) and
 ``verdicts``, a list of ``{now, scope, verdict, public_url?}``: the instance's clock, the scope of the route asked, and
@@ -17,11 +16,11 @@ an operator writes them), ``header`` and ``payload`` (what the ticket holds), ``
 
 The tests:
 
-- HPV-001, the block is found: the anchor once in the page, a ``json`` block after it, parsed, with every key and the
-  shape of each verdict row. The failure names the page and the anchor.
+- HPV-001, the vectors are found: the file, parsed, with every key and the shape of each verdict row. The failure names the
+  file.
 - HPV-002, the seed derives the public key, and the variable of ``environment`` is ``kid:public_key``, the ``kid`` of the
   header.
-- HPV-003, the ticket is what it says: its first two segments are the ``header`` and the ``payload`` of the page, and
+- HPV-003, the ticket is what it says: its first two segments are the ``header`` and the ``payload`` of the fixture, and
   signing that ``payload`` again with the seed's key gives the very same ticket.
 - HPV-004, each verdict row, once, through the three readers of the configuration and ``verify_ticket``: ``accepted`` is a
   ``TicketClaims`` with the payload's ``jti``, ``iat`` and ``exp``, any other verdict is the ``TicketRefusal`` code.
@@ -32,25 +31,23 @@ How. Pure: a file of the repository read from disk (its path found from this fil
 no server, no database, no network, no clock — each row carries its own ``now``. The ticket is verified by the real
 readers (``panel_public_keys``, ``panel_audience``, ``panel_clock_skew_seconds`` read the process environment at each
 call) and the real ``verify_ticket``: no re-implementation of the contract in this file. The three variables of L2 are
-deleted before each test, then set through ``monkeypatch`` from the page. The key is the page's test key: a real key
+deleted before each test, then set through ``monkeypatch`` from the fixture. The key is the fixture's test key: a real key
 never appears here.
 
 Read here beyond the contract's words, each in one place of this file, so that another choice changes one line:
 
-- The rows are read when pytest collects this file, to parametrize HPV-004. A page that is missing, or whose block cannot
+- The rows are read when pytest collects this file, to parametrize HPV-004. A file that is missing, or cannot
   be read, must not crash the collection of the whole suite: the parametrization then holds one placeholder row whose test
-  fails with the reason, and HPV-001 fails with the same reason, naming the page and the anchor (``_rows``).
+  fails with the reason, and HPV-001 fails with the same reason, naming the file (``_rows``).
 - The exact equality of HPV-003 rests on three facts, each stable by design and not by luck of an implementation: Ed25519
   signs deterministically (RFC 8032, no random nonce), PyJWT writes the header with its keys sorted and the payload in the
-  order of the dict it is given, both in the most compact JSON. The vectors of a published page need exactly that: a
+  order of the dict it is given, both in the most compact JSON. The published vectors need exactly that: a
   provider reproduces the ticket byte for byte, and any other signature of the same claims would not be the vector. If a
-  later PyJWT stops sorting the header, this test is the one to fail, and the page's ticket is regenerated, not the test
+  later PyJWT stops sorting the header, this test is the one to fail, and the fixture's ticket is regenerated, not the test
   loosened: a provider's library does not read this file.
 - Each row names the scope the route asks for (``scope``): ``verify_ticket`` is given that string, as ``panel_access``
   gives it the value of a ``PanelScope``.
 
-Red today: when the page has not got the block, HPV-001..005 fail on its reason, «the page … has no heading with the
-attribute {: #panel-api-test-vectors }».
 """
 
 import base64
@@ -70,24 +67,23 @@ from backend.app.services.platform.hosting_panel.tickets import TicketClaims, Ti
 from backend.test_scripts.test_utils import print_section, print_success
 
 # =============================================================================
-# THE PAGE, SPELLED OUT
+# THE FIXTURE, SPELLED OUT
 # =============================================================================
 
 #: The root of the repository: this file is ``backend/test_scripts/test_services/<name>.py``.
 REPO_ROOT = Path(__file__).resolve().parents[3]
-#: The page of the vectors, relative to the root, and the anchor of the heading they follow.
-PAGE = "mkdocs_src/docs/admin/hosting_panel_api.en.md"
-ANCHOR_ID = "panel-api-test-vectors"
-ANCHOR = re.compile(r"\{:\s*#" + re.escape(ANCHOR_ID) + r"\s*\}")
-#: What the page says of itself when the block is not there: the same words for every test that needs it.
-WHERE = f"the page {PAGE}, the heading with the attribute {{: #{ANCHOR_ID} }}"
+#: The vectors, relative to the root. They were the JSON block of the admin guide's panel API page (05/11/2026: the hosting guide left
+#: the docs, archived in the developer journal); the contract, H-61 CP2 §6, stays, and a provider's external signer is checked against them.
+FIXTURE = "backend/test_scripts/fixtures/hosting_panel/ticket_vectors.json"
+#: What a failure says of the file: the same words for every test that needs it.
+WHERE = f"the fixture {FIXTURE}"
 
 #: The variables of L2, as .env.example writes them: spelled out here, so that a rename shows.
 KEYS_VARIABLE = "LIBREFOLIO_PANEL_PUBLIC_KEYS"
 PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 SKEW_VARIABLE = "LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS"
 KEYFILE_VARIABLE = KEYS_VARIABLE + "_FILE"
-#: What the page's ``environment`` holds, and every variable the readers could see: none comes from the runner.
+#: What the fixture's ``environment`` holds, and every variable the readers could see: none comes from the runner.
 PAGE_VARIABLES = (KEYS_VARIABLE, PUBLIC_URL_VARIABLE, SKEW_VARIABLE)
 L2_VARIABLES = (*PAGE_VARIABLES, KEYFILE_VARIABLE)
 
@@ -117,25 +113,6 @@ CODE_PREFIX = "panel_ticket_"
 # =============================================================================
 # READING THE BLOCK
 # =============================================================================
-
-
-def _json_block(text: str) -> str:
-    """The content of the first fence opened with ``json`` after the anchor of the vectors; ValueError, with the reason,
-    when the page does not hold it. The fence may be indented (inside a tab or an admonition): the indent is removed."""
-    anchors = ANCHOR.findall(text)
-    if len(anchors) != 1:
-        raise ValueError(f"{WHERE}, found {len(anchors)} time(s) in the page, expected exactly once")
-    lines = text[ANCHOR.search(text).end() :].splitlines()
-    opening = next((index for index, line in enumerate(lines) if re.fullmatch(r"\s*```json\b.*", line)), None)
-    if opening is None:
-        raise ValueError(f"{WHERE} is not followed by a block opened with ```json")
-    indent = re.match(r"\s*", lines[opening]).group()
-    body: list[str] = []
-    for line in lines[opening + 1 :]:
-        if line.strip() == "```" and line.startswith(indent):
-            return "\n".join(body)
-        body.append(line[len(indent) :] if line.startswith(indent) else line)
-    raise ValueError(f"{WHERE}: the ```json block that follows is never closed")
 
 
 def _problem_with(data: Any) -> str | None:  # noqa: C901 — flat shape validator, one early return per field, no nested logic
@@ -180,18 +157,15 @@ def _problem_with(data: Any) -> str | None:  # noqa: C901 — flat shape validat
 
 @cache
 def _read() -> tuple[dict[str, Any] | None, str | None]:
-    """The block of the page and ``None``, or ``None`` and why it could not be had: never an exception, so that collecting
-    this file cannot crash on a page that has not got the vectors (yet, or any more)."""
-    path = REPO_ROOT / PAGE
+    """The vectors and ``None``, or ``None`` and why they could not be had: never an exception, so that collecting
+    this file cannot crash on a fixture that is missing or damaged."""
+    path = REPO_ROOT / FIXTURE
     try:
-        text = path.read_text(encoding="utf-8")
+        data = json.loads(path.read_text(encoding="utf-8"))
     except OSError as error:
-        return None, f"{WHERE}: the page cannot be read ({path}): {error}"
-    try:
-        block = _json_block(text)
-        data = json.loads(block)
+        return None, f"{WHERE}: the file cannot be read ({path}): {error}"
     except ValueError as error:  # json.JSONDecodeError is one
-        return None, f"{error}" if str(error).startswith("the page") else f"{WHERE}: the ```json block is not JSON: {error}"
+        return None, f"{WHERE}: not JSON: {error}"
     problem = _problem_with(data)
     return (None, f"{WHERE}: {problem}") if problem else (data, None)
 
@@ -215,7 +189,7 @@ def no_inherited_l2_variable(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def vectors() -> dict[str, Any]:
-    """The block of the page, or the test fails naming the page, the anchor and what is wrong."""
+    """The vectors, or the test fails naming the file and what is wrong."""
     data, problem = _read()
     if data is None:
         pytest.fail(f"H-61 CP2 §6: {problem}")
@@ -233,7 +207,7 @@ def _unb64url(text: str) -> bytes:
 
 
 def _private_key(vectors: dict[str, Any]) -> Ed25519PrivateKey:
-    """The private key of the page's seed: the test key, published, never a real one."""
+    """The private key of the fixture's seed: the test key, published, never a real one."""
     return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(vectors["private_key_seed_hex"]))
 
 
@@ -242,13 +216,11 @@ def _private_key(vectors: dict[str, Any]) -> Ed25519PrivateKey:
 # =============================================================================
 
 
-def test_the_page_holds_the_vectors_block() -> None:
-    """HPV-001 (§6): the page has the heading with ``{: #panel-api-test-vectors }`` once, a block opened with ``json`` after
-    it, which parses, has the seven keys (``private_key_seed_hex``, ``public_key``, ``environment`` with the three
-    variables, ``header``, ``payload``, ``ticket``, ``verdicts``) and rows of ``now``, ``scope`` and ``verdict``. Fails
-    when the heading or its anchor is renamed, moved to another page or doubled; when the block is no longer ``json``, no
-    longer follows the heading or is not valid JSON; when a key is dropped or changes type."""
-    print_section("H-61 CP2 §6: the vectors block of the admin page")
+def test_the_fixture_holds_the_vectors() -> None:
+    """HPV-001 (§6): the fixture is valid JSON with the seven keys (``private_key_seed_hex``, ``public_key``, ``environment`` with the
+    three variables, ``header``, ``payload``, ``ticket``, ``verdicts``) and rows of ``now``, ``scope`` and ``verdict``. Fails when
+    the file is moved, renamed or damaged, or when a key is dropped or changes type."""
+    print_section("H-61 CP2 §6: the ticket vectors fixture")
     data, problem = _read()
 
     assert data is not None, f"H-61 CP2 §6: {problem}"
@@ -268,7 +240,7 @@ def test_the_seed_derives_the_public_key_and_the_variable(vectors: dict[str, Any
     another key or another ``kid`` than the ticket's, or when the entry stops being ``kid:key``."""
     derived = _b64url(_private_key(vectors).public_key().public_bytes(Encoding.Raw, PublicFormat.Raw))
 
-    assert derived == vectors["public_key"], f"the seed's public key is {derived!r}, the page says {vectors['public_key']!r}"
+    assert derived == vectors["public_key"], f"the seed's public key is {derived!r}, the fixture says {vectors['public_key']!r}"
     expected = f"{vectors['header']['kid']}:{vectors['public_key']}"
     assert vectors["environment"][KEYS_VARIABLE] == expected, f"{KEYS_VARIABLE} is kid:public_key, {expected!r}"
 
@@ -288,8 +260,8 @@ def test_the_ticket_is_the_header_and_the_payload_signed_by_the_seed(vectors: di
     segments = vectors["ticket"].split(".")
 
     assert len(segments) == 3 and all(re.fullmatch(r"[A-Za-z0-9_-]+", segment) for segment in segments), f"a compact JWS, three base64url segments: {segments!r}"
-    assert json.loads(_unb64url(segments[0])) == vectors["header"], "the ticket's first segment is the page's header"
-    assert json.loads(_unb64url(segments[1])) == vectors["payload"], "the ticket's second segment is the page's payload"
+    assert json.loads(_unb64url(segments[0])) == vectors["header"], "the ticket's first segment is the fixture's header"
+    assert json.loads(_unb64url(segments[1])) == vectors["payload"], "the ticket's second segment is the fixture's payload"
     header = vectors["header"]
     resigned = jwt.encode(vectors["payload"], _private_key(vectors), algorithm="EdDSA", headers={"typ": header["typ"], "kid": header["kid"]})
     assert resigned == vectors["ticket"], "the payload signed again with the seed's key is the ticket, byte for byte"
@@ -306,9 +278,9 @@ def test_each_verdict_is_what_the_instance_answers(monkeypatch: pytest.MonkeyPat
     replacing ``LIBREFOLIO_PUBLIC_URL``), ``panel_public_keys()``, ``panel_audience()`` and ``panel_clock_skew_seconds()``
     read as the instance reads them, and ``verify_ticket(ticket, scope, keys, audience, skew, now)``: ``accepted`` is a
     ``TicketClaims`` with the payload's ``jti``, ``iat`` and ``exp`` (and its ``kid`` and ``scope``); any other verdict is
-    a ``TicketRefusal`` whose code is that verdict. Fails when the page's verdict, clock, scope or address is edited
-    without the code, when the code's order of checks, tolerance, audience or scope rule changes without the page, or when
-    a reader of the configuration stops giving what the page's variables mean."""
+    a ``TicketRefusal`` whose code is that verdict. Fails when the fixture's verdict, clock, scope or address is edited
+    without the code, when the code's order of checks, tolerance, audience or scope rule changes without the fixture, or when
+    a reader of the configuration stops giving what the fixture's variables mean."""
     if case is None:
         pytest.fail("H-61 CP2 §6: the vectors block is not readable (see HPV-001)")
     index, row = case
@@ -329,12 +301,12 @@ def test_each_verdict_is_what_the_instance_answers(monkeypatch: pytest.MonkeyPat
 
     where = f"row {index}: now {row['now']}, scope {row['scope']!r}" + (f", public URL {row['public_url']!r}" if "public_url" in row else "")
     if row["verdict"] == ACCEPTED:
-        assert isinstance(result, TicketClaims), f"{where}: the page says accepted, the code answers {result!r}"
+        assert isinstance(result, TicketClaims), f"{where}: the fixture says accepted, the code answers {result!r}"
         assert (result.jti, result.iat, result.exp) == (payload["jti"], payload["iat"], payload["exp"]), f"{where}: the claims are the payload's: {result!r}"
         assert (result.kid, result.scope) == (vectors["header"]["kid"], payload["scope"]), f"{where}: the kid and the scope are the ticket's: {result!r}"
     else:
-        assert isinstance(result, TicketRefusal), f"{where}: the page says {row['verdict']}, the code accepts: {result!r}"
-        assert result.code == row["verdict"], f"{where}: the page says {row['verdict']}, the code refuses with {result.code!r}"
+        assert isinstance(result, TicketRefusal), f"{where}: the fixture says {row['verdict']}, the code accepts: {result!r}"
+        assert result.code == row["verdict"], f"{where}: the fixture says {row['verdict']}, the code refuses with {result.code!r}"
     print_success(f"{where}: {row['verdict']}")
 
 

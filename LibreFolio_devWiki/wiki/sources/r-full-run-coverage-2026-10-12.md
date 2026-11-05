@@ -16,7 +16,7 @@ related:
 
 ## Summary
 
-Workstream R ran the whole suite with coverage on train 68 (`78101574b`), at two workers, from 19:40 to 00:02 —
+Workstream R ran the whole suite with coverage on train 68 (`3c8ea2c8b`), at two workers, from 19:40 to 00:02 —
 4 h 21 min, at a load between 9.6 and 151. Ten of fifteen categories were green; pytest 12 627 passed and vitest
 10 760, with no red; Playwright 1 163 passed and **29 failed**, all on desktop.
 
@@ -37,7 +37,7 @@ Workstream R ran the whole suite with coverage on train 68 (`78101574b`), at two
 - Also closed on the same day, in I's lot 50: C-58 — [[problems/broker-detail-tests-over-budget-under-load]].
 
 The release page cites this run among the checks of 1.2.0, next to the final run: [[sources/release-1.2.0]]. *Update
-(2026-10-14)*: R's final run, on `058b76dcf`, had **0 reds** — pytest 12 936, vitest 11 515, Playwright 1 221 — at a
+(2026-10-14)*: R's final run, on `2a48d6529`, had **0 reds** — pytest 12 936, vitest 11 515, Playwright 1 221 — at a
 much lower load (8.9 on average against 37.9), so the load cures are proven at normal load only (C-82); its report
 is `report-R-final-run-coverage-20261013.md` in the same folder.
 

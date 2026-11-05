@@ -4,7 +4,7 @@ that no longer grows with the range. Pinned on a real database.
 
 The developer's rule: «è imperativo non sbagliare i calcoli, veloci sì, ma precisi».
 
-Today (HEAD ``41f66f23a``):
+Today (HEAD ``4f406d5ef``):
 - ``PortfolioCalculationEngine._preload_fx_rates`` collects ``(currency, day)`` needs — transaction amounts at their date,
   priced outgoing ADJUSTMENTs at their date (dropped from the oracle by N78-1: such a row has no value), external cash flows, price and asset currencies on every day of
   ``[date_from, date_to]``, TRANSFER legs before the range, in-transit cash on every day of the transit from
@@ -69,7 +69,7 @@ What is tested:
    ``NativeCash._rate_days``) does not grow when ``rates_until`` moves from 30 to 3000 days after the last movement.
    Nothing to convert: no call at all (guards).
 
-RED on HEAD 41f66f23a — the cost only: ``TestTheCost``'s five cost tests (``convert_bulk`` is handed one unit per day,
+RED on HEAD 4f406d5ef — the cost only: ``TestTheCost``'s five cost tests (``convert_bulk`` is handed one unit per day,
 ``unit_rate_steps`` is never called, the work grows ~100× with the range). GREEN on HEAD, guards the cure must keep green:
 ``TestTheEngineMapIsConvertBulks``, ``TestTheNativeCashIsConvertBulks``, ``TestTheReportIsBitIdentical`` (today's readers
 ARE the oracle), the «nothing to convert» guard (engine and native cash) and the oracles' own guard
@@ -90,7 +90,7 @@ named, and only on this file's own evidence:
 - ``step_series`` dropping the anchor step: both native-cash tests and the report;
 - the native cash's window clamped at 1900, or split into single days before it: the 1900 book and the native windows test.
 
-Re-measured on MF's cure (2026-10-20, a scratch copy of HEAD 41f66f23a + the cure): green 15/15, and every mutant above
+Re-measured on MF's cure (2026-10-20, a scratch copy of HEAD 4f406d5ef + the cure): green 15/15, and every mutant above
 turns red the same tests. Two more, of the callers' guards: the engine asking a transit window that ends before it
 starts (a transit wholly before 1900, with the old floor) — the pre-1900 transit test, as ``unit_rate_steps`` raises; the native cash
 asking one for a currency whose first movement comes after ``rates_until`` — the 1900 book with ``rates_until``
@@ -276,7 +276,7 @@ def _differences(left: object, right: object, path: str = "report") -> list[str]
 
 
 # =============================================================================
-# THE ORACLES OF TODAY — HEAD 41f66f23a, VERBATIM
+# THE ORACLES OF TODAY — HEAD 4f406d5ef, VERBATIM
 # =============================================================================
 
 
@@ -297,7 +297,7 @@ def _fx_needs_today(  # noqa: C901 — HEAD's collection loops, copied as they a
         if tx.amount and tx.amount != 0 and tx.currency and tx.currency != target_currency:
             fx_needs.add((tx.currency, tx.date))
     # N78-1 (the developer's decision, 21/10/2026): an outgoing ADJUSTMENT has no value, so the value it may store is never
-    # converted and is no need. HEAD 41f66f23a asked (cost currency, row date) for each one (J-24); that loop is gone from
+    # converted and is no need. HEAD 4f406d5ef asked (cost currency, row date) for each one (J-24); that loop is gone from
     # this oracle, which follows the rule and no longer HEAD alone (RED until the cure on the book's two such rows).
     for dt, _, _, ccy in external_cash_flows:
         if ccy != target_currency:
@@ -1095,7 +1095,7 @@ class TestTheCost:
 
 def test_the_oracles_are_copies_of_head():
     """GUARD of the oracles: ``_fx_needs_today`` and ``_unit_requests_today`` answer, on the books of this file, what the
-    dense readers asked (HEAD 41f66f23a, then without the 1900 floor: D-P4, MF-PAV-L1) — counted here so that a later edit
+    dense readers asked (HEAD 4f406d5ef, then without the 1900 floor: D-P4, MF-PAV-L1) — counted here so that a later edit
     of an oracle shows. The native book asks every day from each currency's first movement to ``NATIVE_RATES_UNTIL``: 132
     for USD (from 1899-11-20: 11 + 31 + 31 + 28 + 31), 86 for CHF (from 1900-01-05), 88 for GBP (from 1900-01-03)."""
     print_section("P3: the oracles of today")

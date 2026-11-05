@@ -1,6 +1,6 @@
 """``dev.py`` inside the Docker image, which does not ship the tests (L, R2 P0, plan 35_devCliImage).
 
-``.dockerignore`` drops ``backend/test_scripts/`` (``3b48e25b4``, in 1.1.0). ``dev.py``,
+``.dockerignore`` drops ``backend/test_scripts/`` (``9c5809792``, in 1.1.0). ``dev.py``,
 though, registers the test runner while it builds its parser (``scripts.test_runner`` →
 ``_cli`` → ``_common.py``, which imports ``backend.test_scripts.test_db_config`` and
 ``test_utils``), and imports ``normalize_coverage_argv`` from ``scripts.test_runner._cli``
@@ -131,7 +131,7 @@ The contract:
   epilog names it in prose too, which does not count); **IMG-025b**: ``dev.py backup
   --help`` exits 0 with the usage of the group;
 * **IMG-026**: on the image's database, ``backup create`` exits 0 and writes exactly one
-  ``librefolio-backup-*.zip`` into ``backups/`` of the image's data directory, where
+  ``librefolio-backup-*.zip`` into its kept folder ``backups/librefolio-backup-<date>-cli-<id[:8]>/`` (FB-24) of the image's data directory, where
   ``docker compose exec librefolio python dev.py backup create`` leaves it, with no job
   folder left in ``backups/.jobs/``; the archive holds that database (a user this test
   created there, and its Alembic revision in the manifest), which no exit code can prove;
@@ -276,12 +276,12 @@ MIN_SECRET_LENGTH = 32
 
 #: Lot B1 of workstream B (plan 07_backupDocker §3.10): ``dev.py backup``, as ``docker compose
 #: exec librefolio python dev.py backup …`` runs it in the image. Without ``--output`` an
-#: archive goes into ``backups/`` of the data directory; while it is built, the backup keeps
-#: its state and work files in a job folder of ``backups/.jobs/``, which the command removes
-#: once the archive is in place.
+#: archive stays in its kept folder ``backups/librefolio-backup-<date>-cli-<id[:8]>/`` of the
+#: data directory (FB-24); while it is built, the backup keeps its state and work files in a
+#: job folder of ``backups/.jobs/``, which is gone once the backup is kept.
 BACKUPS = "backups"
 BACKUP_JOBS = ".jobs"
-BACKUP_ARCHIVES = "librefolio-backup-*.zip"
+BACKUP_ARCHIVES = "librefolio-backup-*-cli-*/librefolio-backup-*.zip"
 #: An archive's database entry, and its manifest.
 ARCHIVED_DATABASE = "sqlite/app.db"
 ARCHIVE_MANIFEST = "manifest.json"

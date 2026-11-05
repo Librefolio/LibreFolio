@@ -20,7 +20,7 @@ BRIM detects which plugins can read a file (`can_parse` of every plugin) **once,
 the file's sidecar (`compatible_plugins`). A release that adds or changes a plugin's `can_parse`, the base reader or
 the plugin list makes that stored list stale — and nothing ever re-detected it.
 
-## Solution (2026-10-06, `e3f53e3cc`, Step 5 of plan 26)
+## Solution (2026-10-06, `1f8c26cd9`, Step 5 of plan 26)
 
 - The sidecar records the **signature** of the plugin catalogue that detected it: `plugins_signature =
   detection_signature()`, which is the **app version** (D2). `plugin_version` could not serve: its contract covers

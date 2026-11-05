@@ -131,7 +131,7 @@ boundary.
   capture procedure in its docstring). A stale capture made the shots render an empty dashboard
   from 2026-09-11 (`yield_on_cost` became required) until R12; the Vitest guard
   `frontend/src/lib/api/dashboardReportFixture.test.ts` now fails in seconds instead.
-- The normalizer scales amounts and per-unit prices only: since `f4af2d554` (2026-10-14) a never-scale rule
+- The normalizer scales amounts and per-unit prices only: since `68e57a15c` (2026-10-14) a never-scale rule
   (`NEVER_SCALE_RE`) and exceptions by path (`NOT_MONEY_PATH_RE`) keep the ratios — allocation shares, Yield on Cost,
   the one-day change — as captured, and invariants are checked before anything is written. Until then the
   allocation-history stacks of the shots stopped short of 100 % —

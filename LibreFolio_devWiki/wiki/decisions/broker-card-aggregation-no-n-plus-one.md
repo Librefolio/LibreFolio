@@ -54,10 +54,10 @@ that the existing `BrokerBreakdown` schema didn't carry natively.
   count.
 - `BrokerBreakdown.cash_balances` is now available to any other consumer that reads the breakdown, not just
   the broker list.
-- Since lot 41 (2026-10-11, step H, `f15fcfdad`), the card's Gain/Loss reads capital and value in transit from the
+- Since lot 41 (2026-10-11, step H, `1eb487ee1`), the card's Gain/Loss reads capital and value in transit from the
   engine's per-broker slice; the service's own capital mirror is gone (see [[decisions/portfolio-pnl-series-contracts]],
   G1a).
-- Since lot 41 F (2026-10-12, `df5db60d0`), a card's cash is its native balances valued at the valuation date's
+- Since lot 41 F (2026-10-12, `b11c7720e`), a card's cash is its native balances valued at the valuation date's
   rates (`NativeCash.value_at()`), its `cash_balances` come from `NativeCash.balances()`, and the headline cash is the
   sum of the cards — on the mock database the two had differed by up to 866.5 before
   ([[decisions/native-cash-daily-revaluation]], [[problems/foreign-cash-never-revalued]]).

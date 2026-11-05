@@ -54,7 +54,6 @@ from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderCon
 from backend.app.schemas.refresh import FARefreshItem, FARefreshResult, SyncDateRangeModel
 from backend.app.services.assets import core as asset_source_core
 from backend.app.services.assets import currency_change as currency_change_operations
-from backend.app.services.assets import metadata as metadata_operations
 from backend.app.services.assets import price_query as price_query_operations
 from backend.app.services.assets import provider_management as provider_management_operations
 from backend.app.services.assets import refresh as refresh_operations
@@ -97,7 +96,6 @@ def _clear_caches():
 @pytest.mark.parametrize(
     ("operation_module", "core_object_names"),
     [
-        (metadata_operations, ("_asset_metadata_cache", "_run_provider_in_thread")),
         (
             refresh_operations,
             (
@@ -126,7 +124,6 @@ def _clear_caches():
         (currency_change_operations, ("_asset_history_cache", "_asset_current_cache")),
     ],
     ids=[
-        "metadata",
         "refresh",
         "search",
         "provider-management",

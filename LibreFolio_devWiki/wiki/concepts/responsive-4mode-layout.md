@@ -8,7 +8,7 @@ related: [concepts/dual-view-pattern, sources/phase00-taxonomy-select-2026-10, s
 
 # Concept: responsive page toolbars
 
-> **Rewritten 2026-10-09 (checked at `fef0203ca`).** Until then this page described the April 2026 pattern — four
+> **Rewritten 2026-10-09 (checked at `111c2c8f3`).** Until then this page described the April 2026 pattern — four
 > modes `wide`/`tablet`/`tablet-s`/`mobile` at fixed breakpoints 1100/770/500 px, each page with its own
 > `ResizeObserver`, and it recommended "extracting `responsiveLayout.svelte.ts`". That extraction happened long ago;
 > the model below replaced the fixed breakpoints, and its thresholds were **calibrated by measurement** on
@@ -47,7 +47,7 @@ below their own widths (labels first shrink via `labelShrink.ts`); `noExtraLabel
 - Values were tried live through `window.__lfLayouts.<name>.thresholds` (`registerLayoutDebug`), which recompute the
   tier without a resize.
 
-**Result** (before → after, verified in the pages at `fef0203ca`):
+**Result** (before → after, verified in the pages at `111c2c8f3`):
 
 | Bar (`layoutDebugName`) | `denseRow` | `stackFilters` | `labelHideTabs` |
 |---|---|---|---|
@@ -80,7 +80,7 @@ Also: the asset-list filters became `flex-1 min-w-0` in `oneColumn` (the Active/
 
 ## A translation can expire the calibration (2026-10-12)
 
-The thresholds hold only for the labels they were measured with. `6f0648408` (2026-10-11, «fix(i18n): apply the
+The thresholds hold only for the labels they were measured with. `6f89c2562` (2026-10-11, «fix(i18n): apply the
 developer's term choices») aligned the catalogues with the documentation glossary, and in Spanish `aiExport` went from
 «Exportar IA» to «Exportación IA». The sweep in workstream V's gate (2026-10-12) was then red in Spanish on two bars, in
 `denseRow`: the «Exportación IA …» group left the Dashboard's bar by up to 11.0 px (at a 1310 px viewport) and the
@@ -88,7 +88,7 @@ asset detail's by up to 11.8 px (at 1210 px). Deterministic — red at one worke
 
 - **The rule**: a catalogue change that lengthens a toolbar label, in any language, re-runs the sweep
   (`./dev.py test front-utility toolbar-width-sweep`); a red re-measures that bar's thresholds as above.
-- **The cure, delivered** (`a91ffd892`, workstream I's plan 48, train 72): the `denseRow` thresholds of the D5
+- **The cure, delivered** (`25b453fbe`, workstream I's plan 48, train 72): the `denseRow` thresholds of the D5
   calibration — the sweep's own name for it — raised from 950 to 990 on the Dashboard and from 850 to 890 on the asset
   detail. The overflows above were only where the sweep's grid fell: the group needs 968 and 868.8 px, the thresholds
   compare the bar's width, and the scrollbar gutter moved the red by 15 px —
@@ -97,7 +97,7 @@ asset detail's by up to 11.8 px (at 1210 px). Deterministic — red at one worke
 ## Phones: the lifecycle pill keeps its labels (2026-10-13)
 
 In `oneColumn` the Assets filters share each row, so Search and the Active/Inactive pill took half of it each
-(`51de5dc75`, 2026-09-30 — new in 1.2). The pill clips its content (`overflow-hidden`) and its labels never wrap: where
+(`27a2d45d2`, 2026-09-30 — new in 1.2). The pill clips its content (`overflow-hidden`) and its labels never wrap: where
 half a row was narrower than the two labels, the pill cut them. Red on the base, measured as how far the Inactive
 button ran past the pill: Spanish at 320–360 px layouts (up to 21.7 px), English at 320–330 (up to 8.4), French at
 320 (3.0), Italian never. The sweep could not see it: it skips the content of clipping containers by design.

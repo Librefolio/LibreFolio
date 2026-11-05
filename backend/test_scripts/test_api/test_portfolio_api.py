@@ -1,6 +1,5 @@
 """Portfolio API tests for active /api/v1/portfolio endpoints."""
 
-import json
 import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
@@ -18,15 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.api.v1 import portfolio_api
 from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
-from backend.app.db.models import Asset, Transaction, TransactionType, UserRole, UserSettings
+from backend.app.db.models import Asset, Transaction, TransactionType, UserSettings
 from backend.app.db.session import get_async_engine, get_session_generator
-from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceProvenance,
     PortfolioPlannerSourceResponse,
     PortfolioPlannerSourceSnapshot,
 )
-from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.accounts import user_service
 from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,
@@ -1405,35 +1402,6 @@ class _ApiRows:
         return _ApiScalars(self._values)
 
 
-class _WacApiSession:
-    """Two-read WAC boundary: Broker access first, Asset identities second."""
-
-    def __init__(
-        self,
-        *,
-        broker_id: int,
-        accessible: bool,
-        access_role: UserRole | None = None,
-        accessible_ids=None,
-        assets=(),
-    ):
-        self.broker_id = broker_id
-        self.accessible = accessible
-        self.access_role = access_role
-        self.accessible_ids = list(accessible_ids) if accessible_ids is not None else ([broker_id] if accessible else [])
-        self.assets = list(assets)
-        self.statements = []
-
-    async def execute(self, statement):
-        self.statements.append(statement)
-        if len(self.statements) == 1:
-            assert "broker_user_access.role" not in str(statement)
-            return _ApiRows(self.accessible_ids)
-        if len(self.statements) == 2:
-            return _ApiRows(self.assets)
-        raise AssertionError("WAC endpoint performed an unexpected read")
-
-
 # ---------------------------------------------------------------------------
 # TestPositionsSeriesEndpoint — POST /portfolio/positions-series (J5-1, #48)
 # ---------------------------------------------------------------------------
@@ -1736,261 +1704,6 @@ async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
     assert response.json()["detail"]["code"] == ("portfolio_planner_source_broker_forbidden")
     assert response.headers.get("cache-control") == "no-store"
     assert builder.await_args.kwargs["user_id"] == 91
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "role",
-    [
-        pytest.param(UserRole.VIEWER, id="viewer"),
-        pytest.param(UserRole.EDITOR, id="editor"),
-        pytest.param(UserRole.OWNER, id="owner"),
-    ],
-)
-async def test_legacy_wac_allows_every_authenticated_broker_access_role(role):
-    broker_id = 7
-    session = _WacApiSession(
-        broker_id=broker_id,
-        accessible=True,
-        access_role=role,
-    )
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=41, is_superuser=False),
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": broker_id,
-                        "asset_id": 11,
-                    }
-                ]
-            },
-        )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "results": [
-            {
-                "broker_id": broker_id,
-                "asset_id": 11,
-                "currency": "USD",
-                "series": [],
-                "missing_fx_pairs": [],
-            }
-        ]
-    }
-    assert len(session.statements) == 2
-    assert session.access_role == role
-
-
-@pytest.mark.asyncio
-async def test_legacy_wac_superuser_without_access_is_403_before_asset_read():
-    session = _WacApiSession(
-        broker_id=7,
-        accessible=False,
-    )
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=91, is_superuser=True),
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": 7,
-                        "asset_id": 11,
-                    }
-                ]
-            },
-        )
-
-    assert response.status_code == 403
-    assert response.json() == {
-        "detail": {
-            "code": "portfolio_wac_broker_forbidden",
-        }
-    }
-    assert len(session.statements) == 1
-
-
-@pytest.mark.asyncio
-async def test_legacy_wac_mixed_access_scope_fails_atomically_before_asset_read():
-    session = _WacApiSession(
-        broker_id=7,
-        accessible=True,
-        accessible_ids=[7],
-    )
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=41, is_superuser=False),
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": 7,
-                        "asset_id": 11,
-                    },
-                    {
-                        "broker_id": 99,
-                        "asset_id": 12,
-                    },
-                ]
-            },
-        )
-
-    assert response.status_code == 403
-    assert response.json() == {
-        "detail": {
-            "code": "portfolio_wac_broker_forbidden",
-        }
-    }
-    assert len(session.statements) == 1
-
-
-@pytest.mark.asyncio
-async def test_legacy_wac_anonymous_is_401_before_any_portfolio_read():
-    session = _WacApiSession(
-        broker_id=7,
-        accessible=True,
-    )
-    app = _focused_portfolio_app(
-        current_user=None,
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": 7,
-                        "asset_id": 11,
-                    }
-                ]
-            },
-        )
-
-    assert response.status_code == 401
-    assert session.statements == []
-
-
-@pytest.mark.asyncio
-async def test_legacy_wac_response_remains_byte_and_semantically_compatible(
-    monkeypatch,
-):
-    broker_id = 7
-    asset_id = 11
-    session = _WacApiSession(
-        broker_id=broker_id,
-        accessible=True,
-        assets=[SimpleNamespace(id=asset_id, currency="EUR")],
-    )
-    compute = AsyncMock(
-        return_value=WACPreviewResultItem(
-            wac=Currency(code="EUR", amount=Decimal("12.3400")),
-            wac_qualifying_txs=[
-                WACQualifyingTX(
-                    tx_id=101,
-                    type="BUY",
-                    date=date(2026, 1, 2),
-                    quantity=Decimal("2.500"),
-                    unit_cost=Decimal("12.3400"),
-                    currency="EUR",
-                    effect="add",
-                    running_wac=Decimal("12.3400"),
-                )
-            ],
-            wac_missing_pairs=[],
-        )
-    )
-    monkeypatch.setattr(
-        portfolio_api,
-        "compute_wac_iterative",
-        compute,
-    )
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=41, is_superuser=False),
-        session=session,
-    )
-    expected = {
-        "results": [
-            {
-                "broker_id": broker_id,
-                "asset_id": asset_id,
-                "currency": "EUR",
-                "series": [
-                    {
-                        "date": "2026-01-02",
-                        "wac": "12.3400",
-                        "pool_qty": "2.500",
-                        "effect": "add",
-                    }
-                ],
-                "missing_fx_pairs": [],
-            }
-        ]
-    }
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": broker_id,
-                        "asset_id": asset_id,
-                        "date_range": {
-                            "end": "2026-01-31",
-                        },
-                    }
-                ]
-            },
-        )
-
-    assert response.status_code == 200
-    assert response.json() == expected
-    assert (
-        response.content
-        == json.dumps(
-            expected,
-            separators=(",", ":"),
-        ).encode()
-    )
-    compute.assert_awaited_once_with(
-        session=session,
-        broker_id=broker_id,
-        asset_id=asset_id,
-        as_of_date=date(2026, 1, 31),
-        asset_currency="EUR",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -2383,7 +2096,7 @@ class TestRowsBefore1900StartTheHistory:
     written last). ``control``: only the API DEPOSIT on 1900-01-01 — its history starts there. Cleanup: the seeded rows by
     id with the ORM, then both brokers (force: their API rows), then the user.
 
-    RED on HEAD a4316d9a0: ``floor``'s ``range.start`` and first history step are 1900-01-01 (the engine's floor), not 1899-03-01,
+    RED on HEAD 962810da1: ``floor``'s ``range.start`` and first history step are 1900-01-01 (the engine's floor), not 1899-03-01,
     and each of its three ``data_quality`` sections holds the ``TRANSACTIONS_BEFORE_FLOOR`` warning. GREEN on HEAD: the control
     scope (no row before 1900: no warning, history from its first row).
     """
@@ -2473,7 +2186,7 @@ class TestRowsBefore1900StartTheHistory:
         return [issue["code"] for issue in quality["issues"] if issue["code"] == "TRANSACTIONS_BEFORE_FLOOR"]
 
     async def test_rows_before_1900_start_the_history_and_raise_no_warning(self, test_server):
-        """RED on HEAD a4316d9a0: the floor scope's history starts on 1900-01-01 and each ``data_quality`` section holds one
+        """RED on HEAD 962810da1: the floor scope's history starts on 1900-01-01 and each ``data_quality`` section holds one
         TRANSACTIONS_BEFORE_FLOOR. After L1: ``range.start``, ``history[0].date`` and ``metadata.computed_date_from`` are the
         earliest row's day (1899-03-01), no section holds the warning; the control scope starts on 1900-01-01 and has none."""
         print_section("Portfolio Report: transactions before 1900 (MF-PAV-L1)")
@@ -2536,7 +2249,7 @@ class TestNonIsoCurrencyDataQuality:
     2025. Cleanup undoes the ORM writes first (the seeded rows deleted by id, the asset's currency and the base currency put
     back to EUR), then the brokers (force: their API rows), the assets, the user.
 
-    Red on HEAD 66e4dcba0: no section holds a ``NON_ISO_CURRENCY`` issue, and MISSING_FX_MARKET lists ``978-EUR``; the
+    Red on HEAD 8938d6b69: no section holds a ``NON_ISO_CURRENCY`` issue, and MISSING_FX_MARKET lists ``978-EUR``; the
     barriers and the control are green there too.
     """
 

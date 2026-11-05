@@ -17,7 +17,7 @@ related:
 
 ## Summary
 
-One plan (~480 lines), merged in train 24 (`275d99218`, commits `12106dbd3`, `6c0e15bd0`, `716b0b4eb`) and archived on
+One plan (~480 lines), merged in train 24 (`b83945c79`, commits `97bee5f28`, `d895a9421`, `d895a9421`) and archived on
 2026-10-09. It added a shield in the sidebar that tells the user whether their connection is secure, local or
 insecure — with the server's help but without the server ever upgrading the browser's verdict or revealing the
 client address — and, on the way, closed an account-enumeration leak in the login.

@@ -50,7 +50,7 @@ resolution (e.g. `€` → `EUR`) still uses the curated `SYMBOL_TO_ISO` map +
 fuzzy name search, but every path now returns either a real ISO 4217 code
 from `pycountry` or `None`.
 
-Commit: `ece744846` (G-batch7, 2026-04-25).
+Commit: `ac40b75bd` (G-batch7, 2026-04-25).
 
 ## Prevention
 

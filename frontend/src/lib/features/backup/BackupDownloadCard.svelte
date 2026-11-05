@@ -24,6 +24,7 @@
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getInstanceBackupOptions, instanceBackupFileUrl, type BackupPhase, type BackupWarning} from './backupApi';
+    import {notifyBackupListChanged} from './backupList.svelte';
     import {BackupJobController} from './backupJob.svelte';
 
     const PHASE_KEYS: Record<BackupPhase, string> = {
@@ -59,13 +60,16 @@
     }
 
     const controller = new BackupJobController({
-        onDone: (job) =>
+        onDone: (job) => {
             notify({
                 name: 'backup.created',
                 detail: {job_id: job.job_id, file_size: job.file_size ?? null, warnings: [...job.warnings], encrypted: job.encrypted},
                 // A complete archive is visible on the card; one with warnings is partial, and says so.
                 toast: job.warnings.length > 0 ? {variant: 'warning', message: $_('backup.download.toast.warnings')} : undefined,
-            }),
+            });
+            // The server keeps the backup: the table of kept backups reads its list again (FB-24).
+            notifyBackupListChanged();
+        },
         onFailed: (code, what, job) =>
             notify({
                 name: what === 'remove' ? 'backup.delete.failed' : 'backup.failed',
@@ -108,7 +112,10 @@
     async function removeArchive() {
         const jobId = controller.job?.job_id;
         await controller.remove();
-        if (jobId !== undefined && controller.state === 'idle') notify({name: 'backup.deleted', detail: {job_id: jobId}});
+        if (jobId !== undefined && controller.state === 'idle') {
+            notify({name: 'backup.deleted', detail: {job_id: jobId}});
+            notifyBackupListChanged();
+        }
     }
 
     function downloadStarted(jobId: string) {
@@ -254,7 +261,14 @@
         </fieldset>
 
         {#if mode === 'secure'}
-            <div class="space-y-3" data-testid="backup-password-fields">
+            <!--
+                FB-20: the pair a password manager expects, so that it does not take the backup password for the user's
+                own: a form with a fixed user field («backup») before two new-password fields. The user field is not
+                type="hidden" (managers skip those): a text input kept off the screen, out of the tab order and away
+                from assistive technology. The form never submits (the buttons stay type="button").
+            -->
+            <form class="space-y-3" autocomplete="off" data-testid="backup-password-form" data-1p-ignore data-bwignore="true" data-form-type="other" data-lpignore="true" onsubmit={(event) => event.preventDefault()}>
+                <input class="sr-only" aria-hidden="true" autocomplete="username" data-testid="backup-password-username" name="backup-username" readonly tabindex="-1" type="text" value="backup" />
                 <div class="space-y-2">
                     <label class="block text-sm font-medium text-lf-secondary" for="backup-password">{$_('backup.download.password.label')}</label>
                     <PasswordInput autocomplete="new-password" bind:value={password} id="backup-password" name="backup-password" testId="backup-password" />
@@ -267,7 +281,7 @@
                         <p class="text-xs text-lf-danger" data-testid="backup-password-mismatch">{$_('backup.download.password.mismatch')}</p>
                     {/if}
                 </div>
-            </div>
+            </form>
         {/if}
 
         <div class="flex flex-wrap items-center gap-2">

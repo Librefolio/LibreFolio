@@ -28,7 +28,7 @@ progress log).
 The factor is observed from the series itself — `observed_annualization` returns `n_observations · 365 /
 calendar_days` (`market_series.py`) — and the same `f` scales the volatility and converts the risk-free rate
 (`daily_risk_free_rate` in `metrics.py`), so numerator and denominator speak of the same period. The documentation
-followed later: the Sharpe and Sortino pages stopped converting with 1/365 (`1f9d7005d`,
+followed later: the Sharpe and Sortino pages stopped converting with 1/365 (`7a3a38e85`,
 [[problems/docs-claimed-what-the-code-did-not-do]]).
 
 ## Prevention

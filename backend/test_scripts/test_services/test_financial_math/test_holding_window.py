@@ -12,7 +12,7 @@ Module under test: ``backend/app/services/financial_math/holding_window.py``, ne
   being the date the running quantity last fell from above ``dust`` to ``dust`` or below.
 
 They replace ``portfolio_service._oldest_open_lot_date`` and ``portfolio_service._closed_position_window`` (HEAD
-a8d2486ae), written out below as ``_head_oldest_open_lot_date`` and ``_head_closed_position_window``, verbatim but
+0fcbeb310), written out below as ``_head_oldest_open_lot_date`` and ``_head_closed_position_window``, verbatim but
 for their names and type hints. One rule changes: the ADJUSTMENT of a stock split (a transaction linked to a SPLIT asset event)
 rescales every open lot by ``(held + q) / held`` and keeps their dates, where HEAD opened a lot dated at the split
 (``+q``) or consumed the oldest lots (``−q``). A split never opens nor closes a position in the window. An incoming
@@ -41,7 +41,7 @@ incoming or zero moves never counted.
 MF-A7 gives ``oldest_open_lot_date(moves, dust=QUANTITY_DUST_THRESHOLD)`` the threshold ``closed_position_window``
 already has: walking the open lots oldest first, the date is that of the lot at which the accumulated open quantity
 first exceeds ``dust``, None when the whole position holds ``dust`` or less — the residual a sale leaves is set aside.
-Before it (HEAD 20ef5b9c0) the first open lot counted whatever its quantity; on a split-free stream that is
+Before it (HEAD f2824c20d) the first open lot counted whatever its quantity; on a split-free stream that is
 ``_head_oldest_open_lot_date``, and with ``dust=0`` it is the new function. The two corpus cases of a dust residual now
 expect None (``DUST_SET_ASIDE_BY_MF_A7`` keeps HEAD's D1), their window unchanged.
 
@@ -56,7 +56,7 @@ expect None (``DUST_SET_ASIDE_BY_MF_A7`` keeps HEAD's D1), their window unchange
 MF-A10 gives ``quantity_moves(transactions, split_linked_ids, share=Decimal("1"))`` the owner's share of the broker
 (``native_cash.effective_share``): every quantity is scaled by it, as the engine scales its own (``daily_state``:
 ``tx.quantity * ctxn.share``), so the dust threshold the windows apply is the one the rows apply to the engine's
-quantity. Before it (HEAD 0c866ff73) the moves carried the raw quantity: on a broker owned at s < 1 a residual in
+quantity. Before it (HEAD 79d526d9d) the moves carried the raw quantity: on a broker owned at s < 1 a residual in
 (dust, dust / s] was dust for the row and an open lot for the window.
 
 - ``TestQuantityMovesAtTheOwnersShare`` — red on HEAD by absence (TypeError, no ``share``): the share scales every
@@ -110,7 +110,7 @@ def _tx(day: date, tx_id: int | None, quantity: str | None) -> _Tx:
 
 
 # =============================================================================
-# HEAD's algorithms (portfolio_service.py @ a8d2486ae), verbatim but for their names and type hints
+# HEAD's algorithms (portfolio_service.py @ 0fcbeb310), verbatim but for their names and type hints
 # =============================================================================
 
 

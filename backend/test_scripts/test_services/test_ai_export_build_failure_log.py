@@ -50,7 +50,7 @@ at all.
 
 Pure: in-memory registries and builders, as in test_ai_export_component_runtime.py; no database, no server, no file.
 
-Red today (HEAD 14eaa4dea). The H-60 tests pin what 8e957c1d3 implemented: their «Red today» notes date from before that
+Red today (HEAD 5c2a46b0d). The H-60 tests pin what 5c2a46b0d implemented: their «Red today» notes date from before that
 commit, when ``_build`` wrote nothing. The H-60r tests are red: ``_build`` passes ``exc_info`` on every ``failed to
 build`` line, so the second component, or the second request, to fail on one loader exception, and a component whose
 loader already logged its failure with the traceback, write that traceback again, and no line has

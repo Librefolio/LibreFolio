@@ -18,8 +18,8 @@ Plan 40 of workstream P (261 lines) fixed three defects of the average cost that
 without trying them. On 2026-10-09 P proved them with red tests; all three were already in v1.1.0. The developer chose
 one backend fix for the first two and a cost check on promotes for the third. The receiving side of a TRANSFER in Auto
 now averages the sending broker as it was when the units left — a date the developer confirmed when a transfer is in
-transit. A promote now asks for a missing cost like any other transaction. Commit `1076fa994` entered with train 28
-(merge `7b279157c`). The folder was archived on 2026-10-10, after the 09/10 archive ingest, which is why the audit of
+transit. A promote now asks for a missing cost like any other transaction. Commit `48c3f52a9` entered with train 28
+(merge `7cffbdba9`). The folder was archived on 2026-10-10, after the 09/10 archive ingest, which is why the audit of
 step B found it never ingested.
 
 ## Key Takeaways

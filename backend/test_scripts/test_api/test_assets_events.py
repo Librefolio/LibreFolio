@@ -3,11 +3,10 @@ Test Suite: Asset Events API Endpoints
 
 Tests for event-related endpoints:
 - POST /api/v1/assets/events - Bulk upsert manual events
-- DELETE /api/v1/assets/events?asset_id=...&ids=... - Bulk delete the events of one asset (RESTRICT-aware)
 - POST /api/v1/assets/events/query - Bulk query events
 - POST /api/v1/assets/events - editing a manual event in place (by key or by id)
 - Release 1.3 contract (W E1a, decisions 20-23): type normalisation, all or nothing with errors
-  that say where, create mode, event_ids in the result, DELETE scoped by asset
+  that say where, create mode, event_ids in the result
 - Release 1.3, lot E1b: ``delete_ids`` in the upsert — the editor's save in ONE request,
   deletions first (EVENT_NOT_DELETABLE 400, EVENT_IN_USE 409, ``deleted_ids`` in the result)
 """
@@ -27,7 +26,6 @@ from backend.app.schemas.assets.assets import (
 from backend.app.schemas.assets.events import (
     FAAssetEventPoint,
     FABulkEventUpsertResponse,
-    FAEventBulkDeleteResponse,
     FAEventQueryItem,
     FAEventQueryResponse,
     FAEventUpsert,
@@ -184,274 +182,6 @@ async def test_query_events(test_server):
         assert evt.value.code == "EUR"
         assert float(evt.value.amount) == 0.50
         print_success(f"Queried event: id={evt.id}, type={evt.type}, is_auto={evt.is_auto}")
-
-
-# ============================================================
-# Test 3: DELETE /assets/events?asset_id=...&ids=... - Bulk delete (happy path)
-# ============================================================
-#
-# Decision 21 (I-12a): the delete names the asset whose events it removes, so every call
-# below passes ``asset_id``. Before the fix the parameter is unknown and ignored, so these
-# tests pass both before and after it; the scoping itself is pinned at the end of the module.
-
-
-async def _create_asset_with_events(client: httpx.AsyncClient, event_count: int, prefix: str) -> tuple[int, list[int]]:
-    """Helper: create an asset with N manual events and return (asset_id, [event_ids])."""
-    create_item = FAAssetCreateItem(display_name=f"Bulk Delete {prefix} {unique_id(prefix)}", currency="USD")
-    create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
-    asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
-
-    today = date.today()
-    events = [
-        FAAssetEventPoint(
-            date=today - timedelta(days=i + 1),
-            type="DIVIDEND",
-            value=Currency(code="USD", amount=Decimal("1.00")),
-            notes=f"Evt {i}",
-        )
-        for i in range(event_count)
-    ]
-    upsert_data = FAEventUpsert(asset_id=asset_id, events=events)
-    await client.post(f"{API_BASE}/assets/events", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT)
-
-    query_resp = await client.post(
-        f"{API_BASE}/assets/events/query",
-        json=[FAEventQueryItem(asset_id=asset_id, date_range=DateRangeModel(start=today - timedelta(days=60), end=today)).model_dump(mode="json")],
-        timeout=TIMEOUT,
-    )
-    result = FAEventQueryResponse(**query_resp.json())
-    ids = [e.id for e in result.items[0].events]
-    assert len(ids) == event_count
-    return asset_id, ids
-
-
-@pytest.mark.asyncio
-async def test_delete_event_bulk_happy_path(test_server):
-    """Bulk delete 3 events — all should be deleted."""
-    print_section("Bulk delete: happy path (3 ids, 3 deleted)")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id, ids = await _create_asset_with_events(client, 3, "HAPPY")
-
-        del_resp = await client.delete(
-            f"{API_BASE}/assets/events",
-            params=[("asset_id", str(asset_id))] + [("ids", str(i)) for i in ids],
-            timeout=TIMEOUT,
-        )
-        assert del_resp.status_code == 200, del_resp.text
-        payload = FAEventBulkDeleteResponse(**del_resp.json())
-        assert payload.deleted_count == 3
-        assert payload.not_found_count == 0
-        assert payload.in_use_count == 0
-        assert {r.status for r in payload.results} == {"deleted"}
-        print_success(f"Deleted {payload.deleted_count} events in bulk")
-
-
-# ============================================================
-# Test 4: Bulk delete with non-existent IDs
-# ============================================================
-@pytest.mark.asyncio
-async def test_delete_event_bulk_not_found_marked_correctly(test_server):
-    """Non-existent IDs must be reported as status='not_found'."""
-    print_section("Bulk delete: not_found marking")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id, ids = await _create_asset_with_events(client, 1, "NF")
-        missing_id = 9_999_999
-
-        del_resp = await client.delete(
-            f"{API_BASE}/assets/events",
-            params=[("asset_id", str(asset_id)), ("ids", str(ids[0])), ("ids", str(missing_id))],
-            timeout=TIMEOUT,
-        )
-        assert del_resp.status_code == 200
-        payload = FAEventBulkDeleteResponse(**del_resp.json())
-        assert payload.deleted_count == 1
-        assert payload.not_found_count == 1
-        by_id = {r.event_id: r for r in payload.results}
-        assert by_id[ids[0]].status == "deleted"
-        assert by_id[missing_id].status == "not_found"
-        print_success("not_found correctly reported; deletable event still removed")
-
-
-# ============================================================
-# Test 5: Bulk delete with in_use (RESTRICT) breakdown
-# ============================================================
-@pytest.mark.asyncio
-async def test_delete_event_bulk_in_use_returns_breakdown(test_server):
-    """Event referenced by a transaction → status='in_use' with breakdown."""
-    print_section("Bulk delete: in_use breakdown")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id, ids = await _create_asset_with_events(client, 1, "INUSE")
-        event_id = ids[0]
-
-        # Create a broker owned by this user and a DIVIDEND tx linked to the event.
-        import uuid as _uuid  # noqa: PLC0415
-
-        broker_name = f"BulkDel Broker {_uuid.uuid4().hex[:6]}"
-        br_resp = await client.post(
-            f"{API_BASE}/brokers",
-            json=[{"name": broker_name, "allow_cash_overdraft": True}],
-            timeout=TIMEOUT,
-        )
-        broker_id = br_resp.json()["results"][0]["broker_id"]
-
-        tx_payload = {
-            "creates": [
-                {
-                    "broker_id": broker_id,
-                    "asset_id": asset_id,
-                    "type": "DIVIDEND",
-                    "date": date.today().isoformat(),
-                    "cash": {"code": "USD", "amount": "1.25"},
-                    "asset_event_id": event_id,
-                }
-            ]
-        }
-        tx_resp = await client.post(f"{API_BASE}/transactions/commit", json=tx_payload, timeout=TIMEOUT)
-        assert tx_resp.status_code == 200, tx_resp.text
-        tx_body = tx_resp.json()
-        assert tx_body["committed"] is True, tx_body
-        tx_id = tx_body["results"][0]["ids"][0]
-
-        # Delete: event should now be in_use.
-        del_resp = await client.delete(
-            f"{API_BASE}/assets/events",
-            params=[("asset_id", str(asset_id)), ("ids", str(event_id))],
-            timeout=TIMEOUT,
-        )
-        assert del_resp.status_code == 200
-        payload = FAEventBulkDeleteResponse(**del_resp.json())
-        assert payload.deleted_count == 0
-        assert payload.in_use_count == 1
-        item = payload.results[0]
-        assert item.status == "in_use"
-        assert tx_id in item.accessible_transactions
-        assert item.hidden_transactions_count == 0
-        print_success(f"in_use reported with accessible_transactions={item.accessible_transactions}")
-
-
-# ============================================================
-# Test 6: Bulk delete — partial success (mix deleted + not_found + in_use)
-# ============================================================
-@pytest.mark.asyncio
-async def test_delete_event_bulk_partial_success(test_server):
-    """Mix of deleted / not_found / in_use should be committed per-item."""
-    print_section("Bulk delete: partial success (mix)")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id, ids = await _create_asset_with_events(client, 2, "MIX")
-        deletable_id, blocked_id = ids[0], ids[1]
-        missing_id = 9_000_001
-
-        # Create a tx referencing blocked_id.
-        import uuid as _uuid  # noqa: PLC0415
-
-        broker_name = f"BulkDel Mix {_uuid.uuid4().hex[:6]}"
-        br_resp = await client.post(
-            f"{API_BASE}/brokers",
-            json=[{"name": broker_name, "allow_cash_overdraft": True}],
-            timeout=TIMEOUT,
-        )
-        broker_id = br_resp.json()["results"][0]["broker_id"]
-        await client.post(
-            f"{API_BASE}/transactions/commit",
-            json={
-                "creates": [
-                    {
-                        "broker_id": broker_id,
-                        "asset_id": asset_id,
-                        "type": "DIVIDEND",
-                        "date": date.today().isoformat(),
-                        "cash": {"code": "USD", "amount": "1.00"},
-                        "asset_event_id": blocked_id,
-                    }
-                ]
-            },
-            timeout=TIMEOUT,
-        )
-
-        del_resp = await client.delete(
-            f"{API_BASE}/assets/events",
-            params=[("asset_id", str(asset_id)), ("ids", str(deletable_id)), ("ids", str(blocked_id)), ("ids", str(missing_id))],
-            timeout=TIMEOUT,
-        )
-        payload = FAEventBulkDeleteResponse(**del_resp.json())
-        assert payload.deleted_count == 1
-        assert payload.not_found_count == 1
-        assert payload.in_use_count == 1
-        by_id = {r.event_id: r for r in payload.results}
-        assert by_id[deletable_id].status == "deleted"
-        assert by_id[blocked_id].status == "in_use"
-        assert by_id[missing_id].status == "not_found"
-        print_success("Mixed statuses all present; deletable committed, others reported")
-
-
-# ============================================================
-# Test 7: Bulk delete — no partial rollback (blocked doesn't cancel deletable)
-# ============================================================
-@pytest.mark.asyncio
-async def test_delete_event_bulk_no_partial_rollback(test_server):
-    """A single in_use id must not roll back successfully-deleted events."""
-    print_section("Bulk delete: no partial rollback")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_id, ids = await _create_asset_with_events(client, 2, "NOROLL")
-        deletable_id, blocked_id = ids[0], ids[1]
-
-        import uuid as _uuid  # noqa: PLC0415
-
-        broker_name = f"BulkDel NoRoll {_uuid.uuid4().hex[:6]}"
-        br_resp = await client.post(
-            f"{API_BASE}/brokers",
-            json=[{"name": broker_name, "allow_cash_overdraft": True}],
-            timeout=TIMEOUT,
-        )
-        broker_id = br_resp.json()["results"][0]["broker_id"]
-        await client.post(
-            f"{API_BASE}/transactions/commit",
-            json={
-                "creates": [
-                    {
-                        "broker_id": broker_id,
-                        "asset_id": asset_id,
-                        "type": "INTEREST",
-                        "date": date.today().isoformat(),
-                        "cash": {"code": "USD", "amount": "1.00"},
-                        "asset_event_id": blocked_id,
-                    }
-                ]
-            },
-            timeout=TIMEOUT,
-        )
-
-        del_resp = await client.delete(
-            f"{API_BASE}/assets/events",
-            params=[("asset_id", str(asset_id)), ("ids", str(deletable_id)), ("ids", str(blocked_id))],
-            timeout=TIMEOUT,
-        )
-        payload = FAEventBulkDeleteResponse(**del_resp.json())
-        assert payload.deleted_count == 1
-        assert payload.in_use_count == 1
-
-        # Verify deletable_id is actually gone.
-        q_resp = await client.post(
-            f"{API_BASE}/assets/events/query",
-            json=[FAEventQueryItem(asset_id=asset_id, date_range=DateRangeModel(start=date.today() - timedelta(days=60), end=date.today())).model_dump(mode="json")],
-            timeout=TIMEOUT,
-        )
-        q_result = FAEventQueryResponse(**q_resp.json())
-        remaining_ids = {e.id for e in q_result.items[0].events}
-        assert deletable_id not in remaining_ids, "Deletable event was rolled back"
-        assert blocked_id in remaining_ids, "Blocked event was unexpectedly removed"
-        print_info(f"After bulk delete, remaining ids: {remaining_ids}")
-        print_success("Deletable event committed; blocked event preserved")
 
 
 # ============================================================
@@ -787,7 +517,7 @@ async def test_get_events_by_ids_groups_multiple_assets(test_server):
 # ============================================================
 #
 # The event editor edits a row the user can see, so the edit must land on THAT
-# row: same id, links kept. Before the fix (03c943f53) ``_upsert_asset_events``
+# row: same id, links kept. Before the fix (58ac14b21) ``_upsert_asset_events``
 # was DELETE + INSERT on (asset_id, date, type, provider_assignment_id):
 #
 # * F2 — a manual event that a transaction links to could not be edited at all.
@@ -1423,7 +1153,6 @@ async def test_upsert_with_ids_edits_two_events_sharing_a_key(test_server):
 #   A create item carrying an event id is a 422. The provider case is pinned at service level
 #   (test_asset_event_store.py): an API test cannot write a provider event without a refresh.
 # * I-10 S4: ``results[i].event_ids`` names the row each event wrote, in request order.
-# * I-12a (decision 21): DELETE requires ``asset_id``; an id of another asset is "not_found".
 #
 # Plain JSON payloads, as in the section above: the new fields do not exist before the fix,
 # and a schema object would break the whole module instead of the tests that need them.
@@ -1722,66 +1451,6 @@ async def test_results_name_the_row_each_event_wrote(test_server):
     assert not leftovers, leftovers
 
 
-@pytest.mark.asyncio
-async def test_delete_without_asset_id_is_a_422(test_server):
-    """I-12a: the delete names the asset whose events it removes.
-
-    Before: 200, and the event is deleted whatever asset it belongs to.
-    Contract: 422 on the missing ``asset_id`` query parameter; the event is still there.
-    """
-    print_section("E1a: DELETE without asset_id is a 422")
-    owned = _OwnedRows()
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        try:
-            asset_id = await _new_asset(client, owned, "DELNOASSET")
-            await _seed(client, asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00")])
-            event_id = (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"]
-
-            resp = await client.delete(f"{API_BASE}/assets/events", params=[("ids", str(event_id))], timeout=TIMEOUT)
-
-            assert resp.status_code == 422, f"a delete without asset_id must be refused: {resp.status_code} {resp.text}"
-            assert any(err["loc"][-1] == "asset_id" for err in resp.json()["detail"]), resp.text
-            assert (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"] == event_id
-            print_success("DELETE without asset_id refused; the event is still there")
-        finally:
-            leftovers = await owned.drop(client)
-    assert not leftovers, leftovers
-
-
-@pytest.mark.asyncio
-async def test_delete_skips_an_event_of_another_asset(test_server):
-    """I-12a: an id of another asset is "not_found" for this asset, and that event stays.
-
-    Before: ``asset_id`` is ignored, so both events are deleted.
-    Contract: own id deleted, foreign id not_found; the other asset keeps its event.
-    """
-    print_section("E1a: DELETE scoped by asset")
-    owned = _OwnedRows()
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        try:
-            asset_id = await _new_asset(client, owned, "DELOWN")
-            other_asset_id = await _new_asset(client, owned, "DELOTHER")
-            await _seed(client, asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00")])
-            await _seed(client, other_asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00")])
-            own_id = (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"]
-            foreign_id = (await _the_event(client, other_asset_id, EDIT_DAY, "DIVIDEND"))["id"]
-
-            resp = await client.delete(f"{API_BASE}/assets/events", params=[("asset_id", str(asset_id)), ("ids", str(own_id)), ("ids", str(foreign_id))], timeout=TIMEOUT)
-
-            assert resp.status_code == 200, resp.text
-            payload = FAEventBulkDeleteResponse(**resp.json())
-            assert {r.event_id: r.status for r in payload.results} == {own_id: "deleted", foreign_id: "not_found"}
-            assert (payload.deleted_count, payload.not_found_count, payload.in_use_count) == (1, 1, 0)
-            assert await _events_on(client, asset_id, EDIT_DAY) == []
-            assert [e["id"] for e in await _events_on(client, other_asset_id, EDIT_DAY)] == [foreign_id], "the other asset's event was deleted"
-            print_success(f"Event {foreign_id} of asset {other_asset_id} not deleted through asset {asset_id}")
-        finally:
-            leftovers = await owned.drop(client)
-    assert not leftovers, leftovers
-
-
 # ============================================================
 # Release 1.3, lot E1b: deletions inside the upsert (``delete_ids``)
 # ============================================================
@@ -1796,7 +1465,7 @@ async def test_delete_skips_an_event_of_another_asset(test_server):
 #   [{id, date, type, linked_transactions}]: counts only, never transaction ids;
 # - in a create item, an id both deleted and edited, or neither events nor deletions → 422;
 # - the result adds ``deleted_ids`` (request order).
-# ``DELETE /assets/events`` is unchanged (pinned above).
+# ``DELETE /assets/events`` no longer exists: deleting is only this path.
 #
 # Before E1b ``delete_ids`` is an unknown field: every request below is a 422 (extra_forbidden).
 

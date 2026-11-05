@@ -1,10 +1,10 @@
 """MF-D4 (workstream MF), the pure half: a SPLIT asset event stored with a ratio the layer cannot use counts as missing.
 
-Measured before the cure (HEAD 661257511): ``PortfolioCalculationEngine.calculate`` raises ``ValueError("SPLIT AssetEvent
+Measured before the cure (HEAD e0f347da4): ``PortfolioCalculationEngine.calculate`` raises ``ValueError("SPLIT AssetEvent
 … must have a positive finite ratio")`` for such an event linked to a transaction, so ``POST /portfolio/report`` answers
 500; the FIFO lot engine applies the ratio (``_apply_split``: ``fragment.unit_price / ratio``) and raises: ``DivisionByZero``
 for 0, ``AssertionError("Lot cost invariant violated")`` for -2, ``ValueError("Expected Decimal value")`` for a ratio that
-reads as None, ``InvalidOperation`` for NaN or Infinity (measured, plain Python on 661257511). The write path (X-R47)
+reads as None, ``InvalidOperation`` for NaN or Infinity (measured, plain Python on e0f347da4). The write path (X-R47)
 refuses new ones; this lot covers the rows already stored.
 
 The contract (option a, the developer's decision through the coordinator, agreed with J): the event's linked ADJUSTMENT

@@ -1,4 +1,10 @@
-"""Portfolio WAC API Tests (A1-A8). POST /api/v1/portfolio/wac."""
+"""Average-cost (WAC) history API tests, read from ``POST /api/v1/portfolio/lots/analysis`` (``BROKER_WAC_HISTORY``).
+
+The standalone ``POST /portfolio/wac`` route is gone: its series is now the broker's average-cost line of the lots
+analysis, a step series (``date`` .. ``through``) of ``wac`` and ``pool_qty``. The per-point ``effect`` label is not part
+of that line: the effect shows in the figures (a split rescale or a reduction keeps or moves ``wac`` and ``pool_qty``).
+The route's own date-range filter, multi-query batch and missing-asset cases (A4, A6, A7, A8) left with the route.
+"""
 
 import uuid
 from decimal import Decimal
@@ -80,9 +86,22 @@ async def commit_batch(client: httpx.AsyncClient, **kwargs) -> dict:
 
 
 async def portfolio_wac(client: httpx.AsyncClient, queries: list[dict]) -> dict:
-    resp = await client.post(f"{API_BASE}/portfolio/wac", json={"queries": queries}, timeout=TIMEOUT)
-    assert resp.status_code == 200, f"Portfolio WAC failed: {resp.status_code}: {resp.text}"
-    return resp.json()
+    """The average-cost line of each (broker, asset) query, as ``{"results": [{broker_id, asset_id, series}]}``.
+
+    Reads ``BROKER_WAC_HISTORY`` of ``POST /portfolio/lots/analysis``; ``series`` holds ``date``, ``wac`` and ``pool_qty``.
+    """
+    results = []
+    for query in queries:
+        resp = await client.post(
+            f"{API_BASE}/portfolio/lots/analysis",
+            json={"asset_id": query["asset_id"], "broker_ids": [query["broker_id"]], "requested_analyses": ["BROKER_WAC_HISTORY"]},
+            timeout=TIMEOUT,
+        )
+        assert resp.status_code == 200, f"Lots analysis failed: {resp.status_code}: {resp.text}"
+        line = [p for p in resp.json()["broker_wac_history"] or [] if p["broker_id"] == query["broker_id"]]
+        series = [{"date": p["date"], "wac": p["wac"], "pool_qty": p["pool_qty"]} for p in sorted(line, key=lambda p: p["date"])]
+        results.append({"broker_id": query["broker_id"], "asset_id": query["asset_id"], "series": series})
+    return {"results": results}
 
 
 async def create_split_event(client: httpx.AsyncClient, asset_id: int, event_date: str, ratio: str, currency: str = "EUR") -> int:
@@ -151,7 +170,6 @@ class TestPortfolioWAC:
             assert s[0]["date"] == "2026-01-15"
             assert Decimal(s[0]["wac"]) == Decimal("50")
             assert Decimal(s[0]["pool_qty"]) == Decimal("10")
-            assert s[0]["effect"] == "add"
             print_success("OK WAC=50 qty=10")
 
     async def test_a3_evolving_wac(self):
@@ -175,27 +193,6 @@ class TestPortfolioWAC:
             assert Decimal(s[1]["pool_qty"]) == Decimal("15")
             print_success("OK WAC 100->120")
 
-    async def test_a4_date_range_filter(self):
-        """A4: date_range filters series."""
-        print_section("A4: date_range filter")
-        async with httpx.AsyncClient() as client:
-            broker_id, asset_id = await setup_env(client)
-            await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-700"}},
-                ],
-            )
-            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-02-01", "end": "2026-03-31"}}])
-            s = result["results"][0]["series"]
-            assert len(s) == 2
-            assert s[0]["date"] == "2026-02-10"
-            assert s[1]["date"] == "2026-03-10"
-            print_success("OK filtered Feb-Mar")
-
     async def test_a5_sell_reduces_pool(self):
         """A5: SELL reduces pool, WAC unchanged."""
         print_section("A5: SELL reduces pool")
@@ -214,99 +211,7 @@ class TestPortfolioWAC:
             assert len(s) == 2
             assert Decimal(s[1]["wac"]) == Decimal("100")
             assert Decimal(s[1]["pool_qty"]) == Decimal("7")
-            assert s[1]["effect"] == "reduce"
             print_success("OK SELL pool 10->7")
-
-    async def test_a6_authorized_broker_with_verified_missing_asset(self):
-        """A6: An authorized Broker plus a verified-missing Asset -> empty series."""
-        print_section("A6: Authorized Broker with missing Asset")
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            user_id = await get_current_user_id(client)
-            broker_id = None
-            asset_id = None
-            asset_deleted = False
-            try:
-                broker_id = await create_broker(client)
-                asset_id = await create_asset(client)
-                deleted = await client.delete(
-                    f"{API_BASE}/assets",
-                    params={"asset_ids": [asset_id]},
-                    timeout=TIMEOUT,
-                )
-                assert deleted.status_code == 200, deleted.text
-                deleted_row = next(row for row in deleted.json()["results"] if row["asset_id"] == asset_id)
-                assert deleted_row["success"] is True
-                asset_deleted = True
-
-                result = await portfolio_wac(
-                    client,
-                    [{"broker_id": broker_id, "asset_id": asset_id}],
-                )
-                missing_asset_result = next(row for row in result["results"] if row["broker_id"] == broker_id and row["asset_id"] == asset_id)
-                assert missing_asset_result["series"] == []
-                print_success("OK graceful empty")
-            finally:
-                if asset_id is not None and not asset_deleted:
-                    await client.delete(
-                        f"{API_BASE}/assets",
-                        params={"asset_ids": [asset_id]},
-                        timeout=TIMEOUT,
-                    )
-                if broker_id is not None:
-                    cleanup = await client.delete(
-                        f"{API_BASE}/brokers",
-                        params={"ids": [broker_id], "force": True},
-                        timeout=TIMEOUT,
-                    )
-                    assert cleanup.status_code == 200, cleanup.text
-                await delete_current_test_user(client, user_id)
-
-    async def test_a7_open_range_end_only(self):
-        """A7: OpenDateRangeModel end only -> history up to end."""
-        print_section("A7: Open range (end only)")
-        async with httpx.AsyncClient() as client:
-            broker_id, asset_id = await setup_env(client)
-            await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
-                ],
-            )
-            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id, "date_range": {"end": "2026-02-01"}}])
-            s = result["results"][0]["series"]
-            assert len(s) == 1
-            assert s[0]["date"] == "2026-01-10"
-            print_success("OK end=Feb -> only Jan")
-
-    async def test_a8_multiple_queries(self):
-        """A8: Multiple queries -> results in order."""
-        print_section("A8: Multiple queries")
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            broker_id = await create_broker(client)
-            asset1 = await create_asset(client, currency="EUR")
-            asset2 = await create_asset(client, currency="USD")
-            await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
-                    {"broker_id": broker_id, "asset_id": asset1, "type": "BUY", "date": "2026-01-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-500"}},
-                ],
-            )
-            result = await portfolio_wac(
-                client,
-                [
-                    {"broker_id": broker_id, "asset_id": asset1},
-                    {"broker_id": broker_id, "asset_id": asset2},
-                ],
-            )
-            assert len(result["results"]) == 2
-            assert len(result["results"][0]["series"]) == 1
-            assert len(result["results"][1]["series"]) == 0
-            print_success("OK batch query")
 
 
 # ============================================================
@@ -331,7 +236,7 @@ class TestPortfolioWAC:
 # A3 pins the refusal and the retype once the cost is there; A4 the reverse split,
 # whose outgoing row never carries a cost and becomes a reduction, still allowed.
 #
-# Before the fix (03c943f53) both tests failed at the retype itself: the upsert
+# Before the fix (58ac14b21) both tests failed at the retype itself: the upsert
 # point had no ``id`` field, so the request was rejected with 422.
 
 
@@ -355,10 +260,9 @@ async def _wac_points(client: httpx.AsyncClient, broker_id: int, asset_id: int) 
     return points
 
 
-def _assert_point(points: dict[str, dict], day: str, *, effect: str, wac: str, pool_qty: str) -> None:
+def _assert_point(points: dict[str, dict], day: str, *, wac: str, pool_qty: str) -> None:
     assert day in points, f"no WAC point on {day}: {points}"
     point = points[day]
-    assert point["effect"] == effect, point
     assert Decimal(str(point["wac"])) == Decimal(wac), point
     assert Decimal(str(point["pool_qty"])) == Decimal(pool_qty), point
 
@@ -624,8 +528,8 @@ class TestPortfolioWACSplit:
 
                 before = await _wac_points(client, broker_id, asset_id)
                 assert set(before) == {"2026-01-15", "2026-02-01"}, before
-                _assert_point(before, "2026-01-15", effect="add", wac="100", pool_qty="15")
-                _assert_point(before, "2026-02-01", effect="split_rescale", wac="50", pool_qty="30")
+                _assert_point(before, "2026-01-15", wac="100", pool_qty="15")
+                _assert_point(before, "2026-02-01", wac="50", pool_qty="30")
 
                 # 1. The retype is refused while the ADJUSTMENT has no cost, and nothing changes.
                 refused = await _post_event_edit(client, asset_id, event_id, "2026-02-01", "PRICE_ADJUSTMENT", "2")
@@ -639,7 +543,7 @@ class TestPortfolioWACSplit:
                 assert (kept_tx["asset_event_id"], kept_tx["cost_basis_override"]) == (event_id, None), kept_tx
                 kept = await _wac_points(client, broker_id, asset_id)
                 assert set(kept) == {"2026-01-15", "2026-02-01"}, kept
-                _assert_point(kept, "2026-02-01", effect="split_rescale", wac="50", pool_qty="30")
+                _assert_point(kept, "2026-02-01", wac="50", pool_qty="30")
                 assert await _dashboard_missing_cost_basis(client, broker_id, asset_id, quantity="30", wac="50") == []
                 assert await _lots_missing_cost_basis(client, broker_id, asset_id, quantity="30", wac="50") == []
 
@@ -650,7 +554,7 @@ class TestPortfolioWACSplit:
                 assert costed_tx["cost_basis_override"] is not None, costed_tx
                 assert (costed_tx["cost_basis_override"]["code"], _decimal(costed_tx["cost_basis_override"]["amount"])) == ("EUR", Decimal("40")), costed_tx
                 # Still split-linked: the row rescales the pool, and its new cost is not read.
-                _assert_point(await _wac_points(client, broker_id, asset_id), "2026-02-01", effect="split_rescale", wac="50", pool_qty="30")
+                _assert_point(await _wac_points(client, broker_id, asset_id), "2026-02-01", wac="50", pool_qty="30")
 
                 await _retype_event(client, asset_id, event_id, "2026-02-01", "PRICE_ADJUSTMENT", "2")
 
@@ -658,8 +562,8 @@ class TestPortfolioWACSplit:
                 assert (await _read_tx(client, adj_tx_id))["asset_event_id"] == event_id
                 after = await _wac_points(client, broker_id, asset_id)
                 assert set(after) == {"2026-01-15", "2026-02-01"}, after
-                _assert_point(after, "2026-01-15", effect="add", wac="100", pool_qty="15")
-                _assert_point(after, "2026-02-01", effect="add", wac="70", pool_qty="30")
+                _assert_point(after, "2026-01-15", wac="100", pool_qty="15")
+                _assert_point(after, "2026-02-01", wac="70", pool_qty="30")
                 assert await _dashboard_missing_cost_basis(client, broker_id, asset_id, quantity="30", wac="70") == []
                 assert await _lots_missing_cost_basis(client, broker_id, asset_id, quantity="30", wac="70") == []
                 print_success("OK forward split: retype refused (409) while the +15 had no cost; with 40 EUR a share it is an add, 30@70")
@@ -702,8 +606,8 @@ class TestPortfolioWACSplit:
 
                 before = await _wac_points(client, broker_id, asset_id)
                 assert set(before) == {"2026-01-15", "2026-02-01"}, before
-                _assert_point(before, "2026-01-15", effect="add", wac="50", pool_qty="30")
-                _assert_point(before, "2026-02-01", effect="split_rescale", wac="100", pool_qty="15")
+                _assert_point(before, "2026-01-15", wac="50", pool_qty="30")
+                _assert_point(before, "2026-02-01", wac="100", pool_qty="15")
 
                 await _retype_event(client, asset_id, event_id, "2026-02-01", "PRICE_ADJUSTMENT", "0.5")
 
@@ -711,8 +615,8 @@ class TestPortfolioWACSplit:
                 assert (await _read_tx(client, adj_tx_id))["asset_event_id"] == event_id
                 after = await _wac_points(client, broker_id, asset_id)
                 assert set(after) == {"2026-01-15", "2026-02-01"}, after
-                _assert_point(after, "2026-01-15", effect="add", wac="50", pool_qty="30")
-                _assert_point(after, "2026-02-01", effect="reduce", wac="50", pool_qty="15")
+                _assert_point(after, "2026-01-15", wac="50", pool_qty="30")
+                _assert_point(after, "2026-02-01", wac="50", pool_qty="15")
                 print_success("OK reverse split retyped: -15 is now a reduction, 15@50, total cost 750")
             finally:
                 problems = await _drop_wac_env(client, user_id=user_id, broker_id=broker_id, asset_id=asset_id)

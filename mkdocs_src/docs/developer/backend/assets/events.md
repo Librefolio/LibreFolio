@@ -235,26 +235,17 @@ refused, `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` above (P-10). The forward case, 
 accepted once the adjustment has a cost (40 a share: WAC 70), is pinned by
 `test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`, the
 reverse one by `test_reverse_split_relabelled_as_price_adjustment_becomes_a_reduction`, both in
-`test_scripts/test_api/test_portfolio_wac.py`.
+`test_scripts/test_api/test_lots_wac_history.py`.
 
 Manual events are **never deleted** by the sync process. They survive provider re-syncs, provider
 changes, and bulk refreshes. Only an explicit user deletion removes them, or the market-data wipe
 of a currency change, which deletes every event of the asset except the `SPLIT`s, manual ones
-included ([Market-Data Wipe](#market-data-wipe)). A user deletes events in two ways:
-
-- **`delete_ids` of `POST /api/v1/assets/events`**, the data editor's save: all or nothing, so an
-  event a transaction uses stops the whole request (`EVENT_IN_USE`). Until 1.3 the editor sent the
-  deletions apart, through the `DELETE` below, after the upsert: the rest of the save was stored,
-  the used event was skipped with a warning, and an edit could not take the key of an event deleted
-  in the same save.
-- **`DELETE /api/v1/assets/events?asset_id=…&ids=…`**, which the frontend no longer calls: per id,
-  `deleted`, `not_found` or `in_use` (an event a transaction uses is reported, not deleted), and
-  the deletable ones are committed even when others are blocked.
-
-Both are scoped to one asset (decision 21 of release 1.3). The `DELETE` requires `asset_id`, so a
-request with `ids` alone, the form API clients sent before, is now a 422, and an id of another
-asset answers `not_found` and leaves its event alone; in `delete_ids`, such an id is
-`EVENT_NOT_DELETABLE`.
+included ([Market-Data Wipe](#market-data-wipe)). A user deletes events through
+**`delete_ids` of `POST /api/v1/assets/events`**, the data editor's save: all or nothing, so an
+event a transaction uses stops the whole request (`EVENT_IN_USE`). The request is scoped to one
+asset (decision 21 of release 1.3): an id of another asset in `delete_ids` is
+`EVENT_NOT_DELETABLE`. The separate `DELETE /api/v1/assets/events` route, which deleted per id and
+committed the deletable ones even when others were blocked, was removed.
 
 ### 🧹 Market-Data Wipe {: #market-data-wipe }
 
@@ -268,7 +259,7 @@ stay». The rule lives in `assets/currency_change.py`:
 | `events_that_go()` | The condition of the events a currency change deletes: every event of the assets except `SPLIT`. A dividend or an interest carries a currency; a split is a ratio, it means the same in any currency, and the `ADJUSTMENT`s linked to it keep their meaning |
 | `delete_market_data_of_assets()` | Three statements whatever the number of assets, no commit: `UPDATE transactions SET asset_event_id = NULL` for the transactions linked to an event that goes, `DELETE` of those events, `DELETE` of the assets' prices |
 | `provider_cache_keys()` / `drop_provider_caches()` | The cache keys of the assets' provider assignments, read before the commit (it expires the rows' attributes), and the drop of their history and current-price entries after it. A cache that fails to drop is logged and skipped: the data is already committed |
-| `CurrencyChangeOperations.wipe_market_data_for_currency_change()` | The counters and the same deletion for one asset, behind the two endpoints below |
+| `CurrencyChangeOperations.wipe_market_data_for_currency_change()` | The counters and the same deletion for one asset, behind the currency `PATCH` and the summary dry run |
 
 What goes and what stays:
 
@@ -295,11 +286,12 @@ Where it happens:
   `events_manual` and `events_provider` count the events that go, `SPLIT`s **not** included;
   `splits_kept` counts the `SPLIT` events that stay; `linked_tx` counts the transactions linked to the events
   that go; `oldest` and `newest` are the price range (ISO dates, `null` without prices).
-- **`POST /api/v1/assets/{asset_id}/market-data/wipe`** stays for a caller who wants to wipe on its own.
-  Same rule, same keys (`dry_run` is `false`), it commits and drops the caches. It never answers 409: the
-  refusal for costless split adjustments (X-R48, `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`) was removed
-  together with the reason for it, because the splits are no longer deleted. A 404 `ASSET_NOT_FOUND`
-  (string `detail`) for an unknown asset is the only answer other than 200 and the generic 500.
+
+The currency `PATCH` is the only caller that wipes: there is no stand-alone wipe route (the former
+`POST /api/v1/assets/{asset_id}/market-data/wipe` was removed). It never answers 409: the
+refusal for costless split adjustments (X-R48, `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`) was removed
+together with the reason for it, because the splits are no longer deleted. The summary's 404 `ASSET_NOT_FOUND`
+(string `detail`) for an unknown asset is the only answer other than 200 and the generic 500.
 
 !!! note "The refusal that remains is the provider's"
 
@@ -358,8 +350,7 @@ is only an error toast: the change is already made. `currencyBlocker.ts` and the
 old flow are deleted.
 
 Tests: `backend/test_scripts/test_services/test_market_data_wipe_keeps_splits.py`
-(`./dev.py test services market-data-wipe-keeps-splits`), `test_scripts/test_api/test_market_data_wipe.py`
-(`./dev.py test api market-data-wipe`), `test_asset_currency_change.py`; in the frontend
+(`./dev.py test services market-data-wipe-keeps-splits`), `test_asset_currency_change.py`; in the frontend
 `currencyImpact.test.ts`, `AssetModal.currencyChange.test.ts` and `AssetCurrencyChangeModal.test.ts`, in the
 same folder, and `e2e/assets/asset-currency-change.spec.ts`.
 

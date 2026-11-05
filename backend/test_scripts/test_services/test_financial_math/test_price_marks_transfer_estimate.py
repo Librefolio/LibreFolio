@@ -20,7 +20,7 @@ by a transfer has no mark at all, and the engine values it at its book cost (``E
 * the motivating example it must not break: an ETF quoted 200 up to Friday, bought years ago at 50, transferred between
   the owner's brokers on Saturday — Saturday and Sunday stay the carried 200 (MARKET), never 50.
 
-RED on HEAD ``0d6eb0df7``: ``TestTransferOnlyAsset``, ``TestTransferBeforeTheFirstRealObservation`` and
+RED on HEAD ``75fa757f2``: ``TestTransferOnlyAsset``, ``TestTransferBeforeTheFirstRealObservation`` and
 ``TestSeveralIncomingLegs`` — HEAD builds no observation from a TRANSFER, so every resolve there is MISSING (or, before
 a quote, the quote's day is the first observation) — except
 ``TestTransferOnlyAsset::test_the_day_before_the_transfer_is_still_missing``. Declared parity guards, green on HEAD and

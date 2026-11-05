@@ -56,7 +56,7 @@ The developer's decision of 2026-09-16 (PAC implementation master) withdrew a ca
 «16 Asset/4 Broker/32 route/4 valute» and asked instead for a growth curve and «un envelope anti-abuso alto,
 resource-bound»: «massimo circa `1 GB RSS` per singolo job; due worker possono raggiungere circa `2 GB`; `30 s`
 riservati al solver per item». Workstream C designed the envelope, and D implemented it as per-operation budgets
-clamped by the platform plus `resources.py` (`97dde9bf3`). The values the operations omit still default to the
+clamped by the platform plus `resources.py` (`098dc435d`). The values the operations omit still default to the
 initial ones, which is a trap for the next Tool ([[features/F-106]], implementation notes).
 
 ## Options Considered
@@ -72,9 +72,9 @@ initial ones, which is a trap for the next Tool ([[features/F-106]], implementat
 - Every job pays a cold start, measured as `startup_ms`; metrics are measured durations, `null` when not observed,
   and parallel items are never summed into a latency.
 - Capacity is per API process: several ASGI workers multiply it, and the diagnostics say they describe one process.
-- Hardening after two reviews (`91070f6bd`): frames read incrementally against deadlines, and a process group that
+- Hardening after two reviews (`d5a0b5aee`): frames read incrementally against deadlines, and a process group that
   lost its leader stays quarantined until the kernel confirms it is gone.
-- **Still open** (dossier §5, checked at `0fa0f3704`): no screen shows the memory mode; the observed mode can count
+- **Still open** (dossier §5, checked at `f5b3d0393`): no screen shows the memory mode; the observed mode can count
   shared pages twice and miss a spike between samples; the cgroup path has never run on a real delegated host.
 
 ## Source files

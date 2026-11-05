@@ -48,7 +48,7 @@ READING. «For each of those, the next day» is read as written: the first day's
 day after ``at_cost_until`` + 1; a day that is in only as a next day brings no next day of its own. ``market_prices`` is
 given a value for every day here (None or a Decimal); what an absent key means is not part of these tests.
 
-TODAY (HEAD ``6552f96c1``): ``change_days`` does not exist. Each of its tests fails on its own with «does not exist yet»
+TODAY (HEAD ``ae52a1d7c``): ``change_days`` does not exist. Each of its tests fails on its own with «does not exist yet»
 (the module is imported inside the test, ``_change_days_function``), so the file collects and the CONTROL tests run.
 ``last_day_without_observation`` walks the days one by one: 19 994 calls of ``resolve`` over 20 000 days whose first
 observation is the seventh from the end. RED marks a test that fails today, CONTROL one that is green today and after.

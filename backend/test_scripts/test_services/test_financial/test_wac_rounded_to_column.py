@@ -24,7 +24,7 @@ a spy that calls the real method, before any flush or expiry). The exact average
 its way through, from the facade's own ``compute_average_costs`` (a spy that runs the real function), so the parity
 guard compares with the very value the facade received, whatever form the rows were loaded in.
 
-Reds — fail on HEAD ``ed9e7679b`` (facade unrounded), pass with the cure:
+Reds — fail on HEAD ``33465b51f`` (facade unrounded), pass with the cure:
 
 - ``TestTheFacadeRoundsAPeriodicAverage``: four pools of 3 units — 100, 1000, 200 (the half-even step rounds up) and
   1000000 EUR (the 15 significant digits bind: ``333333.333333333``) — whose exact average financial_math hands the
@@ -46,7 +46,7 @@ Guards — green on HEAD and with the cure:
   back from the facade in the very form financial_math computed (``str`` equal, so ``100.00`` is not turned into
   ``100.000000000000``) and equal in value to 100, 2.5 and 0.125. A cure that quantizes every value turns it red.
 
-Not covered here: ``POST /portfolio/wac`` charts ``wac_qualifying_txs[].running_wac``, which the cure leaves exact (it
+Not covered here: the transaction preview's ``wac_qualifying_txs[].running_wac``, which the cure leaves exact (it
 rounds ``wac`` only); whether that series should be rounded too is not decided.
 
 Ownership. Every test builds its own asset and broker under a unique marker, writes its rows with the ORM in one

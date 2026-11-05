@@ -81,7 +81,7 @@ Both asset pages decide whether to poll live prices with
 `isHeadToday = dateEnd >= <today>`. The left side, `dateEnd`, comes from the
 store: `defaultRange().end` or `resolveDateSentinel('max')`. The right side was
 `new Date().toISOString().slice(0, 10)`. Until 2026-08-30 both sides were UTC, so
-the comparison was consistent. The audit's commit (`4e719107e`) moved the store
+the comparison was consistent. The audit's commit (`b4d270735`) moved the store
 to `todayIso()` — rightly — and left the two `isHeadToday` lines as they were,
 though they carried the same idiom when the sites were counted. From then on the
 comparison read two calendars.
@@ -93,7 +93,7 @@ Because the operator is `>=`, the two calendars disagree in two different ways:
 | west of Greenwich, in the evening (New York: from 20:00 in summer time) | already tomorrow | a range ending **today** — the default view — read as past: no live price, the summary on the chart's last close. Every evening, since 2026-08-30 |
 | east of Greenwich, just after midnight (Rome: until 02:00 in summer time) | still yesterday | a range that ended **yesterday** read as live and polled, and every poll is a write ([[concepts/prices-current-side-effect]]). Older than the audit |
 
-**Fix** (`d32eb1a11`, workstream Z, lot A): both sites compare with `todayIso()`
+**Fix** (`dc5cddf75`, workstream Z, lot A): both sites compare with `todayIso()`
 from `frontend/src/lib/utils/dateOnly.ts`, the function the store resolves
 `dateEnd` with. Both sides of the comparison now come from one function.
 
@@ -118,7 +118,7 @@ where the two dates agree, instead of passing. Four red before the fix, all
 green after. For a comparison of two calendars, freezing the clock is not
 enough: the zone decides which face a run sees.
 
-Not re-audited: at `50945715e` the idiom is still in six product lines of
+Not re-audited: at `a87bb6e38` the idiom is still in six product lines of
 `frontend/src` (`backupDownload.ts`, `AssetCurrencyChangeModal.svelte`,
 `AssetModal.svelte` twice, the conversion above, `TransactionBulkModal.svelte`).
 Only the conversion was classified here.

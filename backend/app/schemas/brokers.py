@@ -138,36 +138,6 @@ class BRListResponse(BaseListResponse[BRReadItem]):
 
 
 # =============================================================================
-# BROKER WITH BALANCES
-# =============================================================================
-
-
-class BRSummary(BRReadItem):
-    """
-    Broker with its computed cash balances.
-
-    Includes:
-    - Current cash balance per currency (computed from transactions)
-    - Total portfolio value in base currency (if FX rates available)
-    - Current user's role and share percentage on this broker
-
-    The broker's positions, their cost and value are the portfolio report's (``POST /portfolio/report``, scoped to the
-    broker), never this summary's.
-    """
-
-    # Cash balances as list of Currency objects
-    cash_balances: List[Currency] = Field(default_factory=list, description="Current cash balance per currency")
-
-    # Optional: Total portfolio value in user's base currency
-    total_value_base_currency: Optional[Currency] = Field(default=None, description="Total portfolio value in base currency")
-
-    @property
-    def currencies(self) -> List[str]:
-        """List of currencies used in this broker's cash balances."""
-        return [c.code for c in self.cash_balances]
-
-
-# =============================================================================
 # BROKER UPDATE
 # =============================================================================
 

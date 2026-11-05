@@ -6,7 +6,7 @@ only) and ``backend/app/api/v1/backup/__init__.py`` (``backup_router``, composed
 ``exports.py``), on the lane's server. The jobs underneath (``services/platform/instance_backup/``) have suites of
 their own, ``services backup-jobs`` and ``services backup-archive``; so do the per-series exports.
 
-- BACKUP-001, pure (C2): ``backup_router`` registers the five routes of ``instance.py``, the four of ``panel.py``, the
+- BACKUP-001, pure (C2): ``backup_router`` registers the seven routes of ``instance.py``, the four of ``panel.py``, the
   nine of ``restore.py``, then the three exports of ``exports.py``, in that order, each with its method and its endpoint, and a single tag: Hosting panel on the four of ``panel.py``, Backup & Export on the others.
 - BACKUP-002: without a session each of the four routes answers 401; BACKUP-003: an ordinary user gets 403 from each.
   Both on an existing job and its archive; a refused DELETE leaves the job in place.
@@ -179,6 +179,17 @@ def content_disposition(header: str) -> tuple[str | None, str | None]:
     message = email.message.Message()
     message["Content-Disposition"] = header
     return message.get_content_disposition(), message.get_filename()
+
+
+def job_folders_of(job_id: str) -> list[Path]:
+    """Where a job's files are now: ``backups/.jobs/<id>/``, and/or (since FB-24, once a finished backup moved) the kept
+    folder ``backups/librefolio-backup-<date>-<origin>-<id[:8]>/``. Empty once the job is deleted."""
+    data_dir = get_data_dir()
+    found = [paths.job_dir(data_dir, job_id)] if paths.job_dir(data_dir, job_id).exists() else []
+    backups = paths.backups_dir(data_dir)
+    if backups.is_dir():
+        found += sorted(path for path in backups.iterdir() if path.is_dir() and path.name.startswith("librefolio-backup-") and path.name.endswith(f"-{job_id[:8]}"))
+    return found
 
 
 def read_only(db: Path) -> sqlite3.Connection:
@@ -462,6 +473,9 @@ def created_jobs(accounts) -> Iterator[list[str]]:
 BACKUP_ROUTES = [
     ("POST", "/backup/instance", "instance.start_instance_backup"),
     ("GET", "/backup/instance/options", "instance.get_instance_backup_options"),
+    ("GET", "/backup/instance/jobs", "instance.list_instance_backups"),
+    # FB-29 (contract B6r-fb29-interface §4): the storage bar's numbers, right after the list; red until FB-29
+    ("GET", "/backup/instance/storage", "instance.get_instance_storage"),
     ("GET", "/backup/instance/jobs/{job_id}", "instance.get_instance_backup_job"),
     ("GET", "/backup/instance/jobs/{job_id}/file", "instance.download_instance_backup"),
     ("DELETE", "/backup/instance/jobs/{job_id}", "instance.delete_instance_backup_job"),
@@ -494,11 +508,13 @@ BACKUP_ROUTES = [
 
 
 def test_the_backup_router_registers_its_routes_in_order():
-    """BACKUP-001 (C2): backup_router registers the five routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in that order, each with its method and endpoint, and a single tag: Hosting panel on panel.py's four, Backup & Export elsewhere."""
+    """BACKUP-001 (C2): backup_router registers the seven routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in that order, each with its method and endpoint, and a single tag: Hosting panel on panel.py's four, Backup & Export elsewhere."""
     print_section("BACKUP-001: the /backup router registers its routes in order (C2)")
     contexts = list(iter_route_contexts(backup_module.backup_router.routes))
     served = [(",".join(sorted(ctx.methods or ())), ctx.path, f"{getattr(ctx.endpoint, '__module__', '?').removeprefix(backup_module.__name__ + '.')}.{getattr(ctx.endpoint, '__name__', '?')}") for ctx in contexts]
-    assert served == BACKUP_ROUTES, f"the /backup router changed: it must register the five routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
+    assert (
+        served == BACKUP_ROUTES
+    ), f"the /backup router changed: it must register the seven routes of instance.py (FB-24: the list of the kept backups; FB-29: the storage), the four of panel.py, the nine of restore.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
     tags = [(ctx.path, list(getattr(ctx, "tags", []))) for ctx in contexts]
     assert tags == [
         (path, ["Hosting panel"] if endpoint.startswith(("panel.", "panel_restore.")) else ["Backup & Export"]) for _method, path, endpoint in BACKUP_ROUTES
@@ -608,8 +624,9 @@ class TestInstanceBackup:
             started = await start_backup(admin, created_jobs)
             job = await wait_until_finished(admin, started["job_id"])
             assert job["status"] == "done", f"premise: the job must end done: {job}"
-            folder = paths.job_dir(get_data_dir(), job["job_id"])
-            assert (folder / job["file_name"]).is_file(), f"premise: the archive of the job must be on the server, in {folder}"
+            folders = job_folders_of(job["job_id"])
+            assert len(folders) == 1 and (folders[0] / job["file_name"]).is_file(), f"premise: the archive of the job must be on the server, in one folder (backups/.jobs/<id>, or its kept folder in backups/): {folders}"
+            folder = folders[0]
 
             deleted = await admin.delete(job_url(job["job_id"]))
             read = await admin.get(job_url(job["job_id"]))
@@ -618,7 +635,7 @@ class TestInstanceBackup:
         assert deleted.status_code == 204 and not deleted.content, f"DELETE of a finished job must answer 204, without a body: {describe(deleted)}"
         assert_error(read, 404, "backup_job_not_found")
         assert_error(fetched, 404, "backup_job_not_found")
-        assert not folder.exists(), f"DELETE must remove the job's folder and its archive from the server: {folder} still holds {sorted(path.name for path in folder.iterdir())}"
+        assert job_folders_of(job["job_id"]) == [], f"DELETE must remove the job's folder and its archive from the server: {folder} is still there"
         print_success("204, then 404 backup_job_not_found for the job and its file, the folder gone")
 
     @needs_flock

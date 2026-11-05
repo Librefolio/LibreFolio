@@ -248,7 +248,7 @@ Rules:
 A symbol at 0 % **and** flagged by vulture is dead with near-certainty: static analysis
 can miss dynamic dispatch, but coverage cannot miss code that actually ran. Use the two
 together before proposing any removal. See
-`LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/12_test_coverage.md`.
+`../LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/12_test_coverage.md`.
 
 - **Exclusion belongs in the report, not in reference collection.** Auditing a subset
   of the tree (e.g. signals+risk without `ai_export/`) is legitimate for *readability*;

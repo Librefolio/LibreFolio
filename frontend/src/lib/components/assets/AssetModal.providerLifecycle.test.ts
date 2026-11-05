@@ -103,7 +103,6 @@ const mocks = vi.hoisted(() => ({
         sync_prices_bulk_api_v1_assets_prices_sync_post: vi.fn(),
         search_assets_via_providers_api_v1_assets_provider_search_get: vi.fn(),
         market_data_summary_api_v1_assets__asset_id__market_data_summary_get: vi.fn(),
-        wipe_market_data_api_v1_assets__asset_id__market_data_wipe_post: vi.fn(),
         list_routes_api_v1_fx_providers_routes_get: vi.fn(),
         list_currencies_api_v1_utilities_currencies_get: vi.fn(),
         list_countries_api_v1_utilities_countries_get: vi.fn(),

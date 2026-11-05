@@ -13,7 +13,7 @@
  * null cases are the same (a missing rate). J's edge cases: a lot opened by an adjustment without cost is worth 0, not
  * «—» (the third test); a short lot is worth the notional sold.
  *
- * On `c91f132e3`, with the cell's test id added, the first two tests are red on their subject assertion: the cell
+ * On `b037b86fe`, with the cell's test id added, the first two tests are red on their subject assertion: the cell
  * shows the product, 100, where the backend said 150 and where it said null. The third is a control, green before and
  * after the cure: a cost of zero is a value, not a missing one.
  *
@@ -131,7 +131,7 @@ afterEach(() => {
  * the file, does: its subject is shown there).
  */
 describe('LotCustodyModal — the opening value is the backend’s original_cost (Y12a, U8)', () => {
-    // Red on c91f132e3: the cell shows the product, 10 × 10 = 100.
+    // Red on b037b86fe: the cell shows the product, 10 × 10 = 100.
     it('shows original_cost (150), not original_quantity × opening_unit_price (10 × 10 = 100)', () => {
         const lot = closedLot({original_quantity: '10', opening_unit_price: '10', original_cost: '150'});
         // Controls: the expected text carries the digits put in and differs from the product's. A formatter that masked
@@ -144,7 +144,7 @@ describe('LotCustodyModal — the opening value is the backend’s original_cost
         expect(shown(cell), 'the opening value is original_cost, formatted as the modal formats money, not the product of quantity and price').toBe(money(150));
     });
 
-    // Red on c91f132e3: quantity and price are both there, so the product is a number, 100.
+    // Red on b037b86fe: quantity and price are both there, so the product is a number, 100.
     it('shows the missing-value placeholder when original_cost is null, quantity and price present', () => {
         const cell = openingValueCellFor(closedLot({original_quantity: '10', opening_unit_price: '10', original_cost: null}));
 

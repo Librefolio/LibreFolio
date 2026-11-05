@@ -2,7 +2,7 @@
 
 The **Users** tab of **Settings › Administration** is where an administrator looks after the
 accounts of the instance: who can sign in, who is an administrator, and who is invited to join. It
-works the same whether you host LibreFolio yourself or a hosting provider runs it for you.
+works the same on every installation.
 
 ---
 
@@ -22,7 +22,7 @@ After each change, the tab reloads its lists, so it always shows what the server
 
 ---
 
-## 📏 Places and Subscription {: #places }
+## 📏 Places {: #places }
 
 The header counts the places taken: **3 / 10 accounts** when the instance has a user limit,
 **3 accounts** when it has none. Active accounts and open invitations take a place, and so does an
@@ -31,12 +31,8 @@ initial administrator still [waiting for its setup link](#pending-setup); deacti
 accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance Is Full» in
 [Environment Variables](configuration_accounts.md#user-limit).
 
-- 💳 **Manage subscription** appears next to the count only when the server has a billing page
-  (`LIBREFOLIO_BILLING_URL`), as a hosting provider sets one for a managed instance. It opens that
-  page in a new tab.
 - 🚫 When the instance is full, a banner says *The instance is full: no new invitation until you
-  deactivate or delete an account, or revoke an invitation.*, with **Manage subscription** when
-  there is a billing page. **Invite** is off, and a deactivated account cannot be reactivated until
+  deactivate or delete an account, or revoke an invitation.* **Invite** is off, and a deactivated account cannot be reactivated until
   a place is free, unless it is [waiting for its email](#waiting) with a live link.
 - 🔒 **Invite** is also off while registration is closed. If the **Registration** global setting is
   **Closed**, the tab tells you to change it there ([Global Settings](settings.md), «Who Can Sign
@@ -66,9 +62,8 @@ username in a plain circle.
 | **You** | Your own account |
 | **Admin** | An administrator: it manages the instance, its settings, its users and its invitations |
 | **Deactivated** | The account cannot sign in, and takes no place. An account [waiting for its email](#waiting) has a badge of its own, below |
-| **Waiting for setup** | The [initial administrator](hosting_instances.md#initial-admin), not active yet: nobody has used its setup link, nor set the account up another way. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
+| **Waiting for setup** | The [initial administrator](configuration_accounts.md#initial-admin), not active yet: nobody has used its setup link, nor set the account up another way. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
 | **Waiting for verification** | An account that has not opened the verification link LibreFolio emailed to its address yet, even once that link has expired. It cannot sign in, and takes a place while its link is live. Shown instead of **Deactivated**: see [Accounts Waiting for Their Email](#waiting) |
-| **Protected** | Nobody can deactivate, demote or delete it: see [When an Action Is Off](#action-off) |
 
 Click a row to open its actions, and again to close them. Your own row has none: it says *This is
 your account. Manage it from:* with a link to **Profile**, the tab where you change your details or
@@ -94,23 +89,14 @@ LibreFolio turns off the actions it knows the server would refuse, and says why 
 
 | The panel says | Off | What you can do |
 |---|---|---|
-| *This account is protected: nobody can deactivate, demote or delete it.* | **Deactivate**, **Remove administrator**, **Delete**, **Cancel setup link** | Nothing, from this tab |
 | *It is the only active administrator: it cannot be deactivated or demoted.* | **Deactivate**, **Remove administrator** | Make another account an administrator first |
 | *The instance is full: free a place to reactivate it.* | **Reactivate** | Deactivate or delete another account, or revoke an invitation; the command line's `user activate` goes past the limit |
 | *An administrator must be demoted before it can be deleted.* | **Delete** | **Remove administrator** first, then **Delete** |
 | *It waits for its setup: it keeps its role until then.* | **Remove administrator**, for the initial administrator [waiting for its setup link](#pending-setup) | [Cancel its setup link](#cancel-setup), or **Delete** it: it needs no **Remove administrator** first |
-| *This administrator account activates through its setup link. If the link is lost, run `dev.py user setup-link` on the server, or ask your hosting provider.* | No **Reactivate**: **Cancel setup link** in its place | Have its setup link used, or give a new one: see [Waiting for Its Setup Link](#pending-setup) |
+| *This administrator account activates through its setup link. If the link is lost, run `dev.py user setup-link` on the server.* | No **Reactivate**: **Cancel setup link** in its place | Have its setup link used, or give a new one: see [Waiting for Its Setup Link](#pending-setup) |
 
 - 👑 The instance always keeps an active administrator. Your own row has no actions, so to step
   down: make another account an administrator, then ask them to remove your rights.
-- 🛡️ **Protected** is the administrator who pays for a
-  [managed instance](hosting_providers.md#managed-profile), the account of `LIBREFOLIO_ADMIN_EMAIL`:
-  nobody can delete, deactivate or demote it, and no other administrator can reset its password or
-  sign it out (`409 ACCOUNT_PROTECTED`); the owner cannot delete its own account or change its own
-  email address from the app, while it still changes its password and its username, and recovers a
-  forgotten password as usual. On the server, `dev.py user` can still deactivate, demote, reset the
-  password, give a reset link and change the email of that account (it has no command to delete one):
-  the emergency exit. No account is protected on a self-hosted instance.
 
 ### ⏳ Accounts Waiting for Their Email {: #waiting }
 
@@ -140,7 +126,7 @@ How the verification works, and its limits: [Email Verification](email_flows.md#
 When LibreFolio creates the administrator of `LIBREFOLIO_ADMIN_EMAIL` at its first start, the
 account waits, not yet active, until someone opens its setup link and chooses the password, or sets
 it up another way (below): see
-[The Initial Administrator](hosting_instances.md#initial-admin). Until then:
+[The Initial Administrator](configuration_accounts.md#initial-admin). Until then:
 
 - its row shows **Waiting for setup** instead of **Deactivated**, even once its link has expired or
   been [cancelled](#cancel-setup);
@@ -148,7 +134,7 @@ it up another way (below): see
 - its panel has no **Reactivate**: nobody knows its password, and activating it would also stop its
   setup link from working. **Cancel setup link** takes its place ([below](#cancel-setup)). Under
   the buttons, the panel says: *This administrator account activates through its setup link. If
-  the link is lost, run `dev.py user setup-link` on the server, or ask your hosting provider.*;
+  the link is lost, run `dev.py user setup-link` on the server.*;
 - **Remove administrator** is off, with the reason *It waits for its setup: it keeps its role until
   then.* To stop the link handed over, cancel it; to stop the account altogether, delete it;
 - **Delete** needs no **Remove administrator** first, unlike for any other administrator;
@@ -162,8 +148,7 @@ be neither reactivated nor demoted here.* `GET /api/v1/users` marks the account 
 `pending_setup: true`.
 
 This version has no button for a new setup link: on the server, `user setup-link` prints one (see
-«A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md)), and on an
-instance a hosting provider runs, the provider gives it. Once the link is used, the account is
+«A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md)). Once the link is used, the account is
 active, like any other.
 
 The account also stops waiting when it is set up another way, without its link:
@@ -192,7 +177,7 @@ else may have seen it, in a forwarded email or in the server's log for example:
 1. Open the row of the account **Waiting for setup** and click **Cancel setup link**.
 2. The dialog asks *Cancel the setup link of {username}?* and explains: *The link already handed
    over stops working. The account keeps waiting for its setup: a new link comes from «dev.py user
-   setup-link» on the server, or from your hosting provider.*
+   setup-link» on the server.*
 3. Click **Cancel the link**. A message confirms: *The setup link of {username} no longer works.*
 
 What happens:
@@ -202,16 +187,12 @@ What happens:
 - ⏳ the account still waits: its row still shows **Waiting for setup**, it keeps its place, and it
   still cannot be reactivated here;
 - 🔁 to let the administrator in, give a new link: on the server, `user setup-link` prints one (see
-  «A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md)); on an
-  instance a hosting provider runs, ask the provider for a new one
-  ([A New Link](hosting_instances.md#initial-admin-new-link)). Restarting the server with the same
+  «A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md))). Restarting the server with the same
   `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives no new link, since the instance has already seen that
   token: each start logs a warning that the setup link was withdrawn, and asks to run
   `dev.py user setup-link`, or to set a new token.
 
-On the server, `user deactivate` on this account cancels its link the same way. A
-**Protected** account cannot have its link cancelled from this tab: **Cancel setup link** is off,
-with the reason of a protected account ([When an Action Is Off](#action-off)).
+On the server, `user deactivate` on this account cancels its link the same way.
 
 If the administrator completed its setup after your list was loaded, there is nothing left to
 cancel: LibreFolio changes nothing and says *This administrator completed its setup in the
@@ -287,8 +268,6 @@ once, and its place is freed.
 
 When someone forgot their password, send them a link to choose a new one themselves. With email,
 they can also ask for one from the login page: see [Forgotten Passwords](email_flows.md#forgot-password).
-On a [managed instance](hosting_providers.md#managed-profile), the login page's
-**Forgot Password?** shows no server command: it tells them to ask you for this link.
 
 1. Open their row and click **Password-reset link**.
 2. The dialog explains: *A single-use link to set a new password, valid 30 minutes. The links
@@ -405,10 +384,9 @@ for developers.
 ## 🔗 Related
 
 - 📝 **[Environment Variables](configuration_accounts.md#accounts)** — «Accounts and Sign-ups»: `LIBREFOLIO_MAX_USERS`,
-  `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_PUBLIC_URL` and `LIBREFOLIO_BILLING_URL`
+  `LIBREFOLIO_REGISTRATION` and `LIBREFOLIO_PUBLIC_URL`
 - ⚙️ **[Global Settings](settings.md)** — «Who Can Sign Up»: the **Registration** setting
 - 🛠️ **[Command-Line Tools](cli_tools.md)** — «Manage Users»: most of these tasks, without a browser
 - 👤 **[Profile](../user/settings/profile.md)** — Your own account, and how to delete it
-- 🏢 **[Hosting for Others](hosting_providers.md)** — Running LibreFolio for other people
 - 🧑‍💻 For developers: **[Administrator API](../developer/architecture/access_control.md#admin-user-api)**
   and **[Settings Components](../developer/frontend/components/features/settings.md#userstab)**

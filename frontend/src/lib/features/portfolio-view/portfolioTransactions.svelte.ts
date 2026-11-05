@@ -19,6 +19,10 @@ export interface PortfolioTransactionsInputs {
     /** The brokers the view shows; undefined asks every broker. */
     brokerIds: () => number[] | undefined;
     period: () => {historyStart: string; start: string; end: string; isMaxPending: boolean};
+    /** The `pageBusy` key of the load: `dashboard-transactions` (default) or `broker-transactions`. */
+    busyKey?: string;
+    /** The rows and their partner legs are in: the bulk workspace of a page that writes reads them from its store (FB-17). */
+    onLoaded?: (mainRows: TXReadItem[], partnerRows: TXReadItem[]) => void;
 }
 
 export class PortfolioTransactions {
@@ -27,6 +31,7 @@ export class PortfolioTransactions {
     eventTooltipMap = $state<Map<number, AssetEvent>>(new Map());
     loading = $state(false);
     currentPage = $state(1);
+    pageSize = $state(50);
     private lastKey = $state('');
 
     constructor(private readonly inputs: PortfolioTransactionsInputs) {}
@@ -34,14 +39,27 @@ export class PortfolioTransactions {
     /** Loads the rows when `active` and the key moved since the last load. */
     sync(active: boolean): void {
         if (!active) return;
-        const {historyStart, end} = this.inputs.period();
         const brokerIds = this.inputs.brokerIds();
-        const key = `${historyStart}|${end}|${brokerIds ? [...brokerIds].sort((a, b) => a - b).join(',') : 'all'}`;
+        const brokersKey = brokerIds ? [...brokerIds].sort((a, b) => a - b).join(',') : 'all';
+        const {historyStart, end} = this.inputs.period();
+        const key = `${historyStart}|${end}|${brokersKey}`;
         if (key !== this.lastKey) {
             this.lastKey = key;
             this.currentPage = 1;
-            void pageBusy.track('dashboard-transactions', () => this.load());
+            void pageBusy.track(this.inputs.busyKey ?? 'dashboard-transactions', () => this.load());
         }
+    }
+
+    /** The table's page size changed: back to page 1. */
+    setPageSize(size: number): void {
+        this.pageSize = size;
+        this.currentPage = 1;
+    }
+
+    /** Asks the rows again, when the tab was opened before (the page's Refresh, a save of the bulk workspace). The rows on screen stay until the new ones land. */
+    async reload(): Promise<void> {
+        if (this.lastKey === '') return;
+        await this.load();
     }
 
     private async load(): Promise<void> {
@@ -56,9 +74,9 @@ export class PortfolioTransactions {
             // Server-side filter: date range always applied; broker_id per-broker (the endpoint
             // only accepts a single broker_id) when a subset is selected, omitted for "all".
             const fetchForBroker = async (brokerId?: number): Promise<TXReadItem[]> => {
-                const period = this.inputs.period();
                 const queries: Record<string, unknown> = {};
                 if (brokerId != null) queries.broker_id = brokerId;
+                const period = this.inputs.period();
                 if (!period.isMaxPending) queries.date_start = period.start;
                 if (period.end) queries.date_end = period.end;
                 return (await zodiosApi.query_transactions_api_v1_transactions_get({queries})) as TXReadItem[];
@@ -71,6 +89,7 @@ export class PortfolioTransactions {
             const [partner, tooltipMap] = await Promise.all([loadPartnerRows(this.mainRows), loadEventTooltipMap(this.mainRows)]);
             this.partnerRows = partner;
             this.eventTooltipMap = tooltipMap;
+            this.inputs.onLoaded?.(this.mainRows, this.partnerRows);
         } finally {
             this.loading = false;
         }

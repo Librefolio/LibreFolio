@@ -11,7 +11,7 @@ sold row (``AssetPeriodContribution.closed_by``, ``test_services/test_financial/
 Each case also checks that the returned move's date is the last close ``closed_position_window`` gives on the same
 stream (green on HEAD), so the two never disagree.
 
-Red on HEAD 8e70ec493 by absence: the module is imported at collection, ``closing_move`` is read while each test runs
+Red on HEAD bb6085662 by absence: the module is imported at collection, ``closing_move`` is read while each test runs
 (``AttributeError: module ... has no attribute 'closing_move'``).
 
 Pure: no DB, no server, no network. Runs in ``./dev.py test services financial-math``.

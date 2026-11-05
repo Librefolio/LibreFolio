@@ -8,7 +8,7 @@ and at ``date_to`` (movements dated ≤ ``date_from`` are in the start), and an 
 arrives inside the period splits its result between the two brokers (developer's decision P22: «each broker answers
 for its own tract; total unchanged»).
 
-Before MF-A (HEAD a8d2486ae + lots B and H, uncommitted) each row valued itself: ``_get_price_at_date`` (market
+Before MF-A (HEAD 0fcbeb310 + lots B and H, uncommitted) each row valued itself: ``_get_price_at_date`` (market
 quotes only, raw price, no split adjustment), converted by ``_convert_to_base`` at ``date_from``'s rate at the start
 and at **the quote's own date**'s rate at the end; with no quote, or no rate, the value was None and its side of the
 delta dropped (counted as 0). No trade mark, no at-cost estimate (J-17). An internal TRANSFER inside the period gave
@@ -89,7 +89,7 @@ its flight time; when a unit left another way, the general rule (P&L on |start v
 (period 01-15 → 04-30, every amount EUR): A: DEPOSIT 1000, BUY 10 X for 1000 on 01-06; closes 110 on ``date_from``,
 115 on 03-17, 120 on 03-19, 130 on ``date_to``; SELL 5 for 625 on 02-17 (realized 125); on 03-17 the last 5 leave A
 for B (a linked TRANSFER, arriving 03-19, worth 600 there: tract 100). The flight time is 01-15 → 03-17, 61 days; the
-period 105. Expected / HEAD (8c8c13a89):
+period 105. Expected / HEAD (953a34944):
 
 - in the scope (J's example): A's P&L 125 (ΔUGL −100 + tract 100, realized 125) on 500 + 500: 0.1250 → 1.023376;
   HEAD on the 500 sold: 0.2500 → 2.800768. Red on HEAD;
@@ -108,7 +108,7 @@ One ledger (the CB period, every amount EUR): A: DEPOSIT 500, BUY 5 X for 500 on
 115 on 02-17, 120 on 02-19, 129 on 04-02, 130 on ``date_to``; the 5 leave A on 02-17 and reach B on 02-19 (V₁ = 600,
 C₁ = 500); on 03-31 B sells them for 660, or passes them on to C, reaching it on 04-02 (V₂ = 645). B's flight time is
 02-19 → 03-31, 40 days; A's 01-15 → 02-17, 33 days (A, the sender: 50 on the 500 moved, 0.1000 → 1.869645, as on
-HEAD). Expected / HEAD (86e120a43):
+HEAD). Expected / HEAD (5f525dbd6):
 
 - received then sold (J's example): B's P&L 60 (ΔUGL −100, the tract; realized 160) on 500 + 100 = 600: 0.1000 →
   1.386208; HEAD on the 500 sold: 0.1200 → 1.812642. Red on HEAD;
@@ -125,7 +125,7 @@ MF-A9 (the same mirror, for a position still open) — TestOpenPositionMovedInBa
 start value, so its annualized return falls back on its end cost over its oldest open lot → the end
 (``contributions.annualized_period_return``). Opened by counted tracts and still holding every unit they brought, its
 result counts them from their value on arrival, so its base adds Σ(V − C) too (``moved_in``); with an exit in the
-period nothing is added — a transfer carries no quantity (the declared limitation). Expected / HEAD (52a417c20):
+period nothing is added — a transfer carries no quantity (the declared limitation). Expected / HEAD (968b7242c):
 
 - the A8 chain read to A9_TO (05-16; X closes 130 there too — to CB_TO C's window, 04-02 → 04-30, is 28 days, too
   short to annualize: None before and after): C holds the 5, worth V₂ = 645 on arrival (C₂ = 500), 650 at the end:
@@ -1331,8 +1331,8 @@ class TestClosedPositionBase:
     """A position fully sold in the period annualizes its P&L on a base over its flight time, CB_FROM → CB_DEPARTURE
     (61 days), when its exits are all covered; otherwise the general rule: the P&L on |start value| over CB_FROM →
     CB_TO (105 days). Since MF-A5 the base is the cost of the units sold **and** of those a counted tract moved to a
-    broker of the scope; until then (HEAD 8c8c13a89) the cost sold alone. Since MF-A8 it also adds what the units a
-    counted tract brought in gained before arriving; until then (HEAD 86e120a43) a receiving row's base was their
+    broker of the scope; until then (HEAD 953a34944) the cost sold alone. Since MF-A8 it also adds what the units a
+    counted tract brought in gained before arriving; until then (HEAD 5f525dbd6) a receiving row's base was their
     historical cost."""
 
     @pytest.mark.asyncio
@@ -1412,7 +1412,7 @@ class TestClosedPositionBase:
     @pytest.mark.asyncio
     async def test_received_then_sold_the_base_is_the_value_on_arrival(self, session, keep_alive, path):
         """J's example. B: ΔUGL 0 − 0 − the tract (600 − 500) = −100, realized 660 − 500 = 160: P&L 60 on the 500 sold +
-        the 100 the units gained before reaching B = 600, 0.1000 → 1.386208. HEAD (86e120a43): on the 500 sold, 0.1200 →
+        the 100 the units gained before reaching B = 600, 0.1000 → 1.386208. HEAD (5f525dbd6): on the 500 sold, 0.1200 →
         1.812642. Red on HEAD."""
         print_section(f"MF-A8 closed position, received then sold ({path})")
         scenario = await _received_then_sold(session, keep_alive)
@@ -1482,7 +1482,7 @@ class TestOpenPositionMovedInBase:
     """A position opened inside the period has no start value: its annualized return falls back on its end cost, over
     its oldest open lot → the end. Since MF-A9, when counted tracts brought units into it and it still holds them all,
     the base adds what they gained before arriving, Σ(V − C), as its result counts them from their value on arrival
-    (the tract adjustment) — as a closed position's base does since MF-A8. Until then (HEAD 52a417c20) the base was their
+    (the tract adjustment) — as a closed position's base does since MF-A8. Until then (HEAD 968b7242c) the base was their
     historical cost. When units left the row in the period, nothing is added (a transfer carries no quantity)."""
 
     @pytest.mark.asyncio

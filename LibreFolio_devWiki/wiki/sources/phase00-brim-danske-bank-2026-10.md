@@ -22,9 +22,9 @@ related:
 Ten files (~5 600 lines: an analysis, the report-set design, the main plan, the Step 4 implementation plan, steps
 5–9 and a reply drafted for issue #26), archived on 2026-10-09. Danske Bank is the pilot of **report sets** — one
 import built from several exports of the same bank. The folder also carries the CSV-encoding fix (2026-09-28,
-`35db1061f`) and five follow-ups: plugin re-detection (`e3f53e3cc`), a damaged workbook preview that answered 500
-(`40e943a5b`), partly ticked sets (`0c58d90e5`), the set card on phones (`ac35ad2ce`) and a stale cached frontend
-(`082196482`).
+`864fe0bc6`) and five follow-ups: plugin re-detection (`1f8c26cd9`), a damaged workbook preview that answered 500
+(`c269061da`), partly ticked sets (`36c031189`), the set card on phones (`4d92fb8e5`) and a stale cached frontend
+(`74e246e5e`).
 
 ## Key takeaways
 

@@ -218,45 +218,6 @@ class FABulkEventUpsertResponse(BaseBulkResponse[FAEventUpsertResult]):
     """Response for bulk event upsert."""
 
 
-class FAEventDeleteItemResult(StrictModel):
-    """
-    Per-item result of a bulk AssetEvent delete.
-
-    status:
-      - "deleted": event removed
-      - "not_found": id did not match any event of the asset (an event of another
-                     asset is left alone)
-      - "in_use": event is referenced by one or more transactions (RESTRICT);
-                  accessible_transactions[] lists tx IDs the caller can see,
-                  hidden_transactions_count counts refs from other users.
-    """
-
-    event_id: int = Field(..., description="Event ID this result refers to")
-    status: Literal["deleted", "not_found", "in_use"] = Field(..., description="Outcome for this event")
-    accessible_transactions: List[int] = Field(
-        default_factory=list,
-        description="Transaction IDs referencing this event that the current user can access",
-    )
-    hidden_transactions_count: int = Field(
-        default=0,
-        description="Number of transactions referencing this event that belong to other users",
-    )
-
-
-class FAEventBulkDeleteResponse(StrictModel):
-    """
-    Aggregate response of a bulk AssetEvent delete.
-
-    Always HTTP 200: inspect per-item ``results`` for per-id outcome.
-    Successful deletions are committed even if others are blocked (no partial rollback).
-    """
-
-    results: List[FAEventDeleteItemResult] = Field(default_factory=list)
-    deleted_count: int = Field(..., description="Count of events successfully deleted")
-    not_found_count: int = Field(..., description="Count of ids that matched no event of the asset")
-    in_use_count: int = Field(..., description="Count of events blocked by RESTRICT")
-
-
 class FAEventQueryItem(StrictModel):
     """Single asset event query in a bulk request."""
 

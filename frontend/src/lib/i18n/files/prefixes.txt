@@ -3,3 +3,4 @@
 uploads
 fileStatus
 files
+storage

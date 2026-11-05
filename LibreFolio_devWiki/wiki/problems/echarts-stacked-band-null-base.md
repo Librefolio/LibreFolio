@@ -24,7 +24,7 @@ When the base of a stacked series is null, ECharts uses the axis origin as the f
 
 ## Solution
 
-`9cb2ea172` («fix(charts): bridge band fill between sessions»): the line-chart helpers fill the gaps between sessions
+`b1e0d32c9` («fix(charts): bridge band fill between sessions»): the line-chart helpers fill the gaps between sessions
 only in the invisible base and delta series, with a straight line between the neighbours; the tooltips skip those two
 series, so a bridged value is never shown.
 

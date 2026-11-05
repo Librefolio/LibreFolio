@@ -19,7 +19,10 @@ Instance backup, the command line (workstream B, lot B1): ``scripts/backup_cli.p
     manifest, an entry altered or added, and a damaged archive.
 (e) ``cmd_create``: 1 without a data directory, without a database (nothing written), and when the switch to the
     owner of the data directory fails; 0 otherwise, with the archive (0600) where it was asked for and the job's folder
-    removed. An ``--output`` the archive could not be written to (a file or a link already there, dangling or not; a
+    removed. FB-24 (interface §7): without ``--output`` the archive is not moved: it stays in the folder the backup
+    kept it in, ``backups/librefolio-backup-<date>-cli-<id[:8]>/<name>``, which is not removed; ``--output`` copies it
+    there as before (``run_backup(keep=False)``: no kept folder, ``backups/.jobs/<id>`` removed); both print the path and
+    one ``SHA-256: <64 hex>`` line, the digest of the file written; a failed backup leaves nothing. An ``--output`` the archive could not be written to (a file or a link already there, dangling or not; a
     path below a file; a folder it cannot write into) is refused before the backup starts: nothing is run, nothing is
     created. A backup that fails creates none of the missing folders of ``--output``; one that succeeds creates them
     with the archive. ``backups/`` or ``backups/.jobs`` a link or a file: 1, a message naming that very folder, nothing
@@ -243,6 +246,35 @@ def job_folders(root: Path) -> list[str]:
     """The entries of the jobs folder but its lock: what a command left behind."""
     folder = jobs_dir(root)
     return sorted(path.name for path in folder.iterdir() if path.name != ".lock") if folder.is_dir() else []
+
+
+#: FB-24 (interface §1): the folder a finished backup is kept in, ``backups/<this>/``; the archive inside keeps its name.
+KEPT_NAME = re.compile(r"librefolio-backup-\d{8}-\d{6}-cli-[0-9a-f]{8}")
+#: The line ``create`` prints for the SHA-256 of the archive it wrote (FB-24, interface §7).
+SHA_LINE = re.compile(r"^SHA-256: ([0-9a-f]{64})$", re.M)
+
+
+def kept_folders(root: Path) -> list[Path]:
+    """The folders of ``backups/`` a CLI backup is kept in (``backups/.jobs`` and everything else aside)."""
+    folder = backups_dir(root)
+    return sorted(path for path in folder.iterdir() if path.is_dir() and KEPT_NAME.fullmatch(path.name)) if folder.is_dir() else []
+
+
+def kept_archives(root: Path, pattern: str = "*.zip") -> list[Path]:
+    """The archives (``pattern``) inside the kept folders of ``backups/``: what ``create`` without ``--output`` leaves."""
+    return sorted(archive for folder in kept_folders(root) for archive in folder.glob(pattern) if archive.is_file())
+
+
+def flat_archives(root: Path, pattern: str = "*") -> list[Path]:
+    """The plain files directly in ``backups/`` (the layout before FB-24: the archive beside ``.jobs``)."""
+    folder = backups_dir(root)
+    return sorted(path for path in folder.glob(pattern) if path.is_file()) if folder.is_dir() else []
+
+
+def printed_sha256(out: str) -> str | None:
+    """The digest on the ``SHA-256:`` line of what ``create`` printed; None when there is no such line."""
+    found = SHA_LINE.findall(out)
+    return found[0] if len(found) == 1 else None
 
 
 def create(output: str | None = None) -> int:
@@ -623,6 +655,78 @@ def test_create_writes_the_archive_where_asked_and_removes_its_job(tmp_path, mon
     print_success(f"{written[0].name} written, job folder removed")
 
 
+def test_create_without_output_leaves_the_archive_in_its_kept_folder(tmp_path, monkeypatch, capsys):
+    """(e) FB-24, interface §7: ``create`` without ``--output`` leaves the archive where the backup put it, in
+    ``backups/librefolio-backup-<date>-cli-<id[:8]>/`` under the name it always had: no copy beside ``backups/.jobs``, the
+    folder not removed, nothing left in ``.jobs``; it prints the archive's path. Red today: the archive is moved to
+    ``backups/<name>`` and the folder removed."""
+    print_section("cmd_create without --output (FB-24)")
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    assert backup_cli.cmd_create(create_args()) == 0, "a backup with no --output is exit code 0"
+    out = capsys.readouterr().out
+    folders = kept_folders(root)
+    assert len(folders) == 1, f"one kept folder backups/librefolio-backup-<date>-cli-<id[:8]>: {sorted(path.name for path in backups_dir(root).iterdir())}"
+    archives = sorted(path for path in folders[0].iterdir() if path.suffix == ".zip")
+    assert len(archives) == 1 and re.fullmatch(r"librefolio-backup-\d{8}-\d{6}\.zip", archives[0].name), f"inside it, the archive under its usual name: {sorted(path.name for path in folders[0].iterdir())}"
+    stamp = archives[0].name[len("librefolio-backup-") : -len(".zip")]
+    assert folders[0].name.startswith(f"librefolio-backup-{stamp}-cli-"), f"the folder is named after the archive's time: {folders[0].name} / {archives[0].name}"
+    assert check_archive(archives[0]).ok and (folders[0] / STATE_FILE).is_file(), "the archive checks ok and its state.json is beside it"
+    assert flat_archives(root) == [], f"no copy in backups/ itself: {[path.name for path in flat_archives(root)]}"
+    assert job_folders(root) == [], f"nothing of the job is left in backups/.jobs: {job_folders(root)}"
+    if POSIX:
+        assert stat.S_IMODE(archives[0].stat().st_mode) == 0o600, "the archive stays readable by its owner only (0600)"
+    assert f"✅ Backup written: {archives[0]}" in out, f"the command prints the archive's path: {out}"
+    print_success(f"{folders[0].name}/{archives[0].name} kept")
+
+
+def test_create_with_output_copies_it_out_and_keeps_nothing_in_backups(tmp_path, monkeypatch, capsys):
+    """(e) GUARD of the other branch (``run_backup(keep=False)``): with ``--output`` the archive is where it was asked for,
+    no kept folder is made under ``backups/``, and ``backups/.jobs/<id>`` is removed. Green before and after."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    output = tmp_path / "nas" / "monday.zip"
+    assert create(str(output)) == 0, "a backup with --output is exit code 0"
+    out = capsys.readouterr().out
+    assert output.is_file() and check_archive(output).ok, "the archive is at --output and checks ok"
+    assert [path.name for path in backups_dir(root).iterdir() if path.name != ".jobs"] == [], f"no kept folder and no copy under backups/: {sorted(path.name for path in backups_dir(root).iterdir())}"
+    assert job_folders(root) == [], f"backups/.jobs/<id> is removed: {job_folders(root)}"
+    assert f"✅ Backup written: {output}" in out, f"the command says where it is: {out}"
+    print_success("--output: copied, no kept folder, job folder removed")
+
+
+@pytest.mark.parametrize("where", ["no-output", "output-file"])
+def test_create_prints_the_sha256_of_the_archive_it_wrote(tmp_path, monkeypatch, capsys, where):
+    """(e) FB-24, interface §7: one line ``SHA-256: <64 hex>`` whose digest is the SHA-256 of the file written, without
+    ``--output`` (the kept archive) and with it (the copy). Red today: the command prints no such line."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    output = tmp_path / "nas" / "monday.zip" if where == "output-file" else None
+    assert create(str(output) if output else None) == 0, "the backup is exit code 0"
+    out = capsys.readouterr().out
+    written = output if output else (flat_archives(root, "*.zip") or kept_archives(root) or [None])[0]
+    assert written is not None and written.is_file(), f"precondition: the archive was written: {sorted(path.name for path in backups_dir(root).iterdir())}"
+    assert printed_sha256(out) == sha256_of(written), f"exactly one `SHA-256: <digest>` line, the digest of {written.name}: {SHA_LINE.findall(out)}\n{out}"
+    print_success(f"{where}: SHA-256 line equals the file's digest")
+
+
+@pytest.mark.parametrize("where", ["no-output", "output-file"])
+def test_a_failed_backup_leaves_nothing_behind(tmp_path, monkeypatch, capsys, where):
+    """(e) GUARD (as before FB-24): a backup that fails is exit code 1 with ``❌ Backup failed``, no SHA-256 line, no kept
+    folder, nothing in ``backups/.jobs``, and nothing at ``--output``. Green before and after."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+
+    def broken_build(*args, **kwargs):
+        raise RuntimeError("the build failed")
+
+    monkeypatch.setattr(jobs, "build_archive", broken_build)
+    output = tmp_path / "nas" / "monday.zip" if where == "output-file" else None
+    assert create(str(output) if output else None) == 1, "a failed backup is exit code 1"
+    out = capsys.readouterr().out
+    assert "❌ Backup failed (backup_failed)" in out and printed_sha256(out) is None, f"the failure is said, with no SHA-256 line: {out}"
+    assert [path.name for path in backups_dir(root).iterdir() if path.name != ".jobs"] == [], f"no kept folder, no archive under backups/: {sorted(path.name for path in backups_dir(root).iterdir())}"
+    assert job_folders(root) == [], f"the failed job's folder is removed: {job_folders(root)}"
+    assert not (tmp_path / "nas").exists(), "nothing at --output"
+    print_success(f"{where}: failed → nothing left")
+
+
 @needs_symlinks
 @pytest.mark.parametrize("case", ["below-a-file", "dangling-link", "link-to-a-file"])
 def test_create_refuses_an_unusable_output_before_running(tmp_path, monkeypatch, capsys, case):
@@ -769,25 +873,27 @@ def test_create_that_cannot_write_its_output_puts_the_archive_in_the_backups_fol
     print_success(f"--output full → {written[0].name} in backups/, exit 1")
 
 
-def test_create_whose_archive_cannot_leave_its_job_folder_says_where_it_stays(tmp_path, monkeypatch, capsys):
-    """(e)(i) Default place, and the move into backups/ fails: the archive stays in its job folder, which is kept."""
+def test_create_without_output_moves_nothing_so_a_failing_move_cannot_hurt_it(tmp_path, monkeypatch, capsys):
+    """(e)(i) FB-24: the default place is the kept folder the backup itself made, so ``create`` moves nothing (it used to
+    move the archive into ``backups/``, and a failing move left it in its job folder with exit 1). Whatever ``shutil.move``
+    would do, the backup is exit code 0 with its archive whole in the kept folder and nothing left in ``backups/.jobs``.
+    Red today: the move fails, exit 1, the archive stays in its job folder."""
     root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
     failing_move(monkeypatch, OSError(errno.EIO, os.strerror(errno.EIO)))
-    assert create() == 1, "an archive left in its job folder is exit code 1"
+    assert create() == 0, "nothing is moved, so nothing fails: exit code 0"
     out = capsys.readouterr().out
-    folders = job_folders(root)
-    assert len(folders) == 1, f"the job's folder is kept, it holds the archive: {folders}"
-    kept = sorted(job_dir(root, folders[0]).glob("*.zip"))
-    assert len(kept) == 1 and check_archive(kept[0]).ok, f"the archive is whole in its job folder: {[path.name for path in kept]}"
-    said = f"❌ cannot write {backups_dir(root) / kept[0].name}: {os.strerror(errno.EIO)}: the archive stays in {kept[0]}. Move it within the hour"
-    assert said in out, f"the command says where the archive stays and for how long: {out}"
-    assert sorted(backups_dir(root).glob("*.zip")) == [], "no archive reached backups/"
-    print_success("move failed → archive kept in its job folder, path said, exit 1")
+    archives = kept_archives(root)
+    assert len(archives) == 1 and check_archive(archives[0]).ok, f"the archive is whole in its kept folder: {[path.name for path in archives]}"
+    assert job_folders(root) == [], f"no job folder is kept: {job_folders(root)}"
+    assert f"✅ Backup written: {archives[0]}" in out and "the archive stays in" not in out, f"the command says where it is, with no alarm: {out}"
+    print_success("default place: no move, exit 0, archive in its kept folder")
 
 
 @pytest.mark.parametrize("into", ["backups-folder", "output-folder"])
 def test_backups_of_the_same_second_keep_their_own_names(tmp_path, monkeypatch, capsys, into):
-    """(e)(h) Three backups of one second into one folder: -2, -3, each exit 0 (the second used to stay in its job)."""
+    """(e)(h) Three backups of one second, each exit 0. Into an ``--output`` folder they keep their own names, ``-2``,
+    ``-3``. Without ``--output`` (FB-24) the id in the kept folder's name keeps them apart: three kept folders, each holding
+    the archive under the same name. Red today for ``backups-folder``: the archives are ``-2``, ``-3`` in ``backups/``."""
     root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
     monkeypatch.setattr(jobs, "archive_name", lambda created_at: NAME)
     folder = tmp_path / "nas" if into == "output-folder" else backups_dir(root)
@@ -796,12 +902,19 @@ def test_backups_of_the_same_second_keep_their_own_names(tmp_path, monkeypatch, 
     codes = [create(str(folder) if into == "output-folder" else None) for _ in range(3)]
     out = capsys.readouterr().out
     assert codes == [0, 0, 0], f"every backup of the same second is exit code 0: {codes}\n{out}"
-    names = sorted(path.name for path in folder.glob("*.zip"))
-    assert names == sorted([NAME, SECOND_NAME, THIRD_NAME]), f"each archive keeps its own name: {names}"
-    for name in (NAME, SECOND_NAME, THIRD_NAME):
-        assert f"✅ Backup written: {folder / name}" in out and check_archive(folder / name).ok, f"{name} is written, said, and checks ok: {out}"
+    if into == "output-folder":
+        names = sorted(path.name for path in folder.glob("*.zip"))
+        assert names == sorted([NAME, SECOND_NAME, THIRD_NAME]), f"each archive keeps its own name: {names}"
+        for name in (NAME, SECOND_NAME, THIRD_NAME):
+            assert f"✅ Backup written: {folder / name}" in out and check_archive(folder / name).ok, f"{name} is written, said, and checks ok: {out}"
+    else:
+        kept = kept_folders(root)
+        assert len(kept) == 3, f"three backups of one second: three kept folders, told apart by the id: {sorted(path.name for path in backups_dir(root).iterdir())}"
+        for archive in (one / NAME for one in kept):
+            assert archive.is_file() and check_archive(archive).ok and f"✅ Backup written: {archive}" in out, f"{archive.parent.name} holds {NAME}, whole and said: {out}"
+        assert flat_archives(root) == [], f"no archive beside the kept folders: {[path.name for path in flat_archives(root)]}"
     assert job_folders(root) == [], f"every job folder is removed: {job_folders(root)}"
-    print_success(f"{into}: {', '.join(names)}")
+    print_success(f"{into}: three backups of one second, each kept apart")
 
 
 def test_create_prints_a_left_out_name_with_its_control_characters_as_question_marks(tmp_path, monkeypatch, capsys):
@@ -850,15 +963,17 @@ def test_the_script_creates_an_archive_then_inspects_it(tmp_path):
     env = child_env(data)
     created = script("create", env=env, cwd=tmp_path)
     assert created.returncode == 0, f"create must exit 0, it exited {created.returncode}\n--- stdout\n{created.stdout[-TAIL:]}\n--- stderr\n{created.stderr[-TAIL:]}"
-    written = sorted(backups_dir(data).glob("*.zip"))
-    assert len(written) == 1, f"create writes one archive in <data dir>/backups/: {[path.name for path in written]}"
-    assert [path.name for path in jobs_dir(data).iterdir() if path.name != ".lock"] == [], "the job's folder is removed"
+    written = kept_archives(data)
+    assert len(written) == 1, f"create leaves one archive in its kept folder backups/librefolio-backup-<date>-cli-<id[:8]>/: {sorted(path.name for path in backups_dir(data).iterdir())}"
+    assert flat_archives(data) == [], f"and none beside .jobs: {[path.name for path in flat_archives(data)]}"
+    assert [path.name for path in jobs_dir(data).iterdir() if path.name != ".lock"] == [], "nothing of the job is left in backups/.jobs"
+    assert printed_sha256(created.stdout) == sha256_of(written[0]), f"create prints `SHA-256: <digest>` of the archive: {created.stdout[-TAIL:]}"
     with zipfile.ZipFile(written[0]) as zf:
         manifest = BackupManifest.from_bytes(zf.read(MANIFEST_ENTRY))
     assert (manifest.origin, manifest.app_version, manifest.alembic_revision) == ("cli", APP_VERSION, REVISION), f"the archive was made by the CLI of this test: {manifest.origin}, {manifest.app_version}, {manifest.alembic_revision}"
     inspected = script("inspect", str(written[0]), env=env, cwd=tmp_path)
     assert inspected.returncode == 0 and "Every entry matches the manifest" in inspected.stdout, f"inspect must exit 0 on it\n--- stdout\n{inspected.stdout[-TAIL:]}\n--- stderr\n{inspected.stderr[-TAIL:]}"
-    print_success(f"create → {written[0].name}, inspect → 0")
+    print_success(f"create → {written[0].parent.name}/{written[0].name}, inspect → 0")
 
 
 #: A job folder left in ``backups/.jobs`` whose state cannot be read (B-50): its ``state.json`` JSON that is no object, or
@@ -879,8 +994,8 @@ def test_the_script_creates_a_backup_past_a_job_whose_state_cannot_be_read(tmp_p
     created = script("create", env=child_env(data), cwd=tmp_path)
     output = f"\n--- stdout\n{created.stdout[-TAIL:]}\n--- stderr\n{created.stderr[-TAIL:]}"
     assert (created.returncode, "Traceback" in created.stderr) == (0, False), f"create must exit 0, without a traceback, past a job whose state is {shape}: exit {created.returncode}{output}"
-    written = sorted(backups_dir(data).glob("*.zip"))
-    assert len(written) == 1 and check_archive(written[0]).ok, f"create writes one archive in <data dir>/backups/, which checks ok: {[path.name for path in written]}{output}"
+    written = kept_archives(data)
+    assert len(written) == 1 and check_archive(written[0]).ok, f"create leaves one archive in a kept folder of <data dir>/backups/, which checks ok: {sorted(path.name for path in backups_dir(data).iterdir())}{output}"
     assert job_folders(data) == [VALID_ID], f"the unreadable job's folder, younger than an hour, is kept, and the new job's folder removed: {job_folders(data)}"
     print_success(f"{shape}: exit 0, {written[0].name}, the unreadable job kept")
 
@@ -929,8 +1044,8 @@ def test_the_script_creates_a_backup_past_a_job_whose_state_is_no_regular_file(t
             state.unlink(missing_ok=True)
     output = f"\n--- stdout\n{created.stdout[-TAIL:]}\n--- stderr\n{created.stderr[-TAIL:]}"
     assert (created.returncode, "Traceback" in created.stderr) == (0, False), f"create must exit 0, without a traceback, past a job whose state is {shape}: exit {created.returncode}{output}"
-    written = sorted(backups_dir(data).glob("*.zip"))
-    assert len(written) == 1 and check_archive(written[0]).ok, f"create writes one archive in <data dir>/backups/, which checks ok: {[path.name for path in written]}{output}"
+    written = kept_archives(data)
+    assert len(written) == 1 and check_archive(written[0]).ok, f"create leaves one archive in a kept folder of <data dir>/backups/, which checks ok: {sorted(path.name for path in backups_dir(data).iterdir())}{output}"
     assert job_folders(data) == [VALID_ID], f"the folder of the job whose state is {shape}, made just now, is kept by its own date (never by the date of what a link points to), and the new job's folder removed: {job_folders(data)}"
     assert {path.name: path.read_bytes() for path in elsewhere.iterdir()} == outside, "what the link points to is never written nor removed"
     print_success(f"{shape}: exit 0, {written[0].name}, the job's folder kept by its own date")

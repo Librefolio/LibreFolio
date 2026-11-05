@@ -29,7 +29,7 @@ The asset-set contract of the second round (`implementation_2/A-contratto-asset-
 non era caro: era sbagliato.» — a choice made for cost reopens as soon as the cost changes; one made for correctness
 does not.
 
-`a0a7e5ae4` («feat(risk): serve the weightless ASSET_SET scope with a per-asset analytic family»): `AssetSetRiskScope`
+`e7cf6c524` («feat(risk): serve the weightless ASSET_SET scope with a per-asset analytic family»): `AssetSetRiskScope`
 (`kind=asset_set`, 1–100 unique asset ids, no weights) is served by a family of per-asset plugins —
 `asset_set_kpi`, `asset_set_risk_return`, `asset_set_var`, `asset_set_drawdown`, `asset_set_comparison` — each declaring
 `supported_scopes=(ASSET_SET,)`.

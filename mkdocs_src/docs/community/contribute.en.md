@@ -14,7 +14,7 @@ If LibreFolio helps you manage your investments better, consider supporting deve
 
 Every donation — no matter how small — helps cover development tools, testing infrastructure, and motivates continued improvement.
 
-Inside LibreFolio, the same coffee link sits next to buttons that share the project on X, Reddit, Facebook, Instagram, and TikTok with a ready-made message: you find them in **Settings → About**, under **Support LibreFolio**, and in the donation popup that appears now and then after you sign in. On an instance a hosting provider runs for you, only the share buttons are there. See [Support LibreFolio in the app](../user/settings/about.md#support-librefolio) for how sharing works — nothing is ever published for you.
+Inside LibreFolio, the same coffee link sits next to buttons that share the project on X, Reddit, Facebook, Instagram, and TikTok with a ready-made message: you find them in **Settings → About**, under **Support LibreFolio**, and in the donation popup that appears now and then after you sign in. See [Support LibreFolio in the app](../user/settings/about.md#support-librefolio) for how sharing works — nothing is ever published for you.
 
 ---
 
@@ -85,14 +85,6 @@ Check the [Developer Manual](../developer/index.md) for architecture details, co
 A simple but powerful way to help: **star the repository** on GitHub! It increases visibility and helps other users discover LibreFolio.
 
 [:octicons-star-fill-24: Star on GitHub](https://github.com/Librefolio/LibreFolio){ .md-button .md-button--primary }
-
----
-
-## :globe_with_meridians: What's Next — LibreFolio Cloud
-
-For those who want to use LibreFolio but don't have the time, skills, or infrastructure to self-host, we're planning a **hosted platform** — **LibreFolio Cloud**. It will offer all the same powerful features without any technical setup, plus upcoming **AI-powered analytics** to help you make smarter investment decisions.
-
-To sustain the infrastructure, maintenance, and ongoing development, the cloud platform will be offered as a **subscription service** — pricing to be determined later.
 
 ---
 

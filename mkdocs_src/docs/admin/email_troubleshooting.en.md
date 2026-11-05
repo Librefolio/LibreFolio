@@ -98,7 +98,7 @@ read again when you ask, where a finding links to the [Email tab](email.md#email
 | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | `warning` | At startup, with `check` set to `email.smtp_encryption`: `none` towards a server outside your local network, which the line names ([Security Notes](#security)). |
 | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` | `info` | At startup, with `check` set to `email.links`: email works, but `LIBREFOLIO_PUBLIC_URL` is not set ([Emails with a Link](email_flows.md#public-url)). |
 | `LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out` | `warning` | At startup, with `check` set to `email.links`: email works, but the variable cannot start a link ([Emails with a Link](email_flows.md#public-url)). |
-| `Email sent` | `info` | The server accepted an email; `kind` says which: `test`, `invite`, `password_reset`, `email_verification`, `email_changed`, `email_change_confirmation` (the link to a managed instance's new administrator address, [Changing the Administrator's Address](hosting_instances.md#owner-email-change)) or `admin_setup`. |
+| `Email sent` | `info` | The server accepted an email; `kind` says which: `test`, `invite`, `password_reset`, `email_verification`, `email_changed` or `email_change_confirmation`. |
 | `Email not sent` | `warning` | The server refused the email or did not answer: `code`, as in [Sending Errors](#sending-errors), and `detail`, the server's own reply, the most precise clue. |
 | `Email not sent: the hourly limit of the instance is reached` | `warning` | The hourly limit stopped an email; `retry_after` is in seconds. |
 | `Test email sent by an administrator` | `info` | A test email went out, with the `admin_id` and the `language`. |
@@ -127,7 +127,7 @@ read again when you ask, where a finding links to the [Email tab](email.md#email
 | `Email change notice: email is off, nothing sent` | `info` | Email is off: nothing to send, and nothing wrong. |
 | `Email change notice: past its limits, nothing sent` | `info` | The account, or the old mailbox, already had 3 notices in the hour: the change went through, the notice did not. With `user_id`. |
 | `Email change notice: the account no longer exists, nothing sent` | `info` | The account was deleted before the email left. |
-| `Email change notice: not sent` | `warning` | Email is set but cannot be used now, a hosting provider blocks the instance, the hourly limit is reached, the old address is not one plain address, or sending failed: `reason` and `code` say which. |
+| `Email change notice: not sent` | `warning` | Email is set but cannot be used now, the hourly limit is reached, the old address is not one plain address, or sending failed: `reason` and `code` say which. |
 | `Email change notice: the request failed` | `error` | An unexpected error, with its type in `error` and the `user_id`, nothing more. |
 
 Every reset link also leaves a `Password reset link created` line, with `user_id`, `token_id` and,

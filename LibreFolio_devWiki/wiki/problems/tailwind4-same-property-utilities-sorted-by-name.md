@@ -56,7 +56,7 @@ and the idle `hover:` sits in the idle branch, so the two never meet on the elem
 {isOpen ? 'ring-2 ring-lf-focus border-lf-focus' : disabled || loading ? 'border-lf-subtle' : 'border-lf-input hover:border-lf-input-hover'}
 ```
 
-The rule was sent to the sub-agent while it was writing the lot, and it went into the body of I1's commit (`67157f22e`).
+The rule was sent to the sub-agent while it was writing the lot, and it went into the body of I1's commit (`3e90b48d8`).
 
 Where a state must win over a colour that a **caller** adds, the state can be a variant: a base `border-*` passed in by
 the caller can never beat it. The input lot, still a draft when this page was written, puts the error border of

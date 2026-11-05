@@ -17,7 +17,7 @@ no wall clock) and a window opening on 2024-10-10, in the middle of an engine se
    (Decimals compared with ``as_tuple``, every field but ``date``/``through``).
 5. ``TestExpansionParity`` — repeating each point over its days gives, field by field (``as_tuple``), today's daily value.
    The oracle of a day is the engine's state of that day (``PortfolioCalculationEngine.calculate`` with the service's
-   arguments, ``daily_states.state_on``), mapped as HEAD ca7599e8a's ``DerivedViewsBuilder.build_history`` /
+   arguments, ``daily_states.state_on``), mapped as HEAD bea830cb4's ``DerivedViewsBuilder.build_history`` /
    ``build_allocation_history`` / ``build_asset_allocation_history`` / ``build_broker_pnl_history`` /
    ``build_pnl_candles`` map it (frozen copies below, so the oracle does not move with the cure); ``twrr`` / ``roi``
    from ``build_performance_inputs`` on the dense daily list → ``rebase_to_period`` → ``calculate_twrr_series`` /
@@ -30,7 +30,7 @@ no wall clock) and a window opening on 2024-10-10, in the middle of an engine se
 7. ``TestEventSeriesUnchanged`` — income, cost, deposit and acquisition funding: the points the service's own methods
    give (one per event, no ``through``).
 
-RED on HEAD ca7599e8a: every test that reads ``through``, ``range`` or ``mwrr_line`` (``StepSpan`` is not a base of any
+RED on HEAD bea830cb4: every test that reads ``through``, ``range`` or ``mwrr_line`` (``StepSpan`` is not a base of any
 point model; one point per day); the schema tests. GREEN on HEAD: the event series, the presence barriers.
 
 The book (report EUR, user U owns brokers A and B at share 1):
@@ -103,7 +103,7 @@ HOLIDAY = date(2024, 8, 15)
 QUOTES_PAUSE = date(2024, 9, 27)
 QUOTES_RESUME = date(2025, 1, 6)
 
-#: HEAD ca7599e8a's PortfolioHistoryPoint fields, without the two MWRR ones the contract removes.
+#: HEAD bea830cb4's PortfolioHistoryPoint fields, without the two MWRR ones the contract removes.
 HISTORY_FIELDS_TODAY_BUT_MWRR = {
     "date",
     "cash_value",
@@ -297,7 +297,7 @@ def scenario(request, tmp_path_factory) -> _Scenario:
 
 
 # =============================================================================
-# ORACLE — frozen copies of HEAD ca7599e8a's daily mappings
+# ORACLE — frozen copies of HEAD bea830cb4's daily mappings
 # =============================================================================
 
 

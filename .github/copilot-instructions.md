@@ -104,7 +104,15 @@ In `async def` handlers, **every sync library doing I/O** MUST be wrapped in `aw
 
 ## Developer Journal & Plan Methodology
 
-Development history is tracked in `LibreFolio_developer_journal/`. We follow a structured plan-driven workflow:
+Development history is tracked in a separate local repository, beside the main checkout: `../LibreFolio_developer_journal/`. It has no remote and is not part of the public repository, so a plan is never committed here. Every journal path in these rules is relative to the main checkout; from a worktree, reach it with:
+
+```bash
+"$(git rev-parse --path-format=absolute --git-common-dir)/../../LibreFolio_developer_journal"
+```
+
+The journal is one shared checkout, with no worktrees of its own: a workstream writes only its own files there and never runs Git in it; the coordinator commits them, on `main`, by explicit path. Outside coordinated work, whoever writes a plan commits it.
+
+We follow a structured plan-driven workflow:
 
 1. **Plan** → create a detailed implementation plan (`.prompt.md`)
 2. **Execute** → implement the plan
@@ -136,7 +144,7 @@ When executing a plan, after completing **EVERY step**, immediately return to th
 
 ### Archive Structure
 
-Completed plan chains are moved into `LibreFolio_developer_journal/RoadmapV4_UI/phases/`:
+Completed plan chains are moved into `../LibreFolio_developer_journal/RoadmapV4_UI/phases/`:
 
 ```
 phases/

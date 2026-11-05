@@ -651,7 +651,7 @@ async def test_mixed_currency_series_keeps_the_matching_points_and_warns(assigne
 # ─────────────────────────────────────────────────────────────────────────────
 # Editing events in place (workstream I: S5, legacy duplicates, provider rows)
 #
-# Before the fix (03c943f53) ``_upsert_asset_events`` was DELETE + INSERT on
+# Before the fix (58ac14b21) ``_upsert_asset_events`` was DELETE + INSERT on
 # (asset_id, date, type, provider_assignment_id). ``transactions.asset_event_id``
 # is ON DELETE RESTRICT, so the DELETE half failed with IntegrityError as soon as
 # a transaction linked the row:
@@ -979,7 +979,7 @@ async def test_two_manual_events_sharing_a_key_are_edited_by_id(event_rows):
 # unit's own assets; the shape of a refusal is read on no database at all -- a refusal before any statement needs none
 # (``_SessionSpy()``).
 #
-# Red before N83's revision (HEAD 4302aaa70), each for the reason its docstring gives ("Red before N83's revision"); the
+# Red before N83's revision (HEAD f6a9f1570), each for the reason its docstring gives ("Red before N83's revision"); the
 # others are guards, green before it and after.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1575,7 +1575,7 @@ async def test_a_providers_currency_mismatch_still_raises_value_error(clean_pric
 # ─────────────────────────────────────────────────────────────────────────────
 # X-R46: an asset's result names the dates the upsert refused, machine-readable
 #
-# The defect, on HEAD 88611daf5: ``bulk_upsert_prices`` drops a date, asset by asset, in three cases -- a candle whose
+# The defect, on HEAD 3609dd862: ``bulk_upsert_prices`` drops a date, asset by asset, in three cases -- a candle whose
 # close lies outside its own [low, high] (``rejected_dates``, under any key), a provider's date after
 # ``latest_stored_date()`` (``out_of_range_dates``, X-R65; outside [1900-01-01, tomorrow] until N83's revision, 19/10)
 # and a provider's value no price column can keep (``unstorable_dates``, W-B58) -- and says so only in the English
@@ -1638,7 +1638,7 @@ async def _xr46_upsert(asset_id: int, prices: list[FAPricePoint], key: str = "MA
 async def test_xr46_a_manual_close_outside_its_low_high_is_listed_in_rejected(clean_prices: int):
     """X-R46: a manual upsert of two candles, the first with its close (50) outside its own [9, 12].
 
-    Red on HEAD 88611daf5: the asset's result is ``{asset_id, count, message}``; the refused date is told only in the
+    Red on HEAD 3609dd862: the asset's result is ``{asset_id, count, message}``; the refused date is told only in the
     English message («… rejected 1 date(s) with impossible OHLC …»), and ``FAUpsertResult`` has no ``rejected``: the
     Data Editor announces the row as saved.
     Contract: the second day alone stored; ``count`` 1 and the message as before; ``rejected`` ``[{"date": the first
@@ -1659,7 +1659,7 @@ async def test_xr46_a_manual_close_outside_its_low_high_is_listed_in_rejected(cl
 async def test_xr46_guard_a_clean_manual_upsert_lists_no_rejection(clean_prices: int):
     """X-R46 guard of the cure: a manual upsert of two consistent candles.
 
-    Red on HEAD 88611daf5 only because the asset's result has no ``rejected``; green once it has.
+    Red on HEAD 3609dd862 only because the asset's result has no ``rejected``; green once it has.
     Contract: both days stored; ``count`` 2 and the message «Upserted 2 prices»; ``rejected`` ``[]``, in the service's
     result (the key is there) and through ``FAUpsertResult``.
     """
@@ -1676,7 +1676,7 @@ async def test_xr46_a_providers_dates_outside_the_bounds_are_listed_in_rejected(
     """X-R46 on X-R65's provider case: under a provider's key, 9999-12-31, a day, the day after the (frozen) ceiling,
     another day.
 
-    Red on HEAD 88611daf5: the two dropped dates are told only in the message («rejected 2 date(s) …»).
+    Red on HEAD 3609dd862: the two dropped dates are told only in the message («rejected 2 date(s) …»).
     Green before N83's revision and after (a guard of it): until then the first date was 1899-12-31, which a provider
     now stores; the two dates here lie after the ceiling under either contract.
     Contract: the two days inside alone stored; ``count`` 2 and the message as before, naming both dates; ``rejected``
@@ -1700,7 +1700,7 @@ async def test_xr46_a_providers_three_kinds_of_refusal_are_listed_by_date(clean_
     lies outside its [9, 12]; the day after the (frozen) ceiling; day 1, a sound close; day 0, a close no price column
     can keep (1E+15); 1899-12-31, a candle whose close (50) lies outside its [9, 12] as well.
 
-    Red on HEAD 88611daf5: the four refusals are told only in the English message.
+    Red on HEAD 3609dd862: the four refusals are told only in the English message.
     Red before N83's revision: 1899-12-31 is refused for its date (``date_out_of_range``) before its candle is read.
     Contract: day 1 alone stored; ``count`` 1 and the message as before, naming the three kinds; ``rejected`` sorted by
     date -- 1899-12-31 ``ohlc_inconsistent`` (its date no refusal since N83's revision), day 0 ``value_not_storable``,
@@ -1732,7 +1732,7 @@ def test_xr46_fa_price_rejection_holds_one_of_three_reasons_and_a_result_default
     refuses any other reason; an ``FAUpsertResult`` built without ``rejected`` -- the service's «Asset N not found» and
     «No prices to upsert» results -- answers ``[]``.
 
-    Red on HEAD 88611daf5: ``schemas.prices`` has no ``FAPriceRejection``.
+    Red on HEAD 3609dd862: ``schemas.prices`` has no ``FAPriceRejection``.
     """
     rejection = getattr(prices_schemas, "FAPriceRejection", None)
     assert rejection is not None, "X-R46: backend.app.schemas.prices has no FAPriceRejection"
@@ -1746,7 +1746,7 @@ def test_xr46_fa_price_rejection_holds_one_of_three_reasons_and_a_result_default
 # ─────────────────────────────────────────────────────────────────────────────
 # The erase marker is no bound for the OHLC check (the docs-writer's finding, 17/10; the marker is "clear" since N92)
 #
-# The defect, on HEAD 88611daf5 with X-R46's cure: the strict branch of the OHLC integrity policy (see its section above;
+# The defect, on HEAD 3609dd862 with X-R46's cure: the strict branch of the OHLC integrity policy (see its section above;
 # ``if price.low is not None and price.high is not None`` in ``bulk_upsert_prices``) reads the raw incoming ``price.low``
 # and ``price.high``, so it takes the erase sentinel ``-1`` (F.4: «SET NULL», which ``_merge_field`` resolves to None
 # just before) for a real bound. In the asset data editor, erasing High while Low stays (close 12, low 11, high -1) is
@@ -1816,7 +1816,7 @@ async def test_a_manual_edit_erasing_high_is_saved_not_rejected(clean_prices: in
     """The day stored 12/14/10/12 (open/high/low/close); the editor erases High and sets Low to 11, the close staying 12:
     close 12, low 11, high "clear".
 
-    History: red on HEAD 88611daf5 with X-R46's cure (the erase was ``-1``, read as a bound below low 11: refused as
+    History: red on HEAD 3609dd862 with X-R46's cure (the erase was ``-1``, read as a bound below low 11: refused as
     ``ohlc_inconsistent``); green with X-R46b's.
     RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
     Contract: an erased bound is no bound: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high NULL,
@@ -1835,7 +1835,7 @@ async def test_a_manual_edit_erasing_both_bounds_is_saved_not_rejected(clean_pri
     """The day stored 12/14/10/12 (open/high/low/close); the editor erases High and Low, the close staying 12: close 12,
     low "clear", high "clear".
 
-    History: red on HEAD 88611daf5 with X-R46's cure (the close 12 outside [-1, -1]); green with X-R46b's.
+    History: red on HEAD 3609dd862 with X-R46's cure (the close 12 outside [-1, -1]); green with X-R46b's.
     RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
     Contract: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high NULL, low NULL, close 12.
     """

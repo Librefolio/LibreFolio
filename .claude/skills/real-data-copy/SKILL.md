@@ -164,7 +164,7 @@ pictures would change). Done on 26/10/2026 for D-P4, with the developer's OK.
 1. **Reference copy** from production (§1), then a **working copy** (§2), e.g. `/tmp/librefolio-r2-y-realdata`.
 2. **Schema.** A copy stamped `005_release_1_3_0_schema` from before 24/10/2026 lacks the owner columns folded into
    005 (Alembic sees the head and runs nothing): repair the **working copy** once with
-   `LibreFolio_developer_journal/Release_2/Phase_1/01_platform/repair_005_owner_columns.py <copy>/sqlite/app.db`
+   `../LibreFolio_developer_journal/Release_2/Phase_1/01_platform/repair_005_owner_columns.py <copy>/sqlite/app.db`
    (`--check` first), then delete the `.before-owner-fix-*` file it leaves next to the database.
 3. **A password on the copy only.** Generate one into a `0600` file in the session folder and set it on the copy, never
    on production:

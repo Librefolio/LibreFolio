@@ -68,7 +68,7 @@ type Catalog = Record<string, unknown>;
 
 /**
  * The only place a catalogue is read. Replaying the gate against another revision — the red-first
- * run of C7 read `git show HEAD:frontend/src/lib/i18n/<locale>.json` at `f1a651cdd` — swaps this
+ * run of C7 read `git show HEAD:frontend/src/lib/i18n/<locale>.json` at `dc879f36d` — swaps this
  * function and nothing else, so what runs is the gate and not a copy of it.
  */
 function readCatalog(locale: Locale): Catalog {

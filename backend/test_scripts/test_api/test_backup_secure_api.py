@@ -454,9 +454,28 @@ def lane_lock() -> Path:
 
 
 def lane_jobs() -> set[str]:
-    """The ids of the jobs the lane's data directory holds now."""
+    """The ids of the jobs the lane's data directory holds now: those in ``backups/.jobs/`` and, since FB-24, the finished
+    ones kept in ``backups/librefolio-backup-<date>-<origin>-<id[:8]>/`` (read from their ``state.json``)."""
     folder = paths.jobs_dir(get_data_dir())
-    return {path.name for path in folder.iterdir() if paths.is_job_id(path.name)} if folder.is_dir() else set()
+    found = {path.name for path in folder.iterdir() if paths.is_job_id(path.name)} if folder.is_dir() else set()
+    backups = paths.backups_dir(get_data_dir())
+    for kept in sorted(backups.iterdir()) if backups.is_dir() else []:
+        state = kept / STATE_FILE
+        if kept.is_dir() and kept.name.startswith("librefolio-backup-") and state.is_file():
+            found.add(json.loads(state.read_text(encoding="utf-8"))["job_id"])
+    return found
+
+
+def job_folder(job_id: str) -> Path:
+    """The folder holding a job's state and archive: ``backups/.jobs/<id>/`` while it runs or if it never moved, the kept
+    folder ``backups/librefolio-backup-<date>-<origin>-<id[:8]>/`` once a finished backup moved there (FB-24)."""
+    in_jobs = paths.job_dir(get_data_dir(), job_id)
+    if in_jobs.is_dir():
+        return in_jobs
+    backups = paths.backups_dir(get_data_dir())
+    kept = sorted(path for path in backups.iterdir() if path.is_dir() and path.name.startswith("librefolio-backup-") and path.name.endswith(f"-{job_id[:8]}")) if backups.is_dir() else []
+    assert len(kept) == 1, f"premise: job {job_id} has its folder in backups/.jobs or exactly one kept folder in backups/: {[path.name for path in kept]}"
+    return kept[0]
 
 
 async def wait_until_the_lane_is_free() -> None:
@@ -1006,7 +1025,7 @@ class TestTheStart:
         assert (key_sha256 is not None) == included, f"the key entry is there exactly when the manifest says so: included {included}, entry {'present' if key_sha256 else 'absent'}"
         assert not included or key_sha256 == instance_key.get("sha256"), f"the manifest gives the key entry's SHA-256: {instance_key.get('sha256')!r} != {key_sha256!r}"
 
-        folder = paths.job_dir(get_data_dir(), job["job_id"])
+        folder = job_folder(job["job_id"])
         assert files_in(folder) == sorted([STATE_FILE, job["file_name"]]), f"the job keeps its state and its envelope, the clear zip removed: {files_in(folder)}"
         assert PASSWORD not in (folder / STATE_FILE).read_text(encoding="utf-8"), "the job's state never holds the password"
         header_lines = "\n".join(f"{name}: {value}" for name, value in headers.multi_items())

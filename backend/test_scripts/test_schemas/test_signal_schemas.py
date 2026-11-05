@@ -1341,7 +1341,7 @@ class TestResultStatusMatrix:
             )
 
 
-# Pinned from 41a4f23ff70189a4ad827d272a368fbf2359464d, BEFORE the ordered-rule
+# Pinned from a6c1a80b689edbe108e25b9e4b5c85840b2ecef5, BEFORE the ordered-rule
 # refactor. Do not replace this oracle with production predicates/tables. The
 # SAME validator name overrides (rather than adds to) the inherited validator.
 # Its two helpers are pinned locally too; nested field validators stay public.
@@ -2027,7 +2027,7 @@ def _without_schema_titles(value: Any) -> Any:
 
 
 def _pinned_result_properties() -> _RawPayload:
-    """Public root field shape at 41a4f23f, independent of inherited fields.
+    """Public root field shape at a6c1a80b, independent of inherited fields.
 
     Nested contracts are intentionally not reimplemented: the refactor owns
     only SignalResult. Both modes also compare the complete public/reference

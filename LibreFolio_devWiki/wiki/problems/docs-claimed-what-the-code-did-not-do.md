@@ -29,18 +29,18 @@ the code before the page changed.
 
 | Page | What it said | What the code does | Fixed in |
 |------|--------------|--------------------|----------|
-| `user/transactions/import/generic-csv` | The Generic CSV importer lets you map columns by hand | Columns are recognised from their headers and aliases (`HEADER_MAPPINGS`) | `f1d446a4e` (Q1) |
-| `user/transactions/import/ibkr` | Export the Activity Statement; dividends, taxes and deposits are imported | The parser does not read the Activity Statement; the page now says so | `074815a60` (wave 1) |
-| `developer/backend/fx/providers/snb` | Wrong from top to bottom | SNB publishes monthly averages, dated on the 1st of the month, through a JSON API, for about 25 currencies | `69d9d0d81` (wave 2) |
-| `developer/backend/scheduler` | A file lock elects the leader | The lowest PID among the uvicorn workers leads (`leader.py`); the price function, the 500-entry log and `LIBREFOLIO_NO_SCHEDULER` were also wrong | `cc33206c9` (wave 3) |
-| `developer/architecture/users_and_brokers` | Sessions live in memory | A stateless JWT cookie; a restart without `JWT_SECRET` signs everyone out | `cc33206c9` (wave 3) |
-| `admin/docker_advanced` | Run `./dev.py docker exec db upgrade` after an update | That command never worked in the image ([[problems/devpy-unusable-in-docker-image]]); the server applies pending migrations at every start, and a failure stops it — so the right procedure is no command | `cc33206c9` (wave 3) |
-| `user/fx/providers/ecb` | About 45 currencies | The daily reference feed of 2026-10-08 had 29; BGN is gone | `7e47dc0e7` (S19) |
-| Sharpe and Sortino ratio pages | The annual risk-free rate is converted with 1/365 | The code converts it with the series' own annualisation factor, the one that scales the volatility (`daily_risk_free_rate`) | `1f9d7005d` |
-| `developer/test-walkthrough` | `./dev.py test --coverage all` runs everything with coverage | It stopped with «test category required»: `all` was read as the language; the command is `--coverage all all` | `7fbed02ac` (S23) |
+| `user/transactions/import/generic-csv` | The Generic CSV importer lets you map columns by hand | Columns are recognised from their headers and aliases (`HEADER_MAPPINGS`) | `e26732eeb` (Q1) |
+| `user/transactions/import/ibkr` | Export the Activity Statement; dividends, taxes and deposits are imported | The parser does not read the Activity Statement; the page now says so | `6220dfb2f` (wave 1) |
+| `developer/backend/fx/providers/snb` | Wrong from top to bottom | SNB publishes monthly averages, dated on the 1st of the month, through a JSON API, for about 25 currencies | `c3b8a4290` (wave 2) |
+| `developer/backend/scheduler` | A file lock elects the leader | The lowest PID among the uvicorn workers leads (`leader.py`); the price function, the 500-entry log and `LIBREFOLIO_NO_SCHEDULER` were also wrong | `a93c8227a` (wave 3) |
+| `developer/architecture/users_and_brokers` | Sessions live in memory | A stateless JWT cookie; a restart without `JWT_SECRET` signs everyone out | `a93c8227a` (wave 3) |
+| `admin/docker_advanced` | Run `./dev.py docker exec db upgrade` after an update | That command never worked in the image ([[problems/devpy-unusable-in-docker-image]]); the server applies pending migrations at every start, and a failure stops it — so the right procedure is no command | `a93c8227a` (wave 3) |
+| `user/fx/providers/ecb` | About 45 currencies | The daily reference feed of 2026-10-08 had 29; BGN is gone | `3a9a1738e` (S19) |
+| Sharpe and Sortino ratio pages | The annual risk-free rate is converted with 1/365 | The code converts it with the series' own annualisation factor, the one that scales the volatility (`daily_risk_free_rate`) | `7a3a38e85` |
+| `developer/test-walkthrough` | `./dev.py test --coverage all` runs everything with coverage | It stopped with «test category required»: `all` was read as the language; the command is `--coverage all all` | `151446d83` (S23) |
 
 On the auth row: on 2026-10-08 the session cookie was also never `Secure`. That changed the next day, in the code:
-`680cd268d` made it follow `SESSION_COOKIE_SECURE` (`auto`, `always`, `never`) — [[features/F-102]].
+`6a3b0291c` made it follow `SESSION_COOKIE_SECURE` (`auto`, `always`, `never`) — [[features/F-102]].
 
 ## Solution
 
@@ -56,7 +56,7 @@ migrations need no command.
   the IBKR page was one of Q's «⚠️ Fuori pista» notes.
 - Not every drift was in the pages: with `mkdocs serve`, MkDocs rewrote `site_url` to the local address and the gallery
   images fell back to the local server instead of the online site; `overrides/main.html` now reads the canonical URL
-  (`b17ac29ec`).
+  (`01ed5bd04`).
 
 ## Source files
 

@@ -9,7 +9,7 @@ scope, the one to fix. A TRANSFER that departs with more than its broker holds (
 short position (SHORT_TRANSFER_NOT_SUPPORTED), is the GIVING leg's fault: the issue names the out leg, the first of the
 departure event's ``raw_transaction_ids``.
 
-TODAY (base ``7814d25fe``) ``FifoLotEngine._apply_transfer_depart`` names ``event.transaction_id``, the departure event's
+TODAY (base ``673077274``) ``FifoLotEngine._apply_transfer_depart`` names ``event.transaction_id``, the departure event's
 id: ``min(out, in)`` for a same-day pair, else the earlier-dated leg (``classify_events``). So the issue names the
 receiving leg when that leg has the lower id, or carries the earlier date (the transit window is [min(dates), max(dates))
 whichever leg is earlier). Each red says what it read.

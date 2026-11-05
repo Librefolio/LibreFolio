@@ -1,6 +1,6 @@
 """MF-P1d — an MWRR solve whose flows are all zero has no rate, never the solver's starting point.
 
-The bug (HEAD 3964ee744): a period that opens at NAV 0 and whose only flow is a deposit on day D builds, for the point
+The bug (HEAD 0e9555d2b): a period that opens at NAV 0 and whose only flow is a deposit on day D builds, for the point
 ending on D, the XIRR flows ``(0, −0.0)`` and ``(T, NAV_D + flow_D) = (T, 1000 − 1000 = 0.0)``: every amount is zero, so
 the NPV is 0 at every rate. ``_newton_xirr`` evaluates f(x0) = 0 at its start, scipy returns x0, and ``_is_xirr_root``
 accepts it (|0| ≤ tolerance): the point carries ``_MWRR_GUESS`` = 0.1, the Dashboard shows «10 %» on the deposit day.
@@ -11,7 +11,7 @@ The cure approved by the developer (24/10/2026): when every flow of the period i
 Dashboard «—»), and ``_solve_xirr(flows, x0)`` None. Nothing else changes: every other point stays bit-for-bit as
 today, and a series' warm start goes on from the next solvable point.
 
-RED on HEAD 3964ee744 (each gives 0.100000, or 0.1 as a float, today):
+RED on HEAD 0e9555d2b (each gives 0.100000, or 0.1 as a float, today):
 - TestDepositDayOfAPeriodOpeningAtZero::test_period_series_point_on_the_deposit_day_has_no_rate (1/3: 0.100000)
 - TestDepositDayOfAPeriodOpeningAtZero::test_calculate_series_has_no_rate_while_every_flow_is_zero (1/2 and 1/3: 0.100000)
 - TestDepositDayOfAPeriodOpeningAtZero::test_period_mwrr_ending_on_the_deposit_day_has_no_rate (0.100000)
@@ -19,7 +19,7 @@ RED on HEAD 3964ee744 (each gives 0.100000, or 0.1 as a float, today):
 - TestDirectSolve::test_calculate_mwrr_with_the_deposit_on_the_end_date_has_no_rate (0.100000)
 - TestDirectSolve::test_solve_xirr_with_every_amount_zero_has_no_root (three flow sets, 0.1 each)
 
-GREEN on HEAD, guards the cure must keep green (values pinned from HEAD 3964ee744):
+GREEN on HEAD, guards the cure must keep green (values pinned from HEAD 0e9555d2b):
 - the points around the deposit day (1/2 None in the period series, 2/3 = 0.440251 and its closed form);
 - the days after the re-deposit: a verified root (closed form + an NPV sign change checked here, not by the product's
   predicate), first and last pinned exactly;

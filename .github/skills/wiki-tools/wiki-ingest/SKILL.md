@@ -1,6 +1,6 @@
 ---
 name: wiki-ingest
-description: "Use this skill (historian agent) when a new source needs to be processed and integrated into the LibreFolio devWiki. Sources can be: completed plans from developer_journal/, external articles, journal entries, architecture notes. Produces: source summary page, updated entity/decision/concept/problem pages, updated index.md and log.md. Triggers graphify --update at the end to keep the knowledge graph current."
+description: "Use this skill (historian agent) when a new source needs to be processed and integrated into the LibreFolio devWiki. Sources can be: completed plans from ../LibreFolio_developer_journal/, external articles, journal entries, architecture notes. Produces: source summary page, updated entity/decision/concept/problem pages, updated index.md and log.md. Triggers graphify --update at the end to keep the knowledge graph current."
 ---
 
 # Wiki Ingest Skill
@@ -23,9 +23,9 @@ description: "Use this skill (historian agent) when a new source needs to be pro
 The source to ingest. Can be:
 | Type | Typical Path |
 |------|-------------|
-| Completed plan | `LibreFolio_developer_journal/RoadmapVX/plan-*.md` |
-| Archived phase | `LibreFolio_developer_journal/RoadmapV4_UI/phases/` |
-| Knowledge base file | `LibreFolio_developer_journal/knowledge_base/*.md` |
+| Completed plan | `../LibreFolio_developer_journal/RoadmapVX/plan-*.md` |
+| Archived phase | `../LibreFolio_developer_journal/RoadmapV4_UI/phases/` |
+| Knowledge base file | `../LibreFolio_developer_journal/knowledge_base/*.md` |
 | External article | `LibreFolio_devWiki/raw/` (already clipped) |
 | Inline text | Provided directly in conversation |
 

@@ -20,7 +20,7 @@ indicator such as ADX or KAMA converges slowly, and a fixed «a few times the pe
 ## Decision
 
 Each plugin declares its own `minimum_points` and warm-up, and the values were measured across periods 2–200 against
-the reference, with a tolerance of 1e-6. The audits corrected two plugins (`0d60124ff`, «feat: add backend signals and
+the reference, with a tolerance of 1e-6. The audits corrected two plugins (`01d21471c`, «feat: add backend signals and
 isolate sessions»):
 
 - **KAMA**: `minimum_points` was one short for periods of 30 and more; it is now `max(30, period + 1)`;

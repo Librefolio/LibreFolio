@@ -6,7 +6,7 @@ LibreFolio embeds an automatic background daemon to fetch current prices, histor
 
 ## 🏗️ Overview
 
-The scheduler runs as an independent `asyncio.Task` inside the FastAPI lifespan. Every run goes through one function, `run_due_jobs(reason)`, which checks whether the configured sync jobs are due and runs those that are: at startup, at each 60-second tick, when a user comes back after a silence, and on a scheduled wake-up, when a hosting panel or a cron job calls `POST /api/v1/system/wake-sync` (see [Scheduled Wake-up](../../admin/wake_sync.md#wake-sync)). A run at startup, on a return or for a wake-up is a catch-up, which the web app shows as **Updating prices…** while one of its jobs runs (see [Catch-up Progress](#price-refresh)).
+The scheduler runs as an independent `asyncio.Task` inside the FastAPI lifespan. Every run goes through one function, `run_due_jobs(reason)`, which checks whether the configured sync jobs are due and runs those that are: at startup, at each 60-second tick, when a user comes back after a silence, and on a scheduled wake-up, when a hosting panel or a cron job calls `POST /api/v1/system/wake-sync`. A run at startup, on a return or for a wake-up is a catch-up, which the web app shows as **Updating prices…** while one of its jobs runs (see [Catch-up Progress](#price-refresh)).
 
 ```mermaid
 graph TD
@@ -47,7 +47,7 @@ Each run has a reason (`RunReason`), which its log line carries; any other value
 | `startup` | The first run, `FIRST_RUN_DELAY_SECONDS` (5 s) after the loop starts, while the application finishes starting. A nudge brings it forward; a shutdown in the meantime ends the loop without it. |
 | `tick` | `TICK_SECONDS` (60 s) after the end of the previous run. |
 | `return` | At once, when a user's request comes after at least `CATCH_UP_AFTER_SECONDS` (60 s) of silence: see the nudge below. |
-| `wake` | A call to the scheduled wake-up route, `POST /api/v1/system/wake-sync`, which streams the run's report back to its caller: see [Scheduled Wake-up](../../admin/wake_sync.md#wake-sync). |
+| `wake` | A call to the scheduled wake-up route, `POST /api/v1/system/wake-sync`, which streams the run's report back to its caller. |
 
 **The nudge on return.** The loop registers a return listener, `scheduler-catch-up` (`CATCH_UP_LISTENER`), on the process's activity record (`current_activity()`, in `backend/app/services/platform/sleep_wake/activity.py`). The record calls it at the start of a user's request that comes after at least 60 seconds without one; the health and readiness probes do not count. The listener announces the catch-up (`PRICE_REFRESH.announce("return")`, see [Catch-up Progress](#price-refresh)) and sets the loop's nudge event, with `loop.call_soon_threadsafe()` so that it works from any thread; the waiting loop runs `return` at once. The record measures the silence on the wall clock, so the time a machine spends suspended counts; the loop's own timer runs on the monotonic clock, which does not count it, so after a resume the next tick could still be up to a minute away. The nudge is cleared when a run starts: nudges that arrive during a run make one `return` run right after it.
 
@@ -55,7 +55,7 @@ Each run has a reason (`RunReason`), which its log line carries; any other value
 
 * **Run lock:** `run_due_jobs()` takes an `asyncio.Lock`, one per event loop, for its checks and its jobs, so two runs of the process never overlap. The second one waits, then loads the state the first one saved, and does not run again what the first one just ran; past the [wait limit](#cross-process-lock), ten minutes, it gives up instead.
 * **Across processes:** where Python has `fcntl`, the runs of different worker processes take turns the same way, on an exclusive `flock` of `.scheduler.lock` in the data directory, which a run takes after its [checks](#run-checks): one run at a time for the data directory, in whichever worker it starts. See [Several Workers](#leader-election).
-* **Busy work:** from its start to its end — the clock settle and the waits for both locks included, whether it returns, raises or is cancelled — the run is busy work on the activity record (`current_activity().busy("scheduler")`): for the [idle suspension](../../admin/sleep_wake.md#idle-suspend), a scheduler run is work in progress, so the idle monitor never suspends the machine in the middle of a run.
+* **Busy work:** from its start to its end — the clock settle and the waits for both locks included, whether it returns, raises or is cancelled — the run is busy work on the activity record (`current_activity().busy("scheduler")`): for the idle suspension, a scheduler run is work in progress, so the idle monitor never suspends the machine in the middle of a run.
 * **Clock settle:** a `return` or `wake` run first waits `CLOCK_SETTLE_SECONDS` (2 s), before the locks and before it reads the time; `startup` and `tick` never wait. After a Fly.io resume the wall clock is corrected within a few hundred milliseconds, and a request may be served before that: the wait lets the due checks read the corrected time.
 
 ### 🚦 Inside a Run {: #run-checks }
@@ -73,13 +73,13 @@ Each job runs in its own `try`:
 
 * A job that raises, or the save after it, is reported `error` with the exception's class name only. The message and the traceback stay in the server log (`Scheduler job failed`, with `job` and `reason`), never in the outcome, which a caller may pass on. The next job still runs. The failure is recorded in the job's state, saved at once: the job keeps the `last_run_at` of its last run that ended, so its regular rule still finds it due, but it is not tried again before a wait that doubles at each failure in a row (see [Provider Pauses and Failures](#pauses-and-failures)).
 * A cancellation is not caught: it goes through, and the run releases its locks, the one across processes included, and its busy span. It records no failure, so no wait. A job it cuts before its state is saved stays due, so after a shutdown the next start runs it again.
-* An exception outside the jobs — the settings or the state cannot be read, or the lock across processes cannot be taken (a symlink in its place, a permission problem) — leaves `run_due_jobs()`: the loop logs it (`Scheduler run failed`) and goes on, and the [scheduled wake-up](../../admin/wake_sync.md#wake-sync-answer) answers `status: "error"` with its class name.
+* An exception outside the jobs — the settings or the state cannot be read, or the lock across processes cannot be taken (a symlink in its place, a permission problem) — leaves `run_due_jobs()`: the loop logs it (`Scheduler run failed`) and goes on, and the scheduled wake-up answers `status: "error"` with its class name.
 
 ### ⏸️ Provider Pauses and Failures {: #pauses-and-failures }
 
 Two things move a job's next run, in opposite directions. A price provider that pauses after «too many requests» defers some of the job's items, and the job is retried as soon as the first pause is over, unless its regular round comes first. A job that raises is held back, for a wait that doubles at each failure in a row.
 
-**Deferred items.** The provider-call boundaries, `call_provider()` for the assets and `call_fx_provider()` for the exchange rates, pause a provider after it answers «too many requests» (HTTP 429), and until the pause ends refuse every call to it at once, without reaching the provider. A pause lasts 60 s by default and doubles at each refusal in a row, up to 1 h; a `Retry-After` sent by the provider is honoured, up to one day. `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` and `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` tune them (`.env.example`, section «Sleep and Wake», and for administrators [Sleep and Wake › Provider Pauses](../../admin/sleep_wake.md#provider-pauses)); [Provider Pauses](assets/architecture.md#provider-pauses) and [Paused Providers](fx/configuration.md#paused-providers) tell the rest. An item refused that way comes back with `error_code="RATE_LIMITED"` and `retry_after`, the seconds until the provider may be called again, and the jobs (`jobs.py`) count it as **deferred**, whatever its status or value: neither ok nor failed. A current price that fell back on the last stored price is deferred, and so is a history item that saved some prices anyway, even one marked `ok`; an FX pair carries `RATE_LIMITED` only when it ended `failed` or `partial`, not when another route served it.
+**Deferred items.** The provider-call boundaries, `call_provider()` for the assets and `call_fx_provider()` for the exchange rates, pause a provider after it answers «too many requests» (HTTP 429), and until the pause ends refuse every call to it at once, without reaching the provider. A pause lasts 60 s by default and doubles at each refusal in a row, up to 1 h; a `Retry-After` sent by the provider is honoured, up to one day. `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` and `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` tune them (`.env.example`, section «Sleep and Wake», and for administrators [Provider Pauses](../../admin/settings.md)); [Provider Pauses](assets/architecture.md#provider-pauses) and [Paused Providers](fx/configuration.md#paused-providers) tell the rest. An item refused that way comes back with `error_code="RATE_LIMITED"` and `retry_after`, the seconds until the provider may be called again, and the jobs (`jobs.py`) count it as **deferred**, whatever its status or value: neither ok nor failed. A current price that fell back on the last stored price is deferred, and so is a history item that saved some prices anyway, even one marked `ok`; an FX pair carries `RATE_LIMITED` only when it ended `failed` or `partial`, not when another route served it.
 
 * **Status.** `_classify_job_status(ok, total, deferred)` gives `ok` when every item succeeded (or there was none), `error` when none did and none was deferred, and `partial` otherwise: a job with deferred items is `partial`, even when all of them were deferred.
 * **`retry_at`.** At its end, the job records when to retry them: now, in UTC, plus the shortest `retry_after` among its deferred items, by when the first pause is over. An item that does not know its wait (with the pauses turned off, a refusal that sent no `Retry-After`) does not count; when none knows it, `retry_at` stays `null` and the deferred items wait for the regular round.
@@ -90,7 +90,7 @@ Two things move a job's next run, in opposite directions. A price provider that 
 2. A `retry_at` that has come makes it due: before the regular round, never after. When the regular round comes first, the job runs then, and the items whose provider is still paused are deferred again, without a call.
 3. Otherwise the regular rule applies: the frequency for the current price, the slots for the [history sync](#history-sync).
 
-A timestamp that cannot be read counts as none. No timer waits for these moments: the loop sees them at its next run, within a tick (60 s). A machine that sleeps runs nothing, so the [answer of the scheduled wake-up](../../admin/wake_sync.md#wake-sync-answer) reports `retry_at`, for a hosting panel to plan its next wake-up.
+A timestamp that cannot be read counts as none. No timer waits for these moments: the loop sees them at its next run, within a tick (60 s). A machine that sleeps runs nothing, so the answer of the scheduled wake-up reports `retry_at`, for a hosting panel to plan its next wake-up.
 
 **Failures.** A job that raises, or whose state cannot be saved after it, goes through `_record_failure()`:
 
@@ -124,7 +124,7 @@ The loop logs each report, `Scheduler run finished` with the reason, the status 
 
 ## ⏳ Catch-up Progress {: #price-refresh }
 
-A run at startup, on a return or for a wake-up is a **catch-up** (`CATCH_UP_REASONS`): the run a user may be waiting for, after the server started, woke up or went a minute without requests. While one of its jobs runs, the web app shows the notice **Updating prices…**: [Updating prices…](../frontend/components/features/live-ticker.md#price-refresh) tells the web app's side, and [While Prices Catch Up](../../admin/wake_sync.md#price-refresh) what users see. A `tick` is never a catch-up: the notice would come back every few minutes. The server tells the web app in two ways, both read from one tracker, `PRICE_REFRESH`:
+A run at startup, on a return or for a wake-up is a **catch-up** (`CATCH_UP_REASONS`): the run a user may be waiting for, after the server started, woke up or went a minute without requests. While one of its jobs runs, the web app shows the notice **Updating prices…**: [Updating prices…](../frontend/components/features/live-ticker.md#price-refresh) tells the web app's side. A `tick` is never a catch-up: the notice would come back every few minutes. The server tells the web app in two ways, both read from one tracker, `PRICE_REFRESH`:
 
 * the header `X-LibreFolio-Price-Refresh` (`PRICE_REFRESH_HEADER`), `starting` or `running`, on every `/api/` answer while a catch-up is pending;
 * `GET /api/v1/system/price-refresh`, which the web app asks every 3 s once it has seen the header, until the answer is `idle`.
@@ -178,7 +178,7 @@ The mechanism is generic: `activity.py` imports nothing from the scheduler, and 
 `GET /api/v1/system/price-refresh` (`backend/app/api/v1/system/price_refresh.py`, one module of the `system` package, like `wake.py`) answers the tracker's state, `PriceRefreshResponse` (`backend/app/schemas/sleep_wake.py`). It reads the same tracker as the header, so the two agree.
 
 * **Signed-in users only**, any role: `get_current_user` answers `401` without a valid session, and the answer tells nothing about anyone's data. On a blocked instance the route is not on the allow-list: a signed-in user gets the `423` of the [Instance Block](../architecture/security.md#instance-block). The web app stops asking at the first `4xx` ([After a 4xx](../frontend/components/features/live-ticker.md#price-refresh-4xx)).
-* **A request of the user.** For the activity record it counts like any route but the probes, the wake-up and the hosting panel's routes: while the web app asks, the [idle suspension](../../admin/sleep_wake.md#idle-suspend) sees a user.
+* **A request of the user.** For the activity record it counts like any route but the probes, the wake-up and the hosting panel's routes: while the web app asks, the idle suspension sees a user.
 
 | Field | What it holds |
 |---|---|
@@ -242,7 +242,7 @@ Where Python has no `fcntl`, `_run_locked()` asks `am_i_leader()` instead, right
 
 ### 🧩 Per Process, Either Way {: #workers-per-process }
 
-The catch-up tracker (`PRICE_REFRESH`, and its header `X-LibreFolio-Price-Refresh`), the activity record and the idle monitor stay per process. With several workers, the notice **Updating prices…** shows on the answers of the worker that runs the jobs, as it did on the leader's, and may be missing ([One Process, Several Workers](#price-refresh-workers)); each worker counts only its own requests for the [idle suspension](../../admin/sleep_wake.md#idle-suspend-timing). The Docker image runs a single worker (its `CMD` starts `uvicorn` without `--workers`), and so does a Fly.io machine that runs it; `./dev.py server --workers N` starts several.
+The catch-up tracker (`PRICE_REFRESH`, and its header `X-LibreFolio-Price-Refresh`), the activity record and the idle monitor stay per process. With several workers, the notice **Updating prices…** shows on the answers of the worker that runs the jobs, as it did on the leader's, and may be missing ([One Process, Several Workers](#price-refresh-workers)); each worker counts only its own requests for the idle suspension. The Docker image runs a single worker (its `CMD` starts `uvicorn` without `--workers`), and so does a Fly.io machine that runs it; `./dev.py server --workers N` starts several.
 
 ---
 
@@ -304,6 +304,5 @@ History-sync times and days are stored as local wall-clock values in `scheduler_
 
 * 📡 **[Live Prices](../frontend/components/features/live-ticker.md)** — How the Assets list and the asset detail page poll current prices
 * ⏳ **[Updating prices…](../frontend/components/features/live-ticker.md#price-refresh)** — How the web app follows a catch-up, and its notice
-* 🛠️ **[While Prices Catch Up](../../admin/wake_sync.md#price-refresh)** — What users see during a catch-up
 * 💰 **[Asset Architecture](assets/architecture.md)** — Pricing provider pipelines and sync steps
 * ⚙️ **[Settings System](../architecture/settings.md)** — Dynamic global configuration variables

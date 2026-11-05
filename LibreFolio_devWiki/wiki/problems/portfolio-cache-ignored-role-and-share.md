@@ -35,10 +35,10 @@ percentage, with 0 % a valid share. Two defects came out of the work:
 
 Two commits of 01/09/2026, both titled «fix: consolidate beta user feedback (F1–F17)» and both shipped in 1.1.0:
 
-- **role-aware scaling** (`e3aee4032`): an owner's share scales the broker's contribution (0 % contributes nothing);
+- **role-aware scaling** (`d1ae2fb49`): an owner's share scales the broker's contribution (0 % contributes nothing);
   an editor or a viewer always scales by 1. Today the rule has one home, `effective_share()` in
   `financial_math/native_cash.py` (see [[decisions/native-cash-daily-revaluation]]);
-- an **access fingerprint** (`3b48e25b4`), the sorted `(broker_id, role, share)` of every access in scope, enters **both** cache
+- an **access fingerprint** (`9c5809792`), the sorted `(broker_id, role, share)` of every access in scope, enters **both** cache
   keys, so a changed share or role misses the cache by itself, without any explicit invalidation. The role is read as
   `getattr(role, "value", role)`, because a model built in the session may carry it as a plain string.
 

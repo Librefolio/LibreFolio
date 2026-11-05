@@ -91,8 +91,8 @@ Each wave, before any commit:
 ## Links
 - [[features/F-007]]
 - Source: `LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md`
-- Entered `dev_release2` on 15/10 with `1011850a6`, the four lots being `e75139f3e`, `08c38e262`, `22beea1a6` and
-  `972b08304`.
+- Entered `dev_release2` on 15/10 with `893df873a`, the four lots being `95a968811`, `c97833e6f`, `9199c2178` and
+  `8bae04c5c`.
 
 ## Source files
 | Role | Path |

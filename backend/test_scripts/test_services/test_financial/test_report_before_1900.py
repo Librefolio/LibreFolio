@@ -19,7 +19,7 @@ the API):
 ``include_summary``, ``include_history``, ``include_allocation_history``, ``include_broker_pnl_history`` and
 ``include_pnl_candles`` are on. The 1Y window starts a year before A's first row, inside B's long step.
 
-What each test pins, and how it stands on HEAD a4316d9a0 (the floor still in the engine):
+What each test pins, and how it stands on HEAD 962810da1 (the floor still in the engine):
 
 - ``TestTheHistoryStartsOnTheFirstRow`` — RED on HEAD: the report's ``range.start`` is 1900-01-01, not 0001-01-03, and so are
   the first date of ``history``, ``allocation_history``, ``broker_pnl_history``, ``pnl_candles`` and ``mwrr_line``. GREEN
@@ -92,7 +92,7 @@ PEAK_BUDGET_BYTES = 50 * 1024 * 1024
 #: ``state_on`` calls tolerated in ``get_report``: a small constant, never proportional to the days or the steps. The summary
 #: reads single days — the end state, the day change (two days), the period boundaries, the current allocations — and
 #: the data-quality and allocation-id readers walk ``iter_segments`` (one call per segment is NOT ``state_on``). Measured
-#: on HEAD a4316d9a0: 10 for «all», 15 for the 1Y window (87 history steps each); a reader walking the days would make
+#: on HEAD 962810da1: 10 for «all», 15 for the 1Y window (87 history steps each); a reader walking the days would make
 #: 740 000, one walking the steps ~90 more per walk.
 STATE_ON_BUDGET = 30
 
@@ -268,7 +268,7 @@ def _finite(value) -> bool:
 
 class TestTheHistoryStartsOnTheFirstRow:
     def test_the_range_starts_on_the_first_row(self, whole):
-        """RED on HEAD a4316d9a0: ``range.start`` is 1900-01-01 (the engine floor), the contract is the first row, 0001-01-03,
+        """RED on HEAD 962810da1: ``range.start`` is 1900-01-01 (the engine floor), the contract is the first row, 0001-01-03,
         even though no API can write it."""
         report = whole.report
         assert report.range is not None, "include_history=True gives the report a range"

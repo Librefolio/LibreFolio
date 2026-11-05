@@ -3,7 +3,7 @@
 An income's eligible quantity is what the position held at the end of the day before it (D-1). An income stored on
 date.min (0001-01-01: an older version or a hand edit; N74 refuses new rows before 1900) has no day before it: nothing
 was held then, so its Yield on Cost is unavailable with INCOME_WITHOUT_ELIGIBLE_QUANTITY, as for any income with
-nothing held the day before. On HEAD 8a6fa4158 ``_calculate_income_position`` subtracts a day from it: OverflowError.
+nothing held the day before. On HEAD b44bdd333 ``_calculate_income_position`` subtracts a day from it: OverflowError.
 
 The per-position seam ``_calculate_position`` is called with the contexts ``calculate_yield_on_cost_for_positions``
 builds from the database, here in memory: the replay is the FIFO engine over the position's rows with a quantity, and
@@ -11,7 +11,7 @@ the income is already in the report currency. These cases use the report end 000
 [as_of - 364 days, as_of] reaches date.min by plain arithmetic.
 
 The trailing year itself is computed by ``calculate_yield_on_cost_for_positions``: for an as_of earlier in year 1 its
-start falls before date.min, and on HEAD 4c199df98 ``as_of_date - timedelta(days=364)`` raises OverflowError before
+start falls before date.min, and on HEAD f2a12860d ``as_of_date - timedelta(days=364)`` raises OverflowError before
 anything is loaded. The last test pins that window through the entry, with the one loader that reads the database
 replaced by a stub that records the window and returns an empty ledger.
 """
@@ -72,7 +72,7 @@ def _yield_on_cost(*, bought_on: date, income_on: date, as_of: date):
     ],
 )
 def test_income_with_nothing_held_the_day_before_is_unavailable(bought_on, income_on, as_of):
-    """Red on HEAD 8a6fa4158 for ``date_min`` (OverflowError). The only lot was bought on the income's day, so nothing
+    """Red on HEAD b44bdd333 for ``date_min`` (OverflowError). The only lot was bought on the income's day, so nothing
     was held the day before: unavailable, INCOME_WITHOUT_ELIGIBLE_QUANTITY, the issue dated on the income — for
     ``ordinary_day`` today, and for date.min, which has no day before at all."""
     result = _yield_on_cost(bought_on=bought_on, income_on=income_on, as_of=as_of)
@@ -92,7 +92,7 @@ def test_income_with_nothing_held_the_day_before_is_unavailable(bought_on, incom
     ],
 )
 def test_income_with_a_lot_held_the_day_before_is_available(bought_on, income_on, as_of):
-    """Guard (green on HEAD 8a6fa4158 and after). The 10 units were held the day before the income — date.min itself
+    """Guard (green on HEAD b44bdd333 and after). The 10 units were held the day before the income — date.min itself
     for ``day_after_date_min``: 5 EUR / 10 units = 0.5 EUR per unit, over a WAC of 10 EUR = 0.05."""
     result = _yield_on_cost(bought_on=bought_on, income_on=income_on, as_of=as_of)
 
@@ -117,7 +117,7 @@ _NO_DATABASE = object()
     ],
 )
 async def test_trailing_year_starts_on_date_min_at_the_earliest(monkeypatch, as_of, expected_window_start):
-    """Red on HEAD 4c199df98 for ``as_of_in_year_one`` (OverflowError: 0001-06-01 minus 364 days is before date.min,
+    """Red on HEAD f2a12860d for ``as_of_in_year_one`` (OverflowError: 0001-06-01 minus 364 days is before date.min,
     raised before the ledger is loaded). The trailing year is [as_of - 364 days, as_of], cut at date.min: the window
     handed to the loader and written in the provenance starts on date.min. ``as_of_on_the_last_day_of_year_one``
     (exactly date.min by plain arithmetic) and ``ordinary_as_of`` are the guards, as today.

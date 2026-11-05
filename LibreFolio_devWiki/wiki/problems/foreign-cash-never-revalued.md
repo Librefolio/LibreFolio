@@ -44,8 +44,8 @@ the way between two brokers. Found by lot 41's inventory on 2026-10-10 (backlog 
 Lot 41, part F ([[decisions/native-cash-daily-revaluation]]): one native-cash ledger per broker and currency
 ([[entities/native-cash]]); on every rate-change day the engine revalues foreign cash and books the difference to the
 broker's returns pool (a loss larger than the returns comes out of capital); the service reads the cards, the headline
-and the period flows from the same ledger, so the headline cash equals the sum of the cards. Commits `e95d053e4`
-(module), `04522e123` (engine), `df5db60d0` (service); train 42.
+and the period flows from the same ledger, so the headline cash equals the sum of the cards. Commits `862d3fa32`
+(module), `23cbffea9` (engine), `b11c7720e` (service); train 42.
 
 ## Prevention
 

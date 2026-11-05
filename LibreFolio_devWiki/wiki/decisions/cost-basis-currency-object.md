@@ -52,7 +52,7 @@ New column `cost_basis_currency VARCHAR(3)` alongside existing `cost_basis_overr
 - `TXReadItem.from_db_model()` constructs Currency from two DB columns
 
 ## Implementation
-- Commit: `6f8768c4c` (SP-A)
+- Commit: `5441cf544` (SP-A)
 - Files: `backend/app/db/models.py`, `backend/app/schemas/transactions/transactions.py`, `backend/alembic/versions/001_initial.py`
 
 ## Source files

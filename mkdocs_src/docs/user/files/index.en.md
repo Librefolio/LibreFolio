@@ -5,6 +5,8 @@ The **Files** page keeps everything uploaded to LibreFolio, in two tabs:
 - **Static Resources** — avatars, broker icons and other images or documents, each one **shared** with every user or **personal** to whoever uploaded it;
 - **Broker Reports** — the statement files you import transactions from, visible only to the people with access to their broker.
 
+Administrators also see a third tab, [Backups](#backups-tab), and a bar with the [space the instance takes](#space-used).
+
 ---
 
 ## 🖼️ Static resources
@@ -117,6 +119,20 @@ Both tabs show who uploaded each file in the **Uploaded by** column, with the pe
 - a file whose uploader was not recorded shows *Uploader not recorded*.
 
 The filter also applies to the grid view of **Static Resources**. It is saved in the page address, so a bookmark or a shared link opens with the same filter.
+
+---
+
+## 🛠️ For Administrators {: #admin-files }
+
+Only administrators see what follows; other users find neither on the page.
+
+### 📊 The space used {: #space-used }
+
+Above the tabs, a bar shows how much room the instance takes, split into the **database**, the **uploaded files**, the **broker reports**, the **backups** and the **other LibreFolio files**. With no limit set it is drawn against the disk, with the other files of the disk in grey; with a limit, against that limit. In the same bar you set the **Space limit (MB)**, `0` for no limit. When the limit is passed, the bar warns you, and nothing is deleted. The bar reads again with **Refresh**. How to read it, and what sets the limit: [The Space Bar](../../admin/backup_restore.md#space-used).
+
+### 🗃️ The Backups tab {: #backups-tab }
+
+The **Backups** tab lists the backups LibreFolio keeps on the server, with their date, origin, type and size. For each one you can **Download** or **Delete** it. The same list is in **Settings › Administration › Backup**, where you also set the automatic clean-up: see [Backups Kept on the Server](../../admin/backup_restore.md#kept-backups).
 
 ---
 

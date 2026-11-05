@@ -8,7 +8,7 @@ The rest of the guide starts on [Backup, Restore and Moving Your Instance](backu
 
 ## 🔏 Sealed Backups: a Key Instead of a Password {: #sealed }
 
-A sealed backup is for a server that makes backups on its own, such as every night, without anyone typing a password and without keeping one on its disk. LibreFolio makes a [secure backup](backup_restore.md#secure) with a random password of its own, encrypts that password with [age](https://age-encryption.org/) for a public key you give it, and forgets it: only the private key that goes with it opens the password, and the server that made the backup cannot open it again. A hosting panel's nightly backups work this way, and so can yours.
+A sealed backup is for a server that makes backups on its own, such as every night, without anyone typing a password and without keeping one on its disk. LibreFolio makes a [secure backup](backup_restore.md#secure) with a random password of its own, encrypts that password with [age](https://age-encryption.org/) for a public key you give it, and forgets it: only the private key that goes with it opens the password, and the server that made the backup cannot open it again.
 
 In three commands:
 
@@ -35,7 +35,7 @@ flowchart LR
         PWD --> TAR
         ENV --> TAR
     end
-    TAR --> STORE["Your storage: a NAS, restic, a hosting panel"]
+    TAR --> STORE["Your storage: a NAS, restic"]
     subgraph restore["To restore, where the private key is"]
         KEY["private key AGE-SECRET-KEY-1…"] -->|"opens password.age"| PASS["the password"]
         PASS --> RES["restore of backup.lfbk"]
@@ -135,16 +135,15 @@ With Docker Compose, `env_file: .env` passes it to the container: run `docker co
 - 🔢 **One or two keys**, comma-separated; the spaces around each one do not count. Two only while you [change the key](#sealed-rotation): the password is then encrypted for both, and either private key opens it.
 - 🧾 **Only age keys**, `age1…`, as `backup keygen` or `age-keygen` prints them: no SSH key, no private key, no other kind of age key, and never the same key twice.
 - 🌐 **Not a secret.** A public key seals and opens nothing, so there is no `_FILE` form, and it may sit in `.env` with the other settings.
-- 🔁 **Read each time it is used**: by `backup create --sealed`, and by every backup a [hosting panel](hosting_panel_backups.md#panel-backups) starts, which it seals. The backups of Settings › Administration › Backup are not sealed: they keep the password you type.
+- 🔁 **Read each time it is used**: by `backup create --sealed`. The backups of Settings › Administration › Backup are not sealed: they keep the password you type.
 
 **The check.** The **Security** tab of Settings › Administration, and the start log, report the variable as `backup.recipients`, in one of four states:
 
 | State | What the tab says | What happens |
 | --- | --- | --- |
-| ✅ Set, usable | *The hosting panel's backups are sealed for 1 key: only the private key opens their password.* (or *2 keys*) | `backup create --sealed` and the hosting panel's backups are sealed |
-| ✅ Not set, your own installation | *No recipients are set for the hosting panel's backups: the panel gets plain zip archives.* | `backup create --sealed` stops with `❌ LIBREFOLIO_BACKUP_RECIPIENTS is not set: …`; a hosting panel, if you have one, gets clear zips, as before |
-| ❌ Set, not usable | *LIBREFOLIO_BACKUP_RECIPIENTS cannot be used (…): one or two age1… recipients, comma-separated. The hosting panel's backups answer 503 until it is fixed.* The parentheses hold `BACKUP_RECIPIENTS_INVALID` (not an `age1…` key, or an empty item between two commas), `BACKUP_RECIPIENTS_TOO_MANY` (more than two) or `BACKUP_RECIPIENTS_DUPLICATE` (the same key twice) | The server starts anyway. `backup create --sealed` stops with the same reason, and a hosting panel's backups answer `503` `backup_panel_unavailable`: never a clear zip instead |
-| ❌ Not set, `managed` profile | *LIBREFOLIO_BACKUP_RECIPIENTS is not set: a managed instance never hands a plain backup to its hosting panel, whose backups answer 503 until it is set.* | An instance [hosted for others](hosting_providers.md#managed-profile) never hands its panel a backup in clear: its panel's backups answer `503` `backup_panel_unavailable` until the variable is set |
+| ✅ Set, usable | *The hosting panel's backups are sealed for 1 key: only the private key opens their password.* (or *2 keys*) | `backup create --sealed` works |
+| ✅ Not set, your own installation | *No recipients are set for the hosting panel's backups: the panel gets plain zip archives.* | `backup create --sealed` stops with `❌ LIBREFOLIO_BACKUP_RECIPIENTS is not set: …` |
+| ❌ Set, not usable | *LIBREFOLIO_BACKUP_RECIPIENTS cannot be used (…): one or two age1… recipients, comma-separated. The hosting panel's backups answer 503 until it is fixed.* The parentheses hold `BACKUP_RECIPIENTS_INVALID` (not an `age1…` key, or an empty item between two commas), `BACKUP_RECIPIENTS_TOO_MANY` (more than two) or `BACKUP_RECIPIENTS_DUPLICATE` (the same key twice) | The server starts anyway. `backup create --sealed` stops with the same reason |
 
 The messages never quote the value, so that a private key pasted by mistake does not land in a log.
 
@@ -212,7 +211,7 @@ With the variable set, `backup create --sealed` makes a sealed backup with no te
 # Host installation: into a folder of a NAS that is mounted
 30 3 * * * cd /path/to/LibreFolio && pipenv run ./dev.py backup create --sealed --output /mnt/nas/librefolio/
 
-# Docker: -T, as cron gives the command no terminal; the archive lands in LibreFolio-data/backups/
+# Docker: -T, as cron gives the command no terminal; the archive stays in its own folder of LibreFolio-data/backups/
 30 3 * * * cd /path/to/librefolio && docker compose exec -T librefolio python dev.py backup create --sealed
 ```
 

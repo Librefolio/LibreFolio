@@ -15,7 +15,7 @@ related:
 # Decision: docs link anchors are read from the page's MkDocs render
 
 > Written by workstream M as a note for the devWiki on 2026-10-11, filed by the historian on 2026-10-12 with its paths
-> and commits checked at `9f63eec22`.
+> and commits checked at `4bc7be91b`.
 
 ## Context
 
@@ -77,8 +77,8 @@ pages** (13,992 ids). `check-links` gave the same 95 valid links before and afte
 - [[concepts/mkdocs-suffix-i18n]] — the suffix structure and its anchors
 - [[problems/stamps-hide-stale-translations]] — the same round's other blind spot of the checks
 - [[decisions/user-docs-plain-dev-manual-technical]] — the rules of the English pages these checks guard
-- Commits: `9ec33e205` "fix(i18n): anchors from the page's MkDocs render" and `d257ed70a` "fix(dev): check-links
-  reads rendered anchors"; batch 13, merged as `3944db5bd` (train 33)
+- Commits: `b0e7a5452` "fix(i18n): anchors from the page's MkDocs render" and `a16ae3e77` "fix(dev): check-links
+  reads rendered anchors"; batch 13, merged as `da79f6e20` (train 33)
 - Source: [[sources/phase00-translation-round12-2026-10]]
 
 ## Source files
