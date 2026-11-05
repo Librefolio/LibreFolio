@@ -12,15 +12,9 @@ LibreFolio est un suivi de portefeuille open-source qui vous offre une vue compl
 
 Oui ! LibreFolio est entièrement gratuit et open-source sous [licence AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Vous pouvez l'installer sur votre propre serveur et tout gérer vous-même, sans frais.
 
-!!! info "Bientôt disponible : plateforme hébergée ☁️"
-
-    Nous travaillons sur une plateforme en ligne pour ceux qui n'ont ni le temps, ni l'envie, ni les compétences techniques pour l'auto-héberger. La version hébergée offrira toutes les fonctionnalités sans configuration, avec des mises à jour automatiques et un support dédié — disponible sous forme d'abonnement payant.
-
 ### 🤖 Puis-je utiliser LibreFolio avec un assistant IA ?
 
 Oui. **[Export IA](../user/ai-export/index.md)** copie vos données sous forme de texte prêt à coller, avec une question ciblée si vous le souhaitez, afin que vous puissiez interroger l'assistant IA de votre choix au sujet de votre portefeuille, d'un courtier, d'un actif ou d'une paire de devises. LibreFolio lui-même ne contacte jamais de service d'IA.
-
-Sur la future plateforme hébergée, les assistants IA seront entièrement intégrés : prêts à l'emploi sans configuration, avec un support premium.
 
 ### 📊 Quels actifs puis-je suivre ?
 
@@ -47,15 +41,15 @@ Suivez le [Guide d'installation Docker](../user/installation.md), la méthode re
 
 ### 👤 Comment créer un compte ?
 
-1. Ouvrez la page de connexion.
-2. Cliquez sur **Inscrivez-vous ici**, à côté de *Vous n'avez pas de compte ?*
-3. Remplissez vos informations : votre compte est prêt à l'emploi.
+1. Ouvrez la page de connexion et cliquez sur **Inscrivez-vous ici**, à côté de *Vous n'avez pas de compte ?* Si un administrateur vous a envoyé un lien d'invitation, ouvrez plutôt ce lien.
+2. Remplissez vos informations, puis cliquez sur **S'inscrire**.
+3. Vous revenez sur la page de connexion : connectez-vous avec votre nouveau compte.
 
-Sur une nouvelle instance, le premier compte créé devient l'administrateur. Ensuite, l'inscription ne fonctionne que tant que l'administrateur garde **Activer l'inscription** activé dans les [Paramètres globaux](../admin/settings.md) ; sinon, demandez-lui un compte.
+Si la page de connexion n'affiche pas **Inscrivez-vous ici**, ce serveur n'accepte de nouveaux comptes que par un lien d'invitation, ou pas du tout : demandez à l'administrateur. Sur une nouvelle instance, le premier compte créé devient l'administrateur. Détails : [Premiers pas](../user/getting-started.md#invitation-link) et, pour les administrateurs, [Qui peut s'inscrire](../admin/settings.md#registration).
 
 ### 🔑 J'ai oublié mon mot de passe, que faire ?
 
-La récupération par e-mail n'est pas encore disponible : demandez à l'administrateur de votre instance, qui peut définir un nouveau mot de passe depuis la ligne de commande ([Réinitialiser un mot de passe](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
+Sur la page de connexion, cliquez sur **Mot de passe oublié ?**. Si votre instance peut envoyer des e-mails, saisissez-y votre nom d'utilisateur ou votre adresse e-mail et vous recevez un lien de réinitialisation valable 30 minutes ([comment ça marche](../user/getting-started.md#forgot-password)). Sinon, demandez à l'administrateur de votre instance. Il peut vous envoyer un lien de réinitialisation du mot de passe, avec lequel vous choisissez vous-même le nouveau mot de passe ([comment ça marche](../user/getting-started.md#password-reset-link)), ou définir un nouveau mot de passe pour vous depuis la ligne de commande ([Réinitialiser un mot de passe](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
 
 ## 🔧 Dépannage
 
@@ -63,7 +57,7 @@ La récupération par e-mail n'est pas encore disponible : demandez à l'adminis
 
 Vérifiez que :
 
-1. L'option **Planificateur activé** est activée dans les [Paramètres globaux](../admin/settings.md#market-data-scheduler) : c'est elle qui exécute les mises à jour automatiques
+1. L'option **Planificateur activé** est activée dans les [Paramètres globaux](../admin/settings.md#market-data-scheduler) : c'est elle qui exécute les mises à jour automatiques. Seuls les administrateurs ont cet onglet : si ce n'est pas votre cas, demandez à votre administrateur de le vérifier
 2. Vos actifs ont des codes ISIN ou des symboles valides reconnus par le **fournisseur de données** configuré (par ex., [yfinance](https://pypi.org/project/yfinance/) pour les actions et les ETF)
 3. Le service du fournisseur est disponible (consultez les journaux du serveur pour les erreurs)
 
@@ -71,7 +65,7 @@ Vérifiez que :
 
 Vérifiez que :
 
-1. L'option **Planificateur activé** est activée dans les [Paramètres globaux](../admin/settings.md#market-data-scheduler)
+1. L'option **Planificateur activé** est activée dans les [Paramètres globaux](../admin/settings.md#market-data-scheduler). Seuls les administrateurs ont cet onglet : si ce n'est pas votre cas, demandez à votre administrateur de le vérifier
 2. La paire de devises a au moins un [fournisseur de données configuré](../user/fx/detail/provider.md)
 3. L'API du fournisseur est accessible (BCE, Fed, BoE, BNS)
 4. Vous avez exécuté une [synchronisation](../user/fx/sync.md) pour la plage de dates souhaitée

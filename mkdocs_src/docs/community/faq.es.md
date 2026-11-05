@@ -12,15 +12,9 @@ LibreFolio es un rastreador de carteras de código abierto que te ofrece una vis
 
 ¡Sí! LibreFolio es completamente gratis y de código abierto bajo la [licencia AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Puedes instalarlo en tu propio servidor y gestionarlo todo tú mismo sin coste alguno.
 
-!!! info "Próximamente: plataforma alojada ☁️"
-
-    Estamos trabajando en una plataforma en línea para quienes no tienen el tiempo, el interés o las habilidades técnicas para autoalojarla. La versión alojada ofrecerá todas las funciones sin necesidad de configuración, actualizaciones automáticas y soporte dedicado — disponible como suscripción de pago.
-
 ### 🤖 ¿Puedo usar LibreFolio con un asistente de IA?
 
 Sí. **[Exportación IA](../user/ai-export/index.md)** copia tus datos como texto listo para pegar, con una pregunta específica si lo deseas, para que puedas preguntar al asistente de IA que elijas sobre tu cartera, un bróker, un activo o un par FX. LibreFolio en sí nunca contacta con un servicio de IA.
-
-En la próxima plataforma alojada, los asistentes de IA estarán totalmente integrados: listos para usar sin configuración, junto con soporte premium.
 
 ### 📊 ¿Qué activos puedo seguir?
 
@@ -47,15 +41,15 @@ Sigue la [Guía de instalación con Docker](../user/installation.md), la forma r
 
 ### 👤 ¿Cómo creo una cuenta?
 
-1. Abre la página de inicio de sesión.
-2. Haz clic en **Regístrate aquí**, junto a *¿No tienes una cuenta?*
-3. Rellena tus datos: tu cuenta está lista para usar.
+1. Abre la página de inicio de sesión y haz clic en **Regístrate aquí**, junto a *¿No tienes una cuenta?* Si un administrador te envió un enlace de invitación, abre ese enlace en su lugar.
+2. Rellena tus datos y haz clic en **Registrarse**.
+3. Vuelves a la página de inicio de sesión: inicia sesión con tu nueva cuenta.
 
-En una instancia nueva, la primera cuenta creada se convierte en administrador. Después de eso, el registro solo funciona mientras el administrador mantenga **Habilitar registro** activado en la [Configuración global](../admin/settings.md); de lo contrario, pídele una cuenta.
+Si la página de inicio de sesión no muestra **Regístrate aquí**, este servidor solo acepta cuentas nuevas mediante un enlace de invitación, o no acepta ninguna: pregunta al administrador. En una instancia nueva, la primera cuenta creada se convierte en administrador. Detalles: [Primeros pasos](../user/getting-started.md#invitation-link) y, para administradores, [Quién puede registrarse](../admin/settings.md#registration).
 
 ### 🔑 Olvidé mi contraseña, ¿qué hago?
 
-La recuperación por correo electrónico aún no está disponible: pídele a tu administrador de instancia que establezca una nueva contraseña desde la línea de comandos ([Restablecer una contraseña](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
+En la página de inicio de sesión, haz clic en **¿Olvidaste tu contraseña?**. Si tu instancia puede enviar correos electrónicos, escribe ahí tu nombre de usuario o tu dirección de correo y recibes un enlace de restablecimiento válido durante 30 minutos ([cómo funciona](../user/getting-started.md#forgot-password)). Si no, pídeselo a tu administrador de instancia. Puede enviarte un enlace de restablecimiento de contraseña, con el que eliges tú mismo la nueva contraseña ([cómo funciona](../user/getting-started.md#password-reset-link)), o establecer una nueva contraseña por ti desde la línea de comandos ([Restablecer una contraseña](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
 
 ## 🔧 Solución de problemas
 
@@ -63,7 +57,7 @@ La recuperación por correo electrónico aún no está disponible: pídele a tu 
 
 Comprueba que:
 
-1. **Planificador Activado** esté encendido en la [Configuración global](../admin/settings.md#market-data-scheduler): ejecuta las actualizaciones automáticas
+1. **Planificador Activado** esté encendido en la [Configuración global](../admin/settings.md#market-data-scheduler): ejecuta las actualizaciones automáticas. Solo los administradores tienen esa pestaña: si no lo eres, pide a tu administrador que lo compruebe
 2. Tus activos tengan ISIN o símbolos válidos reconocidos por el **proveedor de datos** configurado (p. ej., [yfinance](https://pypi.org/project/yfinance/) para acciones y ETF)
 3. El servicio del proveedor esté disponible (revisa los registros del servidor en busca de errores)
 
@@ -71,7 +65,7 @@ Comprueba que:
 
 Comprueba que:
 
-1. **Planificador Activado** esté encendido en la [Configuración global](../admin/settings.md#market-data-scheduler)
+1. **Planificador Activado** esté encendido en la [Configuración global](../admin/settings.md#market-data-scheduler). Solo los administradores tienen esa pestaña: si no lo eres, pide a tu administrador que lo compruebe
 2. El par FX tenga al menos un [proveedor de datos configurado](../user/fx/detail/provider.md)
 3. La API del proveedor sea accesible (ECB, FED, BOE, SNB)
 4. Hayas ejecutado una [sincronización](../user/fx/sync.md) para el rango de fechas deseado
