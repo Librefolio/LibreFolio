@@ -487,7 +487,7 @@ chiude questa voce (`L4WhatIf.svelte`).
 bootstrap ripesca ogni osservazione `orizzonte / n_osservazioni` volte: con 93 osservazioni su 365 giorni assume che quel
 trimestre duri quattro volte tanto. Non dipende dai dati finti: chi tiene crypto e sceglie «3M» riceve questo.
 
-**⚠️ Il denominatore è gonfiato.** `series_preparation.py` riporta i prezzi in avanti, quindi `n_observations` conta giorni di
+**⚠️ Il denominatore è gonfiato.** La preparazione delle serie riporta i prezzi in avanti, quindi `n_observations` conta giorni di
 calendario, e 540 giorni restituiscono le stesse 360 osservazioni di 365. Chiedere più storia può ridare in silenzio la stessa
 storia.
 
