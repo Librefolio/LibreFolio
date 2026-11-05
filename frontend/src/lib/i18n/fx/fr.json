@@ -58,6 +58,7 @@
       "unusableHint": "Ces fournisseurs n'ont pas de chemin de conversion automatique pour cette paire de devises.",
       "steps": "étapes",
       "noRoutesAvailable": "Aucune route de conversion automatique trouvée pour cette paire. Vous pouvez quand même sauvegarder sans fournisseur et insérer les taux manuellement.",
+      "providersUnavailable": "Les routes de conversion ne sont pas disponibles pour le moment. Fermez cette fenêtre et rouvrez-la dans un instant.",
       "chainWarning": "Les chaînes nécessitent que TOUTES les étapes intermédiaires réussissent lors de la synchronisation. Si un fournisseur échoue, toute la chaîne échoue pour cette date.",
       "searchPlaceholder": "Rechercher fournisseurs, devises, pays…",
       "noSearchResults": "Aucune route ne correspond à la recherche",

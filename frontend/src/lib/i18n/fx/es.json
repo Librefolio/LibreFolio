@@ -58,6 +58,7 @@
       "unusableHint": "Estos proveedores no tienen una ruta de conversión automática para este par de divisas.",
       "steps": "pasos",
       "noRoutesAvailable": "No se encontraron rutas de conversión automáticas para este par. Puede guardar sin proveedor e insertar los tipos de cambio manualmente.",
+      "providersUnavailable": "Las rutas de conversión no están disponibles en este momento. Cierre esta ventana y vuelva a abrirla en unos instantes.",
       "chainWarning": "Las cadenas requieren que TODOS los pasos intermedios tengan éxito durante la sincronización. Si un proveedor falla, toda la cadena falla para esa fecha.",
       "searchPlaceholder": "Buscar proveedores, divisas, países…",
       "noSearchResults": "Ninguna ruta coincide con la búsqueda",

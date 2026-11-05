@@ -58,6 +58,7 @@
       "unusableHint": "Questi provider non hanno un percorso di conversione automatico per questa coppia di valute.",
       "steps": "passi",
       "noRoutesAvailable": "Nessun percorso di conversione automatico trovato per questa coppia. Puoi comunque salvare senza provider e inserire i tassi manualmente.",
+      "providersUnavailable": "Percorsi di conversione non disponibili al momento. Chiudi questa finestra e riaprila fra poco.",
       "chainWarning": "Le catene richiedono che TUTTI i passaggi intermedi riescano durante il sync. Se un provider fallisce, l'intera catena fallisce per quella data.",
       "searchPlaceholder": "Cerca provider, valute, paesi…",
       "noSearchResults": "Nessun percorso corrisponde alla ricerca",

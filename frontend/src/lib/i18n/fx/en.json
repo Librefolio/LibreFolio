@@ -58,6 +58,7 @@
       "unusableHint": "These providers have no automatic conversion path for this currency pair.",
       "steps": "steps",
       "noRoutesAvailable": "No automatic conversion routes found for this currency pair. You can still save without a provider and insert rates manually.",
+      "providersUnavailable": "Conversion routes are not available right now. Close this window and open it again in a moment.",
       "chainWarning": "Chain routes require ALL intermediate steps to succeed during sync. If any provider fails, the entire chain fails for that date.",
       "searchPlaceholder": "Search providers, currencies, countries…",
       "noSearchResults": "No routes match the search query",
