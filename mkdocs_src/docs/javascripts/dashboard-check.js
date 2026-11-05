@@ -1,9 +1,11 @@
 /**
  * Dashboard Connectivity Check
  *
- * Adds a 🚀 dashboard icon in the MkDocs header (next to theme toggle and
- * language selector). The icon is hidden by default and only shown when the
- * LibreFolio server is online (health check passes).
+ * Adds a 🚀 dashboard icon in the MkDocs header, between the Buy Me a Coffee
+ * link and the search box (where the theme toggle used to sit: the toggle now
+ * sits beside the language selector, as in the app's header). The icon is hidden
+ * by default and only shown when the LibreFolio server is online (health check
+ * passes).
  */
 (function () {
     'use strict';
@@ -59,10 +61,10 @@
 
         var icon = createDashboardIcon();
 
-        // Insert before the source/repo link (right side of header)
-        var headerSource = document.querySelector('.md-header__source');
-        if (headerSource) {
-            headerSource.parentNode.insertBefore(icon, headerSource);
+        // Insert right before the search box: the search toggle label is its first element
+        var searchToggle = headerInner.querySelector('label[for="__search"]');
+        if (searchToggle) {
+            searchToggle.parentNode.insertBefore(icon, searchToggle);
         } else {
             headerInner.appendChild(icon);
         }
