@@ -335,6 +335,30 @@ Gli amministratori controllano l'email dell'istanza: se può spedire, quante ema
     <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
 </div>
 
+### 🚨 Controlli di sicurezza (Admin)
+
+Gli amministratori vedono cosa richiede attenzione e come intervenire; i controlli superati restano chiusi in fondo, e un badge su Amministrazione conta errori e avvisi.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="security" alt="Controlli di sicurezza (Admin)">
+</div>
+
+### ↩️ Ripristino annullato (Admin)
+
+Se un ripristino non va a buon fine, LibreFolio rimette i dati com'erano e spiega il motivo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-rolled-back" alt="Ripristino annullato (Admin)">
+</div>
+
+### 🧾 Esito dell'ultimo ripristino (Admin)
+
+La scheda del ripristino conserva l'esito dell'ultimo tentativo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-last-result" alt="Esito dell'ultimo ripristino (Admin)">
+</div>
+
 ### 🕐 Scheduler dati di mercato — Configurazione
 
 Configura il daemon di sincronizzazione automatica dei dati di mercato: frequenza di aggiornamento, orari di sincronizzazione della cronologia e giorni attivi.
@@ -397,6 +421,14 @@ La ricerca scende nelle pieghe e i chip dei risultati saltano al punto esatto.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Ricerca nel changelog">
+</div>
+
+### 🆕 Novità
+
+Dopo un aggiornamento, una finestra mostra cosa è cambiato dalla tua ultima versione.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="whats-new-modal" alt="Novità">
 </div>
 
 ### 🧩 Diagnostica plugin
