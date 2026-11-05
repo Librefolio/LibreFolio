@@ -330,22 +330,11 @@ parametri inventati è sofisticazione senza contenuto: fuori scope, salvo una fu
 
 ## 🔒 Ripensare struttura di accesso ai broker Utente-SuperUtente per essere GDPR compliant
 
-**Data aggiunta**: Gennaio 2026  
-**Status**: 📋 PIANIFICATO → Architettura definita in `plan-phase05-to-08-upgrade.md` §10 (GDPR/Sharing)  
-**Priorità**: Media
+**Data aggiunta**: Gennaio 2026 · **Status**: 📋 PIANIFICATO · **Priorità**: Media
 
-### Contesto
-
-La visibilità dei dati di altri utenti da parte del superuser deve essere ripensata per essere GDPR compliant.
-
-### Possibili Approcci
-
-- Superuser non vede dati personali di altri utenti senza consenso esplicito
-- Log di accesso ai dati di altri utenti
-- Anonimizzazione dei dati visualizzati (solo statistiche aggregate)
-- Meccanismo di "data request" invece di accesso diretto (utente concede accesso all'assistenza per x tempo)
-
----
+La visibilità dei dati degli altri utenti da parte del superuser va ripensata. Strade possibili: niente dati personali senza
+consenso esplicito, log degli accessi, solo statistiche aggregate, oppure una «data request» con cui l'utente concede
+l'accesso per un tempo limitato.
 
 ## 🏦 Regime Fiscale — Metodo di Vendita (FIFO, LIFO, PMC, Select ID)
 
@@ -960,44 +949,15 @@ come oggetti ORM, quindi legge tutta la storia di ogni asset. `get_prices_bulk` 
 
 ## 💡 Traccia rischio/rendimento nel tempo («snail trail»)
 
-**Data aggiunta**: 1 Ottobre 2026 · **Status**: 💡 IDEA — da approfondire prima di pianificarla ·
-**Priorità**: Bassa
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 💡 IDEA · **Priorità**: Bassa
 
-### Contesto
+La proposta: con un periodo di 1A, un punto per trimestre uniti da una linea. A trimestri non regge: su un asset che non cambia, la
+media annualizzata di un trimestre si scosta per puro caso di 2σ (±40 punti per un ETF azionario, ±140 per una cripto), quindi si
+vedrebbe un'evoluzione che non c'è.
 
-- Origine: la review del developer di L3° di Asset Global (scheda Correlazione), 01/10/2026. Il
-  parere di F è nel suo diario di avanzamento di L3°
-  (`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-L3-rischio-rendimento.md`,
-  ancora sul ramo di F).
-- Cambiando il periodo, i punti del grafico rischio/rendimento si spostano. Per mostrare
-  quell'evoluzione il developer propone una traccia: con un periodo di 1A, un punto per ciascun
-  trimestre, uniti da una linea. In letteratura esiste e si chiama *snail trail*: i punti
-  rischio/rendimento di sotto-periodi successivi, uniti nel tempo.
-
-### ⚠️ Perché non a trimestri dentro un anno
-
-- **Asse orizzontale, la volatilità**: si stima bene già su ~63 sedute (errore relativo ≈ 1/√(2n),
-  cioè 9–14% con le code grasse), e cambia davvero nel tempo, perché i mercati alternano fasi calme e
-  agitate. Qui la traccia direbbe il vero.
-- **Asse verticale, il rendimento medio annuo**: anche per un asset che non cambia affatto, la media
-  annualizzata di un sotto-periodo lungo T anni si scosta per puro caso di σ/√T. Su un trimestre fa
-  2σ: ±40 punti per un ETF azionario al 20% di volatilità, ±140 per una cripto al 70%. In più,
-  annualizzare un trimestre lo moltiplica per quattro: un +10% nel trimestre diventa «+40% annuo».
-- **Il risultato**: punti che saltano di decine di punti, e un'evoluzione che si vede ma non c'è. È
-  il grafico «plausibile ma sbagliato» che il laboratorio evita.
-- **La leggibilità**: N asset per 4 punti, più N linee che si incrociano.
-
-### Azione Futura — la versione onesta, se un giorno la si vuole
-
-- Solo per l'asset selezionato: la selezione collegata fra tabella e grafico di L3° c'è già.
-- Segmenti di un anno solare: il rendimento davvero ottenuto in quell'anno, un fatto e non
-  un'estrapolazione. Quindi solo per periodi di almeno 3 anni.
-- Calcolata dal motore (Risk): un campo nuovo nell'uscita di `asset_set_risk_return`, con le regole
-  di copertura per segmento.
-- Prima di disegnarla, un prototipo sui dati veri, per vedere se la traccia dice qualcosa di più del
-  rumore.
-- Per «come cambia il rischio nel tempo» esistono già gli indicatori Rolling Volatility e Rolling
-  Sharpe nel grafico dell'asset.
+**La versione onesta**: solo per l'asset selezionato, a segmenti di un anno solare (il rendimento davvero ottenuto), per periodi
+di almeno 3 anni, calcolata dal motore in `asset_set_risk_return`. Prima un prototipo sui dati veri. Per il rischio nel tempo
+esistono già Rolling Volatility e Rolling Sharpe.
 
 ## 💰 Rischio — rendimento totale con cedole e dividendi
 
