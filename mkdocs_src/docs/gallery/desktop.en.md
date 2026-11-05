@@ -132,6 +132,8 @@ Switch between Portfolio and Period, then compare data in table or map views —
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portfolio / Map" alt="Positions — Portfolio Map">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Period / Table" alt="Positions — Period Table">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Period / Map" alt="Positions — Period Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-yoc" data-title="💰 Yield on Cost" alt="Positions — Yield on Cost">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-fx-on-cash" data-title="💱 FX on cash" alt="Positions — FX on cash">
 </div>
 
 ### 💸 Transactions Tab
@@ -187,6 +189,14 @@ The dashboard with privacy mode on — the eye button in the header and every am
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Privacy Mode">
+</div>
+
+### 🤖 AI Export
+
+Choose what to export for your AI assistant: the category, the dataset, the detail level, the period and your notes.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="ai-export" data-name="dialog-dataset" alt="AI Export">
 </div>
 
 ---
@@ -547,6 +557,7 @@ Switch between Portfolio and Period, then compare data in table or map views.
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portfolio / Map" alt="Broker Positions — Portfolio Map">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Period / Table" alt="Broker Positions — Period Table">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Period / Map" alt="Broker Positions — Period Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-yoc" data-title="💰 Yield on Cost" alt="Broker Positions — Yield on Cost">
 </div>
 
 ### ℹ️ Broker Info
