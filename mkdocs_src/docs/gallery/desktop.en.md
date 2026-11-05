@@ -338,6 +338,30 @@ Administrators check the instance's email: whether it can send, how many emails 
     <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
 </div>
 
+### 🚨 Security Checks (Admin)
+
+Administrators see what needs attention and how to act on it; the passed checks stay folded below, and a badge on Administration counts the errors and warnings.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="security" alt="Security Checks (Admin)">
+</div>
+
+### ↩️ Restore Rolled Back (Admin)
+
+If a restore fails, LibreFolio puts the data back as it was and says why.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-rolled-back" alt="Restore Rolled Back (Admin)">
+</div>
+
+### 🧾 Last Restore Result (Admin)
+
+The restore card keeps the result of the last attempt.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-last-result" alt="Last Restore Result (Admin)">
+</div>
+
 ### 🕐 Market Data Scheduler — Config
 
 Configure the automatic market data sync daemon: update frequency, history sync times, and active days.
@@ -402,6 +426,14 @@ Searching descends into the folds and the result chips jump to the exact spot.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Changelog Search">
+</div>
+
+### 🆕 What's New
+
+After an update, a window shows what changed since your last version.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="whats-new-modal" alt="What's New">
 </div>
 
 ### 🧩 Plugin Diagnostics
