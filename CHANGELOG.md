@@ -136,6 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An «Export» button next to «Import CSV»**, in the edit panel of an asset's prices and of an FX pair's rates.
 - **Help that fits the problem:** a check the administrator can solve links the guide; one that only the host can solve offers «Contact support», with an email already written.
 - **Data-quality warnings on the broker page:** old prices, missing or old exchange rates and their sync buttons appear there too, for every role.
+- **Backups stay on the server:** made from the app, the command line or a hosting panel, they are listed in a table (Settings › Backup and the new Files › Backups tab) with origin, type, size and SHA-256, ready to download or delete. Administrators can set an automatic clean-up by total size and by age; the latest backup is always kept.
+- **A bar in the Files page shows administrators the space the instance takes** (database, uploaded files, broker reports, backups), against the disk or against a limit they can set; a hosting provider can fix the limit with `LIBREFOLIO_STORAGE_LIMIT_MB`.
 
 ### 🔄 Changed
 
@@ -234,6 +236,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI Export from a broker page** tells the AI that amounts are the broker's whole figures, not your share, and where your role and ownership stake are in the export.
 - **The documentation site uses the same colours as the app**, in the light and the dark theme.
 - **Syncing from an asset card asks for a confirmation** when it would write over stored prices.
+- `dev.py backup create` without `--output` keeps the backup in its own folder inside `backups/` and prints its SHA-256.
 
 #### 🎨 A new colour palette
 
@@ -495,6 +498,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sign-up:** a validation or server message already on screen follows the language you pick.
 - **Transactions on the Dashboard:** the page-size selector works.
 - **An address that does not exist** keeps you where you were, or takes you to the Dashboard or the sign-in page, instead of an error page.
+- **The password of a backup** is no longer offered by the browser as your account password.
 
 #### 🔒 Security
 
