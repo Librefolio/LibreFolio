@@ -1698,6 +1698,34 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('dashboard positions FX on cash - all languages and themes', async ({page}, testInfo) => {
+            // M-12: the exchange result on foreign cash, a row of the Performance view's secondary table (`other_effects`, code
+            // `fx_on_cash`). The captured snapshot holds none, so this one row is made up and added to the date-shifted COPY the
+            // page is served (setupDashboardMockReport's `adjust`, never the file): the report's own schema, an invented amount.
+            test.setTimeout(420_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page, (report) => {
+                const contribution = (report as unknown as {positions_contribution: {other_effects: Array<Record<string, unknown>>}}).positions_contribution;
+                contribution.other_effects.push({description: 'FX on cash', code: 'fx_on_cash', category: 'Other', period_pnl: '-84.20', broker_id: 1, broker_name: 'directa'});
+            });
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                await page.getByTestId('dashboard-tab-posizioni').click();
+                await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
+                await setPositionsView(page, 'performance', 'table');
+                const effects = page.getByTestId('other-period-effects-table');
+                await expect(effects, 'the secondary table of the period effects is on the page').toBeVisible();
+                await expect(effects.locator('[data-testid^="other-period-effects-row-effect-"][data-testid*="-Other-"]'), 'the made-up exchange result on cash is a row').toHaveCount(1);
+                await frameTarget(page, effects, `${viewport}/${lang}/${theme}/dashboard/positions-fx-on-cash`, 160);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'positions-fx-on-cash');
+            });
+        });
+
         test('dashboard fifo lots panel - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
             // Deliberately NOT using setupDashboardMockReport here: that fixture is a static,
