@@ -895,141 +895,47 @@ sono quelli dichiarati.
 
 ## Avanzamento della simulazione Monte Carlo — si può fare, e si sa già dove è difficile
 
-**Misurato da S4 il 18 Set.** Non è più *«forse si può»*: la domanda binaria è chiusa.
+**Status**: 📋 FUTURO · **Priorità**: Medio-bassa
 
-### ✅ Il worker sa a che punto è, su tutti e tre i rami
+**Il worker sa a che punto è** su tutti e tre i rami: `resampling.py` (block bootstrap, a chunk) e `quantlib_worker.py` (GBM,
+MC e QMC, per cammino). Una callback sul confine del chunk costa una chiamata per chunk e riusa una garanzia già difesa: la
+riproducibilità non dipende da come il lavoro è affettato.
 
-```
-resampling.py:172        for start in range(0, path_count, chunk_size)   ← BLOCK BOOTSTRAP (default)
-quantlib_worker.py:143   for path_index in range(request.path_count)     ← GBM / MC
-quantlib_worker.py:199   for path_index in range(request.path_count)     ← GBM / QMC
-```
+**Il criterio di accettazione.** Il sorteggio degli inizi di blocco e la preparazione stanno fuori dal ciclo: una barra guidata
+dal contatore resterebbe a 0 % per tutta quella fase, e una barra ferma è peggio di nessuna barra. Il payload misura già i tempi
+(`rng_seconds`, `process_evolution_seconds`, `generation_evolution_seconds`, `path_aggregation_seconds`): vanno letti da un
+caso reale prima di scegliere la forma. Se le fasi fuori ciclo pesano, serve un avanzamento a fasi.
 
-**Nessuno è una scala finta**: il contatore *è* l'unità di lavoro reale. `path_index / path_count`
-è esatto e monotono — niente «finzione a scalini».
-
-### 🔑 E il ramo predefinito ha l'aggancio di forma migliore
-
-```python
-chunk_size = max(1, _CELL_BUDGET // max(1, horizon_days * asset_count))
-```
-
-Il bootstrap è **già affettato**, con blocchi derivati dalla taglia del problema. Una callback sul
-confine del chunk costa **una chiamata per chunk**, e **il numero di tick si autoregola**:
-problema grande → più chunk → più avanzamenti.
-
-> ⚠️ Ribalta la previsione ragionevole — il ramo *nuovo* è il comodo, i due GBM (per-cammino)
-> richiederebbero una soglia. E la ragione non c'entra con l'avanzamento: il chunking esiste per
-> il **budget di memoria** (`:169`), e `:116` dichiara che *«la riproducibilità non deve dipendere
-> da come il lavoro è affettato»*. **Un aggancio lì riusa una garanzia già difesa invece di
-> introdurne una nuova.**
-
-### ⚠️ Il criterio di accettazione, da rispettare o non farlo
-
-Il sorteggio degli inizi di blocco (`resampling.py:148-155`) è **fuori dal ciclo**, vettorizzato;
-nel GBM stanno fuori `_validated_covariance` e `_build_process`. Una barra guidata dal solo
-contatore **resta a 0 % per tutta quella fase, poi parte**.
-
-> **Una barra ferma a 0 % è peggio di nessuna barra: l'utente conclude che è bloccata.**
-
-✅ **Il numero per deciderlo esiste già nel payload** — `rng_seconds`,
-`process_evolution_seconds`, `generation_evolution_seconds`, `path_aggregation_seconds`: il worker
-**già misura dove è finito il tempo**. Se le fasi fuori ciclo pesano, la strumentazione giusta è
-**un avanzamento a fasi, non a cammini**.
-
-### 🔴 Il costo vero non è il worker
-
-Il salto worker→web ha tre soluzioni (multi-frame sul pipe · canale laterale · contatore
-condiviso). ⚠️ Ma `SpawnWorkerPool` è generico e ha **due utenti** — simulazione **e
-ottimizzazione**: toccare il protocollo tocca anche l'ottimizzazione.
-
-**Il salto web→client non ha un appiglio.** `query_risk` è **sincrona, richiesta/risposta**, e
-**non esiste un id di lavoro**: non c'è nulla da interrogare né a cui abbonarsi. SSE, websocket e
-polling **richiedono tutti e tre lo stesso prerequisito che oggi manca**. E la richiesta è
-**bulk**: «la simulazione» è *una* analitica dentro un lotto, quindi una percentuale della
-richiesta non è la percentuale della simulazione.
-
-**Il lavoro vero è invertire l'API in «invia → segui», o trasmettere dentro la stessa risposta
-HTTP.** È architetturale.
-
-**Priorità**: media-bassa. **Prerequisito**: leggere i quattro tempi di fase da un payload reale
-prima di scegliere la forma della barra.
-
----
+**Il costo vero non è il worker.**
+- `SpawnWorkerPool` ha due utenti, simulazione e ottimizzazione: cambiare il protocollo le tocca entrambe.
+- `query_risk` è sincrona e bulk e non ha un id di lavoro: non c'è nulla da seguire, e «la simulazione» è una delle analitiche di
+  un lotto. Il lavoro vero è invertire l'API in «invia → segui», o trasmettere dentro la stessa risposta HTTP.
 
 ## 🔴 La simulazione risponde alla finestra, non al portafoglio — e non si annuncia
 
-**Misurato il 21 Set da S4, su corsia pulita** (rilevatore v2: arco `0,1 s`), intercettando la
-`SimulationEngineRequest` vera invece di ricostruirla.
+**Misurato il 21/09/2026** · **Priorità**: Medio-alta. Non blocca il rilascio: L4 è dietro il banner beta, che cade quando si
+chiude questa voce (`L4WhatIf.svelte`).
 
-### Il fatto
+**Il fatto.** Stesso asset, stesso orizzonte (365 giorni), stesso motore: cambia solo la finestra.
 
-**Stesso asset, stesso orizzonte, stesso giorno, stesso motore. Cambia solo la finestra:**
+| Finestra | Mediana | Probabilità di perdita |
+|---|---:|---:|
+| 95 giorni | +1 400,4 % | 0,01 % |
+| 365 giorni | −39,1 % | 70,74 % |
 
-| finestra       | mediana a 365 giorni | probabilità di perdita |
-| -------------- | --------------------:| ----------------------:|
-| **95 giorni**  | **+1 400,4 %**       | **0,01 %**             |
-| **365 giorni** | **−39,1 %**          | **70,74 %**            |
+**La causa.** La matematica è giusta: su sei finestre la mediana sta fra 1,009 e 1,016 volte l'estrapolazione ingenua. Il
+bootstrap ripesca ogni osservazione `orizzonte / n_osservazioni` volte: con 93 osservazioni su 365 giorni assume che quel
+trimestre duri quattro volte tanto. Non dipende dai dati finti: chi tiene crypto e sceglie «3M» riceve questo.
 
-> **Da +1 400 % a −39 %, e da «non puoi perdere» a «perdi sette volte su dieci», per una
-> tendina che l'utente legge come «quanta storia guardo».**
->
-> **E nessuno dei due numeri, preso da solo, si annuncia come sbagliato.**
+**⚠️ Il denominatore è gonfiato.** `series_preparation.py` riporta i prezzi in avanti, quindi `n_observations` conta giorni di
+calendario, e 540 giorni restituiscono le stesse 360 osservazioni di 365. Chiedere più storia può ridare in silenzio la stessa
+storia.
 
-### ✅ Non è matematica rotta, e non sono i dati finti
+**Il lavoro.** Decidere cosa fare quando l'orizzonte supera la finestra: rifiutare, avvisare, o lasciar fare dichiarando
+l'incertezza. Una soglia ovvia non esiste (a 1,00× Bitcoin dà comunque +100 %): la monotonia è il dato, la soglia è una scelta.
+L'incertezza della deriva è già mostrata accanto alla banda; resta da decidere se serve anche la guardia.
 
-**Il motore estrapola fedelmente.** Confronto fra la mediana simulata e l'estrapolazione
-ingenua `(1 + r_finestra)^(365/n)` su **sei** finestre:
-
-| finestra | ripetizioni | ingenua  | mediana  | rapporto  |
-| -------- | -----------:| --------:| --------:| ---------:|
-| 95 g     | **3,92×**   | +31,57 % | +33,22 % | **1,013** |
-| 140 g    | 2,64×       | +8,54 %  | +10,28 % | 1,016     |
-| 190 g    | 1,94×       | +1,97 %  | +2,92 %  | 1,009     |
-| 250 g    | 1,47×       | +8,21 %  | +9,49 %  | 1,012     |
-| 365 g    | 1,01×       | +8,76 %  | +9,93 %  | 1,011     |
-
-**Le ripetizioni variano di quattro volte, il rapporto resta fra 1,009 e 1,016.** Il motore
-aggiunge l'1 %, sempre lo stesso.
-
-🔑 **La causa è il rapporto, non la lunghezza**: il bootstrap **ripesca ogni osservazione
-`orizzonte / n_osservazioni` volte per cammino**. Con 93 osservazioni su 365 giorni sono
-**3,92 ripetizioni** — cioè si assume che quel trimestre duri quattro volte tanto.
-
-⚠️ **E morde un utente vero**: il portafoglio di prova lo nasconde perché è **per metà
-liquido**, ma sullo scope asset no. **Chi tiene crypto e clicca «3M» riceve questo.**
-
-### ⚠️ Il denominatore è gonfiato e saturabile — da sapere PRIMA di scrivere la soglia
-
-```
-finestra 540 giorni  →  n_osservazioni 360   ← identico alla finestra da 365
-series_preparation.py riporta i prezzi in avanti  →  93 dove la borsa ha 66 giorni
-```
-
-**Chiedere più storia restituisce in silenzio la stessa storia**, e il riporto in avanti
-inserisce rendimenti nulli che **abbassano la σ per giorno e gonfiano il conteggio**.
-`n_observations` conta **giorni di calendario, non osservazioni indipendenti**, ed è il
-denominatore di qualunque guardia a rapporto.
-
-### Il lavoro, e cosa NON è
-
-**Non è** «aggiusta il calcolo»: l'aritmetica è corretta.
-**Non è** «rifai i dati»: si riproduce su dati puliti con volatilità realistiche
-(BTC `4,58 %`/giorno, che è il valore vero).
-
-**È** decidere cosa fare quando `orizzonte ≫ finestra`: **rifiutare**, **avvisare**, o
-**lasciar fare e dichiarare l'incertezza**. ⚠️ **Nessuna soglia ovvia esiste**: a ripetizione
-`1,00×` Bitcoin dà comunque **+100 %**. **La monotonia è il dato, la soglia è una scelta.**
-
-📌 **Parzialmente mitigato nel round 2**: l'incertezza di stima della deriva viene resa accanto
-alla banda — su un asset volatile a finestra corta vale **×/÷ 29,9** contro una banda di
-**×11,4**, quindi **si dichiara inutile da sola**. **Resta da decidere se serve anche la
-guardia.**
-
-**Priorità**: media-alta. **Non blocca il rilascio** — la funzione è dietro banner beta — ma è
-il difetto di prodotto più grande trovato nella review della fase 2.
-
----
+**Stima**: circa un giorno per un avviso quando l'orizzonte supera la storia usata, 4 lingue comprese.
 
 ## 🔴 I 110 `raise ValueError` del motore di rischio — il metodo per separarli, non il risultato
 
