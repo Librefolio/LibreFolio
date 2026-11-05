@@ -495,6 +495,22 @@ Navegación visual de archivos con vistas previas de imágenes en móvil.
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vista de cuadrícula de archivos estáticos">
 </div>
 
+### 💾 Copias de seguridad (Administrador)
+
+Los administradores ven las copias conservadas y configuran su limpieza automática.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Copias de seguridad (Administrador)">
+</div>
+
+### 📊 Espacio ocupado (Administrador)
+
+Una barra muestra cómo se reparte el espacio entre la base de datos, los archivos subidos, los informes y las copias, respecto al límite fijado.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="storage-bar" alt="Espacio ocupado (Administrador)">
+</div>
+
 ### 📋 Informes del bróker (BRIM)
 
 Importa y gestiona informes del bróker.
