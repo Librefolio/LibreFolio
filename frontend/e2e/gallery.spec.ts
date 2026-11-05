@@ -131,6 +131,7 @@ import {
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
+import {backToRestoreCard, rollBackRestoreOverlay, serveGalleryRestore} from './fixtures/galleryRestore';
 import {expectGallerySecurityServed, gallerySecurityReads, serveGallerySecurityChecks} from './fixtures/gallerySecurity';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
@@ -2193,6 +2194,28 @@ test.describe('Gallery Screenshots', () => {
                 }
                 await screenshot(page, viewport, lang, theme, 'settings', 'backup-ready');
                 await restoreTallScreen(page);
+            });
+        });
+
+        test('restore rolled back (admin) - all languages and themes', async ({page}, testInfo) => {
+            // A restore that was rolled back, played in the page (galleryRestore.ts): the overlay that says why, then the card's
+            // last result. Nothing is uploaded, restored or restarted; the success is never photographed (P8).
+            const viewport = getViewport(testInfo);
+            await serveGalleryRestore(page);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await rollBackRestoreOverlay(page, async () => {
+                    await navigateTo(page, '/settings?tab=backup');
+                    await expect(page.getByTestId('settings-tab-backup')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                    await freezeAnimations(page);
+                });
+                // The restore card behind the overlay is busy (restarting) by design: the overlay is the subject, not a loading page.
+                await screenshot(page, viewport, lang, theme, 'settings', 'restore-rolled-back', {allowLoaders: true});
+                await backToRestoreCard(page);
+                await freezeAnimations(page);
+                await frameTarget(page, page.getByTestId('restore-card'), `${viewport}/${lang}/${theme}/settings/restore-last-result`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'restore-last-result');
             });
         });
 
