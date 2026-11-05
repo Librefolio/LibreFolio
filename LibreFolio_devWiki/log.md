@@ -3706,8 +3706,7 @@ execution to `signals/execution.py` and the output checks to `signals/validation
 `signals/annotations.py`. No behaviour change. Source-file rows point at the module that now holds the behaviour.
 Updated: [[domains/signals]], [[decisions/signal-backend-plugin-architecture]], [[decisions/drawdown-full-history-warmup]].
 ## [2026-10-17] update | Domain: EMAIL — E-14: the limiter evicts the key with the fewest hits
-Workstream E's lot E-14 (release 1.3), from E's after-the-fact review of decision N70, approved by the coordinator for
-the cloud. `SlidingWindowLimiter` now evicts the key with the fewest hits still in the window, the least recently used
+Workstream E's lot E-14 (release 1.3), from E's after-the-fact review of decision N70, approved by the coordinator. `SlidingWindowLimiter` now evicts the key with the fewest hits still in the window, the least recently used
 among them, with exact expiry (a heap of each key's oldest hit) and no search; `eviction_scan` is gone. The lesson
 filed on the page: any least-recently-used family, N70's «spare the full keys» included, lets an attacker who stops one
 failure short of a lock reset the count with a spray of `max_keys` fresh keys (about 1,100 requests per guess,
@@ -3734,8 +3733,7 @@ Workstream E's lot E-9 (release 1.3), done the night of 17/10 as the coordinator
 by the developer. Checked in the code first: the three per-mailbox limits count on `delivery.mailbox_budget_key()`
 (`+tag` and Gmail's dots folded, never stored, logged or shown); reset, verification and change notice greet
 anonymously, the notice shows nothing of the new address, `masked_address()` is gone, admin setup and test keep the
-username. The page gains the N62 bullet with its why (the spam relay that would harm the cloud's Brevo key and
-`mail.librefolio.eu`); the notice bullet, the limits paragraph, the E4c sentence on the four limiter keys, the Aliases
+username. The page gains the N62 bullet with its why (the spam relay that would harm the instance's sender reputation); the notice bullet, the limits paragraph, the E4c sentence on the four limiter keys, the Aliases
 limit (resolved; E-12, catch-all and Fastmail, left), the developer decisions (the drained instance budget, N62), the
 backlog line and the `delivery.py` row follow. Sources: plan 08 «E-9.0» and «E-9.1», backlog E-9 and E-12; R13-SEC…3
 stay in the plan. `developer/backend/email.md` still shows the masked notice and E-9 open: the docs-writer's part.
@@ -3933,3 +3931,15 @@ code with itself cannot see a bug in a step both runs share, and equal closes re
 Filed: [[concepts/self-parity-needs-the-shared-step-pinned]], [[problems/equal-closes-read-back-alike-through-realdecimal]];
 revision of [[entities/lots-analysis-service]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-11-05] file | Wave 6 closing: broker page as PortfolioView, backups in backups/, removed routes, history-rewrite lessons
+Release 1.3 closing. Filed the decisions and problems of wave 6 that were still only in the journal: the broker page
+as a `PortfolioView` fed by one data controller (with whole-broker amounts and live prices, FB-28), finished backups
+kept in `backups/` (FB-24, FB-29), the removal of unused routes without deprecation (API-CLEAN), `core.ignorecase`
+hiding a test file, and the lesson «tags first, branches second» after a history rewrite. SCHEMA.md now says the
+journal is a separate local repository. `check_source_paths.py`: 17 missing paths (28 occurrences) before and after,
+none from the new pages.
+Filed: [[decisions/broker-page-is-a-portfolio-view]], [[decisions/backups-kept-in-backups-folder]],
+[[decisions/api-routes-removed-without-deprecation]], [[problems/core-ignorecase-hides-a-test-file]],
+[[problems/history-rewrite-publish-tags-before-branches]].
+Graph: not updated (see checkpoint).
