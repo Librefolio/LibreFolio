@@ -88,16 +88,37 @@ PRIORITY_MAP = {
 # ---------------------------------------------------------------------------
 
 # Provider metadata method names (1-liner, return constant)
-_PROVIDER_META_NAMES = frozenset({
-    "provider_code", "provider_name", "description", "supported_extensions",
-    "detection_priority", "icon_url", "icon", "test_file_pattern",
-    "test_search_query", "test_cases", "accepted_identifier_types",
-    "supports_history", "supports_search", "provider_help_url",
-    "get_icon", "get_asset_url", "base_currency", "docs_url",
-    "description_i18n", "test_currencies", "warning_i18n",
-    "base_currencies", "multi_unit_currencies", "params_schema",
-    "validate_params", "to_plugin_info", "generate_static_url",
-})
+_PROVIDER_META_NAMES = frozenset(
+    {
+        "provider_code",
+        "provider_name",
+        "description",
+        "supported_extensions",
+        "detection_priority",
+        "icon_url",
+        "icon",
+        "test_file_pattern",
+        "test_search_query",
+        "test_cases",
+        "accepted_identifier_types",
+        "supports_history",
+        "supports_search",
+        "provider_help_url",
+        "get_icon",
+        "get_asset_url",
+        "base_currency",
+        "docs_url",
+        "description_i18n",
+        "test_currencies",
+        "warning_i18n",
+        "base_currencies",
+        "multi_unit_currencies",
+        "params_schema",
+        "validate_params",
+        "to_plugin_info",
+        "generate_static_url",
+    }
+)
 
 # Abstract base class prefixes
 _ABSTRACT_PREFIXES = ("AssetSourceProvider.", "BRIMProvider.", "FXRateProvider.")
@@ -154,8 +175,7 @@ def classify_category(filepath: str, func_name: str, stmts: int) -> str:  # noqa
         return "INFRA"
     if "_debug_" in func_name:
         return "INFRA"
-    if short in ("shutdown_live_feeds",
-                 "shutdown_all_providers", "_get_provider_folder"):
+    if short in ("shutdown_live_feeds", "shutdown_all_providers", "_get_provider_folder"):
         return "INFRA"
 
     # Not implemented features
@@ -179,11 +199,18 @@ def classify_category(filepath: str, func_name: str, stmts: int) -> str:  # noqa
         return "FX_PROV"
 
     # Core services
-    if any(svc in filepath for svc in [
-        "services/assets/", "services/fx/", "services/brokers/",
-        "services/transactions/", "user_service.py",
-        "services/brim/", "settings_service.py",
-    ]):
+    if any(
+        svc in filepath
+        for svc in [
+            "services/assets/",
+            "services/fx/",
+            "services/brokers/",
+            "services/transactions/",
+            "user_service.py",
+            "services/brim/",
+            "settings_service.py",
+        ]
+    ):
         return "CORE_SVC"
 
     # API endpoints
@@ -198,20 +225,20 @@ def classify_category(filepath: str, func_name: str, stmts: int) -> str:  # noqa
 
 
 CATEGORY_INFO = {
-    "ABSTRACT":      ("⬜", "SKIP",     "Abstract interfaces (body=pass)"),
-    "PROVIDER_META": ("🏷️", "LOW",      "Provider metadata (1-liner constants)"),
-    "SCHEMA_PROP":   ("📋", "LOW",      "Computed schema properties"),
-    "MODEL_VALID":   ("🔐", "MEDIUM",   "DB model validators"),
-    "INFRA":         ("🔧", "SKIP",     "Startup, logging, debug"),
-    "NOT_IMPL":      ("⏳", "SKIP",     "Future features (not implemented)"),
-    "SCHEMA_VALID":  ("📝", "MEDIUM",   "Pydantic schema validators"),
-    "BRIM_PROV":     ("📊", "HIGH",     "Broker import plugins (CSV parsing)"),
-    "ASSET_PROV":    ("📈", "HIGH",     "Asset source providers (JustETF/Yahoo/CSS)"),
-    "FX_PROV":       ("💱", "HIGH",     "FX rate providers (ECB/BOE/FED/SNB)"),
-    "CORE_SVC":      ("🔥", "CRITICAL", "Core business logic (CRUD/sync/bulk)"),
-    "API_ENDPOINT":  ("🌐", "HIGH",     "HTTP endpoint handlers"),
-    "UTILITY":       ("🔨", "MEDIUM",   "Pure utility functions"),
-    "OTHER":         ("❓", "LOW",      "Other"),
+    "ABSTRACT": ("⬜", "SKIP", "Abstract interfaces (body=pass)"),
+    "PROVIDER_META": ("🏷️", "LOW", "Provider metadata (1-liner constants)"),
+    "SCHEMA_PROP": ("📋", "LOW", "Computed schema properties"),
+    "MODEL_VALID": ("🔐", "MEDIUM", "DB model validators"),
+    "INFRA": ("🔧", "SKIP", "Startup, logging, debug"),
+    "NOT_IMPL": ("⏳", "SKIP", "Future features (not implemented)"),
+    "SCHEMA_VALID": ("📝", "MEDIUM", "Pydantic schema validators"),
+    "BRIM_PROV": ("📊", "HIGH", "Broker import plugins (CSV parsing)"),
+    "ASSET_PROV": ("📈", "HIGH", "Asset source providers (JustETF/Yahoo/CSS)"),
+    "FX_PROV": ("💱", "HIGH", "FX rate providers (ECB/BOE/FED/SNB)"),
+    "CORE_SVC": ("🔥", "CRITICAL", "Core business logic (CRUD/sync/bulk)"),
+    "API_ENDPOINT": ("🌐", "HIGH", "HTTP endpoint handlers"),
+    "UTILITY": ("🔨", "MEDIUM", "Pure utility functions"),
+    "OTHER": ("❓", "LOW", "Other"),
     # Frontend categories live in the same table so filters, sorting and the
     # legend work identically whichever language is being analysed.
     **coverage_js.JS_CATEGORY_INFO,
@@ -224,8 +251,8 @@ CATEGORY_ORDER = list(CATEGORY_INFO.keys())
 # Analysis using native JSON `functions` data
 # ---------------------------------------------------------------------------
 
-def find_uncovered_functions(cov_data: dict, threshold: float = 0.0,
-                             priority_fn=None, category_fn=None) -> list[dict]:
+
+def find_uncovered_functions(cov_data: dict, threshold: float = 0.0, priority_fn=None, category_fn=None) -> list[dict]:
     """
     Read function-level coverage from JSON and return functions below threshold.
 
@@ -265,29 +292,33 @@ def find_uncovered_functions(cov_data: dict, threshold: float = 0.0,
             category = category_fn(filepath, func_name, num_stmts)
             priority = priority_fn(filepath)
 
-            results.append({
-                "file": filepath,
-                "func": func_name,
-                "stmts": num_stmts,
-                "covered": covered,
-                "missing": missing,
-                # Uncovered branch arms. Present only for JS reports; the Python
-                # converter does not supply them, hence the 0 default. Branches are
-                # what say whether a decision was *exercised* rather than merely
-                # reached, and the frontend's branch coverage runs 16 points below
-                # its statement coverage — so this is the column to steer by.
-                "missing_branches": summary.get("missing_branches", 0),
-                "pct": pct,
-                "start_line": func_info.get("start_line", 0),
-                "priority": priority,
-                "category": category,
-            })
+            results.append(
+                {
+                    "file": filepath,
+                    "func": func_name,
+                    "stmts": num_stmts,
+                    "covered": covered,
+                    "missing": missing,
+                    # Uncovered branch arms. Present only for JS reports; the Python
+                    # converter does not supply them, hence the 0 default. Branches are
+                    # what say whether a decision was *exercised* rather than merely
+                    # reached, and the frontend's branch coverage runs 16 points below
+                    # its statement coverage — so this is the column to steer by.
+                    "missing_branches": summary.get("missing_branches", 0),
+                    "pct": pct,
+                    "start_line": func_info.get("start_line", 0),
+                    "priority": priority,
+                    "category": category,
+                }
+            )
 
-    results.sort(key=lambda r: (
-        CATEGORY_ORDER.index(r["category"]) if r["category"] in CATEGORY_ORDER else 99,
-        r["file"],
-        r["start_line"],
-    ))
+    results.sort(
+        key=lambda r: (
+            CATEGORY_ORDER.index(r["category"]) if r["category"] in CATEGORY_ORDER else 99,
+            r["file"],
+            r["start_line"],
+        )
+    )
 
     return results
 
@@ -296,14 +327,13 @@ def find_uncovered_functions(cov_data: dict, threshold: float = 0.0,
 # Output formatters
 # ---------------------------------------------------------------------------
 
-def print_text_report(results: list[dict], priority_filter: str = None,  # noqa: C901 — flat report printing, no nested logic
-                      category_filter: str = None):
+
+def print_text_report(results: list[dict], priority_filter: str = None, category_filter: str = None):  # noqa: C901 — flat report printing, no nested logic
     """Print a human-readable report grouped by category."""
     if priority_filter:
         results = [r for r in results if r["priority"].upper() == priority_filter.upper()]
     if category_filter:
-        results = [r for r in results
-                   if r["category"].upper() == category_filter.upper()]
+        results = [r for r in results if r["category"].upper() == category_filter.upper()]
 
     # Summary table
     by_cat = Counter(r["category"] for r in results)
@@ -381,15 +411,17 @@ def print_json_report(results: list[dict]):
     for r in results:
         stmts_by_cat[r["category"]] += r["stmts"]
 
-    print(json.dumps({
-        "summary": {
-            cat: {"functions": by_cat.get(cat, 0), "statements": stmts_by_cat.get(cat, 0)}
-            for cat in CATEGORY_ORDER if by_cat.get(cat, 0) > 0
-        },
-        "functions": results,
-        "total_functions": len(results),
-        "total_statements": sum(r["stmts"] for r in results),
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "summary": {cat: {"functions": by_cat.get(cat, 0), "statements": stmts_by_cat.get(cat, 0)} for cat in CATEGORY_ORDER if by_cat.get(cat, 0) > 0},
+                "functions": results,
+                "total_functions": len(results),
+                "total_statements": sum(r["stmts"] for r in results),
+            },
+            indent=2,
+        )
+    )
 
 
 def print_summary(results: list[dict]):
@@ -440,6 +472,7 @@ def print_summary(results: list[dict]):
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Analyse coverage using native function-level data from coverage JSON.",
@@ -471,31 +504,35 @@ Categories (JS/Svelte):
 """,
     )
     parser.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         default=None,
-        help="Path to coverage JSON file (default: /tmp/cov_report.json, "
-             "or the newest JS report when --lang js)",
+        help="Path to coverage JSON file (default: /tmp/cov_report.json, " "or the newest JS report when --lang js)",
     )
     parser.add_argument(
-        "--lang", "-l",
+        "--lang",
+        "-l",
         choices=["py", "js"],
         default=None,
         help="Which coverage to analyse (default: inferred from the file format)",
     )
     parser.add_argument(
-        "--priority", "-p",
+        "--priority",
+        "-p",
         choices=["high", "medium", "low", "infra"],
         default=None,
         help="Filter by coarse priority level",
     )
     parser.add_argument(
-        "--category", "-c",
+        "--category",
+        "-c",
         choices=[c.lower() for c in CATEGORY_ORDER],
         default=None,
         help="Filter by fine-grained category",
     )
     parser.add_argument(
-        "--threshold", "-t",
+        "--threshold",
+        "-t",
         type=float,
         default=0.0,
         help="Include functions with coverage <= this %% (default: 0 = only 0%%)",
@@ -577,8 +614,7 @@ def run_analysis(args=None):  # noqa: C901 — flat CLI step driver, no nested l
         return 1
 
     # Analyse
-    results = find_uncovered_functions(cov_data, threshold=args.threshold,
-                                       priority_fn=priority_fn, category_fn=category_fn)
+    results = find_uncovered_functions(cov_data, threshold=args.threshold, priority_fn=priority_fn, category_fn=category_fn)
 
     # Apply category filter
     category_filter = args.category.upper() if args.category else None
@@ -597,8 +633,7 @@ def run_analysis(args=None):  # noqa: C901 — flat CLI step driver, no nested l
             results = [r for r in results if r["priority"].upper() == args.priority.upper()]
         print_summary(results)
     else:
-        print_text_report(results, priority_filter=args.priority,
-                          category_filter=category_filter)
+        print_text_report(results, priority_filter=args.priority, category_filter=category_filter)
 
     return 0
 
@@ -610,32 +645,36 @@ def register_subparser(subparsers):
         help="Analyse coverage: find uncovered functions using native JSON data",
     )
     p.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         default=None,
-        help="Path to coverage JSON (default: /tmp/cov_report.json, "
-             "or the newest JS report with --lang js)",
+        help="Path to coverage JSON (default: /tmp/cov_report.json, " "or the newest JS report with --lang js)",
     )
     p.add_argument(
-        "--lang", "-l",
+        "--lang",
+        "-l",
         choices=["py", "js"],
         default=None,
         help="Which coverage to analyse (default: inferred from the file format)",
     )
     p.add_argument(
-        "--priority", "-p",
+        "--priority",
+        "-p",
         choices=["high", "medium", "low", "infra"],
         default=None,
         help="Filter by coarse priority",
     )
     p.add_argument(
-        "--category", "-c",
+        "--category",
+        "-c",
         dest="cov_category",
         choices=[c.lower() for c in CATEGORY_ORDER],
         default=None,
         help="Filter by fine-grained category",
     )
     p.add_argument(
-        "--threshold", "-t",
+        "--threshold",
+        "-t",
         type=float,
         default=0.0,
         help="Include functions with coverage <= this %% (default: 0)",
@@ -656,4 +695,3 @@ def register_subparser(subparsers):
 
 if __name__ == "__main__":
     sys.exit(run_analysis())
-

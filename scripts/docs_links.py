@@ -47,9 +47,7 @@ from pathlib import Path
 #: glob rather than listed, so a new plugin family is covered the day it lands.
 BACKEND_SERVICE_GLOB = "*_providers", "*_plugins"
 
-_CONST_DECL = re.compile(
-    r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*['\"]([^'\"]+)['\"]"
-)
+_CONST_DECL = re.compile(r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*['\"]([^'\"]+)['\"]")
 _INTERP = re.compile(r"\$\{([^}]*)\}")
 #: Both interpolation dialects that appear in a docs path: the JS template form
 #: ``${X}`` and the Svelte markup form ``{X}`` inside an attribute value.
@@ -58,9 +56,7 @@ _ANY_INTERP = re.compile(r"\$\{([^}]*)\}|\{([^}]*)\}")
 _DOCS_PATH_LITERAL = re.compile(r"""docsPath\s*[:=]\s*['"]([^'"]+)['"]""")
 _DOCS_PATH_TEMPLATE = re.compile(r"""docsPath\s*[:=]\s*`([^`]+)`""")
 _MKDOCS_URL = re.compile(r"""/mkdocs/([^'"`,\s)]+)""")
-_DOCSLINK_PROP = re.compile(
-    r"""\b(?:localizedFallbackPath|path)\s*=\s*['"]([^'"]+)['"]"""
-)
+_DOCSLINK_PROP = re.compile(r"""\b(?:localizedFallbackPath|path)\s*=\s*['"]([^'"]+)['"]""")
 _MAP_ENTRY = re.compile(r"""^\s*[A-Za-z0-9_'"]+\s*:\s*(?:`([^`]+)`|['"]([^'"]+)['"])\s*,?\s*$""")
 
 _BACKEND_DOCS = re.compile(r"""\bdocs_path\s*=\s*['"]([^'"]+)['"]""")
@@ -167,7 +163,7 @@ def _map_values(content: str, name: str) -> list[str]:
             if depth == 0:
                 break
         i += 1
-    body = content[start.end(): i]
+    body = content[start.end() : i]
     return [m.group(1) or m.group(2) for m in (_MAP_ENTRY.match(ln) for ln in body.splitlines()) if m]
 
 
@@ -231,9 +227,7 @@ def collect_backend(services_dir: Path) -> Discovery:
     if not services_dir.is_dir():
         return found
 
-    seen_dirs = sorted(
-        {d for pattern in BACKEND_SERVICE_GLOB for d in services_dir.glob(pattern) if d.is_dir()}
-    )
+    seen_dirs = sorted({d for pattern in BACKEND_SERVICE_GLOB for d in services_dir.glob(pattern) if d.is_dir()})
     for pdir in seen_dirs:
         # rglob: a plugin is a folder, ``<name>/plugin.py``; the family's ``_*.py`` helpers sit at the root.
         for path in sorted(p for p in pdir.rglob("*.py") if "__pycache__" not in p.parts):
