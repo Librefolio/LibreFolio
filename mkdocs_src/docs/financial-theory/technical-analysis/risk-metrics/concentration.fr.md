@@ -79,7 +79,7 @@ Un chiffre calculé sur les positions est vérifiable sur ce point : les rapport
 
 ## 🪙 Où se situe la trésorerie {: #where-cash-sits }
 
-La trésorerie doit être traitée d'une manière ou d'une autre, et ce choix change le résultat. Dans les rapports de portefeuille et de courtier, la règle est énoncée dans le code lui-même : les poids correspondent à la valeur de la position rapportée à la **NAV totale**, et la trésorerie est *incluse dans le dénominateur mais ne constitue pas elle-même un terme de l'indice*.
+La trésorerie doit être traitée d'une manière ou d'une autre, et ce choix change le résultat. Dans les rapports de portefeuille et de courtier, la règle est énoncée dans le code lui-même : les poids correspondent à la valeur de la position rapportée à la **NAV totale**, et la trésorerie est *incluse dans le dénominateur mais ne constitue pas elle-même un terme de l'indice*. Ce dénominateur doit être positif : avec une NAV totale — la valeur nette — inférieure ou égale à zéro, il n'existe aucun poids, si bien que le rapport ne fournit ni le poids de la plus grande position ni un indice (les deux sont null) plutôt qu'un chiffre divisé par un substitut arbitraire.
 
 La conséquence mérite d'être explicitée, car elle va dans un sens que la plupart des lecteurs ne devineraient pas. La trésorerie dilue chaque poids sans apporter son propre carré, si bien que détenir plus de trésorerie **abaisse** l'indice et donc **élève** le décompte des actifs effectifs. Un portefeuille détenant la moitié de sa valeur en trésorerie paraît mieux diversifié que les mêmes positions sans cette trésorerie.
 
