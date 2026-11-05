@@ -272,6 +272,39 @@ async def test_ecb_after_a_restart_with_a_timed_out_discovery_still_lists_the_ro
     print_success("RON listed at once after the timeout, the live list takes over when ECB answers")
 
 
+@pytest.mark.asyncio
+async def test_status_flags_only_a_list_that_is_empty_because_the_fetch_failed(monkeypatch):
+    """B-4: ``unavailable`` tells the client «could not read the list, retry shortly» from «this provider covers nothing»."""
+    print_section("B-4: unavailable flag")
+    _record_warnings(monkeypatch)
+    down = _FakeProvider(error=TimeoutError())
+    status = await catalog.get_supported_currencies_status("B4_NONE", down)
+    assert status.currencies == [] and status.unavailable is True
+    assert (await catalog.get_supported_currencies_status("B4_NONE", down)).unavailable is True, "the cached fallback lost the flag"
+
+    covers_nothing = _FakeProvider([])
+    status = await catalog.get_supported_currencies_status("B4_EMPTY", covers_nothing)
+    assert status.currencies == [] and status.unavailable is False, "a list that came back empty is not an outage"
+
+    with_fallback = _FakeProvider(error=TimeoutError(), fallback=["EUR", "RON"])
+    status = await catalog.get_supported_currencies_status("B4_FALLBACK", with_fallback)
+    assert status.currencies == ["EUR", "RON"] and status.unavailable is False
+
+    flaky = _FakeProvider(["EUR"])
+    await catalog.get_supported_currencies_status("B4_STALE", flaky)
+    catalog._currencies_cache.delete("B4_STALE")
+    flaky.error = TimeoutError()
+    status = await catalog.get_supported_currencies_status("B4_STALE", flaky)
+    assert status.currencies == ["EUR"] and status.unavailable is False
+
+    down.error = None
+    down.currencies = ["CHF"]
+    catalog._currencies_cache.delete("B4_NONE")
+    status = await catalog.get_supported_currencies_status("B4_NONE", down)
+    assert status.currencies == ["CHF"] and status.unavailable is False, "the flag outlived the outage"
+    print_success("Flagged only when the list is empty because the fetch failed; gone once it is fetched")
+
+
 def test_the_ecb_fallback_is_a_sorted_distinct_list_with_the_base_currency_and_the_ron():
     """B-4: the list the ECB plugin falls back on has what the add-pair modal needs, and no duplicates."""
     ecb = ECBProvider()
