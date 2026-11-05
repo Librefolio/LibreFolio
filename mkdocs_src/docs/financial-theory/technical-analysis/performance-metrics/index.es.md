@@ -25,7 +25,7 @@ Contabilidad agregada basada en PMC para toda la cartera (o cualquier ámbito de
 
 | Métrica / Concepto | Descripción |
 |------------------|-------------|
-| **[Resumen del motor de cartera](portfolio-engine/index.md)** | Modelo matemático completo: resolvedor de precios unificado, PMC, agregación, modelo de 3 grupos, contribución, arquitectura pre-frame/frame. |
+| **[Resumen del motor de cartera](portfolio-engine/index.md)** | Modelo matemático completo: resolvedor de precios unificado, PMC, agregación, modelo de 3 grupos, contribución, una única repetición diaria. |
 | **[Resolución de precios](portfolio-engine/price-resolution.md)** | Niveles del resolvedor unificado: MARKET → TRADE_AVG → CARRIED → MISSING, con marcas nativas y FX por fecha. |
 | **[Valor liquidativo (NAV)](portfolio-engine/nav.md)** | Valoración total de mercado de la cartera (activos + efectivo + en tránsito), utilizando el resolvedor unificado. |
 | **[Valor contable](portfolio-engine/book-value.md)** | Coste contable histórico de las posiciones abiertas (PMC × cantidad) más el efectivo. La diferencia con el NAV = P&L no realizado. |
@@ -34,7 +34,7 @@ Contabilidad agregada basada en PMC para toda la cartera (o cualquier ámbito de
 | **[Efecto de sincronización](portfolio-engine/timing-effect.md)** | Diferencia entre la MWRR acumulada y la TWRR acumulada — cuantifica el impacto de la sincronización de los flujos de caja en las rentabilidades. |
 | **[ROI simple](portfolio-engine/roi.md)** | Rentabilidad porcentual en relación con el capital neto invertido. Sencillo, pero sujeto a la dilución por los flujos de caja. |
 | **[Rentabilidad neta anualizada](portfolio-engine/net-annualized-return.md)** | Definiciones de CAGR neto para posiciones, contribución del período y lotes FIFO, con una ventana mínima de 30 días. |
-| **[Rendimiento sobre coste](portfolio-engine/yield-on-cost.md)** | Dividendos/intereses brutos no negativos de los últimos 365 días por unidad histórica elegible, divididos por el precio medio de compra (PMC) de cada par activo/bróker. |
+| **[Rendimiento sobre coste](portfolio-engine/yield-on-cost.md)** | Dividendos/intereses brutos de los últimos 365 días, cada importe con su signo, por unidad histórica elegible, divididos por el precio medio de compra (PMC) de cada par activo/bróker. |
 | **[TWRR](portfolio-engine/twrr.md)** | Tasa de rentabilidad ponderada en el tiempo. Rendimiento puro de activos/estrategia, neutralizando la sincronización de depósitos/retiros. |
 | **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Tasa de rentabilidad ponderada por dinero. Rendimiento personal del inversor que tiene en cuenta la sincronización de los flujos de caja. Formas anualizada y acumulada. |
 
@@ -101,7 +101,7 @@ Para ayudarte a elegir la métrica adecuada para tu análisis, utiliza esta guí
 
 ### 💸 9. [Rendimiento sobre coste](portfolio-engine/yield-on-cost.md)
 * **Pregunta clave:** «¿Cuántos ingresos brutos por dividendos e intereses produjo cada unidad actual en los últimos 365 días naturales en relación con su precio medio de compra?»
-* **Concepto de la fórmula:** Suma los ingresos no negativos, convertidos al tipo de la fecha de la transacción, por cada unidad larga elegible del día anterior, ajusta por los desdoblamientos vinculados y luego divide entre el precio medio de compra (PMC) en la fecha final del informe.
+* **Concepto de la fórmula:** Suma los ingresos con signo, convertidos al tipo de la fecha de la transacción, por cada unidad larga elegible del día anterior, ajusta por los desdoblamientos vinculados y luego divide entre el precio medio de compra (PMC) en la fecha final del informe.
 * **Mejor caso de uso:** Comparar la productividad de ingresos registrada de las posiciones abiertas activo/bróker sin confundirla con la rentabilidad por dividendo del mercado, la CAGR o la rentabilidad al vencimiento (YTM) de un bono.
 
 ---
