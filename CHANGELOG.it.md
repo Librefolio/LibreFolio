@@ -46,6 +46,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Rischio: la matrice di correlazione può essere ordinata per tipo, settore e area**, e le barre dell'istogramma dei rendimenti mostrano il tooltip dell'app.
 - **Le tabelle di rischio mostrano cinque righe per pagina** (5, 10, 25 o tutte), nel laboratorio di rischio e nei livelli di rischio; un clic su un punto del grafico rischio/rendimento apre la pagina della relativa riga senza spostare la vista.
 - **Rischio: l'avviso sui risultati parziali conteggia gli asset esclusi** e mostra ciascuno come badge; le barre dell'istogramma dei rendimenti mostrano i loro giorni e la loro quota.
+- **L'orizzonte della simulazione accetta anni, mesi e giorni**, come `2a3m5g` o `24m66g`, oltre a un semplice numero di giorni: un anno vale 365 giorni e un mese 30, e il totale compare sotto il campo.
+- **Le card delle perdite dicono quale perdita è stata**: la peggior discesa mostra da quale massimo a quale minimo, e il mese storto mostra il tratto di un mese peggiore davvero visto, con il primo e l'ultimo giorno.
 
 #### 🔌 Fonti di prezzi e tassi di cambio
 
@@ -244,6 +246,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - API: i risultati del drawdown dell'Analisi del rischio (`drawdown_summary`, `asset_set_drawdown`) riportano il guadagno necessario per risalire dal calo peggiore al picco precedente, `maximum_drawdown_trough_to_peak_ratio` (un calo del 50 % richiede +100 %); `remaining_to_peak_ratio` è null per una perdita totale, con un avviso che ne spiega il motivo, dove prima l'analisi falliva.
 - **Rischio: aggiungi una coppia di tassi di cambio mancante senza lasciare l'analisi.** Nella scheda Rischio della Dashboard, di un broker e di un asset, e nel laboratorio di rischio nella pagina Asset, il pulsante di una coppia senza percorso di tassi di cambio apre la finestra **Aggiungi nuova coppia di valute** già compilata con quella coppia (EUR/USD, per esempio), invece di portarti alla pagina FX. Una volta salvata la coppia, e di nuovo quando i suoi tassi vengono scaricati, l'analisi si aggiorna da sola.
+- **L'istogramma dei rendimenti giornalieri è un vero grafico**: l'asse mostra le soglie dei rendimenti, una linea tratteggiata segna la soglia VaR, e passando su una barra leggi quanti giorni ci cadono e dove sta quella fascia rispetto alla soglia.
 
 #### 🤖 AI Export
 
@@ -569,6 +572,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - L'analisi del rischio non fallisce più all'apertura quando un codice valuta salvato prima della 1.3 non è un codice ISO a tre lettere: l'importo viene mostrato seguito dal codice così com'è salvato.
 - **Rischio: le date del replay storico seguono la lingua dell'app**, e un gruppo geografico definito dall'host mostra il suo nome nella tabella degli shock invece del suo id.
 - Rischio: ottimizzare più di 100 asset riporta un limite di dimensione invece di un errore di parametro non valido.
+- **«Sono diversificato come credo?» sugli schermi stretti**: le righe non escono più dallo schermo. Prima il nome, poi la barra, poi peso e contributo al rischio, e un nome lungo scorre.
 
 #### 🤖 AI Export
 
