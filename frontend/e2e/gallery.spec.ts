@@ -131,6 +131,7 @@ import {
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
+import {serveGalleryWhatsNew} from './fixtures/galleryWhatsNew';
 import {backToRestoreCard, rollBackRestoreOverlay, serveGalleryRestore} from './fixtures/galleryRestore';
 import {expectGallerySecurityServed, GALLERY_SECURITY_ATTENTION_COUNT, GALLERY_SECURITY_FINDING_IDS, gallerySecurityReads, serveGallerySecurityChecks, serveGallerySecurityFindings} from './fixtures/gallerySecurity';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
@@ -2498,6 +2499,30 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(200);
                 }
             }
+        });
+
+        test('whats new modal - all languages and themes', async ({page}, testInfo) => {
+            // «What's new since your last version»: the user payload of the page says there is a release to read (galleryWhatsNew.ts,
+            // as layout/whats-new.spec.ts does); closing it posts «seen», answered there too. e2e_test_user is an ordinary member whose
+            // onboarding is complete, so no guide holds the popup back. The routes go in after the sign-in, which lands untouched.
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_USER);
+            await serveGalleryWhatsNew(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Not navigateTo(): its hydration barrier waits for a visible <html>, which the modal's scroll lock may hide.
+                await page.goto('/dashboard');
+                await expect(page.locator('html')).toHaveAttribute('data-i18n-ready', 'true', {timeout: 15_000});
+                const modal = page.getByTestId('whats-new-modal');
+                await expect(modal, 'the modal shows once per load').toBeVisible({timeout: 30_000});
+                await expect(page.getByTestId('deferred-app-popups')).toHaveAttribute('data-active-popup', 'whats-new');
+                await expect(modal.getByTestId('whats-new-chapter').first(), 'the release chapter is in').toBeVisible();
+                await expect(modal.getByTestId('whats-new-full-changelog')).toBeVisible();
+                await freezeAnimations(page);
+                await screenshot(page, viewport, lang, theme, 'settings', 'whats-new-modal');
+                await modal.getByTestId('whats-new-close').click();
+                await expect(modal).toBeHidden();
+            });
         });
 
         test('cache panel - all languages and themes', async ({page}, testInfo) => {
