@@ -30,6 +30,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Contribution des positions : une ligne clôturée dans la période indique comment elle s'est clôturée (une vente, un transfert, avec le courtier destinataire lorsque vous pouvez le voir, ou un ajustement).
 - **Le tableau de bord et la page du courtier suivent les prix actuels** : chaque minute pendant que vous les utilisez, les montants, les KPI et les positions se mettent à jour d'eux-mêmes ; ils s'arrêtent lorsque l'onglet est masqué ou après deux minutes sans interaction (« Mises à jour en pause ») et reprennent à votre action suivante.
 - **Avertissements de qualité des données sur la page du courtier** : les prix anciens, les taux de change manquants ou anciens et leurs boutons de synchronisation y apparaissent aussi, pour chaque rôle.
+- **Graphique des positions : choisissez la fenêtre de la vue Glissant.** Une semaine, un mois, trois mois, un an ou une fenêtre personnalisée ; elle part de la fenêtre automatique.
 
 #### 📈 Graphiques
 
@@ -77,6 +78,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - `GET /api/v1/brokers/import/files` : chaque fichier porte `can_delete`, vrai lorsque l'appelant peut le supprimer.
 - **Page Fichiers : une colonne Visibilité** indique si chaque fichier est partagé avec tous les utilisateurs ou personnel. Depuis le menu de la ligne ou une carte de la grille, vous pouvez partager un fichier avec tout le monde ou le rendre de nouveau personnel, avec une confirmation, puisque les autres le perdent.
 - **Une barre dans la page Fichiers montre aux administrateurs l'espace occupé par l'instance** (base de données, fichiers téléversés, rapports de courtiers, sauvegardes), par rapport au disque ou à une limite qu'ils peuvent définir ; un fournisseur d'hébergement peut fixer la limite avec `LIBREFOLIO_STORAGE_LIMIT_MB`.
+- **La barre d'espace et sa légende s'éclairent ensemble** lorsque vous pointez l'une ou l'autre.
 
 #### 💾 Sauvegarde et restauration
 
@@ -219,6 +221,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **La page du courtier affiche les montants totaux du courtier**, et non plus votre part, risque compris ; pour les chiffres réduits à votre part, utilisez le tableau de bord filtré sur ce courtier.
 - **La page d’un courtier est désormais le tableau de bord avec ce courtier déjà sélectionné :** les mêmes contrôles, la devise avec « Créer une paire FX », les liquidités et les montants de la période choisie, le détail des lots qui se ferme avec Retour, le badge « Mises à jour en pause », et les transactions de la période choisie (auparavant, tout l’historique).
 - **Lots : un transfert avec un courtier hors du panneau s'affiche désormais comme un transfert.** Dans l'Historique d'un lot, sur Vie du lot et conservation et sur les marqueurs Coût moyen / Prix du marché, les unités déplacées vers ou depuis un courtier que le panneau n'inclut pas étaient affichées comme des ajustements. Elles s'affichent désormais comme des transferts (TRANSFERT+ / TRANSFERT- dans l'Historique, Transfert entrant / Transfert sortant sur les marqueurs), sans nommer l'autre courtier. Aucun chiffre ne change.
+- **« Mises à jour en pause » prend la place d'Actualiser** sur le tableau de bord et la page du courtier : rien ne bouge sur la page, et un clic relance les mises à jour. Elles repartent aussi seules à votre retour.
+- **Graphique des positions** : les badges affichent le nom de l'actif, qui défile s'il est long, et le sélecteur de vues utilise les icônes de la liste des actifs.
 
 #### 📈 Graphiques
 
@@ -276,6 +280,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - API : `POST /api/v1/uploads` accepte `scope` ; `PATCH /api/v1/uploads/{id}` le modifie ; les informations du fichier contiennent `scope` et `can_delete`. Le fichier personnel d’un autre utilisateur répond 404, comme un fichier manquant.
 - Un fichier téléversé depuis la page Fichiers est personnel ; les images téléversées via un sélecteur d’images (icône d’actif, icône de courtier, avatar) sont partagées. Choisir l’une de vos images personnelles dans un sélecteur la partage, avec un avertissement.
 - Sur la page Fichiers et dans les fichiers de rapport d’un courtier, Supprimer n’apparaît que sur les fichiers que vous pouvez supprimer ; une suppression groupée laisse les autres en place, avec un avertissement.
+- **Fichiers système** : les icônes créées à l'installation affichent « système » comme auteur, au lieu d'un numéro d'utilisateur.
+- **Fichiers, pour les administrateurs** : la limite d'espace se trouve dans un panneau fermé « Avancé » et s'appelle Espace total de LibreFolio ; la dépasser ne fait qu'avertir. Le nettoyage automatique est aussi un panneau fermé, et indique que ses règles s'appliquent dans l'heure. L'enregistrement de l'un ou l'autre affiche une confirmation verte, et le rappel sur le même disque est désormais une simple note.
 
 #### 💱 Codes de devise
 
@@ -309,6 +315,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - **Les plages de dates couvrent toujours deux jours différents.** Dans chaque sélecteur de plage de dates, le jour cliqué en premier affiche le curseur d’interdiction et un second clic dessus est ignoré ; une date saisie égale à l’autre extrémité devient rouge ; les touches fléchées l’ignorent. Une date saisie alors que l’autre extrémité est vide laisse cette extrémité ouverte : dans le filtre de dates d’un tableau, **Depuis** seul conserve les lignes à partir de ce jour (auparavant, il ne conservait que ce jour). Les plages d’un seul jour enregistrées auparavant fonctionnent toujours.
 - Les notifications sont annoncées par les lecteurs d’écran (les erreurs immédiatement, les autres avec politesse), et leur bouton de fermeture est nommé dans votre langue.
+- **Une flèche de retour sur Courtiers, Transactions, Actifs et Forex** lorsque vous y arrivez par un lien de l'application : elle vous ramène avec vos filtres et votre période. Elle n'apparaît pas depuis la barre latérale ou une adresse saisie.
 
 #### 👥 Comptes et connexion
 
@@ -334,6 +341,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - Un secret vide ou composé d’espaces compte comme non défini, comme si la variable était absente.
 - `GET /api/v1/system/info` sans session ne renvoie que la version de l’application ; les utilisateurs connectés reçoivent toujours le rapport complet.
+- **Contrôles de sécurité** : « Vérifier à nouveau » se trouve sur la ligne du titre, et le contrôle de la clé de session indique qu'elle est aléatoire et comment rester connecté après un redémarrage.
 
 #### 🏢 Fournisseurs d'hébergement et instances gérées
 
@@ -525,6 +533,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Actifs : supprimer un actif que des transactions utilisent ouvre sa confirmation déjà sur le résultat (combien de transactions, avec le lien vers elles) au lieu de demander d'abord ; la confirmation indique aussi que les événements de l'actif partent avec lui ; et le message d'échec de la recherche, le titre de la source, le badge « Manuel » et le nombre d'actifs à supprimer suivent votre langue.
 - API : convertir un montant de 0 (`POST /api/v1/fx/currencies/convert`) répond 0 avec le taux du jour au lieu d'une erreur serveur.
 - Un fournisseur qui livre un jour avec un prix de 0 ou moins ne fait plus échouer tout le téléchargement des prix de l'actif : ce jour est ignoré et la synchronisation l'indique. Un prix actuel de 0 ou moins provenant d'un fournisseur est refusé comme un prix inutilisable : le dernier prix stocké reste.
+- **Une nouvelle paire FX juste après un redémarrage** : EUR/RON et les autres paires couvertes uniquement par la BCE n'indiquent plus « aucun chemin de conversion » quand la BCE tarde à répondre. Si la liste d'un fournisseur reste illisible, la boîte de dialogue demande de réessayer bientôt ; le second bandeau jaune a disparu.
 
 #### 🗓️ Événements d'actif et investissements programmés
 
@@ -617,6 +626,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Une restauration qui ne peut pas être confirmée, annulée ou relancée en raison d'un problème de disque l'indique désormais sur l'onglet Sauvegarde, avec la cause dans le journal du serveur, au lieu d'une erreur générique.
 - `dev.py backup decrypt` exécuté via `docker compose exec` écrit un zip appartenant à l'utilisateur du serveur, comme les autres commandes de sauvegarde ; une archive qu'il ne peut pas lire l'indique désormais.
 - **Le mot de passe d'une sauvegarde** n'est plus proposé par le navigateur comme mot de passe de votre compte.
+- **Le navigateur ne propose plus d'enregistrer le mot de passe d'une sauvegarde** : les champs de mot de passe de la sauvegarde et de la restauration sont du texte masqué, hors du gestionnaire de mots de passe.
 
 #### 🏢 Fournisseurs d'hébergement et instances gérées
 
