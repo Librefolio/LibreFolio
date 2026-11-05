@@ -24,7 +24,7 @@
  *       - `selfHosted: true`: the docs link is BACK, `<a data-testid="instance-restore-interrupted-docs" target="_blank"
  *         rel="noopener noreferrer">` named `instance.restoreInterrupted.docs`, to `/mkdocs/<lang prefix>admin/<anchor>`
  *         (prefix `it/`, `fr/`, `es/`, none in English, from `currentLanguage`; anchor `cli_backup/#backup-pending-unreadable`
- *         for reason restore_state / null / absent, `hosting_panel_backups/#restore-owner-pending` for owner_assignment).
+ *         for reason restore_state / null / absent, no link for owner_assignment: that case has no guide).
  *         The support link with the report is still there when the instance has a usable address; there is NEVER the
  *         support-missing line (the administrator IS the host);
  *   - nothing else to act on: the retry is the only button, no form, no field, no logout; the links are the docs link
@@ -75,8 +75,8 @@
  * `reason?: 'restore_state' | 'owner_assignment' | null`. Absent, null and `'restore_state'` are today's page (same keys,
  * same docs link `admin/cli_backup/#backup-pending-unreadable`). `'owner_assignment'` reads
  * `instance.restoreInterrupted.ownerTitle` (the h1), `.ownerMessage` (`instance-restore-interrupted-message`) and
- * `.ownerAdminHint` (`instance-restore-interrupted-admin`), and its docs link is the section
- * `admin/hosting_panel_backups/#restore-owner-pending` (the same language-prefix rule). Support link, retry button and the polling are the
+ * `.ownerAdminHint` (`instance-restore-interrupted-admin`), and it has no docs link
+ * (the owner's account has no guide). Support link, retry button and the polling are the
  * same for both reasons. The three keys exist in the `instance` subsystem source of all four languages (the generated
  * catalogue fills a missing translation from English, so the sources themselves are read: no generic parity gate
  * would catch a missing it/fr/es entry). Red until H5-3: the page has no `reason` prop (the owner cases read today's
@@ -264,9 +264,8 @@ function expectSupportMissing(root: HTMLElement): void {
 
 /** The app's docs-URL rule (`DocsLink`): `/mkdocs/`, the language prefix (none in English), the path. */
 const docsUrl = (lang: string, path: string): string => `/mkdocs/${lang && lang !== 'en' ? `${lang}/` : ''}${path}`;
-/** The guide's section on an unreadable restore state (reason restore_state, null or absent), and on an owner with no account. */
+/** The guide's section on an unreadable restore state (reason restore_state, null or absent). The owner's account has no guide. */
 const RESTORE_STATE_DOCS_PATH = 'admin/cli_backup/#backup-pending-unreadable';
-const OWNER_DOCS_PATH = 'admin/hosting_panel_backups/#restore-owner-pending';
 const DOCS_LANGUAGES = ['en', 'it', 'fr', 'es'] as const;
 
 /** The docs link of the self-hosted page: an anchor to `href`, in a new tab, without a window.opener nor a referrer. */
@@ -845,7 +844,6 @@ describe('InstanceRestoreInterruptedPage — selfHosted: the help of an administ
         ['no reason', undefined, RESTORE_STATE_DOCS_PATH],
         ['reason null', null, RESTORE_STATE_DOCS_PATH],
         ["reason 'restore_state'", 'restore_state', RESTORE_STATE_DOCS_PATH],
-        ["reason 'owner_assignment'", 'owner_assignment', OWNER_DOCS_PATH],
     ] as const;
 
     const reasonProps = (reason: string | null | undefined): Record<string, unknown> => (reason === undefined ? {} : {reason});
@@ -906,6 +904,14 @@ describe('InstanceRestoreInterruptedPage — selfHosted: the help of an administ
         });
     });
 
+    it("reason 'owner_assignment' has no «Guide» button, even for the administrator who has the server; the support link stays", () => {
+        mountPolling(neverAnswers, POLL_MS, {reason: 'owner_assignment', selfHosted: true, supportUrl: SUPPORT});
+        const root = screen.getByTestId('instance-restore-interrupted');
+
+        expect(within(root).getByTestId('instance-restore-interrupted-support'), 'Barrier: the support link painted').toBeVisible();
+        expectNoDocs(root, 'owner_assignment, self-hosted');
+    });
+
     it('the managed page of the same reasons has no docs link: control that selfHosted is what shows it', () => {
         for (const [, reason] of REASONS) {
             mountPolling(neverAnswers, POLL_MS, {...reasonProps(reason), selfHosted: false, supportUrl: SUPPORT});
@@ -931,10 +937,10 @@ describe('InstanceRestoreInterruptedPage — selfHosted: the help of an administ
             expect(within(root).queryByTestId('instance-restore-interrupted-support-missing'), 'the administrator is the host: no missing line').toBeNull();
         });
 
-        it('shows the owner section of the guide when the server answered selfhosted and the reason is owner_assignment', async () => {
+        it('shows no docs link when the server answered selfhosted and the reason is owner_assignment: that case has no guide', async () => {
             const root = await mountWithStoreProfile('selfhosted', {reason: 'owner_assignment'});
 
-            expectDocsLink(within(root).getByTestId('instance-restore-interrupted-docs'), docsUrl('en', OWNER_DOCS_PATH));
+            expectNoDocs(root, 'owner_assignment');
         });
 
         it('shows no docs link, and the missing line without an address, when the server answered managed', async () => {

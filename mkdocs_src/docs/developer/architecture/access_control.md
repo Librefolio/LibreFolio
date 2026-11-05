@@ -599,8 +599,7 @@ scripted install, names the administrator of a new instance in the environment. 
 it, inactive, with a single-use setup link; whoever spends the link chooses the password, activates
 the account and is signed in. The variables are read in `backend/app/config/accounts.py`, the rest
 is in `backend/app/services/accounts/bootstrap_admin_service.py`. Administrator side:
-[Hosting for Others](../../admin/hosting_instances.md#initial-admin), and «The Initial
-Administrator» in [Configuration](../../admin/configuration.md).
+«The Initial Administrator» in [Configuration](../../admin/configuration.md).
 
 **The variables.** `admin_bootstrap_config()` returns an `AdminBootstrapConfig(email, username, token)`,
 read at every call from the process environment only, or `None` while `LIBREFOLIO_ADMIN_EMAIL` is
@@ -801,9 +800,7 @@ holds no place, as any inactive account.
   of **Reactivate**, **Remove administrator** turned off with the reason `pending-setup`, **Delete**
   enabled (on a protected account, all three are off with the reason `protected`); and a hint that
   names `dev.py user setup-link`
-  ([UserRow](../frontend/components/features/settings.md#userrow)); administrator side:
-  [Waiting for Its Setup Link](../../admin/users.md#pending-setup) and
-  [Cancel Its Setup Link](../../admin/users.md#cancel-setup).
+  ([UserRow](../frontend/components/features/settings.md#userrow)).
 - No route issues a new setup link: in release 1.3 the command line does (backlog).
 
 **Cancelling the setup link** (lot A-43). Deactivating the waiting administrator cancels the link

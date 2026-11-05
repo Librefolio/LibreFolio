@@ -17,7 +17,7 @@ sign-ins. Without these variables, the **Registration** setting of the
 number of accounts, the language of new accounts is the one an administrator chose
 ([Global Settings](settings.md)), and failed sign-ins are limited ([Failed Sign-ins](#login-limit)). All eight are
 optional: uncomment a line of the **Accounts** section of `.env.example` to set one. Three more, for
-hosting providers and scripted installs, create the [initial administrator](#initial-admin) of a new
+scripted installs and Docker Compose, create the [initial administrator](#initial-admin) of a new
 instance.
 
 | Variable | Default | What it does |
@@ -27,12 +27,11 @@ instance.
 | `LIBREFOLIO_DEFAULT_LANGUAGE` | _not set_ | The language of the accounts that have not chosen one, and of the emails sent to people who have no account yet: `en`, `it`, `fr` or `es`, in any case. It stands for the **Default Language** of the [Global Settings](settings.md) until an administrator saves that setting for the first time; from that first save the administrator's value wins, even when it is English again. Not set: the setting decides, English on a new instance. Any other value stops the server at startup. |
 | `LIBREFOLIO_DEFAULT_CURRENCY` | _not set_ | The currency new accounts start with: an ISO 4217 code that LibreFolio knows, such as `EUR`, `USD` or `CHF`, in any case. It stands for the **Default Currency** of the [Global Settings](settings.md) until an administrator saves that setting for the first time; from that first save the administrator's value wins, even when it is `EUR` again. Not set: the setting decides, `EUR` on a new instance. Any other value stops the server at startup. |
 | `LIBREFOLIO_DEFAULT_TIMEZONE` | _not set_ | The timezone of the app, the one the times of the [market data scheduler](settings.md#market-data-scheduler) are read in: an IANA name such as `Europe/Rome` or `America/New_York` (the server itself always works in UTC). It stands for the **Timezone** of the scheduler's configuration until an administrator saves that setting for the first time; from that first save the administrator's value wins, even when it is `UTC` again. Not set: the setting decides, `UTC` on a new instance. Any other value stops the server at startup. |
-| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings › Administration, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md) puts it in front of the invitation, password-reset and setup links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link, setup link or forgotten-password email goes out ([Email](email.md)). An address that holds a user name or a password is refused, and LibreFolio then works as it does without it. |
-| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings › Administration, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_instances.md#instance-block). Not set: no such link. An address that holds a user name or a password is refused: no such link either. |
-| `LIBREFOLIO_LOGIN_LIMIT` | `on` | The limit on failed sign-ins: `on` or `off`, in any case; spaces around the value do not matter. `off` is for a test instance only: anyone can then try passwords without pause, and every start logs a [warning](configuration_security.md#startup-checks). Unlike `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_PUBLIC_URL` and `LIBREFOLIO_BILLING_URL`, any other value, `true`, `1` and `yes` included, stops the server at startup. See [Failed Sign-ins](#login-limit). |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings › Administration, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link or forgotten-password email goes out ([Email](email.md)). An address that holds a user name or a password is refused, and LibreFolio then works as it does without it. |
+| `LIBREFOLIO_LOGIN_LIMIT` | `on` | The limit on failed sign-ins: `on` or `off`, in any case; spaces around the value do not matter. `off` is for a test instance only: anyone can then try passwords without pause, and every start logs a [warning](configuration_security.md#startup-checks). Unlike `LIBREFOLIO_REGISTRATION` and `LIBREFOLIO_PUBLIC_URL`, any other value, `true`, `1` and `yes` included, stops the server at startup. See [Failed Sign-ins](#login-limit). |
 
-An empty value counts as not set. A wrong value of `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_PUBLIC_URL` or
-`LIBREFOLIO_BILLING_URL` does not stop the server, unlike the [main options](configuration.md): LibreFolio stays on the safe side, and writes an error to its log the first time each
+An empty value counts as not set. A wrong value of `LIBREFOLIO_REGISTRATION` or
+`LIBREFOLIO_PUBLIC_URL` does not stop the server, unlike the [main options](configuration.md): LibreFolio stays on the safe side, and writes an error to its log the first time each
 server process needs the value: `Invalid account configuration`, with the variable and its value in
 `problem` (an address that holds an `@` is not shown: it may carry a user name or a password), and
 in `consequence` what it costs until you fix it. Fix the value, then restart:
@@ -41,7 +40,6 @@ in `consequence` what it costs until you fix it. Fix the value, then restart:
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` other than the three modes | Registration is closed, and the global setting stays locked | `registration stays closed until it is fixed` |
 | `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://`, or with a user name or a password | Ignored, as if it were not set: the [command line](cli_tools.md) prints the path only and says why under each link, and the dialogs of the [Users](users.md) tab start from the browser's address. No email with a link goes out, and while email works the start log has a [warning](configuration_security.md#startup-checks) too ([Email](email.md)) | `links show the bare path until it is fixed` |
-| `LIBREFOLIO_BILLING_URL` without `http://` or `https://`, or with a user name or a password | Ignored, as if it were not set | `the billing link stays hidden until it is fixed` |
 
 `LIBREFOLIO_LOGIN_LIMIT`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_DEFAULT_LANGUAGE`, `LIBREFOLIO_DEFAULT_CURRENCY` and `LIBREFOLIO_DEFAULT_TIMEZONE` are the exceptions: a
 value LibreFolio cannot use **stops the server at startup**, as an unusable value of the
@@ -81,8 +79,7 @@ does not delete anybody; it asks an administrator to choose.
 - **Who is concerned**: only `active > limit`. With exactly as many active accounts as the limit, nothing
   happens. Invitations and accounts waiting for their verification take places but never start this state.
 - **What an administrator sees**: at the first sign-in, before any other page, the list of the active
-  accounts. The owner of a [managed instance](hosting_instances.md) is checked and cannot be unchecked; so
-  is the administrator who is choosing, when the instance has no owner to protect. Each row says how many
+  accounts. The administrator who is choosing is checked and cannot be unchecked. Each row says how many
   brokers the account owns **alone**: those brokers stay, but nobody else can reach them until the account is
   reactivated. A counter shows how many accounts are chosen against how many the limit allows.
 - **The full backup first**: the same page offers it, so the data can be taken away before anybody is
@@ -136,7 +133,7 @@ password after password until one works. The limit is on unless you turn it off.
   refused before the password is checked, and the page says in how many minutes to try again. The
   right password clears the failures of what was typed, as a successful sign-in does. Its own limits
   still apply ([Limits of the Verification Emails](email_flows.md#verification-limits)).
-- **Not limited**: the links of invitations, password resets and setups. Their tokens are long
+- **Not limited**: the links of invitations and password resets. Their tokens are long
   random values nobody can guess, and a limit per address could refuse them to every user behind
   the same router. **Forgot Password?** asks for no password, and has limits of its own: see
   [Forgotten Passwords](email_flows.md#forgot-password).
@@ -169,18 +166,21 @@ counted in the number on the tab, until the limit is back on (see «Security» i
 Remove the variable, or set it to `on`, to turn the limit back on at the next start. Any other
 value stops the server at startup: see [Accounts and Sign-ups](#accounts).
 
+## 🥇 The Order of the Price Providers in the Search {: #provider-order }
+
+When you create an asset, the search asks every price provider at once and lists the results
 ### 👑 The Initial Administrator {: #initial-admin }
 
 LibreFolio can create the administrator of a new instance by itself, at its first start, for the
-address you give it: nobody can register first and take its place. It is meant for hosting
-providers and scripted installs. Without these variables nothing changes, and the first account
+address you give it: nobody can register first and take its place. It is meant for installs made with
+a script or Docker Compose. Without these variables nothing changes, and the first account
 registered becomes the administrator ([Who Can Sign Up](settings.md)).
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `LIBREFOLIO_ADMIN_EMAIL` | _not set_ | The email address of the administrator. Setting it turns the initial administrator on. |
 | `LIBREFOLIO_ADMIN_USERNAME` | `admin` | The administrator's username: 3 to 50 characters, without `@`, as at registration. |
-| `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | _not set_ | Optional: the token of the setup link, for a hosting panel that delivers the link itself. 32 to 200 characters, only letters, digits and `-` `.` `_` `~`, since it travels in a link: the output of `openssl rand -hex 32`, for example. `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` reads it from a file instead: see [Secrets](configuration_secrets.md#secrets). Not set: LibreFolio generates the token. |
+| `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | _not set_ | Optional: the token of the setup link, for a script that delivers the link itself. 32 to 200 characters, only letters, digits and `-` `.` `_` `~`, since it travels in a link: the output of `openssl rand -hex 32`, for example. `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` reads it from a file instead: see [Secrets](configuration_secrets.md#secrets). Not set: LibreFolio generates the token. |
 
 An empty value counts as not set. Spaces around the email and the username do not matter; the token
 is used exactly as written, so a space in it, even at the end, makes it unusable.
@@ -197,9 +197,9 @@ At the first start of an instance **without any account**, LibreFolio:
 While the administrator waits, nobody can register as the first account, and the administrator
 takes a place of `LIBREFOLIO_MAX_USERS`. Who hands over the link depends on the token:
 
-- **With `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`**, the hosting panel that chose it: the link is the
+- **With `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`**, whoever chose it: the link is the
   instance's address followed by `/setup#token=` and the token. LibreFolio neither logs it nor
-  emails it. See [Hosting for Others](hosting_instances.md#initial-admin).
+  emails it.
 - **Without it**, LibreFolio generates the token and hands the link over itself:
     - it writes the link **once** in its log, as a warning:
       `Setup link of the initial administrator, single use: open it to choose the password`, with
@@ -219,9 +219,7 @@ ran out, or
 `The initial administrator's setup link was withdrawn (cancelled, or its address changed): run ./dev.py user setup-link…`
 when it was [cancelled](users.md#cancel-setup) or the administrator's address changed. That command
 prints a new link ([A New Setup Link](cli_tools.md)). A new value of
-`LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` also gives a new link, at the next start. Changing the username
-or the email before the setup, and the rest of the provider's side:
-[Hosting for Others](hosting_instances.md#initial-admin).
+`LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` also gives a new link, at the next start.
 
 On an instance that already has accounts, and no administrator waiting, the variables create
 nothing: each start logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts`. The same
@@ -246,9 +244,6 @@ names the variable, never the token. Fix the value, then start again.
 
 ---
 
-## 🥇 The Order of the Price Providers in the Search {: #provider-order }
-
-When you create an asset, the search asks every price provider at once and lists the results
 provider by provider. Each provider declares where it stands: its tier, **premium** for a source an
 instance vouches for, such as licensed data, or **community**, the default; and its priority inside
 the tier. When at least one premium provider is available, its results come first. None of the

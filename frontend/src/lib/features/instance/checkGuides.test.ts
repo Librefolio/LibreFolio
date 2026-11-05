@@ -134,8 +134,8 @@ const EXPECTED_HELP: Readonly<Record<string, Help>> = {
     'platform.hosting_panel': {kind: 'support'},
     'platform.test_mode': {kind: 'guide', path: 'admin/configuration_security/#startup-checks'},
     'backup.panel_token': {kind: 'support'},
-    'backup.upload_limit': {kind: 'guide', path: 'admin/hosting_panel_backups/#restore-upload-limit'},
-    'backup.restore_limit': {kind: 'guide', path: 'admin/hosting_panel_backups/#restore-upload-limit'},
+    'backup.upload_limit': {kind: 'guide', path: 'admin/configuration/#main-options'},
+    'backup.restore_limit': {kind: 'guide', path: 'admin/cli_backup/#backup-restore-dry-run'},
     // L3 (B, 22/10): the recipients of the hosting panel's sealed backups.
     'backup.recipients': {kind: 'guide', path: 'admin/backup_sealed/#sealed'},
     'accounts.login_limit': {kind: 'guide', path: 'admin/configuration_accounts/#login-limit'},
@@ -174,8 +174,11 @@ const BROWSER_FINDINGS: readonly string[] = [OPEN_REGISTRATION_NOTICE_ID, BLOCKE
  * move (the debt itself moved to the translation of the new pages: each is untranslated). It only shrinks: the release's Aphra
  * translation takes it to empty, a pair the ratchet reports gone leaves it in the same change, and a new pair comes in only
  * with its reason written beside it.
+ *
+ * `configuration#main-options` (05/11): the guide of `backup.upload_limit` is the English heading «Main Options»; the it, fr and es
+ * headings are untranslated debt until the release's Aphra translation.
  */
-const TRANSLATION_DEBT: readonly string[] = ['es:settings#open-registration-warning', 'fr:settings#open-registration-warning', 'it:settings#open-registration-warning'];
+const TRANSLATION_DEBT: readonly string[] = ['es:configuration#main-options', 'es:settings#open-registration-warning', 'fr:configuration#main-options', 'fr:settings#open-registration-warning', 'it:configuration#main-options', 'it:settings#open-registration-warning'];
 
 // =============================================================================
 //  The module under test, and its data
@@ -470,9 +473,12 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
             expect(checkHelp(id), `${id} is solved by whoever hosts the instance`).toEqual({kind: 'support'});
             expect(checkGuidePath(id), `${id} has no guide path`).toBeUndefined();
         }
-        for (const id of ['backup.upload_limit', 'backup.restore_limit']) {
-            expect(checkHelp(id), `${id} stays a guide: it applies to a self-hosted instance`).toEqual({kind: 'guide', path: 'admin/hosting_panel_backups/#restore-upload-limit'});
-            expect(checkGuidePath(id)).toBe('admin/hosting_panel_backups/#restore-upload-limit');
+        for (const [id, path] of [
+            ['backup.upload_limit', 'admin/configuration/#main-options'],
+            ['backup.restore_limit', 'admin/cli_backup/#backup-restore-dry-run'],
+        ] as const) {
+            expect(checkHelp(id), `${id} stays a guide: it applies to a self-hosted instance`).toEqual({kind: 'guide', path});
+            expect(checkGuidePath(id)).toBe(path);
         }
     });
 

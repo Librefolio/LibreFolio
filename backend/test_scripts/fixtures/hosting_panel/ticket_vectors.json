@@ -1,0 +1,61 @@
+{
+  "warning": "Test values only: this key is published, never use it to sign for a real instance",
+  "private_key_seed_hex": "934e14faf1000ba247789b80c5ee42e56e9bcea95704f27789dbf79feb1f0d87",
+  "public_key": "ZaKIp6hE1dqXQkB19O2g4x_047q1cEYL_u_S5ToghwE",
+  "environment": {
+    "LIBREFOLIO_PANEL_PUBLIC_KEYS": "test-vector-1:ZaKIp6hE1dqXQkB19O2g4x_047q1cEYL_u_S5ToghwE",
+    "LIBREFOLIO_PUBLIC_URL": "https://folio.example.com",
+    "LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS": "60"
+  },
+  "header": {
+    "alg": "EdDSA",
+    "kid": "test-vector-1",
+    "typ": "lf-panel+jwt"
+  },
+  "payload": {
+    "aud": "https://folio.example.com",
+    "scope": "status",
+    "iat": 2000000000,
+    "exp": 2000000300,
+    "jti": "dGVzdC12ZWN0b3ItMDAx"
+  },
+  "ticket": "eyJhbGciOiJFZERTQSIsImtpZCI6InRlc3QtdmVjdG9yLTEiLCJ0eXAiOiJsZi1wYW5lbCtqd3QifQ.eyJhdWQiOiJodHRwczovL2ZvbGlvLmV4YW1wbGUuY29tIiwic2NvcGUiOiJzdGF0dXMiLCJpYXQiOjIwMDAwMDAwMDAsImV4cCI6MjAwMDAwMDMwMCwianRpIjoiZEdWemRDMTJaV04wYjNJdE1EQXgifQ.mZTtw7BdXHfJfrI2cSf_CPsZ6piPpTmXEWtb_ZoMVtrW4uKFH3JSqOiXQ6D7dbhro0PHbNNEOlPNkdGrPYOnCA",
+  "verdicts": [
+    {
+      "now": 2000000000,
+      "scope": "status",
+      "verdict": "accepted"
+    },
+    {
+      "now": 1999999940,
+      "scope": "status",
+      "verdict": "accepted"
+    },
+    {
+      "now": 1999999939,
+      "scope": "status",
+      "verdict": "panel_ticket_not_yet_valid"
+    },
+    {
+      "now": 2000000359,
+      "scope": "status",
+      "verdict": "accepted"
+    },
+    {
+      "now": 2000000360,
+      "scope": "status",
+      "verdict": "panel_ticket_expired"
+    },
+    {
+      "now": 2000000000,
+      "scope": "backup",
+      "verdict": "panel_ticket_wrong_scope"
+    },
+    {
+      "now": 2000000000,
+      "scope": "status",
+      "public_url": "https://other.example.com",
+      "verdict": "panel_ticket_wrong_audience"
+    }
+  ]
+}

@@ -1095,8 +1095,6 @@ of `GET /system/instance`
   without links, and the links appear in place when it lands.
 - The keys `legal.title`, `legal.disclaimer`, `legal.disclaimerShort`, `legal.terms` and
   `legal.privacy` belong to the `app` i18n subsystem (`frontend/src/lib/i18n/app/`, prefix `legal`).
-  The English wording of the disclaimer is quoted in
-  [Hosting for Others](../../../../admin/hosting_providers.md#legal-pages).
 - AI Export renders `legal.title` and `legal.disclaimer` too, without the components and without
   links, as the `legal_notice` section of every prompt
   ([Exact Prompt Order](../../../architecture/patterns/ai_export_composition.md)): a change to

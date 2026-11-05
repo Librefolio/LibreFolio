@@ -380,8 +380,7 @@ portfolio views stale and reloads, by itself and in silence, the views already o
 Dashboard, a broker's page, the Assets and FX pages, the risk and lots panels.
 `lib/features/price-refresh/priceRefresh.ts` does it, on the
 `startActivePolling()` of the live prices. The server's side — what a catch-up is, the header, the
-route — is in [Catch-up Progress](../../../backend/scheduler.md#price-refresh); what users see, in
-[While Prices Catch Up](../../../../admin/wake_sync.md#price-refresh).
+route — is in [Catch-up Progress](../../../backend/scheduler.md#price-refresh).
 
 ### 📥 The header {: #price-refresh-header }
 
@@ -426,7 +425,7 @@ The poller is [`startActivePolling()`](#active-polling), for the same reasons as
 - the first question goes at once, from a timer; in a background tab, none goes until the tab is
   visible;
 - the questions pause in a background tab and after two minutes without input: each one is a user's
-  request for the server's [idle suspension](../../../../admin/sleep_wake.md#idle-suspend-activity),
+  request for the server's idle suspension,
   and a tab nobody uses must not keep the instance awake. Meanwhile the notice stays as it was, and
   the question of the resume settles it;
 - after a failed question the next one waits twice as long: 6, 12, 24, then 48 s
@@ -694,14 +693,12 @@ sequenceDiagram
 - 💰 [Asset Architecture](../../../backend/assets/architecture.md) — Sync pipeline and pricing
 - ⏸️ [Provider Pauses](../../../backend/assets/architecture.md#provider-pauses) — The backend's
   pauses after «too many requests», behind `RATE_LIMITED`
-- 🛠️ [Provider Pauses](../../../../admin/sleep_wake.md#provider-pauses) — The administrator's
+- 🛠️ [Provider Pauses](../../../../admin/settings.md) — The administrator's
   side: the two variables, and what each page shows during a pause
 - 🧠 [Domain state](../../state/domain-state.md) — The portfolio caches and the mutation signal
 - ⏱️ [Scheduler](../../../backend/scheduler.md) — The server-side current-price refresh
 - ⏳ [Catch-up Progress](../../../backend/scheduler.md#price-refresh) — The server's side of
   **Updating prices…**: the tracker, the header and the route
-- 🛠️ [While Prices Catch Up](../../../../admin/wake_sync.md#price-refresh) — What users see
-  during a catch-up
 - 📢 [Instance notices](../../state/app-state.md#instance-notices) — The registry that shows the
   notice
 - 🎨 [Styling](../../styling.md#utility-classes) — The `.lf-price-flash-*` classes

@@ -147,8 +147,8 @@ describe('movedTarget', () => {
 describe('MOVED_ANCHORS', () => {
     const {MOVED_ANCHORS, movedTarget} = loadScript();
 
-    it('moves the anchors of the five split pages', () => {
-        expect(Object.keys(MOVED_ANCHORS).sort()).toEqual(expect.arrayContaining(['configuration', 'connection_checks', 'email', 'service_exposure', 'sleep_wake']));
+    it('moves the anchors of the split pages', () => {
+        expect(Object.keys(MOVED_ANCHORS).sort()).toEqual(expect.arrayContaining(['configuration', 'connection_checks', 'email', 'service_exposure']));
         expect(Object.values(MOVED_ANCHORS).reduce((sum, entries) => sum + Object.keys(entries).length, 0)).toBeGreaterThanOrEqual(20);
     });
 

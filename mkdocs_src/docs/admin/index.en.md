@@ -14,9 +14,6 @@ command line, through environment variables, or in the app's **Settings › Admi
     - 🌍 **[Expose Securely: Public Access with Funnel](service_exposure_funnel.md)**: A public HTTPS address with Tailscale Funnel: enabling Funnel and the ACLs, one address for LibreFolio, or one for each service with Docker.
 - 🔍 **[Check Connection Security](connection_checks.md)**: Verify that your users connect securely: the checklist, the indicator, the server's view and the session cookie, and what to do when a check fails.
     - 🧰 **[Check Connection Security: Behind a Reverse Proxy](connection_proxy.md)**: Run LibreFolio behind Nginx, Caddy, Traefik or Tailscale: the headers to send, the proxy LibreFolio trusts and the visitor's address.
-- 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, the initial administrator, how to block an instance, backups for your hosting panel, the upload limit of a restore and your legal pages.
-- 💤 **[Sleep and Wake](sleep_wake.md)**: Let an unused Fly.io machine suspend itself, check that it works, and see how a price provider that answers «too many requests» is paused.
-    - ⏰ **[Sleep and Wake: Scheduled Wake-up](wake_sync.md)**: Wake the instance on a schedule: a hosting panel or a cron job calls one route with a token, and prices and exchange rates are brought up to date.
 
 ### ⚙️ System Configuration
 - 📝 **[Environment Variables](configuration.md)**: Create the `.env` file and read the main supported variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.), with the precedence that decides which value wins.
@@ -31,7 +28,7 @@ command line, through environment variables, or in the app's **Settings › Admi
 
 ### 🧹 Maintenance & Operations
 - 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades, instance backups).
-- 💾 **[Backup, Restore & Moving](backup_restore.md)**: One archive with the whole instance: make it from Settings › Administration › Backup or the command line, check it, restore it, and move LibreFolio between a hosted instance and your own server.
+- 💾 **[Backup, Restore & Moving](backup_restore.md)**: One archive with the whole instance: make it from Settings › Administration › Backup or the command line, check it, restore it, and move LibreFolio between two installations.
 - 📂 **[Filesystem Structure](filesystem.md)**: Details on where databases, logs, uploads, and temporary folders are stored, and how to perform backups.
 
 ---
@@ -56,9 +53,6 @@ a **How to update** link to the [updating guide](../user/installation.md#updatin
 - To check right away, use **Check for updates** in the
   [changelog](../user/settings/about.md#changelog-modal): it reports errors, and versions you
   skipped too.
-- On an instance in the `managed` profile, run by a hosting provider, there is no check at all:
-  none at sign-in, and no **Check for updates** in the changelog. The provider updates the instance
-  ([Hosting for Others](hosting_providers.md#managed-profile)).
 
 ??? note "👥 Other users — when someone who is not an administrator checks"
 
