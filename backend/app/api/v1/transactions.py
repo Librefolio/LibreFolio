@@ -279,7 +279,7 @@ async def promote_suggest(
     """Find DB transactions compatible for promote with each input TX.
 
     Each input can have a real ID (>0) or a fake ID (<0, unsaved).
-    Results are keyed by the input ID.
+    Results are keyed by the input ID. Candidates come only from brokers the user can edit (OWNER or EDITOR).
     """
     service = TransactionService(session)
     return await service.promote_suggest_bulk(inputs, tolerance_days, user_id=current_user.id)

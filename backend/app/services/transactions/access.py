@@ -53,6 +53,12 @@ class TransactionAccessMixin:
         result = await self.session.execute(stmt)
         return {row[0] for row in result.all()}
 
+    async def _get_editable_broker_ids(self, user_id: int) -> Set[int]:
+        """Return the set of broker IDs the user can edit (OWNER or EDITOR): the ones a merge can touch."""
+        stmt = select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id).where(BrokerUserAccess.role.in_([UserRole.OWNER, UserRole.EDITOR]))
+        result = await self.session.execute(stmt)
+        return {row[0] for row in result.all()}
+
     async def _enforce_batch_access(self, broker_ids: Set[int], user_id: Optional[int], min_role: UserRole = UserRole.EDITOR) -> None:
         """One access check per distinct broker_id touched by the batch."""
         if user_id is None:
