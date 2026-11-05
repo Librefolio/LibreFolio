@@ -60,8 +60,7 @@ Scartate, perché l'idea non ritorni:
 - Doc: `admin/email` e `developer/backend/email`.
 
 ### Origine
-- La voce di `TODO_FUTURI.md` del 3 Settembre 2026 (audit P2-1). Poi la specifica F04 del fondatore («Feature SaaS
-  Readiness») e le decisioni del developer del 14/10: 1–3, 10 e 44.
+- La voce di `TODO_FUTURI.md` del 3 Settembre 2026 (audit P2-1). Poi la specifica F04 del fondatore e le decisioni del developer del 14/10: 1–3, 10 e 44.
 - Due punti della voce sono stati contraddetti dalla specifica:
   - l'SMTP non si configura dalle impostazioni dell'admin, solo da variabili d'ambiente o da file segreti;
   - niente `aiosmtplib`.
