@@ -91,7 +91,8 @@
       "sharedOnPick": "{name} era personal: ahora es visible para todos los usuarios, para que todos lo vean aquí"
     },
     "deleteSkipped": "Los archivos que no puedes eliminar se han quedado en su sitio",
-    "backups": "Copias"
+    "backups": "Copias",
+    "systemUploader": "Del sistema"
   },
   "files": {
     "deleteFailed": "Error al eliminar el archivo"

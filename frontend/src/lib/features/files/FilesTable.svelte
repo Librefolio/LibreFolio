@@ -212,7 +212,8 @@
         }
 
         const uploader = userLookup.get(uploaderId);
-        const label = uploader?.username ?? `${$t('common.user')} #${uploaderId}`;
+        // User 0 is no account: it is what the installation itself uploaded (the icons), so it reads «System», not «User #0».
+        const label = uploader?.username ?? (uploaderId === 0 ? $t('uploads.systemUploader') : `${$t('common.user')} #${uploaderId}`);
         const avatarCandidates = uploader?.avatar_url ? [appendPreviewSuffix(uploader.avatar_url, '32x32'), buildAvatarDataUrl(label, `uploader:${uploaderId}`)] : [buildAvatarDataUrl(label, `uploader:${uploaderId}`)];
         return {
             key: String(uploaderId),

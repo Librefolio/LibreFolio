@@ -91,7 +91,8 @@
       "sharedOnPick": "{name} était personnel : il est désormais visible par tous les utilisateurs, pour que chacun le voie ici"
     },
     "deleteSkipped": "Les fichiers que vous n'avez pas le droit de supprimer sont restés en place",
-    "backups": "Sauvegardes"
+    "backups": "Sauvegardes",
+    "systemUploader": "Système"
   },
   "files": {
     "deleteFailed": "Échec de la suppression du fichier"

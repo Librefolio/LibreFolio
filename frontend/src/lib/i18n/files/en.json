@@ -91,7 +91,8 @@
       "sharedOnPick": "{name} was personal: it is now visible to every user, so that everyone sees it here"
     },
     "deleteSkipped": "Files you are not allowed to delete were left in place",
-    "backups": "Backups"
+    "backups": "Backups",
+    "systemUploader": "System"
   },
   "files": {
     "deleteFailed": "Failed to delete file"
