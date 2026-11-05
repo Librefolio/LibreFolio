@@ -18,7 +18,23 @@
       "includeFrontier": "Includi frontiera",
       "frontierPoints": "Punti della frontiera",
       "includeSensitivity": "Includi sensibilità",
-      "optimizationSolver": "Solver"
+      "optimizationSolver": "Solver",
+      "horizonExpr": {
+        "units": {
+          "year": "a",
+          "month": "m",
+          "day": "g"
+        },
+        "hint": "Scrivi i giorni (365) oppure anni, mesi e giorni: 2a3m5g sono 2 anni, 3 mesi e 5 giorni, cioè 825 giorni (un anno vale 365 giorni, un mese 30).",
+        "hintLabel": "Come scrivere l'orizzonte",
+        "resultDays": "{days, plural, one {# giorno} other {# giorni}}",
+        "errors": {
+          "empty": "Inserisci l'orizzonte.",
+          "format": "Orizzonte non valido: scrivi i giorni (365) oppure, in quest'ordine, anni, mesi e giorni (2a3m5g).",
+          "tooShort": "L'orizzonte deve essere di almeno 1 giorno.",
+          "tooLong": "L'orizzonte non può superare {max} giorni."
+        }
+      }
     },
     "title": "Rischio",
     "dashboardTitle": "Rischio portafoglio",
