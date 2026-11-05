@@ -268,98 +268,30 @@ in produzione.
 
 ## 📉 Risk Analysis — Tracking Error / Information Ratio con benchmark selezionabile
 
-**Data aggiunta**: 16 Settembre 2026
-**Status**: 📋 FUTURO — tagliato dalla riorganizzazione Risk
-**Priorità**: 🔽 BASSA
+**Data aggiunta**: 16 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: 🔽 Bassa
 
-### Contesto
-
-`ComparisonAnalytic` (`backend/app/services/risk_plugins/comparison/plugin.py`) calcola già
-active return, tracking error, information ratio, correlazione e beta contro un asset
-reale di confronto. Nella riorganizzazione della UI Risk, **beta e active return
-restano**; **tracking error e information ratio vengono rimossi dalla UI**.
-
-Motivo: TE e IR nascono per valutare un gestore attivo contro un **mandato dichiarato**.
-Un investitore privato non ha né mandato né benchmark ufficiale, quindi i due numeri
-non sono interpretabili e occupano spazio accanto a metriche che decidono.
-Il backend non viene toccato: il calcolo resta disponibile via API.
-
-### Azione futura
-
-Riabilitarli **solo dopo** aver introdotto una vera selezione di benchmark:
-
-- scelta del benchmark fra gli asset già presenti in DB (non un ticker libero);
-- possibilità di dichiarare un benchmark **persistente** per portafoglio/broker,
-  non scelto al volo a ogni esecuzione;
-- avviso esplicito quando il benchmark ha valuta o storico non allineati allo scope;
-- wording che chiarisca che TE/IR misurano **scostamento dal benchmark**, non qualità.
-
-Senza benchmark persistente e dichiarato, riesporli riproduce il problema attuale.
-
-### Riferimenti
-
-- `backend/app/services/risk_plugins/comparison/plugin.py`
-- `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` (sezione comparison)
-
----
+`ComparisonAnalytic` li calcola già, ma sono stati tolti dalla UI: nascono per giudicare un gestore contro un mandato, e un
+privato non ne ha uno. Si riabilitano solo con un benchmark vero: scelto fra gli asset del DB, persistente per portafoglio o
+broker, con un avviso se valuta o storia non sono allineate, e un testo che dica che misurano lo scostamento, non la qualità.
 
 ## 🧮 Risk Analysis — Portfolio optimization / frontiera efficiente (Riskfolio)
 
-**Data aggiunta**: 16 Settembre 2026
-**Status**: 📋 FUTURO LONTANO — rinviato a tempo indeterminato
-**Priorità**: 🔽 MOLTO BASSA
+**Data aggiunta**: 16 Settembre 2026 · **Status**: 📋 FUTURO LONTANO · **Priorità**: 🔽 Molto bassa
 
-### Contesto
+`PortfolioOptimizationAnalytic` è fatto e testato, ma non ha UI: si raggiunge solo via API.
 
-`PortfolioOptimizationAnalytic` (`backend/app/services/risk_plugins/portfolio_optimization/plugin.py`)
-è implementato e testato (Riskfolio-Lib 7.0.1 + CVXPY, solver CLARABEL/SCS, strategie
-min-variance / max-Sharpe / ERC, covarianze historical / Ledoit-Wolf / OAS) ma **non ha
-alcuna UI**: oggi è raggiungibile solo via API ed è quindi costo puro per ogni
-installazione.
+**Perché è rinviato.** Non per la potenza di calcolo (0,016 s). L'ottimizzatore dà un output prescrittivo che lo strumento non
+sa giustificare: preferisce gli asset con il rendimento sovrastimato, i pesi cambiano con la finestra, più asset vuol dire più
+errore. LibreFolio è un tracker, non un consulente.
 
-### Perché è rinviato — il motivo vero
+**Precondizioni.** Un provider con universo ampio e storia lunga; un risultato mostrato come confronto con l'allocazione
+attuale, mai come «consigliata»; niente max-Sharpe in-sample, solo min-variance ed ERC; una guida su instabilità e limiti.
 
-Non è la potenza di calcolo: il benchmark misurato dà **0,0159 s warm**. Non è nemmeno
-l'ampiezza del paniere in sé. Il problema è che l'ottimizzatore media-varianza produce
-un **output prescrittivo** ("i pesi giusti sono questi") che lo strumento non è in grado
-di giustificare onestamente:
+**Decisione aperta sulle dipendenze.** Finché non è esposto, va deciso se togliere Riskfolio-Lib, CVXPY, CLARABEL, SCS e il
+pool `optimization` dall'immagine, misurando prima quanto pesano.
 
-- è un *error maximizer*: preferisce gli asset il cui rendimento atteso è stato
-  sovrastimato dal campione;
-- i pesi sono instabili — cambia la finestra di stima e l'allocazione si ribalta;
-- più asset significa **più parametri da stimare** (N medie + N(N+1)/2 covarianze) e
-  quindi più errore, non meno — motivo per cui esistono gli shrinkage estimator;
-- LibreFolio è un tracker, non un consulente: è un confine di prodotto, non tecnico.
-
-### Precondizioni per riprenderlo
-
-1. provider dati esteso (verosimilmente a pagamento) con universo ampio e storia lunga,
-   pulita e sovrapposta;
-2. una semantica di presentazione non prescrittiva: output come **confronto** con
-   l'allocazione attuale, mai come "allocazione consigliata";
-3. esclusione di max-Sharpe in-sample; ammesse solo min-variance ed ERC/risk parity,
-   che non usano i rendimenti attesi;
-4. documentazione utente che spieghi instabilità e limiti prima di mostrare i pesi.
-
-### Decisione pendente sulle dipendenze
-
-Finché resta non esposto, va deciso se **rimuovere** Riskfolio-Lib, CVXPY, CLARABEL e
-SCS (più il pool `optimization`) dall'immagine, misurando prima quanto pesano davvero
-sui 2.781.625.742 byte totali dell'immagine. Il pool `simulation` (QuantLib) resta
-comunque necessario.
-
-Nota: la variante onesta e a basso costo — **ERC come diagnostica**, non come consiglio
-("se ogni asset contribuisse allo stesso rischio i pesi sarebbero questi, i tuoi sono
-questi") — è un complemento naturale di `risk_contribution` e **non richiede Riskfolio**:
-è risolvibile in poche decine di righe di NumPy.
-
-### Riferimenti
-
-- `backend/app/services/risk_plugins/portfolio_optimization/plugin.py`
-- `backend/app/services/risk/quant/optimization_engine.py`
-- `LibreFolio_devWiki/wiki/problems/riskfolio-numpy-vectorbt-dependency-trap.md`
-
----
+**Variante a basso costo.** L'ERC come diagnostica («con lo stesso rischio per asset i pesi sarebbero questi, i tuoi sono
+questi»): affianca `risk_contribution`, si fa in poche righe di NumPy e non richiede Riskfolio.
 
 ## 🎲 Risk Analysis — Monte Carlo avanzato: regimi calibrati e volatilità stocastica
 
