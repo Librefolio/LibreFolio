@@ -795,6 +795,14 @@ Create a new asset with name, type, currency, identifiers, provider, and classif
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 From Import Wizard (pre-filled)" alt="Create Asset from Import Wizard">
 </div>
 
+### ⭐ Search Online — Premium Sources
+
+Results from premium sources come first, in a section of their own.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Search Online — Premium Sources">
+</div>
+
 ### 🧬 Asset Type Picker
 
 The searchable two-level type menu open, with the ETF family expanded and composite icons.
