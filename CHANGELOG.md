@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Positions contribution: a row closed in the period says how it closed (a sale, a transfer, with the receiving broker when you can see it, or an adjustment).
 - **The Dashboard and the broker page follow the current prices**: every minute while you use them, amounts, KPIs and positions update by themselves; they stop when the tab is hidden or after two minutes without input («Updates paused») and resume at your next action.
 - **Data-quality warnings on the broker page:** old prices, missing or old exchange rates and their sync buttons appear there too, for every role.
+- **Positions chart: choose the window of the Rolling view.** One week, one month, three months, one year or a custom window; it starts from the automatic one.
 
 #### 📈 Charts
 
@@ -77,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GET /api/v1/brokers/import/files`: each file carries `can_delete`, true when the caller may delete it.
 - **Files page: a Visibility column** shows whether each file is shared with every user or personal. From the row menu or a grid card you can share a file with everyone or make it personal again, with a confirmation, since the others lose it.
 - **A bar in the Files page shows administrators the space the instance takes** (database, uploaded files, broker reports, backups), against the disk or against a limit they can set; a hosting provider can fix the limit with `LIBREFOLIO_STORAGE_LIMIT_MB`.
+- **The space bar and its legend light up together** when you point at either of them.
 
 #### 💾 Backup and restore
 
@@ -219,6 +221,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The broker page shows the broker's whole amounts**, no longer your share of it, risk included; for the figures reduced by your share use the Dashboard filtered on that broker.
 - **A broker's page is now the Dashboard with that broker already chosen:** the same controls, the currency with «Create forex», cash and amounts of the chosen period, the lots detail that closes with Back, the «Updates paused» badge, and the transactions of the chosen period (it used to be the whole history).
 - **Lots: a transfer with a broker outside the panel now reads as a transfer.** In a lot's History, on Lot Life & Custody and on the Avg. Cost / Market Price markers, units moved to or from a broker the panel doesn't include were shown as adjustments. They now show as transfers (TRANSFER+ / TRANSFER- in the History, Transfer In / Transfer Out on the markers), without naming the other broker. No figure changes.
+- **«Updates paused» takes the place of Refresh** on the Dashboard and the broker page: nothing moves on the page, and a click starts the updates again. They still restart on their own when you come back.
+- **Positions chart**: the badges show the asset's name, which scrolls when it is long, and the view selector uses the icons of the Assets list.
 
 #### 📈 Charts
 
@@ -276,6 +280,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: `POST /api/v1/uploads` accepts `scope`; `PATCH /api/v1/uploads/{id}` changes it; file info carries `scope` and `can_delete`. Another user's personal file answers 404, as a missing one.
 - A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
 - On the Files page and in a broker's report files, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
+- **System files**: the icons created at installation show «system» as their uploader, instead of a user number.
+- **Files, for administrators**: the space limit sits in a closed Advanced panel and is called LibreFolio total space; going over it only warns. Automatic clean-up is a closed panel too, and says its rules apply within the hour. Saving either shows a green confirmation, and the same-disk reminder is now a plain note.
 
 #### 💱 Currency codes
 
@@ -309,6 +315,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Date ranges always span two different days.** In every date-range picker the day clicked first shows the not-allowed cursor and a second click on it is ignored; a typed date equal to the other end turns red; the arrow keys skip it. A date typed while the other end is empty leaves that end open: in a table's date filter, **From** alone keeps the rows from that day on (it used to keep that day only). Ranges of one day saved earlier still work.
 - Notifications are announced by screen readers (errors at once, the others politely), and their close button is named in your language.
+- **A back arrow on Brokers, Transactions, Assets and FX** when you reach them from a link in the app: it brings you back with your filters and period. It does not appear from the sidebar or a typed address.
 
 #### 👥 Accounts and sign-in
 
@@ -334,6 +341,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - An empty or blank secret counts as not set, as if the variable were absent.
 - `GET /api/v1/system/info` without a session answers only the app version; signed-in users still get the full report.
+- **Security checks**: «Check again» sits on the title line, and the session key check says the key is random and how to stay signed in across restarts.
 
 #### 🏢 Hosting providers and managed instances
 
@@ -525,6 +533,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Assets: deleting an asset that transactions use opens its confirmation already on the result (how many transactions, with the link to them) instead of asking first; the confirmation also says the asset's events go with it; and the search's failure message, the source title, the «Manual» badge and the count of assets to delete follow your language.
 - API: converting an amount of 0 (`POST /api/v1/fx/currencies/convert`) answers 0 with the day's rate instead of a server error.
 - A provider that delivers a day with a price of 0 or less no longer makes the whole price download of the asset fail: that day is skipped and the sync says so. A current price of 0 or less from a provider is refused like an unusable one: the last stored price stays.
+- **A new FX pair right after a restart**: EUR/RON and the other pairs only ECB covers no longer report «no conversion path» when ECB is slow to answer. If a provider's list stays unreadable, the dialog asks you to try again shortly; the second yellow banner is gone.
 
 #### 🗓️ Asset events and Scheduled Investments
 
@@ -617,6 +626,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A restore that cannot be confirmed, cancelled or restarted because of a disk problem now says so on the Backup tab, with the cause in the server's log, instead of a generic error.
 - `dev.py backup decrypt` run through `docker compose exec` writes a zip owned by the server's user, like the other backup commands; an archive it cannot read now says so.
 - **The password of a backup** is no longer offered by the browser as your account password.
+- **The browser no longer offers to save a backup password**: the password fields of a backup and of a restore are masked text, kept out of the password manager.
 
 #### 🏢 Hosting providers and managed instances
 
