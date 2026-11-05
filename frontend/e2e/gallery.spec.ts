@@ -131,6 +131,7 @@ import {
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
+import {GALLERY_PREMIUM_QUERY, serveGalleryPremiumSearch} from './fixtures/galleryAssetSearch';
 import {serveGalleryWhatsNew} from './fixtures/galleryWhatsNew';
 import {backToRestoreCard, rollBackRestoreOverlay, serveGalleryRestore} from './fixtures/galleryRestore';
 import {expectGallerySecurityServed, GALLERY_SECURITY_ATTENTION_COUNT, GALLERY_SECURITY_FINDING_IDS, gallerySecurityReads, serveGallerySecurityChecks, serveGallerySecurityFindings} from './fixtures/gallerySecurity';
@@ -6136,6 +6137,45 @@ test.describe('Gallery Screenshots', () => {
                     await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('Asset search with premium results - all languages and themes', async ({page}, testInfo) => {
+            // Search Online with a provider made premium: its results lead in a section of their own, the report row follows,
+            // the community section stays closed (galleryAssetSearch.ts, as asset-modal.spec.ts routes it). Nothing is created.
+            const viewport = getViewport(testInfo);
+            const {premium} = await serveGalleryPremiumSearch(page);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await page.getByTestId('assets-add-button').click();
+                    const dialog = page.getByTestId('asset-modal');
+                    await expect(dialog.getByTestId('asset-modal-form')).toBeVisible({timeout: 5_000});
+                    await expect(dialog.getByTestId(`asset-search-provider-${premium}`), 'Search Online asks the provider made premium').toHaveAttribute('data-selected', 'true', {timeout: 15_000});
+                    // Its input has no test id: it is the one text field of the search block.
+                    await dialog.locator('[data-search-autocomplete] input[type="text"]').fill(GALLERY_PREMIUM_QUERY);
+                    const results = dialog.getByTestId('asset-search-results');
+                    await expect(results, 'the search ends with results').toHaveAttribute('data-state', 'results', {timeout: 15_000});
+                    const section = results.getByTestId('asset-search-premium-section');
+                    await expect(section.getByTestId('asset-search-premium-badge')).toBeVisible();
+                    await expect(section.getByTestId('asset-search-result-0')).toBeVisible();
+                    await expect(section.getByTestId('asset-search-result-1')).toBeVisible();
+                    await expect(results.getByTestId('asset-search-report-row')).toBeVisible();
+                    await expect(results.getByTestId('asset-search-community-toggle')).toHaveAttribute('aria-expanded', 'false');
+                    await waitForMotionSettled(dialog, 'the asset modal');
+                    // DESKTOP — the tall-screen rule (galleryTallShots.ts): the dialog whole, results included.
+                    if (viewport === 'desktop') await fitScreenToDialog(page, dialog, `desktop/${lang}/${theme}/assets/search-premium`, {body: page.getByTestId('asset-modal-form').locator('..')});
+                    await screenshot(page, viewport, lang, theme, 'assets', 'search-premium');
+                    await restoreTallScreen(page);
+                    await page.keyboard.press('Escape');
+                    await expect(dialog).toBeHidden();
                 }
             }
         });
