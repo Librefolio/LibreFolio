@@ -109,7 +109,7 @@ Il primo avvio genera l'interfaccia web e la documentazione, quindi richiede qua
 
 ### 👤 6. Crea il Tuo Account
 
-Apri LibreFolio nel browser e scegli **Registrati qui** sotto il modulo di accesso: il primo account registrato diventa l'amministratore. Per gestire gli utenti dal terminale, vedi [Strumenti da Riga di Comando](cli_tools.md).
+Apri LibreFolio nel browser e scegli **Registrati qui** sotto il modulo di accesso: il primo account registrato diventa l'amministratore. Per gestire gli utenti dal terminale, vedi [Strumenti da Riga di Comando](cli_tools.md). Per far creare l'amministratore a LibreFolio stesso al primo avvio, vedi [L'Amministratore Iniziale](configuration_accounts.md#initial-admin).
 
 ---
 
