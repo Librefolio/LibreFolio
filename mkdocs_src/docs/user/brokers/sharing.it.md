@@ -50,7 +50,7 @@ La quota decide cosa conta nei tuoi numeri:
 
 - La **Dashboard** conta solo i broker che **possiedi** con una quota superiore allo 0%, e proporziona i loro importi in base alla tua quota: con il 50%, vedi metà del valore, del reddito e del P&L del broker.
 - La scheda **Rischio** della Dashboard copre gli stessi broker: quelli che possiedi con una quota superiore allo 0% (vedi [Scheda Rischio](../dashboard/index.md#risk-tab)).
-- I broker in cui sei un visualizzatore o un editor, o che possiedi allo 0%, non sono nella tua Dashboard. La loro pagina li mostra: i visualizzatori e gli editor vedono gli importi **completi**, i proprietari la loro quota.
+- I broker in cui sei un visualizzatore o un editor, o che possiedi allo 0%, non sono nella tua Dashboard. La loro pagina li mostra, e mostra l'**intero** broker (100%) a ogni ruolo, anche a un proprietario con una quota minore.
 
 ---
 
