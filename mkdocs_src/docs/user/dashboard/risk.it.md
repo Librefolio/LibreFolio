@@ -133,6 +133,7 @@ Una cifra di rischio vale solo quanto i prezzi che vi stanno dietro. Quando i da
 **Come leggerlo**
 
 - **Il banner in alto** elenca prezzi e tassi di cambio mancanti o obsoleti: sistemali con i suoi pulsanti, oppure con **Sincronizza** in alto a destra.
+- **Una coppia di valute senza una rotta di cambio** ha un pulsante proprio nel banner, uno per coppia (descrizione **Aggiungi coppia FX**): apre subito la finestra **Aggiungi Nuova Coppia FX**, già compilata con quella coppia, e la scheda si ricalcola da sola quando la coppia è salvata e i suoi tassi sono scaricati → [Aggiungere una coppia di valute](../fx/add-pair.md)
 - **L'avviso sopra i blocchi** dice quali risultati sono parziali, e perché.
 - **Un banner dentro un blocco** nomina una cifra che non è stato possibile calcolare, con il motivo.
 - **Un trattino (—)** significa che una cifra non ha potuto essere misurata: non significa mai zero.

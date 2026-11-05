@@ -133,6 +133,7 @@ Un chiffre de risque ne vaut pas mieux que les prix qui le sous-tendent. Lorsque
 **Comment le lire**
 
 - **La bannière en haut** liste les prix et taux de change manquants ou obsolètes : corrigez-les avec ses boutons, ou avec **Synchroniser** en haut à droite.
+- **Une paire de devises sans route de change** a son propre bouton dans la bannière, un par paire (info-bulle **Ajouter paire FX**) : il ouvre aussitôt la fenêtre **Ajouter une Paire de Devises**, déjà remplie avec cette paire, et l'onglet se recalcule tout seul une fois la paire enregistrée et ses taux téléchargés → [Ajouter une paire de devises](../fx/add-pair.md)
 - **L'avis au-dessus des blocs** indique quels résultats sont partiels, et pourquoi.
 - **Une bannière à l'intérieur d'un bloc** nomme un chiffre qui n'a pas pu être calculé, avec la raison.
 - **Un tiret (—)** signifie qu'un chiffre n'a pas pu être mesuré : il ne signifie jamais zéro.

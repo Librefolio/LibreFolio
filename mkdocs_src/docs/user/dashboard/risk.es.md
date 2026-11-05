@@ -133,6 +133,7 @@ Una cifra de riesgo es tan buena como los precios que la sustentan. Cuando falta
 **Cómo leerlo**
 
 - **El aviso en la parte superior** lista los precios y tipos de cambio faltantes u obsoletos: corrígelos con sus botones, o con **Sincronizar** en la esquina superior derecha.
+- **Un par de divisas sin ruta de cambio** tiene su propio botón en el aviso, uno por par (información sobre herramientas **Añadir par FX**): abre enseguida la ventana **Añadir Par de Divisas**, ya rellenada con ese par, y la pestaña se recalcula sola cuando el par se guarda y se descargan sus tipos → [Añadir un par de divisas](../fx/add-pair.md)
 - **El aviso sobre los bloques** indica qué resultados son parciales, y por qué.
 - **Un aviso dentro de un bloque** nombra una cifra que no se pudo calcular, con la razón.
 - **Un guion (—)** significa que una cifra no se pudo medir: nunca significa cero.
