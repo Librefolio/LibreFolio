@@ -1258,6 +1258,46 @@ test.describe('Gallery Screenshots', () => {
         }
     }
 
+    /**
+     * The Yield on Cost column of the holdings table (`positions-yoc`): the panel framed as the other positions shots are, the
+     * table narrowed with its own column selector (the eye) to the asset and YoC (and the value, on the desktop) — the table is wider than the panel, and
+     * scrolled to the column it would leave the rows without their asset — and read back: the three headers on the screen. The
+     * choice is the table's own, kept in the page's storage; the test's page goes with it.
+     */
+    async function screenshotPositionsYoc(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string) {
+        const shot = `${viewport}/${lang}/${theme}/${category}/positions-yoc`;
+        // A phone's panel holds the asset and YoC columns; the desktop's a third, the value.
+        const keep = viewport === 'mobile' ? ['asset', 'yield-on-cost'] : ['asset', 'yield-on-cost', 'value'];
+        await expect(page.getByTestId('positions-panel')).toBeVisible({timeout: 5_000});
+        await setPositionsView(page, 'holdings', 'table');
+        const toggle = page.getByTestId('positions-panel').getByTestId('column-visibility-toggle');
+        await expect(toggle, `${shot}: the table's column selector`).toBeVisible();
+        await toggle.click();
+        const dropdown = page.getByTestId('column-visibility-dropdown');
+        await expect(dropdown).toBeVisible();
+        const ids = await dropdown.locator('[data-testid^="column-visibility-item-"]').evaluateAll((items) => items.map((item) => (item.getAttribute('data-testid') ?? '').replace('column-visibility-item-', '')));
+        expect(ids, `${shot}: the selector offers the Yield on Cost column`).toContain('yield-on-cost');
+        for (const id of ids.filter((column) => !keep.includes(column))) {
+            // A column hidden by default has no header: ask for the state, click only when it is shown.
+            if ((await page.getByTestId(`dt-header-${id}`).count()) === 0) continue;
+            await dropdown.getByTestId(`column-visibility-item-${id}`).click();
+            await expect(page.getByTestId(`dt-header-${id}`), `${shot}: ${id} is hidden`).toHaveCount(0);
+        }
+        // Closed by its backdrop (a layer over the page, which a second click on the toggle would meet).
+        await page.mouse.click(2, 2);
+        await expect(dropdown, `${shot}: the selector is closed`).toBeHidden();
+        await frameTarget(page, page.getByTestId('positions-panel'), shot);
+        // A phone's table is still wider than its panel: scrolled sideways, by the least that brings the YoC header whole into view.
+        await page.getByTestId('dt-header-yield-on-cost').evaluate((element) => {
+            const scroller = element.closest('[data-testid="dt-scroll"]');
+            if (!scroller) return;
+            const over = element.getBoundingClientRect().right - scroller.getBoundingClientRect().right;
+            if (over > 0) scroller.scrollLeft += over + 8;
+        });
+        for (const id of viewport === 'mobile' ? ['yield-on-cost'] : keep) await expect(page.getByTestId(`dt-header-${id}`), `${shot}: ${id} is on the screen`).toBeInViewport({ratio: 1});
+        await screenshot(page, viewport, lang, theme, category, 'positions-yoc');
+    }
+
     const LOTS_SCREENSHOT_VARIANTS = [
         {testId: 'lot-wac-price-chart', name: 'fifo-lots-wac-chart'},
         {testId: 'lot-gantt-chart', name: 'fifo-lots-gantt-chart'},
@@ -1613,6 +1653,23 @@ test.describe('Gallery Screenshots', () => {
                 // Each variant is shot once setPositionsView() has its content root on screen: the
                 // holdings table or treemap, the contribution table or the performance chart.
                 await screenshotPositionsVariants(page, viewport, lang, theme, 'dashboard', ['positions-holdings-table', 'positions-holdings-map', 'positions-performance-table', 'positions-performance-map']);
+            });
+        });
+
+        test('dashboard positions YoC column - all languages and themes', async ({page}, testInfo) => {
+            test.setTimeout(420_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                await page.getByTestId('dashboard-tab-posizioni').click();
+                await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
+                await screenshotPositionsYoc(page, viewport, lang, theme, 'dashboard');
             });
         });
 
