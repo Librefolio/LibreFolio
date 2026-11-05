@@ -23,7 +23,7 @@ configuration et redémarré (voir « Sécurité » dans [Paramètres globaux](s
 
 | Niveau | Ce que dit le journal | Que faire |
 | --- | --- | --- |
-| ℹ️ `info` | `JWT_SECRET is not set: every start makes a new session signing key, …` | Rien, si déconnecter tout le monde à chaque redémarrage vous convient. Sinon, voir [Garder les utilisateurs connectés](index.md#session-persistence). |
+| ℹ️ `info` | `The session key is random: every restart signs everyone out. To stay signed in, set JWT_SECRET.` | Rien, si déconnecter tout le monde à chaque redémarrage vous convient. Sinon, voir [Garder les utilisateurs connectés](index.md#session-persistence). |
 | ⚠️ `warning` | `The session signing key from JWT_SECRET is … characters long: use at least 32 random characters` (ou `from JWT_SECRET_FILE (<path>)`) | Générez une clé plus longue, comme dans [Garder les utilisateurs connectés](index.md#session-persistence), et placez-la là où l'indique la ligne. |
 | ⚠️ `warning` | `Set both directly and through a *_FILE variable: …` | Pour chaque secret listé, ne gardez qu'un seul des deux : la variable elle-même l'emporte, le fichier est ignoré. |
 | ❌ `error` | `The instance key cannot be used: …`, se terminant par `cannot be reached (Permission denied)` ou `cannot be read (…)` | Le dossier `secrets/` ou `instance.key` appartient à un autre utilisateur, ou ses permissions empêchent LibreFolio d'y accéder. Rendez-les tous deux à l'utilisateur qui exécute LibreFolio (`chown`), puis `chmod 700` sur le dossier et `chmod 600` sur le fichier. Ne remplacez jamais la clé par une nouvelle. Le serveur démarre quand même. |
