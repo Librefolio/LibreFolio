@@ -501,6 +501,18 @@ describe('the positions chart follows the same scope', () => {
         expect(series.dispose).toHaveBeenCalled();
         expect(rolling.dispose).toHaveBeenCalled();
     });
+
+    it('hands the Rolling view the window the user chose, and none while it is the automatic one (F-2)', () => {
+        const rolling = {sync: vi.fn(), request: vi.fn(), dispose: vi.fn(), subscribe: vi.fn()};
+        let chosen: number | undefined;
+        const inputs: PortfolioDataInputs = {scope: () => baseScope, canAsk: () => true, alive: () => true, wantsBrokerPnlHistory: () => false, rollingPeriod: () => ({start: '2026-01-02', end: '2026-10-28'}), rollingWindow: () => chosen};
+        const data = createPortfolioData(inputs, {positionsSeries: {sync: vi.fn(), request: vi.fn(), dispose: vi.fn(), subscribe: vi.fn()} as never, positionsRolling: rolling as never});
+        expect(data.positionsRollingScope(1).windowDays).toBeUndefined();
+        chosen = 365;
+        data.syncPositions(1);
+        expect(rolling.sync).toHaveBeenLastCalledWith(expect.objectContaining({windowDays: 365}));
+        data.dispose();
+    });
 });
 
 
