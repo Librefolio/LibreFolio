@@ -801,6 +801,14 @@ Crea un nuovo asset su mobile — o avvia dalla Procedura guidata di importazion
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Da procedura guidata di importazione" alt="Crea asset da procedura guidata di importazione">
 </div>
 
+### ⭐ Cerca Online — Fonti premium
+
+I risultati delle fonti premium compaiono per primi, in una sezione tutta loro.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Cerca Online — Fonti premium">
+</div>
+
 ### 🧬 Selettore tipo asset
 
 Il menu a due livelli ricercabile dei tipi aperto, con la famiglia ETF espansa e icone composite.

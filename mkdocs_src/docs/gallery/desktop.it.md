@@ -789,6 +789,14 @@ Crea un nuovo asset con nome, tipo, valuta, identificatori, provider e classific
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Da Procedura guidata di importazione (precompilato)" alt="Crea asset da Procedura guidata di importazione">
 </div>
 
+### ⭐ Cerca Online — Fonti premium
+
+I risultati delle fonti premium compaiono per primi, in una sezione tutta loro.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Cerca Online — Fonti premium">
+</div>
+
 ### 🧬 Selettore tipo asset
 
 Il menu dei tipi a due livelli ricercabile aperto, con la famiglia ETF espansa e icone composite.
