@@ -4,6 +4,31 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 🧹 Voci chiuse o scartate nella pulizia di `TODO_FUTURI.md` ✅
+
+**Data:** 5 Novembre 2026
+
+Fatte nel frattempo:
+
+- **Split nel FIFO**: il motore applica gli split come eventi dell'asset (`financial_math/fifo/engine.py`).
+- **TanStack Table v9**: la libreria non è più nel progetto.
+- **Separatore decimale**: denaro e percentuali seguono la lingua dell'app (`uiLocale()`, `formatPercent`), non quella del
+  browser.
+- **Guide dei segnali**: stanno in Teoria finanziaria (`technical-analysis/indicators/` e `risk-metrics/`), e le pagine
+  utente descrivono la scheda con i link.
+
+Scartate, perché l'idea non ritorni:
+
+- **BRIM Auto-Detect del broker dal codice conto** (07/09/2026): pochi broker danno dati che identificano il conto, e
+  l'utente divide già i file all'upload.
+- **FX nel PAC** (02/10/2026): niente tasso o spread per broker, niente margine di sicurezza, niente commissione di
+  conversione oltre lo spread, niente multi-hop. Lo spread globale somma già tutti gli attori della conversione.
+- **QuarkAI** (05/11/2026): l'assistente AI via MCP con notizie, notifiche e recap giornaliero.
+- **`coupon_policy`** (05/11/2026): resta solo `FULL_RESET`, senza `CUSTOM_RATE` e `PARTIAL`.
+- **Asimmetria dei Tool sull'assenza** (05/11/2026): era un'osservazione senza azione; nessuna delle due scelte è sbagliata.
+
+---
+
 ## 📧 Email del server — prova, link per email, password dimenticata, verifica, avviso ✅
 
 **Data completamento:** 16 Ottobre 2026
@@ -38,8 +63,7 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 - Doc: `admin/email` e `developer/backend/email`.
 
 ### Origine
-- La voce di `TODO_FUTURI.md` del 3 Settembre 2026 (audit P2-1). Poi la specifica F04 del fondatore («Feature SaaS
-  Readiness») e le decisioni del developer del 14/10: 1–3, 10 e 44.
+- La voce di `TODO_FUTURI.md` del 3 Settembre 2026 (audit P2-1). Poi la specifica F04 del fondatore e le decisioni del developer del 14/10: 1–3, 10 e 44.
 - Due punti della voce sono stati contraddetti dalla specifica:
   - l'SMTP non si configura dalle impostazioni dell'admin, solo da variabili d'ambiente o da file segreti;
   - niente `aiosmtplib`.
