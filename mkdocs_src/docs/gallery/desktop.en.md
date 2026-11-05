@@ -488,6 +488,22 @@ Browse files visually with image previews in grid layout.
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View">
 </div>
 
+### 💾 Backups (Admin)
+
+Administrators see the kept backups and set their automatic clean-up.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Backups (Admin)">
+</div>
+
+### 📊 Space Used (Admin)
+
+A bar shows how the space is shared among the database, uploaded files, reports and backups, against the limit you set.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="storage-bar" alt="Space Used (Admin)">
+</div>
+
 ### 📋 Broker Reports (BRIM)
 
 Import and manage broker transaction reports.
