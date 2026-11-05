@@ -3,7 +3,8 @@
 
   The chart under the Dashboard's holdings table (Y5-2, #48). Two views of the same lines: the position's
   result in money (Abs, a dashed reference at 0) or its return in «base 100» (%, a dashed reference at 100).
-  A custom HTML legend turns each line on and off and says which position closed and which line leaves values out.
+  A custom HTML legend turns each line on and off and says which position closed and which line leaves values out; a name too long
+  for its badge scrolls by itself (`scrollOnOverflow`).
 
   The component is CONTROLLED: it keeps no view and no hidden set. It draws the props it is given and calls
   `onviewchange(view)` / `ontoggle(id)`. The numbers are the backend's, shaped by `positionsSeries.ts`; a missing
@@ -48,6 +49,8 @@
     import {applyLineShape, effectiveLineShape} from '$lib/components/charts/lineShape';
     import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
 
     interface Props {
@@ -389,7 +392,7 @@
                     onclick={() => ontoggle?.(line.id)}
                 >
                     <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full {visible ? '' : 'opacity-40'}" style="background-color: {colorOf(line.id)}" data-testid="positions-chart-swatch-{line.id}"></span>
-                    <span class="truncate {line.kind === 'portfolio' ? 'font-semibold' : ''}">{labelOf(line)}</span>
+                    <span use:scrollOnOverflow class="{overflowScrollTextClass} max-w-56 {line.kind === 'portfolio' ? 'font-semibold' : ''}" data-testid="positions-chart-legend-name-{line.id}">{labelOf(line)}</span>
                     {#if line.closedOn}
                         <Flag size={12} class="shrink-0" aria-hidden="true" />
                     {/if}

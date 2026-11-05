@@ -95,12 +95,12 @@ export function lineValue(point: Pick<PositionSeriesPoint, 'pnl' | 'pnl_percent'
 }
 
 /**
- * A position's line: the ticker (else the name), then the broker when the series is for one broker. The series is steps (each
+ * A position's line: the asset's name (the legend scrolls a long one, F-1), then the broker when the series is for one broker. The series is steps (each
  * holds from its `date` to its `through`): one point per step and a closing point on the last `through`, so the line reaches the
  * last day the position is known; drawn as steps.
  */
 export function positionLine(series: PositionSeries, view: PositionsSeriesView): PositionLine {
-    const name = safeString(series.asset_ticker) || series.asset_name;
+    const name = series.asset_name;
     const broker = safeString(series.broker_name);
     const steps = series.points ?? [];
     const points: ChartPoint[] = steps.map((point) => ({date: point.date, value: lineValue(point, view)}));

@@ -232,14 +232,13 @@
         onRequestPositionsRolling?.([...new Set(selectedRows.map((row) => row.assetId))]);
     });
 
-    /** A ticked position's name for the legend of the Rolling view: its ticker or name, then the broker, as the positions' own lines say it. */
+    /** A ticked position's name for the legend of the Rolling view: its asset's name, then the broker, as the positions' own lines say it. */
     function rollingLabel(row: SelectedRow): string {
         const open = holdings.find((holding) => holding.asset_id === row.assetId && (safeNumberOrNull(holding.broker_id) ?? null) === row.brokerId);
         const sold = soldPositions.find((position) => position.asset_id === row.assetId && (position.broker_id ?? null) === row.brokerId);
         const source = open ?? sold;
         if (!source) return `#${row.assetId}`;
-        const ticker = typeof source.asset_ticker === 'string' ? source.asset_ticker : '';
-        const name = ticker || source.asset_name;
+        const name = source.asset_name;
         const broker = typeof source.broker_name === 'string' ? source.broker_name : '';
         return broker ? `${name} · ${broker}` : name;
     }
