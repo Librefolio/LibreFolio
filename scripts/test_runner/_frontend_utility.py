@@ -466,6 +466,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/form/TxFormBanners.test.ts",
             "src/lib/components/ui/display/KpiMetricBar.test.ts",
             "src/lib/components/ui/display/LinkedStackedBar.test.ts",
+            "src/lib/components/ui/display/FoldPanel.test.ts",
             "src/lib/components/ui/display/KpiDivergingFlowBar.test.ts",
             "src/lib/components/ui/display/RiskMetricCard.test.ts",
             "src/lib/components/ui/display/RiskCardGrid.test.ts",
