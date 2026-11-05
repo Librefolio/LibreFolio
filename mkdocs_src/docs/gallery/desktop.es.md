@@ -335,6 +335,30 @@ Los administradores revisan el correo de la instancia: si puede enviar, cuántos
     <img class="gallery-img" data-category="settings" data-name="email" alt="Correo">
 </div>
 
+### 🚨 Comprobaciones de seguridad (Administrador)
+
+Los administradores ven qué requiere atención y cómo actuar; las comprobaciones superadas quedan plegadas abajo, y una insignia en Administración cuenta los errores y las advertencias.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="security" alt="Comprobaciones de seguridad (Administrador)">
+</div>
+
+### ↩️ Restauración deshecha (Administrador)
+
+Si una restauración falla, LibreFolio deja los datos como estaban y explica el motivo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-rolled-back" alt="Restauración deshecha (Administrador)">
+</div>
+
+### 🧾 Resultado de la última restauración (Administrador)
+
+La tarjeta de restauración conserva el resultado del último intento.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-last-result" alt="Resultado de la última restauración (Administrador)">
+</div>
+
 ### 🕐 Planificador de datos de mercado — Config
 
 Configura el demonio de sincronización automática de datos de mercado: frecuencia de actualización, horas de sincronización del historial y días activos.
@@ -397,6 +421,14 @@ La búsqueda desciende en los pliegues y los chips de resultado saltan al punto 
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Búsqueda en registro de cambios">
+</div>
+
+### 🆕 Novedades
+
+Tras una actualización, una ventana muestra qué ha cambiado desde tu última versión.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="whats-new-modal" alt="Novedades">
 </div>
 
 ### 🧩 Diagnóstico de complementos
