@@ -412,6 +412,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/feedback/DataQualityBanner.tone.test.ts",
             "src/lib/components/ui/feedback/DataQualityBanner.layout.test.ts",
             "src/lib/components/ui/tabs/TabBar.test.ts",
+            "src/lib/components/layout/PageBackButton.test.ts",
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
             "src/lib/components/table/DataTable.rowOrder.test.ts",
