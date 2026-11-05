@@ -131,6 +131,7 @@ import {
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
+import {serveGalleryBackupList, serveGalleryStorage} from './fixtures/galleryFilesBackups';
 import {GALLERY_PREMIUM_QUERY, serveGalleryPremiumSearch} from './fixtures/galleryAssetSearch';
 import {serveGalleryWhatsNew} from './fixtures/galleryWhatsNew';
 import {backToRestoreCard, rollBackRestoreOverlay, serveGalleryRestore} from './fixtures/galleryRestore';
@@ -2937,6 +2938,8 @@ test.describe('Gallery Screenshots', () => {
         test.beforeEach(async ({page}) => {
             // Use TEST_ADMIN since db populate assigns brokers to admin
             await login(page, TEST_ADMIN);
+            // The administrators' space bar is on every tab: its sizes come from a fixture, never from the lane's data folder.
+            await serveGalleryStorage(page);
         });
 
         // One page load per language (after the one the first switch is made on), its two themes switched in place, every
@@ -3042,6 +3045,23 @@ test.describe('Gallery Screenshots', () => {
             await eachLanguageAndTheme(page, url, async (lang, theme) => {
                 await filesTableReady(page, table, `${viewport}/${lang}/${theme}/files/brim-tab`);
                 await shootFiles(page, viewport, lang, theme, 'brim-tab', table);
+            });
+        });
+
+        test('storage bar - all languages and themes', async ({page}, testInfo) => {
+            // The administrators' space bar, from a fixture (galleryFilesBackups.ts): the data folder's parts against a 2 GB limit.
+            test.setTimeout(90_000);
+            const viewport = getViewport(testInfo);
+            const url = '/files?tab=static';
+            await openFilesPage(page, url);
+
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
+                const bar = page.getByTestId('storage-bar');
+                await expect(bar, 'the bar has read the space the instance takes').toHaveAttribute('data-state', 'ready', {timeout: 15_000});
+                await expect(bar).toHaveAttribute('data-mode', 'limit');
+                await expect(bar).toHaveAttribute('data-busy', 'false');
+                await expect(bar.getByTestId('storage-legend-database')).toBeVisible();
+                await shootFiles(page, viewport, lang, theme, 'storage-bar', bar);
             });
         });
 
