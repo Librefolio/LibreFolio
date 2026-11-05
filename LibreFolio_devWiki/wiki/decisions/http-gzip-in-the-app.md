@@ -17,7 +17,7 @@ related:
 
 LibreFolio is one container that serves the API, the SvelteKit build and the documentation site
 ([[features/F-062]]), and an install may reach it with no reverse proxy in between, or through one that does not
-compress. The cloud sizing study of workstream M measured what a browser downloads (report, item 7): a first visit
+compress. A sizing study of workstream M measured what a browser downloads (report, item 7): a first visit
 of about 7.5 MB and an eight-page session of about 5.8 MB, nearly all of it text — API JSON, JavaScript, CSS and the
 docs' HTML, about 200 KiB per docs page.
 
