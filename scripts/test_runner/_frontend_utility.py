@@ -613,7 +613,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/instance/components/CheckHelp.test.ts",
             "src/lib/features/live-updates/LiveUpdatesStatus.test.ts",
             "src/lib/features/backup/BackupDownloadCard.test.ts",
-            "src/lib/features/backup/backupList.test.ts",
+            "src/lib/features/backup/backupListSignal.test.ts",
             "src/lib/features/backup/BackupList.test.ts",
             "src/lib/features/backup/BackupCleanupPanel.test.ts",
             "src/lib/features/backup/BackupsSection.test.ts",
