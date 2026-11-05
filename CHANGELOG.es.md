@@ -30,6 +30,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Contribución de posiciones: una fila cerrada en el periodo indica cómo se cerró (una venta, una transferencia, con el bróker receptor cuando pueda verlo, o un ajuste).
 - **El Panel y la página del bróker siguen los precios actuales**: cada minuto mientras los usa, los importes, los KPI y las posiciones se actualizan solos; se detienen cuando la pestaña se oculta o tras dos minutos sin interacción («Actualizaciones en pausa») y se reanudan en su siguiente acción.
 - **Avisos de calidad de datos en la página del bróker:** los precios obsoletos, los tipos de cambio ausentes u obsoletos y sus botones de sincronización también aparecen allí, para todos los roles.
+- **Gráfico de posiciones: elige la ventana de la vista Móvil.** Una semana, un mes, tres meses, un año o una ventana personalizada; parte de la automática.
 
 #### 📈 Gráficos
 
@@ -77,6 +78,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - `GET /api/v1/brokers/import/files`: cada archivo incluye `can_delete`, verdadero cuando quien llama puede eliminarlo.
 - **Página Archivos: una columna Visibilidad** muestra si cada archivo se comparte con todos los usuarios o es personal. Desde el menú de la fila o una tarjeta de la cuadrícula puede compartir un archivo con todos o volver a hacerlo personal, con una confirmación, ya que los demás lo pierden.
 - **Una barra en la página Archivos muestra a los administradores el espacio que ocupa la instancia** (base de datos, archivos subidos, informes del bróker, copias de seguridad), frente al disco o frente a un límite que pueden establecer; un proveedor de alojamiento puede fijar el límite con `LIBREFOLIO_STORAGE_LIMIT_MB`.
+- **La barra de espacio y su leyenda se resaltan juntas** al pasar por una u otra.
 
 #### 💾 Copia de seguridad y restauración
 
@@ -219,6 +221,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **La página del bróker muestra los importes completos del bróker**, ya no tu parte, incluido el riesgo; para las cifras reducidas por tu parte, usa el Panel filtrado por ese bróker.
 - **La página de un bróker ahora es el Panel con ese bróker ya elegido:** los mismos controles, la moneda con «Crear forex», efectivo e importes del periodo elegido, el detalle de lotes que se cierra con Atrás, la insignia «Actualizaciones en pausa» y las transacciones del periodo elegido (antes era todo el historial).
 - **Lotes: una transferencia con un bróker fuera del panel ahora se interpreta como una transferencia.** En el Historial de un lote, en Vida y custodia del lote y en los marcadores de Coste medio / Precio de mercado, las unidades movidas hacia o desde un bróker que el panel no incluye se mostraban como ajustes. Ahora se muestran como transferencias (TRANSFER+ / TRANSFER- en el Historial, Transfer In / Transfer Out en los marcadores), sin nombrar al otro bróker. Ninguna cifra cambia.
+- **«Actualizaciones en pausa» ocupa el lugar de Actualizar** en el panel y en la página del bróker: nada se mueve en la página, y un clic reanuda las actualizaciones. También se reanudan solas cuando vuelves.
+- **Gráfico de posiciones**: las etiquetas muestran el nombre del activo, que se desplaza si es largo, y el selector de vistas usa los iconos de la lista de activos.
 
 #### 📈 Gráficos
 
@@ -276,6 +280,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - API: `POST /api/v1/uploads` acepta `scope`; `PATCH /api/v1/uploads/{id}` lo cambia; la información del archivo lleva `scope` y `can_delete`. El archivo personal de otro usuario responde 404, como uno inexistente.
 - Un archivo subido desde la página Archivos es personal; las imágenes subidas mediante un selector de imágenes (icono de activo, icono de bróker, avatar) son compartidas. Elegir una de tus imágenes personales en un selector la comparte, con un aviso.
 - En la página Archivos y en los archivos de informes de un bróker, Eliminar aparece solo en los archivos que puedes eliminar; una eliminación masiva deja los demás en su sitio, con un aviso.
+- **Archivos del sistema**: los iconos creados en la instalación muestran «del sistema» como autor, en lugar de un número de usuario.
+- **Archivos, para los administradores**: el límite de espacio está en un panel cerrado «Avanzado» y se llama Espacio total de LibreFolio; superarlo solo avisa. La limpieza automática también es un panel cerrado, y dice que sus reglas se aplican en el plazo de una hora. Al guardar cualquiera de los dos aparece una confirmación verde, y el recordatorio del mismo disco es ahora una simple nota.
 
 #### 💱 Códigos de moneda
 
@@ -309,6 +315,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 - **Los rangos de fechas siempre abarcan dos días diferentes.** En todos los selectores de rango de fechas, el día pulsado primero muestra el cursor de no permitido y un segundo clic sobre él se ignora; una fecha escrita igual al otro extremo se vuelve roja; las teclas de flecha la saltan. Una fecha escrita mientras el otro extremo está vacío deja ese extremo abierto: en el filtro de fechas de una tabla, solo **Desde** mantiene las filas desde ese día en adelante (antes solo mantenía ese día). Los rangos de un solo día guardados anteriormente siguen funcionando.
 - Los lectores de pantalla anuncian las notificaciones (los errores de inmediato, las demás con cortesía), y su botón de cerrar tiene nombre en tu idioma.
+- **Una flecha atrás en Brókers, Transacciones, Activos y Forex** cuando llegas desde un enlace de la app: te devuelve con tus filtros y tu periodo. No aparece desde la barra lateral ni con una dirección escrita.
 
 #### 👥 Cuentas e inicio de sesión
 
@@ -334,6 +341,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 - Un secreto vacío o en blanco cuenta como no establecido, como si la variable estuviera ausente.
 - `GET /api/v1/system/info` sin sesión responde solo con la versión de la aplicación; los usuarios con sesión iniciada siguen recibiendo el informe completo.
+- **Comprobaciones de seguridad**: «Comprobar de nuevo» está en la línea del título, y la comprobación de la clave de sesión dice que es aleatoria y cómo seguir conectado tras un reinicio.
 
 #### 🏢 Proveedores de alojamiento e instancias gestionadas
 
@@ -525,6 +533,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Activos: eliminar un activo que usan transacciones abre su confirmación ya en el resultado (cuántas transacciones, con el enlace a ellas) en lugar de preguntar primero; la confirmación también dice que los eventos del activo se van con él; y el mensaje de fallo de la búsqueda, el título de la fuente, la insignia «Manual» y el recuento de activos a eliminar siguen tu idioma.
 - API: convertir un importe de 0 (`POST /api/v1/fx/currencies/convert`) responde 0 con el tipo del día en lugar de un error del servidor.
 - Un proveedor que entrega un día con un precio de 0 o menos ya no hace fallar toda la descarga de precios del activo: ese día se omite y la sincronización lo dice. Un precio actual de 0 o menos de un proveedor se rechaza como inutilizable: queda el último precio almacenado.
+- **Un nuevo par FX justo después de un reinicio**: EUR/RON y los demás pares que solo cubre el BCE ya no indican «ninguna ruta de conversión» cuando el BCE tarda en responder. Si la lista de un proveedor sigue ilegible, el diálogo pide reintentar en breve; el segundo aviso amarillo ya no está.
 
 #### 🗓️ Eventos de activos e Inversiones programadas
 
@@ -617,6 +626,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Una restauración que no se puede confirmar, cancelar o reiniciar por un problema de disco ahora lo dice en la pestaña Copia de seguridad, con la causa en el registro del servidor, en lugar de un error genérico.
 - `dev.py backup decrypt` ejecutado mediante `docker compose exec` escribe un zip propiedad del usuario del servidor, como los demás comandos de copia de seguridad; un archivo que no puede leer ahora lo dice.
 - **La contraseña de una copia de seguridad** ya no la ofrece el navegador como la contraseña de tu cuenta.
+- **El navegador ya no ofrece guardar la contraseña de una copia de seguridad**: los campos de contraseña de copia y restauración son texto enmascarado, fuera del gestor de contraseñas.
 
 #### 🏢 Proveedores de alojamiento e instancias gestionadas
 
