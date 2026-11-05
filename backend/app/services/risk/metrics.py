@@ -101,6 +101,20 @@ class HistoricalTailRisk:
 
 
 @dataclass(frozen=True, slots=True)
+class WorstHorizonWindow:
+    """The worst compounded stretch a series actually went through, over one horizon.
+
+    ``start_index`` and ``end_index`` are positions in the **return** series, both inclusive:
+    the first and the last return the window compounds (``end_index - start_index + 1`` is the
+    horizon in observations). A caller holding the dates of the returns reads the dates there.
+    """
+
+    compounded_return: float
+    start_index: int
+    end_index: int
+
+
+@dataclass(frozen=True, slots=True)
 class ReturnHistogram:
     """Uniform-width histogram of a signed return series with one edge pinned.
 
@@ -742,6 +756,22 @@ def horizon_compounded_returns(
     if horizon_observations > len(values):
         return []
     return [compounded_return(values[start : start + horizon_observations]) for start in range(len(values) - horizon_observations + 1)]
+
+
+def worst_horizon_window(horizon_returns: Sequence[float], horizon_observations: int) -> WorstHorizonWindow | None:
+    """Locate the lowest of the overlapping compounded returns of :func:`horizon_compounded_returns`.
+
+    The monthly VaR is the mean of the worst 5 % of the windows, a figure no single month ever
+    printed; this is the one window the series really lived through, which the reader can look up.
+    ``horizon_returns[i]`` compounds the returns ``i … i + horizon_observations - 1``. A tie keeps the
+    earliest window; an empty input has no worst window.
+    """
+    if isinstance(horizon_observations, bool) or horizon_observations <= 0:
+        raise ValueError("horizon_observations must be a positive integer")
+    if not horizon_returns:
+        return None
+    start = min(range(len(horizon_returns)), key=lambda index: (horizon_returns[index], index))
+    return WorstHorizonWindow(compounded_return=float(horizon_returns[start]), start_index=start, end_index=start + horizon_observations - 1)
 
 
 def historical_var_cvar(

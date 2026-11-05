@@ -11,6 +11,7 @@ from backend.app.schemas.risk import (
     RiskMode,
     RiskOutputKind,
     RiskScopeKind,
+    RiskWorstHorizonWindow,
 )
 from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
@@ -22,7 +23,7 @@ from backend.app.services.risk.base import (
     RiskExecutionContext,
     RiskUnavailableError,
 )
-from backend.app.services.risk.metrics import historical_var_cvar
+from backend.app.services.risk.metrics import historical_var_cvar, worst_horizon_window
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
@@ -72,10 +73,12 @@ class AssetSetVarAnalytic(RiskAnalytic):
     """
 
     analytic_code = "asset_set_var"
+    # 2.1.0 — F-6: each asset's worst compounded window, with its dates (`worst_horizon`). VaR and
+    # CVaR do not move.
     # 2.0.0 — the horizon is in calendar days, converted to `horizon_observations`
     # at the joint calendar's observed frequency; 1.x compounded `horizon_days`
     # observations.
-    algorithm_version = "2.0.0"
+    algorithm_version = "2.1.0"
     name_i18n_key = "risk.analytics.assetSetVar.name"
     description_i18n_key = "risk.analytics.assetSetVar.description"
     output_kind = RiskOutputKind.VAR_CVAR_SET
@@ -104,18 +107,20 @@ class AssetSetVarAnalytic(RiskAnalytic):
 
         items: list[RiskAssetSetVarCvarItem] = []
         horizon_count = windows
-        for asset_id, _dates, returns in series:
+        for asset_id, dates, returns in series:
             summary = historical_var_cvar(
                 returns,
                 confidence_level=params.confidence_level,
                 horizon_observations=horizon_observations,
             )
             horizon_count = len(summary.horizon_returns)
+            worst = worst_horizon_window(summary.horizon_returns, horizon_observations)
             items.append(
                 RiskAssetSetVarCvarItem(
                     asset_id=asset_id,
                     value_at_risk=summary.value_at_risk,
                     conditional_value_at_risk=summary.conditional_value_at_risk,
+                    worst_horizon=None if worst is None else RiskWorstHorizonWindow(compounded_return=worst.compounded_return, start_date=dates[worst.start_index], end_date=dates[worst.end_index]),
                 )
             )
 
