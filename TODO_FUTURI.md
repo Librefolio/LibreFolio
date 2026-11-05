@@ -72,7 +72,7 @@ un'architettura unica, pensata bene prima di scrivere codice.
 - **Portafoglio diviso per obiettivi** (GitHub #52, @Xgialippo, 17/10/2026; qui dal 22/10, decisione del developer):
   raggruppare gli asset per obiettivo («i pilastri di Coletti»: fondo emergenze, pensione…), con sottogruppi o tag, e
   filtrare la Dashboard per gruppo. Oggi la Dashboard si filtra solo per broker. Si lega all'idea dei «Portafogli»,
-  gruppi di broker, di asset o di entrambi (più sotto, tra le idee sparse). Domande poste all'utente il 18/10, ancora
+  gruppi di broker, di asset o di entrambi (vedi «Idee sparse»). Domande poste all'utente il 18/10, ancora
   senza risposta: un asset sta in un solo obiettivo o si divide (a quote o a lotti)? gruppi di broker, di asset o
   tutti e due? cosa vedere per ogni portafoglio (Dashboard filtrata, KPI e allocazione propri, allocazione obiettivo
   per il PAC)? Registro: `PROSSIMI_LAVORI.md`, #52.
@@ -130,7 +130,7 @@ un'architettura unica, pensata bene prima di scrivere codice.
   (identità asset, identificativi).
 - `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md` (#50, #51, #52).
 - Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, spostate qui.
-- Qui sotto, «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
+- «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
 
 ---
 
@@ -342,7 +342,7 @@ l'accesso per un tempo limitato.
 **Status**: 📋 PIANIFICATO  
 **Priorità**: Alta (architettura core)
 
-> **Cross-link**: stesso motore FIFO (`fifo_utils.py`) del TODO "BRIM: FEE/TAX non collegati all'asset" qui sopra — entrambi toccano come i lotti calcolano il proprio cost basis. Da coordinare se pianificati insieme.
+> Tocca il motore dei lotti (`backend/app/services/financial_math/fifo/`): da coordinare con ogni lavoro sul cost basis.
 
 ### Contesto
 
@@ -813,7 +813,7 @@ asset, tipo e data, un solo candidato), con un riepilogo per l'utente. La regola
 tenuti dal frontend, che si perderebbero a una ricarica o con un sync notturno.
 
 Prima di farlo va verificato che serva davvero (developer, 19/10: «prima facciamolo funzionare, magari scopriamo che
-non serve e i primi 3 sono sufficienti»). Si lega al task notturno qui sopra: potrebbero diventare la stessa cosa.
+non serve e i primi 3 sono sufficienti»). Si lega al task notturno: potrebbero diventare la stessa cosa.
 
 ## 🔥 Strumenti — calcolatore FIRE e riuso del motore matematico
 
