@@ -96,6 +96,10 @@ Focused semantic datasets such as `portfolio.asset_comparison` and
 `fx.market_context` are internal projections. They remain excluded from
 `*.all_data` to avoid exporting both the complete series and a duplicate summary.
 
+Every dataset of the broker domain, public or internal, requires `broker.provenance` as its last section: it carries
+the user's role, the owner's stake and the amounts basis (`whole_broker`), so any export of a broker states them. The
+composer keeps one copy when several datasets of one request ask for it.
+
 Each `*.all_data` union is composed only from its domain's canonical complete
 datasets:
 
