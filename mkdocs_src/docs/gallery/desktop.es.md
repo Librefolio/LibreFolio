@@ -789,6 +789,14 @@ Crea un nuevo activo con nombre, tipo, divisa, identificadores, proveedor y clas
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Desde el asistente de importación (prerrellenado)" alt="Crear activo desde el asistente de importación">
 </div>
 
+### ⭐ Buscar en Línea — Fuentes premium
+
+Los resultados de las fuentes premium aparecen primero, en una sección propia.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Buscar en Línea — Fuentes premium">
+</div>
+
 ### 🧬 Selector de tipo de activo
 
 El menú de tipos de dos niveles con búsqueda abierto, con la familia ETF expandida e iconos compuestos.
