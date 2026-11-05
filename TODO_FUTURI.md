@@ -211,24 +211,6 @@ giorno dopo una cedola, a metà ciclo, fra due date di prezzo, e il caso BTP (pr
 
 **Stima**: circa un giorno, più i test.
 
-## 💰 Futura policy cedola (coupon_policy)
-
-**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)
-**Status**: 📋 IDEA FUTURA
-**Priorità**: Bassa
-
-### Concetto
-
-Colonna `coupon_policy` su `FAInterestRatePeriod` con opzioni:
-
-- **FULL_RESET** (attuale): torna a `initial_value` dopo coupon
-- **CUSTOM_RATE**: tasso cedola diverso dal tasso di accumulo
-- **PARTIAL**: percentuale del valore accumulato
-
-Per ora solo FULL_RESET è implementato.
-
----
-
 # Transazioni e import
 
 ## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
@@ -925,24 +907,6 @@ serializzabili. Se il processo cade si perde solo la cache. Alternativa: `diskca
 `orjson` guadagnerebbe 20–50 ms sui payload grandi, ma scavalca il `PlainSerializer` di `SafeDecimal` e trasforma i `Decimal` in
 float. Se mai si fa: una `SafeORJSONResponse` che passa da `jsonable_encoder` prima di `orjson.dumps()`, con test di output
 identico sugli endpoint `SafeDecimal` e un benchmark su dati reali.
-
-## 🤖 QuarkAI — Assistente AI (MCP Server)
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Bassa (futuro)
-
-### Contesto
-
-Creare un assistente AI basato su MCP server chiamato "QuarkAI".
-
-### Funzionalità Future
-
-- Raccolta automatizzata notizie mercati azionari
-- Notifiche su Telegram (o simili) quando rileva eventi che richiedono attenzione
-- Recap giornaliero (es. alle 20:00) con sommario eventi rilevanti
-
----
 
 # Qualità del codice e dei test
 

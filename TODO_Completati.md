@@ -23,6 +23,8 @@ Scartate, perché l'idea non ritorni:
   l'utente divide già i file all'upload.
 - **FX nel PAC** (02/10/2026): niente tasso o spread per broker, niente margine di sicurezza, niente commissione di
   conversione oltre lo spread, niente multi-hop. Lo spread globale somma già tutti gli attori della conversione.
+- **QuarkAI** (05/11/2026): l'assistente AI via MCP con notizie, notifiche e recap giornaliero.
+- **`coupon_policy`** (05/11/2026): resta solo `FULL_RESET`, senza `CUSTOM_RATE` e `PARTIAL`.
 
 ---
 
