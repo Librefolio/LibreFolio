@@ -20,6 +20,7 @@
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
     import {BarChart3, CalendarSync, ChartLine, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
@@ -1712,18 +1713,21 @@
          whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN
          available width instead (see fx/+page.svelte's equivalent header for the full note). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div use:guideAnchor={'asset.page.overview'} data-testid="asset-page-overview-guide-target">
-            <!-- The pill sits beside the heading, not inside it: a status is not part of the title. -->
-            <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
-                    {$t('common.assets')}
-                    {#if assets.length > 0}
-                        <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{assets.length}</span>
-                    {/if}
-                </h2>
-                <LiveUpdatesStatus state={liveUpdatesState} />
+        <div class="flex items-center gap-3">
+            <PageBackButton fallback="/dashboard" testId="assets-back-btn" />
+            <div use:guideAnchor={'asset.page.overview'} data-testid="asset-page-overview-guide-target">
+                <!-- The pill sits beside the heading, not inside it: a status is not part of the title. -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
+                        {$t('common.assets')}
+                        {#if assets.length > 0}
+                            <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{assets.length}</span>
+                        {/if}
+                    </h2>
+                    <LiveUpdatesStatus state={liveUpdatesState} />
+                </div>
+                <p class="text-lf-muted text-sm">{$t('assets.subtitle')}</p>
             </div>
-            <p class="text-lf-muted text-sm">{$t('assets.subtitle')}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedAssetRows.length > 0}

@@ -2,9 +2,9 @@
     import {onMount} from 'svelte';
     import {browser} from '$app/environment';
     import {page} from '$app/stores';
-    import {afterNavigate, goto, onNavigate, preloadCode} from '$app/navigation';
+    import {afterNavigate, beforeNavigate, goto, onNavigate, preloadCode} from '$app/navigation';
     import {_, i18nLoading, initI18n} from '$lib/i18n';
-    import {trackNavigation} from '$lib/stores/app/navigationStore';
+    import {syncCurrentLocation, trackNavigation} from '$lib/stores/app/navigationStore';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {seedFromUrl} from '$lib/stores/dateRangeStore.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -62,6 +62,14 @@
     // tokens before the new page mounts. A change of parameter on the same route (asset 1 → asset 2) keeps them.
     onNavigate((nav) => {
         if (nav.from?.route.id !== nav.to?.route.id) pageBusy.reset();
+    });
+
+    // The page being left may have changed its address behind SvelteKit's back (a bare history.replaceState for the
+    // period): the stack records where it really is, so ← brings it back with its period and filters. The browser's
+    // own Back/Forward already moved window.location, so those are left to trackNavigation.
+    beforeNavigate((nav) => {
+        if (nav.type === 'popstate' || nav.type === 'leave') return;
+        syncCurrentLocation(window.location.pathname + window.location.search);
     });
 
     // Track SPA navigation depth for smart back-navigation
