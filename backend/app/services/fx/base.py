@@ -203,6 +203,19 @@ class FXRateProvider(PluginSettingsMixin, ABC):
         return ["USD", "EUR", "GBP", "JPY", "CHF"]
 
     @property
+    def fallback_currencies(self) -> list[str]:
+        """
+        Currencies to list while ``get_supported_currencies`` cannot be fetched and none was fetched before.
+
+        Only a provider that discovers its list over the network needs this: right after a restart the catalog has no
+        earlier answer to fall back on, and an empty list makes every pair of that provider look unsupported. Keep it
+        the list the provider returns when it answers; the live list replaces it as soon as one arrives.
+
+        Default: empty (the provider's list is static, or it has no useful guess).
+        """
+        return []
+
+    @property
     def multi_unit_currencies(self) -> set[str]:
         """
         Set of currencies quoted per 100 units instead of per 1 unit.
