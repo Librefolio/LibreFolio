@@ -17,6 +17,7 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/stores/__tests__/EditBuffer.test.ts",
         "src/lib/stores/__tests__/TimeSeriesStore.test.ts",
         "src/lib/stores/__tests__/fxStoreRegistry.test.ts",
+        "src/lib/stores/currencyGraphStore.test.ts",
         # K step 12b: one global font rule for flags ('LF Flags'), no emoji font ahead of text.
         "src/flagFont.gate.test.ts",
     ]
@@ -225,7 +226,7 @@ def populate_registry(registry: dict) -> None:
     from ._common import add_test, make_category
 
     cat = make_category(help_text="Frontend FX E2E & unit tests", description="""Frontend FX Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)", tests="vitest")
+    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, currencyGraphStore (an incomplete graph is not cached, B-4), flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)", tests="vitest")
     add_test(cat, "fx-list", front_fx_list, name="FX List Page", desc="List page navigation, cards, filters", tests="fx/fx-list.spec.ts")
     add_test(cat, "fx-detail", front_fx_detail, name="FX Detail Page", desc="Detail page chart, panels, swap", tests="fx/fx-detail.spec.ts")
     add_test(

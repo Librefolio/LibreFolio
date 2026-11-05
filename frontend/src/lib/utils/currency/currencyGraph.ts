@@ -37,6 +37,8 @@ export interface ProviderInfo {
     base_currency: string;
     base_currencies: string[];
     target_currencies: string[];
+    /** True when `target_currencies` is empty because the list could not be fetched (not because the provider covers nothing). */
+    currencies_unavailable?: boolean;
     /** Provider icon URL (for UI display) */
     icon_url?: string | null;
     /** Provider description (for UI display) */
