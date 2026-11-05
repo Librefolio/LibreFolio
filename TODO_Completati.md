@@ -12,6 +12,8 @@ Fatte nel frattempo:
 
 - **Split nel FIFO**: il motore applica gli split come eventi dell'asset (`financial_math/fifo/engine.py`).
 - **TanStack Table v9**: la libreria non è più nel progetto.
+- **Separatore decimale**: denaro e percentuali seguono la lingua dell'app (`uiLocale()`, `formatPercent`), non quella del
+  browser.
 
 ---
 
