@@ -135,6 +135,8 @@ Basculez entre Portefeuille et Période, puis comparez les données en vue table
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portefeuille / Carte" alt="Positions — Carte du portefeuille">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Période / Tableau" alt="Positions — Tableau de la période">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Période / Carte" alt="Positions — Carte de la période">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-yoc" data-title="💰 Rendement sur coût" alt="Positions — Rendement sur coût">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-fx-on-cash" data-title="💱 Effet de change sur les liquidités" alt="Positions — Effet de change sur les liquidités">
 </div>
 
 ### 💸 Onglet Transactions
@@ -197,6 +199,14 @@ Le tableau de bord avec le mode confidentialité activé — le bouton en forme 
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Mode confidentialité">
+</div>
+
+### 🤖 Export IA
+
+Choisissez ce que vous exportez pour votre assistant IA : la catégorie, le jeu de données, le niveau de détail, la période et vos notes.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="ai-export" data-name="dialog-dataset" alt="Export IA">
 </div>
 
 ---
@@ -554,6 +564,7 @@ Le sélecteur Portefeuille / Période change la vue ; les icônes Tableau / Cart
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portefeuille / Carte" alt="Positions du courtier — Carte du portefeuille">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Période / Tableau" alt="Positions du courtier — Tableau de la période">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Période / Carte" alt="Positions du courtier — Carte de la période">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-yoc" data-title="💰 Rendement sur coût" alt="Positions du courtier — Rendement sur coût">
 </div>
 
 ### ℹ️ Informations sur le courtier
