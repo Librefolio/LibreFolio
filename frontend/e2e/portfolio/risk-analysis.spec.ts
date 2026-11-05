@@ -719,6 +719,10 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     // fixture sitting exactly on an edge would pass under both the
                     // half-open rule and the closed one it exists to distinguish.
                     var_bin_edge: longHorizon ? null : -0.021,
+                    // F-6: the worst compounded window the series really lived through, dated; only the month states one
+                    // (the day has the worst realization's date). −0,121 is worse than the 0,094 average of the worst 5 %,
+                    // as a worst window always is.
+                    ...(longHorizon ? {worst_horizon: {compounded_return: -0.121, start_date: '2023-11-14', end_date: '2023-12-14'}} : {}),
                 },
             };
         }
@@ -1973,6 +1977,14 @@ test.describe('Risk analysis functional integration', () => {
         // read as a positive magnitude of 8,7%, not as a dropped contradiction.
         await expect(panel.getByTestId('risk-l1-card-worst-value')).toHaveText(loss('8.7%'));
         await expect(panel.getByTestId('risk-l1-duration-worst')).toBeVisible();
+        // F-6: which one it was. The worst fall from its peak to its trough, and the worst month the series really
+        // went through beside the average of the worst 5 % the card prints; the day has its own date (below).
+        await expect(panel.getByTestId('risk-l1-period-worst')).toHaveAttribute('data-from', '2023-11-14');
+        await expect(panel.getByTestId('risk-l1-period-worst')).toHaveAttribute('data-to', '2023-12-03');
+        await expect(panel.getByTestId('risk-l1-worst-month')).toContainText(loss('12.1%'));
+        await expect(panel.getByTestId('risk-l1-period-month')).toHaveAttribute('data-from', '2023-11-14');
+        await expect(panel.getByTestId('risk-l1-period-month')).toHaveAttribute('data-to', '2023-12-14');
+        await expect(panel.getByTestId('risk-l1-period-day')).toHaveCount(0);
         await expect(panel.getByTestId('risk-l1-recovery-worst')).toBeVisible();
         // Where the portfolio stands now is a different question from its worst
         // moment, and the drawdown summary is what answers it.
