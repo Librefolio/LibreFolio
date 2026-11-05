@@ -131,6 +131,8 @@ Passa tra Portafoglio e Periodo, poi confronta i dati in viste tabella o mappa �
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portafoglio / Mappa" alt="Posizioni — Mappa portafoglio">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Periodo / Tabella" alt="Posizioni — Tabella periodo">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Periodo / Mappa" alt="Posizioni — Mappa periodo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-yoc" data-title="💰 Rendimento sul costo" alt="Posizioni — Rendimento sul costo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-fx-on-cash" data-title="💱 Effetto cambio sulla liquidità" alt="Posizioni — Effetto cambio sulla liquidità">
 </div>
 
 ### 💸 Scheda Transazioni
@@ -185,6 +187,14 @@ La dashboard con modalità privacy attiva — il pulsante a forma di occhio nell
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Modalità privacy">
+</div>
+
+### 🤖 AI Export
+
+Scegli cosa esportare per il tuo assistente AI: la categoria, il dataset, il livello di dettaglio, il periodo e le note.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="ai-export" data-name="dialog-dataset" alt="AI Export">
 </div>
 
 ---
@@ -542,6 +552,7 @@ Passa tra Portafoglio e Periodo, poi confronta i dati in viste tabella o mappa.
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portafoglio / Mappa" alt="Posizioni broker — Mappa portafoglio">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo / Tabella" alt="Posizioni broker — Tabella periodo">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo / Mappa" alt="Posizioni broker — Mappa periodo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-yoc" data-title="💰 Rendimento sul costo" alt="Posizioni broker — Rendimento sul costo">
 </div>
 
 ### ℹ️ Informazioni broker
