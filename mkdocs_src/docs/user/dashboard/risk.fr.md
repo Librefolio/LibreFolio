@@ -23,9 +23,10 @@ Combien pourriez-vous perdre, et à quel point cela a-t-il déjà été grave ? 
 **Outils présentés**
 
 - **Un mauvais jour**, **Un mauvais mois** — votre perte moyenne sur les 5 % de jours les plus mauvais, ou sur des périodes d'un mois → [VaR conditionnelle](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Seuil de VaR** — sur la *Distribution des rendements quotidiens* : la perte quotidienne que seuls les 5 % de jours les plus mauvais ont dépassée → [Valeur à risque](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **Seuil de VaR** — sur la *Distribution des rendements quotidiens* : la perte quotidienne que seuls les 5 % de jours les plus mauvais ont dépassée ; une ligne en pointillés la marque sur le graphique, et en survolant une barre on voit combien de jours y sont tombés et si elle se situe au-delà du seuil → [Valeur à risque](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
 - **La pire journée réellement vue** — le seul pire jour de la période → [Pire réalisation](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
-- **La pire chute** — la baisse la plus profonde d'un sommet à un creux ultérieur → [Perte maximale](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **Le pire mois réellement vécu** — sous *Un mauvais mois* : la pire période d'un mois que le portefeuille a réellement traversée, avec son premier et son dernier jour. *Un mauvais mois* est en revanche une moyenne des 5 % les plus mauvais, qu'aucun mois n'a jamais affichée seul
+- **La pire chute** — la baisse la plus profonde d'un sommet à un creux ultérieur, avec les dates du sommet et du creux → [Perte maximale](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Repli à risque** — à quelle distance sous son pic le portefeuille se trouvait, en excluant ses 5 % de jours les plus mauvais → [Repli à risque](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Moyenne au-delà de ce seuil** — à quelle distance sous son pic il se trouvait, en moyenne, lors de ces pires jours → [Repli à risque conditionnel](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
 - **Actuellement sous le sommet** — à quelle distance sous son dernier sommet le portefeuille se situe aujourd'hui → [Repli actuel](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
@@ -110,7 +111,7 @@ Quel effet une crise passée, ou un choc que vous imaginez, aurait-il sur le por
 - **Ajoutez un outil** avec les boutons **Ajouter :** ; son **×** le ferme et supprime son résultat. Les outils que vous laissez ouverts réapparaîtront la prochaine fois, dans ce navigateur.
 - **Rejeu historique** : choisissez une crise dans **Préréglage**, ou votre propre **Période**, puis **Lancer le rejeu**. Les positions sans prix pour cette période sont exclues, et un bouton peut proposer une période durant laquelle elles ont toutes des prix.
 - **Choc hypothétique** : cliquez sur un scénario, comme *Krach boursier*, pour le lancer ; **Afficher le choc par catégorie** vous permet de modifier ses hypothèses.
-- **Simulation** : choisissez un mode — *Historique remélangé* est recommandé — et un horizon, puis **Simuler**. Lisez le cône comme un éventail de possibilités, pas comme une prévision.
+- **Simulation** : choisissez un mode — *Historique remélangé* est recommandé — et un horizon, en jours ou en années, mois et jours (`2a3m5j`), puis **Simuler**. Lisez le cône comme un éventail de possibilités, pas comme une prévision.
 
 !!! note "La simulation est encore en bêta"
 

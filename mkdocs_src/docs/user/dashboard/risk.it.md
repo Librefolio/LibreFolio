@@ -23,9 +23,10 @@ Quanto potresti perdere, e quanto è già stato grave? Ogni cifra qui è qualcos
 **Strumenti mostrati**
 
 - **Una brutta giornata**, **Un brutto mese** — la tua perdita media nel 5% peggiore delle giornate, o di periodi di un mese → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Soglia VaR** — su *Distribuzione dei rendimenti giornalieri*: la perdita giornaliera che solo il 5% peggiore delle giornate ha superato → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **Soglia VaR** — su *Distribuzione dei rendimenti giornalieri*: la perdita giornaliera che solo il 5% peggiore delle giornate ha superato; una linea tratteggiata la segna nel grafico, e passando su una barra vedi quanti giorni ci sono caduti e se sta oltre la soglia → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
 - **Il giorno peggiore davvero visto** — la singola giornata peggiore del periodo → [peggior realizzazione](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
-- **Il peggior calo** — la discesa più profonda da un massimo a un minimo successivo → [drawdown massimo](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **Il mese peggiore davvero visto** — sotto *Un brutto mese*: il peggior periodo di un mese che il portafoglio ha davvero attraversato, con il primo e l'ultimo giorno. *Un brutto mese* è invece una media del 5% peggiore, che nessun mese ha mai mostrato da solo
+- **Il peggior calo** — la discesa più profonda da un massimo a un minimo successivo, con le date del massimo e del minimo → [drawdown massimo](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Drawdown a rischio** — quanto sotto il suo picco si trovava il portafoglio, a parte il 5% peggiore delle giornate → [drawdown a rischio](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Media oltre quella soglia** — quanto sotto il suo picco si trovava, in media, in quelle giornate peggiori → [drawdown a rischio condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
 - **Attualmente sotto il massimo** — quanto sotto il suo ultimo massimo si trova oggi il portafoglio → [drawdown attuale](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
@@ -110,7 +111,7 @@ Cosa farebbe una crisi passata, o uno shock che immagini, al portafoglio che det
 - **Aggiungi uno strumento** con i pulsanti **Aggiungi:**; la sua **×** lo chiude e ne scarta il risultato. Gli strumenti che lasci aperti tornano la prossima volta, in questo browser.
 - **Replay storico**: scegli una crisi in **Preset**, oppure il tuo **Periodo**, poi **Esegui replay**. Le posizioni senza prezzi per quel periodo vengono escluse, e un pulsante può offrire un periodo in cui tutte hanno prezzi.
 - **Shock ipotetico**: clicca su uno scenario, come *Crollo azionario*, per eseguirlo; **Mostra lo shock per bucket** ti consente di modificarne le ipotesi.
-- **Simulazione**: scegli una modalità — *Storia rimescolata* è quella consigliata — e un orizzonte, poi **Simula**. Leggi il cono come una gamma di possibilità, non come una previsione.
+- **Simulazione**: scegli una modalità — *Storia rimescolata* è quella consigliata — e un orizzonte, in giorni o come anni, mesi e giorni (`2a3m5g`), poi **Simula**. Leggi il cono come una gamma di possibilità, non come una previsione.
 
 !!! note "La simulazione è ancora in beta"
 

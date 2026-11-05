@@ -23,9 +23,10 @@ How much could you lose, and how bad has it already been? Every figure here is s
 **Tools shown**
 
 - **A bad day**, **A bad month** — your average loss on the worst 5% of days, or of one-month stretches → [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **VaR threshold** — on *Distribution of daily returns*: the daily loss that only the worst 5% of days went beyond → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **VaR threshold** — on *Distribution of daily returns*: the daily loss that only the worst 5% of days went beyond; a dashed line marks it on the chart, and hovering a bar tells how many days fell in it and whether it lies beyond the threshold → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
 - **Worst day actually seen** — the single worst day of the period → [Worst Realization](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
-- **The worst fall** — the deepest drop from a high to a later low → [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **Worst month actually seen** — under *A bad month*: the worst one-month stretch the portfolio really went through, with its first and last day. *A bad month* itself is an average of the worst 5%, which no single month ever printed
+- **The worst fall** — the deepest drop from a high to a later low, with the dates of the high and of the low → [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Drawdown at risk** — how far below its peak the portfolio stood, its worst 5% of days aside → [Drawdown at Risk](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Average beyond that threshold** — how far below its peak it stood, on average, on those worst days → [Conditional Drawdown at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
 - **Currently down from the peak** — how far below its last high the portfolio stands today → [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
@@ -110,7 +111,7 @@ What would a past crisis, or a shock you imagine, do to the portfolio you hold t
 - **Add a tool** with the **Add:** buttons; its **×** closes it and drops its result. The tools you leave open come back next time, in this browser.
 - **Historical replay**: pick a crisis in **Preset**, or your own **Period**, then **Run replay**. Holdings with no prices for that period are left out, and a button may offer a period in which they all have prices.
 - **Hypothetical shock**: click a scenario, such as *Equity crash*, to run it; **Show the shock per bucket** lets you change its assumptions.
-- **Simulation**: pick a mode — *Reshuffled history* is recommended — and a horizon, then **Simulate**. Read the cone as a range of possibilities, not a forecast.
+- **Simulation**: pick a mode — *Reshuffled history* is recommended — and a horizon, in days or as years, months and days (`2y3m5d`), then **Simulate**. Read the cone as a range of possibilities, not a forecast.
 
 !!! note "The simulation is still in beta"
 
