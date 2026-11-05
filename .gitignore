@@ -122,3 +122,4 @@ chart-error-page.html
 
 # Claude Code session worktrees
 .claude/worktrees/
+mkdocs_src/docs/stylesheets/lf-tokens.css

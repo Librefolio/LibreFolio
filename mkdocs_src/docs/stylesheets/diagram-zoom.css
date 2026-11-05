@@ -3,7 +3,7 @@ div.mermaid { cursor: zoom-in; }
 div.mermaid:focus-visible { outline: 2px solid var(--md-accent-fg-color); outline-offset: 4px; }
 
 html.dz-lock { overflow: hidden; }
-.dz-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.82); }
+.dz-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: var(--lf-surface-overlay); }
 .dz-overlay.open { display: block; }
 .dz-viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }
 .dz-viewport:active { cursor: grabbing; }
@@ -14,7 +14,7 @@ html.dz-lock { overflow: hidden; }
   transform-origin: 0 0;
   background: var(--md-default-bg-color);
   border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 10px 40px var(--lf-shadow-raised);
 }
 .dz-stage svg { display: block; max-width: none; }
 .dz-bar { position: absolute; top: 12px; right: 12px; z-index: 2; display: flex; gap: 6px; }
@@ -27,7 +27,7 @@ html.dz-lock { overflow: hidden; }
   color: var(--md-default-fg-color);
   font-size: 1.2rem;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 8px var(--lf-shadow-raised);
 }
 .dz-bar button:hover { background: var(--md-default-fg-color--lightest); }
 .dz-bar button:focus-visible { outline: 3px solid var(--md-accent-fg-color); outline-offset: 2px; }
@@ -37,9 +37,9 @@ html.dz-lock { overflow: hidden; }
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
-  color: #e2e8f0;
+  color: var(--lf-on-overlay);
   font-size: 0.8rem;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--lf-surface-overlay);
   padding: 4px 10px;
   border-radius: 6px;
   pointer-events: none;
