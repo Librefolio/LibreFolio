@@ -326,6 +326,18 @@ describe('FxPairAddModal — tour preview', () => {
     });
 });
 
+describe('FxPairAddModal — no second warning for a pair without a provider', () => {
+    it('shows no warning banner of its own while no route is chosen: the route block is the only place that speaks', async () => {
+        // B-4: the modal used to add a yellow «no provider configured» banner under the route block, which already
+        // says it, and which also read as a fact while the routes were still being worked out.
+        mount();
+        await ready();
+
+        expect(selectedRouteKeys()).toEqual([]);
+        expect(screen.queryByTestId('info-banner-warning')).toBeNull();
+    });
+});
+
 describe('FxPairAddModal — configuration before background sync', () => {
     it('keeps creation pending until the POST commits and ignores a second save activation', async () => {
         const posted = deferred<Awaited<ReturnType<typeof zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post>>>();
