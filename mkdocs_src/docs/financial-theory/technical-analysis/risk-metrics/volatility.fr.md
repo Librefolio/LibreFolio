@@ -82,7 +82,7 @@ La volatilité implicite est prospective, mais elle n'est disponible que pour le
 
 ## 🔄 Volatilité en fenêtre glissante {: #rolling-window-volatility }
 
-Plutôt que de calculer un seul chiffre de volatilité pour toute la période, la **volatilité en fenêtre glissante** calcule $\sigma$ sur une fenêtre glissante (par ex., 30 jours), produisant une série temporelle qui montre l'évolution de la volatilité :
+Plutôt que de calculer un seul chiffre de volatilité pour toute la période, la **volatilité en fenêtre glissante** calcule $\sigma$ sur une fenêtre glissante de $w$ observations de rendement — une par jour de cotation avec un rendement, par ex. $w = 30$ — produisant une série temporelle qui montre l'évolution de la volatilité :
 
 $$
 \sigma_t^{(w)} = \text{StdDev}(R_{t-w+1}, R_{t-w+2}, \ldots, R_t)
