@@ -1158,13 +1158,13 @@ describe('K-1 — BackupDownloadCard: the password fields are masked text fields
         render(BackupDownloadCard);
         await chooseSecure();
         await typePasswords(PASSWORD);
-        expect(passwordField().value).toBe(PASSWORD);
+        expect((passwordField() as HTMLInputElement).value).toBe(PASSWORD);
         expect(passwordField()).toHaveAttribute('data-masked', 'true');
 
         const eye = within(form()).getAllByRole('button')[0];
         await fireEvent.click(eye);
         expect(passwordField()).toHaveAttribute('data-masked', 'false');
-        expect(passwordField().value).toBe(PASSWORD);
+        expect((passwordField() as HTMLInputElement).value).toBe(PASSWORD);
         await fireEvent.click(eye);
         expect(passwordField()).toHaveAttribute('data-masked', 'true');
     });

@@ -677,3 +677,40 @@ describe('StorageBar — the limit editor: pinned by the environment', () => {
         expect(segment('database')).toHaveAttribute('data-bytes', String(100 * MiB));
     });
 });
+
+// =====================================================================================================================
+// K-2 (developer, 05/11) — pointing at the bar lights the legend row, and the other way round
+// =====================================================================================================================
+describe('StorageBar — the bar and its legend are linked (K-2)', () => {
+    const active = (id: string) => [segment(id)?.getAttribute('data-active'), legend(id)?.getAttribute('data-active')];
+
+    it('pointing at a segment lights its legend row and dims the other segments; leaving puts everything back', async () => {
+        await mountReady(LIMIT_USAGE());
+        expect(active('backups'), 'nothing lit before the pointer arrives').toEqual(['false', 'false']);
+
+        await fireEvent.pointerEnter(segment('backups')!);
+        expect(active('backups')).toEqual(['true', 'true']);
+        expect(active('database'), 'the others stay unlit').toEqual(['false', 'false']);
+
+        await fireEvent.pointerLeave(segment('backups')!);
+        expect(active('backups')).toEqual(['false', 'false']);
+    });
+
+    it('pointing at a legend row lights its segment, the free space included', async () => {
+        await mountReady(LIMIT_USAGE());
+
+        await fireEvent.pointerEnter(legend('free')!);
+        expect(active('free')).toEqual(['true', 'true']);
+        await fireEvent.pointerLeave(legend('free')!);
+        expect(active('free')).toEqual(['false', 'false']);
+    });
+
+    it('focus inside a legend row counts as pointing at it', async () => {
+        await mountReady(LIMIT_USAGE());
+
+        await fireEvent.focusIn(legend('uploads')!);
+        expect(active('uploads')).toEqual(['true', 'true']);
+        await fireEvent.focusOut(legend('uploads')!);
+        expect(active('uploads')).toEqual(['false', 'false']);
+    });
+});

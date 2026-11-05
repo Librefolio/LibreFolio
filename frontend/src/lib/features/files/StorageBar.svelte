@@ -19,6 +19,8 @@
     import {backupListSignal} from '$lib/features/backup/backupList.svelte';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import LinkedStackedBar from '$lib/components/ui/display/LinkedStackedBar.svelte';
+    import type {LinkedSegment} from '$lib/components/ui/display/linkedStackedBar';
     import {formatBytes} from '$lib/utils/files/upload';
     import {storageBarModel, type StorageSegmentId} from './storageBar';
 
@@ -104,6 +106,19 @@
         return formatBytes(bytes, $_);
     }
 
+    const TEST_IDS = {
+        bar: 'storage-bar-track',
+        segment: (id: string) => `storage-segment-${id}`,
+        item: (id: string) => `storage-legend-${id}`,
+    };
+
+    /** The parts of the data, then the free space when the bar has a total to measure it against. */
+    const barSegments = $derived.by((): LinkedSegment[] => {
+        if (model === null) return [];
+        const parts = model.segments.map((segment) => ({id: segment.id, percent: segment.percent, fill: FILL[segment.id], attrs: {'data-bytes': segment.bytes}}));
+        return model.mode === 'data' ? parts : [...parts, {id: 'free', percent: model.freePercent, fill: FILL.free, attrs: {'data-bytes': model.freeBytes}}];
+    });
+
     const summary = $derived.by(() => {
         if (model === null || usage === null) return '';
         if (model.mode === 'limit') return $_('storage.summary.limit', {values: {used: size(model.usedBytes), limit: size(model.totalBytes)}});
@@ -138,33 +153,23 @@
             </button>
         </div>
     {:else if model !== null && usage !== null}
-        <div class="flex h-3 w-full overflow-hidden rounded-full border border-lf-subtle bg-lf-field" data-testid="storage-bar-track" role="img" aria-label={summary}>
-            {#each model.segments as segment (segment.id)}
-                <div class="h-full {FILL[segment.id]}" data-testid="storage-segment-{segment.id}" data-bytes={segment.bytes} style:width="{segment.percent}%"></div>
-            {/each}
-            {#if model.mode !== 'data'}
-                <div class="h-full {FILL.free}" data-testid="storage-segment-free" data-bytes={model.freeBytes} style:width="{model.freePercent}%"></div>
-            {/if}
-        </div>
-
-        <p class="text-sm text-lf-secondary" data-testid="storage-summary">{summary}</p>
-
-        <ul class="grid gap-x-6 gap-y-1 text-xs text-lf-secondary sm:grid-cols-2 lg:grid-cols-3">
-            {#each model.segments as segment (segment.id)}
-                <li class="flex items-center gap-2" data-testid="storage-legend-{segment.id}">
-                    <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-lf-subtle {FILL[segment.id]}" aria-hidden="true"></span>
-                    <span class="min-w-0 flex-1">{$_(`storage.parts.${segment.id}`)}</span>
-                    <span class="tabular-nums text-lf-primary">{size(segment.bytes)}</span>
-                </li>
-            {/each}
-            {#if model.mode !== 'data'}
-                <li class="flex items-center gap-2" data-testid="storage-legend-free">
-                    <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-lf-subtle" aria-hidden="true"></span>
-                    <span class="min-w-0 flex-1">{$_('storage.parts.free')}</span>
-                    <span class="tabular-nums text-lf-primary">{size(model.freeBytes)}</span>
-                </li>
-            {/if}
-        </ul>
+        <!-- Pointing at a part of the bar lights its legend row, and the other way round (the planner's timing bar does the same). -->
+        <LinkedStackedBar
+            segments={barSegments}
+            barClass="flex h-3 w-full overflow-hidden rounded-full border border-lf-subtle bg-lf-field"
+            barLabel={summary}
+            legendClass="grid gap-x-6 gap-y-1 text-xs text-lf-secondary sm:grid-cols-2 lg:grid-cols-3"
+            itemClass="rounded-md px-1 py-0.5"
+            testIds={TEST_IDS}
+        >
+            {#snippet between()}
+                <p class="text-sm text-lf-secondary" data-testid="storage-summary">{summary}</p>
+            {/snippet}
+            {#snippet row(segment)}
+                <span class="min-w-0 flex-1">{$_(`storage.parts.${segment.id}`)}</span>
+                <span class="tabular-nums text-lf-primary">{size(Number(segment.attrs?.['data-bytes'] ?? 0))}</span>
+            {/snippet}
+        </LinkedStackedBar>
 
         {#if model.overLimit}
             <p class="flex items-start gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="storage-over-limit">
