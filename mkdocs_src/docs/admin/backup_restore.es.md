@@ -142,7 +142,7 @@ La lista muestra solo las copias de seguridad hechas por esta versión de LibreF
 
 ### 🧹 Limpieza automática {: #backup-cleanup }
 
-Las copias de seguridad conservadas se acumulan, y viven en el disco de tus datos. En la misma sección **Copias de seguridad en este servidor** de **Configuración › Administración › Copia de seguridad** configuras dos límites, ambos opcionales:
+Las copias de seguridad conservadas se acumulan, y viven en el disco de tus datos. En el panel cerrado **Limpieza automática** de la misma sección **Copias de seguridad en este servidor**, en **Configuración › Administración › Copia de seguridad** y en **Archivos › Copias de seguridad**, configuras dos límites, ambos opcionales:
 
 | Límite | Qué hace | Desactivado |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ Las copias de seguridad conservadas se acumulan, y viven en el disco de tus dato
 | Antigüedad máxima, en días | Una copia de seguridad más antigua que esto se elimina | `0` |
 
 - 🛡️ **La última copia de seguridad siempre se conserva**, digan lo que digan los límites: una instancia nunca se queda sin ninguna.
-- ⏰ La limpieza se ejecuta después de cada copia de seguridad, cuando LibreFolio se inicia y aproximadamente una vez por hora.
+- ⏰ La limpieza se ejecuta después de cada copia de seguridad y cuando LibreFolio se inicia, como mucho una vez por hora: un cambio guardado se aplica en una hora como máximo.
 - 🏠 **Autoalojado:** ambos límites están desactivados hasta que los configures.
 - 🔍 Solo se limpian las copias de seguridad de la lista. Los archivos sueltos más antiguos en `backups/`, una copia de seguridad en curso y una fallida nunca se tocan.
 - ⌨️ La línea de comandos deja sus copias de seguridad en el mismo lugar y se aplican los mismos límites: consulta [Dónde se quedan las copias de seguridad](cli_backup.md#backup-kept).
@@ -173,7 +173,7 @@ La barra tiene tres aspectos, según si se ha establecido un límite y si se con
 - 📏 **Con un límite**: la barra es el límite, y las partes de LibreFolio la llenan hasta donde llegan los datos. La línea bajo la barra dice *usado del límite*.
 - 📁 **Sin límite y disco desconocido**: LibreFolio no puede consultar el disco, así que la barra es la propia carpeta de LibreFolio, dividida en sus partes, sin espacio libre.
 
-**Establece el límite** en la misma barra, en el campo **Límite de espacio (MB)**: un número entero de megabytes, `0` para sin límite, luego **Guardar**. También es la [configuración global](settings.md) *Límite de espacio*, que no se muestra en la pestaña Administración: este campo es el lugar para cambiarlo.
+**Establece el límite** en el panel cerrado **Avanzado** bajo la misma barra, en el campo **Espacio total de LibreFolio (MB)**: un número entero de megabytes, `0` para sin límite, luego **Guardar**; un aviso verde lo confirma. Es el espacio máximo que LibreFolio debería ocupar en total, y superarlo solo muestra un aviso: no se bloquea nada. También es la [configuración global](settings.md) *Límite de espacio*, que no se muestra en la pestaña Administración: este campo es el lugar para cambiarlo.
 
 - ⚠️ **Por encima del límite**, la barra advierte que se ha superado el límite y sugiere eliminar copias de seguridad o archivos, o subir el límite. Eso es todo: LibreFolio no elimina nada, y el límite no detiene una subida ni una copia de seguridad.
 - 🔒 **Establecido en la configuración del servidor**: cuando `LIBREFOLIO_STORAGE_LIMIT_MB` está definido, su valor es el límite, el campo aparece en gris y una nota dice que lo establece quien aloja la instancia. Consulta [Variables de entorno](configuration.md). Un valor que LibreFolio no puede usar, uno que no sea un número entero, se ignora, y el campo funciona como se describe arriba.

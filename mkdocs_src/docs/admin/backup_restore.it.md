@@ -142,7 +142,7 @@ L'elenco mostra solo i backup creati da questa versione di LibreFolio. I file sp
 
 ### 🧹 Pulizia automatica {: #backup-cleanup }
 
-I backup conservati si accumulano e risiedono sul disco dei tuoi dati. Nella stessa sezione **Backup su questo server** di **Impostazioni › Amministrazione › Backup** imposti due limiti, entrambi facoltativi:
+I backup conservati si accumulano e risiedono sul disco dei tuoi dati. Nel pannello chiuso **Pulizia automatica** della stessa sezione **Backup su questo server**, in **Impostazioni › Amministrazione › Backup** e in **File › Backup**, imposti due limiti, entrambi facoltativi:
 
 | Limite | Cosa fa | Disattivato |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ I backup conservati si accumulano e risiedono sul disco dei tuoi dati. Nella ste
 | Età massima, in giorni | Un backup più vecchio di questo viene eliminato | `0` |
 
 - 🛡️ **L'ultimo backup viene sempre conservato**, qualunque cosa dicano i limiti: un'istanza non rimane mai senza alcun backup.
-- ⏰ La pulizia viene eseguita dopo ogni backup, all'avvio di LibreFolio e circa una volta all'ora.
+- ⏰ La pulizia viene eseguita dopo ogni backup e all'avvio di LibreFolio, al massimo una volta l'ora: una modifica salvata si applica entro un'ora.
 - 🏠 **Self-hosted:** entrambi i limiti sono disattivati finché non li imposti.
 - 🔍 Vengono puliti solo i backup dell'elenco. Gli archivi sparsi più vecchi in `backups/`, un backup in corso e uno non riuscito non vengono mai toccati.
 - ⌨️ La riga di comando lascia i suoi backup nello stesso posto e si applicano gli stessi limiti: vedi [Dove restano i backup](cli_backup.md#backup-kept).
@@ -173,7 +173,7 @@ La barra ha tre aspetti, a seconda che sia impostato un limite e che il disco si
 - 📏 **Con un limite**: la barra è il limite, e le parti di LibreFolio la riempiono fino a dove arrivano i dati. La riga sotto la barra mostra *usato rispetto al limite*.
 - 📁 **Nessun limite e disco sconosciuto**: LibreFolio non può interrogare il disco, quindi la barra è la cartella di LibreFolio stessa, suddivisa nelle sue parti, senza spazio libero.
 
-**Imposta il limite** nella stessa barra, nel campo **Limite di spazio (MB)**: un numero intero di megabyte, `0` per nessun limite, poi **Salva**. È anche l'[impostazione globale](settings.md) *Limite di spazio*, che non viene mostrata nella scheda Amministrazione: questo campo è il punto in cui modificarla.
+**Imposta il limite** nel pannello chiuso **Avanzate** sotto la stessa barra, nel campo **Spazio totale di LibreFolio (MB)**: un numero intero di megabyte, `0` per nessun limite, poi **Salva**; un avviso verde lo conferma. È lo spazio massimo che LibreFolio dovrebbe occupare in tutto, e superarlo mostra solo un avviso: nulla viene bloccato. È anche l'[impostazione globale](settings.md) *Limite di spazio*, che non viene mostrata nella scheda Amministrazione: questo campo è il punto in cui modificarla.
 
 - ⚠️ **Oltre il limite**, la barra avvisa che il limite è superato e suggerisce di eliminare backup o file, o di aumentare il limite. Tutto qui: LibreFolio non elimina nulla e il limite non interrompe un caricamento o un backup.
 - 🔒 **Impostato nella configurazione del server**: quando `LIBREFOLIO_STORAGE_LIMIT_MB` è impostato, il suo valore è il limite, il campo è disattivato e una nota dice che è impostato da chi ospita l'istanza. Vedi [Variabili d'ambiente](configuration.md). Un valore che LibreFolio non può usare, cioè non un numero intero, viene ignorato, e il campo funziona come sopra.
