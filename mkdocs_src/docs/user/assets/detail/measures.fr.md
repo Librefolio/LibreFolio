@@ -10,11 +10,13 @@ L'outil Mesure répond à la question *de combien cela a-t-il changé entre ces 
 
 ## 🛠️ Prendre une mesure
 
-1. Cliquez sur **📏 Ajouter une mesure** en haut à droite du graphique : le panneau **Mesures** s'ouvre en dessous.
-2. Cliquez sur le point de **début** sur le graphique, puis sur le point de **fin**.
+1. Cliquez sur **📏 Ajouter une mesure** en haut à droite du graphique : le panneau **Mesures** s'ouvre en dessous, et au-dessus du graphique le pointeur devient un réticule.
+2. Cliquez sur le point de **début** sur le graphique : une ligne en tirets suit le pointeur à partir de là. Puis cliquez sur le point de **fin**, un autre jour.
 3. La nouvelle mesure s'ouvre avec son tableau, et le graphique la trace dans sa propre couleur.
 
-**+ Ajouter une mesure** dans l'en-tête du panneau mesure l'ensemble du graphique à la place, de son premier à son dernier point : pratique sur mobile. L'en-tête de chaque mesure contient sa couleur et 🗑️ pour la supprimer ; développez la mesure pour modifier ses dates.
+Une mesure demande deux jours différents. De retour sur le jour du point de début, la ligne en tirets disparaît et le pointeur affiche le signe *interdit* (🚫) : un second clic à cet endroit ne fait rien, et le point de début reste choisi.
+
+**+ Ajouter une mesure** dans l'en-tête du panneau mesure l'ensemble du graphique à la place, de son premier à son dernier point : pratique sur mobile. L'en-tête de chaque mesure contient sa couleur et 🗑️ pour la supprimer ; développez la mesure pour modifier ses dates, là encore deux jours différents.
 
 Les mesures ne sont pas sauvegardées : le rechargement de la page vide le panneau. **Prix** et **Rendement glissant** conservent des mesures distinctes.
 

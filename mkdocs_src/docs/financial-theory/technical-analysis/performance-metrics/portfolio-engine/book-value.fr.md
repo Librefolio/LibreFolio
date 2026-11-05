@@ -15,10 +15,10 @@ $$
 où le coût de base ouvert (OCB) :
 
 $$
-\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w^{C^*}(a,b,t)
+\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 10^{-5}}} q(a,b,t) \cdot w^{C^*}(a,b,t)
 $$
 
-Ici $w^{C^*}(a,b,t)$ est le [PRU](../weighted-average-cost.md) conservé directement dans la devise demandée $C^*$ : chaque acquisition y a été enregistrée au taux de sa propre date $d_i$, à savoir $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ pour un montant $P_i$ effectivement payé. L'OCB n'utilise donc **aucun taux de change à la date de valorisation** $t$ : c'est la somme des coûts historiques — ce qui a été payé — et elle ne varie pas lorsque les taux de change varient.
+La somme porte sur les positions détenues : une position qui n'a plus que $10^{-5}$ unité ou moins n'est pas détenue ([Portfolio Engine — §3](index.md#3-position-state)). Ici $w^{C^*}(a,b,t)$ est le [PRU](../weighted-average-cost.md) conservé directement dans la devise demandée $C^*$ : chaque acquisition y a été enregistrée au taux de sa propre date $d_i$, à savoir $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ pour un montant $P_i$ effectivement payé. L'OCB n'utilise donc **aucun taux de change à la date de valorisation** $t$ : c'est la somme des coûts historiques — ce qui a été payé — et elle ne varie pas lorsque les taux de change varient.
 
 Les liquidités, elles, sont celles de chaque courtier, conservées dans les devises où elles ont été enregistrées et valorisées au taux de $t$ :
 

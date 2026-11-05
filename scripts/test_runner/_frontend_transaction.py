@@ -10,42 +10,46 @@ from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ens
 def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Transaction unit tests (Vitest), including URL/filter state."""
     print_section("Frontend TX Unit Tests (Vitest)")
-    cmd = ["npx", "vitest", "run",
-           "src/lib/features/transactions/txPayloadHelpers.test.ts",
-           "src/lib/features/transactions/txCommitApi.test.ts",
-           "src/lib/features/transactions/bulk/promoteHelpers.test.ts",
-           "src/lib/features/transactions/import/splitRowCharges.test.ts",
-           "src/lib/features/transactions/import/fixRowLifecycle.test.ts",
-           "src/lib/features/transactions/import/duplicateRecheckPayload.test.ts",
-           "src/lib/features/transactions/bulk/bulkDisplay.test.ts",
-           "src/lib/features/transactions/import/importReportSets.test.ts",
-           "src/lib/features/transactions/import/importPairs.test.ts",
-           "src/lib/features/transactions/bulk/promoteSuggest.test.ts",
-           "src/lib/features/transactions/bulk/costCellState.test.ts",
-           "src/lib/features/transactions/import/defaultPluginCheck.test.ts",
-           "src/lib/features/transactions/import/parseFailure.test.ts",
-           "src/lib/utils/brim/pluginText.test.ts",
-           "src/lib/utils/brim/pluginKind.test.ts",
-           "src/lib/features/transactions/import/ImportBrokerMismatchModal.test.ts",
-           "src/lib/features/transactions/bulk/PromoteAllModal.test.ts",
-           "src/lib/features/transactions/bulk/PromoteMergeModal.test.ts",
-           "src/lib/features/transactions/import/gapFixModel.test.ts",
-           "src/lib/features/transactions/import/GapFixStep.test.ts",
-           "src/lib/features/transactions/import/ReportSetCard.test.ts",
-           "src/lib/features/transactions/import/ParseDetailModal.test.ts",
-           "src/lib/features/transactions/import/BrimNoticeList.test.ts",
-           "src/lib/features/transactions/import/importNotices.test.ts",
-           "src/lib/features/transactions/import/NoticeCounts.test.ts",
-           "src/lib/features/transactions/import/AnalyzeStep.test.ts",
-           "src/lib/features/transactions/bulk/bulkTodos.test.ts",
-           "src/lib/features/transactions/bulk/selectionGuards.test.ts",
-           "src/lib/features/transactions/bulk/PossibleSplitRow.test.ts",
-           "src/lib/features/transactions/bulk/TxBulkBanners.possibleSplit.test.ts",
-           "src/lib/features/transactions/import/ReviewStep.possibleSplit.test.ts",
-           "src/lib/features/transactions/bulk/TxBulkBanners.preFloor.test.ts",
-           "src/lib/features/transactions/import/ReviewStep.preFloor.test.ts",
-           "src/lib/features/transactions/transactionTypeStore.test.ts",
-           "src/lib/features/transactions/filterState.test.ts"]
+    cmd = [
+        "npx",
+        "vitest",
+        "run",
+        "src/lib/features/transactions/txPayloadHelpers.test.ts",
+        "src/lib/features/transactions/txCommitApi.test.ts",
+        "src/lib/features/transactions/bulk/promoteHelpers.test.ts",
+        "src/lib/features/transactions/import/splitRowCharges.test.ts",
+        "src/lib/features/transactions/import/fixRowLifecycle.test.ts",
+        "src/lib/features/transactions/import/duplicateRecheckPayload.test.ts",
+        "src/lib/features/transactions/bulk/bulkDisplay.test.ts",
+        "src/lib/features/transactions/import/importReportSets.test.ts",
+        "src/lib/features/transactions/import/importPairs.test.ts",
+        "src/lib/features/transactions/bulk/promoteSuggest.test.ts",
+        "src/lib/features/transactions/bulk/costCellState.test.ts",
+        "src/lib/features/transactions/import/defaultPluginCheck.test.ts",
+        "src/lib/features/transactions/import/parseFailure.test.ts",
+        "src/lib/utils/brim/pluginText.test.ts",
+        "src/lib/utils/brim/pluginKind.test.ts",
+        "src/lib/features/transactions/import/ImportBrokerMismatchModal.test.ts",
+        "src/lib/features/transactions/bulk/PromoteAllModal.test.ts",
+        "src/lib/features/transactions/bulk/PromoteMergeModal.test.ts",
+        "src/lib/features/transactions/import/gapFixModel.test.ts",
+        "src/lib/features/transactions/import/GapFixStep.test.ts",
+        "src/lib/features/transactions/import/ReportSetCard.test.ts",
+        "src/lib/features/transactions/import/ParseDetailModal.test.ts",
+        "src/lib/features/transactions/import/BrimNoticeList.test.ts",
+        "src/lib/features/transactions/import/importNotices.test.ts",
+        "src/lib/features/transactions/import/NoticeCounts.test.ts",
+        "src/lib/features/transactions/import/AnalyzeStep.test.ts",
+        "src/lib/features/transactions/bulk/bulkTodos.test.ts",
+        "src/lib/features/transactions/bulk/selectionGuards.test.ts",
+        "src/lib/features/transactions/bulk/PossibleSplitRow.test.ts",
+        "src/lib/features/transactions/bulk/TxBulkBanners.possibleSplit.test.ts",
+        "src/lib/features/transactions/import/ReviewStep.possibleSplit.test.ts",
+        "src/lib/features/transactions/bulk/TxBulkBanners.preFloor.test.ts",
+        "src/lib/features/transactions/import/ReviewStep.preFloor.test.ts",
+        "src/lib/features/transactions/transactionTypeStore.test.ts",
+        "src/lib/features/transactions/filterState.test.ts",
+    ]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
     try:
@@ -418,6 +422,7 @@ def front_tx_brim_import(verbose: bool = False, ui: bool = False, headed: bool =
         return False
     # Populate DB with broker report files (--with-reports flag)
     from ._backend_db import db_populate
+
     if not db_populate(verbose=verbose, force=True, with_reports=True):
         return False
     if not _ensure_test_users():
@@ -456,6 +461,7 @@ def front_tx_import_resolution(verbose: bool = False, ui: bool = False, headed: 
         return False
     # Populate DB with broker report files (--with-reports flag for generic_simple.csv)
     from ._backend_db import db_populate
+
     if not db_populate(verbose=verbose, force=True, with_reports=True):
         return False
     if not _ensure_test_users():
@@ -641,6 +647,7 @@ def front_tx_import_flow(verbose: bool = False, ui: bool = False, headed: bool =
         return False
     # Parses the seeded generic_simple.csv report → needs --with-reports.
     from ._backend_db import db_populate
+
     if not db_populate(verbose=verbose, force=True, with_reports=True):
         return False
     if not _ensure_test_users():
@@ -896,6 +903,14 @@ def populate_registry(registry: dict) -> None:
         desc="W-B39, each test on a disposable account with brokers of its own, the page's commit answered through page.route by a refusal the generated client's response schema accepts: S1 a linked TRANSFER pair split from its row menu and refused with wacFxUnavailable on the split → an error toast naming the pair (USD, no {placeholder}), the confirmation still open and usable, the pair still linked after Cancel; P1 a WITHDRAWAL and a DEPOSIT linked from the selection toolbar's plain confirm and refused with accessDenied on the receiving broker → an error toast naming that broker, the confirmation still open, both rows still standalone after Cancel; W6-6 M1/M2 Link as pair opens the merge dialog only when description or tags differ: rows differing only in date go to the plain confirm (no empty merge dialog), rows with different descriptions open the merge dialog",
         tests="transactions/tx-split-refusal.spec.ts",
     )
-    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom) + BrimNoticeList's report-issue link (jsdom) + the notice counts of step 3 (importNotices, NoticeCounts, AnalyzeStep; jsdom)", tests="vitest")
+    add_test(
+        cat,
+        "tx-unit",
+        front_tx_unit,
+        test_names=False,
+        name="TX Unit Tests (Vitest)",
+        desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom) + BrimNoticeList's report-issue link (jsdom) + the notice counts of step 3 (importNotices, NoticeCounts, AnalyzeStep; jsdom)",
+        tests="vitest",
+    )
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

@@ -1,27 +1,27 @@
-# 💵 MWRR (Rendimento Ponderato per il Capitale) / XIRR
+# 💵 MWRR (tasso di rendimento ponderato per i flussi di cassa) / XIRR
 
 ## 💡 Cos'è?
-Il MWRR (conosciuto anche come Tasso Interno di Rendimento) misura la **tua performance personale** come investitore. A differenza delle metriche focalizzate solo sugli asset, il MWRR tiene conto sia del rendimento degli strumenti sottostanti, sia del **tempismo (timing) e dell'entità** dei tuoi depositi e prelievi.
+Il MWRR (noto anche come tasso di rendimento interno) misura la **tua performance personale** come investitore. A differenza delle metriche relative ai soli asset, tiene conto sia della performance degli asset sottostanti sia della **tempistica e dell'entità** dei tuoi depositi e prelievi. 
 
-Per offrire una visibilità completa, LibreFolio distingue tra due forme di questa metrica: **MWRR Annualizzato** e **MWRR Cumulativo**.
+Per offrire una visibilità completa, LibreFolio distingue due forme di questa metrica: **MWRR annualizzato** e **MWRR cumulato**.
 
 ---
 
-## 📈 MWRR Annualizzato vs. MWRR Cumulativo
+## 📈 MWRR annualizzato vs. MWRR cumulato
 
-### 📈 MWRR Annualizzato {: #annualized-mwrr }
-Il MWRR Annualizzato è il tasso composto annuo che rende il Valore Attuale Netto (NPV) di tutti i flussi di cassa pari a zero.
+### 📈 MWRR annualizzato {: #annualized-mwrr }
+Il MWRR annualizzato è il tasso di rendimento annuo composto che rende pari a zero il Valore Attuale Netto (NPV) di tutti i flussi di cassa. 
 
-Questo tasso composto è matematicamente equivalente al **CAGR** (Compound Annual Growth Rate - Tasso di crescita annuale composto) del tuo capitale effettivamente investito, rappresentando il tasso di crescita annuo costante necessario affinché il capitale iniziale raggiunga il saldo finale, tenendo conto di tutti i movimenti intermedi.
+Questo tasso composto è matematicamente equivalente al **CAGR** (tasso di crescita annuo composto) del tuo denaro effettivamente investito, e rappresenta il tasso di crescita annuo livellato necessario affinché il capitale cresca fino al saldo finale, tenendo conto di tutti i movimenti intermedi.
 
 $$
 0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{\frac{t_i}{365}}}
 $$
 
-??? note "🧮 Come si srotola l'equazione NPV"
+??? note "🧮 Come si sviluppa l'equazione del NPV"
 
-    #### 1. Forma Intuitiva del Valore Finale
-    Immagina di voler proiettare il valore finale del tuo portafoglio (NAV) facendo crescere ciascun flusso di cassa ad un tasso composto \(r\):
+    #### 1. Forma intuitiva del valore finale
+    Immagina di provare a proiettare il tuo valore netto finale (NAV) facendo crescere ogni flusso di cassa a un tasso composto \(r\):
     
     \[
     NAV_{finale} = CF_0 \times (1 + r)^{\frac{d_0}{365}} + CF_1 \times (1 + r)^{\frac{d_1}{365}} + \dots + CF_n \times (1 + r)^{\frac{d_n}{365}}
@@ -29,141 +29,153 @@ $$
     
     Dove \(d_i\) rappresenta il numero di giorni in cui ciascun flusso di cassa è rimasto investito durante il periodo.
     
-    #### 2. Portare tutto al Valore Attuale (NPV = 0)
-    Dividendo entrambi i membri dell'equazione per \((1 + r)^{\frac{\text{giorni totali}}{365}}\), riportiamo tutti i flussi di cassa all'inizio del periodo (\(t_0\)). Si ottiene così l'equazione standard del Valore Attuale Netto (NPV) dove la somma dei flussi attualizzati è pari a zero:
+    #### 2. Attualizzazione al Valore Attuale Netto (NPV = 0)
+    Dividendo entrambi i membri dell'equazione per \((1 + r)^{\frac{\text{giorni totali}}{365}}\), riportiamo tutti i flussi di cassa all'inizio del periodo (\(t_0\)). Si ottiene così l'equazione standard del Valore Attuale Netto, in cui la somma dei flussi di cassa attualizzati è pari a zero:
     
     \[
     0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{\frac{t_i}{365}}}
     \]
     
-    Dove \(t_i\) è il numero di giorni trascorsi dall'inizio del periodo alla data del flusso di cassa \(i\).
+    Dove \(t_i\) è il numero di giorni dall'inizio del periodo alla data del flusso di cassa \(i\).
     
-    #### 3. Esempio di Srotolamento dei Flussi di Cassa
-    Vediamo come si popolano i flussi di cassa per un portafoglio in un periodo di 31 giorni:
+    #### 3. Esempio di sviluppo dei flussi di cassa
+    Vediamo come si distribuiscono i flussi di cassa per un portafoglio in un periodo di 31 giorni:
     
-    * **Giorno 0:** Il portafoglio iniziale vale 1.000 € (rappresentato come deposito/investimento).
-    * **Giorno 15:** Depositi 100 €.
-    * **Giorno 31:** Il NAV finale del portafoglio è di 1.150 €.
+    * **Giorno 0:** Il valore iniziale del portafoglio è €1.000 (rappresentato come deposito/investimento).
+    * **Giorno 15:** Effettui un deposito di €100.
+    * **Giorno 31:** Il valore netto finale (NAV) del portafoglio è €1.150.
     
-    Innanzitutto, costruiamo la tabella delle transazioni dal punto di vista del portafoglio (il denaro che entra nel portafoglio investito è negativo, quello che ritorna indietro all'investitore è positivo):
+    Per prima cosa, costruiamo la tabella delle transazioni dal punto di vista dell'investitore (il denaro che entra nel portafoglio è negativo, il denaro che ritorna è positivo):
     
-    | Passo (\(i\)) | Giorno (\(t_i\)) | Evento | Flusso di Cassa Portafoglio (\(CF_i\)) |
-    |-------------|----------------|--------|--------------------------------------|
-    | 0 | 0 | Saldo Iniziale | **-1.000 €** (Uscita) |
-    | 1 | 15 | Deposito | **-100 €** (Uscita) |
-    | 2 | 31 | Liquidazione Ipotetica (NAV) | **+1.150 €** (Entrata) |
+    | Passo (\(i\)) | Giorno (\(t_i\)) | Evento | Flusso di cassa personale (\(CF_i\)) |
+    |------------|-------------|-------|---------------------------|
+    | 0 | 0 | Saldo iniziale | **-€1.000** (Deflusso) |
+    | 1 | 15 | Deposito | **-€100** (Deflusso) |
+    | 2 | 31 | Liquidazione ipotetica (NAV) | **+€1.150** (Afflusso) |
     
-    Ora srotoliamo queste transazioni nella sommatoria NPV:
+    Ora espandiamo queste transazioni nella sommatoria del NPV:
     
     \[
     0 = -1000 + \frac{-100}{(1+r)^{\frac{15}{365}}} + \frac{1150}{(1+r)^{\frac{31}{365}}}
     \]
     
-    Il solver matematico cerca iterativamente il valore di \(r\) (MWRR Annualizzato) che rende il membro destro dell'equazione pari a 0.
+    Il risolutore matematico cerca iterativamente il valore di \(r\) (MWRR annualizzato) che rende il lato destro di questa equazione uguale a 0. 
 
-    #### 4. Ancoraggio del Grafico Cumulativo
-    Questa convenzione sui segni assicura che, nel primissimo giorno (\(t_0\)), il deposito iniziale (\(CF_0 = -1000\)) e la liquidazione ipotetica (\(CF_1 = +1000\)) si annullino perfettamente a vicenda:
+    #### 4. Ancoraggio del grafico cumulato
+    Questa convenzione di segno garantisce che, nel primissimo giorno (\(t_0\)), il deposito iniziale (\(CF_0 = -1000\)) e la liquidazione ipotetica (\(CF_1 = +1000\)) si annullino a vicenda:
     
     \[
     0 = -1000 + 1000 = 0\%
     \]
     
-    Questo àncora l'inizio del grafico del MWRR Cumulativo esattamente allo **0%**.
+    Ciò ancora l'inizio del grafico del MWRR cumulato esattamente a **0%**.
 
-**Descrizione delle Variabili:**
+**Descrizione delle variabili:**
 
-* $r$ = MWRR Annualizzato (che rappresenta il CAGR del tuo denaro reale).
+* $r$ = MWRR annualizzato (che rappresenta il CAGR del tuo denaro effettivo).
 * $CF_i$ = Flusso di cassa dal punto di vista dell'investitore:
-    * **Flussi di cassa negativi ($CF_i < 0$):** Capitale versato nel portafoglio (depositi, acquisti). Questo rappresenta denaro che esce dal portafoglio/portafogli dell'investitore per essere investito.
-    * **Flussi di cassa positivi ($CF_i > 0$):** Capitale restituito all'investitore (prelievi, dividendi). Questo rappresenta denaro che ritorna nel portafoglio personale.
-    * **Valutazione finale ($CF_n > 0$):** Il Net Asset Value (NAV) finale del portafoglio alla fine del periodo, trattato come un afflusso positivo (una liquidazione ipotetica in cui l'intero portafoglio viene convertito nuovamente in liquidità che ritorna all'investitore).
+    * **Flussi di cassa negativi ($CF_i < 0$):** Capitale impegnato nel portafoglio (depositi, investimenti). Rappresenta denaro che esce dalle disponibilità dell'investitore.
+    * **Flussi di cassa positivi ($CF_i > 0$):** Capitale restituito all'investitore (prelievi, dividendi). Rappresenta denaro che ritorna nelle disponibilità dell'investitore.
+    * **Valutazione finale ($CF_n > 0$):** Il valore netto finale (NAV) del portafoglio alla fine del periodo, trattato come un afflusso positivo (una liquidazione ipotetica in cui l'intero portafoglio viene riconvertito in liquidità che ritorna nelle disponibilità dell'investitore).
 * $t_i$ = Giorni trascorsi dall'inizio del periodo ($t_0 = 0$).
 
-**Concetti Chiave:**
+**Concetti chiave:**
 
-* Rappresenta una **velocità o tasso annuo composto** di crescita.
-* È ideale per confronti a lungo termine (es. per confrontare la tua performance con un tasso di interesse bancario o con il CAGR).
-* **Avviso di Volatilità:** Su periodi brevi (es. pochi giorni o settimane), il rendimento annualizzato può essere estremamente volatile e mostrare percentuali enormi perché la matematica ipotizza che il rendimento di pochi giorni si ripeta per l'intero anno (365 giorni).
+* Rappresenta una **velocità/tasso annuo** di crescita.
+* È ideale per confronti di lungo periodo (ad esempio, confrontare la tua performance con un tasso di interesse bancario annuo o con il CAGR).
+* **Avviso sulla volatilità:** Su periodi brevi (ad esempio, pochi giorni o settimane), il rendimento annualizzato può essere molto volatile e mostrare percentuali estreme, perché il calcolo estrapola il rendimento di una finestra breve a un anno intero di 365 giorni.
 
-LibreFolio costruisce i flussi di cassa del MWRR dalle variazioni della base del capitale, non dalle sole righe di deposito in contanti. Il capitale da ADJUSTMENT/TRANSFER in natura prezzato è quindi trattato come capitale versato, non come un'improvvisa performance dell'investimento.
+LibreFolio costruisce i flussi di cassa del MWRR a partire dalle variazioni rispetto alla base del capitale, non dalle sole righe di deposito. Il capitale di tipo Rettifica/Trasferimento valorizzato in natura è quindi trattato come capitale conferito, anziché come un'improvvisa performance di investimento. Una rettifica in uscita non ha valore: non restituisce nulla all'investitore e non è un flusso di cassa ([Capitale versato — Rettifiche in uscita](deposited-capital.md#outgoing-adjustments)).
 
-### 📊 MWRR Cumulativo {: #cumulative-mwrr }
-Il MWRR Cumulativo rappresenta il rendimento totale equivalente del periodo, ottenuto capitalizzando il tasso annualizzato per la durata reale della finestra temporale selezionata.
+### 📊 MWRR cumulato {: #cumulative-mwrr }
+Il MWRR cumulato rappresenta il rendimento totale equivalente nel periodo selezionato, ottenuto capitalizzando il tasso annualizzato per la durata effettiva di quella finestra.
 
-**Formula Diretta (senza radici, usa direttamente $r$):**
-
-$$
-\text{MWRR}_{\text{cumulativo}} = (1 + r)^{\frac{\text{giorni}}{365}} - 1
-$$
-
-**Formula per Tasso Giornaliero (con radice):**
+**Formula diretta (senza radici, usa direttamente $r$):**
 
 $$
-\text{MWRR}_{\text{cumulativo}} = (1 + r_d)^{\text{giorni}} - 1 \quad \text{dove} \quad r_d = \sqrt[365]{1 + r} - 1
+\text{MWRR}_{\text{cumulato}} = (1 + r)^{\frac{\text{giorni}}{365}} - 1
 $$
 
-Le due formule sono matematicamente equivalenti. Tuttavia, a livello computazionale, si preferisce la formula diretta con $r$ (senza radici) una volta che il tasso annualizzato $r$ è stato trovato, poiché l'elevamento a potenza diretto è più semplice ed efficiente da calcolare per il software.
+**Formula con tasso giornaliero (con radice):**
 
-**Descrizione delle Variabili:**
+$$
+\text{MWRR}_{\text{cumulato}} = (1 + r_d)^{\text{giorni}} - 1 \quad \text{dove} \quad r_d = \sqrt{1 + r} - 1
+$$
 
-* $\text{giorni}$ = Il numero effettivo di giorni di calendario nel periodo selezionato.
+Entrambe le formule sono matematicamente equivalenti. Tuttavia, dal punto di vista computazionale, una volta trovato il tasso annualizzato $r$, si preferisce la formula diretta che usa $r$ (senza radici), poiché l'elevamento a potenza diretto è più semplice ed efficiente da calcolare per il software.
 
-**Concetti Chiave:**
+**Descrizione delle variabili:**
+
+* $\text{giorni}$ = Il numero effettivo di giorni di calendario nella finestra temporale selezionata.
+
+**Concetti chiave:**
 
 * Rappresenta la **distanza totale percorsa** nel periodo.
-* Parte da 0% e cresce lungo la finestra temporale, rendendolo la metrica ideale da tracciare nel grafico seriale.
-* **Non è un ROI semplice:** Sebbene rappresenti un rendimento cumulativo, si tratta di un rendimento cumulativo ponderato per il capitale (money-weighted). Non va confuso con il ROI semplice, che ignora il timing dei flussi di cassa.
+* Parte da 0% e cresce lungo la linea temporale, il che lo rende la metrica corretta per la visualizzazione in un grafico seriale.
+* **Non è un semplice HPR:** Pur rappresentando un rendimento cumulato, si tratta di un rendimento cumulato ponderato per i flussi di cassa. Non va confuso con il semplice rendimento del periodo di detenzione (ROI), che ignora la tempistica dei flussi di cassa.
 
 ---
 
-## 🔢 Esempio Numerico su 10 Anni
+## 🔢 Esempio numerico su 10 anni
 
-Vediamo uno scenario su 10 anni per capire come il timing influenzi la performance e come si convertono queste metriche:
+Consideriamo uno scenario di 10 anni per vedere come la tempistica influisce sulla performance e come si convertono queste metriche:
 
-* **Anno 0:** Depositi **10.000 €**.
-* **Anno 5:** Depositi altri **90.000 €**.
-* **Anno 10:** Il valore finale del portafoglio (NAV) è **200.000 €**.
+* **Anno 0:** Depositi **€10.000**.
+* **Anno 5:** Depositi altri **€90.000**.
+* **Anno 10:** Il tuo valore netto finale (NAV) è **€200.000**.
 
-### 📉 Confronto ROI Semplice
-Il ROI semplice viene calcolato esclusivamente sul totale netto dei versamenti:
+### 📉 Confronto con il ROI semplice
+Il ROI semplice è calcolato esclusivamente sui contributi netti totali:
 
 $$
 ROI = \frac{200.000 - 100.000}{100.000} = +100\%
 $$
 
-### ⏱️ Effetto Timing del MWRR
-Se il grosso del capitale (90.000 €) è stato depositato all'Anno 5, subito prima di un forte recupero pluriennale del mercato, il tuo denaro ha lavorato con estrema efficienza. Poiché la cifra più consistente è rimasta esposta agli anni ad alta crescita, il tuo **MWRR Annualizzato** risulterà molto superiore al TWRR del mercato.
+### ⏱️ Effetto timing sul MWRR
+Se la maggior parte del tuo capitale (€90.000) è stata depositata nell'anno 5, subito prima di una massiccia ripresa pluriennale del mercato, il tuo denaro ha lavorato in modo molto efficiente. Poiché la somma maggiore è stata esposta agli anni di forte crescita, il tuo **MWRR annualizzato** sarebbe stato molto più alto del TWRR del mercato.
 
-Utilizzando un solver matematico NPV per questo specifico scenario:
-* Il **MWRR Annualizzato ($r$)** è esattamente del **13,02%**.
+Utilizzando un risolutore matematico NPV per questo specifico scenario:
+* Il **MWRR annualizzato ($r$)** è esattamente **13,02%**.
 
-### 🔁 Conversione in MWRR Cumulativo
-Capitalizzando questo rendimento annualizzato del 13,02% per un periodo di 10 anni:
+### 🔁 Conversione in MWRR cumulato
+Capitalizzando questo rendimento annualizzato del 13,02% nell'arco del periodo di 10 anni:
 
 $$
-\text{MWRR}_{\text{cumulativo}} = (1 + 0,130227)^{10} - 1 \approx +240,14\%
+\text{MWRR}_{\text{cumulato}} = (1 + 0{,}130227)^{10} - 1 \approx +240{,}14\%
 $$
 
-### 💡 Cosa significa +240,14%?
-* **Non** significa che i 100.000 € totali che hai versato siano diventati 340.140 €.
-* Significa che un **euro teorico**, investito all'inizio del periodo di 10 anni e mai più toccato, sarebbe diventato 3,40 €, ottenendo un rendimento totale del 240,14% crescendo alla stessa velocità media composta generata dai tuoi flussi reali.
+### 💡 Che cosa significa +240,14%?
+* **Non** significa che i tuoi contributi totali di €100.000 siano cresciuti fino a €340.140.
+* Significa che un **euro teorico**, investito all'inizio del periodo di 10 anni e lasciato intatto, sarebbe cresciuto fino a €3,40, ottenendo un rendimento totale del 240,14% crescendo alla stessa velocità composta media dei tuoi flussi di cassa effettivi.
 
 ---
 
-## 🖥️ Integrazione UI e Uso nella Dashboard
+## 🖥️ Integrazione nell'interfaccia utente e utilizzo della dashboard
 
-LibreFolio mostra queste metriche di performance nella dashboard:
+LibreFolio mostra queste metriche di performance in tutta la dashboard:
 
-### 📊 Grafico Percentuale (`%`)
-Le serie tracciate utilizzano il **MWRR Cumulativo**, il **TWRR Cumulativo** e il **ROI Semplice**. Questo consente un confronto visivo diretto, in quanto tutte e tre le serie partono dallo 0% e mostrano l'avanzamento totale lungo il periodo temporale selezionato.
+### 📊 Grafico percentuale (`%`)
+Le serie tracciate usano **MWRR cumulato**, **TWRR cumulato** e **ROI semplice**. Ciò consente un confronto visivo diretto e affiancato, poiché tutte e tre le serie partono da 0% e rappresentano il progresso totale nell'intervallo di tempo selezionato.
+
+### 📐 La linea del MWRR è composta da punti reali {: #mwrr-line }
+
+A differenza del TWRR e del ROI, il MWRR cambia anche in un giorno in cui non succede nulla: il tempo passa e, con più flussi, non esiste una forma chiusa che lo estenda da un giorno all'altro. Nel report del portafoglio, pertanto, non viene memorizzato nei [passaggi giornalieri](index.md#daily-states-as-steps) dello storico, ma in una serie propria, `mwrr_line`, i cui punti sono **valori reali**: ciascuno è il MWRR del periodo che termina in quel giorno, risolto in quel giorno, annualizzato e cumulato, secondo la stessa regola delle schede (vedi sotto). La linea ha un punto all'inizio e alla fine di ogni passaggio dello storico, più uno alla fine di ogni mese di calendario all'interno dei passaggi più lunghi di 62 giorni (al massimo 24 per passaggio); il suo primo punto è 0. Nulla tra due punti viene stimato o memorizzato: il grafico li unisce.
 
 ### 🧾 Schede KPI
-* **ROI Semplice** (Metrica principale per il rendimento assoluto).
-* **TWRR Cumulativo** (Indicatore della performance di strategia/allocazione).
-* **MWRR Cumulativo** (Indicatore principale del timing personale).
-* **MWRR Annualizzato** (Mostrato come metrica secondaria/comparativa per comprendere il tasso composto annuo).
+* **ROI semplice** (Metrica principale per il rendimento assoluto).
+* **TWRR cumulato** (Indicatore di performance della strategia/allocazione).
+* **MWRR cumulato** (Indicatore principale della tempistica personale).
+* **MWRR annualizzato** (Mostrato come metrica secondaria/comparativa per comprendere il tasso annuo composto).
 
-!!! tip "Analizzare la Differenza di Performance"
+### 🚫 Quando non viene mostrato il MWRR
 
-    Per interpretare la differenza tra MWRR cumulativo e TWRR cumulativo, vedi la pagina dell'[Effetto Timing](timing-effect.md).
+Le schede KPI e la linea del MWRR del grafico seguono la stessa regola in ogni giorno del periodo. Un giorno ha un MWRR solo quando:
 
+* il valore del portafoglio in quel giorno è maggiore di zero, e
+* il periodo conserva ancora **capitale netto investito** in quel giorno: il valore con cui è iniziato, più i depositi, meno i prelievi effettuati fino a quel giorno (i flussi di capitale descritti sopra), è maggiore di zero.
+
+Altrimenti non c'è alcun tasso: la scheda mostra `—` e la linea presenta un vuoto (un punto senza valore). Dopo prelievi netti, il vuoto inizia il giorno in cui questi portano il capitale netto investito a zero o a un valore inferiore, e dura finché nuovi depositi non lo riportano sopra zero. Le schede mostrano sempre l'ultimo punto della linea, quindi una scheda senza MWRR corrisponde a una linea che termina con un vuoto. Un giorno è inoltre privo di MWRR quando nessun tasso risolve l'equazione dei flussi di cassa: LibreFolio non mostra mai un tasso che non la risolva.
+
+!!! tip "Analizzare la differenza di performance"
+
+    Per interpretare la differenza tra MWRR cumulato e TWRR cumulato, consulta la pagina [Effetto timing](timing-effect.md).

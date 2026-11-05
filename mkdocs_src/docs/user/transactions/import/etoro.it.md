@@ -2,16 +2,16 @@
 
 !!! info "Beta"
 
-    Questo plugin è in **Beta** — testato con file di esempio ma potrebbero esistere casi limite.
+    Questo plugin è in **Beta** — testato con file di esempio, ma potrebbero esistere casi limite.
 
 LibreFolio legge il foglio **Account Activity** dell'estratto conto di eToro, salvato come CSV.
 
 ## 📥 Come esportare
 
 1. Accedi al tuo [account eToro](https://www.etoro.com).
-2. Apri **Portafoglio**, poi **History** (l'icona dell'orologio).
-3. Clicca l'icona delle impostazioni in alto a destra e scegli **Account Statement**.
-4. Scegli le date di inizio e fine, poi clicca **Create**.
+2. Apri **Portafoglio**, poi **Cronologia** (l'icona dell'orologio).
+3. Clicca sull'icona delle impostazioni in alto a destra e scegli **Estratto conto**.
+4. Scegli le date di inizio e fine, poi clicca su **Crea**.
 5. Scarica l'estratto conto con l'icona **XLS**.
 6. Apri il file in un foglio di calcolo, vai al foglio **Account Activity** e salvalo come **CSV**,
    mantenendo i nomi delle colonne sulla prima riga. LibreFolio non legge file PDF o Excel.
@@ -22,7 +22,7 @@ LibreFolio legge il foglio **Account Activity** dell'estratto conto di eToro, sa
 
 ## 🔄 Cosa viene importato
 
-| Nel foglio Account Activity (**Type**) | Importato come |
+| In Account Activity (**Type**) | Importato come |
 |:-------------------------------|:------------|
 | Open Position | **Acquisto** |
 | Position closed | **Vendita** |
@@ -31,27 +31,42 @@ LibreFolio legge il foglio **Account Activity** dell'estratto conto di eToro, sa
 | Deposit | **Deposito** |
 | Withdraw Request | **Prelievo** |
 | Withdraw Fee, Withdrawal Conversion Fee, Conversion Fee | **Commissione**, quando l'importo non è zero |
+| Overnight fee (CFD financing) | **Commissione**, quando l'importo non è zero: un costo del denaro, senza asset |
+| Overnight refund (CFD financing given back) | **Interesse**: denaro restituito (importo positivo), senza asset e con la descrizione *Overnight refund* |
+| SDRT (UK stamp duty) | **Imposta**, sullo strumento della riga |
 
 Lo strumento proviene da **Details** (ad esempio `NKE/USD`) e la quantità da **Units**.
 
-**Non importati**: **Overnight fee** e **Overnight refund** (finanziamento CFD) e **SDRT** (imposta di bollo britannica) vengono saltati senza un avviso, quindi aggiungili manualmente se ne tieni traccia. Qualsiasi altro tipo viene saltato con un avviso.
+Qualsiasi altro tipo viene saltato con un avviso.
 
 ## ⚠️ Insidie comuni
 
 !!! warning "Controlla la valuta degli strumenti non quotati in USD"
 
-    LibreFolio registra ogni riga nella valuta dopo la barra in **Details** (`KER/EUR` in euro),
-    e ogni altra riga in dollari USA. eToro indica i suoi importi nella valuta del tuo account (solitamente
-    USD): controlla le righe degli strumenti quotati in un'altra valuta prima di salvarle.
+    LibreFolio registra ogni riga nella valuta che segue la barra in **Details** (`KER/EUR` in euro),
+    e ogni altra riga in dollari statunitensi. eToro indica i suoi importi nella valuta del tuo conto
+    (di solito USD): controlla le righe degli strumenti quotati in un'altra valuta prima di salvarle.
 
-- **Mantieni le date di eToro**: giorno/mese/anno, con o senza l'ora. Una riga la cui data non può essere letta
-  viene saltata con un avviso.
-- **Commissioni di conversione per prelievo.** Una commissione diversa da zero diventa una **Commissione** separata, accanto al
-  **Withdraw Request** completo. Confronta entrambi con il tuo estratto conto: se la commissione era già stata detratta dal
-  denaro prelevato, deselezionala in [Riepilogo](how-to.md#review).
-- I **CFD** diventano normali acquisti e vendite dello strumento, come azioni reali, senza le loro
-  commissioni overnight: controlla quelle posizioni e i loro costi.
+- **Mantieni le date di eToro**: giorno/mese/anno, con o senza l'ora. Una riga la cui data non è
+  leggibile viene saltata con un avviso.
+- **Commissioni di conversione dei prelievi.** Una commissione non nulla diventa una **Commissione**
+  separata, accanto alla **Withdraw Request** completa. Confronta entrambe con il tuo estratto conto:
+  se la commissione era già stata detratta dal denaro prelevato, deselezionala in [Review](how-to.md#review).
+- **I CFD** diventano normali acquisti e vendite dello strumento, come vere azioni. Le loro
+  **commissioni overnight** vengono importate come transazioni separate di tipo **Commissione**, senza asset:
+  controlla quelle posizioni e i relativi costi rispetto al tuo estratto conto.
+- **Commissioni e rimborsi overnight.** Le commissioni vengono importate come **Commissione** e i rimborsi
+  come **Interesse**: il costo overnight che hai effettivamente pagato, al netto dei rimborsi, è dato
+  dalle commissioni meno i rimborsi. Un rimborso compare come entrata, quindi un report delle tue
+  entrate lo include.
 
-## 🔗 Riferimenti per sviluppatori
+## 🚧 Limitazioni note {: #known-limitations }
+
+- **Importi nella valuta del tuo conto.** Vedi l'avviso sopra: controlla la valuta degli strumenti
+  non quotati in USD prima di salvarli.
+- **Qualcosa non torna?** Per favore [apri una issue](https://github.com/Librefolio/LibreFolio/issues)
+  con un file di esempio anonimizzato.
+
+## 🔗 Riferimenti per gli sviluppatori
 
 → [Architettura BRIM — note su eToro](../../../developer/backend/brim/architecture.md#plugin-etoro)

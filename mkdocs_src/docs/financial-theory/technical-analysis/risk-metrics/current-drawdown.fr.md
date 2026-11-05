@@ -53,11 +53,13 @@ $$
 \text{Gain requis} = \frac{1}{1 + DD} - 1 = \frac{-DD}{1 + DD}
 $$
 
-Les deux formes sont la même expression — la seconde est la première avec la fraction combinée — et la [Perte maximale](max-drawdown.md) explique l'asymétrie que cela crée, avec les valeurs calculées.
+Les deux formes sont la même expression — la seconde est la première avec la fraction combinée — et la [Perte maximale](max-drawdown.md) explique l'asymétrie que cela crée, avec les valeurs calculées. La seconde forme est celle qui est évaluée : sur un faible repli, elle garde le gain précis, alors que la première perd des chiffres en soustrayant $1$ d'un nombre très proche de $1$. La valeur « restant pour revenir au sommet » et le [gain du point bas au sommet](max-drawdown.md#recovery-time) de la perte maximale sont calculés par une seule fonction partagée, de sorte que les deux ne peuvent jamais suivre des formules différentes.
+
+Une perte totale n'a pas de gain de récupération fini : à $DD = -100\%$ le dénominateur $1 + DD$ est nul. La valeur « restant pour revenir au sommet » est alors laissée sans nombre plutôt que d'en recevoir un infini, et le résultat porte un avertissement qui en donne la raison.
 
 !!! warning "La même formule, appliquée à une question différente"
 
-    Cette asymétrie est une leçon générale, et elle est enseignée sur la page de la perte maximale. La quantité calculée ici l'applique au **repli actuel** à la place, et la différence n'est pas cosmétique :
+    Cette asymétrie est une leçon générale, et elle est enseignée sur la page de la perte maximale. La quantité calculée ici l'applique au **repli actuel** à la place, tandis que le gain du point bas au sommet l'applique à la **perte maximale**, et la différence n'est pas cosmétique :
 
     - appliquée à la **perte maximale**, c'est un énoncé historique — *combien il aurait fallu pour récupérer, au pire point jamais atteint* ;
     - appliquée au **repli actuel**, c'est un énoncé présent — *combien il faut pour récupérer depuis la position où se trouve aujourd'hui le portefeuille*.

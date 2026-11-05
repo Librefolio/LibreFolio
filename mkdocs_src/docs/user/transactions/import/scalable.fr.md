@@ -84,6 +84,8 @@ Le premier export lit tout l'historique ; les suivants démarrent à partir du d
 
 Importez chaque fichier dans son propre courtier, lors du même import ou à des moments différents : dans l'[Assistant d'importation](how-to.md), déposez les fichiers CSV et assignez chacun à son courtier. N'importez jamais le même fichier dans deux courtiers : ses transactions compteraient deux fois.
 
+Seuls les ordres **exécutés** sont importés. Les ordres en attente, annulés, expirés ou rejetés sont laissés de côté en silence, sans note : un ordre exécuté plus tard arrive avec l'export suivant. Une ligne dont le statut est inconnu de LibreFolio est listée dans un avertissement ambre, avec un lien pour ouvrir une issue sur GitHub.
+
 !!! note "💡 Un fichier dans le mauvais courtier"
 
     Si un courtier a un **Plugin d'Import par Défaut**, l'assistant d'importation vérifie chaque fichier qui lui est assigné juste après le téléversement. Lorsque ce plugin ne peut pas lire un fichier, l'assistant indique pourquoi, montre quel courtier peut le lire et propose de déplacer le fichier, de le conserver ou de le supprimer.

@@ -155,6 +155,7 @@ Quando qualcosa non va nei dati, la scheda lo dice una volta, subito sotto la sc
 **Come leggerla**
 
 - **Il banner di qualità dei dati** elenca cosa correggere, ogni problema con la sua azione, come **Sincronizza prezzi** o **Sincronizza tassi**. Cliccalo per aprire l'elenco.
+- **Una coppia di valute senza una rotta di cambio** ha un pulsante proprio in quel banner, uno per coppia (descrizione **Aggiungi coppia FX**): apre subito la finestra **Aggiungi Nuova Coppia FX**, già compilata con quella coppia, e l'analisi si ricalcola da sola quando la coppia è salvata e i suoi tassi sono scaricati → [Aggiungere una coppia di valute](../fx/add-pair.md)
 - **L'avviso** sotto di esso nomina i risultati **parziali** e la loro causa. Un risultato parziale mostra comunque le sue cifre: leggile tenendo presente quella causa.
 - **Un banner ambra proprio di una sezione** significa che un risultato non è tornato affatto, spesso perché il periodo è troppo breve: scegline uno più lungo, o sincronizza i prezzi.
 - **Cosa succede se…?** segnala i suoi problemi all'interno della sua sezione.

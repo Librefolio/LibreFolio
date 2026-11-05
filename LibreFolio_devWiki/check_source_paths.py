@@ -51,6 +51,7 @@ JOURNAL_PARENT = Path(GIT_COMMON).parent.parent
 # carry prose rather than a path are filtered out by the heuristics below.
 CELL = re.compile(r"`([^`]+)`")
 
+
 # Not paths: prose, globs, symbols, URLs, npm packages, API endpoints and shell
 # fragments all end up in these tables legitimately. So do abbreviated citations
 # (`.../foo.md`) and bare filenames used as names rather than locations.
@@ -123,10 +124,7 @@ def main() -> int:
 
     occurrences = sum(len(v) for v in missing.values())
     affected = len({p for v in missing.values() for p, _ in v})
-    print(
-        f"\n{len(missing)} path inesistenti ({occurrences} occorrenze) "
-        f"su {total} citati, in {affected} pagine."
-    )
+    print(f"\n{len(missing)} path inesistenti ({occurrences} occorrenze) " f"su {total} citati, in {affected} pagine.")
     return 1 if missing else 0
 
 

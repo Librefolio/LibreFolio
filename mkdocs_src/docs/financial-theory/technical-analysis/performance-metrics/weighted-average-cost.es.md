@@ -159,7 +159,7 @@ La moneda objetivo depende de dónde se muestra el PMC:
 |-------|---------------------|
 | Panel, tabla de Posiciones, ventas realizadas, Rendimiento sobre coste | La moneda de visualización (informe) |
 | Líneas de PMC del análisis de lotes | La moneda del análisis |
-| Vista previa de transacción, coste base automático, series de PMC (`POST /portfolio/wac`) | La moneda seleccionada en la vista previa; de lo contrario, la moneda de la **última adquisición** |
+| Vista previa de transacción, coste base automático | La moneda seleccionada en la vista previa; de lo contrario, la moneda de la **última adquisición** |
 | Planificador PAC | La moneda del planificador |
 
 La moneda de la última adquisición es la moneda pagada por la transacción más reciente que añadió cantidad — una regla determinista; en caso de empate, gana la primera registrada. Un desdoblamiento, o una adquisición de coste desconocido, recurre a la moneda propia del activo.
@@ -184,14 +184,14 @@ La moneda de la última adquisición es la moneda pagada por la transacción má
 ## 🎯 Dónde se usa el PMC en LibreFolio
 
 - **Coste base**: $\text{CB}(a,b,t) = q(a,b,t) \times \text{PMC}^{T}(a,b,t)$, histórico, sin conversión en $t$
-- **P&L realizado en VENTA**: $\text{realizado} = P_{\text{venta}} - q_{\text{vendida}} \times \text{PMC}^{T}_{\text{pre-venta}}$, con los ingresos $P_{\text{venta}}$ convertidos en la fecha de venta y las unidades vendidas saliendo a su coste histórico
+- **P&L realizado en VENTA**: $\text{realizado} = P_{\text{venta}} - q_{\text{vendida}} \times \text{PMC}^{T}_{\text{pre-venta}}$, con los ingresos $P_{\text{venta}}$ convertidos en la fecha de venta y las unidades vendidas saliendo a su coste histórico. Un ajuste de salida se realiza igual con unos ingresos de cero, porque no tiene valor: menos el coste histórico de sus unidades (ver [Ajustes de salida](../../instruments/transaction-types/adjustment.md#outgoing-adjustments))
 - **Descomposición del pool de efectivo**: la VENTA devuelve $C = q_{\text{vendida}} \times \text{PMC}^{T}_{\text{pre-venta}}$ a Capital Pool
 - **Rendimiento sobre coste**: el precio de compra promedio del denominador de [Rendimiento sobre coste](portfolio-engine/yield-on-cost.md)
 - **Formulario de transferencia**: sugiere automáticamente el cost_basis_override del lado receptor a partir del PMC de la posición emisora
 
-!!! warning "El PMC nunca se usa para la valoración de activos"
+!!! warning "El PMC nunca es un precio"
 
-    El PMC es una construcción contable para el coste base. El valor de mercado utiliza los niveles del resolutor unificado: `MARKET → TRADE_AVG → CARRIED → MISSING`, expuestos a las filas de cartera como `MARKET_PRICE`, `LAST_TRADE_PRICE` o `MISSING`. Ver [Resolución de precios](portfolio-engine/price-resolution.md).
+    El PMC es una construcción contable para el coste base. El valor de mercado utiliza los niveles del resolutor unificado: `MARKET → TRADE_AVG → CARRIED → MISSING`, expuestos a las filas de cartera como `MARKET_PRICE` o `LAST_TRADE_PRICE`. Solo una posición cuyo activo no tiene ninguna marca de precio — ni cotización, ni BUY ni SELL, ni [estimación del coste de transferencia](portfolio-engine/price-resolution.md#transfer-cost-estimate) todavía — se cuenta a su coste base $q \times \text{PMC}^{T}$, como una estimación declarada, sin precio ni P&L no realizado (`ESTIMATED_AT_COST`), o se deja sin valorar (`MISSING`) cuando ese coste está incompleto. Ver [Resolución de precios](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implementación: alcance a nivel de posición
 

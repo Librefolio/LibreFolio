@@ -34,7 +34,7 @@ def get_term_width(min_width: int = 60) -> int:
         return min_width
 
 
-def format_help(prog: str) -> 'CustomFormatter':
+def format_help(prog: str) -> "CustomFormatter":
     """
     Factory function for CustomFormatter with good defaults.
 
@@ -62,7 +62,7 @@ class CustomFormatter(argparse.RawDescriptionHelpFormatter):
             for subaction in self._iter_indented_subactions(action):
                 # Compensate for the indent that will be added
                 indent_chg = self._current_indent - current_indent
-                added_indent = 'x' * indent_chg
+                added_indent = "x" * indent_chg
                 invocations.append(added_indent + get_invocation(subaction))
 
             # Update the maximum item length
@@ -75,7 +75,7 @@ class CustomFormatter(argparse.RawDescriptionHelpFormatter):
 
     def _format_action_invocation(self, action):
         if not action.option_strings:
-            metavar, = self._metavar_formatter(action, action.dest)(1)
+            (metavar,) = self._metavar_formatter(action, action.dest)(1)
             return metavar
         else:
             parts = []
@@ -88,10 +88,10 @@ class CustomFormatter(argparse.RawDescriptionHelpFormatter):
                 default = action.dest.upper()
                 args_string = self._format_args(action, default)
                 for option_string in action.option_strings:
-                    parts.append('%s' % option_string)
-                parts[-1] += ' %s' % args_string
+                    parts.append("%s" % option_string)
+                parts[-1] += " %s" % args_string
 
-            return ', '.join(parts)
+            return ", ".join(parts)
 
 
 class TreeParser(argparse.ArgumentParser):
@@ -179,15 +179,7 @@ def _option_strings_formatter(parser: argparse.ArgumentParser) -> str:  # noqa: 
     return ret_str
 
 
-def subparser_tree(
-    parser: argparse.ArgumentParser,
-    start: str = "",
-    down: tuple = ("│", " "),
-    leaf: tuple = ("├", "╰"),
-    item: tuple = ("┬", "─", "╴"),
-    ind_inc: int = 1,
-    _is_root: bool = True
-    ) -> str:
+def subparser_tree(parser: argparse.ArgumentParser, start: str = "", down: tuple = ("│", " "), leaf: tuple = ("├", "╰"), item: tuple = ("┬", "─", "╴"), ind_inc: int = 1, _is_root: bool = True) -> str:
     """
     Generate ASCII tree representation of parser and all subparsers.
 
@@ -216,10 +208,7 @@ def subparser_tree(
         ╰──╴fe [-h]
     """
     # Find all subparser actions
-    subparsers_actions = [
-        action for action in parser._actions
-        if isinstance(action, argparse._SubParsersAction)
-        ]
+    subparsers_actions = [action for action in parser._actions if isinstance(action, argparse._SubParsersAction)]
 
     # Root node shows prog name
     str_out = f"{parser.prog}{_option_strings_formatter(parser)}\n" if _is_root else ""
@@ -228,7 +217,7 @@ def subparser_tree(
         choices = list(subparsers_action.choices.items())
 
         for i, (choice, subparser) in enumerate(choices):
-            is_last = (i == len(choices) - 1)
+            is_last = i == len(choices) - 1
 
             # Build the branch prefix
             branch_char = leaf[1] if is_last else leaf[0]
@@ -236,15 +225,7 @@ def subparser_tree(
 
             # Recurse into subparser
             child_prefix = start + (down[1] if is_last else down[0]) + " " * ind_inc
-            ret_string = subparser_tree(
-                subparser,
-                start=child_prefix,
-                down=down,
-                leaf=leaf,
-                item=item,
-                ind_inc=ind_inc,
-                _is_root=False
-                )
+            ret_string = subparser_tree(subparser, start=child_prefix, down=down, leaf=leaf, item=item, ind_inc=ind_inc, _is_root=False)
 
             # Add connector if has children
             str_out += item[0] if ret_string else item[1]

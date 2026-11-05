@@ -10,11 +10,13 @@ La herramienta Medida responde a *¿cuánto cambió entre estos dos días?* Elig
 
 ## 🛠️ Tomar una medida
 
-1. Haz clic en **📏 Añadir medición** en la parte superior derecha del gráfico: el panel **Medidas** se abre debajo de él.
-2. Haz clic en el punto **inicio** del gráfico, luego en el punto **fin**.
+1. Haz clic en **📏 Añadir medición** en la parte superior derecha del gráfico: el panel **Medidas** se abre debajo de él, y sobre el gráfico el puntero se convierte en una cruz.
+2. Haz clic en el punto **inicio** del gráfico: una línea discontinua sigue al puntero desde ahí. Luego haz clic en el punto **fin**, en otro día.
 3. La nueva medida se abre con su tabla, y el gráfico la dibuja con su propio color.
 
-**+ Añadir medición** en el encabezado del panel, en cambio, mide todo el gráfico, desde su primer hasta su último punto: práctico en el móvil. El encabezado de cada medida contiene su color y 🗑️ para eliminarla; despliega la medida para cambiar sus fechas.
+Una medida necesita dos días distintos. Al volver sobre el día del punto de inicio, la línea discontinua desaparece y el puntero muestra el signo de *no permitido* (🚫): un segundo clic ahí no hace nada, y el punto de inicio sigue elegido.
+
+**+ Añadir medición** en el encabezado del panel, en cambio, mide todo el gráfico, desde su primer hasta su último punto: práctico en el móvil. El encabezado de cada medida contiene su color y 🗑️ para eliminarla; despliega la medida para cambiar sus fechas, de nuevo dos días distintos.
 
 Las medidas no se guardan: recargar la página vacía el panel. **Precios** y **Rendimiento móvil** mantienen medidas separadas.
 

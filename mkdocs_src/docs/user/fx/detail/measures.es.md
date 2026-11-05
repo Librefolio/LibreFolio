@@ -14,15 +14,18 @@ cambio en % y la tasa anual.
 ### 📏 Paso 1: Activa el modo de medición
 
 Haz clic en 📏 (**Añadir medida**) en la parte superior derecha del gráfico. El panel **Medidas** debajo del gráfico
-se abre y muestra **Activa — haz clic en el gráfico**.
+se abre y muestra **Activa — haz clic en el gráfico**; sobre el gráfico el puntero se convierte en una cruz.
 
 ### 📍 Paso 2: Haz clic en el punto de inicio
 
-Una indicación muestra la fecha y el tipo de cambio que seleccionaste; una línea discontinua sigue al puntero.
+Una indicación muestra la fecha y el tipo de cambio que seleccionaste; una línea discontinua sigue al puntero. Una medición necesita dos
+días distintos: al volver sobre el día del punto de inicio, la línea desaparece y el puntero muestra
+el signo de *no permitido* (🚫), y un segundo clic ahí no hace nada.
 
 ### 🏁 Paso 3: Haz clic en el punto final
 
-La medición se añade y el modo de medición se desactiva. Las dos fechas se ordenan automáticamente.
+Haz clic en un punto de otro día. La medición se añade y el modo de medición se desactiva. Las dos fechas se
+ordenan automáticamente.
 
 ??? tip "➕ Todo el periodo en un solo clic — práctico en el móvil"
 
@@ -33,7 +36,7 @@ La medición se añade y el modo de medición se desactiva. Las dos fechas se or
 ## 📊 Leer una medición
 
 Cada medición es una tarjeta que muestra sus fechas, el cambio en % y el número de días naturales; también
-puedes definir el color y el estilo de su línea. Expándela para cambiar las fechas y ver **Inicio**,
+puedes definir el color y el estilo de su línea. Expándela para cambiar las fechas, de nuevo dos días distintos, y ver **Inicio**,
 **Fin**, **Δ Abs**, **Δ %** y **Δ%/año** para el par FX y para cada superposición en el mismo eje.
 
 **Δ%/año** es la tasa anual (CAGR), donde $d$ son los días naturales entre las dos fechas:

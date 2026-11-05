@@ -92,7 +92,7 @@ Ces chiffres relèvent de l'histoire générale des marchés, et non d'une mesur
     Une perte de 50 % nécessite un **gain de 100 %** pour être récupérée :
 
     $$
-    \text{Gain requis} = \frac{1}{1 + MDD} - 1
+    \text{Gain requis} = \frac{1}{1 + MDD} - 1 = \frac{-MDD}{1 + MDD}
     $$
 
     <div style="display: flex; justify-content: center;">
@@ -106,7 +106,11 @@ Ces chiffres relèvent de l'histoire générale des marchés, et non d'une mesur
 
     </div>
 
-Le tableau ci-dessus présente l'arithmétique générale de l'asymétrie, tabulée selon la profondeur de la perte **maximale**. Le chiffre que le système calcule applique cette même formule au repli **actuel** : il répond à la question de savoir quel gain est nécessaire pour revenir au sommet *depuis la position actuelle du portefeuille*, ce qui est la seule version de la question sur laquelle on peut agir. Les deux lectures ne coïncident que lorsque le portefeuille se trouve à son point le plus bas historique — voir [Repli actuel](current-drawdown.md).
+    Une perte totale n'a aucun gain de récupération fini : à $MDD = -100\%$ le dénominateur $1 + MDD$ est nul, et aucun gain ne ramène une valeur tombée à zéro.
+
+Le tableau ci-dessus présente l'arithmétique générale de l'asymétrie, tabulée selon la profondeur de la perte **maximale**, et le résultat du repli porte ce chiffre pour la pire chute elle-même. À côté de sa profondeur, il publie le **gain du point bas au sommet**, $-MDD / (1 + MDD)$ : le gain nécessaire pour remonter du pire point bas jusqu'au sommet qui le précède — $+33,3\%$ pour passer de 90 à 120 dans l'exemple ci-dessus. Ce chiffre est fourni pour un épisode ouvert comme pour un épisode récupéré, car il décrit la profondeur de la chute, et non si elle a été remontée. Il est nul lorsqu'il n'y a eu aucun repli ; une perte totale le laisse sans valeur, et le résultat porte un avertissement qui en explique la raison.
+
+La même formule, calculée par une seule fonction partagée par les deux chiffres, s'applique aussi au repli **actuel** : elle répond alors à la question de savoir quel gain est nécessaire pour revenir au sommet *depuis la position actuelle du portefeuille*, ce qui est la seule version de la question sur laquelle on peut encore agir. Les deux lectures ne coïncident que lorsque le portefeuille se trouve à son point le plus bas historique — voir [Repli actuel](current-drawdown.md#what-it-takes-to-get-back).
 
 ---
 

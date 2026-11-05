@@ -9,9 +9,8 @@ to work correctly. This hook rewrites them using site_url at build time.
 import re
 from urllib.parse import urljoin
 
-
 _ALTERNATE_LINK = re.compile(
-    r'<link\b([^>]*\brel="alternate"[^>]*\bhreflang="[^"]*"[^>]*)/?>', 
+    r'<link\b([^>]*\brel="alternate"[^>]*\bhreflang="[^"]*"[^>]*)/?>',
     re.IGNORECASE,
 )
 _HREF_ATTR = re.compile(r'\bhref="([^"]*)"')

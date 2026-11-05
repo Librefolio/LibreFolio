@@ -41,7 +41,10 @@ Il pannello si apre su una scelta pronta all'uso: cambia solo ciò che ti serve.
 
 Sotto **Tipo di esportazione**:
 
-- **Esporta dati** copia solo i fatti: conserva un'istantanea, oppure fai la tua domanda.
+- **Esporta dati** copia solo i fatti, da conservare come istantanea o per fare la tua domanda.
+  Se li incolli da soli, l'AI si limita a confermare di averli ricevuti, nella lingua della tua
+  interfaccia, magari elencando gli argomenti principali; se nello stesso messaggio fai una
+  domanda, risponde a quella.
 - **Richiedi analisi** aggiunge una domanda mirata, regole per verificare i dati e la
   struttura della risposta attesa.
 
@@ -85,15 +88,24 @@ LibreFolio ricorda le tue ultime scelte su ogni pagina per alcuni minuti; la dis
 
 Copi testo semplice: una breve intestazione (cosa è stato esportato, la data, il periodo, la valuta e il livello
 di dettaglio) e i tuoi dati in tabelle compatte. **Richiedi analisi** aggiunge la domanda e la struttura della
-risposta attesa attorno ad essi.
+risposta attesa attorno ad essi. Ogni esportazione contiene le
+[note legali](../settings/about.md#legal-notice) di LibreFolio verso la fine, nella lingua della tua
+interfaccia e senza i relativi link; subito dopo c'è solo una breve istruzione per l'AI: con
+**Esporta dati**, come rispondere; con **Richiedi analisi**, la riga che le chiede di rispondere
+nella tua lingua.
 
 1. Apri una nuova chat in un assistente AI di cui ti fidi per i dati finanziari.
-2. Incolla il testo e invialo. Con **Richiedi analisi**, la domanda è già inclusa.
+2. Incolla il testo e invialo. Con **Richiedi analisi**, la domanda è già inclusa; con
+   **Esporta dati**, aggiungi la tua domanda nello stesso messaggio, oppure invia i dati da soli e
+   fai la domanda quando l'AI conferma di averli ricevuti.
 3. Rispondi alle domande dell'AI: all'AI viene detto di chiedere solo ciò che cambia il risultato (un budget, un
    obiettivo, la tua situazione fiscale) e di non indovinarlo mai.
 
 Da sapere:
 
+- Entrambi i tipi di esportazione dicono all'AI di non ripetere i numeri che hai già visto in
+  LibreFolio, ma di usarli per rispondere solo alla domanda posta. Quando i tuoi dati non bastano,
+  le viene chiesto di cercare anche sul web le ultime notizie e di dire quali conclusioni si basano su di esse.
 - Con **Richiedi analisi**, all'AI viene chiesto di rispondere nella lingua dell'interfaccia di LibreFolio e
   di tenere i tuoi dati separati dalla sua interpretazione.
 - Le analisi **Performance e fattori di mercato** richiedono un assistente che possa cercare sul web;

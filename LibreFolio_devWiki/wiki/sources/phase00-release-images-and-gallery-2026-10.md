@@ -22,7 +22,7 @@ related:
 
 Folder 27 holds four plans of workstream M, written from 2026-10-06 to 10-12. This page covers the first three; the
 fourth, the 1.2 translation round, has its own page ([[sources/phase00-translation-round12-2026-10]]). They start
-from the cloud sizing study, which found two release blockers in the published images, and end with a release
+from a sizing study, which found two release blockers in the published images, and end with a release
 pipeline whose gallery is a gate and whose screenshots come from real data, offline.
 
 | File | Dates | What it adds |

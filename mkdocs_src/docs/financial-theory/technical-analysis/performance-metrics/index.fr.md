@@ -25,7 +25,7 @@ Comptabilité agrégée basée sur le PRU pour l'ensemble du portefeuille (ou to
 
 | Métrique / Concept | Description |
 |------------------|-------------|
-| **[Vue d'ensemble du moteur de portefeuille](portfolio-engine/index.md)** | Modèle mathématique complet : résolveur de prix unifié, PRU, agrégation, modèle à 3 pools, contribution, architecture pre-frame/frame. |
+| **[Vue d'ensemble du moteur de portefeuille](portfolio-engine/index.md)** | Modèle mathématique complet : résolveur de prix unifié, PRU, agrégation, modèle à 3 pools, contribution, un seul rejeu quotidien. |
 | **[Résolution des prix](portfolio-engine/price-resolution.md)** | Niveaux du résolveur unifié : MARKET → TRADE_AVG → CARRIED → MISSING, avec valorisations natives et FX par date. |
 | **[Valeur nette d'inventaire (NAV)](portfolio-engine/nav.md)** | Valorisation totale au prix du marché du portefeuille (actifs + liquidités + en transit), à l'aide du résolveur unifié. |
 | **[Valeur comptable](portfolio-engine/book-value.md)** | Coût comptable historique des positions ouvertes (PRU × quantité) plus les liquidités. La différence avec la NAV = P&L non réalisé. |
@@ -34,7 +34,7 @@ Comptabilité agrégée basée sur le PRU pour l'ensemble du portefeuille (ou to
 | **[Effet de timing](portfolio-engine/timing-effect.md)** | Différence entre le MWRR cumulé et le TWRR cumulé — quantifie l'impact du timing des flux de trésorerie sur les rendements. |
 | **[ROI simple](portfolio-engine/roi.md)** | Rendement en pourcentage par rapport au capital net investi. Simple mais sujet à la dilution des flux de trésorerie. |
 | **[Rendement net annualisé](portfolio-engine/net-annualized-return.md)** | Définitions du CAGR net pour les positions, la contribution de période et les lots FIFO, avec une fenêtre minimale de 30 jours. |
-| **[Rendement sur coût](portfolio-engine/yield-on-cost.md)** | Dividendes/intérêts bruts non négatifs des 365 derniers jours par unité historique éligible, divisés par le prix de revient unitaire (PRU) de chaque couple actif/courtier. |
+| **[Rendement sur coût](portfolio-engine/yield-on-cost.md)** | Dividendes/intérêts bruts des 365 derniers jours, chaque montant avec son signe, par unité historique éligible, divisés par le prix de revient unitaire (PRU) de chaque couple actif/courtier. |
 | **[TWRR](portfolio-engine/twrr.md)** | Taux de rendement pondéré en fonction du temps. Performance pure des actifs/stratégie, neutralisant le timing des dépôts/retraits. |
 | **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Taux de rendement pondéré par les capitaux. Performance personnelle de l'investisseur tenant compte du timing des flux de trésorerie. Formes annualisée et cumulée. |
 
@@ -101,7 +101,7 @@ Pour vous aider à choisir la métrique adaptée à votre analyse, utilisez ce g
 
 ### 💸 9. [Rendement sur coût](portfolio-engine/yield-on-cost.md)
 * **Question Clé :** « Quel revenu brut de dividendes et d'intérêts chaque unité actuelle a-t-elle produit au cours des 365 derniers jours calendaires, par rapport à son prix de revient unitaire ? »
-* **Concept de Formule :** Additionne les revenus non négatifs, convertis au taux de la date de la transaction, par unité longue éligible de la veille, ajuste pour les divisions liées, puis divise par le prix de revient unitaire (PRU) à la date de fin du rapport.
+* **Concept de Formule :** Additionne les revenus signés, convertis au taux de la date de la transaction, par unité longue éligible de la veille, ajuste pour les divisions liées, puis divise par le prix de revient unitaire (PRU) à la date de fin du rapport.
 * **Meilleur Cas d'Usage :** Comparer la productivité de revenu enregistrée des positions ouvertes actif/courtier sans la confondre avec le rendement en dividendes du marché, le CAGR ou le rendement à l'échéance (YTM) d'une obligation.
 
 ---

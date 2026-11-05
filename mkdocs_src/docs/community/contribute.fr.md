@@ -88,14 +88,6 @@ Un moyen simple mais puissant d'aider : **mettez une étoile au dépôt** sur Gi
 
 ---
 
-## :globe_with_meridians: Et après — LibreFolio Cloud
-
-Pour ceux qui souhaitent utiliser LibreFolio mais n'ont pas le temps, les compétences ou l'infrastructure pour l'auto-héberger, nous prévoyons une **plateforme hébergée** — **LibreFolio Cloud**. Elle offrira toutes les mêmes fonctionnalités puissantes sans aucune configuration technique, ainsi que des **analyses basées sur l'IA** à venir pour vous aider à prendre des décisions d'investissement plus intelligentes.
-
-Pour soutenir l'infrastructure, la maintenance et le développement continu, la plateforme cloud sera proposée sous forme de **service d'abonnement** — le tarif sera déterminé ultérieurement.
-
----
-
 !!! tip "Thank you!"
 
     Toute forme de soutien — code, idées, rapports de bugs ou dons — est profondément appréciée. Ensemble, nous pouvons construire le meilleur tracker de portefeuille auto-hébergé ! :rocket:

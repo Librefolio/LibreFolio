@@ -109,7 +109,7 @@ El primer inicio compila la interfaz web y la documentación, por lo que tarda u
 
 ### 👤 6. Crear tu cuenta
 
-Abre LibreFolio en tu navegador y elige **Regístrate aquí** debajo del formulario de inicio de sesión: la primera cuenta registrada se convierte en administrador. Para gestionar usuarios desde la terminal, consulta [Herramientas de línea de comandos](cli_tools.md).
+Abre LibreFolio en tu navegador y elige **Regístrate aquí** debajo del formulario de inicio de sesión: la primera cuenta registrada se convierte en administrador. Para gestionar usuarios desde la terminal, consulta [Herramientas de línea de comandos](cli_tools.md). Para que LibreFolio cree el administrador por sí mismo en su primer inicio, consulta [El administrador inicial](configuration_accounts.md#initial-admin).
 
 ---
 

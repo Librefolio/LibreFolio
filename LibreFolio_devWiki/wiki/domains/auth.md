@@ -87,7 +87,7 @@ Release 1.3, workstream A:
 - A6: the Users tab, with deleting an account.
 - A7: the first administrator from environment variables, with a setup link.
 - A8: the login attempt limit, and the Security tab.
-- A9: the managed profile and the legal notices.
+- A9: the legal notices.
 
 ## Source files
 

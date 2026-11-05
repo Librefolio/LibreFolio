@@ -47,6 +47,8 @@ Un Trasferimento è salvato come due righe `TRANSFER`, una per broker, ciascuna 
 | **Scollega coppia** | Trasferimento → due Rettifiche indipendenti |
 | **Promuovi** (collega) | Due Rettifiche → Trasferimento |
 
+**Costo di carico in caso di scollegamento e promozione**: quando scolleghi la coppia, la Rettifica in entrata mantiene il suo costo di carico e quella in uscita non ne ha: non ha valore, quindi sul broker di partenza le sue unità escono solo dalla quantità e il loro costo conta come perdita realizzata (vedi [Rettifiche in uscita](adjustment.md#outgoing-adjustments)). Quando promuovi, l'eventuale costo di carico memorizzato sulla Rettifica in uscita viene scartato, perché il lato di partenza di un Trasferimento non ne porta.
+
 **Vincoli di promozione**: stesso asset, broker diversi, quantità opposte, e nessuna delle due righe collegata a un evento dell'asset (per esempio uno split), perché un trasferimento non può portare quel collegamento.
 
 ---

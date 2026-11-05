@@ -1401,7 +1401,15 @@ def populate_registry(registry: dict) -> None:
         prereq="Admin and regular test users created",
         tests="files-storage.spec.ts",
     )
-    add_test(cat, "chart-line-shape", front_chart_line_shape, name="Chart Line Shape Tests", desc="Line shape of every chart (segments, steps, smooth curve): the welcome page example, Settings Preferences, the asset detail chart settings", prereq="Login working, populated DB", tests="chart-line-shape.spec.ts")
+    add_test(
+        cat,
+        "chart-line-shape",
+        front_chart_line_shape,
+        name="Chart Line Shape Tests",
+        desc="Line shape of every chart (segments, steps, smooth curve): the welcome page example, Settings Preferences, the asset detail chart settings",
+        prereq="Login working, populated DB",
+        tests="chart-line-shape.spec.ts",
+    )
     add_test(
         cat,
         "chart-comparison-axis",

@@ -44,7 +44,7 @@ description: Libre de comprendre, libre d'agir. LibreFolio réunit tous vos inve
     <div class="premium-badges">
       <span class="badge badge-open-source">100 % OPEN-SOURCE</span>
       <span class="badge badge-expandable">HAUTEMENT EXTENSIBLE</span>
-      <span class="badge badge-self-hosted">AUTO-HÉBERGÉ OU CLOUD</span>
+      <span class="badge badge-self-hosted">AUTO-HÉBERGÉ</span>
     </div>
   </div>
 

@@ -195,7 +195,9 @@ Due azioni ti aiutano ad arrivarci:
 
 - **Copia la distribuzione attuale** legge quanto ciascuno di questi asset pesa
   oggi nei broker che spunti, contando solo questi asset e non la liquidità.
-  Con $H_i$ il valore di mercato dell'asset $i$ detenuto lì oggi:
+  Con $H_i$ il valore di mercato dell'asset $i$ detenuto lì oggi — ciò che ti è
+  costato, per un asset senza alcun prezzo, la cui **Valutazione** riporta
+  *valutato al costo · nessun prezzo*:
 
     $$
     w_i = \frac{H_i}{\sum_j H_j} \cdot 100\%

@@ -18,7 +18,7 @@ related:
 
 The 1.1.0 pipeline built two variants of the image, a **full** one that carries the documentation screenshots and
 a **light** one without them, and both pushed `latest`: the light one won only because it was pushed second
-([[concepts/ci-release-pipeline]]). On 2026-10-06 the cloud sizing study of workstream M found worse: the two
+([[concepts/ci-release-pipeline]]). On 2026-10-06 a sizing study of workstream M found worse: the two
 variants were identical, both with a debug frontend ([[problems/release-images-shipped-debug-frontend]]). Before
 fixing the images, M asked the developer which variant `latest` should be.
 

@@ -84,6 +84,8 @@ La prima esportazione legge l'intera cronologia; le successive partono dall'ulti
 
 Importa ciascun file nel proprio broker, nella stessa importazione o in momenti diversi: nella [Procedura guidata di importazione](how-to.md), trascina i file CSV e assegna ciascuno al suo broker. Non importare mai lo stesso file in due broker: le sue transazioni verrebbero contate due volte.
 
+Vengono importati solo gli ordini **eseguiti**. Gli ordini in sospeso, annullati, scaduti o rifiutati vengono lasciati fuori in silenzio, senza alcuna nota: un ordine eseguito più tardi arriva con l'esportazione successiva. Una riga con uno stato che LibreFolio non conosce è elencata in un avviso ambra, con un link per aprire una issue su GitHub.
+
 !!! note "💡 Un file nel broker sbagliato"
 
     Se un broker ha un **Plugin di Import Predefinito**, la procedura guidata controlla ogni file assegnato a quel broker subito dopo il caricamento. Quando quel plugin non può leggere un file, la procedura guidata ti dice perché, mostra quale broker può leggerlo e offre di spostare il file, mantenerlo o rimuoverlo.

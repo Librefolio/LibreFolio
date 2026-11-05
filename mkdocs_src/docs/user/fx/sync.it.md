@@ -46,6 +46,7 @@ attivato — secondo una pianificazione.
 ## ⚠️ Cosa cambia una sincronizzazione
 
 - Le date del periodo già memorizzate assumono il valore del provider; le date mancanti vengono aggiunte.
+  Prima di iniziare, la finestra avvisa quando il periodo contiene già dei tassi memorizzati e per quante delle sue coppie.
 - Le date al di fuori del periodo vengono lasciate invariate.
 - Se il primo percorso di una coppia non riesce, LibreFolio prova il successivo: vedi
   [Configurazione provider](detail/provider.md).

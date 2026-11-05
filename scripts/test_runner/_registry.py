@@ -31,7 +31,7 @@ _pop_db(TEST_REGISTRY)
 _pop_services(TEST_REGISTRY)
 _pop_utils(TEST_REGISTRY)
 _pop_schemas(TEST_REGISTRY)
-_pop_api(TEST_REGISTRY)          # adds "api" + "e2e"
+_pop_api(TEST_REGISTRY)  # adds "api" + "e2e"
 _pop_front_utility(TEST_REGISTRY)
 _pop_front_broker(TEST_REGISTRY)
 _pop_front_user(TEST_REGISTRY)

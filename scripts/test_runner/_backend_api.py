@@ -364,7 +364,9 @@ def api_backup_panel(verbose: bool = False, test_names: list = None) -> bool:
 def api_backup_list(verbose: bool = False, test_names: list = None) -> bool:
     """Test the list of the kept instance backups (GET /backup/instance/jobs) and the unchanged hosting panel routes, in an app of the test."""
     print_section("Backup API: the list of kept backups")
-    print_info("Testing: GET /backup/instance/jobs (admins only, origin, SHA-256, encrypted/sealed, newest first, never a running or failed job), the move of a finished backup into backups/<kept name>/, the id after the move, the panel routes unchanged, OpenAPI InstanceBackupList/InstanceBackupEntry")
+    print_info(
+        "Testing: GET /backup/instance/jobs (admins only, origin, SHA-256, encrypted/sealed, newest first, never a running or failed job), the move of a finished backup into backups/<kept name>/, the id after the move, the panel routes unchanged, OpenAPI InstanceBackupList/InstanceBackupEntry"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_list_api.py", test_names)
     return run_command(cmd, "Backup API list tests", verbose=verbose)
 
@@ -372,7 +374,9 @@ def api_backup_list(verbose: bool = False, test_names: list = None) -> bool:
 def api_backup_storage(verbose: bool = False, test_names: list = None) -> bool:
     """Test the storage bar's numbers (GET /backup/instance/storage) and the unchanged panel routes and status, in an app of the test."""
     print_section("Backup API: the storage")
-    print_info("Testing: GET /backup/instance/storage (admins only, the eleven fields, the parts of the planted files, the limit from the row and the variable, a failing measure is never a 500, a plain def outside the blocked-instance lists, OpenAPI InstanceStorage), no new panel route, GET /panel/status unchanged")
+    print_info(
+        "Testing: GET /backup/instance/storage (admins only, the eleven fields, the parts of the planted files, the limit from the row and the variable, a failing measure is never a 500, a plain def outside the blocked-instance lists, OpenAPI InstanceStorage), no new panel route, GET /panel/status unchanged"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_storage_api.py", test_names)
     return run_command(cmd, "Backup API storage tests", verbose=verbose)
 
@@ -921,7 +925,9 @@ def api_backup_users_limit_panel(verbose: bool = False, test_names: list[str] | 
 def api_backup_owner_channels(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the tests of the owner of a restore confirmed by the hosting panel or from the command line (B5-1j)."""
     print_section("Restore Owner, Panel and Command Line API")
-    print_info("Testing: the panel's confirmation on a managed instance picks the account holding the owner's address (nobody found: 202, outcome none), 409 owner_conflict with advice, 409 restore_stage_outdated, self-hosted unchanged; the real restore guard for a restore of the command line or panel (423 owner_assignment while pending, served once recorded, an error keeps refusing, reset allowed)")
+    print_info(
+        "Testing: the panel's confirmation on a managed instance picks the account holding the owner's address (nobody found: 202, outcome none), 409 owner_conflict with advice, 409 restore_stage_outdated, self-hosted unchanged; the real restore guard for a restore of the command line or panel (423 owner_assignment while pending, served once recorded, an error keeps refusing, reset allowed)"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_channels_api.py", test_names)
     return run_command(cmd, "Restore owner, panel and command line API tests", verbose=verbose)
 
@@ -929,7 +935,9 @@ def api_backup_owner_channels(verbose: bool = False, test_names: list[str] | Non
 def api_backup_owner_kept(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the tests of the hosting panel's confirmation that keeps the owner's password and sessions (B5-1l)."""
     print_section("Restore Owner Kept, Hosting Panel API")
-    print_info("Testing: the panel's confirmation on a managed instance where the backup marks exactly one account as its instance owner (an active administrator holding LIBREFOLIO_ADMIN_EMAIL): 202 with PanelRestoreStatus unchanged and restore.json recording that account and owner_outcome kept; the panel's status view says nothing of it; a second mark or an unmarked holder is B5-1j's pick without outcome; owner_conflict is still 409 first")
+    print_info(
+        "Testing: the panel's confirmation on a managed instance where the backup marks exactly one account as its instance owner (an active administrator holding LIBREFOLIO_ADMIN_EMAIL): 202 with PanelRestoreStatus unchanged and restore.json recording that account and owner_outcome kept; the panel's status view says nothing of it; a second mark or an unmarked holder is B5-1j's pick without outcome; owner_conflict is still 409 first"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_kept_api.py", test_names)
     return run_command(cmd, "Restore owner kept, hosting panel API tests", verbose=verbose)
 
@@ -953,7 +961,9 @@ def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None =
 def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the interrupted restore's API tests: refuse_when_restore_interrupted, its allowed set, instance/wake/panel status (B-33, H)."""
     print_section("Restore Interrupted API")
-    print_info("Testing: 423 instance_restore_interrupted for anyone outside the allowed set (the mode's), the third router dependency, restore_interrupted in /system/instance, wake-sync restore_interrupted, GET /panel/status restore unreadable (D7), the panel's backup start 409 backup_restore_interrupted")
+    print_info(
+        "Testing: 423 instance_restore_interrupted for anyone outside the allowed set (the mode's), the third router dependency, restore_interrupted in /system/instance, wake-sync restore_interrupted, GET /panel/status restore unreadable (D7), the panel's backup start 409 backup_restore_interrupted"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_restore_interrupted_api.py", test_names)
     return run_command(cmd, "Restore interrupted API tests", verbose=verbose)
 
@@ -961,7 +971,9 @@ def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None 
 def api_instance_key_check(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the instance key check's API tests: the panel's status, its backup start, wake-sync, the Security list, the way back (H5-7, H)."""
     print_section("Instance Key Check API")
-    print_info("Testing: GET /panel/status instance_key ok|mismatch (nine keys since H5-8), POST /backup/panel/jobs 409 backup_instance_key_mismatch after the credential, wake-sync instance_key_mismatch, the instance keeps serving, /security/checks platform.instance_key_check, the state read at every request, the way back on real files")
+    print_info(
+        "Testing: GET /panel/status instance_key ok|mismatch (nine keys since H5-8), POST /backup/panel/jobs 409 backup_instance_key_mismatch after the credential, wake-sync instance_key_mismatch, the instance keeps serving, /security/checks platform.instance_key_check, the state read at every request, the way back on real files"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_instance_key_check_api.py", test_names)
     return run_command(cmd, "Instance key check API tests", verbose=verbose)
 
@@ -1057,7 +1069,9 @@ def api_email_verification(verbose: bool = False, test_names: list[str] | None =
 def api_owner_email_change(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the API tests of the owner's email-change confirmation: POST /email/email-change/confirm, in-process."""
     print_section("Owner Email Change API Tests")
-    print_info("Testing POST /email/email-change/confirm (anonymous: 200 {username}, the address moved and verified, sessions ended, notice to the old address scheduled; 400 TOKEN_INVALID with the token's status; revoked when the variable changed again, the address was taken, the profile is not managed or the account is not the owner; 422)")
+    print_info(
+        "Testing POST /email/email-change/confirm (anonymous: 200 {username}, the address moved and verified, sessions ended, notice to the old address scheduled; 400 TOKEN_INVALID with the token's status; revoked when the variable changed again, the address was taken, the profile is not managed or the account is not the owner; 422)"
+    )
     print_info("In-process: the real auth and email routers on a private SQLite, profile and variables by monkeypatch; the lane's backend is never called")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_owner_email_change_api.py", test_names)
@@ -1249,7 +1263,14 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     # PURE: the handler runs in process with convert_bulk replaced by a double; no database, no server.
-    add_test(api, "fx-convert-sampling", api_fx_convert_sampling, name="FX Convert Sampling", desc="Z-29fx: max_points, resolution and sample_like on POST /fx/currencies/convert: the step from the fill's first day, the bucket results, samples with resolution and sample_bounds, request_index, sample_reference 422s, signals reduced and aligned (O1), the calendar rolling return in the FX domain, the day budget", isolation="pure")
+    add_test(
+        api,
+        "fx-convert-sampling",
+        api_fx_convert_sampling,
+        name="FX Convert Sampling",
+        desc="Z-29fx: max_points, resolution and sample_like on POST /fx/currencies/convert: the step from the fill's first day, the bucket results, samples with resolution and sample_bounds, request_index, sample_reference 422s, signals reduced and aligned (O1), the calendar rolling return in the FX domain, the day budget",
+        isolation="pure",
+    )
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch; X-R29 POST /assets/prices/stored-count (stored and manual rows of a range, 1 001 items 422, 401 without a session)")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
     add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of; X5-6: no 1900 floor")

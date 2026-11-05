@@ -58,8 +58,10 @@ Las fotos de perfil se abren con **Avatar**, los iconos de bróker con **Icono**
 
 ## ✅ Confirmar o cancelar
 
-- **Recortar y subir** guarda la imagen y la usa. En la página Archivos, **Recortar**, en cambio, la coloca en la lista de subida
-  (**Restaurar original** ↺ recupera la original), y **Subir** envía la lista.
+- **Recortar y subir** guarda la imagen y la usa. La imagen es **compartida**: todos los usuarios pueden verla,
+  como tu avatar o como el icono que elegiste. En la página Archivos, **Recortar**, en cambio, la coloca en la lista de subida
+  (**Restaurar original** ↺ recupera la original), y **Subir** envía la lista: esos
+  archivos son personales (consulta [Compartido o personal](../files/index.md#visibility)).
 - **Cancelar** o **✕** cierra la herramienta — tras preguntar, si tienes cambios sin guardar
   (**Descartar y cerrar**). Desde el selector de imágenes, vuelves al selector.
 

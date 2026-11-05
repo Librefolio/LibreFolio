@@ -1,12 +1,12 @@
 # 📥 Transactions du courtier
 
-L'onglet **Transactions** d'un courtier liste toutes ses transactions, de la plus récente à la plus ancienne. Il affiche toujours tout l'historique du courtier : la plage de dates dans la barre d'outils ne le filtre pas.
+L'onglet **Transactions** d'un courtier liste ses transactions, de la plus récente à la plus ancienne, pour la plage de dates choisie dans la barre d'outils. Pour voir tout l'historique, choisissez-y **Tout**.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Onglet Transactions du courtier">
 </div>
 
-Au-dessus de la liste, vous trouvez **Rapports téléversés**, **Voir dans les Transactions** et le sélecteur de colonnes. Les Propriétaires et les Éditeurs ont également accès à **Importer** et **Ajouter une transaction**.
+Au-dessus de la liste, vous trouvez **Rapports téléversés**, **Voir dans les Transactions** et le sélecteur de colonnes. Les Propriétaires et les Éditeurs ont également accès à **Importer**, **Ajouter une transaction** et, une fois des lignes cochées, à la barre pour les modifier, les cloner ou les supprimer. Un Lecteur voit le tableau, les rapports téléversés et **Voir dans les Transactions**.
 
 ---
 
@@ -23,7 +23,8 @@ Rien n'est enregistré avant **Enregistrer Tout** : jusque-là, vous pouvez ajou
 ## 🔎 Ouvrir, modifier ou supprimer des transactions
 
 - **Double-cliquez** sur une ligne pour l'ouvrir en lecture seule.
-- Pour modifier, cloner ou supprimer des lignes, cliquez sur **Voir dans les Transactions** : la page [Transactions](../transactions/index.md) s'ouvre, filtrée sur ce courtier et sur les filtres de colonnes que vous avez définis ici.
+- Les Propriétaires et les Éditeurs peuvent modifier, cloner ou supprimer des lignes ici : utilisez les actions d'une ligne, ou cochez des lignes et utilisez la barre au-dessus du tableau.
+- **Voir dans les Transactions** ouvre la page [Transactions](../transactions/index.md), filtrée sur ce courtier, sur la période de la barre d'outils et sur les filtres de colonnes que vous avez définis ici.
 
 ---
 

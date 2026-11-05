@@ -17,6 +17,8 @@ Le panneau **Signaux** trace des indicateurs techniques, des séries de comparai
 
 Les signaux que vous ajoutez sont conservés avec les [paramètres du graphique](../chart-settings.md) de cette paire.
 
+Dans le mode [Rendement glissant](chart.md#rolling-return) du graphique, le panneau propose uniquement les comparaisons **Paire FX**, chacune traçant son propre rendement glissant ; vos autres signaux restent enregistrés et reviennent avec **Prix**.
+
 ---
 
 ## 🧮 Indicateurs techniques — 9 pour le FX
@@ -41,10 +43,10 @@ Le menu déroulant **Indicateurs techniques** est une arborescence groupée par 
 
 ---
 
-## 💱 Comparaison de données
+## 💱 Comparaison de données {: #data-comparison }
 
 - 💱 **Paire FX** — une autre de vos paires, par ex. GBP/USD à côté d'EUR/USD. Dans la liste, 👑 marque la paire de cette page et 📌 une paire déjà utilisée par un autre signal.
-- ↔️ **Comparaison d'actif** — le prix d'un actif à côté du taux.
+- ↔️ **Comparaison d'actif** — le prix d'un actif à côté du taux, choisi dans le même panneau que la comparaison de risque (zone de recherche, filtres **Type** et **Devise**, benchmarks en premier). Un actif déjà utilisé par une autre comparaison porte un signe d'avertissement mais peut tout de même être choisi.
 
 Une carte de comparaison comporte des boutons pour synchroniser la paire ou l'actif comparé et pour ouvrir sa page. En vue %, les deux courbes démarrent à 0 %, ce qui permet de comparer directement leurs évolutions.
 

@@ -82,7 +82,7 @@ La volatilidad implícita mira hacia el futuro, pero solo está disponible para 
 
 ## 🔄 Volatilidad de ventana móvil {: #rolling-window-volatility }
 
-En lugar de calcular un único número de volatilidad para todo el periodo, la **volatilidad de ventana móvil** calcula $\sigma$ en una ventana deslizante (p. ej., 30 días), produciendo una serie temporal que muestra cómo evoluciona la volatilidad:
+En lugar de calcular un único número de volatilidad para todo el periodo, la **volatilidad de ventana móvil** calcula $\sigma$ en una ventana deslizante de $w$ observaciones de rendimiento — una por cada día de cotización con rendimiento, p. ej., $w = 30$ — produciendo una serie temporal que muestra cómo evoluciona la volatilidad:
 
 $$
 \sigma_t^{(w)} = \text{StdDev}(R_{t-w+1}, R_{t-w+2}, \ldots, R_t)

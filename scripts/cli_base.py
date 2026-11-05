@@ -30,16 +30,18 @@ from scripts.i18n_catalog import generated_catalogs, plugin_i18n_dirs
 # Terminal Colors
 # =============================================================================
 
+
 class Colors:
     """ANSI color codes for terminal output."""
-    GREEN = '\033[0;32m'
-    YELLOW = '\033[1;33m'
-    RED = '\033[0;31m'
-    BLUE = '\033[0;34m'
-    CYAN = '\033[0;36m'
-    MAGENTA = '\033[0;35m'
-    BOLD = '\033[1m'
-    NC = '\033[0m'  # No Color
+
+    GREEN = "\033[0;32m"
+    YELLOW = "\033[1;33m"
+    RED = "\033[0;31m"
+    BLUE = "\033[0;34m"
+    CYAN = "\033[0;36m"
+    MAGENTA = "\033[0;35m"
+    BOLD = "\033[1m"
+    NC = "\033[0m"  # No Color
 
     @classmethod
     def success(cls, msg: str) -> str:
@@ -66,6 +68,7 @@ class Colors:
 # Project Paths
 # =============================================================================
 
+
 def get_project_root() -> Path:
     """Get the project root directory."""
     # This file is in scripts/, so parent is project root
@@ -80,6 +83,7 @@ def get_scripts_dir() -> Path:
 # =============================================================================
 # Port Configuration
 # =============================================================================
+
 
 def get_server_host() -> str:
     """Get server host from environment variable (default: 0.0.0.0)."""
@@ -118,11 +122,7 @@ def _project_dotenv_values() -> dict[str, str]:
     try:
         from dotenv import dotenv_values  # noqa: PLC0415 — optional outside the managed environment
 
-        return {
-            key: str(value)
-            for key, value in dotenv_values(env_file).items()
-            if value is not None
-        }
+        return {key: str(value) for key, value in dotenv_values(env_file).items() if value is not None}
     except ImportError:
         pass
 
@@ -245,9 +245,7 @@ def _validated_port(value: int | str, option: str) -> int:
     try:
         port = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{option} must be an integer between 1 and 65535"
-        ) from exc
+        raise ValueError(f"{option} must be an integer between 1 and 65535") from exc
     if not 1 <= port <= 65535:
         raise ValueError(f"{option} must be between 1 and 65535")
     return port
@@ -312,9 +310,7 @@ def configure_test_runtime(
         "PORT",
     )
     if resolved_port == production_port:
-        raise ValueError(
-            "Test port must not be the production server port"
-        )
+        raise ValueError("Test port must not be the production server port")
 
     raw_data_dir = data_dir
     if raw_data_dir is None:
@@ -425,10 +421,11 @@ def path_to_url(db_path: str) -> str:
 # Server Utilities
 # =============================================================================
 
+
 def is_port_in_use(port: int) -> bool:
     """Check if a port is in use."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
+        return s.connect_ex(("localhost", port)) == 0
 
 
 def check_server_running(action: str = "this operation", strict: bool = True, port: int | None = None) -> bool:
@@ -468,12 +465,13 @@ def check_server_running(action: str = "this operation", strict: bool = True, po
         print(Colors.warning(f"   {action} while server is active may cause issues."))
         print()
         response = input("Continue anyway? (y/N) ").strip().lower()
-        return response == 'y'
+        return response == "y"
 
 
 # =============================================================================
 # Command Execution
 # =============================================================================
+
 
 def run_command(cmd: list, cwd: Optional[Path] = None, env: Optional[dict] = None) -> Tuple[int, str, str]:
     """
@@ -492,13 +490,7 @@ def run_command(cmd: list, cwd: Optional[Path] = None, env: Optional[dict] = Non
         full_env.update(env)
 
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=cwd or get_project_root(),
-            env=full_env,
-            capture_output=True,
-            text=True
-            )
+        result = subprocess.run(cmd, cwd=cwd or get_project_root(), env=full_env, capture_output=True, text=True)
         return result.returncode, result.stdout, result.stderr
     except Exception as e:
         return 1, "", str(e)
@@ -521,11 +513,7 @@ def run_command_live(cmd: list, cwd: Optional[Path] = None, env: Optional[dict] 
         full_env.update(env)
 
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=cwd or get_project_root(),
-            env=full_env
-            )
+        result = subprocess.run(cmd, cwd=cwd or get_project_root(), env=full_env)
         return result.returncode
     except KeyboardInterrupt:
         print("\n" + Colors.warning("Interrupted"))
@@ -628,11 +616,7 @@ def _supervise_server(process: subprocess.Popen, grace_seconds: Optional[float],
 
 def _is_docker() -> bool:
     """Detect if running inside a Docker container."""
-    return (
-        os.path.exists("/.dockerenv")
-        or os.environ.get("container") == "docker"
-        or (os.path.exists("/proc/1/cgroup") and "docker" in open("/proc/1/cgroup").read())
-    )
+    return os.path.exists("/.dockerenv") or os.environ.get("container") == "docker" or (os.path.exists("/proc/1/cgroup") and "docker" in open("/proc/1/cgroup").read())
 
 
 def pipenv_prefix() -> list:
@@ -654,6 +638,7 @@ def run_pipenv(args: list, cwd: Optional[Path] = None, env: Optional[dict] = Non
 # =============================================================================
 # Printing Utilities
 # =============================================================================
+
 
 def print_header(title: str):
     """Print a formatted header."""
@@ -696,8 +681,11 @@ def print_info(msg: str):
 # a plain bundle on top of the instrumented one, and the run then reported no JS
 # coverage at all while every test passed.
 _BUILD_GENERATED_SOURCES = {
-    "generated.ts", "openapi.json", "tool-contracts.openapi.json",
-    "generated-tools.ts", "tool-contract-map.generated.ts",
+    "generated.ts",
+    "openapi.json",
+    "tool-contracts.openapi.json",
+    "generated-tools.ts",
+    "tool-contract-map.generated.ts",
 }
 
 
@@ -895,9 +883,5 @@ def auto_build_frontend(debug: bool = False, build_func=None, force: bool = Fals
     else:
         # Direct npm build
         project_root = get_project_root()
-        result = subprocess.run(
-            ["npm", "run", "build"],
-            cwd=project_root / "frontend",
-            capture_output=False
-        )
+        result = subprocess.run(["npm", "run", "build"], cwd=project_root / "frontend", capture_output=False)
         return result.returncode

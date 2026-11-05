@@ -29,6 +29,10 @@ article table:first-of-type td:nth-child(-n + 2) {
     americano scrive `14,788.01` e `Oct 12, 2026`, e un browser in un'altra lingua riceve il formato britannico,
     `14,788.01` e `12 Oct 2026`.
 
+!!! tip "Forma delle linee dei grafici"
+
+    **Preferenze** contiene anche la **Forma delle linee** di ogni grafico — segmenti, gradini o curva morbida. Viene conservata in questo browser e si applica appena la scegli, senza **Salva**. Come appaiono le forme: **[Grafici della Dashboard](../dashboard/charts.md#line-shape)**.
+
 Scegli una categoria nella barra laterale — su un telefono, nel menu **Categoria** — per mostrare solo le sue impostazioni;
 **Tutte le Impostazioni** mostra tutto.
 
@@ -64,6 +68,7 @@ la raggiungi.
 | **Broker** | Panoramica broker, Guida broker, Guida dettagli broker |
 | **FX** | Panoramica FX, Guida FX, Guida dettagli coppia FX |
 | **Asset** | Panoramica asset, Guida asset, Guida dettagli asset |
+| **Strumenti** | Pagina Strumenti |
 
 ### 🔁 Ripetere una guida
 

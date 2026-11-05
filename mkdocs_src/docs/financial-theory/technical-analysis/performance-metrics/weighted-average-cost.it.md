@@ -159,7 +159,7 @@ La valuta obiettivo dipende da dove viene mostrato il PMC:
 |-------|---------------------|
 | Dashboard, tabella Posizioni, vendite realizzate, Rendimento sul costo | La valuta di visualizzazione (report) |
 | Righe PMC dell'analisi lotti | La valuta dell'analisi |
-| Anteprima transazione, costo di carico automatico, serie PMC (`POST /portfolio/wac`) | La valuta scelta nell'anteprima, altrimenti la valuta dell'**ultima acquisizione** |
+| Anteprima transazione, costo di carico automatico | La valuta scelta nell'anteprima, altrimenti la valuta dell'**ultima acquisizione** |
 | Pianificatore PAC | La valuta del pianificatore |
 
 La valuta dell'ultima acquisizione è la valuta pagata dalla transazione più recente che ha aggiunto quantità — una regola deterministica; in caso di parità, vince la prima registrata. Uno split, o un'acquisizione di costo sconosciuto, fa fallback sulla valuta dell'asset stesso.
@@ -184,14 +184,14 @@ La valuta dell'ultima acquisizione è la valuta pagata dalla transazione più re
 ## 🎯 Dove viene usato il PMC in LibreFolio
 
 - **Costo di carico**: $\mathrm{CB}(a,b,t) = q(a,b,t) \times \mathrm{PMC}^{T}(a,b,t)$, storico, senza conversione a $t$
-- **P&L realizzato su SELL**: $\text{realizzato} = P_{\text{vendita}} - q_{\text{vendute}} \times \text{PMC}^{T}_{\text{pre-vendita}}$, con i proventi $P_{\text{vendita}}$ convertiti alla data di vendita e le unità vendute che escono al loro costo storico
+- **P&L realizzato su SELL**: $\text{realizzato} = P_{\text{vendita}} - q_{\text{vendute}} \times \text{PMC}^{T}_{\text{pre-vendita}}$, con i proventi $P_{\text{vendita}}$ convertiti alla data di vendita e le unità vendute che escono al loro costo storico. Una rettifica in uscita realizza allo stesso modo con proventi pari a zero, poiché non ha valore: meno il costo storico delle sue unità (vedi [Rettifiche in uscita](../../instruments/transaction-types/adjustment.md#outgoing-adjustments))
 - **Scomposizione del pool di cassa**: SELL restituisce $C = q_{\text{vendute}} \times \text{PMC}^{T}_{\text{pre-vendita}}$ al Pool di capitale
 - **Rendimento sul costo**: il prezzo medio di acquisto del denominatore del [Rendimento sul costo](portfolio-engine/yield-on-cost.md)
 - **Modulo di trasferimento**: suggerisce automaticamente il cost_basis_override del lato ricevente dal PMC della posizione mittente
 
-!!! warning "Il PMC non viene mai usato per la valutazione degli asset"
+!!! warning "Il PMC non è mai un prezzo"
 
-    Il PMC è un costrutto contabile per il costo di carico. Il valore di mercato utilizza i livelli unificati del resolver: `MARKET → TRADE_AVG → CARRIED → MISSING`, esposti alle righe di portafoglio come `MARKET_PRICE`, `LAST_TRADE_PRICE` o `MISSING`. Vedi [Risoluzione del prezzo](portfolio-engine/price-resolution.md).
+    Il PMC è un costrutto contabile per il costo di carico. Il valore di mercato utilizza i livelli unificati del resolver: `MARKET → TRADE_AVG → CARRIED → MISSING`, esposti alle righe di portafoglio come `MARKET_PRICE` o `LAST_TRADE_PRICE`. Solo una posizione il cui asset non ha alcun prezzo di riferimento — nessuna quotazione, nessun BUY o SELL, nessuna [stima del costo di trasferimento](portfolio-engine/price-resolution.md#transfer-cost-estimate) — viene contata al suo costo di carico $q \times \text{PMC}^{T}$, come stima dichiarata senza prezzo e senza P&L latente (`ESTIMATED_AT_COST`), oppure lasciata senza valutazione (`MISSING`) quando quel costo è incompleto. Vedi [Risoluzione del prezzo](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implementazione: ambito a livello di posizione
 

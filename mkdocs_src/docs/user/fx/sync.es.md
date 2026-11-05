@@ -44,6 +44,7 @@ cuando añades un par FX, cada vez que lo solicites y —si tu administrador lo 
 ## ⚠️ Qué cambia una sincronización
 
 - Las fechas del periodo que ya están almacenadas toman el valor del proveedor; las fechas que faltan se añaden.
+  Antes de empezar, la ventana te avisa cuando el periodo ya contiene tipos almacenados, y de cuántos de sus pares FX.
 - Las fechas fuera del periodo no se modifican.
 - Si la primera ruta de un par FX falla, LibreFolio prueba la siguiente: consulta
   [Configuración del proveedor](detail/provider.md).

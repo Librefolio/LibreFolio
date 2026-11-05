@@ -529,6 +529,7 @@ def test_a_symlink_to_a_folder_is_removed_as_a_link(data_dir: Path, tmp_path: Pa
 # C6-6 (C-51) and W6-10 (U-B9): the mock data write the shapes the models read
 # ---------------------------------------------------------------------------
 
+
 def _mock_classification_params() -> dict[str, dict]:
     """``display_name`` -> the dict the mock asset passes to ``json.dumps`` (read as source, never run)."""
     tree = ast.parse(Path(populate_mock_data.__file__).read_text(encoding="utf-8"))

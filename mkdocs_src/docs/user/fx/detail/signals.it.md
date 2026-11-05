@@ -18,6 +18,8 @@ Il pannello **Segnali** disegna indicatori tecnici, serie di confronto e curve d
 
 I segnali che aggiungi vengono mantenuti con le [impostazioni grafico](../chart-settings.md) di questa coppia.
 
+Nella modalità [Rendimento mobile](chart.md#rolling-return) del grafico il pannello offre solo i confronti **Coppia FX**, ciascuno dei quali disegna il proprio rendimento mobile; gli altri tuoi segnali restano salvati e ricompaiono con **Prezzi**.
+
 ---
 
 ## 🧮 Indicatori tecnici — 9 per FX
@@ -46,11 +48,11 @@ una casella di ricerca in alto: digita per filtrare tutte le famiglie contempora
 
 ---
 
-## 💱 Confronto dati
+## 💱 Confronto dati {: #data-comparison }
 
 - 💱 **Coppia FX** — un'altra delle tue coppie, ad es. GBP/USD accanto a EUR/USD. Nell'elenco, 👑 contrassegna la
   coppia di questa pagina e 📌 una coppia già usata da un altro segnale.
-- ↔️ **Confronto asset** — il prezzo di un asset accanto al tasso.
+- ↔️ **Confronto asset** — il prezzo di un asset accanto al tasso, scelto nello stesso pannello del confronto di rischio (casella di ricerca, filtri **Tipo** e **Valuta**, benchmark per primi). Uno già usato da un altro confronto riporta un segno di avviso ma può comunque essere scelto.
 
 Una scheda di confronto ha pulsanti per sincronizzare la coppia o l'asset confrontato e per aprire la sua pagina. Nella vista in %
 entrambe le curve partono da 0 %, quindi i loro movimenti sono direttamente confrontabili.

@@ -53,7 +53,8 @@ LibreFolio reproduce cada transacción de un activo **en orden cronológico**, c
 |--------|--------|
 | COMPRA | Primero cierra cualquier lote SHORT abierto en ese bróker; cualquier remanente abre un nuevo lote LONG |
 | VENTA | Cierra lotes LONG abiertos en orden FIFO en ese bróker; cualquier remanente abre un nuevo lote SHORT solo donde el bróker permita ventas en corto |
-| Ajuste de entrada/salida | Misma lógica de emparejamiento que COMPRA/VENTA, a costo cero |
+| Ajuste de entrada | Misma lógica de emparejamiento que COMPRA, al coste base por unidad del ajuste (cero si no lo tiene): cualquier remanente abre un nuevo lote LONG a ese coste — en la moneda del coste base cuando la tiene |
+| Ajuste de salida | Cierra lotes LONG abiertos en orden FIFO en ese bróker, como una VENTA, a cero: no tiene valor, así que cada lote realiza menos el coste de las unidades que cede; nunca abre un lote SHORT |
 | DESDOBLAMIENTO | Reescala la cantidad y el costo unitario de cada lote abierto del activo |
 | Transferencia (salida/llegada) | Mueve la custodia de la cantidad abierta de un lote de un bróker a otro |
 
@@ -81,7 +82,11 @@ $$
 \text{GananciaPérdidaRealizada}_{\text{SHORT}} = \text{CantidadEmparejada} \times (\text{CostoUnitarioDelLote} - \text{PrecioCierre})
 $$
 
+$\text{PrecioCierre}$ es el precio unitario de la operación en una VENTA, o en una COMPRA que cierra un lote SHORT. Un ajuste no negocia nada: uno de entrada se cierra a su **anulación del coste base** por unidad, o a **cero** si no la tiene. Un ajuste de salida no tiene valor: siempre se cierra a **cero**, de modo que cada lote que consume realiza menos el coste de esas unidades, sea cual sea el coste base que tenga la fila (ver [Ajustes de salida](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)).
+
 Esta es la razón por la que dos lotes del mismo activo, comprados en diferentes momentos y precios, pueden mostrar resultados realizados muy diferentes aunque luego se emparejen el mismo día al mismo precio — consulta el ejemplo práctico en [Análisis de Lotes FIFO](fifo-lot-analysis.md).
+
+Ambas fórmulas toman los dos precios en la moneda propia del lote. En la moneda objetivo del análisis, cada pata del cierre se convierte en su propia fecha — el coste del lote en la fecha de apertura, el precio de cierre, en su propia moneda, en la fecha de cierre — y la ganancia o pérdida realizada es su diferencia (ver [Lotes en otra moneda](fifo-lot-analysis.md#lots-in-another-currency)).
 
 ---
 

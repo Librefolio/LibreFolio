@@ -131,6 +131,8 @@ Basculez entre Portefeuille et Période, puis comparez les données en vue table
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portefeuille / Carte" alt="Positions — Carte du portefeuille">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Période / Tableau" alt="Positions — Tableau de la période">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Période / Carte" alt="Positions — Carte de la période">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-yoc" data-title="💰 Rendement sur coût" alt="Positions — Rendement sur coût">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-fx-on-cash" data-title="💱 Effet de change sur les liquidités" alt="Positions — Effet de change sur les liquidités">
 </div>
 
 ### 💸 Onglet Transactions
@@ -185,6 +187,14 @@ Le tableau de bord avec le mode confidentialité activé — le bouton en forme 
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Mode confidentialité">
+</div>
+
+### 🤖 Export IA
+
+Choisissez ce que vous exportez pour votre assistant IA : la catégorie, le jeu de données, le niveau de détail, la période et vos notes.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="ai-export" data-name="dialog-dataset" alt="Export IA">
 </div>
 
 ---
@@ -325,6 +335,30 @@ Les administrateurs vérifient l'e-mail de l'instance : s'il peut partir, combie
     <img class="gallery-img" data-category="settings" data-name="email" alt="E-mail">
 </div>
 
+### 🚨 Contrôles de sécurité (administrateur)
+
+Les administrateurs voient ce qui demande leur attention et comment agir ; les contrôles réussis restent repliés en bas, et un badge sur Administration compte les erreurs et les avertissements.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="security" alt="Contrôles de sécurité (administrateur)">
+</div>
+
+### ↩️ Restauration annulée (administrateur)
+
+Si une restauration échoue, LibreFolio remet les données comme elles étaient et en explique la raison.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-rolled-back" alt="Restauration annulée (administrateur)">
+</div>
+
+### 🧾 Résultat de la dernière restauration (administrateur)
+
+La carte de restauration conserve le résultat de la dernière tentative.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-last-result" alt="Résultat de la dernière restauration (administrateur)">
+</div>
+
 ### 🕐 Planificateur de données de marché — Configuration
 
 Configurez le démon de synchronisation automatique des données de marché : fréquence de mise à jour, heures de synchronisation de l'historique et jours actifs.
@@ -389,6 +423,14 @@ La recherche descend dans les sections repliées et les puces de résultat vous 
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Recherche dans le journal des modifications">
 </div>
 
+### 🆕 Nouveautés
+
+Après une mise à jour, une fenêtre montre ce qui a changé depuis votre dernière version.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="whats-new-modal" alt="Nouveautés">
+</div>
+
 ### 🧩 Diagnostics des plugins
 
 L'état de chargement des plugins par registre : ce qui n'a pas pu être chargé et pourquoi.
@@ -439,6 +481,22 @@ Parcourez les fichiers visuellement avec des aperçus d'images en disposition de
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vue grille des fichiers statiques">
+</div>
+
+### 💾 Sauvegardes (administrateur)
+
+Les administrateurs voient les sauvegardes conservées et règlent leur nettoyage automatique.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Sauvegardes (administrateur)">
+</div>
+
+### 📊 Espace occupé (administrateur)
+
+Une barre montre comment l'espace se répartit entre la base de données, les fichiers envoyés, les rapports et les sauvegardes, par rapport à la limite fixée.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="storage-bar" alt="Espace occupé (administrateur)">
 </div>
 
 ### 📋 Rapports de courtier (BRIM)
@@ -542,6 +600,7 @@ Basculez entre Portefeuille et Période, puis comparez les données en vue table
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portefeuille / Carte" alt="Positions du courtier — Carte du portefeuille">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Période / Tableau" alt="Positions du courtier — Tableau de la période">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Période / Carte" alt="Positions du courtier — Carte de la période">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-yoc" data-title="💰 Rendement sur coût" alt="Positions du courtier — Rendement sur coût">
 </div>
 
 ### ℹ️ Informations sur le courtier
@@ -728,6 +787,14 @@ Créez un nouvel actif avec son nom, son type, sa devise, ses identifiants, son 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-8" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Création manuelle" alt="Modale de création d'actif">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Depuis l'assistant d'importation (pré-rempli)" alt="Créer un actif depuis l'assistant d'importation">
+</div>
+
+### ⭐ Rechercher en Ligne — Sources premium
+
+Les résultats des sources premium apparaissent en premier, dans une section à part.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Rechercher en Ligne — Sources premium">
 </div>
 
 ### 🧬 Sélecteur de type d'actif

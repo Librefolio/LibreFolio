@@ -32,5 +32,6 @@ LibreFolio lit les transactions d'une **Requête Flex d'activité** exportée au
 - **Commissions**, chacune comme des **Frais** distincts sur le même actif et à la même date, dans
   `IBCommissionCurrency` (ou la devise de la transaction lorsque cette colonne est vide).
 - **Non importés** : dividendes, intérêts, impôts, dépôts et retraits, conversions de devise
-  (les lignes sans ISIN sont ignorées avec un avertissement) et opérations sociétaires. Ajoutez-les manuellement, ou
+  (les opérations de change, qui n'ont pas d'ISIN, sont listées dans un avertissement ambre avec un lien pour ouvrir une
+  issue sur GitHub) et opérations sociétaires. Ajoutez-les manuellement, ou
   avec un fichier [CSV générique](generic-csv.md).

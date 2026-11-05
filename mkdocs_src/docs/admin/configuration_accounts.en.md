@@ -166,9 +166,6 @@ counted in the number on the tab, until the limit is back on (see «Security» i
 Remove the variable, or set it to `on`, to turn the limit back on at the next start. Any other
 value stops the server at startup: see [Accounts and Sign-ups](#accounts).
 
-## 🥇 The Order of the Price Providers in the Search {: #provider-order }
-
-When you create an asset, the search asks every price provider at once and lists the results
 ### 👑 The Initial Administrator {: #initial-admin }
 
 LibreFolio can create the administrator of a new instance by itself, at its first start, for the
@@ -244,6 +241,9 @@ names the variable, never the token. Fix the value, then start again.
 
 ---
 
+## 🥇 The Order of the Price Providers in the Search {: #provider-order }
+
+When you create an asset, the search asks every price provider at once and lists the results
 provider by provider. Each provider declares where it stands: its tier, **premium** for a source an
 instance vouches for, such as licensed data, or **community**, the default; and its priority inside
 the tier. When at least one premium provider is available, its results come first. None of the

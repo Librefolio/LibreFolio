@@ -38,7 +38,10 @@ Le panneau s'ouvre sur un choix prêt à l'emploi : modifiez uniquement ce dont 
 
 Sous **Type d'export** :
 
-- **Exporter les données** copie uniquement les faits : conservez un instantané ou posez votre propre question.
+- **Exporter les données** copie uniquement les faits, à conserver comme instantané ou pour poser votre propre question.
+  Collés seuls, l'IA se contente de confirmer qu'elle les a reçus, dans la langue de votre interface,
+  en énumérant éventuellement les grands thèmes ; si vous posez une question dans le même message,
+  elle y répond.
 - **Demander une analyse** ajoute une question ciblée, des règles pour vérifier les chiffres et la structure de la réponse attendue.
 
 ### 🗂️ Étape 2 : Choisir un jeu de données ou une analyse
@@ -73,14 +76,24 @@ LibreFolio se souvient de vos derniers choix sur chaque page pendant quelques mi
 
 ## 🤖 Collez-le dans votre assistant IA
 
-Vous copiez du texte brut : un court en-tête (ce qui a été exporté, la date, la période, la devise et le niveau de détail) et vos données dans des tableaux compacts. **Demander une analyse** ajoute la question et la structure de réponse attendue autour de celles-ci.
+Vous copiez du texte brut : un court en-tête (ce qui a été exporté, la date, la période, la devise et le niveau de détail) et vos données dans des tableaux compacts. **Demander une analyse** ajoute la question et la structure de réponse attendue autour de celles-ci. Chaque export contient les
+[mentions légales](../settings/about.md#legal-notice) de LibreFolio vers la fin, dans la langue de votre
+interface et sans leurs liens ; seule une courte consigne pour l'IA les suit : avec
+**Exporter les données**, comment répondre ; avec **Demander une analyse**, la ligne qui lui demande de
+répondre dans votre langue.
 
 1. Ouvrez une nouvelle conversation dans un assistant IA à qui vous confiez des données financières.
-2. Collez le texte et envoyez-le. Avec **Demander une analyse**, la question y figure déjà.
+2. Collez le texte et envoyez-le. Avec **Demander une analyse**, la question y figure déjà ; avec
+   **Exporter les données**, ajoutez votre question dans le même message, ou envoyez les données seules
+   et posez-la une fois que l'IA a confirmé les avoir reçues.
 3. Répondez aux questions de l'IA : il lui est demandé de ne poser que des questions sur ce qui change le résultat (un budget, un objectif, votre situation fiscale) et de ne jamais le deviner.
 
 Bon à savoir :
 
+- Les deux types d'export demandent à l'IA de ne pas répéter les chiffres que vous avez déjà vus dans
+  LibreFolio, mais de s'en servir pour répondre uniquement à la question posée. Lorsque vos données ne
+  suffisent pas, il lui est demandé de chercher aussi sur le web les dernières actualités et d'indiquer
+  quelles conclusions s'appuient dessus.
 - Avec **Demander une analyse**, il est demandé à l'IA de répondre dans la langue de votre interface LibreFolio et de garder vos chiffres séparés de son interprétation.
 - Les analyses **Performance et moteurs de marché** nécessitent un assistant capable de faire des recherches sur le web ; sans cela, la réponse le dit au lieu d'inventer des sources.
 - Les actifs, courtiers, paires FX et lots apparaissent sous forme de codes courts (A1, B1, F1, L1) expliqués dans le texte ; il est demandé à l'IA de répondre avec les noms réels.

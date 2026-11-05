@@ -79,7 +79,7 @@ Un valore calcolato sulle posizioni è verificabile su questo punto: il report d
 
 ## 🪙 Dove si colloca la liquidità {: #where-cash-sits }
 
-La liquidità deve essere gestita in qualche modo, e la scelta cambia il risultato. Nel report di portafoglio e del broker, la regola è dichiarata nel codice stesso: i pesi sono il valore della posizione rapportato al **NAV totale**, e la liquidità è *inclusa nel denominatore ma non è essa stessa un termine dell'indice*.
+La liquidità deve essere gestita in qualche modo, e la scelta cambia il risultato. Nel report di portafoglio e del broker, la regola è dichiarata nel codice stesso: i pesi sono il valore della posizione rapportato al **NAV totale**, e la liquidità è *inclusa nel denominatore ma non è essa stessa un termine dell'indice*. Quel denominatore deve essere positivo: con un NAV totale — il patrimonio netto — pari o inferiore a zero non esiste alcun peso, quindi il report non fornisce né il peso della posizione maggiore né un indice (entrambi null) invece di una cifra divisa per un sostituto arbitrario.
 
 Vale la pena esplicitare la conseguenza, perché va in una direzione che la maggior parte dei lettori non immaginerebbe. La liquidità diluisce ogni peso senza contribuire con un quadrato proprio, quindi detenere più liquidità **abbassa** l'indice e dunque **innalza** il numero di asset effettivi. Un portafoglio che detiene metà del proprio valore in liquidità sembra meglio diversificato rispetto alle stesse posizioni senza di essa.
 

@@ -9,7 +9,7 @@ related: [domains/auth, decisions/link-tokens-in-the-url-fragment, problems/gene
 
 # Domain: EMAIL
 
-> Optional transactional email over SMTP — release 1.3 «Cloud-ready core», workstream E, founder's spec F04.
+> Optional transactional email over SMTP — release 1.3, workstream E, founder's spec F04.
 > Configured only from the environment, off by default, built on workstream A's single-use account tokens.
 
 ## What it does
@@ -36,8 +36,8 @@ What it sends — six kinds of email, with texts in English, Italian, French and
 - **A notice to the old address** when an account's email changes: no link, and nothing of the new address (N62).
 - **The setup link of the initial administrator**: when LibreFolio creates the administrator from
   `LIBREFOLIO_ADMIN_EMAIL` and generates the link itself, workstream A's `deliver_setup_link()` (lot A7a) writes it to
-  the log once and emails it with `build_admin_setup()` when email works; a link from the hosting panel's token is the
-  panel's to deliver (D-E11).
+  the log once and emails it with `build_admin_setup()` when email works; a link from a token supplied from outside is not
+  the app's to deliver (D-E11).
 
 Every link an email carries is built from `LIBREFOLIO_PUBLIC_URL` alone, never from the request's Host, Origin or
 forwarded headers (the test email, which carries no link, names the instance after the request's host). Without that
@@ -83,7 +83,7 @@ The full table is §4 of the plan: D-E1…D-E14, twelve approved by the coordina
 the developer as points 45 and 44 of `decisioni-analisi-20261014.md`. The detail lives in the developer page; here,
 the why.
 
-- **The release rule** (objective of release 1.3): no cloud-only code. Every new variable defaults to today's
+- **The release rule** (objective of release 1.3): no deployment-specific code. Every new variable defaults to today's
   behaviour, every secret also accepts `*_FILE` — so no SMTP host means no change, and the password goes through H's
   `env_secret()`. It overruled the old `TODO_FUTURI` idea of an SMTP configured from the admin settings with
   `aiosmtplib` (plan §2).
@@ -97,14 +97,14 @@ the why.
   secrets, an unreadable `LIBREFOLIO_SMTP_PASSWORD_FILE` never stops a start. The three checks (`email.smtp`,
   `email.smtp_encryption`, `email.links`) close H's `CONFIG_CHECKS`.
 - **D-E5 and D-E12 — limits in memory, per process, with one primitive.** `rate_window.py` is written by E and planned
-  for reuse by A's login limiter (A8). D-E6 adds `_MAX_PER_HOUR`, `_REPLY_TO` (for the cloud) and a three-value `_TLS`.
+  for reuse by A's login limiter (A8). D-E6 adds `_MAX_PER_HOUR`, `_REPLY_TO` and a three-value `_TLS`.
 - **D-E8 — the texts are the backend's own catalogue** (`templates/<lang>.json` and `layout.html`), not the frontend
   i18n. A pytest guard pins the same keys and the same `$placeholders` in the four languages. The rendering keeps user
   values out of subjects, HTML-escaped, and on one line (since the review of E3s).
 - **D-E10 — the email endpoint receives a freshly created token**, so A's routes stay unchanged: `POST /email/links`
   inspects the token for its purpose (`valid` only) and rebuilds the link itself, never trusting the link the dialog
-  shows. **D-E11**: the admin's activation goes by email only when the instance generated the token (in the cloud the
-  control panel sends it). **D-E13**: a blocked instance sends nothing — the route guard of H's CP6, plus
+  shows. **D-E11**: the admin's activation goes by email only when the instance generated the token (an externally supplied token is
+  delivered by whoever supplied it). **D-E13**: a blocked instance sends nothing — the route guard of H's CP6, plus
   `sending_blocked()` inside `send_email()` for any other caller. **D-E14**: E2E use `page.route` for simulated states;
   the real chain is proven by in-process backend tests.
 - **Decision 45 (D-E3), the developer's alternative, 15/10: links only from `LIBREFOLIO_PUBLIC_URL`**, the
@@ -139,8 +139,7 @@ the why.
   aliases — where the broader grouping is the prudent side.
 - **N62 — no email a stranger can address carries text they chose** (lot E-9, a night decision of the coordinator,
   17/10, to be reviewed by the developer). The username (3–50 free characters, URLs included) and a new address's
-  domain let a stranger use the instance as a spam relay to many addresses, which in the managed cloud harms the
-  per-instance Brevo key and the shared `mail.librefolio.eu` sender domain. So a password reset (the builder of the
+  domain let a stranger use the instance as a spam relay to many addresses, which harms the instance's sender reputation. So a password reset (the builder of the
   administrator's «Send by email» too), an email verification and the change notice greet anonymously, and the notice
   shows nothing of the new address: without a DNS check even a domain's last label is free text. `build_password_reset`
   and `build_verification` no longer take `username`, `build_email_changed(*, language, instance)` neither it nor
@@ -198,7 +197,7 @@ the why.
   16/10); since the night of 17/10 (N62) the per-mailbox limits fold them. Catch-all domains and Fastmail's sub-domain
   addresses (`x@victim.fastmail.com`) still give a new key per local part, so only the instance budget bounds them
   (backlog E-12, low). And draining that budget with many distinct mailboxes from many IPs blocks everyone's resets: a
-  cloud question for the developer, whose cures (captcha or proof-of-work, registration limits) are not E's.
+  product question for the developer, whose cures (captcha or proof-of-work, registration limits) are not E's.
 - **Out of 1.3**: notifications (F19). `admin/email.en.md` is English only, by choice; the translation debt of the
   touched pages is declared, without stamps.
 
@@ -274,8 +273,7 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
   E4c, the CHANGELOG text for the coordinator, and backlog E-4 (the deprecated 422 name in `api/v1/settings.py`) with
   A's OK. Done: the C-99 rows, the TODO moved, the FAQ, the coherence pass on `admin/email.en.md`, the A7a docs (the
   `admin_setup` kind), the final security review (no finding; E-9 to the backlog, A-27 to A).
-- **Developer decisions**: the «Confirm» button on `/verify-email`, the message after a held email, the proxy for the
-  cloud, the instance budget that many mailboxes can drain (since E-9); and the review of the night decisions (the
+- **Developer decisions**: the «Confirm» button on `/verify-email`, the message after a held email, the proxy, the instance budget that many mailboxes can drain (since E-9); and the review of the night decisions (the
   hold removed entirely, E-8, the notice-limit compromise, P1 as a `<details>`, N62).
 - **Backlog «E · Email (fase 01)»**: E-1 and E-5 closed. E-2 (the widened optional type,
   [[problems/generated-client-widens-nullable-scalar]]), E-3 (`ApiError`) and E-6 (the settings tab registry) deferred

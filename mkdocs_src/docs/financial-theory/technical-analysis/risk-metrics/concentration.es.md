@@ -79,7 +79,7 @@ Una cifra calculada sobre posiciones es verificable en este punto: los informes 
 
 ## 🪙 Dónde se sitúa el efectivo {: #where-cash-sits }
 
-El efectivo debe tratarse de alguna manera, y la elección cambia el resultado. En los informes de cartera y del bróker, la regla se declara en el propio código: las ponderaciones son el valor de la posición sobre el **NAV total**, y el efectivo está *incluido en el denominador pero no es en sí mismo un término del índice*.
+El efectivo debe tratarse de alguna manera, y la elección cambia el resultado. En los informes de cartera y del bróker, la regla se declara en el propio código: las ponderaciones son el valor de la posición sobre el **NAV total**, y el efectivo está *incluido en el denominador pero no es en sí mismo un término del índice*. Ese denominador tiene que ser positivo: con un NAV total — el patrimonio neto — igual o inferior a cero no existe ponderación alguna, así que el informe no da ni la ponderación de la mayor posición ni un índice (ambos null) en lugar de una cifra dividida por un sustituto arbitrario.
 
 Vale la pena detallar la consecuencia, porque va en una dirección que la mayoría de los lectores no adivinaría. El efectivo diluye cada ponderación sin aportar un cuadrado propio, así que mantener más efectivo **baja** el índice y, por lo tanto, **sube** el recuento de activos efectivos. Una cartera que mantiene la mitad de su valor en efectivo parece mejor diversificada que las mismas posiciones sin él.
 

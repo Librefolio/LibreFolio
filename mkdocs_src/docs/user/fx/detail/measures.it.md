@@ -14,15 +14,18 @@ variazione in % e il tasso annuo.
 ### 📏 Passaggio 1: Attiva la modalità di misura
 
 Fai clic su 📏 (**Aggiungi misura**) in alto a destra del grafico. Il pannello **Misure** sotto il grafico
-si apre e mostra **Attiva — clicca sul grafico**.
+si apre e mostra **Attiva — clicca sul grafico**; sopra il grafico il puntatore diventa un mirino.
 
 ### 📍 Passaggio 2: Fai clic sul punto iniziale
 
-Un suggerimento mostra la data e il tasso di cambio scelti; una linea tratteggiata segue il puntatore.
+Un suggerimento mostra la data e il tasso di cambio scelti; una linea tratteggiata segue il puntatore. Una misura richiede due
+giorni diversi: tornando sul giorno del punto iniziale, la linea scompare e il puntatore mostra
+il segnale di *non consentito* (🚫), e un secondo clic lì non fa nulla.
 
 ### 🏁 Passaggio 3: Fai clic sul punto finale
 
-La misura viene aggiunta e la modalità di misura si disattiva. Le due date vengono ordinate automaticamente.
+Fai clic su un punto di un altro giorno. La misura viene aggiunta e la modalità di misura si disattiva. Le due
+date vengono ordinate automaticamente.
 
 ??? tip "➕ L'intero periodo in un clic — comodo su un telefono"
 
@@ -34,8 +37,8 @@ La misura viene aggiunta e la modalità di misura si disattiva. Le due date veng
 ## 📊 Leggi una misura
 
 Ogni misura è una scheda che mostra le sue date, la variazione in % e il numero di giorni di calendario;
-puoi anche impostare il colore e lo stile della sua linea. Espandila per cambiare le date e vedere
-**Inizio**, **Fine**, **Δ Ass**, **Δ %** e **Δ%/anno** per la coppia FX e per ogni serie sovrapposta sullo stesso asse.
+puoi anche impostare il colore e lo stile della sua linea. Espandila per cambiare le date, sempre due giorni diversi,
+e vedere **Inizio**, **Fine**, **Δ Ass**, **Δ %** e **Δ%/anno** per la coppia FX e per ogni serie sovrapposta sullo stesso asse.
 
 **Δ%/anno** è il tasso annuo (CAGR), con $d$ i giorni di calendario tra le due date:
 

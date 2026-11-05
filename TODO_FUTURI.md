@@ -1,34 +1,17 @@
 # TODO FUTURI
 
-Questo file documenta miglioramenti futuri, migrazioni pianificate, e note tecniche importanti per il progetto LibreFolio.
-I TODO completati sono in `TODO_Completati.md`.
+Idee e miglioramenti ancora da ponderare, per tema. Le voci completate o scartate stanno in `TODO_Completati.md`; i
+lavori già decisi per la 1.4 stanno nel journal, `Release_2/Phase_2/ATTIVITA_INIZIO_1.4.md`.
 
 ---
 
-## ⏳ Investimento programmato con mora: la cedola di scadenza (J-39, 28/10/2026)
-
-**Il difetto.** In un investimento programmato (provider Scheduled Investment) con **mora**, la cedola di scadenza è
-contata due volte e la mora parte dal valore di prima della cedola. La liquidazione senza mora è già curata
-(`5fcd7b738`).
-
-**Cosa manca.** Decidere se, con la mora, la cedola di scadenza è pagata o no; poi correggere il calcolo (J, ~1 giorno).
-
-**Decisione del developer (28/10/2026):** non è una priorità della 1.3, resta qui.
-
-## ⚖️ Rebalancer del PAC (28/10/2026)
-
-**Cosa resta.** L'analisi del Rebalancer («riga 14»), gli E2E del PAC, il difetto 1 e l'opzione (e) del backlog di
-`LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/` (i difetti 2 e 5 e C-38 sono chiusi, `57001a928`).
-
-**Decisione del developer (28/10/2026):** nella 1.4.
-
----
+# Asset e dati di mercato
 
 ## 🧬 Profilo dei dati dell'asset — composizione, costi, obbligazioni, esposizione e nuove fonti
 
 **Data aggiunta**: 18 Ottobre 2026 · **Status**: 📋 FUTURO — da progettare · **Priorità**: 🔼 Medio-alta
 **Origine**: fusione di F16 (feedback Giuseppe + Alfy, 07/08/2026), F-MC-3 (feedback utente 08/09/2026), le voci
-C-86, C-87 e C-88 del backlog (utente C, chat del 04/09), due note sciolte (extraETF, aziende) e le richieste GitHub
+C-86 e C-87 del backlog (utente C, chat del 04/09), due note sciolte (extraETF, aziende) e le richieste GitHub
 #50, #51 e #52 di @Xgialippo (17/10/2026). Skill di riferimento: `asset-plugin`.
 
 ### Perché un punto solo
@@ -81,7 +64,7 @@ un'architettura unica, pensata bene prima di scrivere codice.
 - **Portafoglio diviso per obiettivi** (GitHub #52, @Xgialippo, 17/10/2026; qui dal 22/10, decisione del developer):
   raggruppare gli asset per obiettivo («i pilastri di Coletti»: fondo emergenze, pensione…), con sottogruppi o tag, e
   filtrare la Dashboard per gruppo. Oggi la Dashboard si filtra solo per broker. Si lega all'idea dei «Portafogli»,
-  gruppi di broker, di asset o di entrambi (più sotto, tra le idee sparse). Domande poste all'utente il 18/10, ancora
+  gruppi di broker, di asset o di entrambi (vedi «Idee sparse»). Domande poste all'utente il 18/10, ancora
   senza risposta: un asset sta in un solo obiettivo o si divide (a quote o a lotti)? gruppi di broker, di asset o
   tutti e due? cosa vedere per ogni portafoglio (Dashboard filtrata, KPI e allocazione propri, allocazione obiettivo
   per il PAC)? Registro: `PROSSIMI_LAVORI.md`, #52.
@@ -125,9 +108,6 @@ un'architettura unica, pensata bene prima di scrivere codice.
 - **Interactive Brokers** (ex C-86): prezzo corrente e storico letti con le API e la chiave dell'utente; serve un
   account per le prove. Dettagli:
   `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/feedback-early-user-C-20261014.md`, voce 4.
-- **Un pacchetto di dati di qualità in abbonamento** (ex C-88): prezzi storici e composizioni dei fondi a pagamento,
-  per chi li vuole, anche come sostegno al progetto. Da valutare licenze, costi e convivenza con il self-hosted.
-  Stessa mappatura, voce 14.
 
 ### Licenze e uso commerciale
 
@@ -135,18 +115,14 @@ un'architettura unica, pensata bene prima di scrivere codice.
   limitano l'uso automatico dei loro dati.
 - In self-hosted ogni istanza interroga per il suo utente, a basso volume e senza ridistribuire: rischio basso, tollerato
   nei fatti.
-- In un **servizio ospitato a pagamento** diventa uso commerciale: servono dati con licenza (il fornitore a pagamento
-  F06) o la chiave dell'utente.
 
 ### Collegamenti
 
 - Piano in pausa: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md`
   (identità asset, identificativi).
 - `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md` (#50, #51, #52).
-- Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, C-88, spostate qui.
-- Qui sotto, «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
-
----
+- Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, spostate qui.
+- «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
 
 ## 🔀 Split e prezzi rettificati dai fornitori (MF-SPL1, 23/10/2026)
 
@@ -197,1227 +173,114 @@ di un giorno è la chiusura vera per il prodotto dei fattori di tutti i dividend
 con fattore `1/rapporto`). Dati che servono: le chiusure vere (dopo Z-35) e i dividendi salvati come eventi dell'asset.
 Il calcolo andrebbe nella casa della matematica finanziaria (`backend/app/services/financial_math/`).
 
----
+## ⏳ Investimento programmato con mora: la cedola di scadenza (J-39, 28/10/2026)
 
-## 🔄 Self-update in-app (da F14)
+**Il difetto.** In un investimento programmato (provider Scheduled Investment) con **mora**, la cedola di scadenza è
+contata due volte e la mora parte dal valore di prima della cedola. La liquidazione senza mora è già curata
+(`5fcd7b738`).
 
-**Data aggiunta**: 1 Settembre 2026
-**Status**: 📋 FUTURO — F14 è stato rilasciato in scope 1 (modale + guida); il self-update richiede un piano dedicato
-**Origine**: discussione F14 del 01/09/2026
+**Cosa manca.** Decidere se, con la mora, la cedola di scadenza è pagata o no; poi correggere il calcolo (J, ~1 giorno).
 
-### Obiettivo
-
-Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il backend.
-
-### Fattibilità analizzata
-
-- **Docker**: un container non può aggiornare la propria immagine da solo, ma può farlo se
-  `/var/run/docker.sock` è montato (opt-in in compose): Docker API → pull nuova immagine →
-  ricreazione del container. È ciò che fa **Watchtower** (documentato nella guida come alternativa).
-  Attenzione: docker.sock montato = root sull'host → montaggio opt-in esplicito, endpoint admin-only,
-  script fisso senza input utente. LibreFolio è single-image → caso semplice.
-- **Git clone**: script guardato — `git fetch`, `git pull` solo se work-tree pulito
-  (`git status --porcelain` vuoto), rebuild, restart. Il restart richiede un supervisore
-  (systemd o Docker restart policy). Candidato: `scripts/self_update.sh` documentato.
-- Distinguere le varianti di immagine full/light se necessario (F13).
-
----
-
-## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
-
-**Data aggiunta**: 3 Settembre 2026
-**Status**: 📋 FUTURO — feature pronta al 70% (backend già fatto e testato); manca il frontend
-**Origine**: audit 08 (P2-6) + idea originale utente (luglio 2026) + indagine 03/09/2026
-
-### La feature voluta
-
-Nella **bulk modal** delle transazioni, in stile riga-notifica "promote": quando una riga
-(transazione) può essere collegata a un **evento** di un asset (dividendo, interesse…)
-entro un range temporale compatibile, compare una riga di notifica con i candidati;
-l'utente conferma il collegamento. Il range riusa il valore dello **slider delta-days**
-già presente nella bulk modal.
-
-### Cosa esiste già (da riusare, NON riscrivere)
-
-- **Backend pronto**: `POST /api/v1/transactions/suggest-events`
-  (`backend/app/api/v1/transactions.py` ~:257) → `suggest_events_bulk` in
-  `transaction_service.py` ~:558-621. Fa: mappa tipo transazione → tipo evento compatibile,
-  filtra per tolleranza ±N giorni, ordina per distanza, accetta batch (lista di transazioni).
-  Coperto da 8 test API (`backend/test_scripts/test_api/test_events_suggest.py`), mai cablato
-  al frontend dal commit `c3faae19` (luglio).
-- **UX di riferimento**: la riga-notifica "promote" nella bulk modal
-  (`TransactionBulkModal.svelte` ~:2994-3094) come template di presentazione.
-- **Pattern picker esistente**: `AssetEventPicker.svelte` + `EventCreateMiniModal.svelte`
-  nella sezione avanzata della modale di edit transazione.
-
-### ⚠️ Duplicazione da sanare nell'occasione
-
-`AssetEventPicker` (edit modal) **NON usa** `suggest_events`: interroga gli eventi con
-`query_events_bulk` (query generica per asset+range) e manca della mappa di compatibilità
-tipo-transazione→tipo-evento e dell'ordinamento per distanza che `suggest_events` ha.
-Chi riprende il lavoro deve **fattorizzare**: un unico motore di matching (quello di
-`suggest_events`) consumato sia dall'edit modal sia dalla nuova riga-notifica bulk.
-
-### Note di implementazione (dall'indagine)
-
-- Il collegamento si scrive su `asset_event_id` della transazione (poi re-validate).
-- Servono: utility frontend condivisa (batch + cache + debounce), componente banner,
-  chiavi i18n ×4, E2E `event-suggest-bulk.spec.ts`.
-- L'analisi completa (forme, rischi, piano in 4 fasi) è nel report dell'indagine del
-  03/09/2026 in questa sessione — recuperabile anche rieseguendo il confronto
-  `suggest_events` vs `AssetEventPicker`.
-
----
-
-## 📊 Risk Analysis — evoluzioni scenario catalog e replay
-
-**Data aggiunta**: 29 Luglio 2026
-**Status**: 📋 FUTURO — escluso da G6 iniziale
-**Priorità**: Da valutare dopo il rilascio del catalogo statico
-**Piano corrente**:
-`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`
-
-### Catalogo scenari dinamico
-
-- rilevamento dei file senza riavvio;
-- reload manuale o hot reload;
-- CRUD scenari personali;
-- salvataggio delle modifiche effettuate dalla UI;
-- import/export YAML;
-- override espliciti dei preset built-in;
-- validazione e diagnostica amministrativa.
-
-La prima implementazione G6 resta startup-loaded, senza CRUD, database o watcher.
-
-### Sostituti (proxy) nel replay storico
-
-**Aggiornato**: 02 Ottobre 2026, decisione D372 (rifacimento del blocco del replay, F3)
-**Priorità**: bassa. Nessun utente l'ha chiesto
-
-Il developer, sul rifacimento del blocco del replay: *«teniamoli fuori, ma segnalo in todo_futuri con tutta la
-spiegazione annessa»*.
-
-**Cos'è.** Oggi, in L4 (Dashboard, Broker e laboratorio), un asset senza storia nella finestra di una crisi viene escluso
-dal replay e mostrato con il suo motivo. È il caso di un ETF nato nel 2015 davanti alla crisi del 2008. Un **sostituto** è un altro asset che ha storia in
-quella finestra: il replay usa i suoi rendimenti al posto di quelli che mancano. Può essere l'indice che l'ETF replica,
-oppure un ETF più vecchio sullo stesso indice. Il peso resta quello dell'asset originale. Del sostituto si usano solo
-i rendimenti giornalieri, non i prezzi.
-
-**Cosa sa già fare il motore** (verificato nel codice il 02/10/2026):
-
-- `StressParams.proxy_assets` (`backend/app/services/risk_plugins/stress/plugin.py`) accetta fino a 100 coppie
-  `{asset_id, proxy_asset_id}`. Il sostituto deve essere diverso dall'originale, e un asset non può essere sostituito
-  ed escluso insieme. L'unica politica dichiarata è `manual_proxy_or_exclude` (`schemas/risk_scenarios.py`).
-- `prepare_historical_replay_context` (`backend/app/services/risk/replay.py`, da CP-9a) controlla due cose: che gli
-  asset sostituiti siano nello scope e che i sostituti esistano. L'asset sostituito salta l'esclusione automatica. Per
-  tutta la finestra il replay usa i rendimenti del sostituto: `proxy_series_usage: "returns_only"`, e non c'è nessuna
-  giunzione con la storia propria dell'asset.
-- Un sostituto senza storia utilizzabile dà un errore di parametri (`invalid_parameters`). L'errore porta `asset_id`,
-  `return_source_asset_id` e il motivo. Non diventa mai un'esclusione silenziosa, perché il sostituto è una scelta
-  esplicita dell'utente.
-- L'audit (`RiskHistoricalReplayAudit`) porta `proxy_count` e `proxy_assets`. L'avviso
-  `historical_replay_proxies_used` elenca gli asset sostituiti.
-
-**Perché è rinviato: cosa manca.**
-
-- **L'interfaccia.** L4 non manda mai `proxy_assets`. Servirebbe un selettore «usa un sostituto» accanto a ogni asset
-  escluso, con la ricerca fra gli asset del DB. Un modello c'è già, ma solo per l'asset singolo:
-  nella scheda rischio di Asset Detail (`RiskAnalysisPanel.svelte`, sezione `risk-replay-controls`) si sceglie un
-  sostituto per l'asset stesso con `SignalAssetParamControl`, oppure lo si esclude con una casella; l'audit mostra
-  l'associazione. Con F3 l'esclusione manuale esce da L4: `excluded_assets` lo manda ancora solo quella casella di
-  Asset Detail.
-- **Una regola su quale sostituto sia sensato.** Va deciso se servono la stessa valuta, la stessa classe e una
-  correlazione minima nel periodo in cui esistono entrambi. Senza una regola, un sostituto sbagliato dà un numero falso
-  che sembra preciso.
-- **Una diagnostica prima della scelta.** Deve dire quanto il sostituto copre la finestra e quanto i due si sono mossi
-  insieme nel periodo comune. Va mostrata prima di proporre il sostituto.
-- **La persistenza.** Oggi il sostituto andrebbe scelto di nuovo a ogni replay. Le associazioni asset → sostituto
-  andrebbero salvate per utente e riusate nei replay successivi. La proposta di un sostituto resta sempre esplicita e
-  confermata dall'utente.
-- ⚠️ **Un buco da verificare con un test prima di riaprire.** La copertura del sostituto non passa per
-  `replay_coverage`, che gira solo sugli asset senza sostituto (`own_ids` in
-  `prepare_historical_replay_context`; `own_ids` e `replay_coverage` sono nel ramo della famiglia Risk ed entrano in
-  `dev_release2` con la sua integrazione). Un sostituto quotato dopo l'inizio della finestra entrerebbe quindi nella
-  serie congiunta. Il commento sull'esclusione automatica, nello stesso metodo, spiega cosa succede allora: un asset
-  che parte tardi sposta la base del replay e lo accorcia per tutti gli altri. Il sostituto andrà controllato con la
-  stessa regola e, se non copre la finestra, rifiutato con il suo motivo.
-
-**Quando riprenderlo.** Quando un utente chiede di rigiocare una crisi con asset più giovani della crisi stessa.
-L'ordine: prima la regola del sostituto sensato e la diagnostica, poi il buco della copertura, poi l'interfaccia.
-
-**Riferimenti**: `stress/plugin.py` (`StressParams`, `_historical`); `risk/replay.py` (`prepare_historical_replay_context`);
-`schemas/risk.py` (`RiskHistoricalReplayProxyAsset`, `RiskHistoricalReplayAudit`); la guida
-`mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/historical-replay.en.md`; D372 in
-`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md`.
-
-### RQMC
-
-Resta a priorità bassa: eventuale scrambling deve avere contratto separato da
-`sobol_start_index`, oracle di convergenza e processo `spawn`, senza fallback
-SciPy production.
-
----
-
-## 📉 Risk Analysis — Tracking Error / Information Ratio con benchmark selezionabile
-
-**Data aggiunta**: 16 Settembre 2026
-**Status**: 📋 FUTURO — tagliato dalla riorganizzazione Risk
-**Priorità**: 🔽 BASSA
-
-### Contesto
-
-`ComparisonAnalytic` (`backend/app/services/risk_plugins/comparison/plugin.py`) calcola già
-active return, tracking error, information ratio, correlazione e beta contro un asset
-reale di confronto. Nella riorganizzazione della UI Risk, **beta e active return
-restano**; **tracking error e information ratio vengono rimossi dalla UI**.
-
-Motivo: TE e IR nascono per valutare un gestore attivo contro un **mandato dichiarato**.
-Un investitore privato non ha né mandato né benchmark ufficiale, quindi i due numeri
-non sono interpretabili e occupano spazio accanto a metriche che decidono.
-Il backend non viene toccato: il calcolo resta disponibile via API.
-
-### Azione futura
-
-Riabilitarli **solo dopo** aver introdotto una vera selezione di benchmark:
-
-- scelta del benchmark fra gli asset già presenti in DB (non un ticker libero);
-- possibilità di dichiarare un benchmark **persistente** per portafoglio/broker,
-  non scelto al volo a ogni esecuzione;
-- avviso esplicito quando il benchmark ha valuta o storico non allineati allo scope;
-- wording che chiarisca che TE/IR misurano **scostamento dal benchmark**, non qualità.
-
-Senza benchmark persistente e dichiarato, riesporli riproduce il problema attuale.
-
-### Riferimenti
-
-- `backend/app/services/risk_plugins/comparison/plugin.py`
-- `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` (sezione comparison)
-
----
-
-## 🧮 Risk Analysis — Portfolio optimization / frontiera efficiente (Riskfolio)
-
-**Data aggiunta**: 16 Settembre 2026
-**Status**: 📋 FUTURO LONTANO — rinviato a tempo indeterminato
-**Priorità**: 🔽 MOLTO BASSA
-
-### Contesto
-
-`PortfolioOptimizationAnalytic` (`backend/app/services/risk_plugins/portfolio_optimization/plugin.py`)
-è implementato e testato (Riskfolio-Lib 7.0.1 + CVXPY, solver CLARABEL/SCS, strategie
-min-variance / max-Sharpe / ERC, covarianze historical / Ledoit-Wolf / OAS) ma **non ha
-alcuna UI**: oggi è raggiungibile solo via API ed è quindi costo puro per ogni
-installazione.
-
-### Perché è rinviato — il motivo vero
-
-Non è la potenza di calcolo: il benchmark misurato dà **0,0159 s warm**. Non è nemmeno
-l'ampiezza del paniere in sé. Il problema è che l'ottimizzatore media-varianza produce
-un **output prescrittivo** ("i pesi giusti sono questi") che lo strumento non è in grado
-di giustificare onestamente:
-
-- è un *error maximizer*: preferisce gli asset il cui rendimento atteso è stato
-  sovrastimato dal campione;
-- i pesi sono instabili — cambia la finestra di stima e l'allocazione si ribalta;
-- più asset significa **più parametri da stimare** (N medie + N(N+1)/2 covarianze) e
-  quindi più errore, non meno — motivo per cui esistono gli shrinkage estimator;
-- LibreFolio è un tracker, non un consulente: è un confine di prodotto, non tecnico.
-
-### Precondizioni per riprenderlo
-
-1. provider dati esteso (verosimilmente a pagamento) con universo ampio e storia lunga,
-   pulita e sovrapposta;
-2. una semantica di presentazione non prescrittiva: output come **confronto** con
-   l'allocazione attuale, mai come "allocazione consigliata";
-3. esclusione di max-Sharpe in-sample; ammesse solo min-variance ed ERC/risk parity,
-   che non usano i rendimenti attesi;
-4. documentazione utente che spieghi instabilità e limiti prima di mostrare i pesi.
-
-### Decisione pendente sulle dipendenze
-
-Finché resta non esposto, va deciso se **rimuovere** Riskfolio-Lib, CVXPY, CLARABEL e
-SCS (più il pool `optimization`) dall'immagine, misurando prima quanto pesano davvero
-sui 2.781.625.742 byte totali dell'immagine. Il pool `simulation` (QuantLib) resta
-comunque necessario.
-
-Nota: la variante onesta e a basso costo — **ERC come diagnostica**, non come consiglio
-("se ogni asset contribuisse allo stesso rischio i pesi sarebbero questi, i tuoi sono
-questi") — è un complemento naturale di `risk_contribution` e **non richiede Riskfolio**:
-è risolvibile in poche decine di righe di NumPy.
-
-### Riferimenti
-
-- `backend/app/services/risk_plugins/portfolio_optimization/plugin.py`
-- `backend/app/services/risk/quant/optimization_engine.py`
-- `LibreFolio_devWiki/wiki/problems/riskfolio-numpy-vectorbt-dependency-trap.md`
-
----
-
-## 🎲 Risk Analysis — Monte Carlo avanzato: regimi calibrati e volatilità stocastica
-
-**Data aggiunta**: 16 Settembre 2026
-**Status**: 📋 FUTURO — livelli **2, 4 e 5** della scaletta simulazione
-**Priorità**: 🔽 BASSA
-
-### Contesto
-
-La riorganizzazione Risk prevede di rilavorare la simulazione ai **livelli 1 e 3**
-della scaletta seguente, e di rinviare i livelli 2, 4 e 5:
-
-| #   | Approccio                                                         | Stato                                               |
-| --- | ----------------------------------------------------------------- | --------------------------------------------------- |
-| 1   | Block bootstrap (rimescolo a blocchi della storia reale)          | ✅ in scope                                          |
-| 2   | GJR-GARCH (cluster di volatilità + effetto leva)                  | 📋 **rinviato — non calibrabile da QuantLib** (D88) |
-| 3   | Preset di regime **prescritti** (ipotesi dichiarate, non stimate) | ✅ in scope                                          |
-| 4   | Markov-switching / HMM **calibrato**                              | 📋 rinviato — questo TODO                           |
-| 5   | Heston / Bates / Merton (volatilità stocastica, salti)            | 📋 rinviato — questo TODO                           |
-
-### Livello 2 — GJR-GARCH: perché è uscito dalla v1
-
-**Data**: 17 Settembre 2026 · misurato su QuantLib 1.43, non dedotto.
-
-Il piano dava per scontato che il GJR-GARCH fosse «nativo QuantLib, calibrabile
-dalla sola serie prezzi». **È falso.** Misura eseguita sul runtime reale:
-
-```text
-hasattr(ql, 'Garch11')                              -> False
-GJRGARCHModel.calibrate(self, CalibrationHelperVector, OptimizationMethod, ...)
-issubclass(GJRGARCHProcess, ql.StochasticProcess1D) -> False    factors() -> 2
-```
-
-Due fatti, entrambi bloccanti:
-
-1. `ql.GJRGARCHModel` è un modello di **pricing di opzioni**: il suo
-   `calibrate()` accetta `CalibrationHelperVector`, cioè quotazioni di opzioni —
-   la stessa identica API di `HestonModel`. `GJRGARCHProcess` **pretende**
-   `v0, omega, alpha, beta, gamma, lambda` già stimati. L'obiezione con cui
-   questo stesso documento rinvia il livello 5 («richiede una superficie di
-   volatilità implicita da opzioni») si applica **identica** al livello 2.
-2. `ql.Garch11` — l'unica classe QuantLib che calibra per massima verosimiglianza
-   da una serie di **rendimenti** — non è esposta nei binding Python SWIG.
-   Esiste in C++, non nel nostro runtime.
-3. Anche avendo i parametri, `GJRGARCHProcess` non entra nell'architettura
-   attuale: non è un `StochasticProcess1D` e ha due fattori, mentre il motore
-   costruisce `StochasticProcessArray`, che accetta **solo** componenti 1-D.
-
-### La strada, quando si riaprirà
-
-La libreria `arch` fa esattamente ciò che serve: un GJR-GARCH(1,1,1) su 1 250
-osservazioni si stima in **22 ms**. È già presente nell'ambiente come
-**dipendenza transitiva** di `riskfolio-lib` (`arch>=7.0`), ma **non è dichiarata
-nel `Pipfile`**.
-
-Nessuna delle due scorciatoie è accettabile:
-
-- **appoggiarsi alla transitiva** significa che il giorno in cui `riskfolio-lib`
-  smette di dipendere da `arch`, il nostro GARCH sparisce **senza che nulla
-  fallisca** in modo visibile;
-- **promuoverla al volo** tocca l'ambiente Python condiviso da tutte le lane di
-  sviluppo attive, e va fatto dal developer a lane congelate.
-
-Precondizione per riprendere il livello 2: `arch` promossa a dipendenza diretta
-in `Pipfile` con lock rigenerato. Da lì il lavoro è contenuto — univariato
-sull'aggregato di portafoglio, innestato sul campionatore esistente.
-
-### Preset di crisi — la forma preferita per il seguito
-
-Il preset «crisi prolungata» consegnato in v1 usa un **pavimento scalare**:
-oscillazioni ×2,5 e deriva −20% annuo applicate ai blocchi ricampionati. È
-onesto — l'ipotesi è dichiarata a schermo con i suoi numeri — ma i numeri sono
-**prescritti**, non osservati.
-
-La forma preferita, quando si riaprirà, è il **ricampionamento condizionato**:
-estrarre i blocchi **solo** dalle finestre del decile peggiore della storia
-reale del portafoglio. Il vantaggio non è di precisione, è di natura:
-
-- l'ipotesi a schermo non conterrebbe **nessun numero dichiarato** — direbbe
-  «ricampionati i tuoi periodi peggiori», e sarebbe verificabile dall'utente;
-- la correlazione salirebbe **perché è salita davvero** nelle crisi vissute da
-  quel portafoglio, invece di restare invariata come impone una trasformazione
-  scalare (vedi la nota su `resampling.py`: su un ricampionamento congiunto
-  scalare e traslare lasciano la correlazione di Pearson matematicamente
-  invariata).
-
-Condizione vincolante, da rispettare il giorno in cui si implementa: se la
-storia disponibile **non contiene** un periodo abbastanza severo, il risultato
-**si dichiara**, non si fabbrica. Un decile peggiore calcolato su tre anni di
-mercato toro non è una crisi, ed è esattamente il tipo di numero che questa
-campagna esiste per non produrre.
-
-### Livello 4 — Markov-switching calibrato
-
-Concettualmente è la risposta esatta a «simula i cambi di fase di mercato»: due o tre
-regimi (calma / stress / crisi), ciascuno con media, volatilità e matrice di
-correlazione proprie, più una matrice di probabilità di transizione stimata dai dati.
-
-Rinviato perché con la storia tipicamente disponibile a un privato (3-5 anni) la stima
-EM **overfitta**: i regimi trovati esistono solo nel campione e cambiano se sposti la
-finestra. Richiederebbe inoltre `hmmlearn` o `statsmodels` (QuantLib non lo supporta
-nativamente).
-
-Precondizioni per riprenderlo: storia lunga e verificata, diagnostica di stabilità dei
-regimi fra finestre diverse, e una presentazione che dichiari l'incertezza della stima
-invece di nasconderla.
-
-### Livello 5 — Heston / Bates / Merton
-
-QuantLib li supporta nativamente (`HestonProcess`, `BatesProcess`, `Merton76Process`),
-ma la loro calibrazione richiede una **superficie di volatilità implicita da opzioni**,
-dato che LibreFolio non ha e non prevede di avere. Usarli con parametri inventati
-produce sofisticazione apparente senza contenuto informativo.
-
-Da riprendere **solo** se in futuro esistesse una fonte dati di opzioni; altrimenti
-resta fuori scope in modo permanente.
-
-### Riferimenti
-
-- `backend/app/services/risk/quant/quantlib_worker.py`
-- `backend/app/services/risk_plugins/simulation/plugin.py`
-
----
-
-## 📈 Gestione Stock Splits nel Calcolo FIFO
-
-> **✅ Superata (14/10/2026, verifica di J per la 1.3)**: il motore FIFO applica gli split come eventi dell'asset
-> collegati alle rettifiche (`backend/app/services/financial_math/fifo/engine.py`, `_apply_split`), senza un tipo di
-> transazione SPLIT. La voce resta come storia della scelta.
-
-**Data aggiunta**: 10 Giugno 2026
-**Priority**: Bassa (P4)
-**Scope**: Backend (Servizi Matematici)
-
-### Contesto
-
-Attualmente il sistema di calcolo FIFO in `fifo_utils.py` accetta in input esclusivamente operazioni di `BUY` e `SELL`. Nel mondo reale, avvengono frequentemente frazionamenti azionari (Stock Splits, es. Apple 1:4).
-A livello teorico uno Stock Split non altera i capitali investiti né crea o distrugge valore monetario, ma **altera retroattivamente i lotti**. Se non gestiti, un utente che tenta di vendere 4 azioni (nate da uno split 1:4 di 1 azione acquistata) manderà il FIFO in `ValueError` per "Oversell".
-
-### Soluzione Proposta
-
-1. Aggiungere un nuovo `TransactionType.SPLIT` al modello dati backend.
-2. Modificare il motore FIFO: quando incontra cronologicamente un'operazione `SPLIT` con un determinato `ratio` (es. 4):
-   - Mette in pausa il normale match BUY/SELL.
-   - Itera su tutti i lotti "aperti" (Open Lots) in quella esatta data.
-   - Moltiplica la `remaining_quantity` di ogni lotto per il `ratio`.
-   - Divide il `buy_price` originale di ogni lotto per il `ratio`.
-   - Riprende l'elaborazione cronologica.
-3. Questo garantisce che eventuali `SELL` successivi trovino le quantità corrette ed estraggano capital gain esatti.
-4. Prevedere anche la gestione di Reverse Splits (ratio < 1).
-
-### Verifica 17 Luglio 2026 — risolta la domanda gemella ("basta ADJUSTMENT?")
-
-Risposta: **no, serve SPLIT esplicito.** `ADJUSTMENT` esiste già ed è documentato anche per "splits, gifts, etc." (`models.py:221-225`), ma il motore FIFO (`fifo_utils.py`) filtra solo BUY/SELL — un ADJUSTMENT non tocca la coda dei lotti. Prova diretta nel codice: il messaggio d'errore di oversell dice letteralmente *"Possible unrecognized stock split or missing BUY transactions"* (`fifo_utils.py:103`) — il bug è reale e già "annunciato" dal sistema stesso. TODO confermato pienamente valido, non risolvibile con l'infrastruttura attuale.
-
----
-
-## 📦 TanStack Table v9 Migration
-
-**Data aggiunta**: 22 Gennaio 2026  
-**Status**: ⏳ IN ATTESA (v9 in alpha)  
-**Priorità**: Bassa (fino a release stabile)
-
-### Contesto
-
-Abbiamo scelto di usare **TanStack Table v8** con un **adapter custom Svelte 5** invece dell'adapter ufficiale `@tanstack/svelte-table` per i seguenti motivi:
-
-1. **v8 adapter ufficiale** (`@tanstack/svelte-table`): Non compatibile con Svelte 5 (usa API interne Svelte 3/4)
-2. **v9 con supporto Svelte 5**: Ancora in versione **alpha** (`9.0.0-alpha.x`)
-
-### Soluzione Attuale
-
-- **Libreria**: `@tanstack/table-core@^8.21.3` (stabile)
-- **Adapter**: Custom in `frontend/src/lib/tanstack-table/`
-
-### Azione Futura
-
-Quando TanStack Table v9 sarà **rilasciato come stabile** con supporto ufficiale Svelte 5:
-
-1. Installare l'adapter ufficiale `@tanstack/svelte-table`
-2. Aggiornare import in tutti i componenti
-3. Rimuovere la cartella `src/lib/tanstack-table/` (adapter custom)
-4. Testare tutte le tabelle (Files, Assets, Transactions, FX)
-
----
-
-## 🔒 Ripensare struttura di accesso ai broker Utente-SuperUtente per essere GDPR compliant
-
-**Data aggiunta**: Gennaio 2026  
-**Status**: 📋 PIANIFICATO → Architettura definita in `plan-phase05-to-08-upgrade.md` §10 (GDPR/Sharing)  
-**Priorità**: Media
-
-### Contesto
-
-La visibilità dei dati di altri utenti da parte del superuser deve essere ripensata per essere GDPR compliant.
-
-### Possibili Approcci
-
-- Superuser non vede dati personali di altri utenti senza consenso esplicito
-- Log di accesso ai dati di altri utenti
-- Anonimizzazione dei dati visualizzati (solo statistiche aggregate)
-- Meccanismo di "data request" invece di accesso diretto (utente concede accesso all'assistenza per x tempo)
-
----
-
-## 🏦 Regime Fiscale — Metodo di Vendita (FIFO, LIFO, PMC, Select ID)
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Alta (architettura core)
-
-> **Cross-link**: stesso motore FIFO (`fifo_utils.py`) del TODO "BRIM: FEE/TAX non collegati all'asset" qui sopra — entrambi toccano come i lotti calcolano il proprio cost basis. Da coordinare se pianificati insieme.
-
-### Contesto
-
-Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere in caso di vendita parziale:
-
-- **Italia**: Prezzo Medio di Carico (PMC)
-- **USA**: FIFO, LIFO, Select ID (scelta specifica dell'utente)
-- **Altre**: HIFO (Highest In First Out), etc.
-
-### Requisiti
-
-1. **Impostazioni Broker**: Nella zona short/long del broker, selettore per il metodo di vendita supportato (FIFO, LIFO, PMC, Select ID)
-2. **Preferenze Utente**: Impostazioni di default per metodo di vendita
-3. **Impostazioni Admin**: Default globale per nuovi utenti
-4. **Collegamento Transazioni**: Il sell deve essere collegato ai buy tramite `link_transactions_id`:
-   - FIFO/LIFO: collegamento algoritmico
-   - Select ID: scelto dall'utente
-   - PMC: nessun collegamento (calcolo on-the-fly)
-
-### Note Tecniche
-
-- Analizzare le strade per lo split dei buy: slittare buy e connettere la parte residua, tabella di appoggio, lista di link
-- Deve essere possibile identificare transazioni già importate per evitare doppio import
-- Per PMC il problema del collegamento non sussiste, basta calcolare il valore on-the-fly
-- I plugin BRIM in fase di vendita devono fornire un dizionario di remap con le transazioni linkate più probabili
-- Il vincolo di over-sell va esteso nell'import
-
----
-
-## 💸 PAC/Rebalancer — Profili Commissionali Avanzati per Broker e Mercato
-
-**Data aggiunta**: 15 Settembre 2026
-**Status**: 📋 FUTURO — estensione successiva al primo planner operativo
-**Priorità**: Media
-
-**Target v1 correlato:** [suite PAC/Rebalancer — piano maestro](LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
-
-### Confine della Prima Versione
-
-Il primo planner PAC/Rebalancer deve mantenere due profili indipendenti,
-`fee_buy` e `fee_sell`. Ciascuno supporta:
-
-- componente fissa;
-- componente percentuale sul controvalore;
-- minimo e massimo opzionali per la componente percentuale;
-- valore `0` valido.
-
-Questa separazione copre i PAC con acquisti gratuiti e vendite soggette alle normali
-commissioni. Non implica ancora regole diverse per mercato o formule dipendenti dalla
-sequenza giornaliera degli ordini.
-
-### Estensioni Future
-
-- Override dei profili per mercato, sede di negoziazione o classe di strumento.
-- Profili dinamici/degressivi nei quali la fee dipende dal numero progressivo degli
-  eseguiti nella giornata.
-- Calendario, timezone, valuta, data di validità e provenance del tariffario.
-- Regole esplicite per eseguiti parziali, ordini annullati e conteggi condivisi fra
-  mercati/strumenti.
-- Integrazione nel solver: una tariffa dipendente dal numero d'ordine rende il costo
-  non separabile e richiede di ottimizzare anche sequenza e numero degli ordini.
-
-Directa documenta, per alcuni mercati, un profilo dinamico giornaliero che parte da
-8 EUR sul primo eseguito, scende progressivamente fino a 3 EUR dal 6° al 25°, passa a
-2 EUR dal 26° al 50° e a 1,50 EUR dal 51°; disponibilità e valori dipendono dal mercato.
-Questa famiglia di policy non rientra nella prima versione.
-
-### Gate Futuri
-
-- Nessuna tariffa implicita o scelta automaticamente senza conferma utente.
-- Distinguere ordine pianificato da eseguito reale: il planner non deve fingere di
-  conoscere il contatore giornaliero.
-- Mostrare profilo, mercato, data e assunzioni usate nel costo stimato.
-- Testare discontinuità delle soglie, min/max, BUY/SELL e pareggi fra Broker.
-
-### Riferimenti
-
-- [Directa — Commissioni](https://www.directa.it/commissioni), consultato il
-  15 settembre 2026.
-
----
-
-## 🧭 PAC/Rebalancer — Profili Persistenti e Strategie Estese
-
-**Data aggiunta**: 15 Settembre 2026
-**Status**: 📋 FUTURO — fuori dal primo planner operativo
-**Priorità**: Media
-
-**Target v1 correlato:** [suite PAC/Rebalancer — piano maestro](LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerTargetDesign.prompt.md).
-
-### Confine della Prima Versione
-
-La prima versione mantiene nello snapshot del singolo calcolo:
-
-- parametri operativi dei Broker;
-- fee BUY/SELL;
-- supporto agli ordini frazionati e relativo step monetario;
-- regime fiscale e minusvalenze pregresse;
-- aliquota sulle plusvalenze per Asset, pre-popolata al `26%` e modificabile;
-- route Asset×Broker e priorità;
-- trasferimenti dichiarati, gratuiti e immediati;
-- FX single-hop, con lo spread globale. ~~`fx_buffer_rate` esplicito (label UI “Margine di sicurezza FX”)~~ —
-  ❌ **non più da fare**, decisione del developer del 02/10/2026: non esiste e non esisterà (vedi «Non più da
-  fare» più sotto).
-
-Questi dati non diventano automaticamente impostazioni persistenti. Il Tool resta
-atomico e riceve sempre uno snapshot completo.
-
-### Persistenza da Valutare
-
-1. **Profilo operativo personale del Broker**
-   - salvare per utente×Broker valute operative, FX mode, supporto frazioni,
-     step monetario, min/max, fee BUY/SELL, regime e minus pregresse;
-   - usare il profilo solo come prefill modificabile del singolo scenario;
-   - non trasformarlo in un lookup del worker Tool;
-   - mantenere i Broker manuali scenario-only salvo futura azione di salvataggio
-     esplicita.
-2. **Aliquota plusvalenze sull'Asset**
-   - aggiungere un campo Asset configurabile e versionabile;
-   - pre-popolare il planner dal dato persistito, con origine/data visibili;
-   - mantenere override per-run;
-   - definire default, permessi, provenienza e migrazione prima di aggiungere la
-     colonna.
-
-### Strategie Future
-
-- Distribuzione proporzionale esplicita degli acquisti fra più Broker.
-- Vendita proporzionale dello stesso Asset fra più custodie.
-- Chiusura Broker: svuotamento controllato di una custodia.
-- Consolidamento: trasferire il portafoglio verso uno o più Broker scelti.
-- Minimizzazione delle plusvalenze realizzate.
-- Compensazione di minusvalenze pregresse con plus compatibili.
-- Tax-loss harvesting e minimizzazione del realizzo fiscale.
-- Bucket di minusvalenze per categoria, compensabilità e scadenza.
-
-#### PAC `min_fragmentation` — differita (decisione developer, 21/09/2026)
-
-**Status**: 📋 DIFFERITA — non entra nella prima versione operativa.
-
-Quarta policy dichiarata nel contratto (`PlannerPolicy`,
-`backend/app/services/pac_allocator/models.py`) e **già specificata**: la sua
-cascata obiettivo esiste ed è scorata in aritmetica esatta
-(`evaluator.py`, ordine `fixed_l2 → shortfall → split_asset_count →
-active_order_rows → route_priority → explicit_cost`). Oggi è risolvibile
-**provatamente** dall'oracolo esaustivo sui domini piccoli; manca solo la
-compilazione dello stage `split_asset_count` verso SCIP, quindi
-`compiler._require_supported_scope` la rifiuta.
-
-**Perché è differita e non "da progettare"**: la funzione obiettivo non è una
-domanda aperta — è scritta e testata. Il rinvio è di priorità: la decisione
-developer del 21/09 mette il **Rebalancer completo** davanti a tutto, perché il
-PAC ne è il caso particolare a distribuzione iniziale nulla.
-
-**Se si volesse ridiscutere l'obiettivo**: `split_asset_count` minimizza il
-numero di Asset spezzati fra più route. Un'alternativa sensata sarebbe pesare la
-frammentazione per valore anziché per conteggio, così che spezzare un Asset da
-10 € non costi quanto spezzarne uno da 10 000 €. È una proposta, non una
-raccomandazione: richiede una decisione di prodotto.
-
-### Modello Operativo Futuro
-
-- Fee, limiti e tempi di settlement dei trasferimenti.
-- ~~Route FX multi-hop, solo con protezioni anti-ciclo e anti-arbitraggio.~~ ❌ non più da fare nel PAC (02/10/2026).
-- ~~Buffer FX dinamico per Asset/volatilità invece del solo `fx_buffer_rate`
-  esplicito.~~ ❌ non più da fare (02/10/2026).
-- Persistenza opzionale delle fonti manuali.
-
-### Salvare l'analisi — sul client, non sul server (richiesta del developer, 02/10/2026)
-
-**Status**: 📋 FUTURO · **Priorità**: da stabilire
-
-Il developer, testuale (riportato dal workstream D): *«salvare l'analisi: stampa PDF e condivisione/salvataggio sul
-client, non sul server»*.
-
-- **Cosa**: il risultato del planner (KPI, esposizioni, piano operativo, prova) diventa un documento che l'utente
-  stampa in PDF, salva o condivide dal proprio dispositivo.
-- **Vincolo**: niente salvataggio sul server. Il Tool resta atomico e senza stato (vedi «Confine della Prima
-  Versione»): l'analisi vive solo sul client.
-- **Da decidere alla ripresa**:
-  - il formato: la stampa del browser con un foglio di stile dedicato, oppure un PDF generato nel client;
-  - il contenuto: gli input dello scenario, il risultato, la data e la versione del contratto;
-  - la condivisione: la Web Share API dove esiste, altrimenti il download;
-  - la privacy: il documento contiene importi reali, quindi va deciso se la modalità privacy vale anche lì.
-
-### ❌ Non più da fare — FX nel PAC (decisione del developer, 02/10/2026)
-
-Nel PAC/Rebalancer **non si faranno mai**:
-
-- un tasso o uno spread FX per Broker;
-- un margine di sicurezza sul tasso, fisso (`fx_buffer_rate`) o dinamico;
-- una commissione di conversione oltre lo spread;
-- conversioni in più passi (multi-hop).
-
-**Perché**: lo spread globale somma già tutti gli attori della conversione; il multi-hop spetta alla parte FX
-(rotte e provider), non al PAC. I piani di D sono già allineati (R13.11). Debito di contratto collegato: `fx_cost`
-della riga d'ordine, nella voce «🔎 Gate sui campi di contratto senza consumatore».
-
-Profili commissionali per mercato e formule intraday/degressive sono già descritti
-nella sezione precedente e non vengono duplicati qui.
-
-### Gate Futuri
-
-- Nuova review matematica se cambiano input, vincoli, fiscalità, fee, FX o
-  obiettivi.
-- Nessuna compensazione fiscale senza categoria dello strumento, regole di
-  compensabilità, scadenza, regime e perimetro Broker espliciti.
-- Nessun profilo persistito può diventare un default silenzioso: provenance,
-  data e override per-run restano visibili.
-- Le strategie di chiusura/consolidamento non possono introdurre short, leverage,
-  BUY+SELL dello stesso Asset o vendite oltre inventario.
-
-### Riuso futuro del solver discreto — senza migrazione Riskfolio
-
-PySCIPOpt/SCIP è il candidato additivo approvato per il planner fixed-L2
-(primo tier MIQP, tier lessicografici successivi convex-MIQCP); la dipendenza non
-è ancora installata e resta subordinata al freeze coordinato, all'update
-developer-owned/autorizzato e ai gate packaging/capacità. Dopo l'adozione
-effettiva, valutarne il riuso solo
-per nuovi problemi realmente misto-interi: cardinalità, lotti minimi, turnover,
-costi fissi, distribuzione proporzionale BUY/SELL fra Broker, chiusura o
-consolidamento di custodie, strategie fiscali discrete, fee dipendenti dalla
-sequenza e routing operativo di trasferimenti, settlement e FX.
-
-Riskfolio-Lib resta il motore di dominio per covariance, risk parity, frontiera
-efficiente e analisi rischio; SciPy resta disponibile per XIRR e calcolo numerico.
-Non reimplementare queste funzioni per eliminare una dipendenza. Un eventuale
-secondo backend richiede spike separato, parità completa degli output esistenti e
-benchmark che dimostri un vantaggio misurabile di capacità, latenza o memoria.
-
----
-
-## 🤖 QuarkAI — Assistente AI (MCP Server)
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Bassa (futuro)
-
-### Contesto
-
-Creare un assistente AI basato su MCP server chiamato "QuarkAI".
-
-### Funzionalità Future
-
-- Raccolta automatizzata notizie mercati azionari
-- Notifiche su Telegram (o simili) quando rileva eventi che richiedono attenzione
-- Recap giornaliero (es. alle 20:00) con sommario eventi rilevanti
-
----
-
-## 🔎 Gate sui campi di contratto senza consumatore
-
-**Data aggiunta**: 21 Settembre 2026
-**Status**: 📋 DIFFERITO — decisione developer del 21/09/2026
-**Priorità**: Media
-
-Oggi un campo aggiunto al contratto backend e **mai consumato dal frontend** non
-produce alcun errore: né a compile time, né a `svelte-check`, né in esecuzione.
-Il contratto cresce, il consumatore resta indietro, e nulla lo dice.
-
-**Il caso che l'ha reso visibile** (21/09/2026): `memory` in `ToolItemMetrics`,
-introdotto da `098dc435d`, mai letto da `ToolExecutionMetrics.svelte`. È stato
-trovato **per caso**: è inciampato in `duration()`, un helper tipizzato
-genericamente su `ToolItemMetrics[keyof ToolItemMetrics]`, che si è allargato da
-solo al nuovo campo e si è ritrovato un oggetto dentro una funzione che formatta
-millisecondi.
-
-> Il punto che rende il debito reale: **se quell'helper fosse stato tipizzato in
-> modo specifico, il campo sarebbe passato in silenzio.** Non esiste un gate —
-> esiste un inciampo fortuito. Un controllo che funziona per effetto collaterale
-> dice quanto era vistoso il difetto, non quanto siamo attenti.
-
-**Precedente con esito** (21/09/2026): `monetary_step`, campo del contratto P1
-compilato a mano dall'utente e **mai letto dalla matematica** — zero occorrenze
-in `constraints`/`objectives`/`solver`/`compiler`/`evaluator`, e scartato
-nell'unpack di `models.py`. È stato **rimosso** nella cancellazione di P1, e la
-sua unità minima di valuta è ora derivata da Babel (`minor_unit`), che è nel
-contratto v2 e che il motore legge davvero. È il primo campo che la regola
-condanna, ed è quello che l'ha generata.
-
-**Secondo precedente, con il segno invertito** (21/09/2026): `ToolDocumentation.path`
-nel descrittore di un Tool. Il modello ne valida **la forma** — relativo, niente
-`..` — e **non l'esistenza**. Il frontend lo consuma davvero (`ToolAboutPanel`,
-`ToolDiagnosticsPanel`, `presentation.ts`) e ci porta l'utente con un pulsante.
-Quindi un path verso una pagina cancellata **supera ogni gate**.
-
-> **Aggiornamento del 21/09, sera — la conseguenza è ora misurata, e c'è un gate
-> che avrebbe dovuto coprirlo.** `dev.py mkdocs check-links` esiste e verifica i
-> link fra codice e documentazione, ma per costruzione non vede questo:
-> `dev.py:1073-1195` cerca stringhe letterali `/mkdocs/` nei `.ts`/`.svelte` del
-> frontend (Scope 1) e `docs_url` nei soli `fx_providers` /
-> `asset_source_providers` (Scope 2). Il path dei Tool non sta in nessuno dei
-> due — vive in `ToolDocumentation(path=…)` sotto `tool_plugins/` ed è letto a
-> runtime. Misurato: `grep -rl 'user/tools' frontend/src` → **0**,
-> `grep -c 'tool_plugins' dev.py` → **0**.
->
-> Quindi cancellando o rinominando la pagina PAC, `check-links` sarebbe rimasto
-> **verde** mentre il pulsante *Documentation* del prodotto dava 404. Non è
-> l'assenza di un gate: è **un gate che esiste e il cui perimetro esclude
-> precisamente il riferimento che nessuno verifica** — la forma più difficile da
-> vedere, perché la sua esistenza è essa stessa una rassicurazione. Verificato a
-> mano che il path risolva in tutte e quattro le lingue del sito buildato: a
-> mano, perché non c'è altro modo.
-
-> Vale la pena tenerli accoppiati, perché insieme dicono una cosa che nessuno
-> dei due dice da solo: `monetary_step` era **dichiarato e mai consumato**,
-> `ToolDocumentation.path` è **consumato e mai verificato**. Il difetto non sta
-> in una direzione particolare — sta nel **non controllare l'estremo**. Una
-> regola con due casi opposti è più forte di una con un caso solo, perché il
-> lettore capisce dov'è il buco invece di imparare un esempio.
-
-**Terzo precedente, con la prova accanto** (21/09/2026): `RebalancerPolicy`,
-`type RebalancerPolicy = Literal["invest_only", "invest_and_sell"]` in
-`services/pac_allocator/models.py`. Zero consumatori in tutto il repository, e i
-suoi due valori sono **interamente contenuti** in `PlannerPolicy`, che è il tipo
-davvero usato (campo `policy` in due dataclass).
-
-L'argomento che lo ha condannato non è il conteggio, che si poteva leggere come
-«predisposizione per il lavoro che viene»: è che il disegno del Rebalancer v2 —
-`plan-phase00PacRebalancerArchitecture.prompt.md`, **1226 righe** — non lo nomina
-mai. `RebalancerPolicy` 0 occorrenze, `PlannerPolicy` 0 occorrenze,
-`invest_and_sell` 1 sola occorrenza in §12.4 e come nome di un *programma
-ristretto del solver*, cioè un concetto diverso da un valore di policy.
-
-> Registrato **con la misura, non con la conclusione**: chi lo rileggerà saprà
-> che è stato deciso su una prova e non su una preferenza. Se il Rebalancer avrà
-> bisogno di un tipo ristretto, nascerà con il disegno in mano — un tipo
-> ereditato da un'epoca precedente arriva con le sue assunzioni e nessuno che le
-> ricordi.
-
-**Quarto precedente, nel runner** (21/09/2026): `pac-analyze` registrato **due
-volte** — `_backend_services.py` e `_backend_schemas.py` — contro file di test
-cancellati nello stesso commit che li rimuoveva. Chiunque avesse eseguito quelle
-due azioni avrebbe avuto un rosso da un pytest su un percorso inesistente.
-
-`dev.py test check-orphans` era **verde**, e correttamente: verifica
-*registrazione → raggiungibilità da un `all`*. Nessuno verifica *azione → il file
-esiste*. Sweep manuale dei 211 percorsi citati da `scripts/test_runner/`: zero
-mancanti dopo la rimozione, due falsi positivi (un commento d'esempio e un glob).
-
-> I quattro insieme coprono le quattro caselle, ed è il motivo per cui vale la
-> pena tenerli tutti: `monetary_step` dichiarato-e-mai-consumato,
-> `ToolDocumentation.path` consumato-e-mai-verificato con un gate che lo esclude,
-> `RebalancerPolicy` dichiarato-e-superato, `pac-analyze` registrato-e-morto con
-> un gate che guarda la direzione opposta. **Due dei quattro hanno un gate che
-> passa**: non basta chiedersi se un controllo esiste, bisogna chiedersi da che
-> parte guarda.
-
-**Perché è differito e non dimenticato**: decisione developer del 21/09 —
-*«buona idea, ma da fare solo alla fine, quando il sistema è funzionante e si
-passa alla fase di condensazione e potenziamento»*. Costruire il gate adesso
-irrigidirebbe contratti che cambiano ogni giorno e produrrebbe rumore su campi
-legittimamente non ancora consumati. Ha senso quando la superficie si
-stabilizza: a quel punto «dichiarato e non usato» smette di essere una fase
-normale dello sviluppo e torna a essere il segnale che è.
-
-**Terzo caso, un campo che non può più portare informazione** (02/10/2026): `fx_cost` della riga d'ordine del
-PAC (`PlannerBuyOrderRow.fx_cost` in `backend/app/schemas/pac_allocator/rows.py`, costruito sempre a zero in
-`backend/app/services/pac_allocator/planner_report.py`, letto dal client dei Tool). Dopo la decisione del
-developer del 02/10 sugli FX nel PAC (nessuna commissione di conversione oltre lo spread) vale sempre 0 e non avrà
-mai un altro valore. Va tolto dal contratto: cambia il contratto e la versione del Tool, quindi non in questo
-round.
-
-**Collocazione**: debito trasversale fra contratto backend e consumatori
-frontend. Non appartiene a PAC/Rebalancer né alla piattaforma Tool: il caso che
-l'ha rivelato viene da lì, ma la lacuna riguarda qualunque coppia
-contratto/consumatore.
-
----
-
-## ⚖️ Asimmetria della piattaforma Tool sull'assenza
-
-**Data aggiunta**: 21 Settembre 2026
-**Status**: 📋 OSSERVAZIONE — nessuna delle due scelte è sbagliata
-**Priorità**: Bassa
-
-La piattaforma Tool modella l'assenza in **due modi opposti** ai suoi due
-estremi, e la differenza ha conseguenze UX visibili:
-
-| lato     | meccanismo                                         | effetto dell'assenza                                                                                                          |
-| -------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| backend  | `ToolDescriptor.operations` ha `min_length=1`      | un servizio **senza operazioni è irrappresentabile**: va rimosso del tutto, e il tool sparisce dal catalogo                   |
-| frontend | `ToolRendererUnavailableCode = 'renderer_missing'` | un tool **senza UI è rappresentato**, con messaggio tradotto in quattro lingue e la precisazione che nessun calcolo è partito |
-
-**Il backend vieta l'assenza, il frontend la descrive.**
-
-La conseguenza concreta, osservata il 21/09/2026 alla rimozione di P1: il
-**Rebalancer sparisce** dal catalogo (nessuna operazione v2 ancora) mentre il
-**PAC resta visibile e si spiega** (`operation="plan"` esiste, la UI no). Due
-tool nella stessa condizione logica — «backend pronto a metà, frontend assente»
-— hanno due destini UX diversi **per un dettaglio di modellazione**, non per una
-decisione di prodotto.
-
-Non è un difetto: entrambe le scelte sono difendibili. Ma se un giorno si vorrà
-uniformare — per esempio rappresentare anche il servizio senza operazioni, così
-che un tool in costruzione resti elencato e si spieghi invece di sparire — è qui
-che va guardato. Vale anche il contrario: rendere irrappresentabile il renderer
-mancante, obbligando a spedire UI e backend insieme.
-
----
-
-## 📁 Template per Nuovi TODO
-
-```markdown
-## 📌 [Titolo]
-
-**Data aggiunta**: [Data]  
-**Status**: [⏳ IN ATTESA | 📋 PIANIFICATO | 🔄 IN CORSO | ✅ COMPLETATO]  
-**Priorità**: [Alta | Media | Bassa]
-
-### Contesto
-[Descrizione del problema o motivazione]
-
-### Azione Futura
-[Passi da eseguire quando sarà il momento]
-
-### Riferimenti
-[Link a documentazione, issue, PR]
-```
-
----
-
-## 🔍 BRIM Auto-Detect Broker via Account Code
-
-**Status**: ❌ SCARTATA (07/09/2026, decisione utente) — pochi broker rilasciano dati che
-identificano il conto, e l'utente divide già da sé i file in fase di upload. Nessuna azione;
-registrata qui solo perché l'idea non ritorni.
-
-## 💰 Futura policy cedola (coupon_policy)
-
-**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)
-**Status**: 📋 IDEA FUTURA
-**Priorità**: Bassa
-
-### Concetto
-
-Colonna `coupon_policy` su `FAInterestRatePeriod` con opzioni:
-
-- **FULL_RESET** (attuale): torna a `initial_value` dopo coupon
-- **CUSTOM_RATE**: tasso cedola diverso dal tasso di accumulo
-- **PARTIAL**: percentuale del valore accumulato
-
-Per ora solo FULL_RESET è implementato.
-
----
-
-## 🗄️ Cache Server Centralizzato per Multi-Worker Uvicorn
-
-**Tema correlato (da fare PRIMA o insieme)**: audit del **necessario delle cache** — con il
-pannello admin (P2-4, 03/09) ora si vedono tutte le 16 cache nominali in un colpo d'occhio.
-Prima di investire nella condivisione multi-worker, vale la pena spendere tempo a capire se
-servono tutte o se ci sono refusi storici (cache aggiunte per colli di bottiglia poi spariti,
-TTL mai rivisti, cache mai popolate davvero). Il pannello "Server Caches" in Global Settings
-è lo strumento di osservazione già pronto per questa analisi (size/TTL/hit per nome).
-
-**Fuse qui (07/09) le code residue della voce "Web search / link-finder"** (voce eliminata:
-la parte search è completa con `ddgs`): (a) la cache dei risultati del link-finder
-(`web_link_finder._cache`) è un dict in-process → non condivisa tra worker: valutarla dentro
-questo stesso studio (TTL/invalidazione, degradazione graceful al dict in-process se nessuna
-cache esterna è configurata); (b) la Fase B SearXNG resta archiviata
-(`phases/04_webSearchEngine/`) come riferimento se mai servisse un primario self-hosted —
-nessuna azione finché `ddgs` regge.
-**Nota**: questa voce chiede l'analisi, non la soluzione.
-
-**Data aggiunta**: 14 Aprile 2026  
-**Status**: 📋 PIANIFICATO (quando si passerà a multi-worker)  
-**Priorità**: Bassa (oggi 1 worker è sufficiente con SQLite)
-
-### Contesto
-
-Le cache in-memory (theine) sono per-processo. Con `--workers 1` (default attuale) funzionano perfettamente. Con `--workers N` (N > 1), ogni worker ha la propria cache isolata: un cache miss su worker 2 non beneficia di un cache hit su worker 1. Uvicorn non garantisce sticky sessions.
-
-### Soluzione Proposta
-
-Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa theine internamente e espone un'interfaccia socket Unix ai worker via `multiprocessing.managers.BaseManager`:
-
-```
-┌─────────────────────────────────────────────────┐
-│  uvicorn master process                          │
-│  └── lifespan() spawna CacheServer process       │
-│       ├── theine Cache instances (in-memory)     │
-│       └── Unix socket /tmp/librefolio-cache.sock │
-├──────────────────────────────────────────────────┤
-│  Worker 1 ──proxy──┐                             │
-│  Worker 2 ──proxy──┼──► Unix socket ──► CacheServer
-│  Worker N ──proxy──┘                             │
-└──────────────────────────────────────────────────┘
-```
-
-### Implementazione (~100 righe)
-
-1. **`backend/app/utils/cache_server.py`** (nuovo): `CacheManager(BaseManager)` con metodi `cache_get/set/delete/clear/get_or_create` registrati. Il server process usa theine direttamente.
-
-2. **`utils/runtime/cache.py`**: `NamedCache` riceve un flag `_remote_manager`. Se attivo, delega get/set/delete via proxy al cache server. Se non attivo (single-worker), usa theine locale come oggi. Zero cambiamenti nei callsite (`get_ttl_cache()` API invariata).
-
-3. **`main.py` `lifespan()`**: Se `workers > 1`, spawna il cache server subprocess prima di avviare l'app. Passa l'indirizzo socket via env var. Shutdown: termina il subprocess.
-
-### Trade-off
-
-- **Latenza**: ~200-500μs per op (vs ~1μs theine locale). Irrilevante per cache di API call da 1-5s.
-- **Serializzazione**: Valori devono essere pickleable (Pydantic model, dict, list — tutti OK).
-- **Fault tolerance**: Se il cache server crasha, i worker perdono solo la cache (no data loss). Restart automatico possibile.
-- **Alternativa**: `diskcache` (SQLite+filesystem, process-safe, ~50μs, ma persistente — non necessario).
-
-### Prerequisiti
-
-- Passaggio a **PostgreSQL** (SQLite non supporta bene multi-writer)
-- Necessità reale di N > 1 worker (>50 utenti concorrenti)
-
-### File coinvolti
-
-- `backend/app/utils/cache_server.py` (nuovo)
-- `backend/app/utils/runtime/cache.py` (adattare `NamedCache`)
-- `backend/app/main.py` (spawn/shutdown cache process)
-
----
+**Decisione del developer (28/10/2026):** non è una priorità della 1.3, resta qui.
 
 ## 📅 Scheduled Investment — Frequenze disaccoppiate (prezzi vs cedola) + anchor day
 
-**Data aggiunta**: 24 Aprile 2026 (retest Batch 4 sezione 3)
-**Status**: ⏳ IDEA — non in roadmap immediata
-**Priorità**: Media (UX, non bloccante)
+**Data aggiunta**: 24 Aprile 2026 · **Status**: ⏳ IDEA · **Priorità**: Media (UX, non bloccante)
+
+**Il limite.** Nel provider `scheduled_investment` la frequenza dei prezzi coincide con quella della cedola
+(`maturation_frequency`), e la data della cedola dipende dalla `start_date` del periodo. Quindi un BTP con cedola semestrale
+ha due punti l'anno sul grafico, e una cedola il 15 marzo e il 15 settembre non si può modellare se l'asset parte in
+un'altra data.
+
+**Cosa serve.**
+- `FAInterestRatePeriod`: `price_frequency` (default DAILY), `coupon_frequency` (solo con `generate_interest=True`),
+  `coupon_anchor` (`SCHEDULE_START`, `FIRST_OF_MONTH`, `LAST_OF_MONTH`, giorno del mese, giorno della settimana, data
+  fissa), con la coerenza fra frequenza e anchor validata.
+- Motore (`_generate_schedule_values`): due insiemi di date, `price_emission_dates` e `coupon_dates`, che possono
+  sovrapporsi.
+- `ScheduledInvestmentEditor.svelte`: i tre campi, con il selettore che dipende dalla frequenza.
+- Nessuna migrazione Alembic: i campi stanno nel JSON `provider_params`; se `price_frequency` manca vale
+  `maturation_frequency`.
+
+**⚠️ Il valore di oggi (#R6-3).** Il ramo «dentro il ciclo» di `get_current_value` presume che cedola e punto di prezzo
+coincidano: con le frequenze separate il valore sulle card può divergere dalla schedule. `get_current_value` e
+`_compute_value_at` vanno ripensati insieme, applicando gli eventi in ordine cronologico.
+
+**Test** (`test_synthetic_yield_integration.py`): parametrici su frequenze e anchor, con `current_price` in date scomode: il
+giorno dopo una cedola, a metà ciclo, fra due date di prezzo, e il caso BTP (prezzi DAILY, cedola ANNUAL).
+
+**Stima**: circa un giorno, più i test.
+
+# Transazioni e import
+
+## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
+
+**Status**: 📋 FUTURO — prima va capito se serve ancora.
+
+**L'idea.** Nella bulk modal, una riga di notifica come quella di «promote»: se una transazione può collegarsi a un evento
+dell'asset entro la tolleranza dello slider delta-days, l'utente vede i candidati e conferma.
+
+**Cosa c'è oggi.** La rotta `POST /transactions/suggest-events` non esiste più. Il bottone «Ricollega eventi» in Transazioni
+(`GET /transactions/event-reconciliation`, `EventReconciliationModal.svelte`) copre una parte del bisogno, ma cerca solo
+eventi **dello stesso giorno**. Il motore sta in `backend/app/services/transactions/event_suggestions.py`
+(`suggest_events_bulk`).
+
+**Cosa resta.**
+- La riga di notifica nella bulk modal, con una tolleranza in giorni.
+- `AssetEventPicker.svelte` usa ancora `query_events_bulk`, senza la mappa tipo transazione → tipo evento e senza
+  l'ordinamento per distanza: va portato sullo stesso motore.
+
+## 🌙 Task notturno — dividendi e interessi senza evento collegato
+
+**Data aggiunta**: 30 Settembre 2026 (appunto dell'11/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Media
 
 ### Contesto
 
-Durante il retest del fix I-bis #26 (Batch 4.c — riordino Step 2/4 in
-`scheduled_investment/plugin.py`) è emerso un limite di design attuale del
-provider `scheduled_investment`:
+Insieme alla sincronizzazione notturna, un task cerca le transazioni di tipo dividendo o interesse,
+più vecchie del periodo sincronizzato, **senza evento collegato**. Per ognuna cerca nell'asset un
+evento compatibile in un intervallo di date configurabile (7 giorni per default).
 
-> **La frequenza di generazione dei prezzi coincide con la frequenza di
-> maturazione della cedola** (`maturation_frequency`). Attivando
-> `generate_interest=True`, ogni volta che viene generato un evento
-> INTEREST il valore si resetta al principal. Non esiste oggi un modo
-> per scegliere _separatamente_ la granularità del grafico prezzi e la
-> frequenza di payout.
+### Azione Futura
 
-Inoltre la data in cui cade la cedola (anchor day of month / week /
-year) è determinata dalla `start_date` del periodo — non c'è controllo
-UX su "cedola ogni 1 del mese" o "cedola ogni lunedì" indipendentemente
-da quando parte lo schedule.
+- Se l'evento non c'è: crearlo (manuale o auto-assegnato, da decidere) e collegarlo, **oppure**
+  produrre un report o una notifica che elenca le transazioni trovate con il suggerimento di
+  correzione.
+- Studiare se dai soli dati di una transazione si può riconoscere uno split (dubbio).
+- Studiare cosa succede se l'asset cambia provider: uno nuovo che espone l'evento alla sync, o uno
+  che smette di esporlo.
+- Riusare il backend già pronto della sezione «🔗 Suggerimento eventi collegabili nella bulk modal
+  (da P2-6)».
 
-### Cosa serve (design a alto livello)
+### Ricollegamento automatico dopo il sync (19/10/2026, decisione N68, punto 4) — 🔍 da analizzare
 
-**Schema Pydantic** (`FAInterestRatePeriod`):
+Nella 1.3 arrivano i primi tre punti di N68:
 
-- `price_frequency: MaturationFrequency` — granularità grafico (DAILY
-  come default ragionevole).
-- `coupon_frequency: MaturationFrequency | None` — **solo se**
-  `generate_interest=True`; disaccoppiata da price_frequency.
-- `coupon_anchor: CouponAnchor | None` — enum opzionale:
-  - `SCHEDULE_START` (comportamento corrente: conta dalla start_date)
-  - `FIRST_OF_MONTH` / `LAST_OF_MONTH`
-  - `SPECIFIC_DAY_OF_MONTH(day: int 1-28|"last")`
-  - `SPECIFIC_WEEKDAY` (MON..SUN)
-  - `SPECIFIC_DATE(month: int, day: int)` per ANNUAL/SEMIANNUAL
-- Validator Pydantic: `coupon_frequency` e `coupon_anchor` devono
-  essere coerenti (es. `SPECIFIC_WEEKDAY` solo con WEEKLY,
-  `SPECIFIC_DATE` solo con ANNUAL/SEMIANNUAL).
+- il cambio di valuta di un asset non è più bloccato dagli split;
+- gli split sopravvivono al cambio di valuta;
+- un bottone **«Ricollega eventi»** in Transazioni elenca le transazioni senza evento, con l'evento candidato.
 
-**Engine** (`_generate_schedule_values`):
+Il quarto resta qui, **da analizzare in un momento futuro**: dopo un sync, ricollegare **da soli** i casi certi (stesso
+asset, tipo e data, un solo candidato), con un riepilogo per l'utente. La regola deve stare nel backend, non in dati
+tenuti dal frontend, che si perderebbero a una ricarica o con un sync notturno.
 
-- Calcolare due set di date separati:
-  `price_emission_dates` (dal `price_frequency`) e `coupon_dates`
-  (dal `coupon_frequency + coupon_anchor`, se abilitati).
-- Step 3 (emit value) ora su `price_emission_dates` invece di
-  `all_maturation_dates`.
-- Step 4 (auto-coupon reset) ora su `coupon_dates` invece di
-  `all_maturation_dates`.
-- I due set possono sovrapporsi (es. DAILY prezzi + MONTHLY coupon:
-  ogni giorno ha un punto, solo il 1° del mese c'è anche il reset).
+Prima di farlo va verificato che serva davvero (developer, 19/10: «prima facciamolo funzionare, magari scopriamo che
+non serve e i primi 3 sono sufficienti»). Si lega al task notturno: potrebbero diventare la stessa cosa.
 
-**Frontend** (`ScheduledInvestmentEditor`):
+## 📥 BRIM — riconoscere all'import una posizione chiusa (Directa, CSV generico)
 
-- Nuova riga per `price_frequency`.
-- Riga condizionale `coupon_frequency` (visibile solo se
-  `generate_interest=true`).
-- Nuovo campo `coupon_anchor` con tendina contestuale
-  (day-of-month picker per MONTHLY, weekday picker per WEEKLY, ecc.).
-- Retrocompatibilità: se `price_frequency` manca nello schema JSON
-  esistente → migrare a `price_frequency = maturation_frequency`
-  (no breaking change per gli asset già configurati).
-
-### Benefici attesi
-
-- **UX**: un utente può vedere l'andamento daily del grafico anche se
-  la cedola è pagata semestralmente (oggi il grafico è sparso su 2
-  punti/anno, confondendo chi guarda).
-- **Modello fedele**: BTP Italia 2028 ha cedole semestrali ma il
-  valore di mercato varia ogni giorno — dovremmo riflettere entrambi
-  i ritmi.
-- **Anchor date**: un'obbligazione che paga cedola il 15 marzo e 15
-  settembre NON può oggi essere modellata fedelmente se l'asset è
-  stato "creato" con start_date diversa da quelle.
-
-### Non in questo plan perché
-
-- Estende schema Pydantic + migrazione dati esistenti +
-  retrocompatibilità — costo 4-6h.
-- Aggiunge ~3 campi FE + validazione contestuale — costo 3-4h.
-- Test coverage estesa (cross-product di freq × anchor × event types).
-- **Non bloccante**: il comportamento attuale è coerente se
-  `generate_interest=False` (retta crescente pulita) o se l'utente
-  accetta la coincidenza prezzi/cedola.
-
-### File candidati (quando si apre il ticket)
-
-- `backend/app/schemas/assets/scheduled_investment.py` — `FAInterestRatePeriod`,
-  nuovo enum `CouponAnchor`.
-- `backend/app/services/asset_source_providers/scheduled_investment/plugin.py`
-  — Step 3/4 rifattorizzati.
-- `frontend/src/lib/components/assets/editors/ScheduledInvestmentEditor.svelte`.
-- Test: `test_synthetic_yield_integration.py` — parametric su
-  `(price_frequency, coupon_frequency, coupon_anchor)`.
-- Alembic: **nessuna** migrazione (campo in JSON `provider_params`,
-  retro-compat via default sull'assenza).
-
-### ⚠️ Caveat current_price (retest Batch 4, 2026-04-24)
-
-Durante il retest 3.2/3.3 (BTP DAILY/WEEKLY regen) è emerso che il
-**current_price** del provider Scheduled Investment **non è ancora
-del tutto coerente con gli eventi intermedi** (coupon reset +
-price_adjustment) quando la frequenza coupon e la frequenza prezzi
-sono disaccoppiate — anche dopo i fix #R6-2 (`_compute_value_at`
-backward-walk) e #R6-4 (event wipe simmetrico).
-
-**Sintomo osservato**: dopo rigenerazione DAILY/WEEKLY il chart
-storico è corretto (sawtooth visibile), la tab Events è pulita
-(niente coupon stantii), ma il **valore "oggi"** mostrato nelle
-card asset può divergere rispetto a quanto ricostruibile a mano
-dalla schedule — tipicamente perché il ramo "intra-cycle" di
-`get_current_value` assume coincidenza tra evento coupon e punto
-di emissione prezzo, che nel modello disaccoppiato non vale più.
-
-**Cosa fare quando si apre il ticket #R6-3**:
-
-1. **Ripensare `get_current_value`** insieme a `_compute_value_at`:
-   deve camminare lo schedule reale con i due set indipendenti
-   (`price_emission_dates` ≠ `coupon_dates`) e applicare gli
-   eventi nel loro ordine cronologico reale, non presumendo
-   lockstep.
-2. **Estendere `test_synthetic_yield_integration.py`** con casi
-   parametrici che verifichino `current_price` in date "scomode":
-   - il giorno dopo un coupon (deve scendere)
-   - a metà ciclo con rateo parziale
-   - nel gap tra due price-emission date consecutive (nessun
-     evento nel mezzo)
-   - con `price_frequency=DAILY` + `coupon_frequency=ANNUAL`
-     (il caso realistico BTP) — verifica che il valore cambi
-     ogni giorno ma il reset avvenga solo alla data cedola.
-3. **Includere `current_price` nella matrice di regressione** del
-   provider, non solo gli storici. Oggi le 4 regression aggiunte
-   in 4.c coprono solo il passato.
-
-### Cross-link
-
-- Rilevato durante retest Batch 4 sezione 3 (I-bis #26):
-  [`LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part3_1_Closure_2.prompt.md`](LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part3_1_Closure_2.prompt.md)
-  §"Retest Batch 4 — sezione 3".
-- Fix correlato già applicato in 4.c:
-  `_generate_schedule_values` Step 2/4 reorder — emette valore
-  pre-reset.
-
----
-
-## ⚡ Migrazione a ORJSONResponse per performance JSON
-
-**Data aggiunta**: 11 Giugno 2026
-**Priority**: P4 (ottimizzazione, non urgente)
-**Scope**: Backend (`app/main.py`, serializzazione)
+**Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA — da approfondire se ne vale la pena · **Priorità**: Bassa
 
 ### Contesto
 
-`orjson` è un serializzatore JSON scritto in Rust, 5–10× più veloce di `json` stdlib per la serializzazione e 2–3× per la deserializzazione. FastAPI supporta nativamente `ORJSONResponse` come `default_response_class`.
+Il flag che fa comparire nel frontend il banner «posizione importata già chiusa: la ricerca potrebbe
+non dare risultati» esiste, ma oggi lo usa solo Crédit Agricole.
 
-### Problema attuale: incompatibilità con `SafeDecimal`
+### Azione Futura
 
-Il progetto usa `SafeDecimal = Annotated[Decimal, PlainSerializer(..., when_used="json")]` su tutti gli schemi di transazioni, FX e portafoglio. Questo `PlainSerializer` garantisce che i `Decimal` arrivino al frontend come stringhe senza notazione scientifica (es. `"0.00500000"` invece di `5e-3`).
-
-**`orjson` bypassa i `PlainSerializer` di Pydantic** quando serializza direttamente, convertendo i `Decimal` in float nativi — con rischio di perdita di precisione e notazione scientifica silenziosa sul frontend.
-
-### Come implementarlo correttamente
-
-Non è sicuro usare `ORJSONResponse` come `default_response_class` senza prima risolvere questo punto. Le opzioni:
-
-1. **Subclass `ORJSONResponse`** che chiama `model.model_dump(mode='json')` prima di passare a `orjson` → applica i `PlainSerializer` prima della serializzazione Rust.
-2. **Custom `orjson` default function** che intercetta `Decimal` e lo serializza come stringa.
-3. **Rendere `orjson` l'encoder di Pydantic v2** via `model_config = ConfigDict(json_encoders=...)` — ma deprecato in v2.
-
-**Approccio consigliato**: opzione 1. Creare `SafeORJSONResponse(ORJSONResponse)` che fa `jsonable_encoder(content)` prima di `orjson.dumps()`, e usarla come `default_response_class`.
-
-### Benefici attesi
-
-Endpoint pesanti (bulk import, FIFO calc, portfolio summary) potrebbero guadagnare 20–50ms su payload grandi. Serializzazione nativa di `datetime`, `UUID`, `Enum` senza `jsonable_encoder`.
-
-### Prerequisiti
-
-- Test coverage sugli endpoint con campi `SafeDecimal` per verificare output identico
-- Benchmark prima/dopo su `/api/v1/transactions` con dataset reale
-
----
-
-Aree di miglioramento dopo aver visto compeditor:
-Tra i provider di prezzo, oltre ai siti da aumentare, ha senso fare olgre al css selector (che potrebbe essere rinominato web page) anche json api, html table e csv
-aggiungere i provider AI, olre a ollama e openrouter, anche tutti gli altri per l'installazione locale.
-pensare un sistema di addon che permetta al forontend di aggiungere tab. Capendo come creare un market place.
-aggiungere nella dashboard e nei broker dei tab che fanno anche altri tipi di analisi oltre quelli pensati. Altri tipi di analisi restano da definire (allocazione % con quadrettoni/treemap già fatta, vedi TODO_Completati.md).
-La vecchia idea di target allocation per Broker è ora precisata nella sezione
-“PAC/Rebalancer — Profili Persistenti e Strategie Estese”: la v1 usa target
-globali per Asset e route/priorità; una distribuzione proporzionale esplicita per
-Broker resta futura.
-Aggiungere la possibilità di creare "Portafogli" che dovrebbero essere gruppi di broker o asset o entrambi, da approfondire.
-Fare delle pagine di dettaglio per analizzare i trade, le fee 
-Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una data di inizio per aver modo di vedere la differenza tra andamento teorico e reale.
-
----
-
-## Risk Analysis
-
-### RQMC with explicit scrambling contract (low priority — 2026-07-28)
-
-- **What**: re-evaluate randomized quasi-Monte Carlo only when the QuantLib Python
-  binding exposes a complete scrambling path suitable for production.
-- **Why deferred**: production now supports MC and QMC entirely in QuantLib. The
-  previous SciPy RQMC path was removed, and its overloaded `seed` mixed random seed,
-  Sobol offset and scrambling semantics.
-- **Required contract**: separate scramble seed from `sobol_start_index`; never
-  overload either field.
-- **Required gate**: convergence across randomized replicates, QuantLib-only
-  execution inside the `spawn` worker and no silent SciPy production fallback.
-- **Trigger to revisit**: a newer QuantLib binding exposes the required scrambling
-  primitives or a separately approved production engine is adopted.
-
-### Dynamic scenario catalog (future — 2026-07-29)
-
-- **What**: evolve the initial static, typed, startup-loaded built-in/host YAML
-  catalog with file detection without restart, manual/hot reload, personal
-  scenario CRUD, persistence of UI edits, YAML import/export, explicit built-in
-  overrides and administrative diagnostics.
-- **Why deferred**: G6 first needs a small deterministic contract with no database,
-  watcher or generic form engine.
-- **Trigger to revisit**: the static catalog and typed editors are stable in
-  production and users need scenario lifecycle management.
-- **Reference**:
-  `Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`.
-
-### Persistent historical-replay proxies (future — 2026-07-29)
-
-- **What**: persist asset→proxy associations, optionally propose proxies only with
-  explicit user confirmation, and reuse confirmed mappings in later replays.
-- **Why deferred**: G6 deliberately keeps proxy choice explicit and ephemeral;
-  automatic or silent substitution is forbidden.
-- **Trigger to revisit**: repeated replay use demonstrates stable, auditable proxy
-  mappings and the persistence UX has been designed.
-
----
+- **Directa**: con ETF venduti completamente, verificare se dal solo messaggio si capisce che la
+  posizione si è estinta, e in quel caso alzare il flag.
+- **CSV generico** (per esempio Recrowd importato in blocco): tenere traccia della quantità per
+  capire quando la posizione si annulla.
 
 ## 💱 Settlement multicurrency ed esposizione — feedback 2026-09-08
 
@@ -1471,521 +334,6 @@ o approvate; conservare collegamento alla motivazione e alla riga originaria.
 **Dipendenza:** chiarire il modello F-MC-1 e la distinzione fra ricostruzione documentata
 e simulazione assistita. Nessuna generazione FX automatica autorizzata dai bug E1-E4.
 
-### F-MC-3 — Valuta base dell'asset ed esposizione valutaria economica
-
-Spostata il 18/10/2026 nella voce «🧬 Profilo dei dati dell'asset», in cima al file.
-
-## Stimatori robusti di covarianza per la matrice di correlazione (Riskfolio)
-
-**Priorità:** 🔽 bassa — dopo che la pagina correlazioni avrà una direzione chiara.
-
-`riskfolio.src.ParamsEstimation.covar_matrix` espone quindici stimatori oltre a quello
-storico: `ledoit`, `oas`, `shrunk`, `gl`, `jlogo`, `gerber1/2`, `ewma1/2`, `semi`, più
-tre metodi di denoising. Servono quando gli asset sono molti e le osservazioni poche —
-con cento asset e 750 giorni si stimano 5 050 parametri da 75 000 osservazioni, e la
-matrice campionaria diventa instabile: piccole variazioni nei dati muovono molto il
-risultato.
-
-**Perché non ora:** è un miglioramento di *qualità della stima*, non di prestazioni.
-Misurato: Ledoit-Wolf 25,4 ms contro 0,2 ms di `np.cov`, scarto massimo 1,2e-05.
-La migrazione M3 (vedi `02_riskfolioIntegration/06`) è deliberatamente a comportamento
-invariato: cambia il tempo, non i numeri mostrati. Mescolare le due cose renderebbe
-impossibile dire quale delle due ha causato una differenza.
-
-**Gate:** decidere prima se la pagina correlazioni serve la domanda L2 («sono
-diversificato come credo?») o una domanda di ottimizzazione. Se resta descrittiva, lo
-stimatore storico è quello onesto da mostrare. Se diventa prescrittiva, uno stimatore
-restretto è obbligatorio, e va dichiarato in UI con link alla wiki.
-
-## 🔄 Rivalutare le otto misure reimplementate da N contro riskfolio-lib
-
-**Posizione dello sviluppatore, 18 Set 2026** — da riprendere nel prossimo sprint:
-
-> *« Anche se è un wrapper di NumPy, è meglio usare una libreria collaudata, anche perché
-> nel tempo, se arrivano migliorie, le abbiamo **for free**. »*
-
-**Stato attuale**: `backend/app/services/risk/acquired.py` reimplementa otto misure
-(`worst_realization`, `maximum_drawdown`, `drawdown_at_risk`, `conditional_drawdown_at_risk`,
-`ulcer_index`, `effective_number_of_assets`, `diversification_ratio`) che **esistono già nel
-catalogo di riskfolio**.
-
-**La ragione data da N**: riskfolio è importabile **solo dentro il worker spawnato**
-(`risk/quant/riskfolio_worker.py`, decisione devWiki `risk-quant-engine-process-boundary`),
-mentre le analitiche che consumano queste misure implementano `RiskAnalytic.compute()`
-**sincrono**. Non si può chiamare un processo separato da lì.
-
-**La domanda vera da porsi, quindi, non è «reimplementare o delegare» ma**:
-
-1. Il confine processo/worker è ancora quello giusto, o si può allargare?
-2. Quanto costa davvero l'import (~340 MB nativi) in un processo che già carica NumPy/SciPy?
-3. Le due convenzioni piegate da N — **segno** (perdite negative) e **baseline** (la serie
-   underwater porta un elemento pre-rendimento che `MDD`/`UCI` consumano e `DaR`/`CDaR` no) —
-   sono esprimibili come adattatore sottile sopra la libreria, invece che come reimplementazione?
-
-⚠️ **Da non perdere nella rivalutazione**: `test_risk_metrics_oracle.py` **già confronta** le
-nostre implementazioni con riskfolio. **La rete per fare il passaggio in sicurezza esiste già** —
-è lo stesso oracolo, usato in direzione opposta.
-
-🔴 **E un divieto che resta valido comunque** (D130/D244): `riskfolio.SemiDeviation` **non** è la
-nostra deviazione di ribasso. Misura lo scarto dalla **propria media**, non da un MAR fisso: su
-un portafoglio che perde lo 0,5 % ogni giorno vale **esattamente zero**. **Quella sostituzione
-resta vietata indipendentemente dall'esito di questa rivalutazione.**
-
-**Priorità**: media. **Non blocca il rilascio** — è un lavoro di miglioramento.
-
-## 🔢 Separatore decimale — l'helper esiste, ma è legato alla lingua sbagliata
-
-**Verificato il 18 Set 2026**, su richiesta dello sviluppatore (*«credo ci sia già un helper in
-tal senso, se non esiste mettilo in TODO_FUTURI altrimenti usiamolo»*).
-
-**Il sintomo**: con l'app in italiano, la stessa riga mostra due separatori.
-
-```
-−1.3%        ← punto     (formatPercent → toFixed)
-−175,91 €    ← virgola   (currencyFormat → toLocaleString)
-```
-
-Non è un difetto del sottosistema rischio: la **panoramica** della dashboard fa lo stesso
-(`-9.47%` accanto a `-392,75 €`). È un difetto di progetto, preesistente.
-
-### 🔴 Perché «usiamo l'helper esistente» non basta
-
-`utils/currency/currencyFormat.ts:36,57` chiama:
-
-```ts
-Math.abs(amount).toLocaleString(undefined, {…})
-                 ^^^^^^^^^
-```
-
-**`undefined` significa «la lingua del BROWSER»**, non quella scelta nell'app.
-
-### Quando divergono — non è un caso limite, **è l'uso normale del selettore di lingua**
-
-`frontend/src/lib/i18n/index.ts:65-84` risolve la lingua in quest'ordine:
-
-```
-1.  localStorage 'librefolio-locale'   ← la scelta esplicita dell'utente   (vince)
-2.  getLocaleFromNavigator()           ← il browser, solo come RIPIEGO
-3.  DEFAULT_LOCALE
-```
-
-> 🔑 **Il browser è il ripiego, non la fonte.** Appena l'utente tocca il selettore di lingua,
-> `librefolio-locale` viene scritto e **la lingua dell'app si stacca da quella del browser**.
-> `toLocaleString(undefined)` continua però a leggere **solo** il browser: le due si separano
-> **per costruzione**, non per incidente.
-
-### 🔴 Divergenza RIPRODOTTA dal vivo, 18 Set 2026
-
-Selettore di lingua → *English*, su un browser `it-IT`:
-
-```
-app_lang      "en"            ← scelta dell'utente, onorata
-browser       "it-IT"
-interfaccia   "How much can it hurt?"      ✅ inglese, corretto
-denaro        "−175,91 €"                  🔴 formato ITALIANO sotto interfaccia inglese
-```
-
-**Non è un'ipotesi: è uno screenshot.** E funziona in entrambi i versi — un utente italiano con
-il sistema operativo in inglese (caso comunissimo) che sceglie 🇮🇹 ottiene **interfaccia italiana
-e numeri inglesi**.
-
-**Adottare questo helper in `formatPercent` propagherebbe un secondo difetto invece di
-chiuderne uno.**
-
-### Il lavoro vero, in tre passi
-
-1. **Decidere la fonte della lingua**: il locale dell'app (`librefolio-locale`), non quello
-   del browser. Serve un accessor unico che entrambi i formattatori consumano.
-2. Legare **`currencyFormat`** e **`formatPercent`** a quell'accessor.
-3. Aggiornare le asserzioni che oggi fissano il punto: **2** negli unitari di `formatPercent`,
-   **~23 negli E2E** (di cui 20 in `risk-analysis.spec.ts`).
-
-📌 **Raggio piccolo sul lato chiamanti** — `formatPercent` ha **5** consumatori — **ma il
-cambio è osservabile ovunque**, perché il formattatore del denaro è usato in tutta l'app.
-
-### 21 Set 2026 — misurato il perimetro vero, e il rischio è il 16 %
-
-Il pacchetto `T4` del round 2 non è mai partito. Prima di aprirlo ho contato i siti:
-
-```
-frontend/src/lib/features/risk/     26  toFixed
-tutto il resto dell'app              139  toFixed
-                                    ─────
-                                     165
-```
-
-> 🔑 **Il sottosistema rischio è un sesto del difetto.** Ripararlo lì dentro
-> produrrebbe l'unica pagina dell'app con il separatore giusto — cioè
-> **renderebbe la divergenza più visibile, non meno**: l'utente passerebbe da
-> «tutta l'app sbaglia allo stesso modo» a «questa pagina dice `−1,3 %` e quella
-> accanto `−1.3%`». Un difetto uniforme si legge come una convenzione; **un
-> difetto a chiazze si legge come un bug.**
-
-✅ **Decisione dello sviluppatore, 21 Set 2026**: *«mettiamo in TODO e facciamo tutto
-in futuro»*. `T4` esce dal round 2 **per intero** — non il rischio prima e il resto
-poi. Diventa una campagna sua, con i suoi tre passi qui sopra.
-
-⚠️ **E il passo 1 resta il vero lavoro**: i 165 `toFixed` sono meccanici, **la scelta
-della fonte della lingua no**. Chi riaprirà questa voce cominci da lì, o sostituirà
-165 chiamate legate al browser con 165 chiamate legate al browser.
-
-**Priorità**: media. **Non blocca il rischio**, e va fatto come lavoro di progetto con la sua
-verifica, non infilato dentro un pacchetto di superficie.
-
----
-
-## Il generatore di dati di prova non onora i bersagli `end_price`, e lo scarto è sistematico
-
-**Misurato da N il 18 Set**, corsia 6151, finestra dichiarata.
-
-| asset        | bersaglio | ottenuto  | scarto      |
-| ------------ | ---------:| ---------:| -----------:|
-| Apple        | 185,00    | 264,57    | **+43,0 %** |
-| Bitcoin      | 45 000    | 25 889,81 | **−42,5 %** |
-| Ethereum     | 2 650     | 1 290,41  | **−51,3 %** |
-| RE Loan Roma | 5 000     | 5 010,52  | +0,2 %      |
-
-### 🔴 La causa — e l'etichetta che le avevo dato era sbagliata
-
-> **Correzione del 18 Set, di N.** Questa voce diceva *«deriva di Jensen: `uniform(−a,+a)`
-> applicato moltiplicativamente ha media logaritmica negativa `≈ −σ²/2`»*. **Non è Jensen**,
-> e l'etichetta manderebbe chi apre il lavoro a cercare un bias che non c'è.
-
-**I segni sono discordi**, e Jensen spingerebbe tutti dalla stessa parte:
-
-| asset     | bersaglio | consegnato | scarto      |
-| --------- | ---------:| ----------:| -----------:|
-| Apple     | 185,00    | 264,57     | **+43,0 %** |
-| Microsoft | 390,00    | 322,03     | **−17,4 %** |
-| Bitcoin   | 45 000    | 25 889,81  | **−42,5 %** |
-
-Le ampiezze sono **esattamente quelle che la volatilità configurata prevede**: rumore
-uniforme su ±2σ dà deviazione `2σ/√3` al giorno, che su 267 giorni fa **≈ 30 %** per le
-azioni e **≈ 91 %** per la cripto su 373. **Tutti e tre cadono entro ~1,2 σ.**
-
-> 🔑 **Non è un difetto di calcolo: `end_price` è un'attesa, non un bersaglio.**
-> `drift_per_day = (end/start)^(1/n) − 1` centra il valore **in media sulle realizzazioni**, e
-> ogni popolamento ne pesca **una sola**. Il commento nel codice dice *«so the final price
-> arrives near end_price»*, e su una cripto «near» significa **±91 %**.
-
-### E la forma vera, che è più interessante del difetto
-
-Gli **indici centrano il bersaglio** (`6399,99999999994`, `3949,99999999998`) perché
-`_populate_benchmark_indices` **normalizza**. Gli altri no, perché **nessuno li normalizza**.
-
-> **Due metà dello stesso generatore trattano la stessa configurazione in due modi diversi**
-> — una la onora esattamente, l'altra solo in media — **e la struttura dati non distingue i
-> due casi.** È la stessa famiglia delle due convenzioni coerenti ciascuna con sé e
-> incoerenti a vista dentro lo stesso oggetto.
-
-**Il lavoro vero**, quindi, non è «correggere una deriva»: è **decidere se `end_price` è un
-contratto o un'aspettativa, e renderlo esplicito nella struttura dati** — oppure normalizzare
-anche le serie non-indice, come già si fa per gli indici.
-
-### ⛔ Perché non è stato riparato subito
-
-Ripararlo porterebbe Apple da **264,57 a 185,00** e Bitcoin da **25 890 a 45 000**. Al momento
-della scoperta, **cinque superfici stavano misurando e pubblicando numeri su quelle serie**:
-ogni misura presa quel giorno sarebbe stata invalidata **senza che nessuno sapesse perché**.
-
-📌 È lo stesso criterio per cui non si infila uno spostamento grande di numeri già pubblicati
-dentro un passo che ha un'altra proprietà definente.
-
-### Quando farlo, e con cosa
-
-**Dopo la fase 2**, come lavoro suo, con il raffronto ante/post su tutte le superfici che
-leggono quelle serie. La correzione naturale è compensare la deriva logaritmica nel
-`drift_per_day` (aggiungere `+σ²/2`), oppure applicare il rumore in forma additiva sui
-log-rendimenti invece che moltiplicativa sui prezzi.
-
-**Priorità**: media. **Non blocca nulla oggi** — i dati sono plausibili, semplicemente non
-sono quelli dichiarati.
-
----
-
-## Un commento di test è un'asserzione senza cancello
-
-`frontend/e2e/gallery.spec.ts:710-716` motiva la scelta di non usare `.first()` così:
-
-> *«"RE Loan Milano" … has exactly ONE PriceHistory row ever (see populate_mock_data.py
-> populate_price_history() `loan_price_points`) so its WAC/Market chart renders empty»*
-
-Dopo F1 quell'asset ha **267 righe di prezzo**, e `loan_price_points` **non esiste più in quella
-forma**. Il test **non fallisce** — punta ad Apple per nome — ma **la ragione scritta è falsa e
-cita un simbolo che non c'è**.
-
-🔑 **Il fatto generale**: un commento che spiega *perché* un test è scritto in un certo modo
-**è un'asserzione che nessuno esegue**, quindi nessuno la vede scadere. È il secondo caso nella
-campagna in cui una modifica ai dati di prova invalida in silenzio un presupposto scritto
-altrove.
-
-**Priorità**: bassa come riparazione, **alta come avvertimento**. Da sistemare quando si tocca
-`gallery.spec.ts`.
-
----
-
-## Avanzamento della simulazione Monte Carlo — si può fare, e si sa già dove è difficile
-
-**Misurato da S4 il 18 Set.** Non è più *«forse si può»*: la domanda binaria è chiusa.
-
-### ✅ Il worker sa a che punto è, su tutti e tre i rami
-
-```
-resampling.py:172        for start in range(0, path_count, chunk_size)   ← BLOCK BOOTSTRAP (default)
-quantlib_worker.py:143   for path_index in range(request.path_count)     ← GBM / MC
-quantlib_worker.py:199   for path_index in range(request.path_count)     ← GBM / QMC
-```
-
-**Nessuno è una scala finta**: il contatore *è* l'unità di lavoro reale. `path_index / path_count`
-è esatto e monotono — niente «finzione a scalini».
-
-### 🔑 E il ramo predefinito ha l'aggancio di forma migliore
-
-```python
-chunk_size = max(1, _CELL_BUDGET // max(1, horizon_days * asset_count))
-```
-
-Il bootstrap è **già affettato**, con blocchi derivati dalla taglia del problema. Una callback sul
-confine del chunk costa **una chiamata per chunk**, e **il numero di tick si autoregola**:
-problema grande → più chunk → più avanzamenti.
-
-> ⚠️ Ribalta la previsione ragionevole — il ramo *nuovo* è il comodo, i due GBM (per-cammino)
-> richiederebbero una soglia. E la ragione non c'entra con l'avanzamento: il chunking esiste per
-> il **budget di memoria** (`:169`), e `:116` dichiara che *«la riproducibilità non deve dipendere
-> da come il lavoro è affettato»*. **Un aggancio lì riusa una garanzia già difesa invece di
-> introdurne una nuova.**
-
-### ⚠️ Il criterio di accettazione, da rispettare o non farlo
-
-Il sorteggio degli inizi di blocco (`resampling.py:148-155`) è **fuori dal ciclo**, vettorizzato;
-nel GBM stanno fuori `_validated_covariance` e `_build_process`. Una barra guidata dal solo
-contatore **resta a 0 % per tutta quella fase, poi parte**.
-
-> **Una barra ferma a 0 % è peggio di nessuna barra: l'utente conclude che è bloccata.**
-
-✅ **Il numero per deciderlo esiste già nel payload** — `rng_seconds`,
-`process_evolution_seconds`, `generation_evolution_seconds`, `path_aggregation_seconds`: il worker
-**già misura dove è finito il tempo**. Se le fasi fuori ciclo pesano, la strumentazione giusta è
-**un avanzamento a fasi, non a cammini**.
-
-### 🔴 Il costo vero non è il worker
-
-Il salto worker→web ha tre soluzioni (multi-frame sul pipe · canale laterale · contatore
-condiviso). ⚠️ Ma `SpawnWorkerPool` è generico e ha **due utenti** — simulazione **e
-ottimizzazione**: toccare il protocollo tocca anche l'ottimizzazione.
-
-**Il salto web→client non ha un appiglio.** `query_risk` è **sincrona, richiesta/risposta**, e
-**non esiste un id di lavoro**: non c'è nulla da interrogare né a cui abbonarsi. SSE, websocket e
-polling **richiedono tutti e tre lo stesso prerequisito che oggi manca**. E la richiesta è
-**bulk**: «la simulazione» è *una* analitica dentro un lotto, quindi una percentuale della
-richiesta non è la percentuale della simulazione.
-
-**Il lavoro vero è invertire l'API in «invia → segui», o trasmettere dentro la stessa risposta
-HTTP.** È architetturale.
-
-**Priorità**: media-bassa. **Prerequisito**: leggere i quattro tempi di fase da un payload reale
-prima di scegliere la forma della barra.
-
----
-
-## 🔴 La simulazione risponde alla finestra, non al portafoglio — e non si annuncia
-
-**Misurato il 21 Set da S4, su corsia pulita** (rilevatore v2: arco `0,1 s`), intercettando la
-`SimulationEngineRequest` vera invece di ricostruirla.
-
-### Il fatto
-
-**Stesso asset, stesso orizzonte, stesso giorno, stesso motore. Cambia solo la finestra:**
-
-| finestra       | mediana a 365 giorni | probabilità di perdita |
-| -------------- | --------------------:| ----------------------:|
-| **95 giorni**  | **+1 400,4 %**       | **0,01 %**             |
-| **365 giorni** | **−39,1 %**          | **70,74 %**            |
-
-> **Da +1 400 % a −39 %, e da «non puoi perdere» a «perdi sette volte su dieci», per una
-> tendina che l'utente legge come «quanta storia guardo».**
->
-> **E nessuno dei due numeri, preso da solo, si annuncia come sbagliato.**
-
-### ✅ Non è matematica rotta, e non sono i dati finti
-
-**Il motore estrapola fedelmente.** Confronto fra la mediana simulata e l'estrapolazione
-ingenua `(1 + r_finestra)^(365/n)` su **sei** finestre:
-
-| finestra | ripetizioni | ingenua  | mediana  | rapporto  |
-| -------- | -----------:| --------:| --------:| ---------:|
-| 95 g     | **3,92×**   | +31,57 % | +33,22 % | **1,013** |
-| 140 g    | 2,64×       | +8,54 %  | +10,28 % | 1,016     |
-| 190 g    | 1,94×       | +1,97 %  | +2,92 %  | 1,009     |
-| 250 g    | 1,47×       | +8,21 %  | +9,49 %  | 1,012     |
-| 365 g    | 1,01×       | +8,76 %  | +9,93 %  | 1,011     |
-
-**Le ripetizioni variano di quattro volte, il rapporto resta fra 1,009 e 1,016.** Il motore
-aggiunge l'1 %, sempre lo stesso.
-
-🔑 **La causa è il rapporto, non la lunghezza**: il bootstrap **ripesca ogni osservazione
-`orizzonte / n_osservazioni` volte per cammino**. Con 93 osservazioni su 365 giorni sono
-**3,92 ripetizioni** — cioè si assume che quel trimestre duri quattro volte tanto.
-
-⚠️ **E morde un utente vero**: il portafoglio di prova lo nasconde perché è **per metà
-liquido**, ma sullo scope asset no. **Chi tiene crypto e clicca «3M» riceve questo.**
-
-### ⚠️ Il denominatore è gonfiato e saturabile — da sapere PRIMA di scrivere la soglia
-
-```
-finestra 540 giorni  →  n_osservazioni 360   ← identico alla finestra da 365
-series_preparation.py riporta i prezzi in avanti  →  93 dove la borsa ha 66 giorni
-```
-
-**Chiedere più storia restituisce in silenzio la stessa storia**, e il riporto in avanti
-inserisce rendimenti nulli che **abbassano la σ per giorno e gonfiano il conteggio**.
-`n_observations` conta **giorni di calendario, non osservazioni indipendenti**, ed è il
-denominatore di qualunque guardia a rapporto.
-
-### Il lavoro, e cosa NON è
-
-**Non è** «aggiusta il calcolo»: l'aritmetica è corretta.
-**Non è** «rifai i dati»: si riproduce su dati puliti con volatilità realistiche
-(BTC `4,58 %`/giorno, che è il valore vero).
-
-**È** decidere cosa fare quando `orizzonte ≫ finestra`: **rifiutare**, **avvisare**, o
-**lasciar fare e dichiarare l'incertezza**. ⚠️ **Nessuna soglia ovvia esiste**: a ripetizione
-`1,00×` Bitcoin dà comunque **+100 %**. **La monotonia è il dato, la soglia è una scelta.**
-
-📌 **Parzialmente mitigato nel round 2**: l'incertezza di stima della deriva viene resa accanto
-alla banda — su un asset volatile a finestra corta vale **×/÷ 29,9** contro una banda di
-**×11,4**, quindi **si dichiara inutile da sola**. **Resta da decidere se serve anche la
-guardia.**
-
-**Priorità**: media-alta. **Non blocca il rilascio** — la funzione è dietro banner beta — ma è
-il difetto di prodotto più grande trovato nella review della fase 2.
-
----
-
-## 🔴 I 110 `raise ValueError` del motore di rischio — il metodo per separarli, non il risultato
-
-**Aperto da B, round 3, 21 Set 2026.** Il pacchetto «errori come codici» ha chiuso B1/B2/B4;
-resta l'enumerazione, e **quello che non va rideriso è il metodo**.
-
-### Il perimetro, misurato due volte
-
-`grep -r "raise ValueError(" services/risk services/risk_plugins` e un parser AST indipendente
-danno **entrambi 172**, quindi la taglia non è un artefatto del pattern. ⚠️ **Ma `172` conta una
-forma sintattica, non una categoria**: `RiskUnavailableError` e `RiskScopeNotFoundError` sono
-**sottoclassi di `ValueError`**, e quel grep **non vede i 41 siti già instradati a un codice**.
-
-Ripartiti per **confine di conversione** (verificato per modulo, non stimato):
-
-| confine                                 | come si verifica                                         | n       |
-| --------------------------------------- | -------------------------------------------------------- | -------:|
-| registrazione plugin = import time      | `provider_registry.py:322,365` → `validate_definition()` | 9       |
-| avvio / YAML dell'operatore             | `load_risk_scenario_catalog()` singleton                 | 8       |
-| costruzione del pool worker             | `SpawnWorkerPool.__init__`                               | 5       |
-| `validate_params()` → `ValidationError` | **eseguendolo**                                          | 28      |
-| richiesta motore dentro il `try`        | `portfolio_optimization/plugin.py:170→221`               | 8       |
-| sottoprocesso worker                    | `SpawnWorkerRemoteError` → `_remote_error_code`          | 4       |
-| **il catch-all di `service.py`**        | il resto                                                 | **110** |
-
-**9+8+5+28+8+4+110 = 172.** I 110 sono il lavoro che resta.
-
-### 🔑 Il criterio — e la scorciatoia che sembra giusta e non lo è
-
-Il primo tentativo è stato *«confronta il guard interno con i vincoli `Field(...)` del modello
-params: se `Field` non copre il predicato, c'è un buco»*. Applicato a `path_count`
-(`ge=256, le=100_000`, **nessun vincolo di potenza di due**) contro *«QMC paths must be a power
-of two»* dava un buco netto.
-
-🔴 **È falso, e l'ha ucciso un probe:** `SimulationParams.model_validate({sampling_method:'qmc',
-path_count:1000})` solleva già `ValidationError`. **Il contratto esterno non è `Field(...)`: è
-`validate_params()` per intero, `model_validator` compresi** — e quei validatori chiamano metodi
-helper che un classificatore statico marca come «non in un validatore».
-
-> **Leggere `Field(...)` risponde a una domanda diversa da «questo payload viene accettato?».**
-> L'unico modo di saperlo è **chiamare `validate_params`**.
-
-**Il criterio corretto è strutturale.** `validate_params()` è funzione **pura dei parametri**:
-non vede storia, portafoglio, calendario.
-
-| classe | predicato                       | `validate_params` può decidere?             | verdetto                      |
-| ------ | ------------------------------- | ------------------------------------------- | ----------------------------- |
-| **C1** | soli parametri                  | sì — **ma va eseguito per sapere se lo fa** | se accetta → causabile        |
-| **C2** | **parametro × dato di runtime** | 🔴 **no, strutturalmente**                  | **causabile per costruzione** |
-| **C3** | soli argomenti interni          | no, e non deve                              | invariante → deve esplodere   |
-
-⚠️ *«Sta in un plugin»* non distingue niente. *«Il validatore dei parametri non può vederne
-metà»* sì.
-
-### Il banco, per enumerare i 110
-
-1. per ogni analitica, **chiamare `validate_params`** su payload ai bordi dichiarati;
-2. eseguire sotto `sys.settrace` con evento `exception`, filtrato su `app/services/risk`:
-   registra **ogni `raise`, con file e riga, anche se poi viene catturato**;
-3. correlare ogni riga colpita con il `RiskErrorCode` che esce.
-
-**Riga colpita = causabile, provato per costruzione.** Riga mai colpita = **«non provata
-raggiungibile»**, mai «irraggiungibile»: un banco che non colpisce dice che *non ha colpito*.
-
-> 🔑 **E c'è una ragione per farlo DOPO B1(b), non prima**: da B1(b) quei 110 siti **loggano**.
-> Il banco traccia ciò che una sonda riesce a raggiungere; **il log registra ciò che gli utenti
-> colpiscono davvero**. Chi lo farà partirà da occorrenze reali con stack veri.
-
-### ⚠️ Ogni guardia C2 va accompagnata dal suo controllo
-
-Una prova di rifiuto **senza** una prova di accettazione non dimostra che la causa sia quella
-dichiarata. Nel primo giro di B entrambi i rami morivano su `historical_digest` e il probe
-**non discriminava niente**: sembrava una prova, e non lo era.
-
-### 📌 Due conseguenze già prodotte da B1(b), da non «riparare» per sbaglio
-
-**①** `risk.errors.undefined_metric` **non ha più un emettitore di produzione.** Era emesso da
-una sola riga — il catch-all — e quella riga era il difetto. **La chiave va tenuta in tutte e
-quattro le lingue**: `UNDEFINED_METRIC` resta il punto di dichiarazione per un plugin che
-sappia che la metrica è indefinita, la strada è coperta da un test, e un test di parità
-enum↔catalogo la tiene viva.
-
-> ⚠️ **Questo contraddice la riga più in alto in questo file** — *«le 14 `risk.errors.*` sono
-> tutte emesse dal backend → vive»* — che era **vera quando è stata scritta**. Un audit che
-> rileggesse `undefined_metric` come orfana e ne cancellasse la chiave **riaprirebbe esattamente
-> il difetto che B1(b) ha chiuso**: il fallback silenzioso.
-
-**②** `portfolio_optimization/plugin.py:221` ha **lo stesso difetto latente** che B2 ha corretto in
-`simulation/plugin.py`: un `except ValueError → INVALID_PARAMETERS` che avvolge **l'intera**
-costruzione della richiesta, quindi converte anche le violazioni di invariante del motore in
-«parametri non validi». **Un `try` allargato è un `except` che presume.** Fuori dal perimetro di
-B, non riparato, misurato.
-
-# Idea interessante presa da un utente:
-
-3. L'effetto del cambio sul rendimento (FX Impact)
-   "Related to my previous feature is how much FX rates change the balance, again not really that import but just interesting to see."
-
-Gli piacerebbe vedere (anche solo per curiosità) quanto del suo guadagno/perdita dipende dal titolo in sé e quanto dalle fluttuazioni del tasso di cambio (il classico spacchettamento tra capital gain e impatto valutario). Ma ribadisce che non è prioritario.
-Discorso originale qui: https://github.com/Librefolio/LibreFolio/discussions/24#discussioncomment-18584139
-
----
-
-# Feedback del developer — idee e migliorie (lista 06–26/09, smistata il 30/09/2026)
-
-Le voci qui sotto vengono da una lista di appunti del developer. I **difetti** della stessa lista
-sono stati assegnati a un workstream di sviluppo (K, piano dei seguiti di review); qui restano solo
-le migliorie e le funzioni nuove.
-
-## 🤝 Condivisione dei broker — la stessa fetta per più utenti
-
-**Data aggiunta**: 30 Settembre 2026 (appunto del 06/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
-
-### Contesto
-
-Oggi ogni utente ha una sua quota di possesso sul broker. L'idea è introdurre la **fetta
-condivisa**: due utenti possiedono al 100% lo stesso broker perché è la stessa fetta. Apre anche a
-scenari, rari, in cui la stessa quota n% appartiene a due utenti: la vedono entrambi con la stessa
-percentuale nella dashboard, e se la quota cambia la subiscono entrambi.
-
-### Azione Futura
-
-Modellare la fetta come entità a sé (quota → insieme di utenti), con migrazione incrementale e
-compatibilità con le quote attuali. Da incrociare con la sezione GDPR sull'accesso ai broker.
-
 ## 🏠 Funzioni in stile HomeBank, parser OFX e migrazione
 
 **Data aggiunta**: 30 Settembre 2026 (appunto del 06/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
@@ -2001,85 +349,80 @@ grafici relativi e le funzioni accessorie, come il calcolatore per l'auto.
 - Uno **script di migrazione** da un file HomeBank a LibreFolio, una tabella alla volta.
 - Categorie per le transazioni di cassa, con grafici dedicati.
 
-## 🌙 Task notturno — dividendi e interessi senza evento collegato
+## Approfondire protocollo Enable Banking europeo
 
-**Data aggiunta**: 30 Settembre 2026 (appunto dell'11/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+Ascoltando online ho trovato di https://enablebanking.com/ come protocollo open per accedere alle banche europee, sarebbe interessante approfondire e capire se si esce a usare per creare un importatore "automatico" delle transazioni nel sistema BRIM
 
-### Contesto
+Priorità: Esplorativa
 
-Insieme alla sincronizzazione notturna, un task cerca le transazioni di tipo dividendo o interesse,
-più vecchie del periodo sincronizzato, **senza evento collegato**. Per ognuna cerca nell'asset un
-evento compatibile in un intervallo di date configurabile (7 giorni per default).
+Aggiunto: 26/10/26
 
-### Azione Futura
+---
 
-- Se l'evento non c'è: crearlo (manuale o auto-assegnato, da decidere) e collegarlo, **oppure**
-  produrre un report o una notifica che elenca le transazioni trovate con il suggerimento di
-  correzione.
-- Studiare se dai soli dati di una transazione si può riconoscere uno split (dubbio).
-- Studiare cosa succede se l'asset cambia provider: uno nuovo che espone l'evento alla sync, o uno
-  che smette di esporlo.
-- Riusare il backend già pronto della sezione «🔗 Suggerimento eventi collegabili nella bulk modal
-  (da P2-6)».
+# Portafoglio e grafici
 
-### Ricollegamento automatico dopo il sync (19/10/2026, decisione N68, punto 4) — 🔍 da analizzare
+## 🏦 Regime Fiscale — Metodo di Vendita (FIFO, LIFO, PMC, Select ID)
 
-Nella 1.3 arrivano i primi tre punti di N68:
+**Data aggiunta**: 20 Febbraio 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Alta (architettura core)
 
-- il cambio di valuta di un asset non è più bloccato dagli split;
-- gli split sopravvivono al cambio di valuta;
-- un bottone **«Ricollega eventi»** in Transazioni elenca le transazioni senza evento, con l'evento candidato.
-
-Il quarto resta qui, **da analizzare in un momento futuro**: dopo un sync, ricollegare **da soli** i casi certi (stesso
-asset, tipo e data, un solo candidato), con un riepilogo per l'utente. La regola deve stare nel backend, non in dati
-tenuti dal frontend, che si perderebbero a una ricarica o con un sync notturno.
-
-Prima di farlo va verificato che serva davvero (developer, 19/10: «prima facciamolo funzionare, magari scopriamo che
-non serve e i primi 3 sono sufficienti»). Si lega al task notturno qui sopra: potrebbero diventare la stessa cosa.
-
-## 🔥 Strumenti — calcolatore FIRE e riuso del motore matematico
-
-**Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+> Tocca il motore dei lotti (`backend/app/services/financial_math/fifo/`): da coordinare con ogni lavoro sul cost basis.
 
 ### Contesto
 
-La pagina **Strumenti** esiste: è il posto naturale per un **calcolatore FIRE**. Se il motore
-matematico dei tool (quello del PAC) si presta, può servire anche ad altri calcolatori.
+Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere in caso di vendita parziale:
 
-### Azione Futura
+- **Italia**: Prezzo Medio di Carico (PMC)
+- **USA**: FIFO, LIFO, Select ID (scelta specifica dell'utente)
+- **Altre**: HIFO (Highest In First Out), etc.
 
-Un plugin Tool nuovo (skill `tool-plugin`), con contratto Pydantic e UI compilata, come il PAC.
+### Requisiti
 
-## 📥 BRIM — riconoscere all'import una posizione chiusa (Directa, CSV generico)
+1. **Impostazioni Broker**: Nella zona short/long del broker, selettore per il metodo di vendita supportato (FIFO, LIFO, PMC, Select ID)
+2. **Preferenze Utente**: Impostazioni di default per metodo di vendita
+3. **Impostazioni Admin**: Default globale per nuovi utenti
+4. **Collegamento Transazioni**: Il sell deve essere collegato ai buy tramite `link_transactions_id`:
+   - FIFO/LIFO: collegamento algoritmico
+   - Select ID: scelto dall'utente
+   - PMC: nessun collegamento (calcolo on-the-fly)
 
-**Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA — da approfondire se ne vale la pena · **Priorità**: Bassa
+### Note Tecniche
 
-### Contesto
+- Analizzare le strade per lo split dei buy: slittare buy e connettere la parte residua, tabella di appoggio, lista di link
+- Deve essere possibile identificare transazioni già importate per evitare doppio import
+- Per PMC il problema del collegamento non sussiste, basta calcolare il valore on-the-fly
+- I plugin BRIM in fase di vendita devono fornire un dizionario di remap con le transazioni linkate più probabili
+- Il vincolo di over-sell va esteso nell'import
 
-Il flag che fa comparire nel frontend il banner «posizione importata già chiusa: la ricerca potrebbe
-non dare risultati» esiste, ma oggi lo usa solo Crédit Agricole.
+## 💱 L'effetto del cambio sul rendimento (FX Impact)
 
-### Azione Futura
+**Origine**: [discussione #24](https://github.com/Librefolio/LibreFolio/discussions/24#discussioncomment-18584139), un utente
+curioso di vedere quanto del guadagno dipende dal titolo e quanto dal cambio. Non prioritario.
 
-- **Directa**: con ETF venduti completamente, verificare se dal solo messaggio si capisce che la
-  posizione si è estinta, e in quel caso alzare il flag.
-- **CSV generico** (per esempio Recrowd importato in blocco): tenere traccia della quantità per
-  capire quando la posizione si annulla.
+**Cosa c'è già**: il tooltip dei KPI della Dashboard separa la variazione non realizzata in effetto dell'asset ed effetto del
+cambio, valuta per valuta (`period_unrealized_breakdown`), e la cassa ha la riga `fx_on_cash`.
 
-## 📚 Documentazione dei segnali — riordino
+**Cosa resta**: il realizzato, e una vista dedicata invece del solo tooltip.
 
-**Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+## ⚡ Motore del portafoglio — caricare solo i prezzi che servono
 
-### Contesto
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 📋 FUTURO · **Priorità**: Media, prima va misurata
 
-Le guide scritte dei segnali stanno oggi vicino alle schede che li mostrano. (Il pulsante che apre la
-guida del segnale e che su mobile sparisce è un difetto: è stato assegnato a K.)
+La PR [#30](https://github.com/Librefolio/LibreFolio/pull/30) ha corretto `convert_bulk` (finestra [ultimo cambio ≤ prima data,
+ultima data] e `bisect`: la ricerca passa da 120–200 ms a meno di 1 ms). Una ricerca O(1) è stata valutata e scartata: meno
+dell'1 %.
 
-### Azione Futura
+Lo stesso schema c'è in `backend/app/services/financial_math/portfolio/engine.py`: precarica i prezzi con solo `date <= actual_to`,
+come oggetti ORM, quindi legge tutta la storia di ogni asset. `get_prices_bulk` ha già la finestra.
 
-- Spostare le guide dei segnali in **Teoria finanziaria → Segnali**, con una **categoria nuova per i
-  segnali di rischio**.
-- Nelle zone dove sono oggi, descrivere la scheda e mettere i link ai segnali.
+**Azione.**
+1. Misurare su una copia dei dati reali: righe e tempo di quella query rispetto al calcolo intero, con e senza `date_from`.
+2. Se conviene: limitarla a [ultimo prezzo ≤ `frame_start`, `actual_to`] con la sottoquery «ancora» della PR #30, e leggere solo
+   le colonne usate.
+3. Prima, verificare che nessuno chieda al resolver una data precedente a `frame_start`.
+4. Test: confronto differenziale del motore prima e dopo, su più utenti e periodi; poi `services portfolio-engine`,
+   `services roi-fifo-utils`, `api portfolio`.
 
 ## 📈 Grafici da un video di analisi del portafoglio
 
@@ -2105,6 +448,331 @@ Una modalità di visualizzazione **logaritmica**, soprattutto sulle percentuali.
 
 Sulle percentuali il logaritmo non si applica ai rendimenti negativi: va applicato al fattore di
 crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asset, confronto).
+
+---
+
+# Analisi del rischio
+
+## 🔴 La simulazione risponde alla finestra, non al portafoglio — e non si annuncia
+
+**Misurato il 21/09/2026** · **Priorità**: Medio-alta. Non blocca il rilascio: L4 è dietro il banner beta, che cade quando si
+chiude questa voce (`L4WhatIf.svelte`).
+
+**Il fatto.** Stesso asset, stesso orizzonte (365 giorni), stesso motore: cambia solo la finestra.
+
+| Finestra | Mediana | Probabilità di perdita |
+|---|---:|---:|
+| 95 giorni | +1 400,4 % | 0,01 % |
+| 365 giorni | −39,1 % | 70,74 % |
+
+**La causa.** La matematica è giusta: su sei finestre la mediana sta fra 1,009 e 1,016 volte l'estrapolazione ingenua. Il
+bootstrap ripesca ogni osservazione `orizzonte / n_osservazioni` volte: con 93 osservazioni su 365 giorni assume che quel
+trimestre duri quattro volte tanto. Non dipende dai dati finti: chi tiene crypto e sceglie «3M» riceve questo.
+
+**⚠️ Il denominatore è gonfiato.** La preparazione delle serie riporta i prezzi in avanti, quindi `n_observations` conta giorni di
+calendario, e 540 giorni restituiscono le stesse 360 osservazioni di 365. Chiedere più storia può ridare in silenzio la stessa
+storia.
+
+**Il lavoro.** Decidere cosa fare quando l'orizzonte supera la finestra: rifiutare, avvisare, o lasciar fare dichiarando
+l'incertezza. Una soglia ovvia non esiste (a 1,00× Bitcoin dà comunque +100 %): la monotonia è il dato, la soglia è una scelta.
+L'incertezza della deriva è già mostrata accanto alla banda; resta da decidere se serve anche la guardia.
+
+**Stima**: circa un giorno per un avviso quando l'orizzonte supera la storia usata, 4 lingue comprese.
+
+## Avanzamento della simulazione Monte Carlo — si può fare, e si sa già dove è difficile
+
+**Status**: 📋 FUTURO · **Priorità**: Medio-bassa
+
+**Il worker sa a che punto è** su tutti e tre i rami: `resampling.py` (block bootstrap, a chunk) e `quantlib_worker.py` (GBM,
+MC e QMC, per cammino). Una callback sul confine del chunk costa una chiamata per chunk e riusa una garanzia già difesa: la
+riproducibilità non dipende da come il lavoro è affettato.
+
+**Il criterio di accettazione.** Il sorteggio degli inizi di blocco e la preparazione stanno fuori dal ciclo: una barra guidata
+dal contatore resterebbe a 0 % per tutta quella fase, e una barra ferma è peggio di nessuna barra. Il payload misura già i tempi
+(`rng_seconds`, `process_evolution_seconds`, `generation_evolution_seconds`, `path_aggregation_seconds`): vanno letti da un
+caso reale prima di scegliere la forma. Se le fasi fuori ciclo pesano, serve un avanzamento a fasi.
+
+**Il costo vero non è il worker.**
+- `SpawnWorkerPool` ha due utenti, simulazione e ottimizzazione: cambiare il protocollo le tocca entrambe.
+- `query_risk` è sincrona e bulk e non ha un id di lavoro: non c'è nulla da seguire, e «la simulazione» è una delle analitiche di
+  un lotto. Il lavoro vero è invertire l'API in «invia → segui», o trasmettere dentro la stessa risposta HTTP.
+
+## 🎲 Risk Analysis — Monte Carlo avanzato: regimi calibrati e volatilità stocastica
+
+**Data aggiunta**: 16 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: 🔽 Bassa
+
+La simulazione fa il livello 1 (block bootstrap) e il livello 3 (preset di regime dichiarati). Questi sono i livelli rinviati.
+
+### Livello 2 — GJR-GARCH
+
+Non si calibra con QuantLib (misurato su 1.43, D88): `GJRGARCHModel.calibrate()` vuole quotazioni di opzioni, `ql.Garch11` non è
+esposto in Python, e `GJRGARCHProcess` ha due fattori e non entra in `StochasticProcessArray`.
+
+**La strada**: la libreria `arch` stima un GJR-GARCH(1,1,1) su 1 250 osservazioni in 22 ms, ma oggi è solo una dipendenza
+transitiva di `riskfolio-lib`. Precondizione: dichiararla nel `Pipfile`, con il lock rigenerato dal developer a corsie ferme.
+Poi il lavoro è contenuto: univariato sull'aggregato del portafoglio, sul campionatore esistente.
+
+### Preset di crisi — la forma preferita per il seguito
+
+Il preset «crisi prolungata» usa numeri prescritti (oscillazioni ×2,5, deriva −20 % annuo). La forma preferita è il
+**ricampionamento condizionato**: blocchi estratti solo dal decile peggiore della storia del portafoglio. L'ipotesi a schermo
+non conterrebbe numeri dichiarati e la correlazione salirebbe perché è salita davvero.
+
+Condizione vincolante: se la storia non contiene un periodo abbastanza severo, il risultato **lo dichiara**. Un decile peggiore
+su tre anni di mercato toro non è una crisi.
+
+### Livello 4 — Markov-switching calibrato
+
+Regimi (calma, stress, crisi) con transizioni stimate dai dati. Rinviato perché con 3-5 anni di storia la stima EM overfitta, e
+richiede `hmmlearn` o `statsmodels`. Precondizioni: storia lunga, diagnostica di stabilità dei regimi fra finestre diverse,
+incertezza dichiarata.
+
+### Livello 5 — Heston / Bates / Merton
+
+QuantLib li supporta, ma la calibrazione vuole una superficie di volatilità implicita da opzioni, dato che LibreFolio non ha. Con
+parametri inventati è sofisticazione senza contenuto: fuori scope, salvo una futura fonte di dati sulle opzioni.
+
+## 📊 Risk Analysis — evoluzioni scenario catalog e replay
+
+**Data aggiunta**: 29 Luglio 2026 · **Status**: 📋 FUTURO · **Priorità**: Bassa
+
+### Catalogo scenari dinamico
+
+Oggi il catalogo è statico, tipizzato e letto all'avvio, senza CRUD, database o watcher. Evoluzioni possibili: rilevamento
+dei file senza riavvio, reload manuale, CRUD di scenari personali, modifiche dalla UI, import/export YAML, override
+espliciti dei preset e diagnostica per l'admin. Da riprendere quando il catalogo statico è stabile e gli utenti chiedono di
+gestire gli scenari.
+
+### Sostituti (proxy) nel replay storico
+
+**Decisione D372 (02/10/2026)**: «teniamoli fuori, ma segnalo in todo_futuri con tutta la spiegazione annessa». Nessun utente
+l'ha chiesto.
+
+**Cos'è.** Un asset senza storia nella finestra di una crisi (un ETF del 2015 davanti al 2008) oggi è escluso dal replay con
+il suo motivo. Un sostituto è un altro asset con quella storia: il replay ne usa i rendimenti giornalieri, con il peso
+dell'originale.
+
+**Il motore è pronto**: `StressParams.proxy_assets` (fino a 100 coppie), `prepare_historical_replay_context`, l'audit e
+l'avviso `historical_replay_proxies_used`. Un sostituto senza storia dà `invalid_parameters`, mai un'esclusione silenziosa.
+
+**Cosa manca, in quest'ordine.**
+1. Una regola su quale sostituto sia sensato (valuta, classe, correlazione minima): senza, un sostituto sbagliato dà un
+   numero falso che sembra preciso.
+2. Una diagnostica prima della scelta: quanto copre la finestra e quanto i due si sono mossi insieme.
+3. ⚠️ Il buco da verificare con un test: la copertura del sostituto non passa per `replay_coverage`, quindi un sostituto
+   quotato dopo l'inizio della finestra accorcerebbe il replay per tutti. Va rifiutato con il suo motivo.
+4. L'interfaccia: L4 non manda mai `proxy_assets`. Un modello c'è per l'asset singolo, in `RiskAnalysisPanel.svelte`.
+5. La persistenza delle associazioni per utente, sempre con una conferma esplicita.
+
+**Quando riprenderlo**: quando un utente chiede di rigiocare una crisi con asset più giovani della crisi.
+
+### RQMC
+
+Priorità bassa. Da rivalutare solo se il binding Python di QuantLib espone lo scrambling. Il contratto deve tenere il seme
+dello scrambling separato da `sobol_start_index`, con un oracolo di convergenza, il processo `spawn` e nessun ripiego su SciPy
+in produzione.
+
+## 💰 Rischio — rendimento totale con cedole e dividendi
+
+**Data aggiunta**: 6 Ottobre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+
+### Contesto
+
+- Review del developer del 06/10/2026 con A (Dashboard, livello L3 rischio/rendimento). Testuale: «mettiamolo nei todo
+  futuri e anche in un todo nel codice per non dimenticarlo».
+- Oggi i rendimenti dell'analisi del rischio vengono dalle sole serie di prezzo: cedole e dividendi non entrano. Un asset
+  che paga gran parte del suo rendimento come reddito sta più in basso di dove lo metterebbe il rendimento totale, e
+  quando succede al benchmark la retta rischio/rendimento si inclina verso il basso.
+- Il manuale lo dichiara nell'avviso «Prices only, for now»
+  (`mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/benchmark-selection.en.md`, sezione
+  `#the-risk-return-line`, sul ramo della famiglia Risk fino alla sua integrazione).
+- Un TODO nel codice segna il punto, aggiunto dalla famiglia Risk nel giro in corso.
+
+### Azione Futura
+
+- Backend (Risk): una serie di rendimento totale per asset, che aggiunga ai prezzi i flussi di cedole e dividendi.
+  Prima di scriverla va deciso se i flussi si reinvestono nell'asset o si sommano come cassa.
+- Usarla nei calcoli di rischio/rendimento: livelli della Dashboard, pagina del broker, laboratorio di Asset Global.
+- Quando arriva: togliere la riga «solo prezzi» dall'interfaccia, l'avviso dal manuale e il TODO dal codice.
+
+## 💡 Traccia rischio/rendimento nel tempo («snail trail»)
+
+**Data aggiunta**: 1 Ottobre 2026 · **Status**: 💡 IDEA · **Priorità**: Bassa
+
+La proposta: con un periodo di 1A, un punto per trimestre uniti da una linea. A trimestri non regge: su un asset che non cambia, la
+media annualizzata di un trimestre si scosta per puro caso di 2σ (±40 punti per un ETF azionario, ±140 per una cripto), quindi si
+vedrebbe un'evoluzione che non c'è.
+
+**La versione onesta**: solo per l'asset selezionato, a segmenti di un anno solare (il rendimento davvero ottenuto), per periodi
+di almeno 3 anni, calcolata dal motore in `asset_set_risk_return`. Prima un prototipo sui dati veri. Per il rischio nel tempo
+esistono già Rolling Volatility e Rolling Sharpe.
+
+## 📉 Risk Analysis — Tracking Error / Information Ratio con benchmark selezionabile
+
+**Data aggiunta**: 16 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: 🔽 Bassa
+
+`ComparisonAnalytic` li calcola già, ma sono stati tolti dalla UI: nascono per giudicare un gestore contro un mandato, e un
+privato non ne ha uno. Si riabilitano solo con un benchmark vero: scelto fra gli asset del DB, persistente per portafoglio o
+broker, con un avviso se valuta o storia non sono allineate, e un testo che dica che misurano lo scostamento, non la qualità.
+
+## 🧮 Risk Analysis — Portfolio optimization / frontiera efficiente (Riskfolio)
+
+**Data aggiunta**: 16 Settembre 2026 · **Status**: 📋 FUTURO LONTANO · **Priorità**: 🔽 Molto bassa
+
+`PortfolioOptimizationAnalytic` è fatto e testato, ma non ha UI: si raggiunge solo via API.
+
+**Perché è rinviato.** Non per la potenza di calcolo (0,016 s). L'ottimizzatore dà un output prescrittivo che lo strumento non
+sa giustificare: preferisce gli asset con il rendimento sovrastimato, i pesi cambiano con la finestra, più asset vuol dire più
+errore. LibreFolio è un tracker, non un consulente.
+
+**Precondizioni.** Un provider con universo ampio e storia lunga; un risultato mostrato come confronto con l'allocazione
+attuale, mai come «consigliata»; niente max-Sharpe in-sample, solo min-variance ed ERC; una guida su instabilità e limiti.
+
+**Decisione aperta sulle dipendenze.** Finché non è esposto, va deciso se togliere Riskfolio-Lib, CVXPY, CLARABEL, SCS e il
+pool `optimization` dall'immagine, misurando prima quanto pesano.
+
+**Variante a basso costo.** L'ERC come diagnostica («con lo stesso rischio per asset i pesi sarebbero questi, i tuoi sono
+questi»): affianca `risk_contribution`, si fa in poche righe di NumPy e non richiede Riskfolio.
+
+## Stimatori robusti di covarianza per la matrice di correlazione (Riskfolio)
+
+**Priorità**: 🔽 Bassa, dopo che la pagina correlazioni avrà una direzione chiara.
+
+`riskfolio.src.ParamsEstimation.covar_matrix` offre quindici stimatori oltre a quello storico (`ledoit`, `oas`, `gerber1/2`,
+`ewma1/2`, denoising…), utili con molti asset e poche osservazioni. Migliorano la qualità della stima, non il tempo
+(Ledoit-Wolf 25 ms contro 0,2 ms). Se la pagina resta descrittiva, lo stimatore storico è quello onesto; se diventa
+prescrittiva, uno stimatore ristretto è obbligatorio e va dichiarato nella UI.
+
+## 🔄 Rivalutare le otto misure reimplementate da N contro riskfolio-lib
+
+**Priorità**: Media, non blocca il rilascio.
+
+Il developer, 18/09/2026: «Anche se è un wrapper di NumPy, è meglio usare una libreria collaudata, anche perché nel tempo, se
+arrivano migliorie, le abbiamo for free».
+
+`backend/app/services/risk/acquired.py` reimplementa misure che esistono in riskfolio (`maximum_drawdown`, `ulcer_index`,
+`drawdown_at_risk`…), perché riskfolio si importa solo nel worker e le analitiche sono sincrone.
+
+**Le domande vere.**
+1. Il confine processo/worker è ancora quello giusto?
+2. Quanto costa l'import (~340 MB nativi) in un processo che già carica NumPy e SciPy?
+3. Le due convenzioni nostre (il segno e la baseline della serie underwater) stanno in un adattatore sottile?
+
+La rete c'è già: `test_risk_metrics_oracle.py` confronta le due implementazioni.
+
+🔴 **Divieto che resta** (D130/D244): `riskfolio.SemiDeviation` non è la nostra deviazione di ribasso, perché misura lo scarto
+dalla propria media e non da un MAR fisso.
+
+## 🔴 I 110 `raise ValueError` del motore di rischio — il metodo per separarli, non il risultato
+
+**Aperto il 21/09/2026** · **Priorità**: Bassa. Il conteggio è di quella data: il 05/11 i `raise ValueError(` in `services/risk` e
+`services/risk_plugins` sono 161 (allora 172). Va rimisurato alla ripresa.
+
+**Il perimetro.** Dei 172, 62 avevano un confine chiaro (registrazione plugin, YAML, pool worker, `validate_params`, motore,
+sottoprocesso); 110 finiscono nel catch-all di `service.py`. Attenzione: il grep non vede i 41 siti già instradati a un codice,
+perché `RiskUnavailableError` e `RiskScopeNotFoundError` sono sottoclassi di `ValueError`.
+
+**Il criterio è strutturale.** Leggere `Field(...)` non basta: il contratto esterno è `validate_params()` per intero, che è
+funzione pura dei parametri.
+
+| Classe | Predicato | Verdetto |
+|---|---|---|
+| C1 | soli parametri | va eseguito: se accetta, l'utente può causarlo |
+| C2 | parametro × dato di runtime | causabile per costruzione |
+| C3 | soli argomenti interni | invariante, deve esplodere |
+
+**Il banco.** Chiamare `validate_params` ai bordi dichiarati sotto `sys.settrace` (evento `exception`, filtro su
+`app/services/risk`) e correlare ogni riga colpita al `RiskErrorCode`. Riga colpita = causabile. Riga mai colpita = «non provata
+raggiungibile», mai «irraggiungibile». I 110 siti ora loggano: conviene partire dalle occorrenze reali.
+
+**Ogni guardia C2 va con il suo controllo**: una prova di rifiuto senza una prova di accettazione non dimostra la causa.
+
+**Da non «riparare» per sbaglio.**
+1. `risk.errors.undefined_metric` non ha un emettitore di produzione, ma la chiave resta nelle 4 lingue: toglierla riaprirebbe il
+   ripiego silenzioso che B1(b) ha chiuso.
+2. `except ValueError` in `portfolio_optimization/plugin.py` ha ancora il difetto latente corretto in `simulation/plugin.py`:
+   avvolge tutta la costruzione della richiesta, quindi anche un errore del motore diventa «parametri non validi».
+
+---
+
+# PAC e strumenti
+
+## 💸 PAC/Rebalancer — Profili Commissionali Avanzati per Broker e Mercato
+
+**Data aggiunta**: 15 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: Media
+
+Oggi il planner ha due profili indipendenti, `fee_buy` e `fee_sell`, con parte fissa, parte percentuale e minimo e massimo
+facoltativi.
+
+**Estensioni.**
+- Profili per mercato, sede o classe di strumento.
+- Profili degressivi che dipendono dal numero di eseguiti del giorno. Esempio Directa, per alcuni mercati: 8 € il primo, a
+  scendere fino a 3 € dal 6° al 25°, 2 € dal 26° al 50°, 1,50 € dal 51°
+  ([commissioni](https://www.directa.it/commissioni), 15/09/2026).
+- Calendario, fuso, valuta, validità e provenienza del tariffario; regole per eseguiti parziali e ordini annullati.
+- Nel solver: una tariffa legata al numero d'ordine rende il costo non separabile, quindi vanno ottimizzati anche sequenza e
+  numero degli ordini.
+
+**Gate.** Nessuna tariffa scelta senza conferma; il planner non finge di conoscere il contatore giornaliero; profilo, mercato,
+data e assunzioni restano visibili; test su soglie, min/max, BUY/SELL e pareggi fra broker.
+
+## 🧭 PAC/Rebalancer — Profili Persistenti e Strategie Estese
+
+**Data aggiunta**: 15 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: Media
+
+Il Tool resta atomico: riceve sempre uno snapshot completo e non legge impostazioni salvate.
+
+### Persistenza da valutare
+
+- **Profilo operativo del broker**, per utente×broker (valute, modo FX, frazioni, step, min/max, fee, regime, minus pregresse):
+  solo come precompilazione modificabile, mai come lookup del worker. I broker manuali restano per scenario.
+- **Aliquota plusvalenze sull'asset**: un campo configurabile e versionabile, con origine e data visibili e override per calcolo.
+  Default, permessi e migrazione vanno definiti prima della colonna.
+
+### Strategie future
+
+- Distribuzione proporzionale degli acquisti fra broker (oggi: target globali per asset e priorità delle route) e vendita
+  proporzionale fra custodie.
+- Chiusura di un broker e consolidamento verso uno o più broker.
+- Minimizzazione delle plusvalenze, compensazione delle minus, tax-loss harvesting, bucket di minus per categoria e scadenza.
+- Fee, limiti e tempi di settlement dei trasferimenti; persistenza facoltativa delle fonti manuali.
+
+### PAC `min_fragmentation` — differita (21/09/2026)
+
+Quarta policy di `PlannerPolicy`: la cascata obiettivo è scritta e testata in aritmetica esatta, e l'oracolo la risolve sui domini
+piccoli. Manca la compilazione dello stage `split_asset_count` verso SCIP. Il rinvio è di priorità, non di disegno. Alternativa da
+decidere: pesare la frammentazione per valore invece che per conteggio.
+
+### Salvare l'analisi — sul client, non sul server (02/10/2026)
+
+Il risultato del planner diventa un documento che l'utente stampa, salva o condivide dal suo dispositivo, senza nulla sul
+server. Da decidere: stampa del browser o PDF generato nel client, contenuto (input, risultato, data, versione del contratto),
+Web Share API o download, e se la modalità privacy vale anche lì.
+
+### Gate futuri
+
+- Nuova review matematica se cambiano input, vincoli, fiscalità, fee, FX o obiettivi.
+- Nessuna compensazione fiscale senza categoria, compensabilità, scadenza, regime e perimetro broker espliciti.
+- Nessun profilo salvato diventa un default silenzioso.
+- Chiusura e consolidamento non introducono short, leva, BUY+SELL dello stesso asset o vendite oltre l'inventario.
+
+### Riuso del solver discreto
+
+PySCIPOpt/SCIP serve il planner: valutarne il riuso solo per problemi davvero misto-interi (cardinalità, lotti minimi, costi
+fissi, chiusura di custodie, fee legate alla sequenza). Riskfolio-Lib resta il motore per covarianza, risk parity e frontiera;
+SciPy per XIRR. Un secondo backend richiede uno spike e un vantaggio misurato.
+
+## 🔥 Strumenti — calcolatore FIRE e riuso del motore matematico
+
+**Data aggiunta**: 30 Settembre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+Un plugin Tool nuovo nella pagina Strumenti (skill `tool-plugin`), con contratto Pydantic e UI compilata, come il PAC. Non solo
+da oggi al futuro: anche con una data di inizio fissata, per vedere la differenza fra andamento teorico e reale. Se il motore
+matematico del PAC si presta, può servire ad altri calcolatori.
+
+---
+
+# Piattaforma
 
 ## 🔐 Accesso con un provider OIDC esterno (SSO)
 
@@ -2165,195 +833,127 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   auth»), rischiosa se il backend è raggiungibile senza passare dal proxy.
 - Stima: qualche giorno, ben delimitato; non tocca i calcoli.
 
-## ⚡ Motore del portafoglio — caricare solo i prezzi che servono
+## 🔒 Ripensare struttura di accesso ai broker Utente-SuperUtente per essere GDPR compliant
 
-**Data aggiunta**: 1 Ottobre 2026 · **Status**: 📋 FUTURO — PR #30 (ex #28) entrata il 05/10/2026 ·
-**Priorità**: Media (prima va misurata)
+**Data aggiunta**: Gennaio 2026 · **Status**: 📋 PIANIFICATO · **Priorità**: Media
+
+La visibilità dei dati degli altri utenti da parte del superuser va ripensata. Strade possibili: niente dati personali senza
+consenso esplicito, log degli accessi, solo statistiche aggregate, oppure una «data request» con cui l'utente concede
+l'accesso per un tempo limitato.
+
+## 🤝 Condivisione dei broker — la stessa fetta per più utenti
+
+**Data aggiunta**: 30 Settembre 2026 (appunto del 06/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
 
 ### Contesto
 
-- La PR [#30](https://github.com/Librefolio/LibreFolio/pull/30) di Martin Sova (msov19), che sostituisce la
-  [#28](https://github.com/Librefolio/LibreFolio/pull/28), corregge `convert_bulk`.
-  La query dei cambi aveva solo il limite superiore e a ogni chiamata caricava tutta la storia della
-  coppia. Ora carica la finestra [ultimo cambio ≤ prima data richiesta, ultima data richiesta] e
-  cerca con `bisect`.
-- Banco di prova del coordinatore (01/10, 10 anni di cambi, 3.650 conversioni giornaliere):
-  - la ricerca passa da 120–200 ms a meno di 1 ms;
-  - nel `convert_bulk` completo (~17 ms) il `bisect` pesa ~4%; il resto è la query e la creazione
-    degli oggetti `Currency`.
-  - **Valutato e scartato**: sostituire il `bisect` con una ricerca O(1) (dizionario per data con
-    passo indietro, dizionario pre-riempito per ogni giorno, cursore). Risparmierebbe meno dell'1%;
-    il cursore non aiuta perché `portfolio_engine` passa le date in ordine sparso (le raccoglie in
-    un `set`).
-- Lo stesso schema della query dei cambi c'è nel motore del portafoglio:
-  - `backend/app/services/financial_math/portfolio/engine.py:312` precarica i prezzi con solo `date <= actual_to`,
-    come oggetti ORM completi (`select(PriceHistory)`);
-  - quindi legge tutta la storia di ogni asset posseduto, anche gli anni prima del primo acquisto o
-    del periodo richiesto (`actual_from = date_from or first_tx_date`, `:246`).
-- A cosa servono i prezzi caricati:
-  - il calcolo dei giorni che cambiano (`daily_state.py:366`), che dei prezzi precedenti a `frame_start` usa solo
-    l'ultimo;
-  - il resolver `AssetPriceSeries` (`backend/app/services/financial_math/price_marks.py:146`), che con `bisect`
-    trova l'ultima osservazione ≤ data.
-- `get_prices_bulk` (`backend/app/services/assets/price_query.py:149`), il corrispettivo di
-  `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
+Oggi ogni utente ha una sua quota di possesso sul broker. L'idea è introdurre la **fetta
+condivisa**: due utenti possiedono al 100% lo stesso broker perché è la stessa fetta. Apre anche a
+scenari, rari, in cui la stessa quota n% appartiene a due utenti: la vedono entrambi con la stessa
+percentuale nella dashboard, e se la quota cambia la subiscono entrambi.
 
 ### Azione Futura
 
-- **Prima misurare**, su una copia dei dati reali: righe lette e tempo della query a `:312` rispetto
-  al calcolo intero, con e senza `date_from`.
-- Se conviene:
-  - limitare la query a [ultimo prezzo ≤ `frame_start` per asset, `actual_to`], con la stessa
-    sottoquery «ancora» della PR #30;
-  - leggere solo le colonne usate (data, close, valuta; open/high/low solo con le candele), invece
-    degli oggetti ORM.
-- Da verificare prima: nessuno deve chiedere al resolver una data precedente a `frame_start`
-  (periodo pre-frame, intervalli in transito, prezzi alle date dei BUY). Altrimenti l'ancora va
-  presa dalla prima di quelle date.
-- Test:
-  - confronto differenziale del risultato del motore, prima e dopo, su più utenti e periodi, come
-    quello fatto per la PR #28;
-  - poi `services portfolio-engine`, `services roi-fifo-utils`, `api portfolio`.
-- Minori, solo se la misura lo giustifica, in `get_prices_bulk`: la finestra è unica per tutte le
-  richieste (minimo e massimo globali), e il prezzo «seme» si cerca con una query per asset. Si
-  possono fare per asset, in una query sola, come nella PR #30.
+Modellare la fetta come entità a sé (quota → insieme di utenti), con migrazione incrementale e
+compatibilità con le quote attuali. Da incrociare con la sezione GDPR sull'accesso ai broker.
 
-## 💡 Traccia rischio/rendimento nel tempo («snail trail»)
+## 🔄 Self-update in-app (da F14)
 
-**Data aggiunta**: 1 Ottobre 2026 · **Status**: 💡 IDEA — da approfondire prima di pianificarla ·
-**Priorità**: Bassa
-
-### Contesto
-
-- Origine: la review del developer di L3° di Asset Global (scheda Correlazione), 01/10/2026. Il
-  parere di F è nel suo diario di avanzamento di L3°
-  (`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-L3-rischio-rendimento.md`,
-  ancora sul ramo di F).
-- Cambiando il periodo, i punti del grafico rischio/rendimento si spostano. Per mostrare
-  quell'evoluzione il developer propone una traccia: con un periodo di 1A, un punto per ciascun
-  trimestre, uniti da una linea. In letteratura esiste e si chiama *snail trail*: i punti
-  rischio/rendimento di sotto-periodi successivi, uniti nel tempo.
-
-### ⚠️ Perché non a trimestri dentro un anno
-
-- **Asse orizzontale, la volatilità**: si stima bene già su ~63 sedute (errore relativo ≈ 1/√(2n),
-  cioè 9–14% con le code grasse), e cambia davvero nel tempo, perché i mercati alternano fasi calme e
-  agitate. Qui la traccia direbbe il vero.
-- **Asse verticale, il rendimento medio annuo**: anche per un asset che non cambia affatto, la media
-  annualizzata di un sotto-periodo lungo T anni si scosta per puro caso di σ/√T. Su un trimestre fa
-  2σ: ±40 punti per un ETF azionario al 20% di volatilità, ±140 per una cripto al 70%. In più,
-  annualizzare un trimestre lo moltiplica per quattro: un +10% nel trimestre diventa «+40% annuo».
-- **Il risultato**: punti che saltano di decine di punti, e un'evoluzione che si vede ma non c'è. È
-  il grafico «plausibile ma sbagliato» che il laboratorio evita.
-- **La leggibilità**: N asset per 4 punti, più N linee che si incrociano.
-
-### Azione Futura — la versione onesta, se un giorno la si vuole
-
-- Solo per l'asset selezionato: la selezione collegata fra tabella e grafico di L3° c'è già.
-- Segmenti di un anno solare: il rendimento davvero ottenuto in quell'anno, un fatto e non
-  un'estrapolazione. Quindi solo per periodi di almeno 3 anni.
-- Calcolata dal motore (Risk): un campo nuovo nell'uscita di `asset_set_risk_return`, con le regole
-  di copertura per segmento.
-- Prima di disegnarla, un prototipo sui dati veri, per vedere se la traccia dice qualcosa di più del
-  rumore.
-- Per «come cambia il rischio nel tempo» esistono già gli indicatori Rolling Volatility e Rolling
-  Sharpe nel grafico dell'asset.
-
-## 🧺 Asset Global — modificare insieme più asset selezionati
-
-**Data aggiunta**: 6 Ottobre 2026 · **Status**: 📋 DA PIANIFICARE · **Priorità**: Media
-
-### Contesto
-
-- Richiesta del developer del 06/10/2026, testuale: «In asset global, sarebbe utile far selezionare più asset e
-  fare modifica, ma in questa modifica non modificare il grafico e i segnali, bensì l'asset, ad esempio selezionare i
-  vari asset etf e renderli etf azionari, con una botta, o tutti benchmark e così via, ovviamente se si cambia un
-  parametro esso diventa uguale per tutti, ma se è quello lo scopo, si fa molto prima».
-- Oggi un asset si modifica solo uno alla volta, dalla sua modale.
+**Data aggiunta**: 1 Settembre 2026
+**Status**: 📋 FUTURO — F14 è stato rilasciato in scope 1 (modale + guida); il self-update richiede un piano dedicato
+**Origine**: discussione F14 del 01/09/2026
 
 ### Obiettivo
 
-- Selezione multipla nella lista di Asset Global, sia nella griglia sia nella tabella.
-- Un'azione «Modifica selezionati» che apre una modale con i soli campi dell'asset, per esempio il tipo (con il menu a
-  due livelli) e il flag benchmark. Niente grafico e niente segnali.
-- Cambiano solo i campi che l'utente tocca, e diventano uguali per tutti gli asset selezionati. Gli altri restano
-  come sono.
-- Prima di salvare, un riepilogo: quanti asset cambiano e quali campi.
+Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il backend.
 
-### Note per chi la pianifica
+### Fattibilità analizzata
 
-- Riusare lo schema create/edit → bulk già deciso per le transazioni (decisione duplicate-mode del 07/09 in
-  `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/01_ux_dashboard.md`) e la selezione di `DataTable`.
-- Backend: un aggiornamento per lista di id in una sola transazione, oppure le PATCH esistenti una per asset, con
-  un esito per ciascuno. I campi che dipendono dal tipo vanno validati per tipo.
-- Attenzione ai campi legati al tipo (famiglie ETF e Crowdfunding) e a quelli che un provider sovrascrive alla
-  sincronizzazione successiva.
-- Candidato naturale: K (tassonomia, select, modale asset).
+- **Docker**: un container non può aggiornare la propria immagine da solo, ma può farlo se
+  `/var/run/docker.sock` è montato (opt-in in compose): Docker API → pull nuova immagine →
+  ricreazione del container. È ciò che fa **Watchtower** (documentato nella guida come alternativa).
+  Attenzione: docker.sock montato = root sull'host → montaggio opt-in esplicito, endpoint admin-only,
+  script fisso senza input utente. LibreFolio è single-image → caso semplice.
+- **Git clone**: script guardato — `git fetch`, `git pull` solo se work-tree pulito
+  (`git status --porcelain` vuoto), rebuild, restart. Il restart richiede un supervisore
+  (systemd o Docker restart policy). Candidato: `scripts/self_update.sh` documentato.
+- Distinguere le varianti di immagine full/light se necessario (F13).
 
-## 💰 Rischio — rendimento totale con cedole e dividendi
+## 🗄️ Cache Server Centralizzato per Multi-Worker Uvicorn
 
-**Data aggiunta**: 6 Ottobre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+**Data aggiunta**: 14 Aprile 2026 · **Status**: 📋 Quando si passerà a più worker · **Priorità**: Bassa
 
-### Contesto
+**Il problema.** Le cache in memoria (theine) sono per processo: con `--workers 1`, il default, vanno bene; con più worker
+ognuno ha la sua, compresa `web_link_finder._cache`.
 
-- Review del developer del 06/10/2026 con A (Dashboard, livello L3 rischio/rendimento). Testuale: «mettiamolo nei todo
-  futuri e anche in un todo nel codice per non dimenticarlo».
-- Oggi i rendimenti dell'analisi del rischio vengono dalle sole serie di prezzo: cedole e dividendi non entrano. Un asset
-  che paga gran parte del suo rendimento come reddito sta più in basso di dove lo metterebbe il rendimento totale, e
-  quando succede al benchmark la retta rischio/rendimento si inclina verso il basso.
-- Il manuale lo dichiara nell'avviso «Prices only, for now»
-  (`mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/benchmark-selection.en.md`, sezione
-  `#the-risk-return-line`, sul ramo della famiglia Risk fino alla sua integrazione).
-- Un TODO nel codice segna il punto, aggiunto dalla famiglia Risk nel giro in corso.
+**Prima, o insieme: l'audit delle cache.** Il pannello «Server Caches» mostra le 16 cache con dimensione, TTL e hit: va
+capito quali servono davvero, prima di investire nella condivisione. Questa voce chiede l'analisi, non la soluzione.
 
-### Azione Futura
+**Soluzione proposta (~100 righe).** Un processo cache lanciato da `lifespan()` in `main.py`, con theine dentro e un socket
+Unix per i worker (`multiprocessing.managers.BaseManager`, nuovo `utils/cache_server.py`). `NamedCache` in
+`utils/runtime/cache.py` delega al server solo con più worker, e i chiamanti non cambiano.
 
-- Backend (Risk): una serie di rendimento totale per asset, che aggiunga ai prezzi i flussi di cedole e dividendi.
-  Prima di scriverla va deciso se i flussi si reinvestono nell'asset o si sommano come cassa.
-- Usarla nei calcoli di rischio/rendimento: livelli della Dashboard, pagina del broker, laboratorio di Asset Global.
-- Quando arriva: togliere la riga «solo prezzi» dall'interfaccia, l'avviso dal manuale e il TODO dal codice.
+**Costi.** 200–500 μs per operazione contro ~1 μs, irrilevanti per cache di chiamate da secondi. I valori devono essere
+serializzabili. Se il processo cade si perde solo la cache. Alternativa: `diskcache`, ~50 μs, ma persistente.
 
-## 🔀 PAC/Rebalancer — un solo passo di cambio per broker e coppia
+**Prerequisiti**: PostgreSQL e un bisogno reale di più worker (oltre 50 utenti concorrenti).
 
-**Data aggiunta**: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — **da fare con urgenza insieme al Rebalancer** ·
-**Priorità**: Alta, quando si apre il Rebalancer
+**Nota**: la Fase B di SearXNG resta archiviata, finché `ddgs` regge.
 
-### Contesto
+## ⚡ Migrazione a ORJSONResponse per performance JSON
 
-- Reperto della gallery (M, 09/10/2026) e analisi di D (opzione «e»): le decisioni di cambio sono una per rotta d'ordine
-  × valuta del pool (`backend/app/services/pac_allocator/evaluation/bounds.py`, `constraints.py`), quindi il piano può contenere
-  più conversioni separate della stessa coppia sullo stesso broker, che il report poi somma (`planner_report.py`).
-- Con la regola «arrotondamento sempre contro il piano» (crediti per difetto, debiti per eccesso, 1.2) queste
-  conversioni spezzate non creano più valore, ma allungano il piano e lo rendono meno leggibile.
-- Decisione del developer (09/10/2026), testuale: «da fare con urgenza quando si fa anche il ribilanciamento, che
-  probabilmente sarà più soggetto al bug rispetto il pac».
+**Data aggiunta**: 11 Giugno 2026 · **Priorità**: P4
 
-### Azione Futura
+`orjson` guadagnerebbe 20–50 ms sui payload grandi, ma scavalca il `PlainSerializer` di `SafeDecimal` e trasforma i `Decimal` in
+float. Se mai si fa: una `SafeORJSONResponse` che passa da `jsonable_encoder` prima di `orjson.dumps()`, con test di output
+identico sugli endpoint `SafeDecimal` e un benchmark su dati reali.
 
-- Una sola decisione di cambio per broker × coppia: variabili, vincoli, ledger e report del motore. È un rifacimento
-  ampio.
-- Test di equivalenza sui piani esistenti e oracolo sui casi con vendite (Rebalancer), dove le conversioni in entrambi i
-  versi sono più frequenti.
+# Qualità del codice e dei test
 
-## Code reordering
+## 🔎 Gate sui campi di contratto senza consumatore
 
-Data di aggiunta: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — da fare con urgenza · **Priorità**: Media
-Il progetto è crescuto tantissimo, e sia il backend sia il frontend hanno file di centinaia di righe. La manutenzione è più difficile, e la leggibilità cala. Il developer propone di **riordinare i file** in più moduli,
-Ristrutturando la struttura delle cartelle, fattorizzando le funzioni comuni, e separando le classi e le funzioni in più file. Questo aiuta a trovare più facilmente il codice, a ridurre i conflitti di merge, e a migliorare la navigazione del progetto.
-Un primo esempio è riprodurre la stessa struttura di cartelle per i plugin  di asset, forex e transazioni in signal e il neo nato tools, così da avere un layout coerente.
-Un altro esempio è separare le funzioni di utilità in moduli dedicati, invece di avere tutto in un unico file di servizio.
-La cartella utils è cresciuta tantissimo e vale la pena fare un analisi per capire se alcune funzioni possono essere spostate in moduli più specifici, o se abbia senso creare dei service layer in tal senso.
+**Data aggiunta**: 21 Settembre 2026 · **Status**: 📋 DIFFERITO · **Priorità**: Media
 
-Discorso simile da fare anche per il frontend, dove i componenti sono cresciuti e vanno raggruppati in cartelle più piccole e coerenti, con nomi chiari e significativi.
+**Il buco.** Un campo aggiunto al contratto backend e mai letto dal frontend non dà nessun errore, né in compilazione né in
+esecuzione: il contratto cresce e nulla lo dice.
 
+**Perché differito.** Decisione del developer del 21/09: «buona idea, ma da fare solo alla fine, quando il sistema è
+funzionante e si passa alla fase di condensazione e potenziamento». Oggi darebbe rumore su campi legittimamente non ancora
+consumati.
 
+**Cosa insegnano i casi trovati.** Il difetto è non controllare l'estremo, in tutte e due le direzioni:
 
+| Caso | Forma | Esito |
+|---|---|---|
+| `memory` in `ToolItemMetrics` | dichiarato, mai letto | trovato per caso, da un helper tipizzato in modo generico |
+| `monetary_step` | compilato dall'utente, mai letto dalla matematica | tolto con P1 |
+| `ToolDocumentation.path` | letto, mai verificato | ora coperto da `check-links` |
+| `RebalancerPolicy` | superato da `PlannerPolicy` | tolto |
+| `pac-analyze` nel runner | registrato su file cancellati, con `check-orphans` verde | tolto |
 
+Due di questi passavano un gate esistente: non basta chiedersi se un controllo c'è, ma da che parte guarda.
 
-## Approfondire protocollo Enable Banking europeo
+## Il generatore di dati di prova non onora i bersagli `end_price`, e lo scarto è sistematico
 
-Ascoltando online ho trovato di https://enablebanking.com/ come protocollo open per accedere alle banche europee, sarebbe interessante approfondire e capire se si esce a usare per creare un importatore "automatico" delle transazioni nel sistema BRIM
+**Misurato il 18/09/2026** · **Priorità**: Media, non blocca nulla.
 
-Priorità: Esplorativa
+`end_price` è un'attesa, non un bersaglio: `drift_per_day` centra il valore in media sulle realizzazioni, e ogni popolamento ne
+pesca una sola. Apple doveva chiudere a 185 e chiude a 264,57 (+43 %), Bitcoin a 45 000 e chiude a 25 890 (−42,5 %), Microsoft
+−17,4 %: i segni discordi escludono un bias, sono le ampiezze previste dalla volatilità configurata. Gli indici invece centrano
+il bersaglio, perché `_populate_benchmark_indices` normalizza.
 
-Aggiunto: 26/10/26
+**Il lavoro.** Decidere se `end_price` è un contratto o un'attesa e renderlo esplicito, oppure normalizzare anche le serie non
+indice. Cambia i numeri di tutte le superfici: va fatto come lavoro a sé, con il confronto prima e dopo.
+
+---
+
+# Idee
+
+## 💡 Idee sparse (dopo aver visto i concorrenti)
+
+- Provider di prezzo: oltre al CSS selector (da rinominare «web page»), anche JSON API, tabella HTML e CSV.
+- Provider AI: oltre a Ollama e OpenRouter, gli altri per l'installazione locale.
+- Addon che aggiungono tab al frontend, con un marketplace.
+- Nuovi tab di analisi in Dashboard e broker, da definire.
+- «Portafogli»: gruppi di broker, di asset o di entrambi. Si lega a #52, nel «Profilo dei dati dell'asset».
+- Pagine di dettaglio per analizzare trade e fee.

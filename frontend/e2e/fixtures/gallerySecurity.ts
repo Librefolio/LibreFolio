@@ -115,3 +115,48 @@ export async function expectGallerySecurityServed(page: Page, since: number): Pr
         })
         .toBeGreaterThan(since);
 }
+
+/**
+ * The Security tab with checks to look at (`settings/security`): the same platform checks as {@link GALLERY_SECURITY_CHECKS},
+ * five of them on the branch a badly configured instance takes, each with that branch's own message key — an error (no
+ * session signing key), three warnings (the session cookie also sent over plain HTTP, the limit on failed sign-ins off, no public URL
+ * for the links of emails — the one that offers its in-app action, `security-finding-action`) and an
+ * info (frame protection off). The badge of «Administration» and of Security counts the errors and warnings: 4. The browser
+ * adds no finding of its own on the gallery's local hosts (see the header of this file).
+ */
+const GALLERY_SECURITY_FINDINGS_BY_CHECK: Record<string, {severity: 'error' | 'warning' | 'info'; i18n_key: string; detail: Record<string, string>}> = {
+    'platform.jwt_secret': {severity: 'error', i18n_key: 'instance.checks.jwtSecret.ephemeral', detail: {}},
+    'platform.session_cookie': {severity: 'warning', i18n_key: 'instance.checks.sessionCookie.never', detail: {}},
+    'accounts.login_limit': {severity: 'warning', i18n_key: 'auth.checks.loginLimit.off', detail: {}},
+    'email.links': {severity: 'warning', i18n_key: 'email.checks.links.missing', detail: {}},
+    'platform.frame_protection': {severity: 'info', i18n_key: 'instance.checks.frameProtection.offSelfHosted', detail: {}},
+};
+
+/** The check ids {@link serveGallerySecurityFindings} turns into findings, and the number the badges show (errors and warnings). */
+export const GALLERY_SECURITY_FINDING_IDS = Object.keys(GALLERY_SECURITY_FINDINGS_BY_CHECK);
+export const GALLERY_SECURITY_ATTENTION_COUNT = Object.values(GALLERY_SECURITY_FINDINGS_BY_CHECK).filter((finding) => finding.severity !== 'info').length;
+
+/**
+ * Answer the checks of this page with the findings above instead of the all-`ok` list: registered after
+ * {@link serveGallerySecurityChecks}, so tried first (Playwright tries the latest route first). The body is checked against
+ * the generated schema once, here. The read is counted as the base fixture counts it ({@link gallerySecurityReads}). Call it
+ * inside the test, before the first navigation to the tab.
+ */
+export async function serveGallerySecurityFindings(page: Page): Promise<void> {
+    const state = states.get(page);
+    if (!state) throw new Error("the gallery's security checks are not served on this page: the outer beforeEach serves them (serveGallerySecurityChecks)");
+    const body = schemas.SecurityChecksResponse.parse({
+        items: GALLERY_SECURITY_CHECKS.items.map((check) => {
+            const finding = GALLERY_SECURITY_FINDINGS_BY_CHECK[check.check_id];
+            return finding ? {check_id: check.check_id, ...finding} : check;
+        }),
+    });
+    await page.route(
+        (url) => url.pathname === SECURITY_CHECKS_PATH,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            state.reads += 1;
+            await route.fulfill({json: body});
+        },
+    );
+}

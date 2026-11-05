@@ -109,9 +109,7 @@ class TestConstantNamespace:
 
     def test_a_trailing_interpolation_yields_a_family_not_a_key(self, usage):
         assert "risk.levels.l4.provenance.labels." in usage.families
-        assert classify(
-            "risk.levels.l4.provenance.labels.regime", usage, set()
-        ) == UNVERIFIED
+        assert classify("risk.levels.l4.provenance.labels.regime", usage, set()) == UNVERIFIED
 
     def test_a_sibling_outside_the_family_stays_dead(self, usage):
         assert classify("risk.levels.l4.provenance.gone", usage, set()) == DEAD
@@ -130,9 +128,7 @@ class TestTernaryArgument:
     def usage(self, tmp_path):
         return collect_from_source(_tree(tmp_path / "src", {"B.svelte": self.SOURCE}))
 
-    @pytest.mark.parametrize(
-        "key", ["brokers.deleted", "brokers.deletedWithTransactions"]
-    )
+    @pytest.mark.parametrize("key", ["brokers.deleted", "brokers.deletedWithTransactions"])
     def test_both_branches_count_as_evidence(self, usage, key):
         # The old regex required the quote immediately after `(`, so a ternary
         # produced *neither* branch and both keys were reported as dead.
@@ -181,9 +177,7 @@ class TestVocabularyHarvest:
             {"S.svelte": "const k = `risk.warnings.${code}`;\n"},
         )
         usage = collect_from_source(src)
-        usage.vocabulary = harvest_vocabulary(
-            _tree(tmp_path / "be", {"m.py": 'c = "low_pair_coverage"\n'})
-        )
+        usage.vocabulary = harvest_vocabulary(_tree(tmp_path / "be", {"m.py": 'c = "low_pair_coverage"\n'}))
         assert classify("risk.warnings.lowPairCoverage", usage, set()) == USED
 
     def test_missing_backend_directory_is_not_an_error(self, tmp_path):

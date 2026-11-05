@@ -84,6 +84,8 @@ La primera exportación lee todo el historial; las siguientes empiezan desde la 
 
 Importa cada archivo en su propio bróker, en la misma importación o en momentos distintos: en el [Asistente de importación](how-to.md), suelta los archivos CSV y asigna cada uno a su bróker. Nunca importes el mismo archivo en dos brókeres: sus transacciones contarían dos veces.
 
+Solo se importan las órdenes **ejecutadas**. Las órdenes pendientes, canceladas, caducadas o rechazadas se dejan fuera en silencio, sin ninguna nota: una orden ejecutada más tarde llega con la siguiente exportación. Una fila con un estado que LibreFolio no conoce se indica en un aviso ámbar, con un enlace para abrir una issue en GitHub.
+
 !!! note "💡 Un archivo en el bróker equivocado"
 
     Si un bróker tiene un **Plugin de Importación Predeterminado**, el asistente comprueba cada archivo asignado a ese bróker justo después de la carga. Cuando ese plugin no puede leer un archivo, el asistente te dice por qué, muestra qué bróker puede leerlo y ofrece mover el archivo, conservarlo o eliminarlo.

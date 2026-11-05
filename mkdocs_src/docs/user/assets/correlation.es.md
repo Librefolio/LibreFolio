@@ -155,6 +155,7 @@ Cuando algo va mal con los datos, la pestaña lo indica una vez, justo debajo de
 **Cómo leerlo**
 
 - **El banner de calidad de datos** enumera lo que hay que corregir, cada problema con su acción, como **Sincronizar precios** o **Sincronizar tipos de cambio**. Haz clic en él para abrir la lista.
+- **Un par de divisas sin ruta de cambio** tiene su propio botón en ese banner, uno por par (información sobre herramientas **Añadir par FX**): abre enseguida la ventana **Añadir Par de Divisas**, ya rellenada con ese par, y el análisis se recalcula solo cuando el par se guarda y se descargan sus tipos → [Añadir un par de divisas](../fx/add-pair.md)
 - **El aviso** debajo nombra los resultados **parciales** y su causa. Un resultado parcial sigue mostrando sus cifras: léelas teniendo en cuenta esa causa.
 - **El banner ámbar propio de una sección** significa que un resultado no se obtuvo en absoluto, a menudo porque el periodo es demasiado corto: elige uno más largo o sincroniza los precios.
 - **¿Qué pasa si…?** informa de sus propios problemas dentro de su sección.

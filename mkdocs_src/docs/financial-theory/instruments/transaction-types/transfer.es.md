@@ -47,6 +47,8 @@ Una Transferencia se guarda como dos filas `TRANSFER`, una por bróker, cada una
 | **Separar par** (desvincular) | Transferencia → dos Ajustes independientes |
 | **Promover** (vincular) | Dos Ajustes → Transferencia |
 
+**Coste base al separar y al promover**: al separar el par, el Ajuste entrante conserva su coste base y el saliente no tiene ninguno: no tiene valor, así que en el bróker emisor sus unidades solo salen de la cantidad y su coste cuenta como una pérdida realizada (consulta [Ajustes salientes](adjustment.md#outgoing-adjustments)). Al promover, cualquier coste base guardado en el Ajuste saliente se descarta, ya que el lado emisor de una Transferencia no lleva ninguno.
+
 **Restricciones de promoción**: mismo activo, diferentes brókeres, cantidades opuestas, y ninguna de las dos filas vinculada a un evento del activo (un desdoblamiento, por ejemplo), ya que una transferencia no puede llevar ese vínculo.
 
 ---

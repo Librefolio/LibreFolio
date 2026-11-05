@@ -14,7 +14,7 @@ decisions, patterns, problems solved, architectural rationale.
 
 ```
 Source code          → immutable truth
-developer_journal/   → working plans during active sessions (short-lived, operational)
+developer_journal/   → working plans during active sessions (short-lived, operational); a separate local repository beside this one, with no remote, NOT part of the public repository
 devWiki/             → persistent accumulated knowledge (this layer, long-lived)
 mkdocs_src/          → formal human documentation (final, polished)
 ```
@@ -47,7 +47,7 @@ LibreFolio_devWiki/
 The `raw/` directory serves a specific purpose: **tracking which version of each source was ingested**.
 
 The actual sources (plans, code, knowledge base files) live in their natural locations:
-- `LibreFolio_developer_journal/` — development plans
+- `LibreFolio_developer_journal/` — development plans (a separate local repository next to the checkout, outside this public repo: paths into it are read from the main checkout, never committed here)
 - `backend/`, `frontend/` — the codebase itself
 - `LibreFolio_developer_journal/knowledge_base/` — accumulated notes
 

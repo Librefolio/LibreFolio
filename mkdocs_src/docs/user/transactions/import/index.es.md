@@ -127,7 +127,7 @@ Los importadores sin etiqueta están bien probados y son fiables para los format
     <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Fineco">
     <span class="card-title" style="margin: 0;">Fineco</span>
     </div>
-    <span class="card-desc">🧪 Beta · La exportación CSV "Movimenti Dossier Titoli"</span>
+    <span class="card-desc">La lista de valores "Ordini e contabili", guardada como CSV</span>
     </a>
     <a href="intesa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
