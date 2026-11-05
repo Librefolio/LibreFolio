@@ -335,6 +335,30 @@ Les administrateurs vérifient l'e-mail de l'instance : s'il peut partir, combie
     <img class="gallery-img" data-category="settings" data-name="email" alt="E-mail">
 </div>
 
+### 🚨 Contrôles de sécurité (administrateur)
+
+Les administrateurs voient ce qui demande leur attention et comment agir ; les contrôles réussis restent repliés en bas, et un badge sur Administration compte les erreurs et les avertissements.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="security" alt="Contrôles de sécurité (administrateur)">
+</div>
+
+### ↩️ Restauration annulée (administrateur)
+
+Si une restauration échoue, LibreFolio remet les données comme elles étaient et en explique la raison.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-rolled-back" alt="Restauration annulée (administrateur)">
+</div>
+
+### 🧾 Résultat de la dernière restauration (administrateur)
+
+La carte de restauration conserve le résultat de la dernière tentative.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-last-result" alt="Résultat de la dernière restauration (administrateur)">
+</div>
+
 ### 🕐 Planificateur de données de marché — Configuration
 
 Configurez le démon de synchronisation automatique des données de marché : fréquence de mise à jour, heures de synchronisation de l'historique et jours actifs.
@@ -397,6 +421,14 @@ La recherche descend dans les sections repliées et les puces de résultat vous 
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Recherche dans le journal des modifications">
+</div>
+
+### 🆕 Nouveautés
+
+Après une mise à jour, une fenêtre montre ce qui a changé depuis votre dernière version.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="whats-new-modal" alt="Nouveautés">
 </div>
 
 ### 🧩 Diagnostics des plugins
