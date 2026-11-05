@@ -1,19 +1,16 @@
-"""Promotion of loose rows into linked pairs, for ``TransactionService``: the request, the type maps, the suggestions."""
+"""Promotion of loose rows into linked pairs, for ``TransactionService``: the type maps and the suggestions."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date as date_type
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
-from uuid import uuid4
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Transaction, TransactionType, UserRole
-from backend.app.schemas.transactions.promotion import TXPromoteSuggestCandidate, TXPromoteSuggestResponse, TXTransferPromoteRequest, TXTransferPromoteResponse
+from backend.app.db.models import Transaction, TransactionType
+from backend.app.schemas.transactions.promotion import TXPromoteSuggestCandidate, TXPromoteSuggestResponse
 from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA, PairFieldConstraint
 from backend.app.utils.datetime_utils import shift_date
 
@@ -31,164 +28,13 @@ class _PromoteCandidate:
 
 
 class TransactionPromotionMixin:
-    """Promotion: two loose rows promoted into a pair, the type maps of split and promote, and the suggestions of what to promote.
+    """Promotion: the type maps of split and promote, and the suggestions of what to promote.
 
     Mixed into ``TransactionService`` (``transaction_service.py``), which provides ``session``, ``execute_batch`` and,
     from ``TransactionAccessMixin``, ``_enforce_batch_access`` and ``_get_accessible_broker_ids``.
     """
 
     session: AsyncSession
-
-    # =========================================================================
-    # TRANSFER PROMOTION (Block H.4)
-    # =========================================================================
-
-    async def promote_transfer(  # noqa: C901 — sequential validation gates + per-type payload build
-        self,
-        req: TXTransferPromoteRequest,
-        user_id: Optional[int] = None,
-    ) -> TXTransferPromoteResponse:
-        """
-        Promote a sciolta coppia DEPOSIT/WITHDRAWAL in TRANSFER or FX_CONVERSION.
-
-        Atomic: delete the original pair + create the new pair in the same
-        session. Any failure → rollback and `rolled_back=True`. Caller (router)
-        commits only when `rolled_back=False`.
-        """
-        errors: List[str] = []
-
-        from_tx = await self.session.get(Transaction, req.from_tx_id)
-        to_tx = await self.session.get(Transaction, req.to_tx_id)
-
-        if from_tx is None:
-            errors.append(f"from_tx_id={req.from_tx_id} not found")
-        if to_tx is None:
-            errors.append(f"to_tx_id={req.to_tx_id} not found")
-        if errors:
-            return TXTransferPromoteResponse(rolled_back=True, errors=errors)
-
-        # Access check EDITOR on both brokers (distinct).
-        try:
-            await self._enforce_batch_access({from_tx.broker_id, to_tx.broker_id}, user_id, min_role=UserRole.EDITOR)
-        except HTTPException as e:
-            return TXTransferPromoteResponse(rolled_back=True, errors=[e.detail if isinstance(e.detail, str) else str(e.detail)])
-
-        # Pre-check: both current types must be in {DEPOSIT, WITHDRAWAL}.
-        cash_pair = {TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}
-        if from_tx.type not in cash_pair or to_tx.type not in cash_pair:
-            errors.append(f"promote supports only DEPOSIT/WITHDRAWAL pairs (got {from_tx.type.value}+{to_tx.type.value})")
-
-        # new_type-specific checks.
-        if req.new_type == TransactionType.TRANSFER:
-            if req.asset_id is None or req.quantity is None:
-                errors.append("TRANSFER promotion requires asset_id and quantity")
-            if from_tx.broker_id == to_tx.broker_id:
-                errors.append(f"TRANSFER requires distinct brokers (both on broker {from_tx.broker_id})")
-        elif req.new_type == TransactionType.FX_CONVERSION:
-            if from_tx.currency == to_tx.currency:
-                errors.append(f"FX_CONVERSION requires different currencies (got {from_tx.currency}+{to_tx.currency})")
-            if req.asset_id is not None:
-                errors.append("FX_CONVERSION promotion must not set asset_id")
-            # N78 (W-B72): the cash legs take no cost basis; it was dropped in silence.
-            if req.cost_basis_override is not None:
-                errors.append("FX_CONVERSION promotion must not set cost_basis_override")
-
-        if errors:
-            return TXTransferPromoteResponse(rolled_back=True, errors=errors)
-
-        # Snapshot originals before delete (we need broker/date/amount/currency).
-        from_broker_id: int = from_tx.broker_id
-        from_date: date_type = from_tx.date
-        from_amount: Decimal = from_tx.amount
-        from_currency: Optional[str] = from_tx.currency
-        from_description: Optional[str] = from_tx.description
-        from_tags_csv: Optional[str] = from_tx.tags
-
-        to_broker_id: int = to_tx.broker_id
-        to_date: date_type = to_tx.date
-        to_amount: Decimal = to_tx.amount
-        to_currency: Optional[str] = to_tx.currency
-        to_description: Optional[str] = to_tx.description
-        to_tags_csv: Optional[str] = to_tx.tags
-
-        # Build the new pair.
-        link_uuid = str(uuid4())
-        from_tags = [t.strip() for t in from_tags_csv.split(",")] if from_tags_csv else None
-        to_tags = [t.strip() for t in to_tags_csv.split(",")] if to_tags_csv else None
-
-        if req.new_type == TransactionType.TRANSFER:
-            qty = req.quantity
-            assert qty is not None
-            # Raw dicts (not TXCreateItem) because they go into execute_batch(creates_raw=...)
-            # which does per-row model_validate() in try/except, collecting ALL errors
-            # in one response instead of failing on the first one.
-            # The values as str, the signs with copy_abs/copy_negate: no fixed point and no context, so a quantity of
-            # 1E+1000000 neither overflows (abs() does, past the context's Emax) nor expands into a million digits; the
-            # batch refuses it past its column's limits (W-B58, R13-SEC7-3).
-            create_from_dict = {
-                "broker_id": from_broker_id,
-                "asset_id": req.asset_id,
-                "type": TransactionType.TRANSFER.value,
-                "date": from_date.isoformat(),
-                "quantity": str(qty.copy_abs().copy_negate()),
-                "link_uuid": link_uuid,
-                "tags": from_tags,
-                "description": from_description,
-            }
-            create_to_dict = {
-                "broker_id": to_broker_id,
-                "asset_id": req.asset_id,
-                "type": TransactionType.TRANSFER.value,
-                "date": to_date.isoformat(),
-                "quantity": str(qty.copy_abs()),
-                "link_uuid": link_uuid,
-                "tags": to_tags,
-                "description": to_description,
-                "cost_basis_override": {"code": req.cost_basis_override.code, "amount": str(req.cost_basis_override.amount)} if req.cost_basis_override is not None else None,
-            }
-        else:  # FX_CONVERSION
-            if from_currency is None or to_currency is None:
-                return TXTransferPromoteResponse(rolled_back=True, errors=["FX_CONVERSION requires both sides to have a currency"])
-            # Raw dicts — same rationale: execute_batch collects all errors in bulk.
-            create_from_dict = {
-                "broker_id": from_broker_id,
-                "type": TransactionType.FX_CONVERSION.value,
-                "date": from_date.isoformat(),
-                "cash": {"code": from_currency, "amount": format(from_amount, "f")},
-                "link_uuid": link_uuid,
-                "tags": from_tags,
-                "description": from_description,
-            }
-            create_to_dict = {
-                "broker_id": to_broker_id,
-                "type": TransactionType.FX_CONVERSION.value,
-                "date": to_date.isoformat(),
-                "cash": {"code": to_currency, "amount": format(to_amount, "f")},
-                "link_uuid": link_uuid,
-                "tags": to_tags,
-                "description": to_description,
-            }
-
-        # Atomic: delete originals + create new pair via unified pipeline.
-        resp = await self.execute_batch(
-            creates_raw=[create_from_dict, create_to_dict],
-            updates_raw=[],
-            deletes=[req.from_tx_id, req.to_tx_id],
-            user_id=user_id,
-            commit=True,
-        )
-
-        if resp.issues:
-            err_msgs = [iss.error for iss in resp.issues]
-            return TXTransferPromoteResponse(rolled_back=True, errors=err_msgs)
-
-        # Extract IDs of the two created transactions.
-        new_ids = [r.ids[0] for r in (resp.results or []) if r.operation == "create" and r.ids]
-        return TXTransferPromoteResponse(
-            rolled_back=False,
-            new_from_tx_id=new_ids[0] if len(new_ids) > 0 else None,
-            new_to_tx_id=new_ids[1] if len(new_ids) > 1 else None,
-        )
 
     # =========================================================================
     # BULK SPLIT / PROMOTE (server-driven, immediate)

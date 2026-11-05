@@ -372,7 +372,7 @@ When the core asks `suggest_quote_base()`:
   class's method.
 - **Best-effort**: an error, a refusal, a timeout or an answer that does not validate gives `null`, logged at info
   level (`Probe: no quote base suggestion`); the metadata result stays as it was.
-- **Nowhere else**: not in the metadata refresh (`POST /api/v1/assets/provider/refresh`), nor in the price refresh.
+- **Nowhere else**: not in the metadata request (`POST /api/v1/assets/provider/probe`, the "Ask the provider" flow), nor in the price refresh.
   The core only returns a suggestion: it never writes one on an asset. Keep it that way, and never set
   `quote_base_quantity` in the `FAAssetPatchItem` your `fetch_asset_metadata()` returns: the metadata refresh writes
   that patch on stored assets without asking.

@@ -16,7 +16,6 @@ from backend.app.config.plugins import DEFAULT_PROBE_RATE_LIMIT, probe_rate_limi
 from backend.app.db.models import AssetProviderAssignment, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets.metadata import FABulkMetadataRefreshResponse
 from backend.app.schemas.provider import (
     FABulkAssignResponse,
     FABulkRemoveResponse,
@@ -435,71 +434,3 @@ async def get_provider_assignments(
 # ============================================================================
 
 
-@provider_router.post("/refresh", response_model=FABulkMetadataRefreshResponse, tags=["FA Provider"])
-async def refresh_assets_from_provider(
-    asset_ids: List[int] = Query(..., description="List of asset IDs to refresh metadata for"),
-    session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
-):
-    """
-    Refresh asset data from assigned providers (bulk operation).
-
-    **EXPLICIT REFRESH** - No auto-refresh during provider assignment.
-
-    Fetches latest metadata from provider and updates:
-    - asset_type (if provider supports)
-    - classification_params (sector, short_description, geographic_area)
-
-    **Field-level response**:
-    - refreshed_fields: Successfully updated from provider
-    - missing_data_fields: Provider couldn't fetch (no data available)
-    - ignored_fields: Provider doesn't support these fields
-
-    **Example Request**:
-    ```
-    POST /api/v1/assets/provider/refresh
-    {
-      "asset_ids": [1, 2, 3]
-    }
-    ```
-
-    **Example Response**:
-    ```json
-    {
-      "results": [
-        {
-          "asset_id": 1,
-          "success": true,
-          "message": "Refreshed from yfinance",
-          "fields_detail": {
-            "refreshed_fields": ["asset_type", "sector", "short_description"],
-            "missing_data_fields": ["geographic_area"],
-            "ignored_fields": []
-          }
-        }
-      ],
-      "success_count": 1,
-      "failed_count": 0
-    }
-    ```
-
-    **Per-Item Outcomes**:
-    - success=true: Metadata refreshed (may have 0 changes)
-    - success=false: No provider, provider doesn't support metadata, or error
-
-    Args:
-        asset_ids: List of asset IDs to refresh
-        session: Database session
-
-    Returns:
-        FABulkMetadataRefreshResponse with per-item results and field-level details
-
-    Raises:
-        HTTPException: 500 if unexpected error occurs
-    """
-    try:
-        result = await AssetSourceManager.refresh_assets_from_provider(asset_ids, session)
-        return result
-    except Exception as e:
-        logger.exception(f"Error refreshing assets from provider: {e}")
-        raise HTTPException(status_code=500, detail="Internal error while refreshing assets from their provider") from e

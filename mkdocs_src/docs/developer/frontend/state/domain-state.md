@@ -88,9 +88,9 @@ The bus never spins the **Refresh** button: it waits only for the requests its p
 
 | Write (under `/api/v1`) | Counts as a change |
 |:------------------------|:-------------------|
-| `POST /transactions/commit`, `POST /transactions/transfers/promote` | Always |
+| `POST /transactions/commit` | Always |
 | `POST`/`DELETE /brokers`, `PATCH /brokers/{id}`, `PUT /brokers/{id}/access`, `PATCH`/`DELETE /brokers/{id}/access/me` | Always |
-| `POST`/`PATCH`/`DELETE /assets`, `POST /assets/{id}/market-data/wipe` | Always |
+| `POST`/`PATCH`/`DELETE /assets` | Always |
 | `POST /assets/merge` | Unless the answer says `dry_run: true` |
 | `POST /assets/prices/sync` | When a result has `points_changed > 0` or `events_changed > 0` |
 | `POST`/`DELETE` on the other `/assets/prices…` paths, `/prices/current` included | Always, except `/prices/query` and `/prices/period-changes` (reads) |

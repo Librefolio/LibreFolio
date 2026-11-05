@@ -108,11 +108,8 @@ curl -X PUT -b /tmp/cookies.txt \
 # List all brokers
 curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers
 
-# Get broker by ID
+# Get broker by ID (broker fields plus the caller's user_role and user_share_percentage)
 curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers/1
-
-# Get broker summary (with balances)
-curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers/1/summary
 ```
 
 ### 📥 BRIM (Broker Report Import)

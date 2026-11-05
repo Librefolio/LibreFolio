@@ -20,7 +20,7 @@ Now, as the release coordinator decided on 17/10:
    characters of the input.
 2. The write paths take that rule:
    - ``TXCreateItem`` and ``TXUpdateItem``: cash and cost basis;
-   - the promote cost basis: ``TXPromoteResolvedFields`` and ``TXTransferPromoteRequest``;
+   - the promote cost basis: ``TXPromoteResolvedFields``;
    - ``FAAssetCreateItem`` and ``FAAssetPatchItem``: currency;
    - the value of ``FAEventUpsertPoint``, alone and in ``FAEventUpsert.events``;
    - ``FXUpsertItem``: base and quote;
@@ -67,7 +67,6 @@ from backend.app.schemas.fx import FXConversionRequest, FXConversionRouteItem, F
 from backend.app.schemas.prices import FAPricePoint
 from backend.app.schemas.settings import _check_currency
 from backend.app.schemas.transactions.batch import TXPromoteResolvedFields
-from backend.app.schemas.transactions.promotion import TXTransferPromoteRequest
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXReadItem, TXUpdateItem
 from backend.app.services.brim_providers.broker_investimental.plugin import _extract_currency_from_account
 
@@ -282,7 +281,6 @@ WRITE_SITES = (
     WriteSite("TXUpdateItem.cash", lambda code: TXUpdateItem.model_validate({"id": 1, "cash": _money(code)}), ("cash", "code")),
     WriteSite("TXUpdateItem.cost_basis_override", lambda code: TXUpdateItem.model_validate({"id": 1, "cost_basis_override": _money(code, "42.50")}), ("cost_basis_override", "code")),
     WriteSite("TXPromoteResolvedFields.cost_basis_override", lambda code: TXPromoteResolvedFields.model_validate({"cost_basis_override": _money(code, "42.50")}), ("cost_basis_override", "code")),
-    WriteSite("TXTransferPromoteRequest.cost_basis_override", lambda code: TXTransferPromoteRequest.model_validate({"from_tx_id": 1, "to_tx_id": 2, "new_type": "TRANSFER", "asset_id": 1, "quantity": "5", "cost_basis_override": _money(code, "42.50")}), ("cost_basis_override", "code")),
     WriteSite("FAAssetCreateItem.currency", lambda code: FAAssetCreateItem.model_validate({"display_name": "CWS asset", "currency": code}), ("currency",), length_limited=True, raw_length=True),
     WriteSite("FAAssetPatchItem.currency", lambda code: FAAssetPatchItem.model_validate({"asset_id": 1, "currency": code}), ("currency",), length_limited=True, raw_length=True),
     WriteSite("FAEventUpsertPoint.value", lambda code: FAEventUpsertPoint.model_validate({"date": "2025-01-15", "type": "DIVIDEND", "value": _money(code, "1.5")}), ("value", "code")),

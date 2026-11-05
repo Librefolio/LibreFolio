@@ -7,8 +7,8 @@
  * BrokerSelect, header summary, etc.) can resolve a broker by id without
  * firing its own `GET /brokers` request.
  *
- * Loaded once via `GET /brokers` (the basic list, NOT the per-broker summary
- * which carries cash_balances/holdings — that stays page-specific).
+ * Loaded once via `GET /brokers` (the basic list: cash and positions are the
+ * portfolio report's, never the broker's).
  *
  * **Implementation**: built on top of [`createEntityStore`](./entityStore.ts).
  * Same invariants as `assetStore`: `invalidateBroker(id)` resets `loaded` so

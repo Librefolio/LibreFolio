@@ -684,7 +684,7 @@ class OpenDateRangeModel(BaseModel):
 
     The validator still enforces end >= start when both are concrete dates.
 
-    Use cases: /portfolio/wac date_range, flexible query filters.
+    Use cases: flexible query filters with an open date range.
     """
 
     model_config = ConfigDict(extra="forbid")

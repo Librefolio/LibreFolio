@@ -4,7 +4,6 @@ Asset Metadata API Tests.
 Tests for asset metadata management via unified PATCH endpoint:
 - PATCH /api/v1/assets (bulk partial update including metadata)
 - GET /api/v1/assets (bulk read with metadata)
-- POST /api/v1/assets/provider/refresh (refresh from provider)
 
 Note: Metadata (classification_params) is now part of the main asset PATCH endpoint,
 no separate /assets endpoint exists.
@@ -24,7 +23,6 @@ from backend.app.schemas import (
     FAAssetPatchResult,
     FABulkAssetCreateResponse,
     FABulkAssetPatchResponse,
-    FABulkMetadataRefreshResponse,
     FAClassificationParams,
     FAGeographicArea,
     FASectorArea,
@@ -356,67 +354,6 @@ async def test_bulk_read_multiple_assets(test_server):
 
 
 @pytest.mark.asyncio
-async def test_metadata_refresh_single_no_provider(test_server):
-    """Test 7: POST /assets/refresh (single asset, no provider assigned)."""
-    print_section("Test 7: POST /assets/refresh - Single Asset, No Provider")
-
-    test_asset = await create_test_asset("REFRESH1")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        # Use bulk endpoint with single asset
-        response = await client.post(
-            f"{API_BASE}/assets/provider/refresh",
-            params={"asset_ids": [test_asset]},
-            timeout=TIMEOUT,
-        )
-
-        assert response.status_code == 200, f"Refresh failed: {response.status_code}: {response.text}"
-
-        bulk_result = FABulkMetadataRefreshResponse(**response.json())
-        assert len(bulk_result.results) == 1, "Should have 1 result"
-
-        result = bulk_result.results[0]
-        assert result.asset_id == test_asset, "Asset ID mismatch"
-        assert "success" in result.model_dump(mode="json"), "Response should have success field"
-        assert "message" in result.model_dump(mode="json"), "Response should have message field"
-
-        # Without provider, should fail gracefully
-        if not result.success:
-            print_info(f"ℹ️  Expected failure (no provider): {result.message}")
-        else:
-            print_info(f"ℹ️  Refresh succeeded: {result.message}")
-
-        print_success("✓ Single metadata refresh endpoint OK")
-
-
-@pytest.mark.asyncio
-async def test_metadata_refresh_bulk(test_server):
-    """Test 8: POST /assets/refresh."""
-    print_section("Test 8: POST /assets/refresh")
-
-    test_asset = await create_test_asset("REFRESH2")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.post(
-            f"{API_BASE}/assets/provider/refresh",
-            params={"asset_ids": [test_asset]},
-            timeout=TIMEOUT,
-        )
-
-        assert response.status_code == 200, f"Bulk refresh failed: {response.status_code}: {response.text}"
-
-        data = FABulkMetadataRefreshResponse(**response.json())
-        assert len(data.results) > 0, "Should have at least one result"
-        failed = data.total_count - data.success_count
-        assert data.success_count + failed == len(data.results), "Counts should match results length"
-
-        print_info(f"  Success: {data.success_count}, Failed: {failed}")
-        print_success("✓ Bulk metadata refresh endpoint OK")
-
-
-@pytest.mark.asyncio
 async def test_patch_metadata_geographic_area_sum_validation(test_server):
     """Test 9: PATCH /assets - geographic_area sum validation.
 
@@ -512,7 +449,7 @@ async def test_patch_metadata_multiple_assets(test_server):
 
         assert response.status_code == 200, f"Bulk PATCH failed: {response.status_code}"
 
-        # PATCH /assets returns FABulkAssetPatchResponse, not FAMetadataRefreshResult
+        # PATCH /assets returns FABulkAssetPatchResponse, not a metadata refresh result
         patch_response = FABulkAssetPatchResponse(**response.json())
         assert len(patch_response.results) == 2, "Should have 2 results"
         assert all(r.success for r in patch_response.results), "All patches should succeed"

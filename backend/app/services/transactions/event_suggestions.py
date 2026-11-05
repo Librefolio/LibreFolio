@@ -10,11 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import AssetEvent, AssetEventType, BrokerUserAccess, Transaction, TransactionType, UserRole
 from backend.app.schemas.transactions.event_suggest import TXEventReconciliationItem, TXEventSuggestCandidate, TXEventSuggestRequestItem, TXEventSuggestResultItem
 from backend.app.schemas.transactions.type_metadata import event_compatible, event_compatible_types
-from backend.app.utils.datetime_utils import shift_date
 
 
 class TransactionEventSuggestionsMixin:
-    """The asset events a transaction can link to, near its date (``POST /transactions/events/suggest``).
+    """The asset events a transaction can link to, near its date (used by ``GET /transactions/event-reconciliation``).
 
     Mixed into ``TransactionService`` (``transaction_service.py``), which provides ``session``.
     """
@@ -27,9 +26,8 @@ class TransactionEventSuggestionsMixin:
 
     async def suggest_events_bulk(self, requests: List[TXEventSuggestRequestItem]) -> List[TXEventSuggestResultItem]:
         """
-        For each (asset_id, date, type, tolerance_days), return candidate
-        AssetEvent rows whose type maps to the tx.type and whose date is
-        within ±tolerance_days. Candidates are sorted by ascending |Δdays|.
+        For each (asset_id, date, type), return candidate AssetEvent rows
+        whose type maps to the tx.type and whose date is the same day.
 
         Mapping (TransactionType → AssetEventType):
         - DIVIDEND  → {DIVIDEND}
@@ -60,11 +58,7 @@ class TransactionEventSuggestionsMixin:
                 continue
 
             event_types = type_map.get(req.type, set())
-            # W-B71: a date at the calendar's edge narrows the window, never raises.
-            lo = shift_date(req.date, -req.tolerance_days)
-            hi = shift_date(req.date, req.tolerance_days)
-
-            stmt = select(AssetEvent).where(AssetEvent.asset_id == req.asset_id).where(AssetEvent.type.in_(event_types)).where(AssetEvent.date >= lo).where(AssetEvent.date <= hi)
+            stmt = select(AssetEvent).where(AssetEvent.asset_id == req.asset_id).where(AssetEvent.type.in_(event_types)).where(AssetEvent.date == req.date)
             rows = (await self.session.execute(stmt)).scalars().all()
 
             candidates = [
@@ -104,7 +98,7 @@ class TransactionEventSuggestionsMixin:
         Rows: the caller's transactions with an ``asset_id``, no ``asset_event_id`` and an event-compatible type, on the
         brokers where the caller is at least EDITOR (the ones they can link on). Newest first (date, then id).
 
-        Candidates: ``suggest_events_bulk`` with ``tolerance_days=0`` — same asset, same date, the event type that
+        Candidates: ``suggest_events_bulk`` — same asset, same date, the event type that
         corresponds to the transaction type; no window of dates. ``unique`` is one candidate, ``none`` zero, ``several``
         more than one. Nothing is written and nothing is linked: the user does that, one row at a time or all the unique.
         """
@@ -125,7 +119,7 @@ class TransactionEventSuggestionsMixin:
 
         # One suggestion per distinct (asset, date, type): a day with several dividends of the asset asks once.
         keys = list(dict.fromkeys((tx.asset_id, tx.date, tx.type) for tx in rows))
-        suggested = await self.suggest_events_bulk([TXEventSuggestRequestItem(asset_id=key[0], date=key[1], type=key[2], tolerance_days=0) for key in keys])
+        suggested = await self.suggest_events_bulk([TXEventSuggestRequestItem(asset_id=key[0], date=key[1], type=key[2]) for key in keys])
         candidates_by_key = {key: result.candidates for key, result in zip(keys, suggested, strict=True)}
 
         items: List[TXEventReconciliationItem] = []

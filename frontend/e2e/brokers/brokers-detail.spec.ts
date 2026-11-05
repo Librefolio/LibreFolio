@@ -914,8 +914,8 @@ async function lotsAnalysis(page: Page, body: {asset_id: number; broker_ids: num
 
 /**
  * The open holdings of one broker with their asset names, as the portfolio report gives them (`summary.holdings`, each
- * with the broker that holds it). They used to come from `GET /brokers/{id}/summary`, which no longer carries them (MF-L:
- * no page read the field, and the report is where a position's cost and value are calculated).
+ * with the broker that holds it). They used to come from `GET /brokers/{id}/summary`, a route that no longer exists (the
+ * report is where a position's cost and value are calculated).
  */
 async function brokerHoldings(page: Page, brokerId: number): Promise<{asset_id: number; asset_name: string}[]> {
     const response = await page.request.post('/api/v1/portfolio/report', {

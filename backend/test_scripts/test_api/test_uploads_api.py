@@ -4,7 +4,6 @@ Uploads API Tests.
 Tests for static file upload endpoints:
 - POST /uploads: Upload file
 - GET /uploads: List files
-- GET /uploads/{id}: File info
 - GET /uploads/{id}/preview: Structured preview payload
 - GET /uploads/file/{id}: Download file
 - DELETE /uploads/{id}: Delete file
@@ -342,10 +341,10 @@ async def listed(actor: Actor, **params) -> dict[str, dict]:
 
 
 async def info_of(actor: Actor, file_id: str) -> dict:
-    """GET /uploads/{id} as ``actor``, who may read the file."""
-    resp = await actor.client.get(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
-    assert resp.status_code == 200, f"{actor.label} GET /uploads/{{id}}: {resp.status_code} {resp.text}"
-    return resp.json()
+    """The info of a file as ``actor``, who may read it, reads it in GET /uploads (there is no per-file info route)."""
+    items = await listed(actor)
+    assert file_id in items, f"{actor.label} GET /uploads does not list the file {file_id}, which this actor may read"
+    return items[file_id]
 
 
 async def patch_scope(actor: Actor, file_id: str, body: dict) -> httpx.Response:
@@ -553,18 +552,6 @@ async def test_list_files_direct_reads_off_the_event_loop(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_file_info_direct_reads_off_the_event_loop(monkeypatch):
-    """UPLOAD-U5: get_file_info() reads the sidecar (get_upload_info) in a worker thread."""
-    threads = record_service_threads(monkeypatch, get_upload_info=_direct_info("info-id", uploader=7))
-
-    response = await uploads_api.get_file_info(file_id="info-id", current_user=SimpleNamespace(id=7, is_superuser=False))
-
-    assert (response.id, response.can_delete) == ("info-id", True)
-    problems = on_the_event_loop(threads, threading.get_ident())
-    assert not problems, "get_file_info: " + "; ".join(problems)
-
-
-@pytest.mark.asyncio
 async def test_upload_file_direct_saves_off_the_event_loop(monkeypatch):
     """UPLOAD-U6: upload_file() writes the file and its sidecar (save_upload) in a worker thread."""
 
@@ -698,7 +685,7 @@ class TestListUploads:
 
 
 class TestFileInfo:
-    """Tests for GET /uploads/{id}."""
+    """Tests for the info of one file, read in GET /uploads."""
 
     @pytest.mark.asyncio
     async def test_get_file_info(self, test_server):
@@ -715,11 +702,11 @@ class TestFileInfo:
             file_id = upload_resp.json()["file"]["id"]
 
             # Get info
-            response = await client.get(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
+            response = await client.get(f"{API_BASE}/uploads", timeout=TIMEOUT)
 
             assert response.status_code == 200
-            data = response.json()
-            assert data["id"] == file_id
+            data = next((item for item in response.json()["items"] if item["id"] == file_id), None)
+            assert data is not None, f"GET /uploads does not list the file {file_id}"
             assert data["original_name"] == filename
 
             print_success("✓ Got file info")
@@ -1024,8 +1011,9 @@ class TestDelete:
             assert response.json()["success"] is True
 
             # Verify deleted
-            get_resp = await client.get(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
-            assert get_resp.status_code == 404
+            list_resp = await client.get(f"{API_BASE}/uploads", timeout=TIMEOUT)
+            assert list_resp.status_code == 200
+            assert file_id not in {item["id"] for item in list_resp.json()["items"]}, "the deleted file is still listed"
 
             print_success("✓ Deleted own file")
 
@@ -1288,7 +1276,7 @@ class TestUploadScopeOnPost:
             answered = {"image": (image.get("scope"), image.get("can_delete")), "text": (text.get("scope"), text.get("can_delete"))}
             assert answered == {"image": ("common", True), "text": ("personal", True)}, f"POST /uploads answered (scope, can_delete) {answered}"
             read_back = {"image": (await info_of(lane.a, image["id"])).get("scope"), "text": (await info_of(lane.a, text["id"])).get("scope")}
-            assert read_back == {"image": "common", "text": "personal"}, f"GET /uploads/{{id}} reads the scopes {read_back}"
+            assert read_back == {"image": "common", "text": "personal"}, f"GET /uploads reads the scopes {read_back}"
 
         print_success("✓ Inherited scope stored: image common, text personal")
 
@@ -1304,7 +1292,7 @@ class TestUploadScopeOnPost:
             answered = {"image": (image.get("scope"), image.get("can_delete")), "text": (text.get("scope"), text.get("can_delete"))}
             assert answered == {"image": ("personal", True), "text": ("common", True)}, f"POST /uploads answered (scope, can_delete) {answered}"
             read_back = {"image": (await info_of(lane.a, image["id"])).get("scope"), "text": (await info_of(lane.a, text["id"])).get("scope")}
-            assert read_back == {"image": "personal", "text": "common"}, f"GET /uploads/{{id}} reads the scopes {read_back}"
+            assert read_back == {"image": "personal", "text": "common"}, f"GET /uploads reads the scopes {read_back}"
 
         print_success("✓ Scope stored as given")
 
@@ -1399,10 +1387,10 @@ class TestUploadScopeList:
 
 
 class TestUploadScopeRead:
-    """GET /uploads/{id} and /uploads/{id}/preview. A personal file: its owner and the admin read it, anyone else gets the
+    """GET /uploads (the info) and /uploads/{id}/preview. A personal file: its owner and the admin read it, anyone else gets the
     answer of a file that does not exist. A common file: everyone reads it."""
 
-    ROUTES = ("/uploads/{id}", "/uploads/{id}/preview")
+    ROUTES = ("/uploads/{id}/preview",)
 
     @pytest.mark.asyncio
     async def test_personal_file_info_and_preview_are_hidden_from_other_users(self, test_server):
@@ -1465,8 +1453,7 @@ class TestUploadScopeDelete:
                 resp = await actor.client.delete(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
                 assert resp.status_code == 200, f"{actor.label} DELETE on A's personal file: {resp.status_code} {resp.text}"
                 assert resp.json()["success"] is True
-                gone = await lane.a.client.get(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
-                assert gone.status_code == 404, f"after {actor.label}'s DELETE the file still answers {gone.status_code}"
+                assert file_id not in await listed(lane.admin), f"after {actor.label}'s DELETE the file is still listed"
 
         print_success("✓ Owner and admin delete a personal file")
 
@@ -1485,8 +1472,7 @@ class TestUploadScopeDelete:
             assert problem is None, f"B DELETE on A's personal file: {problem}"
 
             for file_id in (common, personal):
-                still = await lane.a.client.get(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
-                assert still.status_code == 200, f"a refused DELETE removed the file: {still.status_code}"
+                assert file_id in await listed(lane.admin), "a refused DELETE removed the file"
 
         print_success("✓ 403 on common, 404 on personal")
 
@@ -1508,7 +1494,7 @@ class TestUploadScopePatch:
                 assert resp.status_code == 200, f"{actor.label} PATCH /uploads/{{id}} {{'scope': {scope!r}}}: {resp.status_code} {resp.text}"
                 body = resp.json()
                 assert (body.get("id"), body.get("scope"), body.get("can_delete")) == (file_id, scope, True), f"{actor.label}'s PATCH answered {body}"
-                assert body == await info_of(actor, file_id), "the PATCH answers the updated file info, as GET /uploads/{id} reads it"
+                assert body == await info_of(actor, file_id), "the PATCH answers the updated file info, as GET /uploads lists it"
 
         print_success("✓ Owner and admin change the scope")
 
@@ -1562,9 +1548,9 @@ class TestUploadScopePatch:
 
         async with scope_lane() as lane:
             file_id = (await lane.upload(lane.a, scope_name("a-switch", ".txt"), SCOPE_TEXT, "text/plain", scope="personal"))["id"]
-            routes = ("/uploads/{id}", "/uploads/{id}/preview", "/uploads/file/{id}")
+            routes = ("/uploads/{id}/preview", "/uploads/file/{id}")
 
-            problem = await hidden_problem(lane.b, "GET", "/uploads/{id}", file_id)
+            problem = await hidden_problem(lane.b, "GET", "/uploads/{id}/preview", file_id)
             assert problem is None, f"precondition, the file is personal: {problem}"
 
             resp = await patch_scope(lane.a, file_id, {"scope": "common"})
@@ -1602,7 +1588,7 @@ class TestUploadScopeLegacy:
                 seen[label] = (info.get("scope"), info.get("can_delete"))
             expected = {"A's legacy image, by B": ("common", False), "the system's legacy text, by B": ("common", False), "A's legacy text, by A": ("personal", True)}
             assert seen == expected, f"(scope, can_delete) of the legacy files: {seen}"
-            problem = await hidden_problem(lane.b, "GET", "/uploads/{id}", text)
+            problem = await hidden_problem(lane.b, "GET", "/uploads/{id}/preview", text)
             assert problem is None, f"A's legacy text file: {problem}"
 
             # The admin's PATCH stores the field, even when it is the value the rule gives anyway (the text file).
@@ -1611,7 +1597,7 @@ class TestUploadScopeLegacy:
                 assert resp.status_code == 200, f"admin PATCH on a legacy file: {resp.status_code} {resp.text}"
                 sidecar = json.loads((get_uploads_dir() / f"{file_id}.json").read_text())
                 assert sidecar.get("scope") == "personal", f"the admin's PATCH did not store the scope in the legacy sidecar: {sidecar}"
-            problem = await hidden_problem(lane.b, "GET", "/uploads/{id}", image)
+            problem = await hidden_problem(lane.b, "GET", "/uploads/{id}/preview", image)
             assert problem is None, f"A's legacy image made personal: {problem}"
 
         print_success("✓ Legacy files inherit their scope, the admin's PATCH stores it")
@@ -1624,14 +1610,14 @@ class TestUploadIdsTheFilesystemCannotName:
 
     @pytest.mark.asyncio
     async def test_nul_byte_in_the_id_answers_the_missing_file_404(self, test_server):
-        """UPLOAD-NUL-1: GET /uploads/{id} and GET /uploads/file/{id} with %00 in the id."""
+        """UPLOAD-NUL-1: GET /uploads/{id}/preview and GET /uploads/file/{id} with %00 in the id."""
         print_section("UPLOAD-NUL-1: %00 in the id → the missing-file 404")
 
         async with httpx.AsyncClient() as client:
             await sign_in(client, "A", *E2E_USER, admin=False)
             nul_id = f"{uuid.uuid4()}%00"
             problems = []
-            for route in ("/uploads/{id}", "/uploads/file/{id}"):
+            for route in ("/uploads/{id}/preview", "/uploads/file/{id}"):
                 missing = await client.get(f"{API_BASE}{route.format(id=uuid.uuid4())}", timeout=TIMEOUT)
                 answer = await client.get(f"{API_BASE}{route.format(id=nul_id)}", timeout=TIMEOUT)
                 assert b"%00" in answer.request.url.raw_path, f"precondition: the client sends the NUL percent-encoded; it sent {answer.request.url.raw_path!r}"

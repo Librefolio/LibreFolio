@@ -5,23 +5,20 @@ Asset classification and metadata schemas (FA).
   and ``FASectorArea`` (standard sectors) extend it.
 - ``FAClassificationParams``: the classification metadata of an asset (all fields optional, for partial updates).
 - ``FAAssetMetadataResponse``: an asset with its metadata fields (GET and PATCH responses, bulk reads).
-- ``FAMetadataRefreshResult`` / ``FABulkMetadataRefreshResponse``: the outcome of a metadata refresh from the providers.
 """
 
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
 from decimal import ROUND_HALF_EVEN, Decimal
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import Field, field_validator
 
 from backend.app.schemas.common import (
-    BaseBulkResponse,
     SafeDecimal,
     StrictModel,
 )
-from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.asset.geo import normalize_country_keys
 from backend.app.utils.asset.sector import normalize_sector
 
@@ -282,28 +279,3 @@ class FAAssetMetadataResponse(StrictModel):
     quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     classification_params: Optional[FAClassificationParams] = None
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
-
-
-class FAMetadataRefreshResult(StrictModel):
-    """
-    Result of metadata refresh for single asset.
-
-    Follows FA pattern: { asset_id, success, message, ... }
-    Includes fields_detail with old/new values for each refreshed field.
-    """
-
-    asset_id: int
-    success: bool
-    message: str
-    fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(None, description="Details of refreshed fields with old/new values")
-    warnings: Optional[List[str]] = None
-
-
-class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
-    """Bulk metadata refresh response (partial success).
-
-    Each result includes fields_detail with:
-    - refreshed_fields: List[OldNew[str]] with old/new values
-    - missing_data_fields: Fields provider didn't return
-    - ignored_fields: Fields skipped (future use)
-    """

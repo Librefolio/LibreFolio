@@ -17,11 +17,10 @@ from backend.app.db.models import (
     AssetEvent,
     BrokerUserAccess,
     Transaction,
-    User,
 )
 from backend.app.db.precision import decimal_limit_issue, get_model_column_precision, max_integer_digits, storable_value
 from backend.app.db.real_decimal import REAL_SIGNIFICANT_DIGITS
-from backend.app.schemas.assets.events import FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAEventQueryResult, FAEventUpsertPoint
+from backend.app.schemas.assets.events import FAAssetEventPoint, FAAssetEventPointOut, FAEventQueryResult, FAEventUpsertPoint
 from backend.app.schemas.common import (
     Currency,
     FxBackwardFillInfo,
@@ -592,8 +591,7 @@ class EventStoreOperations:
         Raises:
             AssetSourceError(code="EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST"): ``details`` names the first such edit in
                 request order: ``event_id``, ``date`` (the stored event's), ``transaction_ids`` (only the transactions
-                ``current_user_id`` can see: a ``BrokerUserAccess`` row for their broker, as ``delete_events_bulk``
-                decides; sorted) and ``hidden_transactions_count`` (the others). A SPLIT of a global asset may carry
+                ``current_user_id`` can see: a ``BrokerUserAccess`` row for their broker; sorted) and ``hidden_transactions_count`` (the others). A SPLIT of a global asset may carry
                 other users' adjustments, and anyone could provoke the refusal (R13-SEC7); without a
                 ``current_user_id`` no transaction is named, all are counted (X-R47b). The message gives the total count.
         """
@@ -760,77 +758,3 @@ class EventStoreOperations:
             grouped.setdefault(ev.asset_id, []).append(point)
 
         return [FAEventQueryResult(asset_id=aid, events=evts, errors=skipped.get(aid, [])) for aid, evts in grouped.items()]
-
-    @staticmethod
-    async def delete_events_bulk(
-        asset_id: int,
-        event_ids: list[int],
-        session: AsyncSession,
-        current_user: User,
-    ) -> FAEventBulkDeleteResponse:
-        """
-        Bulk delete events of one asset with RESTRICT-aware per-item result.
-
-        Scoped by ``asset_id`` (decision 21): an id of another asset is ``not_found``
-        and its event is left alone, so a wrong or crafted request cannot delete the
-        events of other assets.
-
-        For each requested id, returns one of:
-        - ``deleted`` — event removed
-        - ``not_found`` — id did not exist, or names an event of another asset
-        - ``in_use`` — referenced by one or more transactions; response exposes
-          ``accessible_transactions`` (tx ids current user can see) and
-          ``hidden_transactions_count`` (refs owned by other users).
-
-        No partial rollback: deletable events are committed even if others are
-        blocked. HTTP layer always returns 200 — inspect ``results`` for outcome.
-        """
-        results: list[FAEventDeleteItemResult] = []
-
-        for event_id in event_ids:
-            event = await session.get(AssetEvent, event_id)
-            if event is None or event.asset_id != asset_id:
-                results.append(FAEventDeleteItemResult(event_id=event_id, status="not_found"))
-                continue
-
-            # RESTRICT pre-check: enumerate transactions that reference this event.
-            total_stmt = select(func.count(Transaction.id)).where(Transaction.asset_event_id == event_id)
-            total_count_row = await session.execute(total_stmt)
-            total_count = int(total_count_row.scalar_one() or 0)
-
-            if total_count > 0:
-                # Split by user accessibility via BrokerUserAccess join.
-                accessible_stmt = (
-                    select(Transaction.id)
-                    .join(BrokerUserAccess, Transaction.broker_id == BrokerUserAccess.broker_id)
-                    .where(
-                        Transaction.asset_event_id == event_id,
-                        BrokerUserAccess.user_id == current_user.id,
-                    )
-                )
-                acc_rows = await session.execute(accessible_stmt)
-                accessible_ids = [int(r[0]) for r in acc_rows.all()]
-                hidden = total_count - len(accessible_ids)
-
-                results.append(
-                    FAEventDeleteItemResult(
-                        event_id=event_id,
-                        status="in_use",
-                        accessible_transactions=accessible_ids,
-                        hidden_transactions_count=hidden,
-                    )
-                )
-                continue
-
-            # Safe to delete
-            await session.delete(event)
-            results.append(FAEventDeleteItemResult(event_id=event_id, status="deleted"))
-
-        await session.commit()
-
-        return FAEventBulkDeleteResponse(
-            results=results,
-            deleted_count=sum(1 for r in results if r.status == "deleted"),
-            not_found_count=sum(1 for r in results if r.status == "not_found"),
-            in_use_count=sum(1 for r in results if r.status == "in_use"),
-        )

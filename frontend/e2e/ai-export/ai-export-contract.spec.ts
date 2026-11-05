@@ -153,8 +153,7 @@ interface BrokerListGate {
  * Holds every `GET /api/v1/brokers` the page sends — the list `ensureBrokersLoaded()` asks for (brokerStore.ts) — until
  * `release()`. The gate delays, it never answers: a held request leaves through `route.fallback()`, so any other route
  * registered on the same URL still gets its turn and the backend answers as usual. Other methods on that path fall back
- * at once, and the pattern stops at the path, so `/brokers/{id}` (icon hydration) and `/brokers/{id}/summary` never
- * enter it. `page.request` does not go through page routes: the owned-set reading goes around the gate.
+ * at once, and the pattern stops at the path, so `/brokers/{id}` (icon hydration) never enters it. `page.request` does not go through page routes: the owned-set reading goes around the gate.
  */
 async function holdBrokerList(page: Page): Promise<BrokerListGate> {
     let release!: () => void;

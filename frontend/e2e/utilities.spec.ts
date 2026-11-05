@@ -6,7 +6,6 @@
  * (currencies, countries, sectors).
  *
  * These tests cover backend functions that serve UI presentation data:
- * - normalize_currency() → utils/fx/currency.py
  * - list_currencies() → utils/fx/currency.py
  * - list_countries() → utils/asset/geo.py
  * - FinancialSector.list_all() → utils/asset/sector.py
@@ -57,52 +56,6 @@ test.describe('Utilities API — Currencies', () => {
         expect(eur.symbol).toBe('€');
         const usd = data.items.find((c: any) => c.code === 'USD');
         expect(usd.symbol).toBe('$');
-    });
-
-    test('normalize € resolves to EUR', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/currencies/normalize?name=${encodeURIComponent('€')}`);
-        expect(response.ok()).toBeTruthy();
-        const data = await response.json();
-
-        expect(data.iso_codes).toContain('EUR');
-        expect(data.match_type).toBe('exact');
-    });
-
-    test('normalize Dollar contains USD', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/currencies/normalize?name=Dollar`);
-        const data = await response.json();
-
-        expect(data.iso_codes).toContain('USD');
-    });
-
-    test('normalize $ is ambiguous', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/currencies/normalize?name=${encodeURIComponent('$')}`);
-        const data = await response.json();
-
-        expect(data.match_type).toBe('symbol_ambiguous');
-        expect(data.iso_codes.length).toBeGreaterThan(1);
-        expect(data.iso_codes).toContain('USD');
-    });
-
-    test('normalize GBP already ISO returns exact', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/currencies/normalize?name=GBP`);
-        const data = await response.json();
-
-        expect(data.iso_codes).toContain('GBP');
-        expect(data.match_type).toBe('exact');
-    });
-
-    test('normalize unknown currency returns not_found', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/currencies/normalize?name=ZZZZZ`);
-        const data = await response.json();
-
-        expect(data.match_type).toBe('not_found');
-        expect(data.iso_codes).toEqual([]);
     });
 });
 

@@ -116,7 +116,7 @@ async function installOfflineProviderIO(page: Page, owned: Owned, baseURL: strin
     });
     page.on('request', (request) => {
         const path = new URL(request.url()).pathname;
-        if ((path === `${API}/assets` && request.method() === 'PATCH') || /\/assets\/\d+\/market-data\/wipe$/.test(path)) {
+        if (path === `${API}/assets` && request.method() === 'PATCH') {
             owned.mutations.push({method: request.method(), path, payload: request.postData() ? request.postDataJSON() : null});
         }
     });

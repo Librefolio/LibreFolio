@@ -4,12 +4,11 @@ Test Suite: Assets Provider API Endpoints
 Tests for asset provider assignment and management:
 - POST /api/v1/assets/provider - Assign providers to assets
 - DELETE /api/v1/assets/provider - Remove provider assignments
-- POST /api/v1/assets/provider/refresh - Refresh metadata from providers
 
 Z-32 (d), the quote base suggestion (QBS-A01…A06, the HTTP side of test_services/test_quote_base_suggestion.py, whose
 docstring holds the contract): the search and the probe's metadata carry ``quote_base_suggestion`` (mockprov's
 ``MOCK_MINOR_UNIT``, a London line quoted in pence: ``{"quantity": 100, "quote_currency": "GBp"}``; null otherwise);
-the metadata refresh never changes ``quote_base_quantity`` for it; the served OpenAPI document has the component.
+the probe's patch never carries ``quote_base_quantity`` for it; the served OpenAPI document has the component.
 """
 
 import uuid
@@ -220,45 +219,6 @@ async def test_remove_provider(test_server):
         assets = [FAAssetMetadataResponse(**a) for a in query_resp.json()]
         assert assets[0].provider_code is None
         print_success("✓ Provider removal verified")
-
-
-# ============================================================
-# Test 4: POST /assets/provider/refresh - Refresh metadata
-# ============================================================
-@pytest.mark.asyncio
-async def test_refresh_metadata(test_server):
-    """Test 4: POST /assets/provider/refresh - Refresh metadata from provider."""
-    print_section("Test 4: POST /assets/provider/refresh - Refresh Metadata")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        # Create asset with provider
-        asset_item = FAAssetCreateItem(display_name=f"Refresh Test {unique_id('REF')}", currency="USD")
-        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
-        create_data = FABulkAssetCreateResponse(**create_resp.json())
-        asset_id = create_data.results[0].asset_id
-
-        # Assign mockprov provider
-        assignment = FAProviderAssignmentItem(
-            asset_id=asset_id,
-            provider_code="mockprov",
-            identifier="MOCK_REFRESH",
-            identifier_type=ProviderInputType.AUTO_GENERATED,
-            provider_params=None,
-        )
-        await client.post(
-            f"{API_BASE}/assets/provider",
-            json=[assignment.model_dump(mode="json")],
-            timeout=TIMEOUT,
-        )
-        print_info("  Provider assigned")
-
-        # Refresh metadata
-        refresh_resp = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
-
-        # Should succeed (mockprov provides metadata)
-        assert refresh_resp.status_code == 200, f"Expected 200, got {refresh_resp.status_code}: {refresh_resp.text}"
-        print_success("✓ Metadata refresh successful")
 
 
 # ============================================================
@@ -665,16 +625,7 @@ async def test_search_to_asset_e2e(test_server):  # noqa: C901 — sequential E2
         assert assign_data.success_count == len(assignments), "All assignments should succeed"
         print_success(f"✓ Assigned {assign_data.success_count} providers")
 
-        # Step 4: Refresh metadata from providers
-        print_info("\nStep 4: Refreshing metadata...")
         asset_ids = [a["asset_id"] for a in created_assets]
-
-        refresh_resp = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
-
-        if refresh_resp.status_code == 200:
-            print_success("✓ Metadata refresh completed")
-        else:
-            print_info(f"  Metadata refresh warning: {refresh_resp.status_code}")
 
         # Step 5: Verify assets have metadata via GET /assets
         print_info("\nStep 5: Verifying asset data...")
@@ -1233,9 +1184,10 @@ async def test_user_url_round_trip(test_server):
         assignment_data = assignments[0]
         assert assignment_data["provider_url"] == "https://finance.yahoo.com/quote/AAPL", f"provider_url not calculated: {assignment_data.get('provider_url')}"
 
-        # Verify user_url via GET /assets/all (it's on the asset, not the assignment)
+        # Verify user_url via GET /assets/query (it's on the asset, not the assignment)
         asset_resp = await client.get(
-            f"{API_BASE}/assets/all",
+            f"{API_BASE}/assets/query",
+            params={"active": True},
             timeout=TIMEOUT,
         )
         if asset_resp.status_code == 200:
@@ -1412,7 +1364,7 @@ async def test_scheduled_investment_via_api(test_server):
 
 @pytest.mark.asyncio
 async def test_probe_bulk_assign_refresh_and_remove_with_mock_provider(test_server):
-    """Test: Probe + bulk assign/refresh/remove via mock provider."""
+    """Test: Probe + bulk assign/remove via mock provider."""
     print_section("Test: probe + bulk provider wrappers with mockprov")
 
     async with httpx.AsyncClient() as client:
@@ -1472,19 +1424,6 @@ async def test_probe_bulk_assign_refresh_and_remove_with_mock_provider(test_serv
         assert assign_resp.status_code == 200, assign_resp.text
         assign_data = FABulkAssignResponse(**assign_resp.json())
         assert assign_data.success_count == 2
-
-        refresh_resp = await client.post(
-            f"{API_BASE}/assets/provider/refresh",
-            params=[("asset_ids", str(asset_id)) for asset_id in asset_ids],
-            timeout=TIMEOUT,
-        )
-        assert refresh_resp.status_code == 200, refresh_resp.text
-        refresh_data = refresh_resp.json()
-        assert refresh_data["success_count"] == 2
-        for item in refresh_data["results"]:
-            assert item["success"] is True
-            assert item["fields_detail"]["refreshed_fields"]
-        print_success("✓ Bulk provider refresh returned refreshed fields")
 
         remove_resp = await client.delete(
             f"{API_BASE}/assets/provider",
@@ -1619,49 +1558,6 @@ async def test_qbs_a04_probe_metadata_of_another_mockprov_line_suggests_null(tes
     assert QBS_FIELD in meta, f"the probe's metadata result has no {QBS_FIELD}: its keys are {sorted(meta)}"
     assert meta[QBS_FIELD] is None, f"mockprov suggests nothing for {identifier}: {meta[QBS_FIELD]!r}"
     print_success(f"✓ {identifier}: null")
-
-
-@pytest.mark.asyncio
-async def test_qbs_a05_metadata_refresh_keeps_the_quote_base(test_server):
-    """QBS-A05 (Z-32 d, point 6): an asset of this test, in GBP with ``quote_base_quantity`` 1, assigned to mockprov
-    ``MOCK_MINOR_UNIT``: ``POST /assets/provider/refresh`` refreshes its metadata (a refreshed field), refreshes no
-    ``quote_base_quantity``, and the asset's ``quote_base_quantity`` is still 1. The asset is deleted at the end.
-
-    Green before Z-32 (d), by construction: the refresh writes mockprov's patch, which has no quote base. A guard: the
-    cure must not let the suggestion reach a stored asset — the quote base is the user's to accept, in the web modal.
-    """
-    print_section("QBS-A05: a metadata refresh keeps quote_base_quantity")
-    name = f"QBS refresh {_qbs_unique('QBS')}"
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        asset_item = FAAssetCreateItem(display_name=name, currency="GBP", asset_type=AssetType.STOCK, quote_base_quantity=1)
-        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
-        assert create_resp.status_code == 201, f"create {name}: {create_resp.status_code} {create_resp.text[:300]}"
-        created = next((result for result in FABulkAssetCreateResponse(**create_resp.json()).results if result.display_name == name), None)
-        assert created is not None and created.success and created.asset_id is not None, f"create {name}: {create_resp.text[:300]}"
-        asset_id = created.asset_id
-        try:
-            assignment = FAProviderAssignmentItem(asset_id=asset_id, provider_code="mockprov", identifier=QBS_MINOR_UNIT_IDENTIFIER, identifier_type=ProviderInputType.TICKER, provider_params=None)
-            assign_resp = await client.post(f"{API_BASE}/assets/provider", json=[assignment.model_dump(mode="json")], timeout=TIMEOUT)
-            assert assign_resp.status_code == 200, f"assign: {assign_resp.status_code} {assign_resp.text[:300]}"
-            assert FABulkAssignResponse(**assign_resp.json()).success_count == 1, f"assign: {assign_resp.text[:300]}"
-
-            refresh_resp = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
-            assert refresh_resp.status_code == 200, f"refresh: {refresh_resp.status_code} {refresh_resp.text[:300]}"
-            refreshed = next((result for result in refresh_resp.json()["results"] if result["asset_id"] == asset_id), None)
-            assert refreshed is not None and refreshed["success"] is True, f"barrier: the refresh of asset {asset_id} succeeded: {refresh_resp.text[:500]}"
-            fields = [change["info"] for change in refreshed["fields_detail"]["refreshed_fields"]]
-            assert fields, f"barrier: the refresh wrote a patch: {refreshed}"
-            assert "quote_base_quantity" not in fields, f"the refresh refreshed quote_base_quantity: {fields}"
-
-            read_resp = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
-            assert read_resp.status_code == 200, f"read: {read_resp.status_code} {read_resp.text[:300]}"
-            asset = next((item for item in read_resp.json() if item["asset_id"] == asset_id), None)
-            assert asset is not None, f"asset {asset_id} not in its own read: {read_resp.text[:300]}"
-            assert asset["quote_base_quantity"] == 1, f"the metadata refresh changed quote_base_quantity: {asset['quote_base_quantity']!r}"
-            print_success(f"✓ asset {asset_id}: refreshed {fields}, quote_base_quantity still 1")
-        finally:
-            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
 
 
 def _qbs_component(schemas: dict, name: str) -> tuple[str, dict]:

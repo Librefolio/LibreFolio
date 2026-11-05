@@ -53,10 +53,8 @@ if TYPE_CHECKING:
         BaseDistribution,
         # Metadata & classification
         FAAssetMetadataResponse,
-        FABulkMetadataRefreshResponse,
         FAClassificationParams,
         FAGeographicArea,
-        FAMetadataRefreshResult,
         FASectorArea,
     )
     from backend.app.schemas.brim import (
@@ -98,7 +96,6 @@ if TYPE_CHECKING:
         BRDeleteItem,
         BRDeleteResult,
         BRReadItem,
-        BRSummary,
         BRUpdateItem,
         BRUpdateResult,
     )
@@ -155,7 +152,6 @@ if TYPE_CHECKING:
         FAProviderImpactResult,
         FAProviderImpactSplit,
         FAProviderInfo,
-        FAProviderRefreshFieldsDetail,
         FAProviderRemovalResult,
         FAVolumeKind,
     )
@@ -281,7 +277,6 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     # Brokers (BR prefix)
     "BRCreateItem",
     "BRReadItem",
-    "BRSummary",
     "BRUpdateItem",
     "BRDeleteItem",
     "BRDeleteResult",
@@ -332,8 +327,6 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "FASectorArea",
     "FAClassificationParams",
     "FAAssetMetadataResponse",
-    "FAMetadataRefreshResult",
-    "FABulkMetadataRefreshResponse",
     "FABulkAssetPatchResponse",
     "FAAssetPatchResult",
     # Assets: CRUD
@@ -357,7 +350,6 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "FAProviderImpactResult",
     "FAProviderImpactSplit",
     "FAProviderRemovalResult",
-    "FAProviderRefreshFieldsDetail",
     # Prices
     "FAUpsert",
     "FAPricePoint",
@@ -501,10 +493,8 @@ _EXPORT_GROUPS = {
     "assets.metadata": (
         "BaseDistribution",
         "FAAssetMetadataResponse",
-        "FABulkMetadataRefreshResponse",
         "FAClassificationParams",
         "FAGeographicArea",
-        "FAMetadataRefreshResult",
         "FASectorArea",
     ),
     "brim": (
@@ -538,7 +528,6 @@ _EXPORT_GROUPS = {
         "BRDeleteItem",
         "BRDeleteResult",
         "BRReadItem",
-        "BRSummary",
         "BRUpdateItem",
         "BRUpdateResult",
     ),
@@ -595,7 +584,6 @@ _EXPORT_GROUPS = {
         "FAProviderImpactResult",
         "FAProviderImpactSplit",
         "FAProviderInfo",
-        "FAProviderRefreshFieldsDetail",
         "FAProviderRemovalResult",
         "FAVolumeKind",
     ),

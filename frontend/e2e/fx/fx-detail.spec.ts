@@ -621,7 +621,7 @@ async function installFxComparisonSyncFixture(page: Page) {
         });
     });
 
-    await page.route('**/api/v1/assets/all*', async (route) => {
+    await page.route('**/api/v1/assets/query*', async (route) => {
         await route.fulfill({status: 200, contentType: 'application/json', json: peers});
     });
 

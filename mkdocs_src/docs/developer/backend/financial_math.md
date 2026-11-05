@@ -930,7 +930,7 @@ SPLIT asset event», and fails when:
   `splits.py` instead: `split_linked_ids()`, or `load_split_links()` when the ratio, the event
   or the dates matter; the event store, before a SPLIT changes type, asks
   `costless_incoming_split_adjustments()`. Before lot MF-I2 the WAC preview
-  (`portfolio_service.py`), the broker summary (`brokers/summary.py`) and the auto cost
+  (`portfolio_service.py`), the former broker summary (`brokers/summary.py`, since removed) and the auto cost
   (`transactions/auto_cost.py`) each wrote the join again. An allowed home that no longer names
   the member is a stale entry, and fails too.
 

@@ -1171,12 +1171,12 @@ async def test_bulk_read_get_all_list_and_delete_identifier_variants(test_server
         assert read_data[1]["classification_params"]["sector_area"]["distribution"]["Technology"] == "1.0000"
         print_success("✓ Bulk read preserves order, skips missing IDs, returns metadata/provider")
 
-        all_resp = await client.get(f"{API_BASE}/assets/all", timeout=TIMEOUT)
+        all_resp = await client.get(f"{API_BASE}/assets/query", params={"active": True}, timeout=TIMEOUT)
         assert all_resp.status_code == 200, all_resp.text
         active_ids = [row["id"] for row in all_resp.json()]
         assert asset1_id in active_ids
         assert asset2_id not in active_ids
-        print_success("✓ /assets/all returns only active assets")
+        print_success("✓ /assets/query?active=true returns only active assets")
 
         ticker_resp = await client.get(f"{API_BASE}/assets/query", params={"ticker": read_ticker}, timeout=TIMEOUT)
         assert ticker_resp.status_code == 200, ticker_resp.text
@@ -1335,14 +1335,14 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         assert summary["dry_run"] is True
         print_success("✓ Market-data summary reports existing rows")
 
-        wipe_resp = await client.post(f"{API_BASE}/assets/{asset_id}/market-data/wipe", timeout=TIMEOUT)
+        # The wipe has no route of its own: a currency change PATCH runs it.
+        wipe_resp = await client.patch(
+            f"{API_BASE}/assets",
+            json=[FAAssetPatchItem(asset_id=asset_id, currency="EUR").model_dump(mode="json", exclude_unset=True)],
+            timeout=TIMEOUT,
+        )
         assert wipe_resp.status_code == 200, wipe_resp.text
-        wiped = wipe_resp.json()
-        assert wiped["prices"] == 1
-        assert wiped["events_manual"] == 1
-        assert wiped["splits_kept"] == 1
-        assert wiped["linked_tx"] == 1
-        assert wiped["dry_run"] is False
+        assert wipe_resp.json()["results"][0]["success"] is True, wipe_resp.text
 
         post_wipe_query = await client.post(
             f"{API_BASE}/assets/events/query",
@@ -1369,7 +1369,7 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         )
         assert price_check.status_code == 200, price_check.text
         assert price_check.json()["items"][0]["prices"] == []
-        print_success("✓ Market-data wipe removed prices/non-split events, kept the SPLIT and disconnected tx links")
+        print_success("✓ Currency-change wipe removed prices/non-split events, kept the SPLIT and disconnected tx links")
 
 
 # ============================================================================

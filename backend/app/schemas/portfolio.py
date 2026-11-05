@@ -2,7 +2,6 @@
 Portfolio schemas for LibreFolio.
 
 Schemas for the /api/v1/portfolio/ endpoints:
-- WAC time series (point-per-transaction where WAC changes)
 - Portfolio summary (net worth, ROI, allocations, holdings)
 - Portfolio history (daily cash/market_value/nav series)
 - Bulk lots analysis (FifoLotEngine-based multi-analysis endpoint)
@@ -22,50 +21,6 @@ from pydantic import BaseModel, BeforeValidator, Field, computed_field, field_va
 
 from backend.app.schemas.common import Currency, CurrencyCode, DateSpan, OpenDateRangeModel, SafeDecimal, StepSpan, StrictModel
 from backend.app.schemas.wac import WACMissingPairInfo
-
-# =============================================================================
-# WAC ANALYTICS — Time series request/response
-# =============================================================================
-
-
-class WACAnalyticsQuery(StrictModel):
-    """Single query for WAC time series."""
-
-    broker_id: int = Field(..., description="Broker to compute WAC for")
-    asset_id: int = Field(..., description="Asset to compute WAC for")
-    date_range: Optional[OpenDateRangeModel] = Field(None, description="Date range filter. None = entire history.")
-
-
-class WACAnalyticsRequest(StrictModel):
-    """Request body for POST /portfolio/wac."""
-
-    queries: List[WACAnalyticsQuery] = Field(..., min_length=1, max_length=20, description="WAC queries (max 20)")
-
-
-class WACSeriesPoint(StrictModel):
-    """Single point in WAC time series (where WAC changes)."""
-
-    date: date_type
-    wac: SafeDecimal = Field(..., description="WAC per unit after this transaction")
-    pool_qty: SafeDecimal = Field(..., description="Pool quantity after this transaction")
-    effect: str = Field(..., description="Effect on pool: add, add_zero_cost, reduce, split_rescale")
-
-
-class WACAnalyticsResultItem(StrictModel):
-    """WAC series result for a single (broker, asset) query."""
-
-    broker_id: int
-    asset_id: int
-    currency: str = Field(..., description="Target currency of WAC values")
-    series: List[WACSeriesPoint] = Field(default_factory=list)
-    missing_fx_pairs: List[WACMissingPairInfo] = Field(default_factory=list, description="FX pairs that could not be resolved, with dates")
-
-
-class WACAnalyticsResponse(StrictModel):
-    """Response for POST /portfolio/wac."""
-
-    results: List[WACAnalyticsResultItem]
-
 
 # =============================================================================
 # PORTFOLIO — Summary, History

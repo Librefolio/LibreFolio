@@ -1,5 +1,5 @@
 """
-Event suggestions (``POST /transactions/events/suggest``): the request, the candidate asset event and the result.
+Event suggestions (used by ``GET /transactions/event-reconciliation``): the request, the candidate asset event and the result.
 Event reconciliation (``GET /transactions/event-reconciliation``): a transaction without its event and the events it could link.
 """
 
@@ -24,13 +24,12 @@ from backend.app.schemas.common import (
 class TXEventSuggestRequestItem(StrictModel):
     """
     Single suggest request: given (asset_id, date, type), find candidate
-    AssetEvent rows within +/- tolerance_days whose type maps to the tx type.
+    AssetEvent rows of the same day whose type maps to the tx type.
     """
 
     asset_id: int = Field(..., gt=0)
     date: date_type
     type: TransactionType
-    tolerance_days: int = Field(0, ge=0, le=7, description="Days window (+/-) around date")
 
 
 class TXEventSuggestCandidate(StrictModel):

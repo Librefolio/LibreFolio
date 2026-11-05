@@ -33,8 +33,8 @@ One rule looks the other way, from the whole backend at the layer (workstream MF
     ``from ... import AssetEventType as X``, ``AssetEventType("SPLIT")``, ``AssetEventType["SPLIT"]``,
     ``getattr(AssetEventType, "SPLIT")`` — and nothing else does: a comment, a docstring, another
     enum's ``SPLIT`` member, the string ``"SPLIT"`` on its own. Before MF-I2 the WAC preview
-    (``portfolio_service.py``), the broker summary (``brokers/summary.py``) and the auto cost
-    (``transactions/auto_cost.py``) each wrote the join again.
+    (``portfolio_service.py``), the broker summary (``brokers/summary.py``, since removed) and the auto
+    cost (``transactions/auto_cost.py``) each wrote the join again.
 
 And one more from the whole backend at the layer (workstream J, lot CP-14a, U10, decision D-8):
 
@@ -111,12 +111,11 @@ SPLIT_EVENT_TYPE_HOMES = {
     "services/transactions/event_suggestions.py": "a UI mapping of event type to transaction type, not a loader",
 }
 # Presence barrier of (d): files the backend scan must reach — the homes, the enum's definition, and
-# the three readers that wrote the join themselves before MF-I2.
+# the readers that wrote the join themselves before MF-I2 (the broker summary, the third, is gone).
 KNOWN_APP_MODULES = (
     *SPLIT_EVENT_TYPE_HOMES,
     "db/models.py",
     "services/portfolio_service.py",
-    "services/brokers/summary.py",
     "services/transactions/auto_cost.py",
 )
 
@@ -502,8 +501,8 @@ def test_an_old_home_of_the_layer_stays_gone(old_home):
 def test_only_the_split_loader_names_the_split_event_type():
     """(d) The rows linked to a SPLIT asset event are read through ``financial_math.splits``, never by a join of one's own.
 
-    Before MF-I2: red, naming ``services/portfolio_service.py``, ``services/brokers/summary.py`` and
-    ``services/transactions/auto_cost.py``.
+    Before MF-I2: red, naming ``services/portfolio_service.py``, ``services/brokers/summary.py`` (since
+    removed) and ``services/transactions/auto_cost.py``.
     """
     offenders = [f"backend/app/{module}:{line}" for module, lines in sorted(_split_event_type_uses().items()) if module not in SPLIT_EVENT_TYPE_HOMES for line in lines]
     assert not offenders, "AssetEventType.SPLIT is named outside the split loader: read the rows linked to a SPLIT event with financial_math.splits.split_linked_ids (or load_split_links when the ratio, the event or the dates matter):\n" + "\n".join(offenders)

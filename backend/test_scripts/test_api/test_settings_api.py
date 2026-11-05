@@ -6,7 +6,7 @@ Tests for user settings and global settings endpoints.
 Test IDs:
 - SET-001 to SET-004: User Settings
 - SET-A11-01 to SET-A11-07: a stored theme the app does not know (lot A-11), in-process on a private database
-- GSET-001 to GSET-010: Global Settings (GSET-001, 002, 002b, 002c, 003: who reads them, A6d — any signed-in user,
+- GSET-001 to GSET-007: Global Settings (GSET-001, 002, 002c: who reads them, A6d — any signed-in user,
   nobody without a valid session)
 """
 
@@ -999,7 +999,7 @@ class TestOnboardingWelcomeAtomicApi:
 #
 # Read by signed-in users only (A6d, decision 36): any session, an administrator's or a regular user's, reads them
 # whole, and nobody without a valid one, whatever the key. Writes stay the administrator's (require_admin, GSET-005 to
-# GSET-010). What the app needs before anyone signs in, the registration mode included, comes from the public
+# GSET-007). What the app needs before anyone signs in, the registration mode included, comes from the public
 # GET /system/instance (test_system_api.py), no longer from here.
 
 #: The answer of every protected route (get_current_user) to a request without a session cookie.
@@ -1008,7 +1008,7 @@ NO_SESSION_ANSWER = {"detail": "Not authenticated"}
 FORGED_SESSION_ANSWER = {"detail": "Session expired or invalid"}
 #: A protected route of this file's own: the reference for the answer every protected route gives.
 PROTECTED_REFERENCE = f"{API_BASE}/settings/user"
-#: Every field of a global setting, as GET /settings/global lists it and GET /settings/global/{key} answers it.
+#: Every field of a global setting, as GET /settings/global lists it.
 GLOBAL_SETTING_FIELDS = set(GlobalSettingRead.model_fields)
 
 
@@ -1099,28 +1099,12 @@ class TestGlobalSettingsList:
         print_success("✓ No session: 401, as every protected route")
 
     @pytest.mark.asyncio
-    async def test_get_single_setting_unauthenticated(self, test_server):
-        """GSET-002b: GET /settings/global/{key} without a session → 401, the answer of every protected route, for a key
-        the instance has and for one it has not: the session is checked first, so a caller without one cannot tell which
-        keys exist."""
-        print_section("GSET-002b: GET /settings/global/{key} - No session → 401")
-        keys = ["session_ttl_hours", f"gset_002b_unknown_{uuid.uuid4().hex}"]
-
-        reference = await _get(PROTECTED_REFERENCE)
-        answers = {key: await _get(f"{API_BASE}/settings/global/{key}") for key in keys}
-
-        assert (reference.status_code, reference.json()) == (401, NO_SESSION_ANSWER), f"Barrier: a protected route without a session answers 401 {NO_SESSION_ANSWER}: GET /settings/user → {reference.status_code} {reference.text}"
-        for key, resp in answers.items():
-            assert (resp.status_code, resp.json()) == (reference.status_code, reference.json()), f"GET /settings/global/{key} without a session must answer as every protected route, 401 {NO_SESSION_ANSWER}: {resp.status_code} {resp.text}"
-        print_success("✓ No session: 401 for a key the instance has and for one it has not")
-
-    @pytest.mark.asyncio
     async def test_global_settings_with_a_forged_session_cookie(self, test_server):
-        """GSET-002c: Both reads with a session cookie the server never issued → 401, the answer every protected route
-        gives that cookie: GET /settings/global and GET /settings/global/{key} accept only a session the server issued."""
-        print_section("GSET-002c: GET /settings/global[/{key}] - Forged session cookie → 401")
+        """GSET-002c: The read with a session cookie the server never issued → 401, the answer every protected route
+        gives that cookie: GET /settings/global accepts only a session the server issued."""
+        print_section("GSET-002c: GET /settings/global - Forged session cookie → 401")
         forged = {"Cookie": f"{SESSION_COOKIE_NAME}=forged-{uuid.uuid4().hex}"}
-        paths = ["/settings/global", "/settings/global/session_ttl_hours"]
+        paths = ["/settings/global"]
 
         reference = await _get(PROTECTED_REFERENCE, forged)
         answers = {path: await _get(f"{API_BASE}{path}", forged) for path in paths}
@@ -1132,41 +1116,12 @@ class TestGlobalSettingsList:
 
 
 # ============================================================================
-# Global Settings Tests - Single Setting
+# Global Settings Tests - Update
 # ============================================================================
 
 
-class TestGlobalSettingsSingle:
-    """Tests for single global setting operations."""
-
-    @pytest.mark.asyncio
-    async def test_get_single_setting(self, test_server, regular_session):
-        """GSET-003: Any signed-in user reads a single global setting, not only an administrator: a regular user gets 200
-        and session_ttl_hours, with every field of a global setting."""
-        print_section("GSET-003: GET /settings/global/{key} - Regular user")
-
-        resp = await _get(f"{API_BASE}/settings/global/session_ttl_hours", regular_session)
-
-        assert resp.status_code == 200, f"GET /settings/global/session_ttl_hours must answer any signed-in user, a regular one too: {resp.status_code} {resp.text}"
-        data = resp.json()
-        assert set(data) == GLOBAL_SETTING_FIELDS, f"A global setting must carry exactly {sorted(GLOBAL_SETTING_FIELDS)}: {resp.text}"
-        assert data["key"] == "session_ttl_hours", f"The answer must be the setting asked for, session_ttl_hours: {resp.text}"
-
-        print_success("✓ A regular user reads a single global setting")
-
-    @pytest.mark.asyncio
-    async def test_get_nonexistent_setting(self, test_server):
-        """GSET-004: Get non-existent setting → 404."""
-        print_section("GSET-004: GET /settings/global/{key} - Non-existent")
-
-        async with httpx.AsyncClient() as client:
-            username, email, session = await create_user_simple(client)
-            assert session is not None, "Failed to create test user"
-
-            resp = await client.get(f"{API_BASE}/settings/global/nonexistent_setting_key", timeout=TIMEOUT)
-
-            assert resp.status_code == 404, f"Expected 404, got {resp.status_code}"
-            print_success("✓ Correctly returned 404 for non-existent setting")
+class TestGlobalSettingsUpdate:
+    """Tests for global setting update operations."""
 
     @pytest.mark.asyncio
     async def test_update_setting_as_admin(self, test_server):
@@ -1244,88 +1199,6 @@ class TestGlobalSettingsSingle:
 
             assert resp.status_code == 404, f"Expected 404, got {resp.status_code}"
             print_success("✓ Admin correctly received 404 for non-existent setting")
-
-
-# ============================================================================
-# Global Settings Tests - Initialize
-# ============================================================================
-
-
-class TestGlobalSettingsInitialize:
-    """Tests for global settings initialization."""
-
-    @pytest.mark.asyncio
-    async def test_initialize_as_admin(self, test_server):
-        """GSET-008: Initialize global settings as admin → success."""
-        print_section("GSET-008: POST /settings/global/initialize - As Admin")
-
-        async with httpx.AsyncClient() as client:
-            # Get admin user (creates and promotes if needed)
-            username, email, session = await get_admin_session(client)
-
-            resp = await client.post(f"{API_BASE}/settings/global/initialize", timeout=TIMEOUT)
-
-            # Accept 200 (success) or 404 (endpoint not implemented)
-            if resp.status_code == 404:
-                pytest.skip("Initialize endpoint not implemented")
-
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
-            data = resp.json()
-
-            # Should return count of created settings (could be 0 if already exist)
-            assert "message" in data, "Response should indicate result"
-
-            print_success("✓ Admin initialized settings successfully")
-
-    @pytest.mark.asyncio
-    async def test_initialize_as_non_admin(self, test_server):
-        """GSET-009: Initialize global settings as non-admin → 403."""
-        print_section("GSET-009: POST /settings/global/initialize - Non-Admin")
-
-        async with httpx.AsyncClient() as client:
-            # Create first user (might be admin)
-            _, _, _, first_is_admin = await create_test_user(client)
-
-            # Create second user (not admin)
-            username2, email2, session2, is_admin2 = await create_test_user(client)
-
-            # If second user is somehow admin, skip
-            if is_admin2:
-                pytest.skip("Second user is admin, cannot test non-admin rejection")
-
-            assert session2 is not None, "Failed to create second test user"
-
-            resp = await client.post(f"{API_BASE}/settings/global/initialize", timeout=TIMEOUT)
-
-            # Accept 403 (forbidden) or 404 (endpoint not implemented)
-            if resp.status_code == 404:
-                pytest.skip("Initialize endpoint not implemented")
-
-            assert resp.status_code == 403, f"Expected 403, got {resp.status_code}"
-            print_success("✓ Non-admin correctly rejected with 403")
-
-    @pytest.mark.asyncio
-    async def test_initialize_idempotent(self, test_server):
-        """GSET-010: Initialize when already exists → idempotent."""
-        print_section("GSET-010: POST /settings/global/initialize - Idempotent")
-
-        async with httpx.AsyncClient() as client:
-            # Get admin user (creates and promotes if needed)
-            username, email, session = await get_admin_session(client)
-
-            # First initialization
-            resp1 = await client.post(f"{API_BASE}/settings/global/initialize", timeout=TIMEOUT)
-
-            if resp1.status_code == 404:
-                pytest.skip("Initialize endpoint not implemented")
-
-            assert resp1.status_code == 200, f"First init expected 200, got {resp1.status_code}"
-
-            # Second initialization (should be idempotent)
-            resp2 = await client.post(f"{API_BASE}/settings/global/initialize", timeout=TIMEOUT)
-
-            assert resp2.status_code == 200, f"Expected 200, got {resp2.status_code}"
-            print_success("✓ Initialize is idempotent")
 
 
 # ============================================================================
@@ -1641,9 +1514,10 @@ async def _assert_saved(client: httpx.AsyncClient, items: list[tuple[str, str]],
 
 
 async def _assert_key_absent(client: httpx.AsyncClient, key: str) -> None:
-    """An unknown key in a refused request must not have been created."""
-    resp = await client.get(f"{API_BASE}/settings/global/{key}", timeout=TIMEOUT)
-    assert resp.status_code == 404, f"Unknown key {key!r} must not be created: GET returned {resp.status_code} {resp.text}"
+    """An unknown key in a refused request must not have been created: the list must not carry it."""
+    resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"GET /settings/global failed: {resp.status_code} {resp.text}"
+    assert key not in {item["key"] for item in resp.json()["items"]}, f"Unknown key {key!r} must not be created: GET /settings/global lists it"
 
 
 def _unknown_key() -> str:

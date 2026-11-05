@@ -1520,7 +1520,7 @@ def services_market_data_wipe_keeps_splits(verbose: bool = False, test_names: li
     """Run N68: the market-data wipe and the currency change keep the SPLIT events."""
     print_section("Services: Market Data Wipe Keeps Splits")
     print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/services/assets/crud.py (patch_assets_bulk), backend/app/api/v1/assets/market_data.py")
-    print_info("Tests: the wipe and the currency PATCH delete the prices and the non-split events, unlink their transactions and keep every SPLIT with the transactions linked to it, never refusing; summary keys incl. splits_kept")
+    print_info("Tests: the wipe service and the currency PATCH delete the prices and the non-split events, unlink their transactions and keep every SPLIT with the transactions linked to it, never refusing; summary keys incl. splits_kept")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_keeps_splits.py", test_names)
     return run_command(cmd, "Market data wipe keeps splits tests", verbose=verbose)
 
@@ -1529,7 +1529,7 @@ def services_routes_generic_500(verbose: bool = False, test_names: list = None) 
     """Run X-R74: the asset and FX routes answer a generic 500, the error logged, never echoed."""
     print_section("Services: Routes Generic 500")
     print_info("Testing: backend/app/api/v1/assets/{providers,crud,events,market_data}.py, backend/app/api/v1/fx/{providers,currencies}.py")
-    print_info("Tests: each of the 26 failure paths answers 500 with a message naming no error, the error logged with its exception; the authored refusals unchanged")
+    print_info("Tests: each of the 22 failure paths answers 500 with a message naming no error, the error logged with its exception; the authored refusals unchanged")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_routes_generic_500.py", test_names)
     return run_command(cmd, "Routes generic 500 tests", verbose=verbose)
 

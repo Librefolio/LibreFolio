@@ -46,7 +46,7 @@ Guards — green on HEAD and with the cure:
   back from the facade in the very form financial_math computed (``str`` equal, so ``100.00`` is not turned into
   ``100.000000000000``) and equal in value to 100, 2.5 and 0.125. A cure that quantizes every value turns it red.
 
-Not covered here: ``POST /portfolio/wac`` charts ``wac_qualifying_txs[].running_wac``, which the cure leaves exact (it
+Not covered here: the transaction preview's ``wac_qualifying_txs[].running_wac``, which the cure leaves exact (it
 rounds ``wac`` only); whether that series should be rounded too is not decided.
 
 Ownership. Every test builds its own asset and broker under a unique marker, writes its rows with the ORM in one

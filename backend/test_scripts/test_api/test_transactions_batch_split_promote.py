@@ -220,7 +220,7 @@ async def create_standalone_tx(
 async def create_split_event(client: httpx.AsyncClient, asset_id: int, event_date: str, ratio: str, currency: str = "USD") -> int:
     """Create a manual SPLIT AssetEvent (value = ratio, e.g. "2" for 2:1) and return its id.
 
-    Same approach as ``create_split_event`` in test_portfolio_wac.py: upsert the manual event,
+    Same approach as ``create_split_event`` in test_lots_wac_history.py: upsert the manual event,
     then read it back by asset and date to learn its id.
     """
     resp = await client.post(
@@ -841,6 +841,36 @@ class TestBatchPromote:
             assert data["committed"] is False
             assert any(i["code"] == "noPromoteRule" for i in data["issues"]), f"Expected noPromoteRule: {data['issues']}"
             print_success("Promote same-broker W+D → noPromoteRule ✓")
+
+    async def test_commit_promote_same_broker_different_currencies_is_fx_conversion(self):
+        """Saved WITHDRAWAL EUR + DEPOSIT USD on one broker, promoted via ``promotes[]`` → an FX_CONVERSION pair.
+
+        Took over the happy path of the removed ``POST /transactions/transfers/promote`` (``test_transfer_promotion.py``).
+        """
+        print_section("B2.7b — Promote saved+saved, same broker, EUR→USD → FX_CONVERSION")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker = await create_broker(client, "PromFxSameBroker")
+
+            w_id = await create_standalone_tx(client, broker, "WITHDRAWAL", cash={"code": "EUR", "amount": "-500"})
+            d_id = await create_standalone_tx(client, broker, "DEPOSIT", cash={"code": "USD", "amount": "540"})
+
+            resp = await client.post(f"{API_BASE}/transactions/commit", json={"promotes": [{"id_a": w_id, "id_b": d_id}]}, timeout=TIMEOUT)
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert data["committed"] is True, f"Promote not committed: {data}"
+            assert data["issues"] == []
+
+            rows = await client.get(f"{API_BASE}/transactions", params={"ids": [w_id, d_id]}, timeout=TIMEOUT)
+            assert rows.status_code == 200, rows.text
+            by_id = {tx["id"]: tx for tx in rows.json()}
+            assert set(by_id) == {w_id, d_id}
+            assert all(tx["type"] == "FX_CONVERSION" for tx in by_id.values())
+            assert by_id[w_id]["related_transaction_id"] == d_id
+            assert by_id[d_id]["related_transaction_id"] == w_id
+            assert Decimal(by_id[w_id]["cash"]["amount"]) == Decimal("-500")
+            assert Decimal(by_id[d_id]["cash"]["amount"]) == Decimal("540")
+            print_success("Promote same-broker EUR/USD W+D → FX_CONVERSION pair ✓")
 
     async def test_adjustment_without_cost_basis_is_rejected(self):
         """Control: positive ADJUSTMENT with no cost basis and no mode → costBasisRequired, not committed."""

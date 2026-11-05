@@ -269,10 +269,12 @@ def _assert_saved_rows_are_likely_duplicates(parsed: dict, saved_ids: Dict[str, 
 
 
 async def _cash_balances(client: httpx.AsyncClient, broker_id: int) -> Dict[str, Decimal]:
-    """``{currency: balance}`` of a broker, from ``GET /brokers/{id}/summary``."""
-    response = await client.get(f"{API_BASE}/brokers/{broker_id}/summary", timeout=TIMEOUT)
+    """``{currency: balance}`` of a broker, from ``POST /portfolio/report`` (``summary.by_broker[].cash_balances``, whole: no ownership share)."""
+    body = {"broker_ids": [broker_id], "include_summary": True, "include_history": False, "include_allocation_history": False, "include_breakdown": True, "apply_ownership_share": False}
+    response = await client.post(f"{API_BASE}/portfolio/report", json=body, timeout=TIMEOUT)
     assert response.status_code == 200, response.text
-    return {item["code"]: Decimal(item["amount"]) for item in response.json()["cash_balances"]}
+    (entry,) = [item for item in response.json()["summary"]["by_broker"] if item["broker_id"] == broker_id]
+    return {item["code"]: Decimal(item["amount"]) for item in entry["cash_balances"]}
 
 
 # ============================================================================
@@ -327,7 +329,7 @@ class TestScalableAccounts:
         The overnight file goes in after the broker file's cash rows are saved, and nothing in it is taken for one of
         them (its +1000 transfer is not the −1000 already there). promote-suggest proposes nothing for the four
         transfers: a cash transfer needs two brokers, a conversion two currencies. Presence barrier: asked from
-        another broker, the same endpoint does propose the −1000 of this one. The summary's cash is the sum of every
+        another broker, the same endpoint does propose the −1000 of this one. The report's cash is the sum of every
         saved row of both files, and the broker holds exactly those rows.
         """
         print_section("SC-B01: Scalable broker and overnight account in one broker")

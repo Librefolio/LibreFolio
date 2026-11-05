@@ -1044,7 +1044,7 @@
 
     async function loadAssetList() {
         try {
-            const response = await zodiosApi.get_all_assets_api_v1_assets_all_get();
+            const response = await zodiosApi.list_assets_api_v1_assets_query_get({queries: {active: true}});
             allAssets = (response as any[]).map((a: any) => ({
                 id: a.id,
                 display_name: a.display_name,

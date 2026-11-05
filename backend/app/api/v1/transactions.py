@@ -27,8 +27,8 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXMixedBatch, TXPromoteBatchItem, TXSplitBatchItem
-from backend.app.schemas.transactions.event_suggest import TXEventReconciliationItem, TXEventSuggestRequestItem, TXEventSuggestResultItem
-from backend.app.schemas.transactions.promotion import TXPromoteSuggestInput, TXPromoteSuggestResponse, TXTransferPromoteRequest, TXTransferPromoteResponse
+from backend.app.schemas.transactions.event_suggest import TXEventReconciliationItem
+from backend.app.schemas.transactions.promotion import TXPromoteSuggestInput, TXPromoteSuggestResponse
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXReadItem, TXUpdateItem
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse
 from backend.app.services.transactions.transaction_service import TransactionService
@@ -243,24 +243,6 @@ async def get_transaction_types(_current_user: User = Depends(get_current_user))
 # =============================================================================
 
 
-@tx_router.post("/events/suggest", response_model=List[TXEventSuggestResultItem])
-async def suggest_events(
-    requests: List[TXEventSuggestRequestItem],
-    session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
-) -> List[TXEventSuggestResultItem]:
-    """
-    For each `(asset_id, date, type)` return candidate `AssetEvent`s whose
-    type maps to the tx type and whose date is within `±tolerance_days`.
-
-    Asset events are global, so no broker access check is needed — the
-    caller only has to be authenticated. Results preserve input order and
-    each list of candidates is sorted by ascending distance (days).
-    """
-    service = TransactionService(session)
-    return await service.suggest_events_bulk(requests)
-
-
 @tx_router.get("/event-reconciliation", response_model=List[TXEventReconciliationItem])
 async def event_reconciliation(
     broker_id: Optional[int] = Query(None, gt=0, description="Only this broker"),
@@ -308,42 +290,3 @@ async def promote_suggest(
 # =============================================================================
 
 
-@tx_router.post("/transfers/promote", response_model=TXTransferPromoteResponse)
-async def promote_transfer(
-    req: TXTransferPromoteRequest,
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> TXTransferPromoteResponse:
-    """
-    Promote a DEPOSIT/WITHDRAWAL pair into TRANSFER or FX_CONVERSION.
-
-    Atomic: deletes the original pair and creates the new pair in the same
-    session. Any failure rolls back the whole operation. `type` being
-    immutable on PATCH means this is the only way to change a cash pair
-    into a typed asset transfer or currency conversion.
-    """
-    user_id = current_user.id
-    logger.info(
-        "Promote transfer %s+%s -> %s",
-        req.from_tx_id,
-        req.to_tx_id,
-        req.new_type.value,
-        user_id=user_id,
-    )
-
-    service = TransactionService(session)
-    response = await service.promote_transfer(req, user_id=user_id)
-
-    if not response.rolled_back:
-        await session.commit()
-        logger.info(
-            "Promoted transfer: new ids %s,%s",
-            response.new_from_tx_id,
-            response.new_to_tx_id,
-            user_id=user_id,
-        )
-    else:
-        await session.rollback()
-        logger.warning("Promote transfer rolled back: %s", response.errors, user_id=user_id)
-
-    return response

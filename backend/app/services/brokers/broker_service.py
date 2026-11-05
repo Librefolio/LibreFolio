@@ -14,8 +14,8 @@ Design Notes:
 - All methods are async for non-blocking I/O
 - User filtering via BrokerUserAccess join
 
-``BrokerService`` is composed of two mixins: ``access`` (roles and access management) and ``summary``
-(``GET /brokers/{id}/summary``); the class keeps create, read, update and delete.
+``BrokerService`` is composed of one mixin, ``access`` (roles and access management); the class keeps create,
+read, update and delete.
 """
 
 from __future__ import annotations
@@ -48,7 +48,6 @@ from backend.app.schemas.brokers import (
     BRUpdateResult,
 )
 from backend.app.services.brokers.access import BrokerAccessMixin
-from backend.app.services.brokers.summary import BrokerSummaryMixin
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import today_date, utcnow
@@ -56,7 +55,7 @@ from backend.app.utils.datetime_utils import today_date, utcnow
 BROKER_NAME_RECOVERY = "To resolve this, rename the existing broker or choose a different name for the broker you are adding."
 
 
-class BrokerService(BrokerAccessMixin, BrokerSummaryMixin):
+class BrokerService(BrokerAccessMixin):
     """
     Service for managing brokers.
 
@@ -297,8 +296,9 @@ class BrokerService(BrokerAccessMixin, BrokerSummaryMixin):
         # Populate user_role if we know the user
         effective_user = user_id if as_user_id is None else (None if skip_access_check else int(as_user_id))
         if effective_user is not None:
-            role = await self._check_user_access(broker_id, effective_user)
-            item.user_role = role.value if role else None
+            access = (await self.session.execute(select(BrokerUserAccess).where(and_(BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.user_id == effective_user)))).scalar_one_or_none()
+            item.user_role = access.role.value if access else None
+            item.user_share_percentage = access.share_percentage if access else None
         return item
 
     # =========================================================================

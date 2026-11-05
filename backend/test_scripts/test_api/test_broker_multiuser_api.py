@@ -221,11 +221,7 @@ class TestMultiUserRoles:
 
             assert resp.status_code == 200
             assert resp.json()["id"] == broker_id
-
-            # Viewer reads summary
-            summary_resp = await viewer_client.get(f"{API_BASE}/brokers/{broker_id}/summary", timeout=TIMEOUT)
-
-            assert summary_resp.status_code == 200
+            assert resp.json()["user_role"] == "VIEWER"
 
             print_success("✓ Viewer can read broker")
 
