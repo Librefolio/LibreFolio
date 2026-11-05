@@ -19,8 +19,6 @@ export interface PortfolioTransactionsInputs {
     /** The brokers the view shows; undefined asks every broker. */
     brokerIds: () => number[] | undefined;
     period: () => {historyStart: string; start: string; end: string; isMaxPending: boolean};
-    /** The rows keep to the period on screen (default). A broker's page keeps to its whole history until «Transactions in the period» (delivery 4). */
-    followsPeriod?: () => boolean;
     /** The `pageBusy` key of the load: `dashboard-transactions` (default) or `broker-transactions`. */
     busyKey?: string;
     /** The rows and their partner legs are in: the bulk workspace of a page that writes reads them from its store (FB-17). */
@@ -35,9 +33,6 @@ export class PortfolioTransactions {
     currentPage = $state(1);
     pageSize = $state(50);
     private lastKey = $state('');
-    private get followsPeriod(): boolean {
-        return this.inputs.followsPeriod?.() ?? true;
-    }
 
     constructor(private readonly inputs: PortfolioTransactionsInputs) {}
 
@@ -46,11 +41,8 @@ export class PortfolioTransactions {
         if (!active) return;
         const brokerIds = this.inputs.brokerIds();
         const brokersKey = brokerIds ? [...brokerIds].sort((a, b) => a - b).join(',') : 'all';
-        let key = brokersKey;
-        if (this.followsPeriod) {
-            const {historyStart, end} = this.inputs.period();
-            key = `${historyStart}|${end}|${brokersKey}`;
-        }
+        const {historyStart, end} = this.inputs.period();
+        const key = `${historyStart}|${end}|${brokersKey}`;
         if (key !== this.lastKey) {
             this.lastKey = key;
             this.currentPage = 1;
@@ -84,11 +76,9 @@ export class PortfolioTransactions {
             const fetchForBroker = async (brokerId?: number): Promise<TXReadItem[]> => {
                 const queries: Record<string, unknown> = {};
                 if (brokerId != null) queries.broker_id = brokerId;
-                if (this.followsPeriod) {
-                    const period = this.inputs.period();
-                    if (!period.isMaxPending) queries.date_start = period.start;
-                    if (period.end) queries.date_end = period.end;
-                }
+                const period = this.inputs.period();
+                if (!period.isMaxPending) queries.date_start = period.start;
+                if (period.end) queries.date_end = period.end;
                 return (await zodiosApi.query_transactions_api_v1_transactions_get({queries})) as TXReadItem[];
             };
 

@@ -55,10 +55,6 @@ export interface PortfolioScopeProfile {
     refreshBeforeAiExport: boolean;
     /** The toolbar has the broker multi-select. */
     hasBrokerFilter: boolean;
-    /** The data-quality banner is shown. */
-    showsBanners: boolean;
-    /** The Transactions tab keeps to the period on screen; false = the broker's whole history. */
-    transactionsFollowPeriod: boolean;
     /** The broker counts whole (`apply_ownership_share: false`, MF6-3, D4), not as the user's share of it. */
     fullShare: boolean;
     /** Nothing is asked before the owned brokers are known (F2): the Dashboard's scope IS those brokers. */
@@ -125,8 +121,6 @@ export function portfolioScopeProfile(scope: PortfolioViewScope): PortfolioScope
             aiExport: {domain: 'broker', memoryKey: `broker:${scope.brokerId}`, defaultSelectionId: 'broker.review'},
             refreshBeforeAiExport: true,
             hasBrokerFilter: false,
-            showsBanners: false,
-            transactionsFollowPeriod: false,
             fullShare: true,
             waitsForOwnedBrokers: false,
         };
@@ -146,8 +140,6 @@ export function portfolioScopeProfile(scope: PortfolioViewScope): PortfolioScope
         aiExport: {domain: 'portfolio', memoryKey: 'portfolio', defaultSelectionId: 'portfolio.pac_planning'},
         refreshBeforeAiExport: false,
         hasBrokerFilter: true,
-        showsBanners: true,
-        transactionsFollowPeriod: true,
         fullShare: false,
         waitsForOwnedBrokers: true,
     };

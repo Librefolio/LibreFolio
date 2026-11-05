@@ -79,6 +79,26 @@ def front_broker_page_roles(verbose: bool = False, ui: bool = False, headed: boo
     return _run_playwright("brokers/broker-page-roles.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_broker_page_banners(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the broker page's data-quality banner E2E: shown to every role, its sync buttons send one request, the report asks for this broker only."""
+    print_section("Frontend Broker Page Banners Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-page-banners.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_transactions_period(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the broker page's Transactions tab period E2E: rows, request and the link to the Transactions page keep to the toolbar's period."""
+    print_section("Frontend Broker Transactions Period Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-transactions-period.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_broker_whole_amounts(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the broker page's whole-broker amounts E2E (MF6-3, D4): apply_ownership_share=false on the broker page only."""
     print_section("Frontend Broker Whole Amounts Tests")
@@ -137,6 +157,8 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "detail", front_broker_detail, name="Broker Detail Tests", desc="Detail page sections, edit/import modals", prereq="Login working, brokers exist", tests="brokers/brokers-detail.spec.ts")
     add_test(cat, "broker-tx-actions", front_broker_tx_actions, name="Broker Transactions Actions Tests", desc="Transactions tab on the broker page: selection bar (Edit/Clone/Delete) and row actions for who can edit, none for a viewer, no Split, rows the user cannot edit left out with a warning", tests="brokers/broker-transactions-actions.spec.ts")
     add_test(cat, "broker-page-roles", front_broker_page_roles, name="Broker Page Roles Tests", desc="Broker page per role (owner, editor, viewer shared with share 0): the shared broker opens and its overview loads, header edit/share buttons, Transactions bar (import and new transaction only for who can edit), Info sharing section", tests="brokers/broker-page-roles.spec.ts")
+    add_test(cat, "broker-page-banners", front_broker_page_banners, name="Broker Page Banners Tests", desc="Broker page data-quality banner for every role (owner, viewer shared with share 0): the MISSING_FX_RATES and STALE_PRICE sync buttons send one request, the page is busy while it runs, the report asks for this broker only", tests="brokers/broker-page-banners.spec.ts")
+    add_test(cat, "broker-transactions-period", front_broker_transactions_period, name="Broker Transactions Period Tests", desc="Broker page Transactions tab keeps to the toolbar's period: rows in and out of the period, the request carries broker_id and the dates, the link to the Transactions page carries the period", tests="brokers/broker-transactions-period.spec.ts")
     add_test(cat, "broker-whole-amounts", front_broker_whole_amounts, name="Broker Whole Amounts Tests", desc="The broker page counts the broker whole (apply_ownership_share=false), the Dashboard keeps the owner share", prereq="Login working, e2e_test_user co-owner of the first mock broker", tests="brokers/broker-whole-amounts.spec.ts")
     add_test(cat, "broker-recovery", front_broker_recovery, name="Broker Recovery Tests", desc="Owned empty/cascade deletion success, failure notifications and preserved recovery dialog", tests="brokers/broker-recovery.spec.ts")
     add_test(cat, "broker-create-feedback", front_broker_create_feedback, name="Broker Create Feedback Tests", desc="Real duplicate failure, close/discard/reopen reset and confirmed creation feedback on desktop/mobile", tests="brokers/broker-create-feedback.spec.ts")

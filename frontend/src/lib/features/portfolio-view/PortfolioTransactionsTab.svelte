@@ -20,16 +20,24 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {PortfolioTransactions} from './portfolioTransactions.svelte';
 
+    /** The period the rows keep to: no `start` while «All» is pending. */
+    export interface TransactionsBarPeriod {
+        start: string | undefined;
+        end: string | undefined;
+    }
+
     interface Props {
         transactions: PortfolioTransactions;
         brokers: BrokerLike[];
         testId: string;
         /** The table's own test id, where the page has one (the broker's `broker-transactions`). */
         tableTestId?: string;
+        /** The period on screen. */
+        period: TransactionsBarPeriod;
         /** The table, for the page's bar (columns, clearing the selection). */
         table?: TransactionsTable | undefined;
-        /** Buttons above the table. */
-        bar?: Snippet<[{table: TransactionsTable | undefined}]>;
+        /** Buttons above the table; they are given the period on screen, for a link to the Transactions page. */
+        bar?: Snippet<[{table: TransactionsTable | undefined; period: TransactionsBarPeriod}]>;
         /** The rows' actions and checkboxes are hidden (default: read-only). */
         hideActions?: boolean;
         onSelectionChange?: (rows: TXReadItem[]) => void;
@@ -39,7 +47,7 @@
         onFiltersChange?: (filters: Record<string, FilterValue>) => void;
     }
 
-    let {transactions, brokers, testId, tableTestId, table = $bindable(), bar, hideActions = true, onSelectionChange, onEditRow, onCloneRow, onDeleteRow, onFiltersChange}: Props = $props();
+    let {transactions, brokers, period, testId, tableTestId, table = $bindable(), bar, hideActions = true, onSelectionChange, onEditRow, onCloneRow, onDeleteRow, onFiltersChange}: Props = $props();
 
     /** Transaction view modal state (opened from a row's double-click). */
     let viewOpen = $state(false);
@@ -47,7 +55,7 @@
 </script>
 
 <div class="space-y-4" data-testid={testId}>
-    {@render bar?.({table})}
+    {@render bar?.({table, period})}
 
     <div data-testid={tableTestId}>
         {#if transactions.loading && transactions.mainRows.length === 0}

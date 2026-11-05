@@ -50,7 +50,7 @@ The share decides what counts in your figures:
 
 - The **Dashboard** counts only the brokers you **own** with a share above 0%, and scales their amounts by your share: with 50%, you see half of the broker's value, income and P&L.
 - The Dashboard's **Risk** tab covers the same brokers: the ones you own with a share above 0% (see [Risk Tab](../dashboard/index.md#risk-tab)).
-- Brokers where you are a Viewer or an Editor, or that you own with 0%, are not on your Dashboard. Their own page shows them: Viewers and Editors see the **full** amounts, Owners their share.
+- Brokers where you are a Viewer or an Editor, or that you own with 0%, are not on your Dashboard. Their own page shows them, and it shows the **whole** broker (100%) to every role, an Owner with a smaller share included.
 
 ---
 

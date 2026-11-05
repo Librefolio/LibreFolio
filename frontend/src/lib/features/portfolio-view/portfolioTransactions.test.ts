@@ -111,31 +111,20 @@ describe('PortfolioTransactions', () => {
 });
 
 describe('PortfolioTransactions · a broker page (delivery 3)', () => {
-    const wholeHistory = {followsPeriod: () => false, busyKey: 'broker-transactions'};
+    const pageInputs = {busyKey: 'broker-transactions'};
 
-    it('asks the broker alone, whole: no dates, whatever the period says', async () => {
-        const {ctl} = make({owned: [7], brokerIds: [7]}, wholeHistory);
+    it('asks the broker alone, for the period on screen, as the Dashboard does', async () => {
+        const {ctl} = make({owned: [7], brokerIds: [7]}, pageInputs);
         ctl.sync(true);
         await vi.waitFor(() => expect(ctl.mainRows.length).toBeGreaterThan(0));
         await loaded(ctl);
-        expect(askedQueries()).toEqual([{broker_id: 7}]);
-    });
-
-    it('does not ask again when the period moves: only the broker is in its key', async () => {
-        const {ctl, knobs} = make({owned: [7], brokerIds: [7]}, wholeHistory);
-        ctl.sync(true);
-        await vi.waitFor(() => expect(ctl.mainRows.length).toBeGreaterThan(0));
-        await loaded(ctl);
-        const asked = mocks.query.mock.calls.length;
-        knobs.period = {...knobs.period, end: '2026-07-31', start: '2026-02-01'};
-        ctl.sync(true);
-        expect(mocks.query.mock.calls.length).toBe(asked);
+        expect(askedQueries()).toEqual([{broker_id: 7, date_start: '2026-01-01', date_end: '2026-06-30'}]);
     });
 
     it('tells the page what it loaded, once the partners and the tooltips are in', async () => {
         const onLoaded = vi.fn();
         mocks.partners.mockResolvedValue([tx(99)]);
-        const {ctl} = make({owned: [7], brokerIds: [7]}, {...wholeHistory, onLoaded});
+        const {ctl} = make({owned: [7], brokerIds: [7]}, {...pageInputs, onLoaded});
         ctl.sync(true);
         await vi.waitFor(() => expect(onLoaded).toHaveBeenCalledTimes(1));
         const [main, partners] = onLoaded.mock.calls[0];
@@ -144,7 +133,7 @@ describe('PortfolioTransactions · a broker page (delivery 3)', () => {
     });
 
     it('asks again on request, only when the tab was opened before (Refresh and the bulk workspace)', async () => {
-        const {ctl} = make({owned: [7], brokerIds: [7]}, wholeHistory);
+        const {ctl} = make({owned: [7], brokerIds: [7]}, pageInputs);
         await ctl.reload();
         expect(mocks.query).not.toHaveBeenCalled();
         ctl.sync(true);
@@ -157,7 +146,7 @@ describe('PortfolioTransactions · a broker page (delivery 3)', () => {
 
     it("is tracked under the page's own busy key", async () => {
         const track = vi.spyOn(pageBusy, 'track');
-        const {ctl} = make({owned: [7], brokerIds: [7]}, wholeHistory);
+        const {ctl} = make({owned: [7], brokerIds: [7]}, pageInputs);
         ctl.sync(true);
         await vi.waitFor(() => expect(mocks.query).toHaveBeenCalled());
         expect(track.mock.calls.map((call) => call[0])).toContain('broker-transactions');

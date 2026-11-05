@@ -38,11 +38,9 @@ describe('portfolioScopeProfile · the Dashboard', () => {
         expect(busyKey(portfolio, 'contribution')).toBe('dashboard-contribution');
     });
 
-    it('has no Info tab, a broker filter, a banner, and the period on its transactions', () => {
+    it('has no Info tab and has a broker filter', () => {
         expect(portfolio.tabs.some((tab) => tab.id === 'info')).toBe(false);
         expect(portfolio.hasBrokerFilter).toBe(true);
-        expect(portfolio.showsBanners).toBe(true);
-        expect(portfolio.transactionsFollowPeriod).toBe(true);
         expect(portfolio.aiExport).toEqual({domain: 'portfolio', memoryKey: 'portfolio', defaultSelectionId: 'portfolio.pac_planning'});
         expect(portfolio.rootGuideAnchor).toBe('page.dashboard');
         expect(portfolio.refreshBeforeAiExport).toBe(false);
@@ -106,11 +104,6 @@ describe('portfolioScopeProfile · a broker', () => {
             debugName: 'brokerDetail',
             pickerMaxWidthTwoRow: 470,
         });
-    });
-
-    it('stays on the whole history of its transactions until «Transactions in the period» (delivery 4)', () => {
-        expect(broker.transactionsFollowPeriod).toBe(false);
-        expect(broker.showsBanners).toBe(false);
     });
 });
 

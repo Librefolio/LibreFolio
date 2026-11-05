@@ -75,13 +75,14 @@
             : null,
     );
 
-    /** Deep-link to the full Transactions page pre-filtered by this broker plus
+    /** Deep-link to the full Transactions page pre-filtered by this broker, the period on screen (the tab keeps to it) and
      *  whatever header column filters are currently active in the embedded table.
-     *  The broker-detail transactions tab loads by broker only (it ignores the
-     *  toolbar date range), so only broker + column filters are carried over.
      *  Navigating via a plain link registers on the nav stack, so browser Back
      *  returns to this exact broker view (see navigationStore.goBack). */
-    const transactionsPageUrl = $derived(broker ? buildTransactionsFiltersUrl({...(applyTransactionColumnFilters({}, txColumnFilters) ?? {}), broker_id: broker.id}) : '/transactions');
+    function transactionsPageUrl(period: {start: string | undefined; end: string | undefined}): string {
+        if (!broker) return '/transactions';
+        return buildTransactionsFiltersUrl({...(applyTransactionColumnFilters({}, txColumnFilters) ?? {}), date_start: period.start, date_end: period.end, broker_id: broker.id});
+    }
 
     async function loadBroker() {
         loading = true;
@@ -294,14 +295,14 @@
     </button>
 {/snippet}
 
-{#snippet transactionsBar({table}: {table: TransactionsTable | undefined})}
+{#snippet transactionsBar({table, period}: {table: TransactionsTable | undefined; period: {start: string | undefined; end: string | undefined}})}
     <div class="flex flex-wrap items-center justify-between gap-2" data-testid="broker-transactions-actions">
         <div class="flex items-center gap-2">
             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" onclick={() => (importFilesModalOpen = true)} data-testid="broker-show-import-history">
                 <FileText size={15} />
                 <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
             </button>
-            <a href={transactionsPageUrl} class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" title={$_('brokers.viewInTransactionsHint')} data-testid="broker-view-in-transactions">
+            <a href={transactionsPageUrl(period)} class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" title={$_('brokers.viewInTransactionsHint')} data-testid="broker-view-in-transactions">
                 <ArrowRightLeft size={15} />
                 <span class="hidden sm:inline">{$_('brokers.viewInTransactions')}</span>
             </a>

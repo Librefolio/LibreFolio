@@ -80,7 +80,7 @@
         /** The Info tab (a broker's only). */
         infoTab?: Snippet;
         /** Buttons above the Transactions table, and the table's own callbacks, for a page that writes. */
-        transactionsBar?: Snippet<[{table: TransactionsTable | undefined}]>;
+        transactionsBar?: Snippet<[{table: TransactionsTable | undefined; period: {start: string | undefined; end: string | undefined}}]>;
         transactionsWriter?: TransactionsWriter;
         transactionsTable?: TransactionsTable | undefined;
     }
@@ -304,7 +304,6 @@
         ownedBrokerIds: () => ownedBrokerIds,
         brokerIds: () => activeBrokerIds,
         period: () => ({historyStart: dateRangeCtl.historyStart, start: dateRangeCtl.start, end: dateRangeCtl.end, isMaxPending: dateRangeCtl.isMaxPending}),
-        followsPeriod: () => profile.transactionsFollowPeriod,
         busyKey: busy('transactions'),
         onLoaded: (mainRows, partnerRows) => transactionsWriter?.onLoaded(mainRows, partnerRows),
     });
@@ -532,8 +531,8 @@
             {actionsBefore}
         />
 
-        <!-- A broker's page shows no banner yet (delivery 4); the dialog of «Create forex» is the same. -->
-        <PortfolioBanners issues={profile.showsBanners ? dataQualityIssues : []} actions={banners} />
+        <!-- The banner is shown to every role, a viewer's included: its buttons sync shared prices and rates, not the broker. -->
+        <PortfolioBanners issues={dataQualityIssues} actions={banners} />
 
         {#if activeTab === 'panoramica'}
             <PortfolioOverviewTab snapshot={$data} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} {testIds} onRequestPnlCandles={() => void pageBusy.join(busy('pnl-candles'), loadPnlCandles)} />
@@ -582,6 +581,7 @@
                 tableTestId={isBrokerScope ? 'broker-transactions' : undefined}
                 bind:table={transactionsTable}
                 bar={transactionsBar}
+                period={{start: dateRangeCtl.isMaxPending ? undefined : dateRangeCtl.start, end: dateRangeCtl.end || undefined}}
                 hideActions={transactionsWriter?.hideActions ?? true}
                 onSelectionChange={transactionsWriter?.onSelectionChange}
                 onEditRow={transactionsWriter?.onEditRow}
