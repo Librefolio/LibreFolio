@@ -173,6 +173,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Appels API échoués dans la console du navigateur.** L'application web écrit une ligne par échec d'API inattendu : statut, chemin, id de requête, jamais les données de la requête. Avec `LOG_LEVEL` à `DEBUG` ou `TRACE`, elle écrit aussi les réponses 4xx (`client_log_level` dans `GET /api/v1/system/instance`).
 - **Auto-hébergement : `LIBREFOLIO_DEFAULT_CURRENCY` et `LIBREFOLIO_DEFAULT_TIMEZONE`** définissent la devise par défaut et le fuseau horaire au premier démarrage, jusqu'à ce qu'un administrateur enregistre le réglage ; une valeur invalide arrête le démarrage et nomme la variable.
 - `./dev.py db check --integrity` vérifie la base de données sans la modifier : intégrité, références cassées, texte qui n'est pas de l'UTF-8 et révision du schéma.
+- Dans l'image Docker, **la touche Tab complète `./dev.py`** dans un shell interactif (la console de Portainer, `docker exec -it … bash`), en root ou avec l'utilisateur de LibreFolio.
 
 #### 🖥️ L'application et ses avis
 
@@ -354,6 +355,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Le site de documentation dessine ses diagrammes avec sa propre copie de Mermaid, sans requête vers un tiers ; la disposition ELK n’est plus disponible.
 - **Le site de documentation utilise les mêmes couleurs que l’application**, en thème clair et en thème sombre.
 - **La documentation ne décrit plus l’exécution de LibreFolio pour d’autres personnes :** les pages sur les fournisseurs d’hébergement, le panneau d’hébergement et le réveil planifié ont disparu, et la page d’accueil indique « Auto-hébergé ».
+- **L'en-tête de la documentation place le commutateur de thème à côté du sélecteur de langue**, comme dans l'application ; le lien 🚀 vers l'application, affiché lorsque LibreFolio est en cours d'exécution, prend la place qu'occupait le commutateur de thème.
 
 ### 🧹 Nettoyage du dépôt
 
