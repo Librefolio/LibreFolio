@@ -14,17 +14,19 @@ variation, la variation en % et le taux annuel.
 ### 📏 Étape 1 : Activer le mode de mesure
 
 Cliquez sur 📏 (**Ajouter une mesure**) en haut à droite du graphique. Le panneau **Mesures** sous le
-graphique s'ouvre et affiche **Active — cliquez sur le graphique**.
+graphique s'ouvre et affiche **Active — cliquez sur le graphique** ; au-dessus du graphique, le pointeur devient un réticule.
 
 ### 📍 Étape 2 : Cliquer sur le point de départ
 
 Une infobulle indique la date et le taux que vous avez choisis ; une ligne en tirets suit le
-pointeur.
+pointeur. Une mesure demande deux jours différents : de retour sur le jour du point de départ,
+la ligne disparaît et le pointeur affiche le signe *interdit* (🚫), et un second clic à cet
+endroit ne fait rien.
 
 ### 🏁 Étape 3 : Cliquer sur le point d'arrivée
 
-La mesure est ajoutée et le mode de mesure se désactive. Les deux dates sont automatiquement remises
-dans l'ordre.
+Cliquez sur un point d'un autre jour. La mesure est ajoutée et le mode de mesure se désactive. Les deux
+dates sont automatiquement remises dans l'ordre.
 
 ??? tip "➕ Toute la période en un clic — pratique sur un téléphone"
 
@@ -37,7 +39,7 @@ dans l'ordre.
 
 Chaque mesure est une carte affichant ses dates, la variation en % et le nombre de jours
 calendaires ; vous pouvez aussi définir la couleur et le style de sa ligne. Dépliez-la pour modifier
-les dates et voir **Début**, **Fin**, **Δ Abs**, **Δ %** et **Δ%/an** pour la paire et pour chaque
+les dates, là encore deux jours différents, et voir **Début**, **Fin**, **Δ Abs**, **Δ %** et **Δ%/an** pour la paire et pour chaque
 superposition sur le même axe.
 
 **Δ%/an** est le taux annuel (CAGR), où $d$ est le nombre de jours calendaires entre les deux
