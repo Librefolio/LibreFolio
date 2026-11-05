@@ -933,14 +933,6 @@ consumati.
 
 Due di questi passavano un gate esistente: non basta chiedersi se un controllo c'è, ma da che parte guarda.
 
-## ⚖️ Asimmetria della piattaforma Tool sull'assenza
-
-**Data aggiunta**: 21 Settembre 2026 · **Status**: 📋 OSSERVAZIONE · **Priorità**: Bassa
-
-Il backend vieta un servizio senza operazioni (`ToolDescriptor.operations`, `min_length=1`): il tool sparisce dal catalogo. Il
-frontend invece descrive un tool senza UI (`renderer_missing`), con un messaggio tradotto. Per questo due tool a metà hanno
-due destini diversi. Nessuna delle due scelte è sbagliata: se un giorno si vuole uniformare, è qui che si guarda.
-
 ## Il generatore di dati di prova non onora i bersagli `end_price`, e lo scarto è sistematico
 
 **Misurato il 18/09/2026** · **Priorità**: Media, non blocca nulla.

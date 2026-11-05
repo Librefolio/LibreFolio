@@ -25,6 +25,7 @@ Scartate, perché l'idea non ritorni:
   conversione oltre lo spread, niente multi-hop. Lo spread globale somma già tutti gli attori della conversione.
 - **QuarkAI** (05/11/2026): l'assistente AI via MCP con notizie, notifiche e recap giornaliero.
 - **`coupon_policy`** (05/11/2026): resta solo `FULL_RESET`, senza `CUSTOM_RATE` e `PARTIAL`.
+- **Asimmetria dei Tool sull'assenza** (05/11/2026): era un'osservazione senza azione; nessuna delle due scelte è sbagliata.
 
 ---
 
