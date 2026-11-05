@@ -15,10 +15,10 @@ $$
 Dove il costo di carico aperto:
 
 $$
-\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w^{C^*}(a,b,t)
+\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 10^{-5}}} q(a,b,t) \cdot w^{C^*}(a,b,t)
 $$
 
-Qui $w^{C^*}(a,b,t)$ è il [PMC](../weighted-average-cost.md) mantenuto direttamente nella valuta richiesta $C^*$: ogni acquisizione vi è stata inserita al tasso della propria data $d_i$, come $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ per un importo $P_i$ effettivamente pagato. OCB quindi non utilizza **alcun tasso di cambio alla data di valutazione** $t$: è la somma dei costi storici — ciò che è stato pagato — e non si muove quando si muovono i tassi di cambio.
+La somma corre sulle posizioni detenute: una posizione rimasta con $10^{-5}$ unità o meno non è detenuta ([Portfolio Engine — §3](index.md#3-position-state)). Qui $w^{C^*}(a,b,t)$ è il [PMC](../weighted-average-cost.md) mantenuto direttamente nella valuta richiesta $C^*$: ogni acquisizione vi è stata inserita al tasso della propria data $d_i$, come $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ per un importo $P_i$ effettivamente pagato. OCB quindi non utilizza **alcun tasso di cambio alla data di valutazione** $t$: è la somma dei costi storici — ciò che è stato pagato — e non si muove quando si muovono i tassi di cambio.
 
 La liquidità, invece, è quella di ciascun broker, mantenuta nelle valute in cui è stata registrata e valutata al tasso di $t$:
 
