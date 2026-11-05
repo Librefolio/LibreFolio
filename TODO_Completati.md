@@ -14,6 +14,8 @@ Fatte nel frattempo:
 - **TanStack Table v9**: la libreria non è più nel progetto.
 - **Separatore decimale**: denaro e percentuali seguono la lingua dell'app (`uiLocale()`, `formatPercent`), non quella del
   browser.
+- **Guide dei segnali**: stanno in Teoria finanziaria (`technical-analysis/indicators/` e `risk-metrics/`), e le pagine
+  utente descrivono la scheda con i link.
 
 ---
 

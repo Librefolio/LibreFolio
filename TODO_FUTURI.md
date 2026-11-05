@@ -1882,21 +1882,6 @@ non dare risultati» esiste, ma oggi lo usa solo Crédit Agricole.
 - **CSV generico** (per esempio Recrowd importato in blocco): tenere traccia della quantità per
   capire quando la posizione si annulla.
 
-## 📚 Documentazione dei segnali — riordino
-
-**Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Media
-
-### Contesto
-
-Le guide scritte dei segnali stanno oggi vicino alle schede che li mostrano. (Il pulsante che apre la
-guida del segnale e che su mobile sparisce è un difetto: è stato assegnato a K.)
-
-### Azione Futura
-
-- Spostare le guide dei segnali in **Teoria finanziaria → Segnali**, con una **categoria nuova per i
-  segnali di rischio**.
-- Nelle zone dove sono oggi, descrivere la scheda e mettere i link ai segnali.
-
 ## 📈 Grafici da un video di analisi del portafoglio
 
 **Data aggiunta**: 27 Luglio 2026 (era `idee_per_grafici.md` nella radice, spostato qui il 14/10/2026) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
