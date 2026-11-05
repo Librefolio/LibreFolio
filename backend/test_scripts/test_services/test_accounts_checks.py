@@ -169,7 +169,20 @@ def _isolate_platform(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
         monkeypatch.delenv(variable)
     for variable in [name for name in os.environ if name.startswith(("LIBREFOLIO_SMTP_", "LIBREFOLIO_ADMIN_"))]:
         monkeypatch.delenv(variable)
-    for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_DELETION_DATE", "LIBREFOLIO_PUBLIC_URL", MAX_USERS_VARIABLE, DEFAULT_LANGUAGE_VARIABLE, DEFAULT_CURRENCY_VARIABLE, DEFAULT_TIMEZONE_VARIABLE):
+    for variable in (
+        "JWT_SECRET",
+        "LIBREFOLIO_INSTANCE_KEY",
+        "LIBREFOLIO_LOG_LEVEL",
+        "LIBREFOLIO_DATA_DIR",
+        "LIBREFOLIO_TEST_DATA_DIR",
+        "LIBREFOLIO_BLOCKED",
+        "LIBREFOLIO_DELETION_DATE",
+        "LIBREFOLIO_PUBLIC_URL",
+        MAX_USERS_VARIABLE,
+        DEFAULT_LANGUAGE_VARIABLE,
+        DEFAULT_CURRENCY_VARIABLE,
+        DEFAULT_TIMEZONE_VARIABLE,
+    ):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
     monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
