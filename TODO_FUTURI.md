@@ -211,49 +211,20 @@ Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il
 
 ## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
 
-**Data aggiunta**: 3 Settembre 2026
-**Status**: 📋 FUTURO — feature pronta al 70% (backend già fatto e testato); manca il frontend
-**Origine**: audit 08 (P2-6) + idea originale utente (luglio 2026) + indagine 03/09/2026
+**Status**: 📋 FUTURO — prima va capito se serve ancora.
 
-### La feature voluta
+**L'idea.** Nella bulk modal, una riga di notifica come quella di «promote»: se una transazione può collegarsi a un evento
+dell'asset entro la tolleranza dello slider delta-days, l'utente vede i candidati e conferma.
 
-Nella **bulk modal** delle transazioni, in stile riga-notifica "promote": quando una riga
-(transazione) può essere collegata a un **evento** di un asset (dividendo, interesse…)
-entro un range temporale compatibile, compare una riga di notifica con i candidati;
-l'utente conferma il collegamento. Il range riusa il valore dello **slider delta-days**
-già presente nella bulk modal.
+**Cosa c'è oggi.** La rotta `POST /transactions/suggest-events` non esiste più. Il bottone «Ricollega eventi» in Transazioni
+(`GET /transactions/event-reconciliation`, `EventReconciliationModal.svelte`) copre una parte del bisogno, ma cerca solo
+eventi **dello stesso giorno**. Il motore sta in `backend/app/services/transactions/event_suggestions.py`
+(`suggest_events_bulk`).
 
-### Cosa esiste già (da riusare, NON riscrivere)
-
-- **Backend pronto**: `POST /api/v1/transactions/suggest-events`
-  (`backend/app/api/v1/transactions.py` ~:257) → `suggest_events_bulk` in
-  `transaction_service.py` ~:558-621. Fa: mappa tipo transazione → tipo evento compatibile,
-  filtra per tolleranza ±N giorni, ordina per distanza, accetta batch (lista di transazioni).
-  Coperto da 8 test API (`backend/test_scripts/test_api/test_events_suggest.py`), mai cablato
-  al frontend dal commit `c3faae19` (luglio).
-- **UX di riferimento**: la riga-notifica "promote" nella bulk modal
-  (`TransactionBulkModal.svelte` ~:2994-3094) come template di presentazione.
-- **Pattern picker esistente**: `AssetEventPicker.svelte` + `EventCreateMiniModal.svelte`
-  nella sezione avanzata della modale di edit transazione.
-
-### ⚠️ Duplicazione da sanare nell'occasione
-
-`AssetEventPicker` (edit modal) **NON usa** `suggest_events`: interroga gli eventi con
-`query_events_bulk` (query generica per asset+range) e manca della mappa di compatibilità
-tipo-transazione→tipo-evento e dell'ordinamento per distanza che `suggest_events` ha.
-Chi riprende il lavoro deve **fattorizzare**: un unico motore di matching (quello di
-`suggest_events`) consumato sia dall'edit modal sia dalla nuova riga-notifica bulk.
-
-### Note di implementazione (dall'indagine)
-
-- Il collegamento si scrive su `asset_event_id` della transazione (poi re-validate).
-- Servono: utility frontend condivisa (batch + cache + debounce), componente banner,
-  chiavi i18n ×4, E2E `event-suggest-bulk.spec.ts`.
-- L'analisi completa (forme, rischi, piano in 4 fasi) è nel report dell'indagine del
-  03/09/2026 in questa sessione — recuperabile anche rieseguendo il confronto
-  `suggest_events` vs `AssetEventPicker`.
-
----
+**Cosa resta.**
+- La riga di notifica nella bulk modal, con una tolleranza in giorni.
+- `AssetEventPicker.svelte` usa ancora `query_events_bulk`, senza la mappa tipo transazione → tipo evento e senza
+  l'ordinamento per distanza: va portato sullo stesso motore.
 
 ## 📊 Risk Analysis — evoluzioni scenario catalog e replay
 
