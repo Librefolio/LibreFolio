@@ -173,6 +173,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Chiamate API non riuscite nella console del browser.** L'app web scrive una riga per ogni errore API imprevisto: stato, percorso, id della richiesta, mai i dati della richiesta. Con `LOG_LEVEL` su `DEBUG` o `TRACE` scrive anche le risposte 4xx (`client_log_level` in `GET /api/v1/system/instance`).
 - **Self-hosting: `LIBREFOLIO_DEFAULT_CURRENCY` e `LIBREFOLIO_DEFAULT_TIMEZONE`** impostano la valuta predefinita e il fuso orario al primo avvio, finché un amministratore non salva l'impostazione; un valore non valido interrompe l'avvio e indica la variabile.
 - `./dev.py db check --integrity` controlla il database senza modificarlo: integrità, riferimenti interrotti, testo non UTF-8 e revisione dello schema.
+- Nell'immagine Docker, **Tab completa `./dev.py`** in una shell interattiva (la console di Portainer, `docker exec -it … bash`), come root o come utente di LibreFolio.
 
 #### 🖥️ L'app e i suoi avvisi
 
@@ -354,6 +355,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Il sito della documentazione disegna i suoi diagrammi con una propria copia di Mermaid, senza richieste a terze parti; il layout ELK non è più disponibile.
 - **Il sito della documentazione usa gli stessi colori dell'app**, nel tema chiaro e in quello scuro.
 - **La documentazione non descrive più come eseguire LibreFolio per altri:** le pagine sui provider di hosting, sul pannello di hosting e sul risveglio pianificato sono state rimosse, e la home page dice «Self-hosted».
+- **L'intestazione della documentazione tiene l'interruttore del tema accanto al selettore della lingua**, come nell'app; il collegamento 🚀 all'app, mostrato quando LibreFolio è in esecuzione, prende il posto che aveva l'interruttore del tema.
 
 ### 🧹 Pulizia del repository
 
