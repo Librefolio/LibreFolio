@@ -425,4 +425,11 @@ describe('BackupCleanupPanel — a panel that starts closed (K-3)', () => {
         expect(panel()).toContainElement(fold);
         for (const element of [field('backup-cleanup-max-mb'), field('backup-cleanup-max-days'), saveButton()]) expect(fold).toContainElement(element);
     });
+
+    it('says, under the rules, when they apply: within the hour', async () => {
+        await mountIdle();
+
+        expect(screen.getByTestId('backup-cleanup-fold')).toContainElement(screen.getByTestId('backup-cleanup-timing'));
+        expect(screen.getByTestId('backup-cleanup-timing')).toHaveTextContent('backup.cleanup.timing');
+    });
 });

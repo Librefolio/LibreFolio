@@ -101,6 +101,7 @@
         </div>
 
         <p class="text-xs text-lf-muted" data-testid="backup-cleanup-latest-kept">{$_('backup.cleanup.latestKept')}</p>
+        <p class="text-xs text-lf-muted" data-testid="backup-cleanup-timing">{$_('backup.cleanup.timing')}</p>
 
         {#if panelState === 'error'}
             <div class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="backup-cleanup-error" data-error-code={errorCode}>
