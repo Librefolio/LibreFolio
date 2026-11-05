@@ -44,7 +44,7 @@ description: Liberi di capire, liberi di agire. LibreFolio riunisce tutti i tuoi
     <div class="premium-badges">
       <span class="badge badge-open-source">100% OPEN-SOURCE</span>
       <span class="badge badge-expandable">ALTAMENTE ESPANDIBILE</span>
-      <span class="badge badge-self-hosted">SELF-HOSTED O CLOUD</span>
+      <span class="badge badge-self-hosted">SELF-HOSTED</span>
     </div>
   </div>
 

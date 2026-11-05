@@ -44,7 +44,7 @@ description: Libre para entender, libre para actuar. LibreFolio reúne todas tus
     <div class="premium-badges">
       <span class="badge badge-open-source">100% CÓDIGO ABIERTO</span>
       <span class="badge badge-expandable">ALTAMENTE AMPLIABLE</span>
-      <span class="badge badge-self-hosted">AUTOALOJADO O NUBE</span>
+      <span class="badge badge-self-hosted">AUTOALOJADO</span>
     </div>
   </div>
 
