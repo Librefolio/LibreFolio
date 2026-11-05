@@ -1,7 +1,8 @@
 <!--
   PositionsReturnChart — the return of the ticked positions, one line each, beside the portfolio's.
 
-  The chart under the Dashboard's holdings table (Y5-2, #48). Two views of the same lines: the position's
+  The chart under the Dashboard's holdings table (Y5-2, #48). Views of the same lines, picked by icons as the Assets list's are (F-3; the
+  label is the tooltip and the accessible name): Abs, %, Rolling. Two of them, one line each: the position's
   result in money (Abs, a dashed reference at 0) or its return in «base 100» (%, a dashed reference at 100).
   A custom HTML legend turns each line on and off and says which position closed and which line leaves values out; a name too long
   for its badge scrolls by itself (`scrollOnOverflow`).
@@ -26,7 +27,7 @@
 <script lang="ts">
     import {onMount, tick, type Snippet} from 'svelte';
     import * as echarts from 'echarts';
-    import {Flag, TriangleAlert} from 'lucide-svelte';
+    import {CalendarSync, ChartLine, Flag, TriangleAlert} from 'lucide-svelte';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -421,13 +422,21 @@
             {#each VIEWS as option (option)}
                 <button
                     type="button"
-                    class="px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
+                    class="inline-flex items-center justify-center px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
                     aria-pressed={view === option}
-                    title={VIEW_HINT_KEYS[option]}
+                    aria-label={$_(VIEW_LABEL_KEYS[option])}
+                    title="{$_(VIEW_LABEL_KEYS[option])} — {VIEW_HINT_KEYS[option]}"
                     data-testid="positions-chart-view-{option}"
                     onclick={() => onviewchange?.(option)}
                 >
-                    {$_(VIEW_LABEL_KEYS[option])}
+                    <!-- The icons of the Assets list's view toggle (F-3): the label is the tooltip and the accessible name. -->
+                    {#if option === 'absolute'}
+                        <ChartLine size={14} aria-hidden="true" data-testid="positions-chart-view-{option}-icon" />
+                    {:else if option === 'rolling'}
+                        <CalendarSync size={14} aria-hidden="true" data-testid="positions-chart-view-{option}-icon" />
+                    {:else}
+                        <span aria-hidden="true">%</span>
+                    {/if}
                 </button>
             {/each}
         </div>

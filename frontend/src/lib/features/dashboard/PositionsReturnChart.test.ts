@@ -521,6 +521,25 @@ describe('PositionsReturnChart — the view toggle is on the chart and the note 
         expect(within(plot).getByTestId('positions-chart-view-percentage')).toBeInTheDocument();
     });
 
+    it('the view toggle is made of icons, as the Assets list’s is (F-3), and the label stays as tooltip and accessible name', async () => {
+        render(PositionsReturnChart, {props: props()});
+        const absolute = screen.getByTestId('positions-chart-view-absolute');
+        const rolling = screen.getByTestId('positions-chart-view-rolling');
+        expect(within(absolute).getByTestId('positions-chart-view-absolute-icon')).toBeInTheDocument();
+        expect(within(rolling).getByTestId('positions-chart-view-rolling-icon')).toBeInTheDocument();
+        // No word drawn inside the buttons: «%» is the one symbol of the Assets list too.
+        expect(rolling.textContent?.trim()).toBe('');
+        expect(absolute.textContent?.trim()).toBe('');
+        expect(screen.getByTestId('positions-chart-view-percentage').textContent?.trim()).toBe('%');
+        for (const option of ['absolute', 'percentage', 'rolling']) {
+            const button = screen.getByTestId(`positions-chart-view-${option}`);
+            const name = button.getAttribute('aria-label') ?? '';
+            expect(name, `${option}: an accessible name`).not.toBe('');
+            expect(name).not.toContain('dashboard.');
+            expect(button.getAttribute('title') ?? '', `${option}: the label is in the tooltip`).toContain(name);
+        }
+    });
+
     it('the note comes after the plot, below the chart', async () => {
         render(PositionsReturnChart, {props: props({lines: [PORTFOLIO()]})});
         const plot = await screen.findByTestId('positions-chart-plot');
