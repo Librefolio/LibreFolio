@@ -132,7 +132,7 @@ import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, ope
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
 import {backToRestoreCard, rollBackRestoreOverlay, serveGalleryRestore} from './fixtures/galleryRestore';
-import {expectGallerySecurityServed, gallerySecurityReads, serveGallerySecurityChecks} from './fixtures/gallerySecurity';
+import {expectGallerySecurityServed, GALLERY_SECURITY_ATTENTION_COUNT, GALLERY_SECURITY_FINDING_IDS, gallerySecurityReads, serveGallerySecurityChecks, serveGallerySecurityFindings} from './fixtures/gallerySecurity';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
@@ -2216,6 +2216,35 @@ test.describe('Gallery Screenshots', () => {
                 await freezeAnimations(page);
                 await frameTarget(page, page.getByTestId('restore-card'), `${viewport}/${lang}/${theme}/settings/restore-last-result`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'restore-last-result');
+            });
+        });
+
+        test('security tab with findings (admin) - all languages and themes', async ({page}, testInfo) => {
+            // The Security tab with checks to look at, from a fixture routed after the gallery's all-ok one (gallerySecurity.ts):
+            // the list of findings, one with its help action, the passed checks folded below, and the badge on «Administration».
+            // The hosts are local: the browser adds no finding of its own.
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+            await serveGallerySecurityFindings(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const reads = gallerySecurityReads(page);
+                await navigateTo(page, '/settings?tab=security');
+                await expectGallerySecurityServed(page, reads);
+                const body = page.getByTestId('security-tab');
+                await expect(body, 'the tab settles: the checks are in').toHaveAttribute('data-status', 'ready', {timeout: 15_000});
+                await expect(body).toHaveAttribute('data-busy', 'false');
+                for (const id of GALLERY_SECURITY_FINDING_IDS) {
+                    await expect(body.locator(`[data-testid="security-finding"][data-check-id="${id}"]`), `${id} is listed as a finding`).toBeVisible();
+                }
+                await expect(body.getByTestId('security-finding-action').first(), 'a finding offers its help').toBeVisible();
+                await expect(body.getByTestId('security-passed'), 'the passed checks are folded below the findings').toBeVisible();
+                await expect(body.getByTestId('security-all-clear')).toHaveCount(0);
+                await expect(page.getByTestId('settings-tab-administration').getByTestId('tab-badge'), "«Administration»'s badge counts the errors and warnings").toHaveAttribute('data-badge', String(GALLERY_SECURITY_ATTENTION_COUNT));
+                await freezeAnimations(page);
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/security`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'security');
+                await restoreTallScreen(page);
             });
         });
 
