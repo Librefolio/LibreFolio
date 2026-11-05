@@ -90,7 +90,8 @@
       "changeFailed": "Impossible de modifier la visibilité du fichier",
       "sharedOnPick": "{name} était personnel : il est désormais visible par tous les utilisateurs, pour que chacun le voie ici"
     },
-    "deleteSkipped": "Les fichiers que vous n'avez pas le droit de supprimer sont restés en place"
+    "deleteSkipped": "Les fichiers que vous n'avez pas le droit de supprimer sont restés en place",
+    "backups": "Sauvegardes"
   },
   "files": {
     "deleteFailed": "Échec de la suppression du fichier"

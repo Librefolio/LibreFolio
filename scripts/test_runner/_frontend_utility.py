@@ -317,6 +317,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/app/auth.verification.test.ts",
             "src/lib/features/auth/registrationErrors.verification.test.ts",
             "src/lib/features/backup/backupApi.test.ts",
+            "src/lib/features/backup/backupApi.listAndCleanup.test.ts",
+            "src/lib/features/backup/backupListI18n.test.ts",
             "src/lib/features/backup/backupJob.test.ts",
             "src/lib/features/backup/restoreFlow.test.ts",
             "src/lib/features/backup/restoreI18n.test.ts",
@@ -605,6 +607,10 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/instance/components/CheckHelp.test.ts",
             "src/lib/features/live-updates/LiveUpdatesStatus.test.ts",
             "src/lib/features/backup/BackupDownloadCard.test.ts",
+            "src/lib/features/backup/backupList.test.ts",
+            "src/lib/features/backup/BackupList.test.ts",
+            "src/lib/features/backup/BackupCleanupPanel.test.ts",
+            "src/lib/features/backup/BackupsSection.test.ts",
             "src/lib/features/backup/RestoreCard.test.ts",
             "src/lib/features/backup/RestoreReportModal.test.ts",
             "src/lib/features/backup/OwnerChoiceModal.test.ts",
@@ -762,6 +768,17 @@ def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, d
     if not _ensure_test_users():
         return False
     return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_files_backup(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Files page Backups tab E2E (lot FB-24) on desktop: the tab for administrators only, the kept backups listed, downloaded and deleted, the clean-up settings."""
+    print_section("Frontend Files Backups Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    # Desktop only (the default project): serial, one backup at a time per instance and two global settings written.
+    return _run_playwright("files-backup.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_chart_line_shape(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1348,6 +1365,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
+    add_test(
+        cat,
+        "files-backup",
+        front_files_backup,
+        name="Files Backups Tab E2E",
+        desc="Files page Backups tab (lot FB-24), desktop: an administrator has files-tab-backup and ?tab=backup opens files-backup-panel (the section open without a fold button, the list read, the clean-up settings, none of the static tab's controls; the tab is remembered), a regular user has no tab and ?tab=backup (or a remembered backup tab) opens the static tab; a backup made through the API appears in backup-list as the row of its job id with the first twelve characters of its SHA-256 after the page's refresh, its download hands the browser that job's archive (backup.download.started) and its delete removes the row (backup.deleted, the job gone from the server); the clean-up settings are read, changed to a value that deletes nothing, saved (backup.cleanup.saved) and put back. Serial (one backup at a time per instance, two global settings written)",
+        prereq="Admin and regular test users created",
+        tests="files-backup.spec.ts",
+    )
     add_test(cat, "chart-line-shape", front_chart_line_shape, name="Chart Line Shape Tests", desc="Line shape of every chart (segments, steps, smooth curve): the welcome page example, Settings Preferences, the asset detail chart settings", prereq="Login working, populated DB", tests="chart-line-shape.spec.ts")
     add_test(
         cat,

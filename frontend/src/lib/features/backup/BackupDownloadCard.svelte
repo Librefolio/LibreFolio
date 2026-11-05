@@ -24,6 +24,7 @@
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getInstanceBackupOptions, instanceBackupFileUrl, type BackupPhase, type BackupWarning} from './backupApi';
+    import {notifyBackupListChanged} from './backupList.svelte';
     import {BackupJobController} from './backupJob.svelte';
 
     const PHASE_KEYS: Record<BackupPhase, string> = {
@@ -59,13 +60,16 @@
     }
 
     const controller = new BackupJobController({
-        onDone: (job) =>
+        onDone: (job) => {
             notify({
                 name: 'backup.created',
                 detail: {job_id: job.job_id, file_size: job.file_size ?? null, warnings: [...job.warnings], encrypted: job.encrypted},
                 // A complete archive is visible on the card; one with warnings is partial, and says so.
                 toast: job.warnings.length > 0 ? {variant: 'warning', message: $_('backup.download.toast.warnings')} : undefined,
-            }),
+            });
+            // The server keeps the backup: the table of kept backups reads its list again (FB-24).
+            notifyBackupListChanged();
+        },
         onFailed: (code, what, job) =>
             notify({
                 name: what === 'remove' ? 'backup.delete.failed' : 'backup.failed',
@@ -108,7 +112,10 @@
     async function removeArchive() {
         const jobId = controller.job?.job_id;
         await controller.remove();
-        if (jobId !== undefined && controller.state === 'idle') notify({name: 'backup.deleted', detail: {job_id: jobId}});
+        if (jobId !== undefined && controller.state === 'idle') {
+            notify({name: 'backup.deleted', detail: {job_id: jobId}});
+            notifyBackupListChanged();
+        }
     }
 
     function downloadStarted(jobId: string) {

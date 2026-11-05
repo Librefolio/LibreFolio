@@ -37,7 +37,7 @@
       "download": "Télécharger",
       "delete": "Supprimer du serveur",
       "deleting": "Suppression de la sauvegarde…",
-      "retention": "L'archive reste sur le serveur pendant une heure, puis elle est supprimée.",
+      "retention": "La sauvegarde reste sur ce serveur jusqu'à ce que vous la supprimiez. Téléchargez-la et conservez une copie ailleurs.",
       "recheck": "Vérifier à nouveau",
       "retry": "Réessayer",
       "warningsTitle": "Sauvegarde terminée, avec des avertissements",
@@ -280,6 +280,64 @@
       "empty": "Cette sauvegarde n'a aucun utilisateur à choisir.",
       "confirm": "Confirmer et restaurer",
       "cancel": "Annuler"
+    },
+    "list": {
+      "title": "Sauvegardes sur ce serveur",
+      "description": "Chaque sauvegarde faite ici reste sur ce serveur jusqu'à ce que vous la supprimiez.",
+      "show": "Afficher les sauvegardes",
+      "hide": "Masquer les sauvegardes",
+      "empty": "Aucune sauvegarde sur ce serveur pour l'instant.",
+      "columns": {
+        "date": "Date",
+        "origin": "Créée depuis",
+        "kind": "Type",
+        "size": "Taille",
+        "sha256": "SHA-256",
+        "actions": "Actions"
+      },
+      "origin": {
+        "ui": "Application",
+        "cli": "Ligne de commande",
+        "pre-restore": "Avant une restauration",
+        "panel": "Panneau d'hébergement"
+      },
+      "kind": {
+        "clear": "Simple",
+        "password": "Avec mot de passe",
+        "sealed": "Scellée"
+      },
+      "actions": {
+        "download": "Télécharger",
+        "delete": "Supprimer",
+        "copySha": "Copier le SHA-256"
+      },
+      "deleteConfirm": "Supprimer cette sauvegarde du serveur ? Téléchargez-la d'abord si vous en avez encore besoin.",
+      "sha": {
+        "copied": "SHA-256 copié."
+      },
+      "sameDisk": "Une copie sur le même disque que vos données n'est pas une vraie sauvegarde : téléchargez le fichier et conservez-le ailleurs.",
+      "errors": {
+        "load": "La liste des sauvegardes n'a pas pu être chargée. Réessayez."
+      },
+      "retry": "Réessayer"
+    },
+    "cleanup": {
+      "title": "Nettoyage automatique",
+      "description": "Réglez l'espace que peuvent occuper les sauvegardes de ce serveur et leur durée de conservation. Saisissez 0 pour désactiver une règle.",
+      "maxMb": "Limite d'espace total (Mo)",
+      "maxDays": "Conserver les sauvegardes (jours)",
+      "hintSelfhosted": "Saisissez 0 pour désactiver cette règle.",
+      "hintManaged": "Saisissez au moins 1 : cette règle ne peut pas être désactivée ici.",
+      "save": "Enregistrer",
+      "saved": "Enregistré.",
+      "latestKept": "La dernière sauvegarde est toujours conservée.",
+      "errors": {
+        "invalid": "Saisissez des nombres entiers d'au moins 0 ; sur une instance hébergée, la limite d'espace doit être d'au moins 1.",
+        "forbidden": "Seuls les administrateurs peuvent modifier ceci.",
+        "network": "Pas de réponse du serveur. Réessayez.",
+        "unexpected": "Les paramètres n'ont pas pu être enregistrés. Réessayez."
+      },
+      "hintDays": "Saisissez 0 pour conserver les sauvegardes jusqu'à ce que vous les supprimiez."
     }
   }
 }

@@ -29,7 +29,7 @@ Never in the archive:
 
 - 🔑 `secrets/`, which holds the instance key: a [secure backup](#secure) carries only the key LibreFolio generated, `secrets/instance.key`, never a key you set yourself with `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`. See «The Instance Key» in [Environment Variables](configuration.md);
 - 📝 `logs/`, and `scheduler_state.json`, the last run of the scheduled syncs;
-- 💾 `backups/`, where the command line writes its archives, and `.restore/`, the work folder of a restore;
+- 💾 `backups/`, where LibreFolio [keeps the backups it makes](#kept-backups), and `.restore/`, the work folder of a restore;
 - ⚙️ the configuration: `.env` and the environment variables, the [email](email.md) settings included, which LibreFolio keeps only in the environment.
 
 ### 🧭 What Follows {: #what-follows }
@@ -64,12 +64,12 @@ In every case LibreFolio keeps working during the backup, and one backup runs at
     - **Secure**: *An .lfbk encrypted with a password you choose: only that password opens it, and a lost password cannot be recovered. It also carries the keys of the data providers.* See [Secure Backups](#secure).
 3. For a secure backup, type its password in **Password of the backup**, then again in **The same password again**. The password follows the rules the server gives, those of an account's password with at least 12 characters: the meter under the first field lists them as you type (*At least 12 characters*, *One uppercase letter*, *One lowercase letter*, *One number*, *One special character*) and shows how strong the password is. While the two fields differ, *The two passwords differ.* shows under the second one, and **Create backup** stays disabled until both are right.
 4. Click **Create backup**. The password fields empty at once. The card follows the backup on the server, phase by phase; a secure backup ends with *Encrypting with your password*.
-5. When it reads **Backup ready**, click **Download**. Your browser saves the archive, named after the moment the backup started, in UTC, such as `librefolio-backup-20261015-121500.zip`, or `librefolio-backup-20261015-121500.lfbk` for a secure backup, which the card marks *Encrypted with your password: keep it safe, LibreFolio cannot recover it.*
+5. When it reads **Backup ready**, click **Download**. Your browser saves the archive, named after the moment the backup started, in UTC, such as `librefolio-backup-20261015-121500.zip`, or `librefolio-backup-20261015-121500.lfbk` for a secure backup, which the card marks *Encrypted with your password: keep it safe, LibreFolio cannot recover it.* A copy stays on the server, in the list of [Backups Kept on the Server](#kept-backups): download it from there later, too.
 
 Good to know:
 
 - 🔑 **Keep the password of a secure backup.** LibreFolio keeps no copy of it, and without it nobody opens the archive, you included: keep it in a password manager, apart from the archive.
-- ⏱️ The archive stays on the server for one hour, then it is deleted: download it within the hour. **Delete from the server** removes it sooner, and **Create a new backup** starts another one.
+- 💾 The archive stays on the server until you delete it, or until the [automatic clean-up](#backup-cleanup) you set removes it. A copy on the same disk as your data is not a real backup: download it and store it elsewhere ([Keep Copies Off the Server](#keep-copies)). **Delete from the server** removes it at once, and **Create a new backup** starts another one.
 - ⚠️ **The backup is complete, with warnings** means that the database failed its integrity check or has broken references, and was archived as it is, or that some files were left out, or, for a secure backup, that the instance key could not be used and was left out ([Making a Secure Backup](backup_moving.md#secure-problems)). The archive is written all the same: read the warnings before you rely on it.
 - 🚦 While another backup runs, started from the app, the command line or a hosting panel, the card says so: try again when it ends. One started from this tab, or another tab of the app, whose answer never arrived (the connection dropped while it started) is not lost: the next **Create backup** finds it running, and the card follows it, then offers its download, as if it had just started it. This holds for a clear backup only: a secure one is never followed this way, because only its own password opens its archive, and a followed backup that turns out to be secure is not offered, unless the card had started it itself; in both cases the card says that another backup runs. A card that already offers an archive keeps offering it, and only says that another backup runs. One started from the command line or a hosting panel is not followed: its archive goes elsewhere. The card never says which backup runs; the browser's console does (its id and where it was started), should you need to find it.
 - 🔒 On an instance its hosting provider has [blocked](hosting_instances.md#instance-block), the app shows the block page instead of Settings. Administrators find on it the same backup card, under **Keep a copy of the data**: make the backup and download it there ([What Users See](hosting_instances.md#what-users-see)). The hosting panel ([What Still Answers](hosting_instances.md#what-still-answers)) and the command line on the server can still make one too.
@@ -77,17 +77,18 @@ Good to know:
 ### ⌨️ From the Command Line {: #command-line }
 
 ```bash
-# Docker: the archive appears in ./LibreFolio-data/backups/ on the host
+# Docker: the archive appears in its own folder of ./LibreFolio-data/backups/ on the host
 docker compose exec librefolio python dev.py backup create
 
-# Host installation: the archive goes into backups/ in the data directory
+# Host installation: the archive goes into its own folder of backups/ in the data directory
 pipenv run ./dev.py backup create
 
 # A secure backup (.lfbk): the password is asked twice
 docker compose exec librefolio python dev.py backup create --encrypt
 ```
 
-- 📁 `--output` (`-o`) writes the archive into another folder that already exists, or under a name of your own. With Docker, the path is inside the container: use a folder mounted from the host.
+- 🗃️ Without `--output`, the archive stays on the server, in its own folder of `backups/` ([Backups Kept on the Server](#kept-backups)), and the command prints its path and its `SHA-256:`.
+- 📁 `--output` (`-o`) copies the archive into another folder that already exists, or under a name of your own, and prints its `SHA-256:` too; nothing is kept in `backups/` then. With Docker, the path is inside the container: use a folder mounted from the host.
 - 🔒 Only the owner of the archive can read it (`0600`): with Docker, that is the container's user.
 - 🔐 `--encrypt` makes a [secure backup](#secure), `librefolio-backup-<date>-<time>.lfbk`, and asks its password twice at the terminal. Instead of typing it, give it with `--password-file FILE`, a file that holds only the password (the line breaks at its end do not count), such as a Docker secret, or with `--password-stdin`, one line of the standard input, from a pipe: at a terminal, the command asks it instead, without showing it, as without the option. Either one makes the backup secure by itself, `--encrypt` or not; the two cannot go together.
 - 🙈 A password is never an argument of the command: every user of the server can read the commands that run (`ps`), and the shell keeps them in its history. There is no `--password` option.
@@ -118,9 +119,48 @@ docker compose exec librefolio python dev.py backup create --encrypt
         docker compose exec librefolio python dev.py backup create --password-file /run/secrets/backup_password
         ```
 
+### 🗃️ Backups Kept on the Server {: #kept-backups }
+
+A backup made from the app, the command line or a hosting panel is no longer deleted after an hour: it stays on the server until you delete it, or until the [automatic clean-up](#backup-cleanup) removes it. Each one has a folder of its own in the `backups/` folder of the data directory, named after the moment it was made (in UTC), where it came from (`ui` for the app, `cli` for the command line, `panel` for a hosting panel) and a short code that tells two backups of the same second apart:
+
+```text
+backups/librefolio-backup-20261015-121500-ui-1a2b3c4d/librefolio-backup-20261015-121500.zip
+```
+
+The archive inside keeps its usual name, `.zip`, `.lfbk` or `.tar`. `backups/.jobs/` holds only a backup in progress or one that failed, which goes after an hour.
+
+**Settings › Administration › Backup**, under *Backups on this server*, lists every backup kept. **Files**, in its **Backups** tab, shows the same list; only administrators see either. For each backup it gives:
+
+- 📅 the date and time it was made, and where it came from: the app, the command line or a hosting panel;
+- 🔐 its type: plain, with a password ([secure](#secure)) or [sealed](backup_sealed.md#sealed);
+- 📏 its size, and its SHA-256: click it to copy the whole checksum, and compare it with the one of the file you download;
+- ⬇️ **Download** and 🗑️ **Delete**, which removes the backup from the server at once.
+
+!!! warning "💽 Download it and store it elsewhere"
+
+    A backup that stays on the same disk as your data is not a real backup: when the disk is lost, the data and its backups go together. Download the archive and keep it on another disk, a NAS or off-site ([Keep Copies Off the Server](#keep-copies)).
+
+The list shows only the backups made by this version of LibreFolio. The loose `librefolio-backup-*.zip` files that earlier versions left in `backups/` are not listed and are never removed by LibreFolio: delete them yourself when you no longer need them.
+
+### 🧹 Automatic Clean-up {: #backup-cleanup }
+
+Kept backups pile up, and they live on the disk of your data. In the same **Backups on this server** section of **Settings › Administration › Backup** you set two limits, both optional:
+
+| Limit | What it does | Off |
+| --- | --- | --- |
+| Total size, in MB | When the kept backups weigh more, the oldest are deleted until the rest fits | `0` |
+| Maximum age, in days | A backup older than this is deleted | `0` |
+
+- 🛡️ **The latest backup is always kept**, whatever the limits say: an instance never ends up with none.
+- ⏰ The clean-up runs after each backup, when LibreFolio starts and about once an hour.
+- 🏠 **Self-hosted:** both limits are off until you set them.
+- ☁️ **Managed instance** ([hosted for you](hosting_instances.md)): until the administrator saves other values, the limits are 250 MB and 30 days. The size limit cannot be turned off there: the smallest value is 1 MB. The age limit can be turned off with `0`.
+- 🔍 Only the backups of the list are cleaned. Older loose archives in `backups/`, a backup in progress and a failed one are never touched by it.
+- ⌨️ The command line leaves its backups in the same place and the same limits apply: see [Where the Backups Stay](cli_backup.md#backup-kept).
+
 ### 🗄️ Keep Copies Off the Server {: #keep-copies }
 
-`backups/` is in the data directory, on the same disk as the data: an archive kept there does not survive the loss of that disk. An archive downloaded from Settings is already off the server. From the command line, write the archives to another disk, a NAS or off-site with `--output`, on a schedule.
+`backups/` is in the data directory, on the same disk as the data: a backup kept there does not survive the loss of that disk. An archive downloaded from Settings is already off the server. From the command line, write the archives to another disk, a NAS or off-site with `--output`, on a schedule.
 
 A `cron` line for a host installation, every night at 03:30 (`crontab -e`, as the user that runs LibreFolio):
 
@@ -128,7 +168,7 @@ A `cron` line for a host installation, every night at 03:30 (`crontab -e`, as th
 30 3 * * * cd /path/to/LibreFolio && pipenv run ./dev.py backup create --output /mnt/nas/librefolio/
 ```
 
-With Docker, add `-T`, as cron gives the command no terminal. The archive lands in `LibreFolio-data/backups/`: copy it elsewhere with your usual tool.
+With Docker, add `-T`, as cron gives the command no terminal. The archive lands in its own folder of `LibreFolio-data/backups/`, where the [automatic clean-up](#backup-cleanup), once you set it, keeps the disk from filling: copy it elsewhere with your usual tool.
 
 ```text
 30 3 * * * cd /path/to/librefolio && docker compose exec -T librefolio python dev.py backup create
@@ -189,17 +229,17 @@ The design, for developers: [Secure Backups (`.lfbk`)](../developer/architecture
 
 ## 🔎 Check a Backup {: #check }
 
-Two commands check an archive and change nothing. With Docker, give the path inside the container: an archive in `LibreFolio-data/backups/` is in `/app/backend/data/prod-docker/backups/` there.
+Two commands check an archive and change nothing. With Docker, give the path inside the container: an archive in `LibreFolio-data/backups/` is in `/app/backend/data/prod-docker/backups/` there. A backup LibreFolio [keeps](#kept-backups) is in a folder of its own, such as `/app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/`.
 
 ```bash
 # Is the archive whole, and what does it hold?
-docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip
 
 # Can this installation restore it? A restore tried on a copy
-docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip --dry-run
+docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip --dry-run
 
 # A secure backup: the same commands ask its password first
-docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.lfbk
+docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.lfbk
 ```
 
 On a host installation, run `pipenv run ./dev.py backup …` with the path of the archive on the host.
@@ -389,7 +429,7 @@ Run it where the server runs, in the container with Docker:
 
 ```bash
 # 1. Check the archive on a copy, read the report, then type "restore" to confirm
-docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500-cli-1a2b3c4d/librefolio-backup-20261015-121500.zip
 
 # 2. Restart LibreFolio: its next start applies the restore
 docker compose restart librefolio

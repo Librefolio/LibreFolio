@@ -41,6 +41,66 @@ export async function deleteInstanceBackupJob(jobId: string): Promise<void> {
     await zodiosApi.delete_instance_backup_job_api_v1_backup_instance_jobs__job_id__delete(undefined, {params: {job_id: jobId}});
 }
 
+// =============================================================================
+// The backups the instance keeps (lot FB-24): the list, and the clean-up that bounds them
+// =============================================================================
+
+/** A backup the instance keeps: its job, and where it came from. (Built from the job's own type: the client's explicit type of the entry widens every nullable field, a branch its schema never lets through.) */
+export type InstanceBackupEntry = InstanceBackupJob & {origin: 'ui' | 'cli' | 'pre-restore' | 'panel'};
+export type BackupKind = 'clear' | 'password' | 'sealed';
+
+/** The backups the instance keeps, the newest first as the server sends them (`GET /backup/instance/jobs`). */
+export async function listInstanceBackups(): Promise<InstanceBackupEntry[]> {
+    const answer = await zodiosApi.list_instance_backups_api_v1_backup_instance_jobs_get();
+    return answer.items as unknown as InstanceBackupEntry[];
+}
+
+/** How a backup is protected: sealed for a hosting panel, with its maker's password, or not at all. */
+export function backupKind(entry: {encrypted?: boolean; sealed?: boolean}): BackupKind {
+    if (entry.sealed) return 'sealed';
+    return entry.encrypted ? 'password' : 'clear';
+}
+
+/** The two rules of the clean-up of the kept backups; 0 switches a rule off. */
+export interface CleanupSettings {
+    maxMb: number;
+    maxDays: number;
+}
+
+const CLEANUP_MAX_MB_KEY = 'backup_cleanup_max_mb';
+const CLEANUP_MAX_DAYS_KEY = 'backup_cleanup_max_days';
+
+/** A setting's value as a whole number of 0 or more; 0 for anything else (a rule that cannot be read is off). */
+function wholeNumber(value: unknown): number {
+    return typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number.parseInt(value.trim(), 10) : 0;
+}
+
+/** The clean-up rules, as the global settings hold them (`GET /settings/global`). */
+export async function getCleanupSettings(): Promise<CleanupSettings> {
+    const answer = await zodiosApi.list_global_settings_api_v1_settings_global_get();
+    const items: Array<{key: string; value: unknown}> = answer?.items ?? [];
+    const valueOf = (key: string) => items.find((item) => item.key === key)?.value;
+    return {maxMb: wholeNumber(valueOf(CLEANUP_MAX_MB_KEY)), maxDays: wholeNumber(valueOf(CLEANUP_MAX_DAYS_KEY))};
+}
+
+/** Save both rules in one request: all or nothing. A refusal goes through as it came (`cleanupSaveCode` reads it). */
+export async function saveCleanupSettings(settings: CleanupSettings): Promise<void> {
+    await zodiosApi.bulk_update_global_settings_api_v1_settings_global_bulk_patch({
+        items: [
+            {key: CLEANUP_MAX_MB_KEY, value: String(settings.maxMb)},
+            {key: CLEANUP_MAX_DAYS_KEY, value: String(settings.maxDays)},
+        ],
+    });
+}
+
+/** Why a save of the clean-up rules failed: a 422 (a value the server refuses), a 403, no answer, anything else. */
+export function cleanupSaveCode(error: unknown): 'invalid' | 'forbidden' | 'network' | 'unexpected' {
+    if (!isAxiosError(error)) return 'unexpected';
+    if (!error.response) return 'network';
+    if (error.response.status === 422) return 'invalid';
+    return error.response.status === 403 ? 'forbidden' : 'unexpected';
+}
+
 /** Where the archive of a finished job downloads from: same origin, so the session cookie goes with the link. */
 export function instanceBackupFileUrl(jobId: string): string {
     return `/api/v1/backup/instance/jobs/${encodeURIComponent(jobId)}/file`;

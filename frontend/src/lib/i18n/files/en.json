@@ -90,7 +90,8 @@
       "changeFailed": "The file's visibility could not be changed",
       "sharedOnPick": "{name} was personal: it is now visible to every user, so that everyone sees it here"
     },
-    "deleteSkipped": "Files you are not allowed to delete were left in place"
+    "deleteSkipped": "Files you are not allowed to delete were left in place",
+    "backups": "Backups"
   },
   "files": {
     "deleteFailed": "Failed to delete file"

@@ -81,8 +81,12 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 - 🚦 One backup runs at a time on an instance, whoever started it: an administrator, the
   [command line](cli_tools.md) or your panel. While one runs, a start answers `409`: try
   again later.
-- 🕐 The server keeps a finished job and its archive for one hour, then removes them: download the
-  archive within the hour, and delete the job as soon as you have it.
+- 🕐 The server no longer removes a finished job after an hour: it keeps the job and its archive in
+  the `backups/` folder of the data directory ([Backups Kept on the Server](backup_restore.md#kept-backups)),
+  until the instance's administrator or your panel deletes it, or the administrator's
+  [automatic clean-up](backup_restore.md#backup-cleanup) does. On a managed instance, the clean-up
+  keeps 250 MB and 30 days until the administrator saves other values, so download the archive as soon
+  as it is `done` and delete the job when you have it. The routes above are unchanged.
 - 👀 Your panel sees only the backups it started: any other job, such as one an administrator
   started from the app, answers as if it did not exist.
 - 🏷️ The archive records that your panel made it: `backup inspect`, on the

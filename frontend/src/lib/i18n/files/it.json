@@ -90,7 +90,8 @@
       "changeFailed": "Non è stato possibile cambiare la visibilità del file",
       "sharedOnPick": "{name} era personale: ora è visibile a ogni utente, perché tutti lo vedano qui"
     },
-    "deleteSkipped": "I file che non puoi eliminare sono rimasti al loro posto"
+    "deleteSkipped": "I file che non puoi eliminare sono rimasti al loro posto",
+    "backups": "Backup"
   },
   "files": {
     "deleteFailed": "Impossibile eliminare il file"
