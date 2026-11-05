@@ -4251,6 +4251,69 @@ test.describe('Risk analysis functional integration', () => {
     });
 
     /**
+     * F-7 (testlist 1.3): on a narrow screen the rows of «Sono diversificato come credo?» stack — the name above, then the bar,
+     * then the weight and the contribution — and no row leaves the screen. Wide, they stay as they were: name, bar and
+     * figure on one line. The switch follows the room the row has (a container query), so it is read on boxes, not on a width.
+     */
+    test('F-7: an L2 row stacks on a phone and no row leaves the screen; wide, it stays on one line', async ({page}) => {
+        await installRiskMocks(page, {concentration: true});
+        const panel = await openDashboardRisk(page);
+        const level2 = panel.getByTestId('risk-level-2');
+        const rows = level2.locator('[data-testid^="risk-l2-divergence-bar-"]');
+        await expect(rows.first(), 'the stub draws no L2 row').toBeVisible({timeout: 10_000});
+
+        /** The three boxes of the first row, read together: the name cell, the bar's track and the figures line. */
+        const geometry = () =>
+            level2.evaluate((section) => {
+                const bar = section.querySelector<HTMLElement>('[data-testid^="risk-l2-divergence-bar-"]');
+                const item = bar?.closest('li');
+                if (!bar || !item) return null;
+                const id = bar.getAttribute('data-testid')!.replace('risk-l2-divergence-bar-', '');
+                const label = bar.querySelector<HTMLElement>('[title]');
+                const track = bar.querySelector<HTMLElement>('.rounded-l-full')?.parentElement?.parentElement;
+                const figures = section.querySelector<HTMLElement>(`[data-testid="risk-l2-figures-${id}"]`);
+                if (!label || !track || !figures) return null;
+                const top = (element: Element) => Math.round(element.getBoundingClientRect().top);
+                const middle = (element: Element) => Math.round(element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2);
+                return {
+                    labelTop: top(label),
+                    labelBottom: Math.round(label.getBoundingClientRect().bottom),
+                    trackTop: top(track),
+                    trackMiddle: middle(track),
+                    figuresTop: top(figures),
+                    itemOverflow: item.scrollWidth - item.clientWidth,
+                    pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                    itemRight: Math.round(item.getBoundingClientRect().right),
+                    viewport: window.innerWidth,
+                };
+            });
+
+        // Desktop first: one line for the name and the bar, the figures under them.
+        const wide = await geometry();
+        expect(wide, 'the first L2 row has no name, bar or figures line').not.toBeNull();
+        // Beside the name: the bar's middle falls within the name's own line (the cells are centred, so their tops differ).
+        expect(wide!.trackMiddle, 'wide, the bar is not beside the name').toBeGreaterThanOrEqual(wide!.labelTop);
+        expect(wide!.trackMiddle, 'wide, the bar is not beside the name').toBeLessThanOrEqual(wide!.labelBottom);
+        expect(wide!.figuresTop, 'the figures are not under the bar').toBeGreaterThan(wide!.trackTop);
+
+        await page.setViewportSize({width: 375, height: 812});
+        await expect
+            .poll(
+                async () => {
+                    const narrow = await geometry();
+                    return narrow !== null && narrow.trackTop >= narrow.labelBottom - 1;
+                },
+                {message: 'at 375 px the bar is not under the name'},
+            )
+            .toBe(true);
+        const narrow = (await geometry())!;
+        expect(narrow.figuresTop, 'at 375 px the figures are not under the bar').toBeGreaterThan(narrow.trackTop);
+        expect(narrow.itemOverflow, 'an L2 row is wider than its box at 375 px').toBeLessThanOrEqual(1);
+        expect(narrow.pageOverflow, 'the page scrolls sideways at 375 px').toBeLessThanOrEqual(1);
+        expect(narrow.itemRight, 'a row leaves the screen at 375 px').toBeLessThanOrEqual(narrow.viewport);
+    });
+
+    /**
      * V3, on the cards L1 and L2 still draw (developer's decision of 05/10/2026, «a capo come la
      * didascalia»): a card's title and subtitle are read whole, as its caption is (the test above) —
      * they wrap, stop at two lines, and carry no native tooltip. They were cut to one line, the rest
