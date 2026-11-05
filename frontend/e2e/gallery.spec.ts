@@ -2185,6 +2185,12 @@ test.describe('Gallery Screenshots', () => {
                 await freezeAnimations(page);
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as the email shot frames it.
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/backup-ready`);
+                // MOBILE — scrolled to the restore card, which stands under the first screen (decision 16/10): the backup card above it
+                // is drawn in the desktop shot.
+                if (viewport === 'mobile') {
+                    await expect(page.getByTestId('restore-card')).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+                    await frameTarget(page, page.getByTestId('restore-card'), `mobile/${lang}/${theme}/settings/backup-ready`);
+                }
                 await screenshot(page, viewport, lang, theme, 'settings', 'backup-ready');
                 await restoreTallScreen(page);
             });
