@@ -4,6 +4,9 @@
     import {_ as t} from '$lib/i18n';
     import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {formatDay, formatDayRange} from '$lib/utils/core/formatAxisDate';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
     import {formatCurrencyAmount} from '../riskAnalysisHelpers';
     import {buildCurrentDrawdown, buildHurtRows} from './levelHelpers';
@@ -87,6 +90,15 @@
         return text === '' ? '\u00A0' : text;
     }
 
+    /**
+     * The card's subtitle, what the parentheses of the title used to say (F8): which part of the distribution, and the measure's name.
+     * The worst fall's is built from two catalogue names — «lived through» and the glossary's own «maximum drawdown» — so the measure
+     * keeps the one name `riskGlossary.test.ts` holds everywhere.
+     */
+    function subtitle(id: 'day' | 'month' | 'worst'): string {
+        return id === 'worst' ? `${$t('risk.levels.l1.technical.lived')} · ${$t('risk.levels.l1.technical.worst')}` : $t(`risk.levels.l1.technical.${id}`);
+    }
+
     /** The confidence the backend actually used, never the 95% one might assume. */
     let confidenceLabel = $derived(tails.drawdownConfidence === null ? '\u2014' : formatPercent(tails.drawdownConfidence, {scale: 100, signed: false, digits: 0}));
 
@@ -117,15 +129,17 @@
     };
 </script>
 
-{#snippet measure(label: string, value: string, testId: string, docsPath?: string)}
-    <div class="flex items-baseline justify-between gap-2 text-xs" data-testid={testId}>
-        <span class="flex min-w-0 items-center gap-1">
-            <span class="truncate text-lf-muted">{label}</span>
+{#snippet measure(label: string, value: string, testId: string, docsPath?: string, period?: {from: string; to: string})}
+    <!-- One detail row, the same in every card (F8): the label on the left, the value on the right; a text that does not fit scrolls
+         instead of being cut. -->
+    <div class="flex items-baseline justify-between gap-2 text-xs" data-testid={testId} data-from={period?.from} data-to={period?.to}>
+        <span class="flex min-w-0 flex-1 items-center gap-1">
+            <span use:scrollOnOverflow class="{overflowScrollTextClass} text-lf-muted">{label}</span>
             {#if docsPath}
                 <a class="shrink-0 text-lf-muted hover:text-lf-link" href="/mkdocs/{docsPath}" target="_blank" rel="noopener noreferrer" aria-label={label} data-testid="{testId}-docs">&#9432;</a>
             {/if}
         </span>
-        <span class="shrink-0 font-medium text-lf-secondary tabular-nums">{value}</span>
+        <span use:scrollOnOverflow class="{overflowScrollTextClass} max-w-[65%] shrink-0 text-right font-medium text-lf-secondary tabular-nums" data-testid="{testId}-value">{value}</span>
     </div>
 {/snippet}
 
@@ -144,33 +158,30 @@
         <div data-testid="risk-l1-cards">
             <RiskCardGrid>
                 {#each rows as row (row.id)}
-                    <RiskMetricCard label={$t(`risk.levels.l1.rows.${row.id}`)} technicalName={$t(`risk.levels.l1.technical.${row.id}`)} value={lossPercent(row.loss)} caption={caption(lossMoney(row.loss))} sentiment="negative" docsPath={DOC_PATHS[row.id]} testId="risk-l1-card-{row.id}">
+                    <RiskMetricCard layout="figure" label={$t(`risk.levels.l1.rows.${row.id}`)} technicalName={subtitle(row.id)} value={lossPercent(row.loss)} caption={caption(lossMoney(row.loss))} sentiment="negative" docsPath={DOC_PATHS[row.id]} testId="risk-l1-card-{row.id}">
                         {#snippet submetrics()}
-                            <!-- Which one it was (F-6): the worst fall from the peak to the trough, and the worst month the series
-                                 really went through, beside the average of the worst 5 % that the card's figure is. The day has its
-                                 own date, under the worst realization below. -->
-                            {#if row.id === 'month' && row.worstSeen !== null}
-                                {@render measure($t('risk.levels.l1.tails.worstMonth'), lossPercent(row.worstSeen), 'risk-l1-worst-month')}
-                            {/if}
-                            {#if row.period}
-                                <p class="text-right text-[10px] text-lf-muted" data-testid="risk-l1-period-{row.id}" data-from={row.period.from} data-to={row.period.to}>{$t('risk.levels.l1.period', {values: {from: row.period.from, to: row.period.to}})}</p>
-                            {/if}
-                            {#if row.durationDays != null}
-                                {@render measure($t('risk.levels.l1.durationDays', {values: {days: row.durationDays}}), '', `risk-l1-duration-${row.id}`)}
-                            {/if}
-                            {#if row.requiredRecovery != null}
-                                <!-- The number that teaches the asymmetry: a 50% fall
-                                     needs a +100% rise, not a +50% one. -->
-                                {@render measure($t('risk.levels.l1.requiredRecovery', {values: {percent: ''}}), gainPercent(row.requiredRecovery), `risk-l1-recovery-${row.id}`)}
-                            {/if}
-
-                            <!-- The acquired measures, each attached to the figure it
-                                 refines instead of standing on its own. -->
+                            <!-- Every card has the same shape (F8, 06/11/2026): which one it was, then the figures that refine the card's
+                                 own. The day: the worst day seen and its date. The month: the worst 30 days really lived through and their
+                                 days. The worst fall: from the peak to the trough, how long it lasted, what it takes to recover, and the
+                                 two tail measures. -->
                             {#if row.id === 'day' && tails.worstRealization !== null}
                                 {@render measure($t('risk.levels.l1.tails.worstRealization'), lossPercent(tails.worstRealization), 'risk-l1-worst-realization', TAIL_DOCS.worstRealization.docsPath)}
                                 {#if tails.worstRealizationDate}
-                                    <p class="text-right text-[10px] text-lf-muted" data-testid="risk-l1-worst-realization-date">{$t('risk.levels.l1.tails.worstRealizationOn', {values: {date: tails.worstRealizationDate}})}</p>
+                                    {@render measure($t('risk.levels.l1.when'), formatDay(tails.worstRealizationDate), 'risk-l1-worst-realization-date')}
                                 {/if}
+                            {/if}
+                            {#if row.id === 'month' && row.worstSeen !== null}
+                                {@render measure($t('risk.levels.l1.tails.worstMonth'), lossPercent(row.worstSeen), 'risk-l1-worst-month')}
+                            {/if}
+                            {#if row.id !== 'day' && row.period}
+                                {@render measure($t('risk.levels.l1.when'), formatDayRange(row.period.from, row.period.to), `risk-l1-period-${row.id}`, undefined, row.period)}
+                            {/if}
+                            {#if row.durationDays != null}
+                                {@render measure($t('risk.levels.l1.duration'), $t('risk.levels.l1.daysCount', {values: {days: row.durationDays}}), `risk-l1-duration-${row.id}`)}
+                            {/if}
+                            {#if row.requiredRecovery != null}
+                                <!-- The number that teaches the asymmetry: a 50% fall needs a +100% rise, not a +50% one. -->
+                                {@render measure($t('risk.levels.l1.requiredRecovery'), gainPercent(row.requiredRecovery), `risk-l1-recovery-${row.id}`)}
                             {/if}
                             {#if row.id === 'worst' && tails.drawdownAtRisk !== null}
                                 {@render measure($t('risk.levels.l1.tails.drawdownAtRisk', {values: {confidence: confidenceLabel}}), lossPercent(tails.drawdownAtRisk), 'risk-l1-drawdown-at-risk', TAIL_DOCS.drawdownAtRisk.docsPath)}
@@ -183,13 +194,22 @@
                 {/each}
 
                 {#if current}
-                    <RiskMetricCard label={$t('risk.levels.l1.currentDrawdown')} technicalName={$t('risk.levels.l1.technical.current')} value={lossPercent(current.loss)} caption={caption(lossMoney(current.loss))} sentiment="negative" docsPath="{DOCS}/current-drawdown/" testId="risk-l1-card-current">
+                    <RiskMetricCard
+                        layout="figure"
+                        label={$t('risk.levels.l1.currentDrawdown')}
+                        technicalName={$t('risk.levels.l1.technical.current')}
+                        value={lossPercent(current.loss)}
+                        caption={caption(lossMoney(current.loss))}
+                        sentiment="negative"
+                        docsPath="{DOCS}/current-drawdown/"
+                        testId="risk-l1-card-current"
+                    >
                         {#snippet submetrics()}
                             {#if current.peakDate}
-                                {@render measure($t('risk.levels.l1.sincePeak', {values: {date: current.peakDate}}), '', 'risk-l1-current-since')}
+                                {@render measure($t('risk.levels.l1.since'), formatDay(current.peakDate), 'risk-l1-current-since')}
                             {/if}
                             {#if current.requiredRecovery != null}
-                                {@render measure($t('risk.levels.l1.requiredRecovery', {values: {percent: ''}}), gainPercent(current.requiredRecovery), 'risk-l1-current-recovery')}
+                                {@render measure($t('risk.levels.l1.requiredRecovery'), gainPercent(current.requiredRecovery), 'risk-l1-current-recovery')}
                             {/if}
                         {/snippet}
                     </RiskMetricCard>
