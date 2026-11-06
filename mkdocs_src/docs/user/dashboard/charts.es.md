@@ -202,9 +202,9 @@ El panel recuerda la vista y la pestaña en este navegador, para cada usuario, y
 
 ¿Qué activos individuales pesan más? **Por activo** divide la cartera activo por activo en lugar de por categoría.
 
-- **Ahora** — un gráfico circular con el peso de cada activo en el último día del rango seleccionado.
+- **Ahora** — un gráfico circular con el peso de cada activo en el último día del rango seleccionado. Cada porción muestra el icono de su activo — el suyo, o el de su tipo si no tiene o no se puede cargar; el efectivo muestra el de Liquidez. No hay leyenda: pasa el ratón por una porción para leer el nombre, la parte y el importe.
 - **Historial** — cómo cambió la distribución por activo a lo largo del tiempo. **Se incluyen las posiciones cerradas**, por lo que un activo que vendiste sigue apareciendo en los días en que lo mantuviste.
-- **Los colores** siguen el peso de hoy: el activo más pesado recibe el primer color, luego los demás por peso, después los activos cerrados, empezando por el cerrado más recientemente. El gráfico circular y el historial usan el mismo color para el mismo activo.
+- **Los colores** siguen el peso de hoy: el activo más pesado recibe el primer color, luego los demás por peso, después los activos cerrados, empezando por el cerrado más recientemente. El gráfico circular y el historial usan el mismo color para el mismo activo, y también las líneas de [Rentabilidad de las posiciones](positions.md#return-of-the-positions).
 
 ### 🍩 Dos anillos por tipo {: #allocation-type-rings }
 

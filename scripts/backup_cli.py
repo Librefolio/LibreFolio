@@ -586,6 +586,17 @@ _STAGE_BLOCKERS = {
 }
 
 
+def _blocker_line(report, code: str) -> str:
+    """The sentence of a blocker; the space limit's carries the numbers and the way out (C8)."""
+    if code != "storage_limit":
+        return _STAGE_BLOCKERS.get(code, code)
+    needed = -(-(report.storage_required_bytes or 0) // (1024 * 1024))
+    line = f"The data after the restore would take {_human(report.storage_required_bytes or 0)}, past the space limit of {report.storage_limit_mb} MB: " f"set LIBREFOLIO_STORAGE_LIMIT_MB to at least {needed} for this command (0 for no limit), or raise the limit in Files › Advanced, and check again"
+    if report.storage_disk_missing_bytes:
+        line += f"; the disk also needs at least {_human(report.storage_disk_missing_bytes)} more free"
+    return line
+
+
 def _print_totals(report) -> None:
     """How the ledger's control totals the backup recorded compare with the copy's (lot B-13)."""
     status = report.control_totals
@@ -673,7 +684,7 @@ def _print_stage_report(report, *, instance_key_given: bool = False) -> None:
         if code not in _STAGE_WARNINGS_SAID_APART:
             print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
     for code in report.blockers:
-        print(f"❌ {_STAGE_BLOCKERS.get(code, code)}")
+        print(f"❌ {_blocker_line(report, code)}")
 
 
 #: What to do after a restore that found nobody for the owner (B5-1j): ``user reassign-owner`` names one.

@@ -215,7 +215,7 @@ class RestoreSecretCounts(BaseModel):
 # own (after the restore one signs in with the backup's credentials, and every session open now ends); and
 # confirming_account_not_in_backup, added for the administrator who reads the report when their username is not among
 # administrators (after the restart they cannot sign in with it; L3). blockers forbid it:
-# no_administrator. The copy is kept until expires_at. encrypted: a secure backup. secrets_rekeyed: the plugin secrets
+# no_administrator, storage_limit (the data after the restore would pass the space limit, C8). The copy is kept until expires_at. encrypted: a secure backup. secrets_rekeyed: the plugin secrets
 # re-encrypted with this instance's key (a secure backup carries its own); secrets_unreadable: those that stay
 # unreadable, to enter again after the restore (another instance's, without its key).
 # B5-1, a managed instance only: an account of the backup the owner may choose as theirs. owner_email: its address is
@@ -286,7 +286,14 @@ class RestoreStageReport(BaseModel):
             "users_over_limit",
         ]
     ]
-    blockers: list[Literal["no_administrator"]]
+    blockers: list[Literal["no_administrator", "storage_limit"]]
+    # C8, the space limit: with the blocker storage_limit, the limit in force at the check (megabytes), whether its hosting
+    # provider fixes it (then the administrator cannot raise it), the space the data would take after the restore (raise the
+    # limit to at least that) and the room the disk is missing for it (free at least that, 0 when it has enough).
+    storage_limit_mb: int | None = None
+    storage_limit_locked: bool = False
+    storage_required_bytes: int | None = Field(default=None, ge=0)
+    storage_disk_missing_bytes: int = Field(default=0, ge=0)
     control_totals: Literal["same", "changed", "absent", "other_version", "unreadable"]
     control_totals_differences: list[RestoreTotalsDifference]
     control_totals_differences_count: int = Field(ge=0)

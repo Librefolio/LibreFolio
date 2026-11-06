@@ -240,6 +240,15 @@ def utils_check_frontend_build(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Frontend build guard tests", verbose=verbose)
 
 
+def utils_gallery_webp(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the WebP copies of the documentation gallery (E8)."""
+    print_section("Utils: Gallery WebP")
+    print_info("Testing: scripts/gallery_webp.py, dev.py _convert_gallery_webp")
+    print_info("Tests: only new or newer PNGs are converted, a second run does no work, a broken PNG is reported and stops nothing, alpha kept")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_gallery_webp.py", test_names)
+    return run_command(cmd, "Gallery WebP tests", verbose=verbose)
+
+
 def utils_release_image_contract(verbose: bool = False, test_names: list = None) -> bool:
     """Test the release.yml / Dockerfile contract that keeps the gallery's debug build out of the images."""
     print_section("Utils: Release Image Contract")
@@ -698,6 +707,15 @@ Tests for utility modules and helper functions:
         desc="scripts/docker/check_frontend_build.sh: a production build passes (a missing .build-debug only warns); a debug marker, any sourcemap (named), the coverage marker or a missing index.html/200.html exits 1",
         # Throwaway build trees in tmp_path, the script run with sh: no DB, no
         # server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gallery-webp",
+        utils_gallery_webp,
+        name="Gallery WebP",
+        desc="scripts/gallery_webp.py: the gallery's PNGs get a WebP beside them (quality 85, alpha kept); only a PNG with no WebP or newer than it is converted, a second run does nothing, a broken PNG is reported and stops nothing and leaves no WebP; dev.py counts it as a failure of the gallery",
+        # Throwaway PNG trees in tmp_path, Pillow only: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(

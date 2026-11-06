@@ -1,3 +1,4 @@
+import type {Route} from '@playwright/test';
 import {expect, test, type Locator, type Page, type Request} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
@@ -474,6 +475,30 @@ test.describe('Files Page', () => {
             await selectViewMode(page, 'list');
             const row = await listRow(page, 'static', fileId);
             await expect(row).toContainText('generic_simple.csv');
+        });
+
+        test("a file the space limit refuses is reported with what to raise, in the interface's words, and nothing is listed (C8)", async ({page}) => {
+            // The server's answer is simulated (the page's own route, removed by the test): the limit is one value for the whole
+            // instance, never changed from a parallel test. The numbers are those of the real refusal.
+            const refusal = {detail: {code: 'storage_limit_exceeded', message: 'The space limit would be passed', limit_mb: 100, used_bytes: 90 * 1024 * 1024, required_bytes: 120 * 1024 * 1024, required_mb: 120, disk_missing_bytes: 0, limit_locked: false}};
+            const isUpload = (url: URL) => url.pathname === `${API}/uploads`;
+            const refuse = (route: Route) => (route.request().method() === 'POST' ? route.fulfill({status: 507, contentType: 'application/json', body: JSON.stringify(refusal)}) : route.fallback());
+            await openStaticTab(page);
+            await page.getByTestId('upload-button').click();
+            await page.getByTestId('file-input').setInputFiles({name: `space-limit-${uniqueSuffix()}.txt`, mimeType: 'text/plain', buffer: Buffer.from('x')});
+
+            await page.route(isUpload, refuse);
+            try {
+                const since = await eventSeq(page);
+                await page.getByTestId('file-upload-submit').click();
+                const failed = await waitForEvent(page, 'file.upload.failed', {since, timeout: 30_000});
+                const reason = String((failed.detail as {reason?: unknown}).reason);
+                expect(reason, "the interface's sentence from the numbers, not the English message of the detail").not.toBe('The space limit would be passed');
+                expect(reason, 'it names the limit to raise').toContain('120');
+                await expect(page.getByTestId('file-uploader'), 'the uploader stays open: nothing was uploaded').toBeVisible();
+            } finally {
+                await page.unroute(isUpload, refuse);
+            }
         });
 
         test('can select and clear files from uploader', async ({page}) => {

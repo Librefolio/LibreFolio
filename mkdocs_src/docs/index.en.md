@@ -41,11 +41,20 @@ description: Free to understand, free to act. LibreFolio brings all your investm
       Everything clear, everything under control — because good decisions start with good information.
     </p>
 
-    <div class="premium-badges">
-      <span class="badge badge-open-source">100% OPEN SOURCE</span>
-      <span class="badge badge-expandable">HIGHLY EXPANDABLE</span>
-      <span class="badge badge-self-hosted">SELF-HOSTED</span>
-    </div>
+    <ul class="project-badges" aria-label="LibreFolio at a glance">
+      <li class="project-badge">
+        <span class="project-badge__icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+        <span class="project-badge__text"><span class="project-badge__title">Private<span class="project-badge__separator">, </span></span><span class="project-badge__subtitle">by design</span></span>
+      </li>
+      <li class="project-badge">
+        <span class="project-badge__icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></span>
+        <span class="project-badge__text"><span class="project-badge__title">100% Open<span class="project-badge__separator">, </span></span><span class="project-badge__subtitle">open source</span></span>
+      </li>
+      <li class="project-badge">
+        <span class="project-badge__icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></span>
+        <span class="project-badge__text"><span class="project-badge__title">Multi-broker<span class="project-badge__separator">, </span></span><span class="project-badge__subtitle">one portfolio</span></span>
+      </li>
+    </ul>
   </div>
 
   <!-- Video Section: Temporaneamente rimosso (Work in Progress) -->

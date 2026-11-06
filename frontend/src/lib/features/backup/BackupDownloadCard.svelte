@@ -22,6 +22,7 @@
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
+    import {STORAGE_LIMIT_CODE, storageLimitMessage, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getInstanceBackupOptions, instanceBackupFileUrl, type BackupPhase, type BackupWarning} from './backupApi';
     import {notifyBackupListChanged} from './backupList.svelte';
@@ -59,6 +60,11 @@
         return (code !== null ? ERROR_KEYS[code] : undefined) ?? ERROR_KEYS.unexpected;
     }
 
+    /** The sentence of a failure: the space limit's refusal, with the numbers of its answer (what to raise, whom to ask, how much room to free), or the code's own. */
+    function errorText(code: string | null, storage: StorageLimitNumbers | null): string {
+        return code === STORAGE_LIMIT_CODE && storage !== null ? storageLimitMessage(storage, $_) : $_(errorKey(code));
+    }
+
     const controller = new BackupJobController({
         onDone: (job) => {
             notify({
@@ -74,7 +80,7 @@
             notify({
                 name: what === 'remove' ? 'backup.delete.failed' : 'backup.failed',
                 detail: {code, what, job_id: job?.job_id ?? null},
-                toast: {variant: 'error', message: $_(errorKey(code))},
+                toast: {variant: 'error', message: errorText(code, controller.errorStorage)},
             }),
     });
 
@@ -237,7 +243,7 @@
     {#if controller.errorCode !== null && (controller.state === 'failed' || controller.state === 'done')}
         <div class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="backup-error" data-error-code={controller.errorCode ?? ''}>
             <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
-            <span>{$_(errorKey(controller.errorCode))}</span>
+            <span>{errorText(controller.errorCode, controller.errorStorage)}</span>
         </div>
     {/if}
 

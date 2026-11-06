@@ -223,8 +223,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The broker page shows the broker's whole amounts**, no longer your share of it, risk included; for the figures reduced by your share use the Dashboard filtered on that broker.
 - **A broker's page is now the Dashboard with that broker already chosen:** the same controls, the currency with «Create forex», cash and amounts of the chosen period, the lots detail that closes with Back, the «Updates paused» badge, and the transactions of the chosen period (it used to be the whole history).
 - **Lots: a transfer with a broker outside the panel now reads as a transfer.** In a lot's History, on Lot Life & Custody and on the Avg. Cost / Market Price markers, units moved to or from a broker the panel doesn't include were shown as adjustments. They now show as transfers (TRANSFER+ / TRANSFER- in the History, Transfer In / Transfer Out on the markers), without naming the other broker. No figure changes.
-- **«Updates paused» takes the place of Refresh** on the Dashboard and the broker page: nothing moves on the page, and a click starts the updates again. They still restart on their own when you come back.
+- **«Updates paused» shows on the Refresh button** on the Dashboard and the broker page: its label stays, only its icon and tone change, and its tooltip says so. A click starts the updates again; they still restart on their own when you come back.
 - **Positions chart**: the badges show the asset's name, which scrolls when it is long, and the view selector uses the icons of the Assets list.
+- **An asset keeps one colour** in the lines of the positions chart, the allocation pie and its history, whatever you tick and in whatever order. The same asset at two brokers gets a different line pattern, and long names scroll in the chart's tooltip too.
+- **The asset allocation pie shows each asset's icon** in its slice, or its type's when it has none or it cannot be loaded, and has no legend: the name shows when you point at the slice.
 
 #### 📈 Charts
 
@@ -247,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: Risk Analysis drawdown results (`drawdown_summary`, `asset_set_drawdown`) carry the gain needed to climb back from the worst fall to the peak before it, `maximum_drawdown_trough_to_peak_ratio` (a 50 % fall needs +100 %); `remaining_to_peak_ratio` is null for a total loss, with a warning that says why, where the analysis used to fail.
 - **Risk: add a missing exchange-rate pair without leaving the analysis.** In the Risk tab of the Dashboard, of a broker and of an asset, and in the risk lab on the Assets page, the button of a pair with no exchange-rate route opens the **Add New Currency Pair** window already filled in with that pair (EUR/USD, for example), instead of taking you to the FX page. Once the pair is saved, and again when its rates are downloaded, the analysis refreshes by itself.
 - **The daily returns histogram is a real chart**: its axis shows the return thresholds, a dashed line marks the VaR threshold, and pointing at a bar tells how many days fell there and where that band stands against the threshold.
+- **The four loss cards of «How much can it hurt?» share one shape**: shorter titles, a subtitle, dated detail rows, and dates in your language. The histogram's tooltip is lighter, sits beside the pointer and writes its interval as `[a; b)`.
 
 #### 🤖 AI Export
 
@@ -284,7 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
 - On the Files page and in a broker's report files, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
 - **System files**: the icons created at installation show «system» as their uploader, instead of a user number.
-- **Files, for administrators**: the space limit sits in a closed Advanced panel and is called LibreFolio total space; going over it only warns. Automatic clean-up is a closed panel too, and says its rules apply within the hour. Saving either shows a green confirmation, and the same-disk reminder is now a plain note.
+- **Files, for administrators**: the space limit sits in a closed Advanced panel and is called LibreFolio total space; it now applies: a new file, a broker report, a backup started by hand or a restore that would pass it is refused, and the message says what to raise it to. Transactions, prices, the database and the backups of a hosting panel or the command line are never stopped. Automatic clean-up is a closed panel too, and says its rules apply within the hour. Saving either shows a green confirmation, and the same-disk reminder is now a plain note.
 
 #### 💱 Currency codes
 
@@ -363,17 +366,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 📚 Documentation
 
+- **The documentation screenshots are WebP**, about a third of the weight of the PNGs, so the full image is lighter. The public site keeps both formats, so documentation already released keeps working.
 - The documentation site draws its diagrams with its own copy of Mermaid, with no request to a third party; the ELK layout is no longer available.
 - **The documentation site uses the same colours as the app**, in the light and the dark theme.
 - **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
 - **The documentation header keeps the theme switch beside the language selector**, as in the app; the 🚀 link to the app, shown when LibreFolio is running, takes the place the theme switch had.
-
-### 🧹 Repository cleanup
-
-- The promotional video experiment leaves the repository (`mkdocs_src/videoClipPrject/` and `./dev.py mkdocs video`): it never reached the app or the documentation, and it now lives outside this repository.
-- The early UI mockups leave the repository too (`mkdocs_src/docs/POC_UX/`, 75 images): the documentation build always excluded them.
-- `./dev.sh` is gone: it only translated the old `db:upgrade`-style commands into `./dev.py` ones. The messages that still suggested it now name the `./dev.py` command.
-- An unused third-party skill pack (`.github/skills/engineering-skills/`) and a few leftover files in the repository root are removed.
 
 ### 🐛 Fixed
 

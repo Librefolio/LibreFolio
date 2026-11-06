@@ -8,6 +8,8 @@
  * - a plain number is days, as the field always was;
  * - the three units in the four interface languages (the letters are an argument; the catalogue is tested apart);
  * - the sum: `2a3m5g` is 730 + 90 + 5 = 825, and a value past its natural range is as good as any (`24m66g` = 786);
+ * - the letters in any order and repeated, all of them counting (developer, 06/11/2026): `30g 1a 2m` = 455, `1a1a2m2m` = 850;
+ * - a number with no letter beside letters (`1a 30`) is an error;
  * - the engine's bounds, and every malformed text, give an error and no number.
  */
 import {describe, expect, it} from 'vitest';
@@ -83,10 +85,28 @@ describe('parseHorizon — years, months and days: a fixed sum', () => {
         expect(days('1a 6m')).toBe(545);
     });
 
-    it('takes each part once and in order', () => {
-        expect(days('3m2a')).toBe('format');
-        expect(days('1a1a')).toBe('format');
-        expect(days('5g1m')).toBe('format');
+    it('takes the parts in any order and adds them up (developer, 06/11/2026)', () => {
+        expect(days('30g 1a 2m')).toBe(455);
+        expect(days('3m2a')).toBe(820);
+        expect(days('5g1m')).toBe(35);
+    });
+
+    it('takes a unit as often as it is written, and every one counts', () => {
+        expect(days('1a1a2m2m')).toBe(850);
+        expect(days('1a1a')).toBe(730);
+        expect(days('10g 10g 10g')).toBe(30);
+    });
+
+    it('does not forgive a number with no letter beside letters', () => {
+        expect(days('1a 30')).toBe('format');
+        expect(days('30 1a')).toBe('format');
+        expect(days('1a30')).toBe('format');
+        expect(days('1a 2m 3')).toBe('format');
+    });
+
+    it('still refuses a unit of another language when the order is free', () => {
+        expect(days('1y 2m', IT)).toBe('format');
+        expect(days('30g 1a', EN)).toBe('format');
     });
 
     it('refuses anything that is not a count and a unit', () => {
@@ -104,6 +124,8 @@ describe('parseHorizon — years, months and days: a fixed sum', () => {
         expect(days('10a')).toBe(3650);
         expect(days('10a1g')).toBe('tooLong');
         expect(days('122m')).toBe('tooLong');
+        // The bound is on the sum, so repeated parts can cross it too.
+        expect(days('5a5a1g')).toBe('tooLong');
         expect(days('99999999999a')).toBe('tooLong');
     });
 });

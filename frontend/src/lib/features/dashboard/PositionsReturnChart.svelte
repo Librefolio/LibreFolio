@@ -33,7 +33,7 @@
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
-    import {buildFittedTooltipBlockRow, buildTooltipHeader, buildTooltipTheme, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildMarqueeTooltipBlockRow, buildTooltipHeader, buildTooltipTheme, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
@@ -51,9 +51,9 @@
     import {applyLineShape, effectiveLineShape} from '$lib/components/charts/lineShape';
     import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
-    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {attachOverflowMarqueeToDescendants, scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import {lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
+    import {lineDashes, lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
 
     interface Props {
         lines: ReadonlyArray<PositionLine>;
@@ -101,6 +101,8 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
     let touchPanHandle: {dispose: () => void} | null = null;
+    /** The marquee of the long names in the tooltip, which ECharts draws inside the chart's element (F-1). */
+    let stopTooltipMarquee: (() => void) | null = null;
     let lastWidth = 0;
     /** The day the pointer is on, kept from ECharts' `updateAxisPointer` (the tooltip of a step line reads it). */
     let pointedDay: string | null = null;
@@ -124,6 +126,9 @@
     let drawn = $derived(lines.filter((line) => !hiddenIds.has(line.id) && hasValue(line)));
 
     let chartState = $derived<'loading' | 'failed' | 'empty' | 'ready'>(loading ? 'loading' : failed ? 'failed' : drawn.length === 0 ? 'empty' : 'ready');
+
+    /** Two lines of one asset (two brokers) share its colour: each has a pattern of its own (the first is solid). */
+    let dashOf = $derived(lineDashes(lines.map((line) => line.id)));
 
     let hasPortfolioLine = $derived(lines.some((line) => line.kind === 'portfolio'));
 
@@ -161,12 +166,15 @@
     function disposeChart(): void {
         touchPanHandle?.dispose();
         touchPanHandle = null;
+        stopTooltipMarquee?.();
+        stopTooltipMarquee = null;
         chart?.dispose();
         chart = null;
     }
 
     $effect(() => {
         void drawn;
+        void dashOf;
         void view;
         void currency;
         void colorOf;
@@ -243,7 +251,7 @@
                 showSymbol: isolated.some(Boolean),
                 symbol: (_value: unknown, params: {dataIndex: number}) => (isolated[params.dataIndex] ? 'circle' : 'none'),
                 symbolSize: 6,
-                lineStyle: {color, width: line.kind === 'portfolio' ? 2.5 : 1.75},
+                lineStyle: {color, width: line.kind === 'portfolio' ? 2.5 : 1.75, type: dashOf.get(line.id) ?? 'solid'},
                 itemStyle: {color},
                 emphasis: {focus: 'series'},
             };
@@ -313,7 +321,7 @@
                             .sort((left, right) => right.value - left.value);
                         if (onDay.length === 0) return '';
                         const dayHeader = buildTooltipHeader(escapeHtml(formatDayWithWeekday(day)), box.mutedColor, {from: day, to: day});
-                        return fitToChart(dayHeader + onDay.map((row) => buildFittedTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
+                        return fitToChart(dayHeader + onDay.map((row) => buildMarqueeTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
                     }
                     const items = (Array.isArray(params) ? params : [params]) as TooltipItem[];
                     const rows = items
@@ -322,7 +330,7 @@
                         .sort((left, right) => right.value - left.value);
                     if (rows.length === 0) return '';
                     const header = buildTooltipHeader(escapeHtml(formatDayWithWeekday(rows[0].date)), box.mutedColor, {from: rows[0].date, to: rows[0].date});
-                    return fitToChart(header + rows.map((row) => buildFittedTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
+                    return fitToChart(header + rows.map((row) => buildMarqueeTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
                 },
             },
             // Zoom and pan on the time axis. No window is named, so a redraw keeps the user's; `none` keeps every step line whole (a filter would
@@ -370,6 +378,8 @@
             });
             attachDaySnap(chart);
             touchPanHandle = attachDataZoomTouchPan(chart, container);
+            // A name too long for the tooltip's row scrolls by itself, as the legend's badges do.
+            stopTooltipMarquee = attachOverflowMarqueeToDescendants(container);
             scheduleFirstRenderStabilityFix(chart, container);
         }
         resizeWatcher.observe(container);
@@ -393,6 +403,7 @@
                     data-testid="positions-chart-legend-{line.id}"
                     data-kind={line.kind}
                     data-closed={line.closedOn ? 'true' : 'false'}
+                    data-dash={typeof dashOf.get(line.id) === 'object' ? 'dash-dot' : (dashOf.get(line.id) ?? 'solid')}
                     onclick={() => ontoggle?.(line.id)}
                 >
                     <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full {visible ? '' : 'opacity-40'}" style="background-color: {colorOf(line.id)}" data-testid="positions-chart-swatch-{line.id}"></span>

@@ -68,7 +68,7 @@ import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/compone
 
 // The identity translator: components render i18n keys verbatim, so the tests
 // can name the message that was chosen without naming any one language.
-vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
+vi.mock('$lib/i18n', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/i18n')>()), _: readable((key: string) => key)}));
 vi.mock('$lib/api', () => ({zodiosApi: {change_password_api_v1_auth_change_password_post: vi.fn()}}));
 // The signed-in user, read by the hidden username field (last block). A lazy
 // `subscribe`, as in `ProfileTab.test.ts`: the factory runs while the component

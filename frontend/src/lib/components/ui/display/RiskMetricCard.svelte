@@ -33,6 +33,11 @@
   exist anywhere in the codebase — `SignalDomain` has exactly two values, ASSET
   and FX — so the slot stays empty there, and that is correct, not missing (D18).
 
+  TWO SHAPES. `side` (the default) is the card above: the number top right, the caption under it. `figure` (F8, developer's
+  decision of 06/11/2026, the loss cards of L1) is one shape for every card of a family: title and subtitle on top, with the
+  manual's ⓘ at the right of the title; the number on the left and its caption (the amount) on the right, on one line; a rule; then
+  the detail rows, each a label on the left and a value on the right. The test ids are the same in both.
+
   Pattern: Svelte 5 Runes, Tailwind CSS 4.
 -->
 <script lang="ts">
@@ -79,9 +84,11 @@
         submetrics?: Snippet;
         /** Optional sparkline. Fill ONLY where a real series exists. */
         sparkline?: Snippet;
+        /** `side`: the number beside the title (the default). `figure`: the number and its caption on one line, a rule, the detail rows. */
+        layout?: 'side' | 'figure';
     }
 
-    let {label, technicalName, value = '—', numericValue, formatValue, caption, captionScroll = false, sentiment = 'neutral', docsPath, loading = false, testId, submetrics, sparkline}: Props = $props();
+    let {label, technicalName, value = '—', numericValue, formatValue, caption, captionScroll = false, sentiment = 'neutral', docsPath, loading = false, testId, submetrics, sparkline, layout = 'side'}: Props = $props();
 
     const accentClass = $derived(sentiment === 'positive' ? SIGN_BAR.accent.gain : sentiment === 'negative' ? SIGN_BAR.accent.loss : null);
     const valueClass = $derived(sentiment === 'positive' ? SIGN_TEXT.headline.gain : sentiment === 'negative' ? SIGN_TEXT.headline.loss : SIGN_TEXT.headline.neutral);
@@ -92,71 +99,114 @@
         <div class="absolute top-0 left-0 right-0 h-0.5 {accentClass}" data-testid={testId ? `${testId}-accent` : undefined}></div>
     {/if}
 
-    <!-- The number sits top right, where the ⓘ was, and the ⓘ beside the title: one row
+    {#if layout === 'figure'}
+        <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+                <p class="text-xs font-medium uppercase tracking-wide text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-label` : undefined}>{label}</p>
+                {#if technicalName}
+                    <p class="text-[10px] text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-technical` : undefined}>{technicalName}</p>
+                {/if}
+            </div>
+            {#if docsPath}
+                <DocsLink path={docsPath} {label} size={14} testId={testId ? `${testId}-docs` : undefined} />
+            {/if}
+        </div>
+
+        <div class="relative">
+            {#if loading}
+                <div class="absolute inset-0 z-10 flex items-center justify-between" data-testid={testId ? `${testId}-skeleton` : undefined}>
+                    <div class="h-7 w-20 bg-lf-neutral rounded animate-pulse"></div>
+                    <div class="h-3 w-1/3 bg-lf-neutral rounded animate-pulse"></div>
+                </div>
+            {/if}
+            <div class:invisible={loading}>
+                <div class="flex items-baseline justify-between gap-3">
+                    <p class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors duration-300 {valueClass}" data-testid={testId ? `${testId}-value` : undefined}>
+                        {#if numericValue !== undefined && formatValue}
+                            <TweenedValue value={numericValue} format={formatValue} duration={700} />
+                        {:else}
+                            {value}
+                        {/if}
+                    </p>
+                    {#if caption}
+                        <p class="min-w-0 text-xs text-right text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
+                    {/if}
+                </div>
+
+                {#if submetrics}
+                    <div class="mt-2 flex flex-col gap-2 border-t border-lf-subtle pt-2" data-testid={testId ? `${testId}-details` : undefined}>
+                        {@render submetrics()}
+                    </div>
+                {/if}
+            </div>
+        </div>
+    {:else}
+        <!-- The number sits top right, where the ⓘ was, and the ⓘ beside the title: one row
          less, so a card is lower (developer's review of 05/10/2026). The row wraps only when
          the number and a readable title do not fit side by side; the number then drops below,
          as it always stood. Title and subtitle wrap, at most two lines each, like the caption,
          and carry no native `title`: the whole text is on the card (V3). -->
-    <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-        <div class="min-w-[9rem] flex-1">
-            <div class="flex items-start gap-1">
-                <p class="text-xs font-medium uppercase tracking-wide text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-label` : undefined}>{label}</p>
-                {#if docsPath}
-                    <DocsLink path={docsPath} {label} size={14} testId={testId ? `${testId}-docs` : undefined} />
+        <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+            <div class="min-w-[9rem] flex-1">
+                <div class="flex items-start gap-1">
+                    <p class="text-xs font-medium uppercase tracking-wide text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-label` : undefined}>{label}</p>
+                    {#if docsPath}
+                        <DocsLink path={docsPath} {label} size={14} testId={testId ? `${testId}-docs` : undefined} />
+                    {/if}
+                </div>
+                {#if technicalName}
+                    <p class="text-[10px] text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-technical` : undefined}>{technicalName}</p>
                 {/if}
             </div>
-            {#if technicalName}
-                <p class="text-[10px] text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-technical` : undefined}>{technicalName}</p>
-            {/if}
+
+            <div class="relative ml-auto shrink-0">
+                {#if loading}
+                    <div class="absolute inset-0 z-10 flex items-center justify-end" data-testid={testId ? `${testId}-skeleton` : undefined}>
+                        <div class="h-7 w-20 bg-lf-neutral rounded animate-pulse"></div>
+                    </div>
+                {/if}
+                <div class:invisible={loading}>
+                    <p class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold text-right tabular-nums transition-colors duration-300 {valueClass}" data-testid={testId ? `${testId}-value` : undefined}>
+                        {#if numericValue !== undefined && formatValue}
+                            <TweenedValue value={numericValue} format={formatValue} duration={700} />
+                        {:else}
+                            {value}
+                        {/if}
+                    </p>
+                </div>
+            </div>
         </div>
 
-        <div class="relative ml-auto shrink-0">
-            {#if loading}
-                <div class="absolute inset-0 z-10 flex items-center justify-end" data-testid={testId ? `${testId}-skeleton` : undefined}>
-                    <div class="h-7 w-20 bg-lf-neutral rounded animate-pulse"></div>
+        <div class="relative">
+            {#if loading && caption}
+                <div class="absolute inset-0 z-10 flex justify-end">
+                    <div class="h-3 w-1/2 bg-lf-neutral rounded animate-pulse"></div>
                 </div>
             {/if}
             <div class:invisible={loading}>
-                <p class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold text-right tabular-nums transition-colors duration-300 {valueClass}" data-testid={testId ? `${testId}-value` : undefined}>
-                    {#if numericValue !== undefined && formatValue}
-                        <TweenedValue value={numericValue} format={formatValue} duration={700} />
-                    {:else}
-                        {value}
-                    {/if}
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <div class="relative">
-        {#if loading && caption}
-            <div class="absolute inset-0 z-10 flex justify-end">
-                <div class="h-3 w-1/2 bg-lf-neutral rounded animate-pulse"></div>
-            </div>
-        {/if}
-        <div class:invisible={loading}>
-            {#if caption}
-                <!-- Wraps, at most two lines, instead of being cut to one with «…»; no native
+                {#if caption}
+                    <!-- Wraps, at most two lines, instead of being cut to one with «…»; no native
                      `title`, since the whole caption is on screen (developer's decision of 05/10/2026).
                      A caption that is a name scrolls on one line instead (`captionScroll`). -->
-                {#if captionScroll}
-                    <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-right text-lf-muted" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
-                {:else}
-                    <p class="text-xs text-right text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
+                    {#if captionScroll}
+                        <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-right text-lf-muted" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
+                    {:else}
+                        <p class="text-xs text-right text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
+                    {/if}
                 {/if}
-            {/if}
 
-            {#if sparkline}
-                <div class="mt-2" data-testid={testId ? `${testId}-sparkline` : undefined}>
-                    {@render sparkline()}
-                </div>
-            {/if}
+                {#if sparkline}
+                    <div class="mt-2" data-testid={testId ? `${testId}-sparkline` : undefined}>
+                        {@render sparkline()}
+                    </div>
+                {/if}
 
-            {#if submetrics}
-                <div class="flex flex-col gap-2 mt-2">
-                    {@render submetrics()}
-                </div>
-            {/if}
+                {#if submetrics}
+                    <div class="flex flex-col gap-2 mt-2">
+                        {@render submetrics()}
+                    </div>
+                {/if}
+            </div>
         </div>
-    </div>
+    {/if}
 </div>

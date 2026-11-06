@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {CircleCheck, Database, FileArchive, KeyRound, ShieldAlert, TriangleAlert, Users, X} from 'lucide-svelte';
+    import {CircleCheck, Database, FileArchive, HardDrive, KeyRound, ShieldAlert, TriangleAlert, Users, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {_} from '$lib/i18n';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
@@ -36,6 +36,16 @@
     const seed = untrack(() => random());
     const word = $derived(pickConfirmationWord(confirmationWords($_('backup.restore.confirm.words')), () => seed));
     // The server says whether the archive can be restored; a blocker (an archive with no administrator) stops it here too.
+    const BYTES_PER_MB = 1024 * 1024;
+
+    // C8: the data after the restore would pass the space limit: what to raise (or whom to ask) and, when the disk lacks room
+    // for it, how much more it needs free. The numbers come from the check's report, in the interface's language.
+    const storageLimitBlocker = $derived.by(() => {
+        const required = formatBytes(Math.ceil((report.storage_required_bytes ?? 0) / BYTES_PER_MB) * BYTES_PER_MB, $_);
+        const missing = formatBytes(report.storage_disk_missing_bytes ?? 0, $_);
+        const sentence = $_(report.storage_limit_locked ? 'backup.restore.blocker.storage_limit_locked' : 'backup.restore.blocker.storage_limit', {values: {required}});
+        return (report.storage_disk_missing_bytes ?? 0) > 0 ? `${sentence} ${$_('backup.restore.blocker.storage_limit_disk', {values: {missing}})}` : sentence;
+    });
     const confirmable = $derived(report.restorable && report.blockers.length === 0);
     const canConfirm = $derived(!busy && confirmable && confirmationMatches(typed, word));
     const changedTables = $derived(Object.entries(report.tables).filter(([, rows]) => (rows.before ?? 0) !== (rows.after ?? 0)));
@@ -202,6 +212,13 @@
                     {/each}
                 </ul>
             </div>
+        {/if}
+
+        {#if report.blockers.includes('storage_limit')}
+            <p class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="restore-report-blocker" data-blocker="storage_limit" data-limit-locked={report.storage_limit_locked ? 'true' : 'false'}>
+                <HardDrive class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
+                <span>{storageLimitBlocker}</span>
+            </p>
         {/if}
 
         {#if report.blockers.includes('no_administrator')}

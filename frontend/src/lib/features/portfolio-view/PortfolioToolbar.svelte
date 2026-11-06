@@ -1,6 +1,6 @@
 <!--
-  PortfolioToolbar — the controls of the portfolio view: period, currency, broker filter, AI Export, Refresh (which becomes
-  «Updates paused» while the live prices wait for the user, F-4), and the tabs below them (Y6-7, delivery 2, checkpoint 9e; moved out of `PortfolioView.svelte`, markup and `data-testid`s
+  PortfolioToolbar — the controls of the portfolio view: period, currency, broker filter, AI Export, Refresh (which, while the live prices wait
+  for the user, only changes its icon and its tone, F-4), and the tabs below them (Y6-7, delivery 2, checkpoint 9e; moved out of `PortfolioView.svelte`, markup and `data-testid`s
   kept).
 
   It wraps `PageToolbar`, so the layout state (`layoutMode`, `filtersStacked`, the labels that hide first) and the picker's
@@ -199,32 +199,26 @@
 {/snippet}
 
 {#snippet refreshButton(showActionLabels: boolean)}
-    <!-- One button for both: while the prices are paused for inactivity (FB-28: nobody used the page for two minutes) it takes the look of the
-         «Updates paused» pill in the same place, so nothing shifts (F-4). The prices resume by themselves as soon as the user is active; the
-         click is there to restart them by hand, and does what Refresh does. -->
+    <!-- One button for both, and the same width: while the prices are paused for inactivity (FB-28: nobody used the page for two minutes) only
+         its icon and its tone change, and its tooltip says so (F-4). The prices resume by themselves as soon as the user is active; the click
+         is there to restart them by hand, and does what Refresh does. -->
     {@const paused = liveState === 'paused-idle'}
     <button
-        class={paused
-            ? `inline-flex items-center justify-center gap-1 px-2 py-0.5 whitespace-nowrap rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${STATUS_TONES.liveUpdates.paused}`
-            : 'flex items-center justify-center gap-1.5 px-2.5 py-1.5 whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50'}
+        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 whitespace-nowrap border border-lf-subtle rounded-lg text-xs font-medium transition-colors disabled:opacity-50 {paused ? `${STATUS_TONES.liveUpdates.paused} hover:bg-lf-hover` : 'bg-lf-card text-lf-secondary hover:bg-lf-hover'}"
         onclick={onrefresh}
         disabled={pageBusy.busy}
         data-busy={pageBusy.busy ? 'true' : 'false'}
         data-live-state={liveState}
         data-testid={profile.testIds.refresh}
         title={paused ? $_('liveUpdates.resumeHint') : $_('dashboard.syncData')}
-        aria-label={paused ? $_('liveUpdates.paused') : undefined}
     >
         {#if paused}
-            <Pause size={12} aria-hidden="true" />
-            {#if showActionLabels}
-                <span>{$_('liveUpdates.paused')}</span>
-            {/if}
+            <Pause size={14} aria-hidden="true" data-testid="{profile.testIds.refresh}-paused-icon" />
         {:else}
             <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
-            {#if showActionLabels}
-                <span>{$_('dashboard.syncData')}</span>
-            {/if}
+        {/if}
+        {#if showActionLabels}
+            <span>{$_('dashboard.syncData')}</span>
         {/if}
     </button>
 {/snippet}

@@ -94,6 +94,8 @@ import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/compo
 import {getUserStorageKey} from '$lib/utils/storage';
 import type {ComponentProps} from 'svelte';
 import PositionsPanel from './PositionsPanel.svelte';
+import {growthBrokerColor} from '$lib/theme/chartPalettes';
+import {isDarkTheme} from '$lib/theme/themeMode';
 import type {HistoryPointLike, PositionKey, PositionsSeriesResponse, PositionSeries} from './positionsSeries';
 
 // =============================================================================
@@ -751,5 +753,73 @@ describe('PositionsPanel — the Rolling view (FB-15)', () => {
         await fireEvent.click(checkbox('22-1'));
         await waitFor(() => expect(chartRoot()).toHaveAttribute('data-state', 'loading'));
         view.unmount();
+    });
+});
+
+// =============================================================================
+// B8 · one colour per asset, the pie's, whatever is ticked and in whatever order
+// =============================================================================
+
+describe('PositionsPanel — a line wears its asset’s colour (B8)', () => {
+    /** The weights of the pie: 22 is the heaviest, then 11, then 33 (the table's own order is 33, 22, 11 by value). */
+    const WEIGHTS = [
+        {name: 'Asset 22', value: 50, amount: '3000', id: 22},
+        {name: 'Asset 11', value: 30, amount: '2000', id: 11},
+        {name: 'Asset 33', value: 20, amount: '1000', id: 33},
+    ];
+    const summaryWithPie = (...rows: Array<ReturnType<typeof holding>>) => ({...(summaryOf(...rows) as Record<string, unknown>), allocation_by_asset: WEIGHTS}) as never;
+    const answer = () =>
+        response(
+            seriesFor(11, 1, [
+                ['0', '0'],
+                ['10', '0.1'],
+            ]),
+            seriesFor(22, 1, [
+                ['0', '0'],
+                ['20', '0.2'],
+            ]),
+            seriesFor(33, 2, [
+                ['0', '0'],
+                ['30', '0.3'],
+            ]),
+        );
+    /** The lines of the return chart: the allocation pie beside it is a chart of its own, and may have drawn last. */
+    function returnChartSeries(): Json[] {
+        for (const chart of [...chartInstances].reverse()) {
+            for (const call of [...chart.setOptionCalls].reverse()) {
+                const series = call.option.series;
+                if (Array.isArray(series) && series.some((entry) => typeof (entry as Json).id === 'string' && LINE_IDS.includes((entry as Json).id as string))) return series as Json[];
+            }
+        }
+        return [];
+    }
+    const drawnLineIds = () => returnChartSeries().map((entry) => entry.id as string);
+    const colourOfLine = (id: string): unknown => (returnChartSeries().find((entry) => entry.id === id)?.lineStyle as Json | undefined)?.color;
+    const expectedFor = (rank: number) => growthBrokerColor(rank, isDarkTheme());
+
+    async function tickInOrder(order: string[]) {
+        const view = await mountPanel({summary: summaryWithPie(holding(11, 1), holding(22, 1), holding(33, 2)), onRequestPositionsSeries: vi.fn()});
+        for (const key of order) await fireEvent.click(checkbox(key));
+        await view.rerender(panelProps({summary: summaryWithPie(holding(11, 1), holding(22, 1), holding(33, 2)), onRequestPositionsSeries: vi.fn(), positionsSeries: answer()}));
+        await waitFor(() => expect(drawnLineIds()).toEqual(expect.arrayContaining(order)));
+    }
+
+    it('the colour is the asset’s rank by weight in the pie, not the order the rows were ticked', async () => {
+        await tickInOrder(['33-2', '11-1', '22-1']);
+        expect(colourOfLine('22-1')).toBe(expectedFor(0));
+        expect(colourOfLine('11-1')).toBe(expectedFor(1));
+        expect(colourOfLine('33-2')).toBe(expectedFor(2));
+    });
+
+    it('another order of ticks gives the same colours', async () => {
+        await tickInOrder(['22-1', '33-2', '11-1']);
+        expect(colourOfLine('22-1')).toBe(expectedFor(0));
+        expect(colourOfLine('11-1')).toBe(expectedFor(1));
+        expect(colourOfLine('33-2')).toBe(expectedFor(2));
+    });
+
+    it('a single ticked row keeps the colour it has among all', async () => {
+        await tickInOrder(['33-2']);
+        expect(colourOfLine('33-2')).toBe(expectedFor(2));
     });
 });

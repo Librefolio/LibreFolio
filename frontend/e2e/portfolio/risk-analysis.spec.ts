@@ -2005,7 +2005,11 @@ test.describe('Risk analysis functional integration', () => {
         // instead of fragments, and still fails if a fifth card appears.
         await expect(panel.getByTestId('risk-l1-cards').locator('> div > [data-testid^="risk-l1-card-"]')).toHaveCount(4);
         await expect(panel.getByTestId('risk-l1-worst-realization')).toContainText(loss('3.8%'));
-        await expect(panel.getByTestId('risk-l1-worst-realization-date')).toContainText('2023-11-21');
+        // The day is written the way the language writes a day (F8, 06/11/2026), never as an ISO date.
+        const worstDayDate = panel.getByTestId('risk-l1-worst-realization-date-value');
+        await expect(worstDayDate).toContainText('2023');
+        await expect(worstDayDate).toContainText('21');
+        await expect(worstDayDate).not.toHaveText(/\d{4}-\d{2}-\d{2}/);
         // ⚠️ 90%, from the fixture's `drawdown_confidence_level`. The usual 95% is
         // a default the backend publishes, not a constant: this assertion turns red
         // the moment anyone writes the familiar number into the label.
@@ -2057,6 +2061,9 @@ test.describe('Risk analysis functional integration', () => {
         });
         expect(drawn.bars, 'the chart drew a different number of bars than the engine binned').toBe(7);
         expect(drawn.cut, 'the chart has no threshold line at the cut').toBeCloseTo(-2.1, 6);
+        // The tooltip of a bar (F8, 06/11/2026): the interval typeset by KaTeX, in a box of the chart's own, with the days beneath.
+        await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => (element as unknown as {__lfChart: {dispatchAction(action: unknown): void}}).__lfChart.dispatchAction({type: 'showTip', seriesIndex: 0, dataIndex: 2}));
+        await expect(histogram.getByTestId('risk-l1-histogram-chart').locator('.katex').first(), 'the interval of the bar is not typeset').toBeVisible();
 
         // Nothing came back degraded, so nothing is disclosed. The mirror of the
         // two-entry assertion in the unavailable test: without this half, a
@@ -4351,17 +4358,33 @@ test.describe('Risk analysis functional integration', () => {
         await level4.getByTestId('risk-simulation-run').click();
         await expect.poll(() => requests.some((request) => request.analytics.some((analytic) => analytic.analytic_code === 'simulation' && analytic.parameters?.horizon_days === days)), {message: 'the run did not send the days the field showed', timeout: 10_000}).toBe(true);
 
-        // A text that is no horizon: the error is in the field, the run button is off.
+        // The letters in any order, repeated, all counting (06/11/2026): 30 days, a year and two months is 455.
+        const day = await catalogueSentence(page, 'risk.params.horizonExpr.units.day');
+        await horizon.fill(`30${day} 1${year} 2${month}`);
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '455');
+
+        // The field sits on the baseline of its neighbours, with the days line under it and nothing moved by it: the bottoms of the
+        // horizon and paths inputs are the same.
+        const bottoms = await level4.evaluate((section) => ['risk-simulation-horizon', 'risk-simulation-paths'].map((id) => Math.round(section.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().bottom)));
+        expect(bottoms[0], 'the horizon input is not aligned with the paths input').toBe(bottoms[1]);
+
+        // A text that is no horizon: the red border and the reason in the tooltip; the days line keeps its place; the run button is off.
         await horizon.fill('1x');
-        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveAttribute('data-error', 'format');
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'format');
         await expect(horizon).toHaveAttribute('aria-invalid', 'true');
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '');
         await expect(level4.getByTestId('risk-simulation-run')).toBeDisabled();
+        const bottomsInError = await level4.evaluate((section) => ['risk-simulation-horizon', 'risk-simulation-paths'].map((id) => Math.round(section.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().bottom)));
+        expect(bottomsInError, 'the error moved a field').toEqual(bottoms);
+        // A number with no letter beside letters is an error too.
+        await horizon.fill(`1${year} 30`);
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'format');
 
         // Past the engine's ten years: its own error, not a request the engine would refuse.
         await horizon.fill('3651');
-        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveAttribute('data-error', 'tooLong');
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'tooLong');
         await horizon.fill('30');
-        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveCount(0);
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', '');
         await expect(level4.getByTestId('risk-simulation-run')).toBeEnabled();
     });
 

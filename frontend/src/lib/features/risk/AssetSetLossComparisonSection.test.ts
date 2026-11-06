@@ -103,6 +103,7 @@ import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
+import {formatDayRange} from '$lib/utils/core/formatAxisDate';
 import {headerWidth, measureHeaderTitle} from './riskReturnLevel';
 
 type VarCvarOutput = z.infer<typeof schemas.RiskAssetSetVarCvarOutput>;
@@ -863,10 +864,9 @@ describe('AssetSetLossComparisonSection — which stretch the figure is about (F
 
         const open = rowOf(OPEN_ASSET);
         const period = within(within(open).getByTestId('risk-asset-set-l1-worstFall')).getByTestId('risk-asset-set-l1-worstFall-period');
-        expect(period.textContent).toContain('2023-10-20');
-        expect(period.textContent).toContain('2024-04-19');
-        expect(within(open).getByTestId('risk-asset-set-l1-badMonth-detail').textContent).toContain('2025-03-03');
-        expect(within(open).getByTestId('risk-asset-set-l1-badMonth-detail').textContent).toContain('2025-04-01');
+        expect(period.textContent).toBe(formatDayRange('2023-10-20', '2024-04-19'));
+        // The days as the language writes a stretch, not as the ISO dates come.
+        expect(within(open).getByTestId('risk-asset-set-l1-badMonth-detail').textContent).toContain(formatDayRange('2025-03-03', '2025-04-01'));
         // The figure itself is the average, untouched by the detail beside it.
         expect(figureText(within(open).getByTestId('risk-asset-set-l1-badMonth'))).toBe('\u221217.1%');
     });

@@ -15,9 +15,9 @@ import type {Writable} from 'svelte/store';
 import type {NotifyOptions} from '$lib/stores/app/notify.svelte';
 
 vi.mock('$lib/api', () => ({zodiosApi: {sync_rates_api_v1_fx_currencies_sync_post: vi.fn()}}));
-vi.mock('$lib/i18n', async () => {
+vi.mock('$lib/i18n', async (importOriginal) => {
     const {writable} = await import('svelte/store');
-    return {_: writable((key: string) => `injected:${key}`)};
+    return {...(await importOriginal<typeof import('$lib/i18n')>()), _: writable((key: string) => `injected:${key}`)};
 });
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
 vi.mock('$lib/stores/app/toastStore.svelte', () => ({toasts: {show: vi.fn(), error: vi.fn()}}));

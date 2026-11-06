@@ -223,8 +223,10 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **La página del bróker muestra los importes completos del bróker**, ya no tu parte, incluido el riesgo; para las cifras reducidas por tu parte, usa el Panel filtrado por ese bróker.
 - **La página de un bróker ahora es el Panel con ese bróker ya elegido:** los mismos controles, la moneda con «Crear forex», efectivo e importes del periodo elegido, el detalle de lotes que se cierra con Atrás, la insignia «Actualizaciones en pausa» y las transacciones del periodo elegido (antes era todo el historial).
 - **Lotes: una transferencia con un bróker fuera del panel ahora se interpreta como una transferencia.** En el Historial de un lote, en Vida y custodia del lote y en los marcadores de Coste medio / Precio de mercado, las unidades movidas hacia o desde un bróker que el panel no incluye se mostraban como ajustes. Ahora se muestran como transferencias (TRANSFER+ / TRANSFER- en el Historial, Transfer In / Transfer Out en los marcadores), sin nombrar al otro bróker. Ninguna cifra cambia.
-- **«Actualizaciones en pausa» ocupa el lugar de Actualizar** en el panel y en la página del bróker: nada se mueve en la página, y un clic reanuda las actualizaciones. También se reanudan solas cuando vuelves.
+- **«Actualizaciones en pausa» se ve en el botón Actualizar** del panel y de la página del bróker: su etiqueta se mantiene, solo cambian el icono y el tono, y su tooltip lo indica. Un clic reanuda las actualizaciones; también se reanudan solas cuando vuelves.
 - **Gráfico de posiciones**: las etiquetas muestran el nombre del activo, que se desplaza si es largo, y el selector de vistas usa los iconos de la lista de activos.
+- **Un activo tiene un solo color** en las líneas del gráfico de posiciones, en el gráfico circular de la asignación y en su historial, marques lo que marques y en cualquier orden. El mismo activo en dos brókeres tiene un trazo distinto, y los nombres largos también se desplazan en el tooltip del gráfico.
+- **El gráfico circular de la asignación por activo muestra el icono de cada activo** en su porción, o el de su tipo si falta o no se carga, y no tiene leyenda: el nombre se ve al pasar por la porción.
 
 #### 📈 Gráficos
 
@@ -247,6 +249,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - API: los resultados de caída del análisis de riesgos (`drawdown_summary`, `asset_set_drawdown`) incluyen la ganancia necesaria para recuperarse de la peor caída hasta el pico anterior, `maximum_drawdown_trough_to_peak_ratio` (una caída del 50 % necesita +100 %); `remaining_to_peak_ratio` es null para una pérdida total, con una advertencia que explica por qué, donde antes fallaba el análisis.
 - **Riesgo: añade un par de tipos de cambio faltante sin salir del análisis.** En la pestaña Riesgo del Panel, en la de un bróker y en la de un activo, y en el laboratorio de riesgos de la página Activos, el botón de un par sin ruta de tipos de cambio abre la ventana **Añadir nuevo par de divisas** ya rellenada con ese par (EUR/USD, por ejemplo), en lugar de llevarte a la página FX. Una vez guardado el par, y de nuevo cuando se descargan sus tipos de cambio, el análisis se actualiza por sí solo.
 - **El histograma de rendimientos diarios es un gráfico de verdad**: su eje muestra los umbrales de rendimiento, una línea discontinua marca el umbral VaR, y al pasar por una barra ves cuántos días caen en ella y dónde queda esa franja respecto al umbral.
+- **Las cuatro tarjetas de pérdidas de «¿Cuánto puede doler?» tienen la misma forma**: títulos más cortos, un subtítulo, filas de detalle con fecha y las fechas en tu idioma. El tooltip del histograma es más ligero, se sitúa junto al puntero y escribe su intervalo como `[a; b)`.
 
 #### 🤖 Exportación IA
 
@@ -284,7 +287,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Un archivo subido desde la página Archivos es personal; las imágenes subidas mediante un selector de imágenes (icono de activo, icono de bróker, avatar) son compartidas. Elegir una de tus imágenes personales en un selector la comparte, con un aviso.
 - En la página Archivos y en los archivos de informes de un bróker, Eliminar aparece solo en los archivos que puedes eliminar; una eliminación masiva deja los demás en su sitio, con un aviso.
 - **Archivos del sistema**: los iconos creados en la instalación muestran «del sistema» como autor, en lugar de un número de usuario.
-- **Archivos, para los administradores**: el límite de espacio está en un panel cerrado «Avanzado» y se llama Espacio total de LibreFolio; superarlo solo avisa. La limpieza automática también es un panel cerrado, y dice que sus reglas se aplican en el plazo de una hora. Al guardar cualquiera de los dos aparece una confirmación verde, y el recordatorio del mismo disco es ahora una simple nota.
+- **Archivos, para los administradores**: el límite de espacio está en un panel cerrado «Avanzado» y se llama Espacio total de LibreFolio; ahora se aplica: un archivo nuevo, un informe del bróker, una copia manual o una restauración que lo superaría se rechazan, y el mensaje indica a cuánto subirlo. Las transacciones, los precios, la base de datos y las copias del panel de alojamiento o de la línea de comandos nunca se detienen. La limpieza automática también es un panel cerrado, y dice que sus reglas se aplican en el plazo de una hora. Al guardar cualquiera de los dos aparece una confirmación verde, y el recordatorio del mismo disco es ahora una simple nota.
 
 #### 💱 Códigos de moneda
 
@@ -363,17 +366,11 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 #### 📚 Documentación
 
+- **Las capturas de la documentación son WebP**, cerca de un tercio del peso de los PNG, y la imagen completa es más ligera. El sitio público mantiene ambos formatos, así que la documentación ya publicada sigue funcionando.
 - El sitio de documentación dibuja sus diagramas con su propia copia de Mermaid, sin solicitudes a terceros; el diseño ELK ya no está disponible.
 - **El sitio de documentación usa los mismos colores que la aplicación**, en el tema claro y el oscuro.
 - **La documentación ya no describe cómo ejecutar LibreFolio para otros:** las páginas sobre proveedores de alojamiento, el panel de alojamiento y el despertar programado han desaparecido, y la página de inicio dice «Autoalojado».
 - **La cabecera de la documentación coloca el interruptor del tema junto al selector de idioma**, como en la aplicación; el enlace 🚀 a la aplicación, que se muestra cuando LibreFolio está en ejecución, ocupa el lugar que tenía el interruptor del tema.
-
-### 🧹 Limpieza del repositorio
-
-- El experimento del vídeo promocional se retira del repositorio (`mkdocs_src/videoClipPrject/` y `./dev.py mkdocs video`): nunca llegó a la aplicación ni a la documentación, y ahora se encuentra fuera de este repositorio.
-- Los mockups iniciales de la interfaz de usuario también se retiran del repositorio (`mkdocs_src/docs/POC_UX/`, 75 imágenes): la compilación de la documentación siempre los excluyó.
-- `./dev.sh` ya no está: solo convertía los antiguos comandos del estilo `db:upgrade` en los equivalentes de `./dev.py`. Los mensajes que todavía lo sugerían ahora mencionan el comando `./dev.py`.
-- Se eliminan un paquete de habilidades de terceros sin usar (`.github/skills/engineering-skills/`) y algunos archivos sobrantes en la raíz del repositorio.
 
 ### 🐛 Corregido
 

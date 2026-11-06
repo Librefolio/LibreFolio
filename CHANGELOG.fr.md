@@ -223,8 +223,10 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **La page du courtier affiche les montants totaux du courtier**, et non plus votre part, risque compris ; pour les chiffres réduits à votre part, utilisez le tableau de bord filtré sur ce courtier.
 - **La page d’un courtier est désormais le tableau de bord avec ce courtier déjà sélectionné :** les mêmes contrôles, la devise avec « Créer une paire FX », les liquidités et les montants de la période choisie, le détail des lots qui se ferme avec Retour, le badge « Mises à jour en pause », et les transactions de la période choisie (auparavant, tout l’historique).
 - **Lots : un transfert avec un courtier hors du panneau s'affiche désormais comme un transfert.** Dans l'Historique d'un lot, sur Vie du lot et conservation et sur les marqueurs Coût moyen / Prix du marché, les unités déplacées vers ou depuis un courtier que le panneau n'inclut pas étaient affichées comme des ajustements. Elles s'affichent désormais comme des transferts (TRANSFERT+ / TRANSFERT- dans l'Historique, Transfert entrant / Transfert sortant sur les marqueurs), sans nommer l'autre courtier. Aucun chiffre ne change.
-- **« Mises à jour en pause » prend la place d'Actualiser** sur le tableau de bord et la page du courtier : rien ne bouge sur la page, et un clic relance les mises à jour. Elles repartent aussi seules à votre retour.
+- **« Mises à jour en pause » se voit sur le bouton Actualiser** du tableau de bord et de la page du courtier : son libellé reste, seuls son icône et son ton changent, et son info-bulle l'indique. Un clic relance les mises à jour ; elles repartent aussi d'elles-mêmes à votre retour.
 - **Graphique des positions** : les badges affichent le nom de l'actif, qui défile s'il est long, et le sélecteur de vues utilise les icônes de la liste des actifs.
+- **Un actif garde une seule couleur** dans les lignes du graphique des positions, le camembert de l'allocation et son historique, quoi que vous cochiez et dans n'importe quel ordre. Le même actif chez deux courtiers a un motif de ligne différent, et les noms longs défilent aussi dans l'info-bulle du graphique.
+- **Le camembert de l'allocation par actif affiche l'icône de chaque actif** dans sa part, ou celle de son type si elle manque ou ne se charge pas, et n'a plus de légende : le nom s'affiche en pointant la part.
 
 #### 📈 Graphiques
 
@@ -247,6 +249,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - API : les résultats de repli de l’analyse des risques (`drawdown_summary`, `asset_set_drawdown`) contiennent le gain nécessaire pour remonter de la pire baisse jusqu’au sommet qui la précède, `maximum_drawdown_trough_to_peak_ratio` (une baisse de 50 % nécessite +100 %) ; `remaining_to_peak_ratio` vaut null en cas de perte totale, avec un avertissement qui en explique la raison, là où l’analyse échouait auparavant.
 - **Risque : ajoutez une paire de taux de change manquante sans quitter l’analyse des risques.** Dans l’onglet Risque du tableau de bord, d’un courtier et d’un actif, ainsi que dans le laboratoire de risque de la page des actifs, le bouton d’une paire sans route de taux de change ouvre la fenêtre **Ajouter une nouvelle paire de devises** déjà remplie avec cette paire (EUR/USD, par exemple), au lieu de vous emmener sur la page FX. Une fois la paire enregistrée, et de nouveau lorsque ses taux sont téléchargés, l’analyse s’actualise d’elle-même.
 - **L'histogramme des rendements quotidiens est un vrai graphique** : son axe affiche les seuils de rendement, une ligne en pointillés marque le seuil VaR, et pointer une barre indique combien de jours y tombent et où se situe cette tranche par rapport au seuil.
+- **Les quatre cartes de pertes de « Quel mal cela peut-il faire ? » ont la même forme** : titres plus courts, un sous-titre, des lignes de détail datées, et les dates dans votre langue. L'info-bulle de l'histogramme est plus légère, se place à côté du pointeur et écrit son intervalle `[a; b)`.
 
 #### 🤖 Export IA
 
@@ -284,7 +287,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Un fichier téléversé depuis la page Fichiers est personnel ; les images téléversées via un sélecteur d’images (icône d’actif, icône de courtier, avatar) sont partagées. Choisir l’une de vos images personnelles dans un sélecteur la partage, avec un avertissement.
 - Sur la page Fichiers et dans les fichiers de rapport d’un courtier, Supprimer n’apparaît que sur les fichiers que vous pouvez supprimer ; une suppression groupée laisse les autres en place, avec un avertissement.
 - **Fichiers système** : les icônes créées à l'installation affichent « système » comme auteur, au lieu d'un numéro d'utilisateur.
-- **Fichiers, pour les administrateurs** : la limite d'espace se trouve dans un panneau fermé « Avancé » et s'appelle Espace total de LibreFolio ; la dépasser ne fait qu'avertir. Le nettoyage automatique est aussi un panneau fermé, et indique que ses règles s'appliquent dans l'heure. L'enregistrement de l'un ou l'autre affiche une confirmation verte, et le rappel sur le même disque est désormais une simple note.
+- **Fichiers, pour les administrateurs** : la limite d'espace se trouve dans un panneau fermé « Avancé » et s'appelle Espace total de LibreFolio ; elle s'applique désormais : un nouveau fichier, un rapport de courtier, une sauvegarde manuelle ou une restauration qui la dépasserait sont refusés, et le message indique à combien la porter. Les transactions, les prix, la base de données et les sauvegardes du panneau d'hébergement ou de la ligne de commande ne sont jamais arrêtés. Le nettoyage automatique est aussi un panneau fermé, et indique que ses règles s'appliquent dans l'heure. L'enregistrement de l'un ou l'autre affiche une confirmation verte, et le rappel sur le même disque est désormais une simple note.
 
 #### 💱 Codes de devise
 
@@ -363,17 +366,11 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 #### 📚 Documentation
 
+- **Les captures d'écran de la documentation sont en WebP**, environ un tiers du poids des PNG, et l'image complète est plus légère. Le site public garde les deux formats, la documentation déjà publiée continue donc de fonctionner.
 - Le site de documentation dessine ses diagrammes avec sa propre copie de Mermaid, sans requête vers un tiers ; la disposition ELK n’est plus disponible.
 - **Le site de documentation utilise les mêmes couleurs que l’application**, en thème clair et en thème sombre.
 - **La documentation ne décrit plus l’exécution de LibreFolio pour d’autres personnes :** les pages sur les fournisseurs d’hébergement, le panneau d’hébergement et le réveil planifié ont disparu, et la page d’accueil indique « Auto-hébergé ».
 - **L'en-tête de la documentation place le commutateur de thème à côté du sélecteur de langue**, comme dans l'application ; le lien 🚀 vers l'application, affiché lorsque LibreFolio est en cours d'exécution, prend la place qu'occupait le commutateur de thème.
-
-### 🧹 Nettoyage du dépôt
-
-- L'expérience de la vidéo promotionnelle quitte le dépôt (`mkdocs_src/videoClipPrject/` et `./dev.py mkdocs video`) : elle n'a jamais atteint l'application ni la documentation, et elle se trouve désormais en dehors de ce dépôt.
-- Les maquettes UI initiales quittent également le dépôt (`mkdocs_src/docs/POC_UX/`, 75 images) : la compilation de la documentation les a toujours exclues.
-- `./dev.sh` a disparu : il ne faisait que convertir les anciennes commandes de type `db:upgrade` en commandes `./dev.py`. Les messages qui le suggéraient encore nomment désormais la commande `./dev.py`.
-- Un pack de compétences d'un tiers inutilisé (`.github/skills/engineering-skills/`) et quelques fichiers résiduels à la racine du dépôt sont supprimés.
 
 ### 🐛 Corrections
 

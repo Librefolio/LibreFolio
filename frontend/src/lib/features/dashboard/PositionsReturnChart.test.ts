@@ -93,6 +93,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
 
 vi.mock('echarts', () => echartsModule);
 
+// F-1: the marquee that scrolls a long name in the tooltip is attached to the chart's element; the test sees the attach and the stop.
+const marquee = vi.hoisted(() => {
+    const stop = vi.fn();
+    return {stop, attach: vi.fn((_container: HTMLElement) => stop)};
+});
+vi.mock('$lib/actions/scrollOnOverflow', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/actions/scrollOnOverflow')>()), attachOverflowMarqueeToDescendants: marquee.attach}));
+
 vi.mock('$lib/api', () => ({
     zodiosApi: new Proxy(
         {},
@@ -590,5 +597,69 @@ describe('PositionsReturnChart — the Rolling view (FB-15)', () => {
     it('has no portfolio line in this view, so no note about it', async () => {
         render(PositionsReturnChart, {props: props({view: 'rolling', lines: [A()], note: NOTE})});
         expect(screen.queryByTestId('positions-chart-note')).toBeNull();
+    });
+});
+
+// =============================================================================
+// B8 · the same asset at two brokers: one colour, two patterns
+// =============================================================================
+
+describe('PositionsReturnChart — two brokers holding one asset (B8)', () => {
+    const SAME = () => [line('22-1', [1, 2, 3]), line('22-2', [1, 2, 3]), line('7-0', [4, 5, 6])];
+    const dashOfSeries = (id: string) => (lineSeries(['22-1', '22-2', '7-0']).find((entry) => entry.id === id)?.lineStyle as Json | undefined)?.type;
+
+    it('the lines of one asset take different patterns, the first solid; a line alone is solid', async () => {
+        await mountReady({lines: SAME(), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(dashOfSeries('22-1')).toBe('solid');
+        expect(dashOfSeries('22-2')).toBe('dashed');
+        expect(dashOfSeries('7-0')).toBe('solid');
+    });
+
+    it('the legend says the pattern of each line', async () => {
+        await mountReady({lines: SAME(), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(screen.getByTestId('positions-chart-legend-22-1')).toHaveAttribute('data-dash', 'solid');
+        expect(screen.getByTestId('positions-chart-legend-22-2')).toHaveAttribute('data-dash', 'dashed');
+    });
+
+    it('hiding the first line does not change the pattern of the second (it is the broker’s, not the position in the drawn list)', async () => {
+        await mountReady({lines: SAME(), hiddenIds: new Set(['22-1']), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(dashOfSeries('22-2')).toBe('dashed');
+    });
+});
+
+// =============================================================================
+// F-1 · a long name in the tooltip scrolls
+// =============================================================================
+
+describe('PositionsReturnChart — the tooltip scrolls a long name (F-1)', () => {
+    const LONG = 'Amundi MSCI Semiconductors UCITS ETF Acc · A broker with a very long name';
+
+    function tooltipFormatter(): (params: unknown) => string {
+        const call = [...chartInstances[0].setOptionCalls].reverse().find(({option}) => option.tooltip !== undefined);
+        return (call!.option.tooltip as Json).formatter as (params: unknown) => string;
+    }
+
+    it('each row of the tooltip holds the whole name in a marquee, never an ellipsis, with the value beside it', async () => {
+        await mountReady({lines: [line('12-3', [1, 2, 3], {label: LONG}), B()], view: 'absolute'});
+        const html = tooltipFormatter()([
+            {seriesId: '12-3', value: ['2026-01-02', 2]},
+            {seriesId: '7-0', value: ['2026-01-02', 10]},
+        ]);
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        const names = [...host.querySelectorAll<HTMLElement>('.overflow-scroll-marquee')];
+        expect(names.map((entry) => entry.textContent)).toEqual(expect.arrayContaining([LONG, 'Label 7-0']));
+        expect(html, 'the label gives way by scrolling, not by an ellipsis').not.toContain('text-overflow');
+        expect(host.querySelectorAll('[data-tooltip-row]')).toHaveLength(2);
+    });
+
+    it('the chart’s element is watched for the marquee while it lives, and released when it goes', async () => {
+        marquee.attach.mockClear();
+        marquee.stop.mockClear();
+        const {view} = await mountReady();
+        expect(marquee.attach).toHaveBeenCalledTimes(1);
+        expect(marquee.attach.mock.calls[0][0]).toBe(screen.getByTestId('positions-chart-canvas'));
+        view.unmount();
+        expect(marquee.stop).toHaveBeenCalled();
     });
 });

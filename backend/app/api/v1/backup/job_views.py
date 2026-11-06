@@ -8,9 +8,11 @@ jobs started with it: any other job id answers as one that does not exist.
 from fastapi import HTTPException, Response, status
 from fastapi.responses import FileResponse
 
+from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import InstanceBackupEntry, InstanceBackupJob
-from backend.app.services.platform.instance_backup import jobs
+from backend.app.services.platform import storage_limit
+from backend.app.services.platform.instance_backup import jobs, retention
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
 from backend.app.services.platform.instance_backup.paths import BackupPathError
@@ -22,7 +24,7 @@ NOT_FOUND = {"description": "No backup job has this id, or its archive is gone (
 START_RESPONSES = {
     409: {"description": "Another backup is running (code `backup_busy`). The detail adds `job_id` and `origin` of the running backup when the caller can read it: the Backup tab always, the hosting panel for a backup of its own (B-8)"},
     500: {"description": "The backup could not start: the backups folder of the data directory is a link or a file (code `backup_folder_unusable`), or it cannot be written (code `backup_failed`)"},
-    507: {"description": "Not enough free space to start the backup (code `backup_no_space`)"},
+    507: {"description": "Not enough free space to start the backup (code `backup_no_space`), or, for a backup started by hand, the space limit would be passed even after the clean-up of the kept backups (code `storage_limit_exceeded`, with `required_mb` and `disk_missing_bytes`)"},
 }
 FILE_RESPONSES = {
     200: {"content": {"application/zip": {}, "application/octet-stream": {}, "application/x-tar": {}}, "description": "The backup archive: a .zip, the .lfbk envelope of a secure backup, or the .tar of a hosting panel's sealed one"},
@@ -71,6 +73,8 @@ def start_job(origin: BackupOrigin, password: str | None = None, recipients: tup
     ``password``: a secure backup (the Backup tab only; the hosting panel's backups never take one). ``recipients``: a
     sealed backup (the hosting panel's, L3).
     """
+    if origin == "ui":
+        _make_room_for_a_manual_backup()
     try:
         job = jobs.start_backup(origin=origin, password=password, recipients=recipients) if recipients else jobs.start_backup(origin=origin, password=password)
     except jobs.BackupBusyError as exc:
@@ -91,6 +95,23 @@ def start_job(origin: BackupOrigin, password: str | None = None, recipients: tup
         logger.error("Instance backup could not start", origin=origin, error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "backup_failed", "The backup could not start") from None
     return job_view(job)
+
+
+def _make_room_for_a_manual_backup() -> None:
+    """The space limit (C8): a backup started by hand that would take the data past it first tries the automatic clean-up of
+    the kept backups, and is refused (507, ``storage_limit_exceeded``) if it would still pass it. What it adds is estimated
+    as what the archive carries (``backup_estimate_bytes``), an upper bound: a backup refused on it loses nothing. The
+    backups of a hosting panel and of the command line are never refused: they are made, and the clean-up follows them."""
+    estimate = storage_limit.backup_estimate_bytes()
+    if storage_limit.problem_for_added(estimate) is None:
+        return
+    removed = retention.apply_cleanup(get_data_dir())
+    problem = storage_limit.problem_for_added(storage_limit.backup_estimate_bytes())
+    if problem is None:
+        logger.info("A backup started by hand fits the space limit after the clean-up", removed=len(removed))
+        return
+    logger.warning("Backup refused: the space limit would be passed", limit_mb=problem.limit_mb, required_bytes=problem.required_bytes, cleaned=len(removed))
+    raise HTTPException(status_code=status.HTTP_507_INSUFFICIENT_STORAGE, detail=storage_limit.storage_limit_detail(problem))
 
 
 def _not_found(message: str = "No such backup job") -> HTTPException:

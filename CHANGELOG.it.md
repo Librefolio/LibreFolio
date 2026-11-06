@@ -223,8 +223,10 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **La pagina broker mostra gli importi interi del broker**, non più la tua quota, rischio incluso; per le cifre ridotte alla tua quota usa la Dashboard filtrata su quel broker.
 - **La pagina di un broker è ora la Dashboard con quel broker già scelto:** gli stessi controlli, la valuta con «Crea forex», liquidità e importi del periodo scelto, il dettaglio dei lotti che si chiude con Indietro, il badge «Aggiornamenti in pausa» e le transazioni del periodo scelto (prima era l'intera cronologia).
 - **Lotti: un trasferimento con un broker esterno al pannello ora viene mostrato come trasferimento.** Nella Cronologia di un lotto, in Ciclo di vita e custodia del lotto e nei marcatori Costo medio / Prezzo di mercato, le unità spostate da o verso un broker non compreso nel pannello venivano mostrate come rettifiche. Ora vengono mostrate come trasferimenti (TRANSFER+ / TRANSFER- nella Cronologia, Trasferimento in entrata / Trasferimento in uscita sui marcatori), senza indicare il nome dell'altro broker. Nessun valore numerico cambia.
-- **«Aggiornamento in pausa» prende il posto di Aggiorna** sulla Dashboard e sulla pagina del broker: nella pagina non si sposta nulla, e un clic fa ripartire gli aggiornamenti. Ripartono comunque da soli quando torni.
+- **«Aggiornamenti in pausa» si vede sul pulsante Aggiorna** nella Dashboard e nella pagina del broker: la scritta resta, cambiano solo icona e colore, e il tooltip lo dice. Un clic fa ripartire gli aggiornamenti, che ripartono comunque da soli quando torni.
 - **Grafico delle posizioni**: i badge mostrano il nome dell'asset, che scorre se è lungo, e il selettore delle viste usa le icone dell'elenco Asset.
+- **Un asset ha un solo colore** nelle linee del grafico delle posizioni, nella torta dell'allocazione e nel suo storico, qualunque cosa spunti e in qualunque ordine. Lo stesso asset su due broker ha un tratteggio diverso, e i nomi lunghi scorrono anche nel tooltip del grafico.
+- **La torta dell'allocazione per asset mostra l'icona di ogni asset** nel suo spicchio, o quella del tipo se manca o non si carica, e non ha legenda: il nome si vede passando sullo spicchio.
 
 #### 📈 Grafici
 
@@ -247,6 +249,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - API: i risultati del drawdown dell'Analisi del rischio (`drawdown_summary`, `asset_set_drawdown`) riportano il guadagno necessario per risalire dal calo peggiore al picco precedente, `maximum_drawdown_trough_to_peak_ratio` (un calo del 50 % richiede +100 %); `remaining_to_peak_ratio` è null per una perdita totale, con un avviso che ne spiega il motivo, dove prima l'analisi falliva.
 - **Rischio: aggiungi una coppia di tassi di cambio mancante senza lasciare l'analisi.** Nella scheda Rischio della Dashboard, di un broker e di un asset, e nel laboratorio di rischio nella pagina Asset, il pulsante di una coppia senza percorso di tassi di cambio apre la finestra **Aggiungi nuova coppia di valute** già compilata con quella coppia (EUR/USD, per esempio), invece di portarti alla pagina FX. Una volta salvata la coppia, e di nuovo quando i suoi tassi vengono scaricati, l'analisi si aggiorna da sola.
 - **L'istogramma dei rendimenti giornalieri è un vero grafico**: l'asse mostra le soglie dei rendimenti, una linea tratteggiata segna la soglia VaR, e passando su una barra leggi quanti giorni ci cadono e dove sta quella fascia rispetto alla soglia.
+- **Le quattro card delle perdite di «Quanto può fare male?» hanno la stessa forma**: titoli più corti, un sottotitolo, righe di dettaglio con le date, nella tua lingua. Il tooltip dell'istogramma è più leggero, sta di lato al cursore e scrive l'intervallo come `[a; b)`.
 
 #### 🤖 AI Export
 
@@ -284,7 +287,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Un file caricato dalla pagina File è personale; le immagini caricate tramite un selettore di immagini (icona dell'asset, icona del broker, avatar) sono condivise. Scegliere una delle tue immagini personali in un selettore la condivide, con un avviso.
 - Nella pagina File e nei file del report del broker, Elimina compare solo sui file che puoi eliminare; un'eliminazione multipla lascia gli altri al loro posto, con un avviso.
 - **File di sistema**: le icone create all'installazione mostrano «di sistema» come autore, invece di un numero utente.
-- **File, per gli amministratori**: il limite di spazio sta in un pannello chiuso «Avanzate» e si chiama Spazio totale di LibreFolio; superarlo avvisa soltanto. Anche «Pulizia automatica» è un pannello chiuso, e dice che le regole si applicano entro un'ora. Il salvataggio di entrambi mostra una conferma verde, e il promemoria sullo stesso disco ora è una semplice nota.
+- **File, per gli amministratori**: il limite di spazio sta in un pannello chiuso «Avanzate» e si chiama Spazio totale di LibreFolio; ora si applica: un nuovo file, un report del broker, un backup a mano o un ripristino che lo supererebbe vengono rifiutati, e il messaggio dice a quanto portarlo. Transazioni, prezzi, database e i backup del pannello di hosting o da riga di comando non vengono mai fermati. Anche «Pulizia automatica» è un pannello chiuso, e dice che le regole si applicano entro un'ora. Il salvataggio di entrambi mostra una conferma verde, e il promemoria sullo stesso disco ora è una semplice nota.
 
 #### 💱 Codici di valuta
 
@@ -363,17 +366,11 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 #### 📚 Documentazione
 
+- **Gli screenshot della documentazione sono in WebP**, circa un terzo del peso dei PNG, e l'immagine full è più leggera. Il sito pubblico tiene entrambi i formati, così la documentazione già rilasciata continua a funzionare.
 - Il sito della documentazione disegna i suoi diagrammi con una propria copia di Mermaid, senza richieste a terze parti; il layout ELK non è più disponibile.
 - **Il sito della documentazione usa gli stessi colori dell'app**, nel tema chiaro e in quello scuro.
 - **La documentazione non descrive più come eseguire LibreFolio per altri:** le pagine sui provider di hosting, sul pannello di hosting e sul risveglio pianificato sono state rimosse, e la home page dice «Self-hosted».
 - **L'intestazione della documentazione tiene l'interruttore del tema accanto al selettore della lingua**, come nell'app; il collegamento 🚀 all'app, mostrato quando LibreFolio è in esecuzione, prende il posto che aveva l'interruttore del tema.
-
-### 🧹 Pulizia del repository
-
-- L'esperimento del video promozionale viene rimosso dal repository (`mkdocs_src/videoClipPrject/` e `./dev.py mkdocs video`): non ha mai raggiunto l'app né la documentazione, e ora si trova al di fuori di questo repository.
-- Anche i mockup iniziali dell'interfaccia utente vengono rimossi dal repository (`mkdocs_src/docs/POC_UX/`, 75 immagini): la build della documentazione li ha sempre esclusi.
-- `./dev.sh` non c'è più: si limitava a tradurre i vecchi comandi in stile `db:upgrade` in quelli di `./dev.py`. I messaggi che ancora ne suggerivano l'uso ora indicano il comando `./dev.py`.
-- Un pacchetto di competenze di terze parti inutilizzato (`.github/skills/engineering-skills/`) e alcuni file residui nella radice del repository vengono rimossi.
 
 ### 🐛 Corretto
 

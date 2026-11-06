@@ -1002,7 +1002,7 @@
         <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-simulation-controls">
             <h3 class="text-sm font-semibold text-lf-secondary">{analyticTitle('simulation', 'risk.analytics.simulation.name')}</h3>
             <p class="text-xs text-lf-muted">{analyticDescription('simulation')}</p>
-            <div class="mt-3 flex flex-wrap items-end gap-3">
+            <div class="mt-3 flex flex-wrap items-end gap-3 pb-5">
                 <label class="text-xs text-lf-muted">
                     {$t('risk.params.sampling')}
                     <div class="mt-1 w-28">

@@ -17,26 +17,27 @@ Chaque bloc ci-dessous suit un même schéma : ce à quoi il répond, une captur
 Combien pourriez-vous perdre, et à quel point cela a-t-il déjà été grave ? Chaque chiffre ici correspond à quelque chose que votre portefeuille a réellement traversé durant la période ; les dépôts et les retraits ne comptent ni comme gains ni comme pertes.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="Le bloc Combien cela peut-il faire mal ? : les cartes Un mauvais jour, Un mauvais mois et La pire chute, chacune avec son montant, et leurs lignes de détail (pire jour réellement observé, durée de la chute, récupération nécessaire, Repli à risque, Moyenne au-delà de ce seuil) ; puis le Temps passé sous le pic avec l'indice d'Ulcer, et la Distribution des rendements quotidiens avec le seuil de VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="Le bloc Combien cela peut-il faire mal ? : les cartes Un mauvais jour, Trente mauvais jours et La pire chute, chacune avec son montant, et leurs lignes de détail (la pire journée et quand, les 30 pires jours et quand, les dates de la pire chute et sa durée, reprise nécessaire, Repli à risque, Moyenne au-delà du seuil) ; puis le Temps passé sous le pic avec l'indice d'Ulcer, et la Distribution des rendements quotidiens avec le seuil de VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Outils présentés**
 
-- **Un mauvais jour**, **Un mauvais mois** — votre perte moyenne sur les 5 % de jours les plus mauvais, ou sur des périodes d'un mois → [VaR conditionnelle](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
+- **Un mauvais jour**, **Trente mauvais jours** — votre perte moyenne sur les 5 % de jours les plus mauvais, ou sur des périodes de 30 jours → [VaR conditionnelle](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Seuil de VaR** — sur la *Distribution des rendements quotidiens* : la perte quotidienne que seuls les 5 % de jours les plus mauvais ont dépassée ; une ligne en pointillés la marque sur le graphique, et en survolant une barre on voit combien de jours y sont tombés et si elle se situe au-delà du seuil → [Valeur à risque](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
-- **La pire journée réellement vue** — le seul pire jour de la période → [Pire réalisation](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
-- **Le pire mois réellement vécu** — sous *Un mauvais mois* : la pire période d'un mois que le portefeuille a réellement traversée, avec son premier et son dernier jour. *Un mauvais mois* est en revanche une moyenne des 5 % les plus mauvais, qu'aucun mois n'a jamais affichée seul
-- **La pire chute** — la baisse la plus profonde d'un sommet à un creux ultérieur, avec les dates du sommet et du creux → [Perte maximale](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **La pire journée** — sous *Un mauvais jour* : le seul pire jour de la période, et quand il a eu lieu → [Pire réalisation](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
+- **Les 30 pires jours** — sous *Trente mauvais jours* : la pire période de 30 jours que le portefeuille a réellement traversée, et quand elle a eu lieu. *Trente mauvais jours* est en revanche une moyenne des 5 % les plus mauvais, qu'aucune période n'a jamais affichée seule
+- **La pire chute** — la baisse la plus profonde d'un sommet à un creux ultérieur, quand elle a commencé et fini, et combien de temps elle a duré → [Perte maximale](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Repli à risque** — à quelle distance sous son pic le portefeuille se trouvait, en excluant ses 5 % de jours les plus mauvais → [Repli à risque](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
-- **Moyenne au-delà de ce seuil** — à quelle distance sous son pic il se trouvait, en moyenne, lors de ces pires jours → [Repli à risque conditionnel](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
-- **Actuellement sous le sommet** — à quelle distance sous son dernier sommet le portefeuille se situe aujourd'hui → [Repli actuel](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Moyenne au-delà du seuil** — à quelle distance sous son pic il se trouvait, en moyenne, lors de ces pires jours → [Repli à risque conditionnel](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
+- **Sous le sommet, aujourd'hui** — à quelle distance sous son dernier sommet le portefeuille se situe aujourd'hui → [Repli actuel](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
 - **indice d'Ulcer** — sous *Temps passé sous le sommet* : la profondeur et la durée des chutes ; plus il est bas, plus c'est calme → [indice d'Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **Comment le lire**
 
 - **Des horizons différents** : les cartes vont d'un jour à un mois, puis à la pire chute, ne les additionnez donc jamais.
-- **Le montant** sous chaque pourcentage correspond à cette perte appliquée à votre valeur nette.
-- **Actuellement sous le sommet** n'apparaît que lorsque votre portefeuille est sous son dernier sommet.
+- **Le montant** à côté de chaque pourcentage correspond à cette perte appliquée à votre valeur nette.
+- **Chaque carte a la même forme** : un titre et un sous-titre, le pourcentage avec son montant, puis des lignes de détail avec le nom à gauche et le chiffre à droite. Une date est écrite comme l'écrit votre langue.
+- **Sous le sommet, aujourd'hui** n'apparaît que lorsque votre portefeuille est sous son dernier sommet.
 - **Les icônes ? et ⓘ** à côté d'un chiffre ouvrent sa page théorique.
 
 ---

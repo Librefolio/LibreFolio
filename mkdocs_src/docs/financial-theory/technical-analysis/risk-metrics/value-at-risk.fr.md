@@ -109,7 +109,7 @@ $$
 n = \max\left(1,\ \operatorname{round}\left(\frac{h \cdot f}{365}\right)\right)
 $$
 
-Un horizon couvre donc la même étendue de calendrier sur chaque série, à l'observation près. Trente jours — le mauvais mois que l'application rapporte à côté du mauvais jour — sont $n = 21$ observations d'une série cotée en jours de bourse ($f \approx 252$) et $n = 30$ d'une série cotée chaque jour calendaire ($f = 365$).
+Un horizon couvre donc la même étendue de calendrier sur chaque série, à l'observation près. Trente jours — la carte Trente mauvais jours que l'application montre à côté du mauvais jour — sont $n = 21$ observations d'une série cotée en jours de bourse ($f \approx 252$) et $n = 30$ d'une série cotée chaque jour calendaire ($f = 365$).
 
 L'analyse calcule exactement ces quantités et publie les deux avec le résultat : $n$ comme son horizon en observations, $T$ comme son nombre d'observations. Ce nombre publié, et non la longueur de la fenêtre, est le $T$ auquel la règle s'applique. C'est aussi le nombre par rapport auquel le minimum de 20 observations est vérifié : avec moins de 20 fenêtres composées, le chiffre n'est pas calculé, et le résultat revient indisponible pour historique insuffisant. Un mauvais mois nécessite donc $N \ge 40$ rendements à $f \approx 252$, où $n = 21$, et $N \ge 49$ à $f = 365$.
 

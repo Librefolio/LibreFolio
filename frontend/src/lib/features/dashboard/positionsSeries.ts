@@ -172,9 +172,17 @@ export function selectionKeys(rows: ReadonlyArray<{assetId: number; brokerId: nu
 /**
  * The colour rank of every asset (0 = the first colour): the assets held today, the heaviest first (ties: the lower id),
  * then the ones that left the portfolio, the one closed most recently first (its last day with a positive amount decides, a step's being its `through`;
- * ties: the lower id). The Liquidity slice (no id) has no rank. The pie, the history and the lines read the same ranks.
+ * ties: the lower id), then the `extraIds` no list above knows (the lower id first). The Liquidity slice (no id) has no rank.
+ *
+ * It is the ONE place the ranks are computed: the pie, the history area and the return chart's lines all take them from here (through
+ * `assetColorRanks`), so an asset wears one colour in all of them, whatever is ticked and in whatever order. A panel that draws more assets than the pie
+ * (the lines of a position sold out in the period) passes them as `extraIds`: they come after every ranked asset, so the ranks the pie reads do not move.
  */
-export function rankAssetsByWeight(today: ReadonlyArray<{id: number | null; amount: number}>, history: ReadonlyArray<{date: string; through?: string; components: ReadonlyArray<{id: number | null; amount: number}>}>): Map<number, number> {
+export function rankAssetsByWeight(
+    today: ReadonlyArray<{id: number | null; amount: number}>,
+    history: ReadonlyArray<{date: string; through?: string; components: ReadonlyArray<{id: number | null; amount: number}>}>,
+    extraIds: ReadonlyArray<number> = [],
+): Map<number, number> {
     const held = new Map<number, number>();
     for (const slice of today) {
         if (slice.id !== null && slice.id !== undefined && slice.amount > 0) held.set(slice.id, slice.amount);
@@ -193,5 +201,58 @@ export function rankAssetsByWeight(today: ReadonlyArray<{id: number | null; amou
     for (const [id] of [...held].sort((left, right) => right[1] - left[1] || left[0] - right[0])) ranks.set(id, ranks.size);
     const closed = [...lastHeld].filter(([id]) => !held.has(id)).sort((left, right) => (left[1] < right[1] ? 1 : left[1] > right[1] ? -1 : left[0] - right[0]));
     for (const [id] of closed) ranks.set(id, ranks.size);
+    for (const id of [...new Set(extraIds)].sort((left, right) => left - right)) if (!ranks.has(id)) ranks.set(id, ranks.size);
     return ranks;
+}
+
+/** The structural part of a slice of the asset dimension (`allocation_by_asset`, or a component of its history) the ranks read. */
+interface AssetSliceLike {
+    id?: number | null;
+    amount?: string | null;
+}
+
+/**
+ * The ranks of the assets from what the backend sent: today's allocation by asset and, when the history was asked, its points. The one entry
+ * point of the Allocation panel and of the positions panel (see `rankAssetsByWeight`).
+ */
+export function assetColorRanks(
+    today: ReadonlyArray<AssetSliceLike>,
+    history: ReadonlyArray<{date: string; through?: string; components?: ReadonlyArray<AssetSliceLike>}>,
+    extraIds: ReadonlyArray<number> = [],
+): Map<number, number> {
+    const amountOf = (slice: AssetSliceLike | null | undefined): number => parseFloat(slice?.amount ?? '0');
+    return rankAssetsByWeight(
+        today.map((slice) => ({id: slice?.id ?? null, amount: amountOf(slice)})),
+        history.map((point) => ({date: point.date, through: point.through, components: (point.components ?? []).map((component) => ({id: component?.id ?? null, amount: amountOf(component)}))})),
+        extraIds,
+    );
+}
+
+/** The asset a line belongs to: its id is `<asset>-<broker>`; the portfolio's line has no asset. */
+export function assetIdOfLineId(lineId: string): number | null {
+    if (lineId === PORTFOLIO_LINE_ID) return null;
+    const asset = Number(lineId.split('-')[0]);
+    return Number.isInteger(asset) ? asset : null;
+}
+
+/**
+ * The look of each line among the lines of the same asset (two brokers holding it): the first is solid, the others dashed, dotted, dash-dot,
+ * in the order of their broker. They wear the same colour, so the pattern is what tells them apart. A line alone, and the portfolio's, are solid.
+ */
+export type LineDash = 'solid' | 'dashed' | 'dotted' | number[];
+export const LINE_DASHES: ReadonlyArray<LineDash> = ['solid', 'dashed', 'dotted', [8, 3, 2, 3]];
+
+export function lineDashes(lineIds: ReadonlyArray<string>): Map<string, LineDash> {
+    const byAsset = new Map<number, string[]>();
+    for (const id of lineIds) {
+        const asset = assetIdOfLineId(id);
+        if (asset === null) continue;
+        byAsset.set(asset, [...(byAsset.get(asset) ?? []), id]);
+    }
+    const dashes = new Map<string, LineDash>();
+    const brokerOf = (id: string) => Number(id.split('-')[1] ?? 0);
+    for (const ids of byAsset.values()) {
+        [...ids].sort((left, right) => brokerOf(left) - brokerOf(right)).forEach((id, i) => dashes.set(id, LINE_DASHES[i % LINE_DASHES.length]));
+    }
+    return dashes;
 }

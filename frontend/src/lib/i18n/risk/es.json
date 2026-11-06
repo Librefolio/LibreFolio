@@ -25,14 +25,18 @@
           "month": "m",
           "day": "d"
         },
-        "hint": "Escribe los días (365) o años, meses y días: 2a3m5d son 2 años, 3 meses y 5 días, es decir 825 días (un año cuenta 365 días, un mes 30).",
         "hintLabel": "Cómo escribir el horizonte",
         "resultDays": "{days, plural, one {# día} other {# días}}",
         "errors": {
           "empty": "Introduce el horizonte.",
-          "format": "Horizonte no válido: escribe días (365) o, en este orden, años, meses y días (2a3m5d).",
+          "format": "Horizonte no válido: escribe días (365) o años, meses y días (2a3m5d).",
           "tooShort": "El horizonte debe ser de al menos 1 día.",
           "tooLong": "El horizonte no puede superar {max} días."
+        },
+        "hintItems": {
+          "days": "Un número de días: 365",
+          "units": "O años, meses y días: 2a3m5d",
+          "sum": "Un año cuenta 365 días, un mes 30"
         }
       }
     },
@@ -407,28 +411,26 @@
       "l1": {
         "title": "¿Cuánto puede doler?",
         "rows": {
-          "day": "Un mal día (peor 5%)",
-          "month": "Un mal mes (peor 5%)",
-          "worst": "La peor caída (vivida de verdad)"
+          "day": "Un mal día",
+          "month": "Treinta malos días",
+          "worst": "La peor caída"
         },
         "technical": {
-          "day": "CVaR · 1 día",
-          "month": "CVaR · 1 mes",
+          "day": "El peor 5% de los días · CVaR",
+          "month": "El peor 5% de los períodos · CVaR",
           "worst": "Caída máxima",
-          "current": "Caída actual"
+          "current": "Caída actual",
+          "lived": "Vivida"
         },
-        "durationDays": "duró {days} días",
-        "requiredRecovery": "recuperación necesaria {percent}",
-        "currentDrawdown": "Actualmente por debajo del máximo",
-        "sincePeak": "desde el {date}",
+        "requiredRecovery": "Recuperación necesaria",
+        "currentDrawdown": "Bajo el máximo, hoy",
         "tails": {
-          "worstRealization": "El peor día realmente visto",
-          "worstRealizationOn": "el {date}",
+          "worstRealization": "El peor día",
           "drawdownAtRisk": "Caída en riesgo ({confidence})",
-          "conditionalDrawdownAtRisk": "Media más allá de ese umbral",
+          "conditionalDrawdownAtRisk": "Media más allá del umbral",
           "ulcerIndex": "Índice de Ulcer {value}",
           "ulcerIndexHint": "profundidad cuadrática media bajo el pico: cuanto más bajo, más tranquilo",
-          "worstMonth": "El peor mes realmente vivido"
+          "worstMonth": "Los 30 peores días"
         },
         "underwater": {
           "title": "Tiempo bajo el pico",
@@ -440,15 +442,18 @@
           "cut": "Umbral VaR en {value}",
           "noCut": "No se ha publicado ningún umbral para esta ventana.",
           "empty": "No hay distribución de rendimientos para este periodo.",
-          "bin": "{range}: {count, plural, one {# día} other {# días}} ({share})",
           "cutLine": "VaR {value}",
           "position": {
             "beyond": "Más allá del umbral VaR ({value}): días que el VaR describe",
             "holds": "Contiene el umbral VaR ({value})",
             "above": "Por encima del umbral VaR ({value})"
-          }
+          },
+          "binDays": "{count, plural, one {# día} other {# días}} · {share}"
         },
-        "period": "del {from} al {to}"
+        "when": "Cuándo",
+        "since": "Desde",
+        "duration": "Duración",
+        "daysCount": "{days, plural, one {# día} other {# días}}"
       },
       "l2": {
         "title": "¿Estoy tan diversificado como creo?",

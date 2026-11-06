@@ -6963,28 +6963,36 @@
         "allocation_by_asset": [
           {
             "amount": "11557.176000000",
+            "asset_type": null,
             "emoji": null,
+            "icon_url": null,
             "id": null,
             "name": "Liquidity",
             "value": "85.90"
           },
           {
             "amount": "991.3198263386396526772793053",
+            "asset_type": "ETF",
             "emoji": null,
+            "icon_url": null,
             "id": "IDX",
             "name": "IDX",
             "value": "7.37"
           },
           {
             "amount": "655.35000000",
+            "asset_type": "STOCK",
             "emoji": null,
+            "icon_url": null,
             "id": "EQ",
             "name": "EQ",
             "value": "4.87"
           },
           {
             "amount": "250.2500000",
+            "asset_type": "HOLD",
             "emoji": null,
+            "icon_url": null,
             "id": "MAN",
             "name": "MAN",
             "value": "1.86"
@@ -7578,28 +7586,36 @@
       "allocation_by_asset": [
         {
           "amount": "11557.176000000",
+          "asset_type": null,
           "emoji": null,
+          "icon_url": null,
           "id": null,
           "name": "Liquidity",
           "value": "85.90"
         },
         {
           "amount": "991.3198263386396526772793053",
+          "asset_type": "ETF",
           "emoji": null,
+          "icon_url": null,
           "id": "IDX",
           "name": "IDX",
           "value": "7.37"
         },
         {
           "amount": "655.35000000",
+          "asset_type": "STOCK",
           "emoji": null,
+          "icon_url": null,
           "id": "EQ",
           "name": "EQ",
           "value": "4.87"
         },
         {
           "amount": "250.2500000",
+          "asset_type": "HOLD",
           "emoji": null,
+          "icon_url": null,
           "id": "MAN",
           "name": "MAN",
           "value": "1.86"
@@ -10790,28 +10806,36 @@
         "allocation_by_asset": [
           {
             "amount": "11557.176000000",
+            "asset_type": null,
             "emoji": null,
+            "icon_url": null,
             "id": null,
             "name": "Liquidity",
             "value": "87.19"
           },
           {
             "amount": "927.1963143224390173452145406",
+            "asset_type": "ETF",
             "emoji": null,
+            "icon_url": null,
             "id": "IDX",
             "name": "IDX",
             "value": "6.99"
           },
           {
             "amount": "520.80000000",
+            "asset_type": "STOCK",
             "emoji": null,
+            "icon_url": null,
             "id": "EQ",
             "name": "EQ",
             "value": "3.93"
           },
           {
             "amount": "250.2500000",
+            "asset_type": "HOLD",
             "emoji": null,
+            "icon_url": null,
             "id": "MAN",
             "name": "MAN",
             "value": "1.89"
@@ -11359,28 +11383,36 @@
       "allocation_by_asset": [
         {
           "amount": "11557.176000000",
+          "asset_type": null,
           "emoji": null,
+          "icon_url": null,
           "id": null,
           "name": "Liquidity",
           "value": "87.19"
         },
         {
           "amount": "927.1963143224390173452145406",
+          "asset_type": "ETF",
           "emoji": null,
+          "icon_url": null,
           "id": "IDX",
           "name": "IDX",
           "value": "6.99"
         },
         {
           "amount": "520.80000000",
+          "asset_type": "STOCK",
           "emoji": null,
+          "icon_url": null,
           "id": "EQ",
           "name": "EQ",
           "value": "3.93"
         },
         {
           "amount": "250.2500000",
+          "asset_type": "HOLD",
           "emoji": null,
+          "icon_url": null,
           "id": "MAN",
           "name": "MAN",
           "value": "1.89"

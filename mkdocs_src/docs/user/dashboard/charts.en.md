@@ -202,9 +202,9 @@ The panel remembers the view and the tab in this browser, for each user, and sha
 
 Which single assets weigh most? **By Asset** splits the portfolio asset by asset instead of by category.
 
-- **Now** — a pie with the weight of every asset on the last day of the selected range.
+- **Now** — a pie with the weight of every asset on the last day of the selected range. Each slice shows its asset's icon — its own, or its type's when it has none or it cannot be loaded; the cash shows the Liquidity one. There is no legend: hover a slice to read the name, the share and the amount.
 - **History** — how the distribution by asset changed over time. **Closed positions are included**, so an asset you sold still shows in the days you held it.
-- **Colours** follow the weight today: the heaviest asset gets the first colour, then the others by weight, then the closed assets, the most recently closed first. The pie and the history use the same colour for the same asset.
+- **Colours** follow the weight today: the heaviest asset gets the first colour, then the others by weight, then the closed assets, the most recently closed first. The pie, the history and the lines of [Return of the positions](positions.md#return-of-the-positions) use the same colour for the same asset.
 
 ### 🍩 Two rings by type {: #allocation-type-rings }
 
