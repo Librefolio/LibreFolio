@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * returnHistogramChartHelpers — the option behind the histogram of daily returns (F-5; Vitest).
  *
@@ -17,7 +18,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {barGeometry, binColor, buildReturnHistogramOption, MIN_BAR_PX, renderBin, type HistogramBin, type HistogramDatum} from './returnHistogramChartHelpers';
+import {barGeometry, binColor, buildReturnHistogramOption, histogramTooltipPosition, MIN_BAR_PX, renderBin, type HistogramBin, type HistogramDatum} from './returnHistogramChartHelpers';
 
 const WARNING = '#ae4e00';
 const LOSS_80 = 'rgba(200,40,56,0.8)';
@@ -183,5 +184,31 @@ describe('renderBin — the hit area and the bar', () => {
 
         expect(hit.shape.height).toBe(130);
         expect(bar.shape.height).toBe(0);
+    });
+});
+
+describe('histogramTooltipPosition — beside the pointer, above the finger on touch (F8)', () => {
+    const size = {contentSize: [120, 60] as [number, number], viewSize: [600, 200] as [number, number]};
+
+    it('puts the box on the right of the pointer in the left half, and on its left in the right half', () => {
+        const left = histogramTooltipPosition([100, 100], null, null, null, size, false);
+        const right = histogramTooltipPosition([500, 100], null, null, null, size, false);
+
+        expect(left[0], 'the box does not stand to the right of the pointer').toBeGreaterThan(100);
+        expect(right[0] + 120, 'the box does not stand to the left of the pointer').toBeLessThan(500);
+    });
+
+    it('keeps the box clear of the pointer in height, pinned near the top of the chart', () => {
+        const [, y] = histogramTooltipPosition([100, 150], null, null, null, size, false);
+
+        expect(y).toBeLessThanOrEqual(8);
+    });
+
+    it('stands above the finger on a touch screen', () => {
+        const [x, y] = histogramTooltipPosition([300, 180], null, null, null, size, true);
+
+        // Centred on the finger, and higher than it (the gap of a touch is larger than the pointer's).
+        expect(x + 60).toBe(300);
+        expect(y + 60).toBeLessThan(180);
     });
 });
