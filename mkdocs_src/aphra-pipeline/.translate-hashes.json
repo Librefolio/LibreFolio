@@ -589,7 +589,7 @@
     "last_translated": "2026-10-10T00:07:20.711014+00:00"
   },
   "user/files/index.en.md": {
-    "md5": "b145940dfb1e464d24ff1a97737bb4cb",
+    "md5": "b5ba3a734927263ce69b9b705b102010",
     "langs_done": [
       "es",
       "fr",
@@ -609,7 +609,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1172.7,
-        "stamped_at": "2026-11-05T19:44:57.929609+00:00",
+        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -622,7 +622,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 818.0,
-        "stamped_at": "2026-11-05T19:44:57.929609+00:00",
+        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -637,7 +637,7 @@
         "elapsed_s": 1164.4,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=83, translated=86 (Δ+3)\n  L95: src=5 trn=7\n    EN: Some banks split one account across several exports: [Danske Bank](../transactions/import/danske-bank.md), for example, \n    TR: Algunos bancos dividen una cuenta en varias exportaciones: [Danske Bank](../transactions/import/danske-bank.md), por eje\n  L119: src=0 trn=1\n    EN: - a file whose uploader was not recorded shows *Uploader not recorded*.\n    TR: - un archivo **del que no se registró quién lo subió** muestra *Autor de la subida no registrado*.\n\nSOURCE_OUTLINE (for reference):\n  # 📁 Files & Uploads\n    ## 🖼️ Static resources\n      ### ⬆️ Upload a file\n      ### 👥 Shared or personal {: #visibility }\n    ## 📊 Broker Reports {: #broker-reports }\n      ### 📤 Upload a broker report\n      ### ⚙️ Manage reports\n      ### 🧩 Report sets {: #report-sets }\n    ## 👤 Who uploaded each file {: #uploaded-by }\n    ## 🛠️ For Administrators {: #admin-files }\n      ### 📊 The space used {: #space-used }\n      ### 🗃️ The Backups tab {: #backups-tab }\n    ## 🔒 Access and limits",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-05T19:44:57.929609+00:00",
+        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
         "stamped_by": "translate-stamp"
       }
     }

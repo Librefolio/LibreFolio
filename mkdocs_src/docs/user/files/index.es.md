@@ -128,7 +128,7 @@ Solo los administradores ven lo que sigue; los demás usuarios no encuentran nin
 
 ### 📊 El espacio usado {: #space-used }
 
-Por encima de las pestañas, una barra muestra cuánto espacio ocupa la instancia, dividido entre la **base de datos**, los **archivos subidos**, los **informes del bróker**, las **copias de seguridad** y los **otros archivos de LibreFolio**. Si no se ha establecido un límite, se dibuja respecto al disco, con los otros archivos del disco en gris; si hay un límite, respecto a ese límite. Bajo la barra, en el panel cerrado **Avanzado**, estableces el **Espacio total de LibreFolio (MB)**, `0` para no tener límite. Cuando se supera el límite, la barra solo te avisa: no se bloquea nada y no se elimina nada. La barra se vuelve a leer con **Actualizar**. Cómo leerla y qué establece el límite: [La barra de espacio](../../admin/backup_restore.md#space-used).
+Por encima de las pestañas, una barra muestra cuánto espacio ocupa la instancia, dividido entre la **base de datos**, los **archivos subidos**, los **informes del bróker**, las **copias de seguridad** y los **otros archivos de LibreFolio**. Si no se ha establecido un límite, se dibuja respecto al disco, con los otros archivos del disco en gris; si hay un límite, respecto a ese límite. Bajo la barra, en el panel cerrado **Avanzado**, estableces el **Espacio total de LibreFolio (MB)**, `0` para no tener límite. Más allá del límite la barra te avisa, y LibreFolio rechaza un archivo o informe nuevo que se sumaría, diciendo a cuánto subir el espacio total; no se elimina nada. La barra se vuelve a leer con **Actualizar**. Cómo leerla y qué establece el límite: [La barra de espacio](../../admin/backup_restore.md#space-used).
 
 ### 🗃️ La pestaña Copias de seguridad {: #backups-tab }
 
