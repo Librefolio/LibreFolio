@@ -1726,3 +1726,28 @@ describe('FB-24 — BackupTab: the section of kept backups', () => {
         expect(within(tab).getAllByTestId('backup-cleanup')).toHaveLength(1);
     });
 });
+
+// =====================================================================================================================
+// C8 — a backup started by hand that would pass the space limit is refused with numbers: the card says what to do
+// =====================================================================================================================
+
+describe('C8 — BackupDownloadCard: a start refused by the space limit', () => {
+    const limitRefusal = (extra: Record<string, unknown> = {}) => ({
+        isAxiosError: true,
+        message: 'Request failed with status code 507',
+        response: {status: 507, data: {detail: {code: 'storage_limit_exceeded', message: 'The space limit would be passed', limit_mb: 100, used_bytes: 1, required_bytes: 1, required_mb: 120, disk_missing_bytes: 0, limit_locked: false, ...extra}}},
+    });
+
+    it.each<[string, Record<string, unknown>, string]>([
+        ['an administrator who can raise the limit', {}, 'storage.limit.exceeded.raise'],
+        ['a limit fixed by the hosting provider', {limit_locked: true}, 'storage.limit.exceeded.locked'],
+        ['a disk that lacks room as well', {disk_missing_bytes: 5 * 1024 * 1024}, 'storage.limit.exceeded.raise storage.limit.exceeded.disk'],
+    ])('%s: the error line and the toast say the sentence of the numbers, not the code’s generic one', async (_case, extra, sentence) => {
+        await refusedStart(() => limitRefusal(extra))();
+
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        expect(card()).toHaveAttribute('data-error-code', 'storage_limit_exceeded');
+        expect(screen.getByTestId('backup-error')).toHaveTextContent(exactly(sentence));
+        expect(events('backup.failed')).toEqual([{name: 'backup.failed', detail: {code: 'storage_limit_exceeded', what: 'start', job_id: null}, toast: {variant: 'error', message: sentence}}]);
+    });
+});
