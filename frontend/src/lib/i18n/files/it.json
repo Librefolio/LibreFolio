@@ -92,7 +92,7 @@
     },
     "deleteSkipped": "I file che non puoi eliminare sono rimasti al loro posto",
     "backups": "Backup",
-    "systemUploader": "Di sistema"
+    "systemUploader": "Sistema"
   },
   "files": {
     "deleteFailed": "Impossibile eliminare il file"
