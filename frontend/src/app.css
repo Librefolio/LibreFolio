@@ -60,6 +60,8 @@ html {
        body/html overflow to hidden) never removes/re-adds the scrollbar and
        shifts the layout (visible as a jump in the sticky Header). */
     scrollbar-gutter: stable;
+    /* That space shows the document's background: the app's, or it reads as a strip at the right edge. */
+    background-color: var(--lf-surface-app);
 }
 
 body {

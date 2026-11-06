@@ -812,6 +812,12 @@ describe('app.css: the legacy dark remap leaves the migrated elements alone', ()
     it('app.css imports tokens.css', () => {
         expect(blankCssComments(appCss), "app.css must import './lib/theme/tokens.css': without it no role utility exists").toMatch(/@import\s+(['"])\.\/lib\/theme\/tokens\.css\1\s*;/);
     });
+
+    it('the document has the background of the app, which the reserved scrollbar space shows', () => {
+        const html = /(?:^|\n)html\s*\{([^}]*)\}/.exec(blankCssComments(appCss))?.[1] ?? '';
+        expect(html, 'positive control: the rule of html is found, with its reserved scrollbar space').toMatch(/scrollbar-gutter:\s*stable/);
+        expect(html, 'without it the scrollbar space keeps the legacy background: a strip at the right edge of every page').toMatch(/background-color:\s*var\(--lf-surface-app\)/);
+    });
 });
 
 // ---------------------------------------------------------------------------
