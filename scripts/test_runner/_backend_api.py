@@ -389,6 +389,14 @@ def api_backup_cleanup_settings(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Backup API cleanup settings tests", verbose=verbose)
 
 
+def api_storage_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the space limit applied (lot C8): uploads, broker reports and a backup by hand refused past it, on the lane's server."""
+    print_section("API: the space limit")
+    print_info("Testing: POST /uploads, POST /brokers/import/upload and POST /backup/instance answer 507 storage_limit_exceeded with the numbers past the limit; accepted with none; a broker is still created; the original limit put back")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_storage_limit_api.py", test_names)
+    return run_command(cmd, "Storage limit API tests", verbose=verbose)
+
+
 def api_backup_restore(verbose: bool = False, test_names: list = None) -> bool:
     """Test the check of a backup archive before a restore (/backup/restore), in an app of the test (no server reached)."""
     print_section("Backup API: the restore check")
@@ -1397,6 +1405,14 @@ Tests for REST API endpoints (server auto-started):
         name="Backup Cleanup Settings API",
         desc="Lot FB-24: backup_cleanup_max_mb and backup_cleanup_max_days in GET /settings/global (int, 0 = off on a self-hosted lane) and PATCH /settings/global/bulk: 0..1048576 and 0..3650 accepted to their edges and read back, one past an edge, a negative number or a non-integer refused with 422 naming the key, the bulk all or nothing; the original values put back",
         exclusive_because="rewrites two global_settings rows (backup_cleanup_max_mb, backup_cleanup_max_days), one value for the whole instance: a concurrent unit reading them, or a backup applying the cleanup, would meet the value this one holds; it restores the originals in a finally",
+    )
+    add_test(
+        api,
+        "storage-limit",
+        api_storage_limit,
+        name="Storage Limit API",
+        desc="Lot C8: with storage_limit_mb at 1 MB (the lane's database alone passes it) POST /uploads, POST /brokers/import/upload and POST /backup/instance answer 507 storage_limit_exceeded with exactly the numbers of the detail (limit_mb, used_bytes, required_bytes, required_mb, disk_missing_bytes) and store or start nothing; with 0 the same upload is accepted; with the limit on a broker is still created; the original limit is put back in a finally",
+        exclusive_because="rewrites global_settings.storage_limit_mb, one value for the whole instance: while it is 1 MB every concurrent upload or backup of another unit is refused; it restores the original in a finally",
     )
     add_test(
         api,
