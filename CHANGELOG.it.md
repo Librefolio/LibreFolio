@@ -284,7 +284,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Un file caricato dalla pagina File è personale; le immagini caricate tramite un selettore di immagini (icona dell'asset, icona del broker, avatar) sono condivise. Scegliere una delle tue immagini personali in un selettore la condivide, con un avviso.
 - Nella pagina File e nei file del report del broker, Elimina compare solo sui file che puoi eliminare; un'eliminazione multipla lascia gli altri al loro posto, con un avviso.
 - **File di sistema**: le icone create all'installazione mostrano «di sistema» come autore, invece di un numero utente.
-- **File, per gli amministratori**: il limite di spazio sta in un pannello chiuso «Avanzate» e si chiama Spazio totale di LibreFolio; superarlo avvisa soltanto. Anche «Pulizia automatica» è un pannello chiuso, e dice che le regole si applicano entro un'ora. Il salvataggio di entrambi mostra una conferma verde, e il promemoria sullo stesso disco ora è una semplice nota.
+- **File, per gli amministratori**: il limite di spazio sta in un pannello chiuso «Avanzate» e si chiama Spazio totale di LibreFolio; ora si applica: un nuovo file, un report del broker, un backup a mano o un ripristino che lo supererebbe vengono rifiutati, e il messaggio dice a quanto portarlo. Transazioni, prezzi, database e i backup del pannello di hosting o da riga di comando non vengono mai fermati. Anche «Pulizia automatica» è un pannello chiuso, e dice che le regole si applicano entro un'ora. Il salvataggio di entrambi mostra una conferma verde, e il promemoria sullo stesso disco ora è una semplice nota.
 
 #### 💱 Codici di valuta
 

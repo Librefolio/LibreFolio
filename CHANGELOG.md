@@ -284,7 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
 - On the Files page and in a broker's report files, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
 - **System files**: the icons created at installation show «system» as their uploader, instead of a user number.
-- **Files, for administrators**: the space limit sits in a closed Advanced panel and is called LibreFolio total space; going over it only warns. Automatic clean-up is a closed panel too, and says its rules apply within the hour. Saving either shows a green confirmation, and the same-disk reminder is now a plain note.
+- **Files, for administrators**: the space limit sits in a closed Advanced panel and is called LibreFolio total space; it now applies: a new file, a broker report, a backup started by hand or a restore that would pass it is refused, and the message says what to raise it to. Transactions, prices, the database and the backups of a hosting panel or the command line are never stopped. Automatic clean-up is a closed panel too, and says its rules apply within the hour. Saving either shows a green confirmation, and the same-disk reminder is now a plain note.
 
 #### 💱 Currency codes
 

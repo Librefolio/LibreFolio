@@ -284,7 +284,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Un archivo subido desde la página Archivos es personal; las imágenes subidas mediante un selector de imágenes (icono de activo, icono de bróker, avatar) son compartidas. Elegir una de tus imágenes personales en un selector la comparte, con un aviso.
 - En la página Archivos y en los archivos de informes de un bróker, Eliminar aparece solo en los archivos que puedes eliminar; una eliminación masiva deja los demás en su sitio, con un aviso.
 - **Archivos del sistema**: los iconos creados en la instalación muestran «del sistema» como autor, en lugar de un número de usuario.
-- **Archivos, para los administradores**: el límite de espacio está en un panel cerrado «Avanzado» y se llama Espacio total de LibreFolio; superarlo solo avisa. La limpieza automática también es un panel cerrado, y dice que sus reglas se aplican en el plazo de una hora. Al guardar cualquiera de los dos aparece una confirmación verde, y el recordatorio del mismo disco es ahora una simple nota.
+- **Archivos, para los administradores**: el límite de espacio está en un panel cerrado «Avanzado» y se llama Espacio total de LibreFolio; ahora se aplica: un archivo nuevo, un informe del bróker, una copia manual o una restauración que lo superaría se rechazan, y el mensaje indica a cuánto subirlo. Las transacciones, los precios, la base de datos y las copias del panel de alojamiento o de la línea de comandos nunca se detienen. La limpieza automática también es un panel cerrado, y dice que sus reglas se aplican en el plazo de una hora. Al guardar cualquiera de los dos aparece una confirmación verde, y el recordatorio del mismo disco es ahora una simple nota.
 
 #### 💱 Códigos de moneda
 
