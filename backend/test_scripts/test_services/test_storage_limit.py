@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import math
 import shutil
+import sqlite3
 from collections import namedtuple
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -32,11 +34,13 @@ from fastapi import HTTPException
 
 from backend.app.api.v1.backup import job_views
 from backend.app.config.backup import STORAGE_LIMIT_VARIABLE
+from backend.app.db.models import GlobalSetting
 from backend.app.services.platform import storage_limit, storage_usage
 from backend.app.services.platform.storage_limit import BYTES_PER_MB, StorageLimitProblem, judge
 from backend.test_scripts.test_utils import print_section, print_success
 
 MB = BYTES_PER_MB
+KEY = "storage_limit_mb"
 DiskUsage = namedtuple("DiskUsage", "total used free")
 
 
@@ -45,15 +49,38 @@ def _write(path: Path, size: int) -> None:
     path.write_bytes(b"x" * size)
 
 
+def _database(path: Path, size: int) -> None:
+    """A real SQLite database of ``size`` bytes (to the page) holding the table of the global settings, whose row
+    ``storage_limit_mb`` is ``0``: what a restore check reads the limit from."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute(f'CREATE TABLE "{GlobalSetting.__tablename__}" (key TEXT PRIMARY KEY, value TEXT)')
+        connection.execute(f'INSERT INTO "{GlobalSetting.__tablename__}" VALUES (?, ?)', (KEY, "0"))
+        connection.execute("CREATE TABLE pad (blob BLOB)")
+        connection.execute("INSERT INTO pad VALUES (zeroblob(?))", (size - 3 * 4096,))
+        connection.commit()
+
+
+def _stored(data_dir: Path, value: str | None) -> None:
+    """The row ``storage_limit_mb`` of ``data_dir``'s database: ``value``, or no row for None (the size does not change)."""
+    with closing(sqlite3.connect(data_dir / "sqlite" / "app.db")) as connection:
+        connection.execute(f'DELETE FROM "{GlobalSetting.__tablename__}" WHERE key = ?', (KEY,))
+        if value is not None:
+            connection.execute(f'INSERT INTO "{GlobalSetting.__tablename__}" VALUES (?, ?)', (KEY, value))
+        connection.commit()
+
+
 @pytest.fixture
 def data_dir(tmp_path, monkeypatch) -> Path:
-    """A data directory of 10 MB: 4 of database, 3 of uploads, 1 of reports, 2 of backups. Plenty of disk."""
+    """A data directory of 10 MB: 4 of database (a real one), 3 of uploads, 1 of reports, 2 of backups. Plenty of disk."""
     root = tmp_path / "data"
-    _write(root / "sqlite" / "app.db", 4 * MB)
-    _write(root / "custom-uploads" / "a.bin", 3 * MB)
+    _database(root / "sqlite" / "app.db", 4 * MB)
+    database = (root / "sqlite" / "app.db").stat().st_size
+    _write(root / "custom-uploads" / "a.bin", 7 * MB - database)
     _write(root / "broker_reports" / "uploaded" / "r.csv", 1 * MB)
     _write(root / "backups" / "b" / "b.zip", 2 * MB)
     monkeypatch.setattr(shutil, "disk_usage", lambda _path: DiskUsage(1000 * MB, 100 * MB, 900 * MB))
+    monkeypatch.delenv(STORAGE_LIMIT_VARIABLE, raising=False)
     return root
 
 
@@ -156,16 +183,16 @@ def test_a_restore_is_judged_on_what_the_data_will_take_without_its_own_work_fol
     print_section("problem_after_restore")
     _write(data_dir / ".restore" / "stage" / "x" / "copy.bin", 6 * MB)
     _write(data_dir / "logs" / "app.log", 1 * MB)
-    _limit(monkeypatch, 11)
+    _stored(data_dir, "11")
     # stays: backups 2 + logs 1 = 3 MB; restored: 8 MB -> 11 MB: exactly the limit
     limit_mb, locked, problem = storage_limit.problem_after_restore(8 * MB, data_dir=data_dir)
     assert (limit_mb, locked, problem) == (11, False, None)
-    _limit(monkeypatch, 11)
     limit_mb, locked, problem = storage_limit.problem_after_restore(9 * MB, data_dir=data_dir)
     assert problem is not None
     assert (problem.required_bytes, problem.required_mb, problem.limit_mb) == (12 * MB, 12, 11)
-    _limit(monkeypatch, None)
-    assert storage_limit.problem_after_restore(900 * MB, data_dir=data_dir) == (None, False, None)
+    for none in ("0", None, "not a number"):
+        _stored(data_dir, none)
+        assert storage_limit.problem_after_restore(900 * MB, data_dir=data_dir) == (None, False, None), f"{none!r} is no limit"
     print_success("the work folder of the restore is not counted")
 
 
@@ -178,7 +205,6 @@ def test_the_confirmation_asks_again_without_the_database(data_dir, monkeypatch)
         raise AssertionError("the confirmation must not read the database")
 
     monkeypatch.setattr(storage_usage, "read_limit", never)
-    monkeypatch.delenv(STORAGE_LIMIT_VARIABLE, raising=False)
     # stays 2 MB (backups); restored 8 MB: 10 MB
     assert storage_limit.problem_at_confirmation(8 * MB, 10, False, data_dir=data_dir) is None
     assert storage_limit.problem_at_confirmation(8 * MB, 9, False, data_dir=data_dir) is not None, "data grew, or the limit is lower than recorded"
@@ -202,7 +228,50 @@ def test_a_limit_fixed_by_the_hosting_provider_says_so(data_dir, monkeypatch):
     print_success("locked is carried")
 
 
-def test_the_check_report_gets_the_blocker_and_the_numbers_only_when_the_limit_is_passed(data_dir, monkeypatch):
+def test_reading_the_limit_of_a_data_directory_writes_nothing_beside_its_database(data_dir):
+    """(b) A restore check on an offline data directory writes nothing outside ``.restore/``: a database with no ``-wal`` file
+    is opened immutable, so no ``-shm`` or ``-wal`` appears; a data directory with no database has no limit."""
+    print_section("limit_of_data_dir: no files")
+    _stored(data_dir, "7")
+    before = sorted(path.name for path in (data_dir / "sqlite").iterdir())
+    assert storage_limit.limit_of_data_dir(data_dir) == (7, False)
+    assert sorted(path.name for path in (data_dir / "sqlite").iterdir()) == before, "nothing was created beside the database"
+    assert storage_limit.limit_of_data_dir(data_dir / "nowhere") == (None, False)
+    print_success("immutable, nothing created")
+
+
+def test_a_database_in_use_is_not_touched(data_dir):
+    """(b) With a ``-wal`` and a ``-shm`` file beside it (a server's), reading the limit changes neither: opened immutable, not
+    read-only, which would write to the shared memory file."""
+    print_section("limit_of_data_dir: a database in use")
+    database = data_dir / "sqlite" / "app.db"
+    writer = sqlite3.connect(database)
+    try:
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.execute(f'UPDATE "{GlobalSetting.__tablename__}" SET value = ? WHERE key = ?', ("9", KEY))
+        writer.commit()
+        beside = [database.with_name(database.name + suffix) for suffix in ("-wal", "-shm")]
+        assert all(path.exists() for path in beside), "precondition: the log and its shared memory are there"
+        before = [(path.stat().st_size, path.stat().st_mtime_ns, path.read_bytes()) for path in beside]
+        storage_limit.limit_of_data_dir(data_dir)
+        assert [(path.stat().st_size, path.stat().st_mtime_ns, path.read_bytes()) for path in beside] == before, "nothing beside the database changed"
+    finally:
+        writer.close()
+    print_success("untouched")
+
+
+def test_the_variable_of_the_provider_decides_before_the_database(data_dir, monkeypatch):
+    """(b) A usable ``LIBREFOLIO_STORAGE_LIMIT_MB`` is the limit, locked, whatever the database holds; 0 is no limit, still locked."""
+    _stored(data_dir, "7")
+    monkeypatch.setenv(STORAGE_LIMIT_VARIABLE, "3")
+    assert storage_limit.limit_of_data_dir(data_dir) == (3, True)
+    monkeypatch.setenv(STORAGE_LIMIT_VARIABLE, "0")
+    assert storage_limit.limit_of_data_dir(data_dir) == (None, True)
+    monkeypatch.setenv(STORAGE_LIMIT_VARIABLE, "not a number")
+    assert storage_limit.limit_of_data_dir(data_dir) == (7, False), "an unusable variable is ignored: the database speaks"
+
+
+def test_the_check_report_gets_the_blocker_and_the_numbers_only_when_the_limit_is_passed(data_dir):
     """(b) ``with_storage_limit``: a report within the limit (or with none) is returned as it is; past it, the blocker
     ``storage_limit`` is added after the others, with the numbers; within a limit, only the limit is recorded."""
     from datetime import UTC, datetime  # noqa: PLC0415
@@ -211,12 +280,12 @@ def test_the_check_report_gets_the_blocker_and_the_numbers_only_when_the_limit_i
 
     now = datetime.now(UTC)
     report = StagingReport.model_construct(stage_id="a" * 32, staged_at=now, expires_at=now, database_size=4 * MB, files_size=4 * MB, blockers=["no_administrator"], warnings=[])
-    _limit(monkeypatch, None)
+    _stored(data_dir, None)
     assert with_storage_limit(report, data_dir) is report
-    _limit(monkeypatch, 11)
+    _stored(data_dir, "11")
     recorded = with_storage_limit(report, data_dir)
     assert (recorded.blockers, recorded.storage_limit_mb, recorded.storage_limit_locked, recorded.storage_required_bytes) == (["no_administrator"], 11, False, None), "within the limit: recorded for the confirmation, no blocker"
-    _limit(monkeypatch, 5)
+    _stored(data_dir, "5")
     blocked = with_storage_limit(report, data_dir)
     assert blocked.blockers == ["no_administrator", "storage_limit"]
     assert (blocked.storage_limit_mb, blocked.storage_limit_locked, blocked.storage_required_bytes, blocked.storage_disk_missing_bytes) == (5, False, 10 * MB, 0)

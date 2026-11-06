@@ -23,12 +23,18 @@ hold it (``disk_missing_bytes``: free at least that), 0 when it has enough. A li
 from __future__ import annotations
 
 import math
+import re
+import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
 from backend.app.config import get_data_dir
 from backend.app.config.backup import BackupConfigError, storage_limit_override_mb
+from backend.app.logging_config import get_logger
 from backend.app.services.platform import storage_usage
+
+logger = get_logger(__name__)
 
 BYTES_PER_MB = 1024 * 1024
 
@@ -125,12 +131,49 @@ def judge_restore(limit_mb: int | None, locked: bool, restored_bytes: int, data_
     return judge(limit_mb, usage.data_bytes, kept + max(0, restored_bytes), usage.volume_free_bytes, locked=locked)
 
 
+def limit_of_data_dir(data_dir: Path) -> tuple[int | None, bool]:
+    """The limit in force for the data directory ``data_dir``, as ``read_limit`` gives it for the process's own: the variable of
+    the hosting provider when it is set and usable (``(value or None, True)``), else the setting ``storage_limit_mb`` of the
+    database of ``data_dir``, read directly and never through the process's engine. A restore asks it of the data directory it
+    restores into, which an offline command line may not be the process's; and its check writes nothing outside ``.restore/``:
+    the database is opened immutable, so no ``-shm`` or ``-wal`` is created or touched (what a server has written to its log
+    and not yet checkpointed is not seen: a limit changed a moment ago counts at the next check). A limit that cannot be read,
+    a database being written while it is read included, is no limit. Never raises."""
+    try:
+        override = storage_limit_override_mb()
+    except BackupConfigError:
+        override = None
+    if override is not None:
+        return (override or None), True
+    return _stored_limit(data_dir), False
+
+
+def _stored_limit(data_dir: Path) -> int | None:
+    """The row ``storage_limit_mb`` of ``data_dir``'s database (0 and anything unusable are no limit)."""
+    try:
+        from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — only when a restore is checked
+        from backend.app.schemas.settings import SETTINGS_REGISTRY  # noqa: PLC0415
+
+        database = (data_dir / "sqlite" / "app.db").resolve()
+        if not database.is_file():
+            return None
+        key = SETTINGS_REGISTRY.global_.STORAGE_LIMIT_MB.key
+        with closing(sqlite3.connect(f"{database.as_uri()}?immutable=1", uri=True)) as connection:
+            row = connection.execute(f'SELECT value FROM "{GlobalSetting.__tablename__}" WHERE key = ?', (key,)).fetchone()
+        text = str(row[0]).strip() if row is not None else ""
+        return int(text) or None if re.fullmatch(r"\d{1,9}", text) else None
+    except Exception as exc:  # noqa: BLE001 — a limit that cannot be read is no limit; the cause is logged
+        logger.warning("The space limit of the data directory cannot be read: the restore check applies none", exc_info=exc)
+        return None
+
+
 def problem_after_restore(restored_bytes: int, *, data_dir: Path | None = None) -> tuple[int | None, bool, StorageLimitProblem | None]:
-    """The limit in force now (``read_limit``: the setting is read from the database), whether its provider fixes it, and the
-    problem of a restore that would leave ``restored_bytes`` of restored data: ``(limit_mb or None, locked, problem or None)``.
-    The limit is the one in force before the restore, not the archive's own: the check asks it."""
-    limit_mb, locked = storage_usage.read_limit()
-    return limit_mb, locked, judge_restore(limit_mb, locked, restored_bytes, data_dir or get_data_dir())
+    """The limit in force for the data directory (``limit_of_data_dir``), whether its provider fixes it, and the problem of a
+    restore that would leave ``restored_bytes`` of restored data: ``(limit_mb or None, locked, problem or None)``. The limit
+    is the one in force before the restore, not the archive's own: the check asks it."""
+    data_dir = data_dir or get_data_dir()
+    limit_mb, locked = limit_of_data_dir(data_dir)
+    return limit_mb, locked, judge_restore(limit_mb, locked, restored_bytes, data_dir)
 
 
 def problem_at_confirmation(restored_bytes: int, recorded_limit_mb: int | None, recorded_locked: bool, *, data_dir: Path | None = None) -> StorageLimitProblem | None:
