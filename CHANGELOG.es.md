@@ -223,8 +223,10 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **La página del bróker muestra los importes completos del bróker**, ya no tu parte, incluido el riesgo; para las cifras reducidas por tu parte, usa el Panel filtrado por ese bróker.
 - **La página de un bróker ahora es el Panel con ese bróker ya elegido:** los mismos controles, la moneda con «Crear forex», efectivo e importes del periodo elegido, el detalle de lotes que se cierra con Atrás, la insignia «Actualizaciones en pausa» y las transacciones del periodo elegido (antes era todo el historial).
 - **Lotes: una transferencia con un bróker fuera del panel ahora se interpreta como una transferencia.** En el Historial de un lote, en Vida y custodia del lote y en los marcadores de Coste medio / Precio de mercado, las unidades movidas hacia o desde un bróker que el panel no incluye se mostraban como ajustes. Ahora se muestran como transferencias (TRANSFER+ / TRANSFER- en el Historial, Transfer In / Transfer Out en los marcadores), sin nombrar al otro bróker. Ninguna cifra cambia.
-- **«Actualizaciones en pausa» ocupa el lugar de Actualizar** en el panel y en la página del bróker: nada se mueve en la página, y un clic reanuda las actualizaciones. También se reanudan solas cuando vuelves.
+- **«Actualizaciones en pausa» se ve en el botón Actualizar** del panel y de la página del bróker: su etiqueta se mantiene, solo cambian el icono y el tono, y su tooltip lo indica. Un clic reanuda las actualizaciones; también se reanudan solas cuando vuelves.
 - **Gráfico de posiciones**: las etiquetas muestran el nombre del activo, que se desplaza si es largo, y el selector de vistas usa los iconos de la lista de activos.
+- **Un activo tiene un solo color** en las líneas del gráfico de posiciones, en el gráfico circular de la asignación y en su historial, marques lo que marques y en cualquier orden. El mismo activo en dos brókeres tiene un trazo distinto, y los nombres largos también se desplazan en el tooltip del gráfico.
+- **El gráfico circular de la asignación por activo muestra el icono de cada activo** en su porción, o el de su tipo si falta o no se carga, y no tiene leyenda: el nombre se ve al pasar por la porción.
 
 #### 📈 Gráficos
 

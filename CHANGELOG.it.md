@@ -223,8 +223,10 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **La pagina broker mostra gli importi interi del broker**, non più la tua quota, rischio incluso; per le cifre ridotte alla tua quota usa la Dashboard filtrata su quel broker.
 - **La pagina di un broker è ora la Dashboard con quel broker già scelto:** gli stessi controlli, la valuta con «Crea forex», liquidità e importi del periodo scelto, il dettaglio dei lotti che si chiude con Indietro, il badge «Aggiornamenti in pausa» e le transazioni del periodo scelto (prima era l'intera cronologia).
 - **Lotti: un trasferimento con un broker esterno al pannello ora viene mostrato come trasferimento.** Nella Cronologia di un lotto, in Ciclo di vita e custodia del lotto e nei marcatori Costo medio / Prezzo di mercato, le unità spostate da o verso un broker non compreso nel pannello venivano mostrate come rettifiche. Ora vengono mostrate come trasferimenti (TRANSFER+ / TRANSFER- nella Cronologia, Trasferimento in entrata / Trasferimento in uscita sui marcatori), senza indicare il nome dell'altro broker. Nessun valore numerico cambia.
-- **«Aggiornamento in pausa» prende il posto di Aggiorna** sulla Dashboard e sulla pagina del broker: nella pagina non si sposta nulla, e un clic fa ripartire gli aggiornamenti. Ripartono comunque da soli quando torni.
+- **«Aggiornamenti in pausa» si vede sul pulsante Aggiorna** nella Dashboard e nella pagina del broker: la scritta resta, cambiano solo icona e colore, e il tooltip lo dice. Un clic fa ripartire gli aggiornamenti, che ripartono comunque da soli quando torni.
 - **Grafico delle posizioni**: i badge mostrano il nome dell'asset, che scorre se è lungo, e il selettore delle viste usa le icone dell'elenco Asset.
+- **Un asset ha un solo colore** nelle linee del grafico delle posizioni, nella torta dell'allocazione e nel suo storico, qualunque cosa spunti e in qualunque ordine. Lo stesso asset su due broker ha un tratteggio diverso, e i nomi lunghi scorrono anche nel tooltip del grafico.
+- **La torta dell'allocazione per asset mostra l'icona di ogni asset** nel suo spicchio, o quella del tipo se manca o non si carica, e non ha legenda: il nome si vede passando sullo spicchio.
 
 #### 📈 Grafici
 

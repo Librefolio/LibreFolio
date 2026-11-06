@@ -223,8 +223,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The broker page shows the broker's whole amounts**, no longer your share of it, risk included; for the figures reduced by your share use the Dashboard filtered on that broker.
 - **A broker's page is now the Dashboard with that broker already chosen:** the same controls, the currency with «Create forex», cash and amounts of the chosen period, the lots detail that closes with Back, the «Updates paused» badge, and the transactions of the chosen period (it used to be the whole history).
 - **Lots: a transfer with a broker outside the panel now reads as a transfer.** In a lot's History, on Lot Life & Custody and on the Avg. Cost / Market Price markers, units moved to or from a broker the panel doesn't include were shown as adjustments. They now show as transfers (TRANSFER+ / TRANSFER- in the History, Transfer In / Transfer Out on the markers), without naming the other broker. No figure changes.
-- **«Updates paused» takes the place of Refresh** on the Dashboard and the broker page: nothing moves on the page, and a click starts the updates again. They still restart on their own when you come back.
+- **«Updates paused» shows on the Refresh button** on the Dashboard and the broker page: its label stays, only its icon and tone change, and its tooltip says so. A click starts the updates again; they still restart on their own when you come back.
 - **Positions chart**: the badges show the asset's name, which scrolls when it is long, and the view selector uses the icons of the Assets list.
+- **An asset keeps one colour** in the lines of the positions chart, the allocation pie and its history, whatever you tick and in whatever order. The same asset at two brokers gets a different line pattern, and long names scroll in the chart's tooltip too.
+- **The asset allocation pie shows each asset's icon** in its slice, or its type's when it has none or it cannot be loaded, and has no legend: the name shows when you point at the slice.
 
 #### 📈 Charts
 
