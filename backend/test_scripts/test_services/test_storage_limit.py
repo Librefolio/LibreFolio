@@ -31,6 +31,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.app.api.v1.backup import job_views
+from backend.app.config.backup import STORAGE_LIMIT_VARIABLE
 from backend.app.services.platform import storage_limit, storage_usage
 from backend.app.services.platform.storage_limit import BYTES_PER_MB, StorageLimitProblem, judge
 from backend.test_scripts.test_utils import print_section, print_success
@@ -157,11 +158,39 @@ def test_a_restore_is_judged_on_what_the_data_will_take_without_its_own_work_fol
     _write(data_dir / "logs" / "app.log", 1 * MB)
     _limit(monkeypatch, 11)
     # stays: backups 2 + logs 1 = 3 MB; restored: 8 MB -> 11 MB: exactly the limit
-    assert storage_limit.problem_after_restore(8 * MB, data_dir=data_dir) is None
-    problem = storage_limit.problem_after_restore(9 * MB, data_dir=data_dir)
+    limit_mb, locked, problem = storage_limit.problem_after_restore(8 * MB, data_dir=data_dir)
+    assert (limit_mb, locked, problem) == (11, False, None)
+    _limit(monkeypatch, 11)
+    limit_mb, locked, problem = storage_limit.problem_after_restore(9 * MB, data_dir=data_dir)
     assert problem is not None
     assert (problem.required_bytes, problem.required_mb, problem.limit_mb) == (12 * MB, 12, 11)
+    _limit(monkeypatch, None)
+    assert storage_limit.problem_after_restore(900 * MB, data_dir=data_dir) == (None, False, None)
     print_success("the work folder of the restore is not counted")
+
+
+def test_the_confirmation_asks_again_without_the_database(data_dir, monkeypatch):
+    """(b) ``problem_at_confirmation``: the limit the check recorded, with the data of now; the variable of the hosting
+    provider when it is set; and it never reads the setting (``read_limit``), so a confirmation writes nothing outside ``.restore/``."""
+    print_section("problem_at_confirmation")
+
+    def never(*_args, **_kwargs):
+        raise AssertionError("the confirmation must not read the database")
+
+    monkeypatch.setattr(storage_usage, "read_limit", never)
+    monkeypatch.delenv(STORAGE_LIMIT_VARIABLE, raising=False)
+    # stays 2 MB (backups); restored 8 MB: 10 MB
+    assert storage_limit.problem_at_confirmation(8 * MB, 10, False, data_dir=data_dir) is None
+    assert storage_limit.problem_at_confirmation(8 * MB, 9, False, data_dir=data_dir) is not None, "data grew, or the limit is lower than recorded"
+    assert storage_limit.problem_at_confirmation(800 * MB, None, False, data_dir=data_dir) is None, "no limit was recorded: none applies"
+    monkeypatch.setenv(STORAGE_LIMIT_VARIABLE, "5")
+    pinned = storage_limit.problem_at_confirmation(8 * MB, None, False, data_dir=data_dir)
+    assert pinned is not None and pinned.limit_locked is True and pinned.limit_mb == 5, "a limit the provider fixes now wins"
+    monkeypatch.setenv(STORAGE_LIMIT_VARIABLE, "0")
+    assert storage_limit.problem_at_confirmation(8 * MB, 1, False, data_dir=data_dir) is None, "0 from the provider is no limit"
+    monkeypatch.setenv(STORAGE_LIMIT_VARIABLE, "not a number")
+    assert storage_limit.problem_at_confirmation(8 * MB, 9, False, data_dir=data_dir) is not None, "an unusable variable is ignored: the recorded limit speaks"
+    print_success("the recorded limit, the provider's variable, no database")
 
 
 def test_a_limit_fixed_by_the_hosting_provider_says_so(data_dir, monkeypatch):
@@ -175,7 +204,7 @@ def test_a_limit_fixed_by_the_hosting_provider_says_so(data_dir, monkeypatch):
 
 def test_the_check_report_gets_the_blocker_and_the_numbers_only_when_the_limit_is_passed(data_dir, monkeypatch):
     """(b) ``with_storage_limit``: a report within the limit (or with none) is returned as it is; past it, the blocker
-    ``storage_limit`` is added after the others, with the limit, whether it is fixed, the space needed and the room the disk lacks."""
+    ``storage_limit`` is added after the others, with the numbers; within a limit, only the limit is recorded."""
     from datetime import UTC, datetime  # noqa: PLC0415
 
     from backend.app.services.platform.instance_backup.staging import StagingReport, with_storage_limit  # noqa: PLC0415
@@ -185,7 +214,8 @@ def test_the_check_report_gets_the_blocker_and_the_numbers_only_when_the_limit_i
     _limit(monkeypatch, None)
     assert with_storage_limit(report, data_dir) is report
     _limit(monkeypatch, 11)
-    assert with_storage_limit(report, data_dir) is report, "11 MB: 8 restored + 2 backups + 0 other, within the limit"
+    recorded = with_storage_limit(report, data_dir)
+    assert (recorded.blockers, recorded.storage_limit_mb, recorded.storage_limit_locked, recorded.storage_required_bytes) == (["no_administrator"], 11, False, None), "within the limit: recorded for the confirmation, no blocker"
     _limit(monkeypatch, 5)
     blocked = with_storage_limit(report, data_dir)
     assert blocked.blockers == ["no_administrator", "storage_limit"]

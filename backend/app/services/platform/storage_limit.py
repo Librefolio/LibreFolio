@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from backend.app.config import get_data_dir
+from backend.app.config.backup import BackupConfigError, storage_limit_override_mb
 from backend.app.services.platform import storage_usage
 
 BYTES_PER_MB = 1024 * 1024
@@ -112,16 +113,39 @@ def problem_for_added(added_bytes: int, *, data_dir: Path | None = None) -> Stor
     return judge(limit_mb, usage.data_bytes, usage.data_bytes + max(0, added_bytes), usage.volume_free_bytes, locked=locked)
 
 
-def problem_after_restore(restored_bytes: int, *, data_dir: Path | None = None) -> StorageLimitProblem | None:
-    """The problem of a restore that puts ``restored_bytes`` (the copy's database and files) in place of the live ones, or
-    ``None``. What the data directory takes afterwards: the restored data, the backups and the rest of what stays (logs,
-    state, keys), without the work folder of the restore itself (``.restore/``: the upload, the copy and the live data set
-    aside, all gone when the restore ends). The limit is the one in force now, not the archive's own: the check asks it
-    again at the confirmation, for a limit lowered or data grown since."""
-    data_dir = data_dir or get_data_dir()
+def judge_restore(limit_mb: int | None, locked: bool, restored_bytes: int, data_dir: Path) -> StorageLimitProblem | None:
+    """The problem of a restore that puts ``restored_bytes`` (the copy's database and files) in place of the live ones under
+    ``limit_mb``, or ``None``. What the data directory takes afterwards: the restored data, the backups and the rest of what
+    stays (logs, state, keys), without the work folder of the restore itself (``.restore/``: the upload, the copy and the live
+    data set aside, all gone when the restore ends). Reads the disk only, never the database."""
+    if not limit_mb:
+        return None
     usage = _usage(data_dir)
     kept = usage.backups_bytes + max(0, usage.other_bytes - storage_usage.folder_bytes(data_dir / ".restore"))
-    return problem_for_total(kept + max(0, restored_bytes), data_dir=data_dir)
+    return judge(limit_mb, usage.data_bytes, kept + max(0, restored_bytes), usage.volume_free_bytes, locked=locked)
+
+
+def problem_after_restore(restored_bytes: int, *, data_dir: Path | None = None) -> tuple[int | None, bool, StorageLimitProblem | None]:
+    """The limit in force now (``read_limit``: the setting is read from the database), whether its provider fixes it, and the
+    problem of a restore that would leave ``restored_bytes`` of restored data: ``(limit_mb or None, locked, problem or None)``.
+    The limit is the one in force before the restore, not the archive's own: the check asks it."""
+    limit_mb, locked = storage_usage.read_limit()
+    return limit_mb, locked, judge_restore(limit_mb, locked, restored_bytes, data_dir or get_data_dir())
+
+
+def problem_at_confirmation(restored_bytes: int, recorded_limit_mb: int | None, recorded_locked: bool, *, data_dir: Path | None = None) -> StorageLimitProblem | None:
+    """The problem of confirming a restore whose check recorded ``recorded_limit_mb``: asked again with the data of now, for
+    data that grew since the check, and with the limit its hosting provider fixes now (``LIBREFOLIO_STORAGE_LIMIT_MB``, read
+    from the environment); otherwise with the limit the check recorded. The database is never read here: a confirmation writes
+    nothing outside ``.restore/``, and opening the database creates files beside it. A limit lowered in the settings since the
+    check is seen at the next check, which an expired or outdated report makes anyway."""
+    try:
+        pinned = storage_limit_override_mb()
+    except BackupConfigError:
+        pinned = None
+    if pinned is not None:
+        return judge_restore(pinned or None, True, restored_bytes, data_dir or get_data_dir())
+    return judge_restore(recorded_limit_mb, recorded_locked, restored_bytes, data_dir or get_data_dir())
 
 
 def require_room_for(added_bytes: int, *, data_dir: Path | None = None) -> None:
