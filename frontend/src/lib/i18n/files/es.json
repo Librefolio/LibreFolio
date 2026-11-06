@@ -116,7 +116,7 @@
     "overLimit": "Se ha superado el límite de espacio: elimina copias o archivos, o sube el límite.",
     "limit": {
       "label": "Espacio total de LibreFolio (MB)",
-      "hint": "El espacio máximo que LibreFolio debería ocupar en total: base de datos, archivos, informes y copias de seguridad. Superarlo solo muestra un aviso y no bloquea nada. Escribe 0 para no poner límite.",
+      "hint": "El espacio máximo que LibreFolio puede ocupar en total: base de datos, archivos, informes y copias de seguridad. Más allá, los archivos, los informes y las copias hechas a mano se rechazan; tus datos y las copias automáticas nunca se detienen. Escribe 0 para no poner límite.",
       "locked": "El límite de espacio lo fija quien aloja esta instancia.",
       "save": "Guardar",
       "saved": "Guardado.",
@@ -126,6 +126,11 @@
         "locked": "El límite de espacio lo fija quien aloja esta instancia: aquí no se puede cambiar.",
         "network": "Sin respuesta del servidor. Inténtalo de nuevo.",
         "unexpected": "No se pudo guardar el límite. Inténtalo de nuevo."
+      },
+      "exceeded": {
+        "raise": "Espacio insuficiente: así LibreFolio superaría su espacio total. Sube el espacio total a al menos {required} en Archivos › Avanzado, o elimina archivos o copias de seguridad.",
+        "locked": "Espacio insuficiente: así LibreFolio superaría su espacio total. Pide a quien aloja esta instancia que suba el límite a al menos {required}, o elimina archivos o copias de seguridad.",
+        "disk": "El disco también necesita al menos {missing} más libres."
       }
     },
     "errors": {

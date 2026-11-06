@@ -10,6 +10,7 @@ import {_} from '$lib/i18n';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import type {UploadScope, UploadedFile} from '$lib/types/files';
+import {storageLimitMessageOfError} from './storageLimit';
 
 /**
  * Upload a file to the backend static uploads endpoint.
@@ -31,7 +32,15 @@ export async function uploadFile(file: File, description?: string, scope?: Uploa
         formData.append('scope', scope);
     }
 
-    const response = await axiosInstance.post('/api/v1/uploads', formData);
+    let response;
+    try {
+        response = await axiosInstance.post('/api/v1/uploads', formData);
+    } catch (error) {
+        // The space limit refused the file (C8): the error's message is what the screens show, in the interface's language.
+        const spaceLimit = storageLimitMessageOfError(error);
+        if (spaceLimit !== null) throw new Error(spaceLimit, {cause: error});
+        throw error;
+    }
     const url = response.data.file?.url || response.data.url;
 
     if (!url) {

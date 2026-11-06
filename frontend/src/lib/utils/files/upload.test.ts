@@ -217,3 +217,40 @@ describe('setUploadScope — the PATCH that changes who sees an uploaded file (d
         expect(api.patch).toHaveBeenCalledExactlyOnceWith({scope: 'common'}, {params: {file_id: 'file-2'}});
     });
 });
+
+describe('uploadFile — a file the space limit refused (C8)', () => {
+    const refusal = (extra: Record<string, unknown> = {}) => ({isAxiosError: true, response: {status: 507, data: {detail: {code: 'storage_limit_exceeded', message: 'The space limit would be passed', required_mb: 120, disk_missing_bytes: 0, limit_locked: false, ...extra}}}});
+
+    beforeEach(() => api.post.mockReset());
+
+    it('throws an Error whose message is the interface’s own sentence with the limit to raise, the refusal kept as its cause', async () => {
+        await uiLanguage('en');
+        const error = refusal();
+        api.post.mockRejectedValueOnce(error);
+
+        const raised = await uploadFile(new File(['x'], 'a.txt')).catch((caught: unknown) => caught);
+
+        expect(raised).toBeInstanceOf(Error);
+        expect((raised as Error).message).not.toBe('The space limit would be passed');
+        expect((raised as Error).message, 'the limit to raise, written as a size').toContain('120');
+        expect((raised as Error).cause).toBe(error);
+    });
+
+    it('a limit fixed by the hosting provider asks whoever hosts the instance', async () => {
+        await uiLanguage('en');
+        api.post.mockRejectedValueOnce(refusal({limit_locked: true}));
+        const locked = await uploadFile(new File(['x'], 'a.txt')).catch((caught: Error) => caught.message);
+
+        api.post.mockRejectedValueOnce(refusal({limit_locked: false}));
+        const open = await uploadFile(new File(['x'], 'a.txt')).catch((caught: Error) => caught.message);
+
+        expect(locked).not.toBe(open);
+    });
+
+    it('any other failure is rethrown as it is', async () => {
+        const other = {isAxiosError: true, response: {status: 413, data: {detail: 'File too large'}}};
+        api.post.mockRejectedValueOnce(other);
+
+        await expect(uploadFile(new File(['x'], 'a.txt'))).rejects.toBe(other);
+    });
+});
