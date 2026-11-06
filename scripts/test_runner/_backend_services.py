@@ -2157,6 +2157,14 @@ def services_storage_usage(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Storage usage tests", verbose=verbose)
 
 
+def services_storage_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the space limit applied: judge, the problems over a data directory, the estimate of a backup, the manual backup (lot C8)."""
+    print_section("Services: the storage limit applied")
+    print_info("Testing: backend/app/services/platform/storage_limit.py (judge, problem_for_added, problem_for_total, backup_estimate_bytes, storage_limit_detail), api/v1/backup/job_views.py (the manual backup)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_storage_limit.py", test_names)
+    return run_command(cmd, "Storage limit tests", verbose=verbose)
+
+
 def services_storage_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the limit of the storage bar: the variable, the setting and the lock (lot FB-29)."""
     print_section("Services: the storage limit settings")
@@ -4103,6 +4111,16 @@ Note: No backend server required.
         desc="FB-29 (contract B6r-fb29-interface §3): folder_bytes sums the files of a tree (lstat), a link counts for itself and is never followed (file, folder, dangling, the folder asked being a link), a missing folder 0, an entry that vanishes or a folder that cannot be read 0 while the rest counts; measure_storage: a frozen StorageUsage whose five parts (sqlite/, custom-uploads/, broker_reports/, backups/ whole, the rest) add up to data_bytes, the volume from shutil.disk_usage(data_dir) or three None when it raises, a missing data directory zero, limit_mb and limit_locked handed through; read_limit: LIBREFOLIO_STORAGE_LIMIT_MB set and valid decides without the database ((value, True), 0 is (None, True)), invalid or blank ignored and the row read unlocked, otherwise the row through the synchronous engine, 0, garbage, no row, no table or a failing engine mean (None, False), never raised",
         # PURE: data directories under tmp_path, shutil.disk_usage replaced; read_limit reads a private SQLite file under tmp_path
         # through a synchronous engine put in place of the process's. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "storage-limit",
+        services_storage_limit,
+        name="Storage Limit",
+        desc="Lot C8: judge (no limit or 0 never refuses, the limit inclusive, required_mb rounded up and at least 1, disk_missing_bytes the growth less the free space and never negative), problem_for_added and problem_for_total over a data directory (no or unreadable limit never a problem, the space used now in the problem, a total not summed with it), backup_estimate_bytes (the database, the uploads and the reports only), storage_limit_detail (the 507 body), and the backup started by hand (fits: starts; past the limit: the clean-up first, then it starts if it made room; still past: 507 and nothing starts; panel and cli never asked)",
+        # PURE: data directories under tmp_path, read_limit and shutil.disk_usage replaced; jobs.start_backup and the clean-up
+        # replaced by recorders. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

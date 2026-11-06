@@ -977,3 +977,49 @@ describe('B5-1k2 — RestoreReportModal: the confirmation is the one of before',
         expect(onConfirm).toHaveBeenCalledWith(ADMIN_NO_EMAIL.user_id);
     });
 });
+
+// =====================================================================================================================
+// C8 — the space limit blocks a restore: the blocker says what to raise, or whom to ask, and the room the disk lacks
+// =====================================================================================================================
+
+describe('C8 — RestoreReportModal: the blocker storage_limit', () => {
+    const blocked = (overrides: Record<string, unknown> = {}) => report({blockers: ['storage_limit'], restorable: false, storage_limit_mb: 100, storage_limit_locked: false, storage_required_bytes: 120 * MIB + 1, storage_disk_missing_bytes: 0, ...overrides} as Partial<RestoreStageReport>);
+    const blocker = () => screen.getByTestId('restore-report-blocker');
+
+    it('is a blocker of its own, worded by the sentence that raises the limit, with the limit written as a size rounded up to the megabyte', () => {
+        mount(blocked());
+
+        expect(blocker()).toHaveAttribute('data-blocker', 'storage_limit');
+        expect(blocker()).toHaveAttribute('data-limit-locked', 'false');
+        expect(valuesOf(blocker(), 'backup.restore.blocker.storage_limit')).toEqual({required: '121.0 common.megabytes'});
+        expect(blocker().textContent).not.toContain('storage_limit_disk');
+    });
+
+    it('a limit fixed by the hosting provider asks whoever hosts the instance, never to raise it here', () => {
+        mount(blocked({storage_limit_locked: true}));
+
+        expect(blocker()).toHaveAttribute('data-limit-locked', 'true');
+        expect(blocker().textContent).toContain('backup.restore.blocker.storage_limit_locked');
+        expect(blocker().textContent).not.toContain('backup.restore.blocker.storage_limit {');
+    });
+
+    it('the room the disk lacks is added only when it lacks some', () => {
+        mount(blocked({storage_disk_missing_bytes: 5 * MIB}));
+
+        expect(blocker().textContent).toContain('backup.restore.blocker.storage_limit_disk {"missing":"5.0 common.megabytes"}');
+    });
+
+    it('confirm stays disabled whatever is typed, even if a report said restorable', async () => {
+        const {onConfirm} = mount(blocked({restorable: true}));
+        await type('violet');
+
+        expect(confirmButton()).toBeDisabled();
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('no blocker when the report holds none: the sentence is not drawn', () => {
+        mount(report());
+
+        expect(screen.queryByTestId('restore-report-blocker')).toBeNull();
+    });
+});

@@ -1391,13 +1391,23 @@ def _update_metadata(file_id: str, mutate: Callable[[Dict[str, Any]], None]) -> 
     return True
 
 
-def write_combined_csv(path: Path, table: BRIMCombinedTable) -> None:
-    """Write a combined table as UTF-8 with BOM, ``;``-separated, one row per line."""
+def _combined_csv_text(table: BRIMCombinedTable) -> str:
+    """A combined table as CSV text: ``;``-separated, one row per line."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
     writer.writerow(table.headers)
     writer.writerows(table.rows)
-    path.write_text(buffer.getvalue(), encoding="utf-8-sig", newline="")
+    return buffer.getvalue()
+
+
+def combined_csv_size(table: BRIMCombinedTable) -> int:
+    """The bytes ``write_combined_csv`` writes for ``table``: the space limit asks it before the file is written (C8)."""
+    return len(_combined_csv_text(table).encode("utf-8-sig"))
+
+
+def write_combined_csv(path: Path, table: BRIMCombinedTable) -> None:
+    """Write a combined table as UTF-8 with BOM, ``;``-separated, one row per line."""
+    path.write_text(_combined_csv_text(table), encoding="utf-8-sig", newline="")
 
 
 def save_combined_file(

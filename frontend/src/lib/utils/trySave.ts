@@ -34,6 +34,7 @@
  */
 
 import {toasts} from '$lib/stores/app/toastStore.svelte';
+import {storageLimitMessageOfError} from '$lib/utils/files/storageLimit';
 
 /** Result of a ``trySave`` call — discriminated union. */
 export type SaveResult<T> = {status: 'success'; data: T} | {status: 'error'; message: string; error: unknown; status_code?: number};
@@ -104,6 +105,9 @@ function isUninformative(msg: string): boolean {
 
 export function extractErrorMessage(err: unknown, fallback: string = 'Operation failed'): string {
     if (!err) return fallback;
+    // The space limit refused it (C8): said in the interface's language, from the numbers of the refusal.
+    const spaceLimit = storageLimitMessageOfError(err);
+    if (spaceLimit !== null) return spaceLimit;
     // Axios-style error
     const anyErr = err as any;
     const detail = anyErr?.response?.data?.detail;

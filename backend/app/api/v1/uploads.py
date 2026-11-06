@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,6 +56,7 @@ from backend.app.services.files.static_uploads import (
     save_upload,
     set_upload_scope,
 )
+from backend.app.services.platform.storage_limit import StorageLimitExceededError, require_room_for, storage_limit_detail
 from backend.app.utils.runtime.paths import confined_path
 
 logger = structlog.get_logger(__name__)
@@ -182,7 +183,7 @@ async def _visible_upload(file_id: str, user: User) -> UploadFileInfo:
     return info
 
 
-@router.post("", response_model=UploadResponse)
+@router.post("", response_model=UploadResponse, responses={507: {"description": "The file would take the data past the space limit (code `storage_limit_exceeded`, with `required_mb` and `disk_missing_bytes`)"}})
 async def upload_file(
     file: UploadFile = File(...),
     description: Optional[str] = Form(default=None),
@@ -216,6 +217,13 @@ async def upload_file(
     content = await file.read()
     if len(content) > max_bytes:
         raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {max_mb} MB")
+
+    # The space limit (C8): a file that would take the data past it is refused, before anything is written
+    try:
+        await asyncio.to_thread(require_room_for, len(content))
+    except StorageLimitExceededError as exc:
+        logger.warning("Upload refused: the space limit would be passed", user_id=current_user.id, size_bytes=len(content), limit_mb=exc.problem.limit_mb)
+        raise HTTPException(status_code=status.HTTP_507_INSUFFICIENT_STORAGE, detail=storage_limit_detail(exc.problem)) from None
 
     # Save file (includes security validation), off the event loop: it writes the file and its sidecar
     try:

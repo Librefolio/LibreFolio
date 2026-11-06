@@ -92,7 +92,7 @@
     },
     "deleteSkipped": "I file che non puoi eliminare sono rimasti al loro posto",
     "backups": "Backup",
-    "systemUploader": "Di sistema"
+    "systemUploader": "Sistema"
   },
   "files": {
     "deleteFailed": "Impossibile eliminare il file"
@@ -116,7 +116,7 @@
     "overLimit": "Il limite di spazio è superato: elimina backup o file, oppure alza il limite.",
     "limit": {
       "label": "Spazio totale di LibreFolio (MB)",
-      "hint": "Lo spazio massimo che LibreFolio dovrebbe occupare in tutto: database, file, report e backup. Superarlo mostra solo un avviso e non blocca nulla. Inserisci 0 per nessun limite.",
+      "hint": "Lo spazio massimo che LibreFolio può occupare in tutto: database, file, report e backup. Oltre, i file, i report e i backup fatti a mano vengono rifiutati; i tuoi dati e i backup automatici non si fermano mai. Inserisci 0 per nessun limite.",
       "locked": "Il limite di spazio lo imposta chi ospita questa istanza.",
       "save": "Salva",
       "saved": "Salvato.",
@@ -126,6 +126,11 @@
         "locked": "Il limite di spazio lo imposta chi ospita questa istanza: qui non si può cambiare.",
         "network": "Nessuna risposta dal server. Riprova.",
         "unexpected": "Non è stato possibile salvare il limite. Riprova."
+      },
+      "exceeded": {
+        "raise": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Porta lo spazio totale ad almeno {required} in File › Avanzate, oppure elimina file o backup.",
+        "locked": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Chiedi a chi ospita questa istanza di portare il limite ad almeno {required}, oppure elimina file o backup.",
+        "disk": "Anche il disco deve avere liberi almeno altri {missing}."
       }
     },
     "errors": {

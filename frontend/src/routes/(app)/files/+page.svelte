@@ -28,6 +28,7 @@
     import BackupsSection from '$lib/features/backup/BackupsSection.svelte';
     import StorageBar from '$lib/features/files/StorageBar.svelte';
     import {notifyBackupListChanged} from '$lib/features/backup/backupList.svelte';
+    import {storageLimitMessageOfError} from '$lib/utils/files/storageLimit';
     import {formatBytes, setUploadScope, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
@@ -553,7 +554,8 @@
             closeBrimUploadModal();
             await reloadFiles('files-reload');
         } catch (e) {
-            error = e instanceof Error ? e.message : 'Upload failed';
+            // The space limit refused a report (C8): said in the interface's words, with what to raise.
+            error = storageLimitMessageOfError(e) ?? (e instanceof Error ? e.message : 'Upload failed');
         }
     }
 

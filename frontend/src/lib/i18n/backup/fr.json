@@ -111,7 +111,10 @@
         "instance_blocked": "L'hébergeur a bloqué cette instance : la restauration attend son déblocage."
       },
       "blocker": {
-        "no_administrator": "La sauvegarde n'a aucun administrateur actif : après une restauration, personne ne pourrait gérer LibreFolio. Elle ne peut pas être restaurée."
+        "no_administrator": "La sauvegarde n'a aucun administrateur actif : après une restauration, personne ne pourrait gérer LibreFolio. Elle ne peut pas être restaurée.",
+        "storage_limit": "Restaurer cette sauvegarde ferait dépasser à LibreFolio son espace total. Portez l'espace total à au moins {required} dans Fichiers › Avancé, puis vérifiez à nouveau la sauvegarde.",
+        "storage_limit_locked": "Restaurer cette sauvegarde ferait dépasser à LibreFolio son espace total. Demandez à l'hébergeur de cette instance de porter la limite à au moins {required}, puis vérifiez à nouveau la sauvegarde.",
+        "storage_limit_disk": "Le disque doit aussi avoir au moins {missing} de plus de libre."
       },
       "report": {
         "title": "Ce que ferait cette restauration",

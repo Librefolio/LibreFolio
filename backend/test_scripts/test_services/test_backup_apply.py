@@ -1378,6 +1378,23 @@ def test_a_head_that_cannot_be_read_does_not_stop_the_confirmation(tmp_path, dat
     print_success("head None: pending")
 
 
+def test_a_space_limit_passed_since_the_check_refuses_the_confirmation_and_writes_nothing(tmp_path, databases, checked, monkeypatch):
+    """(e) C8: the confirmation asks the space limit again, with the numbers of now: a limit lowered or data grown since the
+    check is ``restore_not_restorable`` and nothing is written; the check is made again."""
+    from backend.app.services.platform.storage_limit import StorageLimitProblem  # noqa: PLC0415
+
+    apply = apply_module()
+    problem = StorageLimitProblem(limit_mb=1, used_bytes=1, required_bytes=5 * 1024 * 1024, disk_missing_bytes=0)
+    monkeypatch.setattr(apply, "problem_at_confirmation", lambda *_args, **_kwargs: problem)
+    instance = build(tmp_path / "instance", databases, checked)
+    items = restore_items(instance.root)
+    with pytest.raises(apply.RestoreNotRestorableError) as raised:
+        confirm(apply, instance)
+    assert raised.value.code == "restore_not_restorable" and "storage_limit" in str(raised.value), f"{raised.value.code}: {raised.value}"
+    assert restore_items(instance.root) == items, "nothing written"
+    print_success("storage_limit: restore_not_restorable")
+
+
 @pytest.mark.parametrize("phase", ACTIVE_PHASES)
 def test_confirm_while_a_restore_is_active_is_refused_and_changes_nothing(tmp_path, databases, checked, phase):
     """(e) Step 5: one restore at a time, in every phase until it ends. Its ``previous/`` is not a leftover."""

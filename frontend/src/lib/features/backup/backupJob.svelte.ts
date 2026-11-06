@@ -27,6 +27,7 @@
  * followed for a clear start that ends secure is someone else's, sealed with a password this tab never had — «busy»
  * too. The adoption is kept across a reload (`BACKUP_ADOPTED_STORAGE_KEY`), so `resume()` applies the same check.
  */
+import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
 import {backupBusyJob, backupErrorCode, backupFailureCode, deleteInstanceBackupJob, getInstanceBackupJob, startInstanceBackup, type InstanceBackupJob} from './backupApi';
 
 export type BackupJobState = 'idle' | 'loading' | 'starting' | 'running' | 'done' | 'deleting' | 'failed';
@@ -84,6 +85,8 @@ export class BackupJobController {
     state = $state<BackupJobState>('idle');
     job = $state<InstanceBackupJob | null>(null);
     errorCode = $state<string | null>(null);
+    /** The numbers of the space limit's refusal while `errorCode` is `storage_limit_exceeded`: what to raise, how much room to free. */
+    errorStorage = $state<StorageLimitNumbers | null>(null); // set before `onFailed` is called, which may read it
     /** What failed, while `errorCode` is set. */
     failure = $state<BackupFailure | null>(null);
     /** The job this tab follows, kept across reloads: the one a new read or `recheck()` asks for. */
@@ -173,13 +176,14 @@ export class BackupJobController {
                 return;
             }
             const code = backupFailureCode(error);
+            const storage = storageLimitNumbersOfError(error);
             if (offered === null) {
-                this.#fail(code, 'start', null, true);
+                this.#fail(code, 'start', null, true, storage);
                 return;
             }
             this.state = 'done';
             this.job = offered;
-            this.#setError(code, 'start');
+            this.#setError(code, 'start', storage);
             this.#onFailed?.(code, 'start', null);
         }
     }
@@ -305,17 +309,18 @@ export class BackupJobController {
         this.#fail(job.error_code ?? 'backup_failed', 'job', job, news);
     }
 
-    #fail(code: string, what: BackupFailure, job: InstanceBackupJob | null, announce: boolean): void {
+    #fail(code: string, what: BackupFailure, job: InstanceBackupJob | null, announce: boolean, storage: StorageLimitNumbers | null = null): void {
         this.#stopTimer();
         this.state = 'failed';
         this.job = job;
-        this.#setError(code, what);
+        this.#setError(code, what, storage);
         if (announce) this.#onFailed?.(code, what, job);
     }
 
-    #setError(code: string | null, what: BackupFailure | null): void {
+    #setError(code: string | null, what: BackupFailure | null, storage: StorageLimitNumbers | null = null): void {
         this.errorCode = code;
         this.failure = what;
+        this.errorStorage = storage;
     }
 
     #schedule(jobId: string, generation: number): void {
