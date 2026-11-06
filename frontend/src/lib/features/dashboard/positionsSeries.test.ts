@@ -14,7 +14,7 @@
  */
 
 import {describe, expect, it} from 'vitest';
-import {MAX_CHART_POSITIONS, PORTFOLIO_LINE_ID, lineOnDay, lineValue, portfolioLine, positionLine, positionLineId, positionLines, rankAssetsByWeight, selectionKeys, type HistoryPointLike, type PositionSeries, type PositionSeriesPoint, type PositionsSeriesResponse} from './positionsSeries';
+import {MAX_CHART_POSITIONS, PORTFOLIO_LINE_ID, assetColorRanks, assetIdOfLineId, lineDashes, lineOnDay, lineValue, portfolioLine, positionLine, positionLineId, positionLines, rankAssetsByWeight, selectionKeys, type HistoryPointLike, type PositionSeries, type PositionSeriesPoint, type PositionsSeriesResponse} from './positionsSeries';
 import {makePositionKey} from '$lib/utils/core/positionKey';
 
 // =============================================================================
@@ -670,5 +670,85 @@ describe('positionsSeries — a position as steps (D-P4)', () => {
     it('lineOnDay keeps an unknown value null (the line breaks there), not zero', () => {
         const unknown = series({points: [point('2026-01-02', {through: '2026-01-10', pnl: null, pnl_percent: null}), point('2026-01-11', {through: '2026-01-31'})]});
         expect(lineOnDay(positionLine(unknown, 'absolute'), '2026-01-05')).toEqual({date: '2026-01-02', value: null});
+    });
+});
+
+// =============================================================================
+// One colour per asset (B8), one pattern per broker
+// =============================================================================
+
+describe('positionsSeries — one rank per asset for every chart that colours by asset', () => {
+    it('the assets no list knows (the lines of a position sold out in the period) come after the ranked ones, the lower id first', () => {
+        const rank = rankAssetsByWeight([{id: 20, amount: 300}], [{date: '2026-01-01', through: '2026-01-10', components: [{id: 5, amount: 10}]}], [9, 7, 20, 5]);
+        expect([...rank.entries()]).toEqual([
+            [20, 0],
+            [5, 1],
+            [7, 2],
+            [9, 3],
+        ]);
+    });
+
+    it('extras never move a rank the pie reads: the ranks without them are a prefix of the ranks with them', () => {
+        const today = [
+            {id: 10, amount: 100},
+            {id: 20, amount: 300},
+        ];
+        const without = rankAssetsByWeight(today, []);
+        const withExtras = rankAssetsByWeight(today, [], [3, 99, 10]);
+        for (const [id, rank] of without) expect(withExtras.get(id)).toBe(rank);
+    });
+
+    it('assetColorRanks reads the backend’s decimals as strings, and gives the same ranks the numeric form does', () => {
+        const ranks = assetColorRanks(
+            [
+                {id: 1, amount: '10.5'},
+                {id: 2, amount: '300'},
+                {id: null, amount: '5000'},
+            ],
+            [{date: '2026-01-01', through: '2026-01-31', components: [{id: 4, amount: '8'}]}],
+        );
+        expect([...ranks.entries()]).toEqual([
+            [2, 0],
+            [1, 1],
+            [4, 2],
+        ]);
+    });
+
+    it('assetColorRanks tolerates a point with no components and a slice with no amount', () => {
+        expect(assetColorRanks([{id: 1}], [{date: '2026-01-01'}]).size).toBe(0);
+    });
+
+    it('assetIdOfLineId: the asset of «asset-broker», none for the portfolio', () => {
+        expect(assetIdOfLineId('22-1')).toBe(22);
+        expect(assetIdOfLineId('44-0')).toBe(44);
+        expect(assetIdOfLineId(PORTFOLIO_LINE_ID)).toBeNull();
+    });
+});
+
+describe('positionsSeries — lineDashes: the same asset at two brokers keeps its colour, the pattern tells the lines apart', () => {
+    it('a line alone is solid, and so is the portfolio’s', () => {
+        const dashes = lineDashes(['portfolio', '11-1', '22-2']);
+        expect(dashes.get('11-1')).toBe('solid');
+        expect(dashes.get('22-2')).toBe('solid');
+        expect(dashes.has('portfolio')).toBe(false);
+    });
+
+    it('two brokers of one asset: the first (lower broker id) solid, the other dashed, whatever the order of the lines', () => {
+        for (const ids of [['22-1', '22-2'], ['22-2', '22-1']]) {
+            const dashes = lineDashes(ids);
+            expect(dashes.get('22-1')).toBe('solid');
+            expect(dashes.get('22-2')).toBe('dashed');
+        }
+    });
+
+    it('a third and a fourth broker get their own patterns, a fifth starts again', () => {
+        const dashes = lineDashes(['5-1', '5-2', '5-3', '5-4', '5-5']);
+        const looks = ['5-1', '5-2', '5-3', '5-4'].map((id) => JSON.stringify(dashes.get(id)));
+        expect(new Set(looks).size).toBe(4);
+        expect(dashes.get('5-5')).toBe('solid');
+    });
+
+    it('other assets do not count: 11-2 beside 22-1 is a line alone', () => {
+        expect(lineDashes(['22-1', '11-2']).get('11-2')).toBe('solid');
     });
 });
