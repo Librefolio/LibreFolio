@@ -21,7 +21,7 @@
  * rewrites its net worth in the browser.
  *
  * The page root publishes the poller's state as `data-live-updates` (`running | paused-idle | paused-hidden | stopped`), and the
- * toolbar's Refresh button takes the look of the «Updates paused» pill (the same button, `data-live-state="paused-idle"`, F-4) only
+ * toolbar's Refresh button changes its icon and tone (the same button, same word, `data-live-state="paused-idle"`, F-4) only
  * while it is paused for inactivity. In every case the
  * request counts come first and the published state after, so a red names the behaviour before the attribute.
  *
@@ -123,7 +123,7 @@ async function exchanges(page: Page): Promise<Exchange[]> {
 }
 
 const root = (page: Page) => page.getByTestId('dashboard-page');
-/** The «Updates paused» pill is the toolbar's Refresh button while the prices are paused for inactivity (F-4): one button, no extra element. */
+/** The paused state is the toolbar's Refresh button with the pause icon, while the prices are paused for inactivity (F-4): one button, no extra element. */
 const pill = (page: Page) => page.locator('[data-testid="sync-button"][data-live-state="paused-idle"]');
 
 const bodyOf = (entry: Exchange): ReportBody | null => {
