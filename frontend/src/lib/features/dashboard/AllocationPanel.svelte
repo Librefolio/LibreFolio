@@ -24,7 +24,7 @@
     type AllocationTab = 'type' | 'sector' | 'geo' | 'asset';
     type AllocationView = 'now' | 'history';
     /** `id` is the asset id of a slice of the asset dimension (its colour key); null for the Liquidity slice. */
-    type AllocEntry = {name: string; value: number; amount: number; id?: number | null};
+    type AllocEntry = {name: string; value: number; amount: number; id?: number | null; iconUrl?: string | null; assetType?: string | null};
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -73,7 +73,7 @@
             if (i?.value == null) return [];
             const v = parseFloat(i.value);
             if (!(v > 0)) return [];
-            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), id: i?.id ?? null}];
+            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), id: i?.id ?? null, iconUrl: i?.icon_url ?? null, assetType: i?.asset_type ?? null}];
         });
     }
 

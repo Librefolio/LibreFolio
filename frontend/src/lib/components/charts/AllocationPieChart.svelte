@@ -9,7 +9,8 @@
   - 'asset': one ring, one slice per asset, the name exactly as sent (nobody's translation
     key, no emoji, no families), each slice in the colour of its weight rank (`colorRanks`,
     asset id -> rank) in the designer's sequence; an entry without an id (the cash) wears
-    the Liquidity type colour.
+    the Liquidity type colour; each slice shows its asset's icon (its own, else its type's, the cash's the Liquidity one), and the pie has no legend:
+    the icons and the tooltip name the slices.
 
   Every slice wears its category's own colour (GR1 of the designer's round 2): the same
   family or sector is the same colour in every view, portfolio and period, read through
@@ -49,6 +50,7 @@
     import {chartRoles} from '$lib/theme/roleColors';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     import {ensureSectorsLoaded, getSectorEmoji, sectorEmojiVersion} from '$lib/stores/reference/sectorStore';
+    import {assetSliceIconUrl, createIconProbe} from './assetPieIcons';
 
     // =========================================================================
     // Types & Props
@@ -62,6 +64,10 @@
         amount: number;
         /** The asset's id, in 'asset' mode: the key of its colour rank. The cash slice has none. */
         id?: number | null;
+        /** The asset's own icon, in 'asset' mode. */
+        iconUrl?: string | null;
+        /** The asset's type, in 'asset' mode: its icon when it has none of its own. */
+        assetType?: string | null;
     }
 
     interface Props {
@@ -129,6 +135,9 @@
     let needsInitialLayoutStabilityPass = false;
     /** The sector store's version the last full build wrote its emoji from: a new list rebuilds the names. */
     let lastEmojiVersion = -1;
+    /** The own icons known to load ('asset' mode); each answer redraws the pie, which writes the icons in its labels. */
+    let iconsVersion = $state(0);
+    const iconProbe = createIconProbe(undefined, () => (iconsVersion += 1));
 
     // =========================================================================
     // Lifecycle
@@ -145,6 +154,7 @@
         return () => {
             observer.disconnect();
             colors.disconnect();
+            iconProbe.dispose();
             cleanup();
         };
     });
@@ -167,6 +177,11 @@
         if (mode === 'sector') void sectorEmojiVersion();
         // The asset colours are a function of the ranks, not of the data: new ranks redraw the pie.
         if (mode === 'asset') void [...(colorRanks ?? [])];
+        // The icons: an own icon that loads replaces the type's one.
+        if (mode === 'asset') {
+            iconProbe.ask(data.map((slice) => ({assetId: slice.id ?? null, iconUrl: slice.iconUrl, assetType: slice.assetType})));
+            void iconsVersion;
+        }
 
         if (chartContainer) {
             tick().then(() => {
@@ -235,7 +250,7 @@
                 const translated = tr(typeKey);
                 displayName = translated !== typeKey ? translated : entry.name;
             }
-            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, assetId: entry.id ?? null};
+            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, assetId: entry.id ?? null, iconUrl: entry.iconUrl ?? null, assetType: entry.assetType ?? null};
         });
 
         // Asset-type subtypes sit inside their family, adjacent to it: two similar colours
@@ -308,8 +323,8 @@
         // build — a new type needs richStyles/legend/label formatters rebuilt so its
         // icon actually registers (see lastRawTypeKeys declaration above for why).
         const currentRawTypeKeys = mode === 'type' ? [...new Set(chartData.map((d) => d.rawName.toUpperCase()))].sort().join(',') + (rings ? '|rings' : '') : '';
-        const ranksKey = mode === 'asset' ? chartData.map((d) => `${d.assetId ?? ''}:${d.assetId == null ? '' : (colorRanks?.get(d.assetId) ?? '')}`).join(',') : '';
-        // The asset colours follow the ranks: a new rank order is not a data-only change.
+        const ranksKey = mode === 'asset' ? chartData.map((d) => `${d.assetId ?? ''}:${d.assetId == null ? '' : (colorRanks?.get(d.assetId) ?? '')}:${assetSliceIconUrl(d, iconProbe.loaded)}`).join(',') : '';
+        // The asset colours follow the ranks, and the icons their probes: a new rank order or a new icon is not a data-only change.
         const sameTypeSet = (mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys) && ranksKey === lastRanksKey;
         // A change of the ranks alone (same assets, same amounts) forces a full rebuild.
         // A language switch rebuilds in full, as a theme switch does: the legend's name map and
@@ -367,6 +382,12 @@
             }
         }
 
+        // 'asset': one icon per slice, the asset's own if it loads, else its type's (the cash: Liquidity's).
+        const assetIconKey = (assetId: number | null) => `img_a${assetId ?? 'cash'}`;
+        if (mode === 'asset') {
+            for (const item of chartData) richStyles[assetIconKey(item.assetId)] = {backgroundColor: {image: assetSliceIconUrl(item, iconProbe.loaded)}, width: 16, height: 16, align: 'center'};
+        }
+
         // Responsive: narrow containers → legend below the pie
         const containerWidth = chartContainer.getBoundingClientRect().width;
         const isNarrow = containerWidth < 400;
@@ -422,14 +443,24 @@
                   pageIconInactiveColor: neutrals.legendPageIconInactive,
               };
 
-        const pieCenter = legendBelow ? ['50%', '40%'] : ['35%', '50%'];
-        const pieRadius = legendBelow ? ['25%', '55%'] : ['35%', '70%'];
+        // 'asset' has no legend: the pie takes the room (the icons and the tooltip name the slices).
+        const noLegend = mode === 'asset';
+        const pieCenter = noLegend ? ['50%', '50%'] : legendBelow ? ['50%', '40%'] : ['35%', '50%'];
+        const pieRadius = noLegend ? ['30%', '70%'] : legendBelow ? ['25%', '55%'] : ['35%', '70%'];
 
         // Inner label — sector: emoji only (from the sector store, in the display name); type: PNG icon via rich text;
-        // asset: none (the name is no emoji and no type key).
+        // asset: the asset's icon (own, else its type's), through rich text too.
         const labelConfig: any =
             mode === 'asset'
-                ? {show: false}
+                ? {
+                      show: true,
+                      position: 'inner',
+                      formatter: (params: any) => `{${assetIconKey(params.data?.assetId ?? null)}|}`,
+                      rich: richStyles,
+                      backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
+                      borderRadius: 20,
+                      padding: [4, 4],
+                  }
                 : mode === 'sector'
                   ? {
                         show: true,
@@ -525,7 +556,7 @@
                 borderColor: neutrals.tooltip.box.border,
                 textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
             },
-            legend: legendConfig,
+            legend: noLegend ? {show: false} : legendConfig,
             series: rings
                 ? ringSeries()
                 : [
@@ -542,6 +573,8 @@
                           },
                           label: labelConfig,
                           labelLayout: {hideOverlap: true},
+                          // A slice too thin for its icon draws none (the tooltip names it).
+                          ...(mode === 'asset' ? {minShowLabelAngle: 12} : {}),
                           emphasis: {
                               // Tooltip is sufficient on hover — hide inner label instead of replacing it with text
                               label: {show: false},
