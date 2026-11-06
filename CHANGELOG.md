@@ -247,6 +247,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: Risk Analysis drawdown results (`drawdown_summary`, `asset_set_drawdown`) carry the gain needed to climb back from the worst fall to the peak before it, `maximum_drawdown_trough_to_peak_ratio` (a 50 % fall needs +100 %); `remaining_to_peak_ratio` is null for a total loss, with a warning that says why, where the analysis used to fail.
 - **Risk: add a missing exchange-rate pair without leaving the analysis.** In the Risk tab of the Dashboard, of a broker and of an asset, and in the risk lab on the Assets page, the button of a pair with no exchange-rate route opens the **Add New Currency Pair** window already filled in with that pair (EUR/USD, for example), instead of taking you to the FX page. Once the pair is saved, and again when its rates are downloaded, the analysis refreshes by itself.
 - **The daily returns histogram is a real chart**: its axis shows the return thresholds, a dashed line marks the VaR threshold, and pointing at a bar tells how many days fell there and where that band stands against the threshold.
+- **The four loss cards of «How much can it hurt?» share one shape**: shorter titles, a subtitle, dated detail rows, and dates in your language. The histogram's tooltip is lighter, sits beside the pointer and writes its interval as `[a; b)`.
 
 #### 🤖 AI Export
 

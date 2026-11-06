@@ -247,6 +247,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - API: i risultati del drawdown dell'Analisi del rischio (`drawdown_summary`, `asset_set_drawdown`) riportano il guadagno necessario per risalire dal calo peggiore al picco precedente, `maximum_drawdown_trough_to_peak_ratio` (un calo del 50 % richiede +100 %); `remaining_to_peak_ratio` è null per una perdita totale, con un avviso che ne spiega il motivo, dove prima l'analisi falliva.
 - **Rischio: aggiungi una coppia di tassi di cambio mancante senza lasciare l'analisi.** Nella scheda Rischio della Dashboard, di un broker e di un asset, e nel laboratorio di rischio nella pagina Asset, il pulsante di una coppia senza percorso di tassi di cambio apre la finestra **Aggiungi nuova coppia di valute** già compilata con quella coppia (EUR/USD, per esempio), invece di portarti alla pagina FX. Una volta salvata la coppia, e di nuovo quando i suoi tassi vengono scaricati, l'analisi si aggiorna da sola.
 - **L'istogramma dei rendimenti giornalieri è un vero grafico**: l'asse mostra le soglie dei rendimenti, una linea tratteggiata segna la soglia VaR, e passando su una barra leggi quanti giorni ci cadono e dove sta quella fascia rispetto alla soglia.
+- **Le quattro card delle perdite di «Quanto può fare male?» hanno la stessa forma**: titoli più corti, un sottotitolo, righe di dettaglio con le date, nella tua lingua. Il tooltip dell'istogramma è più leggero, sta di lato al cursore e scrive l'intervallo come `[a; b)`.
 
 #### 🤖 AI Export
 

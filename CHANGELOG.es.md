@@ -247,6 +247,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - API: los resultados de caída del análisis de riesgos (`drawdown_summary`, `asset_set_drawdown`) incluyen la ganancia necesaria para recuperarse de la peor caída hasta el pico anterior, `maximum_drawdown_trough_to_peak_ratio` (una caída del 50 % necesita +100 %); `remaining_to_peak_ratio` es null para una pérdida total, con una advertencia que explica por qué, donde antes fallaba el análisis.
 - **Riesgo: añade un par de tipos de cambio faltante sin salir del análisis.** En la pestaña Riesgo del Panel, en la de un bróker y en la de un activo, y en el laboratorio de riesgos de la página Activos, el botón de un par sin ruta de tipos de cambio abre la ventana **Añadir nuevo par de divisas** ya rellenada con ese par (EUR/USD, por ejemplo), en lugar de llevarte a la página FX. Una vez guardado el par, y de nuevo cuando se descargan sus tipos de cambio, el análisis se actualiza por sí solo.
 - **El histograma de rendimientos diarios es un gráfico de verdad**: su eje muestra los umbrales de rendimiento, una línea discontinua marca el umbral VaR, y al pasar por una barra ves cuántos días caen en ella y dónde queda esa franja respecto al umbral.
+- **Las cuatro tarjetas de pérdidas de «¿Cuánto puede doler?» tienen la misma forma**: títulos más cortos, un subtítulo, filas de detalle con fecha y las fechas en tu idioma. El tooltip del histograma es más ligero, se sitúa junto al puntero y escribe su intervalo como `[a; b)`.
 
 #### 🤖 Exportación IA
 
