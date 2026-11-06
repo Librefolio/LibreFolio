@@ -45,6 +45,7 @@ from backend.app.schemas.portfolio import (
     AllocationHistoryDimensions,
     AllocationHistoryPoint,
     AllocationItem,
+    AssetAllocationItem,
     AssetPeriodContribution,
     BrokerBreakdown,
     BrokerPnlHistory,
@@ -935,11 +936,21 @@ class PortfolioService:
         # ── 4. Allocation from engine (scope-aware, includes in-transit) ──
         alloc_type, alloc_sector, alloc_geo = views.build_allocation_current()
         last_by_asset = views.daily_states[-1].by_asset if views.daily_states else {}
-        alloc_asset_names = {asset_id: asset.display_name for asset_id, asset in (await self._get_assets_map(set(last_by_asset))).items()}
+        alloc_asset_rows = await self._get_assets_map(set(last_by_asset))
+        alloc_asset_names = {asset_id: asset.display_name for asset_id, asset in alloc_asset_rows.items()}
         alloc_asset = views.build_asset_allocation_current(alloc_asset_names)
+        # The pie draws each asset's icon (F-10): the asset's own, else its type's. Presentation only, no figure changes.
+        for item in alloc_asset:
+            row = alloc_asset_rows.get(item.get("id")) if item.get("id") is not None else None
+            if row is not None:
+                item["asset_type"] = row.asset_type.value if row.asset_type is not None else None
+                item["icon_url"] = row.icon_url or None
 
         def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
             return [AllocationItem(**item) for item in items]
+
+        def _asset_alloc_from_engine(items: list[dict]) -> list[AssetAllocationItem]:
+            return [AssetAllocationItem(**item) for item in items]
 
         # Weights from the house (D-MF7): no share of a total at or below zero — the field stays None («—»).
         total_market = sum((h.current_value for h in all_holdings if h.current_value), Decimal("0"))
@@ -1219,7 +1230,7 @@ class PortfolioService:
             allocation_by_type=_alloc_from_engine(alloc_type),
             allocation_by_sector=_alloc_from_engine(alloc_sector),
             allocation_by_geography=_alloc_from_engine(alloc_geo),
-            allocation_by_asset=_alloc_from_engine(alloc_asset),
+            allocation_by_asset=_asset_alloc_from_engine(alloc_asset),
             holdings=all_holdings,
             holding_groups=holding_groups,
             by_broker=by_broker_list if include_breakdown else None,

@@ -40,6 +40,13 @@ class AllocationItem(StrictModel):
     id: Optional[int] = Field(None, description="Asset id of a slice of the asset dimension (the colour key); None for its Liquidity slice and in the other dimensions")
 
 
+class AssetAllocationItem(AllocationItem):
+    """A slice of the asset dimension: the allocation item, plus what the pie needs to draw the asset's icon."""
+
+    asset_type: Optional[str] = Field(None, description="Type of the asset (its icon when it has no icon of its own); None for the Liquidity slice")
+    icon_url: Optional[str] = Field(None, description="The asset's own icon; None when it has none and for the Liquidity slice")
+
+
 # =============================================================================
 # DATA QUALITY — Missing prices, stale prices, quality report
 # =============================================================================
@@ -553,7 +560,7 @@ class PortfolioSummary(StrictModel):
     allocation_by_type: List[AllocationItem] = Field(default_factory=list)
     allocation_by_sector: List[AllocationItem] = Field(default_factory=list)
     allocation_by_geography: List[AllocationItem] = Field(default_factory=list)
-    allocation_by_asset: List[AllocationItem] = Field(default_factory=list, description="Held market value by asset (id = asset id), plus the Liquidity slice")
+    allocation_by_asset: List[AssetAllocationItem] = Field(default_factory=list, description="Held market value by asset (id = asset id), plus the Liquidity slice")
     holdings: List[PortfolioHolding] = Field(default_factory=list)
     holding_groups: List[HoldingGroupGainLoss] = Field(
         default_factory=list,
