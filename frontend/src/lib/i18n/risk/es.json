@@ -25,14 +25,18 @@
           "month": "m",
           "day": "d"
         },
-        "hint": "Escribe los días (365) o años, meses y días: 2a3m5d son 2 años, 3 meses y 5 días, es decir 825 días (un año cuenta 365 días, un mes 30).",
         "hintLabel": "Cómo escribir el horizonte",
         "resultDays": "{days, plural, one {# día} other {# días}}",
         "errors": {
           "empty": "Introduce el horizonte.",
-          "format": "Horizonte no válido: escribe días (365) o, en este orden, años, meses y días (2a3m5d).",
+          "format": "Horizonte no válido: escribe días (365) o años, meses y días (2a3m5d).",
           "tooShort": "El horizonte debe ser de al menos 1 día.",
           "tooLong": "El horizonte no puede superar {max} días."
+        },
+        "hintItems": {
+          "days": "Un número de días: 365",
+          "units": "O años, meses y días: 2a3m5d",
+          "sum": "Un año cuenta 365 días, un mes 30"
         }
       }
     },

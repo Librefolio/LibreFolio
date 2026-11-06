@@ -25,14 +25,18 @@
           "month": "m",
           "day": "d"
         },
-        "hint": "Type the days (365) or years, months and days: 2y3m5d is 2 years, 3 months and 5 days, 825 days (a year counts 365 days, a month 30).",
         "hintLabel": "How to write the horizon",
         "resultDays": "{days, plural, one {# day} other {# days}}",
         "errors": {
           "empty": "Enter the horizon.",
-          "format": "Not a valid horizon: write days (365) or, in this order, years, months and days (2y3m5d).",
+          "format": "Not a valid horizon: write days (365) or years, months and days (2y3m5d).",
           "tooShort": "The horizon must be at least 1 day.",
           "tooLong": "The horizon cannot exceed {max} days."
+        },
+        "hintItems": {
+          "days": "A number of days: 365",
+          "units": "Or years, months and days: 2y3m5d",
+          "sum": "A year counts 365 days, a month 30"
         }
       }
     },

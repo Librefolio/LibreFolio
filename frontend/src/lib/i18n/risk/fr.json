@@ -25,14 +25,18 @@
           "month": "m",
           "day": "j"
         },
-        "hint": "Saisissez les jours (365) ou des années, mois et jours : 2a3m5j correspond à 2 ans, 3 mois et 5 jours, soit 825 jours (une année compte 365 jours, un mois 30).",
         "hintLabel": "Comment saisir l'horizon",
         "resultDays": "{days, plural, one {# jour} other {# jours}}",
         "errors": {
           "empty": "Saisissez l'horizon.",
-          "format": "Horizon non valide : saisissez des jours (365) ou, dans cet ordre, années, mois et jours (2a3m5j).",
+          "format": "Horizon non valide : saisissez des jours (365) ou des années, mois et jours (2a3m5j).",
           "tooShort": "L'horizon doit être d'au moins 1 jour.",
           "tooLong": "L'horizon ne peut pas dépasser {max} jours."
+        },
+        "hintItems": {
+          "days": "Un nombre de jours : 365",
+          "units": "Ou des années, mois et jours : 2a3m5j",
+          "sum": "Une année compte 365 jours, un mois 30"
         }
       }
     },
