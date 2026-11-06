@@ -33,7 +33,7 @@
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
-    import {buildFittedTooltipBlockRow, buildTooltipHeader, buildTooltipTheme, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildMarqueeTooltipBlockRow, buildTooltipHeader, buildTooltipTheme, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
@@ -51,7 +51,7 @@
     import {applyLineShape, effectiveLineShape} from '$lib/components/charts/lineShape';
     import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
-    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {attachOverflowMarqueeToDescendants, scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {lineDashes, lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
 
@@ -101,6 +101,8 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
     let touchPanHandle: {dispose: () => void} | null = null;
+    /** The marquee of the long names in the tooltip, which ECharts draws inside the chart's element (F-1). */
+    let stopTooltipMarquee: (() => void) | null = null;
     let lastWidth = 0;
     /** The day the pointer is on, kept from ECharts' `updateAxisPointer` (the tooltip of a step line reads it). */
     let pointedDay: string | null = null;
@@ -164,6 +166,8 @@
     function disposeChart(): void {
         touchPanHandle?.dispose();
         touchPanHandle = null;
+        stopTooltipMarquee?.();
+        stopTooltipMarquee = null;
         chart?.dispose();
         chart = null;
     }
@@ -317,7 +321,7 @@
                             .sort((left, right) => right.value - left.value);
                         if (onDay.length === 0) return '';
                         const dayHeader = buildTooltipHeader(escapeHtml(formatDayWithWeekday(day)), box.mutedColor, {from: day, to: day});
-                        return fitToChart(dayHeader + onDay.map((row) => buildFittedTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
+                        return fitToChart(dayHeader + onDay.map((row) => buildMarqueeTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
                     }
                     const items = (Array.isArray(params) ? params : [params]) as TooltipItem[];
                     const rows = items
@@ -326,7 +330,7 @@
                         .sort((left, right) => right.value - left.value);
                     if (rows.length === 0) return '';
                     const header = buildTooltipHeader(escapeHtml(formatDayWithWeekday(rows[0].date)), box.mutedColor, {from: rows[0].date, to: rows[0].date});
-                    return fitToChart(header + rows.map((row) => buildFittedTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
+                    return fitToChart(header + rows.map((row) => buildMarqueeTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
                 },
             },
             // Zoom and pan on the time axis. No window is named, so a redraw keeps the user's; `none` keeps every step line whole (a filter would
@@ -374,6 +378,8 @@
             });
             attachDaySnap(chart);
             touchPanHandle = attachDataZoomTouchPan(chart, container);
+            // A name too long for the tooltip's row scrolls by itself, as the legend's badges do.
+            stopTooltipMarquee = attachOverflowMarqueeToDescendants(container);
             scheduleFirstRenderStabilityFix(chart, container);
         }
         resizeWatcher.observe(container);
