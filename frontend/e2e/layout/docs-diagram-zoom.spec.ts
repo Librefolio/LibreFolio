@@ -48,7 +48,7 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 /** The site's root, as the backend serves it. */
 const SITE_ROOT = '/mkdocs/';
 /** English page with a flowchart. */
-const FLOWCHART_PATH = `${SITE_ROOT}admin/backup_restore/`;
+const FLOWCHART_PATH = `${SITE_ROOT}admin/backup_sealed/`;
 /** English page with two diagrams (a flowchart and more), used for the count of reachable diagrams. */
 const TWO_DIAGRAMS_PATH = `${SITE_ROOT}developer/test-walkthrough/runner_architecture/`;
 /** English page with a sequence diagram. */
