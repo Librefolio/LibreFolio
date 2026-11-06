@@ -411,28 +411,26 @@
       "l1": {
         "title": "How much can it hurt?",
         "rows": {
-          "day": "A bad day (worst 5%)",
-          "month": "A bad month (worst 5%)",
-          "worst": "The worst fall (actually lived through)"
+          "day": "A bad day",
+          "month": "Thirty bad days",
+          "worst": "The worst fall"
         },
         "technical": {
-          "day": "CVaR · 1 day",
-          "month": "CVaR · 1 month",
+          "day": "The worst 5% of days · CVaR",
+          "month": "The worst 5% of periods · CVaR",
           "worst": "Maximum drawdown",
-          "current": "Current drawdown"
+          "current": "Current drawdown",
+          "lived": "Lived through"
         },
-        "durationDays": "lasted {days} days",
-        "requiredRecovery": "recovery needed {percent}",
-        "currentDrawdown": "Currently down from the peak",
-        "sincePeak": "since {date}",
+        "requiredRecovery": "Recovery needed",
+        "currentDrawdown": "Below the peak, today",
         "tails": {
-          "worstRealization": "Worst day actually seen",
-          "worstRealizationOn": "on {date}",
+          "worstRealization": "The worst day",
           "drawdownAtRisk": "Drawdown at risk ({confidence})",
-          "conditionalDrawdownAtRisk": "Average beyond that threshold",
+          "conditionalDrawdownAtRisk": "Average beyond the threshold",
           "ulcerIndex": "Ulcer index {value}",
           "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer",
-          "worstMonth": "The worst month actually seen"
+          "worstMonth": "The worst 30 days"
         },
         "underwater": {
           "title": "Time spent below the peak",
@@ -452,7 +450,10 @@
           },
           "binDays": "{count, plural, one {# day} other {# days}} · {share}"
         },
-        "period": "from {from} to {to}"
+        "when": "When",
+        "since": "Since",
+        "duration": "Duration",
+        "daysCount": "{days, plural, one {# day} other {# days}}"
       },
       "l2": {
         "title": "Am I as diversified as I think?",

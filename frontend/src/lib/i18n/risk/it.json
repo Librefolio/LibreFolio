@@ -411,28 +411,26 @@
       "l1": {
         "title": "Quanto può fare male?",
         "rows": {
-          "day": "Una giornata storta (peggiori 5%)",
-          "month": "Un mese storto (peggiori 5%)",
-          "worst": "La peggior discesa (vissuta davvero)"
+          "day": "Una giornata storta",
+          "month": "Trenta giorni storti",
+          "worst": "La peggior discesa"
         },
         "technical": {
-          "day": "CVaR · 1 giorno",
-          "month": "CVaR · 1 mese",
+          "day": "Il peggior 5% dei giorni · CVaR",
+          "month": "Il peggior 5% dei periodi · CVaR",
           "worst": "Drawdown massimo",
-          "current": "Drawdown attuale"
+          "current": "Drawdown attuale",
+          "lived": "Vissuta"
         },
-        "durationDays": "durata {days} giorni",
-        "requiredRecovery": "recupero richiesto {percent}",
-        "currentDrawdown": "Attualmente sotto il massimo",
-        "sincePeak": "dal {date}",
+        "requiredRecovery": "Recupero richiesto",
+        "currentDrawdown": "Sotto il massimo, oggi",
         "tails": {
-          "worstRealization": "Il giorno peggiore davvero visto",
-          "worstRealizationOn": "il {date}",
+          "worstRealization": "Il giorno peggiore",
           "drawdownAtRisk": "Drawdown a rischio ({confidence})",
-          "conditionalDrawdownAtRisk": "Media oltre quella soglia",
+          "conditionalDrawdownAtRisk": "Media oltre la soglia",
           "ulcerIndex": "Indice di Ulcer {value}",
           "ulcerIndexHint": "profondità quadratica media sotto il picco: più basso, più tranquillo",
-          "worstMonth": "Il mese peggiore davvero visto"
+          "worstMonth": "I 30 giorni peggiori"
         },
         "underwater": {
           "title": "Tempo passato sotto il picco",
@@ -452,7 +450,10 @@
           },
           "binDays": "{count, plural, one {# giorno} other {# giorni}} · {share}"
         },
-        "period": "dal {from} al {to}"
+        "when": "Quando",
+        "since": "Dal",
+        "duration": "Durata",
+        "daysCount": "{days, plural, one {# giorno} other {# giorni}}"
       },
       "l2": {
         "title": "Sono diversificato come credo?",

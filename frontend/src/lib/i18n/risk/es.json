@@ -411,28 +411,26 @@
       "l1": {
         "title": "¿Cuánto puede doler?",
         "rows": {
-          "day": "Un mal día (peor 5%)",
-          "month": "Un mal mes (peor 5%)",
-          "worst": "La peor caída (vivida de verdad)"
+          "day": "Un mal día",
+          "month": "Treinta malos días",
+          "worst": "La peor caída"
         },
         "technical": {
-          "day": "CVaR · 1 día",
-          "month": "CVaR · 1 mes",
+          "day": "El peor 5% de los días · CVaR",
+          "month": "El peor 5% de los períodos · CVaR",
           "worst": "Caída máxima",
-          "current": "Caída actual"
+          "current": "Caída actual",
+          "lived": "Vivida"
         },
-        "durationDays": "duró {days} días",
-        "requiredRecovery": "recuperación necesaria {percent}",
-        "currentDrawdown": "Actualmente por debajo del máximo",
-        "sincePeak": "desde el {date}",
+        "requiredRecovery": "Recuperación necesaria",
+        "currentDrawdown": "Bajo el máximo, hoy",
         "tails": {
-          "worstRealization": "El peor día realmente visto",
-          "worstRealizationOn": "el {date}",
+          "worstRealization": "El peor día",
           "drawdownAtRisk": "Caída en riesgo ({confidence})",
-          "conditionalDrawdownAtRisk": "Media más allá de ese umbral",
+          "conditionalDrawdownAtRisk": "Media más allá del umbral",
           "ulcerIndex": "Índice de Ulcer {value}",
           "ulcerIndexHint": "profundidad cuadrática media bajo el pico: cuanto más bajo, más tranquilo",
-          "worstMonth": "El peor mes realmente vivido"
+          "worstMonth": "Los 30 peores días"
         },
         "underwater": {
           "title": "Tiempo bajo el pico",
@@ -452,7 +450,10 @@
           },
           "binDays": "{count, plural, one {# día} other {# días}} · {share}"
         },
-        "period": "del {from} al {to}"
+        "when": "Cuándo",
+        "since": "Desde",
+        "duration": "Duración",
+        "daysCount": "{days, plural, one {# día} other {# días}}"
       },
       "l2": {
         "title": "¿Estoy tan diversificado como creo?",
