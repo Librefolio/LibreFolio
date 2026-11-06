@@ -89,12 +89,17 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Holding window of a position: oldest lot still open, a closed position's flight time | `services/financial_math/holding_window.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
 | Technical indicators | `services/signal_plugins/` (the plugins), `services/signals/` (runtime, contract, registry) |
-| Risk metrics and optimization | `services/risk/quant/` |
+| Risk metrics: the statistics of a return series (volatility, VaR, drawdown, correlation) | `services/risk/metrics.py` |
+| Risk simulation and optimization | `services/risk/quant/` |
 | PAC allocation | `services/pac_allocator/` |
 
 Risk, signals and PAC stay where they are, but take the common math — returns, annualization, conversions, average
 cost, valuation — from `financial_math/`. The frontend computes none of these (`.github/copilot-instructions.md`,
 decision 1).
+
+A calculation moves into `financial_math/` when it is a general financial formula or when something outside its
+subsystem needs it; until then a statistic of a return series stays in `risk/metrics.py`. This split can change as the
+code grows: when it does, move the code and update this table in the same change.
 
 `utils/` holds leaf functions only: they never import services; anything that needs FX, assets or other services
 belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
