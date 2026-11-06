@@ -2005,7 +2005,11 @@ test.describe('Risk analysis functional integration', () => {
         // instead of fragments, and still fails if a fifth card appears.
         await expect(panel.getByTestId('risk-l1-cards').locator('> div > [data-testid^="risk-l1-card-"]')).toHaveCount(4);
         await expect(panel.getByTestId('risk-l1-worst-realization')).toContainText(loss('3.8%'));
-        await expect(panel.getByTestId('risk-l1-worst-realization-date')).toContainText('2023-11-21');
+        // The day is written the way the language writes a day (F8, 06/11/2026), never as an ISO date.
+        const worstDayDate = panel.getByTestId('risk-l1-worst-realization-date-value');
+        await expect(worstDayDate).toContainText('2023');
+        await expect(worstDayDate).toContainText('21');
+        await expect(worstDayDate).not.toHaveText(/\d{4}-\d{2}-\d{2}/);
         // ⚠️ 90%, from the fixture's `drawdown_confidence_level`. The usual 95% is
         // a default the backend publishes, not a constant: this assertion turns red
         // the moment anyone writes the familiar number into the label.
