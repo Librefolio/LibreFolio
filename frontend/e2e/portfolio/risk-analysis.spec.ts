@@ -2057,6 +2057,9 @@ test.describe('Risk analysis functional integration', () => {
         });
         expect(drawn.bars, 'the chart drew a different number of bars than the engine binned').toBe(7);
         expect(drawn.cut, 'the chart has no threshold line at the cut').toBeCloseTo(-2.1, 6);
+        // The tooltip of a bar (F8, 06/11/2026): the interval typeset by KaTeX, in a box of the chart's own, with the days beneath.
+        await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => (element as unknown as {__lfChart: {dispatchAction(action: unknown): void}}).__lfChart.dispatchAction({type: 'showTip', seriesIndex: 0, dataIndex: 2}));
+        await expect(histogram.getByTestId('risk-l1-histogram-chart').locator('.katex').first(), 'the interval of the bar is not typeset').toBeVisible();
 
         // Nothing came back degraded, so nothing is disclosed. The mirror of the
         // two-entry assertion in the unavailable test: without this half, a
