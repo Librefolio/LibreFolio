@@ -93,6 +93,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
 
 vi.mock('echarts', () => echartsModule);
 
+// F-1: the marquee that scrolls a long name in the tooltip is attached to the chart's element; the test sees the attach and the stop.
+const marquee = vi.hoisted(() => {
+    const stop = vi.fn();
+    return {stop, attach: vi.fn((_container: HTMLElement) => stop)};
+});
+vi.mock('$lib/actions/scrollOnOverflow', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/actions/scrollOnOverflow')>()), attachOverflowMarqueeToDescendants: marquee.attach}));
+
 vi.mock('$lib/api', () => ({
     zodiosApi: new Proxy(
         {},
@@ -617,5 +624,42 @@ describe('PositionsReturnChart — two brokers holding one asset (B8)', () => {
     it('hiding the first line does not change the pattern of the second (it is the broker’s, not the position in the drawn list)', async () => {
         await mountReady({lines: SAME(), hiddenIds: new Set(['22-1']), colorOf: () => 'rgb(9, 9, 9)'});
         expect(dashOfSeries('22-2')).toBe('dashed');
+    });
+});
+
+// =============================================================================
+// F-1 · a long name in the tooltip scrolls
+// =============================================================================
+
+describe('PositionsReturnChart — the tooltip scrolls a long name (F-1)', () => {
+    const LONG = 'Amundi MSCI Semiconductors UCITS ETF Acc · A broker with a very long name';
+
+    function tooltipFormatter(): (params: unknown) => string {
+        const call = [...chartInstances[0].setOptionCalls].reverse().find(({option}) => option.tooltip !== undefined);
+        return (call!.option.tooltip as Json).formatter as (params: unknown) => string;
+    }
+
+    it('each row of the tooltip holds the whole name in a marquee, never an ellipsis, with the value beside it', async () => {
+        await mountReady({lines: [line('12-3', [1, 2, 3], {label: LONG}), B()], view: 'absolute'});
+        const html = tooltipFormatter()([
+            {seriesId: '12-3', value: ['2026-01-02', 2]},
+            {seriesId: '7-0', value: ['2026-01-02', 10]},
+        ]);
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        const names = [...host.querySelectorAll<HTMLElement>('.overflow-scroll-marquee')];
+        expect(names.map((entry) => entry.textContent)).toEqual(expect.arrayContaining([LONG, 'Label 7-0']));
+        expect(html, 'the label gives way by scrolling, not by an ellipsis').not.toContain('text-overflow');
+        expect(host.querySelectorAll('[data-tooltip-row]')).toHaveLength(2);
+    });
+
+    it('the chart’s element is watched for the marquee while it lives, and released when it goes', async () => {
+        marquee.attach.mockClear();
+        marquee.stop.mockClear();
+        const {view} = await mountReady();
+        expect(marquee.attach).toHaveBeenCalledTimes(1);
+        expect(marquee.attach.mock.calls[0][0]).toBe(screen.getByTestId('positions-chart-canvas'));
+        view.unmount();
+        expect(marquee.stop).toHaveBeenCalled();
     });
 });
