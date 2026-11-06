@@ -4351,17 +4351,33 @@ test.describe('Risk analysis functional integration', () => {
         await level4.getByTestId('risk-simulation-run').click();
         await expect.poll(() => requests.some((request) => request.analytics.some((analytic) => analytic.analytic_code === 'simulation' && analytic.parameters?.horizon_days === days)), {message: 'the run did not send the days the field showed', timeout: 10_000}).toBe(true);
 
-        // A text that is no horizon: the error is in the field, the run button is off.
+        // The letters in any order, repeated, all counting (06/11/2026): 30 days, a year and two months is 455.
+        const day = await catalogueSentence(page, 'risk.params.horizonExpr.units.day');
+        await horizon.fill(`30${day} 1${year} 2${month}`);
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '455');
+
+        // The field sits on the baseline of its neighbours, with the days line under it and nothing moved by it: the bottoms of the
+        // horizon and paths inputs are the same.
+        const bottoms = await level4.evaluate((section) => ['risk-simulation-horizon', 'risk-simulation-paths'].map((id) => Math.round(section.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().bottom)));
+        expect(bottoms[0], 'the horizon input is not aligned with the paths input').toBe(bottoms[1]);
+
+        // A text that is no horizon: the red border and the reason in the tooltip; the days line keeps its place; the run button is off.
         await horizon.fill('1x');
-        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveAttribute('data-error', 'format');
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'format');
         await expect(horizon).toHaveAttribute('aria-invalid', 'true');
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '');
         await expect(level4.getByTestId('risk-simulation-run')).toBeDisabled();
+        const bottomsInError = await level4.evaluate((section) => ['risk-simulation-horizon', 'risk-simulation-paths'].map((id) => Math.round(section.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().bottom)));
+        expect(bottomsInError, 'the error moved a field').toEqual(bottoms);
+        // A number with no letter beside letters is an error too.
+        await horizon.fill(`1${year} 30`);
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'format');
 
         // Past the engine's ten years: its own error, not a request the engine would refuse.
         await horizon.fill('3651');
-        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveAttribute('data-error', 'tooLong');
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'tooLong');
         await horizon.fill('30');
-        await expect(level4.getByTestId('risk-simulation-horizon-error')).toHaveCount(0);
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', '');
         await expect(level4.getByTestId('risk-simulation-run')).toBeEnabled();
     });
 
