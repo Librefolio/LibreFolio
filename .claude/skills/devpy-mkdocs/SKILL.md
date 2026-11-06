@@ -20,7 +20,7 @@ description: "Use this skill when the user needs to build, serve, or deploy MkDo
 Generate automatic screenshots for documentation (light/dark × desktop/mobile × 4 languages):
 
 ```bash
-./dev.py mkdocs gallery                          # Full gallery generation (browser workers: 60% of the CPUs)
+./dev.py mkdocs gallery                          # Full gallery generation (browser workers: 60% of the CPUs); PNGs are then converted to WebP
 ./dev.py mkdocs gallery -l                       # List available test names
 ./dev.py mkdocs gallery -f "assets"              # Filter by name
 ./dev.py mkdocs gallery --desktop-only           # Only desktop viewport

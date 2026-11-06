@@ -27,6 +27,10 @@ ARG DOCS_VARIANT=full
 # the files would still exist in the earlier layer.
 FROM python:3.13-slim AS docs-full
 COPY mkdocs_src/site/ /site/
+# The gallery keeps two files per screenshot: the PNG Playwright writes and its WebP copy, which the pages ask for
+# (mkdocs_src/docs/javascripts/gallery-img-loader.js). The site keeps both because the images already released and the
+# README read the PNGs from GitHub Pages; this image needs only the WebP, about a third of the weight.
+RUN find /site/gallery -iname '*.png' -delete
 
 FROM python:3.13-slim AS docs-light
 COPY mkdocs_src/site/ /site/

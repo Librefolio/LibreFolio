@@ -1069,6 +1069,19 @@ def default_gallery_workers(cpu_count: Optional[int] = None) -> int:
     return max(1, round(GALLERY_BROWSER_WORKERS_PER_CPU * cpus))
 
 
+def _convert_gallery_webp() -> int:
+    """Write the WebP copies of the gallery PNGs that have none or an older one. Returns the number of PNGs that failed."""
+    from scripts.gallery_webp import WEBP_QUALITY, convert_gallery_webp  # noqa: PLC0415 — only the gallery needs Pillow here
+
+    root = PROJECT_ROOT / "mkdocs_src" / "docs" / "gallery"
+    print(f"\n{Colors.CYAN}🖼️  Converting the gallery PNGs to WebP (quality {WEBP_QUALITY})...{Colors.NC}")
+    report = convert_gallery_webp(root)
+    print(f"   {report.converted} converted, {report.up_to_date} already up to date, {len(report.failed)} failed")
+    for png, reason in report.failed:
+        print_error(f"WebP not written for {png.relative_to(root)}: {reason}")
+    return len(report.failed)
+
+
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
 
@@ -1258,6 +1271,10 @@ def cmd_mkdocs_gallery(args):
         print(f"{Colors.YELLOW}Partial screenshots may have been saved to mkdocs_src/docs/gallery/{Colors.NC}")
         return 1
 
+    # The PNGs are what Playwright writes; the documentation pages ask for their WebP copies. Converted whether or not the
+    # run failed, so the shots that did succeed are served as WebP (the nightly goes on with them).
+    webp_failures = _convert_gallery_webp()
+
     # Parse failed test names from Playwright output
     # Playwright prints lines like:
     #   [desktop] › e2e/gallery.spec.ts:330:9 › Gallery Screenshots › Files › test name ───────
@@ -1312,10 +1329,12 @@ def cmd_mkdocs_gallery(args):
             print()
         else:
             print(f"{Colors.YELLOW}Some screenshots may be missing or outdated. Run with --filter to retry specific tests.{Colors.NC}")
+    elif webp_failures:
+        print(f"\n{Colors.YELLOW}⚠️  The screenshots were taken, but {webp_failures} PNG(s) could not be converted to WebP (see above): those pages fall back to the PNG.{Colors.NC}")
     else:
         print_success("\n✅ Gallery screenshots generated successfully!")
     print(f"{Colors.GREEN}Output: mkdocs_src/docs/gallery/{Colors.NC}")
-    return 1 if failures else 0
+    return 1 if (failures or webp_failures) else 0
 
 
 # Declared perimeter of the explicit-anchor convention, measured 18 Sep 2026.

@@ -853,6 +853,22 @@ def default_variant_violations(dockerfile_text: str) -> list[str]:
     return [f"the Dockerfile does not default DOCS_VARIANT to {DEFAULT_DOCS_VARIANT}: the image built without it is not the one the version tag promises"]
 
 
+def full_image_png_violations(dockerfile_text: str) -> list[str]:
+    """The ``docs-full`` stage deletes the gallery's PNGs: the pages ask for the WebP copies, and the PNGs are for GitHub Pages."""
+    stage, in_full = [], False
+    for keyword, args in dockerfile_instructions(dockerfile_text):
+        if keyword == "FROM":
+            in_full = bool(re.search(r"\bAS\s+docs-full\s*$", args, flags=re.IGNORECASE))
+        elif in_full:
+            stage.append((keyword, args))
+    if not stage:
+        return ["the Dockerfile has no docs-full stage"]
+    deletes = [args for keyword, args in stage if keyword == "RUN" and re.search(r"\bfind\s+/site/gallery\b", args) and re.search(r"-i?name\s+'?\*\.png'?", args) and "-delete" in args]
+    if deletes:
+        return []
+    return ["the docs-full stage does not delete the gallery's PNGs (`find /site/gallery -iname '*.png' -delete`): the full image would carry both formats of every screenshot"]
+
+
 # ---------------------------------------------------------------------------
 # release.yml, R12: only a stable release or main deploys the docs site
 # ---------------------------------------------------------------------------
@@ -2238,6 +2254,20 @@ class TestImageTags:
 
     def test_an_image_build_without_docs_variant_is_the_full_image(self, dockerfile_text):
         assert default_variant_violations(dockerfile_text) == []
+
+    def test_the_full_image_keeps_the_webp_and_drops_the_png(self, dockerfile_text):
+        assert full_image_png_violations(dockerfile_text) == []
+
+    def test_png_check_fails_when_the_full_image_keeps_the_pngs(self, dockerfile_text):
+        problems = full_image_png_violations(mutate_dockerfile(dockerfile_text, r"^RUN find /site/gallery -iname '\*\.png' -delete[ \t]*$", "RUN true"))
+
+        assert_rejected(problems, "the docs-full stage does not delete the gallery's PNGs")
+
+    def test_png_check_fails_when_the_deletion_targets_another_folder(self, dockerfile_text):
+        # The light stage already deletes every image: only the full stage's own gallery line counts.
+        problems = full_image_png_violations(mutate_dockerfile(dockerfile_text, r"^RUN find /site/gallery -iname '\*\.png' -delete[ \t]*$", "RUN find /site/other -iname '*.png' -delete"))
+
+        assert_rejected(problems, "the docs-full stage does not delete the gallery's PNGs")
 
     def test_default_variant_check_fails_on_a_broken_copy(self, dockerfile_text):
         problems = default_variant_violations(mutate_dockerfile(dockerfile_text, r"^ARG[ \t]+DOCS_VARIANT=full[ \t]*$", "ARG DOCS_VARIANT=light"))
