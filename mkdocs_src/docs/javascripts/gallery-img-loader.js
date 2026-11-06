@@ -107,12 +107,38 @@
         return scheme === 'slate' ? 'dark' : 'light';
     }
 
-    function buildSrc(viewport, lang, theme, category, name) {
-        return basePath() + '/gallery/' + viewport + '/' + lang + '/' + theme + '/' + category + '/' + name + '.png';
+    /**
+     * The gallery keeps two files per screenshot: the PNG Playwright writes and its WebP copy
+     * (`dev.py mkdocs gallery` converts them, about a third of the weight). Pages ask for the
+     * WebP; the PNG is the last resort of each place, because a site published before the
+     * conversion existed (GitHub Pages, until the next nightly) and a local gallery that was
+     * not converted yet only have PNGs.
+     */
+    var FORMATS = ['webp', 'png'];
+
+    function buildSrc(viewport, lang, theme, category, name, ext, base) {
+        return (base === undefined ? basePath() : base) + '/gallery/' + viewport + '/' + lang + '/' + theme + '/' + category + '/' + name + '.' + (ext || 'webp');
     }
 
-    function buildGithubSrc(viewport, lang, theme, category, name) {
-        return GITHUB_PAGES_BASE + '/gallery/' + viewport + '/' + lang + '/' + theme + '/' + category + '/' + name + '.png';
+    /**
+     * Addresses to try, in order: this site (requested lang, then the fallback lang) and then the
+     * public docs site (same two), each as WebP and then as PNG.
+     * Local first, GitHub Pages after: a missing local screenshot is the normal case of the light image.
+     */
+    function candidateSources(viewport, lang, theme, category, name) {
+        var langs = lang !== FALLBACK_LANG ? [lang, FALLBACK_LANG] : [FALLBACK_LANG];
+        var bases = [basePath(), GITHUB_PAGES_BASE];
+        var out = [];
+        bases.forEach(function (base) {
+            // On one site, every language as WebP before any as PNG: the format is the lighter choice, so it is
+            // tried for the fallback language too before the heavier PNG of the requested one.
+            FORMATS.forEach(function (ext) {
+                langs.forEach(function (l) {
+                    out.push(buildSrc(viewport, l, theme, category, name, ext, base));
+                });
+            });
+        });
+        return out;
     }
 
     function updateImages() {
@@ -133,47 +159,22 @@
             if (path.includes('/gallery/mobile')) viewport = 'mobile';
             else if (path.includes('/gallery/desktop')) viewport = 'desktop';
 
-            var newSrc = buildSrc(viewport, lang, theme, category, name);
+            var candidates = candidateSources(viewport, lang, theme, category, name);
+            var newSrc = candidates[0];
             if (img.getAttribute('src') === newSrc) return; // Already set
 
-            // Cascading fallback chain:
-            // 1. Local: requested lang
-            // 2. Local: fallback lang (en)
-            // 3. GitHub Pages: requested lang
-            // 4. GitHub Pages: fallback lang (en)
+            // Cascading fallback chain, one step per load error:
+            // 1. Local WebP: requested lang, then fallback lang (en)
+            // 2. Local PNG: same two
+            // 3. GitHub Pages WebP: same two
+            // 4. GitHub Pages PNG: same two
+            var next = 0;
             img.onerror = function () {
-                var currentSrc = img.getAttribute('src');
-                if (currentSrc === newSrc && lang !== FALLBACK_LANG) {
-                    // Step 2: try local fallback lang
-                    img.onerror = function () {
-                        // Step 3: try GitHub Pages with requested lang
-                        var ghSrc = buildGithubSrc(viewport, lang, theme, category, name);
-                        img.onerror = function () {
-                            if (lang !== FALLBACK_LANG) {
-                                // Step 4: try GitHub Pages with fallback lang
-                                var ghFallback = buildGithubSrc(viewport, FALLBACK_LANG, theme, category, name);
-                                img.onerror = null; // Prevent infinite loop
-                                img.src = ghFallback;
-                            } else {
-                                img.onerror = null;
-                            }
-                        };
-                        img.src = ghSrc;
-                    };
-                    img.src = buildSrc(viewport, FALLBACK_LANG, theme, category, name);
+                next += 1;
+                if (next < candidates.length) {
+                    img.src = candidates[next];
                 } else {
-                    // Already on fallback lang locally → try GitHub Pages
-                    var ghSrc = buildGithubSrc(viewport, lang !== FALLBACK_LANG ? lang : FALLBACK_LANG, theme, category, name);
-                    img.onerror = function () {
-                        if (lang !== FALLBACK_LANG) {
-                            var ghFallback = buildGithubSrc(viewport, FALLBACK_LANG, theme, category, name);
-                            img.onerror = null;
-                            img.src = ghFallback;
-                        } else {
-                            img.onerror = null;
-                        }
-                    };
-                    img.src = ghSrc;
+                    img.onerror = null; // Prevent infinite loop
                 }
             };
             img.src = newSrc;
