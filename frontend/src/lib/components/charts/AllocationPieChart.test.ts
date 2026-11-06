@@ -984,6 +984,44 @@ describe('AllocationPieChart — the asset pie: one ring, the asset names as sen
         expect(callsWithAColourList(), 'an option handing ECharts a palette to paint a slice by its index').toEqual([]);
     });
 
+    describe('F-10 — the icons, and no legend', () => {
+        interface IconSlice extends AssetSlice {
+            iconUrl?: string | null;
+            assetType?: string | null;
+        }
+        const withIcons = (name: string, value: number, id: number | null, assetType: string | null, iconUrl: string | null = null): IconSlice => ({...assetSlice(name, value, id), assetType, iconUrl});
+        const SLICES: IconSlice[] = [withIcons('Own icon', 50, 41, 'ETF', '/own/icon.png'), withIcons('Typed', 30, 42, 'BOND'), withIcons('No type', 10, 43, null), withIcons(CASH_BUCKET, 10, null, null)];
+        const lastBuild = () => [...chartInstances[0].setOptionCalls].reverse().find(({option}) => option.tooltip !== undefined)!.option as Record<string, any>;
+
+        it('the pie has no legend: the icons and the tooltip name the slices; the other modes keep theirs', async () => {
+            await drawAssetPie(SLICES);
+            expect(lastBuild().legend).toEqual({show: false});
+            chartInstances.length = 0;
+            render(AllocationPieChart, {props: {data: [slice('Technology', 60), slice('Energy', 40)], mode: 'sector', legendPosition: 'bottom', currency: 'EUR'} as unknown as ComponentProps<PieComponent>});
+            await waitFor(() => expect(chartInstances[0]?.setOptionCalls.length ?? 0).toBeGreaterThan(0), {timeout: 5_000});
+            expect(lastBuild().legend.show).not.toBe(false);
+        });
+
+        it('each slice shows an icon through its label; the asset’s type’s while the own icon is unknown, the Liquidity one for the cash', async () => {
+            const drawn = await drawAssetPie(SLICES);
+            const label = (lastBuild().series as any[])[0].label;
+            const rich = label.rich as Record<string, {backgroundColor: {image: string}}>;
+            expect(label.show).toBe(true);
+            for (const arc of drawn.inner) expect(drawn.insideLabelOf(arc), `${arc.name}: a label that names its image`).toMatch(/^\{img_a(\d+|cash)\|\}$/);
+            expect(rich.img_a41.backgroundColor.image, 'the own icon is only used once it is known to load').toBe(K.getAssetTypeIconUrl('ETF'));
+            expect(rich.img_a42.backgroundColor.image).toBe(K.getAssetTypeIconUrl('BOND'));
+            expect(rich.img_a43.backgroundColor.image, 'a type the backend did not send: the generic icon').toBe(K.getAssetTypeIconUrl(null));
+            expect(rich.img_acash.backgroundColor.image).toBe(K.getAssetTypeIconUrl('LIQUIDITY'));
+        });
+
+        it('the tooltip still names the asset, with its percent and amount', async () => {
+            const drawn = await drawAssetPie(SLICES);
+            const arc = drawn.inner.find((entry) => entry.name === 'Typed')!;
+            expect(drawn.tooltipOf(arc)).toContain('Typed');
+            expect(drawn.tooltipOf(arc)).toContain('3');
+        });
+    });
+
     it('ranks 0 to 7 are categoryColor of the sequence’s eight types; the ranks past it are the sequence one shade further, never a repeat', async () => {
         const ranks = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         const many = ranks.map((rank) => assetSlice(`Asset ${rank}`, 50 - rank, 100 + rank));
