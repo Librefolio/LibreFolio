@@ -5,6 +5,6 @@
     "priceRefresh": {
       "running": "Actualizando precios…"
     },
-    "resumeHint": "Haz clic para actualizar los precios de nuevo"
+    "resumeHint": "Actualizaciones en pausa. Haz clic para actualizar los precios de nuevo."
   }
 }
