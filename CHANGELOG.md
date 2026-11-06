@@ -363,6 +363,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 📚 Documentation
 
+- **The documentation screenshots are WebP**, about a third of the weight of the PNGs, so the full image is lighter. The public site keeps both formats, so documentation already released keeps working.
 - The documentation site draws its diagrams with its own copy of Mermaid, with no request to a third party; the ELK layout is no longer available.
 - **The documentation site uses the same colours as the app**, in the light and the dark theme.
 - **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
