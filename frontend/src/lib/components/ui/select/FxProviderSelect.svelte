@@ -70,6 +70,8 @@
     let directRoutes = $state<RouteOption[]>([]);
     let chainRoutes = $state<RouteOption[]>([]);
     let unusableProviders = $state<ProviderInfo[]>([]);
+    /** A provider came without its currency list (backend could not read it): «no route» would be a guess, not an answer. */
+    let providersUnavailable = $state(false);
     let selectedKeys = $state<Set<string>>(new Set());
     let searchQuery = $state('');
     /** Whether the "Add route" picker is expanded */
@@ -257,7 +259,8 @@
 
             directRoutes = direct;
             chainRoutes = chain;
-            unusableProviders = providers.filter((p) => p.code !== 'MANUAL' && !usedProviderCodes.has(p.code));
+            providersUnavailable = providers.some((p) => p.currencies_unavailable);
+            unusableProviders = providers.filter((p) => p.code !== 'MANUAL' && !p.currencies_unavailable && !usedProviderCodes.has(p.code));
 
             // Auto-expand: if direct routes exist they're always visible, so no chain expansion needed.
             // If no direct routes, expand the first chain group only.
@@ -798,10 +801,10 @@
 
         <!-- No routes available at all -->
         {#if !hasAnyRoutes && !loading}
-            <div class="px-3 py-3 rounded-lg border border-dashed border-lf-warning-line bg-lf-warning-soft/50" data-testid="fx-route-none">
+            <div class="px-3 py-3 rounded-lg border border-dashed border-lf-warning-line bg-lf-warning-soft/50" data-testid={providersUnavailable ? 'fx-route-unavailable' : 'fx-route-none'}>
                 <div class="flex items-center gap-2 text-xs text-lf-warning-on-soft">
                     <AlertTriangle size={12} />
-                    <span>{$_('fx.route.noRoutesAvailable')}</span>
+                    <span>{$_(providersUnavailable ? 'fx.route.providersUnavailable' : 'fx.route.noRoutesAvailable')}</span>
                 </div>
             </div>
         {/if}

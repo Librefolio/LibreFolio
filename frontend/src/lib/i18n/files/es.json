@@ -91,7 +91,8 @@
       "sharedOnPick": "{name} era personal: ahora es visible para todos los usuarios, para que todos lo vean aquí"
     },
     "deleteSkipped": "Los archivos que no puedes eliminar se han quedado en su sitio",
-    "backups": "Copias"
+    "backups": "Copias",
+    "systemUploader": "Del sistema"
   },
   "files": {
     "deleteFailed": "Error al eliminar el archivo"
@@ -114,8 +115,8 @@
     },
     "overLimit": "Se ha superado el límite de espacio: elimina copias o archivos, o sube el límite.",
     "limit": {
-      "label": "Límite de espacio (MB)",
-      "hint": "Escribe 0 para no poner límite.",
+      "label": "Espacio total de LibreFolio (MB)",
+      "hint": "El espacio máximo que LibreFolio debería ocupar en total: base de datos, archivos, informes y copias de seguridad. Superarlo solo muestra un aviso y no bloquea nada. Escribe 0 para no poner límite.",
       "locked": "El límite de espacio lo fija quien aloja esta instancia.",
       "save": "Guardar",
       "saved": "Guardado.",
@@ -130,6 +131,9 @@
     "errors": {
       "load": "No se pudo cargar el espacio ocupado. Inténtalo de nuevo."
     },
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "advanced": {
+      "title": "Avanzado"
+    }
   }
 }

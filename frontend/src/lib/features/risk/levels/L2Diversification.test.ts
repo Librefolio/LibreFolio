@@ -172,6 +172,34 @@ beforeAll(async () => {
     await setupI18n();
 });
 
+describe('L2Diversification — a row follows the room it is given (F-7)', () => {
+    const withRows = {
+        analytic_code: 'risk_contribution',
+        instance_id: 'base-current_composition-risk_contribution',
+        status: 'ok',
+        output: {
+            kind: 'contribution',
+            portfolio_volatility: 0.13,
+            cash_weight: 0,
+            excluded_weight: 0,
+            items: [{asset_id: 7, weight: 0.068, percentage_contribution: 0.252}],
+        },
+    } as unknown as RiskAnalyticResult;
+
+    it('draws each row on the responsive layout, with the weight and the contribution under the bar', () => {
+        mountLevel(withRows);
+
+        // jsdom has no container queries: what is pinned is the markup they act on (the layout, the figures line).
+        const bar = screen.getByTestId('risk-l2-divergence-bar-7');
+        expect(bar.getAttribute('data-layout')).toBe('responsive');
+        const figures = screen.getByTestId('risk-l2-figures-7');
+        expect(figures.contains(screen.getByTestId('risk-l2-weight-7'))).toBe(true);
+        expect(figures.contains(screen.getByTestId('risk-l2-contribution-7'))).toBe(true);
+        // The bar comes before the figures in the document: name, bar, then the two numbers.
+        expect(bar.compareDocumentPosition(figures) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+});
+
 describe('L2Diversification — the share the risk model does not speak for', () => {
     it.each(['ok', 'partial'] as const)('publishes the share and draws its card on a contribution that came back %s', (status) => {
         mountLevel(contribution(status));

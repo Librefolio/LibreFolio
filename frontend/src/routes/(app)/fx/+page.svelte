@@ -13,6 +13,7 @@
     import {zodiosApi} from '$lib/api';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {ArrowLeftRight, CalendarSync, ChartLine, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
+    import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
     import FxTable from '$lib/components/fx/FxTable.svelte';
@@ -1304,14 +1305,17 @@
          philosophy as PageToolbar's own container-driven tiers, just via native CSS here since
          no JS threshold tuning is needed for a simple 2-block header). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div use:guideAnchor={'fx.page.overview'} data-testid="fx-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
-                {$_('fx.title')}
-                {#if pairs.length > 0}
-                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{pairs.length}</span>
-                {/if}
-            </h2>
-            <p class="text-lf-muted text-sm">{$_('fx.subtitle')}</p>
+        <div class="flex items-center gap-3">
+            <PageBackButton fallback="/dashboard" testId="fx-back-btn" />
+            <div use:guideAnchor={'fx.page.overview'} data-testid="fx-page-overview-guide-target">
+                <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
+                    {$_('fx.title')}
+                    {#if pairs.length > 0}
+                        <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{pairs.length}</span>
+                    {/if}
+                </h2>
+                <p class="text-lf-muted text-sm">{$_('fx.subtitle')}</p>
+            </div>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedFxRows.length > 0}

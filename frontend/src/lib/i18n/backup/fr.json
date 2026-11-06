@@ -337,7 +337,8 @@
         "network": "Pas de réponse du serveur. Réessayez.",
         "unexpected": "Les paramètres n'ont pas pu être enregistrés. Réessayez."
       },
-      "hintDays": "Saisissez 0 pour conserver les sauvegardes jusqu'à ce que vous les supprimiez."
+      "hintDays": "Saisissez 0 pour conserver les sauvegardes jusqu'à ce que vous les supprimiez.",
+      "timing": "Les règles s'appliquent dans l'heure : après chaque sauvegarde et à chaque démarrage, au plus une fois par heure."
     }
   }
 }

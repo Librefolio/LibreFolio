@@ -1,6 +1,6 @@
 <!--
   The backups the instance keeps (lot FB-24): the table of the backups on the server, the automatic clean-up that
-  bounds them, and the reminder that a copy on the same disk as the data is not a real backup.
+  bounds them, and the reminder (an info notice, not a warning) that a copy on the same disk as the data is not a real backup.
 
   Shown under the backup card of Settings › Administration › Backup (foldable, remembered) and in the Files page's
   Backup tab (always open). Administrators only: both places already are.
@@ -8,7 +8,7 @@
   Published state: `data-open` (`true|false`); the toggle `backups-section-toggle` carries `aria-expanded`.
 -->
 <script lang="ts">
-    import {ChevronDown, ChevronRight, HardDrive, TriangleAlert} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, HardDrive, Info} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import BackupCleanupPanel from './BackupCleanupPanel.svelte';
@@ -67,8 +67,8 @@
     </header>
 
     {#if open}
-        <p class="flex items-start gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="backup-same-disk-warning">
-            <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
+        <p class="flex items-start gap-2 rounded-lg border border-lf-info-line bg-lf-info-soft p-3 text-sm text-lf-info-on-soft" data-testid="backup-same-disk-notice" data-variant="info">
+            <Info class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
             <span>{$_('backup.list.sameDisk')}</span>
         </p>
         <BackupList />

@@ -81,7 +81,7 @@ La page d'un courtier est le [Tableau de bord](../dashboard/index.md) avec ce co
 
 Ce qui est identique au Tableau de bord :
 
-- **Période, devise et boutons.** La plage de dates, le menu **Devise**, **Export IA** et **Actualiser** sont ceux du Tableau de bord. **Mises à jour en pause** s'affiche ici aussi, lorsque vous n'avez pas utilisé la page pendant deux minutes (voir **Prix live** sur la page [Actifs](../assets/index.md)).
+- **Période, devise et boutons.** La plage de dates, le menu **Devise**, **Export IA** et **Actualiser** sont ceux du Tableau de bord. Lorsque vous n'avez pas utilisé la page pendant deux minutes, **Actualiser** devient **Mises à jour en pause**, au même endroit : cliquez dessus pour actualiser de nouveau les prix (voir **Prix live** sur la page [Actifs](../assets/index.md)).
 - **Les soldes de trésorerie suivent la période.** Ils affichent les liquidités à la fin de la période choisie.
 - **Lots.** **Analyser les lots** ouvre le détail des lots sous la liste ; le bouton **Retour** du navigateur le ferme. **Voir tout →** ouvre la page Actifs sur la même période.
 - **Bannière de qualité des données.** Les prix anciens et les taux de change manquants ou anciens sont également signalés ici, avec les mêmes boutons **Synchroniser les prix** et **Synchroniser les taux** ([Bannière de qualité des données](../dashboard/index.md#data-quality-banner)). Chaque rôle les voit, y compris un Lecteur : ils mettent à jour les prix et les taux de change partagés, et non le courtier lui-même.

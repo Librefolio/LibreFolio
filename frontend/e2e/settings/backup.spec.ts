@@ -1475,8 +1475,13 @@ restoreTest.describe('Settings › Backup — a restore of the instance', () => 
         await expect(create, 'no password yet: nothing to start').toBeDisabled();
         const first = backupCard.getByTestId('backup-password');
         const second = backupCard.getByTestId('backup-password-confirm');
-        await expect(first).toHaveAttribute('type', 'password');
-        await expect(second).toHaveAttribute('type', 'password');
+        // K-1: never a real password field (a browser would offer to save it), a text field drawn masked by CSS.
+        for (const field of [first, second]) {
+            await expect(field).toHaveAttribute('type', 'text');
+            await expect(field).toHaveAttribute('data-masked', 'true');
+            expect(await field.evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-text-security')), 'the browser draws the dots').toBe('disc');
+        }
+        await expect(backupCard.locator('input[type="password"]')).toHaveCount(0);
 
         // One character short of the options' minimum, every class in it, typed twice alike: the meter holds it to the
         // options' rules — once they are in: the accounts' own ask fewer characters —, and the backup cannot start.

@@ -23,7 +23,7 @@ tab, and read again with **Check again** once you have fixed the configuration a
 
 | Level | The log says | What to do |
 | --- | --- | --- |
-| ℹ️ `info` | `JWT_SECRET is not set: every start makes a new session signing key, …` | Nothing, if signing everyone out at every restart is fine. Otherwise see [Keep users signed in](index.md#session-persistence). |
+| ℹ️ `info` | `The session key is random: every restart signs everyone out. To stay signed in, set JWT_SECRET.` | Nothing, if signing everyone out at every restart is fine. Otherwise see [Keep users signed in](index.md#session-persistence). |
 | ⚠️ `warning` | `The session signing key from JWT_SECRET is … characters long: use at least 32 random characters` (or `from JWT_SECRET_FILE (<path>)`) | Generate a longer key, as in [Keep users signed in](index.md#session-persistence), and put it where the line says. |
 | ⚠️ `warning` | `Set both directly and through a *_FILE variable: …` | For each secret listed, keep only one of the two: the variable itself wins, the file is ignored. |
 | ❌ `error` | `The instance key cannot be used: …`, ending with `cannot be reached (Permission denied)` or `cannot be read (…)` | The `secrets/` folder or `instance.key` belongs to another user, or its permissions keep LibreFolio out. Give both back to the user that runs LibreFolio (`chown`), then `chmod 700` on the folder and `chmod 600` on the file. Never replace the key with a new one. The server starts anyway. |

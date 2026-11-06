@@ -401,6 +401,19 @@ describe('PositionsReturnChart — legend', () => {
         expect(screen.getByTestId('positions-chart-legend-12-3').getAttribute('data-kind')).not.toBe('portfolio');
     });
 
+    it('the label scrolls when it is too long (F-1): a marquee span, capped in width, holding the whole name', () => {
+        const longName = 'Amundi MSCI Semiconductors UCITS ETF Acc · Broker With A Long Name';
+        render(PositionsReturnChart, {props: props({lines: [PORTFOLIO(), line('12-3', [1, 2, 3], {label: longName})]})});
+        const name = screen.getByTestId('positions-chart-legend-name-12-3');
+        expect(screen.getByTestId('positions-chart-legend-12-3')).toContainElement(name);
+        expect(name).toHaveTextContent(longName);
+        // The marker class is what `scrollOnOverflow` and the design system share; `max-w-*` is what makes it overflow at all.
+        expect(name.className).toContain('overflow-scroll-marquee');
+        expect(name.className).toMatch(/\bmax-w-/);
+        // Not an ellipsis: the tail must stay reachable by the scroll.
+        expect(name.className).not.toContain('truncate');
+    });
+
     it('the note is shown with the portfolio line (the text it was given)', () => {
         render(PositionsReturnChart, {props: props()});
         expect(screen.getByTestId('positions-chart-note')).toHaveTextContent(NOTE);
@@ -506,6 +519,25 @@ describe('PositionsReturnChart — the view toggle is on the chart and the note 
         const plot = await screen.findByTestId('positions-chart-plot');
         expect(within(plot).getByTestId('positions-chart-view-absolute')).toBeInTheDocument();
         expect(within(plot).getByTestId('positions-chart-view-percentage')).toBeInTheDocument();
+    });
+
+    it('the view toggle is made of icons, as the Assets list’s is (F-3), and the label stays as tooltip and accessible name', async () => {
+        render(PositionsReturnChart, {props: props()});
+        const absolute = screen.getByTestId('positions-chart-view-absolute');
+        const rolling = screen.getByTestId('positions-chart-view-rolling');
+        expect(within(absolute).getByTestId('positions-chart-view-absolute-icon')).toBeInTheDocument();
+        expect(within(rolling).getByTestId('positions-chart-view-rolling-icon')).toBeInTheDocument();
+        // No word drawn inside the buttons: «%» is the one symbol of the Assets list too.
+        expect(rolling.textContent?.trim()).toBe('');
+        expect(absolute.textContent?.trim()).toBe('');
+        expect(screen.getByTestId('positions-chart-view-percentage').textContent?.trim()).toBe('%');
+        for (const option of ['absolute', 'percentage', 'rolling']) {
+            const button = screen.getByTestId(`positions-chart-view-${option}`);
+            const name = button.getAttribute('aria-label') ?? '';
+            expect(name, `${option}: an accessible name`).not.toBe('');
+            expect(name).not.toContain('dashboard.');
+            expect(button.getAttribute('title') ?? '', `${option}: the label is in the tooltip`).toContain(name);
+        }
     });
 
     it('the note comes after the plot, below the chart', async () => {

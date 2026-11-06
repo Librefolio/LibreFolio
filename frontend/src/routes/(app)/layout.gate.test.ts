@@ -58,7 +58,7 @@ const mocks = await vi.hoisted(async () => {
 });
 
 vi.mock('$app/environment', () => ({browser: false, dev: true, building: false, version: 'test'}));
-vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), onNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
+vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), beforeNavigate: vi.fn(), onNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
 vi.mock('$app/stores', async () => {
     const {readable} = await import('svelte/store');
     return {page: readable({route: {id: '/(app)/dashboard'}, url: new URL('http://librefolio.test/dashboard')})};
@@ -107,7 +107,7 @@ vi.mock('$lib/features/onboarding/onboardingRouteSettlement', async (importOrigi
     runOwnedOnboardingRouteSettlement: mocks.runOwnedSettlement,
 }));
 vi.mock('$lib/features/onboarding/onboardingGuide.svelte', () => ({onboardingGuide: {active: null, maybeStartIntro: vi.fn()}}));
-vi.mock('$lib/stores/app/navigationStore', () => ({trackNavigation: vi.fn()}));
+vi.mock('$lib/stores/app/navigationStore', () => ({trackNavigation: vi.fn(), syncCurrentLocation: vi.fn()}));
 vi.mock('$lib/stores/dateRangeStore.svelte', () => ({seedFromUrl: vi.fn()}));
 vi.mock('$lib/stores/app/language', () => ({currentLanguage: {init: vi.fn()}}));
 vi.mock('$lib/debug', () => ({debug: {log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn()}, isDebugEnabled: () => false}));

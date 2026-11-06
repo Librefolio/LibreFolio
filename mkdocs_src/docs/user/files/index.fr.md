@@ -128,7 +128,7 @@ Seuls les administrateurs voient ce qui suit ; les autres utilisateurs ne trouve
 
 ### 📊 L'espace utilisé {: #space-used }
 
-Au-dessus des onglets, une barre indique la place qu'occupe l'instance, répartie entre la **base de données**, les **fichiers téléversés**, les **rapports de courtiers**, les **sauvegardes** et les **autres fichiers de LibreFolio**. Sans limite définie, elle est tracée par rapport au disque, les autres fichiers du disque apparaissant en gris ; avec une limite, par rapport à cette limite. Dans la même barre, vous définissez la **Limite d'espace (MB)**, `0` pour aucune limite. Lorsque la limite est dépassée, la barre vous avertit, et rien n'est supprimé. La barre se met à jour avec **Actualiser**. Comment l'interpréter, et ce qui définit la limite : [La barre d'occupation de l'espace](../../admin/backup_restore.md#space-used).
+Au-dessus des onglets, une barre indique la place qu'occupe l'instance, répartie entre la **base de données**, les **fichiers téléversés**, les **rapports de courtiers**, les **sauvegardes** et les **autres fichiers de LibreFolio**. Sans limite définie, elle est tracée par rapport au disque, les autres fichiers du disque apparaissant en gris ; avec une limite, par rapport à cette limite. Sous la barre, dans le panneau fermé **Avancé**, vous définissez l'**Espace total de LibreFolio (Mo)**, `0` pour aucune limite. Lorsque la limite est dépassée, la barre vous avertit seulement : rien n'est bloqué et rien n'est supprimé. La barre se met à jour avec **Actualiser**. Comment l'interpréter, et ce qui définit la limite : [La barre d'occupation de l'espace](../../admin/backup_restore.md#space-used).
 
 ### 🗃️ L'onglet Sauvegardes {: #backups-tab }
 

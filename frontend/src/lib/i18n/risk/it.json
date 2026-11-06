@@ -18,7 +18,23 @@
       "includeFrontier": "Includi frontiera",
       "frontierPoints": "Punti della frontiera",
       "includeSensitivity": "Includi sensibilità",
-      "optimizationSolver": "Solver"
+      "optimizationSolver": "Solver",
+      "horizonExpr": {
+        "units": {
+          "year": "a",
+          "month": "m",
+          "day": "g"
+        },
+        "hint": "Scrivi i giorni (365) oppure anni, mesi e giorni: 2a3m5g sono 2 anni, 3 mesi e 5 giorni, cioè 825 giorni (un anno vale 365 giorni, un mese 30).",
+        "hintLabel": "Come scrivere l'orizzonte",
+        "resultDays": "{days, plural, one {# giorno} other {# giorni}}",
+        "errors": {
+          "empty": "Inserisci l'orizzonte.",
+          "format": "Orizzonte non valido: scrivi i giorni (365) oppure, in quest'ordine, anni, mesi e giorni (2a3m5g).",
+          "tooShort": "L'orizzonte deve essere di almeno 1 giorno.",
+          "tooLong": "L'orizzonte non può superare {max} giorni."
+        }
+      }
     },
     "title": "Rischio",
     "dashboardTitle": "Rischio portafoglio",
@@ -411,7 +427,8 @@
           "drawdownAtRisk": "Drawdown a rischio ({confidence})",
           "conditionalDrawdownAtRisk": "Media oltre quella soglia",
           "ulcerIndex": "Indice di Ulcer {value}",
-          "ulcerIndexHint": "profondità quadratica media sotto il picco: più basso, più tranquillo"
+          "ulcerIndexHint": "profondità quadratica media sotto il picco: più basso, più tranquillo",
+          "worstMonth": "Il mese peggiore davvero visto"
         },
         "underwater": {
           "title": "Tempo passato sotto il picco",
@@ -423,8 +440,15 @@
           "cut": "Soglia VaR a {value}",
           "noCut": "Nessuna soglia pubblicata per questa finestra.",
           "empty": "Nessuna distribuzione dei rendimenti per questo periodo.",
-          "bin": "{range}: {count, plural, one {# giorno} other {# giorni}} ({share})"
-        }
+          "bin": "{range}: {count, plural, one {# giorno} other {# giorni}} ({share})",
+          "cutLine": "VaR {value}",
+          "position": {
+            "beyond": "Oltre la soglia VaR ({value}): giorni che il VaR descrive",
+            "holds": "Contiene la soglia VaR ({value})",
+            "above": "Sopra la soglia VaR ({value})"
+          }
+        },
+        "period": "dal {from} al {to}"
       },
       "l2": {
         "title": "Sono diversificato come credo?",

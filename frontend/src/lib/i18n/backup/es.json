@@ -337,7 +337,8 @@
         "network": "Sin respuesta del servidor. Inténtalo de nuevo.",
         "unexpected": "No se pudieron guardar los ajustes. Inténtalo de nuevo."
       },
-      "hintDays": "Escribe 0 para conservar las copias hasta que las elimines."
+      "hintDays": "Escribe 0 para conservar las copias hasta que las elimines.",
+      "timing": "Las reglas se aplican en una hora como máximo: tras cada copia de seguridad y en cada arranque, como mucho una vez por hora."
     }
   }
 }

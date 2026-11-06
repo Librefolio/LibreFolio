@@ -22,8 +22,10 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4.
 -->
 <script lang="ts">
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {SIGN_BAR} from '$lib/theme/toneClasses';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
     interface Props {
         label: string;
@@ -53,10 +55,18 @@
         /**
          * `stacked` — label and value on a line above the bar (the dashboard).
          * `inline`  — label │ bar │ value on a single row (dense tables).
+         * `responsive` — `inline` while its own box is at least `inlineFromWidth` wide, and under that the name and the
+         *   value on one line with the bar below: the row follows the room it is given, not the screen (container query),
+         *   so it holds in a narrow column of a wide screen as on a phone. The caller adds what goes under the bar.
          */
-        layout?: 'stacked' | 'inline';
-        /** Grid template used by `layout="inline"`. */
+        layout?: 'stacked' | 'inline' | 'responsive';
+        /** Grid template used by `layout="inline"`, and by `responsive` from `inlineFromWidth` up. */
         inlineColumns?: string;
+        /**
+         * The name scrolls when it does not fit (`scrollOnOverflow`), instead of being cut with an ellipsis; the full
+         * name stays in the `title`. Only the plain label (no tooltip) scrolls.
+         */
+        scrollLabel?: boolean;
         /** Extra classes on the value element, e.g. `font-mono`. */
         valueClass?: string;
         /** Stable E2E selector placed on the root element. */
@@ -91,6 +101,7 @@
         barHeight = 'h-1.5',
         layout = 'stacked',
         inlineColumns = 'minmax(7rem,1fr) minmax(10rem,2fr) 5rem',
+        scrollLabel = false,
         valueClass = '',
         testId,
         valueTestId,
@@ -127,6 +138,8 @@
         <Tooltip text={tooltip} position="top" wrapperClass="min-w-0">
             <span class="block truncate min-w-0 cursor-help border-b border-dotted border-lf-input text-lf-muted" title={label}>{label}</span>
         </Tooltip>
+    {:else if scrollLabel}
+        <span use:scrollOnOverflow class="{overflowScrollTextClass} text-lf-muted" title={label}>{label}</span>
     {:else}
         <span class="block truncate min-w-0 text-lf-muted" title={label}>{label}</span>
     {/if}
@@ -146,7 +159,17 @@
     </div>
 {/snippet}
 
-{#if layout === 'inline'}
+{#if layout === 'responsive'}
+    <!-- Narrow: name and value on the first line, the bar full width under them. From 26rem of its own width: name │ bar │
+         value, as `inline`. The three cells are placed by grid lines, so one markup serves both. -->
+    <div class="@container" data-testid={testId} data-layout="responsive">
+        <div class="grid items-center gap-x-2 gap-y-1 text-xs grid-cols-[minmax(0,1fr)_auto] @[26rem]:grid-cols-[var(--lf-bar-columns)]" style="--lf-bar-columns: {inlineColumns}">
+            <div class="min-w-0 col-start-1 row-start-1">{@render labelNode()}</div>
+            <div class="col-span-2 row-start-2 @[26rem]:col-span-1 @[26rem]:col-start-2 @[26rem]:row-start-1">{@render track()}</div>
+            <span class="col-start-2 row-start-1 text-right whitespace-nowrap font-medium @[26rem]:col-start-3 {valueColor} {valueClass}" data-testid={valueTestId}>{value}</span>
+        </div>
+    </div>
+{:else if layout === 'inline'}
     <div class="grid items-center gap-2 text-xs" style="grid-template-columns: {inlineColumns}" data-testid={testId}>
         {@render labelNode()}
         {@render track()}

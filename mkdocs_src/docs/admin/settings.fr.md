@@ -283,7 +283,7 @@ Chaque constat indique ce qui ne va pas, avec son icône et sa couleur : ❌ une
 
 | Contrôle | Un constat lorsque | Son lien |
 |---|---|---|
-| Clé de signature de session | ℹ️ Aucune clé n’est définie : chaque redémarrage déconnecte tous les utilisateurs. ⚠️ La clé fait moins de 32 caractères. ❌ Son `JWT_SECRET_FILE` ne peut pas être lu | — |
+| Clé de signature de session | ℹ️ La clé est aléatoire : chaque redémarrage déconnecte tout le monde ; définissez `JWT_SECRET` pour rester connecté. ⚠️ La clé fait moins de 32 caractères. ❌ Son `JWT_SECRET_FILE` ne peut pas être lu | — |
 | Secrets définis deux fois | ⚠️ Un secret est défini à la fois directement et via sa variable `_FILE` : la valeur directe l’emporte | — |
 | Clé de l’instance | ❌ Elle ne peut pas être utilisée. ⚠️ Son dossier ou son fichier est accessible à d’autres utilisateurs | — |
 | Cookie de session | ⚠️ `SESSION_COOKIE_SECURE=never` : le cookie circule aussi en HTTP simple | — |

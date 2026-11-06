@@ -41,6 +41,56 @@ class ECBProvider(FXRateProvider):
     REFERENCE_AREA = "EUR"  # Base currency
     SERIES = "SP00"  # Series variation (spot rate)
 
+    # What the discovery below returned on 2026-11-05 (44 currencies plus EUR). The catalog lists it while the first
+    # discovery after a restart is slow or fails; the live list replaces it as soon as one arrives.
+    FALLBACK_CURRENCIES = (
+        "ARS",
+        "AUD",
+        "BGN",
+        "BRL",
+        "CAD",
+        "CHF",
+        "CNY",
+        "CYP",
+        "CZK",
+        "DKK",
+        "DZD",
+        "EEK",
+        "EUR",
+        "GBP",
+        "GRD",
+        "HKD",
+        "HRK",
+        "HUF",
+        "IDR",
+        "ILS",
+        "INR",
+        "ISK",
+        "JPY",
+        "KRW",
+        "LTL",
+        "LVL",
+        "MAD",
+        "MTL",
+        "MXN",
+        "MYR",
+        "NOK",
+        "NZD",
+        "PHP",
+        "PLN",
+        "RON",
+        "RUB",
+        "SEK",
+        "SGD",
+        "SIT",
+        "SKK",
+        "THB",
+        "TRY",
+        "TWD",
+        "USD",
+        "ZAR",
+    )
+
     @property
     def code(self) -> str:
         return "ECB"
@@ -91,6 +141,10 @@ class ECBProvider(FXRateProvider):
             "AUD",  # Australian Dollar
             "EUR",  # Euro (base currency)
         ]
+
+    @property
+    def fallback_currencies(self) -> list[str]:
+        return list(self.FALLBACK_CURRENCIES)
 
     async def get_supported_currencies(self) -> list[str]:
         """

@@ -130,6 +130,30 @@ describe('FxProviderSelect', () => {
         expect(screen.queryByTestId('fx-route-picker-toggle')).toBeNull();
     });
 
+    it('asks to try again shortly, instead of saying no path exists, when a provider came without its currencies', async () => {
+        await setupI18n();
+        // B-4: ECB too slow to list its currencies right after a restart. No route is found because ECB has no edges yet.
+        graphReturns([], [{...ECB, target_currencies: [], currencies_unavailable: true}, FED, BOE, MANUAL]);
+        mount();
+
+        await settled();
+
+        expect(screen.getByTestId('fx-route-unavailable')).toBeInTheDocument();
+        expect(screen.queryByTestId('fx-route-none')).toBeNull();
+    });
+
+    it('does not list a provider whose currencies are unknown among those that cannot serve the pair', async () => {
+        await setupI18n();
+        graphReturns([CHAIN], [{...ECB, target_currencies: [], currencies_unavailable: true}, FED, BOE, MANUAL]);
+        mount();
+        await settled();
+        const picker = await openPicker();
+
+        // BOE really does not serve EUR→GBP; ECB is unknown, and «cannot serve» would be a guess.
+        expect(within(picker).getByTestId('fx-route-unusable')).toHaveTextContent('BOE');
+        expect(within(picker).getByTestId('fx-route-unusable')).not.toHaveTextContent('ECB');
+    });
+
     it('lists the direct route and the providers it goes through, never MANUAL', async () => {
         await setupI18n();
         mount();

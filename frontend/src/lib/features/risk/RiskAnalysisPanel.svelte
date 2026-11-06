@@ -32,6 +32,7 @@
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import RiskResultFrame from './RiskResultFrame.svelte';
+    import SimulationHorizonField from './SimulationHorizonField.svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
@@ -133,6 +134,7 @@
     let appliedRiskFreePercent = $state(0);
     let simulationSampling = $state<'mc' | 'qmc'>('mc');
     let simulationHorizonDays = $state(365);
+    let simulationHorizonValid = $state(true);
     let simulationPaths = $state(8192);
     let simulationRandomSeed = $state(123456);
     let simulationSobolStartIndex = $state(123456);
@@ -1015,19 +1017,7 @@
                         />
                     </div>
                 </label>
-                <label class="text-xs text-lf-muted">
-                    {$t('risk.params.horizonDays')}
-                    <input
-                        class="mt-1 block w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
-                        type="number"
-                        use:numericArrows
-                        min="1"
-                        max="3650"
-                        step="1"
-                        bind:value={simulationHorizonDays}
-                        data-testid="risk-simulation-horizon"
-                    />
-                </label>
+                <SimulationHorizonField bind:days={simulationHorizonDays} bind:valid={simulationHorizonValid} />
                 <label class="text-xs text-lf-muted">
                     {$t('risk.params.paths')}
                     <div class="mt-1 w-28">
@@ -1061,7 +1051,7 @@
                         />
                     </label>
                 {/if}
-                <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runSimulation} disabled={simulationLoading} data-testid="risk-simulation-run">
+                <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runSimulation} disabled={simulationLoading || !simulationHorizonValid} data-testid="risk-simulation-run">
                     <Play size={13} />
                     {$t('risk.actions.simulate')}
                 </button>

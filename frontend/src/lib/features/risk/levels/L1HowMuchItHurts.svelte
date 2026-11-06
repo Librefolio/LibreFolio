@@ -146,6 +146,15 @@
                 {#each rows as row (row.id)}
                     <RiskMetricCard label={$t(`risk.levels.l1.rows.${row.id}`)} technicalName={$t(`risk.levels.l1.technical.${row.id}`)} value={lossPercent(row.loss)} caption={caption(lossMoney(row.loss))} sentiment="negative" docsPath={DOC_PATHS[row.id]} testId="risk-l1-card-{row.id}">
                         {#snippet submetrics()}
+                            <!-- Which one it was (F-6): the worst fall from the peak to the trough, and the worst month the series
+                                 really went through, beside the average of the worst 5 % that the card's figure is. The day has its
+                                 own date, under the worst realization below. -->
+                            {#if row.id === 'month' && row.worstSeen !== null}
+                                {@render measure($t('risk.levels.l1.tails.worstMonth'), lossPercent(row.worstSeen), 'risk-l1-worst-month')}
+                            {/if}
+                            {#if row.period}
+                                <p class="text-right text-[10px] text-lf-muted" data-testid="risk-l1-period-{row.id}" data-from={row.period.from} data-to={row.period.to}>{$t('risk.levels.l1.period', {values: {from: row.period.from, to: row.period.to}})}</p>
+                            {/if}
                             {#if row.durationDays != null}
                                 {@render measure($t('risk.levels.l1.durationDays', {values: {days: row.durationDays}}), '', `risk-l1-duration-${row.id}`)}
                             {/if}

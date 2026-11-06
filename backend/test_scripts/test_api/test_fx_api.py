@@ -155,6 +155,9 @@ async def test_providers_include_target_currencies(test_server):
             # Base currency should be included in target currencies
             assert provider.base_currency in provider.target_currencies, f"Base currency {provider.base_currency} should be in target_currencies for {provider.code}"
 
+            # A list that is there is never flagged as missing (B-4: the flag only marks a failed, empty fetch)
+            assert provider.currencies_unavailable is False, f"Provider {provider.code} is flagged unavailable with {len(provider.target_currencies)} currencies"
+
             print_success(f"✓ {provider.code}: {len(provider.target_currencies)} target currencies, " f"base_currencies={provider.base_currencies}")
 
 

@@ -1,14 +1,18 @@
 /**
  * Currency Graph Store — Session-level cache for the FX currency graph.
  *
- * Builds the graph once from GET /fx/providers + GET /utilities/currencies,
+ * Builds the graph from GET /fx/providers + GET /utilities/currencies,
  * then caches it for the entire session. Both API responses are stable
  * (providers are registered at startup, currencies don't change).
  *
  * There is deliberately no invalidation API: the graph is built only from
- * provider capabilities, which are fixed at backend startup — the MANUAL
- * sentinel is skipped and user FX routes/rates are not graph inputs — so a
- * mid-session change is impossible and the cache can never go stale.
+ * provider capabilities — the MANUAL sentinel is skipped and user FX
+ * routes/rates are not graph inputs — so a complete graph can never go stale.
+ *
+ * One exception: a provider whose currency list the backend could not read
+ * (`currencies_unavailable`, e.g. ECB slow right after a restart) has no
+ * edges, so the graph built from it is incomplete. That graph is returned but
+ * not cached: the next call asks the backend again, which retries the list.
  *
  * Usage:
  *   const graph = await getCurrencyGraph();
@@ -80,6 +84,7 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
                 base_currency: p.base_currency,
                 base_currencies: p.base_currencies ?? [p.base_currency],
                 target_currencies: p.target_currencies ?? [],
+                currencies_unavailable: p.currencies_unavailable ?? false,
                 icon_url: p.icon_url ?? null,
                 description: p.description ?? '',
                 description_i18n: p.description_i18n ?? {},
@@ -93,9 +98,9 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
             // Build the graph
             const graph = buildCurrencyGraph(providers, allCurrencyCodes);
 
-            // Cache
+            // Cache — unless a provider came without its currencies: that graph is incomplete, the next call rebuilds it
             cachedFxProviders = providers;
-            cachedGraph = graph;
+            if (!providers.some((p) => p.currencies_unavailable)) cachedGraph = graph;
             fxProvidersVersion.update((v) => v + 1);
 
             return graph;

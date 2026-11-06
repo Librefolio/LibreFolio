@@ -141,6 +141,12 @@ RUN groupadd -g ${GID} librefolio 2>/dev/null || true && \
 ENV LIBREFOLIO_UID=${UID} \
     LIBREFOLIO_GID=${GID}
 
+# Tab completion for ./dev.py in an interactive shell (the Portainer console, `docker exec -it … bash`), as root or as
+# the named user: a non-login interactive bash reads /etc/bash.bashrc, which returns early when the shell is not
+# interactive. The completion script is written once here, not `eval`ed at every shell start. It is registered for
+# `dev.py`: for `./dev.py` bash falls back to the name after the last slash. argcomplete comes from the pybuilder stage.
+RUN register-python-argcomplete dev.py >> /etc/bash.bashrc
+
 # Entrypoint: fix bind-mount permissions then drop to non-root via gosu
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

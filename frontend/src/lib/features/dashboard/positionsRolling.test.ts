@@ -10,7 +10,7 @@
  */
 import {describe, expect, it, vi} from 'vitest';
 import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
-import {buildRollingQuery, createPositionsRollingController, rollingLine, rollingScopeKey, rollingWindowDays, type RollingScope} from './positionsRolling';
+import {buildRollingQuery, createPositionsRollingController, rollingLine, rollingAutoPreset, rollingScopeKey, rollingWindowDays, type RollingScope} from './positionsRolling';
 
 const SCOPE: RollingScope = {start: '2026-01-01', end: '2026-10-29', ready: true};
 
@@ -73,6 +73,27 @@ describe('buildRollingQuery', () => {
             signals: [{instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: 90}}],
         });
         expect(items.map((entry) => entry.asset_id)).toEqual([3, 9]);
+    });
+});
+
+describe('the window the user chose (F-2)', () => {
+    it('rollingAutoPreset is the preset behind the automatic window: the largest that fits', () => {
+        expect(rollingAutoPreset('2026-01-01', '2026-10-29')).toBe('3m');
+        expect(rollingAutoPreset('2026-10-01', '2026-10-29')).toBe('1w');
+        expect(rollingAutoPreset('2025-01-01', '2026-10-29')).toBe('1y');
+    });
+
+    it('without a choice the query keeps the automatic window; with one, the chosen days', () => {
+        const auto = buildRollingQuery([3], SCOPE)[0].signals[0].params.window_days;
+        expect(auto).toBe(rollingWindowDays(SCOPE.start!, SCOPE.end!));
+        expect(buildRollingQuery([3], {...SCOPE, windowDays: 7})[0].signals[0].params.window_days).toBe(7);
+        expect(buildRollingQuery([3], {...SCOPE, windowDays: 365})[0].signals[0].params.window_days).toBe(365);
+    });
+
+    it('the window is part of the question: another window is another scope key, no window is the automatic one', () => {
+        expect(rollingScopeKey({...SCOPE, windowDays: 7})).not.toBe(rollingScopeKey(SCOPE));
+        expect(rollingScopeKey({...SCOPE, windowDays: 7})).not.toBe(rollingScopeKey({...SCOPE, windowDays: 30}));
+        expect(rollingScopeKey({...SCOPE, windowDays: undefined})).toBe(rollingScopeKey(SCOPE));
     });
 });
 
@@ -173,6 +194,24 @@ describe('createPositionsRollingController', () => {
         await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
         expect((fetcher.mock.calls[1][0] as unknown as Array<{date_range: {start: string}}>)[0].date_range.start).toBe('2026-06-01');
         expect(rollingScopeKey({...SCOPE, version: 1})).not.toBe(rollingScopeKey(SCOPE));
+    });
+
+    it('a new window asks again for everything ticked, with that window', async () => {
+        const fetcher = vi.fn(async (items: Array<{asset_id: number}>) => answerFor(items.map((entry) => entry.asset_id)));
+        const controller = createPositionsRollingController(fetcher as never);
+        controller.request([3, 9], SCOPE);
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+
+        // The page's sync (the user picked 1W): the views are another question's, so both assets are asked again.
+        controller.sync({...SCOPE, windowDays: 7});
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+        const asked = fetcher.mock.calls[1][0] as unknown as Array<{asset_id: number; signals: Array<{params: {window_days: number}}>}>;
+        expect(asked.map((entry) => entry.asset_id)).toEqual([3, 9]);
+        expect(asked[0].signals[0].params.window_days).toBe(7);
+
+        // The same window again: nothing new to ask.
+        controller.sync({...SCOPE, windowDays: 7});
+        expect(fetcher).toHaveBeenCalledTimes(2);
     });
 
     it('says when the request failed, and asks again at the next call', async () => {

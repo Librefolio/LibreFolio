@@ -5,6 +5,7 @@
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
+    import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
 
     import {zodiosApi} from '$lib/api';
     import {commitTransactions} from '$lib/features/transactions/txCommitApi';
@@ -737,14 +738,17 @@
 <div class="space-y-6 text-lf-primary" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="transactions-page">
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-4">
-        <div use:guideAnchor={'transactions.page.overview'} data-testid="transactions-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
-                {$_('transactions.title')}
-                {#if mainRows.length > 0}
-                    <span data-testid="tx-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{mainRows.length}</span>
-                {/if}
-            </h2>
-            <p class="text-lf-muted text-sm">{$_('transactions.subtitle')}</p>
+        <div class="flex items-center gap-3">
+            <PageBackButton fallback="/dashboard" testId="transactions-back-btn" />
+            <div use:guideAnchor={'transactions.page.overview'} data-testid="transactions-page-overview-guide-target">
+                <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
+                    {$_('transactions.title')}
+                    {#if mainRows.length > 0}
+                        <span data-testid="tx-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{mainRows.length}</span>
+                    {/if}
+                </h2>
+                <p class="text-lf-muted text-sm">{$_('transactions.subtitle')}</p>
+            </div>
         </div>
         <div class="flex items-center gap-2 ml-auto">
             {#if selectedRows.length > 0}

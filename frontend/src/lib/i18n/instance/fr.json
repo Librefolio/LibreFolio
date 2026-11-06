@@ -6,7 +6,7 @@
     "checks": {
       "jwtSecret": {
         "ok": "Les sessions sont signées avec une clé définie par l'administrateur.",
-        "ephemeral": "Aucune clé de signature des sessions n'est définie : chaque redémarrage déconnecte tous les utilisateurs.",
+        "ephemeral": "La clé des sessions est aléatoire : chaque redémarrage déconnecte tout le monde. Pour rester connecté, définissez JWT_SECRET.",
         "short": "La clé de signature des sessions de {source} fait {length} caractères : utilisez-en au moins {minimum}, aléatoires.",
         "unreadable": "La clé de signature des sessions est illisible : {reason}"
       },

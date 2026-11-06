@@ -7,8 +7,8 @@
  * per position: two brokers holding the same asset have the same line. The portfolio has no price, so the portfolio line is not drawn in
  * this view.
  *
- * It computes nothing: the window is the largest preset that fits the period (as the Assets list's «auto»), the values are the
- * backend's percentage points, and a day without a value stays a gap.
+ * It computes nothing: the window is the user's choice (F-2) or, until they choose, the largest preset that fits the period (as the
+ * Assets list's «auto»); the values are the backend's percentage points, and a day without a value stays a gap.
  *
  * It is a Svelte store (`subscribe`), like `positionsSeriesController`, so that the broker's legacy-mode page follows it too.
  *
@@ -17,7 +17,7 @@
 
 import {writable, type Readable} from 'svelte/store';
 import {zodiosApi} from '$lib/api';
-import {calendarReturnRangeDays, calendarReturnWindowDays, DEFAULT_CALENDAR_RETURN_WINDOW, largestCalendarReturnPresetFor} from '$lib/components/charts/calendarReturnWindow';
+import {calendarReturnRangeDays, calendarReturnWindowDays, DEFAULT_CALENDAR_RETURN_WINDOW, largestCalendarReturnPresetFor, type CalendarReturnPresetKey} from '$lib/components/charts/calendarReturnWindow';
 import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
 import type {PositionLine} from './positionsSeries';
 
@@ -29,6 +29,8 @@ export interface RollingScope {
     ready: boolean;
     /** Bumped by the page when its figures are asked again (Refresh, a price catch-up): the views follow. */
     version?: number;
+    /** The window the user chose, in days; absent: the automatic one, the largest preset that fits the period (F-2). */
+    windowDays?: number;
 }
 
 /** One item of `POST /assets/prices/query`, as this view asks it. */
@@ -44,17 +46,21 @@ export type RollingFetcher = (items: RollingQueryItem[]) => Promise<{items?: unk
 
 const defaultFetcher: RollingFetcher = async (items) => (await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(items as never)) as {items?: unknown[]};
 
-/** The window of the period on screen: the largest preset that fits it, the smallest when none does. */
+/** The preset the automatic window is: the largest one that fits the period on screen, the smallest when none does. */
+export function rollingAutoPreset(start: string, end: string): CalendarReturnPresetKey {
+    return largestCalendarReturnPresetFor(calendarReturnRangeDays(start, end));
+}
+
+/** The automatic window of the period on screen, in days. */
 export function rollingWindowDays(start: string, end: string): number {
-    const preset = largestCalendarReturnPresetFor(calendarReturnRangeDays(start, end));
-    return calendarReturnWindowDays({...DEFAULT_CALENDAR_RETURN_WINDOW, kind: 'preset', preset}) ?? 30;
+    return calendarReturnWindowDays({...DEFAULT_CALENDAR_RETURN_WINDOW, kind: 'preset', preset: rollingAutoPreset(start, end)}) ?? 30;
 }
 
 /** The request: each asset once, its rolling return over the period, no prices. */
 export function buildRollingQuery(assetIds: ReadonlyArray<number>, scope: RollingScope): RollingQueryItem[] {
     const start = scope.start ?? '';
     const end = scope.end ?? '';
-    const windowDays = rollingWindowDays(start, end);
+    const windowDays = scope.windowDays ?? rollingWindowDays(start, end);
     return [...new Set(assetIds)].map((asset_id) => ({
         asset_id,
         date_range: {start, end},
@@ -66,7 +72,7 @@ export function buildRollingQuery(assetIds: ReadonlyArray<number>, scope: Rollin
 
 /** Two scopes are the same question when this is equal. */
 export function rollingScopeKey(scope: RollingScope): string {
-    return [scope.start ?? '', scope.end ?? '', scope.version ?? 0].join('|');
+    return [scope.start ?? '', scope.end ?? '', scope.version ?? 0, scope.windowDays ?? 'auto'].join('|');
 }
 
 /**

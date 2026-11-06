@@ -142,7 +142,7 @@ The list shows only the backups made by this version of LibreFolio. The loose `l
 
 ### 🧹 Automatic Clean-up {: #backup-cleanup }
 
-Kept backups pile up, and they live on the disk of your data. In the same **Backups on this server** section of **Settings › Administration › Backup** you set two limits, both optional:
+Kept backups pile up, and they live on the disk of your data. In the closed **Automatic clean-up** panel of the same **Backups on this server** section, in **Settings › Administration › Backup** and in **Files › Backups**, you set two limits, both optional:
 
 | Limit | What it does | Off |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ Kept backups pile up, and they live on the disk of your data. In the same **Back
 | Maximum age, in days | A backup older than this is deleted | `0` |
 
 - 🛡️ **The latest backup is always kept**, whatever the limits say: an instance never ends up with none.
-- ⏰ The clean-up runs after each backup, when LibreFolio starts and about once an hour.
+- ⏰ The clean-up runs after each backup and when LibreFolio starts, at most once an hour: a change you save applies within the hour.
 - 🏠 **Self-hosted:** both limits are off until you set them.
 - 🔍 Only the backups of the list are cleaned. Older loose archives in `backups/`, a backup in progress and a failed one are never touched by it.
 - ⌨️ The command line leaves its backups in the same place and the same limits apply: see [Where the Backups Stay](cli_backup.md#backup-kept).
@@ -173,7 +173,7 @@ The bar has three looks, depending on whether a limit is set and whether the dis
 - 📏 **With a limit**: the bar is the limit, and LibreFolio's parts fill it as far as the data goes. The line under the bar reads *used of limit*.
 - 📁 **No limit and the disk unknown**: LibreFolio cannot ask the disk, so the bar is LibreFolio's own folder, split into its parts, with no free space.
 
-**Set the limit** in the same bar, in the **Space limit (MB)** field: a whole number of megabytes, `0` for no limit, then **Save**. It is also the *Space limit* [global setting](settings.md), which is not shown in the Administration tab: this field is the place to change it.
+**Set the limit** in the closed **Advanced** panel under the same bar, in the **LibreFolio total space (MB)** field: a whole number of megabytes, `0` for no limit, then **Save**; a green notice confirms it. It is the most space LibreFolio should take in all, and passing it only shows a warning: nothing is blocked. It is also the *Space limit* [global setting](settings.md), which is not shown in the Administration tab: this field is the place to change it.
 
 - ⚠️ **Over the limit**, the bar warns that the limit is exceeded and suggests deleting backups or files, or raising the limit. That is all: LibreFolio deletes nothing, and the limit does not stop an upload or a backup.
 - 🔒 **Set in the server's configuration**: when `LIBREFOLIO_STORAGE_LIMIT_MB` is set, its value is the limit, the field is greyed out and a note says it is set by whoever hosts the instance. See [Environment Variables](configuration.md). A value LibreFolio cannot use, one that is not a whole number, is ignored, and the field works as above.

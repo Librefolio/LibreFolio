@@ -74,6 +74,8 @@ export interface PortfolioDataInputs {
     wantsBrokerPnlHistory(): boolean;
     /** The period the Rolling view asks, as the picker shows it. */
     rollingPeriod?(): {start: string | undefined; end: string | undefined};
+    /** The window of the Rolling view the user chose, in days; undefined: the automatic one (F-2). */
+    rollingWindow?(): number | undefined;
     /** "All" waits for its first real day: this is the first day of the history just applied, or null when there is none (FB-7). */
     onFirstDay?(day: string | null): void;
     /** A refresh that failed while figures are on screen: the page tells the user, the figures stay. */
@@ -380,7 +382,7 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
 
     function positionsRollingScope(version: number): RollingScope {
         const period = inputs.rollingPeriod?.() ?? {start: undefined, end: undefined};
-        return {start: period.start, end: period.end, ready: inputs.positionsReady?.() ?? inputs.canAsk(), version};
+        return {start: period.start, end: period.end, ready: inputs.positionsReady?.() ?? inputs.canAsk(), version, windowDays: inputs.rollingWindow?.()};
     }
 
     function syncPositions(version: number) {

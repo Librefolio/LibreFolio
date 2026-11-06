@@ -165,6 +165,58 @@ describe('buildHurtRows', () => {
     it('returns nothing at all when the wave is empty', () => {
         expect(buildHurtRows([])).toEqual([]);
     });
+
+    // F-6 (testlist 1.3): say which one it was.
+    describe('which stretch the figure is about (F-6)', () => {
+        const SUMMARY = {maximum_drawdown: -0.384, maximum_drawdown_duration_days: 570, maximum_drawdown_peak_date: '2024-01-10', maximum_drawdown_trough_date: '2025-08-02', maximum_drawdown_trough_to_peak_ratio: 0.62};
+        const month = (window: Record<string, unknown>) => ok('historical_var', {...varResult(MONTHLY_VAR_INSTANCE, 0.072, 0.09).output, worst_horizon: window}, MONTHLY_VAR_INSTANCE);
+
+        it('gives the worst fall from its peak to its trough', () => {
+            const worst = buildHurtRows([ok('drawdown_summary', SUMMARY)]).find((row) => row.id === 'worst');
+
+            expect(worst?.period).toEqual({from: '2024-01-10', to: '2025-08-02'});
+        });
+
+        it('gives no period to the worst fall when the depth came from the KPI, which names no dates', () => {
+            const worst = buildHurtRows([ok('historical_kpi', {max_drawdown: -0.2})]).find((row) => row.id === 'worst');
+
+            expect(worst?.loss).toBe(0.2);
+            expect(worst?.period).toBeNull();
+        });
+
+        it('gives no period when one of the two dates is missing, or they come out of order', () => {
+            const lone = buildHurtRows([ok('drawdown_summary', {...SUMMARY, maximum_drawdown_trough_date: null})]).find((row) => row.id === 'worst');
+            const reversed = buildHurtRows([ok('drawdown_summary', {...SUMMARY, maximum_drawdown_peak_date: '2025-09-01'})]).find((row) => row.id === 'worst');
+
+            expect(lone?.period).toBeNull();
+            expect(reversed?.period).toBeNull();
+        });
+
+        it('gives the month the worst window the series lived through, beside its average', () => {
+            const row = buildHurtRows([month({compounded_return: -0.137, start_date: '2025-03-03', end_date: '2025-04-01'})]).find((entry) => entry.id === 'month');
+
+            expect(row?.loss).toBe(0.09);
+            expect(row?.worstSeen).toBe(0.137);
+            expect(row?.period).toEqual({from: '2025-03-03', to: '2025-04-01'});
+        });
+
+        it('names no worst month when its window gained, or when the payload has none', () => {
+            const gained = buildHurtRows([month({compounded_return: 0.01, start_date: '2025-03-03', end_date: '2025-04-01'})]).find((entry) => entry.id === 'month');
+            const absent = buildHurtRows([varResult(MONTHLY_VAR_INSTANCE, 0.072, 0.09)]).find((entry) => entry.id === 'month');
+
+            expect(gained?.worstSeen).toBeNull();
+            expect(gained?.period).toBeNull();
+            expect(absent?.worstSeen).toBeNull();
+            expect(absent?.period).toBeNull();
+        });
+
+        it('never reads a worst window into the daily row, which has the worst realization’s date', () => {
+            const day = buildHurtRows([ok('historical_var', {...varResult(DAILY_VAR_INSTANCE, 0.018, 0.024).output, worst_horizon: {compounded_return: -0.05, start_date: '2025-03-03', end_date: '2025-03-03'}}, DAILY_VAR_INSTANCE)]).find((entry) => entry.id === 'day');
+
+            expect(day?.worstSeen).toBeNull();
+            expect(day?.period).toBeNull();
+        });
+    });
 });
 
 describe('buildCurrentDrawdown', () => {

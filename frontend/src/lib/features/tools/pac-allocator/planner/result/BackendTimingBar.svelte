@@ -6,7 +6,8 @@
   never drawn as 0. Durations only: no amount is shown here.
   R11.9: pointing at a segment highlights its legend entry, and the other way round (pointer
   events, so a press on a touch screen does it too; focus inside an entry, its «?», counts as well).
-  The legend already says everything in text: the highlight only links the two.
+  The legend already says everything in text: the highlight only links the two. The bar and its
+  linked legend are the shared `LinkedStackedBar`, which the Files page's space bar uses too.
 -->
 <script lang="ts">
     import {ChartBarStacked} from 'lucide-svelte';
@@ -15,6 +16,7 @@
     import HelpTip from '../shared/HelpTip.svelte';
     import {HINT} from '../ui';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import LinkedStackedBar from '$lib/components/ui/display/LinkedStackedBar.svelte';
 
     interface Props {
         metrics: ToolItemMetrics;
@@ -83,10 +85,15 @@
         share: new Intl.NumberFormat(uiLocale(), {style: 'percent', maximumFractionDigits: 1}),
     });
 
-    let pointed = $state<string | null>(null);
-    /** The phase under the pointer, if it is still drawn: a new result may have dropped it. */
-    const active = $derived(segments.some((segment) => segment.id === pointed) ? pointed : null);
-    const dimmed = (id: string) => active !== null && active !== id;
+    const TEST_IDS = {
+        bar: 'pac-planner-timing-bar',
+        segment: () => 'pac-planner-timing-segment',
+        legend: 'pac-planner-timing-legend',
+        item: () => 'pac-planner-timing-item',
+    };
+
+    /** The shared bar's segments: the share of the bar and the fill, with the phase's own fields kept. */
+    const barSegments = $derived(segments.map((segment) => ({...segment, percent: segment.share * 100, fill: segment.colour})));
 
     function duration(ms: number): string {
         return $t('tools.metrics.milliseconds', {default: '{value} ms', values: {value: formats.ms.format(ms)}});
@@ -107,39 +114,23 @@
         </p>
         <!-- The separators are the bar's `divide-*`, in the card's colour: a segment carries only its fill, a legacy phase
              colour or the unattributed role, so no segment mixes the two (G3). -->
-        <div class="mt-3 flex h-4 w-full divide-x divide-lf-card overflow-hidden rounded-full bg-lf-panel" aria-hidden="true" data-testid="pac-planner-timing-bar">
-            {#each segments as segment (segment.id)}
-                <div
-                    class="h-full transition-opacity {segment.colour} {dimmed(segment.id) ? 'opacity-30' : ''}"
-                    style="width: {segment.share * 100}%; min-width: 3px;"
-                    data-testid="pac-planner-timing-segment"
-                    data-phase={segment.id}
-                    data-active={active === segment.id ? 'true' : 'false'}
-                    onpointerenter={() => (pointed = segment.id)}
-                    onpointerleave={() => (pointed = null)}
-                ></div>
-            {/each}
-        </div>
-        <ul class="mt-3 grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-3" data-testid="pac-planner-timing-legend">
-            {#each segments as segment (segment.id)}
-                <li
-                    class="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-[opacity,background-color] {active === segment.id ? 'bg-lf-panel' : ''} {dimmed(segment.id) ? 'opacity-50' : ''}"
-                    data-testid="pac-planner-timing-item"
-                    data-phase={segment.id}
-                    data-active={active === segment.id ? 'true' : 'false'}
-                    onpointerenter={() => (pointed = segment.id)}
-                    onpointerleave={() => (pointed = null)}
-                    onfocusin={() => (pointed = segment.id)}
-                    onfocusout={() => (pointed = null)}
-                >
-                    <span class="h-2.5 w-2.5 shrink-0 rounded-sm {segment.colour}" aria-hidden="true"></span>
-                    <span class="flex min-w-0 flex-1 items-center gap-1 text-lf-secondary">
-                        <span class="min-w-0 break-words">{segment.label}</span>
-                        {#if segment.help}<HelpTip label={segment.label} help={segment.help} testid="pac-planner-timing-help" />{/if}
-                    </span>
-                    <span class="shrink-0 tabular-nums text-lf-primary">{duration(segment.ms)} · {formats.share.format(segment.share)}</span>
-                </li>
-            {/each}
-        </ul>
+        <LinkedStackedBar
+            segments={barSegments}
+            barClass="mt-3 flex h-4 w-full divide-x divide-lf-card overflow-hidden rounded-full bg-lf-panel"
+            legendClass="mt-3 grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-3"
+            itemClass="min-w-0 rounded-md px-1.5 py-1 text-xs"
+            dotClass="h-2.5 w-2.5 rounded-sm"
+            activeItemClass="bg-lf-panel"
+            minSegmentPx={3}
+            testIds={TEST_IDS}
+        >
+            {#snippet row(segment)}
+                <span class="flex min-w-0 flex-1 items-center gap-1 text-lf-secondary">
+                    <span class="min-w-0 break-words">{segment.label}</span>
+                    {#if segment.help}<HelpTip label={segment.label} help={segment.help} testid="pac-planner-timing-help" />{/if}
+                </span>
+                <span class="shrink-0 tabular-nums text-lf-primary">{duration(segment.ms)} · {formats.share.format(segment.share)}</span>
+            {/snippet}
+        </LinkedStackedBar>
     </section>
 {/if}

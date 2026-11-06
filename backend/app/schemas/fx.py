@@ -84,6 +84,10 @@ class FXProviderInfo(StrictModel):
     # TODO: deprecate base_currency in favor of base_currencies
     base_currencies: list[str] = Field(..., description="All supported base currencies")
     target_currencies: list[str] = Field(default_factory=list, description="All target currencies this provider can convert to (from get_supported_currencies)")
+    currencies_unavailable: bool = Field(
+        False,
+        description="True when `target_currencies` is empty because the provider's list could not be fetched (not because it covers nothing): the list is retried shortly, and a client must not cache what it builds from it",
+    )
     description: str = Field(..., description="Provider description")
     description_i18n: dict[str, str] = Field(default_factory=dict, description="Multilingual provider descriptions {lang_code: description}")
     warning_i18n: dict[str, str] = Field(default_factory=dict, description="Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning.")

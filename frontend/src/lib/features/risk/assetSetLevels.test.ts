@@ -273,6 +273,8 @@ describe('buildAssetSetHurtRows', () => {
             badMonth: null,
             worstFall: null,
             worstFallDays: null,
+            worstFallPeriod: null,
+            worstMonth: null,
             recovery: null,
             currentFall: null,
             toPeak: null,
@@ -280,6 +282,25 @@ describe('buildAssetSetHurtRows', () => {
         // And the fixture is not vacuously empty: the asset that *was* measured
         // carries its figures, so the nulls above mean absence and not silence.
         expect(rowFor(rows, 7).badMonth).toBe(0.124);
+    });
+
+    it('names the days of the deepest fall and of the worst month this asset really went through (F-6)', () => {
+        // The card says «the average of the worst 5 %», which no single month printed; the row also says which one it was.
+        const month = {compounded_return: -0.137, start_date: '2025-03-03', end_date: '2025-04-01'};
+        const rows = buildAssetSetHurtRows(SELECTION, LABELS, null, monthlyVar([{...varItem(7, 0.087, 0.124), worst_horizon: month}, varItem(12, 0.05, 0.06)]), drawdownResult([recoveredFall(7)]));
+
+        expect(rowFor(rows, 7).worstFallPeriod).toEqual({from: '2023-08-01', to: '2023-10-27'});
+        expect(rowFor(rows, 7).worstMonth).toEqual({loss: 0.137, from: '2025-03-03', to: '2025-04-01'});
+        // An asset whose payload names no window has none: nothing is invented from the average.
+        expect(rowFor(rows, 12).worstMonth).toBeNull();
+        expect(rowFor(rows, 3).worstFallPeriod).toBeNull();
+    });
+
+    it('does not call a window that gained a «worst month»', () => {
+        const gain = {compounded_return: 0.02, start_date: '2025-03-03', end_date: '2025-04-01'};
+        const rows = buildAssetSetHurtRows(SELECTION, LABELS, null, monthlyVar([{...varItem(7, 0, 0), worst_horizon: gain}]), null);
+
+        expect(rowFor(rows, 7).worstMonth).toBeNull();
     });
 
     it('keeps a measured zero as zero, so "never fell" and "never measured" stay different readings', () => {

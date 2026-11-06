@@ -52,21 +52,23 @@
 </script>
 
 <div class="space-y-6 text-lf-primary" data-testid="security-tab" data-status={checks.status} data-busy={loading} aria-busy={loading}>
-    <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0">
-            <h2 class="text-lg font-semibold text-lf-primary">{$_('settings.securityTab.title')}</h2>
-            <p class="mt-1 text-sm text-lf-muted">{$_('settings.securityTab.description')}</p>
+    <!-- The button sits on the title's line, at its right; the description runs under both (K-9: on a phone the button
+         stays on the screen, the title takes the rest of the line and wraps). -->
+    <div class="space-y-1">
+        <div class="flex items-center justify-between gap-3" data-testid="security-header">
+            <h2 class="min-w-0 flex-1 text-lg font-semibold text-lf-primary" data-testid="security-title">{$_('settings.securityTab.title')}</h2>
+            <button
+                type="button"
+                class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-lf-input px-3 py-2 text-sm font-medium text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="security-refresh"
+                disabled={loading}
+                onclick={() => void checks.reload()}
+            >
+                <RefreshCw class={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} aria-hidden="true" />
+                {$_('settings.securityTab.refresh')}
+            </button>
         </div>
-        <button
-            type="button"
-            class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-lf-input px-3 py-2 text-sm font-medium text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50"
-            data-testid="security-refresh"
-            disabled={loading}
-            onclick={() => void checks.reload()}
-        >
-            <RefreshCw class={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} aria-hidden="true" />
-            {$_('settings.securityTab.refresh')}
-        </button>
+        <p class="text-sm text-lf-muted">{$_('settings.securityTab.description')}</p>
     </div>
 
     {#if checks.status === 'error'}

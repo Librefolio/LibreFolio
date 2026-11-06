@@ -1,9 +1,11 @@
 <!--
   PositionsReturnChart — the return of the ticked positions, one line each, beside the portfolio's.
 
-  The chart under the Dashboard's holdings table (Y5-2, #48). Two views of the same lines: the position's
+  The chart under the Dashboard's holdings table (Y5-2, #48). Views of the same lines, picked by icons as the Assets list's are (F-3; the
+  label is the tooltip and the accessible name): Abs, %, Rolling. Two of them, one line each: the position's
   result in money (Abs, a dashed reference at 0) or its return in «base 100» (%, a dashed reference at 100).
-  A custom HTML legend turns each line on and off and says which position closed and which line leaves values out.
+  A custom HTML legend turns each line on and off and says which position closed and which line leaves values out; a name too long
+  for its badge scrolls by itself (`scrollOnOverflow`).
 
   The component is CONTROLLED: it keeps no view and no hidden set. It draws the props it is given and calls
   `onviewchange(view)` / `ontoggle(id)`. The numbers are the backend's, shaped by `positionsSeries.ts`; a missing
@@ -18,13 +20,14 @@
   - loading / failed: the states of the request
   - portfolioLabel: overrides the portfolio line's label in the legend and the tooltip
   - note: the caption under the legend that says what the portfolio line is
+  - windowControls: the choice of the Rolling view's window, drawn in that view only
 
   Pattern: Svelte 5 runes, ECharts, dark mode, privacy masking (see .claude/rules/frontend.md).
 -->
 <script lang="ts">
-    import {onMount, tick} from 'svelte';
+    import {onMount, tick, type Snippet} from 'svelte';
     import * as echarts from 'echarts';
-    import {Flag, TriangleAlert} from 'lucide-svelte';
+    import {CalendarSync, ChartLine, Flag, TriangleAlert} from 'lucide-svelte';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -48,6 +51,8 @@
     import {applyLineShape, effectiveLineShape} from '$lib/components/charts/lineShape';
     import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
 
     interface Props {
@@ -62,6 +67,8 @@
         failed?: boolean;
         portfolioLabel?: string;
         note?: string;
+        /** The window of the Rolling view (F-2): the page's controls, shown only in that view, between the legend and the plot. */
+        windowControls?: Snippet;
         /** CSS height of the chart area. */
         height?: string;
     }
@@ -72,7 +79,7 @@
         value?: unknown;
     }
 
-    let {lines, view, onviewchange, hiddenIds = new Set<string>(), ontoggle, colorOf, currency, loading = false, failed = false, portfolioLabel, note, height = '18rem'}: Props = $props();
+    let {lines, view, onviewchange, hiddenIds = new Set<string>(), ontoggle, colorOf, currency, loading = false, failed = false, portfolioLabel, note, windowControls, height = '18rem'}: Props = $props();
 
     const VIEWS: ReadonlyArray<PositionsChartView> = ['absolute', 'percentage', 'rolling'];
 
@@ -389,7 +396,7 @@
                     onclick={() => ontoggle?.(line.id)}
                 >
                     <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full {visible ? '' : 'opacity-40'}" style="background-color: {colorOf(line.id)}" data-testid="positions-chart-swatch-{line.id}"></span>
-                    <span class="truncate {line.kind === 'portfolio' ? 'font-semibold' : ''}">{labelOf(line)}</span>
+                    <span use:scrollOnOverflow class="{overflowScrollTextClass} max-w-56 {line.kind === 'portfolio' ? 'font-semibold' : ''}" data-testid="positions-chart-legend-name-{line.id}">{labelOf(line)}</span>
                     {#if line.closedOn}
                         <Flag size={12} class="shrink-0" aria-hidden="true" />
                     {/if}
@@ -403,19 +410,33 @@
         </div>
     {/if}
 
+    {#if view === 'rolling' && windowControls}
+        <div data-testid="positions-chart-window">
+            {@render windowControls()}
+        </div>
+    {/if}
+
     <!-- The plot, with the view toggle on it (Abs / %), top right as the Growth chart's toggles are (FB-12) -->
     <div class="relative" data-testid="positions-chart-plot">
         <div class="absolute right-1 top-1 z-10 inline-flex overflow-hidden rounded-md border border-lf-input shadow-sm shadow-lf-shadow-card" role="group" aria-label={$_('dashboard.positionsChart.title')}>
             {#each VIEWS as option (option)}
                 <button
                     type="button"
-                    class="px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
+                    class="inline-flex items-center justify-center px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
                     aria-pressed={view === option}
-                    title={VIEW_HINT_KEYS[option]}
+                    aria-label={$_(VIEW_LABEL_KEYS[option])}
+                    title="{$_(VIEW_LABEL_KEYS[option])} — {VIEW_HINT_KEYS[option]}"
                     data-testid="positions-chart-view-{option}"
                     onclick={() => onviewchange?.(option)}
                 >
-                    {$_(VIEW_LABEL_KEYS[option])}
+                    <!-- The icons of the Assets list's view toggle (F-3): the label is the tooltip and the accessible name. -->
+                    {#if option === 'absolute'}
+                        <ChartLine size={14} aria-hidden="true" data-testid="positions-chart-view-{option}-icon" />
+                    {:else if option === 'rolling'}
+                        <CalendarSync size={14} aria-hidden="true" data-testid="positions-chart-view-{option}-icon" />
+                    {:else}
+                        <span aria-hidden="true">%</span>
+                    {/if}
                 </button>
             {/each}
         </div>

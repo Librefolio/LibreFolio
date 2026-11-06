@@ -131,6 +131,10 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/chartSignalsHelpers.test.ts",
             "src/lib/components/charts/lineChartHelpers.sessionGaps.test.ts",
             "src/lib/components/charts/scatterChartHelpers.test.ts",
+            "src/lib/components/charts/returnHistogramChartHelpers.test.ts",
+            "src/lib/components/charts/ReturnHistogramChart.test.ts",
+            "src/lib/features/risk/horizonExpression.test.ts",
+            "src/lib/features/risk/SimulationHorizonField.test.ts",
             "src/lib/features/risk/riskAnalysisHelpers.test.ts",
             "src/lib/features/risk/correlationHelpers.test.ts",
             "src/lib/features/risk/assetSetSelection.test.ts",
@@ -412,6 +416,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/feedback/DataQualityBanner.tone.test.ts",
             "src/lib/components/ui/feedback/DataQualityBanner.layout.test.ts",
             "src/lib/components/ui/tabs/TabBar.test.ts",
+            "src/lib/components/layout/PageBackButton.test.ts",
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
             "src/lib/components/table/DataTable.rowOrder.test.ts",
@@ -465,6 +470,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/form/CompactCashCell.test.ts",
             "src/lib/features/transactions/form/TxFormBanners.test.ts",
             "src/lib/components/ui/display/KpiMetricBar.test.ts",
+            "src/lib/components/ui/display/LinkedStackedBar.test.ts",
+            "src/lib/components/ui/display/FoldPanel.test.ts",
             "src/lib/components/ui/display/KpiDivergingFlowBar.test.ts",
             "src/lib/components/ui/display/RiskMetricCard.test.ts",
             "src/lib/components/ui/display/RiskCardGrid.test.ts",
@@ -1031,6 +1038,18 @@ def front_unknown_address(verbose: bool = False, ui: bool = False, headed: bool 
     return _run_playwright("layout/unknown-address.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_page_back_arrow(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the main pages' back arrow: drawn only after an in-app link, never on a typed address or from the sidebar (B-6)."""
+    print_section("Frontend Page Back Arrow Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/page-back-arrow.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_api_docs(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the API documentation pages of H-55 R5: Swagger UI and ReDoc render from the pinned jsDelivr files under the documentation policy, and a changed bundle is refused by its integrity hash."""
     print_section("Frontend API Docs Tests")
@@ -1571,6 +1590,15 @@ def populate_registry(registry: dict) -> None:
         desc="FB-23: an address the web app does not know (the SPA fallback renders its 404 view) leaves by itself: signed in it ends on /dashboard, signed out on the login, and the error card (data-testid error-page) is no longer on screen",
         prereq="Populated DB + test users",
         tests="layout/unknown-address.spec.ts",
+    )
+    add_test(
+        cat,
+        "page-back-arrow",
+        front_page_back_arrow,
+        name="Page Back Arrow",
+        desc="B-6: Brokers, Transactions, Assets and FX draw a back arrow only after an in-app link (Brokers → a broker → view in Transactions: the arrow returns to the broker with its period); none on a typed address, none from the sidebar even from deep inside the app, none once the arrow itself returned to the section root",
+        prereq="Populated DB + test users",
+        tests="layout/page-back-arrow.spec.ts",
     )
     add_test(
         cat,

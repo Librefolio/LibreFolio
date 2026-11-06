@@ -50,7 +50,7 @@ const OFFLINE_PROBE_UNPKG_URL = 'https://unpkg.com/librefolio-e2e-offline-probe/
 
 /** English pages with a diagram: one plain, one asking for the ELK layout in its frontmatter. */
 const PAGES = [
-    {label: 'a diagram with the default layout', path: `${SITE_ROOT}admin/backup_restore/`},
+    {label: 'a diagram with the default layout', path: `${SITE_ROOT}admin/backup_sealed/`},
     {label: 'a diagram whose frontmatter asks for layout: elk', path: `${SITE_ROOT}developer/test-walkthrough/runner_architecture/`},
 ];
 

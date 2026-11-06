@@ -73,7 +73,7 @@ def check_jwt_secret() -> ConfigCheck:
             check_id,
             "info",
             "instance.checks.jwtSecret.ephemeral",
-            summary="JWT_SECRET is not set: every start makes a new session signing key, so a restart signs every user out",
+            summary="The session key is random: every restart signs everyone out. To stay signed in, set JWT_SECRET.",
         )
     if len(secret) < JWT_SECRET_MIN_LENGTH:
         origin = configured_jwt_secret_origin() or "JWT_SECRET"
