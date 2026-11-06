@@ -42,7 +42,7 @@
     import AllocationPanel from './AllocationPanel.svelte';
     import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
     import {DEFAULT_CALENDAR_RETURN_WINDOW, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
-    import {PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionLine, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
+    import {assetColorRanks, assetIdOfLineId, PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionLine, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
     import {rollingLine, type PositionsRollingState} from './positionsRolling';
 
     import {closedPositionsToList} from './closedPositions';
@@ -223,18 +223,6 @@
         hiddenIds = next;
     }
 
-    /** A line keeps its colour while the selection changes: ids get their number in the order they are first drawn. */
-    const colourSlots = new Map<string, number>();
-    function colourOf(id: string): string {
-        if (id === PORTFOLIO_LINE_ID) return themed(GROWTH_SERIES.nav, isDark);
-        let slot = colourSlots.get(id);
-        if (slot === undefined) {
-            slot = colourSlots.size;
-            colourSlots.set(id, slot);
-        }
-        return growthBrokerColor(slot, isDark);
-    }
-
     let selectedKeys = $derived(selectedRows.map((row) => row.key));
 
     // The Rolling view asks the rolling return of the ticked positions' assets; the controller keeps what it already has.
@@ -308,6 +296,25 @@
     let soldPositions = $derived(
         closedPositionsToList(contributionPositions, holdings).map((position) => ({asset_id: position.asset_id, asset_name: position.asset_name, asset_type: position.asset_type, broker_id: position.broker_id, broker_name: position.broker_name, asset_ticker: typeof position.asset_ticker === 'string' ? position.asset_ticker : null})),
     );
+
+    /**
+     * A line wears its asset's colour, the pie's and the history's: the asset's rank by weight (`assetColorRanks`, the one place the ranks are computed),
+     * whatever is ticked and in whatever order. The assets sold out in the period come after the ranked ones.
+     */
+    let assetRanks = $derived(
+        assetColorRanks(
+            (summary?.allocation_by_asset ?? []) as Array<{id?: number | null; amount?: string | null}>,
+            (allocationHistory?.asset ?? []) as Array<{date: string; through?: string; components?: Array<{id?: number | null; amount?: string | null}>}>,
+            [...holdings.map((holding) => holding.asset_id), ...soldPositions.map((position) => position.asset_id)],
+        ),
+    );
+    // A new function each time the ranks or the theme move: the chart redraws when its `colorOf` changes.
+    let colourOf = $derived((id: string): string => {
+        if (id === PORTFOLIO_LINE_ID) return themed(GROWTH_SERIES.nav, isDark);
+        const assetId = assetIdOfLineId(id);
+        const rank = assetId === null ? undefined : assetRanks.get(assetId);
+        return growthBrokerColor(rank ?? assetRanks.size, isDark);
+    });
 
     let showLoading = $derived(loading || (semanticMode === 'performance' && contributionLoading));
     let showHoldingsEmpty = $derived(semanticMode === 'holdings' && holdings.length === 0);
