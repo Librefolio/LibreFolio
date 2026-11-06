@@ -111,7 +111,10 @@
         "instance_blocked": "Il fornitore di hosting ha bloccato questa istanza: il ripristino attende lo sblocco."
       },
       "blocker": {
-        "no_administrator": "Il backup non ha nessun amministratore attivo: dopo un ripristino nessuno potrebbe gestire LibreFolio. Non può essere ripristinato."
+        "no_administrator": "Il backup non ha nessun amministratore attivo: dopo un ripristino nessuno potrebbe gestire LibreFolio. Non può essere ripristinato.",
+        "storage_limit": "Ripristinare questo backup porterebbe LibreFolio oltre il suo spazio totale. Porta lo spazio totale ad almeno {required} in File › Avanzate, poi ricontrolla il backup.",
+        "storage_limit_locked": "Ripristinare questo backup porterebbe LibreFolio oltre il suo spazio totale. Chiedi a chi ospita questa istanza di portare il limite ad almeno {required}, poi ricontrolla il backup.",
+        "storage_limit_disk": "Anche il disco deve avere liberi almeno altri {missing}."
       },
       "report": {
         "title": "Cosa farebbe questo ripristino",
