@@ -368,13 +368,6 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **La documentación ya no describe cómo ejecutar LibreFolio para otros:** las páginas sobre proveedores de alojamiento, el panel de alojamiento y el despertar programado han desaparecido, y la página de inicio dice «Autoalojado».
 - **La cabecera de la documentación coloca el interruptor del tema junto al selector de idioma**, como en la aplicación; el enlace 🚀 a la aplicación, que se muestra cuando LibreFolio está en ejecución, ocupa el lugar que tenía el interruptor del tema.
 
-### 🧹 Limpieza del repositorio
-
-- El experimento del vídeo promocional se retira del repositorio (`mkdocs_src/videoClipPrject/` y `./dev.py mkdocs video`): nunca llegó a la aplicación ni a la documentación, y ahora se encuentra fuera de este repositorio.
-- Los mockups iniciales de la interfaz de usuario también se retiran del repositorio (`mkdocs_src/docs/POC_UX/`, 75 imágenes): la compilación de la documentación siempre los excluyó.
-- `./dev.sh` ya no está: solo convertía los antiguos comandos del estilo `db:upgrade` en los equivalentes de `./dev.py`. Los mensajes que todavía lo sugerían ahora mencionan el comando `./dev.py`.
-- Se eliminan un paquete de habilidades de terceros sin usar (`.github/skills/engineering-skills/`) y algunos archivos sobrantes en la raíz del repositorio.
-
 ### 🐛 Corregido
 
 #### 🧾 Transacciones y editor masivo

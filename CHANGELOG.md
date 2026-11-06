@@ -368,13 +368,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
 - **The documentation header keeps the theme switch beside the language selector**, as in the app; the 🚀 link to the app, shown when LibreFolio is running, takes the place the theme switch had.
 
-### 🧹 Repository cleanup
-
-- The promotional video experiment leaves the repository (`mkdocs_src/videoClipPrject/` and `./dev.py mkdocs video`): it never reached the app or the documentation, and it now lives outside this repository.
-- The early UI mockups leave the repository too (`mkdocs_src/docs/POC_UX/`, 75 images): the documentation build always excluded them.
-- `./dev.sh` is gone: it only translated the old `db:upgrade`-style commands into `./dev.py` ones. The messages that still suggested it now name the `./dev.py` command.
-- An unused third-party skill pack (`.github/skills/engineering-skills/`) and a few leftover files in the repository root are removed.
-
 ### 🐛 Fixed
 
 #### 🧾 Transactions and the bulk editor

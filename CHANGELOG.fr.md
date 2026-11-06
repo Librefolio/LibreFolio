@@ -368,13 +368,6 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **La documentation ne décrit plus l’exécution de LibreFolio pour d’autres personnes :** les pages sur les fournisseurs d’hébergement, le panneau d’hébergement et le réveil planifié ont disparu, et la page d’accueil indique « Auto-hébergé ».
 - **L'en-tête de la documentation place le commutateur de thème à côté du sélecteur de langue**, comme dans l'application ; le lien 🚀 vers l'application, affiché lorsque LibreFolio est en cours d'exécution, prend la place qu'occupait le commutateur de thème.
 
-### 🧹 Nettoyage du dépôt
-
-- L'expérience de la vidéo promotionnelle quitte le dépôt (`mkdocs_src/videoClipPrject/` et `./dev.py mkdocs video`) : elle n'a jamais atteint l'application ni la documentation, et elle se trouve désormais en dehors de ce dépôt.
-- Les maquettes UI initiales quittent également le dépôt (`mkdocs_src/docs/POC_UX/`, 75 images) : la compilation de la documentation les a toujours exclues.
-- `./dev.sh` a disparu : il ne faisait que convertir les anciennes commandes de type `db:upgrade` en commandes `./dev.py`. Les messages qui le suggéraient encore nomment désormais la commande `./dev.py`.
-- Un pack de compétences d'un tiers inutilisé (`.github/skills/engineering-skills/`) et quelques fichiers résiduels à la racine du dépôt sont supprimés.
-
 ### 🐛 Corrections
 
 #### 🧾 Transactions et éditeur groupé
