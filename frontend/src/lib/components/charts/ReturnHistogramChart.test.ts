@@ -5,6 +5,8 @@
  * `returnHistogramChartHelpers.test.ts` pins what is drawn. Here, with ECharts replaced by a recorder:
  *
  * - one chart per mount, drawn from the option the builder made, with the tooltip box in the page's theme;
+ * - the tooltip has the size of the other charts' (12 px) and stands beside the pointer on a desktop (`histogramTooltipPosition`);
+ *   a `$…$` stretch of a line is typeset as LaTeX (KaTeX), the rest stays text (F8, 06/11/2026);
  * - the tooltip is HTML that ECharts sets as `innerHTML`, written from text the caller supplies: every line is escaped, so a
  *   line holding markup reads as text (the rule of every `*.tooltipEscape.test.ts`);
  * - the heading is the first line and the rest follow it; a datum without a bin says nothing;
@@ -50,6 +52,7 @@ import {tick} from 'svelte';
 import {cleanup, render, screen, waitFor} from '$test/component';
 
 import {buildTooltipTheme} from './echartsTooltipHelpers';
+import {histogramTooltipPosition} from './returnHistogramChartHelpers';
 import ReturnHistogramChart from './ReturnHistogramChart.svelte';
 import type {HistogramBin} from './returnHistogramChartHelpers';
 
@@ -92,6 +95,26 @@ describe('ReturnHistogramChart', () => {
     it('publishes that it is drawing, for a test to wait on', async () => {
         mount();
         await waitFor(() => expect(screen.getByTestId('chart-under-test').getAttribute('data-chart-ready')).not.toBeNull());
+    });
+
+    it('draws the tooltip at the size of the other charts, beside the pointer', async () => {
+        mount();
+        await waitFor(() => expect(charts[0]?.setOptionCalls.length).toBeGreaterThan(0));
+
+        const option = charts[0].setOptionCalls.at(-1)!.option as {tooltip: {textStyle: {fontSize: number}; position: unknown}};
+        expect(option.tooltip.textStyle.fontSize).toBe(12);
+        expect(option.tooltip.position).toBe(histogramTooltipPosition);
+    });
+
+    it('typesets a $…$ stretch as LaTeX and leaves the rest as text', async () => {
+        mount({tooltipLines: () => ['$[−1{,}2\\%;\\,−0{,}8\\%)$', '14 days · 5.6%']});
+        await waitFor(() => expect(charts[0]?.setOptionCalls.length).toBeGreaterThan(0));
+
+        const holder = document.createElement('div');
+        holder.innerHTML = tooltipFor(0);
+        expect(holder.querySelector('.katex'), 'the interval was not typeset').not.toBeNull();
+        expect(holder.textContent).toContain('14 days · 5.6%');
+        expect(holder.textContent).not.toContain('$');
     });
 
     it('writes the heading first and the other lines after it', async () => {
