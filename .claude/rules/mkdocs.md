@@ -119,6 +119,6 @@ For displaying multiple related images, use the custom `lf-screenshot-carousel` 
 </div>
 ```
 
-Path resolved: `{basePath}/gallery/{viewport}/{lang}/{theme}/{category}/{name}.png`
+Path resolved: `{basePath}/gallery/{viewport}/{lang}/{theme}/{category}/{name}.webp`, then the same `.png`, then the public site's (the gallery writes PNG, `dev.py mkdocs gallery` converts it to WebP at the end; the site keeps both)
 
 For gallery generation and translation commands, see skills `devpy-mkdocs`.
