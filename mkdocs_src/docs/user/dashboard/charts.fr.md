@@ -202,9 +202,9 @@ Le panneau mémorise la vue et l'onglet dans ce navigateur, pour chaque utilisat
 
 Quels actifs individuels pèsent le plus ? **Par actif** décompose le portefeuille actif par actif plutôt que par catégorie.
 
-- **Maintenant** — un diagramme circulaire avec le poids de chaque actif au dernier jour de la plage sélectionnée.
+- **Maintenant** — un diagramme circulaire avec le poids de chaque actif au dernier jour de la plage sélectionnée. Chaque part affiche l'icône de son actif — la sienne, ou celle de son type s'il n'en a pas ou si elle ne se charge pas ; les liquidités affichent celle de Liquidités. Il n'y a pas de légende : survolez une part pour lire le nom, la part et le montant.
 - **Historique** — l'évolution de la distribution par actif dans le temps. **Les positions clôturées sont incluses**, de sorte qu'un actif que vous avez vendu apparaît encore les jours où vous le déteniez.
-- **Les couleurs** suivent le poids actuel : l'actif le plus lourd reçoit la première couleur, puis les autres par poids, puis les actifs clôturés, les plus récemment clôturés en premier. Le diagramme circulaire et l'historique utilisent la même couleur pour le même actif.
+- **Les couleurs** suivent le poids actuel : l'actif le plus lourd reçoit la première couleur, puis les autres par poids, puis les actifs clôturés, les plus récemment clôturés en premier. Le diagramme circulaire et l'historique utilisent la même couleur pour le même actif ; les courbes de [Rendement des positions](positions.md#return-of-the-positions) aussi.
 
 ### 🍩 Deux anneaux par type {: #allocation-type-rings }
 
