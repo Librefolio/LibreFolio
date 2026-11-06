@@ -25,14 +25,18 @@
           "month": "m",
           "day": "g"
         },
-        "hint": "Scrivi i giorni (365) oppure anni, mesi e giorni: 2a3m5g sono 2 anni, 3 mesi e 5 giorni, cioè 825 giorni (un anno vale 365 giorni, un mese 30).",
         "hintLabel": "Come scrivere l'orizzonte",
         "resultDays": "{days, plural, one {# giorno} other {# giorni}}",
         "errors": {
           "empty": "Inserisci l'orizzonte.",
-          "format": "Orizzonte non valido: scrivi i giorni (365) oppure, in quest'ordine, anni, mesi e giorni (2a3m5g).",
+          "format": "Orizzonte non valido: scrivi i giorni (365) oppure anni, mesi e giorni (2a3m5g).",
           "tooShort": "L'orizzonte deve essere di almeno 1 giorno.",
           "tooLong": "L'orizzonte non può superare {max} giorni."
+        },
+        "hintItems": {
+          "days": "Un numero di giorni: 365",
+          "units": "Oppure anni, mesi e giorni: 2a3m5g",
+          "sum": "Un anno vale 365 giorni, un mese 30"
         }
       }
     },
@@ -407,28 +411,26 @@
       "l1": {
         "title": "Quanto può fare male?",
         "rows": {
-          "day": "Una giornata storta (peggiori 5%)",
-          "month": "Un mese storto (peggiori 5%)",
-          "worst": "La peggior discesa (vissuta davvero)"
+          "day": "Una giornata storta",
+          "month": "Trenta giorni storti",
+          "worst": "La peggior discesa"
         },
         "technical": {
-          "day": "CVaR · 1 giorno",
-          "month": "CVaR · 1 mese",
+          "day": "Il peggior 5% dei giorni · CVaR",
+          "month": "Il peggior 5% dei periodi · CVaR",
           "worst": "Drawdown massimo",
-          "current": "Drawdown attuale"
+          "current": "Drawdown attuale",
+          "lived": "Vissuta"
         },
-        "durationDays": "durata {days} giorni",
-        "requiredRecovery": "recupero richiesto {percent}",
-        "currentDrawdown": "Attualmente sotto il massimo",
-        "sincePeak": "dal {date}",
+        "requiredRecovery": "Recupero richiesto",
+        "currentDrawdown": "Sotto il massimo, oggi",
         "tails": {
-          "worstRealization": "Il giorno peggiore davvero visto",
-          "worstRealizationOn": "il {date}",
+          "worstRealization": "Il giorno peggiore",
           "drawdownAtRisk": "Drawdown a rischio ({confidence})",
-          "conditionalDrawdownAtRisk": "Media oltre quella soglia",
+          "conditionalDrawdownAtRisk": "Media oltre la soglia",
           "ulcerIndex": "Indice di Ulcer {value}",
           "ulcerIndexHint": "profondità quadratica media sotto il picco: più basso, più tranquillo",
-          "worstMonth": "Il mese peggiore davvero visto"
+          "worstMonth": "I 30 giorni peggiori"
         },
         "underwater": {
           "title": "Tempo passato sotto il picco",
@@ -440,15 +442,18 @@
           "cut": "Soglia VaR a {value}",
           "noCut": "Nessuna soglia pubblicata per questa finestra.",
           "empty": "Nessuna distribuzione dei rendimenti per questo periodo.",
-          "bin": "{range}: {count, plural, one {# giorno} other {# giorni}} ({share})",
           "cutLine": "VaR {value}",
           "position": {
             "beyond": "Oltre la soglia VaR ({value}): giorni che il VaR descrive",
             "holds": "Contiene la soglia VaR ({value})",
             "above": "Sopra la soglia VaR ({value})"
-          }
+          },
+          "binDays": "{count, plural, one {# giorno} other {# giorni}} · {share}"
         },
-        "period": "dal {from} al {to}"
+        "when": "Quando",
+        "since": "Dal",
+        "duration": "Durata",
+        "daysCount": "{days, plural, one {# giorno} other {# giorni}}"
       },
       "l2": {
         "title": "Sono diversificato come credo?",

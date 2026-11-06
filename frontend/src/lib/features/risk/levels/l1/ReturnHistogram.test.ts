@@ -100,18 +100,24 @@ describe('ReturnHistogram — what it publishes of the chart', () => {
 });
 
 describe('ReturnHistogram — what a bar’s tooltip says', () => {
-    it('opens with its interval, written as the axis writes it', () => {
+    it('opens with its interval as an interval, written as the axis writes its ends: closed on the left, open on the right', () => {
         render(ReturnHistogram, {props: {histogram: HISTOGRAM}});
 
-        expect(words(1)).toContain(axisPercent(-3));
-        expect(words(1)).toContain(axisPercent(0));
+        expect(words(1)).toContain(`[${axisPercent(-3)}, ${axisPercent(0)})`);
+        expect(words(0)).toContain(`[${axisPercent(-6)}, ${axisPercent(-3)})`);
+    });
+
+    it('closes the last bar on both sides: it keeps its upper edge', () => {
+        render(ReturnHistogram, {props: {histogram: HISTOGRAM}});
+
+        expect(words(2)).toContain(`[${axisPercent(0)}, ${axisPercent(3)}]`);
     });
 
     it('says how many days fell in the bar and their share of the observations (D-B6a)', () => {
         render(ReturnHistogram, {props: {histogram: HISTOGRAM}});
 
         // 10 of 100 observed days; the share is the share rule's own text, not a number written here.
-        expect(words(1)).toContain(say('risk.levels.l1.histogram.bin', {range: `${axisPercent(-3)} … ${axisPercent(0)}`, count: 10, share: formatShare(0.1, 1)}));
+        expect(words(1)).toContain(say('risk.levels.l1.histogram.binDays', {count: 10, share: formatShare(0.1, 1)}));
     });
 
     it('says an empty bar held no day, with a share of zero, and has its own entry', () => {
@@ -119,8 +125,7 @@ describe('ReturnHistogram — what a bar’s tooltip says', () => {
 
         expect(screen.queryByTestId(BIN(2)), 'an empty bin has nothing to hover: it reads as a bin that is not there').not.toBeNull();
         expect(words(2)).toContain(formatShare(0, 1));
-        // More than the interval alone, which is all the bar said before it carried its days.
-        expect(words(2).trim()).not.toBe(`${axisPercent(0)} … ${axisPercent(3)}`);
+        expect(words(2)).toContain(say('risk.levels.l1.histogram.binDays', {count: 0, share: formatShare(0, 1)}));
     });
 
     it('tells the three positions against the VaR threshold apart, with the threshold written', () => {

@@ -151,6 +151,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/risk/riskWholeBroker.test.ts",
             "src/lib/features/risk/levels/L2DiversificationMatrix.test.ts",
             "src/lib/features/risk/levels/l1/ReturnHistogram.test.ts",
+            "src/lib/features/risk/levels/L1HowMuchItHurts.test.ts",
             "src/lib/features/risk/levels/RiskPartialNoticeBadges.test.ts",
             "src/lib/components/assets/providerProbe.test.ts",
             "src/lib/components/assets/resolveProviderError.test.ts",

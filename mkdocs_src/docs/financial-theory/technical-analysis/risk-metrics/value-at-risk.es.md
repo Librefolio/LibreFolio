@@ -109,7 +109,7 @@ $$
 n = \max\left(1,\ \operatorname{round}\left(\frac{h \cdot f}{365}\right)\right)
 $$
 
-Por tanto, un horizonte abarca el mismo tramo de calendario en todas las series, a la observación más cercana. Treinta días — el mes malo que la aplicación reporta junto al día malo — son $n = 21$ observaciones de una serie cotizada en días hábiles ($f \approx 252$) y $n = 30$ de una cotizada cada día calendario ($f = 365$).
+Por tanto, un horizonte abarca el mismo tramo de calendario en todas las series, a la observación más cercana. Treinta días — la tarjeta Treinta malos días que la aplicación muestra junto al mal día — son $n = 21$ observaciones de una serie cotizada en días hábiles ($f \approx 252$) y $n = 30$ de una cotizada cada día calendario ($f = 365$).
 
 El módulo de análisis calcula exactamente estas cantidades y publica ambas con el resultado: $n$ como su horizonte en observaciones, $T$ como su recuento de observaciones. Ese recuento publicado, no la longitud de la ventana, es el $T$ al que se aplica la regla. También es el recuento con el que se verifica el mínimo de 20 observaciones: con menos de 20 ventanas compuestas, la cifra no se calcula, y el resultado vuelve como no disponible por historial insuficiente. Un mes malo, por tanto, necesita $N \ge 40$ rendimientos con $f \approx 252$, donde $n = 21$, y $N \ge 49$ con $f = 365$.
 

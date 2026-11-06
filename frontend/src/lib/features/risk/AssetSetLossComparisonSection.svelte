@@ -45,6 +45,7 @@
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {formatDayRange} from '$lib/utils/core/formatAxisDate';
     import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
@@ -194,7 +195,7 @@
         lossColumn(
             'badMonth',
             (row) => row.badMonth,
-            (row) => (row.worstMonth ? `${fall(row.worstMonth.loss)} · ${$t('risk.levels.l1.period', {values: {from: row.worstMonth.from, to: row.worstMonth.to}})}` : ''),
+            (row) => (row.worstMonth ? `${fall(row.worstMonth.loss)} · ${formatDayRange(row.worstMonth.from, row.worstMonth.to)}` : ''),
         ),
         {
             id: 'worstFall',
@@ -213,10 +214,7 @@
                 const lastedHtml =
                     row.worstFall !== null && row.worstFallDays !== null ? `<span class="block text-[10px] font-normal text-lf-muted" data-testid="risk-asset-set-l1-worstFall-days">${escapeHtml($t('risk.assetSet.levels.l1.lastedDays', {values: {days: row.worstFallDays}}))}</span>` : '';
                 // From the peak it fell from to the trough it reached (F-6).
-                const periodHtml =
-                    row.worstFall !== null && row.worstFallPeriod
-                        ? `<span class="block text-[10px] font-normal text-lf-muted" data-testid="risk-asset-set-l1-worstFall-period">${escapeHtml($t('risk.levels.l1.period', {values: {from: row.worstFallPeriod.from, to: row.worstFallPeriod.to}}))}</span>`
-                        : '';
+                const periodHtml = row.worstFall !== null && row.worstFallPeriod ? `<span class="block text-[10px] font-normal text-lf-muted" data-testid="risk-asset-set-l1-worstFall-period">${escapeHtml(formatDayRange(row.worstFallPeriod.from, row.worstFallPeriod.to))}</span>` : '';
                 const text = row.worstFall === null ? '\u2014' : fall(row.worstFall);
                 return figureCell(cellHtml('worstFall', row.worstFall !== null, `${text}${periodHtml}${lastedHtml}`, LOSS_CLASS, ` data-recovery="${escapeHtml(row.recovery ?? '')}"`), row.worstFall !== null, blankExplanation);
             },

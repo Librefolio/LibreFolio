@@ -19,11 +19,11 @@
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
-    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {renderInlineMathText} from '$lib/utils/inlineMath';
 
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
-    import {buildTooltipTheme, scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from './echartsTooltipHelpers';
-    import {buildReturnHistogramOption, type HistogramBin} from './returnHistogramChartHelpers';
+    import {buildTooltipTheme, scheduleFirstRenderStabilityFix} from './echartsTooltipHelpers';
+    import {buildReturnHistogramOption, histogramTooltipPosition, type HistogramBin} from './returnHistogramChartHelpers';
 
     interface Props {
         bins: readonly HistogramBin[];
@@ -33,7 +33,7 @@
         formatAxis: (percent: number) => string;
         /** The label of the cut line, written. */
         cutLabel: string;
-        /** The lines of one bar's tooltip, written; the first is the heading. */
+        /** The lines of one bar's tooltip, written; the first is the heading. A `$…$` stretch in a line is typeset as LaTeX (KaTeX), the rest is text. */
         tooltipLines: (bin: HistogramBin, index: number) => string[];
         height?: string;
         testId?: string;
@@ -100,18 +100,21 @@
                 ...built.option,
                 tooltip: {
                     trigger: 'item',
-                    position: tooltipPositionAboveFinger,
+                    // Beside the pointer on a desktop, above the finger on a touch screen (F8, 06/11/2026).
+                    position: histogramTooltipPosition,
                     confine: true,
                     backgroundColor: box.bg,
                     borderColor: box.border,
-                    textStyle: {color: box.textColor},
+                    // The size of the other charts' tooltips; the family is the chart theme's.
+                    textStyle: {color: box.textColor, fontSize: 12},
                     formatter: (params: {data?: {binIndex?: number}}) => {
                         const index = params.data?.binIndex;
                         const bin = index === undefined ? undefined : bins[index];
                         if (index === undefined || !bin) return '';
                         const [heading, ...rest] = tooltipLines(bin, index);
-                        // Written text, escaped as every tooltip here: a name or a figure never reaches the box as markup.
-                        return [`<div style="font-weight:600">${escapeHtml(heading ?? '')}</div>`, ...rest.map((line) => `<div style="color:${box.mutedColor}">${escapeHtml(line)}</div>`)].join('');
+                        // Written text, escaped before it is typeset, as every tooltip here: a name or a figure never reaches the box as
+                        // markup, and only a `$…$` stretch becomes LaTeX.
+                        return [`<div style="font-weight:600">${renderInlineMathText(heading ?? '')}</div>`, ...rest.map((line) => `<div style="color:${box.mutedColor}">${renderInlineMathText(line)}</div>`)].join('');
                     },
                 },
             },

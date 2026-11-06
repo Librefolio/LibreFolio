@@ -244,4 +244,62 @@ describe('RiskMetricCard', () => {
             expect(screen.getByTestId('card-value').className).toContain('cqw');
         });
     });
+
+    // F8 (06/11/2026): the loss cards of L1 share one shape — title and subtitle, the number with its caption on one line, a rule,
+    // the detail rows. Geometry is the E2E's; what a DOM can pin is the order of the parts and that the ids did not change.
+    describe('layout="figure"', () => {
+        const FIGURE = {...BASE, layout: 'figure' as const, caption: '-1,175.80 EUR', docsPath: 'financial-theory/x/', submetrics: probe('detail')};
+
+        it('keeps every test id of the side layout', async () => {
+            await setupI18n();
+            render(RiskMetricCard, {props: FIGURE});
+
+            for (const part of ['label', 'technical', 'value', 'caption', 'docs']) expect(screen.getByTestId(`card-${part}`), part).toBeInTheDocument();
+            expect(screen.getByTestId('card-label')).toHaveTextContent('A bad day');
+            expect(screen.getByTestId('card-value')).toHaveTextContent('-2.10%');
+        });
+
+        it('puts the number and its caption on one line, the number first, and the detail rows under a rule', async () => {
+            await setupI18n();
+            render(RiskMetricCard, {props: FIGURE});
+
+            const value = screen.getByTestId('card-value');
+            const caption = screen.getByTestId('card-caption');
+            expect(value.parentElement, 'the number and the caption are not on one line').toBe(caption.parentElement);
+            expect(value.compareDocumentPosition(caption) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            const details = screen.getByTestId('card-details');
+            expect(details.className).toContain('border-t');
+            expect(details).toContainElement(screen.getByTestId('detail'));
+            expect(caption.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        });
+
+        it('has no rule when there are no detail rows', async () => {
+            await setupI18n();
+            render(RiskMetricCard, {props: {...FIGURE, submetrics: undefined}});
+
+            expect(screen.queryByTestId('card-details')).not.toBeInTheDocument();
+        });
+
+        it('keeps the title and the subtitle wrapping to two lines, with no native title', async () => {
+            await setupI18n();
+            render(RiskMetricCard, {props: FIGURE});
+
+            for (const part of ['label', 'technical']) {
+                expect(screen.getByTestId(`card-${part}`).className).toContain('line-clamp-2');
+                expect(screen.getByTestId(`card-${part}`)).not.toHaveAttribute('title');
+            }
+        });
+
+        it('keeps the value in the DOM while loading, so nothing moves when it arrives', async () => {
+            await setupI18n();
+            const {rerender} = render(RiskMetricCard, {props: {...FIGURE, loading: true}});
+            const before = screen.getByTestId('card-value');
+
+            expect(screen.getByTestId('card-skeleton')).toBeInTheDocument();
+            await rerender({...FIGURE, loading: false});
+
+            expect(screen.getByTestId('card-value')).toBe(before);
+            expect(screen.queryByTestId('card-skeleton')).not.toBeInTheDocument();
+        });
+    });
 });

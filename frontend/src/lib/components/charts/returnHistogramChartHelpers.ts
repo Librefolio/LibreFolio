@@ -25,6 +25,8 @@
 import {chartNeutrals, RETURN_HISTOGRAM_COLORS} from '$lib/theme/chartTheme';
 import {themed} from '$lib/theme/themePair';
 
+import {tooltipPositionAboveFinger, tooltipPositionSide} from './echartsTooltipHelpers';
+
 /** One bar, in percent units, with the flags `l1Helpers` computed. */
 export interface HistogramBin {
     lowerBound: number;
@@ -46,6 +48,22 @@ export interface ReturnHistogramOptionInput {
     formatAxis: (percent: number) => string;
     /** The label at the top of the cut line, already written. */
     cutLabel: string;
+}
+
+/**
+ * Where the tooltip stands: beside the pointer on a desktop, on the side with more room (F8, developer's decision of 06/11/2026), so it
+ * never covers the bar it describes; above the finger on a touch screen, where a side box would sit under the hand.
+ */
+export function histogramTooltipPosition(
+    point: [number, number],
+    params: unknown,
+    dom: unknown,
+    rect: unknown,
+    size: {contentSize: [number, number]; viewSize: [number, number]},
+    // ECharts passes five arguments; the sixth is the seam a test uses.
+    touch: boolean = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+): [number, number] {
+    return touch ? tooltipPositionAboveFinger(point, params, dom, rect, size) : tooltipPositionSide(point, params, dom, rect, size);
 }
 
 /** A bar never rounds away to nothing: an invisible bar and an empty bin must not look the same. */

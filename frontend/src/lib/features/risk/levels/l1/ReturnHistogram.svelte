@@ -49,27 +49,47 @@
     let {histogram, height = '140px'}: Props = $props();
 
     /**
-     * What a bar's tooltip says (D-B6a, 31/10/2026; F-5, 05/11/2026): the interval it covers, written as the axis ends are, how many days
-     * fell in it and their share of the observed days, written by the share rule; and, when a threshold was published, where the
+     * The interval a bar covers, as the interval it is: closed on the left, open on the right, and closed on both sides for the last
+     * bar, which keeps its upper edge. The separator is the one the figures are written with: a semicolon where the decimal mark is
+     * a comma (`[−1,2%; −0,8%)`), a comma where it is a point.
+     */
+    function interval(bin: HistogramBin, index: number, math: boolean): string {
+        const last = histogram !== null && index === histogram.bins.length - 1;
+        const decimalComma = axisPercent(1.5).includes(',');
+        const lower = axisPercent(bin.lowerBound);
+        const upper = axisPercent(bin.upperBound);
+        const close = last ? ']' : ')';
+        if (!math) return `[${lower}${decimalComma ? '; ' : ', '}${upper}${close}`;
+        // LaTeX: «%» is a comment mark and the comma after a digit is spaced as a list, so the figures are escaped as they are.
+        const tex = (figure: string) => figure.replace(/%/g, '\\%').replace(/,/g, '{,}');
+        return `$[${tex(lower)}${decimalComma ? ';\\,' : '{,}\\,'}${tex(upper)}${close}$`;
+    }
+
+    /**
+     * What a bar's tooltip says (D-B6a, 31/10/2026; F-5, 05/11/2026; F8, 06/11/2026): a few ordered lines — the interval, how many days
+     * fell in it and their share of the observed days (written by the share rule), and, when a threshold was published, where the
      * bar lies against it. The share is a plain ratio of counts, the bar's own over the histogram's total: it is not a financial
      * quantity and nothing else reads it.
      *
-     * A derived function, so a language switch (the `$t` store changing) hands the chart a new one and redraws its tooltip.
+     * Derived functions, so a language switch (the `$t` store changing) hands the chart new ones and redraws its tooltip. `math`
+     * gives the interval as LaTeX for the chart (KaTeX); the hidden list, which a screen reader and a test read, has it as text.
      */
-    const tooltipLines = $derived.by(() => {
+    const linesOf = $derived.by(() => {
         const observations = histogram?.observations ?? 0;
         const cut = histogram?.cut ?? null;
         const say = $t;
-        return (bin: HistogramBin): string[] => {
-            const range = `${axisPercent(bin.lowerBound)} … ${axisPercent(bin.upperBound)}`;
-            const lines = [say('risk.levels.l1.histogram.bin', {values: {range, count: bin.count, share: formatShare(observations > 0 ? bin.count / observations : 0, 1)}})];
-            if (cut !== null) {
-                const where = bin.holdsCut ? 'holds' : bin.belowCut ? 'beyond' : 'above';
-                lines.push(say(`risk.levels.l1.histogram.position.${where}`, {values: {value: figurePercent(cut / 100)}}));
-            }
-            return lines;
-        };
+        return (math: boolean) =>
+            (bin: HistogramBin, index: number): string[] => {
+                const lines = [interval(bin, index, math), say('risk.levels.l1.histogram.binDays', {values: {count: bin.count, share: formatShare(observations > 0 ? bin.count / observations : 0, 1)}})];
+                if (cut !== null) {
+                    const where = bin.holdsCut ? 'holds' : bin.belowCut ? 'beyond' : 'above';
+                    lines.push(say(`risk.levels.l1.histogram.position.${where}`, {values: {value: figurePercent(cut / 100)}}));
+                }
+                return lines;
+            };
     });
+    const tooltipLines = $derived(linesOf(true));
+    const plainLines = $derived(linesOf(false));
 
     /** The threshold's label on the chart: a figure, not a position, so a cut of −0.04% keeps its sign (D380). */
     const cutLabel = $derived(histogram?.cut == null ? '' : $t('risk.levels.l1.histogram.cutLine', {values: {value: figurePercent(histogram.cut / 100)}}));
@@ -89,7 +109,7 @@
             <!-- What the canvas drew, as text: for a screen reader, and for a test that cannot read pixels. -->
             <ul class="sr-only" data-testid="risk-l1-histogram-bins">
                 {#each histogram.bins as bin, index (index)}
-                    <li data-testid="risk-l1-histogram-bin-{index}" data-holds-cut={bin.holdsCut} data-below-cut={bin.belowCut} data-count={bin.count}>{tooltipLines(bin).join('. ')}</li>
+                    <li data-testid="risk-l1-histogram-bin-{index}" data-holds-cut={bin.holdsCut} data-below-cut={bin.belowCut} data-count={bin.count}>{plainLines(bin, index).join('. ')}</li>
                 {/each}
             </ul>
             <p class="sr-only">

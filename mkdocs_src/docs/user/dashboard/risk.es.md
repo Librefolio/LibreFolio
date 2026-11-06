@@ -17,26 +17,27 @@ Cada bloque a continuación sigue un patrón: qué responde, una captura de pant
 ¿Cuánto podrías perder, y qué tan mal ha sido ya? Cada cifra aquí es algo que tu cartera realmente experimentó en el período; los depósitos y retiros no cuentan como ganancias ni pérdidas.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="El bloque ¿Cuánto puede doler?: las tarjetas Un mal día, Un mal mes y La peor caída, cada una con su importe, y sus líneas de detalle (peor día realmente visto, cuánto duró la caída, recuperación necesaria, caída en riesgo, promedio más allá de ese umbral); luego Tiempo pasado bajo el pico con el índice de Ulcer, y la Distribución de rendimientos diarios con el umbral de VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="El bloque ¿Cuánto puede doler?: las tarjetas Un mal día, Treinta malos días y La peor caída, cada una con su importe, y sus líneas de detalle (el peor día y cuándo, los 30 peores días y cuándo, las fechas de la peor caída y cuánto duró, recuperación necesaria, caída en riesgo, media más allá del umbral); luego Tiempo pasado bajo el pico con el índice de Ulcer, y la Distribución de rendimientos diarios con el umbral de VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Herramientas mostradas**
 
-- **Un mal día**, **Un mal mes** — tu pérdida promedio en el peor 5% de los días, o de los períodos de un mes → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
+- **Un mal día**, **Treinta malos días** — tu pérdida promedio en el peor 5% de los días, o de los períodos de 30 días → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Umbral de VaR** — en *Distribución de los rendimientos diarios*: la pérdida diaria que solo el peor 5% de los días superó; una línea discontinua la marca en el gráfico, y al pasar sobre una barra se ve cuántos días cayeron en ella y si queda más allá del umbral → [Valor en riesgo](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
-- **El peor día realmente visto** — el peor día del período → [Peor realización](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
-- **El peor mes realmente vivido** — bajo *Un mal mes*: el peor período de un mes que la cartera realmente atravesó, con su primer y su último día. *Un mal mes* es en cambio un promedio del peor 5%, que ningún mes mostró nunca por sí solo
-- **La peor caída** — la caída más profunda desde un máximo hasta un mínimo posterior, con las fechas del máximo y del mínimo → [Caída máxima](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **El peor día** — bajo *Un mal día*: el peor día del período, y cuándo fue → [Peor realización](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
+- **Los 30 peores días** — bajo *Treinta malos días*: el peor período de 30 días que la cartera realmente atravesó, y cuándo fue. *Treinta malos días* es en cambio un promedio del peor 5%, que ningún período mostró nunca por sí solo
+- **La peor caída** — la caída más profunda desde un máximo hasta un mínimo posterior, cuándo empezó y terminó, y cuánto duró → [Caída máxima](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Caída en riesgo** — cuán por debajo de su pico estuvo la cartera, dejando de lado su peor 5% de días → [Caída en riesgo](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
-- **Media más allá de ese umbral** — cuán por debajo de su pico estuvo, en promedio, en esos peores días → [Caída en riesgo condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
-- **Actualmente por debajo del máximo** — cuán por debajo de su último máximo está la cartera hoy → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Media más allá del umbral** — cuán por debajo de su pico estuvo, en promedio, en esos peores días → [Caída en riesgo condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
+- **Bajo el máximo, hoy** — cuán por debajo de su último máximo está la cartera hoy → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
 - **Índice de Ulcer** — bajo *Tiempo bajo el pico*: cuán profundas y cuán largas fueron las caídas; más bajo es más calmado → [Índice de Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **Cómo leerlo**
 
 - **Distintos horizontes**: las tarjetas van de un día a un mes a la peor caída, así que nunca las sumes.
-- **El importe** bajo cada porcentaje es esa pérdida aplicada a tu patrimonio neto.
-- **Actualmente por debajo del máximo** aparece solo mientras tu cartera está por debajo de su último máximo.
+- **El importe** junto a cada porcentaje es esa pérdida aplicada a tu patrimonio neto.
+- **Cada tarjeta tiene la misma forma**: un título y un subtítulo, el porcentaje con su importe, y luego filas de detalle con el nombre a la izquierda y la cifra a la derecha. Una fecha se escribe como la escribe tu idioma.
+- **Bajo el máximo, hoy** aparece solo mientras tu cartera está por debajo de su último máximo.
 - **Los iconos ? e ⓘ** junto a una cifra abren su página de teoría.
 
 ---

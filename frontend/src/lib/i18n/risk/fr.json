@@ -25,14 +25,18 @@
           "month": "m",
           "day": "j"
         },
-        "hint": "Saisissez les jours (365) ou des années, mois et jours : 2a3m5j correspond à 2 ans, 3 mois et 5 jours, soit 825 jours (une année compte 365 jours, un mois 30).",
         "hintLabel": "Comment saisir l'horizon",
         "resultDays": "{days, plural, one {# jour} other {# jours}}",
         "errors": {
           "empty": "Saisissez l'horizon.",
-          "format": "Horizon non valide : saisissez des jours (365) ou, dans cet ordre, années, mois et jours (2a3m5j).",
+          "format": "Horizon non valide : saisissez des jours (365) ou des années, mois et jours (2a3m5j).",
           "tooShort": "L'horizon doit être d'au moins 1 jour.",
           "tooLong": "L'horizon ne peut pas dépasser {max} jours."
+        },
+        "hintItems": {
+          "days": "Un nombre de jours : 365",
+          "units": "Ou des années, mois et jours : 2a3m5j",
+          "sum": "Une année compte 365 jours, un mois 30"
         }
       }
     },
@@ -407,28 +411,26 @@
       "l1": {
         "title": "Quel mal cela peut-il faire ?",
         "rows": {
-          "day": "Une mauvaise journée (pires 5%)",
-          "month": "Un mauvais mois (pires 5%)",
-          "worst": "Le pire repli (réellement vécu)"
+          "day": "Un mauvais jour",
+          "month": "Trente mauvais jours",
+          "worst": "La pire chute"
         },
         "technical": {
-          "day": "CVaR · 1 jour",
-          "month": "CVaR · 1 mois",
+          "day": "Les 5 % de jours les plus mauvais · CVaR",
+          "month": "Les 5 % de périodes les plus mauvaises · CVaR",
           "worst": "Perte maximale",
-          "current": "Repli actuel"
+          "current": "Repli actuel",
+          "lived": "Vécue"
         },
-        "durationDays": "durée {days} jours",
-        "requiredRecovery": "reprise nécessaire {percent}",
-        "currentDrawdown": "Actuellement sous le sommet",
-        "sincePeak": "depuis le {date}",
+        "requiredRecovery": "Reprise nécessaire",
+        "currentDrawdown": "Sous le sommet, aujourd'hui",
         "tails": {
-          "worstRealization": "La pire journée réellement vue",
-          "worstRealizationOn": "le {date}",
+          "worstRealization": "La pire journée",
           "drawdownAtRisk": "Repli à risque ({confidence})",
-          "conditionalDrawdownAtRisk": "Moyenne au-delà de ce seuil",
+          "conditionalDrawdownAtRisk": "Moyenne au-delà du seuil",
           "ulcerIndex": "Indice d'Ulcer {value}",
           "ulcerIndexHint": "profondeur quadratique moyenne sous le sommet : plus bas, plus calme",
-          "worstMonth": "Le pire mois réellement vécu"
+          "worstMonth": "Les 30 pires jours"
         },
         "underwater": {
           "title": "Temps passé sous le sommet",
@@ -440,15 +442,18 @@
           "cut": "Seuil VaR à {value}",
           "noCut": "Aucun seuil publié pour cette fenêtre.",
           "empty": "Aucune distribution des rendements pour cette période.",
-          "bin": "{range} : {count, plural, one {# jour} other {# jours}} ({share})",
           "cutLine": "VaR {value}",
           "position": {
             "beyond": "Au-delà du seuil VaR ({value}) : jours que la VaR décrit",
             "holds": "Contient le seuil VaR ({value})",
             "above": "Au-dessus du seuil VaR ({value})"
-          }
+          },
+          "binDays": "{count, plural, one {# jour} other {# jours}} · {share}"
         },
-        "period": "du {from} au {to}"
+        "when": "Quand",
+        "since": "Depuis",
+        "duration": "Durée",
+        "daysCount": "{days, plural, one {# jour} other {# jours}}"
       },
       "l2": {
         "title": "Suis-je aussi diversifié que je le crois ?",

@@ -172,7 +172,7 @@
         {/each}
     </fieldset>
 
-    <div class="flex flex-wrap items-end gap-3 text-xs text-lf-muted">
+    <div class="flex flex-wrap items-end gap-3 pb-5 text-xs text-lf-muted">
         <SimulationHorizonField bind:days={horizonDays} bind:valid={horizonValid} onchange={invalidate} />
         <label class="flex flex-col gap-1">
             {$t('risk.params.paths')}
