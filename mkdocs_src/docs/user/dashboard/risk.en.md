@@ -17,26 +17,27 @@ Each block below follows one pattern: what it answers, a screenshot, its tools a
 How much could you lose, and how bad has it already been? Every figure here is something your portfolio really went through in the period; deposits and withdrawals do not count as gains or losses.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="The How much can it hurt? block: the A bad day, A bad month and The worst fall cards, each with its amount, and their detail lines (worst day actually seen, how long the fall lasted, recovery needed, Drawdown at risk, Average beyond that threshold); then Time spent below the peak with the Ulcer index, and the Distribution of daily returns with the VaR threshold" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="The How much can it hurt? block: the A bad day, Thirty bad days and The worst fall cards, each with its amount, and their detail lines (the worst day and when, the worst 30 days and when, the worst fall's dates and how long it lasted, recovery needed, Drawdown at risk, Average beyond the threshold); then Time spent below the peak with the Ulcer index, and the Distribution of daily returns with the VaR threshold" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Tools shown**
 
-- **A bad day**, **A bad month** — your average loss on the worst 5% of days, or of one-month stretches → [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
+- **A bad day**, **Thirty bad days** — your average loss on the worst 5% of days, or of 30-day stretches → [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **VaR threshold** — on *Distribution of daily returns*: the daily loss that only the worst 5% of days went beyond; a dashed line marks it on the chart, and hovering a bar tells how many days fell in it and whether it lies beyond the threshold → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
-- **Worst day actually seen** — the single worst day of the period → [Worst Realization](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
-- **Worst month actually seen** — under *A bad month*: the worst one-month stretch the portfolio really went through, with its first and last day. *A bad month* itself is an average of the worst 5%, which no single month ever printed
-- **The worst fall** — the deepest drop from a high to a later low, with the dates of the high and of the low → [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **The worst day** — under *A bad day*: the single worst day of the period, and when it was → [Worst Realization](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
+- **The worst 30 days** — under *Thirty bad days*: the worst 30-day stretch the portfolio really went through, and when it was. *Thirty bad days* itself is an average of the worst 5%, which no single stretch ever printed
+- **The worst fall** — the deepest drop from a high to a later low, when it began and ended, and how long it lasted → [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Drawdown at risk** — how far below its peak the portfolio stood, its worst 5% of days aside → [Drawdown at Risk](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
-- **Average beyond that threshold** — how far below its peak it stood, on average, on those worst days → [Conditional Drawdown at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
-- **Currently down from the peak** — how far below its last high the portfolio stands today → [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Average beyond the threshold** — how far below its peak it stood, on average, on those worst days → [Conditional Drawdown at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
+- **Below the peak, today** — how far below its last high the portfolio stands today → [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
 - **Ulcer index** — under *Time spent below the peak*: how deep and how long the falls were; lower is calmer → [Ulcer Index](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **How to read it**
 
 - **Different horizons**: the cards go from a day to a month to the worst fall, so never add them up.
-- **The amount** under each percentage is that loss applied to your net worth.
-- **Currently down from the peak** appears only while your portfolio is below its last high.
+- **The amount** beside each percentage is that loss applied to your net worth.
+- **Every card has the same shape**: a title and a subtitle, the percentage with its amount, then detail rows with the name on the left and the figure on the right. A date is written the way your language writes it.
+- **Below the peak, today** appears only while your portfolio is below its last high.
 - **The ? and ⓘ icons** next to a figure open its theory page.
 
 ---
