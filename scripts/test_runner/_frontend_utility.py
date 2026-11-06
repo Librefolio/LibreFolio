@@ -87,6 +87,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/core/__tests__/formatFixed.test.ts",
             "src/lib/stores/app/uiLocale.test.ts",
             "src/lib/utils/files/upload.test.ts",
+            "src/lib/utils/files/storageLimit.test.ts",
             "src/lib/utils/core/__tests__/positionKey.test.ts",
             "src/lib/utils/core/__tests__/finiteNumber.test.ts",
             "src/lib/utils/core/__tests__/formatAxisDate.test.ts",
