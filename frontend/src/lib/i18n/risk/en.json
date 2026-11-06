@@ -444,13 +444,13 @@
           "cut": "VaR threshold at {value}",
           "noCut": "No threshold published for this window.",
           "empty": "No return distribution available for this period.",
-          "bin": "{range}: {count, plural, one {# day} other {# days}} ({share})",
           "cutLine": "VaR {value}",
           "position": {
             "beyond": "Beyond the VaR threshold ({value}): days the VaR describes",
             "holds": "Holds the VaR threshold ({value})",
             "above": "Above the VaR threshold ({value})"
-          }
+          },
+          "binDays": "{count, plural, one {# day} other {# days}} · {share}"
         },
         "period": "from {from} to {to}"
       },
