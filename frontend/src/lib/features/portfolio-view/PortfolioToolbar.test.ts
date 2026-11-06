@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * PortfolioToolbar — the Refresh button that becomes «Updates paused» (F-4; Vitest + jsdom).
+ * PortfolioToolbar — the Refresh button while the live prices are paused (F-4; Vitest + jsdom).
  *
- * While the live prices wait for the user (`liveState === 'paused-idle'`, FB-28) the toolbar draws no extra pill: the Refresh button
- * itself takes the pill's icon, label and tone, in the same place, so nothing around it shifts. It is one and the same element
- * (same test id), and a click does what Refresh does. The picker, the currency select, the broker filter and the AI Export menu are
+ * While the live prices wait for the user (`liveState === 'paused-idle'`, FB-28) the toolbar draws no extra pill and its label does not change:
+ * the Refresh button keeps its shape, its width and its word, and only its icon and its tone change, with a tooltip that says the updates are
+ * paused. It is one and the same element (same test id), and a click does what Refresh does. The picker, the currency select, the broker filter and the AI Export menu are
  * replaced by no-op components: they have their own specs.
  *
  * Nothing translated is asserted: the label is checked as «not empty, not a raw key».
@@ -48,13 +48,15 @@ function props(liveState: ActivePollingState, kind: 'portfolio' | 'broker' = 'po
     };
 }
 
-describe('PortfolioToolbar — Refresh and «Updates paused» (F-4)', () => {
+describe('PortfolioToolbar — Refresh while the updates are paused (F-4)', () => {
+    const iconOf = (button: HTMLElement) => button.querySelector('svg')?.getAttribute('class') ?? '';
+
     it.each(['running', 'stopped', 'paused-hidden'] as const)('draws the plain Refresh button while %s', (state) => {
         render(PortfolioToolbar, props(state) as never);
         const button = screen.getByTestId('sync-button');
         expect(button).toHaveAttribute('data-live-state', state);
-        expect(button.className).not.toContain('rounded-full');
-        expect(button).not.toHaveAttribute('aria-label');
+        expect(screen.queryByTestId('sync-button-paused-icon')).toBeNull();
+        expect(button.className).toContain('bg-lf-card');
     });
 
     it('draws no separate pill: the old «Updates paused» element is gone', () => {
@@ -62,34 +64,43 @@ describe('PortfolioToolbar — Refresh and «Updates paused» (F-4)', () => {
         expect(screen.queryByTestId('live-updates-status')).toBeNull();
     });
 
-    it('while paused for inactivity the same button takes the pill’s look: rounded, no border, another icon and label', () => {
+    it('while paused for inactivity the same button changes only its icon and its tone: same element, same word, same shape', async () => {
         const {rerender} = render(PortfolioToolbar, props('running') as never);
         const before = screen.getByTestId('sync-button');
-        const plainIcon = before.querySelector('svg')?.getAttribute('class') ?? '';
+        const word = before.textContent?.trim();
+        const shape = before.className.split(/\s+/).filter((name) => /^(px|py|gap|rounded|border|flex|items|justify|text-xs|font)/.test(name) || name === 'whitespace-nowrap');
+        expect(word, 'precondition: the button has its word').not.toBe('');
+        const plainIcon = iconOf(before);
 
-        return rerender(props('paused-idle') as never).then(() => {
-            const button = screen.getByTestId('sync-button');
-            expect(button, 'the same element: nothing is swapped, nothing shifts').toBe(before);
-            expect(button).toHaveAttribute('data-live-state', 'paused-idle');
-            expect(button.className).toContain('rounded-full');
-            expect(button.className).not.toContain('border');
-            expect(button.querySelector('svg')?.getAttribute('class') ?? '').not.toBe(plainIcon);
-            const label = button.textContent?.trim() ?? '';
-            expect(label).not.toBe('');
-            expect(label).not.toContain('liveUpdates.');
-            expect(button.getAttribute('aria-label')).toBe(label);
-            const hint = button.getAttribute('title') ?? '';
-            expect(hint).not.toBe('');
-            expect(hint).not.toContain('liveUpdates.');
-        });
+        await rerender(props('paused-idle') as never);
+
+        const button = screen.getByTestId('sync-button');
+        expect(button, 'the same element: nothing is swapped, nothing shifts').toBe(before);
+        expect(button).toHaveAttribute('data-live-state', 'paused-idle');
+        expect(button.textContent?.trim(), 'the word stays, so the width does not change').toBe(word);
+        for (const name of shape) expect(button.className, `the shape class ${name} stays`).toContain(name);
+        expect(screen.getByTestId('sync-button-paused-icon'), 'the pause icon').toBeInTheDocument();
+        expect(iconOf(button)).not.toBe(plainIcon);
+        expect(button.className, 'the tone of the old pill').not.toContain('bg-lf-card');
+        expect(button.className).toContain('bg-lf-neutral');
+    });
+
+    it('its tooltip says the updates are paused and what the click does; no raw key', async () => {
+        const {rerender} = render(PortfolioToolbar, props('running') as never);
+        const plain = screen.getByTestId('sync-button').getAttribute('title');
+        await rerender(props('paused-idle') as never);
+        const hint = screen.getByTestId('sync-button').getAttribute('title') ?? '';
+        expect(hint).not.toBe('');
+        expect(hint).not.toContain('liveUpdates.');
+        expect(hint, 'another tooltip than the plain one').not.toBe(plain);
     });
 
     it('goes back to the plain button when the prices resume', async () => {
         const {rerender} = render(PortfolioToolbar, props('paused-idle') as never);
         await rerender(props('running') as never);
         const button = screen.getByTestId('sync-button');
-        expect(button.className).not.toContain('rounded-full');
-        expect(button.className).toContain('border');
+        expect(screen.queryByTestId('sync-button-paused-icon')).toBeNull();
+        expect(button.className).toContain('bg-lf-card');
     });
 
     it.each(['running', 'paused-idle'] as const)('a click calls the page’s refresh, paused or not (%s)', async (state) => {
@@ -102,7 +113,7 @@ describe('PortfolioToolbar — Refresh and «Updates paused» (F-4)', () => {
     it('the broker’s page has the same button under its own test id', () => {
         render(PortfolioToolbar, props('paused-idle', 'broker') as never);
         const button = screen.getByTestId('broker-refresh');
-        expect(button.className).toContain('rounded-full');
         expect(button).toHaveAttribute('data-live-state', 'paused-idle');
+        expect(screen.getByTestId('broker-refresh-paused-icon')).toBeInTheDocument();
     });
 });

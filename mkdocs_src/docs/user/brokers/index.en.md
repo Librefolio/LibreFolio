@@ -81,7 +81,7 @@ A broker's page is the [Dashboard](../dashboard/index.md) with that broker alrea
 
 What is the same as on the Dashboard:
 
-- **Period, currency and buttons.** The date range, the **Currency** menu, **AI Export** and **Refresh** are the Dashboard's. When you have not used the page for two minutes, **Refresh** turns into **Updates paused**, in the same place: click it to update the prices again (see **Live prices** on the [Assets](../assets/index.md) page).
+- **Period, currency and buttons.** The date range, the **Currency** menu, **AI Export** and **Refresh** are the Dashboard's. When you have not used the page for two minutes, the **Refresh** button shows a pause icon and a greyer tone, and its tooltip says the updates are paused: click it to update the prices again (see **Live prices** on the [Assets](../assets/index.md) page).
 - **Cash balances follow the period.** They show the cash at the end of the period you picked.
 - **Lots.** **Analyze Lots** opens the lot detail below the list; the browser's **Back** button closes it. **See all →** opens the Assets page on the same period.
 - **Data-quality banner.** Old prices and missing or old exchange rates are reported here too, with the same **Sync prices** and **Sync rates** buttons ([Data Quality Banner](../dashboard/index.md#data-quality-banner)). Every role sees them, a Viewer included: they update shared prices and exchange rates, not the broker.

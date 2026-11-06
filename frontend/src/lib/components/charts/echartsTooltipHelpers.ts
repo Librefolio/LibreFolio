@@ -3,6 +3,7 @@ import {chartFontLoaded, chartFontReady} from './chartFont';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {chartNeutrals} from '$lib/theme/chartTheme';
+import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
@@ -84,6 +85,19 @@ export function buildFittedTooltipRow(labelHtml: string, valueHtml: string): str
 export function buildFittedTooltipBlockRow(labelHtml: string, valueHtml: string, dotColor?: string): string {
     const dot = dotColor ? buildDot(dotColor) : '';
     return `<div data-tooltip-row style="display:flex;align-items:baseline;max-width:100%;min-width:0;gap:16px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dot}${labelHtml}</span><b style="flex-shrink:0;white-space:nowrap;margin-left:auto">${valueHtml}</b></div>`;
+}
+
+/**
+ * `buildFittedTooltipBlockRow` whose label scrolls instead of ending in an ellipsis (F-1, B8): inside a box narrower than the row, the label
+ * (and its dot) shrinks, the value keeps its whole width, and a name that does not fit is the project's marquee: it scrolls by itself, as the
+ * names of the cards and the badges do. The marquee is attached by the chart (`attachOverflowMarqueeToDescendants` on its element, which the
+ * ECharts tooltip lives in), through the class `overflowScrollTextClass` carries; the inline styles keep the label one line and clipped
+ * without depending on a stylesheet reaching the tooltip's HTML. Both arguments are HTML: the caller escapes.
+ */
+export function buildMarqueeTooltipBlockRow(labelHtml: string, valueHtml: string, dotColor?: string): string {
+    const dot = dotColor ? buildDot(dotColor) : '';
+    const label = `<span class="${overflowScrollTextClass}" style="display:block;min-width:0;overflow:hidden;white-space:nowrap">${labelHtml}</span>`;
+    return `<div data-tooltip-row style="display:flex;align-items:baseline;max-width:100%;min-width:0;gap:16px"><span style="display:flex;align-items:baseline;min-width:0;flex:1 1 auto">${dot}${label}</span><b style="flex-shrink:0;white-space:nowrap;margin-left:auto">${valueHtml}</b></div>`;
 }
 
 /**

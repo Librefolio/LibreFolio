@@ -279,7 +279,7 @@ describe('the tooltip on a narrow chart (Y2 FB-5)', () => {
         expect(frame.style.maxWidth).toBe('768px');
     });
 
-    it('cuts a long name with an ellipsis and keeps the value whole', async () => {
+    it('gives way by scrolling the long name (F-1: a marquee, no ellipsis) and keeps the value whole', async () => {
         const option = await mountChart([
             stepped('12-3', LONG, [
                 ['2026-01-02', 100],
@@ -290,9 +290,13 @@ describe('the tooltip on a narrow chart (Y2 FB-5)', () => {
         const frame = parse(option.tooltip.formatter([{seriesId: '12-3', value: ['2026-01-02', 100]}]));
         const row = frame.querySelector('[data-tooltip-row]') as HTMLElement;
         expect(row, 'the row is marked').not.toBeNull();
-        const [label, value] = Array.from(row.children) as HTMLElement[];
-        expect(label.style.textOverflow).toBe('ellipsis');
+        const [side, value] = Array.from(row.children) as HTMLElement[];
+        expect(side.style.minWidth, 'the side of the row may shrink below its text').toBe('0px');
+        const label = side.querySelector('.overflow-scroll-marquee') as HTMLElement;
+        expect(label, 'the name is the project’s marquee').not.toBeNull();
+        expect(label.style.textOverflow, 'it scrolls, it does not end in an ellipsis').toBe('');
         expect(label.style.overflow).toBe('hidden');
+        expect(label.style.whiteSpace).toBe('nowrap');
         expect(label.style.minWidth).toBe('0px');
         expect(value.style.whiteSpace).toBe('nowrap');
         expect(value.style.flexShrink).toBe('0');

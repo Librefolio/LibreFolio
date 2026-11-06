@@ -202,9 +202,9 @@ Il pannello ricorda la visualizzazione e la scheda in questo browser, per ciascu
 
 Quali singoli asset pesano di più? **Per asset** suddivide il portafoglio asset per asset anziché per categoria.
 
-- **Ora** — un grafico a torta con il peso di ogni asset nell'ultimo giorno dell'intervallo selezionato.
+- **Ora** — un grafico a torta con il peso di ogni asset nell'ultimo giorno dell'intervallo selezionato. Ogni spicchio mostra l'icona del suo asset — la sua, o quella del tipo se non ne ha una o non si carica; la liquidità mostra quella di Liquidità. Non c'è legenda: passa sopra uno spicchio per leggere nome, quota e importo.
 - **Storico** — come è cambiata nel tempo la distribuzione per asset. **Le posizioni chiuse sono incluse**, quindi un asset che hai venduto compare ancora nei giorni in cui lo detenevi.
-- **I colori** seguono il peso di oggi: l'asset più pesante riceve il primo colore, poi gli altri per peso, quindi gli asset chiusi, quelli chiusi più di recente per primi. Il grafico a torta e lo storico usano lo stesso colore per lo stesso asset.
+- **I colori** seguono il peso di oggi: l'asset più pesante riceve il primo colore, poi gli altri per peso, quindi gli asset chiusi, quelli chiusi più di recente per primi. Il grafico a torta, lo storico e le linee di [Rendimento delle posizioni](positions.md#return-of-the-positions) usano lo stesso colore per lo stesso asset.
 
 ### 🍩 Due anelli per tipo {: #allocation-type-rings }
 

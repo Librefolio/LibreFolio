@@ -204,6 +204,23 @@ describe('AllocationPanel — the asset tab, Now view (Y5-2)', () => {
         ]);
     });
 
+    it('hands the pie what it needs to draw each asset’s icon: its own icon and its type, none for the cash (F-10)', async () => {
+        const byAsset = [
+            {name: 'Alpha', value: '60.00', amount: '6000', id: 11, icon_url: '/own/alpha.png', asset_type: 'ETF'},
+            {name: 'Beta', value: '30.00', amount: '3000', id: 12, icon_url: null, asset_type: 'STOCK'},
+            {name: 'Liquidity', value: '10.00', amount: '1000', id: null},
+        ];
+        mountOnAssetTab('now', byAsset as never);
+        await waitFor(() => expect(screen.getByTestId('allocation-tab-asset')).toHaveAttribute('aria-pressed', 'true'));
+
+        const entries = pie().data as Array<{name: string; iconUrl?: string | null; assetType?: string | null}>;
+        expect(entries.map(({name, iconUrl, assetType}) => ({name, iconUrl: iconUrl ?? null, assetType: assetType ?? null}))).toEqual([
+            {name: 'Alpha', iconUrl: '/own/alpha.png', assetType: 'ETF'},
+            {name: 'Beta', iconUrl: null, assetType: 'STOCK'},
+            {name: 'Liquidity', iconUrl: null, assetType: null},
+        ]);
+    });
+
     it('hands the pie the colour ranks of rankAssetsByWeight: the heaviest held asset 0, a closed asset after the held ones, the cash none', async () => {
         // CONTRACT: `colorRanks` = rankAssetsByWeight(today, history), so the heaviest held asset (Alpha) is rank 0,
         // Beta rank 1, then the closed ones, the most recently closed first (Gamma before Delta). RED TODAY: no pie.

@@ -81,7 +81,7 @@ La pagina di un broker è la [Dashboard](../dashboard/index.md) con quel broker 
 
 Cosa resta uguale rispetto alla Dashboard:
 
-- **Periodo, valuta e pulsanti.** L'intervallo di date, il menu **Valuta**, **AI Export** e **Aggiorna** sono quelli della Dashboard. Quando non usi la pagina da due minuti, **Aggiorna** diventa **Aggiornamenti in pausa**, nello stesso posto: cliccalo per aggiornare di nuovo i prezzi (vedi **Prezzi live** nella pagina [Asset](../assets/index.md)).
+- **Periodo, valuta e pulsanti.** L'intervallo di date, il menu **Valuta**, **AI Export** e **Aggiorna** sono quelli della Dashboard. Quando non usi la pagina da due minuti, il pulsante **Aggiorna** mostra l'icona della pausa e un colore più spento, e il suo suggerimento dice che gli aggiornamenti sono in pausa: cliccalo per aggiornare di nuovo i prezzi (vedi **Prezzi live** nella pagina [Asset](../assets/index.md)).
 - **I saldi di cassa seguono il periodo.** Mostrano la liquidità alla fine del periodo scelto.
 - **Lotti.** **Analizza lotti** apre il dettaglio dei lotti sotto l'elenco; il pulsante **Indietro** del browser lo chiude. **Vedi tutto →** apre la pagina Asset sullo stesso periodo.
 - **Banner di qualità dei dati.** Anche qui vengono segnalati prezzi obsoleti e tassi di cambio mancanti o obsoleti, con gli stessi pulsanti **Sincronizza prezzi** e **Sincronizza tassi** ([Banner di qualità dei dati](../dashboard/index.md#data-quality-banner)). Tutti i ruoli li vedono, Visualizzatore incluso: aggiornano prezzi e tassi di cambio condivisi, non il broker.

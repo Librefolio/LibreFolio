@@ -18,13 +18,13 @@
     import AllocationHistoryChart from '$lib/features/dashboard/AllocationHistoryChart.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
-    import {rankAssetsByWeight} from './positionsSeries';
+    import {assetColorRanks as rankAssets} from './positionsSeries';
     import {sectorI18nKey} from '$lib/utils/assetTypes';
 
     type AllocationTab = 'type' | 'sector' | 'geo' | 'asset';
     type AllocationView = 'now' | 'history';
     /** `id` is the asset id of a slice of the asset dimension (its colour key); null for the Liquidity slice. */
-    type AllocEntry = {name: string; value: number; amount: number; id?: number | null};
+    type AllocEntry = {name: string; value: number; amount: number; id?: number | null; iconUrl?: string | null; assetType?: string | null};
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -73,7 +73,7 @@
             if (i?.value == null) return [];
             const v = parseFloat(i.value);
             if (!(v > 0)) return [];
-            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), id: i?.id ?? null}];
+            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), id: i?.id ?? null, iconUrl: i?.icon_url ?? null, assetType: i?.asset_type ?? null}];
         });
     }
 
@@ -130,12 +130,7 @@
     const allocationByAsset = $derived(toAllocEntries(allocationByAssetItems));
     const allocationHistoryAsset = $derived((allocationHistory?.asset ?? []) as Array<{date: string; through: string; components: any[]}>);
     /** One colour rank per asset, shared by the pie and the history: the heaviest today first, then the closed ones, the latest closed first. */
-    const assetColorRanks = $derived(
-        rankAssetsByWeight(
-            allocationByAssetItems.map((item) => ({id: item?.id ?? null, amount: parseFloat(item?.amount ?? '0')})),
-            allocationHistoryAsset.map((point) => ({date: point.date, through: point.through, components: (point.components ?? []).map((component) => ({id: component?.id ?? null, amount: parseFloat(component?.amount ?? '0')}))})),
-        ),
-    );
+    const assetColorRanks = $derived(rankAssets(allocationByAssetItems, allocationHistoryAsset));
     /** The list of the tab on screen, as the backend sent it. */
     const shownItems = $derived(allocationTab === 'type' ? summary?.allocation_by_type : allocationTab === 'sector' ? summary?.allocation_by_sector : allocationTab === 'geo' ? summary?.allocation_by_geography : allocationByAssetItems) as any[] | null | undefined;
     const shownHasNoShares = $derived(allocationView === 'now' && hasNoShares(shownItems));

@@ -66,6 +66,8 @@ Which of your positions did better than the portfolio, and which worse? On the D
 - **Nothing ticked**: the chart shows the portfolio line only. **Tick a row**, in either table, to add a line for that position, and tick more to compare them.
 - **The legend** under the title has one button per line, named by the asset's name (a name too long for its button scrolls by itself): click it to turn the line off and on. A **flag** marks a position that closed, and a **warning mark** one with a missing price or exchange rate, whose line leaves those days out.
 - **Abs / % / Rolling** switch the view; the buttons are on the chart, top right, drawn as the Assets list draws them: the **line chart** icon for **Abs**, **%** for the percent, the **calendar with arrows** icon for **Rolling** (hover a button to read its name). **Abs** is the position's profit or loss in money, from the start of the period. **%** is its return in *base 100*: every line starts at 100 on the first day of the period, so 112 means +12%. **Rolling** is described below. LibreFolio remembers the view.
+- **Colours** are the asset's: a line wears the colour its asset has in the allocation pie and history beside it, whatever you tick and in whatever order. When two brokers hold the same asset, their lines share the colour and differ by pattern: the first is solid, the other dashed (then dotted, then dash-dotted).
+- **The box that follows the cursor** lists every drawn line on that day; a name too long for the box scrolls by itself.
 - **A closed position's line ends on the day it closed**; hover the legend button for the date.
 - **Up to 50 positions** can be drawn at once.
 

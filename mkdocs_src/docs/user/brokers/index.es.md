@@ -81,7 +81,7 @@ La página de un bróker es el [panel](../dashboard/index.md) con ese bróker ya
 
 Lo que es igual que en el panel:
 
-- **Periodo, divisa y botones.** El rango de fechas, el menú **Divisa**, **Exportación IA** y **Actualizar** son los del panel. Cuando no has usado la página durante dos minutos, **Actualizar** se convierte en **Actualizaciones en pausa**, en el mismo sitio: haz clic en él para actualizar los precios de nuevo (consulta **Precios en vivo** en la página [Activos](../assets/index.md)).
+- **Periodo, divisa y botones.** El rango de fechas, el menú **Divisa**, **Exportación IA** y **Actualizar** son los del panel. Cuando no has usado la página durante dos minutos, el botón **Actualizar** muestra el icono de pausa y un tono más apagado, y su información emergente dice que las actualizaciones están en pausa: haz clic en él para actualizar los precios de nuevo (consulta **Precios en vivo** en la página [Activos](../assets/index.md)).
 - **Los saldos de efectivo siguen el periodo.** Muestran el efectivo al final del periodo que elegiste.
 - **Lotes.** **Analizar lotes** abre el detalle de lotes debajo de la lista; el botón **Atrás** del navegador lo cierra. **Ver todo →** abre la página de Activos en el mismo periodo.
 - **Banner de calidad de datos.** Los precios obsoletos y los tipos de cambio ausentes u obsoletos también se notifican aquí, con los mismos botones **Sincronizar precios** y **Sincronizar tipos** ([Banner de calidad de datos](../dashboard/index.md#data-quality-banner)). Todos los roles los ven, incluido un Lector: actualizan precios y tipos de cambio compartidos, no el bróker.
