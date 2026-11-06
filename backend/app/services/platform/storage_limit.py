@@ -46,6 +46,9 @@ class StorageLimitProblem:
     required_bytes: int
     #: The room the volume is missing to hold ``required_bytes``: 0 when it has enough, or cannot be asked.
     disk_missing_bytes: int
+    #: The limit is fixed by ``LIBREFOLIO_STORAGE_LIMIT_MB`` (its hosting provider): the administrator cannot raise it, so the
+    #: message asks the provider and never says «raise it here».
+    limit_locked: bool = False
 
     @property
     def required_mb(self) -> int:
@@ -73,17 +76,18 @@ def storage_limit_detail(problem: StorageLimitProblem) -> dict[str, str | int]:
         "required_bytes": problem.required_bytes,
         "required_mb": problem.required_mb,
         "disk_missing_bytes": problem.disk_missing_bytes,
+        "limit_locked": problem.limit_locked,
     }
 
 
-def judge(limit_mb: int | None, used_bytes: int, required_bytes: int, free_bytes: int | None) -> StorageLimitProblem | None:
+def judge(limit_mb: int | None, used_bytes: int, required_bytes: int, free_bytes: int | None, *, locked: bool = False) -> StorageLimitProblem | None:
     """The problem of taking ``required_bytes`` in all when ``used_bytes`` are taken now, with ``free_bytes`` free on the
     volume; ``None`` when there is no limit or the data stays within it. Pure."""
     if not limit_mb or required_bytes <= limit_mb * BYTES_PER_MB:
         return None
     growth = required_bytes - used_bytes
     missing = max(0, growth - free_bytes) if free_bytes is not None and growth > 0 else 0
-    return StorageLimitProblem(limit_mb=limit_mb, used_bytes=used_bytes, required_bytes=required_bytes, disk_missing_bytes=missing)
+    return StorageLimitProblem(limit_mb=limit_mb, used_bytes=used_bytes, required_bytes=required_bytes, disk_missing_bytes=missing, limit_locked=locked)
 
 
 def _usage(data_dir: Path) -> storage_usage.StorageUsage:
@@ -92,20 +96,32 @@ def _usage(data_dir: Path) -> storage_usage.StorageUsage:
 
 def problem_for_total(required_bytes: int, *, data_dir: Path | None = None) -> StorageLimitProblem | None:
     """The problem of a data directory that would take ``required_bytes`` in all (a restore), or ``None``."""
-    limit_mb, _locked = storage_usage.read_limit()
+    limit_mb, locked = storage_usage.read_limit()
     if limit_mb is None:
         return None
     usage = _usage(data_dir or get_data_dir())
-    return judge(limit_mb, usage.data_bytes, required_bytes, usage.volume_free_bytes)
+    return judge(limit_mb, usage.data_bytes, required_bytes, usage.volume_free_bytes, locked=locked)
 
 
 def problem_for_added(added_bytes: int, *, data_dir: Path | None = None) -> StorageLimitProblem | None:
     """The problem of adding ``added_bytes`` to the data directory (a file, a report, a backup), or ``None``."""
-    limit_mb, _locked = storage_usage.read_limit()
+    limit_mb, locked = storage_usage.read_limit()
     if limit_mb is None:
         return None
     usage = _usage(data_dir or get_data_dir())
-    return judge(limit_mb, usage.data_bytes, usage.data_bytes + max(0, added_bytes), usage.volume_free_bytes)
+    return judge(limit_mb, usage.data_bytes, usage.data_bytes + max(0, added_bytes), usage.volume_free_bytes, locked=locked)
+
+
+def problem_after_restore(restored_bytes: int, *, data_dir: Path | None = None) -> StorageLimitProblem | None:
+    """The problem of a restore that puts ``restored_bytes`` (the copy's database and files) in place of the live ones, or
+    ``None``. What the data directory takes afterwards: the restored data, the backups and the rest of what stays (logs,
+    state, keys), without the work folder of the restore itself (``.restore/``: the upload, the copy and the live data set
+    aside, all gone when the restore ends). The limit is the one in force now, not the archive's own: the check asks it
+    again at the confirmation, for a limit lowered or data grown since."""
+    data_dir = data_dir or get_data_dir()
+    usage = _usage(data_dir)
+    kept = usage.backups_bytes + max(0, usage.other_bytes - storage_usage.folder_bytes(data_dir / ".restore"))
+    return problem_for_total(kept + max(0, restored_bytes), data_dir=data_dir)
 
 
 def require_room_for(added_bytes: int, *, data_dir: Path | None = None) -> None:

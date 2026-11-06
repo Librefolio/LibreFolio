@@ -149,6 +149,50 @@ def test_a_total_is_judged_as_it_is_not_added_to_what_is_used(data_dir, monkeypa
     print_success("a total is not summed with the data of now")
 
 
+def test_a_restore_is_judged_on_what_the_data_will_take_without_its_own_work_folder(data_dir, monkeypatch):
+    """(b) The restored data (the copy's database and files) plus what stays (backups, logs, keys), not the ``.restore`` folder
+    the restore itself fills (the upload, the copy, the live data set aside: all gone when it ends)."""
+    print_section("problem_after_restore")
+    _write(data_dir / ".restore" / "stage" / "x" / "copy.bin", 6 * MB)
+    _write(data_dir / "logs" / "app.log", 1 * MB)
+    _limit(monkeypatch, 11)
+    # stays: backups 2 + logs 1 = 3 MB; restored: 8 MB -> 11 MB: exactly the limit
+    assert storage_limit.problem_after_restore(8 * MB, data_dir=data_dir) is None
+    problem = storage_limit.problem_after_restore(9 * MB, data_dir=data_dir)
+    assert problem is not None
+    assert (problem.required_bytes, problem.required_mb, problem.limit_mb) == (12 * MB, 12, 11)
+    print_success("the work folder of the restore is not counted")
+
+
+def test_a_limit_fixed_by_the_hosting_provider_says_so(data_dir, monkeypatch):
+    """(b) ``limit_locked``: the administrator cannot raise it, so the message asks the provider."""
+    monkeypatch.setattr(storage_usage, "read_limit", lambda: (1, True))
+    problem = storage_limit.problem_for_added(MB, data_dir=data_dir)
+    assert problem is not None and problem.limit_locked is True
+    assert storage_limit.storage_limit_detail(problem)["limit_locked"] is True
+    print_success("locked is carried")
+
+
+def test_the_check_report_gets_the_blocker_and_the_numbers_only_when_the_limit_is_passed(data_dir, monkeypatch):
+    """(b) ``with_storage_limit``: a report within the limit (or with none) is returned as it is; past it, the blocker
+    ``storage_limit`` is added after the others, with the limit, whether it is fixed, the space needed and the room the disk lacks."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup.staging import StagingReport, with_storage_limit  # noqa: PLC0415
+
+    now = datetime.now(UTC)
+    report = StagingReport.model_construct(stage_id="a" * 32, staged_at=now, expires_at=now, database_size=4 * MB, files_size=4 * MB, blockers=["no_administrator"], warnings=[])
+    _limit(monkeypatch, None)
+    assert with_storage_limit(report, data_dir) is report
+    _limit(monkeypatch, 11)
+    assert with_storage_limit(report, data_dir) is report, "11 MB: 8 restored + 2 backups + 0 other, within the limit"
+    _limit(monkeypatch, 5)
+    blocked = with_storage_limit(report, data_dir)
+    assert blocked.blockers == ["no_administrator", "storage_limit"]
+    assert (blocked.storage_limit_mb, blocked.storage_limit_locked, blocked.storage_required_bytes, blocked.storage_disk_missing_bytes) == (5, False, 10 * MB, 0)
+    print_success("the blocker and the numbers")
+
+
 # =====================================================================================================================
 # (c) the estimate of a backup
 # =====================================================================================================================
@@ -177,6 +221,7 @@ def test_the_507_detail_has_a_stable_code_and_the_numbers():
         "required_bytes": 120 * MB,
         "required_mb": 120,
         "disk_missing_bytes": 5 * MB,
+        "limit_locked": False,
     }
     print_success("the detail carries the code and the numbers")
 

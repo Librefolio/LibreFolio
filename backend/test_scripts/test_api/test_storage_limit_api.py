@@ -31,7 +31,7 @@ settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
 KEY = "storage_limit_mb"
-DETAIL_KEYS = {"code", "message", "limit_mb", "used_bytes", "required_bytes", "required_mb", "disk_missing_bytes"}
+DETAIL_KEYS = {"code", "message", "limit_mb", "used_bytes", "required_bytes", "required_mb", "disk_missing_bytes", "limit_locked"}
 
 
 @pytest.fixture(scope="module")
