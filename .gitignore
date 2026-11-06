@@ -77,6 +77,7 @@ mkdocs_src/site/
 /mkdocs_src/mkdocs_src/site/
 mkdocs_src/docs/javascripts/vendor/
 /mkdocs_src/docs/gallery/**/*.png
+/mkdocs_src/docs/gallery/**/*.webp
 
 
 # Video renders (heavy binaries, never versioned)
