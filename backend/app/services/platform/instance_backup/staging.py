@@ -85,6 +85,7 @@ from backend.app.services.platform.instance_backup.paths import (
 from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, _identifier, describe_database
 from backend.app.services.platform.instance_backup.totals import TotalsComparison, TotalsDifference, TotalsStatus, compare_totals, ledger_totals_of
 from backend.app.services.platform.instance_key import INSTANCE_KEY_MIN_LENGTH, InstanceKeyError, derive_key_from
+from backend.app.services.platform.storage_limit import problem_after_restore
 from backend.app.services.platform.stored_currencies import find_stored_currency_findings
 from backend.app.services.plugin_settings.crypto import SUBKEY_LENGTH, SUBKEY_PURPOSE, count_unreadable_secrets, rekey_plugin_secrets, settings_subkey
 
@@ -241,6 +242,13 @@ class StagingReport(BaseModel):
     control_totals: TotalsStatus = "absent"
     control_totals_differences: list[TotalsDifference] = []
     control_totals_differences_count: int = Field(default=0, ge=0)
+    #: C8, the space limit: set when the data after the restore would pass it (then ``blockers`` holds ``storage_limit``). The
+    #: limit in force at the check, whether its provider fixes it, the space the data would take (raise the limit to at least
+    #: that) and the room the disk is missing for it (free at least that); defaults, so that a report written before reads.
+    storage_limit_mb: int | None = None
+    storage_limit_locked: bool = False
+    storage_required_bytes: int | None = None
+    storage_disk_missing_bytes: int = Field(default=0, ge=0)
     warnings: list[str]
     blockers: list[str]
 
@@ -286,7 +294,7 @@ def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = 
         root = stage_dir(data_dir, stage_id)
         root.mkdir(mode=0o700)
         try:
-            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress, key, instance_key, max_unpacked)
+            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress, key, instance_key, max_unpacked, data_dir=data_dir)
         except BaseException:
             shutil.rmtree(root, ignore_errors=True)
             raise
@@ -348,7 +356,7 @@ def _refuse_unusable_instance_key(instance_key: str | None) -> None:
         raise StagingError("instance_key_invalid", f"The instance key given is too short: an instance key has at least {INSTANCE_KEY_MIN_LENGTH} characters") from None
 
 
-def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress, key: EnvelopeKey | None = None, instance_key: str | None = None, max_unpacked: int | None = None) -> StagingReport:
+def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress, key: EnvelopeKey | None = None, instance_key: str | None = None, max_unpacked: int | None = None, *, data_dir: Path | None = None) -> StagingReport:
     data_root = root / STAGE_DATA_FOLDER
     encrypted = is_envelope(archive_path)
     if encrypted:
@@ -414,6 +422,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
             "warnings": _with_users_warning(report.warnings, users_over_limit),
         }
     )
+    report = with_storage_limit(report, data_dir)
     _write_report(root, report)
     return report
 
@@ -1032,6 +1041,24 @@ def _report(
         control_totals_differences_count=totals.differences_count,
         warnings=warnings,
         blockers=[] if administrators else ["no_administrator"],
+    )
+
+
+def with_storage_limit(report: StagingReport, data_dir: Path | None = None) -> StagingReport:
+    """``report`` with the space limit applied (C8): when the data after the restore (the copy's database and files, and what
+    stays) would pass the limit in force, the blocker ``storage_limit`` and the numbers for the message. Without a limit, or
+    within it, the report as it is. Never raises: a measure or a limit that cannot be read is no blocker."""
+    problem = problem_after_restore(report.database_size + report.files_size, data_dir=data_dir)
+    if problem is None:
+        return report
+    return report.model_copy(
+        update={
+            "blockers": [*report.blockers, "storage_limit"],
+            "storage_limit_mb": problem.limit_mb,
+            "storage_limit_locked": problem.limit_locked,
+            "storage_required_bytes": problem.required_bytes,
+            "storage_disk_missing_bytes": problem.disk_missing_bytes,
+        }
     )
 
 
