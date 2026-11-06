@@ -98,7 +98,7 @@ from backend.app.services.platform.instance_backup.paths import (
 )
 from backend.app.services.platform.instance_backup.staging import read_report, remove_stage
 from backend.app.services.platform.readiness import alembic_head_revision
-from backend.app.services.platform.storage_limit import problem_after_restore
+from backend.app.services.platform.storage_limit import problem_at_confirmation
 
 logger = get_logger(__name__)
 
@@ -834,8 +834,9 @@ def confirm_restore(
         raise RestoreStageMissingError("No checked copy has this id") from None
     if report.blockers:
         raise RestoreNotRestorableError(f"The archive cannot be restored: {', '.join(report.blockers)}")
-    # C8: a limit lowered, or data grown, since the check: asked again here, with the numbers of now; the check is made again.
-    if problem_after_restore(report.database_size + report.files_size, data_dir=data_dir) is not None:
+    # C8: data grown since the check, or a limit its hosting provider lowered: asked again here with the numbers of now, from the
+    # database-free limit of the check (a confirmation writes nothing outside ``.restore/``); the check is made again.
+    if problem_at_confirmation(report.database_size + report.files_size, report.storage_limit_mb, report.storage_limit_locked, data_dir=data_dir) is not None:
         raise RestoreNotRestorableError("The archive cannot be restored: storage_limit")
     if report.expires_at <= now:
         raise RestoreStageExpiredError("The check of the archive expired: check it again")

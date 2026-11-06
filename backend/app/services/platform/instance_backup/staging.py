@@ -1045,21 +1045,17 @@ def _report(
 
 
 def with_storage_limit(report: StagingReport, data_dir: Path | None = None) -> StagingReport:
-    """``report`` with the space limit applied (C8): when the data after the restore (the copy's database and files, and what
-    stays) would pass the limit in force, the blocker ``storage_limit`` and the numbers for the message. Without a limit, or
-    within it, the report as it is. Never raises: a measure or a limit that cannot be read is no blocker."""
-    problem = problem_after_restore(report.database_size + report.files_size, data_dir=data_dir)
-    if problem is None:
+    """``report`` with the space limit applied (C8). The limit in force is recorded (``storage_limit_mb``, and whether its
+    provider fixes it): the confirmation asks again from it, without the database. When the data after the restore (the
+    copy's database and files, and what stays) would pass it, the blocker ``storage_limit`` and the numbers for the message
+    are added. Without a limit, the report as it is. Never raises: a measure or a limit that cannot be read is no blocker."""
+    limit_mb, locked, problem = problem_after_restore(report.database_size + report.files_size, data_dir=data_dir)
+    if limit_mb is None:
         return report
-    return report.model_copy(
-        update={
-            "blockers": [*report.blockers, "storage_limit"],
-            "storage_limit_mb": problem.limit_mb,
-            "storage_limit_locked": problem.limit_locked,
-            "storage_required_bytes": problem.required_bytes,
-            "storage_disk_missing_bytes": problem.disk_missing_bytes,
-        }
-    )
+    update: dict[str, object] = {"storage_limit_mb": limit_mb, "storage_limit_locked": locked}
+    if problem is not None:
+        update.update({"blockers": [*report.blockers, "storage_limit"], "storage_required_bytes": problem.required_bytes, "storage_disk_missing_bytes": problem.disk_missing_bytes})
+    return report.model_copy(update=update)
 
 
 def _write_report(root: Path, report: StagingReport) -> None:

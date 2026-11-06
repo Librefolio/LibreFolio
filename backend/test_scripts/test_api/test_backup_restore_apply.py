@@ -342,9 +342,6 @@ def signals(instance, monkeypatch) -> Signals:
     apply = optional("services.platform.instance_backup.apply")
     if apply is not None:
         monkeypatch.setattr(apply, "get_data_dir", lambda: instance.root, raising=False)
-        # The space limit (C8) is not under test here (``services storage-limit`` and ``services backup-apply`` pin it): without
-        # a database in this private data directory its read would log a warning of its own, and these tests count the warnings.
-        monkeypatch.setattr(apply, "problem_after_restore", lambda *_args, **_kwargs: None, raising=False)
     outcome = optional("services.platform.instance_backup.outcome")
     if outcome is not None:
         monkeypatch.setattr(outcome, "get_data_dir", lambda: instance.root, raising=False)

@@ -1385,7 +1385,7 @@ def test_a_space_limit_passed_since_the_check_refuses_the_confirmation_and_write
 
     apply = apply_module()
     problem = StorageLimitProblem(limit_mb=1, used_bytes=1, required_bytes=5 * 1024 * 1024, disk_missing_bytes=0)
-    monkeypatch.setattr(apply, "problem_after_restore", lambda *_args, **_kwargs: problem)
+    monkeypatch.setattr(apply, "problem_at_confirmation", lambda *_args, **_kwargs: problem)
     instance = build(tmp_path / "instance", databases, checked)
     items = restore_items(instance.root)
     with pytest.raises(apply.RestoreNotRestorableError) as raised:
