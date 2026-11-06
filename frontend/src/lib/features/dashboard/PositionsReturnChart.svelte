@@ -53,7 +53,7 @@
     import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import {lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
+    import {lineDashes, lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
 
     interface Props {
         lines: ReadonlyArray<PositionLine>;
@@ -125,6 +125,9 @@
 
     let chartState = $derived<'loading' | 'failed' | 'empty' | 'ready'>(loading ? 'loading' : failed ? 'failed' : drawn.length === 0 ? 'empty' : 'ready');
 
+    /** Two lines of one asset (two brokers) share its colour: each has a pattern of its own (the first is solid). */
+    let dashOf = $derived(lineDashes(lines.map((line) => line.id)));
+
     let hasPortfolioLine = $derived(lines.some((line) => line.kind === 'portfolio'));
 
     function labelOf(line: PositionLine): string {
@@ -167,6 +170,7 @@
 
     $effect(() => {
         void drawn;
+        void dashOf;
         void view;
         void currency;
         void colorOf;
@@ -243,7 +247,7 @@
                 showSymbol: isolated.some(Boolean),
                 symbol: (_value: unknown, params: {dataIndex: number}) => (isolated[params.dataIndex] ? 'circle' : 'none'),
                 symbolSize: 6,
-                lineStyle: {color, width: line.kind === 'portfolio' ? 2.5 : 1.75},
+                lineStyle: {color, width: line.kind === 'portfolio' ? 2.5 : 1.75, type: dashOf.get(line.id) ?? 'solid'},
                 itemStyle: {color},
                 emphasis: {focus: 'series'},
             };
@@ -393,6 +397,7 @@
                     data-testid="positions-chart-legend-{line.id}"
                     data-kind={line.kind}
                     data-closed={line.closedOn ? 'true' : 'false'}
+                    data-dash={typeof dashOf.get(line.id) === 'object' ? 'dash-dot' : (dashOf.get(line.id) ?? 'solid')}
                     onclick={() => ontoggle?.(line.id)}
                 >
                     <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full {visible ? '' : 'opacity-40'}" style="background-color: {colorOf(line.id)}" data-testid="positions-chart-swatch-{line.id}"></span>

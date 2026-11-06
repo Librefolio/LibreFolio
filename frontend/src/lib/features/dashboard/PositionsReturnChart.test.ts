@@ -592,3 +592,30 @@ describe('PositionsReturnChart — the Rolling view (FB-15)', () => {
         expect(screen.queryByTestId('positions-chart-note')).toBeNull();
     });
 });
+
+// =============================================================================
+// B8 · the same asset at two brokers: one colour, two patterns
+// =============================================================================
+
+describe('PositionsReturnChart — two brokers holding one asset (B8)', () => {
+    const SAME = () => [line('22-1', [1, 2, 3]), line('22-2', [1, 2, 3]), line('7-0', [4, 5, 6])];
+    const dashOfSeries = (id: string) => (lineSeries(['22-1', '22-2', '7-0']).find((entry) => entry.id === id)?.lineStyle as Json | undefined)?.type;
+
+    it('the lines of one asset take different patterns, the first solid; a line alone is solid', async () => {
+        await mountReady({lines: SAME(), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(dashOfSeries('22-1')).toBe('solid');
+        expect(dashOfSeries('22-2')).toBe('dashed');
+        expect(dashOfSeries('7-0')).toBe('solid');
+    });
+
+    it('the legend says the pattern of each line', async () => {
+        await mountReady({lines: SAME(), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(screen.getByTestId('positions-chart-legend-22-1')).toHaveAttribute('data-dash', 'solid');
+        expect(screen.getByTestId('positions-chart-legend-22-2')).toHaveAttribute('data-dash', 'dashed');
+    });
+
+    it('hiding the first line does not change the pattern of the second (it is the broker’s, not the position in the drawn list)', async () => {
+        await mountReady({lines: SAME(), hiddenIds: new Set(['22-1']), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(dashOfSeries('22-2')).toBe('dashed');
+    });
+});
