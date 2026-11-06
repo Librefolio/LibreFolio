@@ -43,6 +43,7 @@ from backend.app.schemas.brim import (
 from backend.app.services.brim import brim_provider
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.platform.storage_limit import StorageLimitProblem, problem_for_added
 from backend.app.utils.datetime_utils import shift_date
 
 logger = structlog.get_logger(__name__)
@@ -64,6 +65,17 @@ class BRIMSetError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message
+
+
+class BRIMSetStorageLimit(BRIMSetError):
+    """The combined file would take the data past the space limit (C8); ``problem`` holds the numbers the message needs."""
+
+    status_code = 507
+    code = "storage_limit_exceeded"
+
+    def __init__(self, problem: StorageLimitProblem):
+        super().__init__("The space limit would be passed")
+        self.problem = problem
 
 
 class BRIMSetPluginNotFound(BRIMSetError):
@@ -402,6 +414,10 @@ def _combine_under_broker_lock(*, broker_id: int, plugin: BRIMProvider, plugin_c
         except (BRIMParseError, ValueError) as exc:
             message = getattr(exc, "message", None) or str(exc)
             raise BRIMSetCombineFailed(f"The report set could not be combined: {message}") from exc
+        # The space limit (C8): the combined file is new data, refused before it is written when it would pass the limit.
+        problem = problem_for_added(brim_provider.combined_csv_size(table))
+        if problem is not None:
+            raise BRIMSetStorageLimit(problem)
         info = brim_provider.save_combined_file(
             broker_id=broker_id,
             plugin_code=plugin_code,

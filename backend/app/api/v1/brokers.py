@@ -33,7 +33,7 @@ from datetime import date
 from pathlib import Path
 from typing import Annotated, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,7 +87,7 @@ from backend.app.services.brim import brim_gap_fix, brim_provider, brim_report_s
 from backend.app.services.brim.brim_file_settings import apply_settings_staleness
 from backend.app.services.brim.brim_parse_pool import parse_file_offloaded
 from backend.app.services.brim.brim_provider import BRIMCannotParseError, BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
-from backend.app.services.brim.brim_report_sets import BRIMLedgerUnreadable, BRIMSetError, BRIMSetIncomplete
+from backend.app.services.brim.brim_report_sets import BRIMLedgerUnreadable, BRIMSetError, BRIMSetIncomplete, BRIMSetStorageLimit
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brokers.broker_service import BROKER_NAME_RECOVERY, BrokerService
 from backend.app.services.files.file_preview import (
@@ -98,6 +98,7 @@ from backend.app.services.files.file_preview import (
 )
 from backend.app.services.files.inline_media import INLINE_SAFE_MEDIA_TYPES
 from backend.app.services.files.static_uploads import BLOCKED_EXTENSIONS
+from backend.app.services.platform.storage_limit import StorageLimitExceededError, require_room_for, storage_limit_detail
 from backend.app.services.plugin_settings.runtime import bound_settings_for
 
 logger = get_logger(__name__)
@@ -543,7 +544,7 @@ async def leave_broker_access(
 # =============================================================================
 
 
-@brim_router.post("/upload", response_model=BRIMFileInfo)
+@brim_router.post("/upload", response_model=BRIMFileInfo, responses={507: {"description": "The file would take the data past the space limit (code `storage_limit_exceeded`, with `required_mb` and `disk_missing_bytes`)"}})
 async def upload_file(
     file: UploadFile = File(..., description="Broker report file to upload"),
     broker_id: int = Form(..., description="Target broker ID for this report"),
@@ -598,6 +599,13 @@ async def upload_file(
         if extension in BLOCKED_EXTENSIONS:
             logger.warning("Broker report upload blocked by its extension", extension=extension, user_id=current_user.id, broker_id=broker_id)
             raise HTTPException(status_code=400, detail=f"File extension '{extension}' is not allowed")
+
+    # The space limit (C8): a report that would take the data past it is refused, before anything is written
+    try:
+        await asyncio.to_thread(require_room_for, len(content))
+    except StorageLimitExceededError as exc:
+        logger.warning("Broker report upload refused: the space limit would be passed", user_id=current_user.id, broker_id=broker_id, size_bytes=len(content), limit_mb=exc.problem.limit_mb)
+        raise HTTPException(status_code=status.HTTP_507_INSUFFICIENT_STORAGE, detail=storage_limit_detail(exc.problem)) from None
 
     # Save file with user_id and broker_id.
     # Writing the payload, sniffing the compatible plugins (which re-reads it) and writing
@@ -1038,6 +1046,9 @@ async def _require_broker_editor(broker_id: int, current_user: User, session: As
 
 def _set_error_detail(error: BRIMSetError) -> dict:
     detail = {"code": error.code, "message": error.message}
+    if isinstance(error, BRIMSetStorageLimit):
+        # C8: the space limit would be passed by the combined file; the numbers for the message, as an upload's refusal gives them.
+        detail = storage_limit_detail(error.problem)
     if isinstance(error, BRIMSetIncomplete):
         detail["missing_roles"] = error.missing_roles
     if isinstance(error, BRIMLedgerUnreadable):
