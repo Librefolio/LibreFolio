@@ -122,6 +122,8 @@ vi.mock('./backupApi', async () => {
         requestRestart: vi.fn(),
         probeServer: vi.fn(),
         restoreOutcome: vi.fn(),
+        // C9-6: the checks waiting for a decision; none unless a case says otherwise.
+        listWaitingRestoreChecks: vi.fn(() => Promise.resolve([])),
         // B4: the download card beside this one in BackupTab may read the options of a secure backup as it mounts.
         getInstanceBackupOptions: vi.fn(() => Promise.resolve({password_rules: [{code: 'min_length', value: 12}, {code: 'uppercase'}, {code: 'lowercase'}, {code: 'digit'}, {code: 'special'}]})),
     };
@@ -1445,5 +1447,49 @@ describe('B5-1b — RestoreCard: the owner chosen goes with the confirmation', (
 
         expect(api.getRestoreCheck.mock.calls.length, 'the forgotten check was read again').toBe(readsBefore);
         expect(card()).toHaveAttribute('data-state', 'idle');
+    });
+});
+
+// =====================================================================================================================
+// C9-6 — the checks waiting for a decision, from any tab or device: resume or discard
+// =====================================================================================================================
+
+describe('C9-6 — RestoreCard: the checks waiting for a decision', () => {
+    const waitingList = vi.mocked(backupApi.listWaitingRestoreChecks);
+    const held = {stage_id: STAGE_ID, status: 'done' as const, created_at: '2026-10-16T09:00:00Z', finished_at: '2026-10-16T09:01:00Z', expires_at: '2026-10-17T09:01:00Z', restorable: true};
+
+    it('idle: one row per waiting check, saying until when, with «Resume» and «Discard»', async () => {
+        waitingList.mockResolvedValueOnce([held]);
+        await mount();
+
+        const row = await screen.findByTestId('restore-waiting-check');
+        expect(row).toHaveAttribute('data-stage-id', STAGE_ID);
+        expect(row).toHaveTextContent('backup.restore.held.until');
+        expect(within(row).getByTestId('restore-waiting-resume')).toHaveTextContent('backup.restore.held.resume');
+        expect(within(row).getByTestId('restore-waiting-discard')).toHaveTextContent('backup.restore.held.discard');
+    });
+
+    it('«Resume» reads the check and opens its report', async () => {
+        waitingList.mockResolvedValueOnce([held]);
+        await mount();
+        api.getRestoreCheck.mockResolvedValueOnce(doneStage());
+
+        await fireEvent.click(await screen.findByTestId('restore-waiting-resume'));
+        await settle();
+
+        expect(api.getRestoreCheck).toHaveBeenCalledWith(STAGE_ID);
+        expect(card()).toHaveAttribute('data-state', 'report');
+    });
+
+    it('«Discard» drops the check, and the list read again no longer has it', async () => {
+        waitingList.mockResolvedValueOnce([held]).mockResolvedValueOnce([]);
+        await mount();
+        api.deleteRestoreCheck.mockResolvedValueOnce(undefined);
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+        await fireEvent.click(await screen.findByTestId('restore-waiting-discard'));
+        await settle();
+
+        expect(api.deleteRestoreCheck).toHaveBeenCalledWith(STAGE_ID);
+        expect(screen.queryByTestId('restore-waiting-check')).toBeNull();
     });
 });
