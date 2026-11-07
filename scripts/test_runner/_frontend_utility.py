@@ -320,6 +320,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/email/emailText.test.ts",
             "src/lib/features/email/emailApi.test.ts",
             "src/lib/features/email/emailLinks.test.ts",
+            "src/lib/features/email/publicUrlExample.test.ts",
             "src/lib/features/email/verificationApi.test.ts",
             "src/lib/features/email/sendLinkApi.test.ts",
             "src/lib/features/email/forgotPasswordApi.test.ts",
