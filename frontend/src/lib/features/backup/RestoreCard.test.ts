@@ -122,6 +122,10 @@ vi.mock('./backupApi', async () => {
         requestRestart: vi.fn(),
         probeServer: vi.fn(),
         restoreOutcome: vi.fn(),
+        // C9-6: the checks waiting for a decision; none unless a case says otherwise.
+        listWaitingRestoreChecks: vi.fn(() => Promise.resolve([])),
+        // C9-9: a kept backup taken as the archive.
+        restoreFromKeptBackup: vi.fn(),
         // B4: the download card beside this one in BackupTab may read the options of a secure backup as it mounts.
         getInstanceBackupOptions: vi.fn(() => Promise.resolve({password_rules: [{code: 'min_length', value: 12}, {code: 'uppercase'}, {code: 'lowercase'}, {code: 'digit'}, {code: 'special'}]})),
     };
@@ -574,6 +578,8 @@ describe('RestoreCard — the upload and the check', () => {
         options?.onProgress?.(256, 1024);
         await settle();
         expect(progressbar(screen.getByTestId('restore-upload-progress'))).toHaveAttribute('aria-valuenow', '25');
+        // C9-7: what the check will take on the server, said while the archive goes up: its size, plus its opened version.
+        expect(screen.getByTestId('restore-space-needed')).toHaveTextContent('backup.restore.spaceNeeded');
 
         upload.resolve(uploaded({size: 1024}));
         await settle();
@@ -1445,5 +1451,72 @@ describe('B5-1b — RestoreCard: the owner chosen goes with the confirmation', (
 
         expect(api.getRestoreCheck.mock.calls.length, 'the forgotten check was read again').toBe(readsBefore);
         expect(card()).toHaveAttribute('data-state', 'idle');
+    });
+});
+
+// =====================================================================================================================
+// C9-6 — the checks waiting for a decision, from any tab or device: resume or discard
+// =====================================================================================================================
+
+describe('C9-6 — RestoreCard: the checks waiting for a decision', () => {
+    const waitingList = vi.mocked(backupApi.listWaitingRestoreChecks);
+    const held = {stage_id: STAGE_ID, status: 'done' as const, created_at: '2026-10-16T09:00:00Z', finished_at: '2026-10-16T09:01:00Z', expires_at: '2026-10-17T09:01:00Z', restorable: true};
+
+    it('idle: one row per waiting check, saying until when, with «Resume» and «Discard»', async () => {
+        waitingList.mockResolvedValueOnce([held]);
+        await mount();
+
+        const row = await screen.findByTestId('restore-waiting-check');
+        expect(row).toHaveAttribute('data-stage-id', STAGE_ID);
+        expect(row).toHaveTextContent('backup.restore.held.until');
+        expect(within(row).getByTestId('restore-waiting-resume')).toHaveTextContent('backup.restore.held.resume');
+        expect(within(row).getByTestId('restore-waiting-discard')).toHaveTextContent('backup.restore.held.discard');
+    });
+
+    it('«Resume» reads the check and opens its report', async () => {
+        waitingList.mockResolvedValueOnce([held]);
+        await mount();
+        api.getRestoreCheck.mockResolvedValueOnce(doneStage());
+
+        await fireEvent.click(await screen.findByTestId('restore-waiting-resume'));
+        await settle();
+
+        expect(api.getRestoreCheck).toHaveBeenCalledWith(STAGE_ID);
+        expect(card()).toHaveAttribute('data-state', 'report');
+    });
+
+    it('«Discard» drops the check, and the list read again no longer has it', async () => {
+        waitingList.mockResolvedValueOnce([held]).mockResolvedValueOnce([]);
+        await mount();
+        api.deleteRestoreCheck.mockResolvedValueOnce(undefined);
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+        await fireEvent.click(await screen.findByTestId('restore-waiting-discard'));
+        await settle();
+
+        expect(api.deleteRestoreCheck).toHaveBeenCalledWith(STAGE_ID);
+        expect(screen.queryByTestId('restore-waiting-check')).toBeNull();
+    });
+});
+
+// =====================================================================================================================
+// C9-9 — the card takes a «Restore» asked from a list of kept backups
+// =====================================================================================================================
+
+describe('C9-9 — RestoreCard: a kept backup asked from the list', () => {
+    it('a pending request is taken once the card is idle: the backup checked from the server, nothing uploaded', async () => {
+        const {restoreRequest} = await import('./restoreRequest.svelte');
+        const fromKept = vi.mocked(backupApi.restoreFromKeptBackup);
+        fromKept.mockResolvedValueOnce({upload_id: UPLOAD_ID, size: 4096, kind: 'zip'});
+        api.startRestoreCheck.mockResolvedValueOnce(runningStage());
+        restoreRequest.jobId = 'aa112233445566778899aabbccddeeff';
+
+        await mount();
+        await settle();
+
+        expect(fromKept).toHaveBeenCalledWith('aa112233445566778899aabbccddeeff');
+        expect(api.uploadRestoreArchive).not.toHaveBeenCalled();
+        expect(api.startRestoreCheck).toHaveBeenCalledWith(UPLOAD_ID);
+        expect(restoreRequest.jobId, 'taken once').toBeNull();
+        expect(card()).toHaveAttribute('data-state', 'checking');
     });
 });

@@ -101,7 +101,7 @@ That is defensible — cash genuinely is an unconcentrated position, and it genu
 
 Read the two figures as a pair, in this order:
 
-1. **Effective assets against the actual number of holdings.** The direction of the gap selects its meaning: **below** the count, the weights are lopsided and a few positions carry the portfolio regardless of how many rows it has; **above** it, the excess is cash, and it says nothing about how the weights are spread.
+1. **Effective assets against the actual number of holdings.** The direction of the gap selects its meaning: **below** the count, the weights are lopsided and a few positions carry the portfolio regardless of how many rows it has; **above** it, the excess comes from the part the weights do not cover — cash and holdings without a usable price series, not cash alone — and it says nothing about how the weights are spread.
 2. **Diversification ratio.** A value near 1 means the holdings move as one, and the spreading bought little. The further above 1, the more the holdings offset one another.
 
 The second figure is the one that can contradict the first, and it is the contradiction that carries the information. A portfolio can be perfectly balanced by weight and undiversified in substance — it is the ordinary outcome of holding several funds that track overlapping markets.

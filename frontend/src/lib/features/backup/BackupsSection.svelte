@@ -5,14 +5,16 @@
   Shown under the backup card of Settings › Administration › Backup (foldable, remembered) and in the Files page's
   Backup tab (always open). Administrators only: both places already are.
 
-  Published state: `data-open` (`true|false`); the toggle `backups-section-toggle` carries `aria-expanded`.
+  Published state: `data-open` (`true|false`); the toggle `backups-section-toggle` carries `aria-expanded`. While open,
+  `backups-section-refresh` reads the list again (a backup made from the command line is announced nowhere else).
 -->
 <script lang="ts">
-    import {ChevronDown, ChevronRight, HardDrive, Info} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, HardDrive, Info, RefreshCw} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import BackupCleanupPanel from './BackupCleanupPanel.svelte';
     import BackupList from './BackupList.svelte';
+    import {notifyBackupListChanged} from './backupList.svelte';
 
     interface Props {
         /** The body folds (default), or it is always open. */
@@ -47,6 +49,18 @@
             <h3 class="text-base font-semibold text-lf-primary">{$_('backup.list.title')}</h3>
             <p class="text-sm text-lf-secondary">{$_('backup.list.description')}</p>
         </div>
+        {#if open}
+            <!-- C9-3: a backup made from the command line is not announced to this page: «Refresh» reads the list again. -->
+            <button
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-lf-subtle px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                type="button"
+                data-testid="backups-section-refresh"
+                onclick={notifyBackupListChanged}
+            >
+                <RefreshCw size={16} aria-hidden="true" />
+                {$_('backup.list.refresh')}
+            </button>
+        {/if}
         {#if collapsible}
             <button
                 class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-lf-subtle px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"

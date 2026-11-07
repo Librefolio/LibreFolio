@@ -3373,3 +3373,149 @@ describe('B5-1b — confirm(ownerUserId): the owner chosen in the report goes wi
         expect(restoreErrorKey('owner_conflict')).toBe('backup.restore.errors.owner_conflict');
     });
 });
+
+// =====================================================================================================================
+// C9-6 — the checks waiting for a decision: listed when nothing is followed, resumed, discarded, left for later
+// =====================================================================================================================
+
+describe('C9-6 — the checks waiting for a decision', () => {
+    type Held = {stage_id: string; status: 'running' | 'done'; created_at: string; finished_at: string | null; expires_at: string | null; restorable: boolean | null};
+    type WithWaiting = {readonly waiting: Held[]; resume(stageId: string): Promise<void>; discard(stageId: string): Promise<void>; later(): Promise<void>};
+    const held = (stageId = STAGE_ID): Held => ({stage_id: stageId, status: 'done', created_at: '2026-10-16T09:00:00Z', finished_at: '2026-10-16T09:01:00Z', expires_at: '2026-10-17T09:01:00Z', restorable: true});
+
+    async function idleWith(list: Held[] | Error) {
+        const context = await setup();
+        const waiting = vi.fn(() => (list instanceof Error ? Promise.reject(list) : Promise.resolve(list)));
+        Object.assign(context.api, {waiting});
+        context.api.status.mockResolvedValue(none());
+        await context.controller.load();
+        await flush();
+        return {...context, waiting, flow: context.controller as unknown as RestoreFlowController & WithWaiting};
+    }
+
+    it('idle with nothing followed: the list is read and kept; a list that cannot be read is none, and the card still works', async () => {
+        const {flow, waiting} = await idleWith([held()]);
+        expect(flow.state).toBe('idle');
+        expect(waiting).toHaveBeenCalledTimes(1);
+        expect(flow.waiting.map((item) => item.stage_id)).toEqual([STAGE_ID]);
+
+        const failing = await idleWith(new Error('no answer'));
+        expect(failing.flow.state).toBe('idle');
+        expect(failing.flow.waiting).toEqual([]);
+    });
+
+    it('resume: the check is read and its report shown, remembered by this tab', async () => {
+        const {flow, api, storage} = await idleWith([held()]);
+        api.getCheck.mockResolvedValueOnce(doneStage());
+
+        await flow.resume(STAGE_ID);
+        await flush();
+
+        expect(api.getCheck).toHaveBeenCalledWith(STAGE_ID);
+        expect(flow.state).toBe('report');
+        expect(flow.report).not.toBeNull();
+        expect(storage.getItem(KEY)).toBe(STAGE_ID);
+    });
+
+    it('a check gone meanwhile: resume reads the list again, idle', async () => {
+        const {flow, api, waiting} = await idleWith([held()]);
+        api.getCheck.mockRejectedValueOnce(refusal(404, 'restore_stage_not_found'));
+        waiting.mockResolvedValueOnce([]);
+
+        await flow.resume(STAGE_ID);
+        await flush();
+
+        expect(flow.state).toBe('idle');
+        expect(flow.waiting).toEqual([]);
+    });
+
+    it('discard: the check is dropped on the server and the list read again', async () => {
+        const {flow, api, waiting} = await idleWith([held()]);
+        api.dropCheck.mockResolvedValueOnce(undefined);
+        waiting.mockResolvedValueOnce([]);
+
+        await flow.discard(STAGE_ID);
+        await flush();
+
+        expect(api.dropCheck).toHaveBeenCalledWith(STAGE_ID);
+        expect(flow.state).toBe('idle');
+        expect(flow.waiting).toEqual([]);
+    });
+
+    it('later: the report closes, this tab forgets the check, and the list shows it; the check is not dropped', async () => {
+        const {flow, api, storage, waiting} = await idleWith([held()]);
+        api.getCheck.mockResolvedValueOnce(doneStage());
+        await flow.resume(STAGE_ID);
+        await flush();
+        expect(flow.state).toBe('report');
+
+        await flow.later();
+        await flush();
+
+        expect(flow.state).toBe('idle');
+        expect(storage.getItem(KEY)).toBeNull();
+        expect(api.dropCheck).not.toHaveBeenCalled();
+        expect(waiting).toHaveBeenCalledTimes(2);
+        expect(flow.waiting.map((item) => item.stage_id)).toEqual([STAGE_ID]);
+    });
+});
+
+// =====================================================================================================================
+// C9-9 — a backup the server keeps, restored without a download and an upload
+// =====================================================================================================================
+
+describe('C9-9 — fromKept: a kept backup taken as the archive', () => {
+    const JOB_ID = 'aa112233445566778899aabbccddeeff';
+    type WithKept = {fromKept(jobId: string): Promise<void>; submitPassword(password: string): Promise<void>};
+
+    async function idleKept(kind: 'zip' | 'envelope') {
+        const context = await setup();
+        const uploadFromKept = vi.fn(() => Promise.resolve({upload_id: UPLOAD_ID, size: 4096, kind}));
+        Object.assign(context.api, {uploadFromKept});
+        context.api.status.mockResolvedValue(none());
+        await context.controller.load();
+        await flush();
+        return {...context, uploadFromKept, flow: context.controller as unknown as RestoreFlowController & WithKept};
+    }
+
+    it('a plain backup: taken on the server, nothing sent, then checked as any upload', async () => {
+        const {flow, api, uploadFromKept} = await idleKept('zip');
+        api.startCheck.mockResolvedValueOnce(runningStage());
+
+        void flow.fromKept(JOB_ID);
+        await flush();
+
+        expect(uploadFromKept).toHaveBeenCalledWith(JOB_ID);
+        expect(api.upload, 'no archive goes up from the browser').not.toHaveBeenCalled();
+        expect(api.startCheck).toHaveBeenCalledWith(UPLOAD_ID);
+        expect(flow.state).toBe('checking');
+    });
+
+    it('a secure backup: its password first, then the check of the same upload, never sent again', async () => {
+        const {flow, api} = await idleKept('envelope');
+
+        await flow.fromKept(JOB_ID);
+        await flush();
+        expect(flow.state).toBe('password');
+
+        api.startCheck.mockResolvedValueOnce(runningStage());
+        void flow.submitPassword('the-backup-password');
+        await flush();
+
+        expect(api.upload).not.toHaveBeenCalled();
+        expect(api.startCheck).toHaveBeenCalledWith(UPLOAD_ID, 'the-backup-password');
+        expect(flow.state).toBe('checking');
+    });
+
+    it('a refusal (a sealed backup) is a failure of the upload, with its code', async () => {
+        const {flow, uploadFromKept} = await idleKept('zip');
+        uploadFromKept.mockRejectedValueOnce(refusal(409, 'backup_sealed_unsupported'));
+
+        await flow.fromKept(JOB_ID);
+        await flush();
+
+        expect(flow.state).toBe('failed');
+        expect(flow.errorCode).toBe('backup_sealed_unsupported');
+        expect(flow.failure).toBe('upload');
+    });
+});

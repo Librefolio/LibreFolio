@@ -428,8 +428,7 @@
           "worstRealization": "Il giorno peggiore",
           "drawdownAtRisk": "Drawdown a rischio ({confidence})",
           "conditionalDrawdownAtRisk": "Media oltre la soglia",
-          "ulcerIndex": "Indice di Ulcer {value}",
-          "ulcerIndexHint": "profondità quadratica media sotto il picco: più basso, più tranquillo",
+          "ulcerIndex": "Indice di Ulcer",
           "worstMonth": "I 30 giorni peggiori"
         },
         "underwater": {
@@ -464,13 +463,17 @@
         "showLess": "Mostra meno",
         "effectiveAssets": {
           "label": "Quante scommesse indipendenti ho davvero?",
-          "aboveCount": "Sopra le {positions} posizioni misurate: l'eccesso è liquidità, e non dice nulla sui pesi",
+          "aboveCount": "Sopra le {positions} posizioni misurate: l'eccesso viene dalla parte non coperta ({share}: liquidità e posizioni senza prezzo), e non dice nulla sui pesi",
           "belowCount": "Sotto le {positions} posizioni misurate: i pesi sono sbilanciati, e poche portano il portafoglio",
-          "evenCount": "Pari alle {positions} posizioni misurate: pesi uniformi e nessuna liquidità"
+          "evenCount": "Pari alle {positions} posizioni misurate: pesi uniformi e nessuna parte non coperta",
+          "name": "Numero effettivo di posizioni",
+          "aboveCountNoShare": "Sopra le {positions} posizioni misurate: l'eccesso viene dalla parte non coperta (liquidità e posizioni senza prezzo), e non dice nulla sui pesi"
         },
         "diversificationRatio": {
           "label": "Distribuire il denaro è servito a qualcosa?",
-          "caption": "1,00 significa che le posizioni si muovono all'unisono; più alto, più si compensano"
+          "scale": "1,00 significa nessun beneficio: le posizioni si muovono all'unisono; più alto, più si compensano.",
+          "example": "Con {value} la volatilità del portafoglio è circa il {percent} sotto la media pesata delle singole posizioni.",
+          "ceiling": "Il massimo è circa √N: {max} con {positions} posizioni."
         },
         "uncovered": {
           "label": "Quanto di me non è misurato qui?",

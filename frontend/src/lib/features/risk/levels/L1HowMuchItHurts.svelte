@@ -38,9 +38,14 @@
      * drawdown that happened. Promoting them to cards of their own would restate
      * the very defect this section exists to cure - an undeclared change of scale.
      *
-     * The fourth, `ulcer_index`, is the caption of the underwater chart rather
-     * than a row anywhere: alone it is a dimensionless number nobody can read,
-     * and the curve above it is literally the shape it measures.
+     * The fourth, `ulcer_index`, is a row of the worst fall's card, beside the
+     * drawdown at risk (D4, developer's decision of 07/11/2026). Until then it was
+     * the caption of the underwater chart, on the argument (18/09) that alone it is
+     * a dimensionless number nobody can read and the curve above it is the shape it
+     * measures. The developer asked for it in a card, where the other measures of
+     * how deep and how long a fall was already are: it is one of them, and a figure
+     * under a chart was a figure nobody looked for. Its name and the manual's ⓘ say
+     * what it is.
      *
      * Pattern: Svelte 5 Runes, Tailwind CSS 4.
      */
@@ -126,6 +131,7 @@
         worstRealization: {docsPath: `${DOCS}/worst-realization/`},
         drawdownAtRisk: {docsPath: `${DOCS}/drawdown-at-risk/`},
         conditionalDrawdownAtRisk: {docsPath: `${DOCS}/conditional-drawdown-at-risk/`},
+        ulcerIndex: {docsPath: `${DOCS}/ulcer-index/`},
     };
 </script>
 
@@ -189,6 +195,9 @@
                             {#if row.id === 'worst' && tails.conditionalDrawdownAtRisk !== null}
                                 {@render measure($t('risk.levels.l1.tails.conditionalDrawdownAtRisk'), lossPercent(tails.conditionalDrawdownAtRisk), 'risk-l1-conditional-drawdown-at-risk', TAIL_DOCS.conditionalDrawdownAtRisk.docsPath)}
                             {/if}
+                            {#if row.id === 'worst' && tails.ulcerIndex !== null}
+                                {@render measure($t('risk.levels.l1.tails.ulcerIndex'), formatPercent(tails.ulcerIndex, {scale: 100, signed: false, digits: 2}), 'risk-l1-ulcer', TAIL_DOCS.ulcerIndex.docsPath)}
+                            {/if}
                         {/snippet}
                     </RiskMetricCard>
                 {/each}
@@ -217,7 +226,7 @@
             </RiskCardGrid>
         </div>
 
-        <UnderwaterChart points={underwater} ulcerIndex={tails.ulcerIndex} />
+        <UnderwaterChart points={underwater} />
 
         <ReturnHistogram {histogram} />
     {/if}

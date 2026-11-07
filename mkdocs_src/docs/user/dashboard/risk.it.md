@@ -17,20 +17,20 @@ Ogni blocco qui sotto segue uno schema fisso: a cosa risponde, uno screenshot, i
 Quanto potresti perdere, e quanto è già stato grave? Ogni cifra qui è qualcosa che il tuo portafoglio ha realmente attraversato nel periodo; versamenti e prelievi non contano come guadagni o perdite.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="Il blocco Quanto può farmi male?: le schede Una giornata storta, Trenta giorni storti e La peggior discesa, ciascuna con il suo importo, e le loro righe di dettaglio (il giorno peggiore e quando, i 30 giorni peggiori e quando, le date della peggior discesa e quanto è durata, recupero richiesto, drawdown a rischio, media oltre la soglia); poi Tempo trascorso sotto il picco con l'indice di Ulcer, e la Distribuzione dei rendimenti giornalieri con la soglia VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="Il blocco Quanto può farmi male?: le schede Una giornata storta, Trenta giorni storti e La peggior discesa, ciascuna con il suo importo, e le loro righe di dettaglio (il giorno peggiore e quando, i 30 giorni peggiori e quando, le date della peggior discesa e quanto è durata, recupero richiesto, drawdown a rischio, media oltre la soglia, indice di Ulcer); poi Tempo trascorso sotto il picco, e la Distribuzione dei rendimenti giornalieri con la soglia VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Strumenti mostrati**
 
 - **Una giornata storta**, **Trenta giorni storti** — la tua perdita media nel 5% peggiore delle giornate, o dei periodi di 30 giorni → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Soglia VaR** — su *Distribuzione dei rendimenti giornalieri*: la perdita giornaliera che solo il 5% peggiore delle giornate ha superato; una linea tratteggiata la segna nel grafico, e passando su una barra vedi quanti giorni ci sono caduti e se sta oltre la soglia → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **Soglia VaR** — su *Distribuzione dei rendimenti giornalieri*: la perdita giornaliera che solo il 5% peggiore delle giornate ha superato; una linea tratteggiata la segna nel grafico, e passando su una barra vedi quanti giorni ci sono caduti e se sta oltre la soglia; la rotella o due dita ingrandiscono il grafico, e con molte barre compare uno slider sotto → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
 - **Il giorno peggiore** — sotto *Una giornata storta*: la singola giornata peggiore del periodo, e quando è stata → [peggior realizzazione](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
 - **I 30 giorni peggiori** — sotto *Trenta giorni storti*: il peggior periodo di 30 giorni che il portafoglio ha davvero attraversato, e quando è stato. *Trenta giorni storti* è invece una media del 5% peggiore, che nessun periodo ha mai mostrato da solo
 - **Il peggior calo** — la discesa più profonda da un massimo a un minimo successivo, quando è iniziata e finita, e quanto è durata → [drawdown massimo](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Drawdown a rischio** — quanto sotto il suo picco si trovava il portafoglio, a parte il 5% peggiore delle giornate → [drawdown a rischio](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Media oltre la soglia** — quanto sotto il suo picco si trovava, in media, in quelle giornate peggiori → [drawdown a rischio condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
 - **Sotto il massimo, oggi** — quanto sotto il suo ultimo massimo si trova oggi il portafoglio → [drawdown attuale](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Indice di Ulcer** — sotto *Tempo passato sotto il picco*: quanto sono stati profondi e lunghi i cali; più basso è più calmo → [indice di Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
+- **Indice di Ulcer** — sotto *La peggior discesa*, accanto al drawdown a rischio: quanto sono stati profondi e lunghi i cali; più basso è più calmo → [indice di Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **Come leggerlo**
 
@@ -52,8 +52,8 @@ Possedere molte posizioni non è la stessa cosa che essere diversificato. Questo
 
 **Strumenti mostrati**
 
-- **Quante scommesse indipendenti ho davvero?** — quanto è uniformemente distribuito il tuo denaro → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
-- **Distribuire il denaro è servito a qualcosa?** — quanto le tue posizioni si attutiscono a vicenda → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **Quante scommesse indipendenti ho davvero?** — il numero effettivo di posizioni: quanto è uniformemente distribuito il tuo denaro; sopra il numero di posizioni, l'eccesso viene dalla parte non coperta (liquidità e posizioni senza prezzo) → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **Distribuire il denaro è servito a qualcosa?** — quanto le tue posizioni si attutiscono a vicenda: 1 significa nessun beneficio, più alto è meglio, fino a circa √N con N posizioni → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
 - **Quanto di me non è misurato qui?** — liquidità, più le posizioni senza prezzi utilizzabili → [qualità dei dati](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
 - **Peso** e **contributo al rischio** — la quota di ciascuna posizione del tuo denaro, e del tuo rischio → [contributo al rischio](../../financial-theory/technical-analysis/risk-metrics/risk-contribution.md)
 - **Quali di queste sono la stessa scommessa?** — quanto strettamente si muove insieme ogni coppia di posizioni → [Correlation](../../financial-theory/technical-analysis/risk-metrics/correlation.md)

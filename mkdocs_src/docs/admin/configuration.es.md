@@ -25,7 +25,7 @@ cp .env.example .env
 Con la imagen de Docker precompilada, la guía de [instalación con Docker](../user/installation.md) descarga la misma muestra como `.env`.
 
 - La muestra agrupa las opciones según lo que hacen. Una opción comentada, como `# SESSION_COOKIE_SECURE=auto`, muestra su valor predeterminado: elimina el `#` solo para cambiar el valor.
-- LibreFolio lee `.env` al arrancar: reinicia LibreFolio después de un cambio. Con Docker Compose, ejecuta `docker compose up -d`, porque `docker compose restart` conserva los valores antiguos.
+- LibreFolio lee `.env` al arrancar: reinicia LibreFolio después de un cambio. Con Docker Compose, ejecuta `docker compose up -d`.
 - Los nombres distinguen entre mayúsculas y minúsculas. En las opciones principales y las opciones de configuración de riesgo que aparecen más abajo, un valor del tipo incorrecto o fuera de rango detiene el servidor al arrancar con un error.
 
 ---

@@ -34,6 +34,8 @@ import {
     deleteRestoreCheck,
     getRestoreCheck,
     getRestoreStatus,
+    listWaitingRestoreChecks,
+    restoreFromKeptBackup,
     isEnvelopeFile,
     probeServer,
     requestRestart,
@@ -47,6 +49,7 @@ import {
     type RestoreStatus,
     type RestoreUpload,
     type RestoreUploadOptions,
+    type RestoreWaitingCheck,
 } from './backupApi';
 
 export type RestoreFlowState = 'loading' | 'idle' | 'password' | 'uploading' | 'checking' | 'report' | 'confirming' | 'pending' | 'in_progress' | 'cancelling' | 'restarting' | 'failed';
@@ -100,6 +103,10 @@ export interface RestoreApi {
     restart(): Promise<RestoreRestartAccepted>;
     probeServer(): Promise<'up' | 'down'>;
     restoreOutcome(ticket: string | null): Promise<RestoreOutcomeRead>;
+    /** The checks waiting for a decision (C9-6); without it, none. */
+    waiting?(): Promise<RestoreWaitingCheck[]>;
+    /** A backup the server keeps, taken as the archive (C9-9); without it, `fromKept` does nothing. */
+    uploadFromKept?(jobId: string): Promise<RestoreUpload>;
 }
 
 export type RestoreStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -138,6 +145,8 @@ const SERVER_API: RestoreApi = {
     restart: requestRestart,
     probeServer,
     restoreOutcome,
+    waiting: listWaitingRestoreChecks,
+    uploadFromKept: restoreFromKeptBackup,
 };
 
 function defaultStorage(): RestoreStorage | null {
@@ -172,6 +181,11 @@ export class RestoreFlowController {
     outcomeStatus = $state<RestoreStatus | null>(null);
     /** A secure backup's password is out to the server: the form waits for its answer. */
     submitting = $state(false);
+    /**
+     * The checks waiting for a decision, read with the status while nothing is in hand (C9-6): the card offers to resume or
+     * discard each, from any tab or device. Empty while a check or a restore is followed.
+     */
+    waiting = $state<RestoreWaitingCheck[]>([]);
 
     report = $derived(this.stage !== null && this.stage.status === 'done' ? (this.stage.report ?? null) : null);
     /** The largest archive the server takes, in megabytes: `0` for no limit, `null` when unknown. */
@@ -197,7 +211,8 @@ export class RestoreFlowController {
     // The one-time ticket of the restart under way (lot B5c): in memory only, never stored nor announced.
     #ticket: string | null = null;
     // The secure backup waiting for its password (lot B4): the file, and its upload once sent, kept for another try.
-    #envelope: {file: File; uploadId: string | null} | null = null;
+    // `file` is null for a backup the server keeps (C9-9): nothing to send, the upload is already there.
+    #envelope: {file: File | null; uploadId: string | null} | null = null;
 
     constructor(options: RestoreFlowOptions = {}) {
         this.#api = options.api ?? SERVER_API;
@@ -238,6 +253,8 @@ export class RestoreFlowController {
         const stageId = this.#remembered();
         if (stageId === null) {
             this.stage = null;
+            await this.#readWaiting(generation);
+            if (this.#stale(generation)) return;
             this.state = 'idle';
             return;
         }
@@ -255,6 +272,42 @@ export class RestoreFlowController {
             }
             this.#fail(backupFailureCode(error), 'check');
         }
+    }
+
+    /** Follow a check that waits for a decision again (C9-6): its report, or its progress while it runs. */
+    async resume(stageId: string): Promise<void> {
+        if (this.state !== 'idle' || !STAGE_ID.test(stageId)) return;
+        const generation = this.#next();
+        this.state = 'loading';
+        this.#setError(null, null);
+        try {
+            const stage = await this.#api.getCheck(stageId);
+            if (this.#stale(generation)) return;
+            this.waiting = [];
+            if (stage.status === 'running') this.#watched = stage.stage_id;
+            this.#follow(stage, generation, false);
+        } catch (error) {
+            if (this.#stale(generation)) return;
+            if (backupErrorCode(error) === 'restore_stage_not_found') {
+                await this.load();
+                return;
+            }
+            this.#fail(backupFailureCode(error), 'check');
+        }
+    }
+
+    /** Drop a check that waits for a decision, from the list (C9-6): its archive is not restored. */
+    async discard(stageId: string): Promise<void> {
+        if (this.state !== 'idle' || !STAGE_ID.test(stageId)) return;
+        await this.#dropNow(stageId);
+    }
+
+    /** «I'll decide later»: the report closes and its check stays on the server, listed for later (C9-6). */
+    async later(): Promise<void> {
+        if (this.state !== 'report') return;
+        this.#forget();
+        this.stage = null;
+        await this.load();
     }
 
     /**
@@ -286,13 +339,48 @@ export class RestoreFlowController {
         await this.#send(file, null);
     }
 
+    /**
+     * Restore a backup the server keeps (C9-9): it becomes the upload of a restore on the server, with no download and no
+     * upload, and is checked as any archive; a secure backup asks for its password first.
+     */
+    async fromKept(jobId: string): Promise<void> {
+        if ((this.state !== 'idle' && this.state !== 'failed') || this.#api.uploadFromKept === undefined || !STAGE_ID.test(jobId)) return;
+        const generation = this.#next();
+        this.state = 'uploading';
+        this.#setError(null, null);
+        this.errorLimitMb = null;
+        this.stage = null;
+        this.waiting = [];
+        this.dropRequested = false;
+        this.uploadedBytes = 0;
+        this.totalBytes = 0;
+        let upload: RestoreUpload;
+        try {
+            upload = await this.#api.uploadFromKept(jobId);
+        } catch (error) {
+            if (this.#stale(generation)) return;
+            this.#fail(backupFailureCode(error), 'upload');
+            return;
+        }
+        if (this.#stale(generation)) return;
+        this.uploadedBytes = upload.size;
+        this.totalBytes = upload.size;
+        this.#emit('backup.restore.uploaded', {upload_id: upload.upload_id, size: upload.size, from: 'kept'});
+        if (upload.kind === 'envelope') {
+            this.#envelope = {file: null, uploadId: upload.upload_id};
+            this.state = 'password';
+            return;
+        }
+        await this.#check(upload.upload_id, null, null, generation);
+    }
+
     /** Check the secure backup waiting for its password: sent first if it is not yet. A wrong password asks again, and
      * the archive is not sent again. */
     async submitPassword(password: string): Promise<void> {
         const envelope = this.#envelope;
         if (this.state !== 'password' || envelope === null || password === '' || this.submitting) return;
         if (envelope.uploadId === null) {
-            await this.#send(envelope.file, password);
+            if (envelope.file !== null) await this.#send(envelope.file, password);
             return;
         }
         const generation = this.#next();
@@ -355,7 +443,7 @@ export class RestoreFlowController {
         await this.#check(upload.upload_id, password, file, generation);
     }
 
-    async #check(uploadId: string, password: string | null, file: File, generation: number): Promise<void> {
+    async #check(uploadId: string, password: string | null, file: File | null, generation: number): Promise<void> {
         let stage: RestoreStage;
         try {
             stage = await (password === null ? this.#api.startCheck(uploadId) : this.#api.startCheck(uploadId, password));
@@ -687,6 +775,20 @@ export class RestoreFlowController {
         this.outcome = 'still_pending';
         this.outcomeStatus = status;
         return true;
+    }
+
+    /** The checks waiting for a decision; a list that cannot be read is an empty one (the card still works without it). */
+    async #readWaiting(generation: number): Promise<void> {
+        if (this.#api.waiting === undefined) {
+            this.waiting = [];
+            return;
+        }
+        try {
+            const waiting = await this.#api.waiting();
+            if (!this.#stale(generation)) this.waiting = waiting;
+        } catch {
+            if (!this.#stale(generation)) this.waiting = [];
+        }
     }
 
     #fail(code: string, what: RestoreFailure, announce = true): void {

@@ -817,6 +817,9 @@ describe('app.css: the legacy dark remap leaves the migrated elements alone', ()
         const html = /(?:^|\n)html\s*\{([^}]*)\}/.exec(blankCssComments(appCss))?.[1] ?? '';
         expect(html, 'positive control: the rule of html is found, with its reserved scrollbar space').toMatch(/scrollbar-gutter:\s*stable/);
         expect(html, 'without it the scrollbar space keeps the legacy background: a strip at the right edge of every page').toMatch(/background-color:\s*var\(--lf-surface-app\)/);
+        const darkBody = /(?:^|\n)html\.dark body\s*\{([^}]*)\}/.exec(blankCssComments(appCss))?.[1] ?? '';
+        expect(darkBody, 'positive control: the rule of html.dark body is found').toMatch(/color:/);
+        expect(darkBody, 'a body background covers the animated background of the login and the other standalone pages, which sits behind the body').not.toMatch(/background/);
     });
 });
 

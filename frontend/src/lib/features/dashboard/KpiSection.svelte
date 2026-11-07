@@ -85,7 +85,11 @@
     /** Direction of the day's change, published as `data-direction`; the colour agrees (up and flat green, down red). */
     const pnlDeltaDayDirection = $derived(pnlDeltaDay == null ? undefined : pnlDeltaDay > 0 ? 'up' : pnlDeltaDay < 0 ? 'down' : 'flat');
 
-    /** Card 2: the day change as a share of yesterday's NAV (`pnl_change_1d_vs_nav_percent`). */
+    /**
+     * Card 1: the day change as a share of yesterday's NAV (`pnl_change_1d_vs_nav_percent`), beside the amount. Developer's decision of
+     * 07/11/2026: it is the only share of the day's change, and Card 2 no longer repeats it. The share of yesterday's total P&L
+     * (`pnl_change_1d_vs_total_pnl_percent`) is gone from the answer: close to zero it explodes (−22.82 % where the NAV says −1.95 %).
+     */
     const pnlDeltaDayPct = $derived(summary ? returnPct(summary.pnl_change_1d_vs_nav_percent) : null);
 
     const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
@@ -114,8 +118,6 @@
         const amount = parseFloat(totalPnlCur.amount);
         return Number.isFinite(amount) ? amount : null;
     });
-    /** Card 1: the day change as a share of yesterday's total P&L (`pnl_change_1d_vs_total_pnl_percent`). */
-    const pnlDeltaDayVsPrevTotalPct = $derived(summary ? returnPct(summary.pnl_change_1d_vs_total_pnl_percent) : null);
     // Absolute (since-inception) ROI next to the absolute total P&L in Card 3 —
     // period ROI (simple_roi_percent) belongs to Card 2's period-based returns only.
     const absRoiPct = $derived.by(() => {
@@ -274,12 +276,18 @@
                     <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
                 </p>
                 {#if pnlDeltaDay != null}
-                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss}" data-testid="kpi-pnl-delta-day" data-direction={pnlDeltaDayDirection}>
-                        <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
-                        {#if pnlDeltaDayVsPrevTotalPct != null}
-                            <span> (<span data-testid="kpi-pnl-delta-day-pct">{formatPercent(pnlDeltaDayVsPrevTotalPct)}</span>)</span>
-                        {/if}
-                    </p>
+                    <!-- «Amount (share)»: the day's change in money and as a share of yesterday's portfolio value; colour and sign are the
+                         change's. The tooltip says what the share is measured against. -->
+                    <div class="flex justify-end">
+                        <Tooltip text={$_('dashboard.pnlDeltaDayTooltip')} position="top" testId="kpi-pnl-delta-day-tip">
+                            <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss}" data-testid="kpi-pnl-delta-day" data-direction={pnlDeltaDayDirection}>
+                                <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
+                                {#if pnlDeltaDayPct != null}
+                                    <span> (<span data-testid="kpi-pnl-delta-day-pct">{formatPercent(pnlDeltaDayPct)}</span>)</span>
+                                {/if}
+                            </p>
+                        </Tooltip>
+                    </div>
                 {/if}
                 <div class="flex flex-col gap-2 mt-1">
                     <KpiMetricBar
@@ -328,9 +336,6 @@
                     {#if timingEffectVal == null}—{:else}<TweenedValue value={timingEffectVal} format={(v) => `${formatFixed(v, 2, {signed: true})} ${$_('dashboard.pp')}`} />{/if}
                 </span>
             </div>
-            {#if pnlDeltaDayPct != null}
-                <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss}" data-testid="kpi-returns-delta-pct" data-direction={pnlDeltaDayDirection}>{formatPercent(pnlDeltaDayPct)}</p>
-            {/if}
             <div class="flex flex-col gap-2 mt-1">
                 <KpiMetricBar testid="kpi-return-roi" label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-lf-primary" />
                 <KpiMetricBar testid="kpi-return-twrr-cum" label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} numericValue={twrrCumVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(twrrCumVal ?? 0)} barColor={retBarColor(twrrCumVal ?? 0)} />

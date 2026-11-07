@@ -101,7 +101,7 @@ C'est défendable — la trésorerie est réellement une position non concentré
 
 Lisez les deux chiffres comme une paire, dans cet ordre :
 
-1. **Les actifs effectifs face au nombre réel de positions.** Le sens de l'écart en détermine la signification : **en dessous** du décompte, les poids sont déséquilibrés et quelques positions portent le portefeuille quel que soit le nombre de lignes ; **au-dessus**, l'excédent est de la trésorerie, et il ne dit rien de la répartition des poids.
+1. **Les actifs effectifs face au nombre réel de positions.** Le sens de l'écart en détermine la signification : **en dessous** du décompte, les poids sont déséquilibrés et quelques positions portent le portefeuille quel que soit le nombre de lignes ; **au-dessus**, l'excédent vient de la part que les poids ne couvrent pas — trésorerie et positions sans série de prix utilisable, pas la seule trésorerie — et il ne dit rien de la répartition des poids.
 2. **Le ratio de diversification.** Une valeur proche de 1 signifie que les positions évoluent d'un seul bloc et que la répartition n'a pas apporté grand-chose. Plus la valeur dépasse 1, plus les positions se compensent mutuellement.
 
 C'est le second chiffre qui peut contredire le premier, et c'est cette contradiction qui porte l'information. Un portefeuille peut être parfaitement équilibré en termes de poids et non diversifié sur le fond — c'est le résultat ordinaire de la détention de plusieurs fonds suivant des marchés qui se recoupent.

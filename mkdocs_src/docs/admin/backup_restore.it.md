@@ -127,6 +127,8 @@ backups/librefolio-backup-20261015-121500-ui-1a2b3c4d/librefolio-backup-20261015
 
 L'archivio all'interno mantiene il suo nome abituale, `.zip`, `.lfbk` o `.tar`. `backups/.jobs/` contiene solo un backup in corso o uno non riuscito, che viene rimosso dopo un'ora.
 
+**Aggiorna**, in cima all'elenco dei backup, lo rilegge: un backup fatto dalla riga di comando compare solo allora.
+
 **Impostazioni › Amministrazione › Backup**, sotto *Backup su questo server*, elenca ogni backup conservato. **File**, nella sua scheda **Backup**, mostra lo stesso elenco; solo gli amministratori vedono l'uno o l'altro. Per ogni backup fornisce:
 
 - 📅 la data e l'ora in cui è stato creato, e la provenienza: l'app o la riga di comando;
@@ -165,7 +167,8 @@ I backup conservati si accumulano e risiedono sul disco dei tuoi dati. Nel panne
 | **File caricati** | I file caricati nell'app, come quelli della pagina **File** |
 | **Report dei broker** | Gli estratti conto caricati per importare le transazioni |
 | **Backup** | Tutto ciò che è in `backups/`: i [backup conservati sul server](#kept-backups), un backup in corso e uno non riuscito |
-| **Altri file di LibreFolio** | Il resto della directory dei dati: log, la cartella di lavoro di un ripristino e simili |
+| **Ripristino in attesa** | Un [ripristino](#restore) non ancora finito o scartato: l'archivio caricato e la sua versione aperta |
+| **Altri file di LibreFolio** | Il resto della directory dei dati: log, stato e simili |
 
 La barra ha tre aspetti, a seconda che sia impostato un limite e che il disco sia noto:
 
@@ -176,7 +179,8 @@ La barra ha tre aspetti, a seconda che sia impostato un limite e che il disco si
 **Imposta il limite** nel pannello chiuso **Avanzate** sotto la stessa barra, nel campo **Spazio totale di LibreFolio (MB)**: un numero intero di megabyte, `0` per nessun limite, poi **Salva**; un avviso verde lo conferma. È lo spazio massimo che LibreFolio può occupare in tutto. È anche l'[impostazione globale](settings.md) *Limite di spazio*, che non viene mostrata nella scheda Amministrazione: questo campo è il punto in cui modificarla.
 
 - 🚧 **Oltre il limite**, LibreFolio rifiuta ciò che aggiungerebbe dati: un file caricato, un report del broker, un backup avviato a mano (dopo aver provato la [pulizia automatica](#backup-cleanup)) e un [ripristino](#restore) il cui risultato lo supererebbe. Il messaggio dice di portare lo spazio totale ad almeno una certa dimensione e, se manca spazio sul disco, quanto altro ne serve libero. Non si fermano mai: transazioni, prezzi e database, i backup di un pannello di hosting e della riga di comando (la pulizia li segue) e un ripristino già confermato. Il limite non elimina nulla da solo.
-- ⚠️ **Oltre il limite**, la barra avvisa che il limite è superato e suggerisce di eliminare backup o file, o di aumentare il limite.
+- ⚠️ **Oltre il limite**, la barra avvisa che il limite è superato e suggerisce di eliminare backup o file, o di aumentare il limite. La barra diventa allora i tuoi dati, così nessuna parte resta fuori: una tacca chiamata *Limite 20 MB* mostra dove cade il limite, e le righe rosse dopo di essa mostrano di quanto lo superi.
+- 💬 **Un rifiuto è detto dove sei**: nella finestra di caricamento o di importazione, o nella scheda del backup. Un amministratore trova **Apri le impostazioni**, che apre **File** con il pannello **Avanzate** aperto; un utente legge quanto spazio liberare, oppure di chiedere a un amministratore. Con un limite impostato da chi ospita l'istanza, il messaggio dice di chiederlo a loro.
 - 🔒 **Impostato nella configurazione del server**: quando `LIBREFOLIO_STORAGE_LIMIT_MB` è impostato, il suo valore è il limite, il campo è disattivato e una nota dice che è impostato da chi ospita l'istanza. Vedi [Variabili d'ambiente](configuration.md). Un valore che LibreFolio non può usare, cioè non un numero intero, viene ignorato, e il campo funziona come sopra.
 - 🧹 **La pulizia e la barra lavorano insieme.** Di solito i backup sono la parte che cresce: la [pulizia automatica](#backup-cleanup) li tiene sotto controllo, e ogni backup che elimini in **Impostazioni › Amministrazione › Backup** o in **File › Backup** accorcia **Backup** nella barra. Quando sei vicino al limite, inizia da lì.
 
@@ -288,23 +292,25 @@ Un ripristino sostituisce i dati dell'installazione con quelli dell'archivio: il
 ### 🖱️ Ripristinare da Impostazioni › Amministrazione › Backup {: #restore-settings }
 
 1. **Scegli l'archivio.** In **Impostazioni › Amministrazione › Backup**, sotto **Esegui il backup dell'istanza**, la scheda **Ripristina un archivio** ti ricorda che un ripristino sostituisce i dati di ogni utente: se potresti voler recuperare i dati attuali, [crea prima un backup](#settings-backup). Fai clic su **Scegli un archivio…** e seleziona un archivio di backup creato da LibreFolio qui o su un'altra installazione: un `.zip`, o un `.lfbk` sicuro. Un `.zip` viene inviato subito al server, con una barra di avanzamento: **Interrompi invio** lo ferma, e nulla viene conservato.
+    Oppure prendi un backup che il server conserva: **Ripristina** sulla sua riga nell'elenco dei [backup conservati sul server](#kept-backups), qui o in **File › Backup**, chiede prima conferma, poi il server prende quel backup come archivio, senza download né caricamento, e la scheda prosegue dal passo successivo. Un backup sigillato di un pannello di hosting si apre solo con la chiave privata dei suoi destinatari: qui non si ripristina.
 2. **Digita la sua password**, per un backup sicuro. La scheda la chiede prima che venga inviato qualcosa: *Un backup sicuro: digita la password con cui è stato creato.* Digitala in **Password del backup** e fai clic su **Controlla il backup**: l'archivio viene inviato, con la stessa barra di avanzamento, e la password va con la richiesta che avvia il controllo, che la prova subito. Una password errata riporta il modulo, con *Password errata, o il file è stato modificato: digita di nuovo la password.* L'archivio resta sul server, e il tentativo successivo non lo invia di nuovo. **Annulla** dimentica il file.
 3. **Lascia che venga controllato.** Il server controlla l'archivio su una copia, come fa `backup restore --dry-run` ([Controllare un backup](#check)): *Decifratura del backup*, solo per un backup sicuro, *Controllo dell'archivio*, *Decompressione su una copia*, *Aggiornamento del database della copia*, *Verifica della copia*. Nulla cambia finché non confermi. **Interrompi il controllo** lo scarta: un controllo ancora in esecuzione viene scartato non appena termina.
 4. **Leggi il report.** Si apre in una finestra, **Cosa farebbe questo ripristino**; una volta chiusa, **Leggi il report** la riapre. Fornisce:
     - chi ha creato l'archivio, con quale versione di LibreFolio e quando;
     - il suo database: alla versione di questo LibreFolio, o portato a essa sulla copia, con le migrazioni elencate e le correzioni applicate alla copia;
-    - i file e la loro dimensione, la dimensione del database e le tabelle le cui righe sono state modificate dall'aggiornamento;
+    - i file e la loro dimensione, la dimensione del database e le tabelle le cui righe sono state modificate dall'aggiornamento; e una barra di cosa contiene il backup: il database, i file caricati, i report del broker e gli altri file;
     - se il backup porta la chiave dell'istanza da cui proviene: in ogni caso, questo LibreFolio conserva la propria;
     - le chiavi salvate dei provider di dati: quante vengono ricifrate con la chiave di questo LibreFolio, come *2 chiavi salvate di provider di dati sono ricifrate con la chiave di questa istanza.*, e quante non può leggere, da inserire di nuovo dopo il ripristino, come *1 chiave salvata di un provider di dati non può essere letta con la chiave di questa istanza: inseriscila di nuovo dopo il ripristino.* ([Cosa segue](#what-follows));
     - i totali del libro mastro: gli stessi di quando è stato creato il backup, diversi sulle righe elencate ([come leggerli](backup_moving.md#check-refused)), non registrati, registrati da un'altra versione del metodo o illeggibili;
     - gli amministratori del backup, con *Dopo il ripristino accedi con uno di loro, con la password di allora; ogni sessione aperta ora termina.*
+    - ogni amministratore con l'immagine del suo account nel backup, e **Verifica una password prima di ripristinare**: scegline uno, digita la sua password e fai clic su **Verifica**: *Con questa password accederai dopo il ripristino.*, oppure *Non è la sua password.* La password viene confrontata solo con il backup, e non viene mai conservata, scritta nel log o rimandata indietro;
     - *Gli inviti e i link inviati prima del ripristino saranno scaduti: inviali di nuovo se necessario.*
-    - gli avvisi, che lasciano proseguire il ripristino, e il blocco, che lo vieta: un backup senza un amministratore attivo;
-    - fino a quando viene conservata la copia controllata: 24 ore dopo il controllo.
+    - gli avvisi, che lasciano proseguire il ripristino, e i blocchi, che lo vietano: un backup senza un amministratore attivo, e un ripristino che supererebbe il [limite di spazio](#space-used), con la dimensione a cui portarlo; un controllo così restituisce subito il suo spazio, e il suo report resta a schermo finché non lo chiudi;
+    - fino a quando viene conservato l'archivio caricato: 24 ore dopo il controllo.
 
-    **Scarta questo archivio** scarta il controllo e la sua copia: nulla viene ripristinato.
+    **Scarta questo archivio** scarta il controllo e la sua copia: nulla viene ripristinato. **Ci penso dopo** chiude la finestra e tiene il controllo: la scheda mostra allora *Un ripristino attende la tua decisione fino al …*, con **Riprendi**, che riapre lo stesso report, e **Scarta**, da qualsiasi scheda o dispositivo di un amministratore.
 
-5. **Digita la parola.** La finestra mostra una parola scelta a caso, una parola reale da 6 a 10 lettere nella lingua dell'interfaccia. Digitala a mano nel campo sottostante: il campo rifiuta testo incollato e trascinato. La parola protegge da un clic affrettato, non da un amministratore: l'API e la riga di comando ne fanno a meno. Per un archivio che non può essere ripristinato, il campo e il pulsante restano disabilitati.
+5. **Digita la parola.** La finestra mostra una parola scelta a caso, una parola reale da 6 a 10 lettere nella lingua dell'interfaccia. Digitala a mano nel campo sottostante: il campo rifiuta testo incollato e trascinato. La parola protegge da un clic affrettato, non da un amministratore: l'API e la riga di comando ne fanno a meno. Per un archivio che non può essere ripristinato, non si mostrano né la parola né **Ripristina e riavvia**: solo il pulsante che lo scarta.
 6. **Ripristina e riavvia.** Una volta digitata la parola, **Ripristina e riavvia** conferma il ripristino e ferma subito LibreFolio, per tutti. Una finestra copre la pagina, **LibreFolio si sta riavviando**: *Il suo avvio applica il ripristino. Questa pagina attende che torni.* LibreFolio non si riavvia da solo: lo fa chi lo supervisiona ([Chi riavvia LibreFolio](#supervisors)), e quell'avvio applica il ripristino ([Cosa fa il prossimo avvio](#next-start)).
 
 Quando LibreFolio risponde di nuovo, la pagina mostra com'è andata:
@@ -328,7 +334,8 @@ Utile sapere:
 - 📏 Quando l'installazione limita la dimensione degli archivi, la scheda lo dice, ad esempio *Archivi fino a 500 MB.*, e rifiuta un file più grande prima di inviare qualsiasi cosa. Il limite è `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, in megabyte da 1024 × 1024 byte: nessuno per impostazione predefinita sulla tua installazione ([Il limite di caricamento di un ripristino](#restore-upload-limit)).
 - 💽 Il disco della directory dei dati deve avere spazio per l'archivio e, durante il controllo, per la sua copia; per un backup sicuro, serve spazio anche per il suo archivio decifrato: [Controllare un backup](#check) dice quanto.
 - 🔑 La password di un backup sicuro va al server solo con la richiesta che avvia il controllo, che la prova subito: non viene mai memorizzata, scritta nel log o restituita. Il campo si svuota non appena lo invii.
-- 🔄 Un ricaricamento della pagina, nella stessa scheda, continua a seguire il controllo e il suo report. La copia controllata viene conservata 24 ore: dopo, la conferma risponde *Il controllo è troppo vecchio: controlla di nuovo l'archivio.*
+- 📦 Durante il controllo, l'archivio occupa la sua dimensione sul server, che la scheda dice mentre viene caricato, più la sua versione aperta; entrambi contano nel limite di spazio finché il ripristino non finisce o viene scartato.
+- 🔄 Un ricaricamento della pagina continua a seguire il controllo e il suo report, e qualsiasi altra scheda o dispositivo di un amministratore lo riprende dalla scheda Backup. L'archivio caricato viene conservato 24 ore: dopo, la conferma risponde *Il controllo è troppo vecchio: controlla di nuovo l'archivio.*
 - 🚪 Il ripristino termina ogni sessione, tutti accedono di nuovo con un account del backup, e i link inviati prima smettono di funzionare: vedi [Cosa fa il prossimo avvio](#next-start).
 - ❌ Un caricamento, un controllo o una conferma rifiutati, o un server che non risponde, vengono mostrati sulla scheda con il motivo. **Riprova** rilegge lo stato del ripristino; per inviare di nuovo un archivio, sceglilo di nuovo con **Scegli un archivio…**. Il controllo rifiuta gli stessi archivi della riga di comando: vedi [Il controllo rifiuta l'archivio](backup_moving.md#check-refused).
 - 🖥️ Se nulla riavvia LibreFolio, come un'installazione host avviata a mano, [avvia il server](cli_tools.md#start-the-server) tu stesso una volta che si è fermato: la pagina lo attende.

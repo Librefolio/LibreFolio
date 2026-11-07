@@ -41,6 +41,8 @@ import {
     dominantExposure,
     exposureOrder,
     heatmapLayout,
+    legendBox,
+    LEGEND_MIN_WIDTH,
     lowerTrianglePoints,
     nameOrder,
     pairKey,
@@ -1321,5 +1323,40 @@ describe('clusterOrder — the E2E stub topology', () => {
             expect(isContiguous(ids, [ids[0], ids[3]]), `size ${size} must NOT already be clustered on input`).toBe(false);
             expect(order, `size ${size} must differ from the payload order`).not.toEqual([...ids]);
         }
+    });
+});
+
+// D6 (07/11/2026): the colour scale under the matrix stays inside the box that holds it, so on a phone nothing of it is cut.
+describe('legendBox', () => {
+    /** A two-asset matrix: one cell, the row labels taking 110 px on the left. */
+    const SMALL = {width: 110 + 70 + 12, grid: {left: 110, right: 12, top: 8, bottom: 40}};
+
+    it('keeps the old rule before the box is measured: under the first column, at least the minimum', () => {
+        expect(legendBox(0, SMALL)).toEqual({left: 110, width: LEGEND_MIN_WIDTH});
+    });
+
+    it('starts under the first column when the box has room for the scale there', () => {
+        expect(legendBox(520, SMALL)).toEqual({left: 110, width: LEGEND_MIN_WIDTH});
+    });
+
+    it('starts at the left edge when the box has no room for it there, so it is not cut on a phone', () => {
+        // 300 px of box: 190 left of the first column, less than the scale needs.
+        const box = legendBox(300, SMALL);
+
+        expect(box.left).toBe(0);
+        expect(box.left + box.width).toBeLessThanOrEqual(300);
+        expect(box.width).toBe(LEGEND_MIN_WIDTH);
+    });
+
+    it('is never wider than the box, however narrow', () => {
+        const box = legendBox(240, SMALL);
+
+        expect(box).toEqual({left: 0, width: 240});
+    });
+
+    it('goes with the matrix, spanning its cells, when the matrix itself is wider than the box (it scrolls)', () => {
+        const wide = {width: 110 + 12 * 70 + 12, grid: {left: 110, right: 12, top: 8, bottom: 40}};
+
+        expect(legendBox(300, wide)).toEqual({left: 110, width: 12 * 70});
     });
 });

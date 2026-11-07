@@ -42,7 +42,8 @@
     const ORIGIN_ORDER: FactOriginState[] = ['librefolio', 'manual', 'modified'];
 
     // On a phone (the table's own 768 px breakpoint) the columns are fluid down to a floor each, and the facts' secondary columns are hidden by
-    // default, so that a table fits a card some 300 px wide (Y-9); «Columns» brings them back.
+    // default, so that a table fits a card some 300 px wide (Y-9); «Columns» brings them back. There is no Action column either (P3): the
+    // row's menu opens on a right click or a long press (`enableContextMenu`), and a tap on a row goes to its step.
     const phone = new MediaQuery('max-width: 768px');
 
     let factsOpen = $state(false);
@@ -234,10 +235,10 @@
             enableColumnVisibility
             enableColumnFilters={false}
             enableColumnResize
-            enableContextMenu={false}
-            enableActions
+            enableContextMenu
+            enableActions={!phone.current}
             rowActions={sectionActions}
-            actionsColumnWidth={phone.current ? '44px' : '64px'}
+            actionsColumnWidth="64px"
             tableLayout="auto"
         />
     </div>
@@ -279,10 +280,11 @@
                             enableColumnVisibility
                             enableColumnFilters
                             enableColumnResize
-                            enableContextMenu={false}
-                            enableActions
+                            enableContextMenu
+                            enableActions={!phone.current}
                             rowActions={factActions}
-                            actionsColumnWidth={phone.current ? '44px' : '64px'}
+                            onRowClick={phone.current ? (fact) => ongoto(fact.step) : undefined}
+                            actionsColumnWidth="64px"
                             tableLayout="auto"
                             emptyMessage={$t(`${KEY}.factsEmpty`, {default: 'No item matches these filters.'})}
                         />

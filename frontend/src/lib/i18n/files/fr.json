@@ -106,7 +106,8 @@
       "backups": "Sauvegardes",
       "dataOther": "Autres fichiers de LibreFolio",
       "disk": "Autres sur le disque",
-      "free": "Libre"
+      "free": "Libre",
+      "restore": "Restauration en cours"
     },
     "summary": {
       "limit": "{used} utilisés sur {limit}",
@@ -116,7 +117,7 @@
     "overLimit": "La limite d'espace est dépassée : supprimez des sauvegardes ou des fichiers, ou relevez la limite.",
     "limit": {
       "label": "Espace total de LibreFolio (Mo)",
-      "hint": "L'espace maximal que LibreFolio peut occuper au total : base de données, fichiers, rapports et sauvegardes. Au-delà, les fichiers, les rapports et les sauvegardes faites à la main sont refusés ; vos données et les sauvegardes automatiques ne sont jamais arrêtées. Saisissez 0 pour aucune limite.",
+      "hint": "L'espace maximal que LibreFolio peut occuper au total : base de données, fichiers, rapports, sauvegardes et une restauration en cours (l'archive téléversée et sa version ouverte). Au-delà, les fichiers, les rapports et les sauvegardes faites à la main sont refusés ; vos données et les sauvegardes automatiques ne sont jamais arrêtées. Saisissez 0 pour aucune limite.",
       "locked": "La limite d'espace est fixée par l'hébergeur de cette instance.",
       "save": "Enregistrer",
       "saved": "Enregistré.",
@@ -130,8 +131,11 @@
       "exceeded": {
         "raise": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Portez l'espace total à au moins {required} dans Fichiers › Avancé, ou supprimez des fichiers ou des sauvegardes.",
         "locked": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Demandez à l'hébergeur de cette instance de porter la limite à au moins {required}, ou supprimez des fichiers ou des sauvegardes.",
-        "disk": "Le disque doit aussi avoir au moins {missing} de plus de libre."
-      }
+        "disk": "Le disque doit aussi avoir au moins {missing} de plus de libre.",
+        "member": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Libérez au moins {free} en supprimant des fichiers ou des rapports, ou demandez à un administrateur d'augmenter la limite."
+      },
+      "openSettings": "Ouvrir les paramètres",
+      "marker": "Limite {limit}"
     },
     "errors": {
       "load": "L'espace occupé n'a pas pu être chargé. Réessayez."

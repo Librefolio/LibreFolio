@@ -480,6 +480,15 @@ def utils_docs_fr_typography(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Docs French typography tests", verbose=verbose)
 
 
+def utils_docs_theme_tokens(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the MkDocs hook that publishes the app's colour roles to the docs site."""
+    print_section("Utils: Docs Theme Tokens")
+    print_info("Testing: mkdocs_src/hooks/lf_theme_tokens.py (transform) on frontend/src/lib/theme/tokens.css")
+    print_info("Tests: the derived roles are declared under the docs' dark scheme too, the dark block still follows them, a moved derived block stops the build")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_theme_tokens.py", test_names)
+    return run_command(cmd, "Docs theme tokens tests", verbose=verbose)
+
+
 def utils_docs_search_split(verbose: bool = False, test_names: list = None) -> bool:
     """Test the MkDocs hook that splits the search index by language after the build (DOC-2)."""
     print_section("Utils: Docs Search Language Split")
@@ -998,6 +1007,15 @@ Tests for utility modules and helper functions:
         # redirected in every test): no DB, no server, no network, never opens the repo's
         # docs or translation cache, no writes outside tmp_path. Reads mkdocs_src/mkdocs.yml
         # (the site configuration the anchors are rendered with).
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-theme-tokens",
+        utils_docs_theme_tokens,
+        name="Docs Theme Tokens",
+        desc="The lf_theme_tokens MkDocs hook publishes the app's colour roles to the docs site: the dark block keyed on Material's dark scheme, and the derived roles (--lf-link and the others that name another role) declared under that scheme too, so they follow it instead of keeping the light values computed on :root; the dark block still follows them; a token file whose derived block moved stops the build",
+        # Reads frontend/src/lib/theme/tokens.css and transforms it in memory. No DB, no server, no network, no writes.
         isolation="pure",
     )
     add_test(

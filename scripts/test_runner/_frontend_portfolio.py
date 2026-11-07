@@ -338,6 +338,7 @@ def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, hea
             "src/lib/components/charts/__tests__/allocationHierarchy.test.ts",
             "src/lib/components/charts/__tests__/allocationRings.test.ts",
             "src/lib/components/charts/AllocationPieChart.test.ts",
+            "src/lib/components/charts/assetPieIcons.test.ts",
             "src/__tests__/palettes.test.ts",
             "src/lib/features/dashboard/AllocationHistoryChart.test.ts",
             "src/lib/features/dashboard/AllocationHistoryChart.negativeCash.test.ts",

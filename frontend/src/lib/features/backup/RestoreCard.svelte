@@ -20,6 +20,8 @@
     import {RestoreFlowController} from './restoreFlow.svelte';
     import RestoreReportModal from './RestoreReportModal.svelte';
     import RestartOverlay from './RestartOverlay.svelte';
+    import {verifyRestorePassword} from './backupApi';
+    import {restoreRequest, takeRestoreRequest} from './restoreRequest.svelte';
     import {restoreErrorKey, restoreReasonKey, restoreWaitingKey} from './restoreText';
 
     const PHASE_KEYS: Record<RestorePhase, string> = {
@@ -47,6 +49,14 @@
     onMount(() => {
         void controller.load();
         return () => controller.dispose();
+    });
+
+    // C9-9: «Restore» on a kept backup, asked from the list here or in Files: taken once the card is free for it.
+    $effect(() => {
+        if (restoreRequest.jobId !== null && (controller.state === 'idle' || controller.state === 'failed')) {
+            const jobId = takeRestoreRequest();
+            if (jobId !== null) void controller.fromKept(jobId);
+        }
     });
 
     // A new report opens the modal.
@@ -108,6 +118,43 @@
         </p>
     {/if}
 
+    {#if controller.state === 'idle' && controller.waiting.length > 0}
+        <!-- C9-6: a check left for later, from this tab or another device: resume its report, or discard its archive. -->
+        <ul class="space-y-2" data-testid="restore-waiting">
+            {#each controller.waiting as held (held.stage_id)}
+                <li
+                    class="flex flex-wrap items-center gap-3 rounded-lg border border-lf-info-line bg-lf-info-soft p-3 text-sm text-lf-info-on-soft"
+                    data-testid="restore-waiting-check"
+                    data-stage-id={held.stage_id}
+                    data-status={held.status}
+                    data-restorable={held.restorable === null ? '' : String(held.restorable)}
+                >
+                    <FileArchive class="shrink-0" size={16} aria-hidden="true" />
+                    <span class="min-w-0 flex-1">
+                        {held.status === 'running' ? $_('backup.restore.held.running') : $_('backup.restore.held.until', {values: {date: formatDateTime(String(held.expires_at ?? ''))}})}
+                    </span>
+                    <button
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                        type="button"
+                        data-testid="restore-waiting-resume"
+                        onclick={() => void controller.resume(held.stage_id)}
+                    >
+                        {$_('backup.restore.held.resume')}
+                    </button>
+                    <button
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                        type="button"
+                        data-testid="restore-waiting-discard"
+                        onclick={() => void controller.discard(held.stage_id)}
+                    >
+                        <X size={14} aria-hidden="true" />
+                        {$_('backup.restore.held.discard')}
+                    </button>
+                </li>
+            {/each}
+        </ul>
+    {/if}
+
     {#if lastResult}
         <div class="flex items-start gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="restore-last-result" data-result={lastResult.state} data-reason={lastResult.reason ?? ''}>
             <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
@@ -161,6 +208,10 @@
 
     {#if controller.state === 'uploading'}
         <div class="space-y-2" data-testid="restore-upload-progress">
+            {#if controller.totalBytes > 0}
+                <!-- C9-7: what the check will take, said before it does: the archive itself, then its opened version. -->
+                <p class="text-xs text-lf-muted" data-testid="restore-space-needed">{$_('backup.restore.spaceNeeded', {values: {size: formatBytes(controller.totalBytes, $_)}})}</p>
+            {/if}
             <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span class="flex items-center gap-2 text-lf-secondary">
                     <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
@@ -229,7 +280,17 @@
                 {$_('backup.restore.openReport')}
             </button>
         </div>
-        <RestoreReportModal open={reportOpen} report={controller.report} busy={false} onConfirm={(ownerUserId) => controller.confirm(ownerUserId)} onDrop={() => controller.dropCheck()} onClose={() => (reportOpen = false)} />
+        <RestoreReportModal
+            open={reportOpen}
+            report={controller.report}
+            busy={false}
+            onConfirm={(ownerUserId) => controller.confirm(ownerUserId)}
+            onDrop={() => controller.dropCheck()}
+            onLater={() => void controller.later()}
+            stageId={controller.stage?.stage_id ?? null}
+            onVerify={(username, password) => verifyRestorePassword(controller.stage?.stage_id ?? '', username, password)}
+            onClose={() => (reportOpen = false)}
+        />
     {/if}
 
     {#if controller.state === 'confirming' || controller.state === 'cancelling'}

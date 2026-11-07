@@ -42,8 +42,8 @@
       },
       "links": {
         "ok": "Les e-mails peuvent contenir des liens : LIBREFOLIO_PUBLIC_URL est définie, ou l'e-mail est désactivé.",
-        "missing": "LIBREFOLIO_PUBLIC_URL n'est pas définie : les e-mails fonctionnent, mais aucun avec un lien (mot de passe oublié, invitation, réinitialisation) ne peut partir.",
-        "invalid": "LIBREFOLIO_PUBLIC_URL ne peut pas commencer un lien : il faut http:// ou https:// et un nom d'hôte, sans nom d'utilisateur, mot de passe, ? ni #. Aucun e-mail avec un lien ne peut partir."
+        "missing": "LIBREFOLIO_PUBLIC_URL n'est pas définie : aucun e-mail avec un lien (mot de passe oublié, invitation, réinitialisation) ne peut partir. Définissez LIBREFOLIO_PUBLIC_URL={example} dans votre .env, puis redémarrez LibreFolio.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL ne peut pas commencer un lien : il faut http:// ou https:// et un nom d'hôte, sans nom d'utilisateur, mot de passe, ? ni #. Définissez-la sur une adresse comme {example}, puis redémarrez LibreFolio."
       }
     },
     "links": {

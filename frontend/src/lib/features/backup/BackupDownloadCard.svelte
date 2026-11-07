@@ -15,14 +15,14 @@
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
-    import {CircleCheck, DatabaseBackup, Download, KeyRound, LoaderCircle, RefreshCw, ShieldAlert, Trash2, TriangleAlert} from 'lucide-svelte';
+    import {CircleCheck, DatabaseBackup, Download, KeyRound, LoaderCircle, RefreshCw, Settings, ShieldAlert, Trash2, TriangleAlert} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
     import type {PasswordRule} from '$lib/features/auth/passwordRules';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
-    import {STORAGE_LIMIT_CODE, storageLimitMessage, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
+    import {STORAGE_LIMIT_CODE, STORAGE_LIMIT_SETTINGS_HREF, storageLimitMessage, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getInstanceBackupOptions, instanceBackupFileUrl, type BackupPhase, type BackupWarning} from './backupApi';
     import {notifyBackupListChanged} from './backupList.svelte';
@@ -241,9 +241,20 @@
     {/if}
 
     {#if controller.errorCode !== null && (controller.state === 'failed' || controller.state === 'done')}
-        <div class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="backup-error" data-error-code={controller.errorCode ?? ''}>
+        <div class="flex flex-wrap items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="backup-error" data-error-code={controller.errorCode ?? ''}>
             <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
-            <span>{errorText(controller.errorCode, controller.errorStorage)}</span>
+            <span class="min-w-0 flex-1" data-testid="backup-error-message">{errorText(controller.errorCode, controller.errorStorage)}</span>
+            {#if controller.errorCode === STORAGE_LIMIT_CODE && controller.errorStorage !== null && !controller.errorStorage.limitLocked}
+                <!-- C9-2: the card is the administrators': the limit is raised in Files › Advanced, its panel open. -->
+                <a
+                    class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-lf-danger-line bg-lf-card px-3 py-1.5 text-sm font-medium text-lf-primary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                    href={STORAGE_LIMIT_SETTINGS_HREF}
+                    data-testid="storage-limit-open-settings"
+                >
+                    <Settings size={14} aria-hidden="true" />
+                    {$_('storage.limit.openSettings')}
+                </a>
+            {/if}
         </div>
     {/if}
 

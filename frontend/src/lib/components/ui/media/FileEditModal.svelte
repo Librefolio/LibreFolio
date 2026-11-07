@@ -13,6 +13,8 @@
     import {_} from '$lib/i18n';
     import {Check, FileIcon, Loader2, RefreshCw, X} from 'lucide-svelte';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
+    import StorageLimitRefusal from '$lib/components/ui/feedback/StorageLimitRefusal.svelte';
+    import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import type {UploadScope} from '$lib/types';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
@@ -36,6 +38,8 @@
     // Internal state
     let isUploading = false;
     let error: string | null = null;
+    /** C9-1: the space limit refused the upload: said here, in the dialog, with what to do. */
+    let refusal: StorageLimitNumbers | null = null;
     let hasChanges = false;
     let showCloseConfirm = false;
 
@@ -60,6 +64,7 @@
         hasChanges = false;
         showCloseConfirm = false;
         error = null;
+        refusal = null;
     }
 
     // Reset tracking when modal closes
@@ -102,6 +107,7 @@
 
         isUploading = true;
         error = null;
+        refusal = null;
 
         try {
             const finalFileName = `${editedBaseName || 'file'}${fileExtension}`;
@@ -122,6 +128,7 @@
         } catch (err) {
             console.error('Upload failed:', err);
             error = err instanceof Error ? err.message : 'Upload failed';
+            refusal = storageLimitNumbersOfError(err);
             dispatch('error', {message: error});
         } finally {
             isUploading = false;
@@ -174,7 +181,9 @@
             </div>
 
             <!-- Error -->
-            {#if error}
+            {#if refusal}
+                <StorageLimitRefusal numbers={refusal} />
+            {:else if error}
                 <div class="error-message">{error}</div>
             {/if}
         </div>

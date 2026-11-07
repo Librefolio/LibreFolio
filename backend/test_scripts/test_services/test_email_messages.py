@@ -23,7 +23,7 @@ test message — is built by one typed builder from the texts of ``templates/{en
 6. ``compose_message``: ``Subject``, ``From``, ``To``, ``Reply-To`` only when given, ``Date`` (``now`` when given), a
    ``Message-ID`` in the sender's domain, ``Content-Language``, ``Auto-Submitted: auto-generated``,
    ``X-Auto-Response-Suppress: All``, each once; a ``multipart/alternative`` body, plain text first and HTML last (the
-   last alternative is the one a client prefers); exactly one recipient address — a CR or LF, a comma, no ``@`` or
+   last alternative is the one a client prefers; the HTML is a ``multipart/related`` with the logo, EMM-031); exactly one recipient address — a CR or LF, a comma, no ``@`` or
    whitespace inside is a ``ValueError``; a non-ASCII display name still makes an ASCII (RFC 2047) header.
 7. Every value an e-mail shows — the username, the instance, the inviter — goes in as one line of plain text (lot E3,
    security review): a control character (Cc: a line feed, a carriage return, a tab, NUL…) or a line or paragraph
@@ -651,10 +651,53 @@ def test_compose_message_writes_every_header_once_and_both_alternatives() -> Non
     assert parsed["X-Auto-Response-Suppress"] == "All"
     assert parsed.get_content_type() == "multipart/alternative"
     parts = list(parsed.iter_parts())
-    assert [part.get_content_type() for part in parts] == ["text/plain", "text/html"]
+    # The HTML alternative is a multipart/related: the HTML itself, then the logo it shows (EMM-031).
+    assert [part.get_content_type() for part in parts] == ["text/plain", "multipart/related"]
     assert _lines(parts[0].get_content()) == _lines(CONTENT.text)
-    assert _lines(parts[1].get_content()) == _lines(CONTENT.html)
+    assert _lines(parts[1].get_body(("html",)).get_content()) == _lines(CONTENT.html)
     print_success("headers once each, text then HTML")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+@pytest.mark.parametrize("kind", ALL_KINDS, ids=str)
+def test_every_email_shows_the_logo_in_its_green_header_as_an_inline_attachment(kind: EmailKind, language: str) -> None:
+    """EMM-031 — the green header of every email carries the LibreFolio logo, as an image attached to the message and named by ``cid:``.
+
+    Gmail blocks a ``data:`` image and a link to the site would need ``LIBREFOLIO_PUBLIC_URL``: the image travels inside the
+    message. It has a text alternative, so the email reads without images; the plain-text part does not mention it.
+    """
+    print_section(f"EMM-031: logo of {kind} in {language}")
+
+    content = _build(kind, language)
+    parsed = _parsed(compose_message(content, to=RECIPIENT, sender=SENDER, now=NOW))
+
+    images = re.findall(r"<img\b[^>]*>", content.html, flags=re.IGNORECASE)
+    assert len(images) == 1, images
+    source = re.search(r"""\bsrc\s*=\s*(["'])(.*?)\1""", images[0], flags=re.IGNORECASE).group(2)
+    alt = re.search(r"""\balt\s*=\s*(["'])(.*?)\1""", images[0], flags=re.IGNORECASE)
+    assert source == f"cid:{messages.LOGO_CONTENT_ID}", "the logo must be an inline attachment: no data: image, no link to the site"
+    assert alt is not None and alt.group(2).strip(), "the logo has no text alternative"
+    assert "cid:" not in content.text
+    related = parsed.get_body(("related",)) or next(part for part in parsed.walk() if part.get_content_type() == "multipart/related")
+    attachments = [part for part in related.iter_parts() if part.get_content_type() == "image/png"]
+    assert len(attachments) == 1
+    logo = attachments[0]
+    assert logo["Content-ID"] == f"<{messages.LOGO_CONTENT_ID}>"
+    assert logo.get_content_disposition() == "inline"
+    data = logo.get_content()
+    assert data.startswith(b"\x89PNG\r\n\x1a\n") and len(data) < 30_000, "a small PNG"
+    print_success("one inline PNG, named by cid:, with an alt text")
+
+
+def test_no_email_part_loads_an_image_from_the_network() -> None:
+    """EMM-032 — the only image of an email is the attached logo: no ``http(s):`` and no ``data:`` source in any layout."""
+    print_section("EMM-032: no remote images")
+
+    for kind in ALL_KINDS:
+        for language in LANGUAGES:
+            sources = re.findall(r"""\bsrc\s*=\s*(["'])(.*?)\1""", _build(kind, language).html, flags=re.IGNORECASE)
+            assert [value for _, value in sources] == [f"cid:{messages.LOGO_CONTENT_ID}"], (kind, language, sources)
+    print_success("only the cid: logo")
 
 
 def test_compose_message_writes_no_reply_to_unless_given() -> None:

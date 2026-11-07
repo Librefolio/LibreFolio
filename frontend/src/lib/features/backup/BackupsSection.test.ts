@@ -296,3 +296,21 @@ describe('BackupsSection — not foldable', () => {
         expectBody(true);
     });
 });
+
+// =====================================================================================================================
+// C9-3 — «Refresh»: the list read again, for the backups made from the command line
+// =====================================================================================================================
+describe('BackupsSection — refresh', () => {
+    it('an open section has «Refresh», which reads the list of kept backups again; a closed one has none', async () => {
+        await mount();
+        const refresh = screen.getByTestId('backups-section-refresh');
+        expect(refresh).toHaveTextContent('backup.list.refresh');
+        await waitFor(() => expect(listInstanceBackups).toHaveBeenCalledTimes(1));
+
+        await fireEvent.click(refresh);
+
+        await waitFor(() => expect(listInstanceBackups, 'one more read of the list').toHaveBeenCalledTimes(2));
+        await fireEvent.click(toggle());
+        expect(screen.queryByTestId('backups-section-refresh')).toBeNull();
+    });
+});

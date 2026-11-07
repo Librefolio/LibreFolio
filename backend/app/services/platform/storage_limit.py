@@ -127,7 +127,7 @@ def judge_restore(limit_mb: int | None, locked: bool, restored_bytes: int, data_
     if not limit_mb:
         return None
     usage = _usage(data_dir)
-    kept = usage.backups_bytes + max(0, usage.other_bytes - storage_usage.folder_bytes(data_dir / ".restore"))
+    kept = usage.backups_bytes + usage.other_bytes
     return judge(limit_mb, usage.data_bytes, kept + max(0, restored_bytes), usage.volume_free_bytes, locked=locked)
 
 

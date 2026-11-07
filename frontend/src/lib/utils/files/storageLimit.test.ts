@@ -24,7 +24,7 @@ const refused = (extra: Record<string, unknown> = {}) => ({isAxiosError: true, r
 
 describe('storageLimitNumbersOf — only a refusal of the space limit with usable numbers', () => {
     it('reads the numbers of a refusal', () => {
-        expect(storageLimitNumbersOf(detail({required_mb: 120, disk_missing_bytes: 5, limit_locked: true}))).toEqual({requiredMb: 120, diskMissingBytes: 5, limitLocked: true});
+        expect(storageLimitNumbersOf(detail({required_mb: 120, disk_missing_bytes: 5, limit_locked: true, limit_mb: 100, required_bytes: 120 * 1024 * 1024}))).toEqual({requiredMb: 120, diskMissingBytes: 5, limitLocked: true, excessBytes: 20 * 1024 * 1024});
     });
 
     it.each([
@@ -40,7 +40,7 @@ describe('storageLimitNumbersOf — only a refusal of the space limit with usabl
     });
 
     it('a missing disk_missing_bytes is 0, a missing limit_locked is false', () => {
-        expect(storageLimitNumbersOf({code: STORAGE_LIMIT_CODE, required_mb: 7})).toEqual({requiredMb: 7, diskMissingBytes: 0, limitLocked: false});
+        expect(storageLimitNumbersOf({code: STORAGE_LIMIT_CODE, required_mb: 7})).toEqual({requiredMb: 7, diskMissingBytes: 0, limitLocked: false, excessBytes: 0});
     });
 
     it('reads an error the way axios carries it, and nothing else', () => {
@@ -53,25 +53,49 @@ describe('storageLimitNumbersOf — only a refusal of the space limit with usabl
 
 describe('storageLimitMessage — what to raise, whom to ask, how much room to free', () => {
     it('an administrator who can raise the limit: the sentence of the raise, the limit written as a size', () => {
-        expect(storageLimitMessage({requiredMb: 120, diskMissingBytes: 0, limitLocked: false}, translate)).toBe('storage.limit.exceeded.raise(required=120.0 [[common.megabytes]],missing=0 [[common.bytes]])');
+        expect(storageLimitMessage({requiredMb: 120, diskMissingBytes: 0, limitLocked: false, excessBytes: 0}, translate)).toBe('storage.limit.exceeded.raise(required=120.0 [[common.megabytes]],missing=0 [[common.bytes]],free=0 [[common.bytes]])');
     });
 
     it('a limit fixed by the hosting provider: the sentence that asks whoever hosts it, never «raise it here»', () => {
-        const message = storageLimitMessage({requiredMb: 120, diskMissingBytes: 0, limitLocked: true}, translate);
+        const message = storageLimitMessage({requiredMb: 120, diskMissingBytes: 0, limitLocked: true, excessBytes: 0}, translate);
         expect(message.startsWith('storage.limit.exceeded.locked(')).toBe(true);
         expect(message).not.toContain('exceeded.raise');
     });
 
     it('the room the disk lacks is added only when it lacks some', () => {
-        const without = storageLimitMessage({requiredMb: 120, diskMissingBytes: 0, limitLocked: false}, translate);
-        const withDisk = storageLimitMessage({requiredMb: 120, diskMissingBytes: 5 * 1024 * 1024, limitLocked: false}, translate);
+        const without = storageLimitMessage({requiredMb: 120, diskMissingBytes: 0, limitLocked: false, excessBytes: 0}, translate);
+        const withDisk = storageLimitMessage({requiredMb: 120, diskMissingBytes: 5 * 1024 * 1024, limitLocked: false, excessBytes: 0}, translate);
         expect(without).not.toContain('exceeded.disk');
         expect(withDisk.startsWith(without.replace('missing=0 [[common.bytes]]', 'missing=5.0 [[common.megabytes]]'))).toBe(true);
-        expect(withDisk).toContain('storage.limit.exceeded.disk(required=120.0 [[common.megabytes]],missing=5.0 [[common.megabytes]])');
+        expect(withDisk).toContain('storage.limit.exceeded.disk(required=120.0 [[common.megabytes]],missing=5.0 [[common.megabytes]],free=0 [[common.bytes]])');
     });
 
     it('of an error: the message of a refusal, null for any other failure', () => {
         expect(storageLimitMessageOfError(refused(), translate)).toContain('storage.limit.exceeded.raise');
         expect(storageLimitMessageOfError(new Error('boom'), translate)).toBeNull();
+    });
+});
+
+describe('C9-1 — the member, and the refusal wrapped by uploadFile', () => {
+    const member = (extra = {}) => ({requiredMb: 120, diskMissingBytes: 5 * 1024 * 1024, limitLocked: false, excessBytes: 20 * 1024 * 1024, ...extra});
+
+    it('a member reads how much to free, never the limit to raise nor the disk', () => {
+        expect(storageLimitMessage(member(), translate, 'member')).toBe('storage.limit.exceeded.member(required=120.0 [[common.megabytes]],missing=5.0 [[common.megabytes]],free=20.0 [[common.megabytes]])');
+    });
+
+    it('a limit the hosting provider fixes reads the same for a member', () => {
+        expect(storageLimitMessage(member({limitLocked: true}), translate, 'member').startsWith('storage.limit.exceeded.locked(')).toBe(true);
+    });
+
+    it('excessBytes: what the action would take past the limit, never negative, 0 without the numbers', () => {
+        expect(storageLimitNumbersOf(detail({limit_mb: 100, required_bytes: 100 * 1024 * 1024 + 7}))?.excessBytes).toBe(7);
+        expect(storageLimitNumbersOf(detail({limit_mb: 100, required_bytes: 10}))?.excessBytes).toBe(0);
+        expect(storageLimitNumbersOf({code: STORAGE_LIMIT_CODE, required_mb: 7})?.excessBytes).toBe(0);
+    });
+
+    it('the numbers are read from the error that wraps the refusal as its cause', () => {
+        const wrapped = new Error('the sentence', {cause: refused({required_mb: 9})});
+        expect(storageLimitNumbersOfError(wrapped)?.requiredMb).toBe(9);
+        expect(storageLimitNumbersOfError(new Error('other', {cause: new Error('deeper')}))).toBeNull();
     });
 });

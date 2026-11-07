@@ -101,6 +101,8 @@ class InstanceStorage(BaseModel):
     volume_free_bytes: int | None = Field(default=None, ge=0)
     limit_mb: int | None = Field(default=None, ge=1)
     limit_locked: bool
+    #: C9-7: a restore under way: the uploaded archive and its opened version, until the restore ends or is discarded.
+    restore_bytes: int = Field(default=0, ge=0)
 
 
 # kind: envelope for a secure backup (.lfbk), whose check needs its password; zip otherwise.
@@ -123,6 +125,31 @@ class RestoreStageRequest(BaseModel):
 
     upload_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     password: SecretStr | None = Field(default=None, max_length=1024)
+
+
+class RestoreFromBackupRequest(BaseModel):
+    """A backup the server keeps, taken as the archive of a restore (C9-9): no download and no upload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
+class RestoreVerifyPasswordRequest(BaseModel):
+    """A password to try against an administrator of the checked backup (C9-8). Never stored, logged or sent back."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=50)
+    password: SecretStr = Field(max_length=1024)
+
+
+class RestoreVerifyPasswordAnswer(BaseModel):
+    """Whether the password is the one this administrator of the backup signs in with after the restore."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    matches: bool
 
 
 # kind cash: the balance of a broker in a currency; kind quantity: the quantity of an asset at a broker. before is
@@ -268,6 +295,9 @@ class RestoreStageReport(BaseModel):
     files: int = Field(ge=0)
     files_size: int = Field(ge=0)
     database_size: int = Field(ge=0)
+    # C9-10: the files split for the bar of the report: the uploaded files and the broker reports.
+    uploads_size: int = Field(default=0, ge=0)
+    broker_reports_size: int = Field(default=0, ge=0)
     instance_key_included: bool
     encrypted: bool
     secrets_rekeyed: int = Field(ge=0)
@@ -333,6 +363,28 @@ class RestoreStage(BaseModel):
     finished_at: datetime | None = None
     error_code: RestoreErrorCode | None = None
     report: RestoreStageReport | None = None
+
+
+class RestoreWaitingCheck(BaseModel):
+    """A check of an archive started from the app that waits for a decision (C9-6): running, or done and its archive still
+    kept. ``expires_at`` and ``restorable`` are null while it runs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage_id: str
+    status: Literal["running", "done"]
+    created_at: datetime
+    finished_at: datetime | None = None
+    expires_at: datetime | None = None
+    restorable: bool | None = None
+
+
+class RestoreWaitingList(BaseModel):
+    """The checks waiting for a decision, the newest first."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[RestoreWaitingCheck]
 
 
 # state: pending (confirmed, waiting for the next start of the server), in_progress (being applied by a start), or the

@@ -7148,11 +7148,11 @@ test.describe('Gallery Screenshots', () => {
                 }
                 await expect(cards.locator('[data-columns]'), 'the card grid has not measured its columns').toHaveAttribute('data-columns', /^\d+$/);
 
-                // Time spent below the peak, drawn, with its ulcer index; the distribution of daily returns, with its VaR threshold.
+                // Time spent below the peak, drawn; the ulcer index is a row of The worst fall (D4); the distribution of daily returns, with its VaR threshold.
                 const underwater = level.getByTestId('risk-l1-underwater');
                 const underwaterChart = underwater.getByTestId('risk-l1-underwater-chart');
                 await waitForChart(underwaterChart, 30_000);
-                await expect(underwater.getByTestId('risk-l1-ulcer')).toBeVisible();
+                await expect(cards.getByTestId('risk-l1-card-worst').getByTestId('risk-l1-ulcer')).toBeVisible();
                 const histogram = level.getByTestId('risk-l1-histogram');
                 await expect(histogram.getByTestId('risk-l1-histogram-bars')).toHaveAttribute('data-bin-count', /^[1-9]\d*$/);
                 await expect(histogram.getByTestId('risk-l1-histogram-cut'), 'the distribution of daily returns has no VaR threshold').toBeVisible();
@@ -7176,7 +7176,7 @@ test.describe('Gallery Screenshots', () => {
                     cards,
                     'currently down': current,
                     'below the peak': underwaterChart,
-                    'ulcer index': underwater.getByTestId('risk-l1-ulcer'),
+                    'ulcer index': cards.getByTestId('risk-l1-ulcer'),
                     distribution: histogram.getByTestId('risk-l1-histogram-bars'),
                     'VaR threshold': histogram.getByTestId('risk-l1-histogram-cut'),
                 });

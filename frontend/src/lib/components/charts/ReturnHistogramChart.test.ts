@@ -117,6 +117,40 @@ describe('ReturnHistogramChart', () => {
         expect(holder.textContent).not.toContain('$');
     });
 
+    // D3 (07/11/2026)
+    it('gives a chart of many bars the room its slider needs, and a chart of few none', async () => {
+        const many = Array.from({length: 40}, (_, index) => ({lowerBound: index, upperBound: index + 1, count: index, holdsCut: false, belowCut: false}));
+        const {unmount} = mount({bins: many});
+        await waitFor(() => expect(charts[0]?.setOptionCalls.length).toBeGreaterThan(0));
+        const host = screen.getByTestId('chart-under-test');
+
+        expect(host.getAttribute('data-has-slider')).toBe('true');
+        expect(host.style.height).toContain('calc(');
+        unmount();
+
+        mount();
+        expect(screen.getByTestId('chart-under-test').getAttribute('data-has-slider')).toBe('false');
+        expect(screen.getByTestId('chart-under-test').style.height).toBe('140px');
+    });
+
+    it('attaches the two-finger pan for a touch screen to the chart, and detaches it with the chart', async () => {
+        const added: string[] = [];
+        const removed: string[] = [];
+        const addSpy = vi.spyOn(HTMLElement.prototype, 'addEventListener').mockImplementation((type: string) => void added.push(type));
+        const removeSpy = vi.spyOn(HTMLElement.prototype, 'removeEventListener').mockImplementation((type: string) => void removed.push(type));
+        try {
+            const {unmount} = mount();
+            await waitFor(() => expect(charts[0]?.setOptionCalls.length).toBeGreaterThan(0));
+            expect(added).toEqual(expect.arrayContaining(['touchstart', 'touchmove', 'touchend']));
+
+            unmount();
+            expect(removed).toEqual(expect.arrayContaining(['touchstart', 'touchmove', 'touchend']));
+        } finally {
+            addSpy.mockRestore();
+            removeSpy.mockRestore();
+        }
+    });
+
     it('writes the heading first and the other lines after it', async () => {
         mount();
         await waitFor(() => expect(charts[0]?.setOptionCalls.length).toBeGreaterThan(0));

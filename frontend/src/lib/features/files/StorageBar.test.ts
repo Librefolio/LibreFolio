@@ -734,3 +734,42 @@ describe('StorageBar — the limit is in a closed «Advanced» panel', () => {
         expect(panel).not.toContainElement(screen.getByTestId('storage-bar-track'));
     });
 });
+
+// =====================================================================================================================
+// C9-1 — «Open the settings» (`/files?storage=limit`) opens the «Advanced» panel of the limit
+// =====================================================================================================================
+describe('StorageBar — opened from «Open the settings»', () => {
+    it('openAdvanced: the panel is open once the bar is drawn; without it, closed', async () => {
+        api.get.mockResolvedValueOnce(LIMIT_USAGE());
+        const StorageBar = await loadBar();
+        render(StorageBar, {props: {openAdvanced: true}});
+        await waitFor(() => expect(bar()).toHaveAttribute('data-state', 'ready'));
+
+        await waitFor(() => expect(screen.getByTestId('storage-advanced')).toHaveAttribute('data-open', 'true'));
+        cleanup();
+
+        await mountReady(LIMIT_USAGE());
+        expect(screen.getByTestId('storage-advanced')).toHaveAttribute('data-open', 'false');
+    });
+});
+
+// =====================================================================================================================
+// C9-4 — over the limit: every part stays, the limit is a tick named «Limit …», what is past it in stripes
+// =====================================================================================================================
+describe('StorageBar — over the limit', () => {
+    it('150 MiB in a 100 MiB limit: both parts drawn, the tick at two thirds named by the limit, the stripes after it', async () => {
+        await mountReady(OVER_USAGE());
+
+        expect(segment('database')).toBeInTheDocument();
+        expect(segment('backups')).toBeInTheDocument();
+        expect(screen.getByTestId('storage-bar-track-marker').getAttribute('style')).toContain('left: 66.67%');
+        expect(screen.getByTestId('storage-bar-track-marker-label')).toHaveTextContent('storage.limit.marker');
+        expect(screen.getByTestId('storage-bar-track-past')).toBeInTheDocument();
+    });
+
+    it('within the limit: no tick', async () => {
+        await mountReady(LIMIT_USAGE());
+
+        expect(screen.queryByTestId('storage-bar-track-marker')).toBeNull();
+    });
+});

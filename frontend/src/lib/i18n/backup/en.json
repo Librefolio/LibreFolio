@@ -100,7 +100,7 @@
         "first_start_failed": "the first start after it did not complete",
         "swap_interrupted": "the start that applied it was interrupted",
         "swap_failed": "its folders could not be moved into place",
-        "stage_missing": "its checked copy was gone",
+        "stage_missing": "its uploaded archive was gone",
         "unknown": "the reason is in the server's log"
       },
       "waiting": {
@@ -152,10 +152,12 @@
           "unknown": "Something in the archive deserves a look: the server's log has the details.",
           "non_iso_currencies": "Some currency codes in the backup are not ISO codes (names or numbers an earlier version saved): an edit of those rows is refused until the code is corrected."
         },
-        "expires": "The checked copy is kept until {date}.",
+        "expires": "The uploaded archive is kept until {date}.",
         "drop": "Drop this archive",
         "ownAccountMissing": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it.",
-        "usersOverLimit": "This backup holds {active} active accounts, but this instance accepts {limit}. The restore goes on; when an administrator signs in, they choose who keeps access, and the others are deactivated, not deleted."
+        "usersOverLimit": "This backup holds {active} active accounts, but this instance accepts {limit}. The restore goes on; when an administrator signs in, they choose who keeps access, and the others are deactivated, not deleted.",
+        "later": "I'll decide later",
+        "partsTitle": "What the backup holds"
       },
       "confirm": {
         "word": "restore",
@@ -243,6 +245,22 @@
         "label": "Password of the backup",
         "submit": "Check the backup",
         "cancel": "Cancel"
+      },
+      "held": {
+        "until": "A restore waits for your decision until {date}.",
+        "running": "An uploaded archive is being checked.",
+        "resume": "Resume",
+        "discard": "Discard"
+      },
+      "spaceNeeded": "While it is checked, this archive takes {size} on the server, plus its opened version, and counts in the space limit until the restore ends or is discarded.",
+      "verify": {
+        "title": "Check a password before you restore",
+        "admin": "Administrator of the backup",
+        "password": "Their password",
+        "button": "Verify",
+        "match": "With this password you will sign in after the restore.",
+        "mismatch": "This is not their password.",
+        "failed": "The password could not be checked: try again."
       }
     },
     "checks": {
@@ -312,7 +330,8 @@
       "actions": {
         "download": "Download",
         "delete": "Delete",
-        "copySha": "Copy SHA-256"
+        "copySha": "Copy SHA-256",
+        "restore": "Restore"
       },
       "deleteConfirm": "Delete this backup from the server? Download it first if you still need it.",
       "sha": {
@@ -322,7 +341,9 @@
       "errors": {
         "load": "The list of backups could not be loaded. Try again."
       },
-      "retry": "Try again"
+      "retry": "Try again",
+      "refresh": "Refresh",
+      "restoreConfirm": "Restore this backup? It will replace the data of every user. LibreFolio checks it first and shows you what would change: nothing changes until you confirm."
     },
     "cleanup": {
       "title": "Automatic clean-up",

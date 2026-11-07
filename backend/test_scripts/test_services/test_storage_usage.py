@@ -60,8 +60,9 @@ FIELDS = [
     "volume_free_bytes",
     "limit_mb",
     "limit_locked",
+    "restore_bytes",
 ]
-PARTS = ["database_bytes", "uploads_bytes", "broker_reports_bytes", "backups_bytes", "other_bytes"]
+PARTS = ["database_bytes", "uploads_bytes", "broker_reports_bytes", "backups_bytes", "other_bytes", "restore_bytes"]
 
 
 def service():
@@ -107,7 +108,9 @@ def a_data_dir(root: Path) -> tuple[Path, dict[str, int]]:
         "uploads_bytes": 300,
         "broker_reports_bytes": 70,
         "backups_bytes": 1010,
-        "other_bytes": 20 + 30 + 40 + 7 + 5,
+        "other_bytes": 20 + 40 + 5,
+        # C9-7: a restore under way is a part of its own, a folder of the same name as another part inside it included.
+        "restore_bytes": 30 + 7,
     }
 
 
@@ -299,7 +302,7 @@ def test_a_volume_that_cannot_be_read_gives_three_nones_and_the_parts_stay(tmp_p
 
 def test_a_missing_data_directory_is_a_measurement_of_zero(tmp_path):
     usage = service().measure_storage(tmp_path / "never-made")
-    assert (*(getattr(usage, name) for name in PARTS), usage.data_bytes) == (0, 0, 0, 0, 0, 0)
+    assert (*(getattr(usage, name) for name in PARTS), usage.data_bytes) == (0,) * (len(PARTS) + 1)
     assert usage.limit_mb is None and usage.limit_locked is False
 
 

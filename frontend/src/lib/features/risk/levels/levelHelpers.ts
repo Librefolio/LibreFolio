@@ -591,6 +591,24 @@ export function buildConcentration(contributionResult: RiskAnalyticResult | null
     return {effectiveNumberOfAssets, diversificationRatio};
 }
 
+/**
+ * What a diversification ratio means in words, for the card's caption (D5, developer's decision of 07/11/2026).
+ *
+ * Two numbers an example needs and the payload does not carry: how far the portfolio's volatility stands below the weighted average of
+ * its holdings' (`1 − 1 / DR`: with `DR = 1.28`, about 22 % below) and the ceiling the ratio can reach with the positions measured
+ * (about `√N`). Both are an illustration of the figure the backend published, never a figure of their own: nothing else reads them,
+ * and the card says what the number MEANS, not how it is computed. They live here, in one place with a test, so the caption's two
+ * sentences cannot disagree; if they ever have to be published numbers, the backend's `concentration` output is where they belong.
+ *
+ * `reduction` is a fraction in `0…1`, `0` at a ratio of 1 or below (no benefit, and a ratio under 1 is a fault, read as none).
+ * `ceiling` is `null` below two positions, where the ratio has nowhere to go.
+ */
+export function diversificationReading(ratio: number, positions: number): {reduction: number; ceiling: number | null} {
+    const reduction = Number.isFinite(ratio) && ratio > 1 ? 1 - 1 / ratio : 0;
+    const ceiling = Number.isFinite(positions) && positions >= 2 ? Math.sqrt(positions) : null;
+    return {reduction, ceiling};
+}
+
 /** The share of the portfolio the risk model does **not** speak for, and what it is made of. */
 export interface UncoveredWeight {
     /** `cash_weight` exactly as published: the whole zero-return residual. */

@@ -93,6 +93,7 @@ import {render, setupI18n, waitFor} from '$test/component';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {addDays} from '$lib/utils/dateOnly';
 import LotWacPriceChart from './LotWacPriceChart.svelte';
+import {valueOnDrawnLine} from './lotWacPriceChartHelpers';
 import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 
@@ -194,6 +195,58 @@ describe('dense steps are the weekly line they always were', () => {
             {timeout: 8_000},
         );
         expect(lines(lastOption()!).some((series) => series.step === 'end')).toBe(false);
+    });
+});
+
+describe('an event marker beyond the daily resolution rests on the drawn line (G7, B9)', () => {
+    // The dense steps of the case above: a plot takes a weekly line, one point per bucket on its last day.
+    const first = '2020-01-01';
+    const days = Array.from({length: 2_400}, (_, index) => addDays(first, index));
+    const dense = {
+        brokerWacHistory: days.map((day, index) => wac(1, day, day, 10 + (index % 5))),
+        cumulativeWacHistory: days.map((day, index) => total(day, day, 10 + (index % 5))),
+        // A price that swings from day to day, so the true price of a day is far from the line drawn through the week's last day.
+        marketPriceHistory: days.map((day, index) => price(day, day, index % 2 === 0 ? 50 : 20)),
+        range: {start: first, end: days[days.length - 1]},
+    };
+    // A Wednesday: inside its week, never on the day the weekly line has a point.
+    const BUY_INDEX = Array.from({length: 7}, (_, offset) => 1_000 + offset).find((index) => new Date(`${days[index]}T00:00:00Z`).getUTCDay() === 3)!;
+    const BUY_DAY = days[BUY_INDEX];
+    const TRUE_PRICE = BUY_INDEX % 2 === 0 ? 50 : 20;
+    const buy = {lot_id: 1, date: BUY_DAY, kind: 'BUY', transaction_id: 7, broker_id: 1, quantity: '10', unit_price: '20', opening_value: '200'};
+
+    async function mountDense(lotEvents: unknown[]) {
+        render(LotWacPriceChart, {props: {...dense, lotEvents, lots: [], brokers: [{id: 1, name: 'Broker One'}], currency: 'EUR', xAxisRange: null} as never});
+        await waitFor(
+            () => {
+                const option = lastOption();
+                expect(option?.series.some((series) => series.type === 'line' && (series.data?.length ?? 0) > 0 && (series.data?.length ?? 0) < 1_000)).toBe(true);
+            },
+            {timeout: 8_000},
+        );
+        return lastOption()!;
+    }
+    const markerOf = (option: DrawnOption) => option.series.find((series) => series.type === 'scatter' && (series.data ?? []).some((datum) => xOf(datum) === BUY_DAY))!;
+    const drawnMarket = (option: DrawnOption) => lines(option).find((series) => (series.data ?? []).some((datum) => yOf(datum) === 50 || yOf(datum) === 20) && (series.data?.length ?? 0) < 1_000)!;
+
+    it('the triangle sits on the line drawn at its date, not on the true price of the day', async () => {
+        const option = await mountDense([buy]);
+        const line = drawnMarket(option).data!.map((datum) => ({date: String(xOf(datum)), value: yOf(datum)}));
+        const triangle = markerOf(option).data![0] as {value: [string, number]};
+        expect(triangle.value[0], 'the marker keeps its true date').toBe(BUY_DAY);
+        expect(
+            line.some((point) => point.date === BUY_DAY),
+            'precondition: the weekly line has no point on the buy day',
+        ).toBe(false);
+        expect(triangle.value[1]).toBeCloseTo(valueOnDrawnLine(line, BUY_DAY) as number, 9);
+        expect(Math.abs(triangle.value[1] - TRUE_PRICE), 'the true price of the day is off the drawn line').toBeGreaterThan(1);
+    });
+
+    it('its tooltip keeps the true date and price of the event', async () => {
+        const option = await mountDense([buy]);
+        const triangle = markerOf(option).data![0] as {meta: {date: string; event: {unit_price: string}}};
+        expect(triangle.meta.date).toBe(BUY_DAY);
+        expect(triangle.meta.event.unit_price).toBe('20');
     });
 });
 

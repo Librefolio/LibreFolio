@@ -422,7 +422,8 @@ describe('SecurityTab — the findings', () => {
             ['email.smtp_encryption', 'warning', say('email.checks.smtpEncryption.plain')],
             ['accounts.openRegistration', 'warning', say('auth.notices.openRegistration')],
             ['platform.log_level', 'info', say('instance.checks.logLevel.verbose', {log_level: 'DEBUG'})],
-            ['email.links', 'info', say('email.checks.links.missing')],
+            // The text names an example for the variable: the address of this page, only a suggestion (developer decision 45).
+            ['email.links', 'info', say('email.checks.links.missing', {example: window.location.origin})],
         ];
         for (const [id, severity, message] of SAID) {
             expect(finding(id), `${id}: its message, with the values of its detail`).toHaveTextContent(message);

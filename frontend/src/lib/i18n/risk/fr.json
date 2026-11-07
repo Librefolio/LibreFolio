@@ -428,8 +428,7 @@
           "worstRealization": "La pire journée",
           "drawdownAtRisk": "Repli à risque ({confidence})",
           "conditionalDrawdownAtRisk": "Moyenne au-delà du seuil",
-          "ulcerIndex": "Indice d'Ulcer {value}",
-          "ulcerIndexHint": "profondeur quadratique moyenne sous le sommet : plus bas, plus calme",
+          "ulcerIndex": "Indice d'Ulcer",
           "worstMonth": "Les 30 pires jours"
         },
         "underwater": {
@@ -464,13 +463,17 @@
         "showLess": "Afficher moins",
         "effectiveAssets": {
           "label": "Combien de paris indépendants ai-je réellement ?",
-          "aboveCount": "Au-dessus des {positions} positions mesurées : l'excédent est de la liquidité, et ne dit rien des poids",
+          "aboveCount": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte ({share} : liquidités et positions sans prix), et ne dit rien des poids",
           "belowCount": "En dessous des {positions} positions mesurées : les poids sont déséquilibrés, et quelques-unes portent le portefeuille",
-          "evenCount": "Égal aux {positions} positions mesurées : poids uniformes et aucune liquidité"
+          "evenCount": "Exactement les {positions} positions mesurées : poids uniformes et rien de non couvert",
+          "name": "Nombre effectif de positions",
+          "aboveCountNoShare": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte (liquidités et positions sans prix), et ne dit rien des poids"
         },
         "diversificationRatio": {
           "label": "Répartir l'argent a-t-il servi à quelque chose ?",
-          "caption": "1,00 signifie que les positions bougent à l'unisson ; plus haut, plus elles se compensent"
+          "scale": "1,00 signifie aucun bénéfice : les positions évoluent à l'unisson ; plus c'est haut, plus elles se compensent.",
+          "example": "À {value}, la volatilité du portefeuille est d'environ {percent} sous la moyenne pondérée de celles des positions.",
+          "ceiling": "Le maximum est d'environ √N : {max} avec {positions} positions."
         },
         "uncovered": {
           "label": "Quelle part de moi n'est pas mesurée ici ?",

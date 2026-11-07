@@ -23,6 +23,7 @@ import {get} from 'svelte/store';
 import {_} from '$lib/i18n';
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {formatDay, formatDayRange} from '$lib/utils/core/formatAxisDate';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import {render, screen, setupI18n, within} from '$test/component';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
@@ -37,7 +38,7 @@ const VAR_BASE = {kind: 'var_cvar', confidence_level: 0.95, horizon_observations
 const RESULTS: RiskAnalyticResult[] = [
     ok('historical_var', {...VAR_BASE, horizon_days: 1}, DAILY_VAR_INSTANCE),
     ok('historical_var', {...VAR_BASE, horizon_days: 30, conditional_value_at_risk: 0.094, worst_horizon: {compounded_return: -0.121, start_date: '2023-11-14', end_date: '2023-12-14'}}, MONTHLY_VAR_INSTANCE),
-    ok('historical_kpi', {worst_realization: -0.038, worst_realization_date: '2023-11-21', drawdown_confidence_level: 0.95, drawdown_at_risk: -0.04, conditional_drawdown_at_risk: -0.06}),
+    ok('historical_kpi', {worst_realization: -0.038, worst_realization_date: '2023-11-21', drawdown_confidence_level: 0.95, drawdown_at_risk: -0.04, conditional_drawdown_at_risk: -0.06, ulcer_index: 0.0179}),
     ok('drawdown_summary', {
         maximum_drawdown: -0.087,
         maximum_drawdown_peak_date: '2023-11-14',
@@ -125,6 +126,28 @@ describe('L1HowMuchItHurts — one shape for every loss card', () => {
         expect(screen.queryByTestId('risk-l1-worst-realization')).toBeNull();
         expect(screen.queryByTestId('risk-l1-period-day')).toBeNull();
         expect(screen.getByTestId('risk-l1-period-worst')).toBeInTheDocument();
+    });
+
+    // D4 (07/11/2026): the ulcer index is a row of the worst fall's card, beside the drawdown at risk; no caption is left under the chart.
+    it('puts the ulcer index in the worst fall’s card, after the two drawdown measures, and nowhere else', () => {
+        mount();
+
+        const row = within(screen.getByTestId('risk-l1-card-worst')).getByTestId('risk-l1-ulcer');
+        expect(row).toBeInTheDocument();
+        expect(screen.getAllByTestId('risk-l1-ulcer'), 'the ulcer index is drawn twice').toHaveLength(1);
+        expect(screen.getByTestId('risk-l1-ulcer-value').textContent).toBe(formatPercent(0.0179, {scale: 100, signed: false, digits: 2}));
+        expect(screen.getByTestId('risk-l1-ulcer-docs')).toBeInTheDocument();
+        const after = (id: string) => screen.getByTestId(id).compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING;
+        expect(after('risk-l1-drawdown-at-risk')).toBeTruthy();
+        expect(after('risk-l1-conditional-drawdown-at-risk')).toBeTruthy();
+        // The chart keeps its title and its curve and no longer carries a caption.
+        expect(within(screen.getByTestId('risk-l1-underwater')).queryByTestId('risk-l1-ulcer')).toBeNull();
+    });
+
+    it('draws no ulcer row when the payload has none', () => {
+        mount([RESULTS[0], RESULTS[1], ok('historical_kpi', {worst_realization: -0.038}), RESULTS[3]]);
+
+        expect(screen.queryByTestId('risk-l1-ulcer')).toBeNull();
     });
 
     it('builds the worst fall’s subtitle from «lived through» and the glossary’s own name for the measure', () => {

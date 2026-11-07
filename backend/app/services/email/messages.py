@@ -4,7 +4,7 @@ Each kind of email has a builder (``build_password_reset``, ``build_password_res
 ``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_change_confirmation``) that returns an ``EmailContent``: a subject, a plain-text part and an
 HTML part, in the language asked for (``email_language``: an unknown one is English). The texts live in
 ``templates/<language>.json``, one file per language with the same keys and the same ``$placeholders``; the HTML layout
-in ``templates/layout.html``. Every value that comes from a person — a user name, the name of the instance, who sent an
+in ``templates/layout.html``, whose green header shows the logo (``templates/logo.png``, attached inline by ``compose_message``). Every value that comes from a person — a user name, the name of the instance, who sent an
 invitation — is escaped in the HTML part, and none goes into a subject. The emails a stranger can have sent to an
 address of their choice (a password reset, an email verification, the notice of an email change) carry no text of
 theirs: their builders take no user name and nothing of a new address (night decision N62). ``compose_message`` adds
@@ -68,6 +68,11 @@ def _load_catalogs() -> dict[str, dict[str, dict[str, str]]]:
 
 _CATALOGS = _load_catalogs()
 _LAYOUT = Template((_TEMPLATES / "layout.html").read_text(encoding="utf-8"))
+
+#: The logo in the green header: a small PNG that travels inside the message as an inline attachment, which the HTML part
+#: names with ``cid:``. A ``data:`` image is blocked by Gmail, and a link to the site would need ``LIBREFOLIO_PUBLIC_URL``.
+LOGO_CONTENT_ID = "librefolio-logo@librefolio.local"
+_LOGO_PNG = (_TEMPLATES / "logo.png").read_bytes()
 
 _PARAGRAPH = '<p style="margin:0 0 16px;">{}</p>'
 _BUTTON = '<p style="margin:24px 0;"><a href="{href}" style="display:inline-block;background-color:#1b4334;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:8px;">{label}</a></p>'
@@ -141,7 +146,7 @@ def _render(
     html_blocks.extend(_PARAGRAPH.format(html.escape(line)) for line in lines_after)
 
     text = "\n\n".join(text_blocks) + f"\n\n-- \n{footer}\n"
-    page = _LAYOUT.substitute(lang=language, subject=html.escape(section[subject_key]), body="\n".join(html_blocks), footer=html.escape(footer))
+    page = _LAYOUT.substitute(lang=language, subject=html.escape(section[subject_key]), body="\n".join(html_blocks), footer=html.escape(footer), logo_cid=LOGO_CONTENT_ID)
     return EmailContent(kind=kind, language=language, subject=section[subject_key], text=text, html=page)
 
 
@@ -261,7 +266,7 @@ def compose_message(
     reply_to: tuple[str, str] | None = None,
     now: datetime | None = None,
 ) -> EmailMessage:
-    """The message to send: ``content`` with its headers, as ``multipart/alternative`` (plain text, then HTML).
+    """The message to send: ``content`` with its headers, as ``multipart/alternative``: the plain text, then the HTML as ``multipart/related`` with the logo it names by ``cid:``.
 
     ``sender`` and ``reply_to`` are ``(display name, address)``. ``Auto-Submitted`` keeps auto-responders from
     answering; the ``Message-ID`` takes the domain of the sender.
@@ -279,6 +284,8 @@ def compose_message(
     message["X-Auto-Response-Suppress"] = "All"
     message.set_content(content.text)
     message.add_alternative(content.html, subtype="html")
+    # The logo the HTML part shows: attached to the HTML part, so a client that shows only the plain text never sees it.
+    message.get_payload()[1].add_related(_LOGO_PNG, "image", "png", cid=f"<{LOGO_CONTENT_ID}>", disposition="inline", filename="librefolio-logo.png")
     # After the body: setting it clears every Content-* header, and making it multipart moves them into the first part.
     message["Content-Language"] = content.language
     return message

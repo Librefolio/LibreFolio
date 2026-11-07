@@ -1747,7 +1747,11 @@ describe('C8 — BackupDownloadCard: a start refused by the space limit', () => 
 
         expect(card()).toHaveAttribute('data-state', 'failed');
         expect(card()).toHaveAttribute('data-error-code', 'storage_limit_exceeded');
-        expect(screen.getByTestId('backup-error')).toHaveTextContent(exactly(sentence));
+        expect(screen.getByTestId('backup-error-message')).toHaveTextContent(exactly(sentence));
         expect(events('backup.failed')).toEqual([{name: 'backup.failed', detail: {code: 'storage_limit_exceeded', what: 'start', job_id: null}, toast: {variant: 'error', message: sentence}}]);
+        // C9-2: «Open the settings» in the banner, to Files › Advanced, unless the hosting provider fixes the limit.
+        const link = screen.queryByTestId('storage-limit-open-settings');
+        if (extra.limit_locked === true) expect(link).toBeNull();
+        else expect(link).toHaveAttribute('href', '/files?storage=limit');
     });
 });

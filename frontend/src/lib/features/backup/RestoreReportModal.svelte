@@ -6,11 +6,15 @@
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {CircleCheck, Database, FileArchive, HardDrive, KeyRound, ShieldAlert, TriangleAlert, Users, X} from 'lucide-svelte';
+    import {CircleCheck, CircleX, Database, FileArchive, HardDrive, KeyRound, LoaderCircle, ShieldAlert, TriangleAlert, Users, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {_} from '$lib/i18n';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {formatBytes} from '$lib/utils/files/upload';
+    import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
+    import LinkedStackedBar from '$lib/components/ui/display/LinkedStackedBar.svelte';
+    import type {LinkedSegment} from '$lib/components/ui/display/linkedStackedBar';
+    import {restoreAdminAvatarUrl} from './backupApi';
     import type {RestoreStageReport} from './backupApi';
     import OwnerChoiceModal, {type OwnerCandidate} from './OwnerChoiceModal.svelte';
     import {confirmationMatches, confirmationWords, pickConfirmationWord} from './restoreFlow.svelte';
@@ -24,12 +28,19 @@
         /** `ownerUserId`: the account the owner chose (B5-1), `null` when the report asks for none. */
         onConfirm: (ownerUserId: number | null) => void;
         onDrop: () => void;
+        /** «I'll decide later» (C9-6): the report closes, its check stays on the server. Without it, no such button. */
+        onLater?: () => void;
+        /** The check this report is of: the avatars of the backup's administrators are read from its copy (C9-10). */
+        stageId?: string | null;
+        /** C9-8: whether a password is the one an administrator of the backup signs in with after the restore. Without it,
+         * no such check. */
+        onVerify?: (username: string, password: string) => Promise<boolean>;
         onClose: () => void;
         /** Where the word is picked: a test fixes it. */
         random?: () => number;
     }
 
-    let {open, report, busy = false, onConfirm, onDrop, onClose, random = Math.random}: Props = $props();
+    let {open, report, busy = false, onConfirm, onDrop, onLater, onClose, stageId = null, onVerify, random = Math.random}: Props = $props();
 
     let typed = $state('');
     // Picked once, when the report opens: the same word while it stays open (a change of language picks in the new list).
@@ -91,6 +102,42 @@
     function refusePasted(event: InputEvent) {
         if (REFUSED_INPUT.has(event.inputType)) event.preventDefault();
     }
+
+    // --- C9-8: a password tried against an administrator of the backup --------------------------------------------------
+    type VerifyState = 'idle' | 'checking' | 'match' | 'mismatch' | 'failed';
+    let verifyUser = $state('');
+    let verifyPassword = $state('');
+    let verifyState = $state<VerifyState>('idle');
+    const canVerify = $derived(onVerify !== undefined && report.administrators.length > 0 && !report.blockers.includes('storage_limit'));
+    $effect(() => {
+        if (verifyUser === '' && report.administrators.length > 0) verifyUser = report.administrators[0];
+    });
+
+    async function verify() {
+        if (onVerify === undefined || verifyUser === '' || verifyPassword === '' || verifyState === 'checking') return;
+        const password = verifyPassword;
+        verifyState = 'checking';
+        try {
+            verifyState = (await onVerify(verifyUser, password)) ? 'match' : 'mismatch';
+        } catch {
+            verifyState = 'failed';
+        }
+    }
+
+    // --- C9-10: the avatars and what the backup holds -----------------------------------------------------------------
+    const brokenAvatars = $state<Record<string, boolean>>({});
+    const partsFill: Record<string, string> = {database: 'bg-lf-brand', uploads: 'bg-lf-info', brokerReports: 'bg-lf-success', dataOther: 'bg-lf-checked'};
+    const parts = $derived.by((): LinkedSegment[] => {
+        const other = Math.max(0, report.files_size - (report.uploads_size ?? 0) - (report.broker_reports_size ?? 0));
+        const sizes: Array<[string, number]> = [
+            ['database', report.database_size],
+            ['uploads', report.uploads_size ?? 0],
+            ['brokerReports', report.broker_reports_size ?? 0],
+            ['dataOther', other],
+        ];
+        const total = sizes.reduce((sum, [, bytes]) => sum + bytes, 0);
+        return sizes.filter(([, bytes]) => bytes > 0).map(([id, bytes]) => ({id, percent: total > 0 ? Math.round((bytes / total) * 10000) / 100 : 0, fill: partsFill[id], attrs: {'data-bytes': bytes}}));
+    });
 </script>
 
 <ModalBase {open} maxWidth="2xl" onRequestClose={onClose} testId="restore-report" labelledBy="restore-report-title" trapFocus restoreFocus>
@@ -129,6 +176,24 @@
 
         <section class="space-y-1 text-sm text-lf-secondary" data-testid="restore-report-tables" data-count={changedTables.length}>
             <p>{$_('backup.restore.report.contents', {values: {files: report.files, filesSize: formatBytes(report.files_size, $_), databaseSize: formatBytes(report.database_size, $_)}})}</p>
+            {#if parts.length > 0}
+                <!-- C9-10: what the backup holds, as the space bar of Files draws the instance. -->
+                <div class="space-y-1 pt-1" data-testid="restore-report-parts">
+                    <p class="text-xs font-medium text-lf-muted">{$_('backup.restore.report.partsTitle')}</p>
+                    <LinkedStackedBar
+                        segments={parts}
+                        barClass="flex h-2.5 w-full overflow-hidden rounded-full border border-lf-subtle bg-lf-field"
+                        legendClass="grid gap-x-4 gap-y-0.5 text-xs text-lf-secondary sm:grid-cols-2"
+                        itemClass="rounded-md px-1 py-0.5"
+                        testIds={{bar: 'restore-report-parts-bar', segment: (id) => `restore-report-part-${id}`, item: (id) => `restore-report-part-legend-${id}`}}
+                    >
+                        {#snippet row(segment)}
+                            <span class="min-w-0 flex-1">{$_(`storage.parts.${segment.id}`)}</span>
+                            <span class="tabular-nums text-lf-primary">{formatBytes(Number(segment.attrs?.['data-bytes'] ?? 0), $_)}</span>
+                        {/snippet}
+                    </LinkedStackedBar>
+                </div>
+            {/if}
             {#if changedTables.length > 0}
                 <p>{$_('backup.restore.report.tablesChanged')}</p>
                 <ul class="list-disc space-y-1 pl-6">
@@ -180,6 +245,62 @@
                     <span>{$_('backup.restore.report.admins', {values: {names: report.administrators.join(', ')}})}</span>
                 </p>
                 <p class="text-lf-secondary">{$_('backup.restore.report.signInAgain')}</p>
+                {#if stageId}
+                    <!-- C9-10: each administrator with the avatar of the backup's copy; the name stays text, for the eye and the screen reader. -->
+                    <ul class="flex flex-wrap gap-2 pt-1" data-testid="restore-report-admin-list">
+                        {#each report.administrators as name (name)}
+                            <li class="inline-flex items-center gap-2 rounded-full border border-lf-subtle bg-lf-panel py-1 pl-1 pr-3 text-sm text-lf-primary" data-testid="restore-report-admin" data-username={name}>
+                                {#if brokenAvatars[name]}
+                                    <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-lf-neutral text-xs font-semibold text-lf-secondary" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+                                {:else}
+                                    <img class="h-6 w-6 rounded-full object-cover" src={restoreAdminAvatarUrl(stageId, name)} alt="" width="24" height="24" onerror={() => (brokenAvatars[name] = true)} data-testid="restore-report-admin-avatar" />
+                                {/if}
+                                <span>{name}</span>
+                            </li>
+                        {/each}
+                    </ul>
+                {/if}
+            </section>
+        {/if}
+
+        {#if canVerify}
+            <!-- C9-8: the password an administrator of the backup signs in with after the restore, tried before confirming. -->
+            <section class="space-y-2 rounded-lg border border-lf-subtle p-3 text-sm" data-testid="restore-verify" data-state={verifyState}>
+                <p class="flex items-center gap-2 font-medium text-lf-primary">
+                    <KeyRound class="shrink-0 text-lf-secondary" size={16} aria-hidden="true" />
+                    {$_('backup.restore.verify.title')}
+                </p>
+                <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                    <label class="space-y-1">
+                        <span class="block text-xs font-medium text-lf-secondary">{$_('backup.restore.verify.admin')}</span>
+                        <select class="w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus" bind:value={verifyUser} onchange={() => (verifyState = 'idle')} data-testid="restore-verify-user">
+                            {#each report.administrators as name (name)}
+                                <option value={name}>{name}</option>
+                            {/each}
+                        </select>
+                    </label>
+                    <div class="space-y-1">
+                        <label class="block text-xs font-medium text-lf-secondary" for="restore-verify-password">{$_('backup.restore.verify.password')}</label>
+                        <PasswordInput neverSaved bind:value={verifyPassword} id="restore-verify-password" name="restore-verify-password" testId="restore-verify-password" on:input={() => (verifyState = 'idle')} />
+                    </div>
+                    <button
+                        class="inline-flex items-center justify-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm font-medium text-lf-primary enabled:hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                        type="button"
+                        disabled={verifyPassword === '' || verifyState === 'checking' || busy}
+                        data-testid="restore-verify-button"
+                        onclick={() => void verify()}
+                    >
+                        {#if verifyState === 'checking'}<LoaderCircle class="animate-spin" size={16} aria-hidden="true" />{/if}
+                        {$_('backup.restore.verify.button')}
+                    </button>
+                </div>
+                {#if verifyState === 'match'}
+                    <p class="flex items-center gap-2 text-lf-success" role="status" data-testid="restore-verify-result" data-result="match"><CircleCheck size={16} aria-hidden="true" />{$_('backup.restore.verify.match')}</p>
+                {:else if verifyState === 'mismatch'}
+                    <p class="flex items-center gap-2 text-lf-danger" role="status" data-testid="restore-verify-result" data-result="mismatch"><CircleX size={16} aria-hidden="true" />{$_('backup.restore.verify.mismatch')}</p>
+                {:else if verifyState === 'failed'}
+                    <p class="flex items-center gap-2 text-lf-danger" role="alert" data-testid="restore-verify-result" data-result="failed"><TriangleAlert size={16} aria-hidden="true" />{$_('backup.restore.verify.failed')}</p>
+                {/if}
             </section>
         {/if}
 
@@ -228,32 +349,37 @@
             </p>
         {/if}
 
-        <p class="text-xs text-lf-muted" data-testid="restore-report-expiry">{$_('backup.restore.report.expires', {values: {date: formatDateTime(report.expires_at)}})}</p>
+        {#if !report.blockers.includes('storage_limit')}
+            <!-- A check refused by the space limit gave its archive's room back at once (C9-5): nothing is kept to expire. -->
+            <p class="text-xs text-lf-muted" data-testid="restore-report-expiry">{$_('backup.restore.report.expires', {values: {date: formatDateTime(report.expires_at)}})}</p>
+        {/if}
 
-        <!-- Always drawn, so that the way to confirm is the same; disabled while the archive cannot be restored. -->
-        <div class="space-y-2 border-t border-lf-subtle pt-4">
-            <p class="flex items-start gap-2 text-sm text-lf-primary">
-                <CircleCheck class={confirmable ? 'mt-0.5 shrink-0 text-lf-success' : 'mt-0.5 shrink-0 text-lf-muted'} size={16} aria-hidden="true" />
-                <span>{$_('backup.restore.confirm.instruction')}</span>
-            </p>
-            <p class="select-none text-center font-mono text-lg font-semibold tracking-widest text-lf-primary" data-testid="restore-confirm-word">{word}</p>
-            <input
-                class="w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
-                type="text"
-                autocomplete="off"
-                spellcheck="false"
-                aria-label={$_('backup.restore.confirm.label')}
-                bind:value={typed}
-                disabled={busy || !confirmable}
-                data-testid="restore-confirm-input"
-                onpaste={refuse}
-                ondrop={refuse}
-                onbeforeinput={refusePasted}
-                onkeydown={(event) => {
-                    if (event.key === 'Enter') confirm();
-                }}
-            />
-        </div>
+        <!-- C9-5: with a blocker nothing can be confirmed: neither the word nor «Restore and restart» is drawn. -->
+        {#if report.blockers.length === 0}
+            <div class="space-y-2 border-t border-lf-subtle pt-4">
+                <p class="flex items-start gap-2 text-sm text-lf-primary">
+                    <CircleCheck class={confirmable ? 'mt-0.5 shrink-0 text-lf-success' : 'mt-0.5 shrink-0 text-lf-muted'} size={16} aria-hidden="true" />
+                    <span>{$_('backup.restore.confirm.instruction')}</span>
+                </p>
+                <p class="select-none text-center font-mono text-lg font-semibold tracking-widest text-lf-primary" data-testid="restore-confirm-word">{word}</p>
+                <input
+                    class="w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                    type="text"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label={$_('backup.restore.confirm.label')}
+                    bind:value={typed}
+                    disabled={busy || !confirmable}
+                    data-testid="restore-confirm-input"
+                    onpaste={refuse}
+                    ondrop={refuse}
+                    onbeforeinput={refusePasted}
+                    onkeydown={(event) => {
+                        if (event.key === 'Enter') confirm();
+                    }}
+                />
+            </div>
+        {/if}
 
         <footer class="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -265,15 +391,28 @@
             >
                 {$_('backup.restore.report.drop')}
             </button>
-            <button
-                class="inline-flex items-center gap-2 rounded-lg bg-lf-danger-solid px-4 py-2 text-sm font-medium text-lf-on-danger-solid enabled:hover:bg-lf-danger-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
-                type="button"
-                disabled={!canConfirm}
-                data-testid="restore-confirm"
-                onclick={confirm}
-            >
-                {$_('backup.restore.confirm.button')}
-            </button>
+            {#if onLater && !report.blockers.includes('storage_limit')}
+                <button
+                    class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary enabled:hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                    type="button"
+                    disabled={busy}
+                    data-testid="restore-later"
+                    onclick={onLater}
+                >
+                    {$_('backup.restore.report.later')}
+                </button>
+            {/if}
+            {#if report.blockers.length === 0}
+                <button
+                    class="inline-flex items-center gap-2 rounded-lg bg-lf-danger-solid px-4 py-2 text-sm font-medium text-lf-on-danger-solid enabled:hover:bg-lf-danger-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                    type="button"
+                    disabled={!canConfirm}
+                    data-testid="restore-confirm"
+                    onclick={confirm}
+                >
+                    {$_('backup.restore.confirm.button')}
+                </button>
+            {/if}
         </footer>
     </div>
 </ModalBase>

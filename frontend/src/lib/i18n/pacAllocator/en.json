@@ -115,7 +115,9 @@
           "stop": "Stop waiting",
           "stopHint": "Stopping only stops the wait: the server may finish anyway, and that answer is discarded.",
           "title": "Calculation in progress",
-          "refreshing": "Reading the copied data again from LibreFolio…"
+          "refreshing": "Reading the copied data again from LibreFolio…",
+          "elapsed": "Waiting {elapsed} s of at most {limit} s",
+          "barLabel": "Time waited"
         },
         "cash": {
           "custody": "Available (custody) {amount}",
@@ -446,19 +448,19 @@
           "assets": {
             "asset": "Asset",
             "buyMid": "Value bought",
-            "finalValue": "Value after the plan",
+            "finalValue": "Final value",
             "residual": "Gap from ideal",
-            "residualHint": "Value after the plan minus ideal value: positive if the Asset ends above its share, negative if below.",
+            "residualHint": "Final value minus ideal value: positive if the Asset ends above its share, negative if below.",
             "targetValue": "Ideal value",
             "totals": "Totals (accounting)",
             "bars": "Target and after",
-            "buyMidHelp": "The value of what the plan buys of this Asset, at the quote price: without fees or price margin. In a PAC, which starts from zero, it equals the value after the plan. What really leaves the cash is in the Operational plan.",
+            "buyMidHelp": "The value of what the plan buys of this Asset, at the quote price: without fees or price margin. In a PAC, which starts from zero, it equals the value at the end of the plan. What really leaves the cash is in the Operational plan.",
             "targetShare": "Target share",
-            "finalShare": "Share after the plan",
+            "finalShare": "Final share",
             "targetShareHelp": "The share you chose for this Asset in the Targets step.",
-            "finalShareHelp": "The share of the Asset in the value of all these Assets after the plan. Compare it with the target share to see how the balance between the Assets changes.",
+            "finalShareHelp": "The share of the Asset in the value of all these Assets at the end of the plan. Compare it with the target share to see how the balance between the Assets changes.",
             "targetValueHelp": "What the Asset would be worth with exactly its target share: target share × base of the targets. In a PAC, which starts from zero, the base is the usable cash.",
-            "finalValueHelp": "What the Asset is worth after the plan: the units the plan buys, at the quote price and, when needed, at the rate of the FX step. In a PAC, which starts from zero, it equals the value bought."
+            "finalValueHelp": "What the Asset is worth at the end of the plan: the units the plan buys, at the quote price and, when needed, at the rate of the FX step. In a PAC, which starts from zero, it equals the value bought."
           },
           "badges": {
             "decimalVerified": "Verified in Decimal",
@@ -526,7 +528,7 @@
             "scaleHelp": "One scale for both maps: the same colour is the same weight. Point at a country, or tap it, to see its two weights.",
             "mapUnavailable": "The map could not be loaded: the weights are listed here.",
             "hairline": "by less than 0.01 points",
-            "help": "How the Assets spread by country, type and sector, according to their declared exposures: the ideal distribution follows your target shares, the actual one the shares after the plan. The charts do not change the plan.",
+            "help": "How the Assets spread by country, type and sector, according to their declared exposures: the ideal distribution follows your target shares, the actual one the shares at the end of the plan. The charts do not change the plan.",
             "ideal": "Ideal distribution",
             "actual": "Actual distribution"
           },
@@ -565,7 +567,7 @@
             "title": "Key figures",
             "help": {
               "fixedReference": "The amount the target percentages apply to: what you already hold of the chosen Assets, plus the cash the plan can reach.",
-              "finalInvested": "The value of the chosen Assets after the plan.",
+              "finalInvested": "The value of the chosen Assets at the end of the plan.",
               "shortfall": "The part of the base that does not end up in the Assets: cash left free, costs and rounding.",
               "explicitCost": "Broker fees, currency exchange spreads and the price margins you set, over the whole plan.",
               "orders": "How many orders the plan asks you to place.",
@@ -617,7 +619,7 @@
               "self_reserved_tax": "Tax reserved by you",
               "sell_fees": "Sale fees"
             },
-            "freeCash": "Cash left free after the plan, in total: {amount}",
+            "freeCash": "Cash left free at the end of the plan, in total: {amount}",
             "hideZero": "Show fewer columns",
             "item": "Broker and currency",
             "showZero": "Show {count, plural, one {# more column} other {# more columns}}",
@@ -631,7 +633,7 @@
               "buy_debit": "The amounts of the orders on this Broker in this currency, fees excluded.",
               "buy_fees": "The Broker fees of those orders.",
               "rounding_delta": "How much of the amounts in this row comes from rounding to the smallest unit of the currency. It is already included in them.",
-              "final_spendable": "What stays in this cash after the plan.",
+              "final_spendable": "What stays in this cash at the end of the plan.",
               "final_physical": "What is left available plus the taxes you set aside.",
               "alwaysZero": "Always 0 in a PAC: it only buys."
             }
@@ -662,7 +664,12 @@
             "fxEstimateHelp": "Enter the {source} amount in the conversion at the Broker. What you receive in {destination} depends on the rate at that moment: the plan uses the rate and spread of the FX step.",
             "autoConversion": "Automatic conversion",
             "autoConversionAmounts": "about {debit} → {credit}",
-            "autoConversionHelp": "You do nothing: the Broker converts when you place the orders in {destination}. It takes about this much from your {source} cash; the exact amount depends on its rate at that moment, while the plan uses the rate and spread of the FX step."
+            "autoConversionHelp": "You do nothing: the Broker converts when you place the orders in {destination}. It takes about this much from your {source} cash; the exact amount depends on its rate at that moment, while the plan uses the rate and spread of the FX step.",
+            "sentence": {
+              "deposit": "Make the deposit “{source}” of {amount} to the Broker “{destination}”",
+              "transfer": "Transfer {amount} from “{source}” to the Broker “{destination}”",
+              "cash": "Use {amount} of the cash available on the Broker “{source}”"
+            }
           },
           "platform": {
             "draftIntact": "The draft is intact.",
@@ -895,11 +902,11 @@
           "intro": "Among all the purchase plans that respect what you set in the previous steps, the strategy picks the best one.",
           "none": "The backend contract offers no strategy: the plan cannot be calculated.",
           "cascadeRule": "Each criterion decides only among the plans still tied on the ones above it.",
-          "l2Help": "Distance from the targets: for each Asset, the difference between its value after the plan and its target share of R, squared, then summed over the Assets. R is what is already invested in these Assets plus the cash you can use. The plan with the lowest sum wins; squaring makes big gaps weigh more. Values at the quote price, without fees or margin.",
+          "l2Help": "Distance from the targets: for each Asset, the difference between its value at the end of the plan and its target share of R, squared, then summed over the Assets. R is what is already invested in these Assets plus the cash you can use. The plan with the lowest sum wins; squaring makes big gaps weigh more. Values at the quote price, without fees or margin.",
           "priorityHelp": "You choose the numbers in the Routing step, for the Assets that more than one Broker can buy, and in the Brokers step, for the cash sources: the lowest wins. All at 0 = no preference.",
           "tieBreakTitle": "Final tie-break",
           "tieBreak": "If a tie is still left, a fixed order of Assets and Brokers decides. A search that ends by itself always gives the same plan for the same data; one stopped by a time or node limit may give a different plan.",
-          "l2Formula": "Distance from the targets:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: value of the Asset after the plan\n• $p_i$: its target\n• $R$: already invested plus usable cash\nThe plan with the lowest sum wins: the square makes big gaps weigh more. At the quote price, without fees or margin."
+          "l2Formula": "Distance from the targets:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: value of the Asset at the end of the plan\n• $p_i$: its target\n• $R$: already invested plus usable cash\nThe plan with the lowest sum wins: the square makes big gaps weigh more. At the quote price, without fees or margin."
         },
         "summary": {
           "assets": "Assets",

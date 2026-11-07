@@ -115,7 +115,9 @@
           "stop": "Interrompi attesa",
           "stopHint": "Interrompere ferma solo l’attesa: il server può comunque terminare, e quella risposta viene scartata.",
           "title": "Calcolo in corso",
-          "refreshing": "Rilettura da LibreFolio dei dati copiati…"
+          "refreshing": "Rilettura da LibreFolio dei dati copiati…",
+          "elapsed": "In attesa da {elapsed} s su un massimo di {limit} s",
+          "barLabel": "Tempo di attesa"
         },
         "cash": {
           "custody": "Disponibile (custodia) {amount}",
@@ -446,19 +448,19 @@
           "assets": {
             "asset": "Asset",
             "buyMid": "Valore comprato",
-            "finalValue": "Valore dopo il piano",
+            "finalValue": "Valore finale",
             "residual": "Scarto dall’ideale",
-            "residualHint": "Valore dopo il piano meno valore ideale: positivo se l’Asset finisce sopra la sua quota, negativo se sotto.",
+            "residualHint": "Valore finale meno valore ideale: positivo se l’Asset finisce sopra la sua quota, negativo se sotto.",
             "targetValue": "Valore ideale",
             "totals": "Totali (contabilità)",
             "bars": "Obiettivo e dopo",
-            "buyMidHelp": "Il valore di ciò che il piano compra di questo Asset, al prezzo di quotazione: senza commissioni né margine sul prezzo. In un PAC, che parte da zero, coincide con il valore dopo il piano. Quanto esce davvero dalla liquidità è nel Piano operativo.",
+            "buyMidHelp": "Il valore di ciò che il piano compra di questo Asset, al prezzo di quotazione: senza commissioni né margine sul prezzo. In un PAC, che parte da zero, coincide con il valore a fine piano. Quanto esce davvero dalla liquidità è nel Piano operativo.",
             "targetShare": "Quota obiettivo",
-            "finalShare": "Quota dopo il piano",
+            "finalShare": "Quota finale",
             "targetShareHelp": "La quota che hai scelto per questo Asset nel passo Obiettivi.",
-            "finalShareHelp": "La quota dell’Asset sul valore di tutti questi Asset dopo il piano. Confrontala con la quota obiettivo per vedere come cambia l’equilibrio fra gli Asset.",
+            "finalShareHelp": "La quota dell’Asset sul valore di tutti questi Asset a fine piano. Confrontala con la quota obiettivo per vedere come cambia l’equilibrio fra gli Asset.",
             "targetValueHelp": "Quanto varrebbe l’Asset con esattamente la sua quota obiettivo: quota obiettivo × base degli obiettivi. In un PAC, che parte da zero, la base è la liquidità utilizzabile.",
-            "finalValueHelp": "Quanto vale l’Asset dopo il piano: le unità che il piano compra, al prezzo di quotazione e, se serve, al tasso del passo FX. In un PAC, che parte da zero, coincide con il valore comprato."
+            "finalValueHelp": "Quanto vale l’Asset a fine piano: le unità che il piano compra, al prezzo di quotazione e, se serve, al tasso del passo FX. In un PAC, che parte da zero, coincide con il valore comprato."
           },
           "badges": {
             "decimalVerified": "Verificato in Decimal",
@@ -526,7 +528,7 @@
             "scaleHelp": "Una sola scala per le due mappe: lo stesso colore è lo stesso peso. Passa su un paese, o toccalo, per vedere i suoi due pesi.",
             "mapUnavailable": "Impossibile caricare la mappa: i pesi sono elencati qui.",
             "hairline": "di meno di 0,01 punti",
-            "help": "Come si distribuiscono gli Asset per paese, tipo e settore, secondo le esposizioni dichiarate: la distribuzione ideale segue le tue quote obiettivo, quella reale le quote dopo il piano. I grafici non cambiano il piano.",
+            "help": "Come si distribuiscono gli Asset per paese, tipo e settore, secondo le esposizioni dichiarate: la distribuzione ideale segue le tue quote obiettivo, quella reale le quote a fine piano. I grafici non cambiano il piano.",
             "ideal": "Distribuzione ideale",
             "actual": "Distribuzione reale"
           },
@@ -565,7 +567,7 @@
             "title": "Cifre chiave",
             "help": {
               "fixedReference": "L’importo a cui si applicano le percentuali obiettivo: quanto già possiedi degli Asset scelti, più la liquidità che il piano può raggiungere.",
-              "finalInvested": "Il valore degli Asset scelti dopo il piano.",
+              "finalInvested": "Il valore degli Asset scelti a fine piano.",
               "shortfall": "La parte della base che non finisce negli Asset: liquidità rimasta libera, costi e arrotondamenti.",
               "explicitCost": "Commissioni dei Broker, spread dei cambi valuta e margini sul prezzo che hai impostato, su tutto il piano.",
               "orders": "Quanti ordini il piano ti chiede di inserire.",
@@ -617,7 +619,7 @@
               "self_reserved_tax": "Imposte accantonate da te",
               "sell_fees": "Commissioni di vendita"
             },
-            "freeCash": "Liquidità rimasta libera dopo il piano, in totale: {amount}",
+            "freeCash": "Liquidità rimasta libera a fine piano, in totale: {amount}",
             "hideZero": "Mostra meno colonne",
             "item": "Broker e valuta",
             "showZero": "Mostra {count, plural, one {# colonna in più} other {# colonne in più}}",
@@ -631,7 +633,7 @@
               "buy_debit": "Gli importi degli ordini su questo Broker in questa valuta, commissioni escluse.",
               "buy_fees": "Le commissioni del Broker su quegli ordini.",
               "rounding_delta": "Quanto degli importi di questa riga viene dall’arrotondamento all’unità minima della valuta. È già compreso in essi.",
-              "final_spendable": "Quanto resta in questa liquidità dopo il piano.",
+              "final_spendable": "Quanto resta in questa liquidità a fine piano.",
               "final_physical": "Quanto resta disponibile più le imposte che hai accantonato.",
               "alwaysZero": "Sempre 0 in un PAC: compra soltanto."
             }
@@ -662,7 +664,12 @@
             "fxEstimateHelp": "Inserisci l’importo in {source} nella conversione presso il Broker. Quanto ricevi in {destination} dipende dal tasso di quel momento: il piano usa tasso e spread del passo FX.",
             "autoConversion": "Conversione automatica",
             "autoConversionAmounts": "circa {debit} → {credit}",
-            "autoConversionHelp": "Non devi fare nulla: il Broker converte quando inserisci gli ordini in {destination}. Dalla tua liquidità in {source} prende circa questo importo; la cifra esatta dipende dal suo tasso in quel momento, mentre il piano usa tasso e spread del passo FX."
+            "autoConversionHelp": "Non devi fare nulla: il Broker converte quando inserisci gli ordini in {destination}. Dalla tua liquidità in {source} prende circa questo importo; la cifra esatta dipende dal suo tasso in quel momento, mentre il piano usa tasso e spread del passo FX.",
+            "sentence": {
+              "deposit": "Esegui il versamento «{source}» di {amount} sul Broker «{destination}»",
+              "transfer": "Trasferisci {amount} da «{source}» al Broker «{destination}»",
+              "cash": "Usa {amount} della liquidità disponibile sul Broker «{source}»"
+            }
           },
           "platform": {
             "draftIntact": "La bozza è intatta.",
@@ -895,11 +902,11 @@
           "intro": "Fra tutti i piani d’acquisto che rispettano quanto hai impostato nei passi precedenti, la strategia sceglie il migliore.",
           "none": "Il contratto del backend non offre alcuna strategia: il piano non può essere calcolato.",
           "cascadeRule": "Ogni criterio decide solo fra i piani rimasti alla pari su quelli sopra.",
-          "l2Help": "Distanza dagli obiettivi: per ogni Asset, la differenza fra il suo valore dopo il piano e la sua quota obiettivo di R, al quadrato, poi sommata su tutti gli Asset. R è quanto è già investito in questi Asset più la liquidità che puoi usare. Vince il piano con la somma più bassa; il quadrato fa pesare di più gli scarti grandi. Valori al prezzo di quotazione, senza commissioni né margine.",
+          "l2Help": "Distanza dagli obiettivi: per ogni Asset, la differenza fra il suo valore a fine piano e la sua quota obiettivo di R, al quadrato, poi sommata su tutti gli Asset. R è quanto è già investito in questi Asset più la liquidità che puoi usare. Vince il piano con la somma più bassa; il quadrato fa pesare di più gli scarti grandi. Valori al prezzo di quotazione, senza commissioni né margine.",
           "priorityHelp": "I numeri li scegli nel passo Route, per gli Asset che più Broker possono comprare, e nel passo Broker, per le fonti di liquidità: vince il più basso. Tutti a 0 = nessuna preferenza.",
           "tieBreakTitle": "Spareggio finale",
           "tieBreak": "Se resta ancora un pareggio, decide un ordine fisso di Asset e Broker. Una ricerca che finisce da sola dà sempre lo stesso piano con gli stessi dati; una fermata da un limite di tempo o di nodi può darne un altro.",
-          "l2Formula": "Distanza dagli obiettivi:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: valore dell’Asset dopo il piano\n• $p_i$: il suo obiettivo\n• $R$: già investito più liquidità utilizzabile\nFra i piani possibili vince quello con la somma più bassa: il quadrato fa pesare di più gli scarti grandi. Al prezzo di quotazione, senza commissioni né margine."
+          "l2Formula": "Distanza dagli obiettivi:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: valore dell’Asset a fine piano\n• $p_i$: il suo obiettivo\n• $R$: già investito più liquidità utilizzabile\nFra i piani possibili vince quello con la somma più bassa: il quadrato fa pesare di più gli scarti grandi. Al prezzo di quotazione, senza commissioni né margine."
         },
         "summary": {
           "assets": "Asset",

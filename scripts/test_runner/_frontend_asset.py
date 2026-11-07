@@ -41,6 +41,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/features/dashboard/allocationTypeEmoji.test.ts",
         "src/lib/features/dashboard/growthLadderAxis.test.ts",
         "src/lib/features/dashboard/growthLadderBuckets.test.ts",
+        "src/lib/features/dashboard/growthIncomeAxis.test.ts",
         "src/lib/features/dashboard/growthStepInputs.test.ts",
         "src/lib/features/dashboard/growthChartSeries.stepped.test.ts",
         "src/lib/features/dashboard/growthChartTooltip.stepped.test.ts",

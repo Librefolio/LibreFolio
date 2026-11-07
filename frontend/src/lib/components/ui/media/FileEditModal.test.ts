@@ -212,3 +212,23 @@ describe('FileEditModal — the file size in the UI language, in a legacy compon
         expect(shownSize(), `en → fr in place — French notation and unit, ${spelled(expectedSize('fr'))}`).toBe(expectedSize('fr'));
     });
 });
+
+describe('FileEditModal — a refusal of the space limit is said in the dialog (C9-1)', () => {
+    it('the upload refused by the space limit: the refusal inside the dialog, which stays open; any other failure as its message', async () => {
+        const refusal = {isAxiosError: true, response: {status: 507, data: {detail: {code: 'storage_limit_exceeded', required_mb: 120, required_bytes: 120 * 1024 * 1024, limit_mb: 100, disk_missing_bytes: 0, limit_locked: false}}}};
+        uploads.uploadFile.mockReset().mockRejectedValueOnce(new Error('the sentence', {cause: refusal}));
+        const file = new File(['%PDF-1.4'], 'statement.pdf', {type: 'application/pdf'});
+        render(FileEditModal, {props: {open: true, file, scope: 'personal'}});
+
+        await fireEvent.click(screen.getByTestId('file-edit-confirm'));
+
+        const box = await screen.findByTestId('storage-limit-refusal');
+        expect(screen.getByTestId('file-edit-modal')).toBeInTheDocument();
+        expect(box).toHaveAttribute('data-limit-locked', 'false');
+
+        uploads.uploadFile.mockRejectedValueOnce(new Error('Disk on fire'));
+        await fireEvent.click(screen.getByTestId('file-edit-confirm'));
+        await waitFor(() => expect(screen.queryByTestId('storage-limit-refusal'), 'another failure is no refusal').toBeNull());
+        expect(screen.getByText('Disk on fire')).toBeInTheDocument();
+    });
+});

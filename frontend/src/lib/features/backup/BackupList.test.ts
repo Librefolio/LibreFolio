@@ -83,6 +83,13 @@ vi.mock('./backupApi', async () => {
 
 vi.mock('$lib/utils/clipboard', () => ({writeTextToClipboard: vi.fn(() => Promise.resolve())}));
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
+// C9-9: «Restore» goes to Settings › Backup, where the restore card takes the request.
+const navigation = vi.hoisted(() => ({goto: vi.fn(() => Promise.resolve())}));
+vi.mock('$app/navigation', () => ({goto: navigation.goto}));
+vi.mock('$app/stores', async () => {
+    const {readable} = await import('svelte/store');
+    return {page: readable({url: new URL('http://localhost/files?tab=backup')})};
+});
 // The table keeps its column preferences under a user-scoped key; the real one reaches the authentication store.
 vi.mock('$lib/utils/storage', () => ({getUserStorageKey: (key: string) => `backup-list-test-${key}`}));
 
@@ -490,5 +497,34 @@ describe('BackupList — a read that fails', () => {
 
         await waitFor(() => expect(list()).toHaveAttribute('data-state', 'ready'));
         expect(rowIds()).toEqual([jobId(1)]);
+    });
+});
+
+// =====================================================================================================================
+// C9-9 — «Restore» on a kept backup: asked first, then handed to the restore card of Settings › Backup
+// =====================================================================================================================
+
+describe('BackupList — restore a kept backup (C9-9)', () => {
+    it('a plain or secure backup offers «Restore»; a sealed one does not', async () => {
+        await mountReady([entry(1), entry(2, {encrypted: true}), entry(3, {sealed: true})]);
+
+        expect(within(await openRowMenu(jobId(1))).getByTestId('context-menu-action-restore')).toHaveTextContent('backup.list.actions.restore');
+        await fireEvent.keyDown(document, {key: 'Escape'});
+        expect(within(await openRowMenu(jobId(3))).queryByTestId('context-menu-action-restore')).toBeNull();
+    });
+
+    it('asked first; confirmed, the request is handed over and the page goes to Settings › Backup', async () => {
+        const {restoreRequest} = await import('./restoreRequest.svelte');
+        restoreRequest.jobId = null;
+        navigation.goto.mockClear();
+        await mountReady([entry(1)]);
+        await fireEvent.click(within(await openRowMenu(jobId(1))).getByTestId('context-menu-action-restore'));
+
+        expect(await screen.findByTestId('confirm-modal-confirm')).toBeInTheDocument();
+        expect(restoreRequest.jobId, 'nothing before the confirmation').toBeNull();
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
+        await waitFor(() => expect(restoreRequest.jobId).toBe(jobId(1)));
+        expect(navigation.goto).toHaveBeenCalledWith('/settings?tab=backup');
     });
 });

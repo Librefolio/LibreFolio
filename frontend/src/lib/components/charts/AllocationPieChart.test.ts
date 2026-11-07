@@ -1020,6 +1020,17 @@ describe('AllocationPieChart — the asset pie: one ring, the asset names as sen
             expect(drawn.tooltipOf(arc)).toContain('Typed');
             expect(drawn.tooltipOf(arc)).toContain('3');
         });
+
+        it('the tooltip shows the icon of the slice, as the type pie does: the type’s while the own icon is unknown, the Liquidity one for the cash', async () => {
+            const drawn = await drawAssetPie(SLICES);
+            const iconOf = (name: string) => {
+                const html = drawn.tooltipOf(drawn.inner.find((entry) => entry.name === name)!);
+                return new DOMParser().parseFromString(html, 'text/html').querySelector('img')?.getAttribute('src') ?? null;
+            };
+            expect(iconOf('Own icon'), 'the own icon is only used once it is known to load').toBe(K.getAssetTypeIconUrl('ETF'));
+            expect(iconOf('Typed')).toBe(K.getAssetTypeIconUrl('BOND'));
+            expect(iconOf(CASH_BUCKET)).toBe(K.getAssetTypeIconUrl('LIQUIDITY'));
+        });
     });
 
     it('ranks 0 to 7 are categoryColor of the sequence’s eight types; the ranks past it are the sequence one shade further, never a repeat', async () => {

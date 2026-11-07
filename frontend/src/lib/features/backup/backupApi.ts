@@ -122,6 +122,8 @@ export interface InstanceStorage {
     volume_free_bytes: number | null;
     limit_mb: number | null;
     limit_locked: boolean;
+    /** C9-7: a restore under way: the uploaded archive and its opened version (0 when there is none). */
+    restore_bytes?: number;
 }
 
 /** The space the instance takes (`GET /backup/instance/storage`, administrators only). */
@@ -245,6 +247,30 @@ const ENVELOPE_MAGIC = [0x4c, 0x46, 0x42, 0x4b];
 export async function isEnvelopeFile(file: Blob): Promise<boolean> {
     const head = new Uint8Array(await file.slice(0, ENVELOPE_MAGIC.length).arrayBuffer());
     return head.length === ENVELOPE_MAGIC.length && ENVELOPE_MAGIC.every((byte, index) => head[index] === byte);
+}
+
+/** Take a backup the server keeps as the archive of a restore (C9-9): no download, no upload; check it as any upload. */
+export function restoreFromKeptBackup(jobId: string): Promise<RestoreUpload> {
+    return zodiosApi.restore_from_kept_backup_api_v1_backup_restore_upload_from_backup_post({job_id: jobId});
+}
+
+/** Whether `password` is the one the administrator `username` of the checked backup signs in with after it (C9-8). */
+export async function verifyRestorePassword(stageId: string, username: string, password: string): Promise<boolean> {
+    const answer = await zodiosApi.verify_restore_password_api_v1_backup_restore_stage__stage_id__verify_password_post({username, password}, {params: {stage_id: stageId}});
+    return answer.matches;
+}
+
+/** The URL of the avatar of an administrator of the checked backup, read from its opened copy (C9-10). */
+export function restoreAdminAvatarUrl(stageId: string, username: string): string {
+    return `/api/v1/backup/restore/stage/${encodeURIComponent(stageId)}/avatar/${encodeURIComponent(username)}`;
+}
+
+/** A check started from the app that waits for a decision (C9-6): running, or done and its archive still kept. */
+export type RestoreWaitingCheck = z.infer<typeof schemas.RestoreWaitingCheck>;
+
+/** The checks waiting for a decision, the newest first: any tab or device of an administrator resumes one. */
+export async function listWaitingRestoreChecks(): Promise<RestoreWaitingCheck[]> {
+    return (await zodiosApi.list_waiting_restore_checks_api_v1_backup_restore_stages_get()).items;
 }
 
 export function getRestoreCheck(stageId: string): Promise<RestoreStage> {

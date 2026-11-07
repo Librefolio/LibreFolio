@@ -379,7 +379,7 @@ describe('EmailSettingsTab — the configuration notices', () => {
         await mount();
 
         const listed = within(screen.getByTestId('email-checks')).getAllByTestId('email-check');
-        expect(listed.map((item) => [item.dataset.checkId, item.dataset.severity, text(item)])).toEqual([['email.smtp_encryption', severity, say(key)]]);
+        expect(listed.map((item) => [item.dataset.checkId, item.dataset.severity, text(within(item).getByTestId('email-check-message'))])).toEqual([['email.smtp_encryption', severity, say(key)]]);
     });
 
     it('lists them in the server’s order, each worded from its own key with its detail as values', async () => {
@@ -389,11 +389,34 @@ describe('EmailSettingsTab — the configuration notices', () => {
         await mount();
 
         const listed = within(screen.getByTestId('email-checks')).getAllByTestId('email-check');
-        expect(listed.map((item) => [item.dataset.checkId, item.dataset.severity, text(item)])).toEqual([
+        expect(listed.map((item) => [item.dataset.checkId, item.dataset.severity, text(within(item).getByTestId('email-check-message'))])).toEqual([
             ['email.future_note', 'info', say('email.checks.futureNote', {count: 2})],
             ['email.smtp_encryption', 'warning', say('email.checks.smtpEncryption.plain')],
             ['email.future_fault', 'error', say('email.checks.futureFault', {variable: 'LIBREFOLIO_SMTP_FROM', code: 550})],
         ]);
+    });
+
+    it.each([
+        {severity: 'info', key: 'email.checks.links.missing'},
+        {severity: 'warning', key: 'email.checks.links.invalid'},
+    ] as const)('the LIBREFOLIO_PUBLIC_URL notice ($key) says what to set, with the address in use as the example, and offers the guide', async ({severity, key}) => {
+        const check: EmailCheck = {check_id: 'email.links', severity, i18n_key: key, detail: {}};
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {checks: [SMTP_OK, ENCRYPTION_OK, check]}));
+        await mount();
+
+        const item = within(screen.getByTestId('email-checks')).getByTestId('email-check');
+        // The example is the address of this page: only a suggestion, nothing is saved (developer decision 45).
+        expect(text(within(item).getByTestId('email-check-message'))).toBe(say(key, {example: window.location.origin}));
+        // The same help the Security tab gives this check: the «Guide» button, to the page of the administrator's guide.
+        expect(within(item).getByTestId('security-guide')).toBeInTheDocument();
+    });
+
+    it('a notice whose check has no page in the guide shows no guide button', async () => {
+        const check: EmailCheck = {check_id: 'email.future_note', severity: 'info', i18n_key: 'email.checks.futureNote', detail: {count: 2}};
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {checks: [SMTP_OK, check]}));
+        await mount();
+
+        expect(within(screen.getByTestId('email-check')).queryByTestId('security-guide')).toBeNull();
     });
 });
 

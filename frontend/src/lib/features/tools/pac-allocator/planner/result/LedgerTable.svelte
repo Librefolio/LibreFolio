@@ -51,7 +51,7 @@
         buy_debit: 'The amounts of the orders on this Broker in this currency, fees excluded.',
         buy_fees: 'The Broker fees of those orders.',
         rounding_delta: 'How much of the amounts in this row comes from rounding to the smallest unit of the currency. It is already included in them.',
-        final_spendable: 'What stays in this cash after the plan.',
+        final_spendable: 'What stays in this cash at the end of the plan.',
         final_physical: 'What is left available plus the taxes you set aside.',
         alwaysZero: 'Always 0 in a PAC: it only buys.',
     };
@@ -88,7 +88,7 @@
                     sortable: false,
                     filterable: false,
                     align: 'right',
-                    minWidth: 110,
+                    minWidth: 150,
                     cell: (row) =>
                         cell(field === 'rounding_delta' ? {type: 'exactMoney', money: {value: row.rounding_delta, currency: row.currency}, digits, testid: `pac-planner-ledger-${field}`} : {type: 'money', amount: row[field], currency: row.currency, digits, testid: `pac-planner-ledger-${field}`}),
                 }),
@@ -125,6 +125,6 @@
         </p>
     {/if}
     <p class="text-sm" data-testid="pac-planner-ledger-free-cash">
-        {$t(`${KEY}.freeCash`, {default: 'Cash left free after the plan, in total: {amount}', values: {amount: formatExactMoneyPlain(accounting.free_cash, {digits})}})}
+        {$t(`${KEY}.freeCash`, {default: 'Cash left free at the end of the plan, in total: {amount}', values: {amount: formatExactMoneyPlain(accounting.free_cash, {digits})}})}
     </p>
 </div>

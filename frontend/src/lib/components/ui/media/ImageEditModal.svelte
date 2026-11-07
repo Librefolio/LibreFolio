@@ -14,6 +14,8 @@
     import {_} from '$lib/i18n';
     import {Eye, EyeOff, Loader2, Lock, RefreshCw, Upload, X} from 'lucide-svelte';
     import {uploadFile} from '$lib/utils/files/upload';
+    import StorageLimitRefusal from '$lib/components/ui/feedback/StorageLimitRefusal.svelte';
+    import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import ImageCropper from './ImageCropper.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/files/imageCrop';
@@ -57,6 +59,8 @@
     let cropper: ImageCropper;
     let isUploading = false;
     let error: string | null = null;
+    /** C9-1: the space limit refused the upload: said here, in the dialog, with what to do. */
+    let refusal: StorageLimitNumbers | null = null;
     let currentPreset: PresetName = preset;
     let hasChanges = false;
     let showCloseConfirm = false;
@@ -156,6 +160,7 @@
         if (imageSrc) URL.revokeObjectURL(imageSrc);
         imageSrc = URL.createObjectURL(f);
         error = null;
+        refusal = null;
     }
 
     function cleanup() {
@@ -164,6 +169,7 @@
             imageSrc = null;
         }
         error = null;
+        refusal = null;
         isUploading = false;
     }
 
@@ -297,6 +303,7 @@
 
         isUploading = true;
         error = null;
+        refusal = null;
 
         try {
             const blob = await getCroppedImageFromCropper(cropperInstance, outputWidth, outputHeight, outputFormat, outputQuality / 100);
@@ -315,6 +322,7 @@
         } catch (err) {
             console.error('Upload failed:', err);
             error = err instanceof Error ? err.message : 'Upload failed';
+            refusal = storageLimitNumbersOfError(err);
             dispatch('error', {message: error});
         } finally {
             isUploading = false;
@@ -454,7 +462,9 @@
                 </div>
             </div>
 
-            {#if error}
+            {#if refusal}
+                <StorageLimitRefusal numbers={refusal} />
+            {:else if error}
                 <div class="error-message">{error}</div>
             {/if}
         </div>

@@ -29,7 +29,7 @@ import type {InstanceStorage} from '$lib/features/backup/backupApi';
 // A literal path would fail the whole file at transform time while the module is missing; a variable path fails each case alone.
 const MODULES = {model: './storageBar'};
 type Segment = {id: string; bytes: number; percent: number};
-type Model = {mode: string; totalBytes: number; segments: Segment[]; usedBytes: number; freeBytes: number; freePercent: number; overLimit: boolean};
+type Model = {mode: string; totalBytes: number; segments: Segment[]; usedBytes: number; freeBytes: number; freePercent: number; overLimit: boolean; limitPercent: number | null};
 const modelOf = async (usage: InstanceStorage): Promise<Model> => {
     const module = await import(/* @vite-ignore */ MODULES.model);
     return module.storageBarModel(usage) as Model;
@@ -171,8 +171,8 @@ describe('storageBarModel — limit mode', () => {
 
 // =====================================================================================================================
 describe('storageBarModel — over the limit', () => {
-    it('data above the limit: overLimit, nothing free, and the bar still adds up to 100 at most (the last part gives way)', async () => {
-        // 150 MiB in a 100 MiB limit: 90 + 60 would be 150 % of the bar.
+    it('data above the limit: overLimit, nothing free, and every part keeps its share: the bar is the data, the limit a tick inside it (C9-4)', async () => {
+        // 150 MiB in a 100 MiB limit: the bar is the 150 MiB, the limit at two thirds of it.
         const model = await modelOf(usage({database: 90 * MiB, backups: 60 * MiB}, {limit_mb: 100}));
 
         expect(model.mode).toBe('limit');
@@ -181,10 +181,11 @@ describe('storageBarModel — over the limit', () => {
         expect(model.freeBytes).toBe(0);
         expect(model.freePercent).toBe(0);
         expect(ids(model)).toEqual(['database', 'backups']);
-        expect(sumOfPercents(model)).toBeLessThanOrEqual(100);
-        expect(model.segments[0].percent).toBe(90);
-        expect(model.segments[1].percent).toBeCloseTo(10, 2);
-        // The bytes are what was measured: only the drawn share is cut.
+        expect(sumOfPercents(model)).toBe(100);
+        expect(model.segments[0].percent).toBe(60);
+        expect(model.segments[1].percent).toBe(40);
+        expect(model.totalBytes, 'the bar is the data').toBe(150 * MiB);
+        expect(model.limitPercent, 'the limit, at two thirds of the bar').toBeCloseTo(66.67, 2);
         expect(model.segments.map((segment) => segment.bytes)).toEqual([90 * MiB, 60 * MiB]);
     });
 
@@ -195,6 +196,7 @@ describe('storageBarModel — over the limit', () => {
         expect(model.freeBytes).toBe(0);
         expect(model.freePercent).toBe(0);
         expect(sumOfPercents(model)).toBe(100);
+        expect(model.limitPercent, 'within the limit: no tick, the bar is the limit').toBeNull();
     });
 
     it('one byte above the limit is over', async () => {
@@ -342,5 +344,16 @@ describe('storageBarModel — rounding and degenerate bars', () => {
         await modelOf(entry);
 
         expect(JSON.stringify(entry)).toBe(before);
+    });
+});
+
+describe('storageBarModel — a restore under way (C9-7)', () => {
+    it('the restore part is drawn after the backups, and only when there is one', async () => {
+        const withRestore = await modelOf(usage({database: 10 * MiB, backups: 10 * MiB}, {restore_bytes: 5 * MiB, data_bytes: 25 * MiB, limit_mb: 100} as Partial<InstanceStorage>));
+        expect(ids(withRestore)).toEqual(['database', 'backups', 'restore']);
+        expect(withRestore.segments.find((segment) => segment.id === 'restore')?.bytes).toBe(5 * MiB);
+
+        const without = await modelOf(usage({database: 10 * MiB}, {limit_mb: 100}));
+        expect(ids(without)).not.toContain('restore');
     });
 });

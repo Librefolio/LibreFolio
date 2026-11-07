@@ -431,9 +431,10 @@ describe('RestoreReportModal — confirm and drop', () => {
         const {onConfirm} = mount(report({blockers: ['no_administrator'], administrators: [], restorable}));
 
         expect(section('restore-report-blocker')).toBeInTheDocument();
-        await type('violet');
-
-        expect(confirmButton()).toBeDisabled();
+        // C9-5: with a blocker nothing can be confirmed: neither the word nor «Restore and restart» is drawn, «Discard» stays.
+        expect(screen.queryByTestId('restore-confirm-input')).toBeNull();
+        expect(screen.queryByTestId('restore-confirm')).toBeNull();
+        expect(screen.getByTestId('restore-drop')).toBeEnabled();
         expect(onConfirm).not.toHaveBeenCalled();
     });
 
@@ -762,11 +763,9 @@ describe('B5-1b — RestoreReportModal: the owner to choose (managed)', () => {
         const {onConfirm} = mount(report({blockers: ['no_administrator'], administrators: [], restorable: false, owner_choice: choice()}));
 
         expect(section('restore-report-blocker')).toBeInTheDocument();
-        expect(field(), 'the field is closed while the archive cannot be restored').toBeDisabled();
-        await type('violet');
-        expect(confirmButton()).toBeDisabled();
-        await fireEvent.click(confirmButton());
-        await fireEvent.keyDown(field(), {key: 'Enter'});
+        // C9-5: the way to confirm is not drawn at all while the archive cannot be restored.
+        expect(screen.queryByTestId('restore-confirm-input')).toBeNull();
+        expect(screen.queryByTestId('restore-confirm')).toBeNull();
 
         expect(screen.queryByTestId('owner-choice-modal'), 'the owner is never asked for an archive that cannot be restored').toBeNull();
         expect(onConfirm).not.toHaveBeenCalled();
@@ -1009,11 +1008,15 @@ describe('C8 — RestoreReportModal: the blocker storage_limit', () => {
         expect(blocker().textContent).toContain('backup.restore.blocker.storage_limit_disk {"missing":"5.0 common.megabytes"}');
     });
 
-    it('confirm stays disabled whatever is typed, even if a report said restorable', async () => {
-        const {onConfirm} = mount(blocked({restorable: true}));
-        await type('violet');
+    it('nothing to confirm, even if a report said restorable: no word, no «Restore and restart», no «decide later»; «Discard» stays, and no expiry is said (C9-5)', async () => {
+        const {onConfirm, onDrop} = mount(blocked({restorable: true}), {onLater: vi.fn()});
 
-        expect(confirmButton()).toBeDisabled();
+        expect(screen.queryByTestId('restore-confirm-input')).toBeNull();
+        expect(screen.queryByTestId('restore-confirm')).toBeNull();
+        expect(screen.queryByTestId('restore-later'), 'its archive is gone: there is nothing to come back to').toBeNull();
+        expect(screen.queryByTestId('restore-report-expiry')).toBeNull();
+        await fireEvent.click(screen.getByTestId('restore-drop'));
+        expect(onDrop).toHaveBeenCalledTimes(1);
         expect(onConfirm).not.toHaveBeenCalled();
     });
 
@@ -1021,5 +1024,94 @@ describe('C8 — RestoreReportModal: the blocker storage_limit', () => {
         mount(report());
 
         expect(screen.queryByTestId('restore-report-blocker')).toBeNull();
+    });
+});
+
+// =====================================================================================================================
+// C9-6 — «I'll decide later»: the report closes, its check stays
+// =====================================================================================================================
+
+describe('C9-6 — RestoreReportModal: decide later', () => {
+    it("a restorable report offers «I'll decide later», which calls onLater; without onLater, no such button", async () => {
+        const onLater = vi.fn();
+        mount(report(), {onLater});
+        await fireEvent.click(screen.getByTestId('restore-later'));
+        expect(onLater).toHaveBeenCalledTimes(1);
+        cleanup();
+
+        mount(report());
+        expect(screen.queryByTestId('restore-later')).toBeNull();
+    });
+});
+
+// =====================================================================================================================
+// C9-8 — a password tried against an administrator of the backup; C9-10 — avatars and what the backup holds
+// =====================================================================================================================
+
+describe('C9-8 — RestoreReportModal: verify a password', () => {
+    async function tryPassword(answer: boolean | Error) {
+        const onVerify = vi.fn(() => (answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer)));
+        mount(report(), {onVerify});
+        const box = screen.getByTestId('restore-verify');
+        expect(within(box).getByTestId('restore-verify-user')).toHaveValue('giulia.bianchi');
+        await fireEvent.change(within(box).getByTestId('restore-verify-user'), {target: {value: 'operator7'}});
+        await fireEvent.input(within(box).getByTestId('restore-verify-password'), {target: {value: 'the-password'}});
+        await fireEvent.click(within(box).getByTestId('restore-verify-button'));
+        await waitFor(() => expect(box).not.toHaveAttribute('data-state', 'checking'));
+        return {onVerify, box};
+    }
+
+    it('a match says the restore will let them in with it; the password and the chosen administrator are what is asked', async () => {
+        const {onVerify, box} = await tryPassword(true);
+        expect(onVerify).toHaveBeenCalledWith('operator7', 'the-password');
+        expect(within(box).getByTestId('restore-verify-result')).toHaveAttribute('data-result', 'match');
+        expect(within(box).getByTestId('restore-verify-result')).toHaveTextContent('backup.restore.verify.match');
+    });
+
+    it('a wrong password says it is not theirs; a failed check says to try again', async () => {
+        const wrong = await tryPassword(false);
+        expect(within(wrong.box).getByTestId('restore-verify-result')).toHaveAttribute('data-result', 'mismatch');
+        cleanup();
+        const failed = await tryPassword(new Error('no answer'));
+        expect(within(failed.box).getByTestId('restore-verify-result')).toHaveAttribute('data-result', 'failed');
+    });
+
+    it('the password field is never one a browser offers to save, and nothing is offered without onVerify or when the copy is gone', () => {
+        mount(report(), {onVerify: vi.fn()});
+        expect(screen.getByTestId('restore-verify-password')).toHaveAttribute('type', 'text');
+        expect(screen.getByTestId('restore-verify-password')).toHaveAttribute('data-masked', 'true');
+        cleanup();
+
+        mount(report());
+        expect(screen.queryByTestId('restore-verify')).toBeNull();
+        cleanup();
+
+        mount(report({blockers: ['storage_limit'], restorable: false, storage_required_bytes: MIB} as Partial<RestoreStageReport>), {onVerify: vi.fn()});
+        expect(screen.queryByTestId('restore-verify'), 'a check refused by the space limit has no copy to ask').toBeNull();
+    });
+});
+
+describe('C9-10 — RestoreReportModal: avatars and what the backup holds', () => {
+    it('each administrator with the avatar of the copy and the name as text; a picture that does not load leaves an initial', async () => {
+        mount(report(), {stageId: 'fedcba9876543210fedcba9876543210'});
+        const admins = screen.getAllByTestId('restore-report-admin');
+        expect(admins.map((li) => li.getAttribute('data-username'))).toEqual(['giulia.bianchi', 'operator7']);
+        const avatar = within(admins[0]).getByTestId('restore-report-admin-avatar');
+        expect(avatar).toHaveAttribute('src', '/api/v1/backup/restore/stage/fedcba9876543210fedcba9876543210/avatar/giulia.bianchi');
+        expect(avatar).toHaveAttribute('alt', '');
+        expect(admins[0]).toHaveTextContent('giulia.bianchi');
+
+        await fireEvent.error(avatar);
+        expect(within(admins[0]).queryByTestId('restore-report-admin-avatar')).toBeNull();
+        expect(admins[0]).toHaveTextContent('G');
+    });
+
+    it('a bar of what the backup holds: the database, the uploads, the reports, the rest of the files', () => {
+        mount(report({database_size: 8 * MIB, files_size: 3 * MIB, uploads_size: 2 * MIB, broker_reports_size: MIB} as Partial<RestoreStageReport>));
+
+        expect(screen.getByTestId('restore-report-parts')).toBeInTheDocument();
+        for (const id of ['database', 'uploads', 'brokerReports']) expect(screen.getByTestId(`restore-report-part-${id}`)).toBeInTheDocument();
+        expect(screen.queryByTestId('restore-report-part-dataOther'), 'no other file: no such part').toBeNull();
+        expect(screen.getByTestId('restore-report-part-legend-uploads')).toHaveTextContent('storage.parts.uploads');
     });
 });

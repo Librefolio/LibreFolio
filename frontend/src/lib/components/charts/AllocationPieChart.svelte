@@ -541,6 +541,12 @@
                 }
                 return `${iconHtml}${escapeHtml(String(translated))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
             }
+            if (mode === 'asset') {
+                // The icon of the slice: the asset's own once it is known to load, else its type's (the cash: Liquidity).
+                const slice = {assetId: params.data?.assetId ?? null, iconUrl: params.data?.iconUrl ?? null, assetType: params.data?.assetType ?? null};
+                const iconHtml = `<img src="${escapeHtml(assetSliceIconUrl(slice, iconProbe.loaded))}" alt="" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
+                return `${iconHtml}${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
+            }
             // Sector: display name already contains the emoji prefix
             return `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
         };

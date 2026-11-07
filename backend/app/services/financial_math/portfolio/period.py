@@ -48,11 +48,13 @@ def period_realized_sales(sales: Sequence[RealizedSale], date_from: date_type | 
 
 @dataclass(frozen=True)
 class DayChange:
-    """How the total P&L moved over the last day: the amount, and that amount as a fraction of the day before's P&L
-    and NAV (``returns.change_ratio``: the change's sign, None on a zero base)."""
+    """How the total P&L moved over the last day: the amount, and that amount as a fraction of the day before's NAV
+    (``returns.change_ratio``: the change's sign, None on a zero base).
+
+    There is no share of the day before's *P&L*: close to zero it explodes (−22.82 % against −1.95 % of the NAV for the same day) and says
+    nothing; the Dashboard shows the share of the NAV only (developer's decision, 07/11/2026)."""
 
     pnl_change: Decimal
-    vs_total_pnl: Decimal | None
     vs_nav: Decimal | None
 
 
@@ -68,7 +70,7 @@ def day_change(daily_states: Sequence[DailyPortfolioState], as_of: date_type) ->
     if end is None or previous is None:
         return None
     change = end.total_pnl - previous.total_pnl
-    return DayChange(pnl_change=change, vs_total_pnl=change_ratio(change, previous.total_pnl), vs_nav=change_ratio(change, previous.nav_value))
+    return DayChange(pnl_change=change, vs_nav=change_ratio(change, previous.nav_value))
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,8 @@
     import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import StorageLimitRefusal from '$lib/components/ui/feedback/StorageLimitRefusal.svelte';
+    import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import FilesTable from '$lib/features/files/FilesTable.svelte';
     import FilePreviewModal from '$lib/features/files/FilePreviewModal.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
@@ -47,6 +49,8 @@
     let files: BrimFile[] = $state([]);
     let loading = $state(true);
     let error: string | null = $state(null);
+    /** C9-1: the space limit refused a report: said here, with what to do, in place of the error line. */
+    let refusal = $state<StorageLimitNumbers | null>(null);
     let uploading = $state(false);
     let showUploader = $state(false);
 
@@ -113,6 +117,7 @@
 
         uploading = true;
         error = null;
+        refusal = null;
 
         // I-bis #22 (Batch 4.d-part2) — break-at-first-error preserves the
         // existing UX (user sees the offending file name, can remove it and
@@ -128,10 +133,17 @@
             const result = await trySave(
                 // Use axios directly - Zodios doesn't handle FormData correctly
                 () => axiosInstance.post(`/api/v1/brokers/import/upload`, formData),
-                {toast: false, fallback: $_('uploads.uploadFailed'), prefix: file.name},
+                {
+                    toast: false,
+                    fallback: $_('uploads.uploadFailed'),
+                    prefix: file.name,
+                    onError: (failure) => {
+                        refusal = storageLimitNumbersOfError(failure);
+                    },
+                },
             );
             if (result.status === 'error') {
-                error = result.message;
+                if (refusal === null) error = result.message;
                 uploading = false;
                 return;
             }
@@ -367,6 +379,9 @@
     {/if}
 
     <!-- Error Message -->
+    {#if refusal}
+        <StorageLimitRefusal numbers={refusal} />
+    {/if}
     <InfoBanner dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
     <!-- Content -->

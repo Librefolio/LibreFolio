@@ -17,20 +17,20 @@ Each block below follows one pattern: what it answers, a screenshot, its tools a
 How much could you lose, and how bad has it already been? Every figure here is something your portfolio really went through in the period; deposits and withdrawals do not count as gains or losses.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="The How much can it hurt? block: the A bad day, Thirty bad days and The worst fall cards, each with its amount, and their detail lines (the worst day and when, the worst 30 days and when, the worst fall's dates and how long it lasted, recovery needed, Drawdown at risk, Average beyond the threshold); then Time spent below the peak with the Ulcer index, and the Distribution of daily returns with the VaR threshold" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="The How much can it hurt? block: the A bad day, Thirty bad days and The worst fall cards, each with its amount, and their detail lines (the worst day and when, the worst 30 days and when, the worst fall's dates and how long it lasted, recovery needed, Drawdown at risk, Average beyond the threshold, Ulcer index); then Time spent below the peak, and the Distribution of daily returns with the VaR threshold" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Tools shown**
 
 - **A bad day**, **Thirty bad days** — your average loss on the worst 5% of days, or of 30-day stretches → [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **VaR threshold** — on *Distribution of daily returns*: the daily loss that only the worst 5% of days went beyond; a dashed line marks it on the chart, and hovering a bar tells how many days fell in it and whether it lies beyond the threshold → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **VaR threshold** — on *Distribution of daily returns*: the daily loss that only the worst 5% of days went beyond; a dashed line marks it on the chart, and hovering a bar tells how many days fell in it and whether it lies beyond the threshold; the wheel or two fingers zoom into the chart, and with many bars a slider appears under it → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
 - **The worst day** — under *A bad day*: the single worst day of the period, and when it was → [Worst Realization](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
 - **The worst 30 days** — under *Thirty bad days*: the worst 30-day stretch the portfolio really went through, and when it was. *Thirty bad days* itself is an average of the worst 5%, which no single stretch ever printed
 - **The worst fall** — the deepest drop from a high to a later low, when it began and ended, and how long it lasted → [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Drawdown at risk** — how far below its peak the portfolio stood, its worst 5% of days aside → [Drawdown at Risk](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Average beyond the threshold** — how far below its peak it stood, on average, on those worst days → [Conditional Drawdown at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
 - **Below the peak, today** — how far below its last high the portfolio stands today → [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Ulcer index** — under *Time spent below the peak*: how deep and how long the falls were; lower is calmer → [Ulcer Index](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
+- **Ulcer index** — under *The worst fall*, beside Drawdown at risk: how deep and how long the falls were; lower is calmer → [Ulcer Index](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **How to read it**
 
@@ -52,8 +52,8 @@ Owning many holdings is not the same as being diversified. This block shows whic
 
 **Tools shown**
 
-- **How many independent bets do I really hold?** — how evenly your money is spread → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
-- **Did spreading the money achieve anything?** — how much your holdings cushion each other → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **How many independent bets do I really hold?** — the effective number of positions: how evenly your money is spread; above the count of positions, the excess comes from the part that is not covered (cash and holdings without prices) → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **Did spreading the money achieve anything?** — how much your holdings cushion each other: 1 means no benefit, higher means more, up to about √N for N positions → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
 - **How much of me is not measured here?** — cash, plus holdings without usable prices → [Data Quality](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
 - **Weight** and **risk contribution** — each holding's share of your money, and of your risk → [Risk Contribution](../../financial-theory/technical-analysis/risk-metrics/risk-contribution.md)
 - **Which of these are the same bet?** — how closely each pair of holdings moves together → [Correlation](../../financial-theory/technical-analysis/risk-metrics/correlation.md)

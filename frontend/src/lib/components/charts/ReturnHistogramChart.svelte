@@ -23,7 +23,8 @@
 
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
     import {buildTooltipTheme, scheduleFirstRenderStabilityFix} from './echartsTooltipHelpers';
-    import {buildReturnHistogramOption, histogramTooltipPosition, type HistogramBin} from './returnHistogramChartHelpers';
+    import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
+    import {buildReturnHistogramOption, histogramTooltipPosition, SLIDER_ROOM_PX, type HistogramBin} from './returnHistogramChartHelpers';
 
     interface Props {
         bins: readonly HistogramBin[];
@@ -43,6 +44,7 @@
 
     let container: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
+    let touchPan: DataZoomTouchPanHandle | null = null;
     let dark = $state(false);
     const resizeWatcher = createResizeWatcher(() => chart?.resize());
 
@@ -65,6 +67,7 @@
             darkObserver.disconnect();
             chartColors.disconnect();
             resizeWatcher.disconnect();
+            touchPan?.dispose();
             chart?.dispose();
         };
     });
@@ -76,6 +79,8 @@
         void tick().then(() => {
             // Going empty removes the canvas host and would leave the instance bound to a detached node.
             if (built.isEmpty || !container) {
+                touchPan?.dispose();
+                touchPan = null;
                 chart?.dispose();
                 chart = null;
                 return;
@@ -90,6 +95,8 @@
             chart = echarts.init(container, CHART_INIT_THEME, chartInitOptions(container));
             attachChartReady(chart, container, testId);
             scheduleFirstRenderStabilityFix(chart, container);
+            // Two fingers move the window on a touch screen; one is left to the page's own scroll (D3, as on the other charts).
+            touchPan = attachDataZoomTouchPan(chart, container);
         }
         resizeWatcher.observe(container);
 
@@ -123,4 +130,4 @@
     }
 </script>
 
-<div bind:this={container} class="w-full" style:height data-testid={testId}></div>
+<div bind:this={container} class="w-full" style:height={built.hasSlider ? `calc(${height} + ${SLIDER_ROOM_PX}px)` : height} data-testid={testId} data-has-slider={built.hasSlider}></div>

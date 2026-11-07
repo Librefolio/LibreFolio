@@ -2023,9 +2023,10 @@ test.describe('Risk analysis functional integration', () => {
         // window it spans because only trading days appear. A chart fed by an
         // interpolation would have some other number here.
         await expect(panel.getByTestId('risk-l1-underwater-chart')).toHaveAttribute('data-point-count', '6');
-        // The ulcer index is the caption of that curve, never a figure on its own:
-        // alone it is a dimensionless number with no reading.
-        await expect(panel.getByTestId('risk-l1-ulcer')).toBeVisible();
+        // The ulcer index is a row of the worst fall's card, beside the drawdown at risk (D4, 07/11/2026), and no longer the
+        // caption of that curve.
+        await expect(panel.getByTestId('risk-l1-card-worst').getByTestId('risk-l1-ulcer')).toBeVisible();
+        await expect(panel.getByTestId('risk-l1-underwater').getByTestId('risk-l1-ulcer')).toHaveCount(0);
 
         await expect(panel.getByTestId('risk-l1-histogram-bars')).toHaveAttribute('data-bin-count', '7');
         await expect(panel.getByTestId('risk-l1-histogram-observations')).toContainText('60');
@@ -2064,6 +2065,19 @@ test.describe('Risk analysis functional integration', () => {
         // The tooltip of a bar (F8, 06/11/2026): the interval typeset by KaTeX, in a box of the chart's own, with the days beneath.
         await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => (element as unknown as {__lfChart: {dispatchAction(action: unknown): void}}).__lfChart.dispatchAction({type: 'showTip', seriesIndex: 0, dataIndex: 2}));
         await expect(histogram.getByTestId('risk-l1-histogram-chart').locator('.katex').first(), 'the interval of the bar is not typeset').toBeVisible();
+        // Zoom (D3, 07/11/2026): the chart takes a zoom window like the others do — seven bars carry no slider, and the window the
+        // chart is given is the one it holds.
+        const zoom = await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => {
+            const chart = (element as unknown as {__lfChart: {dispatchAction(action: unknown): void; getOption(): {dataZoom: {type: string; start: number; end: number}[]}}}).__lfChart;
+            const before = chart.getOption().dataZoom.map((entry) => entry.type);
+            chart.dispatchAction({type: 'dataZoom', start: 10, end: 60});
+            const after = chart.getOption().dataZoom[0];
+            return {before, start: Math.round(after.start), end: Math.round(after.end)};
+        });
+        expect(zoom.before, 'the histogram has no zoom').toContain('inside');
+        expect(zoom.before, 'a slider for seven bars').not.toContain('slider');
+        expect([zoom.start, zoom.end]).toEqual([10, 60]);
+        await expect(histogram.getByTestId('risk-l1-histogram-chart')).toHaveAttribute('data-has-slider', 'false');
 
         // Nothing came back degraded, so nothing is disclosed. The mirror of the
         // two-entry assertion in the unavailable test: without this half, a
@@ -4330,6 +4344,53 @@ test.describe('Risk analysis functional integration', () => {
         expect(narrow.itemOverflow, 'an L2 row is wider than its box at 375 px').toBeLessThanOrEqual(1);
         expect(narrow.pageOverflow, 'the page scrolls sideways at 375 px').toBeLessThanOrEqual(1);
         expect(narrow.itemRight, 'a row leaves the screen at 375 px').toBeLessThanOrEqual(narrow.viewport);
+    });
+
+    /**
+     * D6 (07/11/2026): on a phone, nothing of L2 is cut. Not the cards, not the rows, not the matrix and its two lists: each either fits the
+     * width of the screen or scrolls inside its own box (the matrix does, by design, and says so with `data-overflowing`). Measured on
+     * boxes at 375 px, level and page: a figure that leaves the screen on the right is cut, wherever it leaves from.
+     */
+    test('D6: nothing in L2 is cut at 375 px: every part fits the screen or scrolls inside its own box', async ({page}) => {
+        await page.setViewportSize({width: 375, height: 812});
+        await installRiskMocks(page, {concentration: true});
+        const panel = await openDashboardRisk(page);
+        const level2 = panel.getByTestId('risk-level-2');
+        await expect(level2.getByTestId('risk-correlation-heatmap'), 'the stub draws no matrix').toBeVisible({timeout: 15_000});
+        await expect(level2.locator('[data-testid^="risk-l2-divergence-bar-"]').first()).toBeVisible();
+
+        const cut = await level2.evaluate((section) => {
+            const viewport = window.innerWidth;
+            const offenders: string[] = [];
+            /** A part is inside a scroller when an ancestor below the level scrolls sideways: what it hides is reachable, not cut. */
+            const scrolls = (element: Element) => {
+                for (let node = element.parentElement; node && node !== section.parentElement; node = node.parentElement) {
+                    const style = getComputedStyle(node);
+                    if ((style.overflowX === 'auto' || style.overflowX === 'scroll') && node.scrollWidth > node.clientWidth) return true;
+                }
+                return false;
+            };
+            for (const element of section.querySelectorAll<HTMLElement>('[data-testid]')) {
+                const box = element.getBoundingClientRect();
+                if (box.width === 0 || box.height === 0) continue;
+                if (box.right > viewport + 1 && !scrolls(element)) offenders.push(`${element.dataset.testid} right=${Math.round(box.right)}`);
+            }
+            return {offenders, pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};
+        });
+        expect(cut.offenders, 'a part of L2 leaves the screen on the right and nothing scrolls it').toEqual([]);
+        expect(cut.pageOverflow, 'the page scrolls sideways at 375 px').toBeLessThanOrEqual(1);
+
+        // The matrix: its box fits the screen, and when its squares are wider than it, it scrolls (and says so) rather than shrinking them.
+        const matrix = level2.getByTestId('risk-correlation-heatmap');
+        const geometry = await matrix.evaluate((element) => ({right: Math.round(element.getBoundingClientRect().right), viewport: window.innerWidth, scrollable: element.scrollWidth > element.clientWidth, overflowX: getComputedStyle(element).overflowX}));
+        expect(geometry.right, 'the matrix box leaves the screen').toBeLessThanOrEqual(geometry.viewport);
+        await expect(matrix).toHaveAttribute('data-overflowing', String(geometry.scrollable));
+        // The colour scale under the matrix: inside the box when the matrix fits it (it used to run past the right edge, cut).
+        if (!geometry.scrollable) {
+            const legend = await level2.getByTestId('risk-correlation-legend').evaluate((element) => ({right: Math.round(element.getBoundingClientRect().right), box: Math.round(element.parentElement!.getBoundingClientRect().right)}));
+            expect(legend.right, 'the colour scale under the matrix is cut on the right').toBeLessThanOrEqual(legend.box);
+        }
+        if (geometry.scrollable) expect(['auto', 'scroll'], 'a matrix wider than its box does not scroll').toContain(geometry.overflowX);
     });
 
     /**

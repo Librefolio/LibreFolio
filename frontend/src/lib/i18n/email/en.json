@@ -42,8 +42,8 @@
       },
       "links": {
         "ok": "Emails can carry links: LIBREFOLIO_PUBLIC_URL is set, or email is off.",
-        "missing": "LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out.",
-        "invalid": "LIBREFOLIO_PUBLIC_URL cannot start a link: it needs http:// or https:// and a host name, with no user name, password, ? or #. No email with a link can go out."
+        "missing": "LIBREFOLIO_PUBLIC_URL is not set: no email with a link (forgotten password, invitation, reset) can go out. Set LIBREFOLIO_PUBLIC_URL={example} in your .env, then restart LibreFolio.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL cannot start a link: it needs http:// or https:// and a host name, with no user name, password, ? or #. Set it to an address like {example}, then restart LibreFolio."
       }
     },
     "links": {

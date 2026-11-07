@@ -106,7 +106,8 @@
       "backups": "Backups",
       "dataOther": "Other LibreFolio files",
       "disk": "Other on the disk",
-      "free": "Free"
+      "free": "Free",
+      "restore": "Restore under way"
     },
     "summary": {
       "limit": "{used} of {limit} used",
@@ -116,7 +117,7 @@
     "overLimit": "The space limit is exceeded: delete backups or files, or raise the limit.",
     "limit": {
       "label": "LibreFolio total space (MB)",
-      "hint": "The most space LibreFolio may take in total: database, files, reports and backups. Past it, files, reports and backups made by hand are refused; your data and automatic backups are never stopped. Enter 0 for no limit.",
+      "hint": "The most space LibreFolio may take in total: database, files, reports, backups, and a restore under way (the uploaded archive and its opened version). Past it, files, reports and backups made by hand are refused; your data and automatic backups are never stopped. Enter 0 for no limit.",
       "locked": "The space limit is set by whoever hosts this instance.",
       "save": "Save",
       "saved": "Saved.",
@@ -130,8 +131,11 @@
       "exceeded": {
         "raise": "Not enough space: this would take LibreFolio past its total space limit. Raise the total space to at least {required} in Files › Advanced, or delete files or backups.",
         "locked": "Not enough space: this would take LibreFolio past its total space limit. Ask whoever hosts this instance to raise the limit to at least {required}, or delete files or backups.",
-        "disk": "The disk also needs at least {missing} more free."
-      }
+        "disk": "The disk also needs at least {missing} more free.",
+        "member": "Not enough space: this would take LibreFolio past its total space limit. Free at least {free} by deleting files or reports, or ask an administrator to raise the limit."
+      },
+      "openSettings": "Open the settings",
+      "marker": "Limit {limit}"
     },
     "errors": {
       "load": "The space used could not be loaded. Try again."

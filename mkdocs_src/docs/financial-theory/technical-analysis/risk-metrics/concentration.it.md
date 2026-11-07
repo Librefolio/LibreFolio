@@ -101,7 +101,7 @@ Ciò è difendibile — la liquidità è davvero una posizione non concentrata, 
 
 Leggere i due valori come una coppia, in questo ordine:
 
-1. **Asset effettivi rispetto al numero effettivo di posizioni.** La direzione dello scarto ne seleziona il significato: **al di sotto** del conteggio, i pesi sono sbilanciati e poche posizioni reggono il portafoglio a prescindere da quante righe abbia; **al di sopra**, l'eccesso è liquidità, e non dice nulla su come sono distribuiti i pesi.
+1. **Asset effettivi rispetto al numero effettivo di posizioni.** La direzione dello scarto ne seleziona il significato: **al di sotto** del conteggio, i pesi sono sbilanciati e poche posizioni reggono il portafoglio a prescindere da quante righe abbia; **al di sopra**, l'eccesso viene dalla parte che i pesi non coprono — liquidità e posizioni senza una serie di prezzi utilizzabile, non la sola liquidità — e non dice nulla su come sono distribuiti i pesi.
 2. **Rapporto di diversificazione.** Un valore vicino a 1 significa che le posizioni si muovono come un'unica posizione, e che la distribuzione ha fruttato poco. Quanto più è sopra 1, tanto più le posizioni si compensano a vicenda.
 
 Il secondo valore è quello che può contraddire il primo, ed è la contraddizione a portare l'informazione. Un portafoglio può essere perfettamente bilanciato nei pesi e non diversificato nella sostanza — è il risultato ordinario del detenere diversi fondi che replicano mercati sovrapposti.

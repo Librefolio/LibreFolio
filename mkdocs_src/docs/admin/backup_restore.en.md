@@ -127,6 +127,8 @@ backups/librefolio-backup-20261015-121500-ui-1a2b3c4d/librefolio-backup-20261015
 
 The archive inside keeps its usual name, `.zip`, `.lfbk` or `.tar`. `backups/.jobs/` holds only a backup in progress or one that failed, which goes after an hour.
 
+**Refresh**, at the top of the list of backups, reads it again: a backup made from the command line shows only then.
+
 **Settings › Administration › Backup**, under *Backups on this server*, lists every backup kept. **Files**, in its **Backups** tab, shows the same list; only administrators see either. For each backup it gives:
 
 - 📅 the date and time it was made, and where it came from: the app or the command line;
@@ -165,7 +167,8 @@ Kept backups pile up, and they live on the disk of your data. In the closed **Au
 | **Uploaded files** | The files uploaded in the app, such as those of the **Files** page |
 | **Broker reports** | The statements uploaded to import transactions |
 | **Backups** | Everything in `backups/`: the [backups kept on the server](#kept-backups), a backup in progress and a failed one |
-| **Other LibreFolio files** | The rest of the data directory: logs, the work folder of a restore and the like |
+| **Restore under way** | A [restore](#restore) not ended or discarded yet: the uploaded archive and its opened version |
+| **Other LibreFolio files** | The rest of the data directory: logs, state and the like |
 
 The bar has three looks, depending on whether a limit is set and whether the disk is known:
 
@@ -176,7 +179,8 @@ The bar has three looks, depending on whether a limit is set and whether the dis
 **Set the limit** in the closed **Advanced** panel under the same bar, in the **LibreFolio total space (MB)** field: a whole number of megabytes, `0` for no limit, then **Save**; a green notice confirms it. It is the most space LibreFolio may take in all. It is also the *Space limit* [global setting](settings.md), which is not shown in the Administration tab: this field is the place to change it.
 
 - 🚧 **Past the limit**, LibreFolio refuses what would add data: an uploaded file, a broker report, a backup you start by hand (after trying the [automatic clean-up](#backup-cleanup) first) and a [restore](#restore) whose result would pass it. The message says to raise the total space to at least a size and, when the disk itself lacks the room, how much more it needs free. Never stopped: your transactions, prices and database, the backups of a hosting panel and of the command line (the clean-up follows them), and an existing restore already confirmed. The limit deletes nothing by itself.
-- ⚠️ **Over the limit**, the bar warns that the limit is exceeded and suggests deleting backups or files, or raising the limit.
+- ⚠️ **Over the limit**, the bar warns that the limit is exceeded and suggests deleting backups or files, or raising the limit. The bar is then your data, so that no part is left out: a tick named *Limit 20 MB* shows where the limit falls, and red stripes after it show how far past it you are.
+- 💬 **A refusal is said where you are**: in the upload or import window, or on the backup card. An administrator gets **Open the settings**, which opens **Files** with the **Advanced** panel open; a user reads how much to free, or to ask an administrator. With a limit set by whoever hosts the instance, the message says to ask them.
 - 🔒 **Set in the server's configuration**: when `LIBREFOLIO_STORAGE_LIMIT_MB` is set, its value is the limit, the field is greyed out and a note says it is set by whoever hosts the instance. See [Environment Variables](configuration.md). A value LibreFolio cannot use, one that is not a whole number, is ignored, and the field works as above.
 - 🧹 **The clean-up and the bar work together.** Backups are usually the part that grows: the [automatic clean-up](#backup-cleanup) keeps them in check, and every backup you delete in **Settings › Administration › Backup** or in **Files › Backups** shortens **Backups** in the bar. When you are near the limit, start there.
 
@@ -288,23 +292,25 @@ A restore replaces the data of the installation with the archive's: the database
 ### 🖱️ Restore from Settings › Administration › Backup {: #restore-settings }
 
 1. **Choose the archive.** In **Settings › Administration › Backup**, under **Back up the instance**, the card **Restore an archive** reminds you that a restore replaces the data of every user: if you may want the current data back, [make a backup](#settings-backup) first. Click **Choose an archive…** and pick a backup archive made by LibreFolio here or on another installation: a `.zip`, or a secure `.lfbk`. A `.zip` is sent to the server at once, with a progress bar: **Stop sending** stops it, and nothing is kept.
+    Or take a backup the server keeps: **Restore** on its row in the list of [backups kept on the server](#kept-backups), here or in **Files › Backups**, asks first, then the server takes that backup as the archive, with no download and no upload, and the card goes on from the next step. A sealed backup of a hosting panel opens only with its recipients' private key: it is not restored here.
 2. **Type its password**, for a secure backup. The card asks for it before anything is sent: *A secure backup: type the password it was made with.* Type it in **Password of the backup** and click **Check the backup**: the archive is sent, with the same progress bar, and the password goes with the request that starts the check, which tries it at once. A wrong password brings the form back, with *Wrong password, or the file was changed: type the password again.* The archive stays on the server, and the next try does not send it again. **Cancel** forgets the file.
 3. **Let it be checked.** The server checks the archive on a copy, as `backup restore --dry-run` does ([Check a Backup](#check)): *Decrypting the backup*, for a secure backup only, *Checking the archive*, *Unpacking it on a copy*, *Updating the copy's database*, *Verifying the copy*. Nothing changes until you confirm. **Stop the check** drops it: a check still running is dropped as soon as it ends.
 4. **Read the report.** It opens in a window, **What this restore would do**; once closed, **Read the report** opens it again. It gives:
     - who made the archive, with which version of LibreFolio, and when;
     - its database: at the version of this LibreFolio, or brought to it on the copy, with the migrations listed, and the fixes applied to the copy;
-    - the files and their size, the size of the database, and the tables whose rows the update changed;
+    - the files and their size, the size of the database, and the tables whose rows the update changed; and a bar of what the backup holds: the database, the uploaded files, the broker reports and the other files;
     - whether the backup carries the key of the instance it comes from: either way, this LibreFolio keeps its own;
     - the saved keys of the data providers: how many are re-encrypted with this LibreFolio's key, such as *2 saved keys of data providers are re-encrypted with this instance's key.*, and how many it cannot read, to enter again after the restore, such as *1 saved key of a data provider cannot be read with this instance's key: enter it again after the restore.* ([What Follows](#what-follows));
     - the ledger totals: the same as when the backup was made, different on the lines listed ([how to read them](backup_moving.md#check-refused)), not recorded, recorded by another version of the method, or unreadable;
     - the administrators of the backup, with *After the restore you sign in with one of them, with the password of then; every session open now ends.*
+    - each administrator with the picture of their account in the backup, and **Check a password before you restore**: choose one, type their password and click **Verify**: *With this password you will sign in after the restore.*, or *This is not their password.* The password is checked against the backup only, and never kept, written to the log or sent back;
     - *Invitations and links sent before the restore will have expired: send them again if needed.*
-    - the warnings, which let the restore go on, and the blocker, which forbids it: a backup without an active administrator;
-    - until when the checked copy is kept: 24 hours after the check.
+    - the warnings, which let the restore go on, and the blockers, which forbid it: a backup without an active administrator, and a restore that would pass the [space limit](#space-used), with the size to raise it to; such a check gives its room back at once, and its report stays on screen until you close it;
+    - until when the uploaded archive is kept: 24 hours after the check.
 
-    **Drop this archive** drops the check and its copy: nothing is restored.
+    **Drop this archive** drops the check and its copy: nothing is restored. **I'll decide later** closes the window and keeps the check: the card then reads *A restore waits for your decision until …*, with **Resume**, which opens the same report again, and **Discard**, from any tab or device of an administrator.
 
-5. **Type the word.** The window shows a word picked at random, a real word of 6 to 10 letters in the language of the interface. Type it by hand in the field below it: the field refuses pasted and dropped text. The word guards against a hasty click, not against an administrator: the API and the command line do without it. For an archive that cannot be restored, the field and the button stay disabled.
+5. **Type the word.** The window shows a word picked at random, a real word of 6 to 10 letters in the language of the interface. Type it by hand in the field below it: the field refuses pasted and dropped text. The word guards against a hasty click, not against an administrator: the API and the command line do without it. For an archive that cannot be restored, neither the word nor **Restore and restart** is shown: only the button that drops it.
 6. **Restore and restart.** Once the word is typed, **Restore and restart** confirms the restore and stops LibreFolio at once, for everyone. A window covers the page, **LibreFolio is restarting**: *Its start applies the restore. This page waits for it to come back.* LibreFolio does not start itself again: whatever supervises it does ([Who Starts LibreFolio Again](#supervisors)), and that start applies the restore ([What the Next Start Does](#next-start)).
 
 Once LibreFolio answers again, the page shows how it went:
@@ -328,7 +334,8 @@ Good to know:
 - 📏 When the installation limits the size of the archives, the card says so, such as *Archives up to 500 MB.*, and refuses a larger file before sending anything. The limit is `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, in megabytes of 1024 × 1024 bytes: none by default on your own installation ([The Upload Limit of a Restore](#restore-upload-limit)).
 - 💽 The disk of the data directory needs room for the archive and, while it is checked, for its copy, and for a secure backup for its decrypted archive too: [Check a Backup](#check) says how much.
 - 🔑 The password of a secure backup goes to the server only with the request that starts the check, which tries it at once: it is never stored, written to the log or sent back. The field empties as soon as you submit it.
-- 🔄 A reload of the page, in the same tab, keeps following the check and its report. The checked copy is kept 24 hours: after that, the confirmation answers *The check is too old: check the archive again.*
+- 📦 While it is checked, the archive takes its own size on the server, which the card says while it goes up, and its opened version; both count in the space limit until the restore ends or is discarded.
+- 🔄 A reload of the page keeps following the check and its report, and any other tab or device of an administrator resumes it from the card. The uploaded archive is kept 24 hours: after that, the confirmation answers *The check is too old: check the archive again.*
 - 🚪 The restore ends every session, everyone signs in again with an account of the backup, and the links sent before it stop working: see [What the Next Start Does](#next-start).
 - ❌ A refused upload, check or confirmation, or a server that does not answer, shows on the card with the reason. **Try again** reads the state of the restore again; to send an archive again, choose it again with **Choose an archive…**. The check refuses the same archives as the command line: see [The Check Refuses the Archive](backup_moving.md#check-refused).
 - 🖥️ With nothing that starts LibreFolio again, such as a host installation started by hand, [start the server](cli_tools.md#start-the-server) yourself once it has stopped: the page waits for it.

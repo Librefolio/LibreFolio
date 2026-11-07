@@ -268,7 +268,7 @@ async function chooseCurrency(scope: Locator, testId: string, code: string): Pro
 }
 
 /**
- * Tick one owned Broker in a copy dialog (BrokerScopeCopyDialog.svelte) and copy it. The dialog reads the snapshot of every
+ * Press one owned Broker's tile in a copy dialog (BrokerScopeCopyDialog.svelte) and copy it. The dialog reads the snapshot of every
  * Broker the admin owns first; the row must be selectable — owned — and, for liquidity, list `currency` among its cash.
  */
 async function copyFromBroker(page: Page, kind: 'liquidity' | 'broker', brokerId: number, currency?: string): Promise<void> {
@@ -285,7 +285,9 @@ async function copyFromBroker(page: Page, kind: 'liquidity' | 'broker', brokerId
         const cashRows = row.getByTestId(`${testid}-cash`).locator(`:scope > [data-currency="${currency}"]`);
         await expect(cashRows, `Broker ${brokerId} holds no ${currency} cash: check populate_mock_data.py`).not.toHaveCount(0);
     }
-    await row.getByTestId(`${testid}-check`).check();
+    // A Broker is a tile pressed to choose it (P2), not a tick box.
+    await row.getByTestId(`${testid}-check`).click();
+    await expect(row.getByTestId(`${testid}-check`)).toHaveAttribute('aria-pressed', 'true');
     await expect(row).toHaveAttribute('data-selected', 'true');
     await dialog.getByTestId(`${testid}-apply`).click();
     await expect(dialog).toHaveCount(0);

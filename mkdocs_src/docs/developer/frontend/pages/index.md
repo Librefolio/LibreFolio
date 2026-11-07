@@ -118,11 +118,12 @@ frontend/src/routes/
       `cash_from_contributed_capital` / `cash_from_generated_returns`
     - the day-change lines read `pnl_change_1d`: the Total P&L's change from the calendar day
       before the valuation date (`date_to`, else today) to it, from the engine's daily states;
-      null for a portfolio born on the valuation date. Card 1 shows it with its share
-      `pnl_change_1d_vs_total_pnl_percent`, Card 2 only the share `pnl_change_1d_vs_nav_percent`:
-      fractions of the day before's `|total_pnl|` and `|nav_value|`, with the change's sign, null
-      on a zero base. A null change drops Card 1's line, a null share its percentage (on Card 2,
-      the whole line); neither line is derived from `history`
+      null for a portfolio born on the valuation date. Card 1 shows it as «amount (share)», the share
+      being `pnl_change_1d_vs_nav_percent`: a fraction of the day before's `|nav_value|`, with the
+      change's sign, null on a zero base; its tooltip says «versus yesterday's portfolio value».
+      Card 2 repeats nothing of it, and there is no share of the day before's total P&L (it exploded
+      near zero; the field was removed on 07/11/2026). A null change drops Card 1's line, a null share
+      its percentage; the line is not derived from `history`
     - the timing effect reads `timing_effect_percent`, the backend's
       `mwrr_cumulative_percent − twrr_percent` (null when either is missing), shown ×100 in pp:
       `—` with no label when null, labelled neutral below 0.05 pp; its colour intensity saturates

@@ -28,7 +28,8 @@
     import BackupsSection from '$lib/features/backup/BackupsSection.svelte';
     import StorageBar from '$lib/features/files/StorageBar.svelte';
     import {notifyBackupListChanged} from '$lib/features/backup/backupList.svelte';
-    import {storageLimitMessageOfError} from '$lib/utils/files/storageLimit';
+    import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
+    import StorageLimitRefusal from '$lib/components/ui/feedback/StorageLimitRefusal.svelte';
     import {formatBytes, setUploadScope, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
@@ -109,6 +110,11 @@
     let loading = true;
     let error: string | null = null;
     let showUploader = false;
+    /** C9-1: the space limit refused an upload: said inside the uploader, or the report dialog, where the user is. */
+    let uploadRefusal: StorageLimitNumbers | null = null;
+    let brimRefusal: StorageLimitNumbers | null = null;
+    // C9-1: `?storage=limit` (an «Open the settings» link) opens the «Advanced» panel of the space bar.
+    $: storageLimitOpen = $page.url.searchParams.get('storage') === 'limit';
     let pendingStaticFiles: globalThis.File[] = []; // Track files in static uploader
 
     // View mode with localStorage persistence (default: list/table)
@@ -365,6 +371,7 @@
 
     async function handleUpload(event: CustomEvent<{files: globalThis.File[]}>) {
         const {files} = event.detail;
+        uploadRefusal = null;
 
         try {
             // Upload ALL files directly (user should use Edit button to crop before upload)
@@ -380,9 +387,11 @@
             // No toast: the new rows appear in the list, which is the confirmation.
             notify({name: 'file.uploaded', detail: {count: files.length}});
         } catch (e) {
-            error = e instanceof Error ? e.message : 'Upload failed';
-            // No toast: `error` is rendered in the page.
-            notify({name: 'file.upload.failed', detail: {reason: error}});
+            uploadRefusal = storageLimitNumbersOfError(e);
+            const reason = e instanceof Error ? e.message : 'Upload failed';
+            // No toast: a refusal of the space limit is said in the uploader; any other error in the page.
+            if (uploadRefusal === null) error = reason;
+            notify({name: 'file.upload.failed', detail: {reason}});
         }
     }
 
@@ -529,6 +538,7 @@
 
     async function confirmBrimUpload() {
         if (!canConfirmBrimUpload()) return;
+        brimRefusal = null;
 
         try {
             // Collect broker IDs used in upload
@@ -554,12 +564,14 @@
             closeBrimUploadModal();
             await reloadFiles('files-reload');
         } catch (e) {
-            // The space limit refused a report (C8): said in the interface's words, with what to raise.
-            error = storageLimitMessageOfError(e) ?? (e instanceof Error ? e.message : 'Upload failed');
+            // The space limit refused a report: said in the dialog, with what to do (C9-1); any other error in the page.
+            brimRefusal = storageLimitNumbersOfError(e);
+            if (brimRefusal === null) error = e instanceof Error ? e.message : 'Upload failed';
         }
     }
 
     function closeBrimUploadModal() {
+        brimRefusal = null;
         showBrimUploadModal = false;
         showBrimUploader = false;
         pendingBrimFiles = [];
@@ -808,7 +820,7 @@
 
     <!-- The space the instance takes (administrators), whatever the tab -->
     {#if isAdmin}
-        <StorageBar />
+        <StorageBar openAdvanced={storageLimitOpen} />
     {/if}
 
     <!-- Tabs -->
@@ -838,6 +850,9 @@
     <!-- Upload area (static only) -->
     {#if showUploader && activeTab === 'static'}
         <div class="upload-area">
+            {#if uploadRefusal}
+                <StorageLimitRefusal numbers={uploadRefusal} />
+            {/if}
             <FileUploader bind:this={fileUploaderRef} on:upload={handleUpload} on:change={handleStaticFileChange} on:editImage={handleEditImage} on:editFile={handleEditFile} on:error={(e: CustomEvent<{message: string}>) => (error = e.detail.message)} multiple={true} maxSizeMB={maxUploadSizeMB} />
         </div>
     {/if}
@@ -962,6 +977,9 @@
     </div>
 
     <div class="modal-body upload-modal-body">
+        {#if brimRefusal}
+            <StorageLimitRefusal numbers={brimRefusal} />
+        {/if}
         <!-- Assign All section -->
         <div class="assign-all-section" data-testid="brim-assign-all">
             <span class="assign-all-label">{$t('uploads.assignAll') || 'Assign all to'}:</span>

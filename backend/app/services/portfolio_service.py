@@ -17,6 +17,7 @@ PortfolioService uses:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -1224,7 +1225,6 @@ class PortfolioService:
             mwrr_period_days=mwrr_period_days,
             timing_effect_percent=timing_effect(mwrr_cumulative, twrr_result),
             pnl_change_1d=Currency(code=base_currency, amount=day_change.pnl_change) if day_change is not None else None,
-            pnl_change_1d_vs_total_pnl_percent=day_change.vs_total_pnl if day_change is not None else None,
             pnl_change_1d_vs_nav_percent=day_change.vs_nav if day_change is not None else None,
             simple_roi_percent=simple_roi,
             allocation_by_type=_alloc_from_engine(alloc_type),
@@ -2132,6 +2132,14 @@ class PortfolioService:
                 scope_transactions=all_txs_for_fp,
                 as_of_date=effective_date_to,
             )
+            # The report shows each asset's name, icon, type, currency and classification: an edit of those changes no
+            # transaction, price or rate, so it has a fingerprint of its own.
+            asset_ids_for_fp = sorted({tx.asset_id for tx in all_txs_for_fp if tx.asset_id})
+            asset_fp = "no_assets"
+            if asset_ids_for_fp:
+                asset_fp_stmt = select(Asset.id, Asset.display_name, Asset.icon_url, Asset.asset_type, Asset.currency, Asset.classification_params).where(Asset.id.in_(asset_ids_for_fp)).order_by(Asset.id)
+                asset_fp_rows = (await self.db.execute(asset_fp_stmt)).all()
+                asset_fp = hashlib.sha256(repr([tuple(row) for row in asset_fp_rows]).encode("utf-8")).hexdigest()
 
             l2_key = (
                 user_id,
@@ -2158,6 +2166,7 @@ class PortfolioService:
                 price_fp,
                 fx_fp,
                 yield_on_cost_fp,
+                asset_fp,
             )
 
             cached, hit = _portfolio_l2_cache.get(l2_key)

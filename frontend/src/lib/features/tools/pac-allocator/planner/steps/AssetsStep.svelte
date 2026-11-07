@@ -7,13 +7,14 @@
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
-    import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
+    import AssetPickerPanel from '$lib/components/ui/select/AssetPickerPanel.svelte';
+    import {assetSelectOrder} from '$lib/components/ui/select/assetPicker';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {assetStoreVersion, ensureAssetsLoaded, getAllAssets, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {AddedAssetFacts} from '../assetRead.svelte';
     import {CategoryLabels} from '../categoryLabels.svelte';
-    import {draftAssetFromInfo, domainAssetKey, setPriceManual} from '../copies';
+    import {draftAssetFromInfo, domainAssetKey, isIndexAssetClass, setPriceManual} from '../copies';
     import {compareDecimal} from '../decimal';
     import {EXPOSURE_DIMENSIONS, type DraftAsset, type DraftExposure, type ExposureDimension, type PlannerDraft, type RemovalImpact} from '../draft.svelte';
     import {formatPlannerDate, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from '../format';
@@ -48,6 +49,12 @@
     let searchValue = $state<number | null>(null);
 
     const inDraft = $derived(new Set(draft.data.assets.map((asset) => asset.key)));
+    let catalogueLoading = $state(true);
+    /** What the search offers: the Assets of LibreFolio the plan does not hold yet, without the indices, in the Risk picker's order. */
+    const catalogue = $derived.by(() => {
+        void $assetStoreVersion;
+        return assetSelectOrder(getAllAssets().filter((info) => !isIndexAssetClass(info.asset_type) && !inDraft.has(domainAssetKey(info.id))));
+    });
 
     $effect(() => {
         const language = $currentLanguage;
@@ -56,12 +63,15 @@
 
     // Assets restored with the draft, or left mid-read when the step was closed, are read once here.
     onMount(() => {
+        // The picker lists the cache: a failed load leaves it empty, the manual Asset stays available.
+        void ensureAssetsLoaded()
+            .catch(() => {})
+            .finally(() => (catalogueLoading = false));
         const pending = reader.pending(draft);
         if (pending.length > 0) readFacts(pending);
     });
 
-    function addFromSearch(id: number | null): void {
-        if (id === null) return;
+    function addFromSearch(id: number): void {
         const info = getAssetInfo(id);
         if (info && !inDraft.has(domainAssetKey(id))) {
             draft.addAsset(draftAssetFromInfo(info));
@@ -150,7 +160,7 @@
 <div class="space-y-4" data-testid="pac-planner-assets" aria-busy={reader.busy} data-busy={reader.busy ? 'true' : 'false'}>
     <div class="flex flex-wrap items-center gap-2">
         <div class="w-full max-w-sm">
-            <AssetSelect bind:value={searchValue} filter={(info) => !inDraft.has(domainAssetKey(info.id))} placeholder={$t(`${KEY}.search`, {default: 'Search Asset'})} testid="pac-planner-asset-search" onchange={addFromSearch} />
+            <AssetPickerPanel mode="single" assets={catalogue} blockedLabel={$t('risk.benchmark.blocked')} bind:value={searchValue} placeholder={$t(`${KEY}.search`, {default: 'Search Asset'})} loading={catalogueLoading} testId="pac-planner-asset-search" onchange={addFromSearch} />
         </div>
         <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-owned-assets-open" onclick={() => (owning = true)}>
             <Briefcase class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.ownedAssets.open', {default: 'Your Assets'})}

@@ -493,8 +493,15 @@ BACKUP_ROUTES = [
     ("GET", "/backup/panel/restore/status", "panel_restore.get_panel_restore_status"),
     ("DELETE", "/backup/panel/restore/pending", "panel_restore.cancel_panel_pending_restore"),
     ("PUT", "/backup/restore/upload", "restore.upload_restore_archive"),
+    # C9-9: a backup the server keeps, taken as the archive of a restore
+    ("POST", "/backup/restore/upload/from-backup", "restore.restore_from_kept_backup"),
     ("POST", "/backup/restore/stage", "restore.start_restore_check"),
+    # C9-6: the checks waiting for a decision, for any tab or device of an administrator
+    ("GET", "/backup/restore/stages", "restore.list_waiting_restore_checks"),
     ("GET", "/backup/restore/stage/{stage_id}", "restore.get_restore_check"),
+    # C9-8 and C9-10: a password tried against an administrator of the backup, and their avatar, from the opened copy
+    ("POST", "/backup/restore/stage/{stage_id}/verify-password", "restore.verify_restore_password"),
+    ("GET", "/backup/restore/stage/{stage_id}/avatar/{username}", "restore.get_restore_admin_avatar"),
     ("DELETE", "/backup/restore/stage/{stage_id}", "restore.delete_restore_check"),
     ("POST", "/backup/restore/stage/{stage_id}/confirm", "restore.confirm_restore_check"),
     ("GET", "/backup/restore/status", "restore.get_restore_status"),

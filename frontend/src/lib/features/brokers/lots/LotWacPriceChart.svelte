@@ -54,6 +54,7 @@
         scaleUnitPrice as scaleUnitPriceShared,
         sortDates,
         toPercentSeries,
+        valueOnDrawnLine,
     } from './lotWacPriceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
@@ -1327,6 +1328,11 @@
             });
         }
 
+        // G7: beyond the daily resolution the market line is drawn through one point per bucket, so the true price of a day inside a bucket is not on
+        // it. A marker then rests on the drawn line at its date; its tooltip keeps the true date and price (`meta`). Daily: the price itself.
+        const drawnMarket = currentResolution === 'daily' || !marketHasData ? null : aggregateValuePoints(groupedChartData.marketPricePoints, valueKey).map((item) => ({date: String(item.value[0]), value: item.value[1]}));
+        const markerHeight = (point: EventMarkerDatum): number | null => (drawnMarket ? (valueOnDrawnLine(drawnMarket, point.date) ?? point[valueKey]) : point[valueKey]);
+
         for (const definition of buildMarkerSeriesDefinitions()) {
             const markerSeries = groupedChartData.markerSeries.find((seriesGroup) => seriesGroup.category === definition.key);
             if (!markerSeries || markerSeries.points.length === 0) continue;
@@ -1341,7 +1347,7 @@
                 z: 5,
                 data: markerSeries.points.map((point) => ({
                     name: point.id,
-                    value: [point.date, point[valueKey]],
+                    value: [point.date, markerHeight(point)],
                     symbolOffset: [0, point.verticalOffsetPx],
                     meta: point,
                 })),

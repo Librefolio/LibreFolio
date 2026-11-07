@@ -33,6 +33,7 @@
     import {_} from '$lib/i18n';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
+    import {incomeAxisMin} from './growthIncomeAxis';
     import {planLadderAxis, ladderAxisOption, type LadderAxisPlan} from './growthLadderAxis';
     import {countSpannedPeriods} from './growthLadderBuckets';
     import {bucketEndDays, buildAggregationInputs, rungWitnessDays, type StepSources} from './growthStepInputs';
@@ -1359,12 +1360,14 @@
                 // Lines and candles: a min function so the y-axis auto-scales rather than
                 // forcing 0, which gives detail visibility when portfolio values are large.
                 // ECharts labels that edge with its raw value, not a round tick, so the label
-                // is hidden and the edge stays where it is (D25). Income keeps ECharts'
-                // defaults: an axis that includes 0, like any bar chart. Its two keys stay
-                // PRESENT as `undefined`: the full rebuild merges `yAxis` into the previous
-                // option (CHART_FULL_UPDATE_OPTS replaces only `series` and `xAxis`), so an
-                // omitted key would keep the line's min function and hidden label.
-                min: incomeBars ? undefined : (value: {min: number; max: number}) => Math.floor(value.min - (value.max - value.min) * 0.08),
+                // is hidden and the edge stays where it is (D25). Income is an axis that includes
+                // 0, like any bar chart, and its lower edge is just below the largest cost, at a
+                // round number (`incomeAxisMin`, G4): ECharts' own edge was a whole tick under it.
+                // Its `showMinLabel` stays PRESENT as `undefined`: the full rebuild merges `yAxis`
+                // into the previous option (CHART_FULL_UPDATE_OPTS replaces only `series` and
+                // `xAxis`), so an omitted key would keep the line's hidden label; `min` is
+                // replaced by its own callback, which the line gets back when it returns.
+                min: incomeBars ? (value: {min: number; max: number}) => incomeAxisMin(value.min, value.max) : (value: {min: number; max: number}) => Math.floor(value.min - (value.max - value.min) * 0.08),
                 axisLabel: {color: textColor, fontSize: 14, formatter: yAxisFormatter, showMinLabel: incomeBars ? undefined : false},
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},

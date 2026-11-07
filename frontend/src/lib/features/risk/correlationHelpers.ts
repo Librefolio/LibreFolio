@@ -503,6 +503,29 @@ export function heatmapLayout({columns, rows, availableWidth, yLabelWidth, xLabe
     };
 }
 
+/** The narrowest the colour scale under the matrix may be and still be read: its three ends each carry a name and a few words. */
+export const LEGEND_MIN_WIDTH = 280;
+
+/**
+ * Where the colour scale under the matrix stands and how wide it is, inside the box that scrolls (D6, 07/11/2026).
+ *
+ * It used to start at the first column and be at least `LEGEND_MIN_WIDTH` wide, whatever the box: on a phone, with the row labels on the
+ * left, that ran past the right edge — cut, and with nothing to say the box scrolled, since only the matrix's own width counted. So:
+ *
+ * - while the matrix itself overflows, the scale goes with it and spans its cells, as before: it scrolls with the matrix;
+ * - otherwise the scale stays inside the box: it starts under the first column when the box has room for it there, and from the left
+ *   edge when it has not, and is never wider than what is left of the box.
+ *
+ * `boxWidth` is the measured width of the scrolling box, `0` before it is measured (then the old rule stands).
+ */
+export function legendBox(boxWidth: number, layout: Pick<HeatmapLayout, 'width' | 'grid'>): {left: number; width: number} {
+    const cells = layout.width - layout.grid.left - layout.grid.right;
+    const wanted = Math.max(LEGEND_MIN_WIDTH, cells);
+    if (boxWidth <= 0 || layout.width > boxWidth) return {left: layout.grid.left, width: wanted};
+    const left = boxWidth - layout.grid.left >= LEGEND_MIN_WIDTH ? layout.grid.left : 0;
+    return {left, width: Math.min(wanted, boxWidth - left)};
+}
+
 /**
  * Above this many assets the matrix stops being readable — ECharts already
  * drops the in-cell numbers past 12, and nobody reads 400 squares — so the pair

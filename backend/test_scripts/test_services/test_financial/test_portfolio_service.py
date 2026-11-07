@@ -56,6 +56,11 @@ from backend.app.services.portfolio_service import (
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
+# The tail of get_report's L2 key: (..., fx_fp, yield_on_cost_fp, asset_fp). The tests below read the two fingerprints
+# by these offsets: a field appended to the key moves them here, in one place.
+_L2_KEY_FX_FP = -3
+_L2_KEY_YOC_FP = -2
+
 # =============================================================================
 # FIXTURES
 # =============================================================================
@@ -3465,8 +3470,8 @@ class TestPortfolioServiceGetReport:
         assert engine_calls["count"] == 1
         assert len(observed_keys) == 2
         assert observed_keys[0] == observed_keys[1]
-        assert observed_keys[0][-2] == "shared-fx-identity-a"
-        assert observed_keys[0][-1] == "no_yoc"
+        assert observed_keys[0][_L2_KEY_FX_FP] == "shared-fx-identity-a"
+        assert observed_keys[0][_L2_KEY_YOC_FP] == "no_yoc"
         assert len(identity_calls) == 3
         assert all(call[0] is session for call in identity_calls)
         assert all(call[1:] == ({broker.id}, "EUR", report_date) for call in identity_calls)
@@ -3477,8 +3482,8 @@ class TestPortfolioServiceGetReport:
             await service.get_report(user_id=test_user.id, query=query)
 
         assert engine_calls["count"] == 2
-        assert observed_keys[-1][-2] == "shared-fx-identity-b"
-        assert observed_keys[-1][-1] == "no_yoc"
+        assert observed_keys[-1][_L2_KEY_FX_FP] == "shared-fx-identity-b"
+        assert observed_keys[-1][_L2_KEY_YOC_FP] == "no_yoc"
         assert observed_keys[-1] != observed_keys[0]
 
     @pytest.mark.asyncio
@@ -3578,7 +3583,7 @@ class TestPortfolioServiceGetReport:
         await service.get_report(user_id=test_user.id, query=query)
         assert engine_calls["count"] == 2
         assert observed_keys[-1] != observed_keys[0]
-        assert observed_keys[-1][-1] != observed_keys[0][-1]
+        assert observed_keys[-1][_L2_KEY_YOC_FP] != observed_keys[0][_L2_KEY_YOC_FP]
 
     @pytest.mark.asyncio
     async def test_get_report_narrower_date_to_not_corrupted_by_wider_blob_cache(self, session, test_user, broker_with_access, test_asset):

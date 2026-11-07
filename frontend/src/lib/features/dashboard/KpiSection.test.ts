@@ -42,6 +42,7 @@ import * as Tweened from '$lib/components/ui/TweenedValue.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {_} from '$lib/i18n';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import KpiSection from './KpiSection.svelte';
 
@@ -79,16 +80,16 @@ function summary() {
 
 /**
  * The day as the backend sends it in the summary (MF-P), made from two history points by its rule: the total P&L's
- * change, and that change over |the day before's total P&L| and over |the day before's NAV| — fractions with the
- * change's sign, null on a zero base. The V2 and M-18 blocks give the card both, the points and these fields, so what
- * they pin holds whichever source the card reads; the R17 block at the end of the file pins which one it reads.
+ * change, and that change over |the day before's NAV| — a fraction with the change's sign, null on a zero base. There is
+ * no share of the day before's total P&L any more (07/11/2026): the field is gone from the answer. The V2 and M-18 blocks
+ * give the card both, the points and these fields, so what they pin holds whichever source the card reads; the R17 block
+ * at the end of the file pins which one it reads.
  */
 function dayFields(prevTotalPnl: string, lastTotalPnl: string, prevNav: string) {
     const change = parseFloat(lastTotalPnl) - parseFloat(prevTotalPnl);
     const share = (base: number): string | null => (base === 0 ? null : String(change / Math.abs(base)));
     return {
         pnl_change_1d: EUR(String(change)),
-        pnl_change_1d_vs_total_pnl_percent: share(parseFloat(prevTotalPnl)),
         pnl_change_1d_vs_nav_percent: share(parseFloat(prevNav)),
     };
 }
@@ -145,11 +146,12 @@ describe('KpiSection — absolute ROI next to total P&L (F5)', () => {
  *   percentage = day change / |previous value| × 100;
  *   sign and colour follow the direction (up → `+`, down → `-`), never «+-»;
  *   hidden ONLY when the previous value is exactly 0.
- * Card 1's base is yesterday's total P&L, Card 2's is yesterday's NAV. The change is the total
- * P&L's from yesterday to today, the same on both cards.
+ * Card 1 shows the change as «amount (share)», the share over yesterday's NAV: the one share of the day's change on
+ * the page (developer's decision of 07/11/2026). Card 2 repeats nothing of it, and the share of yesterday's total P&L,
+ * which exploded near zero, is gone from the answer.
  *
- * Since MF-P the backend applies this rule and sends the change and both shares with the summary
- * (`pnl_change_1d`, `pnl_change_1d_vs_total_pnl_percent`, `pnl_change_1d_vs_nav_percent`). Each case
+ * Since MF-P the backend applies this rule and sends the change and its share with the summary
+ * (`pnl_change_1d`, `pnl_change_1d_vs_nav_percent`). Each case
  * gives the card yesterday and today twice — as the last two history points, and as the summary fields
  * the rule makes of them (`dayFields`) — so the readings below hold whichever source the card reads;
  * the R17 block at the end of the file pins that it reads the summary.
@@ -187,12 +189,13 @@ describe('KpiSection — daily change percentage (V2)', () => {
         return screen.getByTestId('kpi-pnl-delta-day');
     }
 
-    describe('Card 1 — share of yesterday’s total P&L', () => {
+    describe('Card 1 — «amount (share)», the share over yesterday’s NAV', () => {
         it('a loss that shrinks is a rise: + and up, never «+-»', async () => {
             renderDay({totalPnl: '-558.10'}, {totalPnl: '-466.79'});
             const line = await dayLine();
 
-            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+16.36%');
+            // +91.31 over a NAV of 10 000.
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+0.91%');
             expect(line).toHaveAttribute('data-direction', 'up');
             expect(line.textContent).not.toContain('+-');
         });
@@ -201,17 +204,26 @@ describe('KpiSection — daily change percentage (V2)', () => {
             renderDay({totalPnl: '-558.10'}, {totalPnl: '-649.41'});
             const line = await dayLine();
 
-            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('-16.36%');
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('-0.91%');
             expect(line).toHaveAttribute('data-direction', 'down');
             expect(line.textContent).not.toContain('+-');
         });
 
-        it('keeps the positive-base reading unchanged', async () => {
-            renderDay({totalPnl: '2950.00'}, {totalPnl: '3041.45'});
+        it('does not explode when yesterday’s P&L is close to zero: the share is the NAV’s, not the P&L’s', async () => {
+            // The case that made the share of the P&L useless: −22.82 % of the P&L where the NAV says −1.95 %.
+            renderDay({totalPnl: '-10', nav: '58000'}, {totalPnl: '-1141', nav: '58000'});
+            await dayLine();
+
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('-1.95%');
+        });
+
+        it('shows a rise against a negative NAV as +, never «+-»', async () => {
+            renderDay({totalPnl: '-500', nav: '-1000'}, {totalPnl: '-450'});
             const line = await dayLine();
 
-            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+3.10%');
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+5.00%');
             expect(line).toHaveAttribute('data-direction', 'up');
+            expect(line.textContent).not.toContain('+-');
         });
 
         it('a day without change is flat, with an unsigned zero', async () => {
@@ -222,58 +234,54 @@ describe('KpiSection — daily change percentage (V2)', () => {
             expect(line).toHaveAttribute('data-direction', 'flat');
         });
 
-        it('hides the percentage when yesterday’s total P&L is exactly zero, keeping the amount', async () => {
-            renderDay({totalPnl: '0'}, {totalPnl: '50'});
+        it('hides the percentage only when yesterday’s NAV is exactly zero, keeping the amount', async () => {
+            renderDay({totalPnl: '0', nav: '0'}, {totalPnl: '50'});
             const line = await dayLine();
 
-            // Positive barrier: the line is rendered under the new contract (it has a direction)…
+            // Positive barrier: the line is rendered (it has a direction)…
             expect(line).toHaveAttribute('data-direction', 'up');
             // …and only the share of a zero base is missing.
             expect(screen.queryByTestId('kpi-pnl-delta-day-pct')).toBeNull();
             expect(line.textContent?.trim().length).toBeGreaterThan(0);
         });
 
-        it('shows the percentage for a tiny base that is not zero', async () => {
-            renderDay({totalPnl: '0.005'}, {totalPnl: '1.005'});
+        it('shows the percentage for a tiny NAV that is not zero', async () => {
+            renderDay({totalPnl: '0.005', nav: '0.005'}, {totalPnl: '1.005'});
             await dayLine();
 
             // Above a thousand percent the share is grouped the way the UI locale writes it (M-18): en-US here,
             // jsdom's browser under the English UI.
             expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+20,000.00%');
         });
+
+        it('reads «amount (share)» on one line, the share in brackets after the amount', async () => {
+            renderDay({totalPnl: '-558.10'}, {totalPnl: '-466.79'});
+            const line = await dayLine();
+
+            expect(line.textContent?.replace(/\s+/g, ' ').trim()).toMatch(/\(\+0\.91%\)$/);
+            expect(line.contains(screen.getByTestId('kpi-pnl-delta-day-pct'))).toBe(true);
+        });
+
+        it('says in its tooltip what the share is measured against: yesterday’s portfolio value', async () => {
+            renderDay({totalPnl: '-558.10'}, {totalPnl: '-466.79'});
+            await dayLine();
+
+            await fireEvent.click(screen.getByTestId('kpi-pnl-delta-day-tip'));
+            const tip = await waitFor(() => screen.getByTestId('tooltip-content'));
+            expect(tip.textContent?.trim()).toBe(get(_)('dashboard.pnlDeltaDayTooltip'));
+        });
     });
 
-    describe('Card 2 — share of yesterday’s NAV', () => {
-        async function returnsPct() {
-            await waitFor(() => expect(screen.getByTestId('kpi-returns')).toBeInTheDocument());
-            return screen.queryByTestId('kpi-returns-delta-pct');
-        }
-
-        it('shows a rise against a negative NAV as +, never «+-»', async () => {
+    describe('Card 2 — the day’s share is not repeated', () => {
+        it('has no day share of its own, whatever the day: the number shows once, on Card 1', async () => {
             renderDay({totalPnl: '-500', nav: '-1000'}, {totalPnl: '-450'});
-            const pct = await returnsPct();
+            await waitFor(() => expect(screen.getByTestId('kpi-returns')).toBeInTheDocument());
 
-            expect(pct).not.toBeNull();
-            expect(pct!.textContent?.trim()).toBe('+5.00%');
-            expect(pct).toHaveAttribute('data-direction', 'up');
-        });
-
-        it('shows a fall against a positive NAV as - and down', async () => {
-            renderDay({totalPnl: '1000', nav: '10000'}, {totalPnl: '900'});
-            const pct = await returnsPct();
-
-            expect(pct).not.toBeNull();
-            expect(pct!.textContent?.trim()).toBe('-1.00%');
-            expect(pct).toHaveAttribute('data-direction', 'down');
-        });
-
-        it('hides the percentage only when yesterday’s NAV is exactly zero', async () => {
-            renderDay({totalPnl: '-558.10', nav: '0'}, {totalPnl: '-466.79'});
-            const pct = await returnsPct();
-
-            // Positive barrier in the same render: Card 1, whose base is not zero, shows its share.
-            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+16.36%');
-            expect(pct).toBeNull();
+            expect(screen.queryByTestId('kpi-returns-delta-pct')).toBeNull();
+            expect(within(screen.getByTestId('kpi-returns')).queryByTestId('kpi-pnl-delta-day-pct')).toBeNull();
+            // Once on the whole row, and on Card 1.
+            expect(screen.getAllByTestId('kpi-pnl-delta-day-pct')).toHaveLength(1);
+            expect(within(screen.getByTestId('kpi-period-pnl')).getByTestId('kpi-pnl-delta-day-pct')).toBeInTheDocument();
         });
     });
 });
@@ -590,8 +598,8 @@ describe('KpiSection — Returns card: a missing return reads «—», never 0 (
  *
  * Fixture. The file's summary: ROI 50%, TWRR 40%, absolute ROI 5%. A day whose total P&L rises from
  * -558.10 to -466.79 on a NAV of 10 000, in the history and in the summary fields MF-P sends for it
- * (`dayFields`): Card 1's share of yesterday's |P&L| and Card 2's share of yesterday's NAV, both signed,
- * both mirrored from the rule (change / |base|) rather than restated.
+ * (`dayFields`): Card 1's share of yesterday's NAV, signed, mirrored from the rule (change / |base|) rather
+ * than restated.
  *
  * Expectations. French strings come from `Intl.NumberFormat('fr', {style: 'percent', …})` in this runtime,
  * never typed: Node puts U+00A0 before the `%`, a browser may put U+202F. English is today's exact text,
@@ -617,20 +625,18 @@ describe('KpiSection — percentages in the UI language (M-18)', () => {
 
     /** The rule's arithmetic: the day change as a share of |base|, in percent. */
     const dayChange = Number(LAST_TOTAL_PNL) - Number(PREV_TOTAL_PNL);
-    const SHARE_OF_PNL = (dayChange / Math.abs(Number(PREV_TOTAL_PNL))) * 100;
     const SHARE_OF_NAV = (dayChange / Math.abs(Number(NAV))) * 100;
 
-    type Reading = {roi: string; twrr: string; dayVsPnl: string; dayVsNav: string; absoluteRoi: string};
+    type Reading = {roi: string; twrr: string; dayVsNav: string; absoluteRoi: string};
 
     /** Today's English text, exactly. */
-    const ENGLISH: Reading = {roi: '50.00%', twrr: '40.00%', dayVsPnl: '+16.36%', dayVsNav: '+0.91%', absoluteRoi: '(+5.00%)'};
+    const ENGLISH: Reading = {roi: '50.00%', twrr: '40.00%', dayVsNav: '+0.91%', absoluteRoi: '(+5.00%)'};
 
     /** French notation, two digits, of a fraction. */
     const french = (fraction: number): string => new Intl.NumberFormat('fr', {style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2}).format(fraction);
     const FRENCH: Reading = {
         roi: french(Number(summary().simple_roi_percent)),
         twrr: french(Number(summary().twrr_percent)),
-        dayVsPnl: `+${french(SHARE_OF_PNL / 100)}`,
         dayVsNav: `+${french(SHARE_OF_NAV / 100)}`,
         absoluteRoi: `(+${french(Number(summary().total_gain_loss_percent))})`,
     };
@@ -671,8 +677,7 @@ describe('KpiSection — percentages in the UI language (M-18)', () => {
         return {
             roi: text('kpi-return-roi-value'),
             twrr: text('kpi-return-twrr-cum-value'),
-            dayVsPnl: text('kpi-pnl-delta-day-pct'),
-            dayVsNav: text('kpi-returns-delta-pct'),
+            dayVsNav: text('kpi-pnl-delta-day-pct'),
             absoluteRoi: bracketed ? bracketed[0] : '(no bracketed percentage)',
         };
     }
@@ -859,12 +864,12 @@ describe('KpiSection — amounts and the timing effect in the UI language (M-18 
 });
 
 /**
- * R17 / W8 / P4 — the day change, its two shares and the timing effect are the summary's (MF-P).
+ * R17 / W8 / P4 — the day change, its share and the timing effect are the summary's (MF-P).
  *
  * The backend now sends with the summary what the cards used to work out:
  *   - `pnl_change_1d`: the total P&L's change from the CALENDAR day before the valuation date to it;
- *   - `pnl_change_1d_vs_total_pnl_percent` and `pnl_change_1d_vs_nav_percent`: that change over |the day
- *     before's total P&L| and over |its NAV|, fractions with the change's sign, null on a zero base;
+ *   - `pnl_change_1d_vs_nav_percent`: that change over |the day before's NAV|, a fraction with the change's
+ *     sign, null on a zero base (the share over the day before's total P&L is gone, 07/11/2026);
  *   - `timing_effect_percent`: MWRR cumulative − TWRR, a fraction, null when either is missing.
  * The cards write them — the change as money, the fractions ×100 — and derive none of them: not the change
  * from the last two `history` points, which need not be a calendar day apart; not a share from its base; not
@@ -873,8 +878,8 @@ describe('KpiSection — amounts and the timing effect in the UI language (M-18 
  *
  * Fixture. The file's summary — TWRR 40% and MWRR cumulative 45%, bars that subtract to +5 pp — and a history
  * whose last two points are a week apart: a fall of 100 on a total P&L of 1 000 and a NAV of 20 000, which the
- * cards would show as -100.00, -10.00% and -0.50%, down. The summary's day says otherwise on every figure:
- * +12.34, +5.00%, +0.10%, up, and a timing effect of -1.23 pp — so whatever the cards show names its source.
+ * cards would show as -100.00 and -0.50%, down. The summary's day says otherwise on every figure:
+ * +12.34, +0.10%, up, and a timing effect of -1.23 pp — so whatever the cards show names its source.
  * Every missing field is tried null and absent: a report cached before MF-P has none of them.
  *
  * Read by `data-testid` in both cards, every figure at its value on the first frame (the page cache's hydration
@@ -887,17 +892,16 @@ describe('KpiSection — the day change and the timing effect come from the summ
     const EM_DASH = '\u2014';
 
     type Missing = 'null' | 'absent';
-    type DayField = 'pnl_change_1d' | 'pnl_change_1d_vs_total_pnl_percent' | 'pnl_change_1d_vs_nav_percent' | 'timing_effect_percent';
+    type DayField = 'pnl_change_1d' | 'pnl_change_1d_vs_nav_percent' | 'timing_effect_percent';
     /** The file's summary with the MF-P fields, optional and nullable as the schema types them. */
     type DaySummary = Omit<ReturnType<typeof summary>, 'timing_effect_percent'> & {
         pnl_change_1d?: {code: string; amount: string} | null;
-        pnl_change_1d_vs_total_pnl_percent?: string | null;
         pnl_change_1d_vs_nav_percent?: string | null;
         timing_effect_percent?: string | null;
     };
 
     /** The calendar day the backend reports: not one of these figures is what the history gives. */
-    const DAY = {pnl_change_1d: EUR('12.34'), pnl_change_1d_vs_total_pnl_percent: '0.05', pnl_change_1d_vs_nav_percent: '0.001'};
+    const DAY = {pnl_change_1d: EUR('12.34'), pnl_change_1d_vs_nav_percent: '0.001'};
 
     function historyPoint(date: string, totalPnl: string) {
         return {
@@ -943,14 +947,11 @@ describe('KpiSection — the day change and the timing effect come from the summ
     /** What the cards show of the day, null where an element is not rendered. The day line's amount is its text without the bracketed share. */
     function readDay() {
         const line = screen.queryByTestId('kpi-pnl-delta-day');
-        const totalShare = screen.queryByTestId('kpi-pnl-delta-day-pct');
-        const navShare = screen.queryByTestId('kpi-returns-delta-pct');
+        const navShare = screen.queryByTestId('kpi-pnl-delta-day-pct');
         return {
             amount: line ? norm(line.textContent).replace(/\s*\([^()]*\)$/, '') : null,
             direction: line ? line.getAttribute('data-direction') : null,
-            shareOfTotalPnl: totalShare ? norm(totalShare.textContent) : null,
             shareOfNav: navShare ? norm(navShare.textContent) : null,
-            shareOfNavDirection: navShare ? navShare.getAttribute('data-direction') : null,
             timing: norm(screen.getByTestId('kpi-timing-effect-value').textContent),
         };
     }
@@ -961,41 +962,32 @@ describe('KpiSection — the day change and the timing effect come from the summ
         expect(uiLocale(), 'control: the interface locale is en-US').toBe('en-US');
     });
 
-    it('shows the summary’s day change, its two shares and its timing effect — not the history’s, not the bars’ difference', () => {
+    it('shows the summary’s day change, its share and its timing effect — not the history’s, not the bars’ difference', () => {
         mountDay({...summary(), ...DAY, timing_effect_percent: '-0.0123'});
 
         expect(readDay()).toEqual({
             amount: norm(formatCurrencyAmountPlain(12.34, 'EUR', {showSign: true})),
             direction: 'up',
-            shareOfTotalPnl: '+5.00%',
             shareOfNav: '+0.10%',
-            shareOfNavDirection: 'up',
             timing: expect.stringMatching(/^-1\.23(?!\d)/),
         });
     });
 
     describe.each<Missing>(['null', 'absent'])('a figure missing from the summary as %s', (how) => {
-        it('pnl_change_1d and its shares: no day line and no share, though the history’s last two points give a change', () => {
-            mountDay(summaryWithout(['pnl_change_1d', 'pnl_change_1d_vs_total_pnl_percent', 'pnl_change_1d_vs_nav_percent'], how));
+        it('pnl_change_1d and its share: no day line and no share, though the history’s last two points give a change', () => {
+            mountDay(summaryWithout(['pnl_change_1d', 'pnl_change_1d_vs_nav_percent'], how));
 
-            const {amount, shareOfTotalPnl, shareOfNav} = readDay();
-            expect({amount, shareOfTotalPnl, shareOfNav}).toEqual({amount: null, shareOfTotalPnl: null, shareOfNav: null});
+            const {amount, shareOfNav} = readDay();
+            expect({amount, shareOfNav}).toEqual({amount: null, shareOfNav: null});
         });
 
-        it('pnl_change_1d_vs_total_pnl_percent: the day line without its share, while the NAV share stays', () => {
-            mountDay(summaryWithout(['pnl_change_1d_vs_total_pnl_percent'], how));
-
-            // The day line and Card 2's share are drawn: only Card 1's share is missing.
-            const {amount, shareOfTotalPnl, shareOfNav} = readDay();
-            expect({amount, shareOfTotalPnl, shareOfNav}).toEqual({amount: expect.any(String), shareOfTotalPnl: null, shareOfNav: expect.any(String)});
-        });
-
-        it('pnl_change_1d_vs_nav_percent: no share on the Returns card, while the day line keeps its own', () => {
+        it('pnl_change_1d_vs_nav_percent: the day line without its share, and no share anywhere else', () => {
             mountDay(summaryWithout(['pnl_change_1d_vs_nav_percent'], how));
 
-            // The day line and its share are drawn: only Card 2's share is missing.
-            const {amount, shareOfTotalPnl, shareOfNav} = readDay();
-            expect({amount, shareOfTotalPnl, shareOfNav}).toEqual({amount: expect.any(String), shareOfTotalPnl: expect.any(String), shareOfNav: null});
+            // The day line is drawn: only its share is missing, and Card 2 has none to fall back on.
+            const {amount, shareOfNav} = readDay();
+            expect({amount, shareOfNav}).toEqual({amount: expect.any(String), shareOfNav: null});
+            expect(screen.queryByTestId('kpi-returns-delta-pct')).toBeNull();
         });
 
         it('timing_effect_percent, both returns present: Timing effect reads «—» and claims nothing', () => {

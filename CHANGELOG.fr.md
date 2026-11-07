@@ -31,6 +31,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Le tableau de bord et la page du courtier suivent les prix actuels** : chaque minute pendant que vous les utilisez, les montants, les KPI et les positions se mettent à jour d'eux-mêmes ; ils s'arrêtent lorsque l'onglet est masqué ou après deux minutes sans interaction (« Mises à jour en pause ») et reprennent à votre action suivante.
 - **Avertissements de qualité des données sur la page du courtier** : les prix anciens, les taux de change manquants ou anciens et leurs boutons de synchronisation y apparaissent aussi, pour chaque rôle.
 - **Graphique des positions : choisissez la fenêtre de la vue Glissant.** Une semaine, un mois, trois mois, un an ou une fenêtre personnalisée ; elle part de la fenêtre automatique.
+- Le camembert de répartition par actif montre aussi l'icône de l'actif dans son infobulle, comme celui par type.
 
 #### 📈 Graphiques
 
@@ -99,6 +100,10 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Une restauration interrompue ne sert plus de données dont elle ne peut pas garantir l'intégrité.** Lorsque l'état d'une restauration ne peut pas être lu, l'instance affiche une page qui demande l'administrateur (avec un lien vers l'assistance de l'instance lorsqu'elle est définie), conserve chaque copie vérifiée, et `./dev.py backup pending --recover` permet à l'administrateur de choisir entre les données d'avant et une nouvelle restauration.
 - Les tâches de sauvegarde indiquent le SHA-256 de l'archive ; un rapport de restauration indique que les comptes et identifiants proviennent de la sauvegarde, et avertit lorsque l'administrateur qui confirme n'y figure pas. Le guide explique les copies nocturnes avec restic ou Backrest.
 - **Les sauvegardes restent sur le serveur** : créées depuis l'application, la ligne de commande ou un panneau d'hébergement, elles sont listées dans un tableau (Paramètres › Sauvegarde et le nouvel onglet Fichiers › Sauvegardes) avec leur origine, leur type, leur taille et leur SHA-256, prêtes à être téléchargées ou supprimées. Les administrateurs peuvent définir un nettoyage automatique par taille totale et par ancienneté ; la dernière sauvegarde est toujours conservée.
+- **Restaurer une sauvegarde conservée par le serveur** : *Restaurer* sur la ligne d'une sauvegarde conservée (Paramètres › Sauvegarde, Fichiers › Sauvegardes) la vérifie directement depuis le serveur, sans téléchargement ni envoi ; une sauvegarde sécurisée demande son mot de passe.
+- **Vérifier un mot de passe avant de restaurer** : dans le rapport de restauration, choisissez un administrateur de la sauvegarde et saisissez un mot de passe pour savoir si vous pourrez vous connecter avec ensuite. Le mot de passe n'est jamais stocké, journalisé ni renvoyé.
+- **Une restauration peut attendre** : *Décider plus tard* garde l'archive vérifiée, et Paramètres › Sauvegarde permet de la reprendre ou de l'écarter depuis n'importe quel onglet ou appareil. Le rapport montre les administrateurs de la sauvegarde avec leur image et une barre de ce qu'elle contient ; une restauration qui ne peut pas continuer ne demande aucune confirmation, et une restauration refusée par la limite d'espace libère aussitôt la place.
+- *Actualiser* sur la liste des sauvegardes conservées, pour les sauvegardes faites en ligne de commande.
 
 #### 👥 Comptes, inscription et administrateurs
 
@@ -133,6 +138,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Envoyer par e-mail** : les boîtes de dialogue de lien d'invitation et de réinitialisation de mot de passe de Paramètres › Utilisateurs peuvent envoyer le lien par e-mail, un lien de réinitialisation dans la langue de son compte et une invitation dans la langue choisie dans la boîte de dialogue, celle de l'instance par défaut, le résultat nommant la langue utilisée, lorsque l'e-mail fonctionne et que `LIBREFOLIO_PUBLIC_URL` est défini. API : `POST /api/v1/email/links`.
 - **Avis de changement d'e-mail** : lorsque l'e-mail fonctionne et que quelqu'un change l'adresse e-mail d'un compte, LibreFolio écrit à l'adresse qu'il avait auparavant, en n'indiquant que le domaine de la nouvelle, afin que son propriétaire apprenne un changement qu'il n'a pas effectué. Au plus 3 avis de ce type partent par heure et par compte et par ancienne adresse ; au-delà, le changement passe quand même, sans l'avis.
 - **Les e-mails d'activation et de réinitialisation de mot de passe partagent une limite par réseau**, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 par heure), en plus du budget horaire de l'instance ; les mots de passe erronés ne la consomment jamais. Lorsqu'un e-mail est retenu, la page indique combien de minutes attendre, dans un encadré jaune.
+- **Le logo de LibreFolio dans chaque e-mail** : l'en-tête vert l'affiche, joint dans le message, il apparaît donc sans rien charger depuis le web. L'avis pour `LIBREFOLIO_PUBLIC_URL` manquante donne un exemple construit à partir de l'adresse que vous utilisez, avec un bouton Guide.
 
 #### 🔐 Sécurité et secrets
 
@@ -227,6 +233,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Graphique des positions** : les badges affichent le nom de l'actif, qui défile s'il est long, et le sélecteur de vues utilise les icônes de la liste des actifs.
 - **Un actif garde une seule couleur** dans les lignes du graphique des positions, le camembert de l'allocation et son historique, quoi que vous cochiez et dans n'importe quel ordre. Le même actif chez deux courtiers a un motif de ligne différent, et les noms longs défilent aussi dans l'info-bulle du graphique.
 - **Le camembert de l'allocation par actif affiche l'icône de chaque actif** dans sa part, ou celle de son type si elle manque ou ne se charge pas, et n'a plus de légende : le nom s'affiche en pointant la part.
+- **La variation du jour sous le P&L se lit comme un montant et une part de la valeur du portefeuille de la veille** (« −1 141 € (−1,95 %) »), le chiffre à comparer aux marchés ; la part du P&L total, qui s'envolait près de zéro, disparaît, et la carte des rendements ne la répète plus.
 
 #### 📈 Graphiques
 
@@ -250,6 +257,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Risque : ajoutez une paire de taux de change manquante sans quitter l’analyse des risques.** Dans l’onglet Risque du tableau de bord, d’un courtier et d’un actif, ainsi que dans le laboratoire de risque de la page des actifs, le bouton d’une paire sans route de taux de change ouvre la fenêtre **Ajouter une nouvelle paire de devises** déjà remplie avec cette paire (EUR/USD, par exemple), au lieu de vous emmener sur la page FX. Une fois la paire enregistrée, et de nouveau lorsque ses taux sont téléchargés, l’analyse s’actualise d’elle-même.
 - **L'histogramme des rendements quotidiens est un vrai graphique** : son axe affiche les seuils de rendement, une ligne en pointillés marque le seuil VaR, et pointer une barre indique combien de jours y tombent et où se situe cette tranche par rapport au seuil.
 - **Les quatre cartes de pertes de « Quel mal cela peut-il faire ? » ont la même forme** : titres plus courts, un sous-titre, des lignes de détail datées, et les dates dans votre langue. L'info-bulle de l'histogramme est plus légère, se place à côté du pointeur et écrit son intervalle `[a; b)`.
+- **Risque :** l'histogramme des rendements se zoome (avec un curseur quand les barres sont nombreuses) ; l'indice Ulcer est une ligne de la carte de la pire baisse ; les textes de diversification disent ce que signifie le nombre effectif de positions, que son excédent vient des liquidités et des positions sans prix, et donnent l'échelle du ratio de diversification avec un exemple.
 
 #### 🤖 Export IA
 
@@ -260,6 +268,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Export IA : le résultat de change sur les liquidités en devise étrangère apparaît séparément, courtier par courtier**, dans l’export de portefeuille, reconnu par un code fixe au lieu de son libellé anglais.
 - Export IA : une part de concentration ou d’allocation qui ne peut pas être calculée (un total nul ou négatif) est signalée comme non disponible au lieu d’afficher un nombre inversé.
 - **L’export IA depuis une page de courtier** indique à l’IA que les montants sont les chiffres totaux du courtier, et non votre part, et où se trouvent votre rôle et votre part de propriété dans l’export.
+- Le bouton *Préparer* du panneau AI Export tourne pendant la préparation de l'export.
 
 #### 🔌 Sources de prix et de taux de change
 
@@ -288,6 +297,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Sur la page Fichiers et dans les fichiers de rapport d’un courtier, Supprimer n’apparaît que sur les fichiers que vous pouvez supprimer ; une suppression groupée laisse les autres en place, avec un avertissement.
 - **Fichiers système** : les icônes créées à l'installation affichent « système » comme auteur, au lieu d'un numéro d'utilisateur.
 - **Fichiers, pour les administrateurs** : la limite d'espace se trouve dans un panneau fermé « Avancé » et s'appelle Espace total de LibreFolio ; elle s'applique désormais : un nouveau fichier, un rapport de courtier, une sauvegarde manuelle ou une restauration qui la dépasserait sont refusés, et le message indique à combien la porter. Les transactions, les prix, la base de données et les sauvegardes du panneau d'hébergement ou de la ligne de commande ne sont jamais arrêtés. Le nettoyage automatique est aussi un panneau fermé, et indique que ses règles s'appliquent dans l'heure. L'enregistrement de l'un ou l'autre affiche une confirmation verte, et le rappel sur le même disque est désormais une simple note.
+- **Un refus de la limite d'espace s'affiche là où vous êtes** (un envoi, un import, la carte des sauvegardes), avec *Ouvrir les paramètres* pour les administrateurs et la place à libérer pour les utilisateurs. Au-delà de la limite, la barre d'espace garde toutes ses parties, avec un repère à la limite et des rayures au-delà ; une restauration en cours est une partie à part.
 
 #### 💱 Codes de devise
 
@@ -371,6 +381,11 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Le site de documentation utilise les mêmes couleurs que l’application**, en thème clair et en thème sombre.
 - **La documentation ne décrit plus l’exécution de LibreFolio pour d’autres personnes :** les pages sur les fournisseurs d’hébergement, le panneau d’hébergement et le réveil planifié ont disparu, et la page d’accueil indique « Auto-hébergé ».
 - **L'en-tête de la documentation place le commutateur de thème à côté du sélecteur de langue**, comme dans l'application ; le lien 🚀 vers l'application, affiché lorsque LibreFolio est en cours d'exécution, prend la place qu'occupait le commutateur de thème.
+- Le guide e-mail indique où placer les variables dans `.env` et comment écrire un mot de passe d'application Gmail (sans espaces), et chaque page donne une seule phrase pour le redémarrage.
+
+#### 🎯 Allocateur PAC
+
+- **Allocateur PAC :** la recherche d'actifs est le sélecteur de la page Risque et laisse de côté les indices ; les courtiers se choisissent sous forme de tuiles avec icône et nom ; une barre se remplit pendant le calcul du plan ; « après le plan » devient « en fin de plan » (colonnes « Final »), avec des colonnes de montants plus larges ; un versement du plan opérationnel se lit comme une phrase, le montant dans un badge ; sur téléphone la revue n'a plus de colonne Action (clic droit ou appui long ouvre le menu) et la preuve du solveur montre moins de colonnes.
 
 ### 🐛 Corrections
 
@@ -427,6 +442,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Import : la vérification effectuée à l'arrivée des lignes n'est plus écartée.** Sur les imports de plus de 50 lignes, les lignes refusées n'apparaissaient qu'après ⚡ Valider maintenant.
 - Import, étape 3 : les notes bleues d'un importateur ne sont plus comptées comme des avertissements. Le tableau des résultats et le résumé affichent séparément les avertissements ⚠️ et les notes ℹ️, le détail du fichier les liste sous deux titres, et la confirmation ne compte que les avertissements lorsqu'elle parle d'avertissements.
 - Le guide d'import ne renvoie plus à un bouton qui peut manquer lorsqu'aucun fichier n'a été lu.
+- L'assistant d'import ne continue plus sans un fichier refusé par le serveur : il reste à la première étape, dit pourquoi et renvoie le fichier.
 
 #### 🏦 Courtiers et transferts
 
@@ -464,6 +480,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Les quantités du tableau Performance ne comptent plus une transaction datée après la fin du rapport.
 - Séries de positions : un actif additionné sur ses courtiers conserve son pourcentage lorsque des unités étaient en transit au début de la période.
 - **Transactions sur le tableau de bord :** le sélecteur de taille de page fonctionne.
+- La nouvelle icône, le nom, le type ou la classification d'un actif apparaissent aussitôt dans le tableau de bord : le rapport ne garde plus les anciens jusqu'à 30 minutes.
 
 #### 🧮 Lots
 
@@ -501,6 +518,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Les signaux de graphique laissent un trou là où une valeur manque, au lieu de le combler.** Un rendement glissant dont le prix de référence manque, ou une fenêtre glissante du ratio de Sharpe ou du bêta sans variance, étaient reliés par un segment droit ; les week-ends et jours fériés, où les indicateurs n'ont pas de point, restent reliés. Le décompte de points 📈 d'un signal compte désormais tous ses points : pour le RSI, le CCI, le MFI et le RSI stochastique, il n'affichait que la plus longue portion entre deux franchissements de seuil. Un signal comportant plus de 30 trous (une fenêtre courte sur un actif rarement négocié) est dessiné comme une seule ligne les reliant, nommée « (trous reliés) », afin que le graphique reste rapide.
 - Graphiques : la variation de l'infobulle depuis le premier point affiche « — » au lieu de 0 % lorsque le graphique part de zéro.
 - Un signal technique invalide ne casse plus le graphique d'un actif ou d'un taux de change : les prix et taux restent sur le graphique et dans le cache de la page, et **Tout** résout le début de la plage ; seuls les signaux sont signalés comme indisponibles.
+- **Graphique des revenus :** le bord inférieur de l'axe se place juste sous le plus gros coût (−90 € pour un coût de 80 €) au lieu d'un pas entier sous zéro.
+- **Graphique des lots :** hors de la vue journalière, les triangles d'achat et de vente reposent sur la ligne tracée ; l'infobulle garde le jour et le prix réels.
 
 #### 💱 Actifs, prix et taux de change
 
@@ -753,6 +772,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Suppression de routes API inutilisées ou remplacées, sans période de dépréciation :** `POST /transactions/transfers/promote` (utilisez `POST /transactions/commit` avec `promotes[]`), `POST /transactions/events/suggest` (utilisez `GET /transactions/event-reconciliation`), `DELETE /assets/events` (utilisez `POST /assets/events` avec `delete_ids`), `GET /assets/all` (utilisez `GET /assets/query?active=true`), `POST /assets/provider/refresh` (utilisez `POST /assets/provider/probe`), `POST /assets/{id}/market-data/wipe` (le `PATCH /assets` de la devise s'en charge), `POST /portfolio/wac` (utilisez `POST /portfolio/lots/analysis`), `GET /settings/global/{key}` (utilisez `GET /settings/global`), `POST /settings/global/initialize` (effectué au démarrage), `GET /uploads/{file_id}` (utilisez `GET /uploads`), `GET /brokers/import/files/{file_id}` et `…/last-parse` (utilisez `GET /brokers/import/files`), `GET /utilities/currencies/normalize` (utilisez `GET /utilities/currencies/suggest`), `GET /brokers/{id}/summary` (lisez le courtier avec `GET /brokers/{id}`, ses liquidités et positions avec `POST /portfolio/report`).
 
 ---
+- **`POST /api/v1/portfolio/report` : `summary.pnl_change_1d_vs_total_pnl_percent` est supprimé**, sans période de dépréciation : la variation du jour en part du P&L total s'envolait près de zéro. Utilisez `pnl_change_1d_vs_nav_percent`, la part de la valeur du portefeuille de la veille.
 
 ## [1.2.1] - 2026-10-15
 

@@ -53,7 +53,8 @@ from backend.app.services.platform.instance_backup.paths import (
     upload_path,
     uploads_dir,
 )
-from backend.app.services.platform.instance_backup.staging import STAGE_LIFETIME, StagePhase, StagingBusyError, StagingError, new_stage_id, remove_stage, stage_archive
+from backend.app.services.platform.instance_backup.sealed import FILE_SUFFIX as SEALED_SUFFIX
+from backend.app.services.platform.instance_backup.staging import STAGE_LIFETIME, StagePhase, StagingBusyError, StagingError, drop_copy, new_stage_id, read_report, remove_stage, stage_archive
 
 logger = get_logger(__name__)
 
@@ -230,6 +231,54 @@ class UploadWriter:
             self._final.unlink(missing_ok=True)
 
 
+class KeptBackupNotFoundError(Exception):
+    """No backup kept on the server has this job id, or its archive is gone."""
+
+
+class KeptBackupSealedError(Exception):
+    """A sealed backup (a hosting panel's ``.tar``) opens only with the private key of its recipients: not restored here."""
+
+
+def upload_from_kept(job_id: str, *, data_dir: Path | None = None) -> RestoreUploaded:
+    """Take a backup the server keeps as the archive of a restore (C9-9), without a download and an upload: its archive is
+    linked into the uploads (a hard link: no byte copied; a copy only where the file system refuses a link), and checked
+    from there by ``start_check`` as any upload, the check removing the link and never the kept backup.
+    ``KeptBackupNotFoundError``, ``KeptBackupSealedError``; ``UploadNoSpaceError`` when a copy does not fit."""
+    from backend.app.services.platform.instance_backup import retention  # noqa: PLC0415 — retention imports jobs, as this module does
+
+    data_dir = data_dir or get_data_dir()
+    kept = next((item for item in retention.list_kept(data_dir) if item.job.job_id == job_id), None)
+    if kept is None or not kept.job.file_name:
+        raise KeptBackupNotFoundError("No kept backup has this id")
+    archive = kept.folder / kept.job.file_name
+    if not archive.is_file() or archive.is_symlink():
+        raise KeptBackupNotFoundError("The archive of this backup is gone")
+    if kept.job.sealed or archive.name.endswith(SEALED_SUFFIX):
+        raise KeptBackupSealedError("A sealed backup opens only with the private key of its recipients")
+    folder = ensure_private_dir(uploads_dir(data_dir), data_dir)
+    upload_id = new_stage_id()
+    target = upload_path(data_dir, upload_id)
+    try:
+        os.link(archive, target)
+    except OSError:
+        size = archive.stat().st_size
+        if shutil.disk_usage(folder).free < size + _SPACE_MARGIN:
+            raise UploadNoSpaceError("Not enough free space for the archive") from None
+        partial = target.with_name(target.name + _PARTIAL_SUFFIX)
+        try:
+            shutil.copyfile(archive, partial)
+            os.replace(partial, target)
+        except OSError as exc:
+            partial.unlink(missing_ok=True)
+            if out_of_space(exc):
+                raise UploadNoSpaceError("Not enough free space for the archive") from None
+            raise
+    remove_replaced_uploads(data_dir, keep=upload_id)
+    kind: Literal["zip", "envelope"] = "envelope" if is_envelope(target) else "zip"
+    logger.info("A kept backup taken for a restore", job_id=job_id, upload_id=upload_id, kind=kind)
+    return RestoreUploaded(upload_id=upload_id, size=target.stat().st_size, kind=kind)
+
+
 def remove_replaced_uploads(data_dir: Path, *, keep: str) -> None:
     """Remove the finished uploads other than ``keep``, but the one a running check reads."""
     if not _plain_folders(data_dir, uploads_dir(data_dir)):
@@ -307,7 +356,11 @@ def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock, key: Envelop
 
     error_code: str | None = None
     try:
-        stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock, key=key, max_unpacked=max_unpacked)
+        report = stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock, key=key, max_unpacked=max_unpacked)
+        if "storage_limit" in report.blockers:
+            # C9-5: the space limit refuses this restore: its copy gives its room back at once; the report stays, to say why.
+            drop_copy(data_dir, check.stage_id)
+            logger.info("A restore check refused by the space limit: its copy removed, its report kept", stage_id=check.stage_id)
     except StagingError as exc:
         error_code = exc.code
     except BackupPathError:
@@ -362,6 +415,48 @@ def running_check(upload_id: str, *, data_dir: Path | None = None) -> RestoreChe
             if current.status == "running":
                 return current
     return None
+
+
+@dataclass(frozen=True)
+class WaitingCheck:
+    """A check an administrator started and has not decided on yet (C9-6): running, or done and not expired."""
+
+    check: RestoreCheck
+    #: When its archive stops being kept (its report's ``expires_at``); ``None`` while it runs.
+    expires_at: datetime | None
+    #: Whether its report lets the restore go on; ``None`` while it runs.
+    restorable: bool | None
+
+
+def waiting_checks(*, data_dir: Path | None = None, now: datetime | None = None) -> list[WaitingCheck]:
+    """The checks started from the app (not a hosting panel's) that wait for a decision, the newest first: a running one, and
+    an ended one whose report is still valid. A failed check, an expired one, and the copy a confirmed restore waits to
+    apply are not listed. Any tab or device of an administrator reads them here: the id of a check is no longer kept by
+    the tab alone. Never writes, except what ``read_check`` records of a check a stopped server left running."""
+    data_dir = data_dir or get_data_dir()
+    now = now or _now()
+    protected = protected_stage(data_dir)
+    waiting: list[WaitingCheck] = []
+    for found in _checks(data_dir):
+        if found.origin != "admin" or found.stage_id == protected:
+            continue
+        try:
+            check = read_check(found.stage_id, data_dir=data_dir)
+        except CheckNotFoundError:
+            continue
+        if check.status == "running":
+            waiting.append(WaitingCheck(check, None, None))
+            continue
+        if check.status != "done":
+            continue
+        try:
+            report = read_report(data_dir, check.stage_id)
+        except (FileNotFoundError, ValueError, OSError):
+            continue
+        if report.expires_at <= now:
+            continue
+        waiting.append(WaitingCheck(check, report.expires_at, report.restorable))
+    return sorted(waiting, key=lambda item: item.check.created_at, reverse=True)
 
 
 def remove_check(stage_id: str, *, data_dir: Path | None = None) -> None:

@@ -21,6 +21,7 @@
     import {automaticConversions, conversionsFor, ordersByBroker, planSteps, type PlanLookup, type PlanSource, type ResultNames} from './model';
     import {withHelpCues} from '../shared/columnHelp';
     import TableColumns from '../shared/TableColumns.svelte';
+    import {AMOUNT_MARKER, splitAtAmount} from '../shared/amountSentence';
 
     interface Props {
         solution: PacSolution;
@@ -35,8 +36,11 @@
 
     const KEY = 'tools.pacAllocator.planner.result.plan';
     type FundingKind = 'cash' | 'transfer' | 'deposit';
-    const FUNDING_FALLBACKS: Record<FundingKind, string> = {cash: 'Available cash', transfer: 'Transfer', deposit: 'Deposit'};
-    const FUNDING_BADGES: Record<FundingKind, string> = {cash: BADGE.neutral, transfer: BADGE.info, deposit: BADGE.success};
+    const SENTENCE_FALLBACKS: Record<FundingKind, string> = {
+        cash: 'Use {amount} of the cash available on the Broker “{source}”',
+        transfer: 'Transfer {amount} from “{source}” to the Broker “{destination}”',
+        deposit: 'Make the deposit “{source}” of {amount} to the Broker “{destination}”',
+    };
 
     const steps = $derived(planSteps(solution.funding_actions, solution.conversions));
     const groups = $derived(ordersByBroker(solution.order_rows));
@@ -48,12 +52,19 @@
     const orphanAutomatic = $derived(solution.conversions.filter((action) => action.mode === 'automatic' && !groups.some((group) => group.brokerId === action.broker_id)));
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
     const brokerCell = (brokerId: string, currency: string | null): ResultCellContent => ({type: 'broker', brokerId, label: names.broker(brokerId), broker: draft.broker(brokerId) ?? null, currency});
-    const sourceCell = (source: PlanSource): ResultCellContent =>
-        source.kind === 'contribution' ? {type: 'contribution', label: source.label, currency: source.currency} : source.brokerId ? brokerCell(source.brokerId, source.currency) : {type: 'broker', brokerId: '', label: source.label, broker: null, currency: source.currency};
 
     function fundingKind(action: PacFundingAction, source: PlanSource): FundingKind {
         if (source.kind === 'contribution') return 'deposit';
         return source.brokerId === action.destination_broker_id ? 'cash' : 'transfer';
+    }
+
+    /** The step as a sentence, with a marker where its amount goes (the badge is drawn there); the names are the Broker's, or the contribution's or account's own. */
+    function fundingSentence(action: PacFundingAction, source: PlanSource, kind: FundingKind): string {
+        const sourceName = source.kind !== 'contribution' && source.brokerId ? names.broker(source.brokerId) : source.label;
+        return $t(`${KEY}.sentence.${kind}`, {
+            default: SENTENCE_FALLBACKS[kind],
+            values: {source: sourceName, destination: names.broker(action.destination_broker_id), amount: AMOUNT_MARKER},
+        });
     }
 
     /** The reason of a funding step; its priority is named only where the user set more than one route. */
@@ -94,7 +105,7 @@
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 110,
+                minWidth: 130,
                 cell: (order) => cell({type: 'price', price: order.mid_price, digits}),
             },
             {
@@ -105,7 +116,7 @@
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 120,
+                minWidth: 150,
                 cell: (order) => cell({type: 'money', amount: order.cash_debit.amount, currency: order.cash_debit.currency, digits}),
             },
             {
@@ -116,7 +127,7 @@
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 100,
+                minWidth: 130,
                 cell: (order) => cell({type: 'money', amount: order.fee.amount, currency: order.fee.currency, digits}),
             },
         ]),
@@ -192,18 +203,12 @@
                         {@const action = step.action}
                         {@const source = lookup.source(action.source)}
                         {@const kind = fundingKind(action, source)}
+                        {@const parts = splitAtAmount(fundingSentence(action, source, kind))}
                         <div class="min-w-0 flex-1 space-y-1" data-funding={kind}>
-                            <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                                <div class="flex min-w-0 flex-wrap items-center gap-2">
-                                    <span class={FUNDING_BADGES[kind]}>{$t(`${KEY}.kind.${kind}`, {default: FUNDING_FALLBACKS[kind]})}</span>
-                                    <ResultCell cell={sourceCell(source)} />
-                                    {#if kind !== 'cash'}
-                                        <ArrowRight class="h-4 w-4 shrink-0 text-lf-muted" aria-hidden="true" />
-                                        <ResultCell cell={brokerCell(action.destination_broker_id, action.amount.currency)} />
-                                    {/if}
-                                </div>
-                                <span class="font-medium tabular-nums text-lf-primary" data-testid="pac-planner-plan-amount">{formatPlannerMoneyPlain(action.amount.amount, action.amount.currency, {digits})}</span>
-                            </div>
+                            <!-- P6: one sentence, the amount a badge in the middle of it. data-broker and data-currency say whom and what the step is for. -->
+                            <p class="text-lf-primary" data-testid="pac-planner-plan-sentence" data-broker={action.destination_broker_id} data-currency={action.amount.currency}>
+                                {parts.before}<span class="{BADGE.neutral} tabular-nums" data-testid="pac-planner-plan-amount">{formatPlannerMoneyPlain(action.amount.amount, action.amount.currency, {digits})}</span>{parts.after}
+                            </p>
                             <p class="{HINT} first-letter:uppercase">{fundingDetail(action)}</p>
                         </div>
                     {:else}
