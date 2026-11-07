@@ -13,7 +13,7 @@
     import {t} from '$lib/i18n';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {userSettings} from '$lib/stores/app/settings';
-    import {assertToolAccount, type CompatibleToolDescriptor} from '../../contracts';
+    import {assertToolAccount, prepareToolRun, type CompatibleToolDescriptor} from '../../contracts';
     import {PLANNER_CONTRACT_VERSION, PLANNER_TOOL_CODE} from './defaults';
     import {copiedOnly, refreshCopiedFacts, refreshPlan, refreshQuery, type RefreshSummary} from './copies';
     import type {PlannerSource} from './source';
@@ -92,6 +92,14 @@
 
     const apiVersion = $derived(descriptor.contract_version);
     const uiVersion = $derived(descriptor.ui.version);
+    /** How long the client waits for a calculation: the bar of the waiting panel fills against it. `null` when the descriptor cannot say. */
+    const timeoutMs = $derived.by((): number | null => {
+        try {
+            return prepareToolRun(PLANNER_TOOL_CODE, PLANNER_CONTRACT_VERSION, descriptor).clientTimeoutMs;
+        } catch {
+            return null;
+        }
+    });
     const problems = $derived(localProblems(draft).map(listLocalProblem));
     const reviewProblems = $derived.by(() => {
         if (problems.length > 0) return problems;
@@ -304,7 +312,7 @@
         {:else if refreshFailure}
             <RefreshFailedPanel error={refreshFailure} onretry={() => void calculate()} onproceed={() => void calculate({refresh: false})} onedit={() => editStep('review')} />
         {:else if run.busy}
-            <BusyPanel built={run.busy} onstop={() => run.stop()} />
+            <BusyPanel built={run.busy} {timeoutMs} onstop={() => run.stop()} />
         {:else if run.outcome}
             {#if run.stopped}
                 <p class={NOTICE.info} role="status" data-testid="pac-planner-stopped-previous">
