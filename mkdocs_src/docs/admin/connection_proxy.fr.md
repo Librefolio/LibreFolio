@@ -46,8 +46,7 @@ afin que le navigateur reçoive un cookie `Secure`.
     SESSION_COOKIE_SECURE=always
     ```
 
-    Redémarrez ensuite LibreFolio : avec Docker, exécutez `docker compose up -d` (un simple
-    `docker compose restart` conserve l’ancien environnement) ; sur une installation sur l’hôte, redémarrez
+    Redémarrez ensuite LibreFolio. Avec Docker Compose, exécutez `docker compose up -d` ; sur une installation sur l’hôte, redémarrez
     `./dev.py server`, qui lit aussi `.env`. Déconnectez-vous ensuite puis reconnectez-vous.
 
     N’utilisez `never` que pour le rare proxy qui prétend utiliser HTTPS alors que le navigateur est en HTTP simple. Voir
@@ -92,7 +91,7 @@ LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP
     contourner les limites ou consommer le quota de quelqu’un d’autre.
 
 - **Redémarrer après un changement** : LibreFolio lit la variable une fois par processus serveur. Avec Docker,
-  exécutez `docker compose up -d` (un simple `docker compose restart` conserve l’ancien environnement) ; sur une
+  exécutez `docker compose up -d` ; sur une
   installation sur l’hôte, redémarrez `./dev.py server`.
 - **L’en-tête doit contenir une seule adresse, écrite par le proxy lui-même** : jamais une valeur que le proxy transmet
   depuis le visiteur. `X-Forwarded-For` et `Forwarded` sont refusés : ils contiennent une liste dont la première
@@ -225,8 +224,6 @@ Pour permettre à LibreFolio de voir chaque visiteur, travaillez sur le serveur,
     ```bash
     docker compose up -d
     ```
-
-    Un simple `docker compose restart` conserve l’ancien environnement.
 
 4. **Vérifiez.** Ouvrez de nouveau LibreFolio à son adresse Tailscale, puis lisez le journal comme à l’étape 1. Les
    lignes de vos requêtes affichent maintenant l’adresse de l’appareil à la place de celle de la passerelle (via
