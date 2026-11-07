@@ -95,8 +95,8 @@ graph LR
         Server -->|Local forwarding| LibreFolio["📊 LibreFolio (Port 6040)"]
         Server -.->|"<font color='red'><b>Cannot expose</b></font>"| Other["🔌 Other Local Services (Different ports)"]
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
-    style Other fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;
+    style Other fill:#f8d7da,color:#1b1b1b,stroke:#dc3545,stroke-width:2px;
     linkStyle 3 stroke:#dc3545,stroke-width:2px;
 ```
 
@@ -168,7 +168,7 @@ graph LR
             TSC2 -->|socat: TCP/80| Service1["🔌 Service 1<br>(192.168.1.20:80)"]
         end
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;
 ```
 
 ### 📁 Passaggio 1: Prepara la cartella e lo script
