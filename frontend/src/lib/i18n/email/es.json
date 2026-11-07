@@ -42,8 +42,8 @@
       },
       "links": {
         "ok": "Los correos pueden llevar enlaces: LIBREFOLIO_PUBLIC_URL está definida, o el correo está desactivado.",
-        "missing": "LIBREFOLIO_PUBLIC_URL no está definida: el correo funciona, pero ninguno con enlace (contraseña olvidada, invitación, restablecimiento) puede salir.",
-        "invalid": "LIBREFOLIO_PUBLIC_URL no puede iniciar un enlace: necesita http:// o https:// y un nombre de host, sin nombre de usuario, contraseña, ? ni #. No puede salir ningún correo con enlace."
+        "missing": "LIBREFOLIO_PUBLIC_URL no está definida: no puede salir ningún correo con enlace (contraseña olvidada, invitación, restablecimiento). Define LIBREFOLIO_PUBLIC_URL={example} en tu .env y reinicia LibreFolio.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL no puede iniciar un enlace: necesita http:// o https:// y un nombre de host, sin nombre de usuario, contraseña, ? ni #. Defínela con una dirección como {example} y reinicia LibreFolio."
       }
     },
     "links": {
