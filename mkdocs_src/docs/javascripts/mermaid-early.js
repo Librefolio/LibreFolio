@@ -34,11 +34,20 @@
         var mermaid = window.mermaid;
         var initialize = mermaid.initialize.bind(mermaid);
         mermaid.initialize = function (config) {
-            return initialize(Object.assign({securityLevel: "loose"}, config));
+            var merged = Object.assign({securityLevel: "loose"}, config);
+            merged.themeCSS = (merged.themeCSS || "") + NODE_TEXT_CSS;
+            return initialize(merged);
         };
         mermaid.lfLoose = true;
         registerElk(mermaid);
     };
+
+    // The text of a node. Mermaid writes a node's own `color` (a `style X color:…` or a `classDef`) on the label's <div> and
+    // <span>, but the text is a <p> inside them, and Material's theme CSS colours `.nodeLabel p` with the theme's label colour
+    // (light in the dark theme): a pale box then shows light text, whatever colour the diagram asked for. The <p> takes the
+    // colour of its <span>, which is the theme's colour when the node asked for none and the node's own when it did.
+    // Appended after Material's CSS (same specificity, later wins), and only for node labels: an edge label keeps its colour.
+    var NODE_TEXT_CSS = ".nodeLabel p, .cluster-label p { color: inherit; }";
 
     function importElk(url) {
         return import(url);

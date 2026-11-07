@@ -741,7 +741,7 @@ Tests for utility modules and helper functions:
         "docs-mermaid-colours",
         utils_docs_mermaid_colours,
         name="Docs Mermaid Colours",
-        desc="every Mermaid style or classDef line of the documentation that sets a fill also sets the text colour: Material draws the text light in the dark theme, so a pale box without its own colour cannot be read",
+        desc="every Mermaid style or classDef line of the documentation that sets a fill also sets the text colour, and the early script appends the rule that lets a node's <p> inherit it (Material colours .nodeLabel p with the theme's light label colour in the dark theme: a pale box showed white text)",
         # Reads Markdown under mkdocs_src/docs: no DB, no server, no network, no writes.
         isolation="pure",
     )
