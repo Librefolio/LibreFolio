@@ -9,6 +9,8 @@ Supported resource types:
   - "js"   → single-file JS library (MathJax, etc.), plus the "companions" it
              loads from beside itself (MathJax's fonts), as its bundle names them
   - "font" → multi-file Google Fonts resource (CSS + woff2 subsets)
+  - "npm-esm" → the ES modules of an npm package (Mermaid's ELK layout), read from the package's tarball and
+                served only if its SRI hash is the pinned one
 
 Usage:
     python scripts/update_js_cache.py [--force]
@@ -18,11 +20,14 @@ Called automatically by:
     - Docker build (at build time)
 """
 
+import base64
 import hashlib
+import io
 import json
 import re
 import shutil
 import sys
+import tarfile
 import urllib.parse
 import urllib.request
 from contextlib import suppress
@@ -98,12 +103,25 @@ LIBRARIES = {
         },
     },
     # H6-3 (M-22): the documentation's diagrams are drawn by our own copy, pinned to one version and to the hash of that
-    # file; without internet they still draw. The ELK layout is not served (its ESM build is ~100 chunks).
+    # file; without internet they still draw.
     "mermaid": {
         "type": "js",
         "url": "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js",
         "target": "mermaid.min.js",
         "sha256": "581ed7d74bd9048d0e3a91363927d72ef22942d7722546b27f7cc29e35390eb8",
+        "vendor_dir_key": "mkdocs",
+    },
+    # The ELK layout of Mermaid, for the diagrams that say `layout: elk`. Same rule as Mermaid: our own copy, an exact version
+    # compatible with the pinned Mermaid (0.2.x takes `^11.0.2`; 1.x is for Mermaid 12), nothing asked of a CDN when a page
+    # opens. It is an ES module build: the entry point and ~100 chunks that the browser fetches from beside it, as it needs
+    # them (5 MB on disk, ~1 KB to start). The tarball is checked against the npm SRI hash before anything is written.
+    "mermaid-layout-elk": {
+        "type": "npm-esm",
+        "tarball": "https://registry.npmjs.org/@mermaid-js/layout-elk/-/layout-elk-0.2.3.tgz",
+        "integrity": "sha512-m46RVGfvKK1PSMdAFGDz2nksI4jusEkFxvf0lb48bYWmqLQxZpjtpruiw29MbOy9rlWJtuMf9EzG9fAF8CVZbg==",
+        "dist": "package/dist/",
+        "include": r"mermaid-layout-elk\.esm\.min\.mjs|chunks/mermaid-layout-elk\.esm\.min/[A-Za-z0-9_.-]+\.mjs",
+        "entry": "mermaid-layout-elk.esm.min.mjs",
         "vendor_dir_key": "mkdocs",
     },
     "noto-color-emoji": {
@@ -399,17 +417,103 @@ def _download_font_resource(vendor_dir: Path, manifest: dict, name: str, config:
     return True
 
 
+def _sri_of(content: bytes) -> str:
+    """The Subresource Integrity string npm publishes for a tarball: ``sha512-`` and the base64 of its SHA-512."""
+    return "sha512-" + base64.b64encode(hashlib.sha512(content).digest()).decode()
+
+
+def _update_npm_esm(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat download/manifest pipeline, no nested logic
+    """
+    Cache the ES modules of an npm package from its tarball.
+
+    The tarball is served only if its SRI hash is exactly ``config["integrity"]``: anything else is not written, and the
+    cached copy, if any, stays. Only the files under ``dist`` that match ``include`` are written (no source maps, no
+    types, no other builds), at their path below ``dist``; files of an earlier version that the new one no longer has are
+    removed once the new ones are in place. Returns True when the files were written.
+    """
+    print(f"📦 Checking {name}...")
+    lib_data = manifest.get("libraries", {}).get(name, {})
+    target_dir = vendor_dir / name
+    entry = target_dir / config["entry"]
+
+    if not force and entry.exists() and lib_data.get("integrity") == config["integrity"]:
+        print(f"  ✓ Already up-to-date ({lib_data.get('file_count', '?')} files)")
+        return False
+
+    content = download_file(config["tarball"], timeout=120)
+    if content is None:
+        if entry.exists():
+            print("  ⚠️  Download failed, keeping cached version")
+        else:
+            print("  ❌ Download failed and no cached version exists")
+            _hard_fail(name, "download failed, no cached version")
+        return False
+    if _sri_of(content) != config["integrity"]:
+        print("  ❌ The download does not match the pinned integrity, keeping what is cached")
+        _hard_fail(name, f"the download does not match the pinned integrity {config['integrity'][:19]}…")
+        return False
+
+    include = re.compile(config["include"])
+    dist = config["dist"]
+    files: dict[str, bytes] = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
+            for member in archive.getmembers():
+                if not member.isfile() or not member.name.startswith(dist):
+                    continue
+                relative = member.name[len(dist) :]
+                if ".." in relative.split("/") or not include.fullmatch(relative):
+                    continue
+                extracted = archive.extractfile(member)
+                if extracted is not None:
+                    files[relative] = extracted.read()
+    except (tarfile.TarError, OSError, EOFError) as error:
+        print(f"  ❌ The tarball cannot be read: {error}")
+        _hard_fail(name, "the tarball cannot be read")
+        return False
+    if config["entry"] not in files:
+        print(f"  ❌ The tarball has no {config['entry']}")
+        _hard_fail(name, f"the tarball has no {config['entry']}")
+        return False
+
+    for relative, data in files.items():
+        path = target_dir / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    removed = 0
+    for stale in [p for p in target_dir.rglob("*") if p.is_file() and p.relative_to(target_dir).as_posix() not in files]:
+        stale.unlink()
+        removed += 1
+
+    record = manifest.setdefault("libraries", {}).setdefault(name, {"versions": []})
+    record.update(
+        {
+            "type": "npm-esm",
+            "url": config["tarball"],
+            "integrity": config["integrity"],
+            "current_hash": get_file_hash(content),
+            "file_count": len(files),
+            "size": sum(len(data) for data in files.values()),
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    )
+    print(f"  ✅ Updated {len(files)} files ({record['size'] / 1024:.0f} KB)" + (f", {removed} removed" if removed else ""))
+    return True
+
+
 def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:
     """
     Update a single library.
 
     Returns True if updated, False if already up-to-date.
-    Dispatches to type-specific handler (js or font). A js library's companions
+    Dispatches to type-specific handler (js, font or npm-esm). A js library's companions
     are checked on every run, whether the script itself changed or not.
     """
     resource_type = config.get("type", "js")
     if resource_type == "font":
         return _download_font_resource(vendor_dir, manifest, name, config, force)
+    if resource_type == "npm-esm":
+        return _update_npm_esm(vendor_dir, manifest, name, config, force)
     updated = _update_js_file(vendor_dir, manifest, name, config, force)
     if config.get("companions"):
         updated = _update_companions(vendor_dir, manifest, name, config, force) or updated
