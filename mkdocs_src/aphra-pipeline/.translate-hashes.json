@@ -9082,7 +9082,7 @@
     }
   },
   "financial-theory/technical-analysis/risk-metrics/concentration.en.md": {
-    "md5": "2780625665edac2fb48486c74df40def",
+    "md5": "823b7f21898a6688e6a1a4ef9b520792",
     "langs_done": [
       "es",
       "fr",
@@ -9102,7 +9102,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-07T17:26:05.190347+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -9115,7 +9115,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 255.1,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-07T17:26:05.190347+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -9128,7 +9128,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 349.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-07T17:26:05.190347+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9954,7 +9954,7 @@
     }
   },
   "user/dashboard/risk.en.md": {
-    "md5": "57746609bf65460954db1eba53f7a23d",
+    "md5": "8fd2483a927f8881aa52ff9da4a88dfa",
     "langs_done": [
       "es",
       "fr",
@@ -9974,7 +9974,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 121.4,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-07T17:33:46.273825+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -9987,7 +9987,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 263.1,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-07T17:33:46.273825+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10000,7 +10000,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 147.7,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-07T17:33:46.273825+00:00",
         "stamped_by": "translate-stamp"
       }
     }
