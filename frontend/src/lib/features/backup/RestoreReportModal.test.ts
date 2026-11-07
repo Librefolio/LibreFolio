@@ -431,9 +431,10 @@ describe('RestoreReportModal — confirm and drop', () => {
         const {onConfirm} = mount(report({blockers: ['no_administrator'], administrators: [], restorable}));
 
         expect(section('restore-report-blocker')).toBeInTheDocument();
-        await type('violet');
-
-        expect(confirmButton()).toBeDisabled();
+        // C9-5: with a blocker nothing can be confirmed: neither the word nor «Restore and restart» is drawn, «Discard» stays.
+        expect(screen.queryByTestId('restore-confirm-input')).toBeNull();
+        expect(screen.queryByTestId('restore-confirm')).toBeNull();
+        expect(screen.getByTestId('restore-drop')).toBeEnabled();
         expect(onConfirm).not.toHaveBeenCalled();
     });
 
@@ -762,11 +763,9 @@ describe('B5-1b — RestoreReportModal: the owner to choose (managed)', () => {
         const {onConfirm} = mount(report({blockers: ['no_administrator'], administrators: [], restorable: false, owner_choice: choice()}));
 
         expect(section('restore-report-blocker')).toBeInTheDocument();
-        expect(field(), 'the field is closed while the archive cannot be restored').toBeDisabled();
-        await type('violet');
-        expect(confirmButton()).toBeDisabled();
-        await fireEvent.click(confirmButton());
-        await fireEvent.keyDown(field(), {key: 'Enter'});
+        // C9-5: the way to confirm is not drawn at all while the archive cannot be restored.
+        expect(screen.queryByTestId('restore-confirm-input')).toBeNull();
+        expect(screen.queryByTestId('restore-confirm')).toBeNull();
 
         expect(screen.queryByTestId('owner-choice-modal'), 'the owner is never asked for an archive that cannot be restored').toBeNull();
         expect(onConfirm).not.toHaveBeenCalled();
@@ -1009,11 +1008,15 @@ describe('C8 — RestoreReportModal: the blocker storage_limit', () => {
         expect(blocker().textContent).toContain('backup.restore.blocker.storage_limit_disk {"missing":"5.0 common.megabytes"}');
     });
 
-    it('confirm stays disabled whatever is typed, even if a report said restorable', async () => {
-        const {onConfirm} = mount(blocked({restorable: true}));
-        await type('violet');
+    it('nothing to confirm, even if a report said restorable: no word, no «Restore and restart», no «decide later»; «Discard» stays, and no expiry is said (C9-5)', async () => {
+        const {onConfirm, onDrop} = mount(blocked({restorable: true}), {onLater: vi.fn()});
 
-        expect(confirmButton()).toBeDisabled();
+        expect(screen.queryByTestId('restore-confirm-input')).toBeNull();
+        expect(screen.queryByTestId('restore-confirm')).toBeNull();
+        expect(screen.queryByTestId('restore-later'), 'its archive is gone: there is nothing to come back to').toBeNull();
+        expect(screen.queryByTestId('restore-report-expiry')).toBeNull();
+        await fireEvent.click(screen.getByTestId('restore-drop'));
+        expect(onDrop).toHaveBeenCalledTimes(1);
         expect(onConfirm).not.toHaveBeenCalled();
     });
 
@@ -1021,5 +1024,22 @@ describe('C8 — RestoreReportModal: the blocker storage_limit', () => {
         mount(report());
 
         expect(screen.queryByTestId('restore-report-blocker')).toBeNull();
+    });
+});
+
+// =====================================================================================================================
+// C9-6 — «I'll decide later»: the report closes, its check stays
+// =====================================================================================================================
+
+describe('C9-6 — RestoreReportModal: decide later', () => {
+    it("a restorable report offers «I'll decide later», which calls onLater; without onLater, no such button", async () => {
+        const onLater = vi.fn();
+        mount(report(), {onLater});
+        await fireEvent.click(screen.getByTestId('restore-later'));
+        expect(onLater).toHaveBeenCalledTimes(1);
+        cleanup();
+
+        mount(report());
+        expect(screen.queryByTestId('restore-later')).toBeNull();
     });
 });

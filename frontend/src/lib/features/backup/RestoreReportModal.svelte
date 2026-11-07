@@ -24,12 +24,14 @@
         /** `ownerUserId`: the account the owner chose (B5-1), `null` when the report asks for none. */
         onConfirm: (ownerUserId: number | null) => void;
         onDrop: () => void;
+        /** «I'll decide later» (C9-6): the report closes, its check stays on the server. Without it, no such button. */
+        onLater?: () => void;
         onClose: () => void;
         /** Where the word is picked: a test fixes it. */
         random?: () => number;
     }
 
-    let {open, report, busy = false, onConfirm, onDrop, onClose, random = Math.random}: Props = $props();
+    let {open, report, busy = false, onConfirm, onDrop, onLater, onClose, random = Math.random}: Props = $props();
 
     let typed = $state('');
     // Picked once, when the report opens: the same word while it stays open (a change of language picks in the new list).
@@ -228,32 +230,37 @@
             </p>
         {/if}
 
-        <p class="text-xs text-lf-muted" data-testid="restore-report-expiry">{$_('backup.restore.report.expires', {values: {date: formatDateTime(report.expires_at)}})}</p>
+        {#if !report.blockers.includes('storage_limit')}
+            <!-- A check refused by the space limit gave its archive's room back at once (C9-5): nothing is kept to expire. -->
+            <p class="text-xs text-lf-muted" data-testid="restore-report-expiry">{$_('backup.restore.report.expires', {values: {date: formatDateTime(report.expires_at)}})}</p>
+        {/if}
 
-        <!-- Always drawn, so that the way to confirm is the same; disabled while the archive cannot be restored. -->
-        <div class="space-y-2 border-t border-lf-subtle pt-4">
-            <p class="flex items-start gap-2 text-sm text-lf-primary">
-                <CircleCheck class={confirmable ? 'mt-0.5 shrink-0 text-lf-success' : 'mt-0.5 shrink-0 text-lf-muted'} size={16} aria-hidden="true" />
-                <span>{$_('backup.restore.confirm.instruction')}</span>
-            </p>
-            <p class="select-none text-center font-mono text-lg font-semibold tracking-widest text-lf-primary" data-testid="restore-confirm-word">{word}</p>
-            <input
-                class="w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
-                type="text"
-                autocomplete="off"
-                spellcheck="false"
-                aria-label={$_('backup.restore.confirm.label')}
-                bind:value={typed}
-                disabled={busy || !confirmable}
-                data-testid="restore-confirm-input"
-                onpaste={refuse}
-                ondrop={refuse}
-                onbeforeinput={refusePasted}
-                onkeydown={(event) => {
-                    if (event.key === 'Enter') confirm();
-                }}
-            />
-        </div>
+        <!-- C9-5: with a blocker nothing can be confirmed: neither the word nor «Restore and restart» is drawn. -->
+        {#if report.blockers.length === 0}
+            <div class="space-y-2 border-t border-lf-subtle pt-4">
+                <p class="flex items-start gap-2 text-sm text-lf-primary">
+                    <CircleCheck class={confirmable ? 'mt-0.5 shrink-0 text-lf-success' : 'mt-0.5 shrink-0 text-lf-muted'} size={16} aria-hidden="true" />
+                    <span>{$_('backup.restore.confirm.instruction')}</span>
+                </p>
+                <p class="select-none text-center font-mono text-lg font-semibold tracking-widest text-lf-primary" data-testid="restore-confirm-word">{word}</p>
+                <input
+                    class="w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                    type="text"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label={$_('backup.restore.confirm.label')}
+                    bind:value={typed}
+                    disabled={busy || !confirmable}
+                    data-testid="restore-confirm-input"
+                    onpaste={refuse}
+                    ondrop={refuse}
+                    onbeforeinput={refusePasted}
+                    onkeydown={(event) => {
+                        if (event.key === 'Enter') confirm();
+                    }}
+                />
+            </div>
+        {/if}
 
         <footer class="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -265,15 +272,28 @@
             >
                 {$_('backup.restore.report.drop')}
             </button>
-            <button
-                class="inline-flex items-center gap-2 rounded-lg bg-lf-danger-solid px-4 py-2 text-sm font-medium text-lf-on-danger-solid enabled:hover:bg-lf-danger-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
-                type="button"
-                disabled={!canConfirm}
-                data-testid="restore-confirm"
-                onclick={confirm}
-            >
-                {$_('backup.restore.confirm.button')}
-            </button>
+            {#if onLater && !report.blockers.includes('storage_limit')}
+                <button
+                    class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary enabled:hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                    type="button"
+                    disabled={busy}
+                    data-testid="restore-later"
+                    onclick={onLater}
+                >
+                    {$_('backup.restore.report.later')}
+                </button>
+            {/if}
+            {#if report.blockers.length === 0}
+                <button
+                    class="inline-flex items-center gap-2 rounded-lg bg-lf-danger-solid px-4 py-2 text-sm font-medium text-lf-on-danger-solid enabled:hover:bg-lf-danger-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                    type="button"
+                    disabled={!canConfirm}
+                    data-testid="restore-confirm"
+                    onclick={confirm}
+                >
+                    {$_('backup.restore.confirm.button')}
+                </button>
+            {/if}
         </footer>
     </div>
 </ModalBase>
