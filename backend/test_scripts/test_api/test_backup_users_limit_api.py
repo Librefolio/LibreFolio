@@ -44,6 +44,7 @@ LIMIT_VARIABLE = "LIBREFOLIO_MAX_USERS"
 CODE = "users_over_limit"
 USERS_FIELDS = ("users_active", "users_limit", "users_over_limit")
 STORAGE_FIELDS = ("storage_limit_mb", "storage_limit_locked", "storage_required_bytes", "storage_disk_missing_bytes")  # lot C8, after this one
+PARTS_FIELDS = ("uploads_size", "broker_reports_size")  # lot C9-10: the bar of what the backup holds
 #: The exact keys of ``RestoreStageReport`` before B5-1k2.
 FIELDS_BEFORE = {
     "backup_created_at",
@@ -151,8 +152,8 @@ async def test_the_report_over_the_limit_carries_the_numbers_and_the_warning(ins
     response = await api.poll(stage_id, user=apply_api.B3_ADMIN)
     report = response.json()["report"]
     assert [report.get(name, "<missing>") for name in USERS_FIELDS] == [5, 3, 2], f"[new] B5-1k2: 5 active, limit 3, 2 over: {sorted(report)}"
-    expected = FIELDS_BEFORE | set(USERS_FIELDS) | set(STORAGE_FIELDS)
-    assert set(report) == expected, f"exactly the keys of before, the three numbers and the storage ones: {sorted(set(report) ^ expected)}"
+    expected = FIELDS_BEFORE | set(USERS_FIELDS) | set(STORAGE_FIELDS) | set(PARTS_FIELDS)
+    assert set(report) == expected, f"exactly the keys of before, the three numbers, the storage ones and the parts: {sorted(set(report) ^ expected)}"
     assert report["warnings"] == api.as_read_by_admin(CODE), f"the warning, then credentials_from_backup, then the viewer's own: {report['warnings']}"
     assert report["restorable"] and report["blockers"] == [], "over the limit is no blocker of the check"
     assert [name for name in (*PLAIN_USERS, "@example") if name in response.text] == [], "no plain user's name and no address in the answer"
