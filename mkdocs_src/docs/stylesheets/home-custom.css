@@ -154,9 +154,8 @@
     opacity: 0.8;
 }
 
-/* Project badges: the three of librefolio.eu, same voices, icons and band, always together. One row, or one column
-   where the row does not fit (founder, 06/11/2026: never two and one). One colour for the three icons: on the dark card
-   the brand green would vanish, so they take the text role. */
+/* Project badges: the three of librefolio.eu, same voices, icons, colours and band, always together. One row, or one
+   column where the row does not fit (founder, 06/11/2026: never two and one). */
 .md-typeset ul.project-badges {
     display: flex;
     gap: 1em 2em;
@@ -194,12 +193,27 @@
     height: 2.75em;
     border-radius: 50%;
     background: var(--lf-surface-card);
-    color: var(--lf-text-primary);
 }
 
 .project-badge__icon svg {
     width: 1.5em;
     height: 1.5em;
+}
+
+/* The icons' colours of librefolio.eu: the lock in the text role (the brand green would vanish on the dark card), the
+   code in amber, the brokers in the link role. */
+.project-badge--private .project-badge__icon {
+    color: var(--lf-text-primary);
+}
+
+.project-badge--open .project-badge__icon {
+    color: var(--lf-warning);
+}
+
+.project-badge--brokers .project-badge__icon {
+    /* --lf-focus, the value --lf-link names: --lf-link is resolved on :root, so under the docs' dark scheme it keeps
+       the light green. */
+    color: var(--lf-focus);
 }
 
 .project-badge__text {
