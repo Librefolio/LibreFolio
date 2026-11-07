@@ -133,7 +133,8 @@
         "disk": "The disk also needs at least {missing} more free.",
         "member": "Not enough space: this would take LibreFolio past its total space limit. Free at least {free} by deleting files or reports, or ask an administrator to raise the limit."
       },
-      "openSettings": "Open the settings"
+      "openSettings": "Open the settings",
+      "marker": "Limit {limit}"
     },
     "errors": {
       "load": "The space used could not be loaded. Try again."

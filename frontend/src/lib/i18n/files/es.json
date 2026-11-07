@@ -133,7 +133,8 @@
         "disk": "El disco también necesita al menos {missing} más libres.",
         "member": "Espacio insuficiente: así LibreFolio superaría su espacio total. Libera al menos {free} eliminando archivos o informes, o pide a un administrador que suba el límite."
       },
-      "openSettings": "Abrir la configuración"
+      "openSettings": "Abrir la configuración",
+      "marker": "Límite {limit}"
     },
     "errors": {
       "load": "No se pudo cargar el espacio ocupado. Inténtalo de nuevo."
