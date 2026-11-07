@@ -130,8 +130,10 @@
       "exceeded": {
         "raise": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Portez l'espace total à au moins {required} dans Fichiers › Avancé, ou supprimez des fichiers ou des sauvegardes.",
         "locked": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Demandez à l'hébergeur de cette instance de porter la limite à au moins {required}, ou supprimez des fichiers ou des sauvegardes.",
-        "disk": "Le disque doit aussi avoir au moins {missing} de plus de libre."
-      }
+        "disk": "Le disque doit aussi avoir au moins {missing} de plus de libre.",
+        "member": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Libérez au moins {free} en supprimant des fichiers ou des rapports, ou demandez à un administrateur d'augmenter la limite."
+      },
+      "openSettings": "Ouvrir les paramètres"
     },
     "errors": {
       "load": "L'espace occupé n'a pas pu être chargé. Réessayez."

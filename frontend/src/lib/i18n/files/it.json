@@ -130,8 +130,10 @@
       "exceeded": {
         "raise": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Porta lo spazio totale ad almeno {required} in File › Avanzate, oppure elimina file o backup.",
         "locked": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Chiedi a chi ospita questa istanza di portare il limite ad almeno {required}, oppure elimina file o backup.",
-        "disk": "Anche il disco deve avere liberi almeno altri {missing}."
-      }
+        "disk": "Anche il disco deve avere liberi almeno altri {missing}.",
+        "member": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Libera almeno {free} eliminando file o report, oppure chiedi a un amministratore di alzare il limite."
+      },
+      "openSettings": "Apri le impostazioni"
     },
     "errors": {
       "load": "Non è stato possibile caricare lo spazio occupato. Riprova."
