@@ -31,6 +31,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Le tableau de bord et la page du courtier suivent les prix actuels** : chaque minute pendant que vous les utilisez, les montants, les KPI et les positions se mettent à jour d'eux-mêmes ; ils s'arrêtent lorsque l'onglet est masqué ou après deux minutes sans interaction (« Mises à jour en pause ») et reprennent à votre action suivante.
 - **Avertissements de qualité des données sur la page du courtier** : les prix anciens, les taux de change manquants ou anciens et leurs boutons de synchronisation y apparaissent aussi, pour chaque rôle.
 - **Graphique des positions : choisissez la fenêtre de la vue Glissant.** Une semaine, un mois, trois mois, un an ou une fenêtre personnalisée ; elle part de la fenêtre automatique.
+- Le camembert de répartition par actif montre aussi l'icône de l'actif dans son infobulle, comme celui par type.
 
 #### 📈 Graphiques
 
@@ -99,6 +100,10 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Une restauration interrompue ne sert plus de données dont elle ne peut pas garantir l'intégrité.** Lorsque l'état d'une restauration ne peut pas être lu, l'instance affiche une page qui demande l'administrateur (avec un lien vers l'assistance de l'instance lorsqu'elle est définie), conserve chaque copie vérifiée, et `./dev.py backup pending --recover` permet à l'administrateur de choisir entre les données d'avant et une nouvelle restauration.
 - Les tâches de sauvegarde indiquent le SHA-256 de l'archive ; un rapport de restauration indique que les comptes et identifiants proviennent de la sauvegarde, et avertit lorsque l'administrateur qui confirme n'y figure pas. Le guide explique les copies nocturnes avec restic ou Backrest.
 - **Les sauvegardes restent sur le serveur** : créées depuis l'application, la ligne de commande ou un panneau d'hébergement, elles sont listées dans un tableau (Paramètres › Sauvegarde et le nouvel onglet Fichiers › Sauvegardes) avec leur origine, leur type, leur taille et leur SHA-256, prêtes à être téléchargées ou supprimées. Les administrateurs peuvent définir un nettoyage automatique par taille totale et par ancienneté ; la dernière sauvegarde est toujours conservée.
+- **Restaurer une sauvegarde conservée par le serveur** : *Restaurer* sur la ligne d'une sauvegarde conservée (Paramètres › Sauvegarde, Fichiers › Sauvegardes) la vérifie directement depuis le serveur, sans téléchargement ni envoi ; une sauvegarde sécurisée demande son mot de passe.
+- **Vérifier un mot de passe avant de restaurer** : dans le rapport de restauration, choisissez un administrateur de la sauvegarde et saisissez un mot de passe pour savoir si vous pourrez vous connecter avec ensuite. Le mot de passe n'est jamais stocké, journalisé ni renvoyé.
+- **Une restauration peut attendre** : *Décider plus tard* garde l'archive vérifiée, et Paramètres › Sauvegarde permet de la reprendre ou de l'écarter depuis n'importe quel onglet ou appareil. Le rapport montre les administrateurs de la sauvegarde avec leur image et une barre de ce qu'elle contient ; une restauration qui ne peut pas continuer ne demande aucune confirmation, et une restauration refusée par la limite d'espace libère aussitôt la place.
+- *Actualiser* sur la liste des sauvegardes conservées, pour les sauvegardes faites en ligne de commande.
 
 #### 👥 Comptes, inscription et administrateurs
 
@@ -133,6 +138,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Envoyer par e-mail** : les boîtes de dialogue de lien d'invitation et de réinitialisation de mot de passe de Paramètres › Utilisateurs peuvent envoyer le lien par e-mail, un lien de réinitialisation dans la langue de son compte et une invitation dans la langue choisie dans la boîte de dialogue, celle de l'instance par défaut, le résultat nommant la langue utilisée, lorsque l'e-mail fonctionne et que `LIBREFOLIO_PUBLIC_URL` est défini. API : `POST /api/v1/email/links`.
 - **Avis de changement d'e-mail** : lorsque l'e-mail fonctionne et que quelqu'un change l'adresse e-mail d'un compte, LibreFolio écrit à l'adresse qu'il avait auparavant, en n'indiquant que le domaine de la nouvelle, afin que son propriétaire apprenne un changement qu'il n'a pas effectué. Au plus 3 avis de ce type partent par heure et par compte et par ancienne adresse ; au-delà, le changement passe quand même, sans l'avis.
 - **Les e-mails d'activation et de réinitialisation de mot de passe partagent une limite par réseau**, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 par heure), en plus du budget horaire de l'instance ; les mots de passe erronés ne la consomment jamais. Lorsqu'un e-mail est retenu, la page indique combien de minutes attendre, dans un encadré jaune.
+- **Le logo de LibreFolio dans chaque e-mail** : l'en-tête vert l'affiche, joint dans le message, il apparaît donc sans rien charger depuis le web. L'avis pour `LIBREFOLIO_PUBLIC_URL` manquante donne un exemple construit à partir de l'adresse que vous utilisez, avec un bouton Guide.
 
 #### 🔐 Sécurité et secrets
 
@@ -288,6 +294,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Sur la page Fichiers et dans les fichiers de rapport d’un courtier, Supprimer n’apparaît que sur les fichiers que vous pouvez supprimer ; une suppression groupée laisse les autres en place, avec un avertissement.
 - **Fichiers système** : les icônes créées à l'installation affichent « système » comme auteur, au lieu d'un numéro d'utilisateur.
 - **Fichiers, pour les administrateurs** : la limite d'espace se trouve dans un panneau fermé « Avancé » et s'appelle Espace total de LibreFolio ; elle s'applique désormais : un nouveau fichier, un rapport de courtier, une sauvegarde manuelle ou une restauration qui la dépasserait sont refusés, et le message indique à combien la porter. Les transactions, les prix, la base de données et les sauvegardes du panneau d'hébergement ou de la ligne de commande ne sont jamais arrêtés. Le nettoyage automatique est aussi un panneau fermé, et indique que ses règles s'appliquent dans l'heure. L'enregistrement de l'un ou l'autre affiche une confirmation verte, et le rappel sur le même disque est désormais une simple note.
+- **Un refus de la limite d'espace s'affiche là où vous êtes** (un envoi, un import, la carte des sauvegardes), avec *Ouvrir les paramètres* pour les administrateurs et la place à libérer pour les utilisateurs. Au-delà de la limite, la barre d'espace garde toutes ses parties, avec un repère à la limite et des rayures au-delà ; une restauration en cours est une partie à part.
 
 #### 💱 Codes de devise
 
@@ -371,6 +378,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Le site de documentation utilise les mêmes couleurs que l’application**, en thème clair et en thème sombre.
 - **La documentation ne décrit plus l’exécution de LibreFolio pour d’autres personnes :** les pages sur les fournisseurs d’hébergement, le panneau d’hébergement et le réveil planifié ont disparu, et la page d’accueil indique « Auto-hébergé ».
 - **L'en-tête de la documentation place le commutateur de thème à côté du sélecteur de langue**, comme dans l'application ; le lien 🚀 vers l'application, affiché lorsque LibreFolio est en cours d'exécution, prend la place qu'occupait le commutateur de thème.
+- Le guide e-mail indique où placer les variables dans `.env` et comment écrire un mot de passe d'application Gmail (sans espaces), et chaque page donne une seule phrase pour le redémarrage.
 
 ### 🐛 Corrections
 
@@ -427,6 +435,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Import : la vérification effectuée à l'arrivée des lignes n'est plus écartée.** Sur les imports de plus de 50 lignes, les lignes refusées n'apparaissaient qu'après ⚡ Valider maintenant.
 - Import, étape 3 : les notes bleues d'un importateur ne sont plus comptées comme des avertissements. Le tableau des résultats et le résumé affichent séparément les avertissements ⚠️ et les notes ℹ️, le détail du fichier les liste sous deux titres, et la confirmation ne compte que les avertissements lorsqu'elle parle d'avertissements.
 - Le guide d'import ne renvoie plus à un bouton qui peut manquer lorsqu'aucun fichier n'a été lu.
+- L'assistant d'import ne continue plus sans un fichier refusé par le serveur : il reste à la première étape, dit pourquoi et renvoie le fichier.
 
 #### 🏦 Courtiers et transferts
 
@@ -464,6 +473,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Les quantités du tableau Performance ne comptent plus une transaction datée après la fin du rapport.
 - Séries de positions : un actif additionné sur ses courtiers conserve son pourcentage lorsque des unités étaient en transit au début de la période.
 - **Transactions sur le tableau de bord :** le sélecteur de taille de page fonctionne.
+- La nouvelle icône, le nom, le type ou la classification d'un actif apparaissent aussitôt dans le tableau de bord : le rapport ne garde plus les anciens jusqu'à 30 minutes.
 
 #### 🧮 Lots
 
