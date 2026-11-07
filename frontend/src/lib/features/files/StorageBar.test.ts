@@ -734,3 +734,21 @@ describe('StorageBar — the limit is in a closed «Advanced» panel', () => {
         expect(panel).not.toContainElement(screen.getByTestId('storage-bar-track'));
     });
 });
+
+// =====================================================================================================================
+// C9-1 — «Open the settings» (`/files?storage=limit`) opens the «Advanced» panel of the limit
+// =====================================================================================================================
+describe('StorageBar — opened from «Open the settings»', () => {
+    it('openAdvanced: the panel is open once the bar is drawn; without it, closed', async () => {
+        api.get.mockResolvedValueOnce(LIMIT_USAGE());
+        const StorageBar = await loadBar();
+        render(StorageBar, {props: {openAdvanced: true}});
+        await waitFor(() => expect(bar()).toHaveAttribute('data-state', 'ready'));
+
+        await waitFor(() => expect(screen.getByTestId('storage-advanced')).toHaveAttribute('data-open', 'true'));
+        cleanup();
+
+        await mountReady(LIMIT_USAGE());
+        expect(screen.getByTestId('storage-advanced')).toHaveAttribute('data-open', 'false');
+    });
+});

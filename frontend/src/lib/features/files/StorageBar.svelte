@@ -13,7 +13,7 @@
   Event: `storage.limit.saved`.
 -->
 <script lang="ts">
-    import {untrack} from 'svelte';
+    import {tick, untrack} from 'svelte';
     import {HardDrive, LoaderCircle, Lock, RefreshCw, TriangleAlert} from 'lucide-svelte';
     import {backupFailureCode, getInstanceStorage, saveStorageLimit, storageLimitSaveCode, type InstanceStorage} from '$lib/features/backup/backupApi';
     import {backupListSignal} from '$lib/features/backup/backupList.svelte';
@@ -35,6 +35,17 @@
         disk: 'bg-lf-neutral',
         free: 'bg-transparent',
     };
+
+    interface Props {
+        /** Open the «Advanced» panel of the limit and bring it into view once the bar is drawn (C9-1, `/files?storage=limit`). */
+        openAdvanced?: boolean;
+    }
+
+    let {openAdvanced = false}: Props = $props();
+
+    let advancedOpen = $state(false);
+    let advancedRoot = $state<HTMLDivElement | undefined>(undefined);
+    let advancedShown = false;
 
     let usage = $state<InstanceStorage | null>(null);
     let failed = $state(false);
@@ -69,6 +80,14 @@
     $effect(() => {
         void backupListSignal.version;
         untrack(() => void load());
+    });
+
+    // C9-1: asked from an «Open the settings» link: the panel opens, once, as soon as it is drawn, and comes into view.
+    $effect(() => {
+        if (!openAdvanced || advancedShown || advancedRoot === undefined) return;
+        advancedShown = true;
+        advancedOpen = true;
+        void tick().then(() => advancedRoot?.scrollIntoView?.({block: 'center'}));
     });
 
     // --- The limit ---------------------------------------------------------------------------------------------------
@@ -179,38 +198,40 @@
             </p>
         {/if}
 
-        <FoldPanel title={$_('storage.advanced.title')} testId="storage-advanced">
-            <div class="flex flex-wrap items-end gap-3">
-                <div class="space-y-1">
-                    <label class="block text-sm font-medium text-lf-secondary" for="storage-limit-mb">{$_('storage.limit.label')}</label>
-                    <input class={fieldClass} id="storage-limit-mb" data-testid="storage-limit-mb" type="number" inputmode="numeric" min="0" step="1" value={limitText} disabled={locked} oninput={(event) => ((limitText = event.currentTarget.value), limitEdited())} />
+        <div bind:this={advancedRoot}>
+            <FoldPanel title={$_('storage.advanced.title')} testId="storage-advanced" bind:open={advancedOpen}>
+                <div class="flex flex-wrap items-end gap-3">
+                    <div class="space-y-1">
+                        <label class="block text-sm font-medium text-lf-secondary" for="storage-limit-mb">{$_('storage.limit.label')}</label>
+                        <input class={fieldClass} id="storage-limit-mb" data-testid="storage-limit-mb" type="number" inputmode="numeric" min="0" step="1" value={limitText} disabled={locked} oninput={(event) => ((limitText = event.currentTarget.value), limitEdited())} />
+                    </div>
+                    <button
+                        class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                        type="button"
+                        data-testid="storage-limit-save"
+                        disabled={!canSave}
+                        onclick={() => void saveLimit()}
+                    >
+                        {#if limitState === 'saving'}
+                            <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
+                        {/if}
+                        {$_('storage.limit.save')}
+                    </button>
                 </div>
-                <button
-                    class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
-                    type="button"
-                    data-testid="storage-limit-save"
-                    disabled={!canSave}
-                    onclick={() => void saveLimit()}
-                >
-                    {#if limitState === 'saving'}
-                        <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
-                    {/if}
-                    {$_('storage.limit.save')}
-                </button>
-            </div>
-            <p class="text-xs text-lf-muted">{$_('storage.limit.hint')}</p>
-            {#if locked}
-                <p class="flex items-center gap-2 text-xs text-lf-secondary" data-testid="storage-limit-locked">
-                    <Lock size={14} aria-hidden="true" />
-                    {$_('storage.limit.locked')}
-                </p>
-            {/if}
-            {#if limitState === 'error'}
-                <p class="flex items-center gap-2 text-sm text-lf-danger-on-soft" role="alert" data-testid="storage-limit-error" data-error-code={limitErrorCode}>
-                    <TriangleAlert class="shrink-0" size={16} aria-hidden="true" />
-                    {$_(`storage.limit.errors.${limitErrorCode}`)}
-                </p>
-            {/if}
-        </FoldPanel>
+                <p class="text-xs text-lf-muted">{$_('storage.limit.hint')}</p>
+                {#if locked}
+                    <p class="flex items-center gap-2 text-xs text-lf-secondary" data-testid="storage-limit-locked">
+                        <Lock size={14} aria-hidden="true" />
+                        {$_('storage.limit.locked')}
+                    </p>
+                {/if}
+                {#if limitState === 'error'}
+                    <p class="flex items-center gap-2 text-sm text-lf-danger-on-soft" role="alert" data-testid="storage-limit-error" data-error-code={limitErrorCode}>
+                        <TriangleAlert class="shrink-0" size={16} aria-hidden="true" />
+                        {$_(`storage.limit.errors.${limitErrorCode}`)}
+                    </p>
+                {/if}
+            </FoldPanel>
+        </div>
     {/if}
 </section>
