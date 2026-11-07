@@ -428,7 +428,9 @@ test.describe('PAC allocator (beta) on real data — 1.2 gap 3', () => {
             await expect(dialog.getByTestId('pac-planner-liquidity-copy-body'), 'the brokers the account owns were not read').toHaveAttribute('data-state', 'ready', {timeout: READ_TIMEOUT_MS});
             const row = dialog.locator(`[data-testid="pac-planner-liquidity-copy-broker"][data-broker-id="${brokerId}"]`);
             await expect(row, 'the account owns its broker: it may be copied').toHaveAttribute('data-selectable', 'true');
-            await row.getByTestId('pac-planner-liquidity-copy-check').check();
+            // A Broker is a tile pressed to choose it (P2), not a tick box.
+            await row.getByTestId('pac-planner-liquidity-copy-check').click();
+            await expect(row.getByTestId('pac-planner-liquidity-copy-check')).toHaveAttribute('aria-pressed', 'true');
             await expect(row).toHaveAttribute('data-selected', 'true');
             await dialog.getByTestId('pac-planner-liquidity-copy-apply').click();
             await expect(dialog).toHaveCount(0, {timeout: UI_TIMEOUT_MS});
