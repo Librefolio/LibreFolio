@@ -171,6 +171,7 @@
       "viewRollingHint": "Porcentaje que se movió el precio del activo en una ventana móvil a lo largo del período: para comparar activos entre sí"
     },
     "allocationNoShares": "No hay porcentajes que mostrar: las porciones suman cero o menos (por ejemplo, un descubierto que anula tus posiciones). Los importes se listan debajo.",
-    "allocationHistoryNoShares": "No hay porcentajes que mostrar: en estos días las porciones suman cero o menos."
+    "allocationHistoryNoShares": "No hay porcentajes que mostrar: en estos días las porciones suman cero o menos.",
+    "pnlDeltaDayTooltip": "Variación de hoy del P&L total, y esa variación en porcentaje respecto al valor de la cartera de ayer."
   }
 }
