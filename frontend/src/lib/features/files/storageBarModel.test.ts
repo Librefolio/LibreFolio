@@ -346,3 +346,14 @@ describe('storageBarModel — rounding and degenerate bars', () => {
         expect(JSON.stringify(entry)).toBe(before);
     });
 });
+
+describe('storageBarModel — a restore under way (C9-7)', () => {
+    it('the restore part is drawn after the backups, and only when there is one', async () => {
+        const withRestore = await modelOf(usage({database: 10 * MiB, backups: 10 * MiB}, {restore_bytes: 5 * MiB, data_bytes: 25 * MiB, limit_mb: 100} as Partial<InstanceStorage>));
+        expect(ids(withRestore)).toEqual(['database', 'backups', 'restore']);
+        expect(withRestore.segments.find((segment) => segment.id === 'restore')?.bytes).toBe(5 * MiB);
+
+        const without = await modelOf(usage({database: 10 * MiB}, {limit_mb: 100}));
+        expect(ids(without)).not.toContain('restore');
+    });
+});

@@ -31,6 +31,7 @@
         uploads: 'bg-lf-info',
         brokerReports: 'bg-lf-success',
         backups: 'bg-lf-warning',
+        restore: 'bg-lf-danger',
         dataOther: 'bg-lf-checked',
         disk: 'bg-lf-neutral',
         free: 'bg-transparent',

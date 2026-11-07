@@ -13,7 +13,7 @@
 import type {InstanceStorage} from '$lib/features/backup/backupApi';
 
 export type StorageMode = 'limit' | 'volume' | 'data';
-export type StorageSegmentId = 'database' | 'uploads' | 'brokerReports' | 'backups' | 'dataOther' | 'disk';
+export type StorageSegmentId = 'database' | 'uploads' | 'brokerReports' | 'backups' | 'restore' | 'dataOther' | 'disk';
 
 export interface StorageSegment {
     id: StorageSegmentId;
@@ -56,6 +56,8 @@ export function storageBarModel(usage: InstanceStorage): StorageBarModel {
         {id: 'uploads', bytes: usage.uploads_bytes},
         {id: 'brokerReports', bytes: usage.broker_reports_bytes},
         {id: 'backups', bytes: usage.backups_bytes},
+        // C9-7: a restore under way (the uploaded archive and its opened version) counts until it ends or is discarded.
+        {id: 'restore', bytes: usage.restore_bytes ?? 0},
         {id: 'dataOther', bytes: usage.other_bytes},
     ];
     if (mode === 'volume') parts.push({id: 'disk', bytes: Math.max(0, (usage.volume_used_bytes ?? 0) - usage.data_bytes)});
