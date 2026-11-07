@@ -36,6 +36,7 @@ from urllib.parse import urlsplit
 # Sibling modules: dev.py and a standalone run both put this directory on sys.path.
 import changelog as cl
 from code_blocks import FencedBlock, code_indent_issues, code_line_mask
+import page_equivalence as pe
 from page_anchors import file_anchors, render_anchors  # MkDocs is imported only when a page renders
 
 # Import shared infrastructure from translate_docs
@@ -1532,6 +1533,17 @@ def check_math_indentation(
 # Main validation orchestration
 # ---------------------------------------------------------------------------
 
+def _as_check(function):
+    """A ``page_equivalence`` function as a validator check: its differences become ERROR issues."""
+
+    def check(source: str, translated: str, cache_key: str, lang: str) -> list[Issue]:
+        return [Issue(severity=Severity.ERROR, file=cache_key, lang=lang, check=d.check, message=d.message, line=d.line) for d in function(source, translated)]
+
+    check.__name__ = function.__name__
+    check.__doc__ = function.__doc__
+    return check
+
+
 ALL_CHECKS = [
     ("heading-structure", check_heading_structure, True),  # needs source + translated
     ("links", check_links, True),
@@ -1552,6 +1564,14 @@ ALL_CHECKS = [
     ("file-size", check_file_size, True),
     ("artifacts", check_artifacts, False),  # only needs translated
     ("admonition-indent", check_admonition_indent, True),  # uses source for title comparison
+    # page_equivalence.py: what a reader of another language must still find (see its docstring)
+    ("mermaid", _as_check(pe.check_mermaid), True),  # same diagrams, nodes, arrows, style/classDef
+    ("content-tabs", _as_check(pe.check_tabs), True),  # same tabs, proper names kept, 4-space body
+    ("tables", _as_check(pe.check_tables), True),  # same tables, rows, columns
+    ("identifiers", _as_check(pe.check_identifiers), True),  # same variables, dev.py commands, paths
+    ("code-content", _as_check(pe.check_code_content), True),  # a command is not a comment
+    ("admonition-sequence", _as_check(pe.check_admonition_sequence), True),  # marker, type, depth, nested too
+    ("heading-anchors", _as_check(pe.check_heading_anchors), True),  # explicit {: #id } anchors
 ]
 
 

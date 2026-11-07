@@ -31,6 +31,7 @@ from pathlib import Path
 
 # Sibling modules: dev.py and a standalone run both put this directory on sys.path.
 import changelog as cl
+import page_equivalence as pe
 from code_blocks import code_line_mask, restore_code_indent
 
 # ---------------------------------------------------------------------------
@@ -958,6 +959,11 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
             broken.append(f"  #{idx + 1} (TRN L{tline}): {', '.join(errs)}\n" f"    EN:  {src_f}\n" f"    TRN: {tf}")
     if broken:
         issues.append(f"LATEX_SYNTAX: {len(broken)} formula(s) with broken LaTeX:\n" + "\n".join(broken))
+
+    # ── 13b. What a reader must still find: diagrams, tabs, tables, identifiers, code, admonitions, anchors ──
+    for check in (pe.check_mermaid, pe.check_tabs, pe.check_tables, pe.check_identifiers, pe.check_code_content, pe.check_admonition_sequence, pe.check_heading_anchors):
+        for difference in check(source_text, translated_text):
+            issues.append(f"{difference.check.upper().replace('-', '_')}: {difference.message}")
 
     # ── 14. Source heading outline (for critic reference) ──
     info.append("SOURCE_OUTLINE (for reference):")
