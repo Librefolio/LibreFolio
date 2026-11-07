@@ -446,19 +446,19 @@
           "assets": {
             "asset": "Actif",
             "buyMid": "Valeur achetée",
-            "finalValue": "Valeur après le plan",
+            "finalValue": "Valeur finale",
             "residual": "Écart à l’idéal",
-            "residualHint": "Valeur après le plan moins valeur idéale : positive si l’actif finit au-dessus de sa part, négative s’il finit en dessous.",
+            "residualHint": "Valeur finale moins valeur idéale : positive si l’actif finit au-dessus de sa part, négative s’il finit en dessous.",
             "targetValue": "Valeur idéale",
             "totals": "Totaux (comptabilité)",
             "bars": "Cible et après",
-            "buyMidHelp": "La valeur de ce que le plan achète de cet actif, au prix coté : sans frais ni marge de prix. Dans un PAC, qui part de zéro, elle est égale à la valeur après le plan. Ce qui sort vraiment des liquidités figure dans le Plan opérationnel.",
+            "buyMidHelp": "La valeur de ce que le plan achète de cet actif, au prix coté : sans frais ni marge de prix. Dans un PAC, qui part de zéro, elle est égale à la valeur à la fin du plan. Ce qui sort vraiment des liquidités figure dans le Plan opérationnel.",
             "targetShare": "Part cible",
-            "finalShare": "Part après le plan",
+            "finalShare": "Part finale",
             "targetShareHelp": "La part que vous avez choisie pour cet actif à l’étape Cibles.",
-            "finalShareHelp": "La part de l’actif dans la valeur de tous ces actifs après le plan. Comparez-la à la part cible pour voir comment l’équilibre entre les actifs change.",
+            "finalShareHelp": "La part de l’actif dans la valeur de tous ces actifs à la fin du plan. Comparez-la à la part cible pour voir comment l’équilibre entre les actifs change.",
             "targetValueHelp": "Ce que vaudrait l’actif avec exactement sa part cible : part cible × base des cibles. Dans un PAC, qui part de zéro, la base est constituée des liquidités utilisables.",
-            "finalValueHelp": "Ce que vaut l’actif après le plan : les unités que le plan achète, au prix coté et, si nécessaire, au taux de l’étape Change. Dans un PAC, qui part de zéro, ce montant est égal à la valeur achetée."
+            "finalValueHelp": "Ce que vaut l’actif à la fin du plan : les unités que le plan achète, au prix coté et, si nécessaire, au taux de l’étape Change. Dans un PAC, qui part de zéro, ce montant est égal à la valeur achetée."
           },
           "badges": {
             "decimalVerified": "Vérifié en Decimal",
@@ -526,7 +526,7 @@
             "scaleHelp": "Une seule échelle pour les deux cartes : la même couleur est le même poids. Survolez un pays, ou touchez-le, pour voir ses deux poids.",
             "mapUnavailable": "Impossible de charger la carte : les poids sont listés ici.",
             "hairline": "de moins de 0,01 point",
-            "help": "Comment les actifs se répartissent par pays, type et secteur, selon leurs expositions déclarées : la répartition idéale suit vos parts cibles, la réelle les parts après le plan. Les graphiques ne changent pas le plan.",
+            "help": "Comment les actifs se répartissent par pays, type et secteur, selon leurs expositions déclarées : la répartition idéale suit vos parts cibles, la réelle les parts à la fin du plan. Les graphiques ne changent pas le plan.",
             "ideal": "Répartition idéale",
             "actual": "Répartition réelle"
           },
@@ -565,7 +565,7 @@
             "title": "Chiffres clés",
             "help": {
               "fixedReference": "Le montant auquel s’appliquent les pourcentages cibles : ce que vous détenez déjà des actifs choisis, plus les liquidités que le plan peut atteindre.",
-              "finalInvested": "La valeur des actifs choisis après le plan.",
+              "finalInvested": "La valeur des actifs choisis à la fin du plan.",
               "shortfall": "La part de la base qui ne finit pas dans les actifs : liquidités restées libres, coûts et arrondis.",
               "explicitCost": "Frais des courtiers, spreads de change et marges de prix que vous avez définies, sur tout le plan.",
               "orders": "Le nombre d’ordres que le plan vous demande de passer.",
@@ -617,7 +617,7 @@
               "self_reserved_tax": "Impôts provisionnés par vous",
               "sell_fees": "Frais de vente"
             },
-            "freeCash": "Liquidités restées libres après le plan, au total : {amount}",
+            "freeCash": "Liquidités restées libres à la fin du plan, au total : {amount}",
             "hideZero": "Afficher moins de colonnes",
             "item": "Courtier et devise",
             "showZero": "Afficher {count, plural, one {# colonne de plus} other {# colonnes de plus}}",
@@ -631,7 +631,7 @@
               "buy_debit": "Les montants des ordres chez ce courtier dans cette devise, frais exclus.",
               "buy_fees": "Les frais du courtier sur ces ordres.",
               "rounding_delta": "La part des montants de cette ligne qui vient de l’arrondi à la plus petite unité de la devise. Elle y est déjà incluse.",
-              "final_spendable": "Ce qui reste dans ces liquidités après le plan.",
+              "final_spendable": "Ce qui reste dans ces liquidités à la fin du plan.",
               "final_physical": "Ce qui reste disponible plus les impôts que vous avez provisionnés.",
               "alwaysZero": "Toujours 0 dans un PAC : il ne fait qu’acheter."
             }
@@ -895,11 +895,11 @@
           "intro": "Parmi tous les plans d’achat qui respectent ce que vous avez réglé aux étapes précédentes, la stratégie choisit le meilleur.",
           "none": "Le contrat du backend ne propose aucune stratégie : le plan ne peut pas être calculé.",
           "cascadeRule": "Chaque critère ne départage que les plans encore à égalité sur ceux du dessus.",
-          "l2Help": "Distance aux cibles : pour chaque actif, l’écart entre sa valeur après le plan et sa part cible de R, au carré, puis additionné sur tous les actifs. R est ce qui est déjà investi dans ces actifs plus les liquidités que vous pouvez utiliser. Le plan avec la somme la plus basse l’emporte ; le carré fait peser davantage les grands écarts. Valeurs au prix coté, sans frais ni marge.",
+          "l2Help": "Distance aux cibles : pour chaque actif, l’écart entre sa valeur à la fin du plan et sa part cible de R, au carré, puis additionné sur tous les actifs. R est ce qui est déjà investi dans ces actifs plus les liquidités que vous pouvez utiliser. Le plan avec la somme la plus basse l’emporte ; le carré fait peser davantage les grands écarts. Valeurs au prix coté, sans frais ni marge.",
           "priorityHelp": "Vous choisissez les numéros à l’étape Routes, pour les actifs que plusieurs courtiers peuvent acheter, et à l’étape Courtiers, pour les sources de liquidités : le plus bas l’emporte. Tous à 0 = aucune préférence.",
           "tieBreakTitle": "Départage final",
           "tieBreak": "S’il reste encore une égalité, un ordre fixe des actifs et des courtiers décide. Une recherche qui se termine d’elle-même donne toujours le même plan avec les mêmes données ; une recherche arrêtée par une limite de temps ou de nœuds peut donner un autre plan.",
-          "l2Formula": "Distance aux cibles :\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$ : valeur de l’actif après le plan\n• $p_i$ : sa cible\n• $R$ : déjà investi plus liquidités utilisables\nLe plan à la somme la plus basse l’emporte : le carré fait peser davantage les grands écarts. Au prix coté, sans frais ni marge."
+          "l2Formula": "Distance aux cibles :\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$ : valeur de l’actif à la fin du plan\n• $p_i$ : sa cible\n• $R$ : déjà investi plus liquidités utilisables\nLe plan à la somme la plus basse l’emporte : le carré fait peser davantage les grands écarts. Au prix coté, sans frais ni marge."
         },
         "summary": {
           "assets": "Actifs",
