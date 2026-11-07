@@ -17,20 +17,20 @@ Cada bloque a continuación sigue un patrón: qué responde, una captura de pant
 ¿Cuánto podrías perder, y qué tan mal ha sido ya? Cada cifra aquí es algo que tu cartera realmente experimentó en el período; los depósitos y retiros no cuentan como ganancias ni pérdidas.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="El bloque ¿Cuánto puede doler?: las tarjetas Un mal día, Treinta malos días y La peor caída, cada una con su importe, y sus líneas de detalle (el peor día y cuándo, los 30 peores días y cuándo, las fechas de la peor caída y cuánto duró, recuperación necesaria, caída en riesgo, media más allá del umbral); luego Tiempo pasado bajo el pico con el índice de Ulcer, y la Distribución de rendimientos diarios con el umbral de VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="El bloque ¿Cuánto puede doler?: las tarjetas Un mal día, Treinta malos días y La peor caída, cada una con su importe, y sus líneas de detalle (el peor día y cuándo, los 30 peores días y cuándo, las fechas de la peor caída y cuánto duró, recuperación necesaria, caída en riesgo, media más allá del umbral, índice de Ulcer); luego Tiempo pasado bajo el pico, y la Distribución de rendimientos diarios con el umbral de VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Herramientas mostradas**
 
 - **Un mal día**, **Treinta malos días** — tu pérdida promedio en el peor 5% de los días, o de los períodos de 30 días → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Umbral de VaR** — en *Distribución de los rendimientos diarios*: la pérdida diaria que solo el peor 5% de los días superó; una línea discontinua la marca en el gráfico, y al pasar sobre una barra se ve cuántos días cayeron en ella y si queda más allá del umbral → [Valor en riesgo](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **Umbral de VaR** — en *Distribución de los rendimientos diarios*: la pérdida diaria que solo el peor 5% de los días superó; una línea discontinua la marca en el gráfico, y al pasar sobre una barra se ve cuántos días cayeron en ella y si queda más allá del umbral; la rueda o dos dedos amplían el gráfico, y con muchas barras aparece un deslizador debajo → [Valor en riesgo](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
 - **El peor día** — bajo *Un mal día*: el peor día del período, y cuándo fue → [Peor realización](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
 - **Los 30 peores días** — bajo *Treinta malos días*: el peor período de 30 días que la cartera realmente atravesó, y cuándo fue. *Treinta malos días* es en cambio un promedio del peor 5%, que ningún período mostró nunca por sí solo
 - **La peor caída** — la caída más profunda desde un máximo hasta un mínimo posterior, cuándo empezó y terminó, y cuánto duró → [Caída máxima](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Caída en riesgo** — cuán por debajo de su pico estuvo la cartera, dejando de lado su peor 5% de días → [Caída en riesgo](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Media más allá del umbral** — cuán por debajo de su pico estuvo, en promedio, en esos peores días → [Caída en riesgo condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
 - **Bajo el máximo, hoy** — cuán por debajo de su último máximo está la cartera hoy → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Índice de Ulcer** — bajo *Tiempo bajo el pico*: cuán profundas y cuán largas fueron las caídas; más bajo es más calmado → [Índice de Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
+- **Índice de Ulcer** — bajo *La peor caída*, junto a la Caída en riesgo: cuán profundas y cuán largas fueron las caídas; más bajo es más calmado → [Índice de Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **Cómo leerlo**
 
@@ -52,8 +52,8 @@ Poseer muchas posiciones no es lo mismo que estar diversificado. Este bloque mue
 
 **Herramientas mostradas**
 
-- **¿Cuántas apuestas independientes tengo realmente?** — cuán uniformemente está repartido tu dinero → [Concentración](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
-- **¿Repartir el dinero ha servido de algo?** — cuánto se amortiguan tus posiciones entre sí → [Concentración](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **¿Cuántas apuestas independientes tengo realmente?** — el número efectivo de posiciones: cuán uniformemente está repartido tu dinero; por encima del número de posiciones, el exceso viene de la parte no cubierta (liquidez y posiciones sin precio) → [Concentración](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **¿Repartir el dinero ha servido de algo?** — cuánto se amortiguan tus posiciones entre sí: 1 significa ningún beneficio, más alto es mejor, hasta unas √N para N posiciones → [Concentración](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
 - **¿Cuánto de mí no se mide aquí?** — efectivo, más posiciones sin precios utilizables → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
 - **Peso** y **contribución al riesgo** — la parte de tu dinero y de tu riesgo que corresponde a cada posición → [Contribución al riesgo](../../financial-theory/technical-analysis/risk-metrics/risk-contribution.md)
 - **¿Cuáles de estas son la misma apuesta?** — cuán de cerca se mueve cada par de posiciones → [Correlación](../../financial-theory/technical-analysis/risk-metrics/correlation.md)
