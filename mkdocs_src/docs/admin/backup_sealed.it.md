@@ -18,21 +18,25 @@ Tre luoghi, tre passi:
 3. **Dove si trova la chiave privata**: controlla, apri o ripristina ([Aprire un Backup Sigillato](#sealed-open)).
 
 ```mermaid
-flowchart LR
-    subgraph night["Ogni notte, sul server"]
-        LF["LibreFolio"] -->|"password casuale"| ENV["backup.lfbk"]
-        LF -->|"la stessa password, cifrata per age1…"| PWD["password.age"]
+---
+config:
+  layout: elk
+---
+flowchart TD
+    subgraph server["🌙 Ogni notte, sul server"]
+        LF["LibreFolio"] -->|"password casuale"| LFBK["backup.lfbk"]
+        LF -->|"stessa password,<br>cifrata per age1…"| PAGE["password.age"]
         LF --> MAN["manifest.json"]
-        MAN --> TAR["librefolio-backup-….tar"]
-        PWD --> TAR
-        ENV --> TAR
+        LFBK & PAGE & MAN --> TAR["librefolio-backup-….tar"]
     end
-    TAR --> STORE["Il tuo storage: un NAS, restic"]
-    subgraph restore["Per ripristinare, dove si trova la chiave privata"]
-        KEY["chiave privata AGE-SECRET-KEY-1…"] -->|"apre password.age"| PASS["la password"]
+    TAR --> STORE["📦 Il tuo storage: NAS, restic"]
+    subgraph restore["🔓 Dove si trova la chiave privata"]
+        KEY["🗝️ AGE-SECRET-KEY-1…"] -->|"apre password.age"| PASS["la password"]
         PASS --> RES["ripristino di backup.lfbk"]
     end
     STORE --> RES
+    style KEY fill:#fff3cd,color:#1b1b1b,stroke:#d39e00
+    style TAR fill:#d4edda,color:#1b1b1b,stroke:#28a745
 ```
 
 ### 📦 Cosa Contiene il `.tar` {: #sealed-contents }
