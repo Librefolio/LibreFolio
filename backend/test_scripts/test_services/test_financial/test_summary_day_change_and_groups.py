@@ -4,7 +4,7 @@ MF-P (workstream MF, lot P, part 1 — R17 and W8): the Dashboard summary's day 
 ``PortfolioService.get_summary`` gains five fields (``schemas/portfolio.py``), every ratio a fraction (0.05 = 5 %),
 unrounded:
 
-* R17 — ``pnl_change_1d`` (Currency), ``pnl_change_1d_vs_total_pnl_percent`` and ``pnl_change_1d_vs_nav_percent``:
+* R17 — ``pnl_change_1d`` (Currency) and ``pnl_change_1d_vs_nav_percent`` (there is no share of the day before's P&L any more, 07/11/2026):
   ``period.day_change(engine_result.daily_states, valuation_date)``, the engine's states of the valuation date and of
   the calendar day before; the change of ``total_pnl``, and that change over |the day before's total_pnl| and over
   |its NAV| (``returns.change_ratio``: the change's sign, None on a zero base). All three None for a portfolio born on
@@ -248,21 +248,20 @@ class _DayCase:
     net_worth: str
     total_pnl: str
     change: str
-    vs_total_pnl: tuple[str, str] | None
     vs_nav: tuple[str, str] | None
 
 
 DAY_CASES = {
     # Thursday 110: NAV 9000 + 1100 = 10100, P&L 100. Friday 113: 10130, 130.
-    "weekday": _DayCase(OPEN_DAY, {THURSDAY: "110", FRIDAY: "113"}, FRIDAY, "10130", "130", "30", ("30", "100"), ("30", "10100")),
+    "weekday": _DayCase(OPEN_DAY, {THURSDAY: "110", FRIDAY: "113"}, FRIDAY, "10130", "130", "30", ("30", "10100")),
     # Thursday 90: NAV 9900, P&L −100. Friday 95: 9950, −50. A loss that shrinks is a rise: +50 / |−100| = +0.5.
-    "loss-shrinks": _DayCase(OPEN_DAY, {THURSDAY: "90", FRIDAY: "95"}, FRIDAY, "9950", "-50", "50", ("50", "100"), ("50", "9900")),
+    "loss-shrinks": _DayCase(OPEN_DAY, {THURSDAY: "90", FRIDAY: "95"}, FRIDAY, "9950", "-50", "50", ("50", "9900")),
     # Bought on Thursday with no quote that day: valued at the trade's 100, NAV 10000, P&L 0. Friday 113.
-    "zero-pnl-the-day-before": _DayCase(THURSDAY, {FRIDAY: "113"}, FRIDAY, "10130", "130", "130", None, ("130", "10000")),
+    "zero-pnl-the-day-before": _DayCase(THURSDAY, {FRIDAY: "113"}, FRIDAY, "10130", "130", "130", ("130", "10000")),
     # Friday 113, nothing over the weekend, Monday 120: Sunday carries Friday's 10130 / 130. Monday 10200 / 200.
-    "monday": _DayCase(OPEN_DAY, {FRIDAY: "113", MONDAY: "120"}, MONDAY, "10200", "200", "70", ("70", "130"), ("70", "10130")),
+    "monday": _DayCase(OPEN_DAY, {FRIDAY: "113", MONDAY: "120"}, MONDAY, "10200", "200", "70", ("70", "10130")),
     # A quote on Saturday, 116: Sunday carries Saturday's 10160 / 160. Monday − Sunday = +40, not Monday − Friday (+70).
-    "monday-after-a-weekend-quote": _DayCase(OPEN_DAY, {FRIDAY: "113", SATURDAY: "116", MONDAY: "120"}, MONDAY, "10200", "200", "40", ("40", "160"), ("40", "10160")),
+    "monday-after-a-weekend-quote": _DayCase(OPEN_DAY, {FRIDAY: "113", SATURDAY: "116", MONDAY: "120"}, MONDAY, "10200", "200", "40", ("40", "10160")),
 }
 
 
@@ -278,15 +277,33 @@ async def _one_stock_ledger(session: AsyncSession, keep_alive: list[object], lab
     return book
 
 
-def _day_figures(summary: PortfolioSummary) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
-    """(pnl_change_1d, vs total P&L, vs NAV) of a summary; the change in the report currency."""
+def _day_figures(summary: PortfolioSummary) -> tuple[Decimal | None, Decimal | None]:
+    """(pnl_change_1d, vs NAV) of a summary; the change in the report currency."""
     change = summary.pnl_change_1d
     assert change is None or change.code == EUR, f"pnl_change_1d in {change.code}, expected {EUR}"
-    return (change.amount if change is not None else None, summary.pnl_change_1d_vs_total_pnl_percent, summary.pnl_change_1d_vs_nav_percent)
+    return (change.amount if change is not None else None, summary.pnl_change_1d_vs_nav_percent)
 
 
-def _expected_day(case: _DayCase) -> tuple[Decimal, Decimal | None, Decimal | None]:
-    return (D(case.change), _ratio(*case.vs_total_pnl) if case.vs_total_pnl else None, _ratio(*case.vs_nav) if case.vs_nav else None)
+def _expected_day(case: _DayCase) -> tuple[Decimal, Decimal | None]:
+    return (D(case.change), _ratio(*case.vs_nav) if case.vs_nav else None)
+
+
+class TestNoShareOfTheDaysPnl:
+    """07/11/2026: the day change is shown over the day before's NAV only. Its share of the day before's total P&L explodes close to zero
+    (−22.82 % where the NAV says −1.95 %), so the field is gone from the answer, with no replacement and no deprecation."""
+
+    def test_the_summary_schema_has_no_such_field(self):
+        assert "pnl_change_1d_vs_total_pnl_percent" not in PortfolioSummary.model_fields
+        assert {"pnl_change_1d", "pnl_change_1d_vs_nav_percent"} <= set(PortfolioSummary.model_fields), "the amount and the share of the NAV are still there"
+
+    @pytest.mark.asyncio
+    async def test_the_answer_carries_the_change_and_its_nav_share_and_nothing_else_of_the_kind(self, session, keep_alive):
+        case = DAY_CASES["weekday"]
+        book = await _one_stock_ledger(session, keep_alive, "noshare", case.open_day, case.closes)
+
+        dumped = (await _summary(session, book, case.valuation_date)).model_dump(mode="json")
+
+        assert sorted(key for key in dumped if key.startswith("pnl_change_1d")) == ["pnl_change_1d", "pnl_change_1d_vs_nav_percent"]
 
 
 class TestDayChange:
@@ -294,7 +311,7 @@ class TestDayChange:
     @pytest.mark.parametrize("name", list(DAY_CASES))
     async def test_the_change_from_the_calendar_day_before(self, session, keep_alive, name):
         """The total P&L of the valuation date less the calendar day before's, and that change over the day before's
-        |total P&L| and |NAV|, exactly (``DAY_CASES``)."""
+        |NAV|, exactly (``DAY_CASES``)."""
         case = DAY_CASES[name]
         book = await _one_stock_ledger(session, keep_alive, "r17", case.open_day, case.closes)
 
@@ -312,12 +329,12 @@ class TestDayChange:
         summary = await _summary(session, book, FRIDAY)
         _assert_headline(summary, "10130", "130")
 
-        assert _day_figures(summary) == (None, None, None)
+        assert _day_figures(summary) == (None, None)
 
     @pytest.mark.asyncio
     async def test_the_period_range_does_not_limit_it(self, session, keep_alive):
         """date_from = the valuation date: a period of one day, and the engine's states still start on 2025-01-02 —
-        the weekday's change, +30, 30 / 100 and 30 / 10100."""
+        the weekday's change, +30, and 30 / 10100 of the NAV."""
         case = DAY_CASES["weekday"]
         book = await _one_stock_ledger(session, keep_alive, "range", case.open_day, case.closes)
 
@@ -329,7 +346,7 @@ class TestDayChange:
     @pytest.mark.asyncio
     async def test_the_report_agrees_with_its_daily_history(self, session, keep_alive):
         """get_report to Friday over the whole history: its summary carries the weekday's change, and today's KPI
-        formula on its history — Friday's point less Thursday's, over |Thursday's total_pnl| and |nav_value|, here in
+        formula on its history — Friday's point less Thursday's, over |nav_value|, here in
         Decimal and as a fraction — gives the very same figures."""
         case = DAY_CASES["weekday"]
         book = await _one_stock_ledger(session, keep_alive, "report", case.open_day, case.closes)
@@ -340,7 +357,7 @@ class TestDayChange:
         assert sorted(points)[-2:] == [THURSDAY, FRIDAY], f"precondition: a daily history ending on Friday, got {sorted(points)[-2:]}"
         last, previous = points[FRIDAY], points[THURSDAY]
         kpi_change = last.total_pnl.amount - previous.total_pnl.amount
-        kpi_today = (kpi_change, kpi_change / abs(previous.total_pnl.amount), kpi_change / abs(previous.nav_value.amount))
+        kpi_today = (kpi_change, kpi_change / abs(previous.nav_value.amount))
         assert kpi_today == _expected_day(case), f"precondition: today's KPI on the daily history gives {kpi_today}"
 
         assert _day_figures(report.summary) == _expected_day(case)

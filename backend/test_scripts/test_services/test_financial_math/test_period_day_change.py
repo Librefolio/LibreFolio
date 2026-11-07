@@ -2,15 +2,15 @@
 MF-P (workstream MF, lot P, part 1 — R17): the Dashboard's day change, from the engine's daily states.
 
 Module under test: ``backend/app/services/financial_math/portfolio/period.py`` —
-``day_change(daily_states, as_of) -> DayChange(pnl_change, vs_total_pnl, vs_nav) | None``:
+``day_change(daily_states, as_of) -> DayChange(pnl_change, vs_nav) | None``:
 
 * the two states are ``state_as_of(daily_states, as_of)`` and ``state_as_of(daily_states, as_of − 1 calendar day)``:
   the last state dated on or before each day. The day before is the calendar day — on a Monday, Sunday's state —
   never the previous element of the list, nor the previous trading day;
 * ``pnl_change`` = end.total_pnl − previous.total_pnl, exact;
-* ``vs_total_pnl`` = ``returns.change_ratio(pnl_change, previous.total_pnl)`` and ``vs_nav`` =
-  ``returns.change_ratio(pnl_change, previous.nav_value)``: ``change / |base|``, the change's sign whatever the base's,
-  None on a zero base, unrounded (fractions: 0.05 = 5 %);
+* ``vs_nav`` = ``returns.change_ratio(pnl_change, previous.nav_value)``: ``change / |base|``, the change's sign
+  whatever the base's, None on a zero base, unrounded (fractions: 0.05 = 5 %). There is no ratio over the day before's
+  total P&L any more (07/11/2026): close to zero it explodes, and nothing shows it;
 * None when either state is missing: a portfolio born on ``as_of`` has no day before.
 
 What the frontend computes today (``frontend/src/lib/features/dashboard/KpiSection.svelte:79-135``): the last point of the
@@ -94,10 +94,10 @@ def _state(day: date, *, pnl: str, nav: str) -> DailyPortfolioState:
     return DailyPortfolioState(date=day, total_pnl=D(pnl), nav_value=D(nav), **dict.fromkeys(_POISONED_FIELDS, POISON))
 
 
-def _figures(result: Any) -> tuple[Decimal, Decimal | None, Decimal | None]:
-    """(pnl_change, vs_total_pnl, vs_nav) of a DayChange."""
+def _figures(result: Any) -> tuple[Decimal, Decimal | None]:
+    """(pnl_change, vs_nav) of a DayChange."""
     assert result is not None, "expected a day change, got None"
-    return result.pnl_change, result.vs_total_pnl, result.vs_nav
+    return result.pnl_change, result.vs_nav
 
 
 def _ratio(numerator: str, denominator: str) -> Decimal:
@@ -112,21 +112,20 @@ def _ratio(numerator: str, denominator: str) -> Decimal:
 
 class TestTheChangeFromTheDayBefore:
     def test_a_weekday(self):
-        """Thursday: P&L 100.05 on a NAV of 10100.05; Friday: 130.10. Change +30.05, exactly; 30.05 / 100.05 of the
-        P&L and 30.05 / 10100.05 of the NAV, unrounded."""
+        """Thursday: P&L 100.05 on a NAV of 10100.05; Friday: 130.10. Change +30.05, exactly; and 30.05 / 10100.05 of the
+        NAV, unrounded."""
         states = [_state(WEDNESDAY, pnl="90", nav="10090"), _state(THURSDAY, pnl="100.05", nav="10100.05"), _state(FRIDAY, pnl="130.10", nav="10130.10")]
 
-        change, vs_total_pnl, vs_nav = _figures(_day_change(states, FRIDAY))
+        change, vs_nav = _figures(_day_change(states, FRIDAY))
 
         assert change == D("30.05")
-        assert vs_total_pnl == _ratio("30.05", "100.05")
         assert vs_nav == _ratio("30.05", "10100.05")
         assert vs_nav != vs_nav.quantize(D("0.000001")), f"rounded: {vs_nav}"
-        assert all(isinstance(figure, Decimal) for figure in (change, vs_total_pnl, vs_nav))
+        assert all(isinstance(figure, Decimal) for figure in (change, vs_nav))
 
     def test_a_monday_after_a_quiet_weekend(self):
         """Daily states, the weekend carrying Friday's figures (P&L 130, NAV 10130); Monday 200: the change is Monday
-        − Sunday, +70; 70 / 130 and 70 / 10130."""
+        − Sunday, +70; 70 / 10130 of the NAV."""
         states = [
             _state(FRIDAY, pnl="130", nav="10130"),
             _state(SATURDAY, pnl="130", nav="10130"),
@@ -134,11 +133,11 @@ class TestTheChangeFromTheDayBefore:
             _state(MONDAY, pnl="200", nav="10200"),
         ]
 
-        assert _figures(_day_change(states, MONDAY)) == (D("70"), _ratio("70", "130"), _ratio("70", "10130"))
+        assert _figures(_day_change(states, MONDAY)) == (D("70"), _ratio("70", "10130"))
 
     def test_a_monday_reads_sunday_not_the_last_trading_day(self):
         """Something moved over the weekend (a quote on Saturday, another on Sunday): Friday 130, Saturday 150,
-        Sunday 160, Monday 200. The change is Monday − Sunday, +40, 40 / 160 = 0.25 and 40 / 10160 — not Monday −
+        Sunday 160, Monday 200. The change is Monday − Sunday, +40, 40 / 10160 of the NAV — not Monday −
         Friday (+70) nor Monday − Saturday (+50)."""
         states = [
             _state(FRIDAY, pnl="130", nav="10130"),
@@ -147,7 +146,7 @@ class TestTheChangeFromTheDayBefore:
             _state(MONDAY, pnl="200", nav="10200"),
         ]
 
-        assert _figures(_day_change(states, MONDAY)) == (D("40"), D("0.25"), _ratio("40", "10160"))
+        assert _figures(_day_change(states, MONDAY)) == (D("40"), _ratio("40", "10160"))
 
     def test_a_list_with_gaps_reads_the_last_state_on_or_before_the_day_before(self):
         """No weekend state in the list: the day before Monday is Sunday, read as the last state dated on or before it —
@@ -155,15 +154,15 @@ class TestTheChangeFromTheDayBefore:
         friday_monday = [_state(THURSDAY, pnl="100", nav="10100"), _state(FRIDAY, pnl="130", nav="10130"), _state(MONDAY, pnl="200", nav="10200")]
         with_saturday = [_state(FRIDAY, pnl="130", nav="10130"), _state(SATURDAY, pnl="150", nav="10150"), _state(MONDAY, pnl="200", nav="10200")]
 
-        assert _figures(_day_change(friday_monday, MONDAY)) == (D("70"), _ratio("70", "130"), _ratio("70", "10130"))
-        assert _figures(_day_change(with_saturday, MONDAY)) == (D("50"), _ratio("50", "150"), _ratio("50", "10150"))
+        assert _figures(_day_change(friday_monday, MONDAY)) == (D("70"), _ratio("70", "10130"))
+        assert _figures(_day_change(with_saturday, MONDAY)) == (D("50"), _ratio("50", "10150"))
 
     def test_as_of_between_two_states_compares_the_same_state(self):
         """A Sunday in a list without weekend states: both days read Friday's state, the change is 0 (a zero change
         has a ratio of 0, not None)."""
         states = [_state(THURSDAY, pnl="100", nav="10100"), _state(FRIDAY, pnl="130", nav="10130"), _state(MONDAY, pnl="200", nav="10200")]
 
-        assert _figures(_day_change(states, SUNDAY)) == (D("0"), D("0"), D("0"))
+        assert _figures(_day_change(states, SUNDAY)) == (D("0"), D("0"))
 
 
 # =============================================================================
@@ -178,18 +177,18 @@ class TestTheSignOfTheChange:
         ids=["loss-shrinks", "loss-deepens"],
     )
     def test_on_a_loss_the_day_before(self, today, change):
-        """Thursday P&L −100 (NAV 9900). Friday −50: +50, +0.5 of the P&L; Friday −150: −50, −0.5. Never the sign of
+        """Thursday P&L −100 (NAV 9900). Friday −50: +50 on a NAV of 9900; Friday −150: −50. The share has the change's sign, never the sign of
         the base: a loss that shrinks is a rise."""
         states = [_state(THURSDAY, pnl="-100", nav="9900"), _state(FRIDAY, pnl=today, nav=str(D("10000") + D(today)))]
 
-        assert _figures(_day_change(states, FRIDAY)) == (D(change), _ratio(change, "100"), _ratio(change, "9900"))
+        assert _figures(_day_change(states, FRIDAY)) == (D(change), _ratio(change, "9900"))
 
     def test_on_a_nav_below_zero_the_day_before(self):
-        """Thursday NAV −200 (a leveraged broker), P&L −1200; Friday NAV −100, P&L −1100: +100, 100 / 1200 of the
-        P&L and 100 / 200 = +0.5 of the NAV."""
+        """Thursday NAV −200 (a leveraged broker), P&L −1200; Friday NAV −100, P&L −1100: +100 and
+        100 / 200 = +0.5 of the NAV."""
         states = [_state(THURSDAY, pnl="-1200", nav="-200"), _state(FRIDAY, pnl="-1100", nav="-100")]
 
-        assert _figures(_day_change(states, FRIDAY)) == (D("100"), _ratio("100", "1200"), D("0.5"))
+        assert _figures(_day_change(states, FRIDAY)) == (D("100"), D("0.5"))
 
 
 # =============================================================================
@@ -197,20 +196,32 @@ class TestTheSignOfTheChange:
 # =============================================================================
 
 
+class TestNoShareOfTheDaysPnl:
+    def test_a_day_change_carries_the_change_and_its_share_of_the_nav_only(self):
+        """07/11/2026: its share of the day before's total P&L is gone (it explodes near zero: −22.82 % where the NAV says −1.95 %).
+        The result has two figures and no field for a third."""
+        states = [_state(THURSDAY, pnl="100", nav="10100"), _state(FRIDAY, pnl="130", nav="10130")]
+
+        result = _day_change(states, FRIDAY)
+
+        assert [field for field in vars(result)] == ["pnl_change", "vs_nav"]
+        assert not hasattr(result, "vs_total_pnl")
+
+
 class TestNoBaseOrNoDayBefore:
-    def test_no_ratio_of_a_zero_pnl_the_day_before(self):
+    def test_the_change_over_a_zero_pnl_the_day_before_has_its_nav_share(self):
         """Bought on Thursday at the day's price: P&L 0 on a NAV of 10000; Friday 130. The change is known and so is
-        its share of the NAV, 0.013; its share of a zero P&L is None."""
+        its share of the NAV, 0.013."""
         states = [_state(THURSDAY, pnl="0", nav="10000"), _state(FRIDAY, pnl="130", nav="10130")]
 
-        assert _figures(_day_change(states, FRIDAY)) == (D("130"), None, D("0.013"))
+        assert _figures(_day_change(states, FRIDAY)) == (D("130"), D("0.013"))
 
     def test_no_ratio_of_a_zero_nav_the_day_before(self):
-        """Everything lost on Thursday (NAV 0, P&L −1000); Friday a recovery to 100: +100, 0.1 of the P&L, no share of
+        """Everything lost on Thursday (NAV 0, P&L −1000); Friday a recovery to 100: +100, and no share of
         a zero NAV."""
         states = [_state(THURSDAY, pnl="-1000", nav="0"), _state(FRIDAY, pnl="-900", nav="100")]
 
-        assert _figures(_day_change(states, FRIDAY)) == (D("100"), D("0.1"), None)
+        assert _figures(_day_change(states, FRIDAY)) == (D("100"), None)
 
     def test_none_for_a_portfolio_born_on_as_of(self):
         """The first state is Friday's: there is no Thursday, so no change at all — not a change of 130 from nothing."""

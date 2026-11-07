@@ -7555,7 +7555,6 @@
           "code": "EUR"
         },
         "pnl_change_1d_vs_nav_percent": "0",
-        "pnl_change_1d_vs_total_pnl_percent": "0",
         "simple_roi_percent": "-0.017949",
         "timing_effect_percent": "0.000153",
         "total_deposited": {
@@ -8178,7 +8177,6 @@
         "code": "EUR"
       },
       "pnl_change_1d_vs_nav_percent": "0",
-      "pnl_change_1d_vs_total_pnl_percent": "0",
       "simple_roi_percent": "-0.017949",
       "timing_effect_percent": "0.000153",
       "total_deposited": {
@@ -11355,7 +11353,6 @@
           "code": "EUR"
         },
         "pnl_change_1d_vs_nav_percent": "0",
-        "pnl_change_1d_vs_total_pnl_percent": "0",
         "simple_roi_percent": "-0.014582",
         "timing_effect_percent": "0.000053",
         "total_deposited": null,
@@ -11932,7 +11929,6 @@
         "code": "EUR"
       },
       "pnl_change_1d_vs_nav_percent": "0",
-      "pnl_change_1d_vs_total_pnl_percent": "0",
       "simple_roi_percent": "-0.014582",
       "timing_effect_percent": "0.000053",
       "total_deposited": null,
