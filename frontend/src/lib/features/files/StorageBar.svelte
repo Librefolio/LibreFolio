@@ -141,7 +141,7 @@
 
     const summary = $derived.by(() => {
         if (model === null || usage === null) return '';
-        if (model.mode === 'limit') return $_('storage.summary.limit', {values: {used: size(model.usedBytes), limit: size(model.totalBytes)}});
+        if (model.mode === 'limit') return $_('storage.summary.limit', {values: {used: size(model.usedBytes), limit: size((usage.limit_mb ?? 0) * 1024 * 1024)}});
         if (model.mode === 'volume') return $_('storage.summary.volume', {values: {used: size(usage.data_bytes), total: size(model.totalBytes)}});
         return $_('storage.summary.data', {values: {used: size(usage.data_bytes)}});
     });
@@ -178,6 +178,7 @@
             segments={barSegments}
             barClass="flex h-3 w-full overflow-hidden rounded-full border border-lf-subtle bg-lf-field"
             barLabel={summary}
+            marker={model.limitPercent === null ? null : {percent: model.limitPercent, label: $_('storage.limit.marker', {values: {limit: size((usage.limit_mb ?? 0) * 1024 * 1024)}})}}
             legendClass="grid gap-x-6 gap-y-1 text-xs text-lf-secondary sm:grid-cols-2 lg:grid-cols-3"
             itemClass="rounded-md px-1 py-0.5"
             testIds={TEST_IDS}

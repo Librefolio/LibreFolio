@@ -752,3 +752,24 @@ describe('StorageBar — opened from «Open the settings»', () => {
         expect(screen.getByTestId('storage-advanced')).toHaveAttribute('data-open', 'false');
     });
 });
+
+// =====================================================================================================================
+// C9-4 — over the limit: every part stays, the limit is a tick named «Limit …», what is past it in stripes
+// =====================================================================================================================
+describe('StorageBar — over the limit', () => {
+    it('150 MiB in a 100 MiB limit: both parts drawn, the tick at two thirds named by the limit, the stripes after it', async () => {
+        await mountReady(OVER_USAGE());
+
+        expect(segment('database')).toBeInTheDocument();
+        expect(segment('backups')).toBeInTheDocument();
+        expect(screen.getByTestId('storage-bar-track-marker').getAttribute('style')).toContain('left: 66.67%');
+        expect(screen.getByTestId('storage-bar-track-marker-label')).toHaveTextContent('storage.limit.marker');
+        expect(screen.getByTestId('storage-bar-track-past')).toBeInTheDocument();
+    });
+
+    it('within the limit: no tick', async () => {
+        await mountReady(LIMIT_USAGE());
+
+        expect(screen.queryByTestId('storage-bar-track-marker')).toBeNull();
+    });
+});

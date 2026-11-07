@@ -3,7 +3,9 @@
  *
  * The backend measures and sums (`GET /backup/instance/storage`); this only divides a part by the whole, which is all a
  * bar needs. Three modes:
- *   - `limit`: the administrator (or the hosting provider) set a limit; the bar is that limit and LibreFolio's parts fill it;
+ *   - `limit`: the administrator (or the hosting provider) set a limit; the bar is that limit and LibreFolio's parts fill it.
+ *     Past the limit (C9-4) the bar is the data instead, so that no part is lost, and the limit is a tick inside it
+ *     (`limitPercent`): what follows the tick is how far past the limit the data are;
  *   - `volume`: no limit and the disk is known; the bar is the disk — LibreFolio's parts, then the other files of the
  *     disk, then the free space;
  *   - `data`: no limit and no disk; the bar is LibreFolio's own folder, split in its parts.
@@ -30,6 +32,8 @@ export interface StorageBarModel {
     freePercent: number;
     /** The limit is set and the data folder is larger than it. */
     overLimit: boolean;
+    /** Over the limit: where the limit falls on the bar, 0–100 (the bar is then the data); `null` otherwise. */
+    limitPercent: number | null;
 }
 
 const BYTES_PER_MB = 1024 * 1024;
@@ -42,7 +46,10 @@ export function storageBarModel(usage: InstanceStorage): StorageBarModel {
     const limitMb = usage.limit_mb ?? 0;
     const volumeTotal = usage.volume_total_bytes ?? 0;
     const mode: StorageMode = limitMb > 0 ? 'limit' : volumeTotal > 0 ? 'volume' : 'data';
-    const totalBytes = mode === 'limit' ? limitMb * BYTES_PER_MB : mode === 'volume' ? volumeTotal : usage.data_bytes;
+    const limitBytes = limitMb * BYTES_PER_MB;
+    const overLimit = mode === 'limit' && usage.data_bytes > limitBytes;
+    // Over the limit the bar is the data, so that every part keeps its width; the limit becomes a tick inside it.
+    const totalBytes = mode === 'limit' ? (overLimit ? usage.data_bytes : limitBytes) : mode === 'volume' ? volumeTotal : usage.data_bytes;
 
     const parts: Array<{id: StorageSegmentId; bytes: number}> = [
         {id: 'database', bytes: usage.database_bytes},
@@ -64,6 +71,6 @@ export function storageBarModel(usage: InstanceStorage): StorageBarModel {
     }
 
     const usedBytes = segments.reduce((sum, segment) => sum + segment.bytes, 0);
-    const freeBytes = mode === 'volume' ? (usage.volume_free_bytes ?? 0) : mode === 'limit' ? Math.max(0, totalBytes - usedBytes) : 0;
-    return {mode, totalBytes, segments, usedBytes, freeBytes, freePercent: share(freeBytes, totalBytes), overLimit: mode === 'limit' && usage.data_bytes > totalBytes};
+    const freeBytes = mode === 'volume' ? (usage.volume_free_bytes ?? 0) : mode === 'limit' && !overLimit ? Math.max(0, totalBytes - usedBytes) : 0;
+    return {mode, totalBytes, segments, usedBytes, freeBytes, freePercent: share(freeBytes, totalBytes), overLimit, limitPercent: overLimit ? share(limitBytes, totalBytes) : null};
 }

@@ -96,3 +96,23 @@ describe('LinkedStackedBar — the link between the bar and the legend', () => {
         expect(states('a')).toEqual(['false', 'false']);
     });
 });
+
+describe('LinkedStackedBar — a marker: what is past a limit (C9-4)', () => {
+    it('a tick at its percent, named by its label, and the part after it drawn as past it; the segments keep their widths', () => {
+        mount({marker: {percent: 75, label: 'Limit 20 MB'}});
+
+        expect(screen.getByTestId('bar-marker')).toHaveStyle({left: '75%'});
+        expect(screen.getByTestId('bar-marker-label')).toHaveTextContent('Limit 20 MB');
+        expect(screen.getByTestId('bar-past')).toHaveStyle({left: '75%'});
+        expect(screen.getByTestId('bar')).toContainElement(screen.getByTestId('bar-past'));
+        expect(screen.getByTestId('seg-a')).toHaveStyle({width: '60%'});
+        expect(screen.getByTestId('seg-b')).toHaveStyle({width: '40%'});
+    });
+
+    it('without a marker the bar is drawn as it always was: no tick, no stripes, no wrapper (the planner’s bar is unchanged)', () => {
+        mount();
+
+        for (const id of ['bar-marker', 'bar-marker-label', 'bar-past', 'bar-marked']) expect(screen.queryByTestId(id)).toBeNull();
+        expect(screen.getByTestId('bar').className).not.toContain('relative');
+    });
+});

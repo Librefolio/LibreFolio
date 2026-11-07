@@ -17,3 +17,9 @@ export interface LinkedStackedBarTestIds {
     legend?: string;
     item: (id: string) => string;
 }
+
+/** A tick on the bar at `percent` (0–100), named by `label`: the part after it is drawn as past it (C9-4). */
+export interface LinkedBarMarker {
+    percent: number;
+    label: string;
+}
