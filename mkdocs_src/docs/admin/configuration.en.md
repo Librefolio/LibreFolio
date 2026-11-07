@@ -32,7 +32,7 @@ the same sample as `.env`.
 - The sample groups the options by what they do. A commented option, such as
   `# SESSION_COOKIE_SECURE=auto`, shows its default: remove the `#` only to change the value.
 - LibreFolio reads `.env` when it starts: restart it after a change. With Docker Compose, run
-  `docker compose up -d`, because `docker compose restart` keeps the old values.
+  `docker compose up -d`.
 - Names are case-sensitive. In the main options and the risk settings below, a value of the wrong
   type or out of range stops the server at startup with an error.
 
