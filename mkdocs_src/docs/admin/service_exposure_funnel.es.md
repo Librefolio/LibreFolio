@@ -82,8 +82,8 @@ graph LR
         Server -->|Reenvío local| LibreFolio["📊 LibreFolio (puerto 6040)"]
         Server -.->|"<font color='red'><b>No se puede exponer</b></font>"| Other["🔌 Otros servicios locales (puertos diferentes)"]
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
-    style Other fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;
+    style Other fill:#f8d7da,color:#1b1b1b,stroke:#dc3545,stroke-width:2px;
     linkStyle 3 stroke:#dc3545,stroke-width:2px;
 ```
 
@@ -153,7 +153,7 @@ graph LR
             TSC2 -->|socat: TCP/80| Service1["🔌 Servicio 1<br>(192.168.1.20:80)"]
         end
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;
 ```
 
 ### 📁 Paso 1: Preparar la carpeta y el script
