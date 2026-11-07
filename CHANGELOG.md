@@ -233,6 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Positions chart**: the badges show the asset's name, which scrolls when it is long, and the view selector uses the icons of the Assets list.
 - **An asset keeps one colour** in the lines of the positions chart, the allocation pie and its history, whatever you tick and in whatever order. The same asset at two brokers gets a different line pattern, and long names scroll in the chart's tooltip too.
 - **The asset allocation pie shows each asset's icon** in its slice, or its type's when it has none or it cannot be loaded, and has no legend: the name shows when you point at the slice.
+- **The day's change under the P&L reads as an amount and a share of yesterday's portfolio value** («−1,141 € (−1.95%)»), the figure to compare with the markets; the share of the total P&L, which blew up near zero, is gone, and the Returns card no longer repeats it.
 
 #### 📈 Charts
 
@@ -256,6 +257,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Risk: add a missing exchange-rate pair without leaving the analysis.** In the Risk tab of the Dashboard, of a broker and of an asset, and in the risk lab on the Assets page, the button of a pair with no exchange-rate route opens the **Add New Currency Pair** window already filled in with that pair (EUR/USD, for example), instead of taking you to the FX page. Once the pair is saved, and again when its rates are downloaded, the analysis refreshes by itself.
 - **The daily returns histogram is a real chart**: its axis shows the return thresholds, a dashed line marks the VaR threshold, and pointing at a bar tells how many days fell there and where that band stands against the threshold.
 - **The four loss cards of «How much can it hurt?» share one shape**: shorter titles, a subtitle, dated detail rows, and dates in your language. The histogram's tooltip is lighter, sits beside the pointer and writes its interval as `[a; b)`.
+- **Risk:** the returns histogram zooms (with a slider when the bars are many); the Ulcer index is a row of the worst-fall card; the diversification texts say what the effective number of positions means, that its excess comes from cash and unpriced positions, and give the scale of the diversification ratio with an example.
 
 #### 🤖 AI Export
 
@@ -266,6 +268,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI Export: the exchange result on foreign cash appears on its own, broker by broker**, in the portfolio export, recognised by a fixed code instead of its English label.
 - AI Export: a concentration or allocation share that cannot be computed (a total of zero or less) is reported as not available instead of a reversed number.
 - **AI Export from a broker page** tells the AI that amounts are the broker's whole figures, not your share, and where your role and ownership stake are in the export.
+- The *Prepare* button of the AI Export panel spins while the export is prepared.
 
 #### 🔌 Price and exchange-rate sources
 
@@ -379,6 +382,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
 - **The documentation header keeps the theme switch beside the language selector**, as in the app; the 🚀 link to the app, shown when LibreFolio is running, takes the place the theme switch had.
 - The email guide says where the variables go in `.env` and how to write a Gmail app password (without spaces), and every page gives one restart sentence.
+
+#### 🎯 PAC Allocator
+
+- **PAC allocator:** the Asset search is the Risk page's picker and leaves indices out; Brokers are chosen as tiles with icon and name; a bar fills while the plan is calculated; «after the plan» reads «at the end of the plan» (columns «Final»), with wider amount columns; a funding step of the operational plan reads as a sentence with the amount in a badge; on a phone the review has no Action column (right click or long press opens the menu) and the solver proof shows fewer columns.
 
 ### 🐛 Fixed
 
@@ -511,6 +518,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Chart signals leave a gap where a value is missing, instead of joining across it.** A rolling return whose reference price is missing, or a rolling Sharpe or beta window with no variance, was bridged by a straight segment; weekends and holidays, on which indicators have no point, stay joined. A signal's 📈 point count now counts all its points: for RSI, CCI, MFI and Stochastic RSI it showed only the longest stretch between two threshold crossings. A signal with more than 30 gaps (a short window on a rarely traded asset) is drawn as one line joining them, named «(gaps joined)», so the chart stays fast.
 - Charts: the tooltip's change from the first point shows «—» instead of 0 % when the chart starts at zero.
 - An invalid technical signal no longer breaks the chart of an asset or an exchange rate: the prices and rates stay on the chart and in the page's cache, and **All** resolves the start of the range; only the signals are reported as unavailable.
+- **Income chart:** the lower edge of the axis sits just below the largest cost (−90 € for a cost of 80 €) instead of a whole step under zero.
+- **Lots chart:** outside the daily view, the buy and sell triangles rest on the drawn line; the tooltip keeps the real day and price.
 
 #### 💱 Assets, prices and exchange rates
 
@@ -763,6 +772,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Removed unused or superseded API routes, with no deprecation period:** `POST /transactions/transfers/promote` (use `POST /transactions/commit` with `promotes[]`), `POST /transactions/events/suggest` (use `GET /transactions/event-reconciliation`), `DELETE /assets/events` (use `POST /assets/events` with `delete_ids`), `GET /assets/all` (use `GET /assets/query?active=true`), `POST /assets/provider/refresh` (use `POST /assets/provider/probe`), `POST /assets/{id}/market-data/wipe` (the currency `PATCH /assets` does it), `POST /portfolio/wac` (use `POST /portfolio/lots/analysis`), `GET /settings/global/{key}` (use `GET /settings/global`), `POST /settings/global/initialize` (done at startup), `GET /uploads/{file_id}` (use `GET /uploads`), `GET /brokers/import/files/{file_id}` and `…/last-parse` (use `GET /brokers/import/files`), `GET /utilities/currencies/normalize` (use `GET /utilities/currencies/suggest`), `GET /brokers/{id}/summary` (read the broker with `GET /brokers/{id}`, its cash and positions with `POST /portfolio/report`).
 
 ---
+- **`POST /api/v1/portfolio/report`: `summary.pnl_change_1d_vs_total_pnl_percent` is removed**, with no deprecation period: the day's change as a share of the total P&L blew up near zero. Use `pnl_change_1d_vs_nav_percent`, the share of yesterday's portfolio value.
 
 ## [1.2.1] - 2026-10-15
 
