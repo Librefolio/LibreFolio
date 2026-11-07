@@ -23,6 +23,11 @@ the Users tab of the interface comes in lot A6. Inactive users are blocked at th
 before any business logic runs. Role-based access (`admin` vs `user`) gates administrative features such as global
 settings, scheduler configuration, and user management.
 
+> 2026-11-07 lint: the system role is the `users.is_superuser` flag (`backend/app/db/models.py`); `UserRole` is the
+> broker-sharing enum (OWNER/EDITOR/VIEWER). The admin gate is the dependency `require_admin`
+> (`backend/app/api/v1/settings.py`), reused by `users.py`; there is no `get_admin_user`. The Users tab of lot A6 has
+> shipped (Settings › Administration › Users, 1.3 CHANGELOG «Accounts, sign-up and administrators»).
+
 The role system also extends into the broker-sharing model (Owner / Editor / Viewer per broker), but that relationship is managed by the BROKERS domain rather than AUTH. AUTH's responsibility ends at: who are you, are you active, and what is your system role.
 
 ## Feature cluster
@@ -41,7 +46,7 @@ graph LR
     AuthAPI -->|bcrypt verify| AuthSvc[auth_service.py]
     AuthSvc -->|JWT issue| Cookie[HttpOnly cookie<br/>'session']
     Cookie -->|every request| Dep[get_current_user<br/>FastAPI dependency]
-    Dep -->|role check| AdminDep[get_admin_user]
+    Dep -->|role check| AdminDep[require_admin]
     Dep -->|user_id lookup| DB[(SQLite user table)]
     AdminDep --> AdminRoutes[Admin-only routes<br/>users, settings, scheduler]
     Dep --> AllRoutes[All protected routes]
@@ -80,6 +85,8 @@ graph LR
 - K-5, until lot A7: on a new instance whose registration is `invite` or `disabled` the login page offers no
   «Register here», although the backend accepts the first account; the first administrator comes from
   `dev.py user create` until A7 adds the setup link.
+  *2026-11-07 lint: resolved — the login page offers «Register here» while the instance has no account yet, and A7's
+  setup link (`LIBREFOLIO_ADMIN_EMAIL`, `/setup`, `./dev.py user setup-link`) has shipped (1.3 CHANGELOG).*
 
 ## What comes next
 
@@ -88,6 +95,11 @@ Release 1.3, workstream A:
 - A7: the first administrator from environment variables, with a setup link.
 - A8: the login attempt limit, and the Security tab.
 - A9: the legal notices.
+
+> 2026-11-07 lint: all four have shipped in 1.3 (CHANGELOG `[Unreleased]`): A6 the Users tab with account deletion after
+> a preview; A7 the initial administrator from `LIBREFOLIO_ADMIN_EMAIL` with a `/setup` link; A8 the limit on failed
+> sign-ins and the Security tab under Settings › Administration; A9 the legal notice (`LIBREFOLIO_TOS_URL`,
+> `LIBREFOLIO_PRIVACY_URL`).
 
 ## Source files
 
@@ -105,4 +117,6 @@ Release 1.3, workstream A:
 | Account variables | `backend/app/config/accounts.py` |
 | Admin user API | `backend/app/api/v1/users.py` |
 | Link pages (frontend) | `frontend/src/routes/invite/+page.svelte`, `frontend/src/routes/reset-password/+page.svelte` |
+| Initial administrator setup page | `frontend/src/routes/setup/+page.svelte` |
+| Admin dependency (`require_admin`) | `backend/app/api/v1/settings.py` |
 | Account tokens mkdocs | `mkdocs_src/docs/developer/architecture/security.md` |

@@ -14,6 +14,12 @@ mkdocs: "developer/architecture/database/brokers_transactions.md"
 
 Transactions are the financial heart of LibreFolio. A transaction records a financial event: a BUY (quantity purchased, price paid, fees), a SELL (quantity sold, proceeds), a DIVIDEND (cash received), an INTEREST payment, a FEE, a TAX, a TRANSFER (in or out), a SPLIT (quantity adjustment), or OTHER. Each transaction belongs to a broker and references an asset. The combination of transaction history, price history, and FX rates is what makes portfolio analytics (cost basis, realized gain, unrealized gain, ROI) possible.
 
+> 2026-11-07 lint: the real `TransactionType` (`backend/app/db/models.py`) has twelve values — BUY, SELL, DIVIDEND,
+> INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER; there is no SPLIT or
+> OTHER type. The bulk API below is now `POST /transactions/validate` + `POST /transactions/commit`
+> ([[decisions/unified-batch-pipeline]]), and the staging, matching wizard and modals have shipped ([[F-048]], [[F-049]]
+> `documented`).
+
 The backend model and bulk API ([[F-046]]) were implemented in Phase 7. The bulk API (`POST /transactions/bulk`) is **multi-broker atomic**: all transactions across any number of brokers in a single call succeed or fail together, with a `validate=true` dry-run mode for previewing without committing. This cross-broker atomicity was required by the DEFERRABLE FK constraint on `link_uuid → related_transaction_id` (TRANSFER pairs can span brokers). Access control is enforced at the API level: GET/PATCH/DELETE are filtered to transactions belonging to brokers the user has access to; creating transactions requires EDITOR role.
 
 The primary user-facing flow for entering transactions is through the BRIM pipeline: upload a broker export file, the system parses it with the appropriate plugin, the user reviews the extracted transactions in a staging area (F-049, in-progress), resolves any unknown assets via the matching wizard, and commits. The staging modal (F-048, in-progress) now supports manual transaction entry (`create-many`/`edit-many`); BRIM mode (`create-brim`) arrives in Part 5. The transaction list page (F-047, implemented in Phase 7 Part 4) provides a DataTable view with client-side filters (multi-enum, currency-stack sliders, date pickers) and always-pair-adjacent rendering for TRANSFER/FX_CONVERSION pairs.
@@ -23,11 +29,11 @@ The primary user-facing flow for entering transactions is through the BRIM pipel
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
 | [[F-046]] | Transaction Model & Bulk API | backend | core — data model + multi-broker atomic bulk create with dry-run | implemented |
-| [[F-047]] | Transaction List Page (DataTable + filters) | frontend | display — client-side filtered DataTable, always-pair-adjacent rendering | implemented |
+| [[F-047]] | Transaction List Page (DataTable + filters) | frontend | display — client-side filtered DataTable, always-pair-adjacent rendering | documented |
 | [[F-048]] | Transaction Modals (Form / Bulk / Delete / Promote Wizard) | frontend | core — FormModal (single + dual-form), BulkModal (mode-less, DataTable-based), DeleteModal (3 layouts), PickerModal, TagInput; CASH_TRANSFER, broker access gating, context menu, 48+ E2E tests | documented |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | core — wizard to match extracted assets + commit | documented |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | support — inline preview of uploaded broker report files | documented |
-| [[F-051]] | Transaction ↔ AssetEvent Link | backend | support — FK between transactions and asset events + suggest endpoint | implemented |
+| [[F-051]] | Transaction ↔ AssetEvent Link | backend | support — FK between transactions and asset events + suggest endpoint *(2026-11-07 lint: suggest removed in `d5e467847`; successor `GET /transactions/event-reconciliation`)* | implemented |
 
 ## Architecture at a glance
 
@@ -37,7 +43,7 @@ graph TD
     StagingData --> ImportUI[F-049 BRIM Import UI<br/>asset matching wizard]
     ManualEntry[Manual entry form] --> StagingModal[F-048 Staging Modal<br/>review + edit]
     ImportUI --> StagingModal
-    StagingModal -->|validate=true dry-run| BulkAPI[F-046 POST /transactions/bulk<br/>multi-broker atomic]
+    StagingModal -->|POST /transactions/validate dry-run| BulkAPI[F-046 POST /transactions/commit<br/>multi-broker atomic]
     StagingModal -->|confirm commit| BulkAPI
     BulkAPI -->|EDITOR role check| TxDB[(Transaction table)]
     TxDB --> TxList[F-047 Transaction List Page<br/>filters: broker, asset, type]
@@ -66,7 +72,8 @@ Phase 7 Parts 1+2+3 closed (2026-04-25). Phase 7 Part 4 Rounds 1–6 closed (202
 - **F-048** BulkModal is now **mode-less**: `mode` prop removed, each row infers create/edit from `tx.id > 0` ([[decisions/bulkmodal-mode-removal]])
 - **F-050** File Preview System still planned (Part 5+). *Delivered on 2026-06-04 ([[F-050]]; lint 2026-10-12).*
 - **F-049** asset matching wizard live but UX polish ongoing.
-- **F-047** E2E test specs deferred to Phase 7 final.
+- **F-047** E2E test specs deferred to Phase 7 final. *2026-11-07 lint: written — `frontend/e2e/transactions/`
+  (`transactions-table.spec.ts` and siblings).*
 - **Unified batch pipeline**: `POST /validate` + `/commit` replace 4 old endpoints ([[decisions/unified-batch-pipeline]])
 - **Server-driven type rules**: frontend auto-adapts to backend metadata ([[decisions/server-driven-type-rules]])
 - **Currency consistency**: enforced through [[decisions/price-currency-hard-reject]] and [[decisions/policy-d-currency-wipe]].
@@ -81,9 +88,10 @@ have been filed:
 
 - Complete Phase 7: F-048 Staging Modal, F-050 File Preview, F-051 TX↔AssetEvent link. *(F-050 delivered on 2026-06-04 — lint 2026-10-12.)*
   *(F-048 shipped in 1.0.0; its residuals K-1 … K-4 are low, after 1.2 — C-64, 2026-10-12.)*
+  *(F-051 shipped too — `implemented` since 2026-04-25; lint 2026-11-07.)*
 - [[F-081]] Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) — user selects accounting method for realized gain calculation; FIFO is the Phase 7 default.
 - [[F-082]] Cash Split Transactions — represent cash from dividends as a separate CASH asset.
-- [[F-083]] Multi-File Multi-Broker Import — batch upload and parse multiple files in one workflow.
+- [[F-083]] Multi-File Multi-Broker Import — batch upload and parse multiple files in one workflow. *2026-11-07 lint: delivered — `documented`.*
 - [[F-084]] Transaction Gain Chart — per-asset gain/loss visualization over time.
 
 ## Source files

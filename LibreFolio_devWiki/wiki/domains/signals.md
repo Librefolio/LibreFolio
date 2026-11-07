@@ -4,7 +4,7 @@ category: domain
 features: [F-037, F-038, F-039, F-040, F-041, F-042, F-043, F-044, F-045]
 status: stable
 mkdocs: null
-related: [signal-backend-plugin-architecture, openapi-zod-discriminator-type-erasure]
+related: [decisions/signal-backend-plugin-architecture, problems/openapi-zod-discriminator-type-erasure]
 ---
 
 # Domain: TECHNICAL ANALYSIS (Signals)
@@ -18,6 +18,12 @@ When a user opens an FX pair or Asset chart, the Signal Library provides technic
 Technical calculations run in `SignalService` through pure auto-discovered Python plugins. Asset and FX adapters load/convert data, extend warm-up once, and return canonical line/bar/band series plus status, availability, warnings, and annotations. List pages issue exactly one bulk POST for every asset/pair needing prices/rates and/or signals; computed results are page-local and never persisted.
 
 The frontend consumes backend catalog JSON Schema to build controls and uses one signal-code-agnostic renderer for composites, dynamic axes, reference levels, value regions, and percentage transforms. FX Pair Comparison, Asset Comparison, Linear/Compound/Sine, and Measure still use `ChartSignal` locally. The previous TypeScript technical classes remain only as Gate E rollback until visual parity is approved.
+
+> 2026-11-07 lint: the catalog has grown to 22 plugin folders in `backend/app/services/signal_plugins/` (drawdown,
+> rolling beta/Sharpe/volatility and calendar rolling return added to the 17 above), and the TypeScript fallback is gone:
+> `EmaSignal.ts`, `RsiSignal.ts`, `MacdSignal.ts` and `BollingerSignal.ts` were deleted in `a332884f0` (2026-07-27).
+> AI Export reads the backend signals (`backend/app/services/ai_export/components/technical_shared.py`,
+> [[entities/ai-export-snapshot-service]]).
 
 ## Feature cluster
 
@@ -62,12 +68,17 @@ graph LR
 
 - Gate E automated validation is complete, but manual chart review is still required before deleting the TypeScript technical fallback.
 - AI Export still uses its old TypeScript technical calculations until F1.
+  *2026-11-07 lint: both points above are closed — the TypeScript fallback was deleted (`a332884f0`) and AI Export
+  computes with the backend plugins.*
 
 ## What comes next
 
 - Complete Gate E visual review across Asset/FX detail and list cards.
 - Migrate AI Export to observed-only backend signals and backend annotations.
 - Remove the obsolete TypeScript EMA/RSI/MACD/Bollinger engine after parity approval.
+
+*2026-11-07 lint: the Gate E review, the AI Export migration and the removal of the TypeScript engine have shipped
+(see the note under «What it does»).*
 - New technical signals normally require one Python plugin plus i18n/docs metadata.
 
 ## Source files
