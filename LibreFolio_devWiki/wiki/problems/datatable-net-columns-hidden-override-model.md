@@ -4,7 +4,7 @@ category: "problem"
 status: resolved
 date: 2026-07-22
 tags: ["frontend", "datatable", "fifo", "net-metrics"]
-related: ["decisions/fifo-v4-gross-net-status-model", "entities/fifo-lot-engine"]
+related: ["decisions/fifo-v4-gross-net-status-model", "entities/fifo-lot-engine", "problems/datatable-pruned-preferences-of-absent-columns"]
 ---
 
 # Problem: DataTable net columns hidden despite real costs
@@ -33,6 +33,8 @@ Any column whose default visibility depends on data that isn't known until after
 the wrong default the moment data quality/shape actually changes it. This DataTable component is shared —
 future dynamic-default columns anywhere in the app inherit the fix, but the same pre-fix pattern would
 reproduce this exact class of bug in *any* component that keeps its own ad-hoc visibility snapshot.
+A later defect of the same persistence, for columns that are absent at the first render rather than hidden:
+[[problems/datatable-pruned-preferences-of-absent-columns]].
 
 ## Impact
 UI-only bug, no data was ever wrong or lost — the net breakdown was correct in the modal the whole time; only

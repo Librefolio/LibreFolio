@@ -52,5 +52,6 @@ pieces are skipped.
 | Implementation | `backend/app/services/financial_math/interest.py` |
 | Consumer (late interest, accrual) | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
 | Unit tests | `backend/test_scripts/test_utilities/test_day_count_conventions.py` |
+| Later cost fix (years memoized, same digits as the per-year loop) | `backend/test_scripts/test_services/test_financial_math/test_act_act_fraction.py` |
 | Golden net | `backend/test_scripts/fixtures/scheduled_investment/accrual_golden.json` |
 | Plan | `LibreFolio_developer_journal/Release_2/Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md` |

@@ -60,7 +60,7 @@ Two traps on top:
 ## Lesson
 
 Any time a project puts a `sitecustomize.py` on `PYTHONPATH`, it must chain to the
-interpreter's own one — on Homebrew Python (macOS dev machines) that file is
+interpreter's own one — on Homebrew Python (macOS) that file is
 load-bearing for *prefix resolution*, not just convenience. `usercustomize.py` is not
 an alternative: it is not imported inside virtualenvs (user site disabled), which is
 exactly where spawn children run.

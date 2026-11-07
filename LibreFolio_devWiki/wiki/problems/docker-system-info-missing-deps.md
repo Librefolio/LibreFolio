@@ -31,6 +31,9 @@ design, so the endpoint never 500s) — it just silently returns empty data:
 | `backend_dependencies` | `system.py::parse_pipfile()` reads `PROJECT_ROOT / "Pipfile"` | not copied |
 | `frontend_dependencies` | `system.py::get_frontend_deps()` reads `.../frontend/package.json` | not copied |
 
+*(2026-11-07 lint: `parse_pipfile()`, `get_frontend_deps()` and `get_deployment_mode()` live today in
+`backend/app/api/v1/system/info.py`.)*
+
 The repo already had precedent for this exact class of problem:
 `requirements.txt` is also gitignored and generated fresh by
 `_docker_ensure_assets_built()` in `dev.py` right before `docker build`
@@ -97,8 +100,8 @@ docker run --rm librefolio:latest cat /app/VERSION   # non-empty, matches image 
 
 ## Related
 See [[problems/docker-entrypoint-gid20-collision]] — a *separate*,
-unrelated, still-open bug discovered while verifying this fix (blocks
-`docker compose up` on macOS hosts).
+unrelated bug discovered while verifying this fix (it blocked
+`docker compose up` on macOS hosts; resolved since `9c5809792`, 2026-09-01).
 
 ## Source files
 

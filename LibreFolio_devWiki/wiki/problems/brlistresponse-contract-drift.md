@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-07-13
 tags: [backend, frontend, api-contract, testing, brokers]
-related: []
+related: [decisions/broker-list-visibility-non-members]
 ---
 
 # Problem: Several Callers Still Treated `/brokers` as a Bare Array

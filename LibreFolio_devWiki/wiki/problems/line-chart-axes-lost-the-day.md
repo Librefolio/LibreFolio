@@ -51,7 +51,8 @@ etichette» and «Sì, procedi; e sistema anche il percorso non compatto nello s
   language; every chart sets it, the lots charts included, whose own formatter is gone.
 - The guarantees: no two consecutive labels are equal in any simulated family; the `Intl.DateTimeFormat` instances are
   built once per policy; Candles and Income keep the bucket ladder of their own axis.
-- The CHANGELOG of 1.2 says it under «Line and price charts name the day on their date axis».
+- The CHANGELOG of 1.2 said it under «Line and price charts name the day on their date axis» (`e24ca9c31`); since the
+  line-by-line review `ed85502e2` (13/10) the entry reads «Date axes read the same way on every line and price chart».
 
 ## Prevention
 

@@ -52,6 +52,9 @@ v1.1.0» (`ee16ebe5b`).
 - **V-38**, to verify on screen: the form files a balance problem under the field problems because it splits them by
   index, where the bulk editor splits them by code.
 
+2026-11-07 lint: both closed in 1.3. V-38 on 15/10 by workstream W, lot K1 (`cb8b26563`); V-37b, the full
+pre-check, by W5-9 (`ad892db33`, 25/10), reconciled in dev on 05/11.
+
 ## Prevention
 
 A form must count its own visible errors before it trusts a server verdict on a corrected copy of its data: what the

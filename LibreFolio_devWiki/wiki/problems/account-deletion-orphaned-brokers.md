@@ -27,14 +27,15 @@ removing them left the broker ownerless instead of deleting it. The last-owner r
 
 The developer's mandate: "apply the last-owner rule already in 1.2", with **one shared service function**.
 
-- `delete_user()` (`backend/app/services/user_service.py`) calls `BrokerService.leave_broker()` for every broker the
+- `delete_user()` (`backend/app/services/accounts/user_service.py`) calls `BrokerService.leave_broker()` for every broker the
   user can access: a broker whose last OWNER the user was is deleted with its transactions; elsewhere only the user's
   access goes. Then the user, and one commit.
 - **All or nothing**: if a broker cannot be released, or anything fails, the session is rolled back and nothing is
   deleted (a `False` from `leave_broker` counts as an error, not only an exception) — the API answers 500 "nothing was
   deleted".
 - **Files after the commit**: the deleted brokers' BRIM files live on disk and are removed after the commit
-  (`brim_provider.delete_files_for_brokers`), as `DELETE /brokers` does.
+  (`brim_provider.delete_files_for_brokers`), as `DELETE /brokers` does. *(2026-11-07 lint: the clean-up now sits in
+  `user_service.delete_account()`, which wraps `delete_user()` and runs it off the event loop; the endpoint calls that.)*
 - Refusing to delete the only active administrator is a product rule, not an error ([[features/F-003]]).
 
 ## Prevention
@@ -55,7 +56,8 @@ known in the field: the bug was "one nobody has lived yet", in the developer's w
 |------|------|
 | `delete_user` (last-owner rule per broker, all or nothing) | `backend/app/services/accounts/user_service.py` |
 | `leave_broker` | `backend/app/services/brokers/access.py` |
-| `DELETE /auth/users/me` (only-admin refusal, file clean-up) | `backend/app/api/v1/auth.py` |
+| `DELETE /auth/users/me` (only-admin refusal) | `backend/app/api/v1/auth.py` |
+| `delete_account` (calls `delete_user`, then the file clean-up after the commit) | `backend/app/services/accounts/user_service.py` |
 | File clean-up | `backend/app/services/brim/brim_provider.py` |
 | Account-deletion API tests | `backend/test_scripts/test_api/test_account_deletion_api.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` |

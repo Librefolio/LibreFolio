@@ -14,6 +14,7 @@ related:
   - problems/fifo-income-silently-dropped-after-full-close
   - features/F-097
   - features/F-054
+  - decisions/broker-page-is-a-portfolio-view
 ---
 
 # Problem: zero purchase cost for a foreign-currency asset paid in the report currency (#32)
@@ -88,6 +89,10 @@ specifically:
   and the yellow banner; an unknown cost becomes a `MISSING_COST_BASIS` warning. Never a silent zero.
 - The other fallbacks listed above were removed by the same change: realized P&L comes from the engine's
   `realized_sales`, the lots WAC lines and the broker summary call the same function.
+
+2026-11-07 lint: the broker summary no longer exists. `dd9d0ce20` (05/11) removed `GET /brokers/{id}/summary` and
+`backend/app/services/brokers/summary.py`; the broker page reads its figures from the portfolio report with a broker
+scope ([[decisions/broker-page-is-a-portfolio-view]]), so they come from the same engine.
 
 ## Regression tests
 

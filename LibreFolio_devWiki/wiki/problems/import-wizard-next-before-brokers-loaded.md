@@ -48,7 +48,8 @@ commit `aa12286e1` ("fix(import): gate wizard Next on broker load", train 48):
 - `loadBrokers()` waits with `Promise.allSettled`, inside the counter's `finally`: a failed loader neither releases
   «Next» early nor locks it, and each loader still logs its own error;
 - `goNext()` returns while `brokersLoading` too, because Svelte 5's event delegation can call a handler on a disabled
-  button (the plan's reading of `svelte`'s `events.js`);
+  button (the plan's reading of `svelte`'s `events.js`; the same fact, met in a jsdom test, is
+  [[problems/dispatched-click-reaches-disabled-button-in-jsdom]]);
 - no i18n key, no recomputation of the panels, no backend change.
 
 **The counter is a plain variable, not `$state`.** The analysis first proposed a reactive counter and

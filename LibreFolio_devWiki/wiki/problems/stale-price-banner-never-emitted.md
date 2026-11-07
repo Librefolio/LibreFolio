@@ -6,7 +6,7 @@ date: 2026-09-30
 first_seen: 2026-06-19
 resolved: 2026-09-30
 tags: [portfolio, data-quality, dashboard, prices, risk, testing, e2e, mockprov]
-related: [problems/fx-backward-fill-unbounded-stale-rates, features/F-054, features/F-025, domains/dashboard, sources/phase00-taxonomy-select-2026-10]
+related: [problems/fx-backward-fill-unbounded-stale-rates, features/F-054, features/F-025, domains/dashboard, sources/phase00-taxonomy-select-2026-10, problems/open-panels-stale-after-fx-sync]
 ---
 
 # Problem: the stale-price banner existed, the report never filled it
@@ -71,7 +71,8 @@ reports partial portfolio results while a filtered asset is stale.
 | Risk: stale assets → partial results | `backend/app/services/risk/data_quality.py`, `backend/app/services/risk/results.py` |
 | Current price write-back | `backend/app/services/assets/price_query.py` |
 | Mock provider refusal | `backend/app/services/asset_source_providers/mockprov/plugin.py` |
-| Dashboard CTA branch | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Dashboard CTA branch (at the time; since 04/11 in `portfolioBannerActions.svelte.ts`, `5f8dac5df`) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| The CTA today (`sync_asset_prices`) | `frontend/src/lib/features/portfolio-view/portfolioBannerActions.svelte.ts` |
 | Banner (icon per CTA) | `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` |
 | Lab action mapping | `frontend/src/lib/features/risk/syncTargets.ts` |
 | Service tests (`TestStalePriceDataQuality`) | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` |

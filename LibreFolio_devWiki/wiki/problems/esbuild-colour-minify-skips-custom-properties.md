@@ -74,7 +74,6 @@ Nothing shipped wrong: the difference was caught on the pilot, before the first 
 | CSS minification settings | `frontend/vite.config.ts` |
 | Tokens holding the emitted text | `frontend/src/lib/theme/components/table.css` |
 | Tokens holding the emitted text | `frontend/src/lib/theme/components/media.css` |
-| Tokens holding the emitted text | `frontend/src/lib/theme/components/files.css` |
-| Tokens holding the emitted text | `frontend/src/lib/theme/components/dialogs.css` |
+| Tokens holding the emitted text — removed in `dc5e66c11` (2026-10-16), when phase B moved these tokens onto colour roles | frontend/src/lib/theme/components/files.css, frontend/src/lib/theme/components/dialogs.css (no successor file) |
 | Pilot component | `frontend/src/lib/components/ui/ContextMenu.svelte` |
 | Gate on the tokens | `frontend/src/themeComponentTokens.gate.test.ts` |

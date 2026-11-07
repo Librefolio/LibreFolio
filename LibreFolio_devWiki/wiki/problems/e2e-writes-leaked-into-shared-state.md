@@ -122,6 +122,11 @@ every round the database is back at the seed's 17 assets. New in the backlog: V-
 rates), V-32 (asset specs that pick rows by position), V-34 (a cleanup that checks only the HTTP status). **Still
 open**: the rest of V-21, V-17's two runner points, V-18.
 
+*2026-11-07 lint, from the backlog (`BACKLOG_POST_1.2.md`)*: V-17 is closed (`4e51e8c9c`, «runner settings pattern»,
+reconciled 05/11); V-21 was closed in large part on 13/10 (T1 split into T1a/T1b, probes removed, pair helpers in
+`fixtures/owned-pair.ts`); V-31 and V-34 were discarded by the developer on 22/10 (tolerated, never a red); V-18 and
+V-32 are deferred to 1.4 (developer decision of 04/11). The status stays `open` for those two.
+
 ## Prevention
 
 - A test that writes shared state owns it: its own account, its own reserved pair, or a read-and-restore in `finally`;

@@ -64,11 +64,22 @@ So the bound stays at tomorrow. The far-future suites lift it through a test sea
   point per day up to the raw end → workstream X.
 - **The replay on the event loop**: the engine's `builder.build()` still runs there → J-45 (SEC7-1b).
 
+2026-11-07 lint: all three were closed afterwards.
+- J-45: `98b81d516` (17/10) runs the replay in the engine's own `ThreadPoolExecutor` (`_ENGINE_EXECUTOR`, two workers),
+  off the event loop.
+- Price backfill: lot X-R55 (`8491e610f`, 17/10) caps every per-day walk at `RANGE_SPAN_LIMIT_DAYS` (100 years) before
+  its end (`range_span_floor`, `backend/app/utils/date_range_limits.py`), and the end of every range at
+  `latest_range_end()`.
+- Absurd stored dates: since D-P4 (26/10) the portfolio, lots and positions walks step on the stored dates instead of
+  every calendar day, so a transaction at `0001-01-01` no longer makes a walk of about 740 000 days (the module
+  docstring of `date_range_limits.py`).
+
 ## Source files
 
 | Role | Path |
 |------|------|
 | The bound | `backend/app/utils/datetime_utils.py` |
+| The per-day walk ceiling (X-R55) | `backend/app/utils/date_range_limits.py` |
 | Engine | `backend/app/services/financial_math/portfolio/engine.py` |
 | Portfolio service | `backend/app/services/portfolio_service.py` |
 | Lots analysis | `backend/app/services/lots_analysis_service.py` |

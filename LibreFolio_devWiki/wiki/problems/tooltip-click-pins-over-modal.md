@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-09-24
 tags: [frontend, tooltip, modal, ux]
-related: [datatable-tooltip-custom-cell]
+related: [decisions/datatable-tooltip-custom-cell, problems/popover-pointerdown-swallows-click, problems/svelte5-teardown-reads-stale-state-timers]
 ---
 
 # Problem: A button inside Tooltip pins its hint for 30 s over the modal it opens

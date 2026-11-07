@@ -17,8 +17,8 @@ The SPA catch-all (`frontend_catchall()`, `backend/app/services/platform/static_
 `frontend/build/` that the request path named, once confined inside the build: hidden files included. `GET /.build-debug`
 told whether the build was a debug one, `GET /.build-version` gave the version (already public), the new
 `/.tool-contract-inputs` would have answered too, and so did `/fonts/noto-color-emoji/.cache_manifest.json`, which the
-app never requests. The `/_app` mount and `/mkdocs` had the same gap. There were no hidden files there, but on a
-developer's Mac the Finder can add a `.DS_Store` at any moment. Found while designing the record of
+app never requests. The `/_app` mount and `/mkdocs` had the same gap. There were no hidden files there, but on
+macOS the Finder can add a `.DS_Store` at any moment. Found while designing the record of
 [[problems/frontend-build-looked-stale-for-files-it-never-bundles]] (H-28, 17/10), finished as H-29.
 
 ## Details

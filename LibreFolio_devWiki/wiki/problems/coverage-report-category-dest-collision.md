@@ -75,7 +75,6 @@ This is one of four incidents with the same shape, named at
 the parser accepts it, and the mechanism it was meant to reach never receives it.
 The failure mode is a **default**, not an error. Siblings:
 [[problems/resume-mode-stale-import]], [[problems/coverage-mode-stale-import]],
-[[problems/coverage-report-category-dest-collision]],
 [[problems/env-var-injection-point-duplicated]].
 
 ## Source files

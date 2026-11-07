@@ -30,6 +30,9 @@ The activation-preserving modern path was treated as a prerequisite instead of o
 - Keep dependency-injected writers on the same prepare-once path.
 - Never fall back to deleted legacy exporters, serializers, technical engines, or prompt logic.
 
+> *2026-11-07 lint: the `V2` suffix is gone — the function is now `copyAiExport` (with `prepareAiExport` and
+> `writePreparedAiExport`) in `aiExportClipboard.ts`; `aiExportClipboardV2.ts` was removed.*
+
 ## Prevention
 
 Test modern and non-modern capability branches separately. Assert that snapshot fetch and rendering each run once, that the transported text equals the prepared prompt, and that fallback changes only the transport—not the export contract.

@@ -9,6 +9,7 @@ related:
   - features/F-069
   - features/F-062
   - sources/phase00-translation-round12-2026-10
+  - decisions/mermaid-elk-layout-and-node-text-colour
 ---
 
 # Problem: the script came without the fonts it loads
@@ -59,6 +60,10 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 - **Still open — M-22** (medium, after 1.2): Mermaid is imported only from jsDelivr (`mermaid.mjs`), with no local copy
   and no fallback, so without internet — as in the full image — 74 pages show their diagrams as code. The cure is
   MathJax's: a copy in `vendor/` and a loader with a fallback.
+  2026-11-07 lint: M-22 closed by H6-3 (`34d5849a7`, 30/10): `mermaid.mjs` is gone; Mermaid 11.17.2 is pinned by
+  SHA-256 in `scripts/update_js_cache.py` (copied into `vendor/mermaid/` by `./dev.py cache js`) and defined by
+  `mermaid-early.js` before Material's bundle, with the same pinned file from the CDN as fallback; spec
+  `docs-offline-mermaid.spec.ts`. See also [[decisions/mermaid-elk-layout-and-node-text-colour]].
 - M-21 now names the vendor files too: a local `dev.py docker build` over an already-built site does not take them
   without `dev.py mkdocs build`.
 
@@ -71,5 +76,6 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 | `typesetPromise` guard | `mkdocs_src/docs/javascripts/mathjax.js` |
 | Loader (M-19) | `mkdocs_src/docs/javascripts/lib-loader.js` |
 | Regression spec (the fonts, the faces, `typesetPromise`) | `frontend/e2e/layout/docs-offline-math.spec.ts` |
-| Mermaid from the CDN only (M-22) | `mkdocs_src/docs/javascripts/mermaid.mjs` |
+| Local Mermaid, defined before Material's bundle (H6-3; it replaced `mermaid.mjs`, from the CDN only, removed in `34d5849a7`) | `mkdocs_src/docs/javascripts/mermaid-early.js` |
+| Offline Mermaid spec (H6-3) | `frontend/e2e/layout/docs-offline-mermaid.spec.ts` |
 | Journal (step 8) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` |

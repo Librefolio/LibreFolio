@@ -39,10 +39,15 @@ still small enough for a new key to win; above it they never are.
 
 ## Fix
 
-`maxsize` is touched **once** after the clear, which forces theine to rebuild the
-policy structures. One line, found by reading the library's source after the
-19/20 boundary made it obvious the problem was in the admission path and not in
-the map.
+`NamedCache.clear()` **rebuilds the instance**: it replaces the theine `Cache` with a
+new one of the same `maxsize` and closes the old one, so its timer-wheel thread
+does not leak (`3c5e815e0`, 2026-08-13). Found by reading the library's source
+after the 19/20 boundary made it obvious the problem was in the admission path and
+not in the map.
+
+*2026-11-07 lint*: this section said «`maxsize` is touched once after the clear»;
+the code never did that. Since the fix commit, `clear()` builds a new
+`Cache(self._maxsize)` and calls `old.close()`.
 
 ## Why it is worth a page
 
@@ -63,5 +68,5 @@ wrong half to keep.
 | Role | Path |
 |------|------|
 | Cache wrapper | `backend/app/utils/runtime/cache.py` — `NamedCache.clear` |
-| Dependency | `theine` 2.0.0 (`requirements.txt`) |
+| Dependency | `theine` 2.0.0 (`Pipfile.lock`; `requirements.txt` is generated and git-ignored) |
 | Cache consumers | `backend/app/services/fx/sync.py`, `backend/app/services/assets/core.py` (and the price providers) |

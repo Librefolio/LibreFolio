@@ -73,6 +73,10 @@ result would differ from the Dashboard's broker view. The boundary reading is on
 - The private demo copy has no transfers at all, so no AI Export probe on real data can show this change; test R13
   pins the AI Export values on a synthetic ledger.
 
+2026-11-07 lint: the three follow-ups are closed. J-47 (transit at `date_to`) merged with `39c486d67` (17/10); J-51
+(co-owner YoC on unseen-broker arrivals) merged with `431564591` (17/10); J-48 (`ae52a1d7c`, 19/10) gave
+`LotTimelineEventSchema.scope_boundary` (`IN`/`OUT`, labels only) in `backend/app/schemas/portfolio.py`.
+
 ## Source files
 
 | Role | Path |

@@ -25,7 +25,7 @@ exercised the destructive Policy D wipe flow.
 
 ## Root Cause
 
-In `backend/app/api/v1/assets.py` the two handlers had:
+In `backend/app/api/v1/assets.py` (since split into the package `backend/app/api/v1/assets/`) the two handlers had:
 
 ```python
 except AssetSourceError as e:

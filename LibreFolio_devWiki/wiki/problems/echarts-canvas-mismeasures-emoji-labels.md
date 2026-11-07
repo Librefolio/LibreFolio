@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-09-24
 tags: [frontend, charts, echarts, emoji, heatmap, layout]
-related: [flag-emoji-windows, asset-global-page-shows-no-money]
+related: [problems/flag-emoji-windows, decisions/asset-global-page-shows-no-money, decisions/heatmap-emphasis-is-hue-free]
 ---
 
 # Problem: ECharts measures emoji wrongly, so axis names overflow or get cut

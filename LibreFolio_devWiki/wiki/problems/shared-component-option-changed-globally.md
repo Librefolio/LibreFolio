@@ -4,8 +4,7 @@ category: problem
 status: resolved
 date: 2026-08-31
 tags: [frontend, charts, echarts, shared-components, blast-radius]
-related_concepts: [absence-sentinel-vs-nullable-type]
-related: [problems/env-var-injection-point-duplicated, sources/settings-lane-and-sixteen-defects]
+related: [problems/env-var-injection-point-duplicated, sources/settings-lane-and-sixteen-defects, concepts/absence-sentinel-vs-nullable-type]
 ---
 
 # Problem: `connectNulls: false` set globally to fix FX would have changed every chart

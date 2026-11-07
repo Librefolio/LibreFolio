@@ -82,7 +82,7 @@ container, but not a real fix.
 
 ## How it was found
 Discovered while verifying the fix in
-[[problems/docker-system-info-missing-deps]] on a Mac host — unrelated to
+[[problems/docker-system-info-missing-deps]] on a macOS host (primary GID 20) — unrelated to
 that task, flagged separately per the "report, don't silently fix
 unrelated bugs" workflow rule rather than folding an unrelated Dockerfile
 change into that PR.

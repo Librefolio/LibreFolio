@@ -4,8 +4,7 @@ category: problem
 status: resolved
 date: 2026-08-29
 tags: [frontend, transactions, bulk, validation, off-by-one, product-defect]
-related: [concepts/discard-the-answer-not-the-question]
-related_problems: [commit-reported-success-on-rolled-back-batch]
+related: [concepts/discard-the-answer-not-the-question, concepts/load-only-red-is-a-product-defect, problems/commit-reported-success-on-rolled-back-batch]
 ---
 
 # Problem: the `"operation:index" → tempId` map was off by one
@@ -67,7 +66,7 @@ last, which is the opposite of what sorting by status is for.
 
 | Role | Path |
 |------|------|
-| Validation path (1116, 1170) and commit path (1397) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| Validation path and commit path (line numbers above are of 2026-08; `buildOpsIndexMap` today near 1222) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Operation resolution | `frontend/src/lib/features/transactions/txPayloadHelpers.ts` |
-| Sibling defect (`sortFn`) | `frontend/src/lib/components/table/types.ts`, `TableBody.svelte` |
+| Sibling defect (`sortFn`: declared / now read) | `frontend/src/lib/components/table/types.ts`, `frontend/src/lib/components/table/dataTableLogic.ts` |
 | Commit service | `backend/app/services/transactions/transaction_service.py` |

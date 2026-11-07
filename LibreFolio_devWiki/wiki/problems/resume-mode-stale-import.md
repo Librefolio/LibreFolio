@@ -77,5 +77,5 @@ The failure mode is a **default**, not an error. Siblings:
 | Role | Path |
 |------|------|
 | Correct pattern (unaffected) | `scripts/test_runner/_cli.py` (`_common._RESUME_MODE` attribute access) |
-| Definition | `scripts/test_runner/_common.py` — `_RESUME_MODE` at L44 (**not** L31: that line is `_COVERAGE_MODE`) |
+| Definition | `scripts/test_runner/_common.py` — `_RESUME_MODE` at L69, `_COVERAGE_MODE` at L56 (lines on 2026-11-07; L44 and L31 when written) |
 | Fixed (13 files) | `scripts/test_runner/_backend_api.py`, `_backend_db.py`, `_backend_external.py`, `_backend_schemas.py`, `_backend_services.py`, `_backend_utils.py`, `_frontend_asset.py`, `_frontend_broker.py`, `_frontend_fx.py`, `_frontend_portfolio.py`, `_frontend_transaction.py`, `_frontend_user.py`, `_frontend_utility.py` |

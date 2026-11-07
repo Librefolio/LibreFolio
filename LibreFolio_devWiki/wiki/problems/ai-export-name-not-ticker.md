@@ -69,6 +69,15 @@ should call `buildAssetIdentifiers()` for the identifiers block and use `name` (
 for anything readable by a human or by the receiving AI's prose. If two different assets can share a
 `display_name`, run them through `findCollidingAssetIds()`/`disambiguateAssetName()` first.
 
+## Successor (2026-11-07 lint)
+
+The files named above (`aiExportBuilder.ts`, `assetLabel.ts`, `aiPromptRenderer.ts`, `aiDataRenderer.ts`,
+`technical/technicalExportBuilder.ts`, `templates/responseStyleTemplate.ts`) were deleted when AI Export moved to the
+backend-built V3 snapshot (commit `a332884f0`, 2026-07-27). The naming rule survives in the shared preamble,
+`frontend/src/lib/features/ai-export/templates/sharedInstructions.ts`: refer to assets and brokers by their display
+names, never by internal codes; the snapshot renderer (`templates/snapshotDataRenderer.ts`) prints identifiers in
+their own column.
+
 ## Impact
 
 Frontend-only fix, no backend/API changes, no data migration. `svelte-check`: 0 errors/warnings after

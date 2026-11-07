@@ -48,6 +48,8 @@ history.
 
 - The other train-time obstacle on a shared checkout: a merge that dies with «stash failed» because an IDE or a
   watcher holds `index.lock` — [[problems/git-merge-stash-failed-on-locked-index]].
+- A history operation of another kind, a rewrite force-pushed to the remote, has its own order: tags first, branches
+  second — [[problems/history-rewrite-publish-tags-before-branches]].
 
 ## Source files
 

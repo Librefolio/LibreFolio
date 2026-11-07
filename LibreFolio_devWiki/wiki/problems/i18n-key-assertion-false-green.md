@@ -4,8 +4,7 @@ category: problem
 status: resolved
 date: 2026-08-31
 tags: [frontend, testing, i18n, vitest, false-green]
-related_concepts: [concepts/assert-on-identity-not-prose]
-related: [concepts/characterisation-test-latch, sources/settings-lane-and-sixteen-defects]
+related: [concepts/assert-on-identity-not-prose, concepts/characterisation-test-latch, concepts/e2e-data-testid-rule, sources/settings-lane-and-sixteen-defects]
 ---
 
 # Problem: a test that asserts on `$_()` output looks like it asserts on a key

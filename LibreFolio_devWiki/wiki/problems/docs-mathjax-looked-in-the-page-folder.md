@@ -56,13 +56,16 @@ carries the fix under «Formulas show in the documentation without internet».
   2 passed (English and Italian), and `check-orphans` clean, 110 of 110 e2e specs registered. A red names the place:
   a 404 under the page's own folder is M-19 back, a 404 at the root is a copy the site does not have.
 
-## Still open — M-21
+## M-21 — discarded (2026-10-22)
 
 A local site does not pick up a change like this one. `dev.py` rebuilds `mkdocs_src/site` only when a `.md` is newer
 than `site/index.html` (`auto_build_mkdocs()` for `dev.py server`, and the same check in `_docker_ensure_assets_built()`
 for `dev.py docker build`), so a change to `lib-loader.js` or `extra.css` alone leaves an existing site as it was. CI
 builds the site from scratch, so published images are not affected; a local server or image needs
 `dev.py mkdocs build` first. Backlog M-21 (low; `dev.py` is shared, so not M's to change).
+
+*2026-11-07 lint: M-21 was discarded by the developer on 2026-10-22 — local builds only, CI starts from scratch, and
+`dev.py mkdocs build` is enough. `auto_build_mkdocs()` still compares only the `.md` files with `site/index.html`.*
 
 ## Source files
 

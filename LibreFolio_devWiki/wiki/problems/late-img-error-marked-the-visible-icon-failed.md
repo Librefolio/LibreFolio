@@ -57,6 +57,9 @@ With a working favicon the same race was only cosmetic. The diagnosis written wh
   opened the window for the race.
 - Still open, outside this fix (backlog, after 1.2): C-56 (the chain does not read the store when its props are
   empty) and C-57 (the plugin-icon list is never requested again after a failed first request).
+  2026-11-07 lint: C-56 was discarded on 22/10 (never seen: no caller passes `BrokerIcon` empty props); C-57 was fixed
+  by W6-8 in `eb88bdd3c` (30/10): `ensurePluginIconsLoaded` in `frontend/src/lib/utils/broker/brokerHelpers.ts`
+  retries after a failed request.
 
 ## Source files
 
@@ -67,4 +70,5 @@ With a working favicon the same race was only cosmetic. The diagnosis written wh
 | Component tests | `frontend/src/lib/components/ui/display/BrokerIcon.test.ts` |
 | Chain tests | `frontend/src/lib/utils/broker/__tests__/brokerIconChain.test.ts` |
 | Plan 48 (H1, the fix) | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |
+| The plugin-icon list and its retry (C-57, W6-8) | `frontend/src/lib/utils/broker/brokerHelpers.ts` |
 | Backlog (C-56, C-57) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

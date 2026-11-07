@@ -38,6 +38,7 @@ date, and the day's value otherwise (a write-down that leaves no gain pays no co
   the code.
 - Still open, for the developer: the late-interest part of J-39. That covers the base of late interest, a late
   settlement that moves with the request's end date, and late payouts that never reset.
+  2026-11-07 lint: still open; on 28/10 it was moved to the repository's `TODO_FUTURI.md` (`c9c86d54c`).
 
 ## Lesson: a red must fail for the right reason
 

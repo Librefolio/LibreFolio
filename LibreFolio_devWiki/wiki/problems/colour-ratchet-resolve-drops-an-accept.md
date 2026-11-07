@@ -1,8 +1,9 @@
 ---
 title: "The colour ratchet's --resolve drops a colour accepted on one side"
 category: problem
-status: workaround
+status: resolved
 date: 2026-10-15
+updated: 2026-11-07
 tags: [frontend, colour, tooling, git, merge, ratchet, gates]
 related: [decisions/colour-factorisation-at-pixel-parity]
 ---
@@ -41,6 +42,12 @@ needs the colour coordinator's OK every time.
 
 Proposed fix, backlog R-8 (for T): make `mergeBaselines` a real three-way merge, where the side that differs from the
 base wins when the other side equals the base; or let the side that declares an `~accept` for the file win its line.
+
+**Fixed (commit `6d9601742`, 2026-10-15; recorded by the 2026-11-07 lint)**: `mergeBaselines` is now a three-way merge
+that takes both proposals — a side equal to the base yields to the other; otherwise the side that added an `~accept`
+for the file wins its line; a file accepted on both sides stops `--resolve` with an error asking to merge the sources
+and `--accept` again on the merged tree. Only when neither rule applies does it fall back to the lower m1 and the
+shared m2 values. Status `workaround` → `resolved`.
 
 ## Prevention
 - After `--resolve`, always run `--check` before staging.

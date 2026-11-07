@@ -27,7 +27,7 @@ found.
   password gets the same `401 "Invalid credentials"` for an unknown, an active or a disabled account.
 - **An unknown account still costs a bcrypt check**: `verify_password_or_dummy()` checks the password against a
   dummy hash of the same cost, computed once (`_dummy_password_hash()`, `functools.cache`) and never matched
-  (`backend/app/services/auth_service.py`). The test checks that the bcrypt check runs; it does not measure time.
+  (`backend/app/services/accounts/auth_service.py`). The test checks that the bcrypt check runs; it does not measure time.
 - **Only the right password learns that the account is disabled**: `403` with
   `{"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"}`. The frontend's axios interceptor reacts
   only to 401, so the 403 reaches the login form's `catch` untouched.

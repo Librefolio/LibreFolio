@@ -69,6 +69,9 @@ renderer untyped.
   `emailApi.fetchEmailStatus()` narrows it once. Backlog E-2, deferred to 1.4:
   [[domains/email]].
 
+*2026-11-07 lint: still open — the generated `RiskMatrixCell.value` type is still `(number | null) | Array<number | null>`
+while its Zod schema is a nullable scalar; `correlationHelpers.ts` still narrows it with `scalar()`.*
+
 ## Source files
 
 | Role | Path |

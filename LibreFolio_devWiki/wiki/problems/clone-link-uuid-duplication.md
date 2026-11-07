@@ -1,13 +1,13 @@
 ---
 title: "Clone Link UUID Duplication — Paired Rows From DB"
-category: Problem
+category: problem
 status: resolved
+date: 2026-05-27
 date_encountered: 2026-05-27
 date_resolved: 2026-05-27
 severity: high
 tags: [frontend, clone, link-uuid, paired, transfer, bulkModal]
-related_features: [F-097, F-048]
-related_decisions: [decisions/tx-link-uuid-semantics]
+related: [features/F-097, features/F-048, decisions/tx-link-uuid-semantics]
 ---
 
 # Clone Link UUID Duplication — Paired Rows From DB

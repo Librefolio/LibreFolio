@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-07-23
 tags: [frontend, openapi, zodios, zod, pydantic, codegen]
-related: [zodios-api-client, signal-backend-plugin-architecture]
+related: [decisions/zodios-api-client, decisions/signal-backend-plugin-architecture, problems/multiline-docstring-backticks-break-generated-client]
 ---
 
 # Problem: OpenAPI Zod discriminator type erasure
@@ -20,6 +20,10 @@ related: [zodios-api-client, signal-backend-plugin-architecture]
 ## Solution
 
 Signal discriminator fields are required `Literal` fields with singleton-enum JSON Schema metadata. Pre-validators inject the known discriminator for internal Python constructors, while wire schemas remain required. After generation, `frontend/scripts/fix-openapi-discriminators.mjs` removes the generic annotation only from the seven discriminated option schemas, with an exact-occurrence fail-fast check. All other exported types remain unchanged, avoiding regressions in existing Zodios request/default semantics.
+
+2026-11-07 lint: the list is no longer seven. `discriminatedSchemas` in the post-processor now names 56 schemas (the
+signal options, then AI Export's selections, snapshot requests and target references, among others), and a second
+list, `requiredLiteralDiscriminators`, keeps discriminators required.
 
 ## Prevention
 

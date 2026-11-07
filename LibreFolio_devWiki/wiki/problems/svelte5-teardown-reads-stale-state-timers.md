@@ -63,6 +63,9 @@ callback reach for the global `document`. Use `$state` only for what the templat
 - **C-13** — `SearchSelect.svelte` defers four `setTimeout`s it never cancels and uses the global
   `document.querySelectorAll`.
 - A suite-wide "no timer alive at the end of a file" check is still only an idea.
+- 2026-11-07 lint: both residuals still stand. `touchTimerId` is still `$state` in `DataTable.svelte`; the Dashboard's
+  `reloadTimer` moved with the page body into `PortfolioView.svelte` (`61ec8c3ab`, 03/11), still as `$state`; and
+  `SearchSelect.svelte` still defers uncancelled `setTimeout`s and reads the global `document.querySelectorAll`.
 
 ## Impact
 
@@ -78,7 +81,8 @@ read ([[concepts/load-only-red-is-a-product-defect]]). In production: callbacks 
 | TreeSelect (`pendingSteps`, `defer`, `entryElement`) | `frontend/src/lib/components/ui/select/TreeSelect.svelte` |
 | TreeSelect teardown tests | `frontend/src/lib/components/ui/select/TreeSelect.test.ts` |
 | Residual K-12 | `frontend/src/lib/components/table/DataTable.svelte` |
-| Residual K-12 (Dashboard) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Residual K-12 (Dashboard; `reloadTimer` there until `61ec8c3ab`) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Residual K-12 (`reloadTimer` since 03/11) | `frontend/src/lib/features/portfolio-view/PortfolioView.svelte` |
 | Residual C-13 | `frontend/src/lib/components/ui/select/SearchSelect.svelte` |
 | Plan (step 14) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep14TooltipTeardownFixture.prompt.md` |
 | Plan (step 16, round 1) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep16Round1-TreeSelectTeardown.prompt.md` |

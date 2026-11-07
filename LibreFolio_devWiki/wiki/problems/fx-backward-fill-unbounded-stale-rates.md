@@ -13,6 +13,15 @@ related: [problems/zero-purchase-cost-foreign-asset-paid-in-report-currency, dec
 > backlog item **N-9**. Status `accepted`: the behaviour is a deliberate trade-off, not a fix that is pending — but
 > its consequence on the Dashboard is invisible, and that is what this page is for.
 
+> **Update (2026-11-07 lint) — half of it is now visible.** Since `962810da1` (2026-10-25, «D-P4 cure B») the
+> engine's rate map (`AskedDayRates`) keeps the date of the stored row it reads; `DailyStateBuilder._stale_fx_pair()`
+> records, per day, the pairs that value a security from a row older than `STALE_PRICE_THRESHOLD_DAYS`; the report
+> publishes those of the **valuation day** as `data_quality.stale_fx_pairs` (row date and age), and the Dashboard
+> turns them into a `STALE_FX` banner issue (`frontend/src/lib/features/dashboard/staleFxIssue.ts`). So a pair whose
+> last stored rate is old is now reported. An **interior** hole of a past period is still filled silently — the
+> report reads only the valuation day — which is why the status stays `accepted`. The tables below describe the code
+> of 2026-10-09.
+
 ## Symptom
 
 A pair whose stored history has a hole in the middle converts every day of the hole with the **last rate before
@@ -27,9 +36,9 @@ after it, the same days are *filled* from the island's last rate and nothing rep
 ## Root cause
 
 `convert_bulk()` (`backend/app/services/fx/conversion.py`) is the one conversion path of the backend. Its docstring says
-it plainly (`:1247`): *"unlimited backward-fill: if rate for exact date is not found, uses the most recent rate
+it plainly (`:1247` then, `:165` today): *"unlimited backward-fill: if rate for exact date is not found, uses the most recent rate
 available (no time limit)"*. For each conversion it does `bisect_right(pair_dates, date)` and takes the rate at
-`pos - 1` (`:1384-1385`):
+`pos - 1` (`:1384-1385` then, `:276` today):
 
 | Requested date | Result |
 |---|---|
@@ -44,8 +53,8 @@ warning above debug level. Whether staleness becomes visible therefore depends e
 | Caller | What it does with `rate_date` / the flag | Stale FX visible? |
 |---|---|---|
 | Portfolio engine, `PortfolioCalculationEngine._preload_fx_rates()` (`financial_math/portfolio/engine.py`, called from `calculate()`) — every NAV, P&L and Dashboard figure | keeps only the converted amount in `fx_rate_map`; date and flag are **discarded** | **no** |
-| Series preparation for Risk and Signals (`market_series.py:377`) | counts a point as carried-forward FX when `valuation_date − fx_rate_date > STALE_PRICE_THRESHOLD_DAYS` (7, `data_quality_thresholds.py:14`) → `DataQualityReport.carried_forward_fx_points/pairs` (`schemas/portfolio.py:230-232`), surfaced by `risk/service.py:1379` and `signal_service.py:627` | yes, above 7 days |
-| `POST /fx/currencies/convert` (`api/v1/fx.py:524`, call at `:623`) | returns `BackwardFillInfo` with `days_back` | yes, to the API caller |
+| Series preparation for Risk and Signals (`market_series.py:377`) | counts a point as carried-forward FX when `valuation_date − fx_rate_date > STALE_PRICE_THRESHOLD_DAYS` (7, `data_quality_thresholds.py:14`) → `DataQualityReport.carried_forward_fx_points/pairs` (`schemas/portfolio.py:230-232`), surfaced by `risk/service.py:1379` and `signal_service.py:627` (today `risk/data_quality.py` and `signals/execution.py`) | yes, above 7 days |
+| `POST /fx/currencies/convert` (`api/v1/fx.py:524` then; `api/v1/fx/currencies.py` today) | returns `BackwardFillInfo` with `days_back` | yes, to the API caller |
 | Engine price marks (`DailyStateBuilder._market_value_for()`, `financial_math/portfolio/daily_state.py`) | `is_stale = days_back > STALE_PRICE_THRESHOLD_DAYS` (7) — for **prices**, not FX | n/a |
 
 So the same rate is "stale" in Risk and Signals and "fine" on the Dashboard. `MISSING_FX_RATES` fires only when no
@@ -111,7 +120,10 @@ repairs it.
 | Role | Path |
 |------|------|
 | `convert_bulk()` — unlimited backward-fill, flag and debug log | `backend/app/services/fx/conversion.py` |
-| Engine FX preload — discards date and flag | `backend/app/services/financial_math/portfolio/engine.py` |
+| Engine FX preload — discarded date and flag until `962810da1` | `backend/app/services/financial_math/portfolio/engine.py` |
+| Stale FX pairs per day (`_stale_fx_pair`) since `962810da1` | `backend/app/services/financial_math/portfolio/daily_state.py` |
+| `stale_fx_pairs` of the valuation day | `backend/app/services/financial_math/portfolio/data_quality.py` |
+| Dashboard `STALE_FX` issue | `frontend/src/lib/features/dashboard/staleFxIssue.ts` |
 | Carried-forward FX count for Risk and Signals | `backend/app/services/market_series.py` |
 | Staleness threshold (7 days) | `backend/app/services/platform/data_quality_thresholds.py` |
 | `DataQualityReport.carried_forward_fx_*`, `MISSING_FX_RATES` | `backend/app/schemas/portfolio.py` |

@@ -24,6 +24,12 @@ The implemented workaround:
 5. `get_current_value()` reads from `_live_quote_store` (instant, no I/O)
 6. `shutdown_live_feeds()` called at app shutdown via `provider_shutdown_generic` pattern
 
+2026-11-07 lint: still a workaround, no watchdog in `justetf/plugin.py`. Since filing the worker also stops for good on
+`TimeoutError` (no first quote within the library timeout: an ETF without gettex quotes), and `get_current_value()`
+uses the live store only for EUR, falling back to `load_live_quote` and then to the chart's daily `latestQuote`. A
+frozen quote keeps its own `timestamp`, so it is dated `as_of_date = quote.timestamp.date()`, not today. Shutdown:
+the plugin's `shutdown()` calls `shutdown_live_feeds()`, and `provider_registry.py` calls every provider's `shutdown()`.
+
 ## Prevention
 - A future improvement would add a **watchdog thread** that checks `_live_quote_store[isin].timestamp` and restarts the worker if no update was received within N minutes
 - For now: the exponential backoff handles disconnects that raise exceptions; frozen generators are not handled
@@ -37,4 +43,5 @@ The implemented workaround:
 | Role | Path |
 |------|------|
 | JustETF provider | `backend/app/services/asset_source_providers/justetf/plugin.py` |
-| Provider shutdown pattern | `backend/app/services/assets/base.py` |
+| Provider shutdown pattern (the no-op default `shutdown()`) | `backend/app/services/assets/base.py` |
+| Calls every provider's `shutdown()` at app shutdown | `backend/app/services/provider_registry.py` |

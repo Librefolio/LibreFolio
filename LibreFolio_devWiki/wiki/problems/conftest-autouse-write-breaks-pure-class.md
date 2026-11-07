@@ -58,6 +58,12 @@ solved the classification and broken the fixture.
 proof — a test module cannot be `PURE` if a `conftest.py` in its path performs a
 side effect.
 
+*2026-11-07 lint: the code does not bear this out. `classify()` in `scripts/test_runner/_inventory.py` scans only
+the test modules and their local helpers for `_IMPURE_MARKERS`; it never reads a `conftest.py` (no `conftest` in the
+file). What protects the run today is a declared isolation class: `classify()` returns the catalogue's declaration
+(`declared_isolation`) before any scan, and the fixture itself got the fixes above (`contextlib.closing`, explicit
+timeout).*
+
 ## Source files
 
 | Role | Path |

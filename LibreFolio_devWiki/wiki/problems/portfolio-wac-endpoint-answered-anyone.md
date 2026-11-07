@@ -6,6 +6,7 @@ date: 2026-10-13
 tags: [security, backend, api, authentication, broker-access, changelog, release-1.2]
 related:
   - decisions/changelog-entry-rules
+  - decisions/api-routes-removed-without-deprecation
 ---
 
 # Problem: an average-cost endpoint without a session
@@ -22,6 +23,10 @@ Closed on 2026-09-18 in `763bf1942`, a commit of the PAC work («feat(pac): rede
 map»): `get_portfolio_wac` now takes the signed-in user and checks the brokers asked for. No CHANGELOG line said so;
 since `ed85502e2` the 🔒 section does: «The average purchase cost API now requires signing in».
 
+2026-11-07 lint: the endpoint no longer exists. `d5e467847` (04/11, «remove 13 unused or superseded routes») removed
+`POST /portfolio/wac`; its callers use `POST /portfolio/lots/analysis`
+([[decisions/api-routes-removed-without-deprecation]]).
+
 ## Prevention
 
 - A security fix gets its own line in the CHANGELOG, whatever commit carries it.
@@ -31,5 +36,5 @@ since `ed85502e2` the 🔒 section does: «The average purchase cost API now req
 
 | Role | Path |
 |------|------|
-| The endpoint (`get_portfolio_wac`) | `backend/app/api/v1/portfolio_api.py` |
+| The endpoint (`get_portfolio_wac`, removed in `d5e467847`) | `backend/app/api/v1/portfolio_api.py` |
 | The 🔒 line | `CHANGELOG.md` |

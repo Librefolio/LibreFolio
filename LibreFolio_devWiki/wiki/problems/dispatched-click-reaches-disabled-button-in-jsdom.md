@@ -4,7 +4,7 @@ category: problem
 status: workaround
 date: 2026-10-19
 tags: [frontend, testing, vitest, jsdom, svelte5, testing-library]
-related: [decisions/no-range-of-a-single-day, problems/testing-library-events-prop-read-as-mount-option]
+related: [decisions/no-range-of-a-single-day, problems/testing-library-events-prop-read-as-mount-option, problems/import-wizard-next-before-brokers-loaded]
 ---
 
 # Problem: In jsdom a dispatched click reaches a disabled button's handlers
@@ -34,12 +34,18 @@ Refuse the click in the handler as well as through the attribute. `CalendarMonth
 ## Prevention
 - When a test asserts «a click on a disabled control does nothing», read it as «the handler refuses it», and keep
   the check in the handler.
+- The import wizard's «Next» made the same choice for the same reason — its `goNext()` refuses while the brokers load:
+  [[problems/import-wizard-next-before-brokers-loaded]].
 - Alternatively, assert `toBeDisabled()` and leave the click out. A case that dispatches the click and expects
   silence pins the handler's check, which is what protects synthetic events.
 
 ## Impact
 No product bug: a real user's click on a disabled button dispatches nothing in a browser. Without the check, the
 test would pass or fail on the test harness rather than on the component.
+
+*2026-11-07 lint: the workaround is still the rule in the code — `CalendarMonth.svelte` keeps both the `disabled`
+attribute and the check in the handler (`if (!disabled && !pendingDay)`). It is a fact of jsdom, so the status stays
+`workaround`.*
 
 ## Source files
 | Role | Path |

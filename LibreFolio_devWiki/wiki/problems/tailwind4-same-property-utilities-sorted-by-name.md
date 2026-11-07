@@ -78,6 +78,10 @@ The balance is fragile. When that caller moves to a role whose name sorts first 
 `border-lf-raised`), the modal's default border will win instead. The caller then needs a modal variant prop, or the
 modal must stop setting a default border colour on that path. This is recorded in T's backlog (TC-10, «da rivedere»).
 
+2026-11-07 lint: done the variant way the same day. Since `1ed424af3` (16/10) `ModalBase` has a `tone` prop:
+`tone="danger"` draws `border-2 border-lf-danger-line`, otherwise `border border-lf-raised`, as two branches of one
+ternary; `AssetCurrencyChangeModal` passes `tone="danger"` and no longer sets its border through `contentClass`.
+
 ## Prevention
 - Rule 8 of the `theme-roles` skill: one property, one ternary; a state that must beat a caller is a variant; check
   every class prop before migrating either side.
@@ -96,8 +100,8 @@ No wrong colour shipped: the problem was caught on the first lot that met it, be
 | Role | Path |
 |------|------|
 | The fix: open, disabled and idle borders in one ternary | `frontend/src/lib/components/ui/select/SimpleSelect.svelte` |
-| Border and text as classes, so a caller's `contentClass` can win | `frontend/src/lib/components/ui/modals/ModalBase.svelte` |
-| A caller passing a border through `contentClass` | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
+| Border and text as classes, so a caller's `contentClass` can win; the `tone` prop since `1ed424af3` | `frontend/src/lib/components/ui/modals/ModalBase.svelte` |
+| A caller passing a border through `contentClass` (`tone="danger"` since `1ed424af3`) | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
 | The `dark` custom variant | `frontend/src/app.css` |
 | The rule for every migration (rule 8) | `.github/skills/design-tools/theme-roles/SKILL.md` |
 | Tailwind version | `frontend/package.json` |

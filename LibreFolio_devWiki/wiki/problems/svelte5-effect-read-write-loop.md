@@ -71,7 +71,9 @@ the template reads only `brokersLoading` — [[problems/import-wizard-next-befor
 
 ## Affected File
 
-- `frontend/src/lib/components/transactions/TransactionStagingModal.svelte` (W1/C1, Round 1)
+- `TransactionStagingModal.svelte` (W1/C1, Round 1), removed in `67ecd05a8` (2026-04-28) when the Form and Bulk
+  modals replaced it — today `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` and
+  `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte`
 
 ## Source
 

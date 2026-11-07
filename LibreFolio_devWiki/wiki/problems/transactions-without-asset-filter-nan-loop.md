@@ -47,7 +47,7 @@ backend or changing the client-side filtering architecture.
 
 | Role | Path |
 |------|------|
-| Filter state and URL mapping | `frontend/src/routes/(app)/transactions/filterState.ts` |
+| Filter state and URL mapping | `frontend/src/lib/features/transactions/filterState.ts` |
 | Page synchronization | `frontend/src/routes/(app)/transactions/+page.svelte` |
-| Regression tests | `frontend/src/routes/(app)/transactions/filterState.test.ts` |
+| Regression tests | `frontend/src/lib/features/transactions/filterState.test.ts` |
 | Test registration | `scripts/test_runner/_frontend_transaction.py` |

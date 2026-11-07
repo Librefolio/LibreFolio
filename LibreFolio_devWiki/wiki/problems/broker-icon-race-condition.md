@@ -1,9 +1,9 @@
 ---
 title: "Broker icon race condition (ensurePluginIconsLoaded)"
 category: problem
-status: open
+status: resolved
 date: 2026-06-25
-updated: 2026-10-12
+updated: 2026-11-07
 tags: [frontend, broker-icon, race-condition, async, plugin-icons, svelte5]
 related:
   - sources/phase-final-bugs-2026-06-25
@@ -77,6 +77,11 @@ after a failed first request, so plugin icons stay missing until the page reload
 
 *2026-10-13*: another way to the fallback icon, from outside the app — a broker's site that answers the browser with a
 bot check: [[problems/schwab-favicon-blocked-by-orb]].
+
+*2026-11-07 lint — status `open` → `resolved`*: every symptom seen is fixed (Form A/B in June, the two of 2026-10-12
+in `db0277a99`). **C-57** is fixed too: since `eb88bdd3c` (2026-10-30, W6-8) a failed first request leaves the cache
+empty (`null`), so the next `ensurePluginIconsLoaded()` asks again. Only **C-56** stays, latent: `BrokerIcon.svelte`
+still reads only its props, which every surface fills today.
 
 ## Prevention
 

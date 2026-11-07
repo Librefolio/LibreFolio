@@ -125,18 +125,20 @@ Only the conversion was classified here.
 
 ## Source files
 
+Line numbers re-read on 2026-11-07 (lint).
+
 | Role | Path |
 |------|------|
 | Spec date helpers | `frontend/e2e/fixtures/dates.ts` — `localIso` (L20), `todayIso` (L25), `daysAgoIso` (L30) |
 | Dashboard default range | `frontend/src/lib/stores/dateRangeStore.svelte.ts` — `defaultRange()` (L20) |
-| Sentinel resolution | `frontend/src/lib/stores/dateRangeStore.svelte.ts` — `resolveDateSentinel()` (L144) |
-| New-row prefill | `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` — `handleAddRow()` (L456) |
+| Sentinel resolution | `frontend/src/lib/stores/dateRangeStore.svelte.ts` — `resolveDateSentinel()` (L148) |
+| New-row prefill | `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` — `handleAddRow()` (L492) |
 | Spec that first went red | `frontend/e2e/transactions/tx-clone.spec.ts` |
-| Asset list live gate (2026-10-16) | `frontend/src/routes/(app)/assets/+page.svelte` — `isHeadToday` (L217) |
-| Asset detail live gate (2026-10-16) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` — `isHeadToday` (L324) |
+| Asset list live gate (2026-10-16) | `frontend/src/routes/(app)/assets/+page.svelte` — `isHeadToday` (L238) |
+| Asset detail live gate (2026-10-16) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` — `isHeadToday` (L347) |
 | Product calendar helpers | `frontend/src/lib/utils/dateOnly.ts` — `localIso` (L76), `todayIso` (L81) |
-| Conversion date, UTC on purpose | `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts` — `#applyLiveSummary` (L146) |
-| Two-face guard | `frontend/e2e/assets/asset-live-pause.spec.ts` — Z-3 cases (i)–(l) (L657, L688) |
+| Conversion date, UTC on purpose | `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts` — `#applyLiveSummary` (L168) |
+| Two-face guard | `frontend/e2e/assets/asset-live-pause.spec.ts` — Z-3 cases (i)–(l) (L661–L699) |
 
 > **Path note (2026-09-01)**: the substance of this page held up; the addresses did
 > not. Three rows were wrong: the store had moved to `.svelte.ts`, `DataEditor.svelte`

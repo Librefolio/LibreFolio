@@ -8,6 +8,7 @@ related:
   - concepts/responsive-4mode-layout
   - sources/phase00-ui-polish-2026-10
   - sources/phase00-data-quality-e2e-2026-10
+  - decisions/broker-page-is-a-portfolio-view
 ---
 
 # Problem: the same bar, measured twice, 15 px apart
@@ -52,7 +53,8 @@ sweep passed 15 of 15, and the served bundle was checked for the new values.
 
 | Role | Path |
 |------|------|
-| Dashboard thresholds | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Dashboard thresholds (at the time) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Dashboard thresholds since 04/11 (`denseRow: 990`, the `portfolio` scope; `90dad9c25`) | `frontend/src/lib/features/portfolio-view/portfolioScopeProfile.ts` |
 | Asset detail thresholds | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
 | Plan 48 (step 5, the correction) | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |
 | Backlog (V-19, 48-1) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

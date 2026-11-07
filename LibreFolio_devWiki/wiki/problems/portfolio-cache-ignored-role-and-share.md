@@ -9,6 +9,7 @@ related:
   - decisions/native-cash-daily-revaluation
   - decisions/broker-last-owner-guard
   - sources/beta-testing-2026-08-05
+  - decisions/one-colour-rank-per-asset
 ---
 
 # Problem: the numbers depended on the role and the share, the cache keys did not
@@ -45,6 +46,17 @@ Two commits of 01/09/2026, both titled «fix: consolidate beta user feedback (F1
 `TestAccessFingerprintCacheBust` edits a share and a role and expects new numbers; with the fingerprint removed from
 the key it turns red.
 
+## Seen again: asset metadata (07/11/2026, `e1a84026f`)
+
+Wave 8 put each asset's icon and type in the allocation pie (see [[decisions/one-colour-rank-per-asset]]). An edit of
+an asset's name, icon, type, currency or classification changes no transaction, price or rate, so the report cache
+(30 minutes) kept serving the old icon and name. The report cache key (`l2_key` in `portfolio_service.py`) now ends with
+an **asset fingerprint**: a SHA-256 of `(id, display_name, icon_url, asset_type, currency, classification_params)` of
+every asset in the scope's transactions, sorted by id (`"no_assets"` when there is none). `test_portfolio_l2_asset_edit.py`
+edits each field and expects a miss; `8f8655ff9` names the key's offsets in the existing tests.
+
+Same lesson, a third input: the key held the data rows and the reader, not the descriptive fields the report also shows.
+
 ## Prevention
 
 - A cache key must contain **everything the cached value depends on**, including permissions and ownership: a
@@ -59,4 +71,5 @@ the key it turns red.
 | Report cache key | `backend/app/services/portfolio_service.py` |
 | Share rule | `backend/app/services/financial_math/native_cash.py` (`effective_share`) |
 | Regression test | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` (`TestAccessFingerprintCacheBust`) |
+| Regression test, asset fingerprint | `backend/test_scripts/test_services/test_financial/test_portfolio_l2_asset_edit.py` |
 | Feedback classification | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/03_feedback_utenti_F1-F17_classificazione_e_fix.md` |
