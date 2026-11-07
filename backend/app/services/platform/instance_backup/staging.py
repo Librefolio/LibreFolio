@@ -213,6 +213,10 @@ class StagingReport(BaseModel):
     files: int = Field(ge=0)
     files_size: int = Field(ge=0)
     database_size: int = Field(ge=0)
+    #: C9-10: what the files are, for the bar of the report: the uploaded files and the broker reports (the rest of
+    #: ``files_size`` is anything else the archive carries). Defaults, so that a report written before reads.
+    uploads_size: int = Field(default=0, ge=0)
+    broker_reports_size: int = Field(default=0, ge=0)
     instance_key_included: bool
     #: Lot B4; defaults, so that a report written before still reads.
     encrypted: bool = False
@@ -1046,6 +1050,8 @@ def _report(
         foreign_key_violations_after=after.foreign_key_violations,
         files=len(files),
         files_size=sum(entry.size for entry in files),
+        uploads_size=sum(entry.size for entry in files if entry.path.startswith("custom-uploads/")),
+        broker_reports_size=sum(entry.size for entry in files if entry.path.startswith("broker_reports/")),
         database_size=after.size,
         instance_key_included=manifest.instance_key.included,
         encrypted=encrypted,

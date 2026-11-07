@@ -27,6 +27,7 @@ import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response, status
+from fastapi.responses import FileResponse
 from starlette.requests import ClientDisconnect
 
 from backend.app.api.no_echo import NoInputEchoRoute
@@ -38,6 +39,7 @@ from backend.app.db.models import User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import (
     RestoreConfirmRequest,
+    RestoreFromBackupRequest,
     RestoreMigration,
     RestoreOutcome,
     RestoreOwnerCandidate,
@@ -51,10 +53,12 @@ from backend.app.schemas.backup import (
     RestoreTableRows,
     RestoreTotalsDifference,
     RestoreUpload,
+    RestoreVerifyPasswordAnswer,
+    RestoreVerifyPasswordRequest,
     RestoreWaitingCheck,
     RestoreWaitingList,
 )
-from backend.app.services.platform.instance_backup import outcome, restart, restore_jobs
+from backend.app.services.platform.instance_backup import outcome, restart, restore_jobs, stage_peek
 from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, RestoreStateUnreadableError, cancel_restore, prepare_restart, read_restore
 from backend.app.services.platform.instance_backup.envelope import EnvelopeError
 from backend.app.services.platform.instance_backup.jobs import out_of_space
@@ -202,6 +206,8 @@ def _report_view(report: StagingReport) -> RestoreStageReport:
         files=report.files,
         files_size=report.files_size,
         database_size=report.database_size,
+        uploads_size=report.uploads_size,
+        broker_reports_size=report.broker_reports_size,
         instance_key_included=report.instance_key_included,
         encrypted=report.encrypted,
         secrets_rekeyed=report.secrets_rekeyed,
@@ -280,6 +286,32 @@ def _stage_view(check: restore_jobs.RestoreCheck, *, reader: str | None = None) 
 
 
 @restore_router.post(
+    "/restore/upload/from-backup",
+    status_code=status.HTTP_201_CREATED,
+    response_model=RestoreUpload,
+    responses={
+        404: {"description": "No backup kept on the server has this id, or its archive is gone (code `backup_job_not_found`)"},
+        409: {"description": "A sealed backup of a hosting panel: it opens only with the private key of its recipients (code `backup_sealed_unsupported`)"},
+        507: {"description": "Not enough free space where the archive had to be copied (code `backup_no_space`)"},
+    },
+)
+def restore_from_kept_backup(body: RestoreFromBackupRequest, _admin: User = Depends(require_admin)) -> RestoreUpload:
+    """Take a backup the server keeps as the archive of a restore (C9-9): no download, no upload. The answer is an upload,
+    checked as any other with ``POST /restore/stage`` (a secure backup with its password); the kept backup stays."""
+    try:
+        uploaded = restore_jobs.upload_from_kept(body.job_id)
+    except restore_jobs.KeptBackupNotFoundError:
+        raise backup_error(status.HTTP_404_NOT_FOUND, "backup_job_not_found", "No kept backup has this id") from None
+    except restore_jobs.KeptBackupSealedError:
+        raise backup_error(status.HTTP_409_CONFLICT, "backup_sealed_unsupported", "A sealed backup opens only with the private key of its recipients") from None
+    except restore_jobs.UploadNoSpaceError:
+        raise backup_error(status.HTTP_507_INSUFFICIENT_STORAGE, "backup_no_space", "Not enough free space for the archive") from None
+    except BackupPathError:
+        raise _folder_unusable() from None
+    return RestoreUpload(upload_id=uploaded.upload_id, size=uploaded.size, kind=uploaded.kind)
+
+
+@restore_router.post(
     "/restore/stage",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=RestoreStage,
@@ -342,6 +374,44 @@ def get_restore_check(stage_id: str, admin: User = Depends(require_admin)) -> Re
         return _stage_view(restore_jobs.read_check(stage_id), reader=admin.username)
     except restore_jobs.CheckNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
+
+
+@restore_router.post(
+    "/restore/stage/{stage_id}/verify-password",
+    response_model=RestoreVerifyPasswordAnswer,
+    responses={
+        404: {"description": "The backup has no active administrator with this username (code `restore_admin_not_found`)"},
+        409: {"description": "The check has no opened copy any more: dropped, expired, or given back for the space limit (code `restore_stage_copy_gone`)"},
+    },
+)
+async def verify_restore_password(stage_id: str, body: RestoreVerifyPasswordRequest, _admin: User = Depends(require_admin)) -> RestoreVerifyPasswordAnswer:
+    """Whether a password is the one an administrator of the checked backup signs in with after the restore (C9-8): its
+    hash in the copy, compared with bcrypt in a thread. The password is never stored, logged, or sent back."""
+    password = body.password.get_secret_value()
+    try:
+        matches = await asyncio.to_thread(stage_peek.verify_admin_password, get_data_dir(), stage_id, body.username, password)
+    except stage_peek.StageCopyGoneError:
+        raise backup_error(status.HTTP_409_CONFLICT, "restore_stage_copy_gone", "The check has no opened copy any more") from None
+    except stage_peek.StageAdminNotFoundError:
+        raise backup_error(status.HTTP_404_NOT_FOUND, "restore_admin_not_found", "The backup has no active administrator with this username") from None
+    return RestoreVerifyPasswordAnswer(matches=matches)
+
+
+@restore_router.get(
+    "/restore/stage/{stage_id}/avatar/{username}",
+    response_class=FileResponse,
+    responses={200: {"content": {"image/*": {}}, "description": "The avatar picture of an administrator of the checked backup, read from the copy"}, 404: {"description": "No such picture (code `restore_avatar_not_found`)"}},
+)
+def get_restore_admin_avatar(stage_id: str, username: str, _admin: User = Depends(require_admin)) -> FileResponse:
+    """The avatar of an administrator of the checked backup, as the report shows it (C9-10): read from the copy, never from
+    this instance's own files; 404 without one, or when the check has no copy any more."""
+    try:
+        picture = stage_peek.admin_avatar(get_data_dir(), stage_id, username)
+    except (stage_peek.StageCopyGoneError, stage_peek.StageAdminNotFoundError):
+        picture = None
+    if picture is None:
+        raise backup_error(status.HTTP_404_NOT_FOUND, "restore_avatar_not_found", "No avatar for this administrator of the backup")
+    return FileResponse(picture, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @restore_router.delete(

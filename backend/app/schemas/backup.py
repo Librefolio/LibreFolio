@@ -127,6 +127,31 @@ class RestoreStageRequest(BaseModel):
     password: SecretStr | None = Field(default=None, max_length=1024)
 
 
+class RestoreFromBackupRequest(BaseModel):
+    """A backup the server keeps, taken as the archive of a restore (C9-9): no download and no upload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
+class RestoreVerifyPasswordRequest(BaseModel):
+    """A password to try against an administrator of the checked backup (C9-8). Never stored, logged or sent back."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=50)
+    password: SecretStr = Field(max_length=1024)
+
+
+class RestoreVerifyPasswordAnswer(BaseModel):
+    """Whether the password is the one this administrator of the backup signs in with after the restore."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    matches: bool
+
+
 # kind cash: the balance of a broker in a currency; kind quantity: the quantity of an asset at a broker. before is
 # the backup's, after the copy's, in J's canonical decimal text; null where the line is absent, that is zero.
 class RestoreTotalsDifference(BaseModel):
@@ -270,6 +295,9 @@ class RestoreStageReport(BaseModel):
     files: int = Field(ge=0)
     files_size: int = Field(ge=0)
     database_size: int = Field(ge=0)
+    # C9-10: the files split for the bar of the report: the uploaded files and the broker reports.
+    uploads_size: int = Field(default=0, ge=0)
+    broker_reports_size: int = Field(default=0, ge=0)
     instance_key_included: bool
     encrypted: bool
     secrets_rekeyed: int = Field(ge=0)
