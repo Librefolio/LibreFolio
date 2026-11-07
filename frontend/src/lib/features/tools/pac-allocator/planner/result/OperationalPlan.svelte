@@ -94,7 +94,7 @@
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 110,
+                minWidth: 130,
                 cell: (order) => cell({type: 'price', price: order.mid_price, digits}),
             },
             {
@@ -105,7 +105,7 @@
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 120,
+                minWidth: 150,
                 cell: (order) => cell({type: 'money', amount: order.cash_debit.amount, currency: order.cash_debit.currency, digits}),
             },
             {
@@ -116,7 +116,7 @@
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 100,
+                minWidth: 130,
                 cell: (order) => cell({type: 'money', amount: order.fee.amount, currency: order.fee.currency, digits}),
             },
         ]),
