@@ -100,7 +100,7 @@
         "first_start_failed": "il primo avvio successivo non è andato a buon fine",
         "swap_interrupted": "l'avvio che lo applicava è stato interrotto",
         "swap_failed": "le sue cartelle non hanno potuto essere messe al loro posto",
-        "stage_missing": "la sua copia controllata non c'era più",
+        "stage_missing": "il suo archivio caricato non c'era più",
         "unknown": "il motivo è nel log del server"
       },
       "waiting": {
@@ -152,10 +152,11 @@
           "unknown": "Qualcosa nell'archivio merita uno sguardo: i dettagli sono nel log del server.",
           "non_iso_currencies": "Alcuni codici valuta del backup non sono codici ISO (nomi o numeri salvati da una versione precedente): la modifica di quelle righe è rifiutata finché il codice non viene corretto."
         },
-        "expires": "La copia controllata resta disponibile fino al {date}.",
+        "expires": "L'archivio caricato resta disponibile fino al {date}.",
         "drop": "Scarta questo archivio",
         "ownAccountMissing": "Il tuo account non è tra gli amministratori di questo backup: dopo il riavvio non potrai accedere con questo account.",
-        "usersOverLimit": "Questo backup contiene {active} account attivi, ma questa istanza ne accetta {limit}. Il ripristino prosegue; quando un amministratore accede, sceglie chi tiene l'accesso, e gli altri account vengono disattivati, non cancellati."
+        "usersOverLimit": "Questo backup contiene {active} account attivi, ma questa istanza ne accetta {limit}. Il ripristino prosegue; quando un amministratore accede, sceglie chi tiene l'accesso, e gli altri account vengono disattivati, non cancellati.",
+        "later": "Ci penso dopo"
       },
       "confirm": {
         "word": "ripristina",
@@ -243,6 +244,12 @@
         "label": "Password del backup",
         "submit": "Controlla il backup",
         "cancel": "Annulla"
+      },
+      "held": {
+        "until": "Un ripristino attende la tua decisione fino al {date}.",
+        "running": "Un archivio caricato è in controllo.",
+        "resume": "Riprendi",
+        "discard": "Scarta"
       }
     },
     "checks": {

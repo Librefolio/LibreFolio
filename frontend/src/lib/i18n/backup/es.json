@@ -100,7 +100,7 @@
         "first_start_failed": "el primer inicio posterior no se completó",
         "swap_interrupted": "el inicio que la aplicaba se interrumpió",
         "swap_failed": "sus carpetas no se pudieron colocar en su sitio",
-        "stage_missing": "su copia comprobada ya no estaba",
+        "stage_missing": "su archivo subido ya no estaba",
         "unknown": "el motivo está en el registro del servidor"
       },
       "waiting": {
@@ -152,10 +152,11 @@
           "unknown": "Algo del archivo merece una revisión: el registro del servidor tiene los detalles.",
           "non_iso_currencies": "Algunos códigos de divisa de la copia de seguridad no son códigos ISO (nombres o números guardados por una versión anterior): la edición de esas filas se rechaza hasta que se corrija el código."
         },
-        "expires": "La copia comprobada se conserva hasta el {date}.",
+        "expires": "El archivo subido se conserva hasta el {date}.",
         "drop": "Descartar este archivo",
         "ownAccountMissing": "Tu cuenta no está entre los administradores de esta copia de seguridad: después del reinicio no podrás iniciar sesión con ella.",
-        "usersOverLimit": "Esta copia tiene {active} cuentas activas, pero esta instancia admite {limit}. La restauración continúa; cuando un administrador inicie sesión, elegirá quién conserva el acceso, y las demás cuentas se desactivarán, no se eliminarán."
+        "usersOverLimit": "Esta copia tiene {active} cuentas activas, pero esta instancia admite {limit}. La restauración continúa; cuando un administrador inicie sesión, elegirá quién conserva el acceso, y las demás cuentas se desactivarán, no se eliminarán.",
+        "later": "Lo decido después"
       },
       "confirm": {
         "word": "restaurar",
@@ -243,6 +244,12 @@
         "label": "Contraseña de la copia",
         "submit": "Comprobar la copia",
         "cancel": "Cancelar"
+      },
+      "held": {
+        "until": "Una restauración espera tu decisión hasta el {date}.",
+        "running": "Se está comprobando un archivo subido.",
+        "resume": "Retomar",
+        "discard": "Descartar"
       }
     },
     "checks": {
