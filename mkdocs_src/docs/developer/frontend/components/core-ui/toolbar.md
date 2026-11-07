@@ -15,11 +15,11 @@ graph TD
     PT -.->|used by| FX["FX List/Detail"]
     TB -.->|used by| ST["Settings<br/><small>scrollable, two bars</small>"]
 
-    style RL fill:#e3f2fd,stroke:#1565c0
-    style PT fill:#e8f5e9,stroke:#2e7d32
-    style DRP fill:#e3f2fd,stroke:#1565c0
-    style TB fill:#e3f2fd,stroke:#1565c0
-    style LS fill:#fff3e0,stroke:#e65100
+    style RL fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style PT fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style DRP fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style TB fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style LS fill:#fff3e0,color:#1b1b1b,stroke:#e65100
 ```
 
 **Key files**: `lib/utils/layout/responsiveLayout.svelte.ts` (thresholds + `layoutMode`), `lib/components/ui/toolbar/PageToolbar.svelte` (shell), `lib/components/ui/date/DateRangePicker.svelte` (date picker + preset "jolly" badges), `lib/utils/layout/labelShrink.ts` (shared linear label auto-shrink), `lib/utils/layout/dropdownPosition.ts` (shared fixed-position dropdown helper).
