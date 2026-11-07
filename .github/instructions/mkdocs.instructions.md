@@ -102,9 +102,9 @@ Then use the agent to fix reported differences (missing headings, broken links, 
   - Clicking a diagram opens it full screen with zoom and pan (`javascripts/diagram-zoom.js`). A script that must see
     the diagram's SVG goes in the head of `overrides/main.html`, before Material's bundle, never in
     `extra_javascript`: Material draws into a closed shadow root and the script must open it first.
-- **Tables** need no markup for their widths: `javascripts/table-balance.js` gives a table with a long cell next to a short one
-  columns in proportion to the square root of their text (wide screens only). Put a long log line in a table freely; do not
-  force widths by hand.
+- **Tables** need no markup for their widths: `static/extra.css` gives a table of three or more columns the width of the page,
+  a floor and a ceiling per cell and a higher floor for the last column, and `javascripts/table-code-wrap.js` lets a log
+  message in a cell wrap (an identifier keeps its line). Put a long log line in a table freely; do not force widths by hand.
 - Code blocks with correct language tag
 
 ## Gallery Images in Pages
