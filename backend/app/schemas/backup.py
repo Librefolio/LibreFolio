@@ -335,6 +335,28 @@ class RestoreStage(BaseModel):
     report: RestoreStageReport | None = None
 
 
+class RestoreWaitingCheck(BaseModel):
+    """A check of an archive started from the app that waits for a decision (C9-6): running, or done and its archive still
+    kept. ``expires_at`` and ``restorable`` are null while it runs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage_id: str
+    status: Literal["running", "done"]
+    created_at: datetime
+    finished_at: datetime | None = None
+    expires_at: datetime | None = None
+    restorable: bool | None = None
+
+
+class RestoreWaitingList(BaseModel):
+    """The checks waiting for a decision, the newest first."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[RestoreWaitingCheck]
+
+
 # state: pending (confirmed, waiting for the next start of the server), in_progress (being applied by a start), or the
 # last one that ended: committed (the restored data is the instance's, every session ended) or rolled_back (the data
 # is as it was before; reason: first_start_failed, the first start after it did not complete; swap_interrupted, the

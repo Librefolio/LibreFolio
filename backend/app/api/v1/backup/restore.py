@@ -51,6 +51,8 @@ from backend.app.schemas.backup import (
     RestoreTableRows,
     RestoreTotalsDifference,
     RestoreUpload,
+    RestoreWaitingCheck,
+    RestoreWaitingList,
 )
 from backend.app.services.platform.instance_backup import outcome, restart, restore_jobs
 from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, RestoreStateUnreadableError, cancel_restore, prepare_restart, read_restore
@@ -319,6 +321,17 @@ def start_restore_check(body: RestoreStageRequest, _admin: User = Depends(requir
             raise backup_error(status.HTTP_507_INSUFFICIENT_STORAGE, "no_space", "Not enough free space to check the archive") from None
         logger.error("A check of a backup archive could not start", error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "stage_failed", "The check could not start: the server's log has the cause") from None
+
+
+@restore_router.get("/restore/stages", response_model=RestoreWaitingList)
+def list_waiting_restore_checks(_admin: User = Depends(require_admin)) -> RestoreWaitingList:
+    """The checks started from the app that wait for a decision, the newest first (C9-6): a running one, and an ended one
+    whose archive is still kept, until it expires. Any tab or device of an administrator resumes one from here
+    (``GET /restore/stage/{stage_id}``) or drops it (``DELETE``); a hosting panel's checks are not listed."""
+    items = [
+        RestoreWaitingCheck(stage_id=item.check.stage_id, status=item.check.status, created_at=item.check.created_at, finished_at=item.check.finished_at, expires_at=item.expires_at, restorable=item.restorable) for item in restore_jobs.waiting_checks() if item.check.status in ("running", "done")
+    ]
+    return RestoreWaitingList(items=items)
 
 
 @restore_router.get("/restore/stage/{stage_id}", response_model=RestoreStage, responses={404: _STAGE_NOT_FOUND})

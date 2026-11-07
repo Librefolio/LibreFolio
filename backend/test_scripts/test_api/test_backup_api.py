@@ -494,6 +494,8 @@ BACKUP_ROUTES = [
     ("DELETE", "/backup/panel/restore/pending", "panel_restore.cancel_panel_pending_restore"),
     ("PUT", "/backup/restore/upload", "restore.upload_restore_archive"),
     ("POST", "/backup/restore/stage", "restore.start_restore_check"),
+    # C9-6: the checks waiting for a decision, for any tab or device of an administrator
+    ("GET", "/backup/restore/stages", "restore.list_waiting_restore_checks"),
     ("GET", "/backup/restore/stage/{stage_id}", "restore.get_restore_check"),
     ("DELETE", "/backup/restore/stage/{stage_id}", "restore.delete_restore_check"),
     ("POST", "/backup/restore/stage/{stage_id}/confirm", "restore.confirm_restore_check"),
