@@ -1,35 +1,35 @@
 # 🌐 Esposizione sicura
 
-Questa guida mostra come raggiungere LibreFolio fuori casa **senza aprire alcuna porta sul tuo router**, usando [Tailscale](https://tailscale.com/), una VPN mesh sicura e gratuita per uso domestico. Gli stessi passaggi funzionano per qualsiasi altro servizio sulla tua rete locale.
+Raggiungi LibreFolio fuori casa **senza aprire alcuna porta sul router**, con [Tailscale](https://tailscale.com/), una VPN mesh gratuita per uso domestico. Gli stessi passi valgono per qualsiasi altro servizio della tua rete locale.
 
-Ti servono il **Passaggio 0** e il livello più adatto alle tue esigenze. I livelli 3 e 4 richiedono anche la [configurazione una tantum di Funnel sulla console](service_exposure_funnel.md#enabling-funnel-and-acls-on-the-console).
+Fai il **Passaggio 0**, poi solo il livello che ti serve. Livelli 1 e 2, **privati**, in questa pagina; Livelli 3 e 4, **pubblici**, in [Esposizione sicura: accesso pubblico con Funnel](service_exposure_funnel.md), dopo la [configurazione una tantum di Funnel sulla console](service_exposure_funnel.md#enabling-funnel-and-acls-on-the-console).
 
-| Livello | Ideale per | Tailscale sul tuo telefono/PC | Indirizzo HTTPS pubblico |
-|---|---|---|---|
-| 🏃 1. VPN privata | Solo per te, con la configurazione più rapida | Necessario | No |
-| 🥉 2. Router di subnet | Ogni dispositivo della tua LAN domestica, non solo LibreFolio | Necessario | No |
-| 🥈 [3. Funnel](service_exposure_funnel.md#level-3-public-https-address-with-tailscale-funnel) | Un indirizzo pubblico per LibreFolio e installazione come app | Non necessario | Sì |
-| 🥇 [4. Multi-Funnel con Docker](service_exposure_funnel.md#level-4-multi-funnel-with-docker-sidecars) | Un indirizzo pubblico per servizio, ciascuno nel proprio container | Non necessario | Sì |
+| Livello | Ideale per | Tailscale sul tuo telefono/PC | Indirizzo HTTPS pubblico | Dove si configura |
+|---|---|---|---|---|
+| 🏃 1. VPN privata | Solo per te, con la configurazione più rapida | Necessario | No | Solo il Passaggio 0 |
+| 🥉 2. Router di subnet | Ogni dispositivo della tua LAN domestica, non solo LibreFolio | Necessario | No | Terminale del server + console Tailscale |
+| 🥈 [3. Funnel](service_exposure_funnel.md#level-3-public-https-address-with-tailscale-funnel) | Un indirizzo pubblico per LibreFolio e installazione come app | Non necessario | Sì | Console Tailscale + terminale del server |
+| 🥇 [4. Multi-Funnel con Docker](service_exposure_funnel.md#level-4-multi-funnel-with-docker-sidecars) | Un indirizzo pubblico per servizio, ciascuno nel proprio container | Non necessario | Sì | Console Tailscale + `docker-compose.yml` |
 
 !!! tip "⭐ La nostra raccomandazione: Livello 4"
 
-    Il Livello 4 richiede solo un po’ più di configurazione rispetto al Livello 3, mantiene ogni servizio isolato nel proprio container e assegna a ciascuno il proprio indirizzo pubblico. I Livelli 1–3 sono alternative più semplici e mostrano il percorso che porta fin lì.
+    Poco più di configurazione del Livello 3; ogni servizio resta isolato nel proprio container, con un indirizzo pubblico suo. I Livelli 1–3 sono alternative più semplici e tappe verso di esso.
 
-In tutta questa guida, `6040` è la porta predefinita di LibreFolio: se hai impostato un `PORT` diverso nel tuo `.env`, usa quel numero. LibreFolio serve l'app web, la sua API e la documentazione integrata su questa unica porta, quindi è l'unica porta da esporre.
+`6040` è la porta predefinita di LibreFolio: se nel tuo `.env` hai impostato un `PORT` diverso, usa quel numero. App web, API e documentazione integrata passano tutte da questa porta: è l'unica da esporre.
 
 !!! info "📚 Questa guida è su più pagine"
 
-    Questa pagina spiega perché Tailscale è preferibile al port forwarding, mostra come installarlo (Passaggio 0) e tratta i due livelli **privati**, 1 e 2, oltre a MagicDNS. I livelli **pubblici**, con la configurazione una tantum di Funnel, sono in [Esposizione sicura: accesso pubblico con Funnel](service_exposure_funnel.md): Livello 3, un indirizzo HTTPS pubblico, e Livello 4, un indirizzo per servizio con Docker.
+    Qui: il perché di Tailscale, il Passaggio 0, i Livelli 1 e 2, MagicDNS. Livelli 3 e 4 e configurazione di Funnel: [Esposizione sicura: accesso pubblico con Funnel](service_exposure_funnel.md).
 
 ---
 
 ## 🔒 Perché non usare il semplice port forwarding?
 
-Il metodo classico consiste nell'aprire una porta sul router di casa e far puntare un nome DNS dinamico (come DuckDNS) al tuo IP pubblico. Funziona, ma:
+Aprire una porta sul router e puntarci un DNS dinamico (come DuckDNS) funziona, ma:
 
-- **Chiunque su Internet può vedere la porta aperta**: chiunque può scansionare il tuo IP pubblico e attaccare la porta aperta.
-- **HTTPS è compito tuo**: devi gestire un reverse proxy (Nginx, Caddy…) e mantenere rinnovati i suoi certificati SSL.
-- **Senza HTTPS, i dati viaggiano in chiaro**: la tua password e i tuoi dati finanziari possono essere intercettati lungo il percorso.
+- **La porta aperta è visibile a chiunque** su Internet, che può scansionarla e attaccarla.
+- **HTTPS è compito tuo**: un reverse proxy (Nginx, Caddy…) e i suoi certificati SSL da rinnovare.
+- **Senza HTTPS i dati viaggiano in chiaro**: password e dati finanziari intercettabili.
 
 ```mermaid
 graph LR
@@ -37,65 +37,63 @@ graph LR
     Cloud --- Server["🖥️ Local Server<br>(Port 6040)"]
 ```
 
-Tailscale evita tutti e tre questi problemi: nessuna porta del router viene aperta, il traffico tra i tuoi dispositivi è cifrato e Funnel (Livelli 3 e 4) aggiunge HTTPS con certificati che Tailscale gestisce per te.
+Con Tailscale nessuna porta del router si apre, il traffico tra i tuoi dispositivi è cifrato e Funnel (Livelli 3 e 4) aggiunge HTTPS con certificati gestiti da Tailscale.
 
 ---
 
 ## 🏁 Passaggio 0: installa Tailscale sui tuoi dispositivi
 
-[Tailscale](https://tailscale.com/) è una VPN mesh basata sul protocollo **WireGuard**: i tuoi dispositivi entrano a far parte di una rete privata (il tuo *tailnet*) e comunicano tra loro tramite tunnel cifrati. Funziona su Linux, macOS, Windows, iOS e Android, su un NAS o dentro Docker, e il piano **Personal** gratuito è sufficiente per l'uso domestico (vedi i [prezzi di Tailscale](https://tailscale.com/pricing) per i limiti attuali).
+[Tailscale](https://tailscale.com/) (protocollo **WireGuard**) collega i tuoi dispositivi in una rete privata cifrata, il tuo *tailnet*. Gira su Linux, macOS, Windows, iOS e Android, su un NAS o in Docker; il piano **Personal** gratuito basta per casa ([prezzi di Tailscale](https://tailscale.com/pricing) per i limiti attuali).
 
-Installalo e accedi su almeno due dispositivi: il **server** che esegue LibreFolio e un **client**, come il tuo telefono o laptop.
+Installalo e accedi su almeno due dispositivi: il **server** di LibreFolio e un **client**, telefono o laptop.
 
 === "Linux"
 
-    Esegui il comando di installazione ufficiale sul server:
+    **Sul server, da terminale**:
 
     ```bash
     curl -fsSL https://tailscale.com/install.sh | sh
     sudo tailscale up
     ```
 
-    Per maggiori dettagli, vedi la [Guida di installazione generica](https://tailscale.com/docs/install).
+    Il server entra nel tuo tailnet. Dettagli: [Guida di installazione generica](https://tailscale.com/docs/install).
 
 === "macOS"
 
-    Installa l'app ufficiale dal **Mac App Store** o usa Homebrew:
+    **Sul server**: app ufficiale dal **Mac App Store**, oppure da terminale con Homebrew:
 
     ```bash
     brew install --cask tailscale
     sudo tailscale up
     ```
 
-    Per maggiori dettagli, vedi la [Guida di installazione generica](https://tailscale.com/docs/install).
+    Dettagli: [Guida di installazione generica](https://tailscale.com/docs/install).
 
 === "Windows"
 
-    Scarica il programma di installazione ufficiale dal portale Tailscale e segui la procedura guidata di accesso.
-
-    Per i dettagli, vedi la [Guida di installazione per Windows](https://tailscale.com/docs/install/windows).
+    **Sul server**: scarica il programma di installazione ufficiale dal portale Tailscale e segui l'accesso guidato. Dettagli: [Guida di installazione per Windows](https://tailscale.com/docs/install/windows).
 
 === "Android"
 
-    Installa l'applicazione ufficiale dal [Google Play Store](https://play.google.com/store/apps/details?id=com.tailscale.ipn).
+    **Sul telefono**: app ufficiale dal [Google Play Store](https://play.google.com/store/apps/details?id=com.tailscale.ipn).
 
 === "iOS (iPhone/iPad)"
 
-    Installa l'applicazione ufficiale dall'[Apple App Store](https://apps.apple.com/us/app/tailscale/id1470499037).
+    **Sul dispositivo**: app ufficiale dall'[Apple App Store](https://apps.apple.com/us/app/tailscale/id1470499037).
 
 ??? tip "🔑 Mantieni il server connesso — disabilita la scadenza della chiave"
 
-    Per impostazione predefinita, Tailscale chiede a ogni dispositivo di accedere di nuovo dopo 180 giorni. Un server non dovrebbe uscire dal tuo tailnet per questo motivo, quindi disabilita questa opzione per il server:
+    Tailscale chiede a ogni dispositivo di accedere di nuovo dopo 180 giorni. Un server non deve uscire dal tailnet per questo. **Nella console di amministrazione di Tailscale, pagina Machines**:
 
-    1. Nella pagina **Machines** della console di amministrazione, individua il tuo server.
-    2. Fai clic sull'**icona con i tre puntini (...)** a destra della riga del dispositivo.
-    3. Seleziona l'opzione **Disable Key Expiry**.
+    1. Individua il tuo server.
+    2. Fai clic sull'**icona con i tre puntini (...)** a destra della sua riga.
+    3. Seleziona **Disable Key Expiry**.
 
 ---
 
 ## 🏃 Livello 1: VPN privata punto a punto
 
-**Ideale se sei da solo, con la configurazione più rapida.** Il tuo telefono o laptop raggiunge LibreFolio attraverso il tuo tailnet privato e nulla è esposto a Internet.
+**Ideale se sei da solo, con la configurazione più rapida.** Il client raggiunge LibreFolio attraverso il tailnet; nulla è esposto a Internet.
 
 ```mermaid
 graph LR
@@ -108,34 +106,35 @@ graph LR
 
 ### ▶️ Passaggio 1: verifica che LibreFolio risponda sulla sua porta
 
-Nessuna porta da esporre pubblicamente: con Tailscale attivo sul server, la porta `6040` di LibreFolio è già
-raggiungibile dal tuo tailnet all'IP Tailscale del server.
+Nulla da configurare: con Tailscale attivo sul server, la porta `6040` è già raggiungibile dal tailnet all'IP Tailscale del server.
 
 ??? tip "Preferisci un indirizzo HTTPS all'interno del tuo tailnet?"
 
-    Esegui questo comando sul server, poi apri `https://<server-name>.your-tailnet.ts.net` invece dell'IP:
+    **Sul server, da terminale**:
 
     ```bash
     tailscale serve --bg 6040
     ```
 
-    `--bg` lo mantiene in esecuzione dopo aver chiuso il terminale; `tailscale serve reset` lo rimuove. La
-    prima volta, Tailscale potrebbe chiederti di abilitare i certificati HTTPS per il tuo tailnet. L'indirizzo è
-    ancora privato: solo i dispositivi del tuo tailnet possono aprirlo.
+    Apri `https://<server-name>.your-tailnet.ts.net` invece dell'IP; resta privato, lo aprono solo i dispositivi del tuo tailnet. `--bg` lo mantiene attivo dopo la chiusura del terminale; `tailscale serve reset` lo rimuove. La prima volta Tailscale può chiederti di abilitare i certificati HTTPS per il tailnet.
 
 ### 📱 Passaggio 2: apri LibreFolio dal tuo dispositivo
 
-Con Tailscale attivo sul telefono o sul PC, digita nel browser l'IP Tailscale del server (o il suo nome MagicDNS) seguito dalla porta, ad esempio `http://100.a.b.c:6040`.
+**Sul telefono o PC, con Tailscale attivo**, digita nel browser l'IP Tailscale del server (o il suo nome MagicDNS) e la porta:
 
-Per verificare il risultato, vedi [Verifica della sicurezza della connessione](connection_checks.md#indicator).
+```text
+http://100.a.b.c:6040
+```
 
-⚠️ **Limiti:** ogni dispositivo da cui ti connetti deve avere Tailscale attivo e raggiungi solo il server, non il resto della tua LAN domestica (il Livello 2 aggiunge questo).
+LibreFolio si apre. Per verificarne la sicurezza: [Verifica della sicurezza della connessione](connection_checks.md#indicator).
+
+⚠️ **Limiti:** ogni dispositivo da cui ti connetti deve avere Tailscale attivo; raggiungi solo il server, non il resto della LAN (lo aggiunge il Livello 2).
 
 ---
 
 ## 🥉 Livello 2: router di subnet per tutta la tua LAN domestica
 
-**Ideale per raggiungere ogni dispositivo di casa, non solo LibreFolio.** Il server diventa un *router di subnet*: con Tailscale attivo, il tuo client apre qualsiasi IP locale come se fossi a casa, ad esempio `http://192.168.1.2:6040` per LibreFolio.
+**Ideale per raggiungere ogni dispositivo di casa, non solo LibreFolio.** Il server diventa *router di subnet*: il client, con Tailscale attivo, apre qualsiasi IP locale come da casa, ad esempio `http://192.168.1.2:6040` per LibreFolio.
 
 ```mermaid
 graph LR
@@ -149,73 +148,83 @@ graph LR
 
 ### 🔀 Passaggio 1: abilita il routing di subnet sul server
 
+Sostituisci `192.168.1.0/24` con la tua rete locale.
+
 === "Linux"
 
-    Abilita l'inoltro IP a livello di kernel:
+    1. **Sul server, da terminale**, abilita l'inoltro IP nel kernel:
 
-    ```bash
-    echo 'net.ipv4.ip_forward = 1' | sudo tee -a /etc/sysctl.d/99-tailscale.conf
-    echo 'net.ipv6.conf.all.forwarding = 1' | sudo tee -a /etc/sysctl.d/99-tailscale.conf
-    sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
-    ```
+        ```bash
+        echo 'net.ipv4.ip_forward = 1' | sudo tee -a /etc/sysctl.d/99-tailscale.conf
+        echo 'net.ipv6.conf.all.forwarding = 1' | sudo tee -a /etc/sysctl.d/99-tailscale.conf
+        sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
+        ```
 
-    Inizia ad annunciare la subnet (sostituisci l'intervallo IP con la tua rete locale, ad es. `192.168.1.0/24`):
+    2. Annuncia la subnet:
 
-    ```bash
-    sudo tailscale up --advertise-routes=192.168.1.0/24
-    ```
+        ```bash
+        sudo tailscale up --advertise-routes=192.168.1.0/24
+        ```
+
+        La route compare nella console, in attesa di approvazione.
 
 === "macOS"
 
-    Usa il percorso dell'eseguibile Tailscale per annunciare la subnet locale:
+    **Sul server, da terminale**, con il percorso dell'eseguibile Tailscale:
 
     ```bash
     /Applications/Tailscale.app/Contents/MacOS/Tailscale up --advertise-routes=192.168.1.0/24
     ```
 
+    La route compare nella console, in attesa di approvazione.
+
 === "Windows"
 
-    Apri il Prompt dei comandi (`cmd.exe`) o PowerShell come **Amministratore** e annuncia la subnet locale:
+    **Sul server, nel Prompt dei comandi (`cmd.exe`) o PowerShell come Amministratore**:
 
     ```cmd
     tailscale up --advertise-routes=192.168.1.0/24
     ```
 
+    La route compare nella console, in attesa di approvazione.
+
 ### ✅ Passaggio 2: approva la route nella console di amministrazione
 
-1. Vai alla [Console di amministrazione di Tailscale](https://login.tailscale.com/admin/machines).
-2. Fai clic sui tre puntini accanto al tuo server -> **Edit route settings**.
-3. Abilita la subnet annunciata.
+**Nella [Console di amministrazione di Tailscale](https://login.tailscale.com/admin/machines), pagina Machines**:
 
-Un router di subnet fa parte dell'infrastruttura della tua rete: se non l'hai fatto, disabilita ora la scadenza della chiave per il server (suggerimento alla fine del Passaggio 0).
+1. Fai clic sui tre puntini accanto al tuo server -> **Edit route settings**.
+2. Abilita la subnet annunciata.
 
-⚠️ **Limiti:** il client deve comunque avere Tailscale attivo, devi conoscere gli IP locali dei tuoi dispositivi e, all'interno della tua LAN, il traffico viaggia come HTTP in chiaro.
+Dal client raggiungi ora ogni IP della LAN. Il server è ora infrastruttura di rete: se non l'hai fatto, disabilita la scadenza della sua chiave (suggerimento alla fine del Passaggio 0).
+
+⚠️ **Limiti:** il client deve avere Tailscale attivo, devi conoscere gli IP locali dei dispositivi e, nella LAN, il traffico viaggia come HTTP in chiaro.
 
 ---
 
 ## 🔮 MagicDNS e domini personalizzati
 
-**MagicDNS** assegna un nome a ogni dispositivo del tuo tailnet: invece di un IP come `100.110.x.x`, puoi digitare `http://your-server` nel browser. Gli indirizzi Funnel pubblici terminano con `.ts.net` (ad esempio, `https://librefolio.your-tailnet.ts.net`, dove `librefolio` è il `TS_HOSTNAME` del Livello 4).
+**MagicDNS** dà un nome a ogni dispositivo del tailnet: invece di un IP come `100.110.x.x`, digiti `http://your-server`. Gli indirizzi Funnel pubblici terminano con `.ts.net` (ad esempio `https://librefolio.your-tailnet.ts.net`, dove `librefolio` è il `TS_HOSTNAME` del Livello 4).
 
-Preferisci un tuo dominio, come `librefolio.mydomain.com`? Due metodi funzionano per l'accesso **privato**, tramite la VPN:
+Un tuo dominio, come `librefolio.mydomain.com`, per l'accesso **privato** tramite la VPN: due metodi.
 
 ??? tip "🌍 Metodo 1 — Un record DNS pubblico che punta all'IP Tailscale (il più semplice)"
 
-    1. Accedi alla console del tuo registrar di dominio (ad es. Cloudflare, GoDaddy, Namecheap).
-    2. Crea un record DNS di tipo **A** (o **AAAA** per IPv6) per il sottodominio scelto (ad es. `librefolio.mydomain.com`).
-    3. Punta il record direttamente all'**IP Tailscale privato** del tuo server (ad es. `100.77.x.x`).
+    **Nella console del tuo registrar di dominio** (ad es. Cloudflare, GoDaddy, Namecheap):
 
-    Gli indirizzi nella rete `100.64.0.0/10` non sono instradabili su Internet, quindi il nome funziona **solo** mentre sei connesso al tuo tailnet: nessun esterno può raggiungere o scansionare il servizio. Per i dettagli, vedi la [documentazione ufficiale sulle impostazioni DNS](https://tailscale.com/kb/1054/dns#public-dns).
+    1. Crea un record DNS di tipo **A** (o **AAAA** per IPv6) per il sottodominio scelto (ad es. `librefolio.mydomain.com`).
+    2. Puntalo all'**IP Tailscale privato** del server (ad es. `100.77.x.x`).
+
+    Il nome funziona **solo** mentre sei connesso al tailnet: la rete `100.64.0.0/10` non è instradabile su Internet, nessun esterno può raggiungere o scansionare il servizio. Dettagli: [documentazione ufficiale sulle impostazioni DNS](https://tailscale.com/kb/1054/dns#public-dns).
 
 ??? tip "🧭 Metodo 2 — Split DNS con il tuo server DNS"
 
-    Per i record interni che gestisci tu stesso e che non pubblichi mai su Internet:
+    Per record interni gestiti da te, mai pubblicati su Internet:
 
-    1. Configura un server DNS privato nella tua LAN (come Pi-hole, AdGuard Home o CoreDNS).
-    2. Aggiungi record locali del tuo dominio facendoli puntare ai tuoi IP Tailscale.
-    3. Nella console di amministrazione di Tailscale, vai su *DNS -> Nameservers -> Add Nameserver* e aggiungi l'IP Tailscale del tuo DNS privato come nameserver globale o limitato al tuo dominio. Per i dettagli, vedi la [documentazione ufficiale sullo Split DNS](https://tailscale.com/kb/1054/dns#split-dns).
+    1. **Nella tua LAN**: configura un server DNS privato (Pi-hole, AdGuard Home o CoreDNS).
+    2. **Nel tuo server DNS**: aggiungi i record del tuo dominio puntandoli ai tuoi IP Tailscale.
+    3. **Nella console di amministrazione di Tailscale**, *DNS -> Nameservers -> Add Nameserver*: aggiungi l'IP Tailscale del tuo DNS privato, come nameserver globale o limitato al tuo dominio. Dettagli: [documentazione ufficiale sullo Split DNS](https://tailscale.com/kb/1054/dns#split-dns).
 
-Per l'accesso **pubblico**, mantieni l'indirizzo `*.ts.net`: Funnel lo serve con un certificato firmato per quel nome, quindi se fai puntare il tuo dominio a esso (CNAME), si verificano errori SSL/TLS nei browser, a meno che tu non aggiunga un tuo reverse proxy (come Caddy o Nginx) con certificati per il tuo dominio.
+Per l'accesso **pubblico**, tieni l'indirizzo `*.ts.net`: il certificato di Funnel è firmato per quel nome, quindi un CNAME dal tuo dominio dà errori SSL/TLS nei browser, a meno di un tuo reverse proxy (Caddy o Nginx) con certificati per il tuo dominio.
 
 ---
 
