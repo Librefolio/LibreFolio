@@ -12,6 +12,7 @@
     import {AlertCircle, AlertTriangle, CheckCircle2, Info, RefreshCw} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import CheckHelp from '$lib/features/instance/components/CheckHelp.svelte';
+    import {checkMessageValues} from '$lib/features/email/publicUrlExample';
     import {securityChecks, type SecurityChecksStore} from './securityChecks.svelte';
     import type {FindingSeverity} from './securityFindings';
 
@@ -97,7 +98,7 @@
                         <Icon class={ICON_CLASSES[finding.severity]} aria-hidden="true" />
                         <p class="flex-1">
                             <span class="sr-only">{$_(SEVERITY_LABEL_KEYS[finding.severity])}:</span>
-                            {$_(finding.messageKey, {values: finding.params})}
+                            {$_(finding.messageKey, {values: checkMessageValues(finding.messageKey, finding.params)})}
                             {#if finding.action}
                                 <a href={finding.action.href} class="ml-1 font-medium underline" data-testid="security-finding-action">{$_(finding.action.labelKey)}</a>
                             {/if}
@@ -123,7 +124,7 @@
                     {#each findings.passed as finding (finding.id)}
                         <li class="flex items-start gap-2" data-testid="security-passed-check" data-check-id={finding.id}>
                             <CheckCircle2 class="mt-0.5 h-4 w-4 shrink-0 text-lf-success" aria-hidden="true" />
-                            <span class="flex-1">{$_(finding.messageKey, {values: finding.params})}</span>
+                            <span class="flex-1">{$_(finding.messageKey, {values: checkMessageValues(finding.messageKey, finding.params)})}</span>
                             <CheckHelp checkId={finding.id} severity={finding.severity} passed />
                         </li>
                     {/each}
