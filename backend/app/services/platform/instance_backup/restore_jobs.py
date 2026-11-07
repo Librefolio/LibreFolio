@@ -53,7 +53,7 @@ from backend.app.services.platform.instance_backup.paths import (
     upload_path,
     uploads_dir,
 )
-from backend.app.services.platform.instance_backup.staging import STAGE_LIFETIME, StagePhase, StagingBusyError, StagingError, drop_copy, new_stage_id, remove_stage, stage_archive
+from backend.app.services.platform.instance_backup.staging import STAGE_LIFETIME, StagePhase, StagingBusyError, StagingError, drop_copy, new_stage_id, read_report, remove_stage, stage_archive
 
 logger = get_logger(__name__)
 
@@ -366,6 +366,48 @@ def running_check(upload_id: str, *, data_dir: Path | None = None) -> RestoreChe
             if current.status == "running":
                 return current
     return None
+
+
+@dataclass(frozen=True)
+class WaitingCheck:
+    """A check an administrator started and has not decided on yet (C9-6): running, or done and not expired."""
+
+    check: RestoreCheck
+    #: When its archive stops being kept (its report's ``expires_at``); ``None`` while it runs.
+    expires_at: datetime | None
+    #: Whether its report lets the restore go on; ``None`` while it runs.
+    restorable: bool | None
+
+
+def waiting_checks(*, data_dir: Path | None = None, now: datetime | None = None) -> list[WaitingCheck]:
+    """The checks started from the app (not a hosting panel's) that wait for a decision, the newest first: a running one, and
+    an ended one whose report is still valid. A failed check, an expired one, and the copy a confirmed restore waits to
+    apply are not listed. Any tab or device of an administrator reads them here: the id of a check is no longer kept by
+    the tab alone. Never writes, except what ``read_check`` records of a check a stopped server left running."""
+    data_dir = data_dir or get_data_dir()
+    now = now or _now()
+    protected = protected_stage(data_dir)
+    waiting: list[WaitingCheck] = []
+    for found in _checks(data_dir):
+        if found.origin != "admin" or found.stage_id == protected:
+            continue
+        try:
+            check = read_check(found.stage_id, data_dir=data_dir)
+        except CheckNotFoundError:
+            continue
+        if check.status == "running":
+            waiting.append(WaitingCheck(check, None, None))
+            continue
+        if check.status != "done":
+            continue
+        try:
+            report = read_report(data_dir, check.stage_id)
+        except (FileNotFoundError, ValueError, OSError):
+            continue
+        if report.expires_at <= now:
+            continue
+        waiting.append(WaitingCheck(check, report.expires_at, report.restorable))
+    return sorted(waiting, key=lambda item: item.check.created_at, reverse=True)
 
 
 def remove_check(stage_id: str, *, data_dir: Path | None = None) -> None:

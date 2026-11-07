@@ -2165,6 +2165,14 @@ def services_storage_limit(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Storage limit tests", verbose=verbose)
 
 
+def services_restore_waiting(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the checks of a restore that wait for a decision (lot C9-6)."""
+    print_section("Services: the restore checks waiting for a decision")
+    print_info("Testing: backend/app/services/platform/instance_backup/restore_jobs.py (waiting_checks)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_waiting.py", test_names)
+    return run_command(cmd, "Restore waiting checks tests", verbose=verbose)
+
+
 def services_storage_limit_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the limit of the storage bar: the variable, the setting and the lock (lot FB-29)."""
     print_section("Services: the storage limit settings")
@@ -4121,6 +4129,16 @@ Note: No backend server required.
         desc="Lot C8: judge (no limit or 0 never refuses, the limit inclusive, required_mb rounded up and at least 1, disk_missing_bytes the growth less the free space and never negative), problem_for_added and problem_for_total over a data directory (no or unreadable limit never a problem, the space used now in the problem, a total not summed with it), backup_estimate_bytes (the database, the uploads and the reports only), storage_limit_detail (the 507 body), and the backup started by hand (fits: starts; past the limit: the clean-up first, then it starts if it made room; still past: 507 and nothing starts; panel and cli never asked)",
         # PURE: data directories under tmp_path, read_limit and shutil.disk_usage replaced; jobs.start_backup and the clean-up
         # replaced by recorders. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "restore-waiting",
+        services_restore_waiting,
+        name="Restore Waiting Checks",
+        desc="Lot C9-6: waiting_checks lists the checks started from the app that wait for a decision, the newest first: a running one (no expiry, no verdict) and an ended one with a valid report (its expires_at, whether it is restorable); never a failed, expired, hosting-panel or unreadable one, nor the copy a confirmed restore waits to apply; a data directory with no checks lists none",
+        # PURE: states written under tmp_path as restore_jobs writes them, reports read through a replaced read_report, the
+        # lock of the checks held for the running one. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
