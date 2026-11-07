@@ -12,9 +12,11 @@
     import {Mail, RefreshCw, Send} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import CheckHelp from '$lib/features/instance/components/CheckHelp.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {fetchEmailStatus, issueProbeNonce, readTestFailure, sendTestEmail, type EmailCheck, type EmailStatus, type EmailTestFailure} from './emailApi';
     import {probeEmailLinks, type LinksProbeState} from './emailLinks';
+    import {checkMessageValues} from './publicUrlExample';
     import {LINKS_PROBE_CLASSES, LINKS_PROBE_KEYS, linksProbeWarns, minutesUntil, NOTICE_CLASSES, OUTCOME_CLASSES, problemKey, STATE_BADGE_CLASSES, STATE_LABEL_KEYS, testFailureMessage} from './emailText';
 
     let status = $state<EmailStatus | null>(null);
@@ -147,8 +149,10 @@
         {#if notices.length > 0}
             <ul class="space-y-2" data-testid="email-checks">
                 {#each notices as check (check.check_id)}
-                    <li class={NOTICE_CLASSES[check.severity === 'ok' ? 'info' : check.severity]} data-testid="email-check" data-check-id={check.check_id} data-severity={check.severity}>
-                        {$_(check.i18n_key, {values: check.detail})}
+                    {@const severity = check.severity === 'ok' ? 'info' : check.severity}
+                    <li class="flex items-start gap-3 {NOTICE_CLASSES[severity]}" data-testid="email-check" data-check-id={check.check_id} data-severity={check.severity}>
+                        <p class="flex-1" data-testid="email-check-message">{$_(check.i18n_key, {values: checkMessageValues(check.i18n_key, check.detail)})}</p>
+                        <CheckHelp checkId={check.check_id} {severity} />
                     </li>
                 {/each}
             </ul>
