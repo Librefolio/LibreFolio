@@ -249,6 +249,15 @@ def utils_gallery_webp(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Gallery WebP tests", verbose=verbose)
 
 
+def utils_docs_mermaid_colours(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a Mermaid node with its own fill also sets its text colour (E9C)."""
+    print_section("Utils: Docs Mermaid Colours")
+    print_info("Testing: every style/classDef line of every Mermaid block of mkdocs_src/docs")
+    print_info("Tests: a fill without a colour is an unreadable pale box in the dark theme")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_mermaid_colours.py", test_names)
+    return run_command(cmd, "Docs Mermaid colours tests", verbose=verbose)
+
+
 def utils_release_image_contract(verbose: bool = False, test_names: list = None) -> bool:
     """Test the release.yml / Dockerfile contract that keeps the gallery's debug build out of the images."""
     print_section("Utils: Release Image Contract")
@@ -725,6 +734,15 @@ Tests for utility modules and helper functions:
         name="Gallery WebP",
         desc="scripts/gallery_webp.py: the gallery's PNGs get a WebP beside them (quality 85, alpha kept); only a PNG with no WebP or newer than it is converted, a second run does nothing, a broken PNG is reported and stops nothing and leaves no WebP; dev.py counts it as a failure of the gallery",
         # Throwaway PNG trees in tmp_path, Pillow only: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-mermaid-colours",
+        utils_docs_mermaid_colours,
+        name="Docs Mermaid Colours",
+        desc="every Mermaid style or classDef line of the documentation that sets a fill also sets the text colour: Material draws the text light in the dark theme, so a pale box without its own colour cannot be read",
+        # Reads Markdown under mkdocs_src/docs: no DB, no server, no network, no writes.
         isolation="pure",
     )
     add_test(
