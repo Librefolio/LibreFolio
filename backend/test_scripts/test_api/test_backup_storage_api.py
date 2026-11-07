@@ -70,7 +70,7 @@ SERVICE = "backend.app.services.platform.storage_usage"
 ADMIN = SimpleNamespace(id=1, username="fb29-admin", is_superuser=True)
 REGULAR = SimpleNamespace(id=2, username="fb29-user", is_superuser=False)
 
-BYTE_FIELDS = ["database_bytes", "uploads_bytes", "broker_reports_bytes", "backups_bytes", "other_bytes", "data_bytes"]
+BYTE_FIELDS = ["database_bytes", "uploads_bytes", "broker_reports_bytes", "backups_bytes", "other_bytes", "restore_bytes", "data_bytes"]
 VOLUME_FIELDS = ["volume_total_bytes", "volume_used_bytes", "volume_free_bytes"]
 FIELDS = {*BYTE_FIELDS, *VOLUME_FIELDS, "limit_mb", "limit_locked"}
 
@@ -194,7 +194,7 @@ async def test_the_storage_is_for_administrators_only(instance):
 
 @pytest.mark.asyncio
 async def test_the_answer_has_exactly_the_fields_of_the_schema(instance):
-    """STORAGE-002: the eleven fields, no more, no fewer; byte fields are integers, the volume integers or null."""
+    """STORAGE-002: the twelve fields (C9-7: restore_bytes), no more, no fewer; byte fields are integers, the volume integers or null."""
     body = await storage()
     assert set(body) == FIELDS, f"exactly {sorted(FIELDS)}: extra {sorted(set(body) - FIELDS)}, missing {sorted(FIELDS - set(body))}"
     for name in BYTE_FIELDS:
@@ -203,7 +203,7 @@ async def test_the_answer_has_exactly_the_fields_of_the_schema(instance):
         assert body[name] is None or (type(body[name]) is int and body[name] >= 0), f"{name} is bytes, or null: {body[name]!r}"
     assert body["limit_mb"] is None or type(body["limit_mb"]) is int
     assert type(body["limit_locked"]) is bool
-    assert body["data_bytes"] == sum(body[name] for name in BYTE_FIELDS if name != "data_bytes"), "the five parts add up to the whole"
+    assert body["data_bytes"] == sum(body[name] for name in BYTE_FIELDS if name != "data_bytes"), "the parts add up to the whole"
 
 
 def test_the_schema_forbids_extra_fields_and_holds_the_eleven():
@@ -246,7 +246,7 @@ async def test_the_parts_reflect_the_files_the_test_planted(instance):
 @pytest.mark.asyncio
 async def test_an_empty_data_directory_weighs_nothing(instance):
     body = await storage()
-    assert [body[name] for name in BYTE_FIELDS] == [0] * 6, f"nothing planted, nothing weighed: {body}"
+    assert [body[name] for name in BYTE_FIELDS] == [0] * len(BYTE_FIELDS), f"nothing planted, nothing weighed: {body}"
 
 
 # =============================================================================
@@ -307,7 +307,7 @@ async def test_a_measurement_that_fails_is_a_200_of_zeros(instance, monkeypatch,
     assert response.status_code == 200, f"a failing measure is not a 500: {shown(response)}"
     body = response.json()
     assert set(body) == FIELDS, f"the same eleven fields: {sorted(body)}"
-    assert [body[name] for name in BYTE_FIELDS] == [0] * 6, f"the bytes read 0: {body}"
+    assert [body[name] for name in BYTE_FIELDS] == [0] * len(BYTE_FIELDS), f"the bytes read 0: {body}"
     assert [body[name] for name in VOLUME_FIELDS] == [None] * 3, f"and the volume null: {body}"
     assert type(body["limit_locked"]) is bool
 
