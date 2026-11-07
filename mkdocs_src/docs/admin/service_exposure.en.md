@@ -103,7 +103,7 @@ graph LR
     subgraph LAN ["Local LAN Network"]
         Server -->|Local access| LibreFolio["📊 LibreFolio (Local)"]
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;
 ```
 
 ### ▶️ Step 1: Check that LibreFolio answers on its port
@@ -144,7 +144,7 @@ graph LR
         Server -->|Local forwarding| LibreFolio["📊 LibreFolio<br>(e.g. 192.168.1.2:6040)"]
         Server -->|Local forwarding| OtherDevice["🖨️ Other Devices/Services<br>(e.g. 192.168.1.100)"]
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;
 ```
 
 ### 🔀 Step 1: Enable subnet routing on the server

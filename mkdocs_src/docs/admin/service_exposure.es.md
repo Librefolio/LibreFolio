@@ -103,7 +103,7 @@ graph LR
     subgraph LAN ["Red LAN local"]
         Server -->|Acceso local| LibreFolio["📊 LibreFolio (local)"]
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;
 ```
 
 ### ▶️ Paso 1: Comprueba que LibreFolio responde en su puerto
@@ -141,7 +141,7 @@ graph LR
         Server -->|Reenvío local| LibreFolio["📊 LibreFolio<br>(p. ej., 192.168.1.2:6040)"]
         Server -->|Reenvío local| OtherDevice["🖨️ Otros dispositivos/servicios<br>(p. ej., 192.168.1.100)"]
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;
 ```
 
 ### 🔀 Paso 1: Habilita el enrutamiento de subred en el servidor
