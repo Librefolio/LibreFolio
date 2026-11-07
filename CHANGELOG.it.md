@@ -31,6 +31,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **La Dashboard e la pagina del broker seguono i prezzi correnti**: ogni minuto mentre le usi, importi, KPI e posizioni si aggiornano da soli; si fermano quando la scheda è nascosta o dopo due minuti senza input («Aggiornamenti in pausa») e riprendono alla tua azione successiva.
 - **Avvisi sulla qualità dei dati nella pagina del broker:** prezzi obsoleti, tassi di cambio mancanti o obsoleti e i relativi pulsanti di sincronizzazione compaiono anche lì, per ogni ruolo.
 - **Grafico delle posizioni: scegli la finestra della vista Mobile.** Una settimana, un mese, tre mesi, un anno o una finestra personalizzata; si parte da quella automatica.
+- La torta dell'allocazione per asset mostra l'icona dell'asset anche nel tooltip, come la torta per tipo.
 
 #### 📈 Grafici
 
@@ -99,6 +100,10 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Un ripristino interrotto non serve più dati di cui non può garantire l'affidabilità.** Quando lo stato di un ripristino non può essere letto, l'istanza mostra una pagina che richiede l'amministratore (con un link al supporto dell'istanza quando è impostato), conserva ogni copia controllata, e `./dev.py backup pending --recover` consente all'amministratore di scegliere tra i dati di prima e un nuovo ripristino.
 - I job di backup riportano lo SHA-256 dell'archivio; un rapporto di ripristino dice che gli account e le credenziali provengono dal backup, e avvisa quando l'amministratore che conferma non è presente. La guida spiega le copie notturne con restic o Backrest.
 - **I backup restano sul server:** creati dall'app, da riga di comando o da un pannello di hosting, sono elencati in una tabella (Impostazioni › Backup e la nuova scheda File › Backup) con origine, tipo, dimensione e SHA-256, pronti da scaricare o eliminare. Gli amministratori possono impostare una pulizia automatica per dimensione totale e per età; il backup più recente viene sempre conservato.
+- **Ripristina un backup che il server conserva**: *Ripristina* sulla riga di un backup conservato (Impostazioni › Backup, File › Backup) lo controlla direttamente dal server, senza scaricarlo né ricaricarlo; un backup sicuro chiede la sua password.
+- **Verifica una password prima di ripristinare**: nel rapporto del ripristino scegli un amministratore del backup e scrivi una password, per sapere se dopo potrai accedere con quella. La password non viene mai salvata, registrata nei log o rimandata indietro.
+- **Un ripristino può aspettare**: *Ci penso dopo* tiene l'archivio controllato, e Impostazioni › Backup permette di riprenderlo o scartarlo da qualsiasi scheda o dispositivo. Il rapporto mostra gli amministratori del backup con la loro immagine e una barra di cosa contiene; un ripristino che non può proseguire non chiede conferma, e uno rifiutato dal limite di spazio libera subito lo spazio.
+- *Aggiorna* sulla lista dei backup conservati, per i backup fatti da riga di comando.
 
 #### 👥 Account, registrazione e amministratori
 
@@ -133,6 +138,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Invia via email**: le finestre di dialogo dei link di invito e di reimpostazione password di Impostazioni › Utenti possono inviare il link via email, un link di reimpostazione nella lingua del relativo account e un invito nella lingua scelta nella finestra, quella dell'istanza per impostazione predefinita, con l'esito che indica la lingua usata, quando la posta funziona e `LIBREFOLIO_PUBLIC_URL` è impostata. API: `POST /api/v1/email/links`.
 - **Avviso di cambio email**: quando la posta funziona e qualcuno cambia l'indirizzo email di un account, LibreFolio scrive all'indirizzo che aveva prima, mostrando solo il dominio del nuovo, così il proprietario viene a conoscenza di una modifica che non ha fatto. Al massimo 3 di tali avvisi partono all'ora per account e per vecchio indirizzo; oltre tale limite la modifica va comunque a buon fine, senza l'avviso.
 - **Le email di attivazione e di reimpostazione password condividono un limite per rete**, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 all'ora), accanto al budget orario dell'istanza; le password errate non lo consumano mai. Quando un'email viene trattenuta, la pagina dice quanti minuti attendere, in un riquadro giallo.
+- **Il logo di LibreFolio in ogni email**: compare nell'intestazione verde, allegato dentro il messaggio, quindi si vede senza caricare nulla dal web. L'avviso per `LIBREFOLIO_PUBLIC_URL` mancante dà un esempio fatto dall'indirizzo che stai usando, con un pulsante Guida.
 
 #### 🔐 Sicurezza e segreti
 
@@ -288,6 +294,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Nella pagina File e nei file del report del broker, Elimina compare solo sui file che puoi eliminare; un'eliminazione multipla lascia gli altri al loro posto, con un avviso.
 - **File di sistema**: le icone create all'installazione mostrano «di sistema» come autore, invece di un numero utente.
 - **File, per gli amministratori**: il limite di spazio sta in un pannello chiuso «Avanzate» e si chiama Spazio totale di LibreFolio; ora si applica: un nuovo file, un report del broker, un backup a mano o un ripristino che lo supererebbe vengono rifiutati, e il messaggio dice a quanto portarlo. Transazioni, prezzi, database e i backup del pannello di hosting o da riga di comando non vengono mai fermati. Anche «Pulizia automatica» è un pannello chiuso, e dice che le regole si applicano entro un'ora. Il salvataggio di entrambi mostra una conferma verde, e il promemoria sullo stesso disco ora è una semplice nota.
+- **Un rifiuto del limite di spazio compare dove sei** (un caricamento, un import, la scheda dei backup), con *Apri le impostazioni* per gli amministratori e quanto liberare per gli utenti. Oltre il limite la barra dello spazio tiene tutte le parti, con una tacca al limite e righe oltre; un ripristino in corso è una parte a sé.
 
 #### 💱 Codici di valuta
 
@@ -371,6 +378,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Il sito della documentazione usa gli stessi colori dell'app**, nel tema chiaro e in quello scuro.
 - **La documentazione non descrive più come eseguire LibreFolio per altri:** le pagine sui provider di hosting, sul pannello di hosting e sul risveglio pianificato sono state rimosse, e la home page dice «Self-hosted».
 - **L'intestazione della documentazione tiene l'interruttore del tema accanto al selettore della lingua**, come nell'app; il collegamento 🚀 all'app, mostrato quando LibreFolio è in esecuzione, prende il posto che aveva l'interruttore del tema.
+- La guida email dice dove vanno le variabili nel `.env` e come scrivere la password per app di Gmail (senza spazi), e ogni pagina dà un'unica frase per il riavvio.
 
 ### 🐛 Corretto
 
@@ -427,6 +435,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Importazione: il controllo fatto all'arrivo delle righe non viene più scartato.** Nelle importazioni di più di 50 righe, le righe rifiutate apparivano solo dopo ⚡ Valida ora.
 - Importazione, passo 3: le note blu di un importatore non vengono più contate come avvisi. La tabella dei risultati e il riepilogo mostrano ⚠️ avvisi e ℹ️ note separatamente, il dettaglio del file li elenca sotto due intestazioni, e la conferma conta solo gli avvisi quando parla di avvisi.
 - La guida all'importazione non rimanda più a un pulsante che può mancare quando non è stato letto alcun file.
+- La procedura di import non va più avanti senza un file che il server ha rifiutato: resta al primo passo, dice perché e rimanda il file.
 
 #### 🏦 Broker e trasferimenti
 
@@ -464,6 +473,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Le quantità nella tabella Performance non contano più una transazione datata dopo la fine del report.
 - Serie delle posizioni: un asset sommato sui suoi broker mantiene la sua percentuale quando all'inizio del periodo c'erano unità in transito.
 - **Transazioni nella Dashboard:** il selettore della dimensione di pagina funziona.
+- La nuova icona, il nome, il tipo o la classificazione di un asset si vedono subito nella Dashboard: il rapporto non tiene più quelli vecchi per un massimo di 30 minuti.
 
 #### 🧮 Lotti
 
