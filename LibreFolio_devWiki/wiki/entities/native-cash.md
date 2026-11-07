@@ -29,28 +29,35 @@ portfolio service and AI Export read cash from it. Why it exists, and the K/R ru
 
 ## Location
 
-`backend/app/services/financial_math/native_cash.py` (490 lines at `4bc7be91b`), flat next to `average_cost.py` in the
-financial math layer ([[decisions/financial-math-one-home]]). It imports only `Currency` (`schemas.common`) and
-`convert_bulk` (`services.fx`), from the modules that define them.
+`backend/app/services/financial_math/native_cash.py` (490 lines at `4bc7be91b`, 584 on 2026-11-07), flat next to
+`average_cost.py` in the financial math layer ([[decisions/financial-math-one-home]]). It imports `Currency`
+(`schemas.common`), `convert_bulk` and `unit_rate_steps` (`services.fx.conversion`), `AskedDayRates`
+(`financial_math/fx_rates.py`) and `change_days` (`financial_math/change_days.py`), from the modules that define them.
+(2026-11-07 lint: this said «only `Currency` and `convert_bulk`»; the rates became steps in P3 and `change_days` moved
+out on 2026-10-28, `559dbe072`.)
 
 ## Key Interfaces
 
 | Name | What it does |
 |------|--------------|
-| `compute_native_cash(session, movements, *, report_currency, rates_until=None)` | async; **one** `convert_bulk` call: each foreign movement at its own date, then one unit of each foreign currency on every day from its first movement to `rates_until` (its last movement when None). No call at all when every non-zero amount is already in the report currency. |
+| `compute_native_cash(session, movements, *, report_currency, rates_until=None)` | async; **one** `convert_bulk` call converts each foreign movement at its own date, then **one** `unit_rate_steps` call gives one unit of each foreign currency from its first movement to `rates_until` (its last movement when None), as steps (P3). No call at all when every non-zero amount is already in the report currency. |
 | `CashMovement` | one cash change: id, type, date, broker, position (or None), currency, signed amount, share; `native` = amount × share |
 | `cash_movement_from_transaction(tx, *, share=1)` | the adapter; None when the transaction records no cash amount. A zero amount is kept: it changes no figure and never needs a rate. |
 | `effective_share(role, share_percentage)` | OWNER → its share (1 when None, 0 kept); EDITOR and VIEWER → 1 — the only copy of the rule (O2) |
-| `NativeCash.value_at(day)` | each broker's cash on `day` in the report currency; only brokers with a counted movement on or before `day` |
+| `broker_shares(accesses, *, apply_ownership_share=True)` | the `effective_share` of each broker of a list of accesses |
+| `NativeCash.value_at(as_of)` | each broker's cash on `day` in the report currency; only brokers with a counted movement on or before `day` |
 | `NativeCash.balances(as_of=None)` | each broker's balance per currency, zero and unconverted movements included |
 | `NativeCash.flows(date_from, date_to)` | `CashFlows` of `(date_from, date_to]`: signed and absolute sums by type, income and costs by position, unallocated by broker |
 | `NativeCash.sums_by_date(date_from, date_to, types)` | counted movements summed by date and type, dates ascending |
+| `NativeCash.position_flow_steps(date_from, date_to)` | `(broker_id, asset_id)` → `[(day, income, costs)]`: each position's income and costs of `(date_from, date_to]` as running totals, on the days they change |
 | `NativeCash.missing_conversions(date_from, date_to, types)` | `MissingCashConversion(pair, dates)` for every pair that could not be converted |
 | `NativeCash.rate_change_days(date_from, date_to)` | the days a held foreign currency's rate changes (the first rate counts); computed by `change_days` |
-| `change_days(read, currencies, days)` | pure, the one home of «the day a rate changes» (J CP-6, 2026-10-16): the days of the calendar on which the caller's reading gives a currency another rate than on the previous day; a rate on the first day counts. The native cash reads the last rate known, on the calendar of its rate points; the portfolio engine the exact day's rate, on its frame |
+| `change_days(read, currencies, days)` | in `financial_math/change_days.py` since 2026-10-28 (`559dbe072`), before in this module. Pure, the one home of «the day a rate changes» (J CP-6, 2026-10-16): the days of the calendar on which the caller's reading gives a currency another rate than on the previous day; a rate on the first day counts. The native cash reads the last rate known, on the calendar of its rate points; the portfolio engine the exact day's rate, on its frame |
 | `NativeCash.foreign_cash_broker_ids` | brokers with a counted movement outside the report currency |
 | `NativeCash.exchange_results(date_from, date_to)` | each foreign-cash broker's exchange result on cash over `(date_from, date_to]`, returned whole |
 | `CONVERSION_DUST` | `Decimal("1e-9")`: below it an exchange result is the rounding of two conversions, not a result |
+| `native_balances(movements, as_of=None)` | each broker's balance per currency straight from the movements, no conversion |
+| `first_negative_cash(movements, *, opening=None, check_days=())` → `NegativeCash` or None | the first day a broker's balance in a currency ends below zero, with the movements that lowered it |
 
 ## Design Notes
 
@@ -89,6 +96,7 @@ financial math layer ([[decisions/financial-math-one-home]]). It imports only `C
 | Role | Path |
 |------|------|
 | The module | `backend/app/services/financial_math/native_cash.py` |
+| Change days (since 2026-10-28) | `backend/app/services/financial_math/change_days.py` |
 | Layer docstring (module map) | `backend/app/services/financial_math/__init__.py` |
 | Engine caller (step 10c) | `backend/app/services/financial_math/portfolio/engine.py` |
 | Builder caller (`_revalue_foreign_cash`) | `backend/app/services/financial_math/portfolio/daily_state.py` |

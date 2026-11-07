@@ -41,7 +41,7 @@ the DTOs (summaries, Gantt, event rows) and the lots data-quality report ([[deci
 ## Location
 
 `backend/app/services/lots_analysis_service.py` (~1980 lines at the v4 ingest; 2 032 lines on 2026-10-07; 2 274 before
-T-1's cut, 1 172 at `4bc7be91b`), plus its math in `backend/app/services/financial_math/lots/`.
+T-1's cut, 1 172 at `4bc7be91b`, 1 375 on 2026-11-07), plus its math in `backend/app/services/financial_math/lots/`.
 
 ## Key Interfaces
 
@@ -128,6 +128,11 @@ T-1's cut, 1 172 at `4bc7be91b`), plus its math in `backend/app/services/financi
   `native_cash.change_days()`, which compares rates. Still per day: the mark conversion, the per-day FX needs and the
   scan itself, which is L1b, after MF's P3. See [[concepts/self-parity-needs-the-shared-step-pinned]] and
   [[problems/equal-closes-read-back-alike-through-realdecimal]].
+- **The series are returned as steps (2026-10-25/26, D-P4).** *2026-11-07 lint:* `expand_to_days()` no longer exists:
+  J5-5 (`fa3222728`) made the lots histories steps — one point per stretch of unchanged days, `date` to `through` —
+  built and read through `backend/app/services/financial_math/series_steps.py` (`StepRow`, `steps_from_rows`), and L2
+  (`1663fbc7e`) dropped the 1900 floor: `computed_from` is the first transaction's date, `display_from` is `date_from`
+  or `computed_from`.
 
 ## Source files
 
@@ -142,6 +147,7 @@ T-1's cut, 1 172 at `4bc7be91b`), plus its math in `backend/app/services/financi
 | FAILED withholding (J-12) | `backend/test_scripts/test_services/test_financial/test_lots_failed_analysis_withholding.py`, `backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py` |
 | Lot-free market price series (Y-30) | `backend/test_scripts/test_services/test_financial/test_lots_market_price_history.py` |
 | Scope edge (J-10) | `backend/app/services/financial_math/lots/scope_boundary.py` |
+| Series as steps (D-P4) | `backend/app/services/financial_math/series_steps.py` |
 | Change days (L1a) | `backend/app/services/financial_math/lots/change_days.py`, `backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py`, `backend/test_scripts/test_services/test_financial/test_lots_change_days_parity.py` |
 | Pure tests (WAC lines and their gaps) | `backend/test_scripts/test_services/test_lots_analysis_pure.py` |
 | Lots WAC lines of the #32 case (L1–L3) | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |

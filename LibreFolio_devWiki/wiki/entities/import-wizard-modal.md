@@ -14,6 +14,7 @@ related:
   - features/F-083
   - features/F-105
   - decisions/onboarding-guide-observes-never-acts
+  - workflows/brim-import-flow
 mkdocs: "developer/frontend/components/features/import-wizard.md"
 ---
 
@@ -28,13 +29,22 @@ collects explicit corrections, rechecks duplicates on the corrected data, and ha
 selected rows to `TransactionBulkModal`.
 
 The modal is still presented as four numbered product stages, but the implementation is
-a conditional seven-state machine:
+a conditional state machine (`StepId` in `wizardTypes.ts`):
 
 ```text
-upload → select → analyze → [assets] → [fix] → [duplicates] → review
+upload → select → analyze → [assets] → [fix] → [duplicates] → review → [gapFix]
 ```
 
-`assets`, `fix`, and `duplicates` appear only when their predicates require user work.
+`assets`, `fix`, and `duplicates` appear only when their predicates require user work. `gapFix` («Align with the
+bank») opens after review only when a report set brings truth points with something to show
+(`gapFixHasSomethingToShow()`); otherwise review hands off to the editor directly (`handOffToEditor()`).
+(2026-11-07 lint: the diagram showed seven states; the eighth, `gapFix`, exists since 2026-10-01.)
+
+## Location
+
+`frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` (one component per step beside it:
+`UploadStep`, `SelectFilesStep`, `AnalyzeStep`, `AssetGroupStep`, `FixFlaggedStep`, `DuplicatesStep`, `ReviewStep`,
+`GapFixStep`), opened by `TransactionBulkModal.svelte`.
 
 ## Key Interfaces
 
@@ -47,7 +57,7 @@ pendingDeleteTxIds?: number[]
 onImportBatch: (creates: Array<{
     tx: TransactionCreateItem
     todos: ImportTodo[]
-}>) => void
+}>, guideProgress?: {current: number; total: number}) => void
 ```
 
 `defaultBrokerId` is only a preselection; the user can still assign a different broker

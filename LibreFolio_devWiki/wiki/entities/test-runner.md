@@ -12,6 +12,7 @@ related:
   - concepts/unique-test-identifiers
   - problems/registered-but-unreachable-test-actions
   - problems/env-var-injection-point-duplicated
+  - decisions/test-runner-refuses-test-names-it-cannot-apply
 ---
 
 # Test Runner
@@ -36,38 +37,41 @@ It is infrastructure used every working day, and it is the single place where
 
 ## Location
 
-`scripts/test_runner/` — **30 Python modules, ~9 500 lines**, flat layout.
+`scripts/test_runner/` — **31 Python modules, ~19 300 lines** on 2026-11-07 (30 / ~9 500 on 2026-09-01), flat layout.
 There is **no** subpackage: no `actions/`, no `suites/`, no `providers/`.
 
 ```
 scripts/test_runner/
 ├── __init__.py            # package facade
 ├── __main__.py            # python -m scripts.test_runner
-├── _registry.py     (41)  # TEST_REGISTRY assembly — the spine
-├── _common.py      (632)  # globals, run_command, pytest cmd builder, add_test()
-├── _cli.py       (1 264)  # argparse tree + dispatch + check-orphans
-├── _suites.py      (221)  # run_all_tests / _backend / _frontend
-├── _inventory.py   (386)  # derived inventory, isolation classifier, reachability
+├── _registry.py     (43)  # TEST_REGISTRY assembly — the spine
+├── _common.py      (737)  # globals, run_command, pytest cmd builder, add_test()
+├── _cli.py       (1 415)  # argparse tree + dispatch + check-orphans
+├── _suites.py      (224)  # run_all_tests / _backend / _frontend
+├── _inventory.py   (380)  # derived inventory, isolation classifier, reachability
 ├── _scheduler.py   (145)  # balance(), plan(), resolve_workers()
-├── _executor.py    (267)  # worker groups, per-worker env, coverage combine
-├── _consolidate.py (380)  # one Playwright invocation per category
-├── _consolidate_backend.py (295)  # one pytest invocation per category
-├── _server.py      (367)  # one shared test server for the whole run
+├── _executor.py    (283)  # worker groups, per-worker env, coverage combine
+├── _consolidate.py (390)  # one Playwright invocation per category
+├── _consolidate_backend.py (297)  # one pytest invocation per category
+├── _server.py      (610)  # one shared test server for the whole run
 ├── _run_cache.py   (225)  # --resume / --fresh-run / --run-status state
-├── _coverage.py    (408)  # coverage finalisation and reporting
+├── _coverage.py    (491)  # coverage finalisation and reporting
 ├── _archive.py     (228)  # 00_archive/<YYYYMMDD_HHMM>.<ext> convention
 ├── _backend_api.py       _backend_db.py       _backend_external.py
 ├── _backend_schemas.py   _backend_services.py _backend_utils.py
 ├── _frontend_common.py   _frontend_ai_export.py _frontend_asset.py
 ├── _frontend_broker.py   _frontend_fx.py       _frontend_portfolio.py
 ├── _frontend_transaction.py _frontend_user.py  _frontend_utility.py
+├── _frontend_designer_lab.py
 ```
+
+> 2026-11-07 lint: line counts refreshed with `wc -l`; `_frontend_designer_lab.py` is new since the rewrite.
 
 ## Key interfaces
 
 ### The registry is explicit, not auto-discovered
 
-`_registry.py` is 41 lines and does exactly one thing: it imports **14
+`_registry.py` is 43 lines and does exactly one thing: it imports **15
 `populate_registry` functions** — one per category module — and calls them in a
 declared order on a single `TEST_REGISTRY` dict.
 
@@ -79,6 +83,7 @@ _pop_external(TEST_REGISTRY)
 _pop_db(TEST_REGISTRY)
 ...
 _pop_front_ai_export(TEST_REGISTRY)
+_pop_front_designer_lab(TEST_REGISTRY)
 ```
 
 > Order matters: it determines the order in CLI help and in the `all` suites.
@@ -88,26 +93,29 @@ category is two edits: a module with a `populate_registry`, and a line in
 `_registry.py`. That is the whole extension point — and it was chosen deliberately
 (see [[decisions/test-runner-package-split]]).
 
-### 15 categories
+### 16 categories
 
-14 `populate_registry` calls produce **15 registry keys**, because
+15 `populate_registry` calls produce **16 registry keys** (2026-11-07; 14 and 15 on 2026-09-01, before
+`front-designer-lab`), because
 `_backend_api.populate_registry` registers both `api` and `e2e`:
 
 | backend | frontend |
 |---|---|
-| `external`, `db`, `services`, `utils`, `schemas`, `api`, `e2e` | `front-utility`, `front-broker`, `front-user`, `front-fx`, `front-asset`, `front-transaction`, `front-portfolio`, `front-ai-export` |
+| `external`, `db`, `services`, `utils`, `schemas`, `api`, `e2e` | `front-utility`, `front-broker`, `front-user`, `front-fx`, `front-asset`, `front-transaction`, `front-portfolio`, `front-ai-export`, `front-designer-lab` |
 
 ### Actions are declared with `add_test()`
 
-Each category module builds its dict by calling `_common.add_test()` — **250 call
-sites across the package**. The signature is the real contract of the runner:
+Each category module builds its dict by calling `_common.add_test()` — **695 call
+sites across the package** on 2026-11-07 (250 on 2026-09-01). The signature is the real contract of the runner:
 
 ```python
-add_test(category, action, func, *, name, desc,
+add_test(category, action, func, *, test_names=True, name, desc,
          prereq=None, tests=None, note=None, in_all=True,
-         isolation=None, exclusive_because=None)
+         named_only=False, isolation=None, exclusive_because=None)
 ```
 
+`test_names` and `named_only` say whether an action can apply test names given on the command line, and whether it runs
+only when named — [[decisions/test-runner-refuses-test-names-it-cannot-apply]].
 `isolation` and `exclusive_because` are what make the scheduler possible
 (see [[concepts/test-isolation-classes]]); `in_all` is what makes an action
 reachable from an `all` suite (see [[concepts/derived-test-inventory]]).
@@ -127,11 +135,11 @@ both as **subcommands**, not as `--suite` flags:
 ```
 
 Category subparsers are generated from `TEST_REGISTRY.keys()` in
-`_cli.py` (~L471-500); the fixed extras (`all`, `all-backend`, `all-frontend`,
+`_cli.py` (~L457-530 on 2026-11-07); the fixed extras (`all`, `all-backend`, `all-frontend`,
 `check-orphans`, coverage) are added by hand right after. Run-wide flags live on
 the `test` parser itself: `--workers`, `--coverage`, `--resume`, `--fresh-run`,
 `--run-status`, `--fail-fast`, `--no-consolidate`, `--log-dir`, `--no-shared-server`,
-`--assume-scoped`.
+`--assume-scoped`, and the runtime lane's `--test-port` / `--data-dir` ([[concepts/runtime-lanes]]).
 
 ## Design notes
 
@@ -184,7 +192,7 @@ and does not say so ([[concepts/silent-no-op-option]]):
 | Role | Path |
 |------|------|
 | Package facade | `scripts/test_runner/__init__.py` |
-| Registry assembly (14 `populate_registry`) | `scripts/test_runner/_registry.py` |
+| Registry assembly (15 `populate_registry`) | `scripts/test_runner/_registry.py` |
 | `add_test()`, `_get_category_tests_for_all()` | `scripts/test_runner/_common.py` |
 | CLI tree + dispatch + `check-orphans` | `scripts/test_runner/_cli.py` |
 | `all` / `all-backend` / `all-frontend` | `scripts/test_runner/_suites.py` |

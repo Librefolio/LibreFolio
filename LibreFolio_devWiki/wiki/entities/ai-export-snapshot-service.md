@@ -30,7 +30,7 @@ related:
 
 ## Role
 
-`AiExportRuntimeService` is the sole backend orchestration boundary for AI Export.
+`AiExportSnapshotService` is the sole backend orchestration boundary for AI Export.
 It turns an authenticated V1 selection into a typed Snapshot V1 by validating
 the public catalog choice, deriving broker scope, composing required/optional
 datasets from reusable components, and returning deterministic facts and
@@ -45,9 +45,9 @@ notes and clipboard transport.
 
 | Interface | Responsibility |
 |---|---|
-| `AiExportRuntimeService.get_catalog()` | Returns the cached static public catalog: 8 datasets and 11 analyses. |
-| `AiExportRuntimeService.build_snapshot()` | Validates selection/scope and composes a Snapshot V1 through the component registries. |
-| `ComponentComposer.compose()` | Builds each component once per request and enforces required/optional failure behavior. |
+| `AiExportSnapshotService.get_catalog()` (static) | Returns the cached static public catalog: 8 datasets and 11 analyses. |
+| `AiExportSnapshotService.build_snapshot()` | Validates selection/scope and composes a Snapshot V1 through the component registries. |
+| `Composer.compose_dataset()` / `Composer.compose_analysis()` (`composer.py`) | Builds each component once per request and enforces required/optional failure behavior. |
 | Component/Dataset/Analysis registries | Define the finite 67/40/11 composition graph. |
 | `GET /api/v1/ai-export/catalog` | HTTP catalog adapter. |
 | `POST /api/v1/ai-export/snapshot` | Authenticated read-only HTTP snapshot adapter with typed problems. |
@@ -60,7 +60,7 @@ Strict request
   → authenticated broker scope
   → AnalysisSpec or public DatasetSpec
   → DatasetSpec composition
-  → ComponentComposer + request BuildContext
+  → Composer + request BuildContext
       → Portfolio Engine / PortfolioService / runtime FIFO
       → Asset and FX source services / SignalService
   → typed versioned snapshot
@@ -149,6 +149,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | 2026-08-05 | Before first release, public snapshot/catalog/selection/instruction/response versions were reset to V1. Probe helper tests stayed in the runner under an explicit helper-only action; real prompt and Task Adequacy runs remained separate. |
 | 2026-10-12 | Release 1.2 cycle: nine components moved one version over `v1.1.0` (provenances, FIFO summaries and lots, `asset.lot_detail`, reconciliations), each in `COMPACT_COMPONENT_VERSIONS`; the developer's rule allows one step per component until the release ships, and none for a change of values only — [[decisions/ai-export-version-bump-once-per-release]]. C-53: `reconciled` true below `CONVERSION_DUST` — [[problems/ai-export-reconciled-false-on-rounding-dust]]. |
 | 2026-10-12 | C-55: the real-prompt probe accepts an empty broker's `null` HHI when the largest weight is `null` too, and counts it (`hhi_unavailable`); the payload contract and the prompts are unchanged — [[problems/ai-export-probe-rejected-unavailable-hhi]]. |
+| 2026-11-07 | Lint: class names realigned with the code — the service class is `AiExportSnapshotService` (in `runtime_service.py`) and the composer is `Composer` with `compose_dataset()`/`compose_analysis()`; neither `AiExportRuntimeService` nor `ComponentComposer` exists in the history (`git log -S`). Catalog counts re-checked: 8 public datasets, 11 analyses, 67 components. |
 
 ## Source files
 
