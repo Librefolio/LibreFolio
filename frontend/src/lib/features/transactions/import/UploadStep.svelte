@@ -5,6 +5,8 @@
   section reads them as props, writes the bound ones back, and calls the handlers.
 -->
 <script lang="ts">
+    import StorageLimitRefusal from '$lib/components/ui/feedback/StorageLimitRefusal.svelte';
+    import type {StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import {_ as t} from '$lib/i18n';
     import {Trash2, AlertTriangle, Plus} from 'lucide-svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -30,6 +32,8 @@
         step1SetWarnings: Step1SetWarning[];
         step1TableRef: DataTable<PendingFileEntry> | undefined;
         uploadError: string | null;
+        /** C9-1: the space limit refused an upload: said here, with what to do. */
+        uploadRefusal?: StorageLimitNumbers | null;
         uploading: boolean;
         pendingFileActions: RowAction<PendingFileEntry>[];
         pendingFileColumns: ColumnDef<PendingFileEntry>[];
@@ -53,6 +57,7 @@
         step1SetWarnings,
         step1TableRef = $bindable(),
         uploadError = $bindable(),
+        uploadRefusal = null,
         uploading,
         pendingFileActions,
         pendingFileColumns,
@@ -66,6 +71,11 @@
 <div class="space-y-4" data-testid="import-wizard-step1" data-busy={brokersLoading || uploading}>
     <!-- Info hint -->
     <p class="text-xs text-lf-muted italic">{$t('importWizard.step1Optional')}</p>
+
+    <!-- The space limit refused an upload (C9-1): what to do, here -->
+    {#if uploadRefusal}
+        <StorageLimitRefusal numbers={uploadRefusal} />
+    {/if}
 
     <!-- Upload error banner -->
     {#if uploadError}

@@ -19,6 +19,8 @@ export interface PendingFileEntry {
     /** The server's file info, from the upload response: role detection needs its plugins and batch. */
     serverInfo?: BrimFile;
     errorMessage?: string;
+    /** The upload of this file failed (the space limit, a network error): the next Continue sends it again (C9-1). */
+    uploadFailed?: boolean;
 }
 
 /** A required export missing from a set this session uploaded (design §4.2). */

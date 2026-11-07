@@ -15,6 +15,7 @@
     import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Info, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, ListChecks, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
+    import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import {formatBytes} from '$lib/utils/files/upload';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
@@ -228,6 +229,8 @@
     let globalBrokerId = $state<number | null>(null);
     let uploading = $state(false);
     let uploadError = $state<string | null>(null);
+    /** C9-1: the space limit refused an upload of step 1: said on that step, which the wizard does not leave. */
+    let uploadRefusal = $state<StorageLimitNumbers | null>(null);
     let fileUploaderRef: FileUploader | undefined = $state(undefined);
     let dropZoneExpanded = $state(true); // T2: collapsible drop zone
     let dropZoneContainerRef: HTMLDivElement | undefined = $state(undefined);
@@ -3086,12 +3089,21 @@ ${arrow}<span>${label}</span></span>`,
         if (currentStepId === 'upload') {
             // Next is disabled while the broker list loads; a click that lands anyway waits for it too.
             if (step1Continuing || brokersLoading) return;
+            // A file a refusal left behind (the space limit, say) is sent again with the next Continue.
+            pendingFiles = pendingFiles.map((f) => (f.status === 'error' && f.uploadFailed === true ? {...f, status: 'pending', errorMessage: undefined, uploadFailed: false} : f));
             const uploadIds = new Set(pendingFiles.filter((f) => f.status === 'pending' && f.brokerId !== null).map((f) => f.id));
             const uploadsNow = uploadIds.size > 0;
             step1Continuing = true;
             void uploadAllPendingFiles()
                 .then(async () => {
                     // A file outside its broker's format is moved, kept or removed before anything reads it as a set.
+                    // A file the server refused is not there: the wizard stays here, where the refusal is said and the
+                    // file can be sent again or removed, instead of going on without it (C9-1).
+                    const refused = pendingFiles.filter((f) => uploadIds.has(f.id) && f.status === 'error');
+                    if (refused.length > 0) {
+                        if (uploadRefusal === null) uploadError = refused[0].errorMessage ?? null;
+                        return;
+                    }
                     if (uploadsNow) await reviewDefaultPluginMismatches(uploadIds);
                     if (!open || currentStepId !== 'upload') return;
                     // Every file just uploaded was removed: stay here, where new files can be dropped.
@@ -3203,6 +3215,7 @@ ${arrow}<span>${label}</span></span>`,
 
         uploading = true;
         uploadError = null;
+        uploadRefusal = null;
         // The files of one wizard session form one report set: they share the session's batch id.
         const batchId = uploadBatchId;
 
@@ -3216,10 +3229,17 @@ ${arrow}<span>${label}</span></span>`,
             if (entry.fileName !== entry.file.name) {
                 formData.append('custom_filename', entry.fileName);
             }
-            const result = await trySave(() => axiosInstance.post(`/api/v1/brokers/import/upload`, formData), {toast: false, fallback: 'Upload failed', prefix: entry.fileName});
+            const result = await trySave(() => axiosInstance.post(`/api/v1/brokers/import/upload`, formData), {
+                toast: false,
+                fallback: 'Upload failed',
+                prefix: entry.fileName,
+                onError: (error) => {
+                    uploadRefusal = storageLimitNumbersOfError(error) ?? uploadRefusal;
+                },
+            });
 
             if (result.status === 'error') {
-                pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'error', errorMessage: result.message} : f));
+                pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'error', errorMessage: result.message, uploadFailed: true} : f));
             } else {
                 const serverInfo = result.data?.data as BrimFile | undefined;
                 const serverFileId = serverInfo?.file_id ?? generateUUID();
@@ -4441,6 +4461,7 @@ ${arrow}<span>${label}</span></span>`,
                 {step1SetWarnings}
                 bind:step1TableRef
                 bind:uploadError
+                {uploadRefusal}
                 {uploading}
                 {pendingFileActions}
                 {pendingFileColumns}
