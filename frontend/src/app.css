@@ -189,9 +189,9 @@ html.dark {
     color-scheme: dark;
 }
 
-/* Apply theme to common elements */
+/* Apply theme to common elements. No background: the document's (html) is the page's, and a body background would cover
+   the animated background of the standalone pages, which sits behind the body. */
 html.dark body {
-    background-color: var(--theme-bg-primary);
     color: var(--theme-text-primary);
 }
 
