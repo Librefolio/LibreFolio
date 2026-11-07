@@ -436,6 +436,22 @@ Usare come base i grafici mostrati in questo video: https://www.youtube.com/watc
 
 Analizzarli, poi implementarne alcuni o tutti.
 
+## 🔍 Da approfondire: roboquants
+
+**Data aggiunta**: 18 Ottobre 2026 (appunto del developer) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+### Azione Futura
+
+Capire cos'è roboquants e se può servire a LibreFolio.
+
+## 🔍 Da approfondire: vikunja
+
+**Data aggiunta**: 19 Ottobre 2026 (appunto del developer) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+### Azione Futura
+
+Valutare vikunja per tracciare le attività e i task del progetto.
+
 ## 📈 Scala logaritmica nei grafici
 
 **Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
