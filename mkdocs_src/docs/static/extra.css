@@ -1146,3 +1146,17 @@ div.lf-screenshot-carousel-item.alloc-crop-container img.gallery-img {
     accent-color: var(--md-accent-fg-color);
     cursor: pointer;
 }
+
+/* --- Balanced table columns (javascripts/table-balance.js) ---
+ * A table with a long log line in one column and a short instruction in another gets fixed columns in proportion to the
+ * length of their text. In a fixed layout a cell must wrap its own text, code included, or it spills over its neighbour. */
+.md-typeset table.lf-balanced td,
+.md-typeset table.lf-balanced th {
+    overflow-wrap: anywhere;
+}
+
+.md-typeset table.lf-balanced code {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}

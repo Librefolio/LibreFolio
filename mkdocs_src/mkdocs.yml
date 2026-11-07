@@ -898,6 +898,8 @@ extra_javascript:
   - javascripts/moved-anchors.js
   # Buy Me a Coffee widget + header button
   - javascripts/bmc-widget.js
+  # Balanced columns for tables with a long cell next to a short one
+  - javascripts/table-balance.js
 
 nav:
   - Home: index.md
