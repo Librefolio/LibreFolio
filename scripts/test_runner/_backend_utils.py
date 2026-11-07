@@ -471,6 +471,15 @@ def utils_translation_cache(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Translation cache tests", verbose=verbose)
 
 
+def utils_translation_equivalence(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the checks that a translated page says what its source says: Mermaid, tabs, tables, identifiers, code, admonitions, anchors (Aphra pipeline)."""
+    print_section("Utils: Translation Equivalence")
+    print_info("Testing: mkdocs_src/aphra-pipeline/page_equivalence.py, validate_translations.py (ALL_CHECKS), every page of mkdocs_src/docs against its English page")
+    print_info("Tests: Mermaid skeleton (ids, arrows, shapes, style/classDef, front matter), content tabs (count, proper names, 4-space body), table rows and cells, variables / dev.py commands / paths, code that is not a comment, nested admonitions, explicit anchors, corpus guard")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_equivalence.py", test_names)
+    return run_command(cmd, "Translation equivalence tests", verbose=verbose)
+
+
 def utils_translation_validator(verbose: bool = False, test_names: list = None) -> bool:
     """Test the translate-validate checks of R2 batches 11-14 and the block-based LINE_COUNT of the structural diff (Aphra pipeline)."""
     print_section("Utils: Translation Validator")
@@ -993,6 +1002,15 @@ Tests for utility modules and helper functions:
         name="Coverage Combine",
         desc="Coverage parts are combined as a directory: a part coverage renames while the combine starts and one landing after coverage's own listing are both folded in with nothing left behind, the shared backend's parts in the cwd too (.coveragerc is never a part), and a failed combine turns the parallel pass red; a run's parts/run-* directory goes once combined and stays, named with the unreadable part, when not; --cov-clean-backend empties parts/ of coverage data and keeps the junit reports; a finished part holding coverage's schema and no rows is removed and named without failing the combine (worker parts and the shared backend's alike), one with a transient name is never judged empty",
         # Temporary files and coverage subprocesses on them, cwd moved into tmp_path: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-equivalence",
+        utils_translation_equivalence,
+        name="Translation Equivalence",
+        desc="A translated page says what its source says: same Mermaid diagrams (nodes, arrows, style/classDef), content tabs with their proper names and a 4-space body, tables with the same rows and cells, the same variables / dev.py commands / paths, code that differs only in comments and placeholders, nested admonitions with the same marker and depth, explicit anchors; translate-validate runs them as errors, and every page of every language passes them",
+        # Pure functions over strings, plus a read-only pass over mkdocs_src/docs: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(
