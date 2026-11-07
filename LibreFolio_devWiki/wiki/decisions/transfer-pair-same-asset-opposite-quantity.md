@@ -53,6 +53,9 @@ confirmed by a red test enters 1.2:
   «exact at large magnitudes» block of `promoteHelpers.test.ts`; PC5 in `tx-bulk-promote-cost-basis.spec.ts` for the bar.
 - Open, with C-42: an API update that changes the quantity of only one leg of a saved TRANSFER is not checked —
   `validate_updated_pairs` looks only at description and tags ([[decisions/pair-description-tags-validation]]).
+  *2026-11-07 lint:* the CASH_TRANSFER and FX_CONVERSION half of C-42 is closed for a pair being created —
+  `_validate_linked_pair` refuses a CASH_TRANSFER on one broker, in two currencies or with amounts not exactly opposite,
+  and an FX_CONVERSION in one currency (W6-7, `9189857d1`, 2026-10-28). The update path is still as described.
 - Reported, not changed: the grid's quantity cell shows `parseFloat(qty)`, so the two sides of PC5's pair look equal and
   the user cannot see why they do not merge.
 

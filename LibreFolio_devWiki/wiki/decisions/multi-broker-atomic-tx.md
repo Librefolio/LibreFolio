@@ -1,10 +1,12 @@
 ---
 title: "Multi-Broker Atomic Transactions (not broker-scoped)"
+category: decision
 date: 2026-04-20
 status: resolved
 tags: [transactions, api, architecture, atomicity]
 related_features: [F-046, F-048, F-049]
 related_sources: [sources/phase07-part3-api-consolidation]
+related: [features/F-046, features/F-048, features/F-049, sources/phase07-part3-api-consolidation, decisions/unified-batch-pipeline]
 ---
 
 # Decision: Multi-Broker Atomic Transactions
@@ -36,6 +38,10 @@ PATCH  /transactions/bulk     (update)
 DELETE /transactions/bulk?ids=...
 POST   /transactions/validate (dry-run — mixed create+update+delete)
 ```
+
+*2026-11-07 lint:* on 2026-04-29 these endpoints became `POST /transactions/validate` and `POST /transactions/commit` —
+[[decisions/unified-batch-pipeline]]. The atomicity rules below hold; the answer reports `committed`
+(`TXBatchResponse`) rather than `rolled_back`.
 
 ### Atomicity rules
 - Each distinct `broker_id` in the batch → EDITOR access check

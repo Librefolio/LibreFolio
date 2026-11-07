@@ -4,8 +4,8 @@ category: decision
 status: resolved
 date: 2026-06-04
 tags: [frontend, transactions, wac, ux, precision, svelte5]
-related_features: [F-097]
-related_problems:
+related:
+  - features/F-097
   - problems/wac-feedback-loop
 ---
 

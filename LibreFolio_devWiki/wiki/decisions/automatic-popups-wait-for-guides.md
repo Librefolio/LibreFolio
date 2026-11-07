@@ -17,7 +17,7 @@ related:
 ## Context
 
 Two prompts appear without the user asking: the **donation** prompt, decided by the backend at sign-in
-(`record_login_and_maybe_show_popup()` in `backend/app/services/donation_popup_service.py`), and the
+(`record_login_and_maybe_show_popup()` in `backend/app/services/accounts/donation_popup_service.py`), and the
 **update-available** modal. Opened over a running guide, either would cover the coachmark's target or steal the
 user's first minutes.
 

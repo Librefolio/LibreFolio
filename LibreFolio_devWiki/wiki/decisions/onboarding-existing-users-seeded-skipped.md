@@ -57,6 +57,8 @@ audience of the feature is new sign-ups.
   *2026-10-12 (developer, via the coordinator): the effect is accepted, not a defect — «Va bene così: lo step è una
   novità della 1.2 e il coachmark la presenta una volta sola». Migration 004 does not change: an account older than
   1.2.0 meets the `import.gapFix` coachmark once, the first time an import reaches the step.*
+  *2026-11-07 lint:* the same holds for a whole flow — `tools_page_guide` (`ad2910b54`, 2026-10-31) is not in migration
+  004's seed, so an account older than 1.2.0 gets it as `pending` on its first progress read.
 - **Test users are not real users.** `_grandfather_onboarding_for_test_users` marks the canonical E2E users
   `completed` on every flow and step, because they did go through the flows in earlier runs; its docstring, which
   described the migration backwards, was corrected in `446d31327`. Seeding the step rows too fixed IWR-006 (pending

@@ -4,8 +4,9 @@ category: decision
 status: resolved
 date: 2026-06-04
 tags: [frontend, transactions, fx, modal, architecture, svelte5]
-related_features: [F-097, F-048]
-related_decisions:
+related:
+  - features/F-097
+  - features/F-048
   - decisions/wac-inline-validate-commit
 ---
 

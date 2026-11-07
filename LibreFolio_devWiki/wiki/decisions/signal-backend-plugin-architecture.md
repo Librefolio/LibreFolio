@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-07-23
 tags: [backend, frontend, signals, plugins, bulk-api, architecture]
-related: [backend-only-calculations, provider-registry-decision, signal-label-unification]
+related: [concepts/backend-only-calculations, decisions/provider-registry-decision, decisions/signal-label-unification]
 ---
 
 # Decision: Backend plugin architecture for technical signals
@@ -28,11 +28,15 @@ The frontend keeps `SignalConfig` and all local style/view behavior. Backend cat
 ## Consequences
 
 - New technical indicators are normally one Python plugin plus i18n/docs metadata.
-- Asset exposes 17 plugins; FX exposes the 9 close-only compatible plugins.
+- Asset exposes 17 plugins; FX exposes the 9 close-only compatible plugins. *2026-11-07 lint:* 22 signal plugin folders
+  today; the FX subset was not recounted.
 - Status is explicit per instance (`ok`, `partial`, `unavailable`, `failed`); one failure never removes prices or sibling results.
 - One bulk request is mandatory for list views; no request-per-card/pair/signal.
 - The old TypeScript technical classes remain only as rollback until Gate E visual review, then are removed.
-- *Planned (2026-10-12)*: each signal plugin becomes a folder (`<plugin>/plugin.py`) with its own translations —
+  *2026-11-07 lint:* removed — `frontend/src/lib/charts/signals/` holds only the comparison, measure and synthetic signals and
+  the backend catalogue, request and renderer modules.
+- *Delivered on 2026-10-12* (U-1, `0848f26bf`): each signal plugin is a folder (`<plugin>/plugin.py`) with its own
+  translations —
   [[decisions/plugin-folders-and-split-i18n]].
 
 

@@ -20,13 +20,15 @@ related:
   - decisions/financial-math-one-home
   - decisions/utils-leaf-functions-only
   - entities/native-cash
+  - decisions/auto-cost-basis-zero-without-position
+  - decisions/broker-page-is-a-portfolio-view
 ---
 
 # Decision: one average-cost function, in a new `financial_math` layer
 
 > Release 2, workstream **P** — issue [#32](https://github.com/Librefolio/LibreFolio/issues/32). Decided by the
 > developer on 2026-10-07, after the read-only analysis relayed by the coordinator; implemented the same day on
-> branch `e-alfy-p-costo-medio-unico-32`. The bug itself is filed as
+> workstream P's branch. The bug itself is filed as
 > [[problems/zero-purchase-cost-foreign-asset-paid-in-report-currency]].
 
 ## Context
@@ -142,6 +144,8 @@ asset currency, P the currency actually paid, d the acquisition's date.
   of 0 computed by the facade and written as such — a known value, not an unknown one, so no `MISSING_COST_BASIS`.
   The developer kept it as the correct fallback; the user corrects that transaction if needed —
   [[decisions/auto-cost-basis-zero-without-position]].
+  *Superseded on 2026-10-17* (`3b6bc8e2d`, N88/J-57): an Auto cost whose pool has nothing to average is now refused
+  (`autoCostEmptyPool`, `autoCostUnknownPool`); a 0 typed by hand is still accepted (2026-11-07 lint).
 
 ### Who calls it
 
@@ -151,6 +155,12 @@ asset currency, P the currency actually paid, d the acquisition's date.
 | `compute_wac_iterative()` — a facade with the same signature, queries, cache and `WACPreviewResultItem` — behind the transaction preview / automatic cost basis, `POST /portfolio/wac` and the PAC planner | The override (the PAC passes T), or the last acquisition's currency ([[decisions/wac-target-currency-last-acquisition]]) | `False` |
 | `LotsAnalysisService` WAC lines — one position per broker plus `"__all__"` | The analysis target currency | `False` |
 | `BrokerService._holding_average_costs()` — `GET /brokers/{id}/summary` | The asset currency, one call per currency group | `False` |
+
+*2026-11-07 lint:* two of these callers' routes are gone. `POST /portfolio/wac` was removed in `d5e467847` (04/11; use
+`POST /portfolio/lots/analysis`), and `GET /brokers/{id}/summary` with `BrokerService._holding_average_costs()` and
+`services/brokers/summary.py` in `dd9d0ce20` (05/11) — [[decisions/api-routes-removed-without-deprecation]],
+[[decisions/broker-page-is-a-portfolio-view]]. The facade `compute_wac_iterative()` still serves the transaction
+preview and Auto cost (`transactions/auto_cost.py`) and the PAC planner.
 
 FIFO stays only where lots are the subject: the lots analysis still creates its lots with the FIFO engine. Every
 average cost comes from this one function.
@@ -178,7 +188,8 @@ average cost comes from this one function.
 - **In-transit assets with a frozen cost** are converted once, at the arrival date, as the destination pool books
   them — not every day of the transit.
 - **Broker summary:** `total_cost` / `average_cost_per_unit` are the historical cost in the asset currency from
-  purchases, sales and transfers, `Optional` (`None` when incomplete), with `BRSummary.missing_fx_pairs`.
+  purchases, sales and transfers, `Optional` (`None` when incomplete), with `BRSummary.missing_fx_pairs`. *(The route
+  and its schemas were removed in `dd9d0ce20`, 05/11; the broker page reads the shared portfolio view.)*
 - **AI Export:** `portfolio.provenance` and `broker.provenance` moved to component version 2 (schema 1 unchanged) with
   a new `valuation_semantics` text — historical WAC in T; FIFO lot `original_cost` converted at the lot's opening
   date; market value at the valuation date's rate, so unrealized P&L includes the exchange-rate effect. The frontend
@@ -239,18 +250,18 @@ average cost comes from this one function.
 | Lots WAC lines and gaps | `backend/app/services/lots_analysis_service.py` |
 | Lots WAC line math (since 2026-10-12) | `backend/app/services/financial_math/lots/average_cost_lines.py` |
 | Lot value and return histories, no native fallback (since 2026-10-11/12) | `backend/app/services/financial_math/lots/histories.py` |
-| Broker summary holdings cost | `backend/app/services/brokers/summary.py` |
+| Broker summary holdings cost | the broker summary module (removed in `dd9d0ce20`, 05/11, with `GET /brokers/{id}/summary`) |
 | FX service (`convert_bulk`) | `backend/app/services/fx/conversion.py` |
 | `MISSING_COST_BASIS`, `UnrealizedBreakdownRow` | `backend/app/schemas/portfolio.py` |
-| `BRAssetHolding.total_cost`, `BRSummary.missing_fx_pairs` | `backend/app/schemas/brokers.py` |
+| `BRAssetHolding.total_cost` (removed in `33b66ba1c`, 28/10), `BRSummary.missing_fx_pairs` (removed in `dd9d0ce20`, 05/11) | `backend/app/schemas/brokers.py` |
 | Facade output (`WACPreviewResultItem`, `WACQualifyingTX`) | `backend/app/schemas/wac.py` |
 | PAC planner (passes T as override) | `backend/app/services/pac_allocator/source/wac.py` |
-| `POST /portfolio/wac` | `backend/app/api/v1/portfolio_api.py` |
+| `POST /portfolio/wac` (removed in `d5e467847`, 04/11) | `backend/app/api/v1/portfolio_api.py` |
 | Batch auto cost basis | `backend/app/services/transactions/auto_cost.py` |
 | Dashboard tooltip | `frontend/src/lib/features/dashboard/KpiSection.svelte` |
 | AI Export provenance v2 | `backend/app/services/ai_export/components/portfolio_financial.py` |
 | AI Export provenance v2 (broker) | `backend/app/services/ai_export/components/broker_financial.py` |
-| AI Export component catalogue (both provenances declared `version=2`) | `backend/app/services/ai_export/components/catalog.py` |
+| AI Export component catalogue (both provenances `version=2` here; `version=3` since J-17, [[decisions/adjustment-is-never-a-price]]) | `backend/app/services/ai_export/components/catalog.py` |
 | AI Export renderer | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
 | Unit tests of the function | `backend/test_scripts/test_services/test_financial_math/test_average_cost.py` |
 | Engine / service / lots tests (#32, breakdown) | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |

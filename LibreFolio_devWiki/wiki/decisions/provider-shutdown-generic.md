@@ -5,6 +5,7 @@ status: resolved
 date: 2026-04-10
 tags: [backend, providers, lifecycle, architecture]
 related_features: [F-059, F-060, F-025]
+related: [features/F-059, features/F-060, features/F-025, problems/justetf-websocket-disconnect]
 ---
 
 # Decision: Generic Provider Shutdown Mechanism

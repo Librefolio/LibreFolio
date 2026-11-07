@@ -44,8 +44,8 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
   datasets and 11 public analyses over 67 components and 40 internal datasets.
   Snapshot, catalog, selection, instruction-template and response-contract
   versions start at V1; prior V2/V3 labels were unreleased iterations.
-- **Single runtime:** `AiExportRuntimeService` + registries +
-  `ComponentComposer` are the only production path. The intermediate
+- **Single runtime:** `AiExportSnapshotService` (`runtime_service.py`) + registries +
+  `Composer` (`composer.py`) are the only production path. The intermediate
   profile/assembler runtime, V1 schema and internal legacy analyses were removed.
 - **Fail closed:** frontend and backend catalogs form an explicit compatibility
   handshake. Unknown, internal, version-mismatched or unsupported selections
@@ -72,7 +72,7 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - **Broker universes use explicit names:** `accessible_broker_count` is the authorization universe, `scoped_broker_count`/`broker_scope` are the effective calculation universe, `position_broker_count` counts Brokers with open positions at snapshot date, and `period_contributor_broker_count` counts period-performance contributors. The Entity Directory uses the effective prepared scope, including a scoped Broker with no current position rows.
 - **Selected-period applicability:** task applicability is evaluated from the task's selected observations. Trailing technical observations may enrich market context, but an empty technical window must not invalidate a historical `drawdown_recovery` request that has two selected observations and a measurable prior maximum.
 - **Transport-only clipboard fallback:** preserve the immediate `ClipboardItem(Promise<Blob>)` route when supported; otherwise prepare the same V2 export once and use `writeText`/`execCommand`. Clipboard capability never permits fallback to legacy builders or prompt logic.
-- **Standalone/MCP-ready service:** `AiExportRuntimeService` is not coupled to
+- **Standalone/MCP-ready service:** `AiExportSnapshotService` is not coupled to
   frontend state. HTTP is one adapter; a future authenticated transport can
   invoke the same typed snapshot path.
 - **Hard cutover and cleanup:** Dashboard, Broker Detail, Asset Detail and FX
@@ -165,6 +165,7 @@ The completed Phase 0 plan records approval by the project owner and implementat
 | Composition and `all_data` semantics | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | Runtime schemas | `backend/app/schemas/ai_export_runtime.py` |
 | Runtime service | `backend/app/services/ai_export/runtime_service.py` |
+| Composer (required/optional datasets, dedup) | `backend/app/services/ai_export/composer.py` |
 | Component/dataset/analysis specs | `backend/app/services/ai_export/components/`, `backend/app/services/ai_export/datasets/`, `backend/app/services/ai_export/analyses/` |
 | Frontend compatibility handshake | `frontend/src/lib/features/ai-export/catalog/compatibility.ts` |
 | Analysis selection and Snapshot mapping | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/features/ai-export/aiExportOptions.ts` |

@@ -56,3 +56,12 @@ and `GET /brokers/{id}/access` 404'd outright for non-members.
 - Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/plan_ui_broker_overview.md`, `impl_plan_broker_overview.md`
 - [[problems/brlistresponse-contract-drift]] — `GET /brokers` changed shape, from a bare list to
   `BRListResponse{items, inaccessible}`
+
+## Source files
+
+| Role | Path |
+|------|------|
+| `GET /brokers?include_inaccessible`, `GET /brokers/{id}/access` | `backend/app/api/v1/brokers.py` |
+| `get_all(include_inaccessible=...)` | `backend/app/services/brokers/broker_service.py` |
+| Discovery card | `frontend/src/lib/features/brokers/BrokerDiscoveryCard.svelte` |
+| Sharing panel and modal | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte`, `frontend/src/lib/features/brokers/BrokerSharingModal.svelte` |

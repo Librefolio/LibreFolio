@@ -37,6 +37,9 @@ Checked on the code at `ef563d91c`:
 - `historical_var_cvar` returns the empirical VaR and the coherent CVaR (Acerbi-Tasche / Rockafellar-Uryasev) in
   `metrics.py`;
 - rolling compounding is vectorised (`np.expm1(np.log1p(series).rolling(window).sum())` in `signal_helpers.py`);
+  *2026-11-07 lint:* `signal_helpers.py` became `backend/app/services/signals/risk_adapters.py` in `195197af8` (2026-10-17);
+  that literal expression is no longer in `backend/app`, and the rolling metrics go through `rolling_single_values()`
+  and `rolling_pair_values()` there;
 - the oracle pins the hand-written maths before any migration ([[decisions/histogram-grid-pinned-to-var-cut]]).
 
 ## Source files

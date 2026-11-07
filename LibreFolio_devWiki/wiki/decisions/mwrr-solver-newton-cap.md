@@ -1,7 +1,7 @@
 ---
 title: "MWRR solver: Newton-only + result cap (deliberate, not a bug)"
 category: decision
-status: resolved
+status: superseded
 date: 2026-07-06
 tags: [backend, portfolio, mwrr, xirr, newton-raphson, numerical-stability, financial-math, design-decision]
 related:
@@ -12,6 +12,15 @@ related:
 ---
 
 # Decision: MWRR Solver — Newton-Only + Result Cap (Deliberate Design Choice)
+
+> **Superseded (2026-11-07 lint).** Since `d82c0e920` (2026-10-15, «verified XIRR») the solver in
+> `financial_math/returns.py` is option 3 below, the hybrid: `_solve_xirr()` tries Newton with the analytic slope and
+> keeps its answer only when the NPV really vanishes there; otherwise it solves every sign change of a rate grid with
+> Brent (`_bracketed_xirr()`) and returns the verified root nearest the start. With no verified root `calculate_mwrr()`
+> answers `mwrr = None`; there is no result cap. The commit's reason: the bare secant used before could stop, after an
+> overflow, on its own starting point and return it as the rate. Tests:
+> `backend/test_scripts/test_services/test_financial_math/test_mwrr_verified_root.py`. The text below is the July
+> decision, kept as history.
 
 ## Context
 
@@ -62,7 +71,8 @@ risk for the specific class of pathological inputs described in the analysis doc
   import), this decision should be revisited — the Brent/hybrid option remains documented as the fallback path
   if convergence failures are ever observed with real user data.
 - Future historians/ingests: do **not** record "Newton-only solver" or "MWRR result cap" as open problems in
-  `wiki/problems/` — they belong here, as an accepted trade-off.
+  `wiki/problems/` — they belong here, as an accepted trade-off. *(2026-11-07 lint: moot since `d82c0e920` — the
+  solver is the hybrid and has no cap; see the note at the top.)*
 
 ## Links
 
@@ -76,5 +86,6 @@ risk for the specific class of pathological inputs described in the analysis doc
 | Role | Path |
 |------|------|
 | MWRR/XIRR implementation | `backend/app/services/financial_math/returns.py` |
+| Verified-root solver tests (since `d82c0e920`) | `backend/test_scripts/test_services/test_financial_math/test_mwrr_verified_root.py` |
 | Numerical stability analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/mwrr-numerical-stability-analysis.md` |
 | MWRR boundary anomaly report | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_boundary_anomaly_report.md` |

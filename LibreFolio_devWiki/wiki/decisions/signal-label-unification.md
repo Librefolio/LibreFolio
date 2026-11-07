@@ -61,7 +61,7 @@ export function buildOverlaySignalInfoMap(overlaySignals: ...): Map<string, Sign
 - [[features/F-033]] Asset Detail Page (consumer)
 - [[features/F-042]] FX Pair Comparison Signal (consumer)
 - [[features/F-043]] Asset Comparison Signal (primary beneficiary)
-- Source: `developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step4/PlanA/plan-phase06Step4PartA-Bugfix_8_SignalLabelUnificationFxWiringDefaultPercent.prompt.md`
+- Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step4/PlanA/plan-phase06Step4PartA-Bugfix_8_SignalLabelUnificationFxWiringDefaultPercent.prompt.md`
 
 ## Source files
 

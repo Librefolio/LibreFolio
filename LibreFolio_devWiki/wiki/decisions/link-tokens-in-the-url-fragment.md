@@ -32,6 +32,9 @@ Reviewing the documentation (`docs-writer`, 15/10) showed that the query breaks 
    - The page reads it with JavaScript and sends it in a POST body.
 3. **Both.** Option 2 already removes the cause; a filter can still be added by the platform workstream for links
    typed by hand.
+   *2026-11-07 lint:* that filter landed the same day — `a6f6d4511` (15/10), `_QueryCredentialFilter` in
+   `backend/app/logging_config.py` masks credentials in the request lines of `uvicorn.access` and `uvicorn.error`, so a
+   hand-typed `?token=` no longer reaches the app's own log in clear (a proxy's log is still out of reach).
 
 ## Decision
 
@@ -70,4 +73,5 @@ Option 2.
 | Address bar | `frontend/src/lib/features/auth/addressBar.ts` |
 | Invitation page | `frontend/src/routes/invite/+page.svelte` |
 | Password-reset page | `frontend/src/routes/reset-password/+page.svelte` |
+| Access-log credential mask (since `a6f6d4511`) | `backend/app/logging_config.py` |
 | Security mkdocs | `mkdocs_src/docs/developer/architecture/security.md` |

@@ -1,10 +1,15 @@
 ---
 title: "BRIM is a Parser Only (Revision 2)"
+category: decision
 date: 2026-04-20
 status: resolved
 tags: [brim, architecture, separation-of-concerns]
-related_features: [F-012, F-049]
-related_sources: [sources/phase07-part2-brim-revision]
+related:
+  - features/F-012
+  - features/F-049
+  - sources/phase07-part2-brim-revision
+  - decisions/brim-fake-asset-id
+  - decisions/multi-broker-atomic-tx
 ---
 
 # Decision: BRIM is a Parser Only
@@ -68,6 +73,8 @@ No BRIM-specific commit API exists.
 
 - `TRANSFER_IN`/`TRANSFER_OUT` from broker files are plain transactions — no auto-link
   creation in the BRIM layer. The Staging Modal may suggest links via `events/suggest`.
+  *(2026-11-07 lint: `POST /transactions/events/suggest` was removed in `d5e467847`, 04/11 — its successor is
+  `GET /transactions/event-reconciliation`; see [[decisions/api-routes-removed-without-deprecation]].)*
 - The Schwab plugin no longer generates `AssetEvent` rows for dividends — it generates
   `DIVIDEND` transaction rows (cash flow in the portfolio).
 

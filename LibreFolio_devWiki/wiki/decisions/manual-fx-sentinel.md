@@ -5,6 +5,7 @@ date: 2026
 status: resolved
 tags: [fx, providers, backend, sentinel]
 related_features: [F-019, F-015]
+related: [features/F-019, features/F-015]
 ---
 
 # Decision: MANUAL FX Provider as Sentinel

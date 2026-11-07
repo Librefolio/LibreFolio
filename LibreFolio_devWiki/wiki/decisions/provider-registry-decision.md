@@ -5,6 +5,7 @@ date: 2026
 status: resolved
 tags: [backend, providers, architecture, extensibility]
 related_features: [F-059, F-015]
+related: [features/F-059, features/F-015, decisions/plugin-folders-and-split-i18n]
 ---
 
 # Decision: Provider Auto-Discovery via Decorator Registry
@@ -34,8 +35,11 @@ The decorator is co-located with the class — you cannot create a provider with
 - [[F-106]] — the Tool platform reuses the discovery for `tool_plugins/` but changes the collision rule: every claimant
   of a duplicate code is quarantined, and a failed import leaves no partial registration
   ([[decisions/tool-contract-from-pydantic-compiled-renderer]])
-- *Planned (2026-10-12)*: every plugin becomes a folder, `<plugin>/plugin.py` loaded by convention, with its own
-  translations — [[decisions/plugin-folders-and-split-i18n]]
+- *Delivered on 2026-10-12* (U-1, `0848f26bf`; the translations with U-2 and U-3): every plugin is a folder,
+  `<plugin>/plugin.py` loaded by convention (`PLUGIN_MODULE_NAME`), with its own translations —
+  [[decisions/plugin-folders-and-split-i18n]]
+- *2026-11-07 lint:* the signal and risk plugin families use the same base (`AbstractPluginRegistry`, `@register_plugin`) —
+  [[decisions/signal-backend-plugin-architecture]]
 
 ## Source files
 

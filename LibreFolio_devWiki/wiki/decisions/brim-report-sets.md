@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-09-28
 tags: [backend, frontend, brim, import, report-sets, danske-bank, gap-fix, upload, issue-26]
-related: [features/F-103, features/F-012, features/F-013, decisions/brim-broker-scoped, decisions/brim-parser-only, decisions/brim-fake-asset-id, entities/import-wizard-modal, workflows/brim-import-flow, problems/brim-compatible-plugins-frozen-at-upload, sources/phase00-brim-danske-bank-2026-10]
+related: [features/F-103, features/F-012, features/F-013, decisions/brim-broker-scoped, decisions/brim-parser-only, decisions/brim-fake-asset-id, entities/import-wizard-modal, workflows/brim-import-flow, problems/brim-compatible-plugins-frozen-at-upload, sources/phase00-brim-danske-bank-2026-10, decisions/credit-agricole-securities-only-cash-neutral-brim]
 ---
 
 # Decision: report sets
@@ -45,7 +45,8 @@ several files become one import without changing the single-file plugins.
 ## Consequences
 
 - A new multi-export bank needs a set plugin (roles, `detect_role`, `describe_member`, `combine`), not a new
-  pipeline. Crédit Agricole as a report set is backlog L3.
+  pipeline. Crédit Agricole as a report set is backlog L3 — shipped on 2026-10-28 as plugin 2.0.0 (`d0be8c7f2`, W5-7),
+  which supersedes [[decisions/credit-agricole-securities-only-cash-neutral-brim]] (2026-11-07 lint).
 - Files uploaded by 1.1.0 have no `batch_id`: they must be uploaded again, together.
 - The upload contract gained `batch_id` (a UUID, else 422) and files gained `combined_into` — see
   [[decisions/brim-broker-scoped]].

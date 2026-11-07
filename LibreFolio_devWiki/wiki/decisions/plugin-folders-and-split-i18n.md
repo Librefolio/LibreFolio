@@ -106,7 +106,11 @@ allows a `base.py` there.
 > Backlog: U-B5 is closed (its devWiki part was step D); U-B2 — the subsystems' sources beside their code — waits for
 > after 1.2.
 
-> **Planned, not in the code.** Decided on 2026-10-12; at `2c8135ba0` (train 56) nothing of it is implemented and
+*2026-11-07 lint:* the subsystem folders are 22 today — `backup`, `email`, `instance`, `liveUpdates` and `pluginSettings`
+joined the 17 of U-3, each with its `prefixes.txt`.
+
+> **Planned, not in the code** *(historical — the state at train 56; U-1 to U-5 are delivered, see the updates
+> above)*. Decided on 2026-10-12; at `2c8135ba0` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is
 > not in the repository, as the coordinator relayed them.
 

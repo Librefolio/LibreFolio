@@ -50,6 +50,8 @@ The contract frozen on 2026-09-16 (Step 4, «copie dominio»), with the review r
 ## Consequences
 
 - A coupled fix: `POST /api/v1/portfolio/wac`, which the copies reuse, now requires authentication (401/403/200).
+  *2026-11-07 lint:* that route was removed in `d5e467847` (2026-11-04, [[decisions/api-routes-removed-without-deprecation]]); the copies reach
+  `compute_wac_iterative()` directly, through `pac_allocator/source/wac.py`.
 - Late answers are dropped by account generation, request sequence and an `AbortController`
   (`sourceLoad.svelte.ts`); the 2026-10-05 mapping note records that this guard has no dedicated unit test.
 - Defects found on the way: a copy whose rows were all in conflict was pruned, and «Aggiorna» then stamped rows

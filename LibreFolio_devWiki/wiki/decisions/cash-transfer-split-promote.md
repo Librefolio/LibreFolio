@@ -72,6 +72,7 @@ Promote is the inverse of split.
 |------|------|
 | Transaction schemas | `backend/app/schemas/transactions/transactions.py` |
 | Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| Promote suggest and constraints | `backend/app/services/transactions/promotion.py` |
 | Transaction API | `backend/app/api/v1/transactions.py` |
 | DB models (enum) | `backend/app/db/models.py` |
 | Frontend type store | `frontend/src/lib/features/transactions/transactionTypeStore.ts` |

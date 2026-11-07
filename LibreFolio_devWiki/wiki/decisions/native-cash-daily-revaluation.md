@@ -114,7 +114,8 @@ dates. `get_positions_contribution()` adds one `OtherPeriodEffect("FX on cash", 
 in access order, and lowers the residual by the same figure. Below `CONVERSION_DUST` (1e-9) the row is skipped, and
 with foreign cash in scope the residual is shown only at or above that size. The schema, the API and KpiSection did
 not change; the frontend maps the description to `dashboard.fxOnCash` in `OtherPeriodEffectsTable.svelte` and
-`PerformanceChart.svelte`.
+`PerformanceChart.svelte`. *2026-11-07 lint:* since F-AI (b) (`aa12286e1`) the row carries the typed code `fx_on_cash`, and both
+components map that code to `dashboard.fxOnCash`, no longer the English description.
 
 ### AI Export, F-AI (a)
 

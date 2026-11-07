@@ -5,9 +5,9 @@ status: accepted
 date: 2026-07-29
 tags: [risk, frontend, scenarios, cache, historical-replay, yaml]
 related:
-  - risk-quant-engine-process-boundary
-  - cancellation-safe-inflight-deduplication
-  - backend-only-calculations
+  - decisions/risk-quant-engine-process-boundary
+  - concepts/cancellation-safe-inflight-deduplication
+  - concepts/backend-only-calculations
 ---
 
 # Decision: Risk G6 application contracts

@@ -109,7 +109,8 @@ not collect it.
 - [[problems/open-panels-stale-after-fx-sync]] — D2, the fix found by E1
 - [[problems/zero-purchase-cost-foreign-asset-paid-in-report-currency]] and [[decisions/financial-math-single-average-cost]]
   — where `MISSING_COST_BASIS` comes from
-- [[decisions/auto-cost-basis-zero-without-position]] — the Auto rule P-10 runs into
+- [[decisions/auto-cost-basis-zero-without-position]] — the Auto rule P-10 runs into (superseded on 17/10: an Auto cost
+  with nothing to average is now refused, `3b6bc8e2d`; 2026-11-07 lint)
 - [[features/F-054]] — the Dashboard and its banner
 - Source: [[sources/phase00-data-quality-e2e-2026-10]]
 

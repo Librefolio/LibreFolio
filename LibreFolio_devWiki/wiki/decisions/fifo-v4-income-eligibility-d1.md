@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-07-22
 tags: [backend, fifo, dividend, interest, income, transfers]
-related: [fifo-v4-cost-allocation-ladder, fifo-v4-engine-architecture, entities/fifo-lot-engine, concepts/d1-income-eligibility-window]
+related: [decisions/fifo-v4-cost-allocation-ladder, decisions/fifo-v4-engine-architecture, entities/fifo-lot-engine, concepts/d1-income-eligibility-window]
 ---
 
 # Decision: FIFO v4 income eligibility — D-1, broker-scoped, transfer-aware

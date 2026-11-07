@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-07-22
 tags: [backend, fifo, fee, tax, cost-basis]
-related: [fifo-v4-income-eligibility-d1, fifo-v4-engine-architecture, entities/fifo-lot-engine, concepts/deterministic-cost-matching-ladder, concepts/asset-orphan-vs-portfolio-level-cost]
+related: [decisions/fifo-v4-income-eligibility-d1, decisions/fifo-v4-engine-architecture, entities/fifo-lot-engine, concepts/deterministic-cost-matching-ladder, concepts/asset-orphan-vs-portfolio-level-cost]
 ---
 
 # Decision: FIFO v4 cost allocation — deterministic FEE/TAX ladders

@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-07-22
 tags: [backend, validation, data-quality, scope, portfolio-engine]
-related: [fifo-v4-engine-architecture, entities/portfolio-engine, problems/transaction-update-bypassed-sign-validation]
+related: [decisions/fifo-v4-engine-architecture, entities/portfolio-engine, problems/transaction-update-bypassed-sign-validation]
 ---
 
 # Decision: FIFO v4 validation approach and release scope
