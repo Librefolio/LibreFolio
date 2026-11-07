@@ -690,6 +690,27 @@ while the structure stays intact:
   `./dev.py mkdocs build`, which afterwards resolves every relative file URL of the built
   site (images, video and audio, links to files) and exits 1 on a broken one.
 
+### 🧬 Equivalence checks {: #equivalence-checks }
+
+A page can keep its headings, links and fences and still say something else in another language. These checks
+(`page_equivalence.py`, standard library only, wired into `ALL_CHECKS` and into the structural diff) compare what a
+reader needs to find. All are ❌ ERRORs; each language is compared with the English page, so when a page is
+translated by hand from another language (the Italian admin guide became the source of the English one in E9E)
+the same tools prove the four languages equivalent: English equal to Italian, and French and Spanish equal to English.
+
+| Check | What must be the same |
+|-------|----------------------|
+| `mermaid-count`, `mermaid-structure` | Number of diagrams; per diagram the *skeleton*: front matter, node ids and shapes, arrows, `subgraph` ids, `style` / `classDef` / `class` lines, sequence participants and message directions. Labels, messages, notes and titles are blanked before comparing, so they may be translated |
+| `tab-count`, `tab-marker`, `tab-nesting`, `tab-title`, `tab-indent` | Content tabs (`=== "…"`): count, marker (`===+`), nesting depth; a product name of the English title (Caddy, Fly.io, Nginx… the `PROPER_NAMES` set, or any word like `macOS` / `Node.js`) stays in the translated title; a body indented by less than 4 spaces |
+| `table-count`, `table-shape` | Tables outside code: count, rows, and cells per row (a pipe inside a code span or escaped does not split a cell) |
+| `variable-*`, `command-*`, `path-*` | The set of `UPPER_SNAKE` variables, `dev.py <subcommand…>` commands and paths cited in inline code and code blocks (comments and Mermaid labels aside; bare prose is not read: a theory page localizes lifecycle states on purpose) |
+| `code-block-content` | A fenced block is the same code once comments, `<placeholders>` and spacing are put aside. `code-block-modified` files every difference as «comments translated» (🌐 LOCALIZED, hidden by `-L`); this one is the error for a changed command, setting or log line |
+| `admonition-nested-count`, `admonition-sequence` | Admonitions at any depth (inside list items and tabs too): same order, marker (`!!!`, `???`, `???+`), type and depth. `admonition-count` reads column 0 only |
+| `anchor-id`, `anchor-order` | Every explicit `{: #id }` of the English stays, in order; the translation adds none except the id MkDocs builds from an English heading (a translated heading keeps the English id that way) |
+
+Tests: `utils translation-equivalence` (`test_translation_equivalence.py`), including a corpus guard that runs every check on
+every page of every language of `mkdocs_src/docs`.
+
 The HTML checks (`html-tag-mismatch`, `html-attr-missing`, `html-attr-mismatch`) read only
 rendered HTML: fenced code (any fence, found by `code_line_mask()` in `code_blocks.py`) and
 inline code are removed first, so inline code such as `EUR<USD` is no longer taken for a

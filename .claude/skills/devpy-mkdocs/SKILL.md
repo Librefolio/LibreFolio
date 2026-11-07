@@ -84,6 +84,8 @@ Failed tests:
 ./dev.py mkdocs translate-check                  # Verify Aphra pipeline setup
 ./dev.py mkdocs translate-validate               # Offline structural validation
 ./dev.py mkdocs translate-validate --lang it     # Validate single language
+                                                 # also checks equivalence (page_equivalence.py): Mermaid skeleton, tabs, table shapes,
+                                                 # variables / dev.py commands / paths, code that is not a comment, nested admonitions, {: #id } anchors
 ./dev.py mkdocs translate-diff                   # Structural diff EN vs translations
 ./dev.py mkdocs translate-diff --issues-only     # Only show problems
 ./dev.py mkdocs translate-inspect                # Inspect translation cache artifacts
@@ -130,6 +132,17 @@ The pipeline skips a file only while its `.en.md` **MD5 is unchanged** (cache: `
 ```
 
 The stamp updates only `.translate-hashes.json` (tracked in git) — it never rewrites the translation files. Commit it alongside the edited docs.
+
+### Translating by hand: prove the languages equal
+
+When a page is translated by hand (the Italian admin guide became the source of the English one), compare each
+language with the English page: `translate-validate --file <page>.en.md --lang it fr es -L` must report 0 errors.
+Besides headings, links, fences and inline code, it checks the Mermaid skeleton (ids, arrows, `style`/`classDef`),
+content tabs (count, proper names, 4-space body), table rows and cells, the sets of variables / `dev.py` commands /
+paths, code that differs by more than comments, nested admonitions and `{: #id }` anchors
+(`mkdocs_src/aphra-pipeline/page_equivalence.py`; developer docs: *Equivalence checks* in the translation pipeline
+page). English equal to Italian and French and Spanish equal to English make the four languages equivalent. Then
+`translate-stamp` the `.en.md`: the translations are real, not debt.
 
 ### Translation Architecture
 - Strategy: `mkdocs-static-i18n` with suffix (`index.en.md`, `index.it.md`)
