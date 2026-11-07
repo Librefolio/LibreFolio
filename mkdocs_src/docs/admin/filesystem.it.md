@@ -3,9 +3,9 @@
 Tutto ciò che LibreFolio memorizza sta in un'unica **directory dei dati**: database, file caricati, report dei broker, log e chiave dell'istanza.
 Conoscerla basta per backup e manutenzione.
 
-**Dove si trova.** Nel resto della pagina, `<dati>` è questa cartella:
+**Dove si trova.** Nel resto della pagina, `<data>` è questa cartella:
 
-| Installazione | `<dati>` sull'host | `<dati>` dentro il container |
+| Installazione | `<data>` sull'host | `<data>` dentro il container |
 | --- | --- | --- |
 | Host (Pipenv) | `backend/data/prod/` nella cartella del progetto, oppure il percorso in `LIBREFOLIO_DATA_DIR` | — |
 | Docker Compose | `LibreFolio-data/` accanto a `docker-compose.yml` | `/app/backend/data/prod-docker` |
@@ -105,7 +105,7 @@ LOG_LEVEL=INFO
 Una riga scritta durante una richiesta porta il suo `request_id`; quando qualcosa fallisce, lo stesso id arriva al browser: header `X-Request-Id` della risposta, corpo dell'errore del server, riga `[API]` nella console del browser (strumenti di sviluppo, **Console**).
 
 1. **Chiedi l'id** all'utente che segnala l'errore.
-2. **Nella cartella `<dati>/logs/`**, leggi le sue righe con [jq](https://jqlang.org/):
+2. **Nella cartella `<data>/logs/`**, leggi le sue righe con [jq](https://jqlang.org/):
 
     ```bash
     # Every line of one request
@@ -160,7 +160,7 @@ Le altre variabili e il file `.env`: [Configurazione](configuration.md).
 
 Il modo consigliato è un archivio di backup, creato mentre LibreFolio continua a funzionare: [Backup, ripristino e spostamento dell'istanza](backup_restore.md).
 
-- **Da riga di comando**, `./dev.py backup create`: uno zip di database, file caricati, report dei broker e scenari di stress, per impostazione predefinita in una cartella dedicata dentro `<dati>/backups/`. Vedi [Eseguire il backup dell'istanza](cli_backup.md#backup) e, per il comando nel container, [Eseguire il backup con Docker](cli_backup.md#backup-docker).
+- **Da riga di comando**, `./dev.py backup create`: uno zip di database, file caricati, report dei broker e scenari di stress, per impostazione predefinita in una cartella dedicata dentro `<data>/backups/`. Vedi [Eseguire il backup dell'istanza](cli_backup.md#backup) e, per il comando nel container, [Eseguire il backup con Docker](cli_backup.md#backup-docker).
 - L'archivio **esclude `secrets/`**, che salvi a parte ([Cosa includere nel backup](#what-to-back-up)), a meno che tu non lo renda [sicuro](backup_restore.md#secure) con `--encrypt`: un archivio sicuro contiene la chiave dell'istanza generata da LibreFolio.
 - L'alternativa è copiare a mano la directory dei dati, come sotto.
 
@@ -174,7 +174,7 @@ Il modo consigliato è un archivio di backup, creato mentre LibreFolio continua 
     cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
     ```
 
-    Risultato: una copia completa e datata di `<dati>`.
+    Risultato: una copia completa e datata di `<data>`.
 
 Questa copia, come quella Docker riportata di seguito, comprende anche `backups/`, con ogni backup che LibreFolio vi conserva ([Backup conservati sul server](backup_restore.md#kept-backups)): elimina prima quelli che non ti servono più, imposta la [pulizia automatica](backup_restore.md#backup-cleanup), oppure lascia fuori la cartella.
 
