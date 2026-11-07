@@ -20,6 +20,8 @@
     import {RestoreFlowController} from './restoreFlow.svelte';
     import RestoreReportModal from './RestoreReportModal.svelte';
     import RestartOverlay from './RestartOverlay.svelte';
+    import {verifyRestorePassword} from './backupApi';
+    import {restoreRequest, takeRestoreRequest} from './restoreRequest.svelte';
     import {restoreErrorKey, restoreReasonKey, restoreWaitingKey} from './restoreText';
 
     const PHASE_KEYS: Record<RestorePhase, string> = {
@@ -47,6 +49,14 @@
     onMount(() => {
         void controller.load();
         return () => controller.dispose();
+    });
+
+    // C9-9: «Restore» on a kept backup, asked from the list here or in Files: taken once the card is free for it.
+    $effect(() => {
+        if (restoreRequest.jobId !== null && (controller.state === 'idle' || controller.state === 'failed')) {
+            const jobId = takeRestoreRequest();
+            if (jobId !== null) void controller.fromKept(jobId);
+        }
     });
 
     // A new report opens the modal.
@@ -270,7 +280,17 @@
                 {$_('backup.restore.openReport')}
             </button>
         </div>
-        <RestoreReportModal open={reportOpen} report={controller.report} busy={false} onConfirm={(ownerUserId) => controller.confirm(ownerUserId)} onDrop={() => controller.dropCheck()} onLater={() => void controller.later()} onClose={() => (reportOpen = false)} />
+        <RestoreReportModal
+            open={reportOpen}
+            report={controller.report}
+            busy={false}
+            onConfirm={(ownerUserId) => controller.confirm(ownerUserId)}
+            onDrop={() => controller.dropCheck()}
+            onLater={() => void controller.later()}
+            stageId={controller.stage?.stage_id ?? null}
+            onVerify={(username, password) => verifyRestorePassword(controller.stage?.stage_id ?? '', username, password)}
+            onClose={() => (reportOpen = false)}
+        />
     {/if}
 
     {#if controller.state === 'confirming' || controller.state === 'cancelling'}

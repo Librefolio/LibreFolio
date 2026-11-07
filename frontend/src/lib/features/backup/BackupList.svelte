@@ -11,7 +11,11 @@
 -->
 <script lang="ts">
     import {onMount, untrack} from 'svelte';
-    import {Download, RefreshCw, Trash2, TriangleAlert} from 'lucide-svelte';
+    import {ArchiveRestore, Download, RefreshCw, Trash2, TriangleAlert} from 'lucide-svelte';
+    import {goto} from '$app/navigation';
+    import {page} from '$app/stores';
+    import {get} from 'svelte/store';
+    import {requestRestoreFromKept} from './restoreRequest.svelte';
     import {DataTable, type ColumnDef, type RowAction} from '$lib/components/table';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -70,6 +74,13 @@
         link.click();
         link.remove();
         notify({name: 'backup.download.started', detail: {job_id: entry.job_id}});
+    }
+
+    /** C9-9: restore a kept backup without downloading it: the restore card of Settings › Backup takes it from here. */
+    async function restore(entry: InstanceBackupEntry) {
+        requestRestoreFromKept(entry.job_id);
+        const here = get(page).url;
+        if (here.pathname !== '/settings' || here.searchParams.get('tab') !== 'backup') await goto('/settings?tab=backup');
     }
 
     async function remove(entry: InstanceBackupEntry) {
@@ -139,6 +150,8 @@
 
     const rowActions: RowAction<InstanceBackupEntry>[] = [
         {id: 'download', icon: Download, label: () => $_('backup.list.actions.download'), onClick: download},
+        // C9-9: a sealed backup opens only with its recipients' private key: it is not restored here.
+        {id: 'restore', icon: ArchiveRestore, label: () => $_('backup.list.actions.restore'), onClick: restore, visible: (row) => !row.sealed, requireConfirm: true, confirmMessage: () => $_('backup.list.restoreConfirm')},
         {id: 'delete', icon: Trash2, label: () => $_('backup.list.actions.delete'), onClick: remove, requireConfirm: true, confirmMessage: () => $_('backup.list.deleteConfirm')},
     ];
 
