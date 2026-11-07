@@ -322,7 +322,8 @@
       "errors": {
         "load": "La liste des sauvegardes n'a pas pu être chargée. Réessayez."
       },
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "refresh": "Actualiser"
     },
     "cleanup": {
       "title": "Nettoyage automatique",

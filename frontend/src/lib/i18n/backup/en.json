@@ -322,7 +322,8 @@
       "errors": {
         "load": "The list of backups could not be loaded. Try again."
       },
-      "retry": "Try again"
+      "retry": "Try again",
+      "refresh": "Refresh"
     },
     "cleanup": {
       "title": "Automatic clean-up",

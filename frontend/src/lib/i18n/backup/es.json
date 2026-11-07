@@ -322,7 +322,8 @@
       "errors": {
         "load": "No se pudo cargar la lista de copias. Inténtalo de nuevo."
       },
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "refresh": "Actualizar"
     },
     "cleanup": {
       "title": "Limpieza automática",

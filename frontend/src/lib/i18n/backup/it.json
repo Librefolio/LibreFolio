@@ -322,7 +322,8 @@
       "errors": {
         "load": "Non è stato possibile caricare l'elenco dei backup. Riprova."
       },
-      "retry": "Riprova"
+      "retry": "Riprova",
+      "refresh": "Aggiorna"
     },
     "cleanup": {
       "title": "Pulizia automatica",
