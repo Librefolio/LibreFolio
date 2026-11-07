@@ -48,7 +48,11 @@ def _admin_row(root: Path, username: str) -> tuple[str, str | None]:
     """``(hashed_password, avatar_url)`` of the active administrator ``username`` of the copy."""
     database = (root / DATABASE_ENTRY).resolve()
     with closing(sqlite3.connect(f"{database.as_uri()}?immutable=1", uri=True)) as conn:
-        row = conn.execute("SELECT hashed_password, avatar_url FROM users WHERE username = ? AND is_superuser = 1 AND is_active = 1", (username,)).fetchone()
+        # The avatar is a setting of the account (``user_settings``), which an account may not have yet.
+        row = conn.execute(
+            "SELECT u.hashed_password, s.avatar_url FROM users AS u LEFT JOIN user_settings AS s ON s.user_id = u.id WHERE u.username = ? AND u.is_superuser = 1 AND u.is_active = 1",
+            (username,),
+        ).fetchone()
     if row is None:
         raise StageAdminNotFoundError("The backup has no active administrator with this username")
     return str(row[0]), (str(row[1]) if row[1] is not None else None)

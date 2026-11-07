@@ -7,17 +7,18 @@
 - ``admin_avatar``: the picture an administrator's avatar URL names, among the copy's uploads; ``None`` without one, for a
   URL that is no upload of the copy, and for a link.
 
-How: a copy built under ``tmp_path`` as a check leaves it, with a ``users`` table of the columns read. Isolation: pure.
+How: a copy built under ``tmp_path`` as a check leaves it, with the ``users`` and ``user_settings`` tables of the models (the avatar is a setting of the account). Isolation: pure.
 """
 
 from __future__ import annotations
 
-import sqlite3
-from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import create_engine
 
+from backend.app.db.models import User, UserSettings
 from backend.app.services.accounts.auth_service import hash_password
 from backend.app.services.platform.instance_backup import stage_peek
 from backend.app.services.platform.instance_backup.paths import stage_data_dir
@@ -35,16 +36,51 @@ def data_dir(tmp_path) -> Path:
     (copy / "custom-uploads").mkdir()
     (copy / "custom-uploads" / f"{AVATAR_ID}.png").write_bytes(b"\x89PNG avatar")
     (copy / "custom-uploads" / f"{AVATAR_ID}.json").write_text("{}")
-    with closing(sqlite3.connect(copy / "sqlite" / "app.db")) as conn:
-        conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, hashed_password TEXT, avatar_url TEXT, is_superuser INTEGER, is_active INTEGER)")
-        rows = [
-            (1, "ada_admin", hash_password("Right-Pass-123!"), f"/api/v1/uploads/file/{AVATAR_ID}", 1, 1),
-            (2, "zoe_admin", hash_password("Other-Pass-456!"), "https://example.org/zoe.png", 1, 1),
-            (3, "plain_user", hash_password("User-Pass-789!"), None, 0, 1),
-            (4, "old_admin", hash_password("Old-Pass-000!"), None, 1, 0),
+    # The tables of the models, as a check's copy holds them at the head: the avatar is a setting of the account.
+    engine = create_engine(f"sqlite:///{copy / 'sqlite' / 'app.db'}")
+    try:
+        User.__table__.create(engine)
+        UserSettings.__table__.create(engine)
+        when = datetime(2026, 1, 1)
+        accounts = [
+            (1, "ada_admin", "Right-Pass-123!", f"/api/v1/uploads/file/{AVATAR_ID}", True, True),
+            (2, "zoe_admin", "Other-Pass-456!", "https://example.org/zoe.png", True, True),
+            (3, "plain_user", "User-Pass-789!", None, False, True),
+            (4, "old_admin", "Old-Pass-000!", None, True, False),
+            (5, "new_admin", "New-Pass-111!", "no settings", True, True),
         ]
-        conn.executemany("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", rows)
-        conn.commit()
+        with engine.begin() as conn:
+            for uid, name, password, avatar, superuser, active in accounts:
+                conn.execute(
+                    User.__table__.insert().values(
+                        id=uid,
+                        username=name,
+                        email=f"{name}@example.org",
+                        hashed_password=hash_password(password),
+                        is_active=active,
+                        is_superuser=superuser,
+                        login_count=0,
+                        donation_popup_logins_since_shown=0,
+                        session_version=0,
+                        is_instance_owner=False,
+                        created_at=when,
+                        updated_at=when,
+                    )
+                )
+                if avatar != "no settings":
+                    conn.execute(
+                        UserSettings.__table__.insert().values(
+                            user_id=uid,
+                            base_currency="EUR",
+                            language="en",
+                            theme="light",
+                            avatar_url=avatar,
+                            created_at=when,
+                            updated_at=when,
+                        )
+                    )
+    finally:
+        engine.dispose()
     return root
 
 
@@ -81,6 +117,8 @@ def test_the_avatar_of_an_administrator_is_the_upload_of_the_copy_its_url_names(
     picture = stage_peek.admin_avatar(data_dir, STAGE, "ada_admin")
     assert picture is not None and picture.name == f"{AVATAR_ID}.png"
     assert stage_peek.admin_avatar(data_dir, STAGE, "zoe_admin") is None, "a picture outside the copy is never fetched"
+    assert stage_peek.admin_avatar(data_dir, STAGE, "new_admin") is None, "an account without settings has no picture"
+    assert stage_peek.verify_admin_password(data_dir, STAGE, "new_admin", "New-Pass-111!") is True
     with pytest.raises(stage_peek.StageAdminNotFoundError):
         stage_peek.admin_avatar(data_dir, STAGE, "plain_user")
     print_success("the copy's upload, nothing else")
