@@ -48,6 +48,7 @@ import {
     sortDates,
     toPercentSeries,
     utcMsToIsoDate,
+    valueOnDrawnLine,
     type LotEventInput,
     type LotEventKind,
 } from './lotWacPriceChartHelpers';
@@ -900,5 +901,59 @@ describe('J-48 — scope boundary', () => {
             expect(applyLotEvent(before, withBoundary(leaving, 'OUT')), 'OUT').toEqual({quantity: 6, unitPrice: 2});
             expect(applyLotEvent(before, withBoundary(leaving, ['OUT'])), '[OUT]').toEqual({quantity: 6, unitPrice: 2});
         });
+    });
+});
+
+describe('valueOnDrawnLine — where an event marker rests on a non-daily line (G7, B9)', () => {
+    /** A weekly line: one point on each Friday. */
+    const WEEKLY = [
+        {date: '2026-01-02', value: 10},
+        {date: '2026-01-09', value: 17},
+        {date: '2026-01-16', value: 10},
+    ];
+
+    it('on a drawn point it is that point', () => {
+        expect(valueOnDrawnLine(WEEKLY, '2026-01-09')).toBe(17);
+    });
+
+    it('between two drawn points it is on the straight stretch between them, by days: Tuesday is 4/7 of the way from Friday to Friday', () => {
+        expect(valueOnDrawnLine(WEEKLY, '2026-01-06')).toBeCloseTo(10 + (7 * 4) / 7, 10);
+        expect(valueOnDrawnLine(WEEKLY, '2026-01-12')).toBeCloseTo(17 - (7 * 3) / 7, 10);
+    });
+
+    it('is not the true price of the day: the line the marker rests on is the drawn one', () => {
+        // A true Tuesday close of 25 would float far above a stretch that runs from 10 to 17.
+        const onLine = valueOnDrawnLine(WEEKLY, '2026-01-06') as number;
+        expect(onLine).toBeGreaterThanOrEqual(10);
+        expect(onLine).toBeLessThanOrEqual(17);
+    });
+
+    it('before the first drawn point and after the last it keeps their height', () => {
+        expect(valueOnDrawnLine(WEEKLY, '2025-12-30')).toBe(10);
+        expect(valueOnDrawnLine(WEEKLY, '2026-02-01')).toBe(10);
+        expect(valueOnDrawnLine(WEEKLY, '2026-01-02')).toBe(10);
+    });
+
+    it('a gap is skipped, never read as zero: the marker rests on the stretch around it', () => {
+        const withGap = [
+            {date: '2026-01-02', value: 10},
+            {date: '2026-01-09', value: null},
+            {date: '2026-01-16', value: 20},
+        ];
+        expect(valueOnDrawnLine(withGap, '2026-01-09')).toBeCloseTo(15, 10);
+        expect(valueOnDrawnLine(withGap, '2026-01-09')).not.toBe(0);
+    });
+
+    it('a line with no value, or no point, gives null: the caller keeps the true price', () => {
+        expect(valueOnDrawnLine([], '2026-01-05')).toBeNull();
+        expect(valueOnDrawnLine([{date: '2026-01-02', value: null}], '2026-01-05')).toBeNull();
+    });
+
+    it('does not depend on the order the points come in', () => {
+        expect(valueOnDrawnLine([...WEEKLY].reverse(), '2026-01-06')).toBeCloseTo(valueOnDrawnLine(WEEKLY, '2026-01-06') as number, 10);
+    });
+
+    it('a malformed date never produces NaN: it falls on a drawn height', () => {
+        expect(Number.isNaN(valueOnDrawnLine(WEEKLY, '2026-01-xx') as number)).toBe(false);
     });
 });
