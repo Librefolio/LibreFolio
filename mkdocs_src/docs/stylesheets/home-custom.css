@@ -211,9 +211,7 @@
 }
 
 .project-badge--brokers .project-badge__icon {
-    /* --lf-focus, the value --lf-link names: --lf-link is resolved on :root, so under the docs' dark scheme it keeps
-       the light green. */
-    color: var(--lf-focus);
+    color: var(--lf-link);
 }
 
 .project-badge__text {
