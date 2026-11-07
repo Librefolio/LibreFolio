@@ -127,6 +127,14 @@ export interface OwnedAssets {
 }
 
 /**
+ * An INDEX is a reference series, not something a plan can buy: the Asset search and «Your Assets» leave it out.
+ * Only those two lists: the type a user writes into a manual Asset is the user's own word and is never refused.
+ */
+export function isIndexAssetClass(assetClass: string | null | undefined): boolean {
+    return assetClass === 'INDEX';
+}
+
+/**
  * The Assets the user holds, joined through the snapshot's own keys: a holding
  * names its Asset and its Broker, the `assets` and `brokers` sections resolve
  * them. No quantity is read.
@@ -139,6 +147,8 @@ export function ownedAssets(source: PlannerSource): OwnedAssets {
     for (const holding of source.holdings) {
         const asset = assets.get(holding.asset_id);
         const brokerId = brokers.get(holding.broker_id);
+        // An index is not bought by a plan: not listed, and not an unmatched position either.
+        if (asset && isIndexAssetClass(asset.asset_class)) continue;
         if (!asset || brokerId === undefined) {
             unresolved += 1;
             continue;
