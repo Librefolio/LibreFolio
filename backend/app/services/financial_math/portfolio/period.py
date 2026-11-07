@@ -51,7 +51,7 @@ class DayChange:
     """How the total P&L moved over the last day: the amount, and that amount as a fraction of the day before's NAV
     (``returns.change_ratio``: the change's sign, None on a zero base).
 
-    There is no share of the day before's *P&L*: close to zero it explodes (−22.82 % against −1.95 % of the NAV for the same day) and says
+    There is no share of the day before's *P&L*: close to zero it explodes (for example −20 % against −2 % of the NAV for the same day) and says
     nothing; the Dashboard shows the share of the NAV only (developer's decision, 07/11/2026)."""
 
     pnl_change: Decimal
