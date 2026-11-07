@@ -336,6 +336,22 @@ def remove_stage(data_dir: Path, stage_id: str) -> None:
         root.unlink(missing_ok=True)
 
 
+def drop_copy(data_dir: Path, stage_id: str) -> None:
+    """Remove the copy of a checked archive but keep its report: a check the space limit refused (C9-5) gives its room back
+    at once, and its report still says why, until the check is dropped or expires. Nothing is removed through a link, nor
+    while ``.restore`` or its ``stage`` folder is not a plain folder."""
+    root = stage_dir(data_dir, stage_id)
+    if not (is_plain_dir(restore_dir(data_dir)) and is_plain_dir(stages_dir(data_dir)) and is_plain_dir(root)):
+        return
+    for entry in root.iterdir():
+        if entry.name == STAGE_REPORT_FILE:
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            entry.unlink(missing_ok=True)
+
+
 # =============================================================================
 # The steps
 # =============================================================================

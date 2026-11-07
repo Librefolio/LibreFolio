@@ -53,7 +53,7 @@ from backend.app.services.platform.instance_backup.paths import (
     upload_path,
     uploads_dir,
 )
-from backend.app.services.platform.instance_backup.staging import STAGE_LIFETIME, StagePhase, StagingBusyError, StagingError, new_stage_id, remove_stage, stage_archive
+from backend.app.services.platform.instance_backup.staging import STAGE_LIFETIME, StagePhase, StagingBusyError, StagingError, drop_copy, new_stage_id, remove_stage, stage_archive
 
 logger = get_logger(__name__)
 
@@ -307,7 +307,11 @@ def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock, key: Envelop
 
     error_code: str | None = None
     try:
-        stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock, key=key, max_unpacked=max_unpacked)
+        report = stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock, key=key, max_unpacked=max_unpacked)
+        if "storage_limit" in report.blockers:
+            # C9-5: the space limit refuses this restore: its copy gives its room back at once; the report stays, to say why.
+            drop_copy(data_dir, check.stage_id)
+            logger.info("A restore check refused by the space limit: its copy removed, its report kept", stage_id=check.stage_id)
     except StagingError as exc:
         error_code = exc.code
     except BackupPathError:

@@ -410,3 +410,57 @@ def test_a_panel_or_command_line_backup_is_never_asked_about_the_limit(backup_wo
         job_views.start_job(origin)
     assert calls == [f"start:{origin}"]
     print_success(f"{origin}: started over the limit")
+
+
+# =====================================================================================================================
+# (f) C9-5: a check the space limit refuses gives its room back at once, its report kept
+# =====================================================================================================================
+
+
+def _check_world(data_dir: Path, stage_id: str):
+    from backend.app.services.platform.instance_backup.paths import STAGE_DATA_FOLDER, STAGE_REPORT_FILE, checks_dir, ensure_private_dir, stage_dir, stages_dir, uploads_dir  # noqa: PLC0415
+
+    for folder in (stages_dir(data_dir), checks_dir(data_dir), uploads_dir(data_dir)):
+        ensure_private_dir(folder, data_dir)
+    root = stage_dir(data_dir, stage_id)
+    root.mkdir()
+    _write(root / STAGE_DATA_FOLDER / "sqlite" / "app.db", MB)
+    _write(root / "decrypted.zip", MB)
+    (root / STAGE_REPORT_FILE).write_text("{}")
+    return root, STAGE_REPORT_FILE
+
+
+def test_drop_copy_removes_the_copy_and_keeps_the_report(data_dir):
+    """(f) ``drop_copy``: everything of the check's folder but its report goes."""
+    from backend.app.services.platform.instance_backup.staging import drop_copy  # noqa: PLC0415
+
+    stage_id = "a" * 32
+    root, report = _check_world(data_dir, stage_id)
+    drop_copy(data_dir, stage_id)
+    assert sorted(path.name for path in root.iterdir()) == [report]
+    drop_copy(data_dir, "b" * 32)  # no such check: nothing happens
+    print_success("only the report is left")
+
+
+@pytest.mark.parametrize(("blockers", "dropped"), [(["storage_limit"], True), (["no_administrator", "storage_limit"], True), (["no_administrator"], False), ([], False)])
+def test_a_check_refused_by_the_space_limit_drops_its_copy_at_once(data_dir, monkeypatch, blockers, dropped):
+    """(f) ``_run_check``: when the report holds ``storage_limit`` the copy is dropped as soon as the check ends; any other
+    report keeps it, for the confirmation."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup import restore_jobs  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.jobs import _RunLock  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, stages_dir  # noqa: PLC0415
+
+    stage_id = "c" * 32
+    root, report = _check_world(data_dir, stage_id)
+    calls: list[str] = []
+    monkeypatch.setattr(restore_jobs, "stage_archive", lambda *_args, **_kwargs: type("Report", (), {"blockers": blockers})())
+    monkeypatch.setattr(restore_jobs, "drop_copy", lambda _data_dir, dropped_id: calls.append(dropped_id))
+    lock = _RunLock(stages_dir(data_dir) / STAGE_LOCK_FILE)
+    assert lock.try_acquire()
+    check = restore_jobs.RestoreCheck(stage_id=stage_id, upload_id="d" * 32, status="running", phase="checking", done_bytes=0, total_bytes=0, created_at=datetime.now(UTC))
+    restore_jobs._run_check(data_dir, check, lock)
+    assert calls == ([stage_id] if dropped else []), f"{blockers}: dropped {calls}"
+    assert restore_jobs.read_check(stage_id, data_dir=data_dir).status == "done"
+    print_success(f"{blockers}: {'dropped' if dropped else 'kept'}")
