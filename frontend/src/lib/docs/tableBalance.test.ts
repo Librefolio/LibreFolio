@@ -57,7 +57,7 @@ afterEach(() => {
 });
 
 describe('which tables are balanced', () => {
-    it('a table with a long log column next to short ones gets a colgroup, the class and a fixed layout', () => {
+    it('a table with a long column next to short ones gets a colgroup, the class and a fixed layout', () => {
         setViewport(true);
         const table = mount(
             ['Level', 'The log says', 'Do'],
@@ -96,7 +96,6 @@ describe('which tables are balanced', () => {
     it.each([
         ['two columns', ['A', 'B'], [['x', LOG]]],
         ['no long cell', ['A', 'B', 'C'], [['short', 'also short', 'short again']]],
-        ['all columns long', ['A', 'B', 'C'], [[LOG, LOG, LOG]]],
     ] as const)('a table with %s is left to the theme', (_name, head, rows) => {
         setViewport(true);
         const table = mount(
@@ -109,6 +108,17 @@ describe('which tables are balanced', () => {
         expect(table.querySelector('colgroup')).toBeNull();
         expect(table.classList.contains('lf-balanced')).toBe(false);
         expect(table.style.tableLayout).toBe('');
+    });
+
+    it('a table whose columns are all long shares the width almost equally: the default layout gave the last one a sliver', () => {
+        setViewport(true);
+        const table = mount(['A', 'B', 'C'], [[LOG, LOG, LOG.slice(0, 150)]]);
+
+        run();
+
+        const widths = [...table.querySelectorAll('colgroup col')].map((col) => parseFloat((col as HTMLElement).style.width));
+        expect(widths).toHaveLength(3);
+        expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(12);
     });
 
     it('a row whose cells do not match the header (a spanning cell) leaves the table alone', () => {
@@ -169,12 +179,40 @@ describe('which tables are balanced', () => {
     });
 });
 
+describe('long code in a cell', () => {
+    it('a code span over 60 characters is marked so it can wrap, in any column; an identifier is not', () => {
+        setViewport(false);
+        const table = mount(['A', 'B'], [['<code>LIBREFOLIO_SMTP_HOST</code>', `<code>${'The instance key cannot be used: it cannot be reached (Permission denied)'}</code>`]]);
+
+        run();
+
+        const [name, message] = [...table.querySelectorAll('td code')];
+        expect(name.classList.contains('lf-code-long')).toBe(false);
+        expect(message.classList.contains('lf-code-long')).toBe(true);
+    });
+
+    it('code outside a table is left alone', () => {
+        setViewport(true);
+        document.body.innerHTML = `<div class="md-typeset"><p><code>${'x'.repeat(90)}</code></p></div>`;
+
+        run();
+
+        expect(document.querySelector('code')!.classList.contains('lf-code-long')).toBe(false);
+    });
+});
+
 describe('what the site is given', () => {
     const site = readFileSync(resolve(__dirname, '../../../../mkdocs_src/mkdocs.yml'), 'utf-8');
     const css = readFileSync(resolve(__dirname, '../../../../mkdocs_src/docs/static/extra.css'), 'utf-8');
 
     it('mkdocs.yml loads the script', () => {
         expect(site).toMatch(/^ {2}- javascripts\/table-balance\.js$/m);
+    });
+
+    it('the stylesheet lets a long code span wrap and beats the nowrap rule of the first two columns', () => {
+        expect(css).toMatch(/\.md-typeset table:not\(\[class\]\) td code\.lf-code-long\.lf-code-long[^{]*\{[^}]*white-space:\s*normal/);
+        expect(css).toMatch(/td:nth-child\(1\) code,\s*\.md-typeset table:not\(\[class\]\) td:nth-child\(2\) code\s*\{[^}]*white-space:\s*nowrap/);
+        expect(css.indexOf('lf-code-long')).toBeGreaterThan(css.indexOf('td:nth-child(2) code'));
     });
 
     it('the stylesheet lets the code of a balanced table wrap: in a fixed layout a cell that does not wrap spills over its neighbour', () => {

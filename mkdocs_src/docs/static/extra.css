@@ -1147,6 +1147,17 @@ div.lf-screenshot-carousel-item.alloc-crop-container img.gallery-img {
     cursor: pointer;
 }
 
+/* --- Long code in a table cell (javascripts/table-balance.js) ---
+ * The first two columns keep their code on one line (an identifier is not broken); a log message in one of them took the
+ * width of its longest line. The script marks a code span over 60 characters, and this lets it wrap; it must beat the
+ * `td:nth-child(n) code` rule above, hence the doubled class. */
+.md-typeset table:not([class]) td code.lf-code-long.lf-code-long,
+.md-typeset table.lf-balanced td code.lf-code-long.lf-code-long {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
 /* --- Balanced table columns (javascripts/table-balance.js) ---
  * A table with a long log line in one column and a short instruction in another gets fixed columns in proportion to the
  * length of their text. In a fixed layout a cell must wrap its own text, code included, or it spills over its neighbour. */
