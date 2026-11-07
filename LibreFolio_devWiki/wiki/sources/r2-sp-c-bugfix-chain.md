@@ -1,8 +1,27 @@
+---
+title: "SP-C Bugfix Chain (11 plans) — BulkModal + Suggest + WAC Preview"
+category: source
+source_type: plan
+date_ingested: 2026-06-02
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/SP-C-BulkModalSuggestUX/
+tags: [transactions, bulk-modal, suggest, wac, frontend, backend]
+related:
+  - sources/r2-sp-c-bulkmodal-suggest-ux
+  - sources/r3-sp-d-formmodal-wac-fx-chain
+  - problems/wac-feedback-loop
+  - problems/clone-link-uuid-duplication
+  - concepts/paired-partner-architecture
+  - concepts/stateless-preview-pattern
+  - decisions/wac-inline-validate-commit
+  - features/F-097
+  - features/F-048
+---
+
 # Source: SP-C Bugfix Chain (11 plans) — BulkModal + Suggest + WAC Preview
 
 > **Ingested**: 2026-06-02 | **Anchor**: `fd16327e6`
 > **Status**: ALL ✅ COMPLETED (2026-05-18 → 2026-06-01)
-> **Parent plan**: [[sources/r2-sp-c-bulkmodal-suggest-ux]]
+> **Parent plan**: [[sources/r2-sp-c-bulkmodal-suggest-ux]] · **Next in the chain**: [[sources/r3-sp-d-formmodal-wac-fx-chain]]
 
 ---
 
@@ -181,19 +200,23 @@ Components that display computed data should be **controlled** (props-in, callba
 
 ## Original Plan Files
 
+> *Path note (2026-11-07 lint)*: the plans were archived without an `SP-C-Bugfix/` folder — they sit in
+> `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/SP-C-BulkModalSuggestUX/`
+> (and its `WacPreview/`); the `...` below stands for that folder.
+
 | # | Plan | Path |
 |---|------|------|
-| 1 | BugfixRound1 | `.../SP-C-Bugfix/plan-SP-C-BugfixRound1.prompt.md` |
-| 2 | BugfixRound2-WacPreview | `.../SP-C-Bugfix/plan-SP-C-BugfixRound2-WacPreview.prompt.md` |
-| 3 | FxImpliedRateSpread | `.../SP-C-Bugfix/plan-SP-C-FxImpliedRateSpread.prompt.md` |
-| 4 | UnifiedPartnerArch | `.../SP-C-Bugfix/WacPreview/plan-BugfixRound3-UnifiedPartnerArch.prompt.md` |
-| 5 | ReactiveWacBulkModal | `.../SP-C-Bugfix/WacPreview/plan-ReactiveWacBulkModal.prompt.md` |
-| 6 | FixCloneLinkUuid | `.../SP-C-Bugfix/WacPreview/plan-FixCloneLinkUuid.prompt.md` |
-| 7 | FixWacFeedbackLoop | `.../SP-C-Bugfix/WacPreview/plan-FixWacFeedbackLoop.prompt.md` |
-| 8 | WacInlineValidateCommit | `.../SP-C-Bugfix/WacPreview/plan-WacInlineValidateCommit.prompt.md` |
-| 9 | FixWacPartnerRows | `.../SP-C-Bugfix/WacPreview/plan-FixWacPartnerRows.prompt.md` |
-| 10 | StatelessWacPreview | `.../SP-C-Bugfix/WacPreview/plan-StatelessWacPreview.prompt.md` |
-| 11 | WacBackendCleanup | `.../SP-C-Bugfix/WacPreview/plan-WacBackendCleanup.prompt.md` |
+| 1 | BugfixRound1 | `.../SP-C-BulkModalSuggestUX/plan-SP-C-BugfixRound1.prompt.md` |
+| 2 | BugfixRound2-WacPreview | `.../SP-C-BulkModalSuggestUX/plan-SP-C-BugfixRound2-WacPreview.prompt.md` |
+| 3 | FxImpliedRateSpread | `.../SP-C-BulkModalSuggestUX/plan-SP-C-FxImpliedRateSpread.prompt.md` |
+| 4 | UnifiedPartnerArch | `.../SP-C-BulkModalSuggestUX/WacPreview/plan-BugfixRound3-UnifiedPartnerArch.prompt.md` |
+| 5 | ReactiveWacBulkModal | `.../SP-C-BulkModalSuggestUX/WacPreview/plan-ReactiveWacBulkModal.prompt.md` |
+| 6 | FixCloneLinkUuid | `.../SP-C-BulkModalSuggestUX/WacPreview/plan-FixCloneLinkUuid.prompt.md` |
+| 7 | FixWacFeedbackLoop | `.../SP-C-BulkModalSuggestUX/WacPreview/plan-FixWacFeedbackLoop.prompt.md` |
+| 8 | WacInlineValidateCommit | `.../SP-C-BulkModalSuggestUX/WacPreview/plan-WacInlineValidateCommit.prompt.md` |
+| 9 | FixWacPartnerRows | `.../SP-C-BulkModalSuggestUX/WacPreview/plan-FixWacPartnerRows.prompt.md` |
+| 10 | StatelessWacPreview | `.../SP-C-BulkModalSuggestUX/WacPreview/plan-StatelessWacPreview.prompt.md` |
+| 11 | WacBackendCleanup | `.../SP-C-BulkModalSuggestUX/WacPreview/plan-WacBackendCleanup.prompt.md` |
 
 ---
 

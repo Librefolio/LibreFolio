@@ -38,8 +38,14 @@ A three-area documentation audit conducted on 2026-06-18, covering: (1) Transact
 - All 10 BRIM broker guides extended with step-by-step export instructions and pitfall warnings.
 - BRIM architecture doc (`brim/architecture.md`) aligned with v2 parser-only model.
 - **New BRIM parser**: `Doubleword.ai` (generic CSV) added as new BRIM provider for imported AI-generated transaction data.
+  *2026-11-07 lint*: wrong at ingest — no BRIM plugin of that name ever existed (`backend/app/services/brim_providers/`),
+  and the three audit files do not mention it. Doubleword.ai is the cloud LLM provider of the Aphra translation pipeline
+  (`b99ef7c87`; `mkdocs_src/docs/developer/docs/translation-pipeline.md`, «Cloud mode»).
 - `lf-screenshot-carousel`: custom CSS/JS carousel for MkDocs documentation pages. Responsive, 3D cover-flow for 3+ items, 180° flip for 2-item carousels. Used in Gallery pages and transaction docs.
 - MkDocs Mermaid: ELK layout now standard for all new diagrams.
+  *2026-11-07 lint*: no longer true on the release branch — since the docs serve their own pinned Mermaid copy (30/10)
+  the ELK layout is not loaded and `.claude/rules/mkdocs.md` says not to add `layout: elk`; bringing ELK back is the open
+  [[decisions/mermaid-elk-layout-and-node-text-colour]].
 
 ## Wiki Pages Created/Updated
 

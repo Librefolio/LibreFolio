@@ -42,7 +42,11 @@ as **N-1 … N-9**; N-9 (the backward-fill page) is [[problems/fx-backward-fill-
   - **D7** — the day change is shown as a percentage of **|base|** (card 1: yesterday's total P&L; card 2:
     yesterday's NAV), so its sign always follows the change, even on a negative base — "a loss that shrinks is a
     rise"; it is hidden only on a zero or unreadable base (`dayChangePct` in
-    `frontend/src/lib/components/dashboard/KpiSection.svelte`, `49f9c4567`).
+    `frontend/src/lib/components/dashboard/KpiSection.svelte`, `49f9c4567`; the file is today
+    `frontend/src/lib/features/dashboard/KpiSection.svelte`, moved in `5b35abfbc`).
+    *2026-11-07 lint*: card 1's share of yesterday's total P&L was removed in 1.3 — card 1 now shows the change as a
+    share of yesterday's NAV and `pnl_change_1d_vs_total_pnl_percent` left the API:
+    [[decisions/pnl-day-change-against-yesterdays-nav]].
 - **Page cache** (`…Step2PageCache`, 2026-10-07, `04c6bc6fc`): stale-while-revalidate for the portfolio views —
   [[concepts/stale-while-revalidate-page-cache]]. Syncs count as writes only when they wrote; the live-price poll
   no longer refreshes every view. Fixed on the way: the Dashboard asked Performance before knowing the user's

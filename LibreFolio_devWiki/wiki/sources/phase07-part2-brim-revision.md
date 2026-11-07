@@ -1,6 +1,9 @@
 ---
 type: source
 title: "Phase 07 — Part 2: BRIM Revision 2 (Parser-Only)"
+category: source
+source_type: plan
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte2/plan-phase07-transaction-Part2.prompt.md
 date_ingested: 2026-04-24
 date_updated: 2026-04-25
 git_hash: a61b0dfa

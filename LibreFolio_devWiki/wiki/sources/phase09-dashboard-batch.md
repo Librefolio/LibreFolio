@@ -1,6 +1,9 @@
 ---
 title: "Phase 09 Dashboard Batch"
 category: "source"
+source_type: plan
+date_ingested: 2026-06-17
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/
 tags: ["phase-09", "dashboard", "kpi", "twrr", "mwrr", "fifo", "portfolio"]
 related: ["F-054"]
 ---

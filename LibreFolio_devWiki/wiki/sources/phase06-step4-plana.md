@@ -1,4 +1,10 @@
 ---
+title: "Phase 06 Step 4 Plan A (Asset Detail Page, Chart Polish, Signal Unification)"
+category: source
+source_type: plan
+date_ingested: 2026-05-24
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step4/
+related: [features/F-033, features/F-037, features/F-042, features/F-043]
 type: source
 group: phase06-step4-plana
 ingested: 2026-05-24

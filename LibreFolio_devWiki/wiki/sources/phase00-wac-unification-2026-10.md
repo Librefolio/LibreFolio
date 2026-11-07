@@ -36,7 +36,7 @@ landed; this page indexes it and adds what was not filed then.
   [[concepts/pre-frame-frame-separation]], [[problems/wac-feedback-loop]], [[features/F-058]],
   [[problems/test-transaction-implied-constructor-mismatch]].
 - Not filed then: a missing cost now surfaces as a `MISSING_COST_BASIS` data-quality warning with a
-  `navigate_asset` call to action (`portfolio_engine.py`, group key `missing_cost_basis`) — which is why a
+  `navigate_asset` call to action (`portfolio_engine.py` at the time, today `backend/app/services/financial_math/portfolio/data_quality.py`; group key `missing_cost_basis`) — which is why a
   Dashboard E2E that counted asset links page-wide broke the next day
   ([[sources/phase00-fx-dashboard-sync-2026-10]]).
 - Yield on Cost divides by the same average cost: the engine's `position.wac` comes from `compute_average_costs()`

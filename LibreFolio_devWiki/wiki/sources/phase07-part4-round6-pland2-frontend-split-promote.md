@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 — Plan D2: Frontend Split/Promote UI + Suggest
 category: source
 source_type: plan
 date_ingested: 2026-05-31
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-PlanD2_FrontendSplitPromoteUI.prompt.md
 tags: [phase07, transactions, frontend, split, promote, promote-suggest, promote-merge-modal, bulk-modal, i18n]
 related:
   - sources/phase07-part4-round6-pland1-backend-batch-suggest

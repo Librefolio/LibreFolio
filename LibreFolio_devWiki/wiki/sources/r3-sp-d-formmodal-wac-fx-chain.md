@@ -1,8 +1,27 @@
+---
+title: "R3-SP-D Plan Chain — FormModal Props + Event Picker + WAC FX Feedback + Bugfixes"
+category: source
+source_type: plan
+date_ingested: 2026-06-04
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md
+tags: [transactions, form-modal, wac, fx, asset-events, frontend, backend]
+related:
+  - sources/r2-sp-c-bugfix-chain
+  - sources/r2-walktest-feedback-master
+  - decisions/wac-target-currency-last-acquisition
+  - decisions/fxsyncmodal-parent-ownership
+  - decisions/blur-detection-format-string-comparison
+  - decisions/cost-basis-currency-object
+  - features/F-097
+  - features/F-048
+---
+
 # Source: R3-SP-D Plan Chain — FormModal Props + Event Picker + WAC FX Feedback + Bugfixes
 
 > **Ingested**: 2026-06-04 @ `ac37afe7e`
 > **Status**: ✅ ALL DONE (2026-06-01 → 2026-06-04)
 > **Origin**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/`
+> **Previous in the chain**: [[sources/r2-sp-c-bugfix-chain]] · **Master plan**: [[sources/r2-walktest-feedback-master]]
 
 ---
 
@@ -94,6 +113,14 @@
 | Backend WAC FX missing | `test_transactions_wac.py` P29 | Multi-currency missing pair scenario |
 
 ---
+
+## Related wiki pages
+
+- [[decisions/wac-target-currency-last-acquisition]] — D, the target currency
+- [[decisions/fxsyncmodal-parent-ownership]] — E, one FxSyncModal owned by the parent
+- [[decisions/blur-detection-format-string-comparison]] — the blur detection
+- [[decisions/cost-basis-currency-object]] — `cost_basis_override` as a Currency object
+- [[features/F-097]], [[features/F-048]]
 
 ## Source Files
 

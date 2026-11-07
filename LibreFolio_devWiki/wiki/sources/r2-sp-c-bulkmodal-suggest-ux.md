@@ -3,7 +3,7 @@ title: "R2 SP-C — BulkModal UX Polish + Suggest Overhaul + Modal Cleanup"
 category: source
 source_type: plan
 date_ingested: 2026-06-01
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/R2-WalktestFeedback/plan-R2-SP-C-BulkModalSuggestUX.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/SP-C-BulkModalSuggestUX/plan-R2-SP-C-BulkModalSuggestUX.prompt.md
 tags: [phase07, transactions, frontend, bulkModal, suggest, promote, split, ux, e2e]
 related:
   - sources/r2-walktest-feedback-master

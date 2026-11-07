@@ -6,7 +6,7 @@ date_ingested: 2026-04-24
 original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step2/
 tags: [phase06, providers, assets, css-scraper, scheduled-investment]
 related_features: [F-034, F-035, F-025]
-related_decisions: [scheduled-investment-redesign]
+related_decisions: [decisions/scheduled-investment-redesign]
 ---
 
 # Source: Phase 06 Bugfix Step 2 — Asset Provider Checklist

@@ -3,7 +3,7 @@ title: "R2 Walktest Feedback Round — Master Plan (D2-Round2)"
 category: source
 source_type: plan
 date_ingested: 2026-06-01
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/plan-R2-WalktestFeedbackRound.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/plan-R2-WalktestFeedbackRound.prompt.md
 tags: [phase07, transactions, wac, cost-basis, fx, asset-event, store-first, walktest]
 related:
   - sources/r2-sp-a-cost-basis-wac
@@ -42,6 +42,8 @@ Post-walktest round (2026-05-24, in-progress) addressing 3 blocking UX/feature g
 | SP-C Bugfix 1-11 | ✅ | WAC Preview modal + 11 walktest bugs | 2026-05-30 |
 | SP-D — FormModal Features | ⏳ | CompactCash, AssetEvent picker, WAC Info modal, store-first | NEXT |
 | SP-E — E2E Tests | 🔲 | Full E2E coverage for all WAC/suggest/picker features | TODO |
+
+> *2026-11-07 lint*: SP-D was completed on 2026-06-04 as the R3-SP-D chain — [[sources/r3-sp-d-formmodal-wac-fx-chain]].
 
 ## Coherence issues identified
 | # | Problem | Resolution |

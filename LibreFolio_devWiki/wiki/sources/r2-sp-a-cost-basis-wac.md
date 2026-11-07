@@ -3,7 +3,7 @@ title: "R2 SP-A — Cost Basis Override Currency + WAC Service + recalc-wac"
 category: source
 source_type: plan
 date_ingested: 2026-06-01
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/R2-WalktestFeedback/plan-R2-SP-A-CostBasisWAC.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/SP-A-CostBasisWAC/plan-R2-SP-A-CostBasisWAC.prompt.md
 tags: [phase07, transactions, wac, cost-basis, currency, fx, backend, schema, endpoint]
 related:
   - sources/r2-walktest-feedback-master

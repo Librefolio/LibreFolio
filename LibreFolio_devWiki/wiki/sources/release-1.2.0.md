@@ -87,6 +87,8 @@ with the commit or the train.
   risk API changed in two visible ways; two endpoints now require signing in; `PATCH /api/v1/settings/global/bulk`
   refuses invalid values; behind a proxy that reports HTTPS for a plain-HTTP address, signing in no longer sticks
   ([[decisions/connection-security-server-never-upgrades]]).
+  *2026-11-07 lint*: `GET /brokers/{id}/summary` itself was removed in 1.3 — the broker page reads `GET /brokers/{id}`
+  and the portfolio report: [[decisions/broker-page-is-a-portfolio-view]], [[decisions/api-routes-removed-without-deprecation]].
 
 ## Decisions of the cycle
 
@@ -138,7 +140,7 @@ future. From R's final run and the release day:
 
 - C-79 — deleting a broker leaves its lock file and an empty upload folder behind (no report file is orphaned);
 - C-80 — backend modules below 80 %: the scheduler, two importers, `api/v1/assets.py`, the FED provider, the tools'
-  resources;
+  resources (`api/v1/assets.py` is today the `backend/app/api/v1/assets/` package, `37d8273a9`);
 - C-81 — frontend files never executed and the largest uncovered ones, to measure again once the coverage fixture
   stops losing counters (C-69);
 - C-82 — the load cures (V-27, V-28, V-33, V-36) are proven at normal load only: a run under high load before the next
