@@ -43,8 +43,8 @@ graph LR
     SVC -->|"resolve_url(url)"| PROV["provider.resolve_url<br/>(e.g. Borsa Italiana)"]
     PROV -->|"search-item(s)"| SVC
 
-    style WLF fill:#fff3e0,stroke:#e65100
-    style PROV fill:#e8f5e9,stroke:#2e7d32
+    style WLF fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style PROV fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
 ```
 
 ---
@@ -78,10 +78,10 @@ graph TD
 
     L3 -->|"non-None items"| OUT
 
-    style S1 fill:#e3f2fd,stroke:#1565c0
-    style F1 fill:#fff3e0,stroke:#e65100
-    style R1 fill:#e8f5e9,stroke:#2e7d32
-    style R2 fill:#e8f5e9,stroke:#2e7d32
+    style S1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style F1 fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style R1 fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style R2 fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
 ```
 
 | Layer | Where | When it runs | Purpose |

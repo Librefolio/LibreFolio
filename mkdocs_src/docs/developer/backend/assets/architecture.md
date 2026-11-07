@@ -138,10 +138,10 @@ graph TD
 
     Persist -- "FARefreshResult per asset" --> API
 
-    style P1 fill:#e3f2fd,stroke:#1565c0
-    style P2 fill:#e3f2fd,stroke:#1565c0
-    style DB1 fill:#f3e5f5,stroke:#7b1fa2
-    style DB2 fill:#f3e5f5,stroke:#7b1fa2
+    style P1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style P2 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style DB1 fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+    style DB2 fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
 1. **PREPARE** uses the caller's `AsyncSession` for reads only. It resolves assets,
@@ -442,7 +442,7 @@ graph LR
     Manager -- "Backward-fill gaps" --> Manager
     Manager -- "FAPriceQueryResponse" --> FE
 
-    style DB fill:#f3e5f5,stroke:#7b1fa2
+    style DB fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
 Each query item can request:

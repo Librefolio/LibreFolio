@@ -78,12 +78,12 @@ flowchart TB
     refine --> clean["🧹 Post-process<br/>Strip [N] glossary, tags<br/>Restore code indentation"]
     clean --> output["source.it.md"]
 
-    style per_file fill:#e8f4fd,stroke:#2196f3
-    style per_lang fill:#fff3e0,stroke:#ff9800
-    style analyze fill:#e3f2fd,stroke:#1565c0
-    style critique fill:#e3f2fd,stroke:#1565c0
-    style translate fill:#fff8e1,stroke:#f57f17
-    style refine fill:#fff8e1,stroke:#f57f17
+    style per_file fill:#e8f4fd,color:#1b1b1b,stroke:#2196f3
+    style per_lang fill:#fff3e0,color:#1b1b1b,stroke:#ff9800
+    style analyze fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style critique fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style translate fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style refine fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
 ```
 
 !!! note "Step 2 (Search) skipped by default"
@@ -156,8 +156,8 @@ graph LR
     T -->|"draft"| C
     C -->|"feedback"| R
 
-    style reasoning fill:#e3f2fd,stroke:#1565c0
-    style generation fill:#fff8e1,stroke:#f57f17
+    style reasoning fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style generation fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
 ```
 
 ### Priority hierarchy
@@ -391,16 +391,16 @@ graph LR
     C2 --> R2["✨ Step 5\nRefine FR\n× 1"]
     C3 --> R3["✨ Step 5\nRefine ES\n× 1"]
 
-    style A1 fill:#e3f2fd,stroke:#1565c0
-    style T1 fill:#fff8e1,stroke:#f57f17
-    style T2 fill:#fff8e1,stroke:#f57f17
-    style T3 fill:#fff8e1,stroke:#f57f17
-    style C1 fill:#e3f2fd,stroke:#1565c0
-    style C2 fill:#e3f2fd,stroke:#1565c0
-    style C3 fill:#e3f2fd,stroke:#1565c0
-    style R1 fill:#fff8e1,stroke:#f57f17
-    style R2 fill:#fff8e1,stroke:#f57f17
-    style R3 fill:#fff8e1,stroke:#f57f17
+    style A1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style T1 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style T2 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style T3 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style C1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style C2 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style C3 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style R1 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style R2 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style R3 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
 ```
 
 !!! tip "Greedy parallel execution with `--workers`"
