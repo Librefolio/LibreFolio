@@ -115,7 +115,9 @@
           "stop": "Arrêter l’attente",
           "stopHint": "Arrêter n’interrompt que l’attente : le serveur peut quand même terminer, et cette réponse est ignorée.",
           "title": "Calcul en cours",
-          "refreshing": "Relecture des données copiées depuis LibreFolio…"
+          "refreshing": "Relecture des données copiées depuis LibreFolio…",
+          "elapsed": "En attente depuis {elapsed} s sur {limit} s au maximum",
+          "barLabel": "Temps d’attente"
         },
         "cash": {
           "custody": "Disponible (conservation) {amount}",

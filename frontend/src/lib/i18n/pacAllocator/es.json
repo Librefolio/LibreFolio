@@ -115,7 +115,9 @@
           "stop": "Dejar de esperar",
           "stopHint": "Detener solo detiene la espera: el servidor puede terminar de todos modos, y esa respuesta se descarta.",
           "title": "Cálculo en curso",
-          "refreshing": "Releyendo de LibreFolio los datos copiados…"
+          "refreshing": "Releyendo de LibreFolio los datos copiados…",
+          "elapsed": "Esperando {elapsed} s de un máximo de {limit} s",
+          "barLabel": "Tiempo de espera"
         },
         "cash": {
           "custody": "Disponible (custodia) {amount}",

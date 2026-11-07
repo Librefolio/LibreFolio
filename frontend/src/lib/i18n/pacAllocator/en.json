@@ -115,7 +115,9 @@
           "stop": "Stop waiting",
           "stopHint": "Stopping only stops the wait: the server may finish anyway, and that answer is discarded.",
           "title": "Calculation in progress",
-          "refreshing": "Reading the copied data again from LibreFolio…"
+          "refreshing": "Reading the copied data again from LibreFolio…",
+          "elapsed": "Waiting {elapsed} s of at most {limit} s",
+          "barLabel": "Time waited"
         },
         "cash": {
           "custody": "Available (custody) {amount}",

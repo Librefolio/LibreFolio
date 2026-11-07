@@ -115,7 +115,9 @@
           "stop": "Interrompi attesa",
           "stopHint": "Interrompere ferma solo l’attesa: il server può comunque terminare, e quella risposta viene scartata.",
           "title": "Calcolo in corso",
-          "refreshing": "Rilettura da LibreFolio dei dati copiati…"
+          "refreshing": "Rilettura da LibreFolio dei dati copiati…",
+          "elapsed": "In attesa da {elapsed} s su un massimo di {limit} s",
+          "barLabel": "Tempo di attesa"
         },
         "cash": {
           "custody": "Disponibile (custodia) {amount}",
