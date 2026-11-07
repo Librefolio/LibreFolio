@@ -99,6 +99,7 @@ FIELDS_BEFORE = {
 }
 USERS_FIELDS = ("users_active", "users_limit", "users_over_limit")
 STORAGE_FIELDS = ("storage_limit_mb", "storage_limit_locked", "storage_required_bytes", "storage_disk_missing_bytes")  # lot C8, after this one
+PARTS_FIELDS = ("uploads_size", "broker_reports_size")  # lot C9B, after this one: the bar of what the backup holds
 
 
 def new_field(report: Any, name: str) -> Any:
@@ -227,8 +228,8 @@ def test_the_new_keys_of_report_json_are_three_numbers_and_name_nobody(instance,
     text = path.read_text(encoding="utf-8")
     written = json.loads(text)
     assert [written.get(name, "<missing>") for name in USERS_FIELDS] == [5, 3, 2], f"[new] B5-1k2: report.json: {[written.get(name, '<missing>') for name in USERS_FIELDS]}"
-    # B5-1l added ``owner_marks`` (a count) and C8 the storage numbers after this lot: they are not the keys this test is about.
-    assert set(written) - FIELDS_BEFORE - {"owner_marks"} - set(STORAGE_FIELDS) == set(USERS_FIELDS), f"the only new keys are the three numbers: {sorted(set(written) - FIELDS_BEFORE)}"
+    # B5-1l added ``owner_marks`` (a count), C8 the storage numbers and C9B the parts sizes after this lot: not the keys this test is about.
+    assert set(written) - FIELDS_BEFORE - {"owner_marks"} - set(STORAGE_FIELDS) - set(PARTS_FIELDS) == set(USERS_FIELDS), f"the only new keys are the three numbers: {sorted(set(written) - FIELDS_BEFORE)}"
     # The owner's candidates (B5-1, any active administrator, with the address it holds) and the owner's address the check
     # used were in the file before this lot; what B5-1k2 adds names nobody.
     rest = json.dumps({key: value for key, value in written.items() if key not in {"owner_candidates", "owner_email_checked"}})
