@@ -20,13 +20,18 @@ Mai dall'indirizzo usato dal browser, né da altro presente in una richiesta.
 
 ```mermaid
 flowchart TD
-    REQ["Un'email con un link da inviare"] --> CHK{"LIBREFOLIO_PUBLIC_URL<br>impostata e valida?"}
-    CHK -->|"no"| REF["Email rifiutata:<br>EMAIL_LINKS_UNAVAILABLE"]
-    CHK -->|"sì"| BUILD["Link = LIBREFOLIO_PUBLIC_URL<br>+ pagina che riceve il link<br>+ parte segreta"]
-    BROWSER["Indirizzo usato dal browser,<br>altro presente nella richiesta"] -. "mai usato" .-> BUILD
-    BUILD --> MAIL["Email: nomina l'istanza (host di LIBREFOLIO_PUBLIC_URL)<br>e per quanto tempo il link è valido"]
-    MAIL --> OPEN["Il link funziona una sola volta"]
+    REQ["Email con un link da inviare"] --> CHK{"LIBREFOLIO_PUBLIC_URL<br>impostata e valida?"}
+    CHK -->|"no"| REF["Rifiutata:<br>EMAIL_LINKS_UNAVAILABLE"]
+    CHK -->|"sì"| BUILD["Link = LIBREFOLIO_PUBLIC_URL<br>+ pagina + parte segreta"]
+    BROWSER["Indirizzo del browser,<br>dati della richiesta"] -. "mai usati" .-> BUILD
+    BUILD --> MAIL["Email inviata,<br>link valido una sola volta"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class REF no
+    class MAIL ok
 ```
+
+L'email nomina l'istanza, con l'host di `LIBREFOLIO_PUBLIC_URL`, e dice per quanto tempo il link è valido.
 
 ```text
 https://librefolio.example.com/reset-password#token=…
@@ -84,26 +89,39 @@ Condizione: email **Pronta** e `LIBREFOLIO_PUBLIC_URL` utilizzabile ([Email con 
 Allora le finestre di invito e di reimpostazione della password di [Utenti e inviti](users.md#send-by-email) mostrano **Invia per email** sotto il link.
 
 ```mermaid
+---
+config:
+  sequence:
+    actorMargin: 20
+    width: 120
+    messageMargin: 20
+---
 sequenceDiagram
     participant A as Amministratore
-    participant F as Finestra Utenti e inviti
+    participant F as Finestra
     participant L as LibreFolio
-    participant E as Email
-    A->>F: Invita, oppure Link di reimpostazione password nella riga della persona
-    F-->>A: Il link, e sotto Invia per email
-    opt Solo per un invito
-        A->>F: Controlla Invia a, scegli la Lingua dell'email
-    end
+    A->>F: Invita, oppure<br>Link di reimpostazione
+    F-->>A: Link + Invia per email
     A->>F: Invia per email
-    F->>L: Solo la parte segreta del link
-    alt Link valido
-        L->>E: Link che inizia con LIBREFOLIO_PUBLIC_URL
-        F-->>A: Inviata a … (indirizzo e lingua)
-    else L'email non è partita
-        F-->>A: Il motivo (Errori di invio)
-    else Link scaduto, usato o revocato
-        F-->>A: Rifiutato: creane uno nuovo
-    end
+    F->>L: Solo la parte segreta
+    Note over L: Email: link da<br>LIBREFOLIO_PUBLIC_URL
+    L-->>F: Esito
+    F-->>A: Esito
+```
+
+**L'esito**, mostrato nella finestra:
+
+```mermaid
+flowchart TD
+    S["Invia per email"] --> V{"Link valido?"}
+    V -->|"scaduto, usato<br>o revocato"| NO["Rifiutato:<br>creane uno nuovo"]
+    V -->|"sì"| P{"Email partita?"}
+    P -->|"no"| ERR["Il motivo<br>(Errori di invio)"]
+    P -->|"sì"| OK["Inviata a …<br>indirizzo e lingua"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class NO,ERR no
+    class OK ok
 ```
 
 | | Invito | Link di reimpostazione della password |
@@ -138,31 +156,49 @@ Vedi [Variabili d'ambiente](configuration_accounts.md#accounts).
 
 Chi ha dimenticato la password può richiedere un link di reimpostazione via email, con il proprio nome utente o indirizzo email, senza accedere.
 
+**Prima della risposta:**
+
 ```mermaid
+---
+config:
+  layout: elk
+---
 flowchart TD
-    subgraph before["Prima della risposta"]
-        REQ["Password dimenticata?<br>nome utente o indirizzo email"] --> READY{"Email Pronta e<br>LIBREFOLIO_PUBLIC_URL utilizzabile?"}
-        READY -->|"no"| NOPE["Rifiutata: breve messaggio,<br>uguale per tutti"]
-        READY -->|"sì"| ADDR{"Contatore per indirizzo client<br>pieno?"}
-        ADDR -->|"sì"| WAIT["Rifiutata: la risposta<br>indica quanto attendere"]
-        ADDR -->|"no"| NAME{"3 richieste all'ora<br>per questo nome o indirizzo?"}
-        NAME -->|"superate"| WAIT
-        NAME -->|"no"| INST{"Limite orario<br>dell'istanza esaurito?"}
-        INST -->|"sì"| WAIT
-        INST -->|"no"| RESP["La stessa risposta per tutti"]
-    end
-    subgraph after["Dopo la risposta, in silenzio"]
-        RESP --> FIND{"Un account attivo<br>corrisponde?"}
-        FIND -->|"no"| STOP["Nulla"]
-        FIND -->|"sì"| ADMIN{"Un link creato da un<br>amministratore è ancora valido?"}
-        ADMIN -->|"sì"| STOP
-        ADMIN -->|"no"| ACC{"Per account: 1 ogni 5 minuti<br>e 3 all'ora superati?"}
-        ACC -->|"sì"| STOP
-        ACC -->|"no"| BOX{"Per casella di posta:<br>3 all'ora superate?"}
-        BOX -->|"sì"| STOP
-        BOX -->|"no"| SEND["Email con il link: 30 minuti,<br>una sola volta, nella lingua dell'account"]
-    end
+    REQ["Password dimenticata?<br>nome utente o indirizzo email"] --> READY{"Email Pronta e<br>LIBREFOLIO_PUBLIC_URL utilizzabile?"}
+    READY -->|"no"| NOPE["Rifiutata: breve messaggio,<br>uguale per tutti"]
+    READY -->|"sì"| ADDR{"Contatore per<br>indirizzo pieno?"}
+    ADDR -->|"no"| NAME{"3 all'ora per questo<br>nome o indirizzo?"}
+    NAME -->|"no"| INST{"Limite orario<br>dell'istanza esaurito?"}
+    ADDR -->|"sì"| WAIT["Rifiutata: la risposta<br>dice quanto attendere"]
+    NAME -->|"superate"| WAIT
+    INST -->|"sì"| WAIT
+    INST -->|"no"| RESP["La stessa risposta<br>per tutti"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    class NOPE,WAIT no
 ```
+
+**Dopo la risposta, in silenzio:**
+
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TD
+    RESP["Risposta già data"] --> FIND{"Un account attivo<br>corrisponde?"}
+    FIND -->|"no"| STOP1["Nulla"]
+    FIND -->|"sì"| ADMIN{"Link di un amministratore<br>ancora valido?"}
+    ADMIN -->|"sì"| STOP1
+    ADMIN -->|"no"| ACC{"Per account: 1 ogni 5 minuti<br>e 3 all'ora superati?"}
+    ACC -->|"sì"| STOP2["Nulla"]
+    ACC -->|"no"| BOX{"Per casella:<br>3 all'ora superate?"}
+    BOX -->|"sì"| STOP2
+    BOX -->|"no"| SEND["Email con il link:<br>30 minuti, una sola volta"]
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class SEND ok
+```
+
+L'email con il link è nella lingua dell'account.
 
 **La stessa risposta per tutti**, che un account corrisponda o no:
 
@@ -216,13 +252,17 @@ Dove vivono i conteggi:
 **Dietro un reverse proxy**, l'indirizzo che conta è quello del visitatore, come lo legge LibreFolio ([L'indirizzo del visitatore](connection_proxy.md#client-address)):
 
 ```mermaid
+---
+config:
+  layout: elk
+---
 flowchart TD
-    Q1{"LIBREFOLIO_CLIENT_IP_HEADER<br>impostata?"} -->|"sì"| HDR["L'indirizzo nell'header del proxy<br>(Fly-Client-IP, X-Real-IP)"]
-    Q1 -->|"no"| Q2{"Indirizzo del proxy elencato<br>in FORWARDED_ALLOW_IPS?"}
-    Q2 -->|"sì"| XFF["uvicorn legge X-Forwarded-For"]
-    Q2 -->|"no: l'indirizzo che vede uvicorn,<br>cioè il proxy, non fidato"| Q3{"Indirizzo del proxy"}
-    Q3 -->|"locale: rete Docker, LAN, VPN"| LOC["Limiti per indirizzo saltati<br>per quelle richieste; gli altri contano"]
-    Q3 -->|"pubblico: una CDN"| PUB["Tutti condividono l'indirizzo<br>e il conteggio del proxy"]
+    Q1{"LIBREFOLIO_CLIENT_IP_HEADER<br>impostata?"} -->|"sì"| HDR["Indirizzo nell'header del proxy<br>(Fly-Client-IP, X-Real-IP)"]
+    Q1 -->|"no"| Q2{"Proxy elencato in<br>FORWARDED_ALLOW_IPS?"}
+    Q2 -->|"sì"| XFF["uvicorn legge<br>X-Forwarded-For"]
+    Q2 -->|"no: proxy non fidato"| Q3{"Indirizzo<br>del proxy"}
+    Q3 -->|"locale: Docker, LAN, VPN"| LOC["Limiti per indirizzo saltati;<br>gli altri contano"]
+    Q3 -->|"pubblico: una CDN"| PUB["Tutti condividono<br>il conteggio del proxy"]
 ```
 
 - **Con `LIBREFOLIO_CLIENT_IP_HEADER`**, **nel file `.env`**, LibreFolio legge l'indirizzo nell'header che il tuo proxy imposta con l'indirizzo del visitatore (`Fly-Client-IP` su Fly.io, `X-Real-IP` da Nginx):
@@ -260,15 +300,25 @@ Ognuno conta negli ultimi 60 minuti, nella memoria di ciascun processo del serve
 
 ```mermaid
 flowchart TD
-    REQ["Registrazione, Invia di nuovo il link,<br>Password dimenticata?"] --> FULL{"Contatore per indirizzo<br>pieno?"}
-    FULL -->|"sì, registrazione"| HELD["Account creato, email trattenuta:<br>la pagina dice quanto attendere"]
-    FULL -->|"sì, Invia di nuovo il link<br>o Password dimenticata?"| REJ["Rifiutata subito, prima della password:<br>la risposta dice quanti secondi attendere"]
-    FULL -->|"no"| OTHER{"Gli altri controlli: password,<br>nome esistente, account, casella, istanza"}
-    OTHER -->|"respinta"| FREE["Nessun posto consumato"]
-    OTHER -->|"passa"| SEND["L'email sta per partire:<br>consuma un posto, ora"]
+    REQ["Registrazione, Invia di nuovo il link,<br>Password dimenticata?"] --> FULL{"Contatore per<br>indirizzo pieno?"}
+    FULL -->|"sì, registrazione"| HELD["Account creato,<br>email trattenuta"]
+    FULL -->|"sì, gli altri due"| REJ["Rifiutata subito,<br>prima della password"]
+    FULL -->|"no"| NEXT["Gli altri controlli<br>(diagramma sotto)"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    class REJ no
+```
+
+**Quando il contatore non è pieno**, il posto si consuma solo se gli altri controlli passano:
+
+```mermaid
+flowchart TD
+    OTHER{"Gli altri controlli: password,<br>nome esistente, account, casella, istanza"} -->|"respinta"| FREE["Nessun posto consumato"]
+    OTHER -->|"passa"| SEND["Consuma un posto, ora"]
     SEND --> SMTP{"Il server SMTP<br>la accetta?"}
-    SMTP -->|"no"| CNT["Resta contata: è stata tentata"]
+    SMTP -->|"no"| CNT["Resta contata:<br>è stata tentata"]
     SMTP -->|"sì"| OK["Inviata"]
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class OK ok
 ```
 
 Non gli costano nulla:
@@ -310,23 +360,49 @@ Con **Richiedi la verifica dell'email** attivo, un nuovo account non può accede
 
 **Dove:** l'interruttore è in **Impostazioni › Amministrazione › Impostazioni globali**, categoria **Sicurezza** ([Impostazioni globali](settings.md)). È disattivato per impostazione predefinita.
 
+**La registrazione:**
+
 ```mermaid
 flowchart TD
-    REG["Registrazione dalla pagina di registrazione,<br>anche con un invito"] --> SW{"Richiedi la verifica<br>dell'email attivo?"}
+    REG["Registrazione,<br>anche con un invito"] --> SW{"Richiedi la verifica<br>dell'email attivo?"}
     SW -->|"no"| ACTIVE["Account attivo"]
     SW -->|"sì"| CAN{"Un'email con un link<br>può partire?"}
     CAN -->|"no"| NOREG["Nessun account creato:<br>Al momento non è possibile registrarsi…"]
-    CAN -->|"sì"| CREATE["Account creato, in attesa"]
-    CREATE --> LIM{"Contatore per indirizzo<br>o limite orario dell'istanza pieni?"}
-    LIM -->|"sì"| HELD["Pagina: Riprova tra circa N minuti.<br>Nessuna email parte"]
-    LIM -->|"no"| TEXT["Pagina: Account creato.<br>Ti stiamo inviando un'email…"]
-    TEXT --> BOX{"Dopo la risposta: casella 3 all'ora,<br>errore SMTP, email guasta?"}
-    BOX -->|"trattenuta"| LOG["Solo nel log:<br>Verification email: not sent"]
-    BOX -->|"riavvio prima che parta"| NOLINE["Nessuna email, nessuna riga"]
-    BOX -->|"parte"| MAIL["Email Conferma il tuo indirizzo email:<br>link 24 ore, una sola volta"]
-    MAIL --> OPEN["Pagina di LibreFolio con il pulsante<br>Conferma il mio indirizzo email"]
-    OPEN -->|"solo aperta, senza clic"| NOTHING["Nulla: il link resta valido"]
-    OPEN -->|"clic"| DONE["Account attivo: torna alla pagina<br>di accesso con una conferma"]
+    CAN -->|"sì"| CREATE["Account creato,<br>in attesa"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class NOREG no
+    class ACTIVE ok
+```
+
+**Poi l'email di verifica:**
+
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TD
+    CREATE["Account creato, in attesa"] --> LIM{"Contatore per indirizzo o<br>limite orario dell'istanza pieni?"}
+    LIM -->|"sì"| HELD["Pagina: Riprova tra<br>circa N minuti"]
+    LIM -->|"no"| TEXT["Pagina: Account creato.<br>Ti stiamo inviando…"]
+    TEXT --> BOX{"Dopo la risposta:<br>casella 3 all'ora, errore SMTP,<br>email guasta?"}
+    BOX -->|"trattenuta"| LOG["Solo nel log:<br>not sent"]
+    BOX -->|"riavvio"| NOLINE["Nessuna email,<br>nessuna riga"]
+    BOX -->|"parte"| MAIL["Email con il link:<br>24 ore, una sola volta"]
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class MAIL ok
+```
+
+**Infine il clic sul link:**
+
+```mermaid
+flowchart TD
+    MAIL["Link nell'email"] --> OPEN["Pagina con il pulsante<br>Conferma il mio indirizzo email"]
+    OPEN -->|"solo aperta, senza clic"| NOTHING["Nulla:<br>il link resta valido"]
+    OPEN -->|"clic"| DONE["Account attivo: pagina<br>di accesso, con una conferma"]
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class DONE ok
 ```
 
 **Chi attende:** ogni account creato dalla pagina di registrazione mentre l'interruttore è attivo, compresi quelli aperti con un invito.
@@ -363,25 +439,53 @@ Il suo link inizia con `LIBREFOLIO_PUBLIC_URL` ([Email con un link](#public-url)
 
 ```mermaid
 flowchart TD
-    LOGIN["Accesso con nome utente e password"] --> PW{"Password?"}
+    LOGIN["Accesso con nome<br>utente e password"] --> PW{"Password?"}
     PW -->|"errata"| REF["Il solito rifiuto dell'accesso:<br>nessuno apprende di più"]
     PW -->|"corretta"| MSG["Indirizzo non ancora verificato:<br>offerto Invia di nuovo il link"]
-    MSG --> RS["Invia di nuovo il link:<br>nome utente e password"]
-    RS --> L1{"Contatore per indirizzo pieno?"}
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    class REF no
+```
+
+**Invia di nuovo il link**, i primi controlli:
+
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TD
+    RS["Invia di nuovo il link:<br>nome utente e password"] --> L1{"Contatore per<br>indirizzo pieno?"}
     L1 -->|"sì"| W["Rifiutato: la pagina dice<br>tra quanti minuti riprovare"]
-    L1 -->|"no"| L2{"Limite delle password errate<br>raggiunto?"}
+    L1 -->|"no"| L2{"Limite delle password<br>errate raggiunto?"}
     L2 -->|"sì"| W
     L2 -->|"no"| PW2{"Password corretta?"}
-    PW2 -->|"no"| REF
-    PW2 -->|"sì"| L3{"Per account: 1 ogni 5 minuti<br>e 3 all'ora superati?"}
-    L3 -->|"sì"| W
-    L3 -->|"no"| L4{"Casella: 3 all'ora superate?"}
-    L4 -->|"sì"| W
+    PW2 -->|"no"| REF["Il solito rifiuto<br>dell'accesso"]
+    PW2 -->|"sì"| GO["Controlli sull'account<br>(diagramma sotto)"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    class W,REF no
+```
+
+**Con la password corretta**, i controlli sull'account:
+
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TD
+    GO["Password corretta"] --> L3{"Per account: 1 ogni 5 minuti<br>e 3 all'ora superati?"}
+    L3 -->|"no"| L4{"Casella: 3 all'ora<br>superate?"}
     L4 -->|"no"| L5{"Limite orario<br>dell'istanza esaurito?"}
+    L3 -->|"sì"| W["Rifiutato: la pagina dice<br>tra quanti minuti riprovare"]
+    L4 -->|"sì"| W
     L5 -->|"sì"| W
     L5 -->|"no"| L6{"Link scaduto e<br>nessun posto libero?"}
     L6 -->|"sì"| ASK["Al proprietario viene detto<br>di chiedere a te"]
     L6 -->|"no"| NEW["Nuovo link: i precedenti<br>smettono di funzionare"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class W,ASK no
+    class NEW ok
 ```
 
 Cosa vede la persona, passo dopo passo: *Se LibreFolio ti chiede di confermare la tua email* in [Per iniziare](../user/getting-started.md).
@@ -389,10 +493,14 @@ Cosa vede la persona, passo dopo passo: *Se LibreFolio ti chiede di confermare l
 ### 🔀 Attivarlo e disattivarlo {: #verification-switch }
 
 ```mermaid
-flowchart LR
+---
+config:
+  layout: elk
+---
+flowchart TD
     OFF["Disattivato"] -->|"attiva: solo se un'email<br>con un link può partire"| ON["Attivo"]
     ON -->|"disattiva: funziona sempre"| OFF
-    ON -->|"l'email smette di funzionare"| BROKEN["Attivo, ma nessuna email parte:<br>nessuno può registrarsi"]
+    ON -->|"l'email smette di funzionare"| BROKEN["Attivo, nessuna email parte:<br>nessuno può registrarsi"]
     BROKEN -->|"sistema l'email"| ON
     BROKEN -->|"disattiva"| OFF
 ```
@@ -409,17 +517,27 @@ flowchart LR
 
 ### ⏳ Account in attesa {: #verification-waiting }
 
+**Verso Attivo:**
+
 ```mermaid
 flowchart TD
-    W["In attesa di verifica, link valido:<br>occupa un posto del limite utenti"] -->|"il proprietario fa clic su Conferma"| A["Attivo"]
-    W -->|"Riattiva, oppure user activate:<br>nessun posto extra, anche a istanza piena"| A
-    W -->|"24 ore: l'ultimo link scade"| E["In attesa di verifica,<br>link scaduto: posto libero"]
-    E -->|"Invia di nuovo il link:<br>serve un posto libero"| W
-    E -->|"Riattiva, oppure user activate:<br>serve un posto libero"| A
-    W -->|"Elimina"| D["Eliminato"]
-    E -->|"Elimina"| D
-    W -->|"user deactivate, oppure PATCH is_active false"| X["Disattivato: link spenti,<br>posto libero"]
-    E -->|"user deactivate, oppure PATCH is_active false"| X
+    W["In attesa, link valido<br>(posto occupato)"] -->|"clic su Conferma"| A["Attivo"]
+    W -->|"Riattiva, o user activate"| A
+    W -->|"24 ore: il link scade"| E["In attesa, link scaduto<br>(posto libero)"]
+    E -->|"Invia di nuovo il link"| W
+    E -->|"Riattiva, o user activate"| A
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class A ok
+```
+
+**Per rifiutarlo:**
+
+```mermaid
+flowchart TD
+    W["In attesa, link valido<br>(posto occupato)"] -->|"Elimina"| D["Eliminato"]
+    E["In attesa, link scaduto<br>(posto libero)"] -->|"Elimina"| D
+    W -->|"user deactivate, o<br>PATCH is_active false"| X["Disattivato:<br>link spenti, posto libero"]
+    E -->|"user deactivate, o<br>PATCH is_active false"| X
 ```
 
 **Dove:** in **Impostazioni › Amministrazione › Utenti**, un account in attesa mostra il badge **In attesa di verifica**, non **Disattivato**, anche una volta scaduto il suo link.
@@ -487,15 +605,21 @@ Inoltre:
 Quando qualcuno cambia l'indirizzo email del proprio account, in [Profilo](../user/settings/profile.md), LibreFolio scrive all'indirizzo che l'account aveva **prima**.
 
 ```mermaid
+---
+config:
+  layout: elk
+---
 flowchart TD
-    CH["Cambio dell'indirizzo email in Profilo"] --> OK["Il cambio va a buon fine:<br>la risposta non attende mai l'email"]
+    CH["Cambio dell'indirizzo email<br>in Profilo"] --> OK["Il cambio va a buon fine:<br>la risposta non attende mai l'email"]
     OK --> CASE{"Cambiate solo le maiuscole<br>delle lettere dalla A alla Z?"}
     CASE -->|"sì: non è un cambio"| SKIP["Nessun avviso"]
-    CASE -->|"no"| LIM{"3 all'ora per l'account, oppure<br>3 all'ora per la casella, superati?"}
+    CASE -->|"no"| LIM{"3 all'ora per l'account o<br>per la casella superati?"}
     LIM -->|"sì"| SKIP
     LIM -->|"no"| EN{"Email attiva?"}
-    EN -->|"no"| LOG["Nulla: una riga informativa nel log,<br>non un avviso"]
+    EN -->|"no"| LOG["Nulla: una riga informativa<br>nel log, non un avviso"]
     EN -->|"sì"| SEND["Avviso al vecchio indirizzo,<br>nella lingua dell'account"]
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class SEND ok
 ```
 
 | | L'avviso |
