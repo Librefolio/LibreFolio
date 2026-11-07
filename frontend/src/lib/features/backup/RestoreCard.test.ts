@@ -576,6 +576,8 @@ describe('RestoreCard — the upload and the check', () => {
         options?.onProgress?.(256, 1024);
         await settle();
         expect(progressbar(screen.getByTestId('restore-upload-progress'))).toHaveAttribute('aria-valuenow', '25');
+        // C9-7: what the check will take on the server, said while the archive goes up: its size, plus its opened version.
+        expect(screen.getByTestId('restore-space-needed')).toHaveTextContent('backup.restore.spaceNeeded');
 
         upload.resolve(uploaded({size: 1024}));
         await settle();

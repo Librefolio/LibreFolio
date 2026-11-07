@@ -198,6 +198,10 @@
 
     {#if controller.state === 'uploading'}
         <div class="space-y-2" data-testid="restore-upload-progress">
+            {#if controller.totalBytes > 0}
+                <!-- C9-7: what the check will take, said before it does: the archive itself, then its opened version. -->
+                <p class="text-xs text-lf-muted" data-testid="restore-space-needed">{$_('backup.restore.spaceNeeded', {values: {size: formatBytes(controller.totalBytes, $_)}})}</p>
+            {/if}
             <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span class="flex items-center gap-2 text-lf-secondary">
                     <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
