@@ -27,7 +27,7 @@ Quanto denaro hanno prodotto i tuoi investimenti nel periodo selezionato? La sch
 **Metriche mostrate**
 
 - **P&L periodo** — il numero grande: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, dove i flussi netti sono il capitale che hai spostato in entrata o in uscita → [P&L periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
-- **La riga sotto** — per esempio `+91.31 € (+16.36%)`: di quanto è cambiato il tuo P&L totale da ieri (pannello sottostante)
+- **La riga sotto** — per esempio `-1.141 € (-1,95%)`: di quanto è cambiato il tuo P&L totale da ieri, e quella variazione in percentuale rispetto al valore del portafoglio di ieri (pannello sottostante)
 - **Variazione non realizzata** — come si è mossa nel periodo la plusvalenza o minusvalenza non realizzata delle tue posizioni, effetto cambio incluso → [P&L periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Vendite** — la plusvalenza o minusvalenza realizzata delle vendite del periodo, rispetto al costo medio delle unità vendute. Una rettifica che rimuove unità non ha valore: qui conta come una vendita a zero, una perdita pari a quanto sono costate quelle unità (vedi [Rettifiche in uscita](../../financial-theory/instruments/transaction-types/adjustment.md#outgoing-adjustments)) → [Prezzo medio di carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendi e interessi** — dividendi, cedole e interessi P2P ricevuti → [Dividendi e interessi](../../financial-theory/instruments/transaction-types/dividend-interest.md)
@@ -41,14 +41,14 @@ Quanto denaro hanno prodotto i tuoi investimenti nel periodo selezionato? La sch
 
 ??? info "📏 La riga sotto il numero grande — come si calcola"
 
-    È la variazione del tuo P&L totale — il guadagno o la perdita dall'inizio — da ieri a oggi, dove *oggi* è la data di fine del periodo. La percentuale lo confronta con il P&L totale di ieri, preso senza il suo segno:
+    È la variazione del tuo P&L totale — il guadagno o la perdita dall'inizio — da ieri a oggi, dove *oggi* è la data di fine del periodo. La percentuale lo confronta con il patrimonio netto di ieri — il valore dell'intero portafoglio —, preso senza il suo segno:
 
     $$
-    \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
+    \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Patrimonio netto}_{\text{yesterday}}\right|} \times 100
     $$
 
-    - **Segno e colore seguono la variazione**, anche quando il P&L totale è una perdita: da `-558.10 €` a `-466.79 €`, la riga mostra `+91.31 € (+16.36%)` — la tua perdita si è ridotta del 16.36%.
-    - **Manca solo quando il periodo termina nel primo giorno del tuo portafoglio**, poiché non c'è un giorno precedente con cui confrontare; la percentuale viene omessa quando il P&L totale di ieri è esattamente zero, e un giorno senza variazioni mostra `0.00%`. Di lunedì la riga copre l'intero fine settimana, poiché un giorno senza mercato mantiene i prezzi dell'ultimo giorno di contrattazione.
+    - **Segno e colore seguono la variazione**, anche quando il P&L totale è una perdita: da `-558.10 €` a `-466.79 €` su un patrimonio netto di 10.000 €, la riga mostra `+91.31 € (+0.91%)`. La base è il portafoglio, non il P&L totale: vicino a zero un P&L totale trasformerebbe la stessa variazione in una percentuale enorme che non dice nulla.
+    - **Manca solo quando il periodo termina nel primo giorno del tuo portafoglio**, poiché non c'è un giorno precedente con cui confrontare; la percentuale viene omessa quando il patrimonio netto di ieri è esattamente zero, e un giorno senza variazioni mostra `0.00%`. Di lunedì la riga copre l'intero fine settimana, poiché un giorno senza mercato mantiene i prezzi dell'ultimo giorno di contrattazione.
 
 ### 💱 Variazione non realizzata per valuta {: #unrealized-change-by-currency }
 
@@ -85,7 +85,6 @@ Quanto bene hanno lavorato i tuoi soldi, indipendentemente dalla dimensione del 
 **Metriche mostrate**
 
 - **Effetto timing** — il numero grande, in punti percentuali (pp): $\text{MWRR}_{\text{cumulative}} - \text{TWRR}$ → [Effetto timing](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)
-- **La percentuale sotto** — per esempio `+0.35%`: la variazione odierna del tuo P&L totale, rispetto al patrimonio netto di ieri (pannello sottostante)
 - **ROI** — il guadagno del periodo rispetto al capitale investito: quanto valeva il portafoglio all'inizio del periodo, più i depositi e meno i prelievi effettuati da allora. Quando l'intervallo inizia prima della tua prima transazione, anche il tuo primo deposito conta come capitale, quindi il ROI è identico a quello dell'intera storia → [ROI semplice](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md#dashboard-period-roi)
 - **TWRR** — come si sono comportate le tue scelte di asset, indipendentemente dal timing dei tuoi depositi → [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)
 - **MWRR cumulato** e **MWRR annualizzato** — il tuo rendimento personale, timing dei depositi incluso, sull'intero periodo e come tasso annuo → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
@@ -94,18 +93,8 @@ Quanto bene hanno lavorato i tuoi soldi, indipendentemente dalla dimensione del 
 
 - **Timing favorevole** (verde): tendevi a depositare prima che i prezzi salissero. **Timing sfavorevole** (rosso): tendevi a depositare sui massimi. Vicino allo zero si legge **Timing neutro**, né verde né rosso.
 - **Il TWRR giudica la strategia, il MWRR il tuo risultato personale** — come per un gestore di fondi e un investitore.
-- **Le quattro righe coprono l'intero periodo**; la piccola percentuale riguarda solo oggi.
+- **Le quattro righe coprono l'intero periodo**.
 - **`—` significa nessun valore**: un rendimento che LibreFolio non può calcolare per il periodo mostra `—` invece di un numero. TWRR e MWRR mostrano `—` quando il tuo portafoglio vale zero o meno alla fine del periodo, ad esempio dopo che hai venduto tutto e prelevato la liquidità ([Quando non viene mostrato il TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md#when-no-twrr), [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)). L'effetto timing richiede sia TWRR sia MWRR: quando ne manca uno, mostra un `—` grigio, senza etichetta di timing. Il ROI non è mai `—`: senza capitale investito nel periodo mostra `0.00%`.
-
-??? info "📏 La percentuale sotto l'effetto timing — come si calcola"
-
-    La stessa variazione del tuo P&L totale della [Scheda 1](#card-1-period-pl), divisa per il patrimonio netto di ieri preso senza il suo segno:
-
-    $$
-    \text{percentage} = \frac{\text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}}}{\left|\text{Net Worth}_{\text{yesterday}}\right|} \times 100
-    $$
-
-    Il suo segno e il suo colore seguono la variazione, come nella Scheda 1. Manca quando il periodo termina nel primo giorno del tuo portafoglio ed è nascosta quando il patrimonio netto di ieri era esattamente zero.
 
 ---
 
@@ -120,7 +109,7 @@ Quanto vale il tuo portafoglio alla fine del periodo, e quanto ha guadagnato da 
 **Metriche mostrate**
 
 - **Patrimonio netto** — il numero grande: titoli al valore di mercato, più la liquidità, più tutto ciò che è in transito tra i tuoi broker → [NAV / Patrimonio netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
-- **La riga sotto** — per esempio `+12,450.30 (+24.85%)`: il tuo **P&L totale** dall'inizio e, tra parentesi, il tuo **ROI dall'inizio** → [Capitale versato e P&L totale](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **La riga sotto** — per esempio `-1.141 € (-1,95%)`: di quanto è cambiato il tuo P&L totale da ieri, e quella variazione in percentuale rispetto al valore del portafoglio di ieri (pannello sottostante)
 - **Valore di mercato** — quanto valgono ai prezzi di mercato gli asset che detieni → [NAV / Patrimonio netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
 - **Valore di acquisto** — quanto ti sono costate le posizioni che detieni ancora, ogni acquisto al tasso di cambio della rispettiva data → [Valore contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Liquidità** — la liquidità presso i tuoi broker; passa il mouse sopra per separare il capitale versato dai rendimenti ottenuti → [Pool di liquidità](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
@@ -137,7 +126,7 @@ Quel capitale è ogni deposito meno ogni prelievo, più il valore di acquisto de
 - **Data di fine o periodo?** Il numero grande e le prime tre righe sono valori alla data di fine; il capitale versato (periodo) conta solo i movimenti tra inizio e fine.
 - **Il piccolo indicatore sulla barra** indica il suo valore all'inizio del periodo (passa il mouse sopra); il valore di mercato diventa rosso quando il suo valore finale è inferiore a quello iniziale.
 - **Il patrimonio netto include la liquidità**, a differenza del "valore titoli" di un estratto conto bancario.
-- **Il P&L totale non è una variazione giornaliera**: per la situazione odierna, vedi le righe piccole nella Scheda 1 e nella Scheda 2.
+- **Il P&L totale non è una variazione giornaliera**: per la situazione odierna, vedi la riga piccola nella Scheda 1.
 
 ---
 
