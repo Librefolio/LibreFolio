@@ -1,141 +1,115 @@
 # ⚙️ Configuración global
 
-La configuración global se aplica a toda la instancia y a cada usuario. Se guarda en la base de datos, y
-solo los administradores tienen su pestaña para verla y cambiarla. No es secreta, sin embargo: la aplicación
-la lee para cada usuario con sesión iniciada, para aplicarla (el límite de subida, los valores predeterminados de las
-[Preferencias](../user/settings/preferences.md)…), y cualquier usuario con sesión iniciada puede leerla a través de la
-API.
+La configuración global se aplica a toda la instancia y a todos los usuarios. Vive en la base de datos.
+Solo los administradores tienen la pestaña para verla y cambiarla. No es secreta: la aplicación la lee para cada usuario con sesión iniciada (el límite de subida, los valores predeterminados de las [Preferencias](../user/settings/preferences.md)…) y cualquier usuario con sesión iniciada puede leerla a través de la API.
+
+Algunas tienen una variable en el archivo `.env` que las fija o que tiene prioridad: la columna **Dónde** de cada tabla lo indica.
 
 ---
 
 ## 🗂️ Configuración › Administración {: #administration }
 
-**Configuración global** es la primera pestaña de **Administración**, el grupo de pestañas que se encargan de la
-instancia, en el extremo derecho de la barra de pestañas de **Configuración** en una pantalla ancha. Solo los administradores tienen
-el grupo. Haz clic en **Administración**: se abre **Configuración global** y una segunda fila de pestañas debajo de la
-primera, con las pestañas del grupo.
+**Dónde:** **Configuración** (icono de engranaje en la barra lateral) › **Administración**, en el extremo derecho de la barra de pestañas en una pantalla ancha. Solo los administradores tienen el grupo.
+Haz clic en **Administración**: se abre **Configuración Global** y una segunda fila de pestañas debajo de la primera.
 
-| Pestaña | Quién la tiene | Para qué sirve |
-|---|---|---|
-| ⚙️ **Configuración global** | Administradores | La configuración de esta página |
-| 👥 **Usuarios** | Administradores | Las cuentas, invitaciones y enlaces de restablecimiento de contraseña: [Usuarios e invitaciones](users.md) |
-| 💾 **Copia de seguridad** | Administradores | Toda la instancia en un solo archivo, y su restauración: [Copia de seguridad, restauración y traslado](backup_restore.md) |
-| ✉️ **Correo electrónico** | Administradores | Si LibreFolio puede enviar correos, y un correo de prueba: [Correo electrónico](email.md) |
-| 🛡️ **Seguridad** | Administradores | Cómo está configurada la instancia, y qué necesita tu atención: [Seguridad](#security-tab), más abajo |
+| Pestaña | Para qué sirve |
+|---|---|
+| ⚙️ **Configuración Global** | Los ajustes de esta página |
+| 👥 **Usuarios** | Las cuentas, las invitaciones y los enlaces de restablecimiento de contraseña: [Usuarios e invitaciones](users.md) |
+| 💾 **Copia de seguridad** | Toda la instancia en un solo archivo, y su restauración: [Copia de seguridad, restauración y traslado](backup_restore.md) |
+| ✉️ **Correo** | Si LibreFolio puede enviar correos, y un correo de prueba: [Correo electrónico](email.md) |
+| 🛡️ **Seguridad** | Cómo está configurada la instancia y qué necesita tu atención: [Seguridad](#security-tab), más abajo |
 
-- 👤 Un usuario que no es administrador no tiene el grupo **Administración**, ni ninguna de sus pestañas: su
-  **Configuración** termina en **Acerca de**, y un enlace a una de las pestañas del grupo abre su **Perfil**
-  en su lugar.
-- 🔁 Hacer clic en **Administración** mientras una de sus pestañas está abierta mantiene esa pestaña abierta.
-- 🔗 Cada pestaña tiene su propia dirección, que un marcador o un enlace pueden abrir: `/settings/admin/global`, `/settings/admin/users`, `/settings/admin/backup`, `/settings/admin/email` y `/settings/admin/security`, y `/settings/admin` para la primera pestaña del grupo. La dirección sigue a la pestaña que abres, y **Atrás** vuelve a la pestaña anterior.
-- 🔢 Un número en **Seguridad**, repetido en **Administración**, cuenta los errores y advertencias de las
-  [comprobaciones de seguridad](#security-tab).
-- 📱 En un teléfono, las pestañas muestran solo sus iconos, y el título de la página nombra la pestaña abierta.
+- 👤 Un usuario que no es administrador no tiene ni el grupo ni sus pestañas: su **Configuración** termina en **Acerca de**, y un enlace a una pestaña del grupo abre su **Perfil**.
+- 🔁 Haz clic en **Administración** mientras una de sus pestañas está abierta: esa pestaña se queda abierta.
+- 🔢 Un número en **Seguridad**, repetido en **Administración**, cuenta los errores y las advertencias de las [comprobaciones de seguridad](#security-tab).
+- 📱 En un teléfono, las pestañas muestran solo sus iconos; el título de la página nombra la pestaña abierta.
 
 ---
 
-## ✏️ Cambiar una configuración
+## ✏️ Cambiar un ajuste
 
 ### 🔓 1. Desbloquear la pestaña
 
-Abre **Configuración** (icono de engranaje en la barra lateral), luego **Administración**, que se abre en
-**Configuración global**: su panel agrupa la configuración por categoría. Haz clic en el **icono de candado** (🔒) en la
-cabecera para desbloquearla. Solo los administradores (superusuarios) tienen esta pestaña.
+**Dónde:** **Configuración › Administración › Configuración Global**. El panel agrupa los ajustes por categoría.
+Haz clic en el **icono de candado** (🔒) de la cabecera.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración global" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración Global" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ### 💾 2. Editar y guardar
 
-- No se escribe nada hasta que hagas clic en **Guardar** junto a una configuración, o en **Guardar todo** en la cabecera.
-  **Deshacer** y **Deshacer todo** recuperan los valores guardados.
-- **Restablecer al valor predeterminado** y **Restablecer todo a los valores predeterminados** rellenan los valores
-  predeterminados, listos para guardar.
+- No se escribe nada hasta que haces clic en **Guardar**, junto a un ajuste, o en **Guardar Todo**, en la cabecera. **Deshacer** y **Deshacer Todo** recuperan los valores guardados.
+- **Restablecer** y **Restablecer Todo** rellenan los valores predeterminados, listos para guardar.
 - Los valores guardados se aplican de inmediato, sin reiniciar.
 
 ??? note "🔒 Bloquear con cambios sin guardar — cuando un diálogo pregunta primero"
 
-    Hacer clic en el candado con cambios sin guardar pregunta si se descartan. **Cancelar** mantiene tus
-    ediciones; **Descartar** devuelve los valores guardados y bloquea la pestaña.
+    Haz clic en el candado con cambios sin guardar: pregunta si quieres descartarlos. **Cancelar** conserva tus ediciones; **Descartar** recupera los valores guardados y bloquea la pestaña.
 
-??? tip "💻 Configuraciones faltantes — recrearlas desde la línea de comandos"
+??? tip "💻 Ajustes que faltan — volver a crearlos desde la línea de comandos"
 
-    Cada inicio del servidor vuelve a crear cualquier configuración faltante con su valor predeterminado. Para hacerlo sin
-    reiniciar, ejecuta la [herramienta de línea de comandos](cli_tools.md):
+    Cada arranque del servidor vuelve a crear los ajustes que faltan con su valor predeterminado. Para hacerlo sin reiniciar, **en el terminal del servidor**, con la [herramienta de línea de comandos](cli_tools.md):
 
     ```bash
     pipenv run ./dev.py user init-settings
     ```
 
-    Se conservan los valores que cambiaste.
+    Los valores que cambiaste se conservan.
 
 ---
 
-## 📋 Qué hace cada configuración
+## 📋 Qué hace cada ajuste
 
-| Categoría | Configuración | Predeterminado | Qué hace — cuándo cambiarla |
+**Dónde:** la categoría indicada de la pestaña **Configuración Global**, salvo que la tabla diga otra cosa.
+
+| Dónde | Ajuste | Predeterminado | Qué hace — cuándo cambiarlo |
 |---|---|---|---|
-| ⏳ Sesión | **Duración de la sesión** | 24 horas | Cuánto tiempo permanecen los usuarios con la sesión iniciada. Redúcela en dispositivos compartidos; un nuevo valor se aplica desde el siguiente inicio de sesión de cada usuario. |
-| 🛡️ Seguridad | **Registro** | Por invitación | Quién puede crear una cuenta: **Abierto**, **Por invitación** o **Cerrado** (consulta [Quién puede registrarse](#registration)). Una instancia actualizada desde una versión anterior conserva el modo que tenía. **Abierto** deja entrar a cualquiera que llegue a la página de inicio de sesión: evítalo si se puede acceder a la instancia desde internet. Los administradores que abren la aplicación en una dirección fuera de la red local reciben una [advertencia](#open-registration-warning) mientras está **Abierto**. |
-| 🛡️ Seguridad | **Requerir verificación de correo electrónico** | Desactivado | Las cuentas nuevas deben abrir un enlace enviado por correo a su dirección antes de poder iniciar sesión; la primera cuenta nunca espera, y las cuentas existentes no se ven afectadas. Solo se activa mientras el correo funciona y se puede usar `LIBREFOLIO_PUBLIC_URL`: hasta entonces el interruptor está atenuado. Consulta *Verificación de correo electrónico* en [Correo electrónico](email.md). |
-| 🔄 Tarea de actualización | **Planificador habilitado** | Activado | Activa o desactiva las actualizaciones automáticas de precios y tipos de cambio: consulta [Planificador de datos de mercado](#market-data-scheduler). |
-| 🧠 Memoria | **Tamaño máximo de archivo subido** | 10 MB | El archivo más grande que los usuarios pueden subir, informes del bróker incluidos. Auméntalo si se rechaza una exportación grande. |
-| 🧠 Memoria | **Espacio total de LibreFolio (MB)** | `0`, sin límite | La cantidad máxima de megabytes que la instancia puede ocupar, que se muestra como la línea contra la que se dibuja la barra de espacio de **Archivos**. `0` es sin límite: la barra entonces muestra el disco. El mismo campo está bajo esa barra, en **Avanzado**. `LIBREFOLIO_STORAGE_LIMIT_MB`, cuando está definida, prevalece y la bloquea: el campo es entonces de solo lectura y dice que lo fija quien aloja la instancia ([Variables de entorno](configuration.md)). **Abrir la configuración**, en un rechazo del límite, abre esta pestaña con la fila resaltada. Consulta [La barra de espacio](backup_restore.md#space-used). |
-| 🌍 Valores predeterminados | **Divisa predeterminada** | `EUR` | La divisa en la que informan los usuarios nuevos. Hasta que la guardas por primera vez, `LIBREFOLIO_DEFAULT_CURRENCY` en el archivo `.env`, si está definida, decide; desde tu primer guardado, prevalece tu valor, incluso cuando vuelve a ser `EUR` ([Variables de entorno](configuration_accounts.md#accounts)). |
-| 🌍 Valores predeterminados | **Idioma predeterminado** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` o 🇪🇸 `es`. También es el idioma de los correos enviados a personas que aún no tienen cuenta. Hasta que lo guardas por primera vez, `LIBREFOLIO_DEFAULT_LANGUAGE` en el archivo `.env`, si está definido, decide; desde tu primer guardado, prevalece tu valor, incluso cuando vuelve a ser inglés ([Variables de entorno](configuration_accounts.md#accounts)). |
-| 🌍 Valores predeterminados | **Tema predeterminado** | `auto` | ☀️ `light`, 🌙 `dark`, o 🖥️ `auto`, que sigue al dispositivo. |
+| ⏳ Sesión | **Duración de Sesión** | 24 horas | Cuánto tiempo permanecen los usuarios con la sesión iniciada. Redúcela en dispositivos compartidos. Un valor nuevo se aplica desde el siguiente inicio de sesión de cada usuario. |
+| 🛡️ Seguridad | **Registro** | Por invitación | Quién puede crear una cuenta: **Abierto**, **Por invitación** o **Cerrado**. **Abierto** deja entrar a cualquiera que llegue a la página de inicio de sesión: evítalo si se puede acceder a la instancia desde internet. Modos, advertencia y `LIBREFOLIO_REGISTRATION`: [Quién puede registrarse](#registration). |
+| 🛡️ Seguridad | **Verificación Email Requerida** | Desactivada | Las cuentas nuevas deben abrir un enlace enviado a su dirección antes de poder iniciar sesión; la primera cuenta nunca espera y las cuentas existentes no se ven afectadas. Solo se puede activar mientras el correo funciona y se puede usar `LIBREFOLIO_PUBLIC_URL`: hasta entonces el interruptor está desactivado. Consulta *Verificación de correo electrónico* en [Correo electrónico](email.md). |
+| 🔄 Tarea de actualización | **Planificador Activado** | Activado | Activa o desactiva las actualizaciones automáticas de precios y tipos de cambio: [Planificador de datos de mercado](#market-data-scheduler). |
+| 🧠 Memoria | **Tamaño Máx. Subida** | 10 MB | El archivo más grande que pueden subir los usuarios, informes de brókeres incluidos. Auméntalo si se rechaza una exportación grande. |
+| **Archivos › Avanzado** (no está en esta pestaña) | **Límite de espacio (MB)** | `0`, sin límite | Los megabytes máximos que puede ocupar la instancia: es la línea contra la que se dibuja la barra de espacio de **Archivos**. `0` significa sin límite: la barra entonces muestra el disco. Lo cambias en esa barra, que solo ven los administradores, no en esta pestaña. `LIBREFOLIO_STORAGE_LIMIT_MB`, cuando está definida, prevalece y lo bloquea ([Variables de entorno](configuration.md)). Consulta [La barra de espacio](backup_restore.md#space-used). |
+| 🌍 Valores Predeterminados | **Divisa predeterminada** | `EUR` | La divisa en la que informan los usuarios nuevos. Antes del primer guardado, decide `LIBREFOLIO_DEFAULT_CURRENCY` (más abajo). |
+| 🌍 Valores Predeterminados | **Idioma Predeterminado** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` o 🇪🇸 `es`. También es el idioma de los correos enviados a personas que aún no tienen cuenta. Antes del primer guardado, decide `LIBREFOLIO_DEFAULT_LANGUAGE` (más abajo). |
+| 🌍 Valores Predeterminados | **Tema Predeterminado** | `auto` | ☀️ `light`, 🌙 `dark` o 🖥️ `auto`, que sigue al dispositivo. |
 
-Los usuarios nuevos parten de los tres valores predeterminados: la [Configuración de bienvenida](../user/getting-started.md#welcome-setup)
-muestra su idioma y divisa ya rellenados. Cambiar un valor predeterminado más tarde deja intactas las
-[Preferencias](../user/settings/preferences.md) de los usuarios existentes.
+**En el archivo `.env`**, dos variables deciden, si están definidas, solo hasta que guardas el ajuste por primera vez: desde el primer guardado prevalece tu valor, incluso cuando vuelve a ser el predeterminado (`EUR`, `en`). Consulta [Variables de entorno](configuration_accounts.md#accounts).
+
+```env
+LIBREFOLIO_DEFAULT_CURRENCY=EUR
+LIBREFOLIO_DEFAULT_LANGUAGE=en
+```
+
+Los usuarios nuevos parten de los tres valores predeterminados: la [Configuración de bienvenida](../user/getting-started.md#welcome-setup) muestra el idioma y la divisa ya rellenados. Cambiar un valor predeterminado más tarde no toca las [Preferencias](../user/settings/preferences.md) de los usuarios existentes.
 
 ---
 
 ## 🚪 Quién puede registrarse {: #registration }
 
-La configuración **Registro** decide quién puede crear una cuenta:
+**Dónde:** **Configuración Global › Seguridad › Registro**, o la pestaña [Usuarios](users.md#registration), junto a **Invitar**: allí el modo se guarda al instante, y solo pide confirmación para **Abierto**.
 
 | Modo | Quién puede crear una cuenta |
 |---|---|
 | 🌐 **Abierto** | Cualquiera que llegue a la página de inicio de sesión, con **Regístrate aquí**. |
-| ✉️ **Por invitación** (predeterminado) | Solo las personas con un enlace de invitación. Creas un enlace por persona desde la pestaña [Usuarios](users.md#invitations), o desde la [línea de comandos](cli_tools.md#invite), y se lo envías. La página de inicio de sesión no muestra **Regístrate aquí**. |
+| ✉️ **Por invitación** (predeterminado) | Solo las personas con un enlace de invitación. Crea un enlace por persona desde la pestaña [Usuarios](users.md#invitations) o desde la [línea de comandos](cli_tools.md#invite), y envíaselo. La página de inicio de sesión no muestra **Regístrate aquí**. |
 | 🔒 **Cerrado** | Nadie, ni siquiera con un enlace de invitación. La página de inicio de sesión no muestra **Regístrate aquí**. |
 
-- 👑 La primera cuenta de una instancia nueva siempre se puede crear, sea cual sea el modo: hasta que
-  exista, la página de inicio de sesión muestra **Regístrate aquí**, y la cuenta que se crea se convierte en
-  administrador. Con `LIBREFOLIO_ADMIN_EMAIL`, LibreFolio crea ese administrador por sí mismo en su
-  primer inicio, y nadie puede registrarse en su lugar: consulta
-  [El administrador inicial](configuration_accounts.md#initial-admin).
-- 🆕 Una instancia nueva empieza en **Por invitación**. Una instancia actualizada desde una versión anterior conserva
-  el modo que tenía: una que estaba **Abierta**, el valor predeterminado anterior, sigue **Abierta** hasta que lo cambies
-  (**Restablecer al valor predeterminado** propone **Por invitación**). Una vez que todos tienen una cuenta, elige
-  **Por invitación** o **Cerrado**.
-- ✉️ Un enlace de invitación funciona una vez, durante 7 días, y puede hacer que la nueva cuenta sea administrador. Con
-  **Abierto**, nadie necesita uno, pero un enlace sigue otorgando su rol.
-- 👥 La misma configuración está en la pestaña [Usuarios](users.md#registration), junto a **Invitar**: eliges
-  el modo allí y se guarda de inmediato, y solo pide confirmación al elegir **Abierto**. Si
-  `LIBREFOLIO_REGISTRATION` establece el modo, ambos lugares lo muestran y ninguno puede cambiarlo.
-- 💻 Sea cual sea el modo, la [línea de comandos](cli_tools.md) sigue pudiendo crear cuentas con
-  `user create`.
-- 📏 Con un límite de usuarios, nadie puede registrarse sin una invitación una vez que la instancia está llena: consulta
-  [Cuando la instancia está llena](configuration_accounts.md#user-limit).
-- 🔒 Si la configuración del servidor establece `LIBREFOLIO_REGISTRATION`, ese valor decide: el campo
-  lo muestra, no se puede cambiar y dice *Establecido en el servidor por LIBREFOLIO_REGISTRATION: cámbialo
-  allí*. **Restablecer todo a los valores predeterminados** no lo toca. Consulta [Cuentas y registros](configuration_accounts.md#accounts).
-- ⬆️ Esta configuración reemplaza el interruptor **Habilitar registro** de versiones anteriores, y la actualización
-  conserva tu elección: un interruptor que estaba activado se convierte en **Abierto**, un interruptor que estaba desactivado se convierte en **Cerrado**.
+- 👑 La primera cuenta de una instancia nueva siempre se puede crear, sea cual sea el modo: consulta la advertencia de más abajo.
+- 🆕 Una instancia nueva empieza en **Por invitación**. Una instancia actualizada desde una versión anterior conserva el modo que tenía: una que estaba **Abierto**, el valor predeterminado anterior, sigue **Abierto** hasta que lo cambies (**Restablecer** propone **Por invitación**). Cuando todos tengan una cuenta, elige **Por invitación** o **Cerrado**.
+- ✉️ Un enlace de invitación funciona una vez, durante 7 días, y puede hacer que la cuenta nueva sea administradora. Con **Abierto**, nadie necesita uno, pero un enlace sigue dando su rol.
+- 💻 Sea cual sea el modo, la [línea de comandos](cli_tools.md) puede crear cuentas con `user create`.
+- 📏 Con un límite de usuarios, nadie puede registrarse sin una invitación cuando la instancia está llena: [Cuando la instancia está llena](configuration_accounts.md#user-limit).
+- 🔒 **En el archivo `.env`**, `LIBREFOLIO_REGISTRATION` fija el modo: el campo lo muestra en ambos sitios, no se puede cambiar y dice *Lo define `LIBREFOLIO_REGISTRATION` en el servidor: cámbialo allí.* **Restablecer Todo** no lo toca. Consulta [Cuentas y registros](configuration_accounts.md#accounts).
+- ⬆️ Este ajuste reemplaza el interruptor **Habilitar registro** de versiones anteriores; la actualización conserva tu elección: un interruptor activado pasa a **Abierto**, uno desactivado a **Cerrado**.
 
-!!! warning "🆕 Una instancia nueva: crea tu cuenta primero"
+!!! warning "🆕 Una instancia nueva: crea primero tu cuenta"
 
-    Hasta que exista la primera cuenta, cualquiera que llegue a la página de inicio de sesión puede crearla con
-    **Regístrate aquí**, sea cual sea el modo, `LIBREFOLIO_REGISTRATION` incluido, y esa cuenta
-    se convierte en el administrador. Regístrate en cuanto el servidor esté en marcha, antes de hacerlo accesible
-    desde internet. A partir de la segunda cuenta, se aplica el modo: con **Por invitación**, el
-    valor predeterminado, la página de inicio de sesión ya no muestra **Regístrate aquí**.
+    Hasta que exista la primera cuenta, cualquiera que llegue a la página de inicio de sesión puede crearla con **Regístrate aquí**, sea cual sea el modo, `LIBREFOLIO_REGISTRATION` incluido, y esa cuenta se convierte en la administradora. Regístrate en cuanto el servidor esté en marcha, antes de hacerlo accesible desde internet. A partir de la segunda cuenta se aplica el modo: con **Por invitación**, el predeterminado, la página de inicio de sesión ya no muestra **Regístrate aquí**.
 
-    También puedes crear el primer administrador desde la [línea de comandos](cli_tools.md), sin el
-    navegador:
+    O crea el primer administrador **en el terminal del servidor**, sin navegador ([línea de comandos](cli_tools.md)):
 
     ```bash
     pipenv run ./dev.py user create <username> <email> <password>
@@ -143,293 +117,221 @@ La configuración **Registro** decide quién puede crear una cuenta:
 
     Con Docker: `docker compose exec librefolio python dev.py user create <username> <email> <password>`.
 
-    O asigna a LibreFolio `LIBREFOLIO_ADMIN_EMAIL` antes de su primer inicio: entonces crea el
-    administrador por sí mismo, con un enlace de configuración para ti, y nadie puede registrarse en su lugar
-    ([El administrador inicial](configuration_accounts.md#initial-admin)).
+    O define `LIBREFOLIO_ADMIN_EMAIL` **en el archivo `.env`** antes del primer arranque: LibreFolio crea el administrador por sí mismo, con un enlace de configuración para ti, y nadie puede registrarse en su lugar ([El administrador inicial](configuration_accounts.md#initial-admin)).
 
 ### 📢 La advertencia de registro abierto {: #open-registration-warning }
 
-Mientras **Registro** está **Abierto**, un administrador que abre LibreFolio en una dirección fuera de la
-red local recibe una advertencia sobre las páginas de la aplicación:
+Mientras **Registro** está **Abierto**, un administrador que abre LibreFolio en una dirección fuera de la red local lee, sobre las páginas de la aplicación:
 
-*El registro está abierto y esta instancia es accesible desde fuera de tu red local: cualquiera que
-la encuentre puede crear una cuenta.*
+*El registro está abierto y esta instancia es accesible desde fuera de tu red local: cualquiera que la encuentre puede crear una cuenta.*
 
-Su enlace, **Cambiar quién puede registrarse**, abre **Configuración › Administración › Configuración global**, donde
-está esta configuración. Cuando `LIBREFOLIO_REGISTRATION` establece el modo en el servidor, la advertencia nombra esa
-variable en su lugar y no tiene enlace: solo la configuración del servidor puede cambiar el modo
-([Cuentas y registros](configuration_accounts.md#accounts)).
+Su enlace, **Cambiar quién puede registrarse**, abre **Configuración › Administración › Configuración Global**. Cuando `LIBREFOLIO_REGISTRATION` fija el modo, la advertencia nombra esa variable en su lugar y no tiene enlace: solo la configuración del servidor (archivo `.env`) puede cambiarlo ([Cuentas y registros](configuration_accounts.md#accounts)).
 
 - 👑 Solo los administradores la ven.
-- 🌐 Tu navegador decide, a partir del nombre o la dirección IP de su barra de direcciones (el puerto no
-  importa). No se envía nada al servidor y nada comprueba si realmente se puede acceder a la instancia desde internet. Estas direcciones cuentan como locales y no reciben advertencia:
-    - `localhost`, y todos los nombres que terminan en `.localhost`;
-    - un nombre sin punto, como `nas`, y todos los nombres que terminan en `.local`, `.lan`, `.home.arpa`
-      o `.internal`;
-    - las direcciones IPv4 de `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` y
-      `100.64.0.0/10` (NAT de nivel de operador, el rango donde Tailscale numera sus dispositivos);
-    - la dirección IPv6 `::1`, y las de `fc00::/7` y `fe80::/10`; una dirección IPv4 escrita como
-      IPv6, como `::ffff:192.168.1.10`, cuenta como la dirección IPv4 que contiene.
+- 🌐 Lo decide tu navegador, a partir del nombre o de la dirección IP de la barra de direcciones (el puerto no importa). No se envía nada al servidor y nada comprueba si la instancia es realmente accesible desde internet. Estas direcciones cuentan como locales, sin advertencia:
+    - `localhost` y todos los nombres que terminan en `.localhost`;
+    - un nombre sin punto, como `nas`, y todos los nombres que terminan en `.local`, `.lan`, `.home.arpa` o `.internal`;
+    - las direcciones IPv4 de `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` y `100.64.0.0/10` (NAT de nivel de operador, el rango donde Tailscale numera sus dispositivos);
+    - la dirección IPv6 `::1` y las de `fc00::/7` y `fe80::/10`; una dirección IPv4 escrita como IPv6, como `::ffff:192.168.1.10`, cuenta como la dirección IPv4 que contiene.
 
-    Las mayúsculas y un punto final no cambian nada. Cualquier otra dirección cuenta como exterior, incluidos los nombres de Tailscale
-    que terminan en `.ts.net`: Tailscale Funnel puede publicarlos en internet.
-- ✖️ Su botón de cierre la oculta hasta que la página se vuelve a cargar.
-- 🔄 Desaparece en cuanto el modo deja de ser **Abierto**: guardar **Registro** aquí la actualiza
-  de inmediato.
-- 🛡️ La pestaña [Seguridad](#security-tab) enumera la misma advertencia entre sus hallazgos, mientras
-  se mantenga, incluso después de cerrarla sobre las páginas.
+    Las mayúsculas y un punto final no cambian nada. Cualquier otra dirección cuenta como exterior, incluidos los nombres de Tailscale que terminan en `.ts.net`: Tailscale Funnel puede publicarlos en internet.
+- ✖️ El botón de cierre la oculta hasta que la página se vuelve a cargar.
+- 🔄 Desaparece en cuanto el modo deja de ser **Abierto**: guardar **Registro** la actualiza al instante.
+- 🛡️ La pestaña [Seguridad](#security-tab) enumera la misma advertencia entre sus hallazgos mientras se cumpla, incluso después de que la hayas cerrado.
 
-Cómo decide, para desarrolladores:
-[La advertencia de registro abierto](../developer/architecture/security.md#open-registration-warning).
+Cómo lo decide, para desarrolladores: [La advertencia de registro abierto](../developer/architecture/security.md#open-registration-warning).
 
 ---
 
 ## 🕐 Planificador de datos de mercado {: #market-data-scheduler }
 
-El planificador mantiene los precios y los tipos de cambio actualizados por sí solo, incluso cuando nadie tiene la sesión iniciada:
+El planificador actualiza precios y tipos de cambio por sí solo, incluso cuando nadie tiene la sesión iniciada:
 
-- 💰 **Actualización del precio actual** — cada pocos minutos, el último precio de cada activo activo que tiene
-  un proveedor de precios.
-- 📊 **Sincronización del historial** — en los días y horas que elijas, los precios diarios de esos activos y los
-  tipos de cada par FX con un proveedor, durante al menos el **Horizonte de retroceso**, para rellenar cualquier hueco.
-  Para un activo o un par FX cuyo último precio o tipo guardado sea más antiguo, retrocede hasta ese día, hasta un
-  año; un activo que aún no tiene ningún precio guardado recibe solo el horizonte, ya que el planificador nunca descarga un
-  historial completo. Los pares FX que solo tienen tipos manuales se omiten.
+- 💰 **Actualización del precio actual** — cada pocos minutos, el último precio de cada activo activo con un proveedor de precios.
+- 📊 **Sincronización del historial** — en los días y a las horas que elijas, los precios diarios de esos activos y los tipos de cada par FX con un proveedor, durante al menos el **Horizonte de recuperación**, para rellenar los huecos. Si el último precio o tipo guardado es más antiguo, retrocede hasta ese día, hasta un año como máximo; un activo sin ningún precio guardado recibe solo el horizonte: el planificador nunca descarga un historial completo. Los pares con tipos manuales únicamente se omiten.
 
-Si el servidor está apagado o suspendido a la hora de una sincronización, la sincronización del historial que se perdió se ejecuta en cuanto el servidor
-vuelve, en lugar de esperar a la siguiente hora de sincronización: un servidor apagado durante semanas rellena todo su hueco.
+Servidor apagado o suspendido a la hora de la sincronización: la sincronización perdida se ejecuta en cuanto el servidor vuelve, sin esperar a la siguiente hora. Un servidor apagado durante semanas rellena todo su hueco.
 
-### ⚙️ Configurar la programación
+### ⚙️ Configurar el horario
 
-Desbloquea la pestaña, abre **Tarea de actualización** y haz clic en **Configurar…** en la fila **Configuración de la programación**.
-El diálogo tiene su propio botón **Guardar**.
+**Dónde:** **Configuración Global › Tarea de actualización › Configuración del Horario › Configurar…**, con la pestaña desbloqueada. El diálogo tiene su propio botón **Guardar**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Modal de configuración del planificador" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Diálogo de configuración del planificador" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-| Campo | Predeterminado | Qué establece |
+| Campo | Predeterminado | Qué fija |
 |---|---|---|
-| **Zona horaria** | `UTC` | La zona horaria de las horas y días siguientes; el reloj UTC del servidor se muestra junto a ella. Hasta que guardas la programación por primera vez, `LIBREFOLIO_DEFAULT_TIMEZONE` en el archivo `.env`, si está definido, decide; desde tu primer guardado, prevalece tu valor, incluso cuando vuelve a ser `UTC` ([Variables de entorno](configuration_accounts.md#accounts)). |
-| **Actualizar cada** | 10 minutos | Con qué frecuencia se actualizan los precios actuales, de 1 a 1440 minutos. |
-| **Horas de sincronización** | `06:00`, `23:00` | Cuándo se ejecuta la sincronización del historial; **Añadir hora** añade una franja. |
-| **Días de sincronización** | Lun a Sáb | Los días de la sincronización del historial. |
-| **Horizonte de retroceso** | 14 días | Cuántos días pasados comprueba como mínimo cada sincronización del historial, de 1 a 365. Retrocede más, hasta un año, cuando el último precio o tipo guardado de un activo o un par FX es más antiguo. |
+| **Zona horaria** | `UTC` | La zona horaria de las horas y los días de abajo; a su lado, el reloj UTC del servidor. Antes del primer guardado del horario, decide `LIBREFOLIO_DEFAULT_TIMEZONE` **en el archivo `.env`**, si está definida; desde el primer guardado prevalece tu valor, incluso cuando vuelve a ser `UTC` ([Variables de entorno](configuration_accounts.md#accounts)). |
+| **Actualizar cada** | 10 minutos | Cada cuánto se actualizan los precios actuales, de 1 a 1440 minutos. |
+| **Horarios de sincronización** | `06:00`, `23:00` | Cuándo se ejecuta la sincronización del historial; **Agregar horario** añade una franja. |
+| **Días de sincronización** | De lun a sáb | Los días de la sincronización del historial. |
+| **Horizonte de recuperación** | 14 días | Cuántos días pasados comprueba cada sincronización como mínimo, de 1 a 365. Retrocede más, hasta un año, cuando el último precio o tipo guardado es más antiguo. |
 
-Mantén al menos una hora y un día. Consejo: una sincronización del historial después del cierre de los mercados (por ejemplo,
-`22:00`) obtiene los datos más completos.
+Conserva al menos una hora y un día. Una sincronización después del cierre de los mercados (por ejemplo `22:00`) obtiene los datos más completos.
 
-??? warning "🌍 Cambiar la zona horaria — las tareas se desplazan en el tiempo"
+??? warning "🌍 Cambiar la zona horaria — las tareas se mueven en el tiempo"
 
-    Las horas y los días conservan sus valores pero cuentan en la nueva zona horaria, así que las tareas se ejecutan en otro
-    momento. También siguen su horario de verano: `06:00` en `Europe/Rome` se ejecuta a las 05:00 UTC
-    en invierno y a las 04:00 UTC en verano.
+    Las horas y los días conservan sus valores, pero se cuentan en la nueva zona horaria: las tareas se ejecutan en otro momento. También siguen el horario de verano de la zona horaria: las `06:00` de `Europe/Rome` se ejecutan a las 05:00 UTC en invierno y a las 04:00 UTC en verano.
 
 ### 📜 Leer el registro del planificador
 
-La fila **Estado del planificador** muestra la última actualización del precio actual, con un punto para su resultado.
-Mientras hay un reintento pendiente, una línea adicional indica su hora: **Fallido: próximo intento a las …** tras una
-actualización que no pudo terminar; si no, **Elementos pausados reintentados a las …** para los precios diferidos
-porque su proveedor se había pausado.
-Haz clic en la fila (o en **Detalles…**) para abrir el **Registro de ejecución del planificador**. Solo los administradores pueden
-leer el estado y el registro.
+**Dónde:** **Configuración Global › Tarea de actualización › Estado del Planificador**. Solo los administradores leen el estado y el registro.
+
+La fila muestra la última actualización del precio actual, con un punto para su resultado. Mientras hay un reintento pendiente, una línea extra da su hora: **Fallido: nuevo intento a las …** después de una actualización que no pudo terminar; en otro caso, **Elementos en pausa reintentados a las …** para los precios aplazados porque su proveedor estaba en pausa.
+Haz clic en la fila (o en **Detalles…**): se abre el **Registro de Ejecución del Planificador**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Modal del registro del planificador" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Diálogo del registro del planificador" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- Cada entrada es una ejecución: tarea, hora, duración y cuántos elementos tuvieron éxito. 🟢 **OK**: todos
-  ellos, o nada que hacer; 🟡 **Parcial**: algunos fallaron, o se difirieron porque su proveedor se pausó tras demasiadas
-  peticiones; 🔴 **Error**: ninguno tuvo éxito y ninguno se difirió.
-- Haz clic en una entrada para ver cada activo o par FX, su proveedor y los precios cambiados (**Delta**).
-  Pasa el cursor sobre un error para leerlo completo; haz doble clic en él (pulsación larga en un teléfono) para copiarlo.
-- Un elemento diferido muestra un icono de pausa y **Diferido: proveedor pausado**: pasa el cursor sobre la etiqueta para leer el
-  mensaje del proveedor. La entrada cuenta los elementos diferidos con ⏸, junto a ✓ y ✗ (por ejemplo,
-  `3/5 ✓ · 1 ⏸ · 1 ✗`), y **Reintentar a las** en su cabecera indica la hora fijada para reintentarlos.
-- Filtra por tarea, estado o periodo, desde la última hora hasta los últimos 30 días. Solo se conservan las
-  ejecuciones más recientes.
+- Cada entrada es una ejecución: tarea, hora, duración y cuántos elementos tuvieron éxito. 🟢 **OK**: todos, o nada que hacer; 🟡 **Parcial**: algunos fallaron, o se aplazaron porque su proveedor se puso en pausa tras demasiadas peticiones; 🔴 **Error**: ninguno tuvo éxito y ninguno se aplazó.
+- Haz clic en una entrada: cada activo o par FX, su proveedor y los precios cambiados (**Delta**). Pasa el ratón sobre un error para leerlo completo; haz doble clic (pulsación larga en un teléfono) para copiarlo.
+- Un elemento aplazado muestra un icono de pausa y **Aplazado: proveedor en pausa**: pasa el ratón sobre la etiqueta para leer el mensaje del proveedor. La entrada cuenta los elementos aplazados con ⏸, junto a ✓ y ✗ (por ejemplo `3/5 ✓ · 1 ⏸ · 1 ✗`), y **Reintento a las …** en la cabecera da la hora del reintento.
+- Filtra por tarea, estado o periodo, desde la última hora hasta los últimos 30 días. Solo se conservan las ejecuciones más recientes.
 
 ---
 
-## ⏸️ Pausas de proveedores {: #provider-pauses }
+## ⏸️ Pausas de proveedor {: #provider-pauses }
 
-LibreFolio pide precios y tipos de cambio a servicios externos: sus proveedores de precios, como Yahoo
-Finance o el Banco Central Europeo. Cuando uno de ellos responde «demasiadas peticiones» (HTTP 429),
-LibreFolio lo pausa: hasta que termina la pausa, ninguna petición llega a ese proveedor, ya sea que la solicite el
-[planificador de datos de mercado](settings.md#market-data-scheduler) o un usuario. Una pausa se mantiene para cada
-usuario y cada tarea del servidor.
+Cuando un proveedor de precios o de tipos de cambio (Yahoo Finance, el Banco Central Europeo…) responde «demasiadas peticiones» (HTTP 429), LibreFolio lo pone en pausa: hasta que la pausa termina, ninguna petición le llega, ni del [planificador de datos de mercado](settings.md#market-data-scheduler) ni de un usuario. Una pausa vale para todos los usuarios y todas las tareas del servidor.
 
-Las pausas están activadas por defecto: una excepción a la regla de que una nueva opción deja una instalación como
-estaba, por la decisión de desarrollo n.º 34 (15 de octubre de 2026). `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS=0`
-las desactiva, como antes de la versión 1.3.
+Las pausas están activadas por defecto. `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS=0` las desactiva, como antes de la versión 1.3.
+
+**Dónde:** **en el archivo `.env`** (o en el entorno del contenedor). Estos son los valores predeterminados:
+
+```env
+LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS=60
+LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS=3600
+```
 
 | Variable | Predeterminado | Qué hace |
 | --- | --- | --- |
-| `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` | `60` | La primera pausa, en segundos, duplicada en cada rechazo seguido: un número entero de `0` a `86400` (un día). `0` desactiva las pausas. |
-| `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` | `3600` | La pausa más larga que alcanza la duplicación, en segundos: un número entero de `1` a `86400`, y no inferior a la primera pausa mientras las pausas están activadas. Un `Retry-After` del proveedor aún puede pedir más, hasta un día. |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` | `60` | La primera pausa, en segundos, que se duplica en cada rechazo seguido: un número entero de `0` a `86400` (un día). `0` desactiva las pausas. |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` | `3600` | La pausa más larga que alcanza la duplicación, en segundos: un número entero de `1` a `86400`, no inferior a la primera pausa mientras las pausas estén activadas. Un `Retry-After` del proveedor aún puede pedir más, hasta un día. |
 
-Defínelas en `.env` o en el entorno del contenedor, luego reinicia LibreFolio: con Docker Compose,
-`docker compose up -d`. Un valor que LibreFolio no puede usar no detiene el servidor: el registro tiene un
-error ([En el registro](#provider-pauses-log)), y se aplican ambos valores predeterminados, 60 y 3600, así que las pausas siguen
-activadas. Con las pausas desactivadas, cada petición vuelve a ir al proveedor; el planificador sigue contando una petición rechazada como diferida ([más abajo](#provider-pauses-effects)).
+Reinicia LibreFolio. Con Docker Compose, ejecuta `docker compose up -d`.
+
+- Un valor que LibreFolio no puede usar no detiene el servidor: el registro tiene un error ([En el registro](#provider-pauses-log)) y se aplican los dos valores predeterminados, 60 y 3600: las pausas siguen activadas.
+- Con las pausas desactivadas, cada petición vuelve a llegar al proveedor; el planificador sigue contando una petición rechazada como aplazada ([más abajo](#provider-pauses-effects)).
 
 ### ⏱️ Cuánto dura una pausa {: #provider-pauses-length }
 
-- **El primer rechazo** pausa el proveedor durante `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`, 60
-  segundos por defecto.
-- **Cada rechazo seguido** duplica la pausa, hasta `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`.
-  Con los valores predeterminados: 2 minutos, luego 4, 8, 16 y 32, luego una hora en cada rechazo posterior.
-  Las peticiones rechazadas juntas cuentan como un solo rechazo.
-- **Un `Retry-After`**, cuando el proveedor lo envía, es la pausa más corta que toma LibreFolio: se
-  respeta más allá de la pausa más larga, hasta un día.
-- **Un extra aleatorio** de hasta el 10 % se añade a cada pausa, nunca más allá de un día.
-- **Cuando termina una pausa**, una petición pasa para probar el proveedor, y las demás siguen contando
-  como pausadas hasta que tenga un resultado, un minuto como máximo. Una respuesta termina la serie: el siguiente rechazo
-  empieza de nuevo desde la primera pausa, y lo mismo ocurre si un rechazo llega más tiempo que la pausa más larga
-  después de que terminara la pausa anterior.
-- **Una pausa se mantiene para todo el proveedor**, excepto con el CSS Scraper: un sitio que rechaza pausa
-  solo las páginas de ese sitio, y los demás sitios se siguen leyendo.
+- **El primer rechazo** pone al proveedor en pausa durante `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`, 60 segundos por defecto.
+- **Cada rechazo seguido** duplica la pausa, hasta `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`. Con los valores predeterminados: 2 minutos, luego 4, 8, 16 y 32, y después una hora en cada rechazo siguiente. Las peticiones rechazadas a la vez cuentan como un solo rechazo.
+- **Un `Retry-After`**, cuando el proveedor envía uno, es la pausa más corta que toma LibreFolio: se respeta incluso por encima de la pausa más larga, hasta un día.
+- **Un extra aleatorio** de hasta el 10 % se suma a cada pausa, sin pasar nunca de un día.
+- **Cuando una pausa termina**, pasa una petición para probar el proveedor; las demás siguen contando como en pausa hasta que tenga un resultado, un minuto como máximo. Una respuesta cierra la serie: el siguiente rechazo vuelve a empezar desde la primera pausa. Lo mismo vale para un rechazo que llega, desde el final de la pausa anterior, tras un intervalo más largo que la pausa más larga.
+- **Una pausa vale para todo el proveedor**, salvo con el CSS Scraper: un sitio que rechaza pausa solo las páginas de ese sitio; los demás sitios se siguen leyendo.
 
-### 👀 Quién espera, y qué ves {: #provider-pauses-effects }
+### 👀 Quién espera y qué ves {: #provider-pauses-effects }
 
 | Dónde | Durante una pausa |
 | --- | --- |
-| 🕐 [Planificador de datos de mercado](settings.md#market-data-scheduler) | Los activos y pares FX de un proveedor pausado están **diferidos**: no se cuentan ni como actualizados ni como fallidos, y su tarea es **Parcial**. La tarea se ejecuta de nuevo cuando termina la primera de esas pausas, o a su hora habitual si llega antes. En **Configuración global**, la fila **Estado del planificador** dice **Elementos pausados reintentados a las …** para la actualización del precio actual; el **Registro de ejecución del planificador** cuenta los elementos diferidos con ⏸, marca cada uno con un icono de pausa y **Diferido: proveedor pausado**, y muestra **Reintentar a las …** en la cabecera de la entrada: consulta «Leer el registro del planificador» en esa página. |
-| 💰 Precios en vivo, en la lista de Activos y en la página de un activo | Se mantiene el último precio almacenado, sin ningún mensaje nuevo. Cuando todos los activos sobre los que pregunta la página tienen su proveedor pausado, la página vuelve a preguntar por sí misma solo cuando ha terminado la primera de esas pausas; mientras un proveedor siga respondiendo, la actualización continúa, y LibreFolio no llama a los pausados. Tras una actualización que falla, la siguiente espera el doble, y así hasta diez minutos, hasta que una actualización vuelve a funcionar. |
-| 🔌 **Probar configuración**, en el diálogo del activo | ⚠️ *Pausado por demasiadas peticiones hasta …*, con la hora a la que termina la pausa; la prueba sigue pasando. Consulta [Conectar un proveedor de precios](../user/assets/create-edit.md). |
-| 🔎 Búsqueda de activos | Un proveedor pausado no da resultados hasta que termina su pausa; los demás proveedores responden como de costumbre. |
-| 💱 Tipos de cambio | Un proveedor pausado cuenta como una ruta que falló: un par FX con otra ruta obtiene su tipo allí, como cuando un banco central no responde ([Configuración de proveedores](../user/fx/detail/provider.md)). Si no, el planificador difiere el par, como hace con un activo. |
+| 🕐 [Planificador de datos de mercado](settings.md#market-data-scheduler) | Los activos y los pares FX de un proveedor en pausa quedan **aplazados**: ni actualizados ni fallidos, y su tarea es **Parcial**. La tarea se ejecuta de nuevo cuando termina la primera de esas pausas, o a su hora habitual si esta llega antes. Cómo lo muestran **Estado del Planificador** y el **Registro de Ejecución del Planificador**: «Leer el registro del planificador», arriba. |
+| 💰 Precios en vivo, en la lista de Activos y en la página de un activo | Se queda el último precio guardado, sin ningún mensaje nuevo. Cuando todos los activos por los que pregunta la página tienen su proveedor en pausa, la página vuelve a preguntar por sí sola solo cuando termina la primera de esas pausas; mientras un proveedor siga respondiendo, la actualización continúa y LibreFolio no llama a los que están en pausa. Tras una actualización que falla, la siguiente espera el doble, y así hasta diez minutos, hasta que una funcione de nuevo. |
+| 🔌 **Probar Configuración**, en el diálogo del activo | ⚠️ *Pausa por exceso de peticiones hasta las …*, con la hora en que termina la pausa; la prueba aun así se supera. Consulta [Conectar un proveedor de precios](../user/assets/create-edit.md). |
+| 🔎 Búsqueda de activos | Un proveedor en pausa no devuelve resultados hasta que su pausa termina; los demás responden como de costumbre. |
+| 💱 Tipos de cambio | Un proveedor en pausa cuenta como una ruta que falló: un par con otra ruta obtiene su tipo allí, como cuando un banco central no responde ([Configuración de Proveedores](../user/fx/detail/provider.md)). En otro caso, el planificador aplaza el par, como hace con un activo. |
 
 ### 💤 En memoria {: #provider-pauses-memory }
 
-- **Cada proceso del servidor mantiene sus pausas en memoria.** Un reinicio las olvida, incluido un despliegue.
-  Con varios procesos del servidor (`--workers N`), cada uno conoce solo las pausas de sus propios rechazos;
-  la imagen de Docker ejecuta uno.
+- **Cada proceso del servidor guarda sus propias pausas en memoria.** Un reinicio las olvida, un despliegue incluido. Con varios procesos del servidor (`--workers N`), cada uno aprende una pausa a partir de un rechazo propio; la imagen de Docker ejecuta uno.
 
 ### 📋 En el registro {: #provider-pauses-log }
 
 | Nivel | El registro dice | Cuándo |
 | --- | --- | --- |
-| ⚠️ `warning` | `Provider refused for too many requests: paused`, con `domain` (`asset` o `fx`), `provider`, `scope` (el sitio, con el CSS Scraper), `wait_s`, los segundos de pausa por delante, y `retry_after`, la espera que pidió el proveedor, si la hay | Un proveedor rechazó una petición |
+| ⚠️ `warning` | `Provider refused for too many requests: paused`, con `domain` (`asset` o `fx`), `provider`, `scope` (el sitio, con el CSS Scraper), `wait_s`, los segundos de pausa que quedan, y `retry_after`, la espera que pidió el proveedor, si la hubo | Un proveedor rechazó una petición |
 | ℹ️ `info` | `Provider answering again after a pause`, con `refusals`, los rechazos seguidos antes de ella | La primera respuesta tras una pausa |
 | ❌ `error` | `Provider pause settings cannot be used: the defaults apply`, con `variable`, `code` (`PROVIDER_COOLDOWN_BASE_INVALID` o `PROVIDER_COOLDOWN_MAX_INVALID`) y `reason` | Una de las dos variables tiene un valor que no se puede usar: una vez por proceso del servidor, la primera vez que LibreFolio está a punto de llamar a un proveedor |
 
-En nivel `DEBUG`, `Provider call skipped: paused after too many requests`, con `wait_s`, marca cada
-petición que una pausa impidió enviar al proveedor. Las líneas propias del planificador, `Scheduler: current-price refresh`
-y `Scheduler: history sync`, dan los elementos diferidos en `deferred`, con `retry_at`.
+En nivel `DEBUG`, `Provider call skipped: paused after too many requests`, con `wait_s`, marca cada petición que una pausa impidió enviar. Las líneas del planificador, `Scheduler: current-price refresh` y `Scheduler: history sync`, dan los elementos aplazados en `deferred`, con `retry_at`.
 
 ---
 
 ## 🗄️ Cachés del servidor {: #server-caches }
 
-Para mantenerse rápido, LibreFolio mantiene en memoria las respuestas recientes de los proveedores y los resultados calculados. El
-panel **Estado de la caché**, al final de la categoría **Memoria**, enumera cada caché con su
-**Tamaño / Máx.** y su **TTL** (cuánto se conserva una entrada). Haz clic en una cabecera de columna para ordenar;
-**Actualizar** actualiza los números.
+LibreFolio guarda en memoria las respuestas recientes de los proveedores y los resultados calculados.
+
+**Dónde:** **Configuración Global › Memoria › Estado de la caché**, al final de la categoría. El panel lista cada caché con **Tam. / Máx** y **TTL** (cuánto tiempo se conserva una entrada). Haz clic en la cabecera de una columna para ordenar; **Actualizar** refresca los números.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Panel de cachés del servidor en Configuración global (categoría Memoria)">
+    <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Panel de cachés del servidor en Configuración Global (categoría Memoria)">
 </div>
 
-El panel muestra sus cifras tanto si la pestaña está bloqueada como si no. Con la pestaña desbloqueada, puedes vaciar
-una caché con **Vaciar** o todas con **Vaciar todo**, para forzar datos nuevos sin reiniciar.
-Un reinicio también vacía todas las cachés.
+El panel muestra sus números incluso con la pestaña bloqueada. Con la pestaña desbloqueada, **Vaciar** vacía una caché y **Vaciar todo** todas, para forzar datos nuevos sin reiniciar. Un reinicio también vacía todas las cachés.
 
-!!! warning "Vaciar una caché ralentiza la siguiente obtención"
+!!! warning "Vaciar una caché ralentiza la siguiente recuperación"
 
-    Ambas acciones piden confirmación primero. Tras un vaciado, la siguiente petición de esos datos vuelve
-    a los proveedores, así que espera una ralentización similar a la de un reinicio del servidor mientras las cachés se
-    vuelven a llenar.
+    Ambas acciones piden confirmación antes. Tras vaciar, la siguiente petición de esos datos vuelve a los proveedores: espera una ralentización parecida a la de un reinicio del servidor hasta que las cachés se vuelvan a llenar.
 
 ??? note "🧵 Varios workers — cuando el servidor se ejecuta con `--workers`"
 
-    Cada proceso worker tiene sus propias cachés. El panel muestra, y vacía, las del worker que
-    respondió; reinicia el servidor para vaciarlas todas.
+    Cada proceso worker tiene sus propias cachés. El panel muestra y vacía las del worker que respondió; reinicia el servidor para vaciarlas todas.
 
 ---
 
 ## 🛡️ Seguridad {: #security-tab }
 
-**Configuración › Administración › Seguridad** comprueba cómo está configurada esta instancia y enumera primero
-lo que necesita tu atención. Solo los administradores tienen esta pestaña. No es la categoría 🛡️ **Seguridad**
-de Configuración global, que contiene **Registro** y **Requerir verificación de correo electrónico**.
+**Dónde:** **Configuración › Administración › Seguridad**. Solo los administradores tienen la pestaña. Comprueba cómo está configurada la instancia y lista primero lo que necesita tu atención.
+No es la categoría 🛡️ **Seguridad** de Configuración Global, que contiene **Registro** y **Verificación Email Requerida**.
 
-### 🚦 Qué enumera {: #security-findings }
+### 🚦 Qué lista {: #security-findings }
 
-Cada hallazgo indica qué está mal, con su icono y su color: ❌ un **error**, ⚠️ una **advertencia** o
-ℹ️ una **información**. Los errores van primero, luego las advertencias y luego la información; dentro de cada gravedad, los
-hallazgos mantienen el orden de esta tabla.
+Cada hallazgo dice qué va mal, con un icono y un color: ❌ un **error**, ⚠️ una **advertencia** o ℹ️ una **información**. Primero los errores, luego las advertencias, luego la información; a igual gravedad, el orden de esta tabla.
 
-| Comprobación | Un hallazgo cuando | Su enlace |
+| Comprobación | Hay un hallazgo cuando | Su enlace |
 |---|---|---|
-| Clave de firma de sesión | ℹ️ La clave es aleatoria: cada reinicio desconecta a todos; define `JWT_SECRET` para seguir conectado. ⚠️ La clave tiene menos de 32 caracteres. ❌ No se puede leer su `JWT_SECRET_FILE` | — |
-| Secretos definidos dos veces | ⚠️ Un secreto está definido tanto directamente como a través de su variable `_FILE`: prevalece el valor directo | — |
-| Clave de instancia | ❌ No se puede usar. ⚠️ Su carpeta o su archivo está abierto a otros usuarios | — |
-| Cookie de sesión | ⚠️ `SESSION_COOKIE_SECURE=never`: la cookie también viaja por HTTP simple | — |
-| Dirección del visitante | ⚠️ Desde el inicio, las peticiones llegaron a través de un proxy inverso en el que LibreFolio no confía: los límites por dirección de visitante no se les aplican. ℹ️ Desde el inicio, se ignoraron las cabeceras de reenvío de una dirección pública. Qué hacer: [La dirección del visitante](connection_proxy.md#client-address) | — |
-| Nivel de registro | ℹ️ `DEBUG` o `TRACE` | — |
-| Modo de prueba | ❌ `LIBREFOLIO_TEST_MODE` está activado fuera de las propias ejecuciones de prueba de LibreFolio: se sirven proveedores de datos que existen solo para las pruebas, y los datos se guardan en la carpeta de datos de prueba | — |
-| Límite de subida de una restauración | ❌ No se puede usar `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (un número entero de megabytes, `0` para sin límite): las subidas de restauración se rechazan hasta que se corrija. Se supera con un límite, como *Una restauración acepta archivos de hasta 500 MB.*, o sin ninguno | — |
-| Tamaño descomprimido de una restauración | ❌ No se puede usar `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` (un número entero de megabytes, `0` para sin límite): las comprobaciones de restauración se rechazan hasta que se corrija. Se supera con un límite, como *Una comprobación de restauración acepta archivos que se descomprimen hasta 4000 MB.*, o sin ninguno | — |
+| Clave de firma de sesión | ℹ️ La clave es aleatoria: cada reinicio cierra la sesión de todos; define `JWT_SECRET` para seguir con la sesión iniciada. ⚠️ La clave tiene menos de 32 caracteres. ❌ Su `JWT_SECRET_FILE` no se puede leer | — |
+| Secretos definidos dos veces | ⚠️ Un secreto está definido a la vez directamente y mediante su variable `_FILE`: gana el valor directo | — |
+| Clave de la instancia | ❌ No se puede usar. ⚠️ Su carpeta o su archivo está abierto a otros usuarios | — |
+| Cookie de sesión | ⚠️ `SESSION_COOKIE_SECURE=never`: la cookie también viaja por HTTP sin cifrar | — |
+| Dirección del visitante | ⚠️ Desde el arranque, llegaron peticiones a través de un proxy inverso en el que LibreFolio no confía: los límites por dirección del visitante no se les aplican. ℹ️ Desde el arranque, se ignoraron cabeceras de reenvío procedentes de una dirección pública. Qué hacer: [La dirección del visitante](connection_proxy.md#client-address) | — |
+| Nivel del registro | ℹ️ `DEBUG` o `TRACE` | — |
+| Modo de prueba | ❌ `LIBREFOLIO_TEST_MODE` está activado fuera de las ejecuciones de prueba de LibreFolio: se sirven proveedores de datos que existen solo para las pruebas y los datos se guardan en la carpeta de datos de prueba | — |
+| Límite de subida de una restauración | ❌ `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` no se puede usar (un número entero de megabytes, `0` para sin límite): se rechazan las subidas de restauración hasta que se corrija. Superada con un límite, como *Una restauración acepta archivos de hasta 500 MB.*, o sin ninguno | — |
+| Tamaño descomprimido de una restauración | ❌ `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` no se puede usar (un número entero de megabytes, `0` para sin límite): se rechazan las verificaciones de restauración hasta que se corrija. Superada con un límite, como *Una verificación para una restauración acepta archivos que, descomprimidos, ocupan hasta 4000 MB.*, o sin ninguno | — |
 | Inicios de sesión fallidos | ⚠️ El límite está desactivado: `LIBREFOLIO_LOGIN_LIMIT=off` | — |
-| Servidor de correo | ❌ No se puede usar un valor `LIBREFOLIO_SMTP_*`: el correo sigue desactivado hasta que se corrija | **Abrir la pestaña Correo electrónico** |
-| Cifrado del correo | ⚠️ Los correos, sus enlaces y la contraseña SMTP viajan sin cifrar a un servidor fuera de tu red local | **Abrir la pestaña Correo electrónico** |
-| Enlaces en los correos | ℹ️ El correo funciona, pero `LIBREFOLIO_PUBLIC_URL` no está definida. ⚠️ `LIBREFOLIO_PUBLIC_URL` no puede iniciar un enlace | **Abrir la pestaña Correo electrónico** |
-| Secretos de plugins | ❌ Los secretos de plugins de toda la instancia no se pueden leer con la clave de instancia | **Abrir la configuración de plugins**, en **Configuración › Plugins** |
-| Registro abierto, comprobado por tu navegador | ⚠️ **Registro** está **Abierto**, y llegaste a LibreFolio en una dirección fuera de tu red local, como en [la advertencia sobre las páginas](#open-registration-warning) | **Cambiar quién puede registrarse**, en **Configuración global**. Ninguno cuando `LIBREFOLIO_REGISTRATION` establece el modo: el hallazgo nombra esa variable en su lugar |
-| Un script bloqueado, comprobado por tu navegador | ⚠️ Un script que LibreFolio no envió, añadido por un proxy, un CDN o una extensión del navegador, se bloqueó en esta pestaña del navegador: el hallazgo nombra sus fuentes. Desaparece cuando cierras la pestaña. No se corrige en el servidor, sino en el proxy, el CDN o la extensión: [Un script que no enviaste](configuration_security.md#csp-blocked-script) | — |
+| Servidor de correo | ❌ Un valor `LIBREFOLIO_SMTP_*` no se puede usar: el correo sigue desactivado hasta que se corrija | **Abrir la pestaña Correo** |
+| Cifrado del correo | ⚠️ Los correos, sus enlaces y la contraseña SMTP viajan sin cifrar a un servidor fuera de tu red local | **Abrir la pestaña Correo** |
+| Enlaces en los correos | ℹ️ El correo funciona, pero `LIBREFOLIO_PUBLIC_URL` no está definida. ⚠️ `LIBREFOLIO_PUBLIC_URL` no se puede usar al principio de un enlace | **Abrir la pestaña Correo** |
+| Secretos de plugins | ❌ Los secretos de plugins de toda la instancia no se pueden leer con la clave de la instancia | **Abrir los ajustes de los plugins**, en **Configuración › Plugins** |
+| Registro abierto, comprobado por tu navegador | ⚠️ **Registro** está **Abierto** y llegaste a LibreFolio en una dirección fuera de tu red local, como en [la advertencia sobre las páginas](#open-registration-warning) | **Cambiar quién puede registrarse**, en **Configuración Global**. Ninguno cuando `LIBREFOLIO_REGISTRATION` fija el modo: el hallazgo nombra esa variable en su lugar |
+| Un script bloqueado, comprobado por tu navegador | ⚠️ Un script que LibreFolio no envió, añadido por un proxy, una CDN o una extensión del navegador, se bloqueó en esta pestaña del navegador: el hallazgo nombra sus orígenes. Desaparece al cerrar la pestaña. No se corrige en el servidor, sino en el proxy, la CDN o la extensión: [Un script que no enviaste](configuration_security.md#csp-blocked-script) | — |
 
-Cada fila tiene un botón de ayuda, y cuál es depende de quién pueda resolver la comprobación:
+Cada fila tiene un botón de ayuda, elegido según quién puede resolver la comprobación:
 
-- 📖 **Guía**: puedes resolverla por tu cuenta, en el servidor. El botón, que también se muestra en las comprobaciones superadas, abre
-  la página de esta guía que explica esa comprobación, en una pestaña nueva y en tu idioma cuando está
-  traducida.
+- 📖 **Guía**: puedes resolverla tú solo, en el servidor. El botón, que se muestra también en las comprobaciones superadas, abre la página de esta guía que explica esa comprobación, en una pestaña nueva y en tu idioma cuando está traducida.
 
-Una comprobación que no tiene página propia ni soporte no tiene botón.
+Una comprobación sin página propia y sin soporte no tiene botón.
 
-Los hallazgos sin enlace se corrigen en el servidor, en su configuración, y necesitan un reinicio: qué
-hacer para cada uno está en la tabla de «Comprobaciones de inicio» en [Configuración](configuration.md), donde
-el registro del servidor expresa las mismas comprobaciones.
+Los hallazgos sin enlace se corrigen en la configuración del servidor (**archivo `.env`**) y necesitan un reinicio: qué hacer con cada uno está en la tabla de «Comprobaciones al arrancar» de [Configuración](configuration.md), donde el registro del servidor informa de las mismas comprobaciones.
 
 ### 🔢 El número en la pestaña {: #security-badge }
 
-**Seguridad** muestra cuántos errores y advertencias enumera, y **Administración** muestra el mismo
-número, para que lo veas desde cada pestaña de Configuración. La información se enumera pero nunca se cuenta: con
-solo información, no hay número, y la pestaña tampoco dice *Nada necesita tu atención.*
+**Seguridad** muestra cuántos errores y advertencias lista; **Administración** muestra el mismo número, visible desde todas las pestañas de Configuración. La información se lista pero nunca se cuenta: con solo información no hay número, y la pestaña tampoco dice *Nada requiere tu atención.*
 
-Fuera de Configuración, el mismo recuento te acompaña en cada página, como un punto en la línea de conexión en la
-parte inferior de la barra lateral: rojo con al menos un error, ámbar solo con advertencias, ninguno solo con información.
-Haz clic en la línea: tras su motivo, sus detalles enlazan a esta pestaña con el recuento, como
-**2 advertencias de seguridad**, errores incluidos. En un teléfono, el botón de menú también lleva el punto. Qué
-aspecto tiene: [Advertencias de seguridad para administradores](../user/connection-security.md#security-warnings).
+Fuera de Configuración, la misma cuenta te sigue en todas las páginas, como un punto en la línea de conexión al pie de la barra lateral: rojo con al menos un error, ámbar con solo advertencias, ninguno con solo información. Haz clic en la línea: tras su motivo, los detalles enlazan con esta pestaña con la cuenta, por ejemplo **2 avisos de seguridad**, errores incluidos. En un teléfono, el botón del menú lleva también el punto. Cómo se ve: [Advertencias de seguridad para administradores](../user/connection-security.md#security-warnings).
 
 ### 🔄 Cuándo comprueba {: #security-refresh }
 
-LibreFolio lee las comprobaciones una vez, en cuanto se abre en tu navegador, sea cual sea la página: la
-línea de conexión de la barra lateral las solicita, así que su punto, y el número en la pestaña, ya están ahí
-cuando abres **Configuración**. Si esa lectura falla, abrir **Configuración** lo intenta de nuevo. LibreFolio conserva
-las comprobaciones mientras usas la aplicación: después de cambiar la configuración del servidor y reiniciarlo, haz clic en
-**Comprobar de nuevo**, en la parte superior de la pestaña, o recarga la página. El hallazgo de registro abierto sigue
-a **Registro** de inmediato: guardarlo en Configuración global actualiza la lista, el número y el punto.
+LibreFolio lee las comprobaciones una vez, en cuanto se abre en tu navegador, sea cual sea la página: la línea de conexión de la barra lateral las pide, así que el punto y el número de la pestaña ya están ahí cuando abres **Configuración**. Si esa lectura falla, abrir **Configuración** lo intenta de nuevo. Las comprobaciones se mantienen mientras usas la aplicación: tras cambiar la configuración del servidor (archivo `.env`) y reiniciar, haz clic en **Comprobar de nuevo**, arriba en la pestaña, o recarga la página. El hallazgo de registro abierto sigue a **Registro** al instante: guardarlo en Configuración Global actualiza la lista, el número y el punto.
 
-- ⏳ Hasta la primera respuesta, la pestaña muestra filas de marcador de posición.
-- ⚠️ Cuando no se pueden leer las comprobaciones, la pestaña dice *No se pudieron cargar las comprobaciones de seguridad.*, con
-  **Intentar de nuevo**. Si **Comprobar de nuevo** falla, los últimos resultados siguen enumerados debajo.
+- ⏳ Hasta la primera respuesta, la pestaña muestra filas de relleno.
+- ⚠️ Cuando las comprobaciones no se pueden leer, la pestaña dice *No se han podido cargar las comprobaciones de seguridad.*, con **Reintentar**. Tras un **Comprobar de nuevo** que falla, los últimos resultados siguen listados debajo.
 
 ### ✅ Comprobaciones superadas {: #security-passed }
 
-Sin ningún hallazgo, la pestaña dice *Nada necesita tu atención.* Debajo de los hallazgos, una sección plegada,
-**N comprobaciones superadas**, enumera las comprobaciones que se superaron, cada una con su propia frase (como *Las sesiones
-se firman con una clave establecida por el administrador.*): haz clic en ella para desplegarla. El correo que está desactivado, o que se envía
-sin cifrar a un servidor de tu propia red, cuenta como superado, y así lo dice allí.
+Sin ningún hallazgo, la pestaña dice *Nada requiere tu atención.* Debajo de los hallazgos, una sección plegada, **N comprobaciones superadas**, lista las comprobaciones superadas, cada una con su propia frase (por ejemplo *Las sesiones se firman con una clave definida por el administrador.*): haz clic en ella para desplegarla. El correo desactivado, o enviado sin cifrar a un servidor de tu propia red, cuenta como superado y lo dice ahí.
 
 ---
 
 ## 🔗 Relacionado
 
-- 📝 **[Variables de entorno](configuration.md)** — La configuración que reside en `.env` en su lugar
-- 👥 **[Usuarios e invitaciones](users.md)** — Las cuentas de la instancia, invitaciones y enlaces de restablecimiento de contraseña
-- 👤 **[Preferencias del usuario](../user/settings/preferences.md)** — Lo que cada usuario puede cambiar por sí mismo
+- 📝 **[Variables de entorno](configuration.md)** — Los ajustes que viven en el archivo `.env`
+- 👥 **[Usuarios e invitaciones](users.md)** — Las cuentas de la instancia, las invitaciones y los enlaces de restablecimiento de contraseña
+- 👤 **[Preferencias de usuario](../user/settings/preferences.md)** — Lo que cada usuario puede cambiar por sí mismo
 - 🧑‍💻 Para desarrolladores: **[Sistema de configuración](../developer/architecture/settings.md)**,
   **[Registro de cachés](../developer/architecture/settings_cache.md)**,
   **[Planificador de datos de mercado](../developer/backend/scheduler.md)** y
