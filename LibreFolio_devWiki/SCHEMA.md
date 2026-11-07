@@ -266,7 +266,7 @@ LibreFolio_devWiki/
 │   ├── roadmap/           # → LibreFolio_developer_journal/RoadmapV4_UI/
 │   └── mkdocs-en/         # EN-only symlinks from mkdocs_src/
 └── graphify-out/
-    ├── graph.json         # Persistent graph (948 nodes, 1292 edges, 71 communities)
+    ├── graph.json         # Persistent graph (its size: see GRAPH_REPORT.md)
     ├── graph.html         # Interactive visualization (open in browser)
     ├── GRAPH_REPORT.md    # Audit report: god nodes, surprises, suggested questions
     ├── cost.json          # Cumulative token cost tracker
@@ -318,8 +318,12 @@ The `--update` only re-extracts changed files and merges into the existing graph
 
 ### Graph structure
 
-The graph was built from **526 files** (246 wiki pages, 185 roadmap plans, 95 mkdocs-en docs).
-71 communities were detected, including:
+> The counts below are those of the first build (2026-04/05: 526 files, 71 communities). Read the current size —
+> nodes, edges, communities, files — from `graphify-out/GRAPH_REPORT.md`: a number written in prose ages, the report
+> does not (2026-11-07 lint).
+
+The first build came from **526 files** (246 wiki pages, 185 roadmap plans, 95 mkdocs-en docs).
+71 communities were detected then, including:
 - `FX & Asset Overview` (C0, n=52) — FX pair management, asset overview
 - `Financial Instruments` (C1, n=49) — ETF, bonds, commodities, stocks
 - `Phase 6 Provider Forms` (C2, n=48) — dynamic params_schema, provider registry UI

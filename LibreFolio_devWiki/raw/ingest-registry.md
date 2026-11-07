@@ -821,3 +821,9 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `580157e91` | 2026-10-14 | C-79…C-84, M-30 closed, M-33 → [[sources/release-1.2.0]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `3f3502b42` | 2026-10-14 | batch 45, the allocation re-shots → [[problems/gallery-fixture-normalizer-scaled-ratios]] |
 | `LibreFolio_developer_journal/Release_2/Phase_1/08_email/plan-phase01Email.prompt.md` | `e15fa386c` | 2026-10-16 | E0–E4b, E-5, E6.0–E6.7 → [[domains/email]] |
+| `DECISIONI-ondata8-20261106.md` (coordinator file, outside the repository) | `untracked` | 2026-11-07 | [[sources/wave8-9-release-1.3-closing-2026-11]], [[decisions/storage-limit-enforced]], [[decisions/one-colour-rank-per-asset]] |
+| `DECISIONI-giro2-backup-20261107.md` (coordinator file, outside the repository) | `untracked` | 2026-11-07 | [[decisions/restore-waits-and-restores-from-kept-backup]], [[decisions/storage-limit-enforced]] |
+| `TRIAGE-feedback-ottobre-20261107.md` (coordinator file, outside the repository) | `untracked` | 2026-11-07 | [[decisions/pnl-day-change-against-yesterdays-nav]], [[sources/wave8-9-release-1.3-closing-2026-11]] |
+| `kickoff-w8.md`, `kickoff-w9-backup.md`, `kickoff-w9-email-guida.md`, `kickoff-w9-ottobre.md` (coordinator files, outside the repository) | `untracked` | 2026-11-07 | [[sources/wave8-9-release-1.3-closing-2026-11]], [[decisions/gallery-webp-with-png-fallback]], [[domains/email]] |
+| `dev_release2` commits 2026-11-06 … 2026-11-07 (`c30b23cf6` … `0008d32df`) | `0008d32df` | 2026-11-07 | [[sources/wave8-9-release-1.3-closing-2026-11]] |
+| `LibreFolio_developer_journal/Release_2/Phase_2/ATTIVITA_INIZIO_1.4.md` | `625c14f` (journal repository) | 2026-11-07 | [[sources/wave8-9-release-1.3-closing-2026-11]] («What moved to 1.4») |

@@ -3943,3 +3943,99 @@ Filed: [[decisions/broker-page-is-a-portfolio-view]], [[decisions/backups-kept-i
 [[decisions/api-routes-removed-without-deprecation]], [[problems/core-ignorecase-hides-a-test-file]],
 [[problems/history-rewrite-publish-tags-before-branches]].
 Graph: not updated (see checkpoint).
+
+## [2026-11-07] ingest | Waves 8–9: the 1.3 closing
+Sources: the coordinator's files `DECISIONI-ondata8-20261106.md`, `DECISIONI-giro2-backup-20261107.md`,
+`TRIAGE-feedback-ottobre-20261107.md`, `kickoff-w8.md`, `kickoff-w9-backup.md`, `kickoff-w9-email-guida.md`,
+`kickoff-w9-ottobre.md` (outside the repository, `untracked`); the commits of `dev_release2` on 06–07/11 up to
+`0008d32df`; `LibreFolio_developer_journal/Release_2/Phase_2/ATTIVITA_INIZIO_1.4.md` @ journal `625c14f`.
+The developer's answers win over the proposals: the automatic backup always runs and the restore is refused past the
+space limit (both reversed from the proposal); the P&L day change share was first «not done» in the October kickoff and
+decided the same day. Personal figures of the triage written as generic examples.
+`check_source_paths.py`: 12 missing paths (19 occurrences) before and after the ingest; none from the new pages.
+Created: [[sources/wave8-9-release-1.3-closing-2026-11]], [[decisions/storage-limit-enforced]],
+[[decisions/restore-waits-and-restores-from-kept-backup]], [[decisions/pnl-day-change-against-yesterdays-nav]],
+[[decisions/one-colour-rank-per-asset]], [[decisions/gallery-webp-with-png-fallback]],
+[[decisions/docs-home-badges-match-project-site]], [[decisions/mermaid-elk-layout-and-node-text-colour]] (open: in
+review, not yet on the branch), [[problems/derived-css-properties-resolve-where-declared]],
+[[problems/body-background-covers-negative-z-fixed-layer]], [[problems/exact-key-tests-break-when-response-gains-a-field]],
+[[problems/pipefail-makes-grep-q-pipe-guards-unreliable]].
+Updated: [[problems/portfolio-cache-ignored-role-and-share]] («Seen again»: the asset fingerprint, `e1a84026f`),
+[[decisions/backups-kept-in-backups-folder]], [[problems/core-ignorecase-hides-a-test-file]] (platform wording),
+[[entities/backup-router]] (five modules), [[features/F-073]] (documented), [[features/F-054]], [[features/F-055]],
+[[features/F-107]], [[features/F-108]], [[features/F-111]], [[features/registry]], [[concepts/stale-while-revalidate-page-cache]],
+[[domains/email]] (lot E9); index rows, and the chronological register rows of 05/11 and 07/11.
+Not filed: «snapshot trees cherry-picked onto a moving candidate» — no trace beyond clean cherry-picks; needs the
+coordinator's account.
+
+## [2026-11-07] lint | Whole wiki at the 1.3 closing: every page re-read against the code
+Scope: all 698 pages (153 decisions, 199 problems, 115 features with the registry, 70 concepts, 17 entities,
+12 domains, 4 connections, 2 workflows, 126 sources), plus `index.md` and `SCHEMA.md`. Seven parallel reviewers, one
+per partition, each read every page in full and checked paths, names, endpoints, environment variables and claims
+against `dev_release2` (`0008d32df`) with `ls`, `grep` and `git log -S/--follow`; history sections were kept, the
+present corrected with dated «2026-11-07 lint» notes or rows. About 400 pages edited.
+
+- **Paths.** `check_source_paths.py`: 12 missing paths (19 occurrences, 4 296 cited) before the session → **0 missing of
+  4 514 cited**. Moves recovered (`services/accounts/`, `features/portfolio-view/`, `lib/features/transactions/`,
+  `services/assets/registry.py`, `signal_plugins/*/plugin.py`, `schemas/pac_allocator/`, `api/v1/fx/…`, `sw.js`…);
+  deleted files marked «removed in <commit>» (`brokers/summary.py` `dd9d0ce20`, `assets/metadata.py` `d5e467847`,
+  `theme/components/files.css`/`dialogs.css` `dc5e66c11`, `mermaid.mjs` `34d5849a7`); generated folders
+  (`htmlcov-*`, `coverage-js`) cited through `scripts/test_runner/_coverage.py`; about 25 journal `original_path`
+  values followed to their archived location.
+- **Names.** Endpoints realigned with the routers (`/settings/user`, `/settings/global/bulk`, `/fx/providers/routes`,
+  `/fx/currencies/sync|convert`, `/assets/prices/sync|current`, `/brokers/import/files/{id}/parse`,
+  `/transactions/validate` + `/commit`, `POST /assets/prices/current`); classes and functions renamed
+  (`AiExportSnapshotService`, `Composer`, `FxRateResolver`, `PortfolioCalculationResult`, `bulk_refresh_prices`,
+  `get_current_prices_bulk`, `period_realized_sales`, `history_steps`…); storage keys (`assetsViewMode`, `fxViewMode`),
+  settings keys and table names from the models.
+- **Stale claims and superseded decisions.** Routes removed in 1.3 without deprecation (`POST /portfolio/wac`,
+  `GET /brokers/{id}/summary`, `events/suggest`, `transfers/promote`, `DELETE /assets/events`, the bulk metadata
+  refresh) noted where pages still cited them, linked to [[decisions/api-routes-removed-without-deprecation]] and
+  [[decisions/broker-page-is-a-portfolio-view]]. Decisions marked `superseded`: [[decisions/mwrr-solver-newton-cap]]
+  (`d82c0e920`, verified XIRR), [[decisions/auto-cost-basis-zero-without-position]] (`3b6bc8e2d`, N88),
+  [[decisions/credit-agricole-securities-only-cash-neutral-brim]] (report set, W5-7). Others noted: N78-1 (outgoing
+  ADJUSTMENT has no value), N68 (a currency change keeps the splits), the pre-frame removed (`2ad9a43b2`), the
+  frontend signal library replaced by backend plugins (`a332884f0`), the catalogue split per subsystem (`e47f45c98`).
+  [[domains/email]] «What comes next» of 16/10 brought to the shipped state; domain pages realigned with the 1.3
+  CHANGELOG.
+- **Problem statuses.** `open` → `resolved`: [[problems/select-list-under-the-sticky-table-header]] (`34d5849a7`),
+  [[problems/stale-version-file-shadows-git-describe]] (`50f9faaa6`), [[problems/broker-icon-race-condition]]
+  (`db0277a99`, `eb88bdd3c`; C-56 latent); `workaround` → `resolved`: [[problems/colour-ratchet-resolve-drops-an-accept]]
+  (`6d9601742`); `open` → `accepted`: [[problems/bulk-modal-sticky-z-index]] (C-61 discarded 22/10). Several open
+  problems re-checked and kept, with dated notes.
+- **Features.** Status and `mkdocs:` aligned with the pages and the registry (0 mismatches): 29 features promoted
+  `implemented` → `documented` where a current user, admin or theory page covers them; [[features/F-087]] planned →
+  implemented (the line-shape setting, `610c6af4d`); [[features/F-094]] planned → documented (C-66, `54996bf07`);
+  [[features/F-073]] documented (ingest). About 120 decision/problem/concept links added on the feature side; the
+  registry's statistics recounted.
+- **Links.** No unresolved `[[…]]` outside the templates of `SCHEMA.md`. Pages with no inbound link now linked:
+  [[problems/vite-hmr-dispose-only-on-the-accepted-module]], [[problems/svelte5-derived-stale-over-non-reactive-cache]]
+  (from [[concepts/svelte5-runes]]), [[problems/tailwind4-same-property-utilities-sorted-by-name]] (from
+  [[decisions/colour-factorisation-at-pixel-parity]]), [[problems/act-act-lost-a-day-per-year-end]] and
+  [[problems/maturity-settlement-counted-the-final-coupon-twice]] (from [[decisions/financial-math-one-home]]),
+  [[decisions/test-runner-refuses-test-names-it-cannot-apply]], [[sources/r3-sp-d-formmodal-wac-fx-chain]] and others;
+  self-links removed. 16 old source pages are reached only from `index.md`, as leaf summaries are.
+- **Frontmatter.** Legacy `related_*` keys folded into `related` on decision, problem and concept pages (feature pages
+  keep `related_*`, their template); `category` capitalisation fixed; missing frontmatter added to five source pages;
+  bare slugs given their folder. Every page's frontmatter parses as YAML.
+- **Index.** Rows for the 12 pages of today's ingest; chronological register rows of 05/11 and 07/11 (the wave 6 entry
+  had none); 16 status cells realigned with the pages (10 features, 6 problems, one problem row missing its status
+  cell); summaries of superseded decisions and resolved problems say so; the email domain row; the video entity row.
+- **Platform, absolute paths, personal data.** Fixed: `/tmp/…` rows in two pages, a lane `--data-dir /tmp/…`, a branch
+  name carrying a user name, a machine-specific venv name, «the developer's Mac»/«macOS dev machines»/«the shared
+  machine»/«the version on the developer's machine» rewritten as platform facts; «the business repository» →
+  «outside this public repository». Personal data removed: a beta tester's bond holdings and amounts
+  ([[sources/beta-testing-2026-08-05]], now illustrative figures) and real broker holdings in
+  [[problems/import-wizard-fake-id-collision]]. `SCHEMA.md`: the graph counts marked as those of the first build.
+- **Duplicates found, not merged** (proposals in the coordinator's report): batch-only vs cash-transfer split/promote;
+  F-020 vs F-057; F-049 vs F-083; concept/entity twins (fifo-lot-tracking vs fifo-lot-engine, txstore WorkspaceIntent
+  vs workspace-intent-pattern); phase07-pland-split-promote vs the PlanD master; phase07-standalone-pwa vs r2 section 1.
+- **Needs a developer decision, not fixed:** see the coordinator's report of 07/11 (status vocabulary outside SCHEMA,
+  the feature status key, F-115+ codes for unregistered subsystems, broker-last-owner-guard, the conftest PURE rule
+  that never existed, a CHANGELOG line on the email-change notice, missing decision pages for N78-1, N68, N88 and the
+  verified XIRR solver, connection pages without a template).
+Graph: `./dev.py graph update` (incremental, no LLM) and `./dev.py graph viz` ran with exit 0, but the scan found
+0 files in `corpus/` (its code links are not read) and kept the old semantic nodes: 1 650 nodes · 2 432 edges ·
+169 communities → 1 548 · 2 287 · 165 (the code nodes dropped). Today's 12 new pages and the lint's edits are **not**
+in the graph: that needs the full semantic rebuild (the `graphify` skill, or `graph build --full` with an LLM key),
+not available in this session. Not repaired.
