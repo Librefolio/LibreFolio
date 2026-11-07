@@ -250,7 +250,8 @@
         "running": "An uploaded archive is being checked.",
         "resume": "Resume",
         "discard": "Discard"
-      }
+      },
+      "spaceNeeded": "While it is checked, this archive takes {size} on the server, plus its opened version, and counts in the space limit until the restore ends or is discarded."
     },
     "checks": {
       "panelToken": {

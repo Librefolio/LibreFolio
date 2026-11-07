@@ -250,7 +250,8 @@
         "running": "Un archivio caricato è in controllo.",
         "resume": "Riprendi",
         "discard": "Scarta"
-      }
+      },
+      "spaceNeeded": "Durante il controllo questo archivio occupa {size} sul server, più la sua versione aperta, e conta nel limite di spazio finché il ripristino non finisce o viene scartato."
     },
     "checks": {
       "panelToken": {

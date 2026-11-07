@@ -250,7 +250,8 @@
         "running": "Une archive téléversée est en cours de vérification.",
         "resume": "Reprendre",
         "discard": "Écarter"
-      }
+      },
+      "spaceNeeded": "Pendant sa vérification, cette archive occupe {size} sur le serveur, plus sa version ouverte, et compte dans la limite d'espace jusqu'à la fin ou l'abandon de la restauration."
     },
     "checks": {
       "panelToken": {

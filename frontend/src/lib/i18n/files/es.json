@@ -106,7 +106,8 @@
       "backups": "Copias de seguridad",
       "dataOther": "Otros archivos de LibreFolio",
       "disk": "Otros en el disco",
-      "free": "Libre"
+      "free": "Libre",
+      "restore": "Restauración en curso"
     },
     "summary": {
       "limit": "{used} usados de {limit}",
@@ -116,7 +117,7 @@
     "overLimit": "Se ha superado el límite de espacio: elimina copias o archivos, o sube el límite.",
     "limit": {
       "label": "Espacio total de LibreFolio (MB)",
-      "hint": "El espacio máximo que LibreFolio puede ocupar en total: base de datos, archivos, informes y copias de seguridad. Más allá, los archivos, los informes y las copias hechas a mano se rechazan; tus datos y las copias automáticas nunca se detienen. Escribe 0 para no poner límite.",
+      "hint": "El espacio máximo que LibreFolio puede ocupar en total: base de datos, archivos, informes, copias de seguridad y una restauración en curso (el archivo subido y su versión abierta). Más allá, los archivos, los informes y las copias hechas a mano se rechazan; tus datos y las copias automáticas nunca se detienen. Escribe 0 para no poner límite.",
       "locked": "El límite de espacio lo fija quien aloja esta instancia.",
       "save": "Guardar",
       "saved": "Guardado.",
