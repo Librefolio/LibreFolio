@@ -428,8 +428,7 @@
           "worstRealization": "The worst day",
           "drawdownAtRisk": "Drawdown at risk ({confidence})",
           "conditionalDrawdownAtRisk": "Average beyond the threshold",
-          "ulcerIndex": "Ulcer index {value}",
-          "ulcerIndexHint": "root-mean-square depth below the peak: lower is calmer",
+          "ulcerIndex": "Ulcer index",
           "worstMonth": "The worst 30 days"
         },
         "underwater": {
@@ -464,13 +463,17 @@
         "showLess": "Show less",
         "effectiveAssets": {
           "label": "How many independent bets do I really hold?",
-          "aboveCount": "Above the {positions} measured positions: the excess is cash, and says nothing about the weights",
+          "aboveCount": "Above the {positions} measured positions: the excess comes from the part not covered ({share}: cash and holdings without prices), and says nothing about the weights",
           "belowCount": "Below the {positions} measured positions: the weights are lopsided, and a few carry the portfolio",
-          "evenCount": "Exactly the {positions} measured positions: even weights and no cash"
+          "evenCount": "Exactly the {positions} measured positions: even weights and nothing uncovered",
+          "name": "Effective number of positions",
+          "aboveCountNoShare": "Above the {positions} measured positions: the excess comes from the part not covered (cash and holdings without prices), and says nothing about the weights"
         },
         "diversificationRatio": {
           "label": "Did spreading the money achieve anything?",
-          "caption": "1.00 means the holdings move as one; higher means they offset each other"
+          "scale": "1.00 means no benefit: the holdings move as one; higher means they offset each other.",
+          "example": "At {value}, the portfolio's volatility is about {percent} below the weighted average of its holdings'.",
+          "ceiling": "The most it can reach is about √N: {max} with {positions} positions."
         },
         "uncovered": {
           "label": "How much of me is not measured here?",

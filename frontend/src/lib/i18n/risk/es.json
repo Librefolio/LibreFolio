@@ -428,8 +428,7 @@
           "worstRealization": "El peor día",
           "drawdownAtRisk": "Caída en riesgo ({confidence})",
           "conditionalDrawdownAtRisk": "Media más allá del umbral",
-          "ulcerIndex": "Índice de Ulcer {value}",
-          "ulcerIndexHint": "profundidad cuadrática media bajo el pico: cuanto más bajo, más tranquilo",
+          "ulcerIndex": "Índice de Ulcer",
           "worstMonth": "Los 30 peores días"
         },
         "underwater": {
@@ -464,13 +463,17 @@
         "showLess": "Mostrar menos",
         "effectiveAssets": {
           "label": "¿Cuántas apuestas independientes tengo realmente?",
-          "aboveCount": "Por encima de las {positions} posiciones medidas: el exceso es liquidez, y no dice nada de los pesos",
+          "aboveCount": "Por encima de las {positions} posiciones medidas: el exceso viene de la parte no cubierta ({share}: liquidez y posiciones sin precio), y no dice nada sobre los pesos",
           "belowCount": "Por debajo de las {positions} posiciones medidas: los pesos están desequilibrados, y unas pocas sostienen la cartera",
-          "evenCount": "Igual a las {positions} posiciones medidas: pesos uniformes y ninguna liquidez"
+          "evenCount": "Exactamente las {positions} posiciones medidas: pesos uniformes y nada sin cubrir",
+          "name": "Número efectivo de posiciones",
+          "aboveCountNoShare": "Por encima de las {positions} posiciones medidas: el exceso viene de la parte no cubierta (liquidez y posiciones sin precio), y no dice nada sobre los pesos"
         },
         "diversificationRatio": {
           "label": "¿Repartir el dinero ha servido de algo?",
-          "caption": "1,00 significa que las posiciones se mueven al unísono; más alto, más se compensan"
+          "scale": "1,00 significa ningún beneficio: las posiciones se mueven al unísono; cuanto más alto, más se compensan.",
+          "example": "Con {value}, la volatilidad de la cartera está alrededor de un {percent} por debajo de la media ponderada de la de sus posiciones.",
+          "ceiling": "El máximo es aproximadamente √N: {max} con {positions} posiciones."
         },
         "uncovered": {
           "label": "¿Cuánto de mí no se mide aquí?",
