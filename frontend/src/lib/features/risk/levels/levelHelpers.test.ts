@@ -389,6 +389,29 @@ describe('buildHurtRows sign conventions', () => {
     });
 });
 
+// D5 (07/11/2026): the caption of the diversification ratio gives an example on the figure on screen, and the ceiling of the scale.
+describe('diversificationReading', () => {
+    it('reads a ratio of 1.28 as a volatility about 22% below the weighted average (the developer’s example)', () => {
+        const {reduction} = levelHelpers.diversificationReading(1.28, 8);
+
+        expect(reduction).toBeCloseTo(0.21875, 10);
+        expect(Math.round(reduction * 100)).toBe(22);
+    });
+
+    it('reads a ratio of exactly 1 as no benefit, and a ratio under 1, which is a fault, as none', () => {
+        expect(levelHelpers.diversificationReading(1, 8).reduction).toBe(0);
+        expect(levelHelpers.diversificationReading(0.9, 8).reduction).toBe(0);
+        expect(levelHelpers.diversificationReading(Number.NaN, 8).reduction).toBe(0);
+    });
+
+    it('gives the ceiling of the scale as √N of the positions measured, and none under two positions', () => {
+        expect(levelHelpers.diversificationReading(1.5, 9).ceiling).toBe(3);
+        expect(levelHelpers.diversificationReading(1.5, 8).ceiling).toBeCloseTo(2.8284, 4);
+        expect(levelHelpers.diversificationReading(1.5, 1).ceiling).toBeNull();
+        expect(levelHelpers.diversificationReading(1.5, 0).ceiling).toBeNull();
+    });
+});
+
 describe('buildConcentration', () => {
     const contribution = (output: Record<string, unknown>) => ok('contribution', {kind: 'contribution', ...output});
 
