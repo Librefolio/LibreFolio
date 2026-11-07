@@ -141,7 +141,7 @@ The stamp updates only `.translate-hashes.json` (tracked in git) — it never re
 
 - **Admonitions**: ALWAYS insert empty line between `!!!`/`???` and body (Prettier-safe)
 - **Emoji in headings**: H1-H3 always have 1 emoji
-- **Diagrams**: Mermaid inline (no PNG)
+- **Diagrams**: Mermaid inline (no PNG); Mermaid and its ELK layout (`layout: elk`) are served from the site's own pinned copies (`./dev.py cache js`)
 - **Language**: Write in English (translations via pipeline)
 
 See `.github/instructions/mkdocs.instructions.md` for full style guide.
