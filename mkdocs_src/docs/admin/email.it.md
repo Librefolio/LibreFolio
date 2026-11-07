@@ -28,7 +28,7 @@ Per configurare l'email:
    login del tuo account quando il server lo richiede. Gli [esempi](#examples) coprono i casi
    usuali.
 2. Per le email con un link, imposta anche `LIBREFOLIO_PUBLIC_URL` ([Email con un link](email_flows.md#public-url)).
-3. Riavvia LibreFolio.
+3. Riavvia LibreFolio. Con Docker Compose, esegui `docker compose up -d`.
 4. Apri **Impostazioni › Amministrazione › Email**: lo stato indica **Pronto**. Invia a te stesso un'email di prova.
 
 !!! info "📚 Questa guida è divisa in più pagine"
@@ -56,8 +56,7 @@ file segreto.
   le email possono portare un link ([Email con un link](email_flows.md#public-url)). Non c'è nient'altro riguardo all'email.
 - **Letta dall'ambiente.** `./dev.py` e Docker Compose (`env_file: .env`) mettono lì i valori di
   `.env`, quindi queste variabili vanno in `.env` come le altre [opzioni](configuration.md).
-- **Riavvia dopo una modifica.** Con Docker Compose, esegui `docker compose up -d`:
-  `docker compose restart` mantiene i vecchi valori.
+- **Riavvia dopo una modifica.** Con Docker Compose, esegui `docker compose up -d`.
 
 Per disattivare l'email, rimuovi `LIBREFOLIO_SMTP_HOST` o lasciala vuota, poi riavvia. Le altre
 variabili possono restare: senza un server, LibreFolio le ignora.
@@ -112,7 +111,7 @@ La sezione «Email» di `.env.example` le elenca, commentate: copia le righe che
 
 ## 💡 Esempi {: #examples }
 
-Sostituisci `smtp.example.com`, gli indirizzi e la password con i tuoi, poi riavvia LibreFolio.
+Sostituisci `smtp.example.com`, gli indirizzi e la password con i tuoi, poi riavvia LibreFolio. Nel tuo `.env` cerca la sezione che inizia con `# Email`: l'`.env.example` di questa versione la contiene. Imposta lì le variabili. Se il tuo `.env` è vecchio e non ha quella sezione, aggiungi in fondo il blocco dell'esempio.
 
 === "Docker Compose + file segreto"
 
@@ -191,9 +190,12 @@ Sostituisci `smtp.example.com`, gli indirizzi e la password con i tuoi, poi riav
        caratteri, in quattro gruppi da quattro: copiala. Se quella pagina non offre alcun modo per crearne una,
        [la pagina di aiuto di Google](https://support.google.com/accounts/answer/185833) spiega perché. Un account di lavoro o
        scolastico potrebbe aver bisogno del suo amministratore.
-    3. Aggiungi le variabili a `.env`:
+    3. Metti le variabili nella sezione **Email** del tuo `.env`, o aggiungi questo blocco in fondo se il tuo `.env` non ce l'ha:
 
         ```env
+        # =============================================================================
+        # Email config gmail
+        # =============================================================================
         LIBREFOLIO_SMTP_HOST=smtp.gmail.com
         LIBREFOLIO_SMTP_USER=you@gmail.com
         LIBREFOLIO_SMTP_PASSWORD=abcdefghijklmnop
@@ -205,14 +207,14 @@ Sostituisci `smtp.example.com`, gli indirizzi e la password con i tuoi, poi riav
         - `abcdefghijklmnop` sta per la tua password per app: i suoi 16 caratteri, scritti
           **senza gli spazi**, poiché LibreFolio usa la password esattamente come scritta, spazi
           inclusi. Meglio ancora, conservala in un file della password, come nella scheda Docker Compose, anche in quel caso senza gli spazi.
+        - **Gli spazi vanno bene nel mittente, non nella password.**
         - Il mittente è lo stesso indirizzo, con un nome davanti o senza. Gmail consente l'invio solo dal tuo
           indirizzo, o da uno che hai aggiunto e confermato in **Invia messaggi come** nelle impostazioni di Gmail.
         - Nessun `LIBREFOLIO_SMTP_TLS` e nessuna porta: `starttls` sulla porta 587 è il valore predefinito, e una delle
           due modalità offerte da Gmail. Per l'altra, la porta 465, aggiungi `LIBREFOLIO_SMTP_TLS=tls`: la
           porta segue.
 
-    4. Riavvia LibreFolio. Con Docker Compose, esegui `docker compose up -d`:
-       `docker compose restart` mantiene i vecchi valori.
+    4. Riavvia LibreFolio. Con Docker Compose, esegui `docker compose up -d`.
     5. Apri **Impostazioni › Amministrazione › Email**, dove lo stato indica **Pronto**, e fai clic su
        **Invia un'email di prova**. Va all'indirizzo del tuo account: vedi
        [L'email di prova](#test-email).

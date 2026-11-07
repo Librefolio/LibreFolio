@@ -28,7 +28,7 @@ To set it up:
    login of your account when the server asks for one. The [examples](#examples) cover the usual
    cases.
 2. For the emails with a link, set `LIBREFOLIO_PUBLIC_URL` too ([Emails with a Link](email_flows.md#public-url)).
-3. Restart LibreFolio.
+3. Restart LibreFolio. With Docker Compose, run `docker compose up -d`.
 4. Open **Settings › Administration › Email**: the state reads **Ready**. Send yourself a test email.
 
 !!! info "📚 This guide is in several pages"
@@ -56,8 +56,7 @@ secret file.
   emails can carry a link ([Emails with a Link](email_flows.md#public-url)). Nothing else about email is there.
 - **Read from the environment.** `./dev.py` and Docker Compose (`env_file: .env`) put the values of
   `.env` there, so these variables go in `.env` like the other [options](configuration.md).
-- **Restart after a change.** With Docker Compose, run `docker compose up -d`:
-  `docker compose restart` keeps the old values.
+- **Restart after a change.** With Docker Compose, run `docker compose up -d`.
 
 To turn email off, remove `LIBREFOLIO_SMTP_HOST` or leave it empty, then restart. The other
 variables can stay: without a server, LibreFolio ignores them.
@@ -115,7 +114,7 @@ The «Email» section of `.env.example` lists them, commented: copy the lines yo
 
 ## 💡 Examples {: #examples }
 
-Replace `smtp.example.com`, the addresses and the password with your own, then restart LibreFolio.
+Replace `smtp.example.com`, the addresses and the password with your own, then restart LibreFolio. In your `.env`, look for the section that starts with `# Email`: this version's `.env.example` has it. Set the variables there. If your `.env` is older and has no such section, add the block of the example at its end.
 
 === "Docker Compose + secret file"
 
@@ -194,9 +193,12 @@ Replace `smtp.example.com`, the addresses and the password with your own, then r
        characters, in four groups of four: copy it. If that page offers no way to create one,
        [Google's help page](https://support.google.com/accounts/answer/185833) says why. A work or
        school account may need its administrator.
-    3. Add the variables to `.env`:
+    3. Put the variables in the **Email** section of your `.env`, or add this block at its end if your `.env` has none:
 
         ```env
+        # =============================================================================
+        # Email config gmail
+        # =============================================================================
         LIBREFOLIO_SMTP_HOST=smtp.gmail.com
         LIBREFOLIO_SMTP_USER=you@gmail.com
         LIBREFOLIO_SMTP_PASSWORD=abcdefghijklmnop
@@ -209,14 +211,14 @@ Replace `smtp.example.com`, the addresses and the password with your own, then r
           **without the spaces**, since LibreFolio uses the password exactly as written, spaces
           included. Better still, keep it in a password file, as in the Docker Compose tab, also
           without the spaces.
+        - **Spaces are fine in the sender, not in the password.**
         - The sender is the same address, with a name in front or without. Gmail sends only as your
           own address, or as one you added and confirmed under **Send mail as** in Gmail's settings.
         - No `LIBREFOLIO_SMTP_TLS` and no port: `starttls` on port 587 is the default, and one of
           the two ways Gmail offers. For the other, port 465, add `LIBREFOLIO_SMTP_TLS=tls`: the
           port follows.
 
-    4. Restart LibreFolio. With Docker Compose, run `docker compose up -d`:
-       `docker compose restart` keeps the old values.
+    4. Restart LibreFolio. With Docker Compose, run `docker compose up -d`.
     5. Open **Settings › Administration › Email**, where the state reads **Ready**, and click
        **Send a test email**. It goes to the address of your account: see
        [The Test Email](#test-email).

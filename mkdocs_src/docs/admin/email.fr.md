@@ -28,7 +28,7 @@ Pour le configurer :
    l’identifiant de connexion de votre compte lorsque le serveur en demande un. Les [exemples](#examples) couvrent les cas
    usuels.
 2. Pour les e-mails contenant un lien, définissez aussi `LIBREFOLIO_PUBLIC_URL` ([E-mails avec un lien](email_flows.md#public-url)).
-3. Redémarrez LibreFolio.
+3. Redémarrez LibreFolio. Avec Docker Compose, exécutez `docker compose up -d`.
 4. Ouvrez **Paramètres › Administration › E-mail** : l’état indique **Prêt**. Envoyez-vous un e-mail de test.
 
 !!! info "📚 Ce guide est réparti sur plusieurs pages"
@@ -55,8 +55,7 @@ fichier secret.
   **Prêt**, et `"links": true` lorsque, en plus, les e-mails peuvent contenir un lien ([E-mails avec un lien](email_flows.md#public-url)). Rien d’autre sur l’e-mail ne s’y trouve.
 - **Lues depuis l’environnement.** `./dev.py` et Docker Compose (`env_file: .env`) y placent les valeurs de
   `.env`, donc ces variables vont dans `.env` comme les autres [options](configuration.md).
-- **Redémarrez après une modification.** Avec Docker Compose, exécutez `docker compose up -d` :
-  `docker compose restart` conserve les anciennes valeurs.
+- **Redémarrez après une modification.** Avec Docker Compose, exécutez `docker compose up -d`.
 
 Pour désactiver l’e-mail, supprimez `LIBREFOLIO_SMTP_HOST` ou laissez-la vide, puis redémarrez. Les autres
 variables peuvent rester : sans serveur, LibreFolio les ignore.
@@ -114,7 +113,7 @@ La section « E-mail » de `.env.example` les liste, commentées : copiez les li
 
 ## 💡 Exemples {: #examples }
 
-Remplacez `smtp.example.com`, les adresses et le mot de passe par les vôtres, puis redémarrez LibreFolio.
+Remplacez `smtp.example.com`, les adresses et le mot de passe par les vôtres, puis redémarrez LibreFolio. Dans votre `.env`, cherchez la section qui commence par `# Email` : le `.env.example` de cette version la contient. Réglez-y les variables. Si votre `.env` est ancien et n’a pas cette section, ajoutez à sa fin le bloc de l’exemple.
 
 === "Docker Compose + fichier secret"
 
@@ -193,9 +192,12 @@ Remplacez `smtp.example.com`, les adresses et le mot de passe par les vôtres, p
        caractères, en quatre groupes de quatre : copiez-le. Si cette page n’offre aucun moyen d’en créer un,
        la [page d’aide de Google](https://support.google.com/accounts/answer/185833) en explique la raison. Un compte professionnel ou
        scolaire peut nécessiter l’intervention de son administrateur.
-    3. Ajoutez les variables à `.env` :
+    3. Mettez les variables dans la section **Email** de votre `.env`, ou ajoutez ce bloc à sa fin si votre `.env` n’en a pas :
 
         ```env
+        # =============================================================================
+        # Email config gmail
+        # =============================================================================
         LIBREFOLIO_SMTP_HOST=smtp.gmail.com
         LIBREFOLIO_SMTP_USER=you@gmail.com
         LIBREFOLIO_SMTP_PASSWORD=abcdefghijklmnop
@@ -208,14 +210,14 @@ Remplacez `smtp.example.com`, les adresses et le mot de passe par les vôtres, p
           **sans les espaces**, puisque LibreFolio utilise le mot de passe exactement tel qu’il est écrit, espaces
           compris. Mieux encore, conservez-le dans un fichier de mot de passe, comme dans l’onglet Docker Compose, également
           sans les espaces.
+        - **Les espaces sont acceptés dans l’expéditeur, pas dans le mot de passe.**
         - L’expéditeur est la même adresse, avec ou sans nom devant. Gmail n’envoie qu’en tant que votre
           propre adresse, ou en tant qu’une adresse que vous avez ajoutée et confirmée sous **Envoyer des e-mails en tant que** dans les paramètres de Gmail.
         - Ni `LIBREFOLIO_SMTP_TLS` ni port : `starttls` sur le port 587 est la valeur par défaut, et l’un des
           deux modes proposés par Gmail. Pour l’autre, le port 465, ajoutez `LIBREFOLIO_SMTP_TLS=tls` : le
           port suit.
 
-    4. Redémarrez LibreFolio. Avec Docker Compose, exécutez `docker compose up -d` :
-       `docker compose restart` conserve les anciennes valeurs.
+    4. Redémarrez LibreFolio. Avec Docker Compose, exécutez `docker compose up -d`.
     5. Ouvrez **Paramètres › Administration › E-mail**, où l’état indique **Prêt**, et cliquez sur
        **Envoyer un e-mail de test**. Il part vers l’adresse de votre compte : voir
        [L’e-mail de test](#test-email).
