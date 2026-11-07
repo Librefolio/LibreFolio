@@ -1202,6 +1202,15 @@ def e2e_backup_roundtrip_l3(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Backup round trip L3 E2E tests", verbose=verbose)
 
 
+def e2e_backup_restore_from_kept(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a real restore from a backup the server keeps, clear and secure, to the restart and the verified password (C9-B)."""
+    print_section("E2E: Restore From a Kept Backup (C9-B)")
+    print_info("Testing: POST /backup/restore/upload/from-backup, the check, verify-password and the avatar of the copy, confirm, restart")
+    print_info("Tests: clear and secure backups kept → linked, checked, archive kept → verified password → restored → signs in")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_restore_from_kept.py", test_names)
+    return run_command(cmd, "Backup restore from kept E2E tests", verbose=verbose)
+
+
 def e2e_backup_roundtrip_owner(verbose: bool = False, test_names: list = None) -> bool:
     """Test a backup restored from the app on a managed instance with the owner's choice: real servers on Unix sockets (B5-1f)."""
     print_section("E2E: Backup Restored on a Managed Instance, the Owner's Choice (B5-1f)")
@@ -1839,6 +1848,18 @@ Complete workflow tests via REST API:
         name="Backup Round Trip L3",
         desc="Contract L3 (lot B5): a populated instance served with LIBREFOLIO_BACKUP_RECIPIENTS makes a sealed backup for the hosting panel (a backup ticket): a .tar without the instance key, its download the job's SHA-256, read with read_sealed, its password opened by the test identity and checked against the envelope; an empty instance in LIBREFOLIO_AWAIT_RESTORE (the source's instance key) answers mode awaiting_restore, 423 instance_awaiting_restore, 409 backup_awaiting_restore; the panel uploads the envelope, checks it (R1: no administrators, differences or tables), confirms, restarts; a new process commits it; out of the mode the target has the source's rows, files, ledger totals and reports, and its administrator signs in; a backup ticket never opens the restore routes, and out of the mode they answer 409 restore_mode_required. RED until H-62",
         tests="Sealed backup → Await restore → Upload, Stage, Confirm, Restart → Committed → Same totals",
+        # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
+        # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
+        # server are never read nor written.
+        isolation="pure",
+    )
+    add_test(
+        e2e,
+        "backup-restore-from-kept",
+        e2e_backup_restore_from_kept,
+        name="Backup Restore From Kept",
+        desc="Lot C9-B: a real restore from a backup the server keeps, clear and secure, to the restart and the verified password. A populated instance (real uvicorn children on Unix sockets) makes a clear and a secure backup through POST /backup/instance and a sealed one through the panel, all listed by GET /backup/instance/jobs; then its administrator changes the password and creates a broker. POST /backup/restore/upload/from-backup links the kept archive (a hard link: link count 2, back to 1 after the check, SHA-256 unchanged); the check reports it restorable with the administrator, uploads_size and broker_reports_size; verify-password is true for the backup's password, false for today's and a wrong one, 404 restore_admin_not_found for an unknown or plain account; the avatar comes from the copy, 404 restore_avatar_not_found otherwise. The secure one asks its password (400 password_required, 400 wrong_password, upload kept), is confirmed and restarted: a new process commits it, the verified password signs in, today's and the old session do not, the later broker is gone. A sealed backup is 409 backup_sealed_unsupported, an unknown id 404 backup_job_not_found. No password in any log",
+        tests="Kept clear/secure/sealed → from-backup → check → verify-password, avatar → confirm, restart → committed → signs in",
         # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
         # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
         # server are never read nor written.
