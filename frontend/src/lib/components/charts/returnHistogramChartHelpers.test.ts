@@ -18,7 +18,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {barGeometry, binColor, buildReturnHistogramOption, histogramTooltipPosition, MIN_BAR_PX, renderBin, type HistogramBin, type HistogramDatum} from './returnHistogramChartHelpers';
+import {barGeometry, binColor, buildReturnHistogramOption, histogramTooltipPosition, MIN_BAR_PX, renderBin, SLIDER_MIN_BINS, SLIDER_ROOM_PX, type HistogramBin, type HistogramDatum} from './returnHistogramChartHelpers';
 
 const WARNING = '#ae4e00';
 const LOSS_80 = 'rgba(200,40,56,0.8)';
@@ -210,5 +210,65 @@ describe('histogramTooltipPosition — beside the pointer, above the finger on t
         // Centred on the finger, and higher than it (the gap of a touch is larger than the pointer's).
         expect(x + 60).toBe(300);
         expect(y + 60).toBeLessThan(180);
+    });
+});
+
+// D3 (07/11/2026): the histogram zooms like the other charts — inside the plot, and with a slider when the bars are many.
+describe('buildReturnHistogramOption — zoom (D3)', () => {
+    /** `count` bars of one percent each, from −count/2. */
+    const manyBins = (count: number): HistogramBin[] => Array.from({length: count}, (_, index) => ({lowerBound: index - count / 2, upperBound: index + 1 - count / 2, count: index % 7, holdsCut: false, belowCut: false}));
+
+    it('zooms inside the plot on the x axis, as the other charts do, and keeps a bar that straddles the window', () => {
+        const option = build().option as Loose;
+
+        const inside = option.dataZoom.filter((zoom: {type: string}) => zoom.type === 'inside');
+        expect(inside).toHaveLength(1);
+        expect(inside[0].xAxisIndex).toEqual([0]);
+        // The shared safe config: the wheel zooms, a mouse drag pans, the page keeps its own scroll.
+        expect(inside[0].zoomOnMouseWheel).toBe(true);
+        expect(inside[0].moveOnMouseMove).toBe(true);
+        expect(inside[0].moveOnMouseWheel).toBe(false);
+        // A bar is an interval: `filter` would drop one half in the window.
+        expect(inside[0].filterMode).toBe('weakFilter');
+    });
+
+    it('stops the zoom at the width of the narrowest bar', () => {
+        const option = build().option as Loose;
+
+        // BINS has bars of 1, 2 and 3 percent.
+        expect(option.dataZoom[0].minValueSpan).toBe(1);
+    });
+
+    it('cuts a bar at the plot when the window leaves it half out', () => {
+        expect((build().option as Loose).series[0].clip).toBe(true);
+    });
+
+    it('draws no slider for a few bars, and gives the plot no extra room', () => {
+        const result = build();
+
+        expect(result.hasSlider).toBe(false);
+        expect((result.option as Loose).dataZoom.some((zoom: {type: string}) => zoom.type === 'slider')).toBe(false);
+        expect((result.option as Loose).grid.bottom).toBe(4);
+    });
+
+    it('draws a slider from the threshold up, tied to the same axis, with its room under the plot', () => {
+        const below = buildReturnHistogramOption({bins: manyBins(SLIDER_MIN_BINS - 1), cut: null, formatAxis: writeAxis, cutLabel: ''});
+        const at = buildReturnHistogramOption({bins: manyBins(SLIDER_MIN_BINS), cut: null, formatAxis: writeAxis, cutLabel: ''});
+
+        expect(below.hasSlider).toBe(false);
+        expect(at.hasSlider).toBe(true);
+        const slider = (at.option as Loose).dataZoom.find((zoom: {type: string}) => zoom.type === 'slider');
+        expect(slider.xAxisIndex).toEqual([0]);
+        expect(slider.filterMode).toBe('weakFilter');
+        expect((at.option as Loose).grid.bottom).toBe(4 + SLIDER_ROOM_PX);
+    });
+
+    it('colours the slider with the chart’s own neutrals, never a literal', () => {
+        const slider = (buildReturnHistogramOption({bins: manyBins(60), cut: null, formatAxis: writeAxis, cutLabel: ''}).option as Loose).dataZoom.find((zoom: {type: string}) => zoom.type === 'slider');
+
+        // The light theme's stand-ins: the subtle border, the muted text at 16 %, a clear background.
+        expect(slider.borderColor).toBe('#d8e0dc');
+        expect(slider.fillerColor).toBe('rgba(97,109,103,0.16)');
+        expect(slider.handleStyle.color).toBe('#616d67');
     });
 });

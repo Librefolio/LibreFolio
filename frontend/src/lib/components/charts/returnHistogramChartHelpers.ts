@@ -25,6 +25,7 @@
 import {chartNeutrals, RETURN_HISTOGRAM_COLORS} from '$lib/theme/chartTheme';
 import {themed} from '$lib/theme/themePair';
 
+import {buildDataZoom} from './chartCoreHelpers';
 import {tooltipPositionAboveFinger, tooltipPositionSide} from './echartsTooltipHelpers';
 
 /** One bar, in percent units, with the flags `l1Helpers` computed. */
@@ -121,15 +122,25 @@ export function renderBin(params: {coordSys: {x: number; y: number; width: numbe
     };
 }
 
+/**
+ * From this many bars a slider is drawn under the chart (D3, 07/11/2026): the engine bins up to 200 and a bar of a few pixels cannot be
+ * hovered nor read, so the reader zooms. Under it the wheel and the pinch are enough, as on the other charts.
+ */
+export const SLIDER_MIN_BINS = 30;
+/** The room the slider takes under the plot, in pixels: the chart's own height grows by this much, so the plot does not shrink. */
+export const SLIDER_ROOM_PX = 26;
+
 export interface ReturnHistogramOptionResult {
     isEmpty: boolean;
+    /** Whether the option draws a slider, so the host can give the chart the room it needs. */
+    hasSlider: boolean;
     /** An ECharts option; typed loosely because a custom series' `renderItem` and `markLine` are wider than the library's own type of a literal. */
     option: Record<string, unknown>;
 }
 
 export function buildReturnHistogramOption(input: ReturnHistogramOptionInput): ReturnHistogramOptionResult {
     const {bins, cut, dark = false, scope = null, formatAxis, cutLabel} = input;
-    if (bins.length === 0) return {isEmpty: true, option: {}};
+    if (bins.length === 0) return {isEmpty: true, hasSlider: false, option: {}};
 
     const {returnHistogram} = chartNeutrals(dark, scope);
     const lowest = bins[0].lowerBound;
@@ -144,11 +155,37 @@ export function buildReturnHistogramOption(input: ReturnHistogramOptionInput): R
 
     const cutColor = themed(RETURN_HISTOGRAM_COLORS.cut, dark);
 
+    // Zoom (D3): inside the chart as on the other charts (wheel, drag, and the two-finger bridge the host attaches), plus a slider
+    // when the bars are many. `weakFilter`, not `filter`: a bar is an interval, and one that straddles an edge of the window must stay.
+    // The zoom stops at one bar's width: past it there is nothing more to see.
+    const hasSlider = bins.length >= SLIDER_MIN_BINS;
+    const narrowest = Math.min(...bins.map((bin) => bin.upperBound - bin.lowerBound));
+    const dataZoom: Record<string, unknown>[] = buildDataZoom([0]).map((zoom) => ({...zoom, filterMode: 'weakFilter', minValueSpan: narrowest}));
+    if (hasSlider) {
+        dataZoom.push({
+            type: 'slider',
+            xAxisIndex: [0],
+            filterMode: 'weakFilter',
+            minValueSpan: narrowest,
+            height: 14,
+            bottom: 4,
+            showDetail: false,
+            showDataShadow: false,
+            borderColor: returnHistogram.axis,
+            backgroundColor: returnHistogram.hitArea,
+            fillerColor: returnHistogram.hoverBand,
+            handleStyle: {color: returnHistogram.axisText, borderColor: returnHistogram.axisText},
+            moveHandleStyle: {color: returnHistogram.axisText},
+            textStyle: {color: returnHistogram.axisText},
+        });
+    }
+
     return {
         isEmpty: false,
+        hasSlider,
         option: {
             // A top margin the cut's label sits in; the bottom one is the axis labels', which `containLabel` measures.
-            grid: {left: 8, right: 14, top: cut === null ? 8 : 22, bottom: 4, containLabel: true},
+            grid: {left: 8, right: 14, top: cut === null ? 8 : 22, bottom: hasSlider ? 4 + SLIDER_ROOM_PX : 4, containLabel: true},
             xAxis: {
                 type: 'value',
                 min: lowest,
@@ -162,10 +199,13 @@ export function buildReturnHistogramOption(input: ReturnHistogramOptionInput): R
             },
             // The height is the count; no axis is drawn, the tooltip says the number.
             yAxis: {type: 'value', min: 0, max: tallest > 0 ? tallest : 1, show: false},
+            dataZoom,
             series: [
                 {
                     id: 'return-histogram',
                     type: 'custom',
+                    // A bar past the edge of a zoomed window is cut at the plot, not drawn over the axis labels.
+                    clip: true,
                     data,
                     encode: {x: [0, 1], y: 2},
                     renderItem: (params: unknown, api: unknown) => renderBin(params as Parameters<typeof renderBin>[0], api as HistogramRenderApi, {hoverBand: returnHistogram.hoverBand, hitArea: returnHistogram.hitArea}),
