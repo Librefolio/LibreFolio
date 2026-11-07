@@ -116,7 +116,7 @@ def latest_range_end() -> date:
     minutes. One day past today is the slack for a user east of the server, whose today is already the server's
     tomorrow; a later day holds no data. It is read where a range enters: ``PortfolioCalculationEngine.calculate``,
     ``PortfolioService.get_summary`` / ``get_report``, ``LotsAnalysisService.get_lots_analysis``, risk's portfolio scope
-    (``risk.scope.load_scope_inputs``) and ``AiExportRuntimeService.prepare_request``.
+    (``risk.scope.load_scope_inputs``) and ``AiExportSnapshotService.prepare_request``.
 
     The server's local date, like ``date.today()`` in those modules (``today_date()`` above is UTC's): ``server_today()``
     plus one day.
