@@ -126,6 +126,13 @@ The code marks the arrival rule as an approximation; backlog B3 (section I) keep
 legs do not touch K/R. Separately, since lot 41 (2026-10-11) the arrival day of a pair between two brokers also moves
 X from A's capital baseline to B's, a zero-sum flow — [[decisions/portfolio-pnl-series-contracts]], G1a.
 
+> *2026-11-07 lint:* both open points above have since shipped. **J2** (`03f2c0de1`, 2026-10-17): the departure
+> records `(from_r, sent)` by its id and the arrival brings back what it took from each pool —
+> `K_B += sent − from_r`, `R_B += from_r + (amount − sent)`, the gap being a result (a loss beyond R comes out of K);
+> an arrival with no known departure still lands all in K (`_move_linked_cash()` in `daily_state.py`). **B3 / MF-J3**
+> (`75fa757f2`, 2026-10-30): a leg whose partner is outside the scope, or an orphan, now moves the pools like a
+> DEPOSIT or a WITHDRAWAL (`_cash_transfer_pools()`).
+
 ### EXCHANGE RESULT ON FOREIGN CASH (since 2026-10-11)
 On every day the rate of a foreign currency held as cash changes, the broker's cash is revalued to its native balances
 at that day's rate ([[decisions/native-cash-daily-revaluation]], lot 41 F, option **k2**):
@@ -144,6 +151,10 @@ the per-transaction loop 4b).
 A SELL in the pre-frame puts all its proceeds into K (the code: "WAC not tracked yet in pre-frame for sell cost
 basis"); the cost/gain split above is applied only in the frame. In production the pre-frame is empty
 (`date_from=None`), so only tests exercise it.
+
+> *2026-11-07 lint:* the pre-frame no longer exists. Since `2ad9a43b2` (2026-10-17, MF-J1, «one daily replay, no
+> pre-frame») one replay applies the same rules every day from the first movement and emits states from `date_from`,
+> so a SELL before `date_from` gets the same cost/gain split as any other. See [[concepts/pre-frame-frame-separation]].
 
 ## Reconciliation
 
@@ -172,8 +183,8 @@ cash_from_generated = max(cash_like − cash_from_contributed, 0)
   exchange results of `_revalue_foreign_cash()` on rate-change days
 - `NativeCash` in `financial_math/native_cash.py` — the native balances the exchange result is measured against
   ([[entities/native-cash]])
-- Pre-frame loop: K/R/W state built up from all historical transactions before t0
-- Frame loop [t0, t1]: pool snapshots emitted daily in `DailyPortfolioState`
+- One daily replay from the first movement (the pre-frame loop was removed in `2ad9a43b2`, 2026-10-17): pool
+  snapshots emitted daily in `DailyPortfolioState` from `date_from`
 - GrowthChart frontend: 3 series
   - Series 1 (dark solid line): NAV
   - Series 2 (dashed): capital baseline (K + R at end of day ≈ cash provenance)
@@ -192,7 +203,8 @@ The new K/R/W model supersedes the earlier informal 2-pool description ("deposit
 >
 > *Superseded 2026-10-07 (last sentence):* the KPI cards' realized P&L no longer comes from a per-SELL computation in
 > `get_summary()`. It is Σ (proceeds − cost) over the engine's `realized_sales` dated in the period
-> (`_period_realized_sales()` in `portfolio_service.py`), leaving out — and reporting — a sale whose proceeds could not
+> (`_period_realized_sales()` in `portfolio_service.py`; *2026-11-07 lint:* now `period_realized_sales()` in
+> `financial_math/portfolio/period.py`, called by `portfolio_service.py`), leaving out — and reporting — a sale whose proceeds could not
 > be converted or whose pool cost was incomplete. Each `RealizedSale` carries the same removed cost C as the K/R
 > update above; the pools are still not the KPI figures.
 
@@ -202,6 +214,7 @@ The new K/R/W model supersedes the earlier informal 2-pool description ("deposit
 |------|------|
 | Engine implementation | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Native cash, exchange results (since 2026-10-11) | `backend/app/services/financial_math/native_cash.py` |
+| Linked transfers keep their returns (J2) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_transfer_keeps_returns.py` |
 | Exchange-result scenarios (k2) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_foreign_cash_revaluation.py` |
 | Theory — exchange result on foreign cash, reconciliation | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.en.md` |
 | Theory — the pools by broker, example D | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.en.md` |

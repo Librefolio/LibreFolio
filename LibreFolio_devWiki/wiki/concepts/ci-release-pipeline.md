@@ -50,6 +50,13 @@ There is no `push: main` trigger and no `force_gallery` input (both appear in ol
 11. gh-pages deploy (main or release), artifacts, release-notes append (release)
 ```
 
+> *2026-11-07 lint:* steps added to `release.yml` since this list was written — each image is published for
+> `linux/amd64` and `linux/arm64` and its manifests are checked after the push (`dd05157bf`, 2026-10-23, M-1); each
+> pushed image gets a build-provenance attestation (`17381a8b7`, 2026-10-23, M-2); the app version is frozen for the
+> frontend builds and the tree is checked clean after install, build, docs and gallery (`47c505081`, 2026-10-13);
+> disk space is freed before the image builds (`03c9ba015`, 2026-11-05). A first SvelteKit build also runs right after
+> install, before the docs checks.
+
 ## Key Design Decisions
 
 ### Release gates and nightly tolerance

@@ -25,6 +25,11 @@ order caught it.
   position, the shared step returns exactly what the removed code returned:
   `test_expand_to_days_on_every_day_is_the_trim_it_replaced` (every day a change day ⇒ the rows of the old
   `trim_dates`, same order, same objects). Only then is «B is today's computation» true.
+> 2026-11-07 lint: since J5-5 (`fa3222728`, 2026-10-25, lots and positions series as steps) `expand_to_days()` is gone,
+> replaced by `history_steps()` in `change_days.py`; the identity property moved with it, as
+> `test_history_steps_on_every_day_expand_to_the_trim_they_replaced_and_are_maximal` (expanding each step over its days
+> gives the old `trim_dates` rows). The method above is unchanged.
+
 - **Compare with the real old tree too.** `git archive <base> backend` into the session folder; the same probe run
   once per tree (`PYTHONPATH` on the tree) on the same database copies; the JSON compared by SHA-256, the wall-clock
   `generated_at` dropped. That probe sees what self-parity cannot.

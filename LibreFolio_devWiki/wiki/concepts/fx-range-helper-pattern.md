@@ -41,6 +41,10 @@ export async function ensureFxRangeLoaded(slug, start, end): Promise<FxDataPoint
 - The `slug` must be in canonical alphabetical order — always use `createPairSlug(base, quote)` before calling.
 - Network failures silently return cached data (no error propagation to caller).
 - The function returns the full range from cache after loading, enabling immediate use.
+- *2026-11-07 lint:* fetched gaps are marked with `store.markFetched()` (also on a 404, so an empty range is not
+  re-asked); a network or 5xx error marks nothing, so the next call retries. Two siblings live in the same file:
+  `ensureFxRangeLoadedBulk()` (all pairs' gaps in one bulk call, used by list pages) and `ensureFxRangeFromFirstDay()`
+  (Y2-CMP, «All» starting at the pair's first stored day).
 
 ## Source files
 

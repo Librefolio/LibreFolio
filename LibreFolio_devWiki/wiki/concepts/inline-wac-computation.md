@@ -159,6 +159,9 @@ Since 2026-10-07: the engine makes two batched `convert_bulk` calls per run (the
 - (Both were in `portfolio_engine.py` until 2026-10-12.)
 - Pre-frame loop: WAC computed for all historical transactions before t0
 - Frame loop [t0, t1]: WAC available at every day for cost basis and 3-pool updates
+- *2026-11-07 lint:* the two loops above are one since `2ad9a43b2` (2026-10-17, MF-J1, «one daily replay, no
+  pre-frame»): a single replay from the first movement, states emitted from `date_from` — the «pre-frame and frame
+  alike» of the pseudo-code now means every day of that one replay ([[concepts/pre-frame-frame-separation]]).
 
 ## Important Invariant
 

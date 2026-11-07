@@ -68,6 +68,9 @@ with no icon fields was re-fetched 40–60 times a second ([[problems/broker-ico
 was closed at the loader (a per-generation "settled" set in `brokerStore.ts`); a `merge` that bumps only on a real
 change is open as backlog **K-11**.
 
+> *2026-11-07 lint:* still open in the code — `merge()` in `entityStore.ts` sets `changed = true` for every existing
+> entry it touches, equal values or not.
+
 ## Relationship to TimeSeriesStore
 
 `createEntityStore` handles **bounded lists** (all assets, all brokers — stable set fetched once). `TimeSeriesStore` handles **unbounded time series** with gap detection and delta fetching. They are complementary, not interchangeable.
@@ -79,7 +82,8 @@ change is open as backlog **K-11**.
 export const assetStore = createEntityStore<AssetInfo, number>({
     loader: () => zodiosApi.list_assets_api_v1_assets_query_get(),   // GET /assets/query
     getId: (a) => a.id,
-    normalize: flattenZodArtifacts,
+    normalize,   // the store's own normalize(raw): AssetInfo (2026-11-07 lint: `flattenZodArtifacts` is not in the code)
+    requiredFields: ['display_name', 'currency'],
 });
 
 // Mutation callsite

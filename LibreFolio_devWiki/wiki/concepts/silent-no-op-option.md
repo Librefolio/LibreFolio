@@ -108,11 +108,11 @@ evidence that the rest of the codebase is immune.
 
 | Role | Path |
 |------|------|
-| Flag definitions (`_RESUME_MODE` L44, `_COVERAGE_MODE` L31) | `scripts/test_runner/_common.py` |
+| Flag definitions (`_RESUME_MODE` ~L69, `_COVERAGE_MODE` ~L56) | `scripts/test_runner/_common.py` |
 | Flag mutation site (correct pattern) | `scripts/test_runner/_cli.py` — `_common._RESUME_MODE = ...` |
 | Case 1 fix — 13 modules | `scripts/test_runner/_backend_api.py`, `_backend_db.py`, `_backend_external.py`, `_backend_schemas.py`, `_backend_services.py`, `_backend_utils.py`, `_frontend_asset.py`, `_frontend_broker.py`, `_frontend_fx.py`, `_frontend_portfolio.py`, `_frontend_transaction.py`, `_frontend_user.py`, `_frontend_utility.py` |
 | Case 2 fix | `scripts/test_runner/_suites.py` |
 | Case 3 — parent `dest` | `scripts/test_runner/_cli.py` — `add_subparsers(dest="category")` |
-| Case 3 fix — `dest="cov_category"` | `scripts/coverage_analysis.py` (~L627), read at `scripts/test_runner/_cli.py` (~L604) |
-| Case 4 — single injection point | `scripts/test_runner/_common.py` — `apply_e2e_workers()` (~L89) |
-| Case 4 — the two launchers | `scripts/test_runner/_consolidate.py` (~L186), `scripts/test_runner/_frontend_common.py` (~L332) |
+| Case 3 fix — `dest="cov_category"` | `scripts/coverage_analysis.py` (~L670), read at `scripts/test_runner/_cli.py` (~L692) |
+| Case 4 — single injection point | `scripts/test_runner/_common.py` — `apply_e2e_workers()` (~L114) |
+| Case 4 — the two launchers | `scripts/test_runner/_consolidate.py` — `run_playwright_group` (~L174), `scripts/test_runner/_frontend_common.py` — `_run_playwright` (~L237) |

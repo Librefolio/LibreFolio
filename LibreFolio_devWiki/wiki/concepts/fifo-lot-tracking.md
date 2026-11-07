@@ -2,7 +2,7 @@
 title: "FIFO Lot Tracking"
 category: "concept"
 tags: ["finance", "fifo", "holdings", "tax"]
-related: ["phase09-dashboard-batch", "entities/fifo-lot-engine", "decisions/fifo-v4-income-eligibility-d1", "decisions/fifo-v4-cost-allocation-ladder", "concepts/gross-net-dual-reporting"]
+related: ["sources/phase09-dashboard-batch", "entities/fifo-lot-engine", "decisions/fifo-v4-income-eligibility-d1", "decisions/fifo-v4-cost-allocation-ladder", "concepts/gross-net-dual-reporting"]
 ---
 
 # FIFO Lot Tracking

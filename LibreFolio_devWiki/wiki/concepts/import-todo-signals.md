@@ -44,8 +44,8 @@ Backend BRIM plugins emit `field_todos` inside `BRIMParseResponse` for each row 
 
 ## Lifecycle in the Import Wizard
 
-1. **Backend parse** (Step 3): `POST /brim/parse` returns `BRIMParseResponse[]` with `field_todos` per row
-2. **Step 4 merge**: `ParsedFileResult.response.transactions` are merged into `MergedTransaction[]`, each with `todos: ImportTodo[]`
+1. **Backend parse** (Step 3): `POST /brim/parse` (*2026-11-07 lint:* the route is `POST /api/v1/brokers/import/files/{file_id}/parse`, `parse_file()` in `brokers.py`) returns `BRIMParseResponse[]` with `field_todos` per row
+2. **Step 4 merge**: `ParsedFileResult.response.transactions` are merged into `MergedTransaction[]` (*2026-11-07 lint:* the type is `MergedTx`, `importTypes.ts`, built by `buildMergedTransactions()` in `importMerge.ts`), each with `todos: ImportTodo[]`
 3. **Step 4 display**: Rows with blockers show a red badge; warnings show amber. Import button disabled if any `severity='blocker'` remains unresolved.
 4. **User review**: User can edit the row's field directly in the review grid, or accept the warning.
 5. **On import**: `onImportBatch(creates: Array<{tx, todos}>)` hands the corrected items to the bulk editor **with their remaining todos**, which keep gating and guiding there (see the Definition).

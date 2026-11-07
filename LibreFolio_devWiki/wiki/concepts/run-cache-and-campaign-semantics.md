@@ -100,6 +100,6 @@ by name; import the module and read the attribute.
 |------|------|
 | Cache + campaign | `scripts/test_runner/_run_cache.py` |
 | Flag parsing, `_timed_run`, `_apply_coverage_mode` | `scripts/test_runner/_cli.py` |
-| `resume` gating in the serial path | `scripts/test_runner/_common.py` (~257) |
+| `resume` gating in the serial path | `scripts/test_runner/_common.py` (~296) |
 | `resume` gating in the consolidated path | `scripts/test_runner/_consolidate.py` — `already_green` |
 | Coverage cleanup helpers | `scripts/test_runner/_coverage.py` |

@@ -1,6 +1,6 @@
 ---
 title: "Stateless Preview Pattern — Controlled Components for Computed Values"
-category: Concept
+category: concept
 tags: [frontend, svelte5, reactivity, pattern, controlled-component, wac]
 related_features: [F-097, F-048]
 related_problems: [problems/wac-feedback-loop, problems/svelte5-effect-read-write-loop]

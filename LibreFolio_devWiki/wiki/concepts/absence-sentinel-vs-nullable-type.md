@@ -18,8 +18,8 @@ But **zero is not a possible exchange rate**. It was the absence sentinel,
 travelling with the shape of a good datum — and it sat at the boundary with the
 API, so it was upstream of everything.
 
-Worse, the backend *declared* the absence: `backend/app/schemas/fx.py:157` has
-`rate: Optional[SafeDecimal] = Field(None, …)`, the generated client types it
+Worse, the backend *declared* the absence: `backend/app/schemas/fx.py` (`FXConversionResult`,
+line 157 then, 194 on 2026-11-07) has `rate: Optional[SafeDecimal] = Field(None, …)`, the generated client types it
 `(string | null) | undefined`, and the generated Zod validates a union with
 `null`. The API said "I have no rate for that day" and the frontend **threw the
 information away exactly where it arrived**.
@@ -129,7 +129,7 @@ bridged inside a run, and no stroke crosses a declared gap.
 | Chart gap | `frontend/src/lib/components/charts/LineChart.svelte`, `lineChartHelpers.ts` |
 | Backend signal runs (J-21) | `frontend/src/lib/charts/signals/backendRenderer.ts` — `renderScalarSeries`, `splitLineSignal`, `renderedSignalPointCount` |
 | Quote-day filter | `backend/app/services/signals/execution.py` — `quote_day_points` |
-| Backend contract | `backend/app/schemas/fx.py:157` |
+| Backend contract | `backend/app/schemas/fx.py` — `FXConversionResult.rate` |
 
 ## See also
 

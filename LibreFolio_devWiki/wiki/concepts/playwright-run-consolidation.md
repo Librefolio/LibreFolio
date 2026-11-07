@@ -54,6 +54,12 @@ The failure mode is what makes this worth writing down:
 > Running out of heap shows up as **an unrelated test dying with `SIGABRT`** — a
 > failure that names the victim and never the cause.
 
+> 2026-11-07 lint: the V8 collector described above was replaced on 2026-08-30 (`b4d270735`, «measure Svelte
+> branches, and stop double-counting»): the build under test is instrumented by `vite-plugin-istanbul`
+> (`COVERAGE_INSTRUMENT=1`), and the fixture reads `window.__coverage__` and writes one JSON per test, merged at the end
+> by `frontend/scripts/js-coverage-report.js`; monocart and `startJSCoverage` are gone. `_JS_COVERAGE_CHUNK = 8` and the
+> 8 GB `NODE_OPTIONS` are still in place (`_consolidate.py`, `playwright.config.ts`).
+
 ## It is test instrumentation, not a product leak
 
 The memory that exploded belonged to the **Node process of Playwright**, not to
@@ -107,4 +113,5 @@ nothing. See [[problems/env-var-injection-point-duplicated]].
 | Single worker-count injection point | `scripts/test_runner/_common.py` — `apply_e2e_workers` |
 | Project selector in the inventory | `scripts/test_runner/_inventory.py` — `ALL_PROJECTS` |
 | Playwright config | `frontend/playwright.config.ts` |
-| Coverage collection | `frontend/e2e/fixtures/` (monocart) |
+| Coverage collection (istanbul `window.__coverage__`, one JSON per test; monocart until `b4d270735`) | `frontend/e2e/fixtures/playwright.ts` |
+| Coverage merge and report | `frontend/scripts/js-coverage-report.js` |

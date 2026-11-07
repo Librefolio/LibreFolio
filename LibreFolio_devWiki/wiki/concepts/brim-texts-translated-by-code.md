@@ -41,6 +41,11 @@ Backlog C-39 split the catalogues by namespace after 1.2, starting with `brimPlu
 goes further: seventeen subsystem catalogues plus a `base`, and each plugin's translations in its own folder —
 [[decisions/plugin-folders-and-split-i18n]].
 
+> *2026-11-07 lint:* shipped. `651143e03` and `e47f45c98` (2026-10-12) build the catalogue from its sources: a `base`
+> plus one folder per subsystem under `frontend/src/lib/i18n/` (22 today), and each BRIM plugin's `brimPlugins.<code>`
+> keys in its own `backend/app/services/brim_providers/<plugin>/i18n/<lang>.json`; `en.json`… are the generated
+> catalogue (skill `devpy-i18n`).
+
 ## Source files
 
 | Role | Path |
@@ -48,6 +53,7 @@ goes further: seventeen subsystem catalogues plus a `base`, and each plugin's tr
 | Plugin names and descriptions | `frontend/src/lib/utils/brim/pluginText.ts` |
 | Notices and evidence captions | `frontend/src/lib/features/transactions/resolveBrimNotice.ts` |
 | Refusals | `frontend/src/lib/features/transactions/import/defaultPluginCheck.ts` |
-| The catalogue | `frontend/src/lib/i18n/base/en.json` |
+| The catalogue (base source) | `frontend/src/lib/i18n/base/en.json` |
+| A plugin's own translations (example) | `backend/app/services/brim_providers/broker_scalable/i18n/en.json` |
 | `TestPluginTextCatalogues` | `backend/test_scripts/test_external/test_brim_providers.py` |
 | `TestWhatTheWizardWords` | `backend/test_scripts/test_external/test_brim_scalable.py` |
