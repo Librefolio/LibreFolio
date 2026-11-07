@@ -611,6 +611,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/copies.refresh.test.ts",
             "src/lib/features/tools/pac-allocator/planner/copies.index.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/BusyPanel.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/shared/amountSentence.test.ts",
             "src/lib/features/tools/pac-allocator/planner/fxRead.test.ts",
             "src/lib/features/tools/pac-allocator/planner/steps/FxStep.test.ts",
             "src/lib/features/tools/pac-allocator/planner/request.test.ts",
