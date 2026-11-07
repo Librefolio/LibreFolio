@@ -101,7 +101,7 @@ Un unico segreto per installazione: LibreFolio ne deriva le proprie chiavi di cr
 2. **In `.env` o nell'ambiente del container**, imposta la chiave, oppure salvala in un file e indica il percorso, come nell'[esempio Docker](#secret-files):
 
     ```env
-    LIBREFOLIO_INSTANCE_KEY=<la chiave>
+    LIBREFOLIO_INSTANCE_KEY=<key>
     # oppure
     LIBREFOLIO_INSTANCE_KEY_FILE=/run/secrets/instance_key
     ```
@@ -176,7 +176,7 @@ LIBREFOLIO_PLUGIN_<KIND>_<PLUGIN CODE>_<SETTING KEY>
 - Tutto in maiuscolo; ogni carattere diverso da una lettera o da una cifra diventa `_`. L'impostazione `api_key` del provider di prezzi `my_provider`:
 
     ```env
-    LIBREFOLIO_PLUGIN_ASSET_MY_PROVIDER_API_KEY=<valore>
+    LIBREFOLIO_PLUGIN_ASSET_MY_PROVIDER_API_KEY=<value>
     ```
 
 - Ogni variabile ha anche una forma `_FILE`: il percorso di un file che contiene il valore, come un segreto Docker, letto come in [Segreti nei file](#secret-files). Un file che non può essere letto non arresta mai il server: vedi [sotto](#plugin-variable-lock).
