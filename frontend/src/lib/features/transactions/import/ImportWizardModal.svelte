@@ -262,9 +262,10 @@
     });
 
     // Step 1 validation: all files must have broker assigned (or no files = ok to proceed)
-    let step1CanProceed = $derived(pendingFiles.length === 0 || pendingFiles.every((f) => f.brokerId !== null && f.status !== 'error'));
+    // A file whose upload was refused (the space limit, C9-1) is sent again by Continue: it does not stop the step.
+    let step1CanProceed = $derived(pendingFiles.length === 0 || pendingFiles.every((f) => f.brokerId !== null && (f.status !== 'error' || f.uploadFailed === true)));
     let step1HasUnassigned = $derived(pendingFiles.some((f) => f.brokerId === null && f.status !== 'error'));
-    let step1ValidCount = $derived(pendingFiles.filter((f) => f.status !== 'error').length);
+    let step1ValidCount = $derived(pendingFiles.filter((f) => f.status !== 'error' || f.uploadFailed === true).length);
     let step1SelectedIds = $state<string[]>([]);
     let step1TableRef: DataTable<PendingFileEntry> | undefined = $state(undefined);
 
