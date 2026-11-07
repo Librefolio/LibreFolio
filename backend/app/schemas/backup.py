@@ -101,6 +101,8 @@ class InstanceStorage(BaseModel):
     volume_free_bytes: int | None = Field(default=None, ge=0)
     limit_mb: int | None = Field(default=None, ge=1)
     limit_locked: bool
+    #: C9-7: a restore under way: the uploaded archive and its opened version, until the restore ends or is discarded.
+    restore_bytes: int = Field(default=0, ge=0)
 
 
 # kind: envelope for a secure backup (.lfbk), whose check needs its password; zip otherwise.

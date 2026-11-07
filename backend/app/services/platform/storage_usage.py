@@ -2,8 +2,8 @@
 
 ``measure_storage`` walks the data directory once and splits what it finds in five parts that never overlap: the
 database (``sqlite/``), the uploaded files (``custom-uploads/``), the broker reports (``broker_reports/``), the
-backups (``backups/``, ``.jobs/`` included) and everything else LibreFolio keeps there (logs, state, the work folder of
-a restore). Their sum is ``data_bytes``. Next to it, the volume the data directory lives on (total, used, free), so a
+backups (``backups/``, ``.jobs/`` included), a restore under way (``.restore/``, C9-7) and everything else LibreFolio keeps
+there (logs, state). Their sum is ``data_bytes``. Next to it, the volume the data directory lives on (total, used, free), so a
 self-hosted instance with no limit can draw «LibreFolio's parts, the other files of the disk, the free space».
 
 The limit is the global setting ``storage_limit_mb`` (0 = none), or ``LIBREFOLIO_STORAGE_LIMIT_MB`` when its hosting
@@ -27,8 +27,9 @@ from backend.app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-#: The top-level entries of the data directory that make the four named parts.
-_PARTS = {"sqlite": "database_bytes", "custom-uploads": "uploads_bytes", "broker_reports": "broker_reports_bytes", "backups": "backups_bytes"}
+#: The top-level entries of the data directory that make the named parts; ``.restore`` is a restore under way (C9-7): the
+#: uploaded archive and its opened version, until the restore ends or is discarded.
+_PARTS = {"sqlite": "database_bytes", "custom-uploads": "uploads_bytes", "broker_reports": "broker_reports_bytes", "backups": "backups_bytes", ".restore": "restore_bytes"}
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,8 @@ class StorageUsage:
     volume_free_bytes: int | None
     limit_mb: int | None
     limit_locked: bool
+    #: C9-7: a restore under way (``.restore/``: the uploaded archive, its opened version, the data set aside while it applies).
+    restore_bytes: int = 0
 
 
 def _entry_bytes(entry: os.DirEntry[str]) -> int:
