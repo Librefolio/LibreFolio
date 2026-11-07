@@ -34,6 +34,7 @@ import {
     deleteRestoreCheck,
     getRestoreCheck,
     getRestoreStatus,
+    listWaitingRestoreChecks,
     isEnvelopeFile,
     probeServer,
     requestRestart,
@@ -47,6 +48,7 @@ import {
     type RestoreStatus,
     type RestoreUpload,
     type RestoreUploadOptions,
+    type RestoreWaitingCheck,
 } from './backupApi';
 
 export type RestoreFlowState = 'loading' | 'idle' | 'password' | 'uploading' | 'checking' | 'report' | 'confirming' | 'pending' | 'in_progress' | 'cancelling' | 'restarting' | 'failed';
@@ -100,6 +102,8 @@ export interface RestoreApi {
     restart(): Promise<RestoreRestartAccepted>;
     probeServer(): Promise<'up' | 'down'>;
     restoreOutcome(ticket: string | null): Promise<RestoreOutcomeRead>;
+    /** The checks waiting for a decision (C9-6); without it, none. */
+    waiting?(): Promise<RestoreWaitingCheck[]>;
 }
 
 export type RestoreStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -138,6 +142,7 @@ const SERVER_API: RestoreApi = {
     restart: requestRestart,
     probeServer,
     restoreOutcome,
+    waiting: listWaitingRestoreChecks,
 };
 
 function defaultStorage(): RestoreStorage | null {
@@ -172,6 +177,11 @@ export class RestoreFlowController {
     outcomeStatus = $state<RestoreStatus | null>(null);
     /** A secure backup's password is out to the server: the form waits for its answer. */
     submitting = $state(false);
+    /**
+     * The checks waiting for a decision, read with the status while nothing is in hand (C9-6): the card offers to resume or
+     * discard each, from any tab or device. Empty while a check or a restore is followed.
+     */
+    waiting = $state<RestoreWaitingCheck[]>([]);
 
     report = $derived(this.stage !== null && this.stage.status === 'done' ? (this.stage.report ?? null) : null);
     /** The largest archive the server takes, in megabytes: `0` for no limit, `null` when unknown. */
@@ -238,6 +248,8 @@ export class RestoreFlowController {
         const stageId = this.#remembered();
         if (stageId === null) {
             this.stage = null;
+            await this.#readWaiting(generation);
+            if (this.#stale(generation)) return;
             this.state = 'idle';
             return;
         }
@@ -255,6 +267,42 @@ export class RestoreFlowController {
             }
             this.#fail(backupFailureCode(error), 'check');
         }
+    }
+
+    /** Follow a check that waits for a decision again (C9-6): its report, or its progress while it runs. */
+    async resume(stageId: string): Promise<void> {
+        if (this.state !== 'idle' || !STAGE_ID.test(stageId)) return;
+        const generation = this.#next();
+        this.state = 'loading';
+        this.#setError(null, null);
+        try {
+            const stage = await this.#api.getCheck(stageId);
+            if (this.#stale(generation)) return;
+            this.waiting = [];
+            if (stage.status === 'running') this.#watched = stage.stage_id;
+            this.#follow(stage, generation, false);
+        } catch (error) {
+            if (this.#stale(generation)) return;
+            if (backupErrorCode(error) === 'restore_stage_not_found') {
+                await this.load();
+                return;
+            }
+            this.#fail(backupFailureCode(error), 'check');
+        }
+    }
+
+    /** Drop a check that waits for a decision, from the list (C9-6): its archive is not restored. */
+    async discard(stageId: string): Promise<void> {
+        if (this.state !== 'idle' || !STAGE_ID.test(stageId)) return;
+        await this.#dropNow(stageId);
+    }
+
+    /** «I'll decide later»: the report closes and its check stays on the server, listed for later (C9-6). */
+    async later(): Promise<void> {
+        if (this.state !== 'report') return;
+        this.#forget();
+        this.stage = null;
+        await this.load();
     }
 
     /**
@@ -687,6 +735,20 @@ export class RestoreFlowController {
         this.outcome = 'still_pending';
         this.outcomeStatus = status;
         return true;
+    }
+
+    /** The checks waiting for a decision; a list that cannot be read is an empty one (the card still works without it). */
+    async #readWaiting(generation: number): Promise<void> {
+        if (this.#api.waiting === undefined) {
+            this.waiting = [];
+            return;
+        }
+        try {
+            const waiting = await this.#api.waiting();
+            if (!this.#stale(generation)) this.waiting = waiting;
+        } catch {
+            if (!this.#stale(generation)) this.waiting = [];
+        }
     }
 
     #fail(code: string, what: RestoreFailure, announce = true): void {

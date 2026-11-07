@@ -247,6 +247,14 @@ export async function isEnvelopeFile(file: Blob): Promise<boolean> {
     return head.length === ENVELOPE_MAGIC.length && ENVELOPE_MAGIC.every((byte, index) => head[index] === byte);
 }
 
+/** A check started from the app that waits for a decision (C9-6): running, or done and its archive still kept. */
+export type RestoreWaitingCheck = z.infer<typeof schemas.RestoreWaitingCheck>;
+
+/** The checks waiting for a decision, the newest first: any tab or device of an administrator resumes one. */
+export async function listWaitingRestoreChecks(): Promise<RestoreWaitingCheck[]> {
+    return (await zodiosApi.list_waiting_restore_checks_api_v1_backup_restore_stages_get()).items;
+}
+
 export function getRestoreCheck(stageId: string): Promise<RestoreStage> {
     return zodiosApi.get_restore_check_api_v1_backup_restore_stage__stage_id__get({params: {stage_id: stageId}}) as Promise<RestoreStage>;
 }
