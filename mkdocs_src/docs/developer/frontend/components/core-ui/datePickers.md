@@ -20,9 +20,9 @@ graph LR
     DRP -.->|used by| CDR["CellDateRange"]
     DRP -.->|used by| L4R["L4Replay"]
 
-    style CAL fill:#e3f2fd,stroke:#1565c0
-    style SDP fill:#e3f2fd,stroke:#1565c0
-    style DRP fill:#e3f2fd,stroke:#1565c0
+    style CAL fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style SDP fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style DRP fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
 ```
 
 ---

@@ -36,19 +36,19 @@ graph TD
     DE -.->|used by| FX["FX & asset data editors"]
     PT -.->|used by| PAGES["Dashboard · Broker Detail · Assets · FX"]
 
-    style MB fill:#f3e5f5,stroke:#7b1fa2
-    style CM fill:#f3e5f5,stroke:#7b1fa2
-    style SMB fill:#f3e5f5,stroke:#7b1fa2
-    style PSM fill:#f3e5f5,stroke:#7b1fa2
-    style CAL fill:#e3f2fd,stroke:#1565c0
-    style SDP fill:#e3f2fd,stroke:#1565c0
-    style DRP fill:#e3f2fd,stroke:#1565c0
-    style CDB fill:#e3f2fd,stroke:#1565c0
-    style DE fill:#e8f5e9,stroke:#2e7d32
-    style DIM fill:#e8f5e9,stroke:#2e7d32
-    style CSE fill:#e8f5e9,stroke:#2e7d32
-    style PT fill:#fff3e0,stroke:#e65100
-    style TB fill:#fff3e0,stroke:#e65100
+    style MB fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+    style CM fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+    style SMB fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+    style PSM fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+    style CAL fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style SDP fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style DRP fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style CDB fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style DE fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style DIM fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style CSE fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style PT fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style TB fill:#fff3e0,color:#1b1b1b,stroke:#e65100
 ```
 
 `PageToolbar` does not import the date picker: the page renders a `DateRangePicker` inside the
