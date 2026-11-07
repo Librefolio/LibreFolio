@@ -27,27 +27,15 @@
     import LineChart from '$lib/components/charts/LineChart.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {_ as t} from '$lib/i18n';
-    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     import type {UnderwaterPoint} from './l1Helpers';
 
     interface Props {
         points: UnderwaterPoint[];
-        /**
-         * Ulcer index as a decimal ratio, shown as this chart's caption.
-         *
-         * It is placed here rather than on a card of its own deliberately: on its
-         * own it is a dimensionless number with no reading, and the curve above it
-         * is literally the thing it summarises — the root-mean-square depth of
-         * exactly this shape.
-         */
-        ulcerIndex: number | null;
         height?: string;
     }
 
-    let {points, ulcerIndex, height = '220px'}: Props = $props();
-
-    const ulcerCaption = $derived(ulcerIndex === null ? null : $t('risk.levels.l1.tails.ulcerIndex', {values: {value: formatPercent(ulcerIndex, {scale: 100, signed: false, digits: 2})}}));
+    let {points, height = '220px'}: Props = $props();
 </script>
 
 <section class="space-y-1" data-testid="risk-l1-underwater">
@@ -62,12 +50,5 @@
         <div data-testid="risk-l1-underwater-chart" data-point-count={points.length}>
             <LineChart data={points} currency="%" viewMode="percentage" yAxisMode="include0" colorByBaseline={false} showGradient={false} {height} />
         </div>
-        {#if ulcerCaption}
-            <p class="text-xs text-lf-muted" data-testid="risk-l1-ulcer">
-                <span class="tabular-nums font-medium text-lf-secondary">{ulcerCaption}</span>
-                <span class="ml-1">— {$t('risk.levels.l1.tails.ulcerIndexHint')}</span>
-                <DocsLink path="financial-theory/technical-analysis/risk-metrics/ulcer-index/" label={$t('risk.levels.l1.tails.ulcerIndexHint')} testId="risk-l1-ulcer-docs" />
-            </p>
-        {/if}
     {/if}
 </section>
