@@ -134,6 +134,9 @@ test.describe('AI Export panel', () => {
             await expect(panel.trigger).toHaveAttribute('aria-busy', 'true', {timeout: 2_000});
             await expect(panel.trigger).toBeDisabled({timeout: 2_000});
             await expect(page.getByTestId('ai-export-copy-button')).toContainText('Preparing export…', {timeout: 2_000});
+            // The button turns while it works (D2, 07/11/2026): busy for the machine, a spinner for the eye.
+            await expect(page.getByTestId('ai-export-copy-button')).toHaveAttribute('aria-busy', 'true', {timeout: 2_000});
+            await expect(page.getByTestId('ai-export-copy-spinner')).toBeVisible({timeout: 2_000});
         } finally {
             releaseRequest();
         }

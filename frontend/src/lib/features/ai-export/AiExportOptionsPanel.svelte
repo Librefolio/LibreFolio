@@ -1,6 +1,6 @@
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {Activity, ArrowLeftRight, CalendarClock, CircleHelp, FileText, Landmark, LayoutDashboard, ListOrdered, Newspaper, Scale, TrendingUp, Wallet} from 'lucide-svelte';
+    import {Activity, ArrowLeftRight, CalendarClock, CircleHelp, FileText, Landmark, LayoutDashboard, ListOrdered, LoaderCircle, Newspaper, Scale, TrendingUp, Wallet} from 'lucide-svelte';
 
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
@@ -314,7 +314,10 @@
         </section>
     {/if}
 
-    <button type="submit" disabled={controlsDisabled || !selected} class="rounded-lg bg-lf-ai px-4 py-2 text-sm font-semibold text-lf-on-ai disabled:opacity-50" data-testid="ai-export-copy-button">
+    <!-- While the export is prepared the button says so and turns: the menu icon already did (D2, 07/11/2026); `aria-busy` is the signal a
+         test and a screen reader read, the spinner is for the eye. -->
+    <button type="submit" disabled={controlsDisabled || !selected} aria-busy={loading} class="flex items-center justify-center gap-2 rounded-lg bg-lf-ai px-4 py-2 text-sm font-semibold text-lf-on-ai disabled:opacity-50" data-testid="ai-export-copy-button">
+        {#if loading}<LoaderCircle size={14} class="animate-spin" data-testid="ai-export-copy-spinner" aria-hidden="true" />{/if}
         {loading ? labels.preparingLabel : labels.prepareLabel}
     </button>
 </form>
