@@ -86,7 +86,7 @@
         const tile = (kpi: Kpi, key: string, fallback: string, help: string, value: string, chips: Chip[]): Tile => ({kpi, label: text(key, fallback), help: text(`help.${key}`, help), value, chips});
         return [
             tile('fixed_reference', 'fixedReference', 'Base of the targets', 'The amount the target percentages apply to: what you already hold of the chosen Assets, plus the cash the plan can reach.', money(accounting.fixed_reference), base),
-            tile('final_invested', 'finalInvested', 'Invested after', 'The value of the chosen Assets after the plan.', money(accounting.final_invested), invested),
+            tile('final_invested', 'finalInvested', 'Invested after', 'The value of the chosen Assets at the end of the plan.', money(accounting.final_invested), invested),
             tile('shortfall', 'shortfall', 'Not invested', 'The part of the base that does not end up in the Assets: cash left free, costs and rounding.', money(accounting.shortfall), shortfall),
             tile(
                 'selected_funding',

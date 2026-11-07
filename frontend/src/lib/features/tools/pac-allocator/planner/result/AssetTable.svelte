@@ -52,10 +52,10 @@
             },
             {
                 id: 'final',
-                header: () => $t(`${KEY}.finalShare`, {default: 'Share after the plan'}),
+                header: () => $t(`${KEY}.finalShare`, {default: 'Final share'}),
                 headerTooltip: () =>
                     $t(`${KEY}.finalShareHelp`, {
-                        default: 'The share of the Asset in the value of all these Assets after the plan. Compare it with the target share to see how the balance between the Assets changes.',
+                        default: 'The share of the Asset in the value of all these Assets at the end of the plan. Compare it with the target share to see how the balance between the Assets changes.',
                     }),
                 type: 'number',
                 sortable: false,
@@ -76,16 +76,16 @@
             },
             {
                 id: 'finalValue',
-                header: () => $t(`${KEY}.finalValue`, {default: 'Value after the plan'}),
+                header: () => $t(`${KEY}.finalValue`, {default: 'Final value'}),
                 headerTooltip: () =>
                     $t(`${KEY}.finalValueHelp`, {
-                        default: 'What the Asset is worth after the plan: the units you had plus the ones bought, at the quote price and, when needed, at the rate of the FX step.',
+                        default: 'What the Asset is worth at the end of the plan: the units you had plus the ones bought, at the quote price and, when needed, at the rate of the FX step.',
                     }),
                 type: 'number',
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 120,
+                minWidth: 150,
                 cell: (row) => cell({type: 'exactMoney', money: row.final_value, digits}),
             },
             {
@@ -99,7 +99,7 @@
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 120,
+                minWidth: 150,
                 cell: (row) => cell({type: 'exactMoney', money: row.target_value, digits}),
             },
             {
@@ -107,13 +107,13 @@
                 header: () => $t(`${KEY}.residual`, {default: 'Gap from ideal'}),
                 headerTooltip: () =>
                     $t(`${KEY}.residualHint`, {
-                        default: 'Value after the plan minus ideal value: positive if the Asset ends above its share, negative if below.',
+                        default: 'Final value minus ideal value: positive if the Asset ends above its share, negative if below.',
                     }),
                 type: 'number',
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 110,
+                minWidth: 150,
                 cell: (row) => cell({type: 'exactMoney', money: row.residual, digits, signed: true, testid: 'pac-planner-assets-residual'}),
             },
             {
@@ -121,15 +121,15 @@
                 header: () => $t(`${KEY}.buyMid`, {default: 'Value bought'}),
                 headerTooltip: () =>
                     $t(`${KEY}.buyMidHelp`, {
-                        default: 'The value of what the plan buys of this Asset, at the quote price: without fees or price margin. In a PAC, which starts from zero, it equals the value after the plan. What really leaves the cash is in the Operational plan.',
+                        default: 'The value of what the plan buys of this Asset, at the quote price: without fees or price margin. In a PAC, which starts from zero, it equals the value at the end of the plan. What really leaves the cash is in the Operational plan.',
                     }),
-                // R11.5: in a PAC it repeats «Value after the plan»; it comes back from the column menu.
+                // R11.5: in a PAC it repeats «Value at the end of the plan»; it comes back from the column menu.
                 hiddenByDefault: true,
                 type: 'number',
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                minWidth: 120,
+                minWidth: 150,
                 cell: (row) => cell({type: 'exactMoney', money: row.buy_mid_value, digits}),
             },
         ]),
@@ -146,8 +146,8 @@
     <div class="flex flex-wrap items-center gap-2">
         <p class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-lf-secondary" data-testid="pac-planner-assets-legend">
             <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-lf-secondary" aria-hidden="true"></span>{$t(`${KEY}.targetShare`, {default: 'Target share'})}</span>
-            <!-- colour: closest role, to review: the «after the plan» bar fill was the brand green as a data colour; bg-lf-checked (the visible accent green on the panel track), alt bg-lf-action -->
-            <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-lf-checked" aria-hidden="true"></span>{$t(`${KEY}.finalShare`, {default: 'Share after the plan'})}</span>
+            <!-- colour: closest role, to review: the final-share bar fill was the brand green as a data colour; bg-lf-checked (the visible accent green on the panel track), alt bg-lf-action -->
+            <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-lf-checked" aria-hidden="true"></span>{$t(`${KEY}.finalShare`, {default: 'Final share'})}</span>
         </p>
         <TableColumns {table} testid="pac-planner-assets-columns" />
     </div>
