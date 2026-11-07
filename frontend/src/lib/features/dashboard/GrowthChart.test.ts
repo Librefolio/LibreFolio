@@ -3468,7 +3468,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         expect({abs, pnlLine, candles, pct}).toEqual({abs: FIXED_EDGE, pnlLine: FIXED_EDGE, candles: FIXED_EDGE, pct: FIXED_EDGE});
     });
 
-    it("D25: Income hands ECharts min and showMinLabel present as undefined, so the yAxis merge cannot keep the line's edge, and the line gets both back", async () => {
+    it("D25 / G4: Income hands ECharts its own lower edge (just below the largest cost, a round number) and showMinLabel present as undefined, so the yAxis merge cannot keep the line's, and the line gets both back", async () => {
         // WHY: D25 for bars. Bars stand on zero, so Income keeps ECharts' default axis, which
         // includes zero. The trap is the merge: the full rebuild merges `yAxis` into the previous
         // option, so an Income option that merely OMITS `min` and `showMinLabel` keeps the
@@ -3492,9 +3492,13 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         await fireEvent.click(getByTestId('growth-pnl-submode-income'));
         const income = await waitForFrame(FRAME.income);
         expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
-        // Soft, so one red names both keys.
-        expect.soft(income.yAxis).toHaveProperty('min', undefined);
+        // Soft, so one red names both keys. G4: the edge is Income's own callback, not the line's (`FIXED_EDGE`: -4152 on this extent) and not
+        // ECharts' default (a whole tick under the bar): -3200 of costs under 11900 of span is -4000, a round number just below.
+        expect.soft(lowerEdgeOf(income)).toEqual({minIsCallback: true, edge: -4_000, showMinLabel: undefined});
         expect.soft(income.yAxis.axisLabel).toHaveProperty('showMinLabel', undefined);
+        // No costs: the edge is zero, where the bars stand.
+        expect.soft((income.yAxis.min as AxisMin)({min: 0, max: 5_000})).toBe(0);
+        expect.soft((income.yAxis.min as AxisMin)({min: 12, max: 5_000})).toBe(0);
 
         await fireEvent.click(getByTestId('growth-pnl-submode-line'));
         const back = await waitForFrame(FRAME.pnlLine);
@@ -3579,7 +3583,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
     });
 
     it.each(PRIVACY)('k4 G1: Income keeps the label of its tick index 0, a real tick on an axis that stands on zero — $title (green today and after the fix)', async ({masked}) => {
-        // WHY: Income has no computed edge (D25): its lowest tick is a round value — zero, or the deepest cost
+        // WHY: Income has no computed edge (D25, G4): its lowest tick is a round value — zero, or the deepest cost
         // bar — and a reader needs it. Catches the blank applied to every view.
         setPrivacyEnabled(masked);
         const {getByTestId} = render(GrowthChart, {props: withMwrr(ladderProps(FIXTURE_40))});
@@ -3589,8 +3593,10 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         await fireEvent.click(getByTestId('growth-pnl-submode-income'));
         const income = await waitForFrame(FRAME.income);
         expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
-        // Barrier: Income's axis has no computed edge, so its index 0 is not the edge G1 blanks.
-        expect(income.yAxis).toHaveProperty('min', undefined);
+        // Barrier: Income's lower edge is a round number just below the largest cost (G4), a real tick the reader needs, not the computed edge G1
+        // blanks: its label stays at index 0.
+        expect(typeof income.yAxis.min).toBe('function');
+        expect((income.yAxis.min as AxisMin)(EXTENT)).toBe(-4_000);
         const VALUES = [0, -30, -5_000, 1_500];
         const labels = readInEnUs(() => VALUES.map((value) => income.yAxis.axisLabel.formatter(value, 0)));
         expect(labels).toEqual(masked ? VALUES.map(maskedMoney) : ['0', '-30', '-5k', '1.5k']);
