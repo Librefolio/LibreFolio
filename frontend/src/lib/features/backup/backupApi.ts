@@ -122,6 +122,8 @@ export interface InstanceStorage {
     volume_free_bytes: number | null;
     limit_mb: number | null;
     limit_locked: boolean;
+    /** C9-7: a restore under way: the uploaded archive and its opened version (0 when there is none). */
+    restore_bytes?: number;
 }
 
 /** The space the instance takes (`GET /backup/instance/storage`, administrators only). */

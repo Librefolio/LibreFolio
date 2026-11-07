@@ -121,7 +121,7 @@
                 >
                     <FileArchive class="shrink-0" size={16} aria-hidden="true" />
                     <span class="min-w-0 flex-1">
-                        {held.status === 'running' ? $_('backup.restore.held.running') : $_('backup.restore.held.until', {values: {date: formatDateTime(held.expires_at ?? '')}})}
+                        {held.status === 'running' ? $_('backup.restore.held.running') : $_('backup.restore.held.until', {values: {date: formatDateTime(String(held.expires_at ?? ''))}})}
                     </span>
                     <button
                         class="inline-flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"

@@ -29,7 +29,7 @@ import type {InstanceStorage} from '$lib/features/backup/backupApi';
 // A literal path would fail the whole file at transform time while the module is missing; a variable path fails each case alone.
 const MODULES = {model: './storageBar'};
 type Segment = {id: string; bytes: number; percent: number};
-type Model = {mode: string; totalBytes: number; segments: Segment[]; usedBytes: number; freeBytes: number; freePercent: number; overLimit: boolean};
+type Model = {mode: string; totalBytes: number; segments: Segment[]; usedBytes: number; freeBytes: number; freePercent: number; overLimit: boolean; limitPercent: number | null};
 const modelOf = async (usage: InstanceStorage): Promise<Model> => {
     const module = await import(/* @vite-ignore */ MODULES.model);
     return module.storageBarModel(usage) as Model;
