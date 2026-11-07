@@ -59,6 +59,7 @@
         dominantExposure,
         exposureOrder,
         heatmapLayout,
+        legendBox,
         lowerTrianglePoints,
         nameOrder,
         NEAR_IDENTICAL,
@@ -206,7 +207,7 @@
     /** From −1 through 0 to +1: the designer's own three values (`CORRELATION_SCALE`, round 3, §1.6). */
     let scale = $derived([...themed(CORRELATION_SCALE, dark)]);
     /** The legend spans the cells, not the card; it gets a floor so a two-asset matrix still has a readable scale. */
-    let legendWidth = $derived(Math.max(280, layout.width - layout.grid.left - layout.grid.right));
+    let legend = $derived(legendBox(wrapperWidth, layout));
     /** `pairKey` of the pair shown in the matrix and in the ranking: one selection for both views. */
     let selectedPairKey = $state<string | null>(null);
     /** The points last drawn, in data-index order: what `dispatchAction` addresses. */
@@ -619,7 +620,7 @@
                     <div bind:this={container} style:width="{layout.width}px" style:height="{layout.height}px"></div>
                     <!-- Inside the scrolling box and under the cells, not under the card: it starts
                          where the first column starts and moves with the matrix when the card scrolls. -->
-                    <div class="pb-2 text-[11px] leading-tight text-lf-muted" style:margin-left="{layout.grid.left}px" style:width="{legendWidth}px" data-testid="risk-correlation-legend">
+                    <div class="pb-2 text-[11px] leading-tight text-lf-muted" style:margin-left="{legend.left}px" style:width="{legend.width}px" data-testid="risk-correlation-legend">
                         <div class="h-2 rounded-full border border-lf-subtle" style:background="linear-gradient(to right, {scale[0]}, {scale[1]}, {scale[2]})"></div>
                         <div class="mt-1 grid grid-cols-3 gap-2">
                             <div>
