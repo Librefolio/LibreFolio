@@ -73,6 +73,7 @@ import itCatalogue from '$lib/i18n/it.json';
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 
 import L2Diversification from './L2Diversification.svelte';
+import {formatShare} from './shareFormat';
 
 /** The residual line under the cards; publishes the raw fraction in `data-uncovered`. */
 const UNCOVERED_LINE = 'risk-l2-uncovered';
@@ -197,6 +198,83 @@ describe('L2Diversification — a row follows the room it is given (F-7)', () =>
         expect(figures.contains(screen.getByTestId('risk-l2-contribution-7'))).toBe(true);
         // The bar comes before the figures in the document: name, bar, then the two numbers.
         expect(bar.compareDocumentPosition(figures) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+});
+
+// D5 (07/11/2026): the two captions that explain a number say what it means, on the figure on screen.
+describe('L2Diversification — what the two ratio cards mean (D5)', () => {
+    /** The developer's case: eight positions, 27.2% not covered (0.07% cash, the rest holdings without prices), N_eff above the count. */
+    function contributionWith(output: Record<string, unknown>, positions = 8): RiskAnalyticResult {
+        return {
+            analytic_code: 'risk_contribution',
+            instance_id: 'base-current_composition-risk_contribution',
+            status: 'ok',
+            output: {
+                kind: 'contribution',
+                portfolio_volatility: 0.13,
+                cash_weight: 0.272,
+                excluded_weight: 0.2713,
+                effective_number_of_assets: 9.32,
+                diversification_ratio: 1.29,
+                items: Array.from({length: positions}, (_, index) => ({asset_id: index + 1, weight: 0.09, percentage_contribution: 0.125})),
+                ...output,
+            },
+        } as unknown as RiskAnalyticResult;
+    }
+
+    const share = (fraction: number) => formatShare(fraction, 1);
+    const caption = (id: string) => screen.getByTestId(`risk-l2-card-${id}-caption`).textContent ?? '';
+
+    it('names the first card «effective number of positions» and no longer N_eff', () => {
+        mountLevel(contributionWith({}));
+
+        expect(screen.getByTestId('risk-l2-card-effective-assets-technical').textContent).toBe(resolve('risk.levels.l2.effectiveAssets.name', {}));
+        expect(screen.getByTestId('risk-l2-card-effective-assets-technical').textContent).not.toContain('N_eff');
+    });
+
+    it('says the excess comes from the part not covered — cash and holdings without prices — with its share, not from cash alone', () => {
+        mountLevel(contributionWith({}));
+
+        expect(normalize(caption('effective-assets'))).toBe(resolve('risk.levels.l2.effectiveAssets.aboveCount', {positions: '8', share: share(0.272)}));
+        // The case that made the old sentence false: 0.07% of cash, 27.1% of holdings without prices.
+        expect(caption('effective-assets')).toContain(share(0.272));
+    });
+
+    it('says the same without a figure when the payload states no uncovered share', () => {
+        const result = contributionWith({});
+        delete (result.output as Record<string, unknown>).cash_weight;
+        mountLevel(result);
+
+        expect(normalize(caption('effective-assets'))).toBe(resolve('risk.levels.l2.effectiveAssets.aboveCountNoShare', {positions: '8'}));
+    });
+
+    it('says nothing is uncovered when the weights are even and no part is left out', () => {
+        mountLevel(contributionWith({effective_number_of_assets: 8, cash_weight: 0, excluded_weight: 0}));
+
+        expect(normalize(caption('effective-assets'))).toBe(resolve('risk.levels.l2.effectiveAssets.evenCount', {positions: '8'}));
+    });
+
+    it('gives the diversification ratio its scale, an example on the figure, and the ceiling', () => {
+        mountLevel(contributionWith({diversification_ratio: 1.28}));
+
+        const text = normalize(caption('diversification-ratio'));
+        expect(text).toContain(resolve('risk.levels.l2.diversificationRatio.scale', {}));
+        // 1 − 1/1.28 = 21.9 %, said as 22 % beside the ratio as the card writes it.
+        expect(text).toContain(resolve('risk.levels.l2.diversificationRatio.example', {value: '1.28', percent: '22%'}));
+        // √8 = 2.83.
+        expect(text).toContain(resolve('risk.levels.l2.diversificationRatio.ceiling', {max: '2.83', positions: '8'}));
+    });
+
+    it('gives only the scale at a ratio of 1, where there is nothing to illustrate, and no ceiling with a single position', () => {
+        mountLevel(contributionWith({diversification_ratio: 1, effective_number_of_assets: 1, items: [{asset_id: 1, weight: 0.7, percentage_contribution: 1}]}));
+
+        expect(normalize(caption('diversification-ratio'))).toBe(resolve('risk.levels.l2.diversificationRatio.scale', {}));
+    });
+
+    it('lets both captions run to their full length instead of cutting them at two lines', () => {
+        mountLevel(contributionWith({}));
+
+        for (const id of ['effective-assets', 'diversification-ratio']) expect(screen.getByTestId(`risk-l2-card-${id}-caption`).className).not.toContain('line-clamp');
     });
 });
 

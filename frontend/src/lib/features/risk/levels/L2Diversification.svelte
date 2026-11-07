@@ -12,7 +12,7 @@
     import CorrelationHeatmap from '../CorrelationHeatmap.svelte';
     import {createMatrixMetadata} from '../matrixMetadata.svelte';
     import {buildLookup, NEAR_IDENTICAL, topPairs} from '../correlationHelpers';
-    import {buildConcentration, buildDivergenceRows, uncoveredWeight} from './levelHelpers';
+    import {buildConcentration, buildDivergenceRows, diversificationReading, uncoveredWeight} from './levelHelpers';
     import {formatShare} from './shareFormat';
     import {POLARITY_TONES} from '$lib/theme/toneClasses';
 
@@ -158,8 +158,28 @@
         if (!concentration) return '';
         const positions = rows.length;
         const effective = concentration.effectiveNumberOfAssets;
-        const key = effective > positions ? 'aboveCount' : effective < positions ? 'belowCount' : 'evenCount';
+        // The excess comes from the part the risk model does not speak for — cash AND holdings without a price series, not cash alone
+        // (D5, 07/11/2026) — and the sentence says how much that is. Without the share (a payload that does not state it) it says
+        // the same without the figure.
+        if (effective > positions) {
+            return uncovered === null ? $t('risk.levels.l2.effectiveAssets.aboveCountNoShare', {values: {positions}}) : $t('risk.levels.l2.effectiveAssets.aboveCount', {values: {positions, share: share(uncovered)}});
+        }
+        const key = effective < positions ? 'belowCount' : 'evenCount';
         return $t(`risk.levels.l2.effectiveAssets.${key}`, {values: {positions}});
+    });
+
+    /**
+     * What the diversification ratio means (D5, 07/11/2026): the scale — 1 is no benefit — with an example on the figure on screen, and
+     * the most the ratio can reach with the positions measured. Three sentences, each said only when it has something to say: the
+     * example needs a ratio above 1 (at 1 there is nothing to illustrate), the ceiling needs two positions.
+     */
+    let ratioReading = $derived.by(() => {
+        if (!concentration) return '';
+        const {reduction, ceiling} = diversificationReading(concentration.diversificationRatio, rows.length);
+        const parts = [$t('risk.levels.l2.diversificationRatio.scale')];
+        if (reduction >= 0.005) parts.push($t('risk.levels.l2.diversificationRatio.example', {values: {value: index(concentration.diversificationRatio), percent: formatPercent(reduction, {scale: 100, signed: false, digits: 0})}}));
+        if (ceiling !== null) parts.push($t('risk.levels.l2.diversificationRatio.ceiling', {values: {max: index(ceiling), positions: rows.length}}));
+        return parts.join(' ');
     });
 
     /**
@@ -252,10 +272,11 @@
                 {#if concentration}
                     <RiskMetricCard
                         label={$t('risk.levels.l2.effectiveAssets.label')}
-                        technicalName="N_eff"
+                        technicalName={$t('risk.levels.l2.effectiveAssets.name')}
                         numericValue={concentration?.effectiveNumberOfAssets}
                         formatValue={index}
                         caption={loading ? '' : effectiveAssetsReading}
+                        captionLines="all"
                         docsPath="financial-theory/technical-analysis/risk-metrics/concentration/"
                         {loading}
                         testId="risk-l2-card-effective-assets"
@@ -265,7 +286,8 @@
                         technicalName="DR"
                         numericValue={concentration?.diversificationRatio}
                         formatValue={index}
-                        caption={loading ? '' : $t('risk.levels.l2.diversificationRatio.caption')}
+                        caption={loading ? '' : ratioReading}
+                        captionLines="all"
                         docsPath="financial-theory/technical-analysis/risk-metrics/concentration/"
                         {loading}
                         testId="risk-l2-card-diversification-ratio"

@@ -84,11 +84,19 @@
         submetrics?: Snippet;
         /** Optional sparkline. Fill ONLY where a real series exists. */
         sparkline?: Snippet;
+        /**
+         * How many lines the caption may take before it is cut: two (the default, the rule of the cards since V3), four, or all of it.
+         * For a caption that explains a number (L2's, D5) and so must be read whole.
+         */
+        captionLines?: 2 | 4 | 'all';
         /** `side`: the number beside the title (the default). `figure`: the number and its caption on one line, a rule, the detail rows. */
         layout?: 'side' | 'figure';
     }
 
-    let {label, technicalName, value = '—', numericValue, formatValue, caption, captionScroll = false, sentiment = 'neutral', docsPath, loading = false, testId, submetrics, sparkline, layout = 'side'}: Props = $props();
+    let {label, technicalName, value = '—', numericValue, formatValue, caption, captionScroll = false, captionLines = 2, sentiment = 'neutral', docsPath, loading = false, testId, submetrics, sparkline, layout = 'side'}: Props = $props();
+
+    /** Whole class names, so the stylesheet finds them. */
+    const CAPTION_CLAMP = {2: 'line-clamp-2', 4: 'line-clamp-4', all: ''} as const;
 
     const accentClass = $derived(sentiment === 'positive' ? SIGN_BAR.accent.gain : sentiment === 'negative' ? SIGN_BAR.accent.loss : null);
     const valueClass = $derived(sentiment === 'positive' ? SIGN_TEXT.headline.gain : sentiment === 'negative' ? SIGN_TEXT.headline.loss : SIGN_TEXT.headline.neutral);
@@ -191,7 +199,7 @@
                     {#if captionScroll}
                         <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-right text-lf-muted" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
                     {:else}
-                        <p class="text-xs text-right text-lf-muted line-clamp-2" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
+                        <p class="text-xs text-right text-lf-muted {CAPTION_CLAMP[captionLines]}" data-testid={testId ? `${testId}-caption` : undefined}>{caption}</p>
                     {/if}
                 {/if}
 
