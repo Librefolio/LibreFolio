@@ -664,7 +664,12 @@
             "fxEstimateHelp": "Saisissez le montant en {source} dans la conversion chez le courtier. Ce que vous recevez en {destination} dépend du taux à ce moment : le plan utilise le taux et le spread de l’étape Change.",
             "autoConversion": "Conversion automatique",
             "autoConversionAmounts": "environ {debit} → {credit}",
-            "autoConversionHelp": "Vous n’avez rien à faire : le courtier convertit quand vous passez les ordres en {destination}. Il prélève environ ce montant sur vos liquidités en {source} ; le montant exact dépend de son taux à ce moment, tandis que le plan utilise le taux et le spread de l’étape Change."
+            "autoConversionHelp": "Vous n’avez rien à faire : le courtier convertit quand vous passez les ordres en {destination}. Il prélève environ ce montant sur vos liquidités en {source} ; le montant exact dépend de son taux à ce moment, tandis que le plan utilise le taux et le spread de l’étape Change.",
+            "sentence": {
+              "deposit": "Effectuez le versement « {source} » de {amount} sur le Broker « {destination} »",
+              "transfer": "Transférez {amount} de « {source} » vers le Broker « {destination} »",
+              "cash": "Utilisez {amount} des liquidités disponibles sur le Broker « {source} »"
+            }
           },
           "platform": {
             "draftIntact": "Le brouillon est intact.",

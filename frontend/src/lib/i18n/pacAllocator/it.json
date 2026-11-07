@@ -664,7 +664,12 @@
             "fxEstimateHelp": "Inserisci l’importo in {source} nella conversione presso il Broker. Quanto ricevi in {destination} dipende dal tasso di quel momento: il piano usa tasso e spread del passo FX.",
             "autoConversion": "Conversione automatica",
             "autoConversionAmounts": "circa {debit} → {credit}",
-            "autoConversionHelp": "Non devi fare nulla: il Broker converte quando inserisci gli ordini in {destination}. Dalla tua liquidità in {source} prende circa questo importo; la cifra esatta dipende dal suo tasso in quel momento, mentre il piano usa tasso e spread del passo FX."
+            "autoConversionHelp": "Non devi fare nulla: il Broker converte quando inserisci gli ordini in {destination}. Dalla tua liquidità in {source} prende circa questo importo; la cifra esatta dipende dal suo tasso in quel momento, mentre il piano usa tasso e spread del passo FX.",
+            "sentence": {
+              "deposit": "Esegui il versamento «{source}» di {amount} sul Broker «{destination}»",
+              "transfer": "Trasferisci {amount} da «{source}» al Broker «{destination}»",
+              "cash": "Usa {amount} della liquidità disponibile sul Broker «{source}»"
+            }
           },
           "platform": {
             "draftIntact": "La bozza è intatta.",

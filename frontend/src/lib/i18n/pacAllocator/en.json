@@ -664,7 +664,12 @@
             "fxEstimateHelp": "Enter the {source} amount in the conversion at the Broker. What you receive in {destination} depends on the rate at that moment: the plan uses the rate and spread of the FX step.",
             "autoConversion": "Automatic conversion",
             "autoConversionAmounts": "about {debit} → {credit}",
-            "autoConversionHelp": "You do nothing: the Broker converts when you place the orders in {destination}. It takes about this much from your {source} cash; the exact amount depends on its rate at that moment, while the plan uses the rate and spread of the FX step."
+            "autoConversionHelp": "You do nothing: the Broker converts when you place the orders in {destination}. It takes about this much from your {source} cash; the exact amount depends on its rate at that moment, while the plan uses the rate and spread of the FX step.",
+            "sentence": {
+              "deposit": "Make the deposit “{source}” of {amount} to the Broker “{destination}”",
+              "transfer": "Transfer {amount} from “{source}” to the Broker “{destination}”",
+              "cash": "Use {amount} of the cash available on the Broker “{source}”"
+            }
           },
           "platform": {
             "draftIntact": "The draft is intact.",

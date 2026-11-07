@@ -664,7 +664,12 @@
             "fxEstimateHelp": "Introduce el importe en {source} en la conversión del bróker. Lo que recibes en {destination} depende del tipo de cambio en ese momento: el plan usa el tipo de cambio y el spread del paso Cambio.",
             "autoConversion": "Conversión automática",
             "autoConversionAmounts": "aprox. {debit} → {credit}",
-            "autoConversionHelp": "No tienes que hacer nada: el bróker convierte cuando introduces las órdenes en {destination}. Toma aproximadamente este importe de tu efectivo en {source}; la cifra exacta depende de su tipo de cambio en ese momento, mientras que el plan usa el tipo de cambio y el spread del paso Cambio."
+            "autoConversionHelp": "No tienes que hacer nada: el bróker convierte cuando introduces las órdenes en {destination}. Toma aproximadamente este importe de tu efectivo en {source}; la cifra exacta depende de su tipo de cambio en ese momento, mientras que el plan usa el tipo de cambio y el spread del paso Cambio.",
+            "sentence": {
+              "deposit": "Realiza la aportación «{source}» de {amount} en el Broker «{destination}»",
+              "transfer": "Transfiere {amount} desde «{source}» al Broker «{destination}»",
+              "cash": "Usa {amount} del efectivo disponible en el Broker «{source}»"
+            }
           },
           "platform": {
             "draftIntact": "El borrador está intacto.",
