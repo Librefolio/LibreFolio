@@ -31,6 +31,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **El Panel y la página del bróker siguen los precios actuales**: cada minuto mientras los usa, los importes, los KPI y las posiciones se actualizan solos; se detienen cuando la pestaña se oculta o tras dos minutos sin interacción («Actualizaciones en pausa») y se reanudan en su siguiente acción.
 - **Avisos de calidad de datos en la página del bróker:** los precios obsoletos, los tipos de cambio ausentes u obsoletos y sus botones de sincronización también aparecen allí, para todos los roles.
 - **Gráfico de posiciones: elige la ventana de la vista Móvil.** Una semana, un mes, tres meses, un año o una ventana personalizada; parte de la automática.
+- La tarta de distribución por activo muestra también el icono del activo en su información emergente, como la tarta por tipo.
 
 #### 📈 Gráficos
 
@@ -99,6 +100,10 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Una restauración interrumpida ya no sirve datos de los que no puede responder.** Cuando no se puede leer el estado de una restauración, la instancia muestra una página que pide al administrador (con un enlace al soporte de la instancia cuando está definido), conserva cada copia comprobada, y `./dev.py backup pending --recover` permite al administrador elegir entre los datos anteriores y una nueva restauración.
 - Los trabajos de copia de seguridad informan del SHA-256 del archivo; un informe de restauración indica que las cuentas y credenciales vienen de la copia de seguridad, y advierte cuando el administrador que confirma no está en ella. La guía explica las copias nocturnas con restic o Backrest.
 - **Las copias de seguridad permanecen en el servidor:** creadas desde la aplicación, la línea de comandos o un panel de alojamiento, se enumeran en una tabla (Configuración › Copia de seguridad y la nueva pestaña Archivos › Copias de seguridad) con origen, tipo, tamaño y SHA-256, listas para descargar o eliminar. Los administradores pueden configurar una limpieza automática por tamaño total y por antigüedad; la última copia de seguridad siempre se conserva.
+- **Restaura una copia que guarda el servidor**: *Restaurar* en la fila de una copia guardada (Ajustes › Copia de seguridad, Archivos › Copias) la comprueba directamente desde el servidor, sin descargarla ni volver a subirla; una copia segura pide su contraseña.
+- **Comprueba una contraseña antes de restaurar**: en el informe de la restauración, elige un administrador de la copia y escribe una contraseña para saber si podrás entrar con ella después. La contraseña nunca se guarda, se registra ni se devuelve.
+- **Una restauración puede esperar**: *Decidir después* conserva el archivo comprobado, y Ajustes › Copia de seguridad permite reanudarlo o descartarlo desde cualquier pestaña o dispositivo. El informe muestra los administradores de la copia con su imagen y una barra de lo que contiene; una restauración que no puede seguir no pide confirmación, y una rechazada por el límite de espacio libera el espacio al momento.
+- *Actualizar* en la lista de copias guardadas, para las copias hechas desde la línea de comandos.
 
 #### 👥 Cuentas, registro y administradores
 
@@ -133,6 +138,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Enviar por correo**: los diálogos de enlace de invitación y de restablecimiento de contraseña de Configuración › Usuarios pueden enviar el enlace por correo, un enlace de restablecimiento en el idioma de su cuenta y una invitación en el idioma elegido en el diálogo, el de la instancia de forma predeterminada, con el resultado indicando el idioma utilizado, cuando el correo funciona y `LIBREFOLIO_PUBLIC_URL` está definida. API: `POST /api/v1/email/links`.
 - **Aviso de cambio de correo**: cuando el correo funciona y alguien cambia la dirección de correo de una cuenta, LibreFolio escribe a la dirección que tenía antes, mostrando solo el dominio de la nueva, para que su propietario se entere de un cambio que no hizo. Como máximo salen 3 avisos de este tipo por hora por cuenta y por dirección anterior; pasado ese límite, el cambio sigue adelante, sin el aviso.
 - **Los correos de activación y de restablecimiento de contraseña comparten un límite por red**, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 por hora), junto al presupuesto horario de la instancia; las contraseñas incorrectas nunca lo consumen. Cuando un correo se retiene, la página indica cuántos minutos esperar, en un cuadro amarillo.
+- **El logotipo de LibreFolio en cada correo**: aparece en la cabecera verde, adjunto dentro del mensaje, así que se ve sin cargar nada de la web. El aviso por `LIBREFOLIO_PUBLIC_URL` ausente da un ejemplo hecho con la dirección que estás usando, con un botón Guía.
 
 #### 🔐 Seguridad y secretos
 
@@ -288,6 +294,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - En la página Archivos y en los archivos de informes de un bróker, Eliminar aparece solo en los archivos que puedes eliminar; una eliminación masiva deja los demás en su sitio, con un aviso.
 - **Archivos del sistema**: los iconos creados en la instalación muestran «del sistema» como autor, en lugar de un número de usuario.
 - **Archivos, para los administradores**: el límite de espacio está en un panel cerrado «Avanzado» y se llama Espacio total de LibreFolio; ahora se aplica: un archivo nuevo, un informe del bróker, una copia manual o una restauración que lo superaría se rechazan, y el mensaje indica a cuánto subirlo. Las transacciones, los precios, la base de datos y las copias del panel de alojamiento o de la línea de comandos nunca se detienen. La limpieza automática también es un panel cerrado, y dice que sus reglas se aplican en el plazo de una hora. Al guardar cualquiera de los dos aparece una confirmación verde, y el recordatorio del mismo disco es ahora una simple nota.
+- **Un rechazo del límite de espacio aparece donde estás** (una subida, una importación, la tarjeta de copias), con *Abrir los ajustes* para los administradores y cuánto liberar para los usuarios. Por encima del límite la barra de espacio conserva todas las partes, con una marca en el límite y rayas más allá; una restauración en curso es una parte propia.
 
 #### 💱 Códigos de moneda
 
@@ -371,6 +378,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **El sitio de documentación usa los mismos colores que la aplicación**, en el tema claro y el oscuro.
 - **La documentación ya no describe cómo ejecutar LibreFolio para otros:** las páginas sobre proveedores de alojamiento, el panel de alojamiento y el despertar programado han desaparecido, y la página de inicio dice «Autoalojado».
 - **La cabecera de la documentación coloca el interruptor del tema junto al selector de idioma**, como en la aplicación; el enlace 🚀 a la aplicación, que se muestra cuando LibreFolio está en ejecución, ocupa el lugar que tenía el interruptor del tema.
+- La guía de correo dice dónde van las variables en `.env` y cómo escribir una contraseña de aplicación de Gmail (sin espacios), y cada página da una única frase para reiniciar.
 
 ### 🐛 Corregido
 
@@ -427,6 +435,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Importación: la comprobación hecha cuando llegan las filas ya no se descarta.** En importaciones de más de 50 filas, las filas rechazadas aparecían solo después de ⚡ Validar ahora.
 - Importación, paso 3: las notas azules de un importador ya no se cuentan como advertencias. La tabla de resultados y el resumen muestran ⚠️ advertencias y ℹ️ notas por separado, el detalle del archivo las enumera bajo dos encabezados, y la confirmación cuenta solo las advertencias cuando habla de advertencias.
 - La guía de importación ya no señala un botón que puede faltar cuando no se leyó ningún archivo.
+- El asistente de importación ya no sigue sin un archivo que el servidor rechazó: se queda en el primer paso, dice por qué y vuelve a enviar el archivo.
 
 #### 🏦 Bróker y transferencias
 
@@ -464,6 +473,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Las cantidades de la tabla de Rendimiento ya no cuentan una transacción fechada después del final del informe.
 - Serie de posiciones: un activo sumado sobre sus brókers conserva su porcentaje cuando había unidades en tránsito al inicio del periodo.
 - **Transacciones en el Panel:** el selector de tamaño de página funciona.
+- El nuevo icono, nombre, tipo o clasificación de un activo se ven al momento en el Panel: el informe ya no conserva los antiguos hasta 30 minutos.
 
 #### 🧮 Lotes
 
