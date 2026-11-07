@@ -3459,3 +3459,63 @@ describe('C9-6 — the checks waiting for a decision', () => {
         expect(flow.waiting.map((item) => item.stage_id)).toEqual([STAGE_ID]);
     });
 });
+
+// =====================================================================================================================
+// C9-9 — a backup the server keeps, restored without a download and an upload
+// =====================================================================================================================
+
+describe('C9-9 — fromKept: a kept backup taken as the archive', () => {
+    const JOB_ID = 'aa112233445566778899aabbccddeeff';
+    type WithKept = {fromKept(jobId: string): Promise<void>; submitPassword(password: string): Promise<void>};
+
+    async function idleKept(kind: 'zip' | 'envelope') {
+        const context = await setup();
+        const uploadFromKept = vi.fn(() => Promise.resolve({upload_id: UPLOAD_ID, size: 4096, kind}));
+        Object.assign(context.api, {uploadFromKept});
+        context.api.status.mockResolvedValue(none());
+        await context.controller.load();
+        await flush();
+        return {...context, uploadFromKept, flow: context.controller as unknown as RestoreFlowController & WithKept};
+    }
+
+    it('a plain backup: taken on the server, nothing sent, then checked as any upload', async () => {
+        const {flow, api, uploadFromKept} = await idleKept('zip');
+        api.startCheck.mockResolvedValueOnce(runningStage());
+
+        void flow.fromKept(JOB_ID);
+        await flush();
+
+        expect(uploadFromKept).toHaveBeenCalledWith(JOB_ID);
+        expect(api.upload, 'no archive goes up from the browser').not.toHaveBeenCalled();
+        expect(api.startCheck).toHaveBeenCalledWith(UPLOAD_ID);
+        expect(flow.state).toBe('checking');
+    });
+
+    it('a secure backup: its password first, then the check of the same upload, never sent again', async () => {
+        const {flow, api} = await idleKept('envelope');
+
+        await flow.fromKept(JOB_ID);
+        await flush();
+        expect(flow.state).toBe('password');
+
+        api.startCheck.mockResolvedValueOnce(runningStage());
+        void flow.submitPassword('the-backup-password');
+        await flush();
+
+        expect(api.upload).not.toHaveBeenCalled();
+        expect(api.startCheck).toHaveBeenCalledWith(UPLOAD_ID, 'the-backup-password');
+        expect(flow.state).toBe('checking');
+    });
+
+    it('a refusal (a sealed backup) is a failure of the upload, with its code', async () => {
+        const {flow, uploadFromKept} = await idleKept('zip');
+        uploadFromKept.mockRejectedValueOnce(refusal(409, 'backup_sealed_unsupported'));
+
+        await flow.fromKept(JOB_ID);
+        await flush();
+
+        expect(flow.state).toBe('failed');
+        expect(flow.errorCode).toBe('backup_sealed_unsupported');
+        expect(flow.failure).toBe('upload');
+    });
+});

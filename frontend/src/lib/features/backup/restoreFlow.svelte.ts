@@ -35,6 +35,7 @@ import {
     getRestoreCheck,
     getRestoreStatus,
     listWaitingRestoreChecks,
+    restoreFromKeptBackup,
     isEnvelopeFile,
     probeServer,
     requestRestart,
@@ -104,6 +105,8 @@ export interface RestoreApi {
     restoreOutcome(ticket: string | null): Promise<RestoreOutcomeRead>;
     /** The checks waiting for a decision (C9-6); without it, none. */
     waiting?(): Promise<RestoreWaitingCheck[]>;
+    /** A backup the server keeps, taken as the archive (C9-9); without it, `fromKept` does nothing. */
+    uploadFromKept?(jobId: string): Promise<RestoreUpload>;
 }
 
 export type RestoreStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -143,6 +146,7 @@ const SERVER_API: RestoreApi = {
     probeServer,
     restoreOutcome,
     waiting: listWaitingRestoreChecks,
+    uploadFromKept: restoreFromKeptBackup,
 };
 
 function defaultStorage(): RestoreStorage | null {
@@ -207,7 +211,8 @@ export class RestoreFlowController {
     // The one-time ticket of the restart under way (lot B5c): in memory only, never stored nor announced.
     #ticket: string | null = null;
     // The secure backup waiting for its password (lot B4): the file, and its upload once sent, kept for another try.
-    #envelope: {file: File; uploadId: string | null} | null = null;
+    // `file` is null for a backup the server keeps (C9-9): nothing to send, the upload is already there.
+    #envelope: {file: File | null; uploadId: string | null} | null = null;
 
     constructor(options: RestoreFlowOptions = {}) {
         this.#api = options.api ?? SERVER_API;
@@ -334,13 +339,48 @@ export class RestoreFlowController {
         await this.#send(file, null);
     }
 
+    /**
+     * Restore a backup the server keeps (C9-9): it becomes the upload of a restore on the server, with no download and no
+     * upload, and is checked as any archive; a secure backup asks for its password first.
+     */
+    async fromKept(jobId: string): Promise<void> {
+        if ((this.state !== 'idle' && this.state !== 'failed') || this.#api.uploadFromKept === undefined || !STAGE_ID.test(jobId)) return;
+        const generation = this.#next();
+        this.state = 'uploading';
+        this.#setError(null, null);
+        this.errorLimitMb = null;
+        this.stage = null;
+        this.waiting = [];
+        this.dropRequested = false;
+        this.uploadedBytes = 0;
+        this.totalBytes = 0;
+        let upload: RestoreUpload;
+        try {
+            upload = await this.#api.uploadFromKept(jobId);
+        } catch (error) {
+            if (this.#stale(generation)) return;
+            this.#fail(backupFailureCode(error), 'upload');
+            return;
+        }
+        if (this.#stale(generation)) return;
+        this.uploadedBytes = upload.size;
+        this.totalBytes = upload.size;
+        this.#emit('backup.restore.uploaded', {upload_id: upload.upload_id, size: upload.size, from: 'kept'});
+        if (upload.kind === 'envelope') {
+            this.#envelope = {file: null, uploadId: upload.upload_id};
+            this.state = 'password';
+            return;
+        }
+        await this.#check(upload.upload_id, null, null, generation);
+    }
+
     /** Check the secure backup waiting for its password: sent first if it is not yet. A wrong password asks again, and
      * the archive is not sent again. */
     async submitPassword(password: string): Promise<void> {
         const envelope = this.#envelope;
         if (this.state !== 'password' || envelope === null || password === '' || this.submitting) return;
         if (envelope.uploadId === null) {
-            await this.#send(envelope.file, password);
+            if (envelope.file !== null) await this.#send(envelope.file, password);
             return;
         }
         const generation = this.#next();
@@ -403,7 +443,7 @@ export class RestoreFlowController {
         await this.#check(upload.upload_id, password, file, generation);
     }
 
-    async #check(uploadId: string, password: string | null, file: File, generation: number): Promise<void> {
+    async #check(uploadId: string, password: string | null, file: File | null, generation: number): Promise<void> {
         let stage: RestoreStage;
         try {
             stage = await (password === null ? this.#api.startCheck(uploadId) : this.#api.startCheck(uploadId, password));
