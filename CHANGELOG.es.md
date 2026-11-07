@@ -233,6 +233,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Gráfico de posiciones**: las etiquetas muestran el nombre del activo, que se desplaza si es largo, y el selector de vistas usa los iconos de la lista de activos.
 - **Un activo tiene un solo color** en las líneas del gráfico de posiciones, en el gráfico circular de la asignación y en su historial, marques lo que marques y en cualquier orden. El mismo activo en dos brókeres tiene un trazo distinto, y los nombres largos también se desplazan en el tooltip del gráfico.
 - **El gráfico circular de la asignación por activo muestra el icono de cada activo** en su porción, o el de su tipo si falta o no se carga, y no tiene leyenda: el nombre se ve al pasar por la porción.
+- **La variación del día bajo el P&L se lee como importe y parte del valor de la cartera de ayer** («−1.141 € (−1,95 %)»), la cifra que se compara con los mercados; la parte sobre el P&L total, que se disparaba cerca de cero, desaparece, y la tarjeta de rentabilidades ya no la repite.
 
 #### 📈 Gráficos
 
@@ -256,6 +257,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Riesgo: añade un par de tipos de cambio faltante sin salir del análisis.** En la pestaña Riesgo del Panel, en la de un bróker y en la de un activo, y en el laboratorio de riesgos de la página Activos, el botón de un par sin ruta de tipos de cambio abre la ventana **Añadir nuevo par de divisas** ya rellenada con ese par (EUR/USD, por ejemplo), en lugar de llevarte a la página FX. Una vez guardado el par, y de nuevo cuando se descargan sus tipos de cambio, el análisis se actualiza por sí solo.
 - **El histograma de rendimientos diarios es un gráfico de verdad**: su eje muestra los umbrales de rendimiento, una línea discontinua marca el umbral VaR, y al pasar por una barra ves cuántos días caen en ella y dónde queda esa franja respecto al umbral.
 - **Las cuatro tarjetas de pérdidas de «¿Cuánto puede doler?» tienen la misma forma**: títulos más cortos, un subtítulo, filas de detalle con fecha y las fechas en tu idioma. El tooltip del histograma es más ligero, se sitúa junto al puntero y escribe su intervalo como `[a; b)`.
+- **Riesgo:** el histograma de rentabilidades admite zoom (con una barra cuando hay muchas columnas); el índice Ulcer es una fila de la tarjeta de la peor caída; los textos de diversificación dicen qué significa el número efectivo de posiciones, que su exceso viene de la liquidez y de las posiciones sin precio, y dan la escala del ratio de diversificación con un ejemplo.
 
 #### 🤖 Exportación IA
 
@@ -266,6 +268,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Exportación IA: el resultado de cambio sobre el efectivo en divisa extranjera aparece por separado, bróker por bróker**, en la exportación de cartera, reconocido por un código fijo en lugar de su etiqueta en inglés.
 - Exportación IA: una cuota de concentración o asignación que no se puede calcular (un total de cero o menos) se informa como no disponible en lugar de un número invertido.
 - **La exportación IA desde una página de bróker** indica a la IA que los importes son las cifras completas del bróker, no tu parte, y dónde están tu rol y participación en la exportación.
+- El botón *Preparar* del panel AI Export gira mientras se prepara la exportación.
 
 #### 🔌 Fuentes de precios y tipos de cambio
 
@@ -379,6 +382,10 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **La documentación ya no describe cómo ejecutar LibreFolio para otros:** las páginas sobre proveedores de alojamiento, el panel de alojamiento y el despertar programado han desaparecido, y la página de inicio dice «Autoalojado».
 - **La cabecera de la documentación coloca el interruptor del tema junto al selector de idioma**, como en la aplicación; el enlace 🚀 a la aplicación, que se muestra cuando LibreFolio está en ejecución, ocupa el lugar que tenía el interruptor del tema.
 - La guía de correo dice dónde van las variables en `.env` y cómo escribir una contraseña de aplicación de Gmail (sin espacios), y cada página da una única frase para reiniciar.
+
+#### 🎯 Asignador PAC
+
+- **Asignador PAC:** la búsqueda de activos es el selector de la página Riesgo y deja fuera los índices; los brókeres se eligen como mosaicos con icono y nombre; una barra se llena mientras se calcula el plan; «después del plan» pasa a «al final del plan» (columnas «Final»), con columnas de importes más anchas; un depósito del plan operativo se lee como una frase con el importe en una insignia; en el teléfono la revisión no tiene columna Acción (clic derecho o pulsación larga abre el menú) y la prueba del solver muestra menos columnas.
 
 ### 🐛 Corregido
 
@@ -511,6 +518,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Las señales del gráfico dejan un hueco donde falta un valor, en lugar de unir a través de él.** Un rendimiento móvil cuyo precio de referencia falta, o una ventana móvil de Sharpe o beta sin varianza, se puenteaba con un segmento recto; los fines de semana y festivos, en los que los indicadores no tienen punto, siguen unidos. El recuento de puntos 📈 de una señal ahora cuenta todos sus puntos: para RSI, CCI, MFI y Stochastic RSI mostraba solo el tramo más largo entre dos cruces de umbral. Una señal con más de 30 huecos (una ventana corta en un activo negociado raramente) se dibuja como una sola línea que los une, llamada «(huecos unidos)», para que el gráfico siga siendo rápido.
 - Gráficos: el cambio de la información emergente desde el primer punto muestra «—» en lugar de 0 % cuando el gráfico empieza en cero.
 - Una señal técnica inválida ya no rompe el gráfico de un activo o de un tipo de cambio: los precios y tipos permanecen en el gráfico y en la caché de la página, y **Todo** resuelve el inicio del rango; solo las señales se informan como no disponibles.
+- **Gráfico de ingresos:** el borde inferior del eje queda justo por debajo del mayor coste (−90 € para un coste de 80 €) en vez de un paso entero bajo cero.
+- **Gráfico de lotes:** fuera de la vista diaria, los triángulos de compra y venta quedan sobre la línea dibujada; la información emergente conserva el día y el precio reales.
 
 #### 💱 Activos, precios y tipos de cambio
 
@@ -763,6 +772,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Se eliminaron rutas de API no utilizadas o sustituidas, sin periodo de deprecación:** `POST /transactions/transfers/promote` (utilice `POST /transactions/commit` con `promotes[]`), `POST /transactions/events/suggest` (utilice `GET /transactions/event-reconciliation`), `DELETE /assets/events` (utilice `POST /assets/events` con `delete_ids`), `GET /assets/all` (utilice `GET /assets/query?active=true`), `POST /assets/provider/refresh` (utilice `POST /assets/provider/probe`), `POST /assets/{id}/market-data/wipe` (para la moneda, lo hace `PATCH /assets`), `POST /portfolio/wac` (utilice `POST /portfolio/lots/analysis`), `GET /settings/global/{key}` (utilice `GET /settings/global`), `POST /settings/global/initialize` (se hace al iniciar), `GET /uploads/{file_id}` (utilice `GET /uploads`), `GET /brokers/import/files/{file_id}` y `…/last-parse` (utilice `GET /brokers/import/files`), `GET /utilities/currencies/normalize` (utilice `GET /utilities/currencies/suggest`), `GET /brokers/{id}/summary` (consulte el bróker con `GET /brokers/{id}`, su efectivo y sus posiciones con `POST /portfolio/report`).
 
 ---
+- **`POST /api/v1/portfolio/report`: se elimina `summary.pnl_change_1d_vs_total_pnl_percent`**, sin periodo de obsolescencia: la variación del día como parte del P&L total se disparaba cerca de cero. Usa `pnl_change_1d_vs_nav_percent`, la parte del valor de la cartera de ayer.
 
 ## [1.2.1] - 2026-10-15
 
