@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Dashboard and the broker page follow the current prices**: every minute while you use them, amounts, KPIs and positions update by themselves; they stop when the tab is hidden or after two minutes without input («Updates paused») and resume at your next action.
 - **Data-quality warnings on the broker page:** old prices, missing or old exchange rates and their sync buttons appear there too, for every role.
 - **Positions chart: choose the window of the Rolling view.** One week, one month, three months, one year or a custom window; it starts from the automatic one.
+- The allocation pie by asset shows the asset's icon in its tooltip too, as the pie by type does.
 
 #### 📈 Charts
 
@@ -99,6 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An interrupted restore no longer serves data it cannot vouch for.** When the state of a restore cannot be read, the instance shows a page that asks for the administrator (with a link to the instance's support when one is set), keeps every checked copy, and `./dev.py backup pending --recover` lets the administrator choose between the data of before and a new restore.
 - Backup jobs report the archive's SHA-256; a restore report says that the accounts and credentials come from the backup, and warns when the confirming administrator is not in it. The guide explains nightly copies with restic or Backrest.
 - **Backups stay on the server:** made from the app, the command line or a hosting panel, they are listed in a table (Settings › Backup and the new Files › Backups tab) with origin, type, size and SHA-256, ready to download or delete. Administrators can set an automatic clean-up by total size and by age; the latest backup is always kept.
+- **Restore a backup the server keeps**: *Restore* on a kept backup's row (Settings › Backup, Files › Backups) checks it straight from the server, with no download and no upload; a secure backup asks for its password.
+- **Check a password before you restore**: in the restore report, choose an administrator of the backup and type a password to know whether you will sign in with it afterwards. The password is never stored, logged or sent back.
+- **A restore can wait**: *Decide later* keeps a checked archive, and Settings › Backup offers to resume or discard it from any tab or device. The report shows the backup's administrators with their pictures and a bar of what it holds; a restore that cannot go on asks for no confirmation, and one refused by the space limit gives its room back at once.
+- *Refresh* on the list of kept backups, for the backups made from the command line.
 
 #### 👥 Accounts, sign-up and administrators
 
@@ -133,6 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Send by email**: the invitation and password-reset link dialogs of Settings › Users can email the link, a reset link in the language of its account and an invitation in the language chosen in the dialog, the instance's by default, with the outcome naming the language used, when email works and `LIBREFOLIO_PUBLIC_URL` is set. API: `POST /api/v1/email/links`.
 - **Notice of an email change**: when email works and someone changes the email address of an account, LibreFolio writes to the address it had before, showing only the domain of the new one, so its owner learns of a change they did not make. At most 3 such notices go out an hour per account and per old address; past that the change still goes through, without the notice.
 - **Activation and password-reset emails share one limit per network**, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 an hour), beside the instance's hourly budget; wrong passwords never spend it. When an email is held, the page says how many minutes to wait, in a yellow box.
+- **The LibreFolio logo in every email**: the green header shows it, attached inside the message, so it appears without loading anything from the web. The notice for a missing `LIBREFOLIO_PUBLIC_URL` gives an example made from the address you are using, with a Guide button.
 
 #### 🔐 Security and secrets
 
@@ -288,6 +294,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the Files page and in a broker's report files, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
 - **System files**: the icons created at installation show «system» as their uploader, instead of a user number.
 - **Files, for administrators**: the space limit sits in a closed Advanced panel and is called LibreFolio total space; it now applies: a new file, a broker report, a backup started by hand or a restore that would pass it is refused, and the message says what to raise it to. Transactions, prices, the database and the backups of a hosting panel or the command line are never stopped. Automatic clean-up is a closed panel too, and says its rules apply within the hour. Saving either shows a green confirmation, and the same-disk reminder is now a plain note.
+- **A refusal of the space limit is said where you are** (an upload, an import, the backup card), with *Open the settings* for administrators and how much to free for users. Over the limit the space bar keeps every part, with a tick at the limit and stripes past it; a restore under way is a part of its own.
 
 #### 💱 Currency codes
 
@@ -371,6 +378,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The documentation site uses the same colours as the app**, in the light and the dark theme.
 - **The documentation no longer describes running LibreFolio for others:** the pages on hosting providers, the hosting panel and scheduled wake-up are gone, and the home page says «Self-hosted».
 - **The documentation header keeps the theme switch beside the language selector**, as in the app; the 🚀 link to the app, shown when LibreFolio is running, takes the place the theme switch had.
+- The email guide says where the variables go in `.env` and how to write a Gmail app password (without spaces), and every page gives one restart sentence.
 
 ### 🐛 Fixed
 
@@ -427,6 +435,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import: the check made when the rows arrive is no longer discarded.** On imports of more than 50 rows, refused rows appeared only after ⚡ Validate now.
 - Import, step 3: an importer's blue notes are no longer counted as warnings. The results table and the summary show ⚠️ warnings and ℹ️ notes apart, the file detail lists them under two headings, and the confirmation counts only the warnings when it speaks of warnings.
 - The import guide no longer points to a button that may be missing when no file was read.
+- The import wizard no longer goes on without a file the server refused: it stays on the first step, says why, and sends the file again.
 
 #### 🏦 Brokers and transfers
 
@@ -464,6 +473,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The quantities in the Performance table no longer count a transaction dated after the end of the report.
 - Positions series: an asset summed over its brokers keeps its percent when units were in transit at the start of the period.
 - **Transactions on the Dashboard:** the page-size selector works.
+- An asset's new icon, name, type or classification shows at once in the Dashboard: the report no longer kept the old ones for up to 30 minutes.
 
 #### 🧮 Lots
 
