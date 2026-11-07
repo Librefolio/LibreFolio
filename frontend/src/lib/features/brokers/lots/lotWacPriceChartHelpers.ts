@@ -436,6 +436,36 @@ export function resolveMarketPriceAtOrBefore<T extends {date: string}>(date: str
 }
 
 /**
+ * Where the DRAWN line is on `date` (G7, B9): the height an event marker rests on when the line is not the daily one.
+ *
+ * Beyond the daily resolution the line is drawn through one point per bucket, on the bucket's last day, so the true price of a day inside a
+ * bucket is not on it: a marker at that price floats beside the line. The marker takes the line's own height instead — the straight stretch
+ * between the two drawn points around the date, which is how the line is joined between buckets; the same height before the first point and
+ * after the last. A point without a value is a gap, never zero: it is skipped, so the marker rests on the nearest drawn stretch. Null when the
+ * line has no point with a value, and the caller keeps the true price.
+ *
+ * It only places a marker on a line that is drawn; the marker's tooltip still reads the true date and price. A spline draws a slightly curved
+ * stretch where this reads a straight one: the difference is a few pixels at most, inside the marker.
+ */
+export function valueOnDrawnLine(points: ReadonlyArray<{date: string; value: number | null}>, date: string): number | null {
+    const drawn = points.filter((point): point is {date: string; value: number} => typeof point.value === 'number' && Number.isFinite(point.value)).sort((left, right) => sortDates(left.date, right.date));
+    if (drawn.length === 0) return null;
+    if (date <= drawn[0].date) return drawn[0].value;
+    const last = drawn[drawn.length - 1];
+    if (date >= last.date) return last.value;
+    let after = drawn.findIndex((point) => point.date >= date);
+    if (after <= 0) after = 1;
+    const before = drawn[after - 1];
+    const next = drawn[after];
+    if (next.date === date) return next.value;
+    const start = isoDateToUtcMs(before.date);
+    const end = isoDateToUtcMs(next.date);
+    const at = isoDateToUtcMs(date);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(at) || end === start) return next.value;
+    return before.value + ((next.value - before.value) * (at - start)) / (end - start);
+}
+
+/**
  * Match a transfer arrival to its departure. A candidate departure must be the
  * same lot, dated on or before the arrival, and — when both sides name the same
  * broker slot — agree on it. It matches when the transaction ids are paired
