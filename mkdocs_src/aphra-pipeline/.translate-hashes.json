@@ -11787,7 +11787,7 @@
     }
   },
   "admin/backup_restore.en.md": {
-    "md5": "7df393899d4bd5b84a8a9cc95bf031c6",
+    "md5": "442e6373ea97178345de0b31d41fc715",
     "langs_done": [
       "es",
       "fr",
@@ -11807,7 +11807,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 2048.7,
-        "stamped_at": "2026-11-06T09:53:21.609776+00:00",
+        "stamped_at": "2026-11-07T13:57:48.441349+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -11820,7 +11820,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 2030.4,
-        "stamped_at": "2026-11-06T09:53:21.609776+00:00",
+        "stamped_at": "2026-11-07T13:57:48.441349+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -11833,7 +11833,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1565.3,
-        "stamped_at": "2026-11-06T09:53:21.609776+00:00",
+        "stamped_at": "2026-11-07T13:57:48.441349+00:00",
         "stamped_by": "translate-stamp"
       }
     }

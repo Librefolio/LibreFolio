@@ -127,6 +127,8 @@ backups/librefolio-backup-20261015-121500-ui-1a2b3c4d/librefolio-backup-20261015
 
 L'archive à l'intérieur conserve son nom habituel, `.zip`, `.lfbk` ou `.tar`. `backups/.jobs/` ne contient qu'une sauvegarde en cours ou une sauvegarde échouée, qui disparaît au bout d'une heure.
 
+**Actualiser**, en haut de la liste des sauvegardes, la relit : une sauvegarde faite depuis la ligne de commande n'apparaît qu'alors.
+
 **Paramètres › Administration › Sauvegarde**, sous *Sauvegardes sur ce serveur*, liste chaque sauvegarde conservée. **Fichiers**, dans son onglet **Sauvegardes**, affiche la même liste ; seuls les administrateurs voient l'une ou l'autre. La liste donne, pour chaque sauvegarde :
 
 - 📅 la date et l'heure de sa création, et son origine : l'application ou la ligne de commande ;
@@ -165,7 +167,8 @@ Les sauvegardes conservées s'accumulent, et elles résident sur le disque de vo
 | **Fichiers téléversés** | Les fichiers téléversés dans l'application, comme ceux de la page **Fichiers** |
 | **Rapports de courtiers** | Les relevés téléversés pour importer des transactions |
 | **Sauvegardes** | Tout ce qui se trouve dans `backups/` : les [sauvegardes conservées sur le serveur](#kept-backups), une sauvegarde en cours et une sauvegarde échouée |
-| **Autres fichiers LibreFolio** | Le reste du répertoire de données : journaux, le dossier de travail d'une restauration et autres |
+| **Restauration en cours** | Une [restauration](#restore) pas encore terminée ni abandonnée : l'archive téléversée et sa version ouverte |
+| **Autres fichiers LibreFolio** | Le reste du répertoire de données : journaux, état et autres |
 
 La barre a trois apparences, selon qu'une limite est définie et que le disque est connu :
 
@@ -176,7 +179,8 @@ La barre a trois apparences, selon qu'une limite est définie et que le disque e
 **Définissez la limite** dans le panneau fermé **Avancé** sous la même barre, dans le champ **Espace total de LibreFolio (Mo)** : un nombre entier de mégaoctets, `0` pour aucune limite, puis **Enregistrer** ; un avis vert le confirme. C'est l'espace maximal que LibreFolio peut occuper au total. C'est aussi le [paramètre global](settings.md) *Limite d'espace*, qui n'est pas affiché dans l'onglet Administration : ce champ est l'endroit où le modifier.
 
 - 🚧 **Au-delà de la limite**, LibreFolio refuse ce qui ajouterait des données : un fichier téléversé, un rapport de courtier, une sauvegarde lancée à la main (après avoir essayé le [nettoyage automatique](#backup-cleanup)) et une [restauration](#restore) dont le résultat la dépasserait. Le message dit de porter l'espace total à au moins une certaine taille et, si le disque lui-même manque de place, combien il lui faut de plus en libre. Jamais arrêtés : vos transactions, prix et base de données, les sauvegardes d'un panneau d'hébergement et de la ligne de commande (le nettoyage les suit) et une restauration déjà confirmée. La limite ne supprime rien d'elle-même.
-- ⚠️ **Au-delà de la limite**, la barre avertit que la limite est dépassée et suggère de supprimer des sauvegardes ou des fichiers, ou d'augmenter la limite.
+- ⚠️ **Au-delà de la limite**, la barre avertit que la limite est dépassée et suggère de supprimer des sauvegardes ou des fichiers, ou d'augmenter la limite. La barre représente alors vos données, pour qu'aucune partie ne soit laissée de côté : un repère nommé *Limite 20 Mo* montre où tombe la limite, et des rayures rouges après lui montrent de combien vous la dépassez.
+- 💬 **Un refus est dit là où vous êtes** : dans la fenêtre de téléversement ou d'importation, ou sur la carte de sauvegarde. Un administrateur dispose de **Ouvrir les paramètres**, qui ouvre **Fichiers** avec le panneau **Avancé** ouvert ; un utilisateur lit combien d'espace libérer, ou de demander à un administrateur. Avec une limite fixée par l'hébergeur de l'instance, le message dit de la lui demander.
 - 🔒 **Définie dans la configuration du serveur** : lorsque `LIBREFOLIO_STORAGE_LIMIT_MB` est défini, sa valeur constitue la limite, le champ est grisé et une note indique qu'elle est définie par l'hébergeur de l'instance. Voir [Variables d'environnement](configuration.md). Une valeur que LibreFolio ne peut pas utiliser, qui n'est pas un nombre entier, est ignorée, et le champ fonctionne comme ci-dessus.
 - 🧹 **Le nettoyage et la barre fonctionnent ensemble.** Les sauvegardes sont généralement la partie qui grossit : le [nettoyage automatique](#backup-cleanup) les maintient sous contrôle, et chaque sauvegarde que vous supprimez dans **Paramètres › Administration › Sauvegarde** ou dans **Fichiers › Sauvegardes** réduit **Sauvegardes** dans la barre. Lorsque vous approchez de la limite, commencez par là.
 
@@ -299,12 +303,12 @@ Une restauration remplace les données de l'installation par celles de l'archive
     - les totaux du grand livre : identiques à ceux du moment de la création de la sauvegarde, différents sur les lignes listées ([comment les lire](backup_moving.md#check-refused)), non enregistrés, enregistrés par une autre version de la méthode, ou illisibles ;
     - les administrateurs de la sauvegarde, avec *Après la restauration, vous vous connectez avec l'un d'eux, avec le mot de passe de l'époque ; toute session ouverte maintenant se termine.*
     - *Les invitations et liens envoyés avant la restauration auront expiré : renvoyez-les si nécessaire.*
-    - les avertissements, qui laissent la restauration se poursuivre, et l'élément bloquant, qui l'interdit : une sauvegarde sans administrateur actif ;
-    - jusqu'à quand la copie vérifiée est conservée : 24 heures après la vérification.
+    - les avertissements, qui laissent la restauration se poursuivre, et les éléments bloquants, qui l'interdisent : une sauvegarde sans administrateur actif, et une restauration qui dépasserait la [limite d'espace](#space-used), avec la taille à laquelle la porter ; une telle vérification rend aussitôt son espace, et son rapport reste à l'écran jusqu'à ce que vous le fermiez ;
+    - jusqu'à quand l'archive téléversée est conservée : 24 heures après la vérification.
 
-    **Abandonner cette archive** abandonne la vérification et sa copie : rien n'est restauré.
+    **Abandonner cette archive** abandonne la vérification et sa copie : rien n'est restauré. **Je déciderai plus tard** ferme la fenêtre et garde la vérification : la carte affiche alors *Une restauration attend votre décision jusqu'au …*, avec **Reprendre**, qui rouvre le même rapport, et **Écarter**, depuis n'importe quel onglet ou appareil d'un administrateur.
 
-5. **Saisissez le mot.** La fenêtre affiche un mot choisi au hasard, un vrai mot de 6 à 10 lettres dans la langue de l'interface. Saisissez-le à la main dans le champ situé en dessous : le champ refuse le texte collé ou déposé. Le mot protège contre un clic hâtif, pas contre un administrateur : l'API et la ligne de commande s'en passent. Pour une archive qui ne peut pas être restaurée, le champ et le bouton restent désactivés.
+5. **Saisissez le mot.** La fenêtre affiche un mot choisi au hasard, un vrai mot de 6 à 10 lettres dans la langue de l'interface. Saisissez-le à la main dans le champ situé en dessous : le champ refuse le texte collé ou déposé. Le mot protège contre un clic hâtif, pas contre un administrateur : l'API et la ligne de commande s'en passent. Pour une archive qui ne peut pas être restaurée, ni le mot ni **Restaurer et redémarrer** ne s'affichent : seulement le bouton qui l'abandonne.
 6. **Restaurer et redémarrer.** Une fois le mot saisi, **Restaurer et redémarrer** confirme la restauration et arrête LibreFolio immédiatement, pour tout le monde. Une fenêtre recouvre la page, **LibreFolio redémarre** : *Son démarrage applique la restauration. Cette page attend son retour.* LibreFolio ne se redémarre pas lui-même : ce qui le supervise le fait ([Qui redémarre LibreFolio](#supervisors)), et ce démarrage applique la restauration ([Ce que fait le démarrage suivant](#next-start)).
 
 Une fois que LibreFolio répond à nouveau, la page montre comment cela s'est passé :
@@ -328,7 +332,8 @@ Bon à savoir :
 - 📏 Lorsque l'installation limite la taille des archives, la carte l'indique, par exemple *Archives jusqu'à 500 Mo.*, et refuse un fichier plus volumineux avant tout envoi. La limite est `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, en mégaoctets de 1024 × 1024 octets : aucune par défaut sur votre propre installation ([La limite de téléversement d'une restauration](#restore-upload-limit)).
 - 💽 Le disque du répertoire de données doit avoir de la place pour l'archive et, pendant sa vérification, pour sa copie, ainsi que, pour une sauvegarde sécurisée, pour son archive déchiffrée : [Vérifier une sauvegarde](#check) indique la quantité nécessaire.
 - 🔑 Le mot de passe d'une sauvegarde sécurisée n'est envoyé au serveur qu'avec la requête qui lance la vérification, laquelle l'essaie aussitôt : il n'est jamais stocké, écrit dans le journal ni renvoyé. Le champ se vide dès que vous le soumettez.
-- 🔄 Un rechargement de la page, dans le même onglet, continue de suivre la vérification et son rapport. La copie vérifiée est conservée 24 heures : passé ce délai, la confirmation répond *La vérification est trop ancienne : vérifiez à nouveau l'archive.*
+- 📦 Pendant sa vérification, l'archive occupe sa propre taille sur le serveur, que la carte indique pendant le téléversement, plus sa version ouverte ; les deux comptent dans la limite d'espace jusqu'à la fin ou l'abandon de la restauration.
+- 🔄 Un rechargement de la page continue de suivre la vérification et son rapport, et tout autre onglet ou appareil d'un administrateur la reprend depuis la carte. L'archive téléversée est conservée 24 heures : passé ce délai, la confirmation répond *La vérification est trop ancienne : vérifiez à nouveau l'archive.*
 - 🚪 La restauration met fin à toutes les sessions, chacun se reconnecte avec un compte de la sauvegarde, et les liens envoyés avant elle cessent de fonctionner : voir [Ce que fait le démarrage suivant](#next-start).
 - ❌ Un téléversement, une vérification ou une confirmation refusés, ou un serveur qui ne répond pas, s'affichent sur la carte avec la raison. **Réessayer** relit l'état de la restauration ; pour renvoyer une archive, choisissez-la à nouveau avec **Choisir une archive…**. La vérification refuse les mêmes archives que la ligne de commande : voir [La vérification refuse l'archive](backup_moving.md#check-refused).
 - 🖥️ Si rien ne redémarre LibreFolio, comme une installation hôte démarrée à la main, [démarrez le serveur](cli_tools.md#start-the-server) vous-même une fois qu'il s'est arrêté : la page l'attend.
