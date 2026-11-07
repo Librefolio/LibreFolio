@@ -73,13 +73,13 @@ graph TD
 
     P1 ~~~ P2 ~~~ P3
 
-    style S1 fill:#e3f2fd,stroke:#1565c0
-    style S2 fill:#e3f2fd,stroke:#1565c0
-    style C1 fill:#e8f5e9,stroke:#2e7d32
-    style C2 fill:#e8f5e9,stroke:#2e7d32
-    style H1 fill:#fff3e0,stroke:#e65100
-    style H2 fill:#fff3e0,stroke:#e65100
-    style H3 fill:#f3e5f5,stroke:#7b1fa2
+    style S1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style S2 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style C1 fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style C2 fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style H1 fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style H2 fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style H3 fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
 **Phase 1** is optional but **strongly recommended** — enables users to discover and link assets without knowing the exact identifier. See [Asset Search](#asset-search) below.

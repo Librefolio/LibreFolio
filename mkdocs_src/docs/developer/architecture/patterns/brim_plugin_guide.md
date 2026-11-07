@@ -51,14 +51,14 @@ graph TD
 
     D3 ~~~ P1
 
-    style D0 fill:#e3f2fd,stroke:#1565c0
-    style D1 fill:#e3f2fd,stroke:#1565c0
-    style D2 fill:#e3f2fd,stroke:#1565c0
-    style D3 fill:#e3f2fd,stroke:#1565c0
-    style P1 fill:#e8f5e9,stroke:#2e7d32
-    style P2 fill:#fff3e0,stroke:#e65100
-    style P3 fill:#fff3e0,stroke:#e65100
-    style P4 fill:#f3e5f5,stroke:#7b1fa2
+    style D0 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style D1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style D2 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style D3 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style P1 fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style P2 fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style P3 fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style P4 fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
 **Phase 1** runs automatically when a file is uploaded — every registered plugin is asked if it can parse the file. Compatible plugins are listed for the user. It runs again, once per app version, when an original detected by another version is read: see [The lifecycle of `compatible_plugins`](#compatible-plugins-lifecycle).
