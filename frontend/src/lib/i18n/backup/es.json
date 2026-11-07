@@ -156,7 +156,8 @@
         "drop": "Descartar este archivo",
         "ownAccountMissing": "Tu cuenta no está entre los administradores de esta copia de seguridad: después del reinicio no podrás iniciar sesión con ella.",
         "usersOverLimit": "Esta copia tiene {active} cuentas activas, pero esta instancia admite {limit}. La restauración continúa; cuando un administrador inicie sesión, elegirá quién conserva el acceso, y las demás cuentas se desactivarán, no se eliminarán.",
-        "later": "Lo decido después"
+        "later": "Lo decido después",
+        "partsTitle": "Qué contiene la copia"
       },
       "confirm": {
         "word": "restaurar",
@@ -251,7 +252,16 @@
         "resume": "Retomar",
         "discard": "Descartar"
       },
-      "spaceNeeded": "Mientras se comprueba, este archivo ocupa {size} en el servidor, más su versión abierta, y cuenta en el límite de espacio hasta que la restauración termine o se descarte."
+      "spaceNeeded": "Mientras se comprueba, este archivo ocupa {size} en el servidor, más su versión abierta, y cuenta en el límite de espacio hasta que la restauración termine o se descarte.",
+      "verify": {
+        "title": "Comprueba una contraseña antes de restaurar",
+        "admin": "Administrador de la copia",
+        "password": "Su contraseña",
+        "button": "Verificar",
+        "match": "Con esta contraseña entrarás después de la restauración.",
+        "mismatch": "No es su contraseña.",
+        "failed": "No se ha podido comprobar la contraseña: inténtalo de nuevo."
+      }
     },
     "checks": {
       "panelToken": {
@@ -320,7 +330,8 @@
       "actions": {
         "download": "Descargar",
         "delete": "Eliminar",
-        "copySha": "Copiar el SHA-256"
+        "copySha": "Copiar el SHA-256",
+        "restore": "Restaurar"
       },
       "deleteConfirm": "¿Eliminar esta copia del servidor? Descárgala antes si aún la necesitas.",
       "sha": {
@@ -331,7 +342,8 @@
         "load": "No se pudo cargar la lista de copias. Inténtalo de nuevo."
       },
       "retry": "Reintentar",
-      "refresh": "Actualizar"
+      "refresh": "Actualizar",
+      "restoreConfirm": "¿Restaurar esta copia de seguridad? Sustituirá los datos de todos los usuarios. LibreFolio la comprueba primero y te muestra qué cambiaría: nada cambia hasta que confirmes."
     },
     "cleanup": {
       "title": "Limpieza automática",

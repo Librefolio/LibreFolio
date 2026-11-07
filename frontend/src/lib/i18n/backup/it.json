@@ -156,7 +156,8 @@
         "drop": "Scarta questo archivio",
         "ownAccountMissing": "Il tuo account non è tra gli amministratori di questo backup: dopo il riavvio non potrai accedere con questo account.",
         "usersOverLimit": "Questo backup contiene {active} account attivi, ma questa istanza ne accetta {limit}. Il ripristino prosegue; quando un amministratore accede, sceglie chi tiene l'accesso, e gli altri account vengono disattivati, non cancellati.",
-        "later": "Ci penso dopo"
+        "later": "Ci penso dopo",
+        "partsTitle": "Cosa contiene il backup"
       },
       "confirm": {
         "word": "ripristina",
@@ -251,7 +252,16 @@
         "resume": "Riprendi",
         "discard": "Scarta"
       },
-      "spaceNeeded": "Durante il controllo questo archivio occupa {size} sul server, più la sua versione aperta, e conta nel limite di spazio finché il ripristino non finisce o viene scartato."
+      "spaceNeeded": "Durante il controllo questo archivio occupa {size} sul server, più la sua versione aperta, e conta nel limite di spazio finché il ripristino non finisce o viene scartato.",
+      "verify": {
+        "title": "Verifica una password prima di ripristinare",
+        "admin": "Amministratore del backup",
+        "password": "La sua password",
+        "button": "Verifica",
+        "match": "Con questa password accederai dopo il ripristino.",
+        "mismatch": "Non è la sua password.",
+        "failed": "Non è stato possibile verificare la password: riprova."
+      }
     },
     "checks": {
       "panelToken": {
@@ -320,7 +330,8 @@
       "actions": {
         "download": "Scarica",
         "delete": "Elimina",
-        "copySha": "Copia lo SHA-256"
+        "copySha": "Copia lo SHA-256",
+        "restore": "Ripristina"
       },
       "deleteConfirm": "Eliminare questo backup dal server? Scaricalo prima se ti serve ancora.",
       "sha": {
@@ -331,7 +342,8 @@
         "load": "Non è stato possibile caricare l'elenco dei backup. Riprova."
       },
       "retry": "Riprova",
-      "refresh": "Aggiorna"
+      "refresh": "Aggiorna",
+      "restoreConfirm": "Ripristinare questo backup? Sostituirà i dati di tutti gli utenti. LibreFolio prima lo controlla e ti mostra cosa cambierebbe: nulla cambia finché non confermi."
     },
     "cleanup": {
       "title": "Pulizia automatica",

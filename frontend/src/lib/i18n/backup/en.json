@@ -156,7 +156,8 @@
         "drop": "Drop this archive",
         "ownAccountMissing": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it.",
         "usersOverLimit": "This backup holds {active} active accounts, but this instance accepts {limit}. The restore goes on; when an administrator signs in, they choose who keeps access, and the others are deactivated, not deleted.",
-        "later": "I'll decide later"
+        "later": "I'll decide later",
+        "partsTitle": "What the backup holds"
       },
       "confirm": {
         "word": "restore",
@@ -251,7 +252,16 @@
         "resume": "Resume",
         "discard": "Discard"
       },
-      "spaceNeeded": "While it is checked, this archive takes {size} on the server, plus its opened version, and counts in the space limit until the restore ends or is discarded."
+      "spaceNeeded": "While it is checked, this archive takes {size} on the server, plus its opened version, and counts in the space limit until the restore ends or is discarded.",
+      "verify": {
+        "title": "Check a password before you restore",
+        "admin": "Administrator of the backup",
+        "password": "Their password",
+        "button": "Verify",
+        "match": "With this password you will sign in after the restore.",
+        "mismatch": "This is not their password.",
+        "failed": "The password could not be checked: try again."
+      }
     },
     "checks": {
       "panelToken": {
@@ -320,7 +330,8 @@
       "actions": {
         "download": "Download",
         "delete": "Delete",
-        "copySha": "Copy SHA-256"
+        "copySha": "Copy SHA-256",
+        "restore": "Restore"
       },
       "deleteConfirm": "Delete this backup from the server? Download it first if you still need it.",
       "sha": {
@@ -331,7 +342,8 @@
         "load": "The list of backups could not be loaded. Try again."
       },
       "retry": "Try again",
-      "refresh": "Refresh"
+      "refresh": "Refresh",
+      "restoreConfirm": "Restore this backup? It will replace the data of every user. LibreFolio checks it first and shows you what would change: nothing changes until you confirm."
     },
     "cleanup": {
       "title": "Automatic clean-up",

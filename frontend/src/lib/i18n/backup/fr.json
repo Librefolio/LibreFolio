@@ -156,7 +156,8 @@
         "drop": "Abandonner cette archive",
         "ownAccountMissing": "Votre compte ne fait pas partie des administrateurs de cette sauvegarde : après le redémarrage, vous ne pourrez plus vous connecter avec ce compte.",
         "usersOverLimit": "Cette sauvegarde contient {active} comptes actifs, mais cette instance en accepte {limit}. La restauration continue ; quand un administrateur se connectera, il choisira qui garde l'accès, et les autres comptes seront désactivés, pas supprimés.",
-        "later": "Je déciderai plus tard"
+        "later": "Je déciderai plus tard",
+        "partsTitle": "Ce que contient la sauvegarde"
       },
       "confirm": {
         "word": "restaurer",
@@ -251,7 +252,16 @@
         "resume": "Reprendre",
         "discard": "Écarter"
       },
-      "spaceNeeded": "Pendant sa vérification, cette archive occupe {size} sur le serveur, plus sa version ouverte, et compte dans la limite d'espace jusqu'à la fin ou l'abandon de la restauration."
+      "spaceNeeded": "Pendant sa vérification, cette archive occupe {size} sur le serveur, plus sa version ouverte, et compte dans la limite d'espace jusqu'à la fin ou l'abandon de la restauration.",
+      "verify": {
+        "title": "Vérifiez un mot de passe avant de restaurer",
+        "admin": "Administrateur de la sauvegarde",
+        "password": "Son mot de passe",
+        "button": "Vérifier",
+        "match": "Avec ce mot de passe, vous vous connecterez après la restauration.",
+        "mismatch": "Ce n'est pas son mot de passe.",
+        "failed": "Le mot de passe n'a pas pu être vérifié : réessayez."
+      }
     },
     "checks": {
       "panelToken": {
@@ -320,7 +330,8 @@
       "actions": {
         "download": "Télécharger",
         "delete": "Supprimer",
-        "copySha": "Copier le SHA-256"
+        "copySha": "Copier le SHA-256",
+        "restore": "Restaurer"
       },
       "deleteConfirm": "Supprimer cette sauvegarde du serveur ? Téléchargez-la d'abord si vous en avez encore besoin.",
       "sha": {
@@ -331,7 +342,8 @@
         "load": "La liste des sauvegardes n'a pas pu être chargée. Réessayez."
       },
       "retry": "Réessayer",
-      "refresh": "Actualiser"
+      "refresh": "Actualiser",
+      "restoreConfirm": "Restaurer cette sauvegarde ? Elle remplacera les données de tous les utilisateurs. LibreFolio la vérifie d'abord et vous montre ce qui changerait : rien ne change tant que vous ne confirmez pas."
     },
     "cleanup": {
       "title": "Nettoyage automatique",
