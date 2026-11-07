@@ -548,10 +548,6 @@ class PortfolioSummary(StrictModel):
         None,
         description="Change of the total P&L from the calendar day before the valuation date to it, from the engine's daily states; None for a portfolio born on the valuation date",
     )
-    pnl_change_1d_vs_total_pnl_percent: Optional[SafeDecimal] = Field(
-        None,
-        description="pnl_change_1d / |total P&L of the day before|, a fraction with the change's sign, unrounded; None on a zero base",
-    )
     pnl_change_1d_vs_nav_percent: Optional[SafeDecimal] = Field(
         None,
         description="pnl_change_1d / |NAV of the day before|, a fraction with the change's sign, unrounded; None on a zero base",

@@ -1225,7 +1225,6 @@ class PortfolioService:
             mwrr_period_days=mwrr_period_days,
             timing_effect_percent=timing_effect(mwrr_cumulative, twrr_result),
             pnl_change_1d=Currency(code=base_currency, amount=day_change.pnl_change) if day_change is not None else None,
-            pnl_change_1d_vs_total_pnl_percent=day_change.vs_total_pnl if day_change is not None else None,
             pnl_change_1d_vs_nav_percent=day_change.vs_nav if day_change is not None else None,
             simple_roi_percent=simple_roi,
             allocation_by_type=_alloc_from_engine(alloc_type),
