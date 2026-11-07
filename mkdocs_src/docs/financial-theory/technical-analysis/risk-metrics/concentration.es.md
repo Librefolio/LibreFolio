@@ -101,7 +101,7 @@ Eso es defendible — el efectivo es genuinamente una posición no concentrada, 
 
 Lee las dos cifras como un par, en este orden:
 
-1. **Activos efectivos frente al número real de posiciones.** La dirección de la diferencia determina su significado: **por debajo** del recuento, las ponderaciones están desequilibradas y unas pocas posiciones sostienen la cartera sin importar cuántas filas tenga; **por encima**, el exceso es efectivo, y no dice nada sobre cómo se reparten las ponderaciones.
+1. **Activos efectivos frente al número real de posiciones.** La dirección de la diferencia determina su significado: **por debajo** del recuento, las ponderaciones están desequilibradas y unas pocas posiciones sostienen la cartera sin importar cuántas filas tenga; **por encima**, el exceso viene de la parte que las ponderaciones no cubren — efectivo y posiciones sin una serie de precios utilizable, no solo efectivo — y no dice nada sobre cómo se reparten las ponderaciones.
 2. **Ratio de diversificación.** Un valor cercano a 1 significa que las posiciones se mueven como una sola, y que el reparto aportó poco. Cuanto más por encima de 1, más se compensan unas posiciones con otras.
 
 La segunda cifra es la que puede contradecir a la primera, y es la contradicción la que aporta la información. Una cartera puede estar perfectamente equilibrada por ponderación y no estar diversificada en esencia — es el resultado ordinario de mantener varios fondos que siguen mercados solapados.
