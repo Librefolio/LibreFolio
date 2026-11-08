@@ -211,8 +211,9 @@ def _finalize_js_coverage() -> None:
     - **unit** — vitest's istanbul provider writes a ``coverage-final.json`` at
       the end of every process, and the runner launches vitest once per
       category, each into its own ``unit/<tag>`` directory.
-    - **e2e** — the Playwright fixture drops one JSON per test into
-      ``e2e-raw/``, read straight out of ``window.__coverage__``.
+    - **e2e** — each Playwright worker sums its tests' ``window.__coverage__``
+      and writes one JSON per worker into ``e2e-raw/``
+      (``worker-<parallelIndex>-<pid>.json``, ``e2e/fixtures/js-coverage-sink.ts``).
 
     That both levels are istanbul is what makes the merge mean anything: while
     the E2E level was V8, the two counted different things and the combined
@@ -239,11 +240,11 @@ def _finalize_js_coverage() -> None:
         print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/unit-combined/ ({len(unit_jsons)} run){Colors.NC}")
         sources.append(f"{JS_COVERAGE_DIR}/unit-combined/coverage-final.json")
 
-    # --- e2e: one istanbul JSON per test ---
+    # --- e2e: one istanbul JSON per Playwright worker, each the sum of its tests ---
     e2e_raw = js_dir / "e2e-raw"
     e2e_jsons = sorted(e2e_raw.glob("*.json")) if e2e_raw.is_dir() else []
     if e2e_jsons and report("e2e", "e2e", [f"{JS_COVERAGE_DIR}/e2e-raw"]):
-        print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/e2e/ ({len(e2e_jsons)} test){Colors.NC}")
+        print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/e2e/ ({len(e2e_jsons)} worker file(s)){Colors.NC}")
         sources.append(f"{JS_COVERAGE_DIR}/e2e/coverage-final.json")
 
     if not sources:
