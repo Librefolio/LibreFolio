@@ -134,6 +134,7 @@ The archive inside keeps its usual name, `.zip`, `.lfbk` or `.tar`. `backups/.jo
 - 📅 the date and time it was made, and where it came from: the app or the command line;
 - 🔐 its type: plain, with a password ([secure](#secure)) or [sealed](backup_sealed.md#sealed);
 - 📏 its size, and its SHA-256: click it to copy the whole checksum, and compare it with the one of the file you download;
+- 📦 **Once restored**: the space its contents take once restored, not compressed, to know what a restore will take; point at it to see the database, the uploaded files and the broker reports apart. A backup made before LibreFolio recorded it shows «—».
 - ⬇️ **Download** and 🗑️ **Delete**, which removes the backup from the server at once.
 
 !!! warning "💽 Download it and store it elsewhere"

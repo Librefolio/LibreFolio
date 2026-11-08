@@ -134,6 +134,7 @@ L'archive à l'intérieur conserve son nom habituel, `.zip`, `.lfbk` ou `.tar`. 
 - 📅 la date et l'heure de sa création, et son origine : l'application ou la ligne de commande ;
 - 🔐 son type : en clair ; avec un mot de passe ([sécurisée](#secure)) ; ou [scellée](backup_sealed.md#sealed) ;
 - 📏 sa taille, et son SHA-256 : cliquez dessus pour copier la somme de contrôle complète, et comparez-la avec celle du fichier que vous téléchargez ;
+- 📦 **Une fois restaurée** : l'espace qu'occupent ses contenus une fois restaurés, non compressés, pour savoir ce que prendra une restauration ; survolez-le pour voir à part la base de données, les fichiers téléversés et les rapports des courtiers. Une sauvegarde faite avant que LibreFolio ne l'enregistre affiche « — ».
 - ⬇️ **Télécharger** et 🗑️ **Supprimer**, qui retire la sauvegarde du serveur immédiatement.
 
 !!! warning "💽 Téléchargez-la et stockez-la ailleurs"

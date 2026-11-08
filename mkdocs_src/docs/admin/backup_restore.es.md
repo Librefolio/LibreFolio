@@ -134,6 +134,7 @@ El archivo interior conserva su nombre habitual, `.zip`, `.lfbk` o `.tar`. `back
 - 📅 la fecha y hora en que se hizo, y de dónde vino: la aplicación o la línea de comandos;
 - 🔐 su tipo: sin cifrar, con contraseña ([segura](#secure)) o [sellada](backup_sealed.md#sealed);
 - 📏 su tamaño, y su SHA-256: haz clic para copiar la suma de comprobación completa, y compárala con la del archivo que descargues;
+- 📦 **Una vez restaurada**: el espacio que ocupan sus contenidos una vez restaurados, sin comprimir, para saber cuánto ocupará una restauración; pasa el puntero por encima para ver aparte la base de datos, los archivos subidos y los informes de los brókeres. Una copia hecha antes de que LibreFolio lo registrara muestra «—».
 - ⬇️ **Descargar** y 🗑️ **Eliminar**, que elimina la copia de seguridad del servidor de inmediato.
 
 !!! warning "💽 Descárgala y guárdala en otro lugar"

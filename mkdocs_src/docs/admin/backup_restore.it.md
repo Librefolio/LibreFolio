@@ -134,6 +134,7 @@ L'archivio all'interno mantiene il suo nome abituale, `.zip`, `.lfbk` o `.tar`. 
 - 📅 la data e l'ora in cui è stato creato, e la provenienza: l'app o la riga di comando;
 - 🔐 il suo tipo: in chiaro, con password ([sicuro](#secure)) o [sigillato](backup_sealed.md#sealed);
 - 📏 la sua dimensione e il suo SHA-256: fai clic per copiare l'intero checksum e confrontalo con quello del file che scarichi;
+- 📦 **Una volta ripristinato**: lo spazio che i suoi contenuti occupano una volta ripristinati, non compressi, per sapere quanto prenderà un ripristino; passaci sopra per vedere a parte il database, i file caricati e i report dei broker. Un backup fatto prima che LibreFolio lo registrasse mostra «—».
 - ⬇️ **Scarica** e 🗑️ **Elimina**, che rimuove subito il backup dal server.
 
 !!! warning "💽 Scaricalo e conservalo altrove"
