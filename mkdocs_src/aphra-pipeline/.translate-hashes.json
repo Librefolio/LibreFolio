@@ -1045,7 +1045,7 @@
     }
   },
   "admin/settings.en.md": {
-    "md5": "15ca629ae4ef5c370bd6d94b24d27d76",
+    "md5": "e7ec047201f996d748fb657724013bfa",
     "langs_done": [
       "es",
       "fr",
@@ -1067,7 +1067,7 @@
         "elapsed_s": 2022.6,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=156, translated=157 (Δ+1)\n  L27: src=3 trn=2\n    EN: **Settings** end with **About**, and a link to one of the group's tabs opens their **Profile**\n    TR: **Impostazioni** terminano con **Informazioni**, e un link a una delle schede del gruppo apre invece il suo\n  L28: src=0 trn=1\n    EN: instead.\n    TR: **Profilo**.\n  L57: src=1 trn=0\n    EN: Clicking the lock with unsaved changes asks whether to discard them. **Cancel** keeps your\n    TR: \n  L59: src=0 trn=1\n    EN: \n    TR: modifiche; **Scarta** ripristina i valori salvati e blocca la scheda.\n  L77: src=1 trn=0\n    EN: | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value\n    TR: |---|---|---|---|\n  L78: src=6 trn=1\n    EN: | 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed** \n    TR: | ⏳ Sessione | **Durata sessione** | 24 ore | Per quanto tempo gli utenti restano connessi. Riducila sui dispositivi con\n  L79: src=1 trn=6\n    EN: | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before the\n    TR: | 🛡️ Sicurezza | **Registrazione** | Su invito | Chi può creare un account: **Aperta**, **Su invito** o **Chiusa** (vedi\n  L82: src=2 trn=1\n    EN: | — (not shown in this tab) | **Space limit (MB)** | `0`, no limit | The most megabytes the instance may take, shown as \n    TR: | 🧠 Memoria | **Dimensione massima file caricabile** | 10 MB | Il file più grande che gli utenti possono caricare, compr\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # ⚙️ Global Settings\n    ## 🗂️ Settings › Administration {: #administration }\n    ## ✏️ Change a Setting\n      ### 🔓 1. Unlock the tab\n      ### 💾 2. Edit and save\n    ## 📋 What Each Setting Does\n    ## 🚪 Who Can Sign Up {: #registration }\n      ### 📢 The Open-Registration Warning {: #open-registration-warning }\n    ## 🕐 Market Data Scheduler {: #market-data-scheduler }\n      ### ⚙️ Configure the schedule\n      ### 📜 Read the scheduler log\n    ## ⏸️ Provider Pauses {: #provider-pauses }\n      ### ⏱️ How Long a Pause Lasts {: #provider-pauses-length }\n      ### 👀 Who Waits, and What You See {: #provider-pauses-effects }\n      ### 💤 In Memory {: #provider-pauses-memory }\n      ### 📋 In the Log {: #provider-pauses-log }\n    ## 🗄️ Server Caches {: #server-caches }\n    ## 🛡️ Security {: #security-tab }\n      ### 🚦 What It Lists {: #security-findings }\n      ### 🔢 The Number on the Tab {: #security-badge }\n      ### 🔄 When It Checks {: #security-refresh }\n      ### ✅ Passed Checks {: #security-passed }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-07T22:40:55.429861+00:00",
+        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -1082,7 +1082,7 @@
         "elapsed_s": 1307.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=156, translated=161 (Δ+5)\n  L9: src=0 trn=5\n    EN: ---\n    TR: **Paramètres globaux** est le premier onglet d’**Administration**, le groupe d’onglets qui gère l’instance, à l’extrémit\n  L13: src=2 trn=1\n    EN: **Global Settings** is the first tab of **Administration**, the group of tabs that look after the\n    TR: | ⚙️ **Paramètres globaux** | Administrateurs | Les paramètres de cette page |\n  L15: src=2 trn=1\n    EN: the group. Click **Administration**: it opens **Global Settings** and a second row of tabs under the\n    TR: | 💾 **Sauvegarde** | Administrateurs | Toute l’instance dans une archive, et sa restauration : [Sauvegarde, restauration\n  L16: src=0 trn=1\n    EN: first one, with the tabs of the group.\n    TR: | ✉️ **E-mail** | Administrateurs | Si LibreFolio peut envoyer des e-mails, et un e-mail de test : [E-mail](email.md) |\n  L17: src=0 trn=1\n    EN: \n    TR: | 🛡️ **Sécurité** | Administrateurs | Comment l’instance est configurée, et ce qui demande votre attention : [Sécurité](\n  L19: src=0 trn=4\n    EN: |---|---|---|\n    TR: - 👤 Un utilisateur qui n’est pas administrateur n’a pas le groupe **Administration**, ni aucun de ses onglets : ses **Pa\n  L21: src=1 trn=2\n    EN: | 👥 **Users** | Administrators | The accounts, invitations and password-reset links: [Users & Invitations](users.md) |\n    TR: - 🔢 Un nombre sur **Sécurité**, répété sur **Administration**, compte les erreurs et les avertissements des [contrôles d\n  L22: src=1 trn=0\n    EN: | 💾 **Backup** | Administrators | The whole instance in one archive, and its restore: [Backup, Restore & Moving](backup_\n    TR: - 📱 Sur un téléphone, les onglets n’affichent que leurs icônes, et le titre de la page nomme l’onglet ouvert.\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # ⚙️ Global Settings\n    ## 🗂️ Settings › Administration {: #administration }\n    ## ✏️ Change a Setting\n      ### 🔓 1. Unlock the tab\n      ### 💾 2. Edit and save\n    ## 📋 What Each Setting Does\n    ## 🚪 Who Can Sign Up {: #registration }\n      ### 📢 The Open-Registration Warning {: #open-registration-warning }\n    ## 🕐 Market Data Scheduler {: #market-data-scheduler }\n      ### ⚙️ Configure the schedule\n      ### 📜 Read the scheduler log\n    ## ⏸️ Provider Pauses {: #provider-pauses }\n      ### ⏱️ How Long a Pause Lasts {: #provider-pauses-length }\n      ### 👀 Who Waits, and What You See {: #provider-pauses-effects }\n      ### 💤 In Memory {: #provider-pauses-memory }\n      ### 📋 In the Log {: #provider-pauses-log }\n    ## 🗄️ Server Caches {: #server-caches }\n    ## 🛡️ Security {: #security-tab }\n      ### 🚦 What It Lists {: #security-findings }\n      ### 🔢 The Number on the Tab {: #security-badge }\n      ### 🔄 When It Checks {: #security-refresh }\n      ### ✅ Passed Checks {: #security-passed }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-07T22:40:55.429861+00:00",
+        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -1095,7 +1095,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1292.7,
-        "stamped_at": "2026-11-07T22:40:55.429861+00:00",
+        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -11841,7 +11841,7 @@
     }
   },
   "admin/backup_restore.en.md": {
-    "md5": "3c9279b857d7ae50d529db4a8e28a405",
+    "md5": "4533b81f43b45f97f14a4584ef28e1a3",
     "langs_done": [
       "es",
       "fr",
@@ -11861,7 +11861,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 2048.7,
-        "stamped_at": "2026-11-07T22:39:49.035984+00:00",
+        "stamped_at": "2026-11-08T20:19:57.164245+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -11874,7 +11874,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 2030.4,
-        "stamped_at": "2026-11-07T22:39:49.035984+00:00",
+        "stamped_at": "2026-11-08T20:19:57.164245+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -11887,7 +11887,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1565.3,
-        "stamped_at": "2026-11-07T22:39:49.035984+00:00",
+        "stamped_at": "2026-11-08T20:19:57.164245+00:00",
         "stamped_by": "translate-stamp"
       }
     }
