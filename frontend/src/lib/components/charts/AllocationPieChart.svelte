@@ -38,7 +38,7 @@
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
-    import {assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeHtml, assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum} from '$lib/components/charts/allocationRings';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -544,8 +544,16 @@
             if (mode === 'asset') {
                 // The icon of the slice: the asset's own once it is known to load, else its type's (the cash: Liquidity).
                 const slice = {assetId: params.data?.assetId ?? null, iconUrl: params.data?.iconUrl ?? null, assetType: params.data?.assetType ?? null};
-                const iconHtml = `<img src="${escapeHtml(assetSliceIconUrl(slice, iconProbe.loaded))}" alt="" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
-                return `${iconHtml}${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
+                const drawnIcon = assetSliceIconUrl(slice, iconProbe.loaded);
+                const iconHtml = `<img src="${escapeHtml(drawnIcon)}" alt="" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
+                const nameLine = `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
+                // T-3: an asset's first line is its icon and its type's badge (without the type's icon: the slice's is beside it),
+                // and a mark when the icon drawn is the asset's own; the name follows on its own line. The cash slice keeps one line.
+                if (slice.assetId === null || !slice.assetType) return `${iconHtml}${nameLine}`;
+                const badge = assetTypeBadgeHtml(slice.assetType, tr(`assets.types.${slice.assetType}`) || slice.assetType, {icon: false});
+                const ownIcon = (slice.iconUrl ?? '').trim();
+                const customMark = ownIcon !== '' && drawnIcon === ownIcon ? ` <span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-lf-neutral text-lf-secondary" data-testid="allocation-pie-custom-icon">${escapeHtml(tr('assets.customIconBadge'))}</span>` : '';
+                return `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${badge}${customMark}</span><br/>${nameLine}`;
             }
             // Sector: display name already contains the emoji prefix
             return `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;

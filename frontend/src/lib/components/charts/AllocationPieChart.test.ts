@@ -1031,6 +1031,52 @@ describe('AllocationPieChart — the asset pie: one ring, the asset names as sen
             expect(iconOf('Typed')).toBe(K.getAssetTypeIconUrl('BOND'));
             expect(iconOf(CASH_BUCKET)).toBe(K.getAssetTypeIconUrl('LIQUIDITY'));
         });
+
+        describe('T-3 — the type badge beside the icon, and the mark of an own icon', () => {
+            const tooltipDom = (drawn: Pick<ReturnType<typeof drawing>, 'inner' | 'tooltipOf'>, name: string) => new DOMParser().parseFromString(drawn.tooltipOf(drawn.inner.find((entry) => entry.name === name)!), 'text/html').body;
+
+            afterEach(() => {
+                vi.unstubAllGlobals();
+            });
+
+            it('an asset shows its type badge, without a second type icon, then the name on its own line; the cash shows none', async () => {
+                const drawn = await drawAssetPie(SLICES);
+                const typed = tooltipDom(drawn, 'Typed');
+                const badge = typed.querySelector('[data-testid="asset-type-badge"]');
+                expect(badge?.getAttribute('data-asset-type')).toBe('BOND');
+                expect(badge?.className).toContain(K.assetTypeBadgeClass('BOND'));
+                expect(typed.querySelectorAll('img'), 'one icon: the slice’s, none inside the badge').toHaveLength(1);
+                expect(typed.innerHTML.indexOf('<br>'), 'the name follows the badge line').toBeGreaterThan(typed.innerHTML.indexOf('asset-type-badge'));
+                expect(typed.innerHTML.indexOf('Typed')).toBeGreaterThan(typed.innerHTML.indexOf('<br>'));
+                expect(typed.querySelector('[data-testid="allocation-pie-custom-icon"]'), 'no own icon, no mark').toBeNull();
+                expect(tooltipDom(drawn, CASH_BUCKET).querySelector('[data-testid="asset-type-badge"]'), 'the cash is not an asset type').toBeNull();
+            });
+
+            it('marks the own icon only while it is the one drawn: not before it is known to load, then beside the badge', async () => {
+                const before = await drawAssetPie(SLICES);
+                expect(tooltipDom(before, 'Own icon').querySelector('[data-testid="allocation-pie-custom-icon"]'), 'an own icon not known to load is not drawn, so not marked').toBeNull();
+                before.view.unmount();
+                chartInstances.length = 0;
+
+                // An image that loads: the probe learns the own icon draws, the pie rebuilds with it.
+                vi.stubGlobal(
+                    'Image',
+                    class {
+                        onload: (() => void) | null = null;
+                        onerror: (() => void) | null = null;
+                        set src(_url: string) {
+                            queueMicrotask(() => this.onload?.());
+                        }
+                    },
+                );
+                const drawn = await drawAssetPie(SLICES);
+                await waitFor(() => expect(tooltipDom(drawing(), 'Own icon').querySelector('img')?.getAttribute('src')).toBe('/own/icon.png'), {timeout: 5_000});
+                const own = tooltipDom(drawing(), 'Own icon');
+                expect(own.querySelector('[data-testid="allocation-pie-custom-icon"]')).not.toBeNull();
+                expect(own.querySelector('[data-testid="asset-type-badge"]')?.getAttribute('data-asset-type')).toBe('ETF');
+                expect(tooltipDom(drawn, 'Typed').querySelector('[data-testid="allocation-pie-custom-icon"]'), 'a slice with no own icon stays unmarked').toBeNull();
+            });
+        });
     });
 
     it('ranks 0 to 7 are categoryColor of the sequence’s eight types; the ranks past it are the sequence one shade further, never a repeat', async () => {
