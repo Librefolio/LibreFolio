@@ -1,7 +1,7 @@
 /**
  * The tabs of the Settings page, as a registry.
  *
- * `routes/(app)/settings/+page.svelte` draws its tab bars and the active tab's body from this list,
+ * `routes/(app)/settings/[...path]/+page.svelte` draws its tab bars and the active tab's body from this list,
  * so adding a tab is one entry here, plus the import of its body:
  *   - `id` is the suffix of its `settings-tab-{id}` test id, and the `?tab=` value that opened it in 1.2 (still read, and
  *     turned into the tab's address);

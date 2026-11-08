@@ -96,6 +96,7 @@ interface SyntheticGroup {
     id: string;
     labelKey: string;
     icon: ComponentType;
+    path: string;
     alignEnd?: boolean;
 }
 
@@ -151,8 +152,10 @@ const mocks = await vi.hoisted(async () => {
 
     const staffOnly = (ctx: SettingsTabContext) => ctx.isSuperuser;
 
+    /** A synthetic tab; its address is `/settings/<id>`, or `/settings/<group>/<id>` for a member (lot B10). */
     function syntheticTab(id: string, order: number, extra: Partial<SyntheticTab> = {}): SyntheticTab {
-        return {id, labelKey: `test.settingsTabs.${id}`, icon: probeIcon(id), order, component: probeBody(id), ...extra};
+        const path = extra.group ? `/settings/${extra.group}/${id}` : `/settings/${id}`;
+        return {id, labelKey: `test.settingsTabs.${id}`, icon: probeIcon(id), path, order, component: probeBody(id), ...extra};
     }
 
     const tabs: SyntheticTab[] = [
@@ -169,8 +172,8 @@ const mocks = await vi.hoisted(async () => {
     ];
 
     const groups: SyntheticGroup[] = [
-        {id: 'office', labelKey: 'test.settingsTabs.office', icon: probeIcon('office'), alignEnd: true},
-        {id: 'crew', labelKey: 'test.settingsTabs.crew', icon: probeIcon('crew')},
+        {id: 'office', labelKey: 'test.settingsTabs.office', icon: probeIcon('office'), path: '/settings/office', alignEnd: true},
+        {id: 'crew', labelKey: 'test.settingsTabs.crew', icon: probeIcon('crew'), path: '/settings/crew'},
     ];
 
     return {
@@ -180,6 +183,8 @@ const mocks = await vi.hoisted(async () => {
         badges,
         prefetches,
         page: writable({url: new URL('http://librefolio.test/settings')}),
+        /** SvelteKit's `goto`, a spy: it records the address the page writes and leaves the page store as it is. */
+        goto: vi.fn(async (_href: string, _options?: Record<string, unknown>) => undefined),
         auth: writable<{user: {is_superuser: boolean} | null}>({user: {is_superuser: false}}),
         /** The bodies of the real tab modules, each a probe named by its module: drawn only by the N69-2 cases. */
         realBodies: {
@@ -228,6 +233,7 @@ vi.mock('$lib/features/plugin-settings/PluginSettingsTab.svelte', () => ({defaul
 vi.mock('$lib/features/settings/security/SecurityTab.svelte', () => ({default: mocks.realBodies.security}));
 vi.mock('$lib/features/settings/security/securityChecks.svelte', () => ({securityChecks: {attentionCount: 0, ensureLoaded: async () => undefined}}));
 vi.mock('$app/stores', () => ({page: {subscribe: mocks.page.subscribe}}));
+vi.mock('$app/navigation', () => ({goto: mocks.goto}));
 vi.mock('$lib/stores/app/auth', () => ({auth: {subscribe: mocks.auth.subscribe}}));
 vi.mock('$lib/i18n', async () => {
     const {readable} = await import('svelte/store');
@@ -362,6 +368,25 @@ async function navigate(query: string): Promise<void> {
     await tick();
 }
 
+/** Mounts the page at this address (lot B10), for a user or an administrator — or, `user: null`, before the user is known. */
+async function mountAt(pathname: string, {isSuperuser = false, user = true}: {isSuperuser?: boolean; user?: boolean} = {}): Promise<void> {
+    mocks.page.set({url: new URL(`http://librefolio.test${pathname}`)});
+    mocks.auth.set({user: user ? {is_superuser: isSuperuser} : null});
+    render(SettingsPage);
+    await tick();
+}
+
+/** A client-side navigation to this address: Back, Forward, a link, or the `goto` the page asked for. */
+async function navigateTo(pathname: string): Promise<void> {
+    mocks.page.set({url: new URL(`http://librefolio.test${pathname}`)});
+    await tick();
+}
+
+/** The addresses the page wrote, each with whether it replaced the current entry of the history. */
+function written(): {href: string; replace: boolean}[] {
+    return mocks.goto.mock.calls.map(([href, options]) => ({href, replace: options?.replaceState === true}));
+}
+
 /** The signed-in user becomes an administrator, in the auth store, while the page is open. */
 async function becomeAdministrator(): Promise<void> {
     mocks.auth.set({user: {is_superuser: true}});
@@ -375,6 +400,7 @@ beforeEach(() => {
     Object.assign(mocks.badges, {beta: 0, delta: 0, echo: 0, tau: 0});
     mocks.prefetches.beta.mockClear();
     mocks.prefetches.tau.mockClear();
+    mocks.goto.mockClear();
 });
 
 afterEach(() => {
@@ -915,5 +941,169 @@ describe('Settings page — the real registry: «Administration» is for adminis
             mocks.mounts.filter((tab) => tab !== 'GlobalSettingsTab'),
             'no other body was mounted first',
         ).toEqual([]);
+    });
+});
+
+/**
+ * Lot B10: every tab has an address. A tab's `path` (a synthetic tab's is `/settings/<id>`, a member's
+ * `/settings/<group>/<id>`, a group's `/settings/<group>`) opens it, at the first render and whenever the address changes;
+ * choosing a tab writes its address with `goto`, as a new entry of the history; `/settings` opens the first tab and keeps
+ * its address; an address the registry does not know, or a tab this user cannot see, goes back to `/settings`; the
+ * `?tab=` of 1.2 opens its tab and is replaced by the tab's address. `goto` is a spy: what the page writes is read from it,
+ * and the page store moves only when a case navigates.
+ */
+describe('Settings page — every tab has its address (B10)', () => {
+    it.each([
+        ['/settings/gamma', false, 'gamma', 'gamma'],
+        ['/settings/office/omega', false, 'office', 'omega'],
+        ['/settings/crew/foxtrot', false, 'crew', 'foxtrot'],
+        ['/settings/office/tau', true, 'office', 'tau'],
+    ])('SPATH-01: %s opens its tab at the first render — no other body is ever mounted', async (pathname, isSuperuser, top, tab) => {
+        await mountAt(pathname, {isSuperuser});
+
+        expect(topSelected(), 'the top bar selects the tab, or its group').toEqual([top]);
+        expect(body()?.tab, 'the body is the tab the address names').toBe(tab);
+        expect(mocks.mounts, 'no other body was mounted first, not even the default').toEqual([tab]);
+        expect(written(), 'an address that names a visible tab is kept as it is').toEqual([]);
+    });
+
+    it('SPATH-02: a group’s address opens its first visible member — delta for a user, echo for an administrator', async () => {
+        await mountAt('/settings/crew');
+        expect(body()?.tab, 'a user’s first member of crew').toBe('delta');
+        cleanup();
+        mocks.mounts.length = 0;
+
+        await mountAt('/settings/crew', {isSuperuser: true});
+        expect(body()?.tab, 'an administrator’s').toBe('echo');
+    });
+
+    it('SPATH-03: choosing a tab writes its address, as a new entry of the history, without scrolling or moving the focus', async () => {
+        await mountAt('/settings');
+
+        await fireEvent.click(tabButton('gamma'));
+        await fireEvent.click(tabButton('crew'));
+        await fireEvent.click(tabButton('foxtrot'));
+
+        expect(written(), 'one address per choice: the tab’s, and a group’s first member').toEqual([
+            {href: '/settings/gamma', replace: false},
+            {href: '/settings/crew/delta', replace: false},
+            {href: '/settings/crew/foxtrot', replace: false},
+        ]);
+        expect(mocks.goto.mock.calls[0][1], 'the page stays where it is').toEqual({noScroll: true, keepFocus: true});
+    });
+
+    it('SPATH-04: choosing the tab the address already names writes nothing', async () => {
+        await mountAt('/settings/gamma');
+
+        await fireEvent.click(tabButton('gamma'));
+
+        expect(written(), 'the address is the tab’s already').toEqual([]);
+    });
+
+    it('SPATH-05: a later address — Back, Forward, a link — opens its tab; /settings opens the first tab again', async () => {
+        await mountAt('/settings/gamma');
+
+        await navigateTo('/settings/crew/foxtrot');
+        expect(body()?.tab, 'the new address opens its tab').toBe('foxtrot');
+        expect(topSelected(), 'in its group').toEqual(['crew']);
+
+        await navigateTo('/settings/beta');
+        expect(body()?.tab, 'and the next one').toBe('beta');
+
+        await navigateTo('/settings');
+        expect(body()?.tab, '/settings is the first tab').toBe('alpha');
+        expect(written(), 'reading an address writes none').toEqual([]);
+    });
+
+    it('SPATH-06: after a click, a page update that keeps the same address does not take the tab back', async () => {
+        await mountAt('/settings/gamma');
+        await fireEvent.click(tabButton('beta'));
+        // the address the click wrote has not landed yet, and the store emits again (a query, a hash, an invalidation)
+        await navigateTo('/settings/gamma');
+
+        expect(body()?.tab, 'the address was applied once: the tab the user chose stays').toBe('beta');
+    });
+
+    it.each(['/settings/nope', '/settings/office/nope', '/settings/gamma/more', '/settings/alpha-'])('SPATH-07: %s, an address the registry does not know, opens the first tab and goes back to /settings', async (pathname) => {
+        await mountAt(pathname);
+
+        expect(body()?.tab, 'the first visible tab').toBe('alpha');
+        expect(written(), 'the address becomes /settings, in place of the unknown one').toEqual([{href: '/settings', replace: true}]);
+    });
+
+    it('SPATH-08: the address of a tab this user cannot see opens the first tab and goes back to /settings', async () => {
+        await mountAt('/settings/office/tau');
+
+        expect(body()?.tab, 'tau is an administrator’s: the first visible tab opens').toBe('alpha');
+        expect(mocks.mounts, 'tau never mounts').toEqual(['alpha']);
+        expect(written(), 'the address becomes /settings').toEqual([{href: '/settings', replace: true}]);
+    });
+
+    it('SPATH-09: before the user is known, the address of an administrator’s tab waits for it, and opens it once the user is an administrator', async () => {
+        await mountAt('/settings/staff', {user: false});
+        expect(body()?.tab, 'nobody known yet: the first visible tab meanwhile').toBe('alpha');
+        expect(written(), 'and the address is kept: the user may still be an administrator').toEqual([]);
+
+        await becomeAdministrator();
+
+        expect(body()?.tab, 'the tab the address named').toBe('staff');
+    });
+
+    it.each([
+        ['?tab=gamma', 'gamma', '/settings/gamma'],
+        ['?tab=foxtrot', 'foxtrot', '/settings/crew/foxtrot'],
+        ['?tab=crew', 'delta', '/settings/crew/delta'],
+    ])('SPATH-10: the address of 1.2, /settings%s, opens its tab and is replaced by the tab’s own', async (query, tab, href) => {
+        await mountPage({query});
+
+        expect(body()?.tab, 'the tab ?tab= names').toBe(tab);
+        expect(written(), 'its address replaces the old one in the history').toEqual([{href, replace: true}]);
+    });
+
+    it('SPATH-11: an old link to /settings?tab= while a tab’s address is open opens that tab again', async () => {
+        await mountPage({query: '?tab=gamma'});
+        await navigateTo('/settings/gamma');
+        await fireEvent.click(tabButton('beta'));
+        await navigateTo('/settings/beta');
+
+        await navigateTo('/settings?tab=gamma');
+
+        expect(body()?.tab, 'the same ?tab= as before, a new request').toBe('gamma');
+    });
+});
+
+describe('Settings page — the real registry: each tab at its address (B10)', () => {
+    beforeEach(() => {
+        mocks.registry.real = true;
+    });
+
+    afterEach(() => {
+        cleanup();
+        mocks.registry.real = false;
+    });
+
+    it.each([
+        ['/settings/profile', 'ProfileTab'],
+        ['/settings/preferences', 'PreferencesTab'],
+        ['/settings/plugins', 'PluginSettingsTab'],
+        ['/settings/about', 'AboutTab'],
+        ['/settings/admin', 'GlobalSettingsTab'],
+        ['/settings/admin/global', 'GlobalSettingsTab'],
+        ['/settings/admin/users', 'UsersTab'],
+        ['/settings/admin/backup', 'BackupTab'],
+        ['/settings/admin/email', 'EmailSettingsTab'],
+        ['/settings/admin/security', 'SecurityTab'],
+    ])('SPATH-12: %s opens %s for an administrator', async (pathname, module) => {
+        await mountAt(pathname, {isSuperuser: true});
+
+        expect(body()?.tab, 'the body of the tab the address names').toBe(module);
+        expect(written(), 'the address is kept').toEqual([]);
+    });
+
+    it('SPATH-13: /settings/admin/users, for a user, opens Profile and goes back to /settings', async () => {
+        await mountAt('/settings/admin/users');
+
+        expect(body()?.tab, 'a user has no Users tab').toBe('ProfileTab');
+        expect(written(), 'the address becomes /settings').toEqual([{href: '/settings', replace: true}]);
     });
 });
