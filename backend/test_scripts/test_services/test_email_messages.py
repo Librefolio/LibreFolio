@@ -700,6 +700,29 @@ def test_no_email_part_loads_an_image_from_the_network() -> None:
     print_success("only the cid: logo")
 
 
+def test_the_logo_sits_on_the_white_rounded_tile_of_the_brand() -> None:
+    """EMM-033 — T-17: in the green header the logo stands on the white rounded tile the app and the guide draw behind it
+    (``bg-lf-logo``, ``rounded-lg``, ``p-1``), not on the green: the cell that holds the one image is white, rounded and
+    padded, and the image keeps the logo's proportions inside it."""
+    print_section("EMM-033: logo on its white tile")
+
+    for kind in ALL_KINDS:
+        for language in LANGUAGES:
+            html = _build(kind, language).html
+            cell = re.search(r"<td\b([^>]*)>\s*<img\b([^>]*)>\s*</td>", html, flags=re.IGNORECASE)
+            assert cell is not None, (kind, language, "the logo is not alone in its own cell")
+            tile = re.sub(r"\s+", "", cell.group(1).lower())
+            assert "background-color:#ffffff" in tile, (kind, language, tile)
+            assert "border-radius:8px" in tile and "padding:4px" in tile, (kind, language, tile)
+            image = cell.group(2)
+            width = re.search(r"""\bwidth\s*=\s*["'](\d+)["']""", image)
+            height = re.search(r"""\bheight\s*=\s*["'](\d+)["']""", image)
+            assert width and height, image
+            # The PNG is 78 x 96: the same ratio, within a pixel, so the mark is not stretched on its tile.
+            assert abs(int(width.group(1)) * 96 - int(height.group(1)) * 78) <= 96, image
+    print_success("the logo is on its white rounded tile")
+
+
 def test_compose_message_writes_no_reply_to_unless_given() -> None:
     """EMM-026 — contract 6: ``Reply-To`` only when there is one."""
     print_section("EMM-026: no Reply-To")
