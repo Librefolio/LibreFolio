@@ -22,6 +22,7 @@ Click **Administration**: it opens **Global Settings** and a second row of tabs 
 
 - 👤 A user who is not an administrator has neither the group nor its tabs: their **Settings** end with **About**, and a link to a tab of the group opens their **Profile**.
 - 🔁 Click **Administration** while one of its tabs is open: that tab stays open.
+- 🔗 Each tab has its own address, for a bookmark or a link: `/settings/admin/global`, `/settings/admin/users`, `/settings/admin/backup`, `/settings/admin/email`, `/settings/admin/security`; `/settings/admin` opens the group's first tab. The address follows the open tab, and **Back** returns to the previous one.
 - 🔢 A number on **Security**, repeated on **Administration**, counts the errors and warnings of the [security checks](#security-tab).
 - 📱 On a phone, the tabs show their icons only; the title of the page names the open tab.
 
@@ -62,7 +63,7 @@ Click the **lock icon** (🔒) in the header.
 
 ## 📋 What Each Setting Does
 
-**Where:** the named category of the **Global Settings** tab, except where the table says otherwise.
+**Where:** the named category of the **Global Settings** tab.
 
 | Where | Setting | Default | What it does — when to change it |
 |---|---|---|---|
@@ -71,7 +72,7 @@ Click the **lock icon** (🔒) in the header.
 | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link sent to their address before they can sign in; the first account never waits and existing accounts are not affected. It turns on only while email works and `LIBREFOLIO_PUBLIC_URL` can be used: until then the switch is disabled. See *Email Verification* in [Email](email.md). |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
-| **Files › Advanced** (not in this tab) | **Space limit (MB)** | `0`, no limit | The most megabytes the instance may take: it is the line the space bar of **Files** is drawn against. `0` means no limit: the bar then shows the disk. You change it in that bar, which only administrators see, not in this tab. `LIBREFOLIO_STORAGE_LIMIT_MB`, when set, wins and locks it ([Environment Variables](configuration.md)). See [The Space Bar](backup_restore.md#space-used). |
+| 🧠 Memory | **LibreFolio total space (MB)** | `0`, no limit | The most megabytes the instance may take: it is the line the space bar of **Files** is drawn against. `0` means no limit: the bar then shows the disk. The same field is under that bar, in **Advanced**. `LIBREFOLIO_STORAGE_LIMIT_MB`, when set, wins and locks it: the field is read-only and says that whoever hosts the instance sets it ([Environment Variables](configuration.md)). **Open the settings**, on a refusal of the limit, opens this tab with the row highlighted; the tab stays locked. See [The Space Bar](backup_restore.md#space-used). |
 | 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. Before the first save, `LIBREFOLIO_DEFAULT_CURRENCY` decides (below). |
 | 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. It is also the language of the emails sent to people who have no account yet. Before the first save, `LIBREFOLIO_DEFAULT_LANGUAGE` decides (below). |
 | 🌍 Defaults | **Default Theme** | `auto` | ☀️ `light`, 🌙 `dark` or 🖥️ `auto`, which follows the device. |

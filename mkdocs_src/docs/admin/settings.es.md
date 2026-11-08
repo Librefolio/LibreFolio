@@ -22,6 +22,7 @@ Haz clic en **Administración**: se abre **Configuración Global** y una segunda
 
 - 👤 Un usuario que no es administrador no tiene ni el grupo ni sus pestañas: su **Configuración** termina en **Acerca de**, y un enlace a una pestaña del grupo abre su **Perfil**.
 - 🔁 Haz clic en **Administración** mientras una de sus pestañas está abierta: esa pestaña se queda abierta.
+- 🔗 Cada pestaña tiene su propia dirección, para un marcador o un enlace: `/settings/admin/global`, `/settings/admin/users`, `/settings/admin/backup`, `/settings/admin/email`, `/settings/admin/security`; `/settings/admin` abre la primera pestaña del grupo. La dirección sigue la pestaña abierta, y **Atrás** vuelve a la de antes.
 - 🔢 Un número en **Seguridad**, repetido en **Administración**, cuenta los errores y las advertencias de las [comprobaciones de seguridad](#security-tab).
 - 📱 En un teléfono, las pestañas muestran solo sus iconos; el título de la página nombra la pestaña abierta.
 
@@ -62,7 +63,7 @@ Haz clic en el **icono de candado** (🔒) de la cabecera.
 
 ## 📋 Qué hace cada ajuste
 
-**Dónde:** la categoría indicada de la pestaña **Configuración Global**, salvo que la tabla diga otra cosa.
+**Dónde:** la categoría indicada de la pestaña **Configuración Global**.
 
 | Dónde | Ajuste | Predeterminado | Qué hace — cuándo cambiarlo |
 |---|---|---|---|
@@ -71,7 +72,7 @@ Haz clic en el **icono de candado** (🔒) de la cabecera.
 | 🛡️ Seguridad | **Verificación Email Requerida** | Desactivada | Las cuentas nuevas deben abrir un enlace enviado a su dirección antes de poder iniciar sesión; la primera cuenta nunca espera y las cuentas existentes no se ven afectadas. Solo se puede activar mientras el correo funciona y se puede usar `LIBREFOLIO_PUBLIC_URL`: hasta entonces el interruptor está desactivado. Consulta *Verificación de correo electrónico* en [Correo electrónico](email.md). |
 | 🔄 Tarea de actualización | **Planificador Activado** | Activado | Activa o desactiva las actualizaciones automáticas de precios y tipos de cambio: [Planificador de datos de mercado](#market-data-scheduler). |
 | 🧠 Memoria | **Tamaño Máx. Subida** | 10 MB | El archivo más grande que pueden subir los usuarios, informes de brókeres incluidos. Auméntalo si se rechaza una exportación grande. |
-| **Archivos › Avanzado** (no está en esta pestaña) | **Límite de espacio (MB)** | `0`, sin límite | Los megabytes máximos que puede ocupar la instancia: es la línea contra la que se dibuja la barra de espacio de **Archivos**. `0` significa sin límite: la barra entonces muestra el disco. Lo cambias en esa barra, que solo ven los administradores, no en esta pestaña. `LIBREFOLIO_STORAGE_LIMIT_MB`, cuando está definida, prevalece y lo bloquea ([Variables de entorno](configuration.md)). Consulta [La barra de espacio](backup_restore.md#space-used). |
+| 🧠 Memoria | **Espacio total de LibreFolio (MB)** | `0`, sin límite | Los megabytes máximos que puede ocupar la instancia: es la línea contra la que se dibuja la barra de espacio de **Archivos**. `0` significa sin límite: la barra entonces muestra el disco. El mismo campo está bajo esa barra, en **Avanzado**. `LIBREFOLIO_STORAGE_LIMIT_MB`, cuando está definida, prevalece y lo bloquea: el campo es de solo lectura y dice que lo fija quien aloja la instancia ([Variables de entorno](configuration.md)). **Abrir la configuración**, ante un rechazo del límite, abre esta pestaña con la fila resaltada; la pestaña sigue bloqueada. Consulta [La barra de espacio](backup_restore.md#space-used). |
 | 🌍 Valores Predeterminados | **Divisa predeterminada** | `EUR` | La divisa en la que informan los usuarios nuevos. Antes del primer guardado, decide `LIBREFOLIO_DEFAULT_CURRENCY` (más abajo). |
 | 🌍 Valores Predeterminados | **Idioma Predeterminado** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` o 🇪🇸 `es`. También es el idioma de los correos enviados a personas que aún no tienen cuenta. Antes del primer guardado, decide `LIBREFOLIO_DEFAULT_LANGUAGE` (más abajo). |
 | 🌍 Valores Predeterminados | **Tema Predeterminado** | `auto` | ☀️ `light`, 🌙 `dark` o 🖥️ `auto`, que sigue al dispositivo. |

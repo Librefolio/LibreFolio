@@ -22,6 +22,7 @@ Cliquez sur **Administration** : cela ouvre **Paramètres globaux** et une deuxi
 
 - 👤 Un utilisateur qui n’est pas administrateur n’a ni le groupe ni ses onglets : ses **Paramètres** se terminent par **À propos**, et un lien vers un onglet du groupe ouvre son **Profil**.
 - 🔁 Cliquez sur **Administration** alors qu’un de ses onglets est ouvert : cet onglet reste ouvert.
+- 🔗 Chaque onglet a sa propre adresse, pour un favori ou un lien : `/settings/admin/global`, `/settings/admin/users`, `/settings/admin/backup`, `/settings/admin/email`, `/settings/admin/security` ; `/settings/admin` ouvre le premier onglet du groupe. L’adresse suit l’onglet ouvert, et **Précédent** ramène à l’onglet d’avant.
 - 🔢 Un nombre sur **Sécurité**, répété sur **Administration**, compte les erreurs et les avertissements des [contrôles de sécurité](#security-tab).
 - 📱 Sur un téléphone, les onglets n’affichent que leurs icônes ; le titre de la page nomme l’onglet ouvert.
 
@@ -62,7 +63,7 @@ Cliquez sur l’**icône de verrou** (🔒) dans l’en-tête.
 
 ## 📋 Ce que fait chaque paramètre
 
-**Où :** la catégorie indiquée de l’onglet **Paramètres globaux**, sauf indication contraire dans le tableau.
+**Où :** la catégorie indiquée de l’onglet **Paramètres globaux**.
 
 | Où | Paramètre | Valeur par défaut | Ce qu’il fait — quand le modifier |
 |---|---|---|---|
@@ -71,7 +72,7 @@ Cliquez sur l’**icône de verrou** (🔒) dans l’en-tête.
 | 🛡️ Sécurité | **Exiger la vérification de l’e-mail** | Désactivé | Les nouveaux comptes doivent ouvrir un lien envoyé à leur adresse avant de pouvoir se connecter ; le premier compte n’attend jamais, et les comptes existants ne sont pas concernés. Il ne peut être activé que lorsque l’e-mail fonctionne et que `LIBREFOLIO_PUBLIC_URL` peut être utilisée : jusque-là, l’interrupteur est grisé. Voir *Vérification de l’e-mail* dans [E-mail](email.md). |
 | 🔄 Tâche de mise à jour | **Planificateur activé** | Activé | Active ou désactive les mises à jour automatiques des prix et des taux de change : [Planificateur des données de marché](#market-data-scheduler). |
 | 🧠 Mémoire | **Taille maximale de téléversement de fichier** | 10 Mo | Le plus gros fichier que les utilisateurs peuvent téléverser, rapports de courtier inclus. Augmentez-la si un export volumineux est refusé. |
-| **Fichiers › Avancé** (pas dans cet onglet) | **Limite d’espace (Mo)** | `0`, aucune limite | Le nombre maximal de mégaoctets que l’instance peut occuper : c’est la ligne par rapport à laquelle la barre d’occupation de l’espace de **Fichiers** est dessinée. `0` signifie aucune limite : la barre affiche alors le disque. Vous la modifiez dans cette barre, que seuls les administrateurs voient, et non dans cet onglet. `LIBREFOLIO_STORAGE_LIMIT_MB`, lorsqu’elle est définie, l’emporte et la verrouille ([Variables d’environnement](configuration.md)). Voir [La barre d’occupation de l’espace](backup_restore.md#space-used). |
+| 🧠 Mémoire | **Espace total de LibreFolio (Mo)** | `0`, aucune limite | Le nombre maximal de mégaoctets que l’instance peut occuper : c’est la ligne par rapport à laquelle la barre d’occupation de l’espace de **Fichiers** est dessinée. `0` signifie aucune limite : la barre affiche alors le disque. Le même champ se trouve sous cette barre, dans **Avancé**. `LIBREFOLIO_STORAGE_LIMIT_MB`, lorsqu’elle est définie, l’emporte et le verrouille : le champ est en lecture seule et indique qu’il est fixé par l’hébergeur de l’instance ([Variables d’environnement](configuration.md)). **Ouvrir les paramètres**, sur un refus de la limite, ouvre cet onglet avec la ligne mise en évidence ; l’onglet reste verrouillé. Voir [La barre d’occupation de l’espace](backup_restore.md#space-used). |
 | 🌍 Valeurs par défaut | **Devise par défaut** | `EUR` | La devise dans laquelle les nouveaux utilisateurs déclarent leurs données. Avant le premier enregistrement, `LIBREFOLIO_DEFAULT_CURRENCY` décide (ci-dessous). |
 | 🌍 Valeurs par défaut | **Langue par défaut** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` ou 🇪🇸 `es`. C’est aussi la langue des e-mails envoyés aux personnes qui n’ont pas encore de compte. Avant le premier enregistrement, `LIBREFOLIO_DEFAULT_LANGUAGE` décide (ci-dessous). |
 | 🌍 Valeurs par défaut | **Thème par défaut** | `auto` | ☀️ `light`, 🌙 `dark` ou 🖥️ `auto`, qui suit l’appareil. |

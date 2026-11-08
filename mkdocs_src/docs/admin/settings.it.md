@@ -22,6 +22,7 @@ Fai clic su **Amministrazione**: apre **Impostazioni globali** e una seconda rig
 
 - 👤 Un utente non amministratore non ha il gruppo né le sue schede: le sue **Impostazioni** terminano con **Informazioni**, e un link a una scheda del gruppo apre il suo **Profilo**.
 - 🔁 Fai clic su **Amministrazione** mentre una sua scheda è aperta: quella scheda resta aperta.
+- 🔗 Ogni scheda ha un suo indirizzo, per un segnalibro o un link: `/settings/admin/global`, `/settings/admin/users`, `/settings/admin/backup`, `/settings/admin/email`, `/settings/admin/security`; `/settings/admin` apre la prima scheda del gruppo. L'indirizzo segue la scheda aperta, e **Indietro** torna a quella di prima.
 - 🔢 Un numero su **Sicurezza**, ripetuto su **Amministrazione**, conta errori e avvisi dei [controlli di sicurezza](#security-tab).
 - 📱 Su un telefono le schede mostrano solo le icone; il titolo della pagina indica la scheda aperta.
 
@@ -62,7 +63,7 @@ Fai clic sull'**icona a lucchetto** (🔒) nell'intestazione.
 
 ## 📋 Cosa fa ogni impostazione
 
-**Dove:** la categoria indicata della scheda **Impostazioni globali**, salvo dove la tabella dice altro.
+**Dove:** la categoria indicata della scheda **Impostazioni globali**.
 
 | Dove | Impostazione | Predefinito | Cosa fa — quando modificarla |
 |---|---|---|---|
@@ -71,7 +72,7 @@ Fai clic sull'**icona a lucchetto** (🔒) nell'intestazione.
 | 🛡️ Sicurezza | **Richiedi verifica email** | Disattivata | I nuovi account devono aprire un link inviato al loro indirizzo prima di poter accedere; il primo account non attende mai e gli account esistenti non sono interessati. Si attiva solo mentre l'email funziona e `LIBREFOLIO_PUBLIC_URL` può essere usato: fino ad allora l'interruttore è disabilitato. Vedi *Verifica email* in [Email](email.md). |
 | 🔄 Processo di aggiornamento | **Scheduler abilitato** | Attivo | Attiva o disattiva gli aggiornamenti automatici di prezzi e tassi di cambio: [Scheduler dei dati di mercato](#market-data-scheduler). |
 | 🧠 Memoria | **Dimensione massima file caricabile** | 10 MB | Il file più grande che gli utenti possono caricare, compresi i report del broker. Aumentala se un'esportazione di grandi dimensioni viene rifiutata. |
-| **File › Avanzate** (non in questa scheda) | **Limite di spazio (MB)** | `0`, nessun limite | Il numero massimo di megabyte che l'istanza può occupare: è la linea di riferimento su cui viene tracciata la barra dello spazio di **File**. `0` significa nessun limite: la barra mostra allora il disco. Lo modifichi in quella barra, che solo gli amministratori vedono, non in questa scheda. `LIBREFOLIO_STORAGE_LIMIT_MB`, quando impostato, ha la precedenza e lo blocca ([Variabili d'ambiente](configuration.md)). Vedi [La barra dello spazio](backup_restore.md#space-used). |
+| 🧠 Memoria | **Spazio totale di LibreFolio (MB)** | `0`, nessun limite | Il numero massimo di megabyte che l'istanza può occupare: è la linea di riferimento su cui viene tracciata la barra dello spazio di **File**. `0` significa nessun limite: la barra mostra allora il disco. Lo stesso campo è sotto quella barra, in **Avanzate**. `LIBREFOLIO_STORAGE_LIMIT_MB`, quando impostato, ha la precedenza e lo blocca: il campo è in sola lettura e dice che lo imposta chi ospita l'istanza ([Variabili d'ambiente](configuration.md)). **Apri le impostazioni**, su un rifiuto del limite, apre questa scheda con la riga evidenziata; la scheda resta bloccata. Vedi [La barra dello spazio](backup_restore.md#space-used). |
 | 🌍 Predefiniti | **Valuta predefinita** | `EUR` | La valuta in cui rendicontano i nuovi utenti. Prima del primo salvataggio decide `LIBREFOLIO_DEFAULT_CURRENCY` (sotto). |
 | 🌍 Predefiniti | **Lingua predefinita** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` o 🇪🇸 `es`. È anche la lingua delle email inviate a chi non ha ancora un account. Prima del primo salvataggio decide `LIBREFOLIO_DEFAULT_LANGUAGE` (sotto). |
 | 🌍 Predefiniti | **Tema predefinito** | `auto` | ☀️ `light`, 🌙 `dark` o 🖥️ `auto`, che segue il dispositivo. |
