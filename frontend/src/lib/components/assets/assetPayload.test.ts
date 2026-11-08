@@ -294,7 +294,17 @@ describe('buildPatchItem', () => {
     it('clears, with null, the user URL and the identifier columns the create item would leave out', () => {
         const item = buildPatchItem(1, form({userUrl: ''}), undefined);
         expect(item.user_url).toBeNull();
-        expect([item.identifier_isin, item.identifier_ticker, item.identifier_cusip, item.identifier_sedol, item.identifier_figi, item.identifier_uuid, item.identifier_other]).toEqual(Array(7).fill(null));
+        expect([item.identifier_isin, item.identifier_ticker, item.identifier_cusip, item.identifier_sedol, item.identifier_figi, item.identifier_uuid]).toEqual(Array(6).fill(null));
+    });
+
+    it('sends the OTHER identifiers as an empty list when the last OTHER row is gone, never null', () => {
+        // The backend reads `identifier_other: null` as "leave unchanged": only `[]` clears the list. A blank OTHER row
+        // counts as no row.
+        const noOther = [idRow('ISIN', 'US0378331005'), idRow('OTHER', '   ')];
+        const wire = JSON.parse(JSON.stringify([buildPatchItem(7, form({...FILLED, identifierRows: noOther}), undefined)]));
+        expect(wire[0]).toHaveProperty('identifier_other', []);
+        expect(wire[0]).toHaveProperty('identifier_isin', 'US0378331005');
+        expect(buildPatchItem(7, form(FILLED), undefined).identifier_other).toEqual(['APC.DE', 'AAPL.MI']);
     });
 
     describe('classification_params', () => {
