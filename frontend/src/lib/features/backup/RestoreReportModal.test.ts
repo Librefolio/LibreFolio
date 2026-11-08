@@ -1106,6 +1106,19 @@ describe('C9-10 — RestoreReportModal: avatars and what the backup holds', () =
         expect(admins[0]).toHaveTextContent('G');
     });
 
+    it('A10: an avatar set by an address on another site is shown from that address, the others from the copy', () => {
+        // T-16: the developer's administrator has an avatar set by an address: the report showed only its initial.
+        mount(report({administrator_avatar_addresses: {operator7: 'https://example.org/op7.png'}} as Partial<RestoreStageReport>), {stageId: 'fedcba9876543210fedcba9876543210'});
+        const [giulia, operator] = screen.getAllByTestId('restore-report-admin');
+        const fromAddress = within(operator).getByTestId('restore-report-admin-avatar');
+        expect(fromAddress).toHaveAttribute('src', 'https://example.org/op7.png');
+        expect(fromAddress).toHaveAttribute('data-source', 'address');
+        expect(fromAddress, 'the other site is not told which page asks').toHaveAttribute('referrerpolicy', 'no-referrer');
+        const fromCopy = within(giulia).getByTestId('restore-report-admin-avatar');
+        expect(fromCopy).toHaveAttribute('src', '/api/v1/backup/restore/stage/fedcba9876543210fedcba9876543210/avatar/giulia.bianchi');
+        expect(fromCopy).toHaveAttribute('data-source', 'copy');
+    });
+
     it('a bar of what the backup holds: the database, the uploads, the reports, the rest of the files', () => {
         mount(report({database_size: 8 * MIB, files_size: 3 * MIB, uploads_size: 2 * MIB, broker_reports_size: MIB} as Partial<RestoreStageReport>));
 
