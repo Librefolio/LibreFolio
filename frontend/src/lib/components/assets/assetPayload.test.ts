@@ -277,6 +277,14 @@ describe('buildPatchItem', () => {
         expect(buildPatchItem(1, form({iconUrl: ''}), undefined).icon_url).toBe('');
     });
 
+    it('puts a removed icon on the wire as an explicit null, never as a missing key (T-2)', () => {
+        // The picker's red x then «Use selected» leaves iconUrl null. The backend clears the column only when the key is
+        // present: an undefined would vanish from the JSON body and the removal would answer success and change nothing.
+        const wire = JSON.parse(JSON.stringify([buildPatchItem(7, form({...FILLED, iconUrl: null}), undefined)]));
+        expect(wire[0]).toHaveProperty('icon_url', null);
+        expect(wire[0]).toHaveProperty('user_url', 'https://example.test/quote/AAPL');
+    });
+
     it('trims the name and floors the quote base quantity, like the create item', () => {
         const item = buildPatchItem(1, form({displayName: '  Apple Inc.  ', quoteBaseQuantity: 0}), undefined);
         expect(item.display_name).toBe('Apple Inc.');

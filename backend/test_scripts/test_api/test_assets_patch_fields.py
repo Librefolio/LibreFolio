@@ -23,6 +23,7 @@ from backend.app.schemas.assets.assets import (
     FAAssetPatchItem,
     FABulkAssetCreateResponse,
     FABulkAssetPatchResponse,
+    FAinfoResponse,
 )
 from backend.app.schemas.assets.metadata import FAAssetMetadataResponse
 
@@ -280,6 +281,60 @@ async def test_patch_icon_url_clear(test_server):
         asset_after = [FAAssetMetadataResponse(**a) for a in read_after.json()][0]
         assert asset_after.icon_url is None, f"Expected None, got {asset_after.icon_url}"
         print_success("✓ icon_url cleared successfully (None)")
+
+
+async def _info_of(client: httpx.AsyncClient, asset_id: int) -> FAinfoResponse:
+    """The asset as ``GET /assets/query`` lists it (it carries the user URL and the identifiers), found by id."""
+    resp = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"query failed: {resp.status_code}"
+    found = next((FAinfoResponse(**row) for row in resp.json() if row["id"] == asset_id), None)
+    assert found is not None, f"asset {asset_id} not listed by /assets/query"
+    return found
+
+
+# ============================================================
+# Test 5b: an explicit null clears the nullable columns (T-2)
+# ============================================================
+@pytest.mark.asyncio
+async def test_patch_explicit_null_clears_icon_url_user_url_and_identifier(test_server):
+    """T-2 — the edit modal removes an icon by sending ``"icon_url": null``: the server must clear it, not answer success and
+    keep the old address. The same holds for the user URL and a single identifier; a null on the name changes nothing, and a
+    field left out of the patch keeps its value."""
+    print_section("Test 5b: PATCH /assets - explicit null clears")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        name = f"Null Clear Test {unique_id('NULLCLR')}"
+        create_item = FAAssetCreateItem(
+            display_name=name,
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            icon_url="https://example.com/own-icon.png",
+            user_url="https://example.com/notes",
+            identifier_isin="US0378331005",
+            identifier_ticker=unique_id("TK")[:20],
+        )
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201, f"Create failed: {create_resp.status_code}: {create_resp.text}"
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+        before = await _info_of(client, asset_id)
+        assert before.icon_url and before.user_url and before.identifier_isin and before.identifier_ticker
+
+        # The wire shape the frontend sends: raw JSON with explicit nulls, no Pydantic dump in between.
+        patch_json = [{"asset_id": asset_id, "icon_url": None, "user_url": None, "identifier_isin": None, "display_name": None}]
+        patch_resp = await client.patch(f"{API_BASE}/assets", json=patch_json, timeout=TIMEOUT)
+        assert patch_resp.status_code == 200, f"PATCH failed: {patch_resp.status_code}: {patch_resp.text}"
+        result = FABulkAssetPatchResponse(**patch_resp.json()).results[0]
+        assert result.success, result.message
+        assert {item.info for item in result.updated_fields} == {"icon_url", "user_url", "identifier_isin"}
+
+        after = await _info_of(client, asset_id)
+        assert after.icon_url is None, f"icon_url kept: {after.icon_url}"
+        assert after.user_url is None, f"user_url kept: {after.user_url}"
+        assert after.identifier_isin is None, f"identifier_isin kept: {after.identifier_isin}"
+        assert after.display_name == name, "a null on the name must not change it"
+        assert after.identifier_ticker == before.identifier_ticker, "a field left out of the patch keeps its value"
+        print_success("✓ explicit null cleared icon_url, user_url and identifier_isin; name and ticker kept")
 
 
 # ============================================================
