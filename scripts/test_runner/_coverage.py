@@ -8,6 +8,7 @@ import shutil
 import sqlite3
 import subprocess
 import time
+import webbrowser
 from pathlib import Path
 
 from scripts.cli_base import pipenv_prefix
@@ -422,7 +423,10 @@ def _coverage_show(target: str) -> int:
 
     if index_file.exists():
         print_success(f"Opening {target} coverage report: {html_dir}/index.html")
-        subprocess.run(["open", str(index_file)])
+        # `open` exists on macOS only: the standard library picks the platform's opener (xdg-open on Linux, the
+        # default browser on Windows), and a machine with no browser just leaves the path printed above.
+        if not webbrowser.open(index_file.resolve().as_uri()):
+            print_info(f"No browser to open it here: {index_file}")
         return 0
     else:
         print_error(f"Failed to generate {target} coverage report")
