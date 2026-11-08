@@ -334,3 +334,68 @@ describe('navigationStore — syncCurrentLocation (← restores the page as it w
         expect(nav.hasPreviousPage()).toBe(false);
     });
 });
+
+describe('navigationStore — a page rewriting its own address (B-6, the ← that came back on Brokers)', () => {
+    it('updates its entry in place while it is on top', () => {
+        nav.trackNavigation('enter', '/brokers');
+        nav.trackNavigation('link', '/brokers/4', '/brokers');
+        nav.trackNavigation('goto', '/brokers/4?start=2026-01-01', '/brokers/4'); // the period written into the address
+        nav.trackNavigation('link', '/transactions?broker_id=4', '/brokers/4');
+        expect(backTrail()).toEqual(['/brokers/4?start=2026-01-01', '/brokers']);
+    });
+
+    it('drops a rewrite that lands after ← has already left the page, so the section root has nothing below it', () => {
+        nav.trackNavigation('enter', '/brokers');
+        nav.trackNavigation('link', '/brokers/4', '/brokers');
+        goto.mockClear();
+        nav.goBack(FALLBACK); // ← pressed while the detail is still writing its period
+        expect(goto).toHaveBeenLastCalledWith('/brokers');
+        nav.trackNavigation('goto', '/brokers/4?start=2026-01-01', '/brokers/4'); // the late rewrite
+        nav.trackNavigation('goto', '/brokers', '/brokers/4'); // ← lands
+        expect(get(nav.canGoBack)).toBe(false);
+        expect(back()).toBe(FALLBACK);
+    });
+
+    it('still lets a replacement between two pages take the place of the top entry (asset prev/next)', () => {
+        nav.trackNavigation('enter', LIST);
+        nav.trackNavigation('link', DETAIL_3, '/assets');
+        nav.expectReplaceNavigation(DETAIL_5);
+        nav.trackNavigation('goto', DETAIL_5, '/assets/3');
+        expect(backTrail()).toEqual([LIST]);
+    });
+
+    it('takes the page left as the floor when the entry was never tracked (the layout mounted after it)', () => {
+        // A slow device: /brokers loaded from scratch, its `enter` missed; the first navigation tracked is the card.
+        nav.trackNavigation('link', '/brokers/7', '/brokers');
+        expect(get(nav.canGoBack)).toBe(true);
+        goto.mockClear();
+        nav.goBack(FALLBACK);
+        expect(goto).toHaveBeenLastCalledWith('/brokers');
+        nav.trackNavigation('goto', '/brokers', '/brokers/7');
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+
+    it('lets the fallback take the place of the current page, so the page ← lands on has no ← of its own', () => {
+        nav.trackNavigation('enter', '/brokers/7');
+        goto.mockClear();
+        nav.goBack('/brokers');
+        expect(goto).toHaveBeenLastCalledWith('/brokers');
+        nav.trackNavigation('goto', '/brokers', '/brokers/7');
+        expect(get(nav.canGoBack)).toBe(false);
+        expect(back()).toBe(FALLBACK);
+    });
+
+    it('keeps a stack the sidebar emptied empty: the section it opens is a root, whatever page it was opened from', () => {
+        nav.trackNavigation('enter', '/brokers');
+        nav.trackNavigation('link', '/brokers/7', '/brokers');
+        nav.resetNavDepth(); // the sidebar's Brokers, from deep inside
+        nav.trackNavigation('link', '/brokers', '/brokers/7');
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+
+    it('keeps it empty even when the sidebar is the first thing to shape the stack', () => {
+        nav.resetNavDepth();
+        nav.trackNavigation('link', '/fx', '/brokers/7');
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+});
