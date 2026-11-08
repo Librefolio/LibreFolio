@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
-from backend.app.schemas.backup import InstanceBackupEntry, InstanceBackupJob
+from backend.app.schemas.backup import InstanceBackupContentParts, InstanceBackupEntry, InstanceBackupJob
 from backend.app.services.platform import storage_limit
 from backend.app.services.platform.instance_backup import jobs, retention
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX
@@ -62,8 +62,13 @@ def job_view(job: jobs.BackupJob) -> InstanceBackupJob:
 
 
 def entry_view(job: jobs.BackupJob) -> InstanceBackupEntry:
-    """A kept backup as the administrators' list shows it: its job (as ``job_view``) and its origin."""
-    return InstanceBackupEntry(**job_view(job).model_dump(), origin=job.origin)
+    """A kept backup as the administrators' list shows it: its job (as ``job_view``), its origin, and what it holds once
+    restored when its state recorded it (A10)."""
+    parts = None
+    if job.content_bytes is not None:
+        database, uploads, reports = job.content_database_bytes or 0, job.content_uploads_bytes or 0, job.content_broker_reports_bytes or 0
+        parts = InstanceBackupContentParts(database_bytes=database, uploads_bytes=uploads, broker_reports_bytes=reports, other_bytes=max(0, job.content_bytes - database - uploads - reports))
+    return InstanceBackupEntry(**job_view(job).model_dump(), origin=job.origin, content_bytes=job.content_bytes, content_parts=parts)
 
 
 def start_job(origin: BackupOrigin, password: str | None = None, recipients: tuple[str, ...] | None = None) -> InstanceBackupJob:

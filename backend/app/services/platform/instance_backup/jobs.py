@@ -49,7 +49,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup import sealed as sealed_backup
 from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, build_archive
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX, EncryptedFile, encrypt_file
-from backend.app.services.platform.instance_backup.manifest import BackupOrigin
+from backend.app.services.platform.instance_backup.manifest import BackupManifest, BackupOrigin
 from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, NotRegularFileError, backups_dir, ensure_private_dir, is_job_id, is_kept_name, is_plain_dir, job_dir, jobs_dir, kept_dir, kept_folder_name, lock_path, read_regular_file, stages_dir
 from backend.app.services.platform.instance_backup.secure import exportable_instance_key, generated_key_unusable
 
@@ -134,6 +134,13 @@ class BackupJob:
     #: A sealed backup (L3): its file is a ``.tar`` whose password only these recipients' private keys open.
     sealed: bool = False
     sealed_recipients: tuple[str, ...] = ()
+    #: A10 (T-10): what the archive holds once restored, not compressed, from its manifest: every entry, then the
+    #: database, the uploaded files and the broker reports among them. ``None`` for a job not done, and in a state written
+    #: before (the list then says it is not known): a password-protected or sealed archive cannot be opened to measure it.
+    content_bytes: int | None = None
+    content_database_bytes: int | None = None
+    content_uploads_bytes: int | None = None
+    content_broker_reports_bytes: int | None = None
 
     def to_json(self) -> str:
         data = asdict(self)
@@ -352,6 +359,7 @@ def _run(
             instance_key_included=key is not None,
             sealed=bool(recipients),
             sealed_recipients=tuple(recipients or ()),
+            **_content(built.manifest),
         )
         logger.info(
             "Instance backup written",
@@ -453,6 +461,18 @@ def _seal(folder: Path, envelope: EncryptedFile, envelope_name: str, sealed_name
     written = sealed_backup.write_sealed(folder / sealed_name, manifest=document, password_age=sealed_backup.seal_password(password, recipients), envelope=folder / envelope_name, mtime=int(created_at.timestamp()))
     on_progress("sealing", envelope.size, envelope.size)
     return written
+
+
+def _content(manifest: BackupManifest) -> dict[str, int]:
+    """What the archive holds once restored (A10, T-10), from the sizes its manifest lists: the database is its first
+    entry, the uploaded files and the broker reports are under their folders."""
+    files = manifest.files
+    return {
+        "content_bytes": sum(entry.size for entry in files),
+        "content_database_bytes": files[0].size,
+        "content_uploads_bytes": sum(entry.size for entry in files if entry.path.startswith("custom-uploads/")),
+        "content_broker_reports_bytes": sum(entry.size for entry in files if entry.path.startswith("broker_reports/")),
+    }
 
 
 def _remove_work_files(folder: Path, keep: str | None) -> None:
