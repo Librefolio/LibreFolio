@@ -111,6 +111,9 @@ release-roadmap/
 LibreFolio_devWiki/graphify-out/graph.json
 LibreFolio_devWiki/graphify-out/graph.html
 LibreFolio_devWiki/graphify-out/.graphify_*
+# the community names chosen by hand: small, repo-relative, kept with the repository
+!LibreFolio_devWiki/graphify-out/.graphify_labels.json
+!LibreFolio_devWiki/graphify-out/.graphify_labels.json.sig
 # Per-machine caches: stat index (mtimes/inodes), AST and semantic extraction caches.
 LibreFolio_devWiki/graphify-out/cache/
 LibreFolio_devWiki/graphify-out/converted/
