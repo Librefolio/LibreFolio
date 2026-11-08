@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Data-quality warnings on the broker page:** old prices, missing or old exchange rates and their sync buttons appear there too, for every role.
 - **Positions chart: choose the window of the Rolling view.** One week, one month, three months, one year or a custom window; it starts from the automatic one.
 - The allocation pie by asset shows the asset's icon in its tooltip too, as the pie by type does.
+- Asset allocation pie: the tooltip shows the asset type as a badge next to the icon, and marks a custom icon.
 
 #### 📈 Charts
 
@@ -82,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Files page: a Visibility column** shows whether each file is shared with every user or personal. From the row menu or a grid card you can share a file with everyone or make it personal again, with a confirmation, since the others lose it.
 - **A bar in the Files page shows administrators the space the instance takes** (database, uploaded files, broker reports, backups), against the disk or against a limit they can set; a hosting provider can fix the limit with `LIBREFOLIO_STORAGE_LIMIT_MB`.
 - **The space bar and its legend light up together** when you point at either of them.
+- The space limit is also in **Settings › Administration › Global Settings**, category Memory, read-only when whoever hosts the instance sets it. *Open the settings*, on a refusal of the limit, leads there with the limit's row highlighted.
 
 #### 💾 Backup and restore
 
@@ -104,6 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Check a password before you restore**: in the restore report, choose an administrator of the backup and type a password to know whether you will sign in with it afterwards. The password is never stored, logged or sent back.
 - **A restore can wait**: *Decide later* keeps a checked archive, and Settings › Backup offers to resume or discard it from any tab or device. The report shows the backup's administrators with their pictures and a bar of what it holds; a restore that cannot go on asks for no confirmation, and one refused by the space limit gives its room back at once.
 - *Refresh* on the list of kept backups, for the backups made from the command line.
+- **Restore from the list**: *Restore* on a kept backup opens its report in a window, right where the list is. Every restore, an archive from your computer too, goes on in a window; closing it keeps the check for later, to resume or discard from the restore card.
+- The list of kept backups has a **Once restored** column: the space the backup's contents take once restored, with the database, uploaded files and broker reports in its tooltip («—» for backups made before this version).
 
 #### 👥 Accounts, sign-up and administrators
 
@@ -190,6 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After an update, each user sees once what changed since their last version: the new changelog chapters, in their language where translated. New accounts never see it, and it never opens over a guide or another window. Same on self-hosted and managed instances.
 - **A legal notice**: a short disclaimer under every sign-in page, at the foot of the sidebar, in Settings › About, on the welcome page and at the end of every AI Export (before the answer-language line), in your language. An instance can link its own terms of service and privacy policy with `LIBREFOLIO_TOS_URL` and `LIBREFOLIO_PRIVACY_URL`.
 - While the server catches up on prices — at startup, on the first visit after a pause, or at a scheduled wake-up — the app shows "Updating prices…" above the pages.
+- **Every Settings tab has its own address**, such as `/settings/preferences` or, for administrators, `/settings/admin/backup`: a link opens the tab, choosing a tab updates the address, and Back returns to the tab before. Old `/settings?tab=…` links still work.
 
 #### 📚 Documentation
 
@@ -553,6 +558,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: converting an amount of 0 (`POST /api/v1/fx/currencies/convert`) answers 0 with the day's rate instead of a server error.
 - A provider that delivers a day with a price of 0 or less no longer makes the whole price download of the asset fail: that day is skipped and the sync says so. A current price of 0 or less from a provider is refused like an unusable one: the last stored price stays.
 - **A new FX pair right after a restart**: EUR/RON and the other pairs only ECB covers no longer report «no conversion path» when ECB is slow to answer. If a provider's list stays unreadable, the dialog asks you to try again shortly; the second yellow banner is gone.
+- Removing an asset's icon now sticks: the edit modal cleared it, but the server kept the old address. The same applies to clearing the user URL, an identifier (ISIN, ticker, CUSIP, SEDOL, FIGI, UUID) or the last *other* identifier.
 
 #### 🗓️ Asset events and Scheduled Investments
 
@@ -589,6 +595,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Risk: the historical replay dates follow the app language**, and a geography group defined by the host shows its name in the shock table instead of its id.
 - Risk: optimizing more than 100 assets reports a size limit instead of an invalid-parameter error.
 - **«Am I as diversified as I think?» on narrow screens**: the rows no longer run off the screen. The name comes first, then the bar, then weight and risk contribution, and a long name scrolls.
+- Risk simulation on phones: each parameter is one row, label on the left and field on the right, and the horizon's days line no longer overlaps the next field.
 
 #### 🤖 AI Export
 
@@ -770,6 +777,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - There is no 1 January 1900 floor any more. A transaction dated before 1900 is accepted (the form, the bulk editor and the import ask for a confirmation first, since such a date is usually a typo), and the portfolio, the lots and the positions start from it. The `TRANSACTIONS_BEFORE_FLOOR` warning is removed. A history that starts in the year 1 costs as much as its changes, not as its 740 000 days. For a portfolio that already held rows dated before 1900, its «All» figures (MWRR, TWRR, ROI) now count from them.
 - **`/system/ready` says `behind` or `ahead` instead of `mismatch`** for a database whose migration is not this version's (`checks.migrations`), and adds `database_revision` and `app_version`. `GET /api/v1/panel/status` adds `instance_key` and `users_over_limit`: a client that checks its exact keys must accept them.
 - **Removed unused or superseded API routes, with no deprecation period:** `POST /transactions/transfers/promote` (use `POST /transactions/commit` with `promotes[]`), `POST /transactions/events/suggest` (use `GET /transactions/event-reconciliation`), `DELETE /assets/events` (use `POST /assets/events` with `delete_ids`), `GET /assets/all` (use `GET /assets/query?active=true`), `POST /assets/provider/refresh` (use `POST /assets/provider/probe`), `POST /assets/{id}/market-data/wipe` (the currency `PATCH /assets` does it), `POST /portfolio/wac` (use `POST /portfolio/lots/analysis`), `GET /settings/global/{key}` (use `GET /settings/global`), `POST /settings/global/initialize` (done at startup), `GET /uploads/{file_id}` (use `GET /uploads`), `GET /brokers/import/files/{file_id}` and `…/last-parse` (use `GET /brokers/import/files`), `GET /utilities/currencies/normalize` (use `GET /utilities/currencies/suggest`), `GET /brokers/{id}/summary` (read the broker with `GET /brokers/{id}`, its cash and positions with `POST /portfolio/report`).
+- `PATCH /api/v1/assets`: an explicit `null` on `icon_url`, `user_url` or a single identifier (`identifier_isin`, `_ticker`, `_cusip`, `_sedol`, `_figi`, `_uuid`) now clears it, as the schema always stated, and an explicit empty list on `identifier_other` clears the other identifiers (`null` there still leaves them unchanged). Send only the fields you change: a client that sends the whole object with `null` or `[]` in untouched fields clears them.
 
 ---
 - **`POST /api/v1/portfolio/report`: `summary.pnl_change_1d_vs_total_pnl_percent` is removed**, with no deprecation period: the day's change as a share of the total P&L blew up near zero. Use `pnl_change_1d_vs_nav_percent`, the share of yesterday's portfolio value.
