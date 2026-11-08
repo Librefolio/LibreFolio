@@ -23,6 +23,7 @@ Seuls les administrateurs disposent de ce groupe. Cliquez sur **Administration**
 
 - 👤 **Vous n’êtes pas administrateur ?** Vous ne disposez pas du groupe **Administration** : vos onglets se terminent par **À propos**, et un lien vers l’un des onglets d’administration ouvre votre **Profil** à la place. Les paramètres de l’instance continuent de s’appliquer à vous : c’est votre administrateur qui les modifie.
 - 🔢 **Le nombre affiché sur Sécurité**, repris sur **Administration**, indique combien de points les contrôles de sécurité de l’instance demandent à un administrateur d’examiner.
+- 🔗 **Chaque onglet a sa propre adresse**, que vous pouvez mettre en favori ou partager : `/settings/profile`, `/settings/preferences`, `/settings/plugins`, `/settings/about` et, pour les administrateurs, `/settings/admin/global`, `/settings/admin/users` et les autres onglets du groupe. L’adresse suit l’onglet que vous ouvrez, et **Retour** revient à l’onglet précédent. Une adresse que l’application ne connaît pas ouvre le premier onglet.
 - 📱 **Sur un téléphone**, les onglets n’affichent que leurs icônes, et le titre au-dessus indique l’onglet ouvert.
 
 ## ↔️ Quand les onglets ne tiennent pas {: #tabs-overflow }

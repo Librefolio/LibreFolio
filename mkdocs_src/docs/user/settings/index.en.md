@@ -23,6 +23,7 @@ Only administrators have this group. Click **Administration** to open its first 
 
 - 👤 **Not an administrator?** You have no **Administration**: your tabs end with **About**, and a link to one of the administration tabs opens your **Profile** instead. The instance's settings still apply to you: your administrator changes them.
 - 🔢 **A number on Security**, repeated on **Administration**, counts what the security checks of the instance ask an administrator to look at.
+- 🔗 **Each tab has its own address**, which you can bookmark or share: `/settings/profile`, `/settings/preferences`, `/settings/plugins`, `/settings/about` and, for administrators, `/settings/admin/global`, `/settings/admin/users` and the other tabs of the group. The address follows the tab you open, and **Back** returns to the tab before. An address the app does not know opens the first tab.
 - 📱 **On a phone**, the tabs show their icons only, and the title above them names the open tab.
 
 ## ↔️ When the Tabs Do Not Fit {: #tabs-overflow }
