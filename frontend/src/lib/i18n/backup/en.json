@@ -82,7 +82,6 @@
       },
       "dropWhenDone": "The check is dropped as soon as it ends.",
       "cancelCheck": "Stop the check",
-      "openReport": "Read the report",
       "confirming": "Confirming the restore…",
       "cancelling": "Cancelling…",
       "pending": {

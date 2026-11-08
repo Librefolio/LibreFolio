@@ -82,7 +82,6 @@
       },
       "dropWhenDone": "La vérification est abandonnée dès qu'elle se termine.",
       "cancelCheck": "Arrêter la vérification",
-      "openReport": "Lire le rapport",
       "confirming": "Confirmation de la restauration…",
       "cancelling": "Annulation…",
       "pending": {

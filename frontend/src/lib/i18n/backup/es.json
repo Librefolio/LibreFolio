@@ -82,7 +82,6 @@
       },
       "dropWhenDone": "La comprobación se descarta en cuanto termine.",
       "cancelCheck": "Detener la comprobación",
-      "openReport": "Leer el informe",
       "confirming": "Confirmando la restauración…",
       "cancelling": "Cancelando…",
       "pending": {
