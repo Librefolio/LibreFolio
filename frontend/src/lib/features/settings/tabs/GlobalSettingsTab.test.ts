@@ -106,6 +106,13 @@ vi.mock('$lib/i18n', () => {
 // from a translator replacement; changing both at once would hide either gap.
 vi.mock('$lib/stores/app/language', () => ({currentLanguage: writable('en')}));
 
+// The page the tab is open on, held by the test: `?setting=<key>` brings a row into view (lot B10).
+const pageStore = await vi.hoisted(async () => {
+    const {writable: hoistedWritable} = await import('svelte/store');
+    return hoistedWritable({url: new URL('http://librefolio.test/settings/admin/global')});
+});
+vi.mock('$app/stores', () => ({page: {subscribe: pageStore.subscribe}}));
+
 const axiosGet = vi.fn(async (_url: string) => ({data: null}) as {data: unknown});
 const axiosPatch = vi.fn(async (_url: string, _body?: unknown) => ({data: null}) as {data: unknown});
 vi.mock('$lib/api', () => {
@@ -470,18 +477,13 @@ describe('GlobalSettingsTab — loading the list', () => {
         expect(screen.getAllByRole('spinbutton'), 'only the control is a number box').toHaveLength(1);
     });
 
-    it('hides storage_limit_mb: the storage bar of the Files page edits it, and the environment can pin it', async () => {
-        // FB-29. An int, so it would be a number box with the key as its id: neither a row nor a field. The first row is
-        // the control — an int the tab does show — so the absence is not the tab having drawn nothing; the clean-up keys
-        // beside it are still hidden, and a key that merely starts like it is still a row.
-        await mount([setting('session_ttl_hours', '24', 'int'), setting('storage_limit_mb', '1024', 'int'), setting('backup_cleanup_max_mb', '250', 'int'), setting('storage_limit_mb_note', '7', 'int')]);
+    it('shows storage_limit_mb as a number row: the space limit is set here too, and still in Files › Advanced (lot B10)', async () => {
+        // Until B10 it was hidden (FB-29): the space bar of the Files page was the only place to set it.
+        await mount([setting('session_ttl_hours', '24', 'int'), setting('storage_limit_mb', '1024', 'int'), setting('backup_cleanup_max_mb', '250', 'int')]);
 
-        expect(screen.getByTestId('global-setting-session_ttl_hours'), 'control: an ordinary int is a row').toBeInTheDocument();
-        expect(screen.getByTestId('global-setting-storage_limit_mb_note'), 'control: a key that only starts like it is a row').toBeInTheDocument();
-        expect(screen.queryByTestId('global-setting-storage_limit_mb')).toBeNull();
-        expect(textInput('storage_limit_mb')).toBeNull();
-        expect(screen.queryByTestId('global-setting-backup_cleanup_max_mb')).toBeNull();
-        expect(screen.getAllByRole('spinbutton'), 'the two controls are the only number boxes').toHaveLength(2);
+        expect(screen.getByTestId('global-setting-storage_limit_mb'), 'the space limit is a row').toBeInTheDocument();
+        expect(within(screen.getByTestId('global-setting-storage_limit_mb')).getByRole('spinbutton'), 'a number box').toHaveValue(1024);
+        expect(screen.queryByTestId('global-setting-backup_cleanup_max_mb'), 'the clean-up keys beside it stay hidden').toBeNull();
     });
 });
 
@@ -632,6 +634,7 @@ describe('GlobalSettingsTab — every row it renders is named in the four catalo
         setting('default_currency', 'EUR', 'str'),
         setting('default_language', 'en', 'str'),
         setting('default_theme', 'auto', 'str'),
+        setting('storage_limit_mb', '0', 'int'),
     ];
 
     /** The leaf behind a dotted key, read from the catalogue file itself. */
@@ -1896,5 +1899,98 @@ describe('GlobalSettingsTab — Runes reactive and lifecycle boundaries', () => 
         await waitFor(() => expect(screen.queryByTestId('scheduler-config-modal')).not.toBeInTheDocument());
         expect(listFn().mock.calls).toEqual([[], []]);
         expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+    });
+});
+
+// =========================================================================
+/**
+ * Lot B10: the space limit (`storage_limit_mb`) is a row of the Memory category, as Files › Advanced reads it
+ * (`storage.limit.label`, `storage.limit.hint`), and follows the same rule: when the hosting provider fixes it
+ * (`limit_locked` of `GET /backup/instance/storage`, through `getInstanceStorage`) the field is read-only, says so
+ * (`storage.limit.locked`) and the reset of everything leaves it. «Open the settings» links here with
+ * `?setting=storage_limit_mb`: the row is shown in its category, brought into view and highlighted (`data-highlighted`),
+ * once per value; the lock stays closed (the developer's choice), the administrator opens it by hand.
+ */
+describe('GlobalSettingsTab — the space limit (B10)', () => {
+    const STORAGE_GET = 'get_instance_storage_api_v1_backup_instance_storage_get';
+    const storageFn = () => vi.mocked((zodiosApi as unknown as Record<string, unknown>)[STORAGE_GET] as never) as ReturnType<typeof vi.fn>;
+    const LIST = [setting('session_ttl_hours', '24', 'int'), setting('max_file_upload_mb', '10', 'int'), setting('storage_limit_mb', '2048', 'int'), setting('backup_cleanup_max_mb', '250', 'int')];
+    const row = () => screen.getByTestId('global-setting-storage_limit_mb');
+    const field = () => within(row()).getByRole('spinbutton') as HTMLInputElement;
+
+    function openAt(query: string): void {
+        pageStore.set({url: new URL(`http://librefolio.test/settings/admin/global${query}`)});
+    }
+
+    beforeEach(() => {
+        storageFn().mockResolvedValue({limit_locked: false, limit_mb: 2048});
+        openAt('');
+    });
+
+    afterEach(() => {
+        openAt('');
+    });
+
+    it('GSL-01: a row of the Memory category, named and explained as in Files › Advanced', async () => {
+        await mount(LIST);
+        await fireEvent.click(screen.getByTestId('global-settings-category-memory'));
+
+        expect(row(), 'Memory holds the space limit').toBeInTheDocument();
+        expect(within(row()).getByText('storage.limit.label'), 'its name').toBeInTheDocument();
+        expect(within(row()).getByText('storage.limit.hint'), 'its explanation').toBeInTheDocument();
+        expect(row(), 'the hosting provider does not fix it').toHaveAttribute('data-locked', 'false');
+    });
+
+    it('GSL-02: unlocked, it saves through the bulk PATCH like every other row', async () => {
+        await mountUnlocked(LIST);
+        await fireEvent.input(field(), {target: {value: '4096'}});
+        await fireEvent.click(within(row()).getByTitle('common.save'));
+
+        await waitFor(() => expect(lastPatchBody()).toEqual({items: [{key: 'storage_limit_mb', value: '4096'}]}));
+    });
+
+    it('GSL-03: fixed by the hosting provider, the field stays read-only once the tab is unlocked, says so, and the reset of everything leaves it', async () => {
+        storageFn().mockResolvedValue({limit_locked: true, limit_mb: 5120});
+        await mountUnlocked([...LIST.slice(0, 2), setting('storage_limit_mb', '5120', 'int')]);
+
+        await waitFor(() => expect(row()).toHaveAttribute('data-locked', 'true'));
+        expect(field(), 'read-only').toBeDisabled();
+        expect(within(row()).getByText('storage.limit.locked'), 'it says who sets it').toBeInTheDocument();
+
+        await fireEvent.click(resetAll());
+        expect(field(), 'the reset of everything leaves it at the value in force').toHaveValue(5120);
+    });
+
+    it('GSL-04: ?setting=storage_limit_mb shows the row in Memory, brings it into view and highlights it; the lock stays closed', async () => {
+        const scroll = vi.spyOn(Element.prototype, 'scrollIntoView');
+        openAt('?setting=storage_limit_mb');
+        await mount(LIST);
+
+        await waitFor(() => expect(row()).toHaveAttribute('data-highlighted', 'true'));
+        await waitFor(() => expect(scroll.mock.contexts, 'the row is brought into view').toContain(row()));
+        expect(screen.queryByTestId('global-setting-session_ttl_hours'), 'the Memory category is the one shown: a row of another is not').toBeNull();
+        expect(screen.getByTestId('global-setting-max_file_upload_mb'), 'and its other row is').toBeInTheDocument();
+        expect(field(), 'the lock stays closed: the administrator opens it by hand').toBeDisabled();
+        expect(screen.queryByTitle('common.saveAll'), 'no edit affordance until then').toBeNull();
+
+        await fireEvent.click(lockToggle());
+        expect(field(), 'opened by hand, the field can be changed').not.toBeDisabled();
+    });
+
+    it('GSL-05: for whoever may not edit, ?setting= highlights the row and leaves the tab read-only', async () => {
+        openAt('?setting=storage_limit_mb');
+        await mount(LIST, {canEdit: false});
+
+        await waitFor(() => expect(row()).toHaveAttribute('data-highlighted', 'true'));
+        expect(field(), 'still read-only').toBeDisabled();
+    });
+
+    it.each(['?setting=backup_cleanup_max_mb', '?setting=nope', ''])('GSL-06: %s names no row the tab shows: nothing is highlighted, the tab stays locked on All', async (query) => {
+        openAt(query);
+        await mount(LIST);
+
+        expect(document.querySelector('[data-highlighted]'), 'no row highlighted').toBeNull();
+        expect(field(), 'the tab is still locked').toBeDisabled();
+        expect(screen.getByTestId('global-setting-session_ttl_hours'), 'All is shown').toBeInTheDocument();
     });
 });
