@@ -113,7 +113,8 @@ vi.mock('$lib/features/plugin-settings/PluginSettingsTab.svelte', () => ({defaul
 vi.mock('$lib/features/settings/security/SecurityTab.svelte', () => ({default: bodies.security}));
 vi.mock('$lib/features/settings/security/securityChecks.svelte', () => ({securityChecks: checks}));
 
-import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabContext} from './settingsTabs';
+import {SETTINGS_TABS, SETTINGS_TAB_GROUPS, settingsPlaceOf, visibleSettingsTabs, type SettingsTab, type SettingsTabContext} from './settingsTabs';
+import {SETTINGS_FIELD_PARAM, SETTINGS_GROUP_PATHS, SETTINGS_ROOT, SETTINGS_TAB_PATHS, settingsTabHref} from './settingsPaths';
 // A8b: the module itself too, so that what A8b adds is read as properties: a named import of an export that does not
 // exist yet would fail every case of this file, not only theirs.
 import * as settingsTabsModule from './settingsTabs';
@@ -503,7 +504,7 @@ describe('visibleSettingsTabs — keeps what the context may see, sorted by orde
     const NO_BODY = (() => undefined) as unknown as Component;
 
     function tab(id: string, order: number, extra: Partial<SettingsTab> = {}): SettingsTab {
-        return {id, labelKey: `test.settingsTabs.${id}`, icon: Info, order, component: NO_BODY, ...extra};
+        return {id, labelKey: `test.settingsTabs.${id}`, icon: Info, path: `/settings/${id}`, order, component: NO_BODY, ...extra};
     }
 
     function unsorted(): SettingsTab[] {
@@ -561,7 +562,7 @@ describe('settingsBar — the entries of the top bar (A8b)', () => {
     const staffOnly = (ctx: SettingsTabContext) => ctx.isSuperuser;
 
     function tab(id: string, order: number, extra: Partial<GroupedTab> = {}): GroupedTab {
-        return {id, labelKey: `test.settingsTabs.${id}`, icon: Info, order, component: NO_BODY, ...extra};
+        return {id, labelKey: `test.settingsTabs.${id}`, icon: Info, path: `/settings/${id}`, order, component: NO_BODY, ...extra};
     }
 
     function group(id: string, extra: Partial<TabGroup> = {}): TabGroup {
@@ -649,5 +650,56 @@ describe('settingsBar — the entries of the top bar (A8b)', () => {
         ).toEqual(groupsBefore.map((given) => given.id));
         groups.forEach((given, index) => expect(given, `groups[${index}] is the group it was`).toBe(groupsBefore[index]));
         expect(entries, 'the answer is a new array').not.toBe(tabs);
+    });
+});
+
+/**
+ * Lot B10: every tab has an address. Its `path` comes from the table of `settingsPaths.ts` — `/settings/<tab>` for a tab in
+ * no group, `/settings/admin/<tab>` for a member of «Administration», `/settings/admin` for the group itself — and
+ * `settingsPlaceOf(pathname, tabs, groups)` reads an address back: the page, a tab, a group, or nothing it knows.
+ */
+describe('addresses — each tab and group at its own (B10)', () => {
+    it('SPATHS-01: the table of settingsPaths.ts has one address per tab of the registry, and each tab’s path is its own', () => {
+        expect(Object.keys(SETTINGS_TAB_PATHS).sort(), 'one row per tab, no more').toEqual(SETTINGS_TABS.map((tab) => tab.id).sort());
+        for (const tab of SETTINGS_TABS) expect(tab.path, `${tab.id} takes its address from the table`).toBe(SETTINGS_TAB_PATHS[tab.id as keyof typeof SETTINGS_TAB_PATHS]);
+        for (const group of SETTINGS_TAB_GROUPS) expect(group.path, `${group.id} too`).toBe(SETTINGS_GROUP_PATHS[group.id]);
+    });
+
+    it('SPATHS-02: a tab in no group is /settings/<one segment>; a member sits one segment under its group’s address', () => {
+        for (const tab of SETTINGS_TABS) {
+            const group = SETTINGS_TAB_GROUPS.find((candidate) => candidate.id === tab.group);
+            const parent = group ? group.path : SETTINGS_ROOT;
+            expect(tab.path, `${tab.id} lives under ${parent}`).toMatch(new RegExp(`^${parent}/[a-z][a-z0-9-]*$`));
+        }
+        expect(SETTINGS_GROUP_PATHS.administration, 'Administration is /settings/admin, as the brief asks').toBe('/settings/admin');
+        expect(SETTINGS_TAB_PATHS.admin, 'Global Settings names what it holds').toBe('/settings/admin/global');
+    });
+
+    it('SPATHS-03: no two tabs or groups share an address, and none is the page’s own', () => {
+        const paths = [...SETTINGS_TABS.map((tab) => tab.path), ...SETTINGS_TAB_GROUPS.map((group) => group.path)];
+
+        expect(new Set(paths).size, `every address once: ${paths.join(', ')}`).toBe(paths.length);
+        expect(paths, '/settings is the first tab, never a tab of its own').not.toContain(SETTINGS_ROOT);
+    });
+
+    it.each([
+        ['/settings', {kind: 'root'}],
+        ['/settings/', {kind: 'root'}],
+        ['/settings/profile', {kind: 'tab', id: 'profile'}],
+        ['/settings/profile/', {kind: 'tab', id: 'profile'}],
+        ['/settings/admin/global', {kind: 'tab', id: 'admin'}],
+        ['/settings/admin/security', {kind: 'tab', id: 'security'}],
+        ['/settings/admin', {kind: 'group', id: 'administration'}],
+        ['/settings/admin/profile', {kind: 'unknown'}],
+        ['/settings/users', {kind: 'unknown'}],
+        ['/settings/profile/more', {kind: 'unknown'}],
+        ['/settingsx', {kind: 'unknown'}],
+    ])('SPATHS-04: settingsPlaceOf(%s) is %j', (pathname, place) => {
+        expect(settingsPlaceOf(pathname, SETTINGS_TABS, SETTINGS_TAB_GROUPS)).toEqual(place);
+    });
+
+    it('SPATHS-05: settingsTabHref gives a tab’s address, with a query when one is asked', () => {
+        expect(settingsTabHref('backup')).toBe('/settings/admin/backup');
+        expect(settingsTabHref('admin', {[SETTINGS_FIELD_PARAM]: 'storage_limit_mb'})).toBe('/settings/admin/global?setting=storage_limit_mb');
     });
 });
