@@ -318,6 +318,7 @@
         "origin": "Créée depuis",
         "kind": "Type",
         "size": "Taille",
+        "restored": "Une fois restaurée",
         "sha256": "SHA-256",
         "actions": "Actions"
       },
@@ -347,7 +348,11 @@
         "load": "La liste des sauvegardes n'a pas pu être chargée. Réessayez."
       },
       "retry": "Réessayer",
-      "refresh": "Actualiser"
+      "refresh": "Actualiser",
+      "restored": {
+        "header": "L'espace qu'occupent les contenus de la sauvegarde une fois restaurés, non compressés : la base de données, les fichiers téléversés et les rapports des courtiers.",
+        "unknown": "Inconnu pour cette sauvegarde : elle a été faite avant que LibreFolio ne l'enregistre."
+      }
     },
     "cleanup": {
       "title": "Nettoyage automatique",

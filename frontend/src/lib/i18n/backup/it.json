@@ -318,6 +318,7 @@
         "origin": "Fatto da",
         "kind": "Tipo",
         "size": "Dimensione",
+        "restored": "Una volta ripristinato",
         "sha256": "SHA-256",
         "actions": "Azioni"
       },
@@ -347,7 +348,11 @@
         "load": "Non è stato possibile caricare l'elenco dei backup. Riprova."
       },
       "retry": "Riprova",
-      "refresh": "Aggiorna"
+      "refresh": "Aggiorna",
+      "restored": {
+        "header": "Lo spazio che i contenuti del backup occupano una volta ripristinati, non compressi: il database, i file caricati e i report dei broker.",
+        "unknown": "Non noto per questo backup: è stato fatto prima che LibreFolio lo registrasse."
+      }
     },
     "cleanup": {
       "title": "Pulizia automatica",

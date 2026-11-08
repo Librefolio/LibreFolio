@@ -318,6 +318,7 @@
         "origin": "Made from",
         "kind": "Type",
         "size": "Size",
+        "restored": "Once restored",
         "sha256": "SHA-256",
         "actions": "Actions"
       },
@@ -347,7 +348,11 @@
         "load": "The list of backups could not be loaded. Try again."
       },
       "retry": "Try again",
-      "refresh": "Refresh"
+      "refresh": "Refresh",
+      "restored": {
+        "header": "The space the backup's contents take once restored, not compressed: the database, the uploaded files and the broker reports.",
+        "unknown": "Not known for this backup: it was made before LibreFolio recorded it."
+      }
     },
     "cleanup": {
       "title": "Automatic clean-up",

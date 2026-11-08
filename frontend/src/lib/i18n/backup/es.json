@@ -318,6 +318,7 @@
         "origin": "Hecha desde",
         "kind": "Tipo",
         "size": "Tamaño",
+        "restored": "Una vez restaurada",
         "sha256": "SHA-256",
         "actions": "Acciones"
       },
@@ -347,7 +348,11 @@
         "load": "No se pudo cargar la lista de copias. Inténtalo de nuevo."
       },
       "retry": "Reintentar",
-      "refresh": "Actualizar"
+      "refresh": "Actualizar",
+      "restored": {
+        "header": "El espacio que ocupan los contenidos de la copia una vez restaurados, sin comprimir: la base de datos, los archivos subidos y los informes de los brókeres.",
+        "unknown": "Desconocido para esta copia: se hizo antes de que LibreFolio lo registrara."
+      }
     },
     "cleanup": {
       "title": "Limpieza automática",
