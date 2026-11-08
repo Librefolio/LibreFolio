@@ -673,10 +673,7 @@ describe('UsersTab — the account rows (UTAB-20…22)', () => {
         const hrefs = within(own)
             .getAllByRole('link')
             .map((a) => a.getAttribute('href') ?? '');
-        expect(
-            hrefs.some((href) => /[?&]tab=profile(?:[&#]|$)/.test(href)),
-            `a link to ?tab=profile among ${JSON.stringify(hrefs)}`,
-        ).toBe(true);
+        expect(hrefs, 'a link to the profile tab, at its own address').toContain('/settings/profile');
 
         await fireEvent.click(toggleOf(ME.id));
 
