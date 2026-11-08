@@ -961,14 +961,19 @@ async function confirmationWord(page: Page): Promise<string> {
     return ((await shown.textContent()) ?? '').trim();
 }
 
+/** A10 (T-15): the window where the steps of the restore card's archive go on: its password, its upload, its check. */
+function stepsWindow(card: Locator): Locator {
+    return card.page().getByTestId('restore-steps-modal');
+}
+
 /** Choose a secure backup's envelope in the restore card: its password is asked first, and nothing is sent before it. */
 async function chooseEnvelope(page: Page, card: Locator, path: string, sent: SentRequest[]): Promise<void> {
     await expect(page.getByTestId('restore-file-input'), 'the picker suggests secure backups too').toHaveAttribute('accept', /\.lfbk/);
     await chooseArchive(page, path);
     await expect(card, 'a secure backup: its password first').toHaveAttribute('data-state', 'password', {timeout: PAGE_MS});
     await expect(card, 'the card waits for the administrator, not for the server').toHaveAttribute('data-busy', 'false');
-    await expect(card.getByTestId('restore-password-form')).toBeVisible();
-    await expect(card.getByTestId('restore-password-error'), 'no password tried yet: no error').toHaveCount(0);
+    await expect(stepsWindow(card).getByTestId('restore-password-form')).toBeVisible();
+    await expect(stepsWindow(card).getByTestId('restore-password-error'), 'no password tried yet: no error').toHaveCount(0);
     expect(
         sent.map(({call}) => call),
         'nothing is sent before the password',
@@ -977,10 +982,10 @@ async function chooseEnvelope(page: Page, card: Locator, path: string, sent: Sen
 
 /** Type a secure backup's password in the restore card, and send it. */
 async function submitRestorePassword(card: Locator, password: string): Promise<void> {
-    const field = card.getByTestId('restore-password');
+    const field = stepsWindow(card).getByTestId('restore-password');
     await field.fill(password);
     await expect(field).toHaveValue(password);
-    await card.getByTestId('restore-password-submit').click();
+    await stepsWindow(card).getByTestId('restore-password-submit').click();
 }
 
 /** Drop the checked archive from its report, as the administrator does: the card idle again, the check gone from the server, nothing restored. */
@@ -1404,7 +1409,7 @@ restoreTest.describe('Settings › Backup — a restore of the instance', () => 
 
         const report = page.getByTestId('restore-report');
         await expect(report, 'the report opens by itself').toBeVisible();
-        await expect(page.getByTestId('restore-report-ready')).toHaveAttribute('data-restorable', 'true');
+        await expect(report.locator('[data-restorable][data-action]'), 'restorable').toHaveAttribute('data-restorable', 'true');
         await expect(report.locator('[data-restorable][data-action]'), 'nothing to upgrade').toHaveAttribute('data-action', 'same');
         await expect(page.getByTestId('restore-report-migrations')).toHaveAttribute('data-count', '0');
         await expect(page.getByTestId('restore-report-admins'), "the archive's administrators, who will sign in again").toContainText(TEST_ADMIN.username);
@@ -1545,7 +1550,7 @@ restoreTest.describe('Settings › Backup — a restore of the instance', () => 
             await expect(card).toHaveAttribute('data-state', /^(checking|failed)$/, {timeout: UPLOAD_MS});
             await expect(card, 'the envelope was received and its check started').toHaveAttribute('data-error-code', '');
             await expect(card).toHaveAttribute('data-state', 'checking');
-            await expect(card.getByTestId('restore-check-progress'), 'an envelope is decrypted first').toHaveAttribute('data-phase', 'decrypting');
+            await expect(stepsWindow(card).getByTestId('restore-check-progress'), 'an envelope is decrypted first').toHaveAttribute('data-phase', 'decrypting');
         } finally {
             releaseChecks();
         }
@@ -1612,11 +1617,11 @@ restoreTest.describe('Settings › Backup — a restore of the instance', () => 
         // A wrong password: the envelope sent, its check refused, the password asked again.
         await submitRestorePassword(card, wrong);
         // The reason first: the card was on the password already before the server answered.
-        await expect(card.getByTestId('restore-password-error'), 'the wrong password is said, by its code').toHaveAttribute('data-error-code', 'wrong_password', {timeout: UPLOAD_MS});
+        await expect(stepsWindow(card).getByTestId('restore-password-error'), 'the wrong password is said, by its code').toHaveAttribute('data-error-code', 'wrong_password', {timeout: UPLOAD_MS});
         await expect(card).toHaveAttribute('data-error-code', 'wrong_password');
         await expect(card, 'still on the password').toHaveAttribute('data-state', 'password');
         await expect(card).toHaveAttribute('data-busy', 'false');
-        await expect(card.getByTestId('restore-password'), 'the field empty again, for the next try').toHaveValue('');
+        await expect(stepsWindow(card).getByTestId('restore-password'), 'the field empty again, for the next try').toHaveValue('');
         expect(
             sent.map(({call}) => call),
             'the envelope sent once, its check asked once',
