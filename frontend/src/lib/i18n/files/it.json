@@ -129,7 +129,7 @@
         "unexpected": "Non è stato possibile salvare il limite. Riprova."
       },
       "exceeded": {
-        "raise": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Porta lo spazio totale ad almeno {required} in File › Avanzate, oppure elimina file o backup.",
+        "raise": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Porta lo spazio totale ad almeno {required} in Impostazioni › Amministrazione › Impostazioni Globali, oppure elimina file o backup.",
         "locked": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Chiedi a chi ospita questa istanza di portare il limite ad almeno {required}, oppure elimina file o backup.",
         "disk": "Anche il disco deve avere liberi almeno altri {missing}.",
         "member": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Libera almeno {free} eliminando file o report, oppure chiedi a un amministratore di alzare il limite."
