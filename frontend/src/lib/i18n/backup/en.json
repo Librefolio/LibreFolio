@@ -111,7 +111,7 @@
       },
       "blocker": {
         "no_administrator": "The backup has no active administrator: after a restore nobody could manage LibreFolio. It cannot be restored.",
-        "storage_limit": "Restoring this backup would take LibreFolio past its total space limit. Raise the total space to at least {required} in Files › Advanced, then check the backup again.",
+        "storage_limit": "Restoring this backup would take LibreFolio past its total space limit. Raise the total space to at least {required} in Settings › Administration › Global Settings, then check the backup again.",
         "storage_limit_locked": "Restoring this backup would take LibreFolio past its total space limit. Ask whoever hosts this instance to raise the limit to at least {required}, then check the backup again.",
         "storage_limit_disk": "The disk also needs at least {missing} more free."
       },

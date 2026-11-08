@@ -111,7 +111,7 @@
       },
       "blocker": {
         "no_administrator": "La copia de seguridad no tiene ningún administrador activo: después de una restauración nadie podría gestionar LibreFolio. No se puede restaurar.",
-        "storage_limit": "Restaurar esta copia de seguridad haría que LibreFolio superara su espacio total. Sube el espacio total a al menos {required} en Archivos › Avanzado y vuelve a comprobar la copia.",
+        "storage_limit": "Restaurar esta copia de seguridad haría que LibreFolio superara su espacio total. Sube el espacio total a al menos {required} en Configuración › Administración › Configuración Global y vuelve a comprobar la copia.",
         "storage_limit_locked": "Restaurar esta copia de seguridad haría que LibreFolio superara su espacio total. Pide a quien aloja esta instancia que suba el límite a al menos {required} y vuelve a comprobar la copia.",
         "storage_limit_disk": "El disco también necesita al menos {missing} más libres."
       },
