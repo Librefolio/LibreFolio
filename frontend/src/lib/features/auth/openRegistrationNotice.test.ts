@@ -12,7 +12,7 @@
  *   2. `openRegistrationNoticeFor({isAdmin, registrationMode, registrationLocked, hostname})` is pure, and null unless
  *      the user is an admin, the mode is `open` and `isLocalHost(hostname)` is false. Then the notice is `{id,
  *      severity: 'warning', dismissible: true, messageKey: 'auth.notices.openRegistration', action: {labelKey:
- *      'auth.notices.openRegistrationAction', href: '/settings?tab=admin'}}` — and, when `LIBREFOLIO_REGISTRATION` pins
+ *      'auth.notices.openRegistrationAction', href: '/settings/admin/global'}}` — and, when `LIBREFOLIO_REGISTRATION` pins
  *      the mode (`registrationLocked`), `messageKey: 'auth.notices.openRegistrationLocked'` and no action: nothing in
  *      the app can change a pinned mode.
  *   3. `startOpenRegistrationNotice(deps?)` watches `user()`, `config()` and `hostname()` reactively and, at each
@@ -103,7 +103,7 @@ const OPEN_NOTICE: InstanceNotice = {
     severity: 'warning',
     dismissible: true,
     messageKey: 'auth.notices.openRegistration',
-    action: {labelKey: 'auth.notices.openRegistrationAction', href: '/settings?tab=admin'},
+    action: {labelKey: 'auth.notices.openRegistrationAction', href: '/settings/admin/global'},
 };
 
 /** The same with the mode pinned by `LIBREFOLIO_REGISTRATION`: no link to a setting nothing in the app can change. */

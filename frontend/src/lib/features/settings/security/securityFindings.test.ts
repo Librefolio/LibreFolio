@@ -151,7 +151,7 @@ const BROWSER_OPEN: SecurityFinding = {
     severity: 'warning',
     messageKey: 'auth.notices.openRegistration',
     params: {},
-    action: {labelKey: 'auth.notices.openRegistrationAction', href: '/settings?tab=admin'},
+    action: {labelKey: 'auth.notices.openRegistrationAction', href: '/settings/admin/global'},
     source: 'browser',
 };
 

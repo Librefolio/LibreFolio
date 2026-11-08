@@ -441,7 +441,7 @@ describe('SecurityTab — the findings', () => {
             ['platform.plugin_secrets', '/settings/plugins', 'settings.securityTab.openPlugins'],
             ['email.smtp_encryption', '/settings/admin/email', 'settings.securityTab.openEmail'],
             ['email.links', '/settings/admin/email', 'settings.securityTab.openEmail'],
-            ['accounts.openRegistration', '/settings?tab=admin', 'auth.notices.openRegistrationAction'],
+            ['accounts.openRegistration', '/settings/admin/global', 'auth.notices.openRegistrationAction'],
         ];
         for (const [id, href, labelKey] of LINKED) {
             const link = within(finding(id)).getByTestId('security-finding-action');

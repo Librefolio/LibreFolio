@@ -15,6 +15,7 @@ import {currentUser} from '$lib/stores/app/auth';
 import {instanceConfig, type InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {instanceNotices, type InstanceNotice} from '$lib/features/instance/instanceNotices.svelte';
 import {isLocalHost} from './localHost';
+import {settingsTabHref} from '$lib/features/settings/settingsPaths';
 
 export const OPEN_REGISTRATION_NOTICE_ID = 'accounts.openRegistration';
 
@@ -36,7 +37,7 @@ export function openRegistrationNoticeFor({isAdmin, registrationMode, registrati
         severity: 'warning',
         dismissible: true,
         messageKey: 'auth.notices.openRegistration',
-        action: {labelKey: 'auth.notices.openRegistrationAction', href: '/settings?tab=admin'},
+        action: {labelKey: 'auth.notices.openRegistrationAction', href: settingsTabHref('admin')},
     };
 }
 
