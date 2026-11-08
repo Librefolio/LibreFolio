@@ -103,6 +103,8 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     (the command line with ``--output``), stays in ``.jobs/`` and expires after an hour. A ``rename`` that fails is logged
     and leaves the job in ``.jobs/``, valid. After each backup that ended ``done`` the clean-up of the kept backups runs
     (``retention.apply_cleanup``); an error there changes nothing in the backup's outcome.
+(n) A10 (T-10): a run that ends ``done`` records what its archive holds once restored, from the manifest's sizes
+    (``content_bytes``, and the database, the uploads and the broker reports apart); a state written before reads none.
 
 Pure: every data directory is in ``tmp_path`` and every call is given its ``data_dir``; ``jobs.get_data_dir`` is
 replaced by a guard that fails the test, so the lane's data directory is never reached (the cases of the routes' views,
@@ -614,6 +616,23 @@ def test_a_started_backup_runs_in_the_background_to_done(data_dir):
     check = check_archive(folder / job.file_name)
     assert check.ok and check.manifest.origin == "ui", f"the archive checks ok and says it was made from the UI: {check}"
     print_success(f"{job.file_name}: {job.file_size} bytes")
+
+
+def test_a_done_job_records_what_its_archive_holds_once_restored(data_dir):
+    """(n) A10 (T-10): the space the backup's contents take once restored, not compressed, is the sum of the sizes its
+    manifest lists (the database first, then the files), with the database, the uploads and the broker reports apart. A
+    state written before has none of it: the list then says it is not known."""
+    print_section("content_bytes")
+    job, folder = run_backup(data_dir=data_dir)
+    manifest = check_archive(folder / job.file_name).manifest
+    assert job.content_bytes == sum(entry.size for entry in manifest.files) > 0, f"the sum of the manifest's sizes: {job.content_bytes}"
+    assert job.content_database_bytes == manifest.files[0].size > 0, "the database, the manifest's first entry"
+    assert job.content_uploads_bytes == sum(entry.size for entry in manifest.files if entry.path.startswith("custom-uploads/"))
+    assert job.content_broker_reports_bytes == sum(entry.size for entry in manifest.files if entry.path.startswith("broker_reports/"))
+    assert get_job(job.job_id, data_dir=data_dir) == job, "written in the state on disk"
+    older = {key: value for key, value in json.loads(job.to_json()).items() if not key.startswith("content_")}
+    assert BackupJob.from_json(json.dumps(older)).content_bytes is None, "a state written before: not known"
+    print_success(f"{job.content_bytes} bytes once restored, {job.file_size} in the archive")
 
 
 def test_a_deleted_job_is_gone_with_its_archive(data_dir):
