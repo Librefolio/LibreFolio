@@ -261,6 +261,12 @@
         "match": "Avec ce mot de passe, vous vous connecterez après la restauration.",
         "mismatch": "Ce n'est pas son mot de passe.",
         "failed": "Le mot de passe n'a pas pu être vérifié : réessayez."
+      },
+      "kept": {
+        "title": "Restaurer une sauvegarde",
+        "backupOf": "Sauvegarde du {date}, conservée sur ce serveur.",
+        "preparing": "Préparation de la sauvegarde pour sa vérification…",
+        "alreadyWaiting": "Une restauration attend déjà le prochain démarrage de LibreFolio. Redémarrez ou annulez-la d'abord dans « Restaurer une archive »."
       }
     },
     "checks": {

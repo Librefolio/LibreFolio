@@ -261,6 +261,12 @@
         "match": "Con esta contraseña entrarás después de la restauración.",
         "mismatch": "No es su contraseña.",
         "failed": "No se ha podido comprobar la contraseña: inténtalo de nuevo."
+      },
+      "kept": {
+        "title": "Restaurar una copia de seguridad",
+        "backupOf": "Copia de seguridad del {date}, guardada en este servidor.",
+        "preparing": "Preparando la copia de seguridad para su comprobación…",
+        "alreadyWaiting": "Ya hay una restauración esperando el próximo inicio de LibreFolio. Reiníciala o cancélala primero en «Restaurar un archivo»."
       }
     },
     "checks": {

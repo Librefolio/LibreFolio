@@ -261,6 +261,12 @@
         "match": "Con questa password accederai dopo il ripristino.",
         "mismatch": "Non è la sua password.",
         "failed": "Non è stato possibile verificare la password: riprova."
+      },
+      "kept": {
+        "title": "Ripristina un backup",
+        "backupOf": "Backup del {date}, conservato su questo server.",
+        "preparing": "Preparazione del backup per il controllo…",
+        "alreadyWaiting": "Un ripristino attende già il prossimo avvio di LibreFolio. Prima riavvia LibreFolio o annulla il ripristino in «Ripristina un archivio»."
       }
     },
     "checks": {

@@ -261,6 +261,12 @@
         "match": "With this password you will sign in after the restore.",
         "mismatch": "This is not their password.",
         "failed": "The password could not be checked: try again."
+      },
+      "kept": {
+        "title": "Restore a backup",
+        "backupOf": "Backup of {date}, kept on this server.",
+        "preparing": "Getting the backup ready for its check…",
+        "alreadyWaiting": "A restore already waits for the next start of LibreFolio. Restart or cancel it in «Restore an archive» first."
       }
     },
     "checks": {
