@@ -12,6 +12,7 @@
  */
 import {openRegistrationNoticeFor} from '$lib/features/auth/openRegistrationNotice.svelte';
 import type {SecurityCheck} from './securityChecksApi';
+import {settingsTabHref} from '$lib/features/settings/settingsPaths';
 
 export type FindingSeverity = 'error' | 'warning' | 'info';
 
@@ -48,8 +49,8 @@ export const BLOCKED_SCRIPT_ID = 'platform.blockedScript';
 
 const SEVERITY_RANK: Record<FindingSeverity, number> = {error: 0, warning: 1, info: 2};
 
-const OPEN_EMAIL: FindingAction = {labelKey: 'settings.securityTab.openEmail', href: '/settings?tab=email'};
-const OPEN_PLUGINS: FindingAction = {labelKey: 'settings.securityTab.openPlugins', href: '/settings?tab=plugins'};
+const OPEN_EMAIL: FindingAction = {labelKey: 'settings.securityTab.openEmail', href: settingsTabHref('email')};
+const OPEN_PLUGINS: FindingAction = {labelKey: 'settings.securityTab.openPlugins', href: settingsTabHref('plugins')};
 
 /** The in-app link of a server check, where a setting of the app fixes it. */
 const SERVER_ACTIONS: Record<string, FindingAction> = {

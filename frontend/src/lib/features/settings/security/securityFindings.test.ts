@@ -12,8 +12,8 @@
  *      server's findings of its severity.
  *   3. `passed` holds the `ok` checks, in the server's order, mapped the same way, never with an action.
  *   4. A server finding links to where it is fixed: `email.smtp`, `email.smtp_encryption` and `email.links` to Settings ›
- *      Email (`settings.securityTab.openEmail`, `/settings?tab=email`), `platform.plugin_secrets` to Settings › Plugins
- *      (`settings.securityTab.openPlugins`, `/settings?tab=plugins`); any other check has none.
+ *      Email (`settings.securityTab.openEmail`, `/settings/admin/email`), `platform.plugin_secrets` to Settings › Plugins
+ *      (`settings.securityTab.openPlugins`, `/settings/plugins`); any other check has none.
  *   5. `attentionCount({attention})` counts the attention findings that are errors or warnings: an `info` is listed,
  *      not counted.
  *   6. (N69b, the security-attention dot) `attentionSeverity({attention})` says how serious the attention is: `'error'`
@@ -140,8 +140,8 @@ async function loadAttentionSeverity(): Promise<AttentionSeverity> {
 
 // --- The contract's literals, never read from the module under test --------------------------------------------------
 
-const OPEN_EMAIL: FindingAction = {labelKey: 'settings.securityTab.openEmail', href: '/settings?tab=email'};
-const OPEN_PLUGINS: FindingAction = {labelKey: 'settings.securityTab.openPlugins', href: '/settings?tab=plugins'};
+const OPEN_EMAIL: FindingAction = {labelKey: 'settings.securityTab.openEmail', href: '/settings/admin/email'};
+const OPEN_PLUGINS: FindingAction = {labelKey: 'settings.securityTab.openPlugins', href: '/settings/plugins'};
 
 const BROWSER_ID = 'accounts.openRegistration';
 
