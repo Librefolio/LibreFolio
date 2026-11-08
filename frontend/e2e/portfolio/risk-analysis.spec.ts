@@ -4394,6 +4394,48 @@ test.describe('Risk analysis functional integration', () => {
     });
 
     /**
+     * T-4 (testlist of 07/11/2026): on a phone the simulation's parameters are one per row, the label on the left and the field on
+     * the right, every field on one right edge; the days line of the horizon sits under its field and never on the row below.
+     */
+    test('T-4: at 375 px each simulation parameter is a row, label left and field right, and the horizon days stay off the next row', async ({page}) => {
+        await page.setViewportSize({width: 375, height: 812});
+        await installRiskMocks(page);
+        const panel = await openDashboardRisk(page);
+        const level4 = await openLevel4(panel);
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '365');
+
+        const layout = await level4.evaluate((section) => {
+            const box = (id: string) => {
+                const element = section.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+                if (!element) return null;
+                const rect = element.getBoundingClientRect();
+                return {left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom};
+            };
+            const horizonRow = section.querySelector<HTMLElement>('[data-testid="risk-simulation-horizon-field"] label')!.getBoundingClientRect();
+            // Each row: the box of the row and of its field. The sampling and seed rows exist when the catalogue offers them.
+            const rows = [
+                {id: 'horizon', row: {left: horizonRow.left, right: horizonRow.right, top: horizonRow.top, bottom: horizonRow.bottom}, field: box('risk-simulation-horizon')},
+                {id: 'paths', row: box('risk-simulation-paths-row'), field: box('risk-simulation-paths')},
+                {id: 'sampling', row: box('risk-simulation-sampling-row'), field: box('risk-simulation-sampling')},
+                {id: 'seed', row: box('risk-simulation-seed-row'), field: box('risk-simulation-seed')},
+            ].filter((entry) => entry.row !== null && entry.field !== null);
+            return {rows, days: box('risk-simulation-horizon-days')!, pathsRow: box('risk-simulation-paths-row')!};
+        });
+
+        expect(layout.rows.map((entry) => entry.id).slice(0, 2), 'the horizon and the paths rows are drawn').toEqual(['horizon', 'paths']);
+        for (const {id, row, field} of layout.rows) {
+            expect(Math.abs(field!.right - row!.right), `${id}: the field is not on the right of its row`).toBeLessThanOrEqual(1);
+            const middle = (field!.top + field!.bottom) / 2;
+            expect(middle >= row!.top && middle <= row!.bottom, `${id}: the field is not on the line of its label`).toBe(true);
+        }
+        const rights = layout.rows.map((entry) => Math.round(entry.field!.right));
+        expect(Math.max(...rights) - Math.min(...rights), 'the fields do not share one right edge').toBeLessThanOrEqual(1);
+        const horizonField = layout.rows[0].field!;
+        expect(layout.days.top, 'the days line is not under the horizon field').toBeGreaterThanOrEqual(horizonField.bottom - 1);
+        expect(layout.days.bottom, 'the days line lies on the paths row').toBeLessThanOrEqual(layout.pathsRow.top + 1);
+    });
+
+    /**
      * F-8 (testlist 1.3): the simulation horizon takes a number of days as before, and also years, months and days in the
      * interface language (`2y3m5d` in English), as a fixed sum: a year is 365 days, a month 30. The days it comes to are written under the field, a text that is no horizon is an
      * error of the field and keeps the run button off, and what goes to the engine is always calendar days. The unit letters

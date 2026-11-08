@@ -28,9 +28,15 @@
         /** Classes of the input: each panel keeps its own width. */
         inputClass?: string;
         testId?: string;
+        /**
+         * Below the `sm` breakpoint, the label on the left and the input on the right of one row, with the days line under the input
+         * in the flow, so it takes its own room and never lands on the field below (T-4, the parameters of `L4Simulation` on a
+         * phone). From `sm` up the field is the column it always was.
+         */
+        phoneRow?: boolean;
     }
 
-    let {days = $bindable(), valid = $bindable(true), onchange, inputClass = 'w-28', testId = 'risk-simulation-horizon'}: Props = $props();
+    let {days = $bindable(), valid = $bindable(true), onchange, inputClass = 'w-28', testId = 'risk-simulation-horizon', phoneRow = false}: Props = $props();
 
     // The initial text is the value the parent starts with; after that the text is the user's.
     let draft = $state(String(days));
@@ -74,10 +80,11 @@
   Aligned with the fields beside it (F8): the label line and the input are all this field puts in the row's flow. The days the
   text comes to sit under the input in a line of their own, out of the flow (absolute), and the row that holds the field keeps the
   room for it (`pb-5`, whether or not there is a line to show), so the inputs of the row stay on one baseline and nothing moves
-  when the line appears, changes or goes.
+  when the line appears, changes or goes. With `phoneRow`, below `sm` the label and the input share one row and the days line is in
+  the flow under the input: in a column of fields an absolute line would lie on the next one.
 -->
 <div class="relative flex flex-col gap-1 text-xs text-lf-muted" data-testid="{testId}-field" data-valid={parsed.ok} data-error={parsed.ok ? '' : parsed.error}>
-    <label class="flex flex-col gap-1">
+    <label class={phoneRow ? 'flex items-center justify-between gap-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1' : 'flex flex-col gap-1'}>
         <span class="flex items-center gap-1">
             {$t('risk.params.horizonDays')}
             <Tooltip html={hintHtml} position="top" testId="{testId}-hint">
@@ -98,7 +105,7 @@
         />
     </label>
     <!-- The days it comes to; while the text is no horizon there are none to say, and the line keeps its place with a dash. -->
-    <p id="{testId}-days" class="absolute left-0 top-full mt-1 whitespace-nowrap text-[11px] leading-4 text-lf-muted" data-testid="{testId}-days" data-days={parsed.ok ? parsed.days : ''}>
+    <p id="{testId}-days" class="{phoneRow ? 'text-right sm:absolute sm:left-0 sm:top-full sm:mt-1 sm:text-left' : 'absolute left-0 top-full mt-1'} whitespace-nowrap text-[11px] leading-4 text-lf-muted" data-testid="{testId}-days" data-days={parsed.ok ? parsed.days : ''}>
         {parsed.ok ? $t('risk.params.horizonExpr.resultDays', {values: {days: parsed.days}}) : '\u2014'}
     </p>
 </div>
