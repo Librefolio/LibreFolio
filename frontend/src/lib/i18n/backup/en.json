@@ -348,8 +348,7 @@
         "load": "The list of backups could not be loaded. Try again."
       },
       "retry": "Try again",
-      "refresh": "Refresh",
-      "restoreConfirm": "Restore this backup? It will replace the data of every user. LibreFolio checks it first and shows you what would change: nothing changes until you confirm."
+      "refresh": "Refresh"
     },
     "cleanup": {
       "title": "Automatic clean-up",

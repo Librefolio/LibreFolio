@@ -348,8 +348,7 @@
         "load": "No se pudo cargar la lista de copias. Inténtalo de nuevo."
       },
       "retry": "Reintentar",
-      "refresh": "Actualizar",
-      "restoreConfirm": "¿Restaurar esta copia de seguridad? Sustituirá los datos de todos los usuarios. LibreFolio la comprueba primero y te muestra qué cambiaría: nada cambia hasta que confirmes."
+      "refresh": "Actualizar"
     },
     "cleanup": {
       "title": "Limpieza automática",

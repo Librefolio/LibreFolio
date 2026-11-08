@@ -348,8 +348,7 @@
         "load": "La liste des sauvegardes n'a pas pu être chargée. Réessayez."
       },
       "retry": "Réessayer",
-      "refresh": "Actualiser",
-      "restoreConfirm": "Restaurer cette sauvegarde ? Elle remplacera les données de tous les utilisateurs. LibreFolio la vérifie d'abord et vous montre ce qui changerait : rien ne change tant que vous ne confirmez pas."
+      "refresh": "Actualiser"
     },
     "cleanup": {
       "title": "Nettoyage automatique",

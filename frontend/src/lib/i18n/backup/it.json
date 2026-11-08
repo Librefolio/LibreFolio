@@ -348,8 +348,7 @@
         "load": "Non è stato possibile caricare l'elenco dei backup. Riprova."
       },
       "retry": "Riprova",
-      "refresh": "Aggiorna",
-      "restoreConfirm": "Ripristinare questo backup? Sostituirà i dati di tutti gli utenti. LibreFolio prima lo controlla e ti mostra cosa cambierebbe: nulla cambia finché non confermi."
+      "refresh": "Aggiorna"
     },
     "cleanup": {
       "title": "Pulizia automatica",
