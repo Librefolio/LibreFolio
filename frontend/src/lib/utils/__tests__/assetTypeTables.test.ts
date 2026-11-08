@@ -277,13 +277,21 @@ describe('asset type tables', () => {
             ['AssetCard.svelte', ASSET_CARD_SVELTE],
             ['ProviderComparisonModal.svelte', PROVIDER_COMPARISON_MODAL_SVELTE],
         ] as const;
+        // A call, with its argument: the import line names a helper too, and so does a
+        // comment such as «see assetTypeBadgeDotClass()», and neither draws anything.
+        const calls = (source: string, helper: string) => new RegExp(`\\b${helper}\\(\\s*[^)\\s]`).test(source);
+        // The views that build markup strings (AssetTable's cell, the asset pie's tooltip) take the whole badge from
+        // assetTypeBadgeHtml(), which reads both maps itself — checked first, so that path cannot skip them.
+        const sharedBadgeHtml = /export function assetTypeBadgeHtml\([^]*?\n}/.exec(read(ASSET_TYPES_TS))?.[0] ?? '';
         const missing: string[] = [];
+        for (const helper of ['assetTypeBadgeClass', 'assetTypeBadgeDotClass']) {
+            if (!calls(sharedBadgeHtml, helper)) missing.push(`assetTypes.ts assetTypeBadgeHtml: ${helper}()`);
+        }
         for (const [label, file] of views) {
             const source = read(file);
+            if (calls(source, 'assetTypeBadgeHtml')) continue;
             for (const helper of ['assetTypeBadgeClass', 'assetTypeBadgeDotClass']) {
-                // A call, with its argument: the import line names a helper too, and so does a
-                // comment such as «see assetTypeBadgeDotClass()», and neither draws anything.
-                if (!new RegExp(`\\b${helper}\\(\\s*[^)\\s]`).test(source)) missing.push(`${label}: ${helper}()`);
+                if (!calls(source, helper)) missing.push(`${label}: ${helper}()`);
             }
         }
 

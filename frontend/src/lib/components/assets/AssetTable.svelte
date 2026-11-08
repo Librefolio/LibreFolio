@@ -17,7 +17,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
-    import {assetTypeBadgeClass, assetTypeBadgeDotClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeHtml, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {publishAssetTableOrder, type AssetPanelId} from './assetBrowse';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
@@ -122,14 +122,9 @@
 
     function typeBadgeHtml(type: string | null | undefined): string {
         if (!type) return '<span class="text-lf-muted">—</span>';
-        const imgSrc = getAssetTypeIconUrl(type);
         // The badge colour follows the *family*, the wrapper; a subtype's dot, like its icon's pastille, says what
-        // it contains (designer, round 3).
-        // The maps are shared with AssetCard — see assetTypeBadgeClass() and assetTypeBadgeDotClass().
-        const cls = assetTypeBadgeClass(type);
-        const dot = assetTypeBadgeDotClass(type);
-        const label = $t(`assets.types.${type}`) || type;
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${escapeHtml(imgSrc)}" alt="" class="w-3.5 h-3.5 object-contain" data-hide-on-error="display" />${label}${dot ? `<span class="inline-block w-1.5 h-1.5 shrink-0 rounded-full ${dot}" aria-hidden="true" data-testid="asset-type-dot"></span>` : ''}</span>`;
+        // it contains (designer, round 3). The markup is shared with the asset pie's tooltip — see assetTypeBadgeHtml().
+        return assetTypeBadgeHtml(type, $t(`assets.types.${type}`) || type);
     }
 
     // =========================================================================
