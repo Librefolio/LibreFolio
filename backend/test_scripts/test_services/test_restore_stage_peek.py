@@ -6,12 +6,16 @@
   database is opened immutable: nothing is written beside it.
 - ``admin_avatar``: the picture an administrator's avatar URL names, among the copy's uploads; ``None`` without one, for a
   URL that is no upload of the copy, and for a link.
+- ``admin_avatar_addresses`` (A10): the active administrators' avatars set by a web address, by username; nothing for
+  an upload, another kind of text, or a check without its copy.
 
 How: a copy built under ``tmp_path`` as a check leaves it, with the ``users`` and ``user_settings`` tables of the models (the avatar is a setting of the account). Isolation: pure.
 """
 
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
@@ -131,6 +135,27 @@ def test_an_avatar_that_is_a_link_is_not_served(data_dir, tmp_path):
     outside.write_bytes(b"secret")
     (uploads / f"{AVATAR_ID}.png").symlink_to(outside)
     assert stage_peek.admin_avatar(data_dir, STAGE, "ada_admin") is None
+
+
+def test_an_avatar_set_by_address_is_given_to_the_page_as_it_is(data_dir):
+    """A10 (T-16): the developer's administrator has an avatar set by an address on another site. The report used to show
+    the initial: ``admin_avatar`` serves only the copy's uploads. The address is now given to the page, which shows it."""
+    print_section("admin_avatar_addresses")
+    assert stage_peek.admin_avatar_addresses(data_dir, STAGE) == {"zoe_admin": "https://example.org/zoe.png"}, "only the active administrators' addresses: an upload is read from the copy"
+    print_success("the address of zoe_admin, nothing else")
+
+
+def test_an_avatar_that_is_no_web_address_is_not_given(data_dir):
+    database = stage_data_dir(data_dir, STAGE) / "sqlite" / "app.db"
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.execute("UPDATE user_settings SET avatar_url = ? WHERE user_id = 2", ("javascript:alert(1)",))
+        conn.execute("UPDATE user_settings SET avatar_url = ? WHERE user_id = 1", ("http://example.org/ada.png",))
+    assert stage_peek.admin_avatar_addresses(data_dir, STAGE) == {"ada_admin": "http://example.org/ada.png"}
+
+
+@pytest.mark.parametrize("stage_id", ["b" * 32, "not-an-id"])
+def test_a_check_without_its_copy_gives_no_avatar_address(data_dir, stage_id):
+    assert stage_peek.admin_avatar_addresses(data_dir, stage_id) == {}
 
 
 # =====================================================================================================================
