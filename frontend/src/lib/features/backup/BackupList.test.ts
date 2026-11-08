@@ -24,7 +24,9 @@
  *     `deleteInstanceBackupJob(job_id)`, reads the list again and notifies `backup.deleted` `{job_id}`; a refused delete
  *     notifies `backup.delete.failed` `{code, what: 'remove', job_id}` with an `error` toast;
  *   - a failed read: `data-state="error"`, `backup-list-error` with `data-error-code` (`backupFailureCode`) and
- *     `backup-list-retry`, which reads again; an empty list is `ready` and says `backup.list.empty`.
+ *     `backup-list-retry`, which reads again; an empty list is `ready` and says `backup.list.empty`;
+ *   - `restore` (never on a sealed backup) opens `RestoreKeptModal` for that backup at once, with no confirmation of its
+ *     own (A10, T-15): the modal is `RestoreKeptModalStub` here, and goes when it calls `onClose`.
  *
  * The seams. `$lib/i18n` is an identity translator, so every label renders as its i18n key: the assertions name keys,
  * never translated text. `$lib/api` is a client that throws on any request, so nothing reaches the network.
@@ -83,13 +85,8 @@ vi.mock('./backupApi', async () => {
 
 vi.mock('$lib/utils/clipboard', () => ({writeTextToClipboard: vi.fn(() => Promise.resolve())}));
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
-// C9-9: «Restore» goes to Settings › Backup, where the restore card takes the request.
-const navigation = vi.hoisted(() => ({goto: vi.fn(() => Promise.resolve())}));
-vi.mock('$app/navigation', () => ({goto: navigation.goto}));
-vi.mock('$app/stores', async () => {
-    const {readable} = await import('svelte/store');
-    return {page: readable({url: new URL('http://localhost/files?tab=backup')})};
-});
+// A10: «Restore» opens a modal of its own, here; what the modal does is RestoreKeptModal.test.ts.
+vi.mock('./RestoreKeptModal.svelte', async () => ({default: (await import('$test/harness/RestoreKeptModalStub.svelte')).default}));
 // The table keeps its column preferences under a user-scoped key; the real one reaches the authentication store.
 vi.mock('$lib/utils/storage', () => ({getUserStorageKey: (key: string) => `backup-list-test-${key}`}));
 
@@ -501,7 +498,7 @@ describe('BackupList — a read that fails', () => {
 });
 
 // =====================================================================================================================
-// C9-9 — «Restore» on a kept backup: asked first, then handed to the restore card of Settings › Backup
+// C9-9, A10 (T-15) — «Restore» on a kept backup opens its modal, where the list is
 // =====================================================================================================================
 
 describe('BackupList — restore a kept backup (C9-9)', () => {
@@ -513,18 +510,18 @@ describe('BackupList — restore a kept backup (C9-9)', () => {
         expect(within(await openRowMenu(jobId(3))).queryByTestId('context-menu-action-restore')).toBeNull();
     });
 
-    it('asked first; confirmed, the request is handed over and the page goes to Settings › Backup', async () => {
-        const {restoreRequest} = await import('./restoreRequest.svelte');
-        restoreRequest.jobId = null;
-        navigation.goto.mockClear();
-        await mountReady([entry(1)]);
-        await fireEvent.click(within(await openRowMenu(jobId(1))).getByTestId('context-menu-action-restore'));
+    it('A10: opens the modal of that backup at once, with no «are you sure?»; closed, the modal goes', async () => {
+        // T-15: the developer expected a modal, not the restore card filled in, nor a jump to Settings.
+        await mountReady([entry(1), entry(2)]);
+        expect(screen.queryByTestId('restore-kept-modal-stub')).toBeNull();
+        await fireEvent.click(within(await openRowMenu(jobId(2))).getByTestId('context-menu-action-restore'));
 
-        expect(await screen.findByTestId('confirm-modal-confirm')).toBeInTheDocument();
-        expect(restoreRequest.jobId, 'nothing before the confirmation').toBeNull();
-        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        const modal = await screen.findByTestId('restore-kept-modal-stub');
+        expect(screen.queryByTestId('confirm-modal-confirm'), 'the modal itself says what a restore does').toBeNull();
+        expect(modal).toHaveAttribute('data-job-id', jobId(2));
+        expect(modal).toHaveAttribute('data-created-at', entry(2).created_at);
 
-        await waitFor(() => expect(restoreRequest.jobId).toBe(jobId(1)));
-        expect(navigation.goto).toHaveBeenCalledWith('/settings?tab=backup');
+        await fireEvent.click(screen.getByTestId('restore-kept-modal-stub-close'));
+        await waitFor(() => expect(screen.queryByTestId('restore-kept-modal-stub')).toBeNull());
     });
 });

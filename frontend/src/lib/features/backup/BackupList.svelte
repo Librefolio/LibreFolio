@@ -5,6 +5,8 @@
   Self-contained: it reads the list when it mounts and again whenever the backup card says a backup ended or was
   deleted (`backupListSignal`), so the Backup tab of Settings and the Files page can show it as it is.
 
+  «Restore» on a row opens `RestoreKeptModal`, here (A10).
+
   Published state: `data-state` (`loading` until the first list comes, `ready`, `error` after a read that failed),
   `data-busy` while a read is out. Events: `backup.list.sha.copied`, `backup.download.started`, `backup.deleted`,
   `backup.delete.failed`.
@@ -12,10 +14,6 @@
 <script lang="ts">
     import {onMount, untrack} from 'svelte';
     import {ArchiveRestore, Download, RefreshCw, Trash2, TriangleAlert} from 'lucide-svelte';
-    import {goto} from '$app/navigation';
-    import {page} from '$app/stores';
-    import {get} from 'svelte/store';
-    import {requestRestoreFromKept} from './restoreRequest.svelte';
     import {DataTable, type ColumnDef, type RowAction} from '$lib/components/table';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -23,6 +21,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {backupFailureCode, backupKind, deleteInstanceBackupJob, instanceBackupFileUrl, listInstanceBackups, type InstanceBackupEntry} from './backupApi';
     import {backupListSignal, shortHash} from './backupList.svelte';
+    import RestoreKeptModal from './RestoreKeptModal.svelte';
 
     let entries = $state<InstanceBackupEntry[] | null>(null);
     let failed = $state(false);
@@ -76,11 +75,11 @@
         notify({name: 'backup.download.started', detail: {job_id: entry.job_id}});
     }
 
-    /** C9-9: restore a kept backup without downloading it: the restore card of Settings › Backup takes it from here. */
-    async function restore(entry: InstanceBackupEntry) {
-        requestRestoreFromKept(entry.job_id);
-        const here = get(page).url;
-        if (here.pathname !== '/settings' || here.searchParams.get('tab') !== 'backup') await goto('/settings?tab=backup');
+    // A10 (T-15): restore a kept backup without downloading it, in a modal of its own, here (C9-9 sent it to the card).
+    let restoring = $state<InstanceBackupEntry | null>(null);
+
+    function restore(entry: InstanceBackupEntry) {
+        restoring = entry;
     }
 
     async function remove(entry: InstanceBackupEntry) {
@@ -151,7 +150,8 @@
     const rowActions: RowAction<InstanceBackupEntry>[] = [
         {id: 'download', icon: Download, label: () => $_('backup.list.actions.download'), onClick: download},
         // C9-9: a sealed backup opens only with its recipients' private key: it is not restored here.
-        {id: 'restore', icon: ArchiveRestore, label: () => $_('backup.list.actions.restore'), onClick: restore, visible: (row) => !row.sealed, requireConfirm: true, confirmMessage: () => $_('backup.list.restoreConfirm')},
+        // A10: no «are you sure?» here: the modal says what a restore does, and its report asks for a typed word.
+        {id: 'restore', icon: ArchiveRestore, label: () => $_('backup.list.actions.restore'), onClick: restore, visible: (row) => !row.sealed},
         {id: 'delete', icon: Trash2, label: () => $_('backup.list.actions.delete'), onClick: remove, requireConfirm: true, confirmMessage: () => $_('backup.list.deleteConfirm')},
     ];
 
@@ -193,3 +193,7 @@
         />
     {/if}
 </div>
+
+{#if restoring}
+    <RestoreKeptModal jobId={restoring.job_id} createdAt={restoring.created_at} onClose={() => (restoring = null)} />
+{/if}

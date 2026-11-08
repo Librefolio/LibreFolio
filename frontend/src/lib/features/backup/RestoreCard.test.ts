@@ -124,7 +124,7 @@ vi.mock('./backupApi', async () => {
         restoreOutcome: vi.fn(),
         // C9-6: the checks waiting for a decision; none unless a case says otherwise.
         listWaitingRestoreChecks: vi.fn(() => Promise.resolve([])),
-        // C9-9: a kept backup taken as the archive.
+        // C9-9: a kept backup taken as the archive: the modal's (A10), never the card's.
         restoreFromKeptBackup: vi.fn(),
         // B4: the download card beside this one in BackupTab may read the options of a secure backup as it mounts.
         getInstanceBackupOptions: vi.fn(() => Promise.resolve({password_rules: [{code: 'min_length', value: 12}, {code: 'uppercase'}, {code: 'lowercase'}, {code: 'digit'}, {code: 'special'}]})),
@@ -1499,24 +1499,26 @@ describe('C9-6 — RestoreCard: the checks waiting for a decision', () => {
 });
 
 // =====================================================================================================================
-// C9-9 — the card takes a «Restore» asked from a list of kept backups
+// A10 (T-15) — a kept backup is restored in its own modal: the card reads its state again when the modal says so
 // =====================================================================================================================
 
-describe('C9-9 — RestoreCard: a kept backup asked from the list', () => {
-    it('a pending request is taken once the card is idle: the backup checked from the server, nothing uploaded', async () => {
-        const {restoreRequest} = await import('./restoreRequest.svelte');
-        const fromKept = vi.mocked(backupApi.restoreFromKeptBackup);
-        fromKept.mockResolvedValueOnce({upload_id: UPLOAD_ID, size: 4096, kind: 'zip'});
-        api.startRestoreCheck.mockResolvedValueOnce(runningStage());
-        restoreRequest.jobId = 'aa112233445566778899aabbccddeeff';
-
+describe('A10 — RestoreCard: told by the modal of a kept backup, it reads its state again', () => {
+    it('idle: the status and the waiting checks are read again, and the check left for later shows to resume', async () => {
+        const {notifyRestoreChanged} = await import('./restoreSignal.svelte');
+        const waitingList = vi.mocked(backupApi.listWaitingRestoreChecks);
+        const held = {stage_id: STAGE_ID, status: 'done' as const, created_at: '2026-10-16T09:00:00Z', finished_at: '2026-10-16T09:01:00Z', expires_at: '2026-10-17T09:01:00Z', restorable: true};
         await mount();
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(screen.queryByTestId('restore-waiting-check')).toBeNull();
+        const reads = api.getRestoreStatus.mock.calls.length;
+
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+        waitingList.mockResolvedValueOnce([held]);
+        notifyRestoreChanged();
         await settle();
 
-        expect(fromKept).toHaveBeenCalledWith('aa112233445566778899aabbccddeeff');
-        expect(api.uploadRestoreArchive).not.toHaveBeenCalled();
-        expect(api.startRestoreCheck).toHaveBeenCalledWith(UPLOAD_ID);
-        expect(restoreRequest.jobId, 'taken once').toBeNull();
-        expect(card()).toHaveAttribute('data-state', 'checking');
+        expect(api.getRestoreStatus.mock.calls.length, 'the status read once more').toBe(reads + 1);
+        expect(screen.getByTestId('restore-waiting-check')).toHaveAttribute('data-stage-id', STAGE_ID);
+        expect(vi.mocked(backupApi.restoreFromKeptBackup), 'the card never restores a kept backup itself').not.toHaveBeenCalled();
     });
 });
