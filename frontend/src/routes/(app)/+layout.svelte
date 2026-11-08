@@ -75,7 +75,8 @@
     // Track SPA navigation depth for smart back-navigation
     afterNavigate((nav) => {
         const url = nav.to?.url;
-        trackNavigation(nav.type, url ? url.pathname + url.search : undefined);
+        const from = nav.from?.url;
+        trackNavigation(nav.type, url ? url.pathname + url.search : undefined, from ? from.pathname + from.search : undefined);
         // On fresh page load (enter = bookmark/refresh/direct link), seed global date range from URL
         if (nav.type === 'enter' && url) {
             seedFromUrl(url.searchParams);
