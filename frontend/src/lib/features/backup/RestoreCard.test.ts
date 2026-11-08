@@ -1499,10 +1499,10 @@ describe('C9-6 — RestoreCard: the checks waiting for a decision', () => {
 });
 
 // =====================================================================================================================
-// A10 (T-15) — a kept backup is restored in its own modal: the card reads its state again when the modal says so
+// A10 (T-15) — every restore goes on in a window; the card keeps the choice, the checks left for later, a confirmed restore
 // =====================================================================================================================
 
-describe('A10 — RestoreCard: told by the modal of a kept backup, it reads its state again', () => {
+describe('A10 — RestoreCard: every restore in a window; told by the modal of a kept backup, it reads its state again', () => {
     it('idle: the status and the waiting checks are read again, and the check left for later shows to resume', async () => {
         const {notifyRestoreChanged} = await import('./restoreSignal.svelte');
         const waitingList = vi.mocked(backupApi.listWaitingRestoreChecks);
@@ -1520,5 +1520,59 @@ describe('A10 — RestoreCard: told by the modal of a kept backup, it reads its 
         expect(api.getRestoreStatus.mock.calls.length, 'the status read once more').toBe(reads + 1);
         expect(screen.getByTestId('restore-waiting-check')).toHaveAttribute('data-stage-id', STAGE_ID);
         expect(vi.mocked(backupApi.restoreFromKeptBackup), 'the card never restores a kept backup itself').not.toHaveBeenCalled();
+    });
+
+    it('T-15: an archive from the computer goes on in a window: its name, the upload, then the check', async () => {
+        await mount();
+        const sending = deferred<RestoreUpload>();
+        api.uploadRestoreArchive.mockReturnValueOnce(sending.promise);
+        await choose(archive(4096, 'my-backup.zip'));
+
+        const window = screen.getByTestId('restore-steps-modal');
+        expect(within(window).getByTestId('restore-upload-progress')).toBeInTheDocument();
+        expect(within(window).getByTestId('restore-steps-subtitle')).toHaveTextContent('my-backup.zip');
+        expect(within(card()).queryByTestId('restore-upload-progress'), 'nothing of it on the card').toBeNull();
+
+        api.startRestoreCheck.mockResolvedValueOnce(runningStage());
+        sending.resolve(uploaded());
+        await settle();
+        expect(within(screen.getByTestId('restore-steps-modal')).getByTestId('restore-check-progress')).toBeInTheDocument();
+    });
+
+    it('T-15: closing the window while the check runs leaves it for later: nothing dropped, listed to resume', async () => {
+        await checkingCard();
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+        vi.mocked(backupApi.listWaitingRestoreChecks).mockResolvedValueOnce([{stage_id: STAGE_ID, status: 'running', created_at: '2026-10-16T09:00:00Z', finished_at: null, expires_at: null, restorable: null}]);
+
+        await fireEvent.click(screen.getByTestId('restore-close'));
+        await settle();
+
+        expect(api.deleteRestoreCheck).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('restore-steps-modal')).toBeNull();
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(screen.getByTestId('restore-waiting-check')).toHaveAttribute('data-status', 'running');
+    });
+
+    it('T-15: closing the report leaves its check for later: the card lists it, «Resume» opens the report again', async () => {
+        await checkingCard();
+        api.getRestoreCheck.mockResolvedValueOnce(doneStage());
+        await elapse(POLL_MS);
+        expect(screen.getByTestId('restore-report')).toBeInTheDocument();
+        expect(screen.queryByTestId('restore-open-report'), 'no «Read the report» on the card').toBeNull();
+
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+        const held = {stage_id: STAGE_ID, status: 'done' as const, created_at: '2026-10-16T09:00:00Z', finished_at: '2026-10-16T09:01:00Z', expires_at: '2026-10-17T09:01:00Z', restorable: true};
+        vi.mocked(backupApi.listWaitingRestoreChecks).mockResolvedValueOnce([held]);
+        await fireEvent.click(screen.getByTestId('restore-report-close'));
+        await settle();
+
+        expect(api.deleteRestoreCheck).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('restore-report')).toBeNull();
+        expect(screen.getByTestId('restore-waiting-check')).toHaveAttribute('data-stage-id', STAGE_ID);
+
+        api.getRestoreCheck.mockResolvedValueOnce(doneStage());
+        await fireEvent.click(screen.getByTestId('restore-waiting-resume'));
+        await settle();
+        expect(screen.getByTestId('restore-report')).toBeInTheDocument();
     });
 });

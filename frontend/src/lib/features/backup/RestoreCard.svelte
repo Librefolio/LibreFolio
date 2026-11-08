@@ -6,9 +6,9 @@
   `data-busy`. Events: `backup.restore.*` (`restoreFlow.svelte.ts`); a failure also raises an error toast.
 
   A secure backup (an .lfbk, lot B4) asks for its password before it is sent (state `password`); a wrong password asks
-  again, and the file is not sent again. Those steps are drawn by `RestoreFlowSteps`, shared with the modal that restores a
-  kept backup (A10, T-15): «Restore» on a row of the kept backups opens that modal, and the card only lists the checks
-  waiting for a decision, to resume or discard.
+  again, and the file is not sent again. A10 (T-15): every restore goes on in a window: those steps in `RestoreStepsModal`
+  (shared with the modal of a kept backup, which «Restore» on a row of the list opens), then the report's. The card keeps
+  the choice of an archive, the checks waiting for a decision (to resume or discard), and a restore confirmed.
 -->
 <script lang="ts">
     import {onMount, untrack} from 'svelte';
@@ -21,7 +21,7 @@
     import RestartOverlay from './RestartOverlay.svelte';
     import {verifyRestorePassword} from './backupApi';
     import {restoreSignal} from './restoreSignal.svelte';
-    import RestoreFlowSteps from './RestoreFlowSteps.svelte';
+    import RestoreStepsModal from './RestoreStepsModal.svelte';
     import {restoreErrorKey, restoreReasonKey, restoreWaitingKey} from './restoreText';
 
     const controller = new RestoreFlowController({
@@ -35,7 +35,8 @@
     });
 
     let fileInput = $state<HTMLInputElement | null>(null);
-    let reportOpen = $state(true);
+    // A10 (T-15): the name of the archive chosen on the computer, under the title of its window.
+    let chosenName = $state<string | null>(null);
 
     onMount(() => {
         void controller.load();
@@ -51,10 +52,16 @@
         });
     });
 
-    // A new report opens the modal.
-    $effect(() => {
-        if (controller.state === 'report') reportOpen = true;
-    });
+    // A10 (T-15): every restore goes on in a window. Before its report: the password of a secure backup, the archive sent, its
+    // check; a request out to drop it or to confirm it. A cancel of a confirmed restore stays on the card.
+    const stepsOpen = $derived(controller.state === 'password' || controller.state === 'uploading' || controller.state === 'checking' || controller.state === 'confirming' || (controller.state === 'cancelling' && controller.stage !== null));
+
+    /** The window closed: a secure backup forgets its password, an upload stops, a check under way goes on, listed to resume. */
+    function closeSteps() {
+        if (controller.state === 'password') controller.cancelPassword();
+        else if (controller.state === 'uploading') controller.abortUpload();
+        else if (controller.state === 'checking') void controller.later();
+    }
 
     // Developer decision P8: a restore kept says nothing (the data shows it); one rolled back says why.
     const lastResult = $derived(controller.state === 'idle' && controller.status?.state === 'rolled_back' ? controller.status : null);
@@ -67,7 +74,9 @@
         const input = event.currentTarget as HTMLInputElement;
         const file = input.files?.[0];
         input.value = '';
-        if (file) void controller.upload(file);
+        if (!file) return;
+        chosenName = file.name;
+        void controller.upload(file);
     }
 </script>
 
@@ -134,33 +143,6 @@
             <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
             <span>{$_('backup.restore.last.rolledBack', {values: {date: formatDateTime(lastResult.finished_at ?? ''), reason: $_(restoreReasonKey(lastResult.reason))}})}</span>
         </div>
-    {/if}
-
-    <RestoreFlowSteps {controller} />
-
-    {#if controller.state === 'report' && controller.report}
-        <div class="flex flex-wrap items-center gap-2" data-testid="restore-report-ready" data-restorable={controller.report.restorable ? 'true' : 'false'}>
-            <button
-                class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-                type="button"
-                data-testid="restore-open-report"
-                onclick={() => (reportOpen = true)}
-            >
-                <FileArchive size={16} aria-hidden="true" />
-                {$_('backup.restore.openReport')}
-            </button>
-        </div>
-        <RestoreReportModal
-            open={reportOpen}
-            report={controller.report}
-            busy={false}
-            onConfirm={(ownerUserId) => controller.confirm(ownerUserId)}
-            onDrop={() => controller.dropCheck()}
-            onLater={() => void controller.later()}
-            stageId={controller.stage?.stage_id ?? null}
-            onVerify={(username, password) => verifyRestorePassword(controller.stage?.stage_id ?? '', username, password)}
-            onClose={() => (reportOpen = false)}
-        />
     {/if}
 
     {#if controller.state === 'pending' && controller.status}
@@ -251,6 +233,25 @@
         {/if}
     {/if}
 </section>
+
+{#if stepsOpen}
+    <RestoreStepsModal {controller} title={$_('backup.restore.title')} subtitle={controller.state === 'uploading' || controller.state === 'password' ? chosenName : null} testIdPrefix="restore" onClose={closeSteps} />
+{/if}
+
+{#if controller.state === 'report' && controller.report}
+    <!-- A10 (T-15): closing the report leaves its check for later: the card lists it, and «Resume» opens it again. -->
+    <RestoreReportModal
+        open
+        report={controller.report}
+        busy={false}
+        onConfirm={(ownerUserId) => controller.confirm(ownerUserId)}
+        onDrop={() => controller.dropCheck()}
+        onLater={() => void controller.later()}
+        stageId={controller.stage?.stage_id ?? null}
+        onVerify={(username, password) => verifyRestorePassword(controller.stage?.stage_id ?? '', username, password)}
+        onClose={() => void controller.later()}
+    />
+{/if}
 
 {#if controller.state === 'restarting' && controller.outcome !== null}
     <RestartOverlay outcome={controller.outcome} slow={controller.slow} notStopping={controller.notStopping} status={controller.outcomeStatus} unreadableReason={controller.unreadableReason} onBack={() => controller.load()} />

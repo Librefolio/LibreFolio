@@ -1,7 +1,7 @@
 <!--
   «Restore» on a row of the kept backups (A10, T-15; C9-9 before): a modal of its own, where the list is, with the steps of
   the restore from the backup taken on the server to the restart. The password of a secure backup and the check on a copy
-  are drawn here (`RestoreFlowSteps`); the report, the password check of an administrator and the confirmation are the
+  are drawn in `RestoreStepsModal`, the window the restore card opens for an archive from the computer too; the report, the password check of an administrator and the confirmation are the
   report's modal (`RestoreReportModal`), then the overlay of the restart (`RestartOverlay`). The restore card stays for an
   archive from the computer, and for the checks left for later.
 
@@ -15,14 +15,13 @@
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
-    import {ArchiveRestore, LoaderCircle, RefreshCw, ShieldAlert, TriangleAlert, X} from 'lucide-svelte';
-    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import {LoaderCircle, RefreshCw, TriangleAlert} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {verifyRestorePassword} from './backupApi';
     import {RestoreFlowController} from './restoreFlow.svelte';
-    import RestoreFlowSteps from './RestoreFlowSteps.svelte';
+    import RestoreStepsModal from './RestoreStepsModal.svelte';
     import RestoreReportModal from './RestoreReportModal.svelte';
     import RestartOverlay from './RestartOverlay.svelte';
     import {notifyRestoreChanged} from './restoreSignal.svelte';
@@ -106,33 +105,8 @@
         onClose={() => void later()}
     />
 {:else if controller.state !== 'restarting'}
-    <ModalBase open maxWidth="lg" onRequestClose={close} testId="restore-kept-modal" labelledBy="restore-kept-title" trapFocus restoreFocus>
-        <div class="space-y-4 p-5 text-lf-primary" data-testid="restore-kept" data-state={controller.state} data-error-code={controller.errorCode ?? ''} data-busy={controller.busy ? 'true' : 'false'} aria-busy={controller.busy}>
-            <header class="flex items-start justify-between gap-3">
-                <div class="flex items-start gap-3">
-                    <ArchiveRestore class="mt-0.5 shrink-0 text-lf-secondary" size={22} aria-hidden="true" />
-                    <div class="space-y-1">
-                        <h2 id="restore-kept-title" class="text-base font-semibold text-lf-primary">{$_('backup.restore.kept.title')}</h2>
-                        <p class="text-sm text-lf-secondary" data-testid="restore-kept-backup">{$_('backup.restore.kept.backupOf', {values: {date: formatDateTime(createdAt)}})}</p>
-                    </div>
-                </div>
-                <button
-                    class="rounded-lg p-1 text-lf-muted hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
-                    type="button"
-                    aria-label={$_('common.close')}
-                    data-testid="restore-kept-close"
-                    disabled={controller.state === 'confirming' || controller.state === 'cancelling'}
-                    onclick={close}
-                >
-                    <X size={18} aria-hidden="true" />
-                </button>
-            </header>
-
-            <p class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" data-testid="restore-kept-replace-notice">
-                <ShieldAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
-                <span>{$_('backup.restore.replaceNotice')}</span>
-            </p>
-
+    <RestoreStepsModal {controller} title={$_('backup.restore.kept.title')} subtitle={$_('backup.restore.kept.backupOf', {values: {date: formatDateTime(createdAt)}})} testIdPrefix="restore-kept" hideSteps={working || alreadyWaiting} onClose={close}>
+        <div class="space-y-4" data-testid="restore-kept" data-state={controller.state} data-error-code={controller.errorCode ?? ''} data-busy={controller.busy ? 'true' : 'false'} aria-busy={controller.busy}>
             {#if working}
                 <p class="flex items-center gap-2 text-sm text-lf-secondary" data-testid="restore-kept-preparing">
                     <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
@@ -143,8 +117,6 @@
                     <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
                     <span>{$_('backup.restore.kept.alreadyWaiting')}</span>
                 </p>
-            {:else}
-                <RestoreFlowSteps {controller} testIdPrefix="restore-kept" />
             {/if}
 
             {#if controller.state === 'failed' && controller.errorCode !== null}
@@ -165,7 +137,7 @@
                 </div>
             {/if}
         </div>
-    </ModalBase>
+    </RestoreStepsModal>
 {/if}
 
 {#if controller.state === 'restarting' && controller.outcome !== null}
