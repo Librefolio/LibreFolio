@@ -5,11 +5,12 @@
  * (`settings-tab-administration`, on the right). The group stands for its members — Global Settings (`admin`), Users,
  * Backup, Email and Security —, every one of them an administrator's, which a second bar inside `settings-subtabs`
  * shows while one of them is open. A member of the instance has no group, no second bar and no member tab (N69-2,
- * decision D4 a; `routes/(app)/settings/+page.svelte`, `settingsTabs.ts`). A member tab is therefore never clicked
+ * decision D4 a; `routes/(app)/settings/[...path]/+page.svelte`, `settingsTabs.ts`). A member tab is therefore never clicked
  * from the top bar: {@link openSettingsTab} goes through the group.
  *
- * `?tab=` needs no helper: `?tab={member}` opens that member directly inside its group (the second bar drawn for an
- * administrator), and `?tab=administration` opens the group's first member.
+ * An address needs no helper (lot B10): `/settings/<tab>` and `/settings/admin/<tab>` open that tab directly, inside its
+ * group for a member (`settingsPaths.ts`), and `/settings/admin` the group's first member. The `?tab=` of 1.2 still
+ * works the same way, and is replaced by the tab's address.
  */
 import {expect, type Locator, type Page} from './playwright';
 
