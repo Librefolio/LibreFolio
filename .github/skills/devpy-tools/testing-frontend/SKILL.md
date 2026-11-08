@@ -106,9 +106,9 @@ what the 8 categories are verified against (629 Playwright + 687 vitest passing)
 !!! warning "Under `--coverage js` the groups are split into batches of 8"
     The batches date from the V8 era, when a consolidated worker accumulated coverage for its whole lifetime.
     Measured then: 8 specs finish comfortably, 25 specs die at the heap limit — and the failure lands on an innocent
-    test with a duration of `0ms`. Today the `jsCoverage` fixture writes one file per test and keeps nothing in memory,
-    but the batches of `_JS_COVERAGE_CHUNK` (8, `scripts/test_runner/_consolidate.py`) stay as a bound on how long a
-    worker lives. If a run starts dying again, lower that constant; do **not** raise `--max-old-space-size`, which only
+    test with a duration of `0ms`. Today each worker holds an istanbul map of its tests' coverage, bounded by the size
+    of the build rather than by the number of tests, but the batches of `_JS_COVERAGE_CHUNK` (8,
+    `scripts/test_runner/_consolidate.py`) stay as a bound on how long a worker lives. If a run starts dying again, lower that constant; do **not** raise `--max-old-space-size`, which only
     postpones the crash.
 
 !!! warning "Never run two Playwright invocations in one lane"
@@ -252,16 +252,22 @@ import type {Page} from '../fixtures/playwright';
 
 `e2e/fixtures/playwright.ts` re-exports the same symbols and adds the `auto` fixture `jsCoverage`, which works only
 when the flag is on — at flag off it returns at once and costs nothing. In its teardown it reads `window.__coverage__`
-from every page of the test and writes one JSON file per test into `frontend/coverage-js/e2e-raw/` (about 17 MB on
-the instrumented build); nothing is accumulated in memory. The teardown has a budget of its own,
+from every page of the test (about 17 MB on the instrumented build) and merges it, with `istanbul-lib-coverage`, into
+the worker's sum held by the worker-scoped fixture `jsCoverageSink` (`e2e/fixtures/js-coverage-sink.ts`). The sum is
+written to one file per worker, `frontend/coverage-js/e2e-raw/worker-<parallelIndex>-<pid>.json`, every 20 tests and
+at worker teardown, through a `.tmp` file and a rename; a new worker absorbs, then deletes, the files of dead workers
+of its `parallelIndex`, so a full run leaves about one file per parallel slot instead of ~30 GB of per-test files. A
+worker killed outright loses at most the tests since its last write. The teardown has a budget of its own,
 `JS_COVERAGE_TIMEOUT_MS` (120 s): without it the collection was charged to the test's after-hooks slot (30 s) and,
 under load, turned green tests red (V-28). A collection that overruns fails as «Fixture "jsCoverage" timeout …
 exceeded during teardown», never as a slow test.
 
 Key files:
 - `frontend/vite.config.ts`: the istanbul instrumentation, on with `COVERAGE_INSTRUMENT=1`
-- `frontend/e2e/fixtures/playwright.ts`: the `jsCoverage` fixture
-- `frontend/scripts/js-coverage-report.js`: merges the per-test files (and the vitest `coverage-final.json`) with
+- `frontend/e2e/fixtures/playwright.ts`: the `jsCoverage` and `jsCoverageSink` fixtures
+- `frontend/e2e/fixtures/js-coverage-sink.ts`: the worker's running sum, its write policy and the absorbing of dead
+  workers' files
+- `frontend/scripts/js-coverage-report.js`: merges the worker files (and the vitest `coverage-final.json`) with
   `istanbul-lib-coverage` into a report
 
 Reports: `frontend/coverage-js/e2e/` (Playwright only), `frontend/coverage-js/unit-combined/` (vitest only), and
