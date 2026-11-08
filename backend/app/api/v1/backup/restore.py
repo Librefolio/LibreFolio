@@ -213,6 +213,7 @@ def _report_view(report: StagingReport) -> RestoreStageReport:
         secrets_rekeyed=report.secrets_rekeyed,
         secrets_unreadable=RestoreSecretCounts(system=report.secrets_unreadable.system, user=report.secrets_unreadable.user),
         administrators=report.administrators,
+        administrator_avatar_addresses=stage_peek.admin_avatar_addresses(get_data_dir(), report.stage_id),
         warnings=report.warnings,
         control_totals=report.control_totals,
         control_totals_differences=[RestoreTotalsDifference(**line.model_dump()) for line in report.control_totals_differences],

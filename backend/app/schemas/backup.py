@@ -303,6 +303,9 @@ class RestoreStageReport(BaseModel):
     secrets_rekeyed: int = Field(ge=0)
     secrets_unreadable: RestoreSecretCounts
     administrators: list[str]
+    # A10: the avatars of administrators set by an address on another site (http or https), by username; the page shows
+    # them as it shows any avatar set by address. An uploaded avatar is read from the copy (GET .../avatar/{username}).
+    administrator_avatar_addresses: dict[str, str] = {}
     warnings: list[
         Literal[
             "rows_changed",

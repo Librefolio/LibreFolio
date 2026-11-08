@@ -6,6 +6,8 @@ it in place. Two things an administrator may ask of it before confirming:
 - ``verify_admin_password``: whether a password is the one an administrator of the backup signs in with after the
   restore. The hash is read from the copy's database and compared with bcrypt, never logged, kept or sent back.
 - ``admin_avatar``: the avatar picture of an administrator of the backup, read from the copy's uploaded files.
+- ``admin_avatar_addresses``: the avatars of the backup's administrators set by an address on another site, which the
+  browser shows as it is (A10): the server never fetches them.
 
 Both read the copy only, never the live data, and never through a link. The database is opened read-only and immutable:
 nothing is written beside it. A copy that is gone (dropped, expired, or given back because of the space limit) is
@@ -19,12 +21,17 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
+from backend.app.logging_config import get_logger
 from backend.app.services.accounts.auth_service import verify_password_or_dummy
 from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, is_job_id, is_plain_dir, stage_data_dir
+
+logger = get_logger(__name__)
 
 #: A file id of the uploads (a UUID), as the avatar URL of an account names it: ``/api/v1/uploads/file/<id>``.
 _UPLOAD_URL = re.compile(r"^/api/v1/uploads/(?:file/)?([0-9a-fA-F-]{8,64})(?:[/?].*)?$")
 _EXTENSION = re.compile(r"^\.[A-Za-z0-9]{1,8}$")
+#: An avatar set by address (A10): a web address on another site, shown by the browser as it is, never fetched here.
+_ADDRESS = re.compile(r"^https?://[^\s\"'<>\\]+$", re.IGNORECASE)
 
 
 class StageCopyGoneError(Exception):
@@ -82,3 +89,21 @@ def admin_avatar(data_dir: Path, stage_id: str, username: str) -> Path | None:
         if candidate.stem == file_id and candidate.suffix != ".json" and _EXTENSION.match(candidate.suffix) and candidate.is_file() and not candidate.is_symlink():
             return candidate
     return None
+
+
+def admin_avatar_addresses(data_dir: Path, stage_id: str) -> dict[str, str]:
+    """The avatars of the backup's active administrators that are an address on another site (``http(s)://``), by
+    username (A10, T-16): the page shows them as the app shows any avatar set by address. The server never fetches
+    them; an uploaded avatar is served by ``admin_avatar``. ``{}`` for a check without its copy, or one whose database
+    cannot be read: the report then shows the initials, as for an account without an avatar."""
+    try:
+        database = (_copy(data_dir, stage_id) / DATABASE_ENTRY).resolve()
+        with closing(sqlite3.connect(f"{database.as_uri()}?immutable=1", uri=True)) as conn:
+            rows = conn.execute("SELECT u.username, s.avatar_url FROM users AS u JOIN user_settings AS s ON s.user_id = u.id WHERE u.is_superuser = 1 AND u.is_active = 1 AND s.avatar_url IS NOT NULL").fetchall()
+    except StageCopyGoneError:
+        return {}
+    except sqlite3.DatabaseError as exc:
+        # The report is shown anyway: a copy whose settings cannot be read only loses the pictures (initials instead).
+        logger.warning("The avatars of a backup's administrators could not be read on its copy", stage_id=stage_id, error=type(exc).__name__)
+        return {}
+    return {str(username): str(url) for username, url in rows if _ADDRESS.match(str(url))}
