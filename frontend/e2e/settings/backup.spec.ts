@@ -1266,7 +1266,7 @@ restoreTest.describe('Settings › Backup — a restore of the instance', () => 
         await expect(page.getByTestId('restart-back')).toBeVisible();
         const rolledBack = await waitForEvent(page, 'backup.restore.rolled_back', {since});
         expect(rolledBack.detail).toEqual({reason: 'first_start_failed'});
-        await expect(page, 'a restore rolled back keeps the page: no sign-in').toHaveURL((url) => url.pathname === '/settings');
+        await expect(page, 'a restore rolled back keeps the page: no sign-in').toHaveURL((url) => url.pathname === '/settings/admin/backup');
         expectTicketInItsHeaderOnly(lane);
 
         // Back to the tab: the status read again, as the restarted server tells it.
@@ -1294,7 +1294,7 @@ restoreTest.describe('Settings › Backup — a restore of the instance', () => 
         await expect(overlay).toHaveAttribute('data-waiting', 'instance_blocked');
         await expect(overlay).toHaveAttribute('data-reason', '');
         await expect(page.getByTestId('restart-back')).toBeVisible();
-        await expect(page, 'not applied: the page stays, no sign-in').toHaveURL((url) => url.pathname === '/settings');
+        await expect(page, 'not applied: the page stays, no sign-in').toHaveURL((url) => url.pathname === '/settings/admin/backup');
         // Read once the overlay says it: a restore not applied is told by the overlay alone, as no failure.
         expect(await eventNamesSince(page, since), 'no failure announced').not.toContain('backup.restore.failed');
         expectTicketInItsHeaderOnly(lane);
