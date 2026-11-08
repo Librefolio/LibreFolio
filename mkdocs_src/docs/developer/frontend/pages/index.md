@@ -283,10 +283,12 @@ frontend/src/routes/
   Plugins and About, then, for a superuser only, the **Administration** group on the right, whose
   tabs show in a second bar: Global Settings, Users, Backup, Email and Security (since lot N69-2 a
   regular user has none of them, so no group).
-  `?tab=<id>` opens a tab the user can see, from the first render, inside its group for a member;
-  `?tab=administration` opens the group's first tab; an unknown or hidden id is ignored (a regular
-  user's `?tab=admin` opens Profile), and a value
-  is applied once, so a page update that keeps it does not take back a tab the user clicked. The
+  Every tab has an address (lot B10): `/settings/<tab>` for Profile, Preferences, Plugins and About,
+  `/settings/admin/<tab>` for the group (`global`, `users`, `backup`, `email`, `security`), and
+  `/settings/admin` for its first tab. The route is `settings/[...path]`. An address opens its tab
+  from the first render, choosing a tab writes its address, an unknown address or a hidden tab goes
+  back to `/settings`, the first tab. The `?tab=<id>` of 1.2 still opens its tab and is replaced by
+  the tab's address. The
   Security tab's badge, summed on Administration, counts the security checks that need attention
 - **ProfileTab**: Avatar editing via AssetPickerModal, username and email editing, account
   deletion through `AccountDeletionDialog`

@@ -590,7 +590,7 @@ Warning» in [Global Settings](../../../../admin/settings.md); why it is only ad
 | `id` | `accounts.openRegistration` (`OPEN_REGISTRATION_NOTICE_ID`) | The same |
 | `severity`, `dismissible` | `warning`, `true`: closed until the next page load | The same |
 | `messageKey` | `auth.notices.openRegistration`: *Registration is open and this instance is reachable from outside your local network: anyone who finds it can create an account.* | `auth.notices.openRegistrationLocked`, which names `LIBREFOLIO_REGISTRATION` |
-| `action` | `{labelKey: 'auth.notices.openRegistrationAction', href: '/settings?tab=admin'}`: *Change who can sign up*, the Global Settings tab of Settings › Administration | None: nothing in the app can change a pinned mode |
+| `action` | `{labelKey: 'auth.notices.openRegistrationAction', href: settingsTabHref('admin')}` (`/settings/admin/global`): *Change who can sign up*, the Global Settings tab of Settings › Administration | None: nothing in the app can change a pinned mode |
 
 The «Security» tab of Settings › Administration calls `openRegistrationNoticeFor()` too, with
 `isAdmin: true`, and lists its notice as one of its findings, a `warning` with the same `id`,
