@@ -3458,6 +3458,26 @@ describe('C9-6 — the checks waiting for a decision', () => {
         expect(waiting).toHaveBeenCalledTimes(2);
         expect(flow.waiting.map((item) => item.stage_id)).toEqual([STAGE_ID]);
     });
+
+    it('A10: later while the check runs: no more reads of it, nothing dropped, the list shows it running', async () => {
+        const {flow, api, storage, waiting} = await idleWith([]);
+        api.getCheck.mockResolvedValueOnce(runningStage());
+        await flow.resume(STAGE_ID);
+        await flush();
+        expect(flow.state).toBe('checking');
+        const reads = api.getCheck.mock.calls.length;
+        waiting.mockResolvedValueOnce([{...held(), status: 'running', finished_at: null, restorable: null}]);
+
+        await flow.later();
+        await flush();
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        expect(flow.state).toBe('idle');
+        expect(api.getCheck.mock.calls.length, 'the polling stopped').toBe(reads);
+        expect(api.dropCheck).not.toHaveBeenCalled();
+        expect(storage.getItem(KEY)).toBeNull();
+        expect(flow.waiting.map((item) => item.status)).toEqual(['running']);
+    });
 });
 
 // =====================================================================================================================
