@@ -351,7 +351,7 @@
       "refresh": "Aggiorna",
       "restored": {
         "header": "Lo spazio che i contenuti del backup occupano una volta ripristinati, non compressi: il database, i file caricati e i report dei broker.",
-        "unknown": "Non noto per questo backup: è stato fatto prima che LibreFolio lo registrasse."
+        "unknown": "Non noto per questo backup."
       }
     },
     "cleanup": {

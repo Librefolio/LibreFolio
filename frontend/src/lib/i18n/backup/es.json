@@ -351,7 +351,7 @@
       "refresh": "Actualizar",
       "restored": {
         "header": "El espacio que ocupan los contenidos de la copia una vez restaurados, sin comprimir: la base de datos, los archivos subidos y los informes de los brókeres.",
-        "unknown": "Desconocido para esta copia: se hizo antes de que LibreFolio lo registrara."
+        "unknown": "Desconocido para esta copia."
       }
     },
     "cleanup": {

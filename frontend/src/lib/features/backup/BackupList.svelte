@@ -162,6 +162,8 @@
             headerTooltip: () => $_('backup.list.restored.header'),
             cell: (row) => restoredCell(row),
             type: 'size',
+            // Sorted with the unknown ones last; not filtered: a backup made before has no size to filter on.
+            filterable: false,
             width: 130,
             getValue: (row) => row.content_bytes ?? -1,
         },

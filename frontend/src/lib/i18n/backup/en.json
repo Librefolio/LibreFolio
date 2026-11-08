@@ -351,7 +351,7 @@
       "refresh": "Refresh",
       "restored": {
         "header": "The space the backup's contents take once restored, not compressed: the database, the uploaded files and the broker reports.",
-        "unknown": "Not known for this backup: it was made before LibreFolio recorded it."
+        "unknown": "Not known for this backup."
       }
     },
     "cleanup": {
