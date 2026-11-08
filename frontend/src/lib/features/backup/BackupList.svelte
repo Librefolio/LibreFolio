@@ -19,6 +19,7 @@
     import {notify} from '$lib/stores/app/notify.svelte';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {formatBytes} from '$lib/utils/files/upload';
     import {backupFailureCode, backupKind, deleteInstanceBackupJob, instanceBackupFileUrl, listInstanceBackups, type InstanceBackupEntry} from './backupApi';
     import {backupListSignal, shortHash} from './backupList.svelte';
     import RestoreKeptModal from './RestoreKeptModal.svelte';
@@ -82,6 +83,30 @@
         restoring = entry;
     }
 
+    /** The «once restored» cell: the size and its parts, or «—» with why. */
+    function restoredCell(row: InstanceBackupEntry) {
+        const total = row.content_bytes;
+        if (total === null || total === undefined) {
+            return {type: 'html' as const, html: '<span data-restored="unknown">—</span>', tooltip: {text: $_('backup.list.restored.unknown')}};
+        }
+        const parts = row.content_parts;
+        const lines = parts
+            ? [
+                  ['database', parts.database_bytes],
+                  ['uploads', parts.uploads_bytes],
+                  ['brokerReports', parts.broker_reports_bytes],
+                  ['dataOther', parts.other_bytes],
+              ]
+                  .filter(([, bytes]) => Number(bytes) > 0)
+                  .map(([id, bytes]) => `${escapeHtml($_(`storage.parts.${id}`))}: ${escapeHtml(formatBytes(Number(bytes), $_))}`)
+            : [];
+        return {
+            type: 'html' as const,
+            html: `<span data-restored="known" data-bytes="${total}">${escapeHtml(formatBytes(total, $_))}</span>`,
+            tooltip: lines.length > 0 ? {html: lines.join('<br>')} : undefined,
+        };
+    }
+
     async function remove(entry: InstanceBackupEntry) {
         try {
             await deleteInstanceBackupJob(entry.job_id);
@@ -128,6 +153,17 @@
             type: 'size',
             width: 110,
             getValue: (row) => row.file_size ?? 0,
+        },
+        {
+            // A10 (T-10): the space the backup's contents take once restored, not compressed, to know what a restore will
+            // take; its parts in the tooltip. A backup made before the size was recorded says it is not known.
+            id: 'restored',
+            header: () => $_('backup.list.columns.restored'),
+            headerTooltip: () => $_('backup.list.restored.header'),
+            cell: (row) => restoredCell(row),
+            type: 'size',
+            width: 130,
+            getValue: (row) => row.content_bytes ?? -1,
         },
         {
             id: 'sha256',

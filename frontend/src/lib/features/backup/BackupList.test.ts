@@ -330,6 +330,20 @@ describe('BackupList — the rows', () => {
 });
 
 // =====================================================================================================================
+describe('BackupList — the space a backup takes once restored (A10, T-10)', () => {
+    it('a backup that recorded it: its size, the parts in the tooltip; one made before: «—», said not known', async () => {
+        const parts = {database_bytes: 3_000_000, uploads_bytes: 2_000_000, broker_reports_bytes: 1_000_000, other_bytes: 0};
+        await mountReady([entry(1, {content_bytes: 6_000_000, content_parts: parts} as Partial<Entry>), entry(2)]);
+
+        const known = cellOf(jobId(1), 'restored').querySelector('[data-restored]');
+        expect(known).toHaveAttribute('data-restored', 'known');
+        expect(known, 'the sum of the parts, not the archive').toHaveAttribute('data-bytes', '6000000');
+        const unknown = cellOf(jobId(2), 'restored').querySelector('[data-restored]');
+        expect(unknown).toHaveAttribute('data-restored', 'unknown');
+        expect(unknown).toHaveTextContent('—');
+    });
+});
+
 describe('BackupList — copying the hash', () => {
     it('copies the whole hash, and notifies backup.list.sha.copied with the job and a toast', async () => {
         await mountReady([entry(5), entry(6)]);
