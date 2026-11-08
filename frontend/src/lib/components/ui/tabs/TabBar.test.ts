@@ -115,7 +115,7 @@ describe('TabBar — label visibility and accessible names', () => {
 /*
  * G-15 (workstream A, release 1.3) — the Settings tab bar clips its last tab.
  *
- * `routes/(app)/settings/+page.svelte` draws TabBar inside a card with `overflow-hidden`. From `sm` up the tabs keep
+ * `routes/(app)/settings/[...path]/+page.svelte` draws TabBar inside a card with `overflow-hidden`. From `sm` up the tabs keep
  * their natural width (`flex-1 sm:flex-none`) and the row does not scroll, so an administrator's seventh tab, `email`,
  * runs past the card at 1280 px in Spanish (and between 640 and ~1200 px in the other languages): only `?tab=` or the
  * keyboard reach it. The approved cure is an opt-in prop, `scrollable` (default false), which the Settings page passes:

@@ -49,7 +49,7 @@
  *     The helper itself is the real one: the case observes what reaches the browser;
  *   - the registry: entries are pushed into the real `LINK_SHARE_ACTIONS` and the array is put back after each case.
  *     Each entry is `SettingsTabProbe` (`src/__tests__/harness`) wrapped as a component, the technique of
- *     `routes/(app)/settings/page.tabs.test.ts`: the probe publishes the props it was drawn with in `data-received`;
+ *     `routes/(app)/settings/[...path]/page.tabs.test.ts`: the probe publishes the props it was drawn with in `data-received`;
  *   - `$lib/i18n`, an identity translator: labels render as their key, and nothing here reads a label anyway.
  *
  * Not asserted: the probe's own ladder (other natural sizes, a loader that throws, the 8 s timeout, the order in which

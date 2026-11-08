@@ -1,5 +1,5 @@
 <!--
-  SettingsTabProbe — test-only tab body for `routes/(app)/settings/page.tabs.test.ts` (Vitest + jsdom).
+  SettingsTabProbe — test-only tab body for `routes/(app)/settings/[...path]/page.tabs.test.ts` (Vitest + jsdom).
 
   The Settings page renders the body of its active tab from the tab registry (`settingsTabs.ts`), with
   the tab's `props(ctx)` spread on it. The page test hands the registry synthetic tabs, and each of
