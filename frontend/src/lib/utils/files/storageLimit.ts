@@ -15,6 +15,7 @@
 import {get} from 'svelte/store';
 import {_} from '$lib/i18n';
 import {formatBytes} from './upload';
+import {SETTINGS_FIELD_PARAM, settingsTabHref} from '$lib/features/settings/settingsPaths';
 
 /** The code of every refusal of the space limit. */
 export const STORAGE_LIMIT_CODE = 'storage_limit_exceeded';
@@ -33,11 +34,14 @@ export interface StorageLimitNumbers {
     excessBytes: number;
 }
 
-/** Who reads the message: an administrator raises the limit (Files › Advanced), a member frees space or asks one. */
+/** Who reads the message: an administrator raises the limit (Settings › Administration › Global Settings), a member frees space or asks one. */
 export type StorageLimitViewer = 'admin' | 'member';
 
-/** Where an administrator raises the limit: the Files page with the «Advanced» panel of the space bar open (C9-1). */
-export const STORAGE_LIMIT_SETTINGS_HREF = '/files?storage=limit';
+/**
+ * Where an administrator raises the limit: the Global Settings tab, the row of the limit in view and highlighted (lot B10).
+ * Files › Advanced keeps the same field, beside the space bar.
+ */
+export const STORAGE_LIMIT_SETTINGS_HREF = settingsTabHref('admin', {[SETTINGS_FIELD_PARAM]: 'storage_limit_mb'});
 
 type Translate = (key: string, options?: {values?: Record<string, string | number>}) => string;
 
