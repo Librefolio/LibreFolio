@@ -338,6 +338,54 @@ async def test_patch_explicit_null_clears_icon_url_user_url_and_identifier(test_
 
 
 # ============================================================
+# Test 5c: an explicit empty list clears identifier_other
+# ============================================================
+@pytest.mark.asyncio
+async def test_patch_explicit_empty_list_clears_identifier_other(test_server):
+    """The edit modal sends ``"identifier_other": []`` when the user removes the last OTHER identifier: the server must clear
+    the list. ``null`` keeps it (the schema reads it as "leave unchanged"), and the single identifiers are not touched."""
+    print_section("Test 5c: PATCH /assets - identifier_other [] clears, null keeps")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        others = [unique_id("OTHER-A"), unique_id("OTHER-B")]
+        create_item = FAAssetCreateItem(
+            display_name=f"Other Clear Test {unique_id('OTHCLR')}",
+            currency="EUR",
+            asset_type=AssetType.BOND,
+            identifier_isin="IT0005634800",
+            identifier_ticker=unique_id("TK")[:20],
+            identifier_other=others,
+        )
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201, f"Create failed: {create_resp.status_code}: {create_resp.text}"
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+        before = await _info_of(client, asset_id)
+        assert before.identifier_other == others
+
+        # null: the list stays as it is, and nothing is reported as updated.
+        null_resp = await client.patch(f"{API_BASE}/assets", json=[{"asset_id": asset_id, "identifier_other": None}], timeout=TIMEOUT)
+        assert null_resp.status_code == 200, f"PATCH failed: {null_resp.status_code}: {null_resp.text}"
+        null_result = FABulkAssetPatchResponse(**null_resp.json()).results[0]
+        assert null_result.success, null_result.message
+        assert not null_result.updated_fields, f"null must change nothing: {null_result.updated_fields}"
+        assert (await _info_of(client, asset_id)).identifier_other == others, "null must keep identifier_other"
+
+        # []: the list is cleared, and only that field is reported.
+        empty_resp = await client.patch(f"{API_BASE}/assets", json=[{"asset_id": asset_id, "identifier_other": []}], timeout=TIMEOUT)
+        assert empty_resp.status_code == 200, f"PATCH failed: {empty_resp.status_code}: {empty_resp.text}"
+        empty_result = FABulkAssetPatchResponse(**empty_resp.json()).results[0]
+        assert empty_result.success, empty_result.message
+        assert [item.info for item in empty_result.updated_fields] == ["identifier_other"]
+
+        after = await _info_of(client, asset_id)
+        assert not after.identifier_other, f"identifier_other kept: {after.identifier_other}"
+        assert after.identifier_isin == before.identifier_isin, "the ISIN must not change"
+        assert after.identifier_ticker == before.identifier_ticker, "the ticker must not change"
+        print_success("✓ identifier_other: null kept it, [] cleared it; ISIN and ticker kept")
+
+
+# ============================================================
 # Test 6: PATCH active
 # ============================================================
 @pytest.mark.asyncio

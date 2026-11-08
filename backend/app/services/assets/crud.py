@@ -49,7 +49,8 @@ logger = structlog.get_logger(__name__)
 
 #: The patch fields an explicit ``null`` clears: the nullable columns the edit modal can empty (the icon, the user's URL,
 #: one identifier). An explicit ``null`` on any other field changes nothing: the name, the currency and the type cannot be
-#: empty, the flags and the quote base keep their value, and ``identifier_other`` reads ``null`` as "leave unchanged".
+#: empty, the flags and the quote base keep their value, and ``identifier_other`` reads ``null`` as "leave unchanged" (an
+#: explicit empty list clears it: the patch schema keeps ``[]``, and the loop below stores it as NULL).
 #: ``classification_params`` has its own rule, below.
 CLEARED_BY_NULL: frozenset[str] = frozenset(
     {
@@ -477,6 +478,7 @@ class AssetCRUDService:
         - Field present with a value: UPDATE; an empty string clears it
         - Field present as None: CLEAR for the fields of ``CLEARED_BY_NULL`` (the edit modal sends ``icon_url: null``
           to remove an icon), IGNORE for the others
+        - ``identifier_other``: a list replaces the whole list, an empty one clears it (stored as NULL); None = IGNORE
 
         For classification_params:
         - If None: Set DB column to NULL

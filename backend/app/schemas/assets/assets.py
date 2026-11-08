@@ -273,6 +273,10 @@ class FAAssetPatchItem(StrictModel):
     - Field present in patch (even if None): UPDATE or BLANK
     - Field absent in patch: IGNORE (keep existing value)
 
+    For identifier_other:
+    - A list replaces the whole list; an empty list clears it
+    - None: IGNORE (keep existing value)
+
     For classification_params:
     - If None or an empty object: Set DB column to NULL
     - Otherwise: Replace provided fields atomically, preserve omitted fields
@@ -299,11 +303,18 @@ class FAAssetPatchItem(StrictModel):
     identifier_sedol: Optional[str] = Field(None, max_length=7, description="Update SEDOL code")
     identifier_figi: Optional[str] = Field(None, max_length=12, description="Update FIGI code")
     identifier_uuid: Optional[str] = Field(None, max_length=36, description="Update UUID")
-    identifier_other: Optional[List[str]] = Field(None, description="Update other/soft identifiers (JSON list; None = leave unchanged)")
+    identifier_other: Optional[List[str]] = Field(
+        None,
+        description="Replace the other/soft identifiers with this JSON list; an explicit empty list clears them; None or absent = leave unchanged",
+    )
 
     @field_validator("identifier_other", mode="before")
     @classmethod
     def normalize_identifier_other(cls, v) -> Optional[List[str]]:
+        """A list sent on purpose is the whole new list, so one that is empty after normalizing stays ``[]``: it clears
+        the column. ``None`` stays ``None``: leave unchanged. The other schemas keep turning ``[]`` into ``None``."""
+        if isinstance(v, (list, tuple)):
+            return normalize_other_identifiers(v) or []
         return normalize_other_identifiers(v)
 
     @field_validator("currency")
