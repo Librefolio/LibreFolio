@@ -55,7 +55,10 @@ const LIST_KEYS = [
     'backup.list.sameDisk',
     'backup.list.errors.load',
     'backup.list.retry',
-    ...['date', 'origin', 'kind', 'size', 'sha256'].map((column) => `backup.list.columns.${column}`),
+    ...['date', 'origin', 'kind', 'size', 'restored', 'sha256'].map((column) => `backup.list.columns.${column}`),
+    // A10 (T-10): the space a backup takes once restored.
+    'backup.list.restored.header',
+    'backup.list.restored.unknown',
     ...['ui', 'cli', 'pre-restore', 'panel'].map((origin) => `backup.list.origin.${origin}`),
     ...['clear', 'password', 'sealed'].map((kind) => `backup.list.kind.${kind}`),
     ...['download', 'delete', 'copySha'].map((action) => `backup.list.actions.${action}`),

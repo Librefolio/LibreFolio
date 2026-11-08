@@ -5,7 +5,7 @@ status: resolved
 date: 2026 (Phase 5)
 updated: 2026-09-29
 tags: [frontend, emoji, windows, fonts, css, unicode-range, i18n]
-related_features: [F-008]
+related: [features/F-008, problems/echarts-canvas-mismeasures-emoji-labels]
 ---
 
 # Problem: Flag Emoji Not Rendering on Windows
@@ -56,9 +56,13 @@ system falls back to Segoe UI Emoji, which prints the two letters.
   `sans-serif`), and its HTML tooltips carry an inline `font: … sans-serif`. Flags there (signal legends, the
   geography map, allocation history) are not covered yet — backlog **K-13** (a global `textStyle.fontFamily` plus
   `document.fonts.load` before drawing); a tooltip flag wrapped in `.emoji-flag` is.
+  *2026-11-07 lint: K-13 is fixed — `052e16485` (2026-10-16) gives every chart `CHART_FONT_FAMILY` (`'LF Flags'`
+  first, then ECharts' own default) from `frontend/src/lib/components/charts/chartFont.ts`, loads the face before the
+  first paint, and `chartFlagFont.test.ts` gates it.*
 - **Known gaps (K-14)**: a few hand-written monospace stacks still lack `'LF Flags'` (e.g. `CompactCashCell`,
   `DataTable`, `FilePreviewModal`), and `lf-flags.css` points at a generated file name
-  (`noto-color-emoji.0.woff2`).
+  (`noto-color-emoji.0.woff2`). *2026-11-07 lint: `DataTable` no longer has its own stack; `CompactCashCell` and
+  `FilePreviewModal` still carry monospace stacks without `'LF Flags'`.*
 - **Verifying without Windows:** `frontend/e2e/fx/fx-flag-font.spec.ts` reads the font that actually draws each
   node through CDP `CSS.getPlatformFontsForNode`; a probe face whose `local()` source cannot resolve exercises the
   Noto (Windows) path on any OS. Real-device checks (iPhone, Mac, Windows) remain manual.
@@ -82,4 +86,5 @@ with Noto first; `963b83d9a` reordered it Apple-first for iOS. Both are supersed
 | Noto cache (flags subset only) | `scripts/update_js_cache.py` |
 | Static gate | `frontend/src/flagFont.gate.test.ts` |
 | CDP end-to-end check | `frontend/e2e/fx/fx-flag-font.spec.ts` |
+| ECharts font family (K-13) | `frontend/src/lib/components/charts/chartFont.ts` |
 | Language selector (flag emoji) | `frontend/src/lib/components/layout/LanguageSelector.svelte` |

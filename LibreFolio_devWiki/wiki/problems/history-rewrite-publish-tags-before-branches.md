@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-11-05
 tags: [git, history-rewrite, ci, nightly, tags, backups]
-related: [problems/stale-version-file-shadows-git-describe]
+related: [problems/stale-version-file-shadows-git-describe, problems/fast-forward-blocked-by-a-dirty-file]
 ---
 
 # Problem: a nightly build that ran before the rewritten tags arrived

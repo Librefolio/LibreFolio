@@ -44,6 +44,10 @@ $: console.log('count changed:', count);
   react to runes state reads it through `toStore()`: [[problems/legacy-layout-gate-missed-runes-state]].
 - Svelte 5 removes the whitespace at the start and end of a tag, so a space that must be shown at a tag's edge is
   written `{' '}`: [[problems/svelte5-trims-leading-space-in-tag]].
+- A `$derived` that reads a plain module `Map` does not re-run when the map fills later: the cache must be a
+  `SvelteMap` (or other reactive state): [[problems/svelte5-derived-stale-over-non-reactive-cache]].
+- With Vite HMR, `import.meta.hot.dispose` runs only on the module the update is accepted through, so a plain module
+  imported by a reactive face keeps its old subscribers: [[problems/vite-hmr-dispose-only-on-the-accepted-module]].
 
 ## Tailwind v4 parallel convention
 Tailwind CSS 4 config lives in `app.css` via `@theme {}` — **not** `tailwind.config.ts`:

@@ -18,6 +18,8 @@ Price sync fetches OHLCV data (open, high, low, close, volume) and stores it one
 
 The asset detail page is the richest view in LibreFolio: a full price history chart with the complete signal overlay system (EMA, RSI, MACD, Bollinger, FX pair comparison, asset comparison, benchmarks, measure tool), an inline data editor for adding/correcting prices and events via click, CSV, or form, a provider comparison modal showing differences between provider data and stored data, and a metadata refresh button. Asset events — dividends, splits, interest payments — are displayed as markers on the chart and will be linked to transactions once Phase 7's event-transaction link is complete.
 
+> 2026-11-07 lint: the event-transaction link shipped — [[F-051]] is `implemented` (Phase 7 Part 3, 2026-04-25; «Relink events» via `GET /transactions/event-reconciliation` in 1.3). A fifth provider, Borsa Italiana (`backend/app/services/asset_source_providers/borsa_italiana/`), now sits beside the four named above.
+
 ## Feature cluster
 
 | Code | Feature | Layer | Role in domain | Status |
@@ -27,15 +29,16 @@ The asset detail page is the richest view in LibreFolio: a full price history ch
 | [[F-026]] | Asset Provider Assignment (dynamic params form) | fullstack | core — assign provider with dynamic config form | implemented |
 | [[F-027]] | Asset Data Sync (price fetch from providers) | fullstack | core — fetch and store OHLCV from providers | implemented |
 | [[F-028]] | Asset Search Autocomplete (multi-provider parallel) | frontend | support — parallel search across providers in add modal | implemented |
-| [[F-029]] | Asset Metadata Refresh | fullstack | support — re-fetch name, sector, currency from provider | implemented |
+| [[F-029]] | Asset Metadata Refresh | fullstack | support — re-fetch name, sector, currency from provider | documented |
 | [[F-030]] | Asset Price History (OHLCV store/query) | backend | core — daily OHLCV storage and range query | implemented |
 | [[F-031]] | Asset Events (DIVIDEND, SPLIT, INTEREST, etc.) | fullstack | core — event markers linked to price history | implemented |
 | [[F-032]] | Asset List View (dual view: card + table) | frontend | display — card grid + DataTable, toggle persisted | implemented |
 | [[F-033]] | Asset Detail Page (chart, signals, editor) | frontend | display — full chart + signals + inline editor | implemented |
 | [[F-034]] | Scheduled Investment Provider (synthetic yield) | backend | support — loan/structured product price synthesis | implemented |
 | [[F-035]] | CSS Scraper Provider (arbitrary web scraping) | backend | support — scrapes any web page for a price | implemented |
-| [[F-036]] | Provider Comparison Modal (diff provider vs DB) | frontend | support — shows diff between provider data and stored data | implemented |
+| [[F-036]] | Provider Comparison Modal (diff provider vs DB) | frontend | support — shows diff between provider data and stored data | documented |
 | [[F-095]] | Asset Delete — Transaction Count Link | fullstack | support — a blocked delete shows the transaction count and links to them | documented |
+| [[F-114]] | Benchmark assets (a switch that offers an asset as a comparison benchmark) | fullstack | support — `is_benchmark` flag, offered in comparison pickers | implemented |
 
 ## Architecture at a glance
 
@@ -49,7 +52,7 @@ graph TD
     ProvRegistry --> JustETF[JustETF<br/>ISIN IE00B4L5Y983]
     ProvRegistry --> CSS[F-035 CSS Scraper<br/>URL + selector]
     ProvRegistry --> SchedInv[F-034 Scheduled Investment<br/>synthetic from schedule]
-    ProvAssign -->|POST /assets/:id/sync| SyncSvc[F-027 Sync Service<br/>thread-isolated calls]
+    ProvAssign -->|POST /assets/prices/sync| SyncSvc[F-027 Sync Service<br/>thread-isolated calls]
     SyncSvc -->|5-layer TTL cache| Cache[F-061 Provider Cache<br/>15min history / 2min current]
     Cache -->|miss| Provider[Provider call<br/>per thread, own event loop]
     Provider -->|OHLCV| PriceDB[(PriceHistory table<br/>F-030, one/day)]
@@ -85,8 +88,11 @@ graph TD
 ## What comes next
 
 - [[F-051]] Transaction ↔ AssetEvent Link — Phase 7: link `AssetEvent` records (dividends, splits) to `Transaction` records for accurate income tracking.
+  *2026-11-07 lint: shipped — `implemented` since Phase 7 Part 3 (2026-04-25).*
 - [[F-029]] Metadata Refresh — already implemented but not yet documented; mkdocs page planned.
+  *2026-11-07 lint: shipped — documented in `mkdocs_src/docs/user/assets/create-edit.en.md`.*
 - [[F-036]] Provider Comparison Modal — already implemented; mkdocs page planned.
+  *2026-11-07 lint: shipped — documented in `mkdocs_src/docs/user/assets/create-edit.en.md` («Check the provider's data»).*
 - [[F-094]] Sync Date Range Dialog — let users choose the historical range when syncing.
 - [[F-096]] Scheduled Investment — Decoupled Frequencies + Anchor Day — idea for finer-grained schedule control.
 

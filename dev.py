@@ -1536,51 +1536,63 @@ def cmd_mkdocs_check_links(args):
 # =============================================================================
 # Graph / DevWiki Commands (graphify knowledge graph)
 # =============================================================================
+#
+# graphify scans the repository root ("."), filtered by the allow-list in
+# /.graphifyignore (devWiki pages, English MkDocs pages, backend/app,
+# backend/alembic/versions, frontend/src/lib, frontend/src/routes). The output
+# lives in LibreFolio_devWiki/graphify-out/, selected through GRAPHIFY_OUT.
+# graphify refuses every file whose real path is outside the scan root, which is
+# why the corpus is no longer a folder of symlinks.
 
-WIKI_DIR = PROJECT_ROOT / "LibreFolio_devWiki"
-CORPUS_DIR = WIKI_DIR / "corpus"
-GRAPH_JSON = WIKI_DIR / "graphify-out" / "graph.json"
-GRAPH_REPORT = WIKI_DIR / "graphify-out" / "GRAPH_REPORT.md"
+GRAPH_IGNORE = PROJECT_ROOT / ".graphifyignore"
+GRAPH_OUT_REL = "LibreFolio_devWiki/graphify-out"  # relative to PROJECT_ROOT
+GRAPH_OUT = PROJECT_ROOT / GRAPH_OUT_REL
+GRAPH_JSON = GRAPH_OUT / "graph.json"
+GRAPH_REPORT = GRAPH_OUT / "GRAPH_REPORT.md"
+# graph.html node cap. graphify stores it in its build state, so every command
+# must pass the same value, or `graph update` rebuilds instead of skipping.
+GRAPHIFY_VIZ_NODE_LIMIT = "15000"
 
 
-def _graphify_cmd(args_list: list, cwd: Path = WIKI_DIR, env: dict | None = None) -> int:
-    """Run graphify via pipenv with live output from LibreFolio_devWiki/."""
-    return run_pipenv(["python", "-m", "graphify"] + args_list, cwd=cwd, env=env)
+def _graphify_cmd(args_list: list, env: dict | None = None) -> int:
+    """Run graphify via pipenv from the repository root, output in LibreFolio_devWiki/graphify-out/."""
+    full_env = {"GRAPHIFY_OUT": GRAPH_OUT_REL, "GRAPHIFY_VIZ_NODE_LIMIT": GRAPHIFY_VIZ_NODE_LIMIT}
+    if env:
+        full_env.update(env)
+    return run_pipenv(["python", "-m", "graphify"] + args_list, cwd=PROJECT_ROOT, env=full_env)
 
 
 def cmd_graph_build(args):
     """Full knowledge-graph build: extract + cluster + report.
 
     When graph.json already exists (default): code-only incremental update, no LLM needed.
-    With --full: full semantic re-extraction (requires an LLM API key in env, or use the
-    graphify skill through your AI assistant for semantic extraction of new doc files).
+    With --full: headless full extraction (needs an LLM API key in env for the docs; otherwise
+    run the graphify skill through your AI assistant, scanning the repository root).
     """
     full = getattr(args, "full", False)
 
-    if not CORPUS_DIR.exists():
-        print_error(f"Corpus directory not found: {CORPUS_DIR}")
-        print_error("Run from project root and ensure LibreFolio_devWiki/corpus/ exists.")
+    if not GRAPH_IGNORE.exists():
+        print_error(f"Corpus allow-list not found: {GRAPH_IGNORE}")
+        print_error("graphify would scan the whole repository: restore /.graphifyignore first.")
         return 1
 
     if GRAPH_JSON.exists() and not full:
         print_warning("graph.json exists — running incremental update (use --full for complete rebuild).")
-        return _graphify_cmd(["update", "corpus/"])
+        return _graphify_cmd(["update", "."])
 
     print(Colors.success("🔬 Building knowledge graph (full extract, no-viz)..."))
     print_warning("Semantic extraction uses cache for known files. New .md files need an LLM API key")
-    print_warning("or run '/graphify corpus/' through your AI assistant for semantic extraction.")
+    print_warning("or run the graphify skill on the repository root through your AI assistant.")
     backend_args = []
     if getattr(args, "backend", None):
         backend_args = ["--backend", args.backend]
     return _graphify_cmd(
         [
             "extract",
-            "corpus/",
+            ".",  # scan root = repository root; GRAPHIFY_OUT sends the output to the devWiki
             *backend_args,
             "--no-viz",
-            "--no-cluster",  # cluster separately; cluster-only is faster on 8k+ nodes
-            "--out",
-            ".",  # write to LibreFolio_devWiki/graphify-out/ (corpus/graphify-out symlinks here)
+            "--no-cluster",  # cluster separately: ./dev.py graph cluster
         ]
     )
 
@@ -1591,21 +1603,18 @@ def cmd_graph_cluster(args):
         print_error("No graph.json found. Run: ./dev.py graph build")
         return 1
     print(Colors.success("🔬 Reclustering graph..."))
-    return _graphify_cmd(["cluster-only", "corpus/", "--no-viz"])
+    return _graphify_cmd(["cluster-only", ".", "--no-viz"])
 
 
 def cmd_graph_viz(args):
-    """Generate graph.html from existing graph.json (raises node limit to 15000)."""
+    """Generate graph.html from existing graph.json and its community labels (no reclustering)."""
     if not GRAPH_JSON.exists():
         print_error("No graph.json found. Run: ./dev.py graph build first.")
         return 1
-    print(Colors.success("🌐 Generating graph.html (node limit raised to 15000)..."))
-    rc = _graphify_cmd(
-        ["cluster-only", "corpus/"],
-        env={"GRAPHIFY_VIZ_NODE_LIMIT": "15000"},
-    )
+    print(Colors.success(f"🌐 Generating graph.html (node limit {GRAPHIFY_VIZ_NODE_LIMIT})..."))
+    rc = _graphify_cmd(["export", "html", "--node-limit", GRAPHIFY_VIZ_NODE_LIMIT])
     if rc == 0:
-        print(Colors.success(f"✅ graph.html → {WIKI_DIR / 'graphify-out' / 'graph.html'}"))
+        print(Colors.success(f"✅ graph.html → {GRAPH_OUT / 'graph.html'}"))
     return rc
 
 
@@ -1615,7 +1624,7 @@ def cmd_graph_update(args):
         print_error("No graph.json found. Run: ./dev.py graph build first.")
         return 1
     print(Colors.success("🔄 Updating graph (code-only, no LLM)..."))
-    return _graphify_cmd(["update", "corpus/"])
+    return _graphify_cmd(["update", "."])
 
 
 def cmd_graph_query(args):
@@ -2986,10 +2995,10 @@ Examples:
     # 🔬 Graph / DevWiki Commands (graphify knowledge graph)
     # =========================================================================
 
-    p = subparsers.add_parser("graph", help="🔬 DevWiki knowledge graph (graphify)")
+    p = subparsers.add_parser("graph", help="🔬 DevWiki knowledge graph (graphify): docs + code, scanned from the repo root")
     graph_sub = p.add_subparsers(dest="graph_cmd", metavar="action")
 
-    gp = graph_sub.add_parser("build", help="Full extraction (--full) or incremental code update")
+    gp = graph_sub.add_parser("build", help="Incremental code update, or headless full extraction (--full, needs an LLM key)")
     gp.add_argument("--backend", default=None, choices=["claude", "openai", "kimi", "deepseek", "ollama", "gemini"], help="LLM backend for semantic extraction of new docs (optional; uses env var auto-detect if not set)")
     gp.add_argument("--full", action="store_true", help="Force full rebuild even if graph.json already exists")
     gp.set_defaults(func=cmd_graph_build)
@@ -2997,7 +3006,7 @@ Examples:
     gp = graph_sub.add_parser("cluster", help="Rerun clustering on existing graph.json")
     gp.set_defaults(func=cmd_graph_cluster)
 
-    gp = graph_sub.add_parser("viz", help="Generate graph.html (raises node limit to 15000)")
+    gp = graph_sub.add_parser("viz", help=f"Generate graph.html from graph.json, no reclustering (node limit {GRAPHIFY_VIZ_NODE_LIMIT})")
     gp.set_defaults(func=cmd_graph_viz)
 
     gp = graph_sub.add_parser("update", help="Code-only incremental update (no LLM, fast)")

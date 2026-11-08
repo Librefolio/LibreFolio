@@ -183,17 +183,17 @@ Use the `find-skills` skill when looking for new capabilities to install (see `~
 
 ### Graphify Knowledge Graph
 
-The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`). Read its real size from `graphify-out/GRAPH_REPORT.md` rather than from here: as of 2026-09-01 it holds ~1 617 nodes / 2 277 edges / 167 communities, built from **100 files**. A number written in prose ages; the report does not.
+The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`), built from **docs and code**. graphify scans the repository root, filtered by the allow-list in `/.graphifyignore`: devWiki pages, English MkDocs pages, `backend/app`, `backend/alembic/versions`, `frontend/src/lib` and `frontend/src/routes`. Read its real size from `graphify-out/GRAPH_REPORT.md`, not from here: on 2026-11-08 it held ~38 800 nodes / 104 000 edges / 619 communities from 2 668 files (1 627 code, extracted by AST; 1 041 docs, extracted semantically). A number written in prose ages; the report does not.
 
-> ⚠️ **The graph covers the wiki, not the code.** Its manifest holds ~363 wiki pages against ~91 code files, out of a corpus of ~2 750. So a BFS/DFS query about *accumulated knowledge* is reliable, while one about *the code* answers partially and **looks complete** — which is the dangerous half. A lint on 2026-09-01 found 144 broken source-file references that no graph query would have surfaced, because the graph does not contain the files that were missing; a filesystem check found all of them in a fraction of a second.
+> ⚠️ **The code is in the graph, but the bridge from docs to code is thin.** Only ~2 450 of 104 000 edges (2%) join a doc to the code. A query about *what the code does* is well covered, and so is one about *what the docs say*. A query about *how a doc page maps to the code* answers partially and **looks complete**.
 >
-> Before writing a wiki page, run `python3 LibreFolio_devWiki/check_source_paths.py`. Every path cited in a `## Source files` table must exist. And remember that **a plan is not a chronicle**: a path read out of a proposal is not a path that was delivered.
+> Before writing a wiki page, run `python3 LibreFolio_devWiki/check_source_paths.py`: every path cited in a `## Source files` table must exist. And remember that **a plan is not a chronicle**: a path read out of a proposal is not a path that was delivered.
 
 - `wiki-search` uses graphify BFS/DFS as primary lookup (much faster than reading raw files)
-- `./dev.py graph update` — incremental code-only rebuild after code changes (no LLM, ~5s)
-- `./dev.py graph viz` — regenerate `graph.html` for browser visualization
-- `./dev.py graph query "TOPIC"` — quick BFS query from the CLI
-- Full semantic rebuild (new .md files): invoke the `graphify` skill through the AI assistant
+- `./dev.py graph update` — incremental rebuild after code changes (AST, no LLM); a run with nothing changed leaves graphify-out untouched
+- New or changed `.md` pages need the semantic pass: the `graphify` skill run from the repository root with `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out` (see the `wiki-file` skill)
+- `./dev.py graph viz` — regenerates `graph.html` without reclustering; above 15 000 nodes it shows one node per community
+- `./dev.py graph query "TOPIC"` and `./dev.py graph path "A" "B"` — BFS query and shortest path from the CLI
 
 ## Changelog Rules (CHANGELOG.md)
 

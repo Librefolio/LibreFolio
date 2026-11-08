@@ -14,8 +14,8 @@ date: 2026-04-24
 
 ## Definition
 
-Despite its read-only-looking name and HTTP verb, the endpoint
-`GET /api/v1/assets/prices/current` is **not** side-effect-free. Every call
+Despite its read-only-looking name, the endpoint
+`POST /api/v1/assets/prices/current` is **not** side-effect-free. Every call
 that returns a provider quote whose `as_of_date == today` also **persists
 today's OHLC row into `PriceHistory`** as part of the request.
 
@@ -39,12 +39,12 @@ one-point-per-day series described in [[concepts/daily-point-policy]].
 
 Any call path that hits `AssetSourceManager.get_current_prices_bulk`:
 
-- `GET /api/v1/assets/prices/current` (bulk live prices, used by the
-  live ticker and the asset detail chart minute poll)
+- `POST /api/v1/assets/prices/current` (bulk live prices, used by the
+  live ticker and the asset detail page's live poll)
 - Any internal caller that reuses the same bulk fetch helper
 
-In contrast, the historical/delta writer is `sync_prices` (the `/sync`
-endpoint), which returns a `changed_points` list computed by
+In contrast, the historical/delta writer is `sync_prices_bulk` (the
+`POST /api/v1/assets/prices/sync` endpoint), which returns a `changed_points` list computed by
 `_count_actual_price_changes`.
 
 ## Consequence: the `/current` + `/sync` anti-pattern
@@ -71,6 +71,12 @@ in-memory chart series:
 - `frontend/src/routes/(app)/assets/[id]/+page.svelte`
   → `pollCurrentPriceOnce` (extensive comment block documents why the
     silent-sync detour was removed)
+
+> 2026-11-07 lint: the endpoint has always been a `POST` (the page first said `GET`). Since `305850522`
+> (2026-10-15, live prices paused when idle) the poll lives in the `AssetDetailLive` class,
+> `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts` → `#pollLivePriceOnce` (every 30 s while
+> the chart reaches today, paused while the tab is hidden or idle, no poller for a manual asset). It still calls
+> `/current` only, never `/sync`.
 
 **Manual "Sync" button** — call `/sync` only. Its `changed_points` delta
 is authoritative *only* when the request is not preceded, in the same
@@ -118,7 +124,7 @@ fresh delta after each `/current` call; it always produced an empty
 |------|------|
 | Backend writer (side-effect owner) | `backend/app/services/assets/price_query.py` (`get_current_prices_bulk`; until 2026-09-11 in the monolithic `asset_source.py` — [[entities/asset-sources-package]]) |
 | Backend delta reader | `backend/app/services/assets/refresh.py` (`_count_actual_price_changes`) |
-| Frontend live poll (correct pattern) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` (`pollCurrentPriceOnce`) |
+| Frontend live poll (correct pattern) | `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts` (`#pollLivePriceOnce`; until 2026-10-15 `pollCurrentPriceOnce` in `frontend/src/routes/(app)/assets/[id]/+page.svelte`) |
+| Endpoints `/current` and `/sync` | `backend/app/api/v1/assets/prices.py` |
 | Post-mortem | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md` (§ "I-bis #24 — Auto-refresh mirato post-sync", v3→v4 paragraph) |
-| Commit message | `/tmp/libreFolio_commit_ibis24_v4.txt` |
 

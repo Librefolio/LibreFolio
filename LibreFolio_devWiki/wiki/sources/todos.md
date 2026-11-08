@@ -1,6 +1,7 @@
 ---
 title: "TODO Files — Project Root"
 category: source
+original_path: TODO_Completati.md, TODO_FUTURI.md
 date: 2026-05-10
 tags: [todo, planning, roadmap, features]
 related_features: [F-075, F-076, F-077, F-078, F-079, F-080, F-081, F-082, F-083, F-084, F-085, F-086, F-087, F-088, F-089, F-090, F-091, F-092, F-093, F-094, F-095, F-096]

@@ -14,7 +14,7 @@ description: "Use this skill (historian agent) when the user wants to health-che
 ### Step 1 — Read GRAPH_REPORT (Graphify Analysis)
 
 ```bash
-cat /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/graphify-out/GRAPH_REPORT.md
+cat "$(git rev-parse --show-toplevel)"/LibreFolio_devWiki/graphify-out/GRAPH_REPORT.md
 ```
 
 Extract from the report:
@@ -26,7 +26,7 @@ Extract from the report:
 ### Step 2 — Check Graph Coverage vs Wiki Pages
 
 ```bash
-cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki
+cd "$(git rev-parse --show-toplevel)/LibreFolio_devWiki"
 $(cat graphify-out/.graphify_python) -c "
 import json
 import networkx as nx
@@ -54,7 +54,7 @@ High-degree non-wiki nodes are candidates for new wiki pages.
 #### Check 1 — Orphan Pages
 Pages with no inbound `[[link]]` from any other wiki page.
 ```bash
-cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki
+cd "$(git rev-parse --show-toplevel)/LibreFolio_devWiki"
 for f in wiki/**/*.md; do
   slug=$(basename "$f" .md)
   count=$(grep -rl "\[\[$slug\]\]" wiki/ 2>/dev/null | wc -l)
@@ -86,7 +86,7 @@ For edges with confidence ≤ 0.7, verify they are plausible or flag for correct
 #### Check 5 — Concept Debt (from Graph)
 Terms recurring in 3+ wiki pages that have no `wiki/concepts/` page:
 ```bash
-cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki
+cd "$(git rev-parse --show-toplevel)/LibreFolio_devWiki"
 $(cat graphify-out/.graphify_python) -c "
 import json
 import networkx as nx
@@ -146,7 +146,7 @@ Entity/concept names appearing as plain text instead of `[[links]]` in pages tha
 
 ### Step 5 — Execute Repairs (if user confirms)
 Fix top-priority issues: resolve contradictions, create missing concept pages, fix index drift, add links.
-After repairs, run `graphify corpus/ --update` to incorporate changes.
+After repairs, run the graphify `--update` pipeline (see `wiki-file` Step 6: repository root, `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out`) to incorporate changed pages; code-only changes need just `./dev.py graph update`.
 
 ### Step 6 — Log the Lint Pass
 ```markdown

@@ -48,7 +48,8 @@ all use it — the wizard used to hold its own 50.
   below it); Vitest covers the orders (`brokerHelpers.test.ts`, `brokerIconChain.test.ts`, `pluginKind.test.ts`).
 - A selector, on the plugin or on the broker, would replace the threshold: backlog C-40, after 1.2.
 - The chain reads only the props it is given: a component that has only the broker's id does not see the icon fields
-  loaded later into the store — [[problems/broker-icon-race-condition]], still open on 2026-10-12.
+  loaded later into the store — [[problems/broker-icon-race-condition]], still open on 2026-10-12 (marked `resolved`
+  since; 2026-11-07 lint).
 
 ## Links
 

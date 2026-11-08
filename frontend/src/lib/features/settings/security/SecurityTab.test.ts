@@ -438,10 +438,10 @@ describe('SecurityTab — the findings', () => {
         await waitForStatus('ready');
 
         const LINKED: Array<[id: string, href: string, labelKey: string]> = [
-            ['platform.plugin_secrets', '/settings?tab=plugins', 'settings.securityTab.openPlugins'],
-            ['email.smtp_encryption', '/settings?tab=email', 'settings.securityTab.openEmail'],
-            ['email.links', '/settings?tab=email', 'settings.securityTab.openEmail'],
-            ['accounts.openRegistration', '/settings?tab=admin', 'auth.notices.openRegistrationAction'],
+            ['platform.plugin_secrets', '/settings/plugins', 'settings.securityTab.openPlugins'],
+            ['email.smtp_encryption', '/settings/admin/email', 'settings.securityTab.openEmail'],
+            ['email.links', '/settings/admin/email', 'settings.securityTab.openEmail'],
+            ['accounts.openRegistration', '/settings/admin/global', 'auth.notices.openRegistrationAction'],
         ];
         for (const [id, href, labelKey] of LINKED) {
             const link = within(finding(id)).getByTestId('security-finding-action');
@@ -796,7 +796,7 @@ describe('SecurityTab — the guide of each check (SGUIDE-01…08, N69d)', () =>
 
         const row = finding('email.smtp_encryption');
 
-        expect(within(row).getByTestId('security-finding-action')).toHaveAttribute('href', '/settings?tab=email');
+        expect(within(row).getByTestId('security-finding-action')).toHaveAttribute('href', '/settings/admin/email');
         expect(guideOf(row)).toBeInTheDocument();
     });
 

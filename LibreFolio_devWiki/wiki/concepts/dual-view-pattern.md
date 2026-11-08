@@ -27,7 +27,9 @@ Table view: DataTable component with sortable columns, filters
 - **Table**: analysis and bulk operations — sorting by multiple columns, dense information
 
 ## Implementation notes
-- Toggle state key: `librefolio-assets-view` / `librefolio-fx-view` in localStorage
+- Toggle state key: `assetsViewMode` / `fxViewMode`, scoped per user by `getUserStorage`/`setUserStorage` in
+  `ViewModeToggle.svelte` (values `grid` / `list`). *2026-11-07 lint:* corrected from `librefolio-assets-view` /
+  `librefolio-fx-view`, which the code does not contain.
 - Both views share the same data store — switching doesn't trigger a re-fetch
 - Table uses the generic `DataTable` component from `frontend/src/lib/components/table/`
 

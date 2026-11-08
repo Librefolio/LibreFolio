@@ -68,6 +68,9 @@ ingests don't flag them as "incomplete" or regressions.
   only path. Any reference to a standalone endpoint in older docs is historical, not a gap.
 - The `net_worth` field name is stable API surface — do not propose renaming it again without a versioned
   migration plan.
+- *2026-11-07 lint:* `_compute_period_summary_metrics()` was removed in `8c478997f` (2026-10-15): the period boundaries and the
+  period P&L live in `financial_math/portfolio/period.py` (`state_as_of`, `period_boundaries`, `period_pnl`), which
+  `get_summary()` calls. The decision — no `build_summary()` in the engine's builder — stands.
 
 ## Links
 
@@ -82,6 +85,7 @@ ingests don't flag them as "incomplete" or regressions.
 |------|------|
 | Service (get_summary, shared helper) | `backend/app/services/portfolio_service.py` |
 | Engine (position_states_end) | `backend/app/services/financial_math/portfolio/daily_state.py` |
+| Period boundaries and P&L (since `8c478997f`) | `backend/app/services/financial_math/portfolio/period.py` |
 | API (single /report entrypoint) | `backend/app/api/v1/portfolio_api.py` |
 | Implementation notes | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/lowDashboard/Low-dashboard_implementation_notes.md` |
 | Original architecture proposal | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |

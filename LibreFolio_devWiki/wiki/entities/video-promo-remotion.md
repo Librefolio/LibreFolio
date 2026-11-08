@@ -1,14 +1,15 @@
 ---
 title: "Remotion Video Promo"
 category: "entity"
+type: "module"
 tags: ["video", "promo", "remotion", "react", "i18n"]
-related: ["source-code-v0.9.0-batch", "gallery-is-a-release-gate-with-real-data"]
+related: ["sources/source-code-v0.9.0-batch", "decisions/gallery-is-a-release-gate-with-real-data"]
 ---
 
 # Remotion Video Promo
 
-> **Moved out of the repository (2026-10-14).** The video project now lives in the project's business repository,
-> folder `media/video/`, together with its render, its AI assets and the local copies of third-party pages it used.
+> **Moved out of the repository (2026-10-14).** The video project now lives outside this public repository, together
+> with its render, its AI assets and the local copies of third-party pages it used.
 > `./dev.py mkdocs video` is gone. The history was not rewritten: `mkdocs_src/videoClipPrject/` is still in the
 > commits from `1ff58e8fa` (June 2026) up to the removal, and in the tags v0.9.0 to v1.2.0.
 

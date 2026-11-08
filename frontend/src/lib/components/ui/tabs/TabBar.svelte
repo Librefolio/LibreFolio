@@ -24,7 +24,7 @@
         showLabels?: boolean;
         /** When true, tabs always stretch to fill 100% of the available width (equal share each),
          *  at every breakpoint — not just below `sm:`. Default false preserves today's behavior
-         *  (natural content width above `sm:`), needed e.g. by settings/+page.svelte which relies
+         *  (natural content width above `sm:`), needed e.g. by settings/[...path]/+page.svelte which relies
          *  on tabs NOT filling full width to push its «Administration» group to the right via `sm:ml-auto`. */
         fillWidth?: boolean;
         /** Opt-in (default false — settings/files stay untouched): when a Tab's label would

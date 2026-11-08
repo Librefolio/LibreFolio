@@ -4,6 +4,7 @@ category: concept
 tags: [backend, async, uvicorn, fastapi, yfinance, performance]
 related_features: [F-025, F-060]
 related_problems: [problems/event-loop-blocking.md]
+related: [problems/event-loop-blocking, problems/bcrypt-blocks-the-event-loop]
 ---
 
 # Concept: Async I/O Rule

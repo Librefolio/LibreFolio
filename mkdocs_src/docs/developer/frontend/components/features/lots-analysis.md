@@ -24,13 +24,13 @@ graph LR
     Table -->|onCustodyCellClick| Panel
     Panel -->|modalLot + modalOpen| Modal
 
-    style API fill:#e3f2fd,stroke:#1565c0
-    style Panel fill:#e8f5e9,stroke:#2e7d32
-    style WAC fill:#fff3e0,stroke:#e65100
-    style Gantt fill:#fff3e0,stroke:#e65100
-    style Table fill:#f3e5f5,stroke:#6a1b9a
-    style Compare fill:#ede7f6,stroke:#4527a0
-    style Modal fill:#fce4ec,stroke:#ad1457
+    style API fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style Panel fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style WAC fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style Gantt fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style Table fill:#f3e5f5,color:#1b1b1b,stroke:#6a1b9a
+    style Compare fill:#ede7f6,color:#1b1b1b,stroke:#4527a0
+    style Modal fill:#fce4ec,color:#1b1b1b,stroke:#ad1457
 ```
 
 ## 🧩 Component composition

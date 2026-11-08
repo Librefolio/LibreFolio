@@ -76,6 +76,14 @@ longer fail.
   backend.app.db.post_migration`, whose `--dry-run` lists each leg with the cost it would take). A leg whose cost
   cannot be computed stays a TRANSFER and the others go on.
 
+*2026-11-07 lint:* decision 47 changed after this page was written. N78-1 (the developer, 21/10; `193a1e8e9`, 2026-10-22):
+an ADJUSTMENT that takes units out has **no value** — it only lowers the quantity, and the engines close it at 0. So the
+giving leg of a TRANSFER whose receiver was deleted becomes an ADJUSTMENT-out **without a cost**: `_handover_cost()` and
+the WAC-stage pricing of a split's giving leg (`_cost_split_handovers` in `batch_costs.py`) were removed, rule 12b
+refuses a cost on an outgoing row, and `lone_transfer_legs.py` now converts every lone giving leg (no cost to compute, so
+none stays a TRANSFER). J-17 is moot: `price_marks.py` never reads an ADJUSTMENT as a price. The received leg is
+unchanged: it still takes the sender's Auto cost when it has none.
+
 ## Source files
 
 | Role | Path |
@@ -90,8 +98,8 @@ longer fail.
 | The Auto cost of a received leg without one | `backend/app/services/transactions/auto_cost.py` (`_auto_cost`, `_write_auto_cost`) |
 | The deletion's tests | `backend/test_scripts/test_services/test_broker_service.py` (`TestDeleteBulkCrossBrokerPair`) |
 | The lots and Dashboard after a deletion | `backend/test_scripts/test_services/test_financial/test_orphan_transfer_after_broker_delete.py` |
-| Decision 47: the handover cost | `backend/app/services/transactions/auto_cost.py` (`_handover_cost`) |
-| Decision 47: the split's giving leg priced in the WAC stage | `backend/app/services/transactions/batch_costs.py` |
+| Decision 47: the handover cost (`_handover_cost` removed in `193a1e8e9`, N78-1) | `backend/app/services/transactions/auto_cost.py` |
+| Decision 47: the split's giving leg priced in the WAC stage (removed in `193a1e8e9`, N78-1) | `backend/app/services/transactions/batch_costs.py` |
 | Decision 47: the promote drops the giving side's cost | `backend/app/services/transactions/batch_creates.py` |
 | Decision 47: the lone legs already in a database | `backend/app/services/transactions/lone_transfer_legs.py` |
 | Decision 47: the startup step | `backend/app/services/platform/app_lifespan.py` |

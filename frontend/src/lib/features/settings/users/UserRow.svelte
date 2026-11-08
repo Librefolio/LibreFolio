@@ -16,6 +16,7 @@ another button.
     import UserAvatar from '$lib/components/ui/media/UserAvatar.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {AdminAccount, UserAction} from './types';
+    import {settingsTabHref} from '$lib/features/settings/settingsPaths';
 
     interface Props {
         account: AdminAccount;
@@ -117,7 +118,7 @@ another button.
             {#if isSelf}
                 <p class="text-sm text-lf-muted" data-testid="users-self-hint">
                     {$_('settings.usersTab.selfHint')}
-                    <a class="text-lf-link hover:underline" href="/settings?tab=profile">{$_('settings.profile')}</a>
+                    <a class="text-lf-link hover:underline" href={settingsTabHref('profile')}>{$_('settings.profile')}</a>
                 </p>
             {:else}
                 <div class="flex flex-wrap gap-2">

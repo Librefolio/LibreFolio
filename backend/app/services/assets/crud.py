@@ -47,6 +47,24 @@ from backend.app.utils.asset.identifier import merge_other_identifiers
 
 logger = structlog.get_logger(__name__)
 
+#: The patch fields an explicit ``null`` clears: the nullable columns the edit modal can empty (the icon, the user's URL,
+#: one identifier). An explicit ``null`` on any other field changes nothing: the name, the currency and the type cannot be
+#: empty, the flags and the quote base keep their value, and ``identifier_other`` reads ``null`` as "leave unchanged" (an
+#: explicit empty list clears it: the patch schema keeps ``[]``, and the loop below stores it as NULL).
+#: ``classification_params`` has its own rule, below.
+CLEARED_BY_NULL: frozenset[str] = frozenset(
+    {
+        "icon_url",
+        "user_url",
+        "identifier_isin",
+        "identifier_ticker",
+        "identifier_cusip",
+        "identifier_sedol",
+        "identifier_figi",
+        "identifier_uuid",
+    }
+)
+
 
 class AssetCRUDService:
     """Service for asset CRUD operations."""
@@ -456,8 +474,11 @@ class AssetCRUDService:
         Patch multiple assets in bulk (partial success allowed).
 
         Merge logic:
-        - Field absent in patch or None: IGNORE (keep existing value)
-        - Field present in patch: UPDATE or BLANK (to delete a string set to empty)
+        - Field absent in patch: IGNORE (keep existing value)
+        - Field present with a value: UPDATE; an empty string clears it
+        - Field present as None: CLEAR for the fields of ``CLEARED_BY_NULL`` (the edit modal sends ``icon_url: null``
+          to remove an icon), IGNORE for the others
+        - ``identifier_other``: a list replaces the whole list, an empty one clears it (stored as NULL); None = IGNORE
 
         For classification_params:
         - If None: Set DB column to NULL
@@ -484,6 +505,11 @@ class AssetCRUDService:
         prepared: list[tuple[FAAssetPatchItem, dict]] = []
         for patch in patches:
             patch_dict = patch.model_dump(mode="json", exclude={"asset_id"}, exclude_unset=True, exclude_none=True)
+            # An explicit null clears a nullable column (T-2: exclude_none above used to drop it, so removing an icon,
+            # a user URL or an identifier answered success and changed nothing).
+            for field in sorted(CLEARED_BY_NULL & patch.model_fields_set):
+                if getattr(patch, field) is None:
+                    patch_dict[field] = None
             # Preserve explicit clears inside the atomic classification blocks too.
             # exclude_none above would turn {"sector_area": None} into {}, clearing all.
             if "classification_params" in patch.model_fields_set:

@@ -75,10 +75,10 @@ second, uninstrumented path does not fail — **it goes quiet**.
 
 | Role | Path |
 |------|------|
-| `check-orphans` action + implementation | `scripts/test_runner/_cli.py` — registered ~L462/L505, `_check_orphan_tests()` ~L154, dispatched ~L597 |
+| `check-orphans` action + implementation | `scripts/test_runner/_cli.py` — registered ~L471/L515, `_check_orphan_tests()` ~L162, dispatched ~L685 (lines on 2026-11-07) |
 | Reachability resolution | `scripts/test_runner/_inventory.py` — `reachable_paths()`, `on_disk()`, `is_covered()` |
 | `EXCLUDED_SPECS = {"gallery.spec.ts"}` | `scripts/test_runner/_inventory.py` (~L55) |
-| `all` derivation from the registry | `scripts/test_runner/_common.py` — `_get_category_tests_for_all()` (~L322) |
+| `all` derivation from the registry | `scripts/test_runner/_common.py` — `_get_category_tests_for_all()` (~L361 on 2026-11-07) |
 | Registry assembly | `scripts/test_runner/_registry.py` |
 | Frontend action definitions | `scripts/test_runner/_frontend_transaction.py`, `_frontend_utility.py`, `_frontend_user.py`, `_frontend_fx.py` (one module per category — there is no actions package) |
 

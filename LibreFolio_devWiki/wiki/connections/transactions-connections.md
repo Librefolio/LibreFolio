@@ -5,7 +5,7 @@
 > Round 5 Bugfix 1-3: CASH_TRANSFER first-class type ([[decisions/cash-transfer-split-promote]]), PATCHABLE_FIELDS allowlist, backend type swap, TagInput.svelte, txPayloadHelpers.ts.
 > Round 6: ContextMenu default-on, broker access min(A,B), 3-layout DeleteModal, PickerModal, mode-less BulkModal, txStore SSoT, PendingOp tagged union.
 > Round 6 Plan D: Split/promote integrated into batch pipeline (`splits[]` + `promotes[]` in TXMixedBatch); standalone endpoints eliminated; `POST /transactions/promote-suggest` for DB candidate matching; PromoteMergeModal for divergent field resolution; PMC auto-calc on TRANSFER receiver; 18 backend + 10 E2E tests. D2-round2 ⏳.
-> See [[connections/dependency-graph]] for the full project view.
+> See [[connections/dependency-graph]] for the full project view; the import steps are [[workflows/brim-import-flow]].
 
 ---
 
@@ -66,29 +66,39 @@ Additional Phase 7 deliverables not in the original gap list:
 | [[F-046]] TX List | `GET /api/v1/transactions` | [[F-047]] Transaction List Page |
 | [[F-046]] TX Type Metadata | `GET /api/v1/transactions/types` | [[F-048]] server-driven type rules |
 | [[F-013]] BRIM parse | `POST /api/v1/brokers/import/files/{id}/parse` | [[F-049]] BRIM Import UI |
-| [[F-013]] Last parse cache | `GET /api/v1/brokers/import/files/{id}/last-parse` | [[F-049]] Re-open Staging |
-| [[F-050]] File preview | `GET /api/v1/uploads/{id}/preview` (planned) | [[F-050]] Inline preview |
+| [[F-013]] Last parse cache | `GET /api/v1/brokers/import/files/{id}/last-parse` (removed in `d5e467847`) | [[F-049]] Re-open Staging |
+| [[F-050]] File preview | `GET /api/v1/uploads/{file_id}/preview` | [[F-050]] Inline preview |
 | [[F-051]] Event link | embedded in TX response | [[F-047]] event indicators |
+
+> 2026-11-07 lint: `POST /transactions/events/suggest` (gap 1) and `GET .../last-parse` were removed in `d5e467847`
+> ([[decisions/api-routes-removed-without-deprecation]]); unlinked income transactions and their candidate events are
+> listed by `GET /api/v1/transactions/event-reconciliation`, linked through `POST /transactions/commit`.
 
 ---
 
-## Transaction Types (from V1 design, still current)
+## Transaction Types
 
-| Type | Quantity effect | Cash effect |
+> 2026-11-07 lint: this table listed the V1 design (`TRANSFER_IN`/`TRANSFER_OUT`, `SPLIT`); it now follows
+> `TransactionType` in `backend/app/db/models.py`. Cash is the signed `amount` of the same unified row (no separate cash
+> movement table); see [[entities/native-cash]].
+
+| Type | Quantity effect | Cash effect (`amount`) |
 |------|---------------|-------------|
-| `BUY` | ↑ | ↓ (BUY_SPEND) |
-| `SELL` | ↓ | ↑ (SALE_PROCEEDS) |
-| `DIVIDEND` | — | ↑ |
-| `INTEREST` | — | ↑ |
-| `TRANSFER_IN` / `TRANSFER_OUT` | ↑/↓ | — |
+| `BUY` | ↑ | ↓ |
+| `SELL` | ↓ | ↑ |
+| `TRANSFER` (paired) | ↑/↓ | — |
+| `ADJUSTMENT` (splits, gifts, corrections) | ↑/↓ | — |
+| `DIVIDEND` / `INTEREST` | — | ↑ |
+| `DEPOSIT` / `WITHDRAWAL` | — | ↑ / ↓ |
 | `FEE` / `TAX` | — | ↓ |
-| `SPLIT` | adjusted | — |
+| `FX_CONVERSION` (paired) | — | ↑/↓ |
+| `CASH_TRANSFER` (paired) | — | ↑/↓ |
 
 ---
 
 ## Notes
 
-- **Cash movements are auto-generated** from transactions that impact cash (not a separate user action)
+- **Cash is native to the transaction**: the signed `amount` of each row is its cash effect (not a separate user action)
 - **FIFO** ([[F-056]]) requires accurate transaction history to compute cost basis on-demand
 - **Phase 7 deliberately excludes** fiscal regimes (FIFO/LIFO/PMC), cash split, over-sell protection — deferred to Phase 8+
 

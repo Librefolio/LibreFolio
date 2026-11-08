@@ -48,6 +48,9 @@ against a forgotten `<=` or `abs`, −99); on the frontend, 4 of 403 failed beca
 into the canonical JSON reproduced the prompt line before the fix (`|reconciled|false|` beside `|residual.amount|0|`)
 and showed it fixed after.
 
+*2026-11-07 lint: the comparison has since moved to one shared helper, `is_reconciled()` in
+`financial_math/portfolio/period.py` (same rule, `abs(residual) < CONVERSION_DUST`), which both builders call.*
+
 ## Prevention
 
 - Compare a computed `Decimal` with a tolerance, never with `== 0`, when it comes out of a chain of conversions.
@@ -68,5 +71,6 @@ would print `0` next to `reconciled: false`.
 | Versions (v2) | `backend/app/services/ai_export/components/catalog.py` |
 | Compact map `{1, 2}` | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
 | `CONVERSION_DUST` | `backend/app/services/financial_math/native_cash.py` |
+| `is_reconciled` (shared rule) | `backend/app/services/financial_math/portfolio/period.py` |
 | Doc paragraph | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | Analysis and implementation notes | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |

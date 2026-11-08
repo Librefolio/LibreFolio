@@ -35,6 +35,9 @@ retested 7.3.0 with pip, Pipenv, and Docker: all paths preserving NumPy 2.5.1 fa
 because Numba 0.66 requires `numpy<2.5`. The exact 7.0.1 pin is therefore a current
 compatibility decision, not merely an assumption inherited from the first probe.
 
+2026-11-07 lint: `Pipfile.lock` still pins `riskfolio-lib ==7.0.1`, with no `vectorbt` or `numba`; NumPy has moved
+within 2.5 (`==2.5.4` today).
+
 ## Prevention
 
 - Diagnose dependency conflicts against exact versions and required capabilities.

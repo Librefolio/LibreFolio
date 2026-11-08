@@ -24,18 +24,24 @@ prerequisite conceptual document before the consumer plans.
 
 ## Key Interfaces
 
-- Bucketing functions that downsample a raw daily time series into weekly/monthly buckets given a visible
-  date range.
+- Bucketing functions that downsample a raw daily time series into weekly/monthly/yearly buckets
+  (`ChartResolution = 'daily' | 'weekly' | 'monthly' | 'yearly'`; `mapDateToBucket()`, `aggregateLineSeries()`,
+  `aggregateSumSeries()`, `aggregateOHLCV()`, `aggregateEnvelope()`, `downsampleRenderedSignal()`,
+  `bucketEventMarkers()`).
 - Aggregation rules per series type (e.g. last-value vs. average vs. sum, depending on what the series
   represents — price vs. cumulative P&L vs. allocation weight).
-- Density/hysteresis thresholds that decide when to switch resolution band, with hysteresis to avoid
+- Density/hysteresis thresholds (`computeDensity()`, `chooseResolution()`, `cascadeResolution()`,
+  `chooseInitialResolution()`; for the compact cards `chooseCompactResolution()`) that decide when to switch resolution band, with hysteresis to avoid
   flicker when the zoom boundary is crossed back and forth.
 - Debounce wrapper so resolution recomputation doesn't fire on every intermediate `dataZoom` drag frame.
 
 ## Design Notes
 
 - Consumed by `PriceChartFull`/`CandlestickChart`, `GrowthChart`, `AllocationHistoryChart`, the 9 signal
-  overlay types, and `ResolutionBadge` (for displaying the active resolution).
+  overlay types, and `ResolutionBadge` (for displaying the active resolution); since then also the lots charts
+  (`LotComparisonChart`, `LotWacPriceChart` in `frontend/src/lib/features/brokers/lots/`). `GrowthChart` and
+  `AllocationHistoryChart` live in `frontend/src/lib/features/dashboard/`. (2026-11-07 lint: exports and consumers
+  checked with `grep`.)
 - The **compact/static** chart variant (`PriceChartCompact`/`LineChart` on `/assets` and `/fx` cards)
   deliberately does NOT use the interactive parts of this module (no `dataZoom`-driven resolution switching) —
   it only recomputes on data/width change.

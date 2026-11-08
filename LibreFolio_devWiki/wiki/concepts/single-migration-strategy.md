@@ -14,6 +14,11 @@ related_features: [F-064]
 > of record is `.github/instructions/backend-db.instructions.md` ("Current Phase: Released — Incremental
 > Migrations"). Repairs that cannot be expressed as Alembic migrations run as ordered *post-migration fixes* after
 > `alembic upgrade head` — see [[problems/reused-ids-after-delete]]. The text below is kept as history.
+>
+> 2026-11-07 lint: since the developer's decision of 19/10/2026 (confirmed 24/10) the rule is **one migration per
+> release**: between two releases there is exactly one file, `00N_release_<x_y_z>_schema.py`, and a schema change edits
+> it instead of adding a revision (1.3: `005_release_1_3_0_schema.py`); a file inside a released tag is frozen.
+> Same rule file, section «Alembic Migrations».
 
 ## Definition
 During LibreFolio's development phase, **all database schema changes are made directly in `alembic/versions/001_initial.py`** — the single migration file. No incremental migration files are created. The DB is recreated from scratch after every schema change.

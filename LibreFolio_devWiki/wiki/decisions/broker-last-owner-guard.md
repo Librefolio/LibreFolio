@@ -9,6 +9,14 @@ related: [concepts/characterisation-test-latch, decisions/settings-write-path-co
 
 # Decision: the last-owner guard is asymmetric — and the fix is a product question
 
+> **2026-11-07 lint — the asymmetry is gone.** On 31/08, the day after this page, `11c4d70b1` gave the role-change path
+> the same guard: demoting the last OWNER to EDITOR or VIEWER shows `brokers.sharing.lastOwnerDemotionWarning` («promote
+> another owner first») and saves nothing, and the characterisation test was turned to pin the refusal
+> (`BrokerSharingPanel.test.ts`). The backend refuses the last OWNER's self-demotion too (`BrokerAccessMixin`,
+> `services/brokers/access.py`). The two-exit dialogue below was **not** built: removal and demotion show a warning,
+> and the last OWNER leaving deletes the broker (`leave_broker()`). Whether this closes the decision is the
+> developer's call; `status: open` is kept until then.
+
 ## The finding
 
 `BrokerSharingPanel.svelte` guards **removal** of the last `OWNER` and refuses
@@ -71,8 +79,9 @@ tell them that the five-minute fix was considered and **rejected**, and why.
 
 | Role | Path |
 |------|------|
-| Removal guard | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` (~262) |
-| Unguarded role change | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` (~245) |
+| Removal guard (`lastOwnerRemovalWarning`) | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` (~368) |
+| Role change, unguarded on 30/08, guarded since `11c4d70b1` (`lastOwnerDemotionWarning`) | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` (~339) |
+| The test that pins both refusals | `frontend/src/lib/features/brokers/BrokerSharingPanel.test.ts` |
 | Broker delete endpoint (`force`) | `backend/app/api/v1/brokers.py` |
 | Sharing service | `backend/app/services/brokers/access.py` |
 | mkdocs | `mkdocs_src/docs/user/brokers/index.en.md` |

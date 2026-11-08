@@ -1146,3 +1146,39 @@ div.lf-screenshot-carousel-item.alloc-crop-container img.gallery-img {
     accent-color: var(--md-accent-fg-color);
     cursor: pointer;
 }
+
+/* --- Tables with three or more columns: the columns share the width within limits (E9D) ---
+ * A log message in one column and a short instruction in another used to be laid out in proportion to the widest cell: the
+ * message column took nearly all the width and the instruction column was squeezed to a few words per line. Every cell
+ * gets a floor and a ceiling, and the last column (the instruction, the description) a higher floor: the browser still
+ * lays the table out by itself, it just cannot go below a readable width or above a sensible one. The table takes the width of the
+ * page (Material sized it to its widest line, which made it scroll sideways); where it still does not fit, its wrapper scrolls. Tables of two columns are left as they were (`:has` ignores them). */
+.md-typeset__table:has(> table:not([class]) > thead th:nth-child(3)) {
+    display: block;
+}
+
+.md-typeset table:not([class]):has(> thead th:nth-child(3)) {
+    display: table;
+    width: 100%;
+}
+
+.md-typeset table:not([class]):has(> thead th:nth-child(3)) th,
+.md-typeset table:not([class]):has(> thead th:nth-child(3)) td {
+    min-width: 8rem;
+    max-width: 38rem;
+}
+
+.md-typeset table:not([class]):has(> thead th:nth-child(3)) th:last-child,
+.md-typeset table:not([class]):has(> thead th:nth-child(3)) td:last-child {
+    min-width: 15rem;
+}
+
+/* --- Long code in a table cell (javascripts/table-code-wrap.js) ---
+ * The first two columns keep their code on one line (an identifier is not broken); a log message in one of them took the
+ * width of its longest line. The script marks a code span over 60 characters, and this lets it wrap; it must beat the
+ * `td:nth-child(n) code` rule above, hence the doubled class. */
+.md-typeset table:not([class]) td code.lf-code-long.lf-code-long {
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+}

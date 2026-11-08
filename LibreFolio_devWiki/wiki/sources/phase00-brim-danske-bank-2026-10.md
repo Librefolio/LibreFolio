@@ -34,7 +34,7 @@ import built from several exports of the same bank. The folder also carries the 
 - A capability list stored at upload needs the version that computed it: [[problems/brim-compatible-plugins-frozen-at-upload]].
 - The entry HTML must revalidate, the hashed chunks may be immutable: [[problems/stale-frontend-after-update-html-cached]].
 - Danske plugin decisions: the value date (D5); `Tuotto` → DIVIDEND (D6); notices in Finnish (D7).
-- Step 6: a damaged workbook preview now answers 400 (`UnreadablePreviewError`, `backend/app/services/file_preview.py`);
+- Step 6: a damaged workbook preview now answers 400 (`UnreadablePreviewError`, `backend/app/services/file_preview.py`, now `backend/app/services/files/file_preview.py` after `518d20a1d`);
   the developer **rejected** restricting the upload formats (backlog L4).
 - Gotcha recorded by the design (§3): the real save path is `/transactions/commit`; a
   `/brokers/{id}/transactions/bulk` endpoint does not exist.

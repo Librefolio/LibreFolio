@@ -17,6 +17,7 @@
     import {connectionSecurity, refreshConnectionSecurity} from '$lib/stores/app/connectionSecurityStore';
     import {connectionSecurityDocsUrl, type ConnectionLevel, type ConnectionReason} from '$lib/utils/security/connectionSecurity';
     import {securityChecks} from '$lib/features/settings/security/securityChecks.svelte';
+    import {settingsTabHref} from '$lib/features/settings/settingsPaths';
 
     interface Props {
         /** The sidebar shows icons only. */
@@ -163,7 +164,7 @@
                     class="flex items-center gap-1.5 rounded border px-2 py-1 transition-colors hover:text-lf-on-bar-active focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus {severity === 'error' ? 'border-lf-bar-danger' : 'border-lf-bar-warning'}"
                     data-testid="connection-security-attention-link"
                     data-severity={severity}
-                    href="/settings?tab=security"
+                    href={settingsTabHref('security')}
                     onclick={closeDetails}
                 >
                     <ShieldAlert size={12} class="flex-shrink-0 {severity === 'error' ? 'text-lf-bar-danger' : 'text-lf-bar-warning'}" aria-hidden="true" />

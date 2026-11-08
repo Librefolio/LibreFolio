@@ -32,7 +32,7 @@ broker   = f"Test Broker {unique_id()}"
 
 ## What `unique_id()` actually is
 
-`backend/test_scripts/test_utils.py` (~L174-182):
+`backend/test_scripts/test_utils.py` (~L177-184):
 
 ```python
 _counter = 0
@@ -97,8 +97,8 @@ Recorded here as an option, **not** as something that has been done.
 
 | Role | Path |
 |------|------|
-| `unique_id()` | `backend/test_scripts/test_utils.py` (~L174-182) |
-| Shared engine used by service tests | `backend/app/db/session.py` — `get_async_engine()` (~L105) |
+| `unique_id()` | `backend/test_scripts/test_utils.py` (~L177-184) |
+| Shared engine used by service tests | `backend/app/db/session.py` — `get_async_engine()` (~L116) |
 | Deterministic users (E2E exception) | `backend/test_scripts/test_db/populate_mock_data.py` |
 | Frontend stable credentials | `frontend/e2e/fixtures/test-users.ts` |
 | Isolation classes / scheduler | `scripts/test_runner/_inventory.py`, `scripts/test_runner/_scheduler.py` |

@@ -1,6 +1,9 @@
 ---
 type: source
 title: "Phase 07 — Part 3: API Consolidation + Transfer Semantics + Currency Simplification"
+category: source
+source_type: plan
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3.md
 date_ingested: 2026-04-24
 date_updated: 2026-04-25
 git_hash: a61b0dfa
@@ -60,6 +63,10 @@ brokers in one batch:
 - `GET /transactions?ids=1,2,3` (ordered by ids param)
 - `POST /transactions/events/suggest` (±tolerance_days ∈ [0,7])
 - **REMOVED**: `GET /transactions/{tx_id}` (replaced by ?ids= filter)
+
+> *2026-11-07 lint*: `POST /transactions/events/suggest` and `POST /transactions/transfers/promote` were removed in
+> 1.3 (`d5e467847`); their replacements are `GET /transactions/event-reconciliation` and `POST /transactions/commit`
+> with `promotes[]` — [[decisions/api-routes-removed-without-deprecation]].
 
 ### Deviation 2 — Blocco H: Transfer Semantics (new, emerged in review)
 

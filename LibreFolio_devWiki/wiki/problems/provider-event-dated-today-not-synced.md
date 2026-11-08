@@ -11,6 +11,7 @@ related:
   - concepts/daily-point-policy
   - concepts/prices-current-side-effect
   - decisions/asset-event-saves-all-or-nothing
+  - problems/yahoo-bars-dated-one-day-early-east-of-utc
 ---
 
 # Problem: a provider event dated today is not synced on its day
@@ -27,10 +28,10 @@ event dated today is missing on its own day, and arrives only with the first syn
 A provider's events reach the database through the history only:
 
 - the fetch reads the history up to yesterday when the requested range reaches today:
-  `history_end = min(end, today - timedelta(days=1)) if end >= today else end` (`refresh.py:227`);
+  `history_end = min(end, today - timedelta(days=1)) if end >= today else end` (`refresh.py:267` on 07/11/2026; line 227 at filing);
 - today's point comes from `get_current_value()`. Its `FACurrentValue` holds a value, a currency, `as_of_date` and a
   source, and no events;
-- the events of `FAHistoricalData` are what `_upsert_asset_events()` writes (`refresh.py:557`).
+- the events of `FAHistoricalData` are what `_upsert_asset_events()` writes (`refresh.py:655` on 07/11/2026; line 557 at filing).
 
 So an event dated today is written once today has become history: by the first sync, on a later day, whose range
 covers that date.
@@ -46,6 +47,10 @@ None yet. The test-author found the cause, and W reported it to the coordinator 
 
 The E2E test works around it: the event and the transaction form are dated yesterday (`setFormDate`). The spec says
 why in a comment.
+
+2026-11-07 lint: still open. `refresh.py` still caps the history fetch at yesterday (`history_end`, line 267) and
+writes events only from `remote_data.events` of the history (line 655); `FACurrentValue` still carries no events, and
+the spec still dates the event before today.
 
 ## Prevention
 
@@ -65,7 +70,7 @@ why in a comment.
 
 | Role | Path |
 |------|------|
-| `history_end` (line 227); the provider events written (line 557) | `backend/app/services/assets/refresh.py` |
+| `history_end` (line 267; 227 at filing); the provider events written (line 655; 557 at filing) | `backend/app/services/assets/refresh.py` |
 | `FACurrentValue` (no events), `FAHistoricalData.events` | `backend/app/schemas/prices.py` |
 | Events planned by the Scheduled Investment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
 | Upsert of the provider events, matched on their own source | `backend/app/services/assets/event_store.py` |

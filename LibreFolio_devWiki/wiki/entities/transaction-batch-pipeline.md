@@ -23,12 +23,16 @@ end-of-day balance replay, and builds the response. Since 2026-09-11 (SP16) `Tra
 
 ## Key Interfaces — the order
 `parse_inputs` (lenient per-row parse, original indices kept — [[problems/pydantic-422-preemption]]) →
-`preload_and_authorize` (EDITOR access; may end the batch early) → `apply_deletes` → `apply_splits` →
-`apply_updates` → `validate_updated_pairs` → `apply_creates` → `apply_promotes` → `resolve_create_links` →
-`compute_wac_and_fx_issues` → `validate_cost_basis` → `validate_balances` → `finalize_response`.
+`check_decimal_limits` → `check_dates` → `check_cost_basis_sign` →
+`preload_and_authorize` (EDITOR access; it, a decimal past its column or a date outside its bounds ends the batch
+early) → `apply_deletes` → `apply_splits` → `apply_updates` → `validate_updated_pairs` → `warn_inverted_updated_pairs`
+→ `apply_creates` → `apply_promotes` → `resolve_create_links` → `compute_wac_and_fx_issues` → `validate_cost_basis` →
+`validate_balances` → `finalize_response`.
 
-The docstring states it in one line: *parse → access → delete → split → update → create → promote → link → WAC → cost
-basis → balance replay → response*.
+The docstring states it in one line: *parse → decimal limits → dates → cost basis sign → access → delete → split →
+update → create → promote → link → WAC → cost basis → balance replay → response*. (2026-11-07 lint: the three checks
+before the access — W-B58 decimal limits, N74 dates, J-60 cost-basis sign — and `warn_inverted_updated_pairs` were added
+in 1.3 after this page was written; a negative cost basis does not stop the batch.)
 
 ## Design Notes
 - **The caller owns the database transaction.** The stages never commit, roll back or begin (nested) transactions;

@@ -38,12 +38,15 @@ graph TD
 | Backend | Interface | Frontend |
 |---------|-----------|----------|
 | [[F-015]] Provider list | `GET /api/v1/fx/providers` | [[F-016]] Add pair modal (provider selector) |
-| [[F-016]] Pair CRUD | `GET/POST/DELETE /api/v1/fx/pairs` | [[F-021]] FX List, [[F-022]] FX Detail |
-| [[F-017]] Sync trigger | `POST /api/v1/fx/sync` | [[F-021]] Sync button |
+| [[F-016]] Pair CRUD | `GET/POST/DELETE /api/v1/fx/providers/routes` | [[F-021]] FX List, [[F-022]] FX Detail |
+| [[F-017]] Sync trigger | `POST /api/v1/fx/currencies/sync` | [[F-021]] Sync button |
 | [[F-018]] Fallback logic | (transparent, server-side) | [[F-017]] transparently improves reliability |
 | [[F-019]] MANUAL sentinel | (auto-managed, hidden from API list) | n/a — invisible to UI |
-| [[F-020]] Conversion route | `GET /api/v1/fx/conversion-route/{base}/{quote}` | [[F-022]] Detail page shows route |
-| [[F-023]] Chart data | `GET /api/v1/fx/pairs/{id}/history` | [[F-022]] rate history chart |
+| [[F-020]] Conversion route | `GET /api/v1/fx/providers/routes` (each route's `chain_steps`) | [[F-022]] Detail page shows route |
+| [[F-023]] Chart data | `POST /api/v1/fx/currencies/convert` (date range, with signals) | [[F-022]] rate history chart |
+
+> 2026-11-07 lint: endpoints realigned with `backend/app/api/v1/fx/` — pairs are conversion routes under
+> `/fx/providers/routes`, sync and conversion live under `/fx/currencies`.
 
 ---
 

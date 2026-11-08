@@ -12,7 +12,7 @@ related:
 # Problem: a merge that dies before it starts
 
 > Filed at the train-71 ingest (2026-10-12) from the coordinator's report, with the mechanism checked in Git's own
-> sources at v2.53.0, the version on the developer's machine.
+> sources at v2.53.0, the Git version in use at the time.
 
 ## Symptom
 

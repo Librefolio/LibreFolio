@@ -1,9 +1,9 @@
 ---
 title: "BulkModal row-selector toolbar hidden after BRIM import"
 category: problem
-status: open
+status: accepted
 date: 2026-06-25
-updated: 2026-10-12
+updated: 2026-11-07
 tags: [frontend, bulk-modal, z-index, overflow, sticky, import, svelte5, css]
 related:
   - problems/datatable-actions-column-on-mobile
@@ -50,6 +50,12 @@ Still open, to re-test after release 1.2 (backlog C-61). No E2E covers the sympt
 checks the hand-off from the import wizard (the selected count, the rows in the editor, the validation, the to-do
 banner) but never selects a row in the BulkModal or checks that its selection toolbar is visible; the guide step
 `transaction.bulk.selection` exists only in the onboarding catalogue. Neither proposed cure is in the code.
+
+## Decision (2026-10-22, recorded by the 2026-11-07 lint)
+
+Backlog C-61 was discarded by the developer on 2026-10-22: the missing bar was never seen again, and a user report
+would reopen it as an issue. No cure and no test were added; status `open` → `accepted`. Source:
+`LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` (C-61).
 
 ## Source files
 

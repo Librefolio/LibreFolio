@@ -89,6 +89,8 @@ equivalence, a passed secret scan, and unchanged source and production databases
 - Portfolio Full 1Y falls from **2,676,781** to **1,990,718** characters (**-25.630151%**). Indicator characters fall **19.934224%** and event characters **49.662553%**; **1,615** events are detected and **707** exported.
 - FX remains blocked by the known `fx.rate_ohlc` warm-up coupling; all nine optional FX matrix probes fail before a measurable payload and remain outside this decision's repair scope.
 - The public analysis catalog contains 16 analyses until deterministic Risk drawdown data supports reinstatement.
+  *2026-11-07 lint:* the focused V3 catalog (`5fa147532`, 04/08) reduced the public catalog to 11 analyses;
+  `asset.drawdown_recovery` has not been reinstated.
 
 ## Validation
 
@@ -122,7 +124,7 @@ The original real-service diagnostic probe completed all 27 Asset/Broker/Portfol
 | Sampling and event-selection response manifests | `backend/app/services/ai_export/runtime_service.py` |
 | Observed-only crossings and epsilon policy | `backend/app/services/signals/annotations.py` |
 | Portfolio/Broker TWRR, P&L, and flow buckets | `backend/app/services/ai_export/components/payloads/portfolio_broker.py` |
-| Public 16-analysis catalog | `backend/app/services/ai_export/analyses/catalog.py` |
+| Public analysis catalog (16 on 03/08, 11 since the V3 catalog) | `backend/app/services/ai_export/analyses/catalog.py` |
 | Frontend metadata rendering | `frontend/src/lib/features/ai-export/templates/promptRenderer.ts` |
 | Empty temporal-row renderer hardening | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
 | Broker scope nomenclature | `backend/app/services/ai_export/components/portfolio_financial.py`, `backend/app/services/ai_export/runtime_service.py` |

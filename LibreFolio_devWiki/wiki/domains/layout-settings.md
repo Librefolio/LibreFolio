@@ -16,6 +16,14 @@ Every authenticated page in LibreFolio lives inside the same persistent shell: a
 
 Language and theme are user-level preferences, persisted both in the backend (`UserSettings`) and in `localStorage` for immediate startup without a round trip. The system supports four languages (EN, IT, FR, ES) with 840+ keys per language, all managed via the `dev.py i18n` CLI. Theme choices are dark, light, or auto (follows OS preference), implemented with Svelte 5 runes in `themeStore.svelte.ts`.
 
+> 2026-11-07 lint: three facts have moved. (1) The sidebar now lists Dashboard, Brokers, Transactions, Tools, Assets,
+> FX, Files and Settings (`frontend/src/lib/components/layout/Sidebar.svelte`), and the footer ticker is gone:
+> `LiveTicker.svelte` was deleted in `cd7b24bb4` (2026-08-05). (2) The theme lives in
+> `frontend/src/lib/stores/app/themeStore.ts`, a plain module (`applyTheme`, `getStoredThemePreference`,
+> `initThemeListener`; localStorage key `librefolio-theme`); no `themeStore.svelte.ts` exists in the history. (3) The
+> catalogue `frontend/src/lib/i18n/{en,it,fr,es}.json` is generated from `base/` plus one folder per subsystem and per
+> plugin ([[concepts/brim-texts-translated-by-code]]); «840+ keys» is the 2026-05 count.
+
 Global settings are a distinct concept from user settings: they are admin-managed, stored in a key-value table (`GlobalSetting`), and govern application-wide behaviour — session TTL, portfolio base currency, scheduler parameters, and future feature flags. Non-admin users can read the subset of global settings that affect their experience (e.g. base currency) but cannot modify them.
 
 ## Feature cluster
@@ -43,9 +51,9 @@ graph TD
     Header --> ThemeToggle[themeStore.svelte.ts<br/>dark/light/auto]
     Header --> LangSelector[LanguageSelector.svelte]
     LangSelector --> i18n[svelte-i18n<br/>en/it/fr/es.json]
-    LangSelector -->|PATCH /users/me/settings| UserSettings[(UserSettings DB)]
+    LangSelector -->|PUT /settings/user| UserSettings[(UserSettings DB)]
     ThemeToggle -->|localStorage| Browser
-    AdminSettings[Admin settings page] -->|PATCH /settings/global| GlobalSettings[(GlobalSetting DB)]
+    AdminSettings[Admin settings page] -->|PATCH /settings/global/bulk| GlobalSettings[(GlobalSetting DB)]
     GlobalSettings -->|read at startup| BackendConfig[JWT TTL, base currency,<br/>scheduler params]
 ```
 
@@ -54,6 +62,8 @@ graph TD
 - [[decisions/i18n-key-rationalization]] — intentional key duplication between namespaces is accepted when it improves clarity; the audit tool flags duplicates but does not enforce deduplication.
 - [[decisions/sveltekit-over-react]] — the SvelteKit v4 rewrite (Phase 0) established this shell architecture; earlier versions used React + MUI, which had heavier theming complexity.
 - Svelte 5 runes in `themeStore.svelte.ts` — the theme store is one of the first files migrated to `$state`/`$derived`; this decision established the `*.svelte.ts` pattern for all new rune-based stores.
+  *2026-11-07 lint: not borne out by the code — the theme store is `themeStore.ts`, plain functions without runes (see
+  the note above); the `*.svelte.ts` pattern is real elsewhere ([[concepts/svelte5-runes]]).*
 - [[decisions/onboarding-versioned-progress-per-flow]] and [[decisions/automatic-popups-wait-for-guides]] — since
   1.2 the shell also hosts the onboarding: one versioned progress row per user and flow, and a popup lane that holds
   the donation and update prompts while a guide or a modal is on screen ([[F-105]]).
@@ -65,7 +75,7 @@ graph TD
 ## Known problems / limitations
 
 - [[problems/flag-emoji-windows]] — flag emoji (language selector, currencies) print as letter pairs on Windows, whose emoji font has no flags; resolved by the global flags-only face `'LF Flags'` (`static/lf-flags.css`), which leads every font stack: Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere. ECharts text is not covered yet.
-- [[problems/liveticker-header-crash]] — LiveTicker in `Header.svelte` caused a crash on navigation in early versions; resolved by lifecycle guard.
+- [[problems/liveticker-header-crash]] — LiveTicker in `Header.svelte` caused a crash on navigation in early versions; resolved by lifecycle guard. *2026-11-07 lint: the component itself was removed in `cd7b24bb4` (2026-08-05).*
 
 ## What comes next
 

@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-09-25
 tags: [frontend, risk, asset-global, eligibility, i18n, selection]
-related: [asset-global-page-shows-no-money, discarded-risk-answer-read-as-empty]
+related: [decisions/asset-global-page-shows-no-money, problems/discarded-risk-answer-read-as-empty, decisions/asset-set-one-preparation-not-fan-out]
 ---
 
 # Decision: eligibility comes from Risk's engine, and an ineligible asset is parked, not dropped
@@ -61,6 +61,7 @@ redesign) arrived in the lab's branch with the Risk → F merge `879063c1c`.
 | Ladder and quick actions | `frontend/src/lib/features/risk/assetSetSelection.ts` |
 | Usage panels (`assetScope`) | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Engine | `backend/app/services/risk/eligibility.py` |
+| `POST /risk/eligibility` | `backend/app/api/v1/risk.py` |
 
 ## Links
 - [[decisions/asset-global-page-shows-no-money]]

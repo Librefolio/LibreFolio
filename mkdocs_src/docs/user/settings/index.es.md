@@ -23,6 +23,7 @@ Solo los administradores tienen este grupo. Haz clic en **Administración** para
 
 - 👤 **¿No eres administrador?** No tienes **Administración**: tus pestañas terminan en **Acerca de**, y un enlace a una de las pestañas de administración abre tu **Perfil** en su lugar. La configuración de la instancia sigue aplicándose a ti: la cambia tu administrador.
 - 🔢 **Un número en Seguridad**, repetido en **Administración**, indica cuántos elementos de las comprobaciones de seguridad de la instancia requieren la revisión de un administrador.
+- 🔗 **Cada pestaña tiene su propia dirección**, que puedes guardar en marcadores o compartir: `/settings/profile`, `/settings/preferences`, `/settings/plugins`, `/settings/about` y, para los administradores, `/settings/admin/global`, `/settings/admin/users` y las demás pestañas del grupo. La dirección sigue a la pestaña que abres, y **Atrás** vuelve a la pestaña anterior. Una dirección que la app no conoce abre la primera pestaña.
 - 📱 **En un teléfono**, las pestañas muestran solo sus iconos, y el título situado encima de ellas indica la pestaña abierta.
 
 ## ↔️ Cuando las pestañas no caben {: #tabs-overflow }

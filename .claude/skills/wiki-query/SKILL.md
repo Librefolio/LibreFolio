@@ -119,6 +119,7 @@ except nx.NetworkXNoPath:
 ### Step 2 — Read Source Pages (Targeted)
 
 The graph returns `source_file` paths for each node. Read only the 2-4 most relevant files.
+`source_file` is relative to the **repository root** (e.g. `LibreFolio_devWiki/wiki/...`, `backend/app/...`): the graph holds docs and code.
 Do NOT read all pages — the graph already pre-filtered the relevant ones.
 
 ### Step 3 — Check for Drift (Optional)

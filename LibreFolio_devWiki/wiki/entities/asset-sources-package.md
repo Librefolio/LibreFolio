@@ -29,7 +29,7 @@ responsibility with **no contract change**.
 | `core.py` | provider thread/cache plumbing: the five caches, `_run_provider_in_thread`, parameter helpers, `_json_safe_details` |
 | `crud.py` | `AssetCRUDService` — create, bulk patch (absent vs `null` semantics), bulk delete with per-item savepoints |
 | `manager.py` | `AssetSourceManager` — the asset service, composed from the responsibility modules |
-| `metadata.py` | provider metadata refresh |
+| `metadata.py` | provider metadata refresh — removed in `d5e467847` (2026-11-04) with its route; metadata now comes from the provider probe (`provider_management.py`) |
 | `price_query.py` | price queries (`get_prices_bulk`) and current quotes |
 | `price_store.py` | persistence of prices (bulk upsert with the OHLC merge, bulk delete) |
 | `currency_change.py` | the market-data wipe after a currency change ([[decisions/policy-d-currency-wipe]]) (1.3, CP2b) |
@@ -39,6 +39,15 @@ responsibility with **no contract change**.
 | `search.py` | `AssetSearchService` — cross-provider search orchestration |
 | `web_link_finder.py` | the search's last-resort web lookup ([[decisions/web-link-finder-ddgs]]); in `services/` until 1.3 |
 | `market_calendar.py` | market holidays and the carry-versus-quote rule; in `services/` until 1.3 |
+| `observed_prices.py` | the public price series of `POST /assets/prices/query`, one point per calendar day, converted only where something changes |
+| `price_sampling.py` | a price series sampled for a compact chart (card charts) |
+| `period_changes.py` | fixed-period price changes (the Δ columns of the Assets table) |
+| `provider_policy.py` | what the instance decides about each provider (today: its place in the asset search) |
+| `event_links.py` | the transactions linked to asset events, named by a refusal to delete them |
+| `split_guard.py` | the SPLITs an event deletion would take from cost-less incoming adjustments |
+
+> 2026-11-07 lint: the last six rows were added from the package listing (`ls backend/app/services/assets/`); `metadata.py`
+> no longer exists.
 
 ## Design Notes
 - **Contract preserved by design** (SP08): cache, thread and error identities, public imports, provider

@@ -1,6 +1,9 @@
 ---
 title: "Source Code v0.9.0 Batch"
 category: "source"
+source_type: commits
+date_ingested: 2026-06-17
+original_path: (source files up to commit 9cd86c823 — no single plan file)
 tags: ["source-code", "v0.9.0", "remotion", "ui", "gallery"]
 ---
 

@@ -12,6 +12,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 | **Account links** | The invitation and password-reset pages, `/invite` and `/reset-password` (`auth-links`) |
 | **Settings** | Profile editing, preferences tabs, password change |
 | **Users tab** | Settings → Administration → Users, for administrators: account actions, invitation and password-reset links with their address check, deletion after its preview (`admin-users`) |
+| **Settings addresses** | Every Settings tab at its own address, `/settings/<tab>` and `/settings/admin/<tab>`; the `?tab=` of 1.2 replaced by the address; «Open the settings» on a refusal of the space limit to the limit in Global Settings (`settings-addresses`) |
 | **Plugins tab** | Settings → Plugins and **Configure**, as a member and as an administrator: the two personal search preferences, `mockprov`'s settings through an asset's edit dialog, the search's «to configure» row and the 👑 legend (`plugin-settings`) |
 | **Files** | File upload, file list, drag & drop, file deletion |
 | **Select Components** | `SearchSelect`, `SimpleSelect`, currency pickers |
@@ -47,6 +48,23 @@ banner, the billing link, the refusals with their error codes, and the copy itse
 Vitest component tests: see
 [Users Tab and Account Deletion Tests](../frontend/components/features/settings.md#users-tests).
 Run it alone with `./dev.py test front-utility admin-users`.
+
+### 🔗 Settings Addresses (`settings-addresses`) {: #settings-addresses }
+
+`settings/settings-addresses.spec.ts` (lot B10) checks the addresses of the Settings tabs on the lane's real
+backend, read-only: nothing is saved.
+
+| Test | What it checks |
+|------|----------------|
+| Address and Back | `/settings/admin/backup` opens Backup inside «Administration»; Users writes `/settings/admin/users`, Preferences `/settings/preferences`; Back returns to Users |
+| Unknown address | `/settings/nope-…` becomes `/settings`, Profile open |
+| The address of 1.2 | `/settings?tab=email` opens Email and becomes `/settings/admin/email` |
+| «Open the settings» | A simulated 507 `storage_limit_exceeded` on an upload from Files offers the button; it opens `/settings/admin/global?setting=storage_limit_mb`, the limit's row highlighted and in view, the field read-only until the lock is opened by hand |
+| A member | `/settings/admin/users` becomes `/settings`, Profile open, no «Administration» |
+
+Prerequisites: the test users, and `LIBREFOLIO_STORAGE_LIMIT_MB` unset on the lane. The logic itself, case by case, is
+pinned by Vitest (`routes/(app)/settings/[...path]/page.tabs.test.ts`, `settingsTabs.test.ts`,
+`GlobalSettingsTab.test.ts`). Run it alone with `./dev.py test front-utility settings-addresses`.
 
 ### 🧩 Plugins Tab (`plugin-settings`) {: #plugin-settings }
 

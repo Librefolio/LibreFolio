@@ -38,6 +38,11 @@ repeatedly) and debounced (avoids recomputing buckets on every intermediate zoom
   `FxCard` on `/assets` and `/fx`. Deliberately **no** `dataZoom`, hysteresis, or badge — recomputes only on
   data/width change, since these cards never zoom interactively.
 
+> *2026-11-07 lint:* two later changes. `ChartResolution` gained a fourth level, `yearly`, reachable only by a caller
+> that counts years (`yearlyCount`), for decades-long growth histories (`b0e14211a`, 2026-10-28, FB-6). And the compact
+> card now shows a `ResolutionBadge` too (`45ce2deb1`, 2026-10-23, Y5-F3): the card asks the server for only the points
+> it can draw (`max_points`, release 1.3), and the badge shows the coarser of the backend's step and the chart's own.
+
 ## Why Not Always Plot Raw Points?
 
 - **Readability**: thousands of daily points crammed into a multi-year view is visual noise; weekly/monthly

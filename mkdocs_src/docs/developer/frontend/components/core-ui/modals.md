@@ -21,9 +21,9 @@ graph TD
     CM -.->|used by| DT["DataTable action confirmations"]
     CM -.->|used by| DIS["Discard-draft confirmations"]
 
-    style MB fill:#f3e5f5,stroke:#7b1fa2
-    style CM fill:#f3e5f5,stroke:#7b1fa2
-    style SMB fill:#f3e5f5,stroke:#7b1fa2
+    style MB fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+    style CM fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+    style SMB fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
 ---

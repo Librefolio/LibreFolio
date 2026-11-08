@@ -6,6 +6,7 @@ date: 2026-10-15
 tags: [backend, frontend, assets, asset-events, api, breaking-change, data-editor, post-migration, release-1.3]
 related:
   - features/F-031
+  - decisions/api-routes-removed-without-deprecation
   - features/F-090
   - features/F-051
   - problems/asset-event-edit-delete-reinsert
@@ -82,6 +83,9 @@ coordinator settled the vehicle of 23 (12:58) and the editor's save (16:20). Quo
 - **One request**: the editor's save sends its deletions inside the upsert request (`delete_ids`). They are deleted
   first, in the same transaction, with one commit. Two requests would leave the deletions done when the upsert is
   refused, which breaks 22 for the user. The separate `DELETE` stays, for a plain deletion.
+  - *2026-11-07 lint:* the separate `DELETE /api/v1/assets/events` was later removed with no deprecation
+    (`d5e467847`, 04/11): a plain deletion is a `POST` with `delete_ids`, see
+    [[decisions/api-routes-removed-without-deprecation]].
 
 ## How it is built
 
@@ -119,6 +123,7 @@ coordinator settled the vehicle of 23 (12:58) and the editor's save (16:20). Quo
 - `DELETE /api/v1/assets/events` requires `asset_id`: a request with `ids` alone is a 422. An id of another asset
   answers `not_found`, and its event stays (`delete_events_bulk()`). The `DELETE` still answers 200 with one outcome
   per id and commits the deletable ones.
+  *(2026-11-07 lint: the route and `delete_events_bulk()` were removed in `d5e467847`, 04/11.)*
 
 ### E1c: the stored types (`b3d33778e`, in `dev_release2` with `162e3cfab`)
 
@@ -135,7 +140,7 @@ coordinator settled the vehicle of 23 (12:58) and the editor's save (16:20). Quo
   exactly against them (`_expected_counts()`). A failure reads «row counts not as expected: table (expected N, found
   M)». The declaration is asked inside the fix's `try`, so a fix that fails to declare is reported, not raised.
 
-### E1b: one request, and the windows (in W's worktree, not committed at filing)
+### E1b: one request, and the windows (not committed at filing; landed as `e8d1b2cc1`, 15/10)
 
 - `FAEventUpsert.delete_ids`, in `upsert` items only, lists events of the item's asset, manual or from a provider,
   as the editor could delete them in 1.2. A provider's event comes back with its next sync.
@@ -232,7 +237,7 @@ The provider-event test had to date its event yesterday: [[problems/provider-eve
 
 | Role | Path |
 |------|------|
-| Events API: the refusal statuses, `mode`, the scoped `DELETE` | `backend/app/api/v1/assets/events.py` |
+| Events API: the refusal statuses, `mode` (the scoped `DELETE` removed in `d5e467847`) | `backend/app/api/v1/assets/events.py` |
 | Upsert, `delete_ids`, the checks, the provider upsert in place | `backend/app/services/assets/event_store.py` |
 | `FAAssetEventPoint.normalize_type()`, `FAEventUpsert` and its validators | `backend/app/schemas/assets/events.py` |
 | The provider refresh, still committed in slices | `backend/app/services/assets/refresh.py` |

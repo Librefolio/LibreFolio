@@ -16,20 +16,27 @@ All SQLModel ORM models for LibreFolio live in `backend/app/db/models.py`. They 
 
 ## Models
 
+> 2026-11-07 lint: tables, columns and enums realigned with the mapped models of `backend/app/db/models.py` (17
+> tables). The earlier table carried a V1 field list (`role` on `User`, `TRANSFER_IN`/`TRANSFER_OUT`/`SPLIT`, a
+> `provider_code` on FX rows, singular table names) that the code no longer has.
+
 | Model | Table | Key Fields |
 |-------|-------|-----------|
-| `User` | `users` | `id, username, email, hashed_password, is_active, role (UserRole: admin/user), created_at` |
-| `UserSettings` | `user_settings` | `user_id (FK), base_currency, theme, language, settings JSON` |
-| `GlobalSetting` | `global_setting` | `key, value, type` |
-| `Broker` | `broker` | `id, name, description, icon_url, owner_id, portal_url, import_plugin` |
-| `BrokerUserAccess` | `broker_user_access` | `broker_id, user_id, role (OWNER/EDITOR/VIEWER)` |
-| `Asset` | `assets` | `id, display_name, currency, asset_type (AssetType), classification_params (JSON), active, identifier_isin, identifier_ticker, identifier_cusip, identifier_sedol, identifier_figi, identifier_uuid, identifier_other` |
-| `Transaction` | `transaction` | `id, asset_id, broker_id, type (TransactionType), date, quantity, amount, currency, fees, notes` |
-| `PriceHistory` | `price_history` | `id, asset_id, date, open, high, low, close, volume, adjusted_close, currency, source_plugin_key` |
-| `AssetEvent` | `asset_events` | `id, asset_id, date, type (AssetEventType), value_amount, value_currency, notes, provider_assignment_id (FK→asset_provider_assignments, nullable)` |
-| `FxRate` | `fx_rate` | `id, base, quote, date, rate (Numeric 18,6), provider_code` |
-| `FxConversionRoute` | `fx_conversion_route` | `id, base, quote, provider_code, priority, chain_steps (JSON), fetch_interval` |
-| `AssetProviderAssignment` | `asset_provider_assignments` | `id, asset_id (FK), provider_code, identifier (nullable), identifier_type, provider_params (JSON), fetch_interval` |
+| `User` | `users` | `id, username, email, hashed_password, is_active, is_superuser (administrator), is_instance_owner, session_version, email_verified_at, created_at` |
+| `UserSettings` | `user_settings` | `user_id (FK), base_currency, language, theme, avatar_url` |
+| `GlobalSetting` | `global_settings` | `key, value, value_type, description, updated_by_user_id` |
+| `Broker` | `brokers` | `id, name, description, portal_url, icon_url, default_import_plugin, allow_cash_overdraft, allow_asset_shorting, is_active, opened_at` |
+| `BrokerUserAccess` | `broker_user_access` | `broker_id, user_id, role (UserRole: OWNER/EDITOR/VIEWER), share_percentage` |
+| `Asset` | `assets` | `id, display_name, currency, icon_url, asset_type (AssetType), classification_params (JSON), quote_base_quantity, active, is_benchmark, user_url, identifier_isin, identifier_ticker, identifier_cusip, identifier_sedol, identifier_figi, identifier_uuid, identifier_other` |
+| `Transaction` | `transactions` | `id, broker_id, asset_id, type (TransactionType), date, quantity, amount, currency, related_transaction_id, tags, description, cost_basis_override, cost_basis_currency, asset_event_id` |
+| `PriceHistory` | `price_history` | `id, asset_id, date, open, high, low, close, volume, adjusted_close, currency, source_plugin_key, fetched_at` |
+| `AssetEvent` | `asset_events` | `id, asset_id, date, type (AssetEventType), value, currency, notes, provider_assignment_id (FK→asset_provider_assignments, nullable)` |
+| `FxRate` | `fx_rates` | `id, date, base, quote, rate, source, fetched_at` |
+| `FxConversionRoute` | `fx_conversion_routes` | `id, base, quote, priority, chain_steps (JSON)` |
+| `AssetProviderAssignment` | `asset_provider_assignments` | `id, asset_id (FK), provider_code, identifier (nullable), identifier_type, provider_params (JSON), last_fetch_at` |
+| `AccountToken` | `account_tokens` | `purpose, token_hash, user_id, email, grants_admin, expires_at, consumed_at, revoked_at` (single-use invitation/reset links) |
+| `PluginSystemSetting` / `PluginUserSetting` | `plugin_system_settings` / `plugin_user_settings` | `family, plugin_code, field_key, value_json, secret_ciphertext, key_id` |
+| `UserOnboardingProgress` / `UserOnboardingStepProgress` | `user_onboarding_progress` / `user_onboarding_step_progress` | `user_id, flow, (step_id), status, version` |
 
 ## Enums
 
@@ -37,14 +44,16 @@ All SQLModel ORM models for LibreFolio live in `backend/app/db/models.py`. They 
 |------|--------|
 | `AssetType` | `STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND, HOLD, COMMODITY, REAL_ESTATE, INDEX, OTHER` + subtypes `ETF_STOCK, ETF_BOND, ETF_COMMODITY, ETF_REAL_ESTATE, ETF_CRYPTO, ETF_MONETARY, CROWDFUND_REAL_ESTATE` (`CROWDFUND` was `CROWDFUND_LOAN` until 2026-07-06; see [[decisions/asset-type-two-level-taxonomy]]) |
 | `AssetEventType` | `DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT, MATURITY_SETTLEMENT` |
-| `TransactionType` | `BUY, SELL, DIVIDEND, INTEREST, FEE, TAX, TRANSFER_IN, TRANSFER_OUT, SPLIT, OTHER` |
-| `UserRole` | `admin, user` |
+| `TransactionType` | `BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER` |
+| `UserRole` | `OWNER, EDITOR, VIEWER` — the broker sharing role; an administrator is `User.is_superuser` |
 | `IdentifierType` | `ISIN, TICKER, CUSIP, SEDOL, FIGI, UUID, OTHER` |
 | `ProviderInputType` | `TICKER, ISIN, URL, AUTO_GENERATED` |
 
 ## Design Notes
-- **Decimal columns**: `Numeric(18, 6)` for all prices, rates, amounts
-- **Daily-point policy**: `UniqueConstraint(asset_id, date)` on `PriceHistory`; `UniqueConstraint(base, quote, date)` on `FxRate`
+- **Decimal columns**: `Numeric`, with a precision per column — e.g. `Transaction.amount` `Numeric(18, 6)`,
+  `Transaction.quantity` `Numeric(22, 10)`, `PriceHistory.close` `Numeric(24, 12)`, `FxRate.rate` `Numeric(24, 10)`
+  (2026-11-07 lint: was «`Numeric(18, 6)` for all»)
+- **Daily-point policy**: `UniqueConstraint(asset_id, date)` on `PriceHistory`; `UniqueConstraint(date, base, quote)` on `FxRate`
 - **Currency validation**: all currency fields validated via `Currency.validate_code()` (ISO 4217 + crypto dictionary)
 - **`AssetEvent.provider_assignment_id`**: nullable FK with `ON DELETE CASCADE` — `NULL` = manually entered event; non-NULL = auto-generated by provider
 - **`Asset.identifier_*` columns**: one column per `IdentifierType` for direct search without JOIN on assignment table
@@ -63,4 +72,4 @@ All SQLModel ORM models for LibreFolio live in `backend/app/db/models.py`. They 
 |------|------|
 | All ORM models | `backend/app/db/models.py` |
 | Session management | `backend/app/db/session.py` |
-| Alembic migration | `backend/alembic/versions/001_initial.py` |
+| Alembic migrations | `backend/alembic/versions/001_initial.py` … `backend/alembic/versions/005_release_1_3_0_schema.py` (one per release, [[concepts/single-migration-strategy]]) |

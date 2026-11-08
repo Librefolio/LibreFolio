@@ -41,7 +41,7 @@ the locked main venv with `PIPENV_CUSTOM_VENV_NAME` (documented in the `devpy` a
 
 ## Where it applies
 
-Every parallel workstream of Release 2 ran in its own lane (e.g. "lane 6156/6166, `--data-dir /tmp/librefolio-r2-l`"
+Every parallel workstream of Release 2 ran in its own lane (e.g. "lane 6156/6166, `--data-dir <lane data dir>`"
 in the plans' headers). Isolation *between tests of one run* is a different layer: [[concepts/test-isolation-classes]].
 
 ## Worktrees and trains

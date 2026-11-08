@@ -15,6 +15,10 @@ Five behaviours of the pinned stack (fastapi 0.141.1, starlette 1.6.0, pydantic 
 during lots H-32 and H-33 of release 1.3 (17/10). Each has already produced, or nearly produced, a wrong test or a wrong
 handler.
 
+> *2026-11-07 lint:* `Pipfile.lock` now pins fastapi 0.162.0, starlette 1.10.0, pydantic 2.14.2. The five behaviours
+> below were measured on 0.141 and have not been re-measured on the new versions; the guards that depend on them
+> (`iter_route_contexts` walks with a route-count barrier, the two validation handlers) are still in place.
+
 1. **Included routers are lazy.** `app.routes` holds `_IncludedRouter` wrappers. A loop over it with
    `isinstance(route, APIRoute)` sees only the app's own routes (4 in LibreFolio, the static site), **not** the 177 API
    routes. Walk with `fastapi.routing.iter_route_contexts(app.routes)`: `context.original_route` is the route,

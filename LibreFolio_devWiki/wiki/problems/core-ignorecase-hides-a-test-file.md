@@ -15,7 +15,7 @@ category was green when run alone on the branch that made the test. The test fil
 missing from the merged tree.
 
 ## Cause
-The repository had `core.ignorecase=true`, inherited from a Mac checkout. Two files whose names differ only by case,
+The repository had `core.ignorecase=true`, the value Git writes when a repository is created on a case-insensitive filesystem (the default on macOS and Windows) and keeps when the checkout moves to a case-sensitive one. Two files whose names differ only by case,
 `backupList.test.ts` and `BackupList.test.ts`, were one path for Git, so the new file was never staged and
 `git status` showed nothing wrong. On Linux (a case-sensitive file system) they are two files.
 
@@ -24,7 +24,7 @@ The repository had `core.ignorecase=true`, inherited from a Mac checkout. Two fi
 - `core.ignorecase` of the repository was set to `false`.
 
 ## Prevention
-- On a Linux or Docker checkout keep `core.ignorecase=false`; check it with `git config core.ignorecase`.
+- On a case-sensitive filesystem (Linux, Docker) keep `core.ignorecase=false`; check it with `git config core.ignorecase`.
 - Never name two files in one folder with names that differ only by case.
 - When a category is green alone and red in the consolidated run, compare the file list of the branch with the
   merged tree before looking for a race.

@@ -1,1 +1,0 @@
-../../../../../mkdocs_src/docs/admin/index.en.md

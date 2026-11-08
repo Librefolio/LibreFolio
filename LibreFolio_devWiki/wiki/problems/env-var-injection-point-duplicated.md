@@ -62,16 +62,15 @@ This is one of four incidents with the same shape, named at
 the parser accepts it, and the mechanism it was meant to reach never receives it.
 The failure mode is a **default**, not an error. Siblings:
 [[problems/resume-mode-stale-import]], [[problems/coverage-mode-stale-import]],
-[[problems/coverage-report-category-dest-collision]],
-[[problems/env-var-injection-point-duplicated]].
+[[problems/coverage-report-category-dest-collision]].
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Single injection point | `scripts/test_runner/_common.py` — `apply_e2e_workers()` (~L89) |
-| Consolidated launcher | `scripts/test_runner/_consolidate.py` (~L186) |
-| Per-action launcher | `scripts/test_runner/_frontend_common.py` (~L332) |
+| Single injection point | `scripts/test_runner/_common.py` — `apply_e2e_workers()` (~L114) |
+| Consolidated launcher | `scripts/test_runner/_consolidate.py` (~L193) |
+| Per-action launcher | `scripts/test_runner/_frontend_common.py` (~L342) |
 | Playwright worker config | `frontend/playwright.config.ts` |
 
 > **Path note (2026-09-01)**: the per-action launcher row previously read

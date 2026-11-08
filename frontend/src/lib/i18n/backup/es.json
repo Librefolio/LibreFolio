@@ -82,7 +82,6 @@
       },
       "dropWhenDone": "La comprobación se descarta en cuanto termine.",
       "cancelCheck": "Detener la comprobación",
-      "openReport": "Leer el informe",
       "confirming": "Confirmando la restauración…",
       "cancelling": "Cancelando…",
       "pending": {
@@ -112,7 +111,7 @@
       },
       "blocker": {
         "no_administrator": "La copia de seguridad no tiene ningún administrador activo: después de una restauración nadie podría gestionar LibreFolio. No se puede restaurar.",
-        "storage_limit": "Restaurar esta copia de seguridad haría que LibreFolio superara su espacio total. Sube el espacio total a al menos {required} en Archivos › Avanzado y vuelve a comprobar la copia.",
+        "storage_limit": "Restaurar esta copia de seguridad haría que LibreFolio superara su espacio total. Sube el espacio total a al menos {required} en Configuración › Administración › Configuración Global y vuelve a comprobar la copia.",
         "storage_limit_locked": "Restaurar esta copia de seguridad haría que LibreFolio superara su espacio total. Pide a quien aloja esta instancia que suba el límite a al menos {required} y vuelve a comprobar la copia.",
         "storage_limit_disk": "El disco también necesita al menos {missing} más libres."
       },
@@ -261,6 +260,12 @@
         "match": "Con esta contraseña entrarás después de la restauración.",
         "mismatch": "No es su contraseña.",
         "failed": "No se ha podido comprobar la contraseña: inténtalo de nuevo."
+      },
+      "kept": {
+        "title": "Restaurar una copia de seguridad",
+        "backupOf": "Copia de seguridad del {date}, guardada en este servidor.",
+        "preparing": "Preparando la copia de seguridad para su comprobación…",
+        "alreadyWaiting": "Ya hay una restauración esperando el próximo inicio de LibreFolio. Reiníciala o cancélala primero en «Restaurar un archivo»."
       }
     },
     "checks": {
@@ -313,6 +318,7 @@
         "origin": "Hecha desde",
         "kind": "Tipo",
         "size": "Tamaño",
+        "restored": "Una vez restaurada",
         "sha256": "SHA-256",
         "actions": "Acciones"
       },
@@ -343,7 +349,10 @@
       },
       "retry": "Reintentar",
       "refresh": "Actualizar",
-      "restoreConfirm": "¿Restaurar esta copia de seguridad? Sustituirá los datos de todos los usuarios. LibreFolio la comprueba primero y te muestra qué cambiaría: nada cambia hasta que confirmes."
+      "restored": {
+        "header": "El espacio que ocupan los contenidos de la copia una vez restaurados, sin comprimir: la base de datos, los archivos subidos y los informes de los brókeres.",
+        "unknown": "Desconocido para esta copia."
+      }
     },
     "cleanup": {
       "title": "Limpieza automática",

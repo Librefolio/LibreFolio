@@ -5,6 +5,8 @@
   Self-contained: it reads the list when it mounts and again whenever the backup card says a backup ended or was
   deleted (`backupListSignal`), so the Backup tab of Settings and the Files page can show it as it is.
 
+  «Restore» on a row opens `RestoreKeptModal`, here (A10).
+
   Published state: `data-state` (`loading` until the first list comes, `ready`, `error` after a read that failed),
   `data-busy` while a read is out. Events: `backup.list.sha.copied`, `backup.download.started`, `backup.deleted`,
   `backup.delete.failed`.
@@ -12,17 +14,15 @@
 <script lang="ts">
     import {onMount, untrack} from 'svelte';
     import {ArchiveRestore, Download, RefreshCw, Trash2, TriangleAlert} from 'lucide-svelte';
-    import {goto} from '$app/navigation';
-    import {page} from '$app/stores';
-    import {get} from 'svelte/store';
-    import {requestRestoreFromKept} from './restoreRequest.svelte';
     import {DataTable, type ColumnDef, type RowAction} from '$lib/components/table';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {formatBytes} from '$lib/utils/files/upload';
     import {backupFailureCode, backupKind, deleteInstanceBackupJob, instanceBackupFileUrl, listInstanceBackups, type InstanceBackupEntry} from './backupApi';
     import {backupListSignal, shortHash} from './backupList.svelte';
+    import RestoreKeptModal from './RestoreKeptModal.svelte';
 
     let entries = $state<InstanceBackupEntry[] | null>(null);
     let failed = $state(false);
@@ -76,11 +76,35 @@
         notify({name: 'backup.download.started', detail: {job_id: entry.job_id}});
     }
 
-    /** C9-9: restore a kept backup without downloading it: the restore card of Settings › Backup takes it from here. */
-    async function restore(entry: InstanceBackupEntry) {
-        requestRestoreFromKept(entry.job_id);
-        const here = get(page).url;
-        if (here.pathname !== '/settings' || here.searchParams.get('tab') !== 'backup') await goto('/settings?tab=backup');
+    // A10 (T-15): restore a kept backup without downloading it, in a modal of its own, here (C9-9 sent it to the card).
+    let restoring = $state<InstanceBackupEntry | null>(null);
+
+    function restore(entry: InstanceBackupEntry) {
+        restoring = entry;
+    }
+
+    /** The «once restored» cell: the size and its parts, or «—» with why. */
+    function restoredCell(row: InstanceBackupEntry) {
+        const total = row.content_bytes;
+        if (total === null || total === undefined) {
+            return {type: 'html' as const, html: '<span data-restored="unknown">—</span>', tooltip: {text: $_('backup.list.restored.unknown')}};
+        }
+        const parts = row.content_parts;
+        const lines = parts
+            ? [
+                  ['database', parts.database_bytes],
+                  ['uploads', parts.uploads_bytes],
+                  ['brokerReports', parts.broker_reports_bytes],
+                  ['dataOther', parts.other_bytes],
+              ]
+                  .filter(([, bytes]) => Number(bytes) > 0)
+                  .map(([id, bytes]) => `${escapeHtml($_(`storage.parts.${id}`))}: ${escapeHtml(formatBytes(Number(bytes), $_))}`)
+            : [];
+        return {
+            type: 'html' as const,
+            html: `<span data-restored="known" data-bytes="${total}">${escapeHtml(formatBytes(total, $_))}</span>`,
+            tooltip: lines.length > 0 ? {html: lines.join('<br>')} : undefined,
+        };
     }
 
     async function remove(entry: InstanceBackupEntry) {
@@ -131,6 +155,19 @@
             getValue: (row) => row.file_size ?? 0,
         },
         {
+            // A10 (T-10): the space the backup's contents take once restored, not compressed, to know what a restore will
+            // take; its parts in the tooltip. A backup made before the size was recorded says it is not known.
+            id: 'restored',
+            header: () => $_('backup.list.columns.restored'),
+            headerTooltip: () => $_('backup.list.restored.header'),
+            cell: (row) => restoredCell(row),
+            type: 'size',
+            // Sorted with the unknown ones last; not filtered: a backup made before has no size to filter on.
+            filterable: false,
+            width: 130,
+            getValue: (row) => row.content_bytes ?? -1,
+        },
+        {
             id: 'sha256',
             header: () => $_('backup.list.columns.sha256'),
             cell: (row) => ({
@@ -151,7 +188,8 @@
     const rowActions: RowAction<InstanceBackupEntry>[] = [
         {id: 'download', icon: Download, label: () => $_('backup.list.actions.download'), onClick: download},
         // C9-9: a sealed backup opens only with its recipients' private key: it is not restored here.
-        {id: 'restore', icon: ArchiveRestore, label: () => $_('backup.list.actions.restore'), onClick: restore, visible: (row) => !row.sealed, requireConfirm: true, confirmMessage: () => $_('backup.list.restoreConfirm')},
+        // A10: no «are you sure?» here: the modal says what a restore does, and its report asks for a typed word.
+        {id: 'restore', icon: ArchiveRestore, label: () => $_('backup.list.actions.restore'), onClick: restore, visible: (row) => !row.sealed},
         {id: 'delete', icon: Trash2, label: () => $_('backup.list.actions.delete'), onClick: remove, requireConfirm: true, confirmMessage: () => $_('backup.list.deleteConfirm')},
     ];
 
@@ -193,3 +231,7 @@
         />
     {/if}
 </div>
+
+{#if restoring}
+    <RestoreKeptModal jobId={restoring.job_id} createdAt={restoring.created_at} onClose={() => (restoring = null)} />
+{/if}

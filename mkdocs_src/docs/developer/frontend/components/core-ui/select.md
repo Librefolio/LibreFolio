@@ -37,17 +37,17 @@ graph TD
 
     APP["<b>AssetPickerPanel</b><br/><small>Portfolio assets · single or multi choice<br/>On <code>SelectPopover</code> + <code>CheckMenu</code></small>"]
 
-    style SS fill:#e8f5e9,stroke:#2e7d32
-    style SrS fill:#e8f5e9,stroke:#2e7d32
-    style TS fill:#e8f5e9,stroke:#2e7d32
-    style CSS fill:#fff3e0,stroke:#e65100
-    style IPS fill:#fff3e0,stroke:#e65100
-    style BSS fill:#fff3e0,stroke:#e65100
-    style MORE fill:#fff3e0,stroke:#e65100
-    style ATS fill:#fff3e0,stroke:#e65100
-    style FPS fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5
-    style APP fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5
-    style STS fill:#f5f5f5,stroke:#9e9e9e
+    style SS fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style SrS fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style TS fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style CSS fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style IPS fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style BSS fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style MORE fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style ATS fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style FPS fill:#fff3e0,color:#1b1b1b,stroke:#e65100,stroke-dasharray: 5 5
+    style APP fill:#fff3e0,color:#1b1b1b,stroke:#e65100,stroke-dasharray: 5 5
+    style STS fill:#f5f5f5,color:#1b1b1b,stroke:#9e9e9e
 ```
 
 Generic selects, then domain-specific wrappers:

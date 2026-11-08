@@ -86,10 +86,15 @@ Each wave, before any commit:
   - R-6: the preview line;
   - R-7: two views that do not follow a live theme switch;
   - R-8: [[problems/colour-ratchet-resolve-drops-an-accept]].
+- *2026-11-07 lint:* phase B went ahead without waiting for the palette: `dc5e66c11` (16/10) moved the media, files and
+  menu components onto roles, deleting `components/files.css` and `components/dialogs.css` and leaving `media.css`
+  only the uploader's image-icon category; the role tokens live in `lib/theme/tokens.css` ([[features/F-007]]).
 - Lesson from the D3 fix: changing `static/offline.html` requires restamping `static/sw.js` ([[features/F-098]]).
 
 ## Links
 - [[features/F-007]]
+- [[problems/tailwind4-same-property-utilities-sorted-by-name]] — a trap met by the role migration (lot I1, D-T27)
+- [[problems/derived-css-properties-resolve-where-declared]] — the same roles read by the documentation
 - Source: `LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md`
 - Entered `dev_release2` on 15/10 with `893df873a`, the four lots being `95a968811`, `c97833e6f`, `9199c2178` and
   `8bae04c5c`.
@@ -105,8 +110,8 @@ Each wave, before any commit:
 | Tone classes | `frontend/src/lib/theme/toneClasses.ts` |
 | Component tokens | `frontend/src/lib/theme/components/table.css` |
 | Component tokens | `frontend/src/lib/theme/components/media.css` |
-| Component tokens | `frontend/src/lib/theme/components/files.css` |
-| Component tokens | `frontend/src/lib/theme/components/dialogs.css` |
+| Component tokens | `files.css` and `dialogs.css` (removed in `dc5e66c11`, 16/10, when phase B moved them onto roles) |
+| Role tokens (phase B, T) | `frontend/src/lib/theme/tokens.css` |
 | Colours drawn outside CSS | `frontend/src/lib/theme/drawnColors.ts` |
 | Theme reads | `frontend/src/lib/theme/themeMode.ts` |
 | Gate D3 | `frontend/src/themeColorMeta.gate.test.ts` |

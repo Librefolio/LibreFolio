@@ -66,12 +66,27 @@ class InstanceBackupJob(BaseModel):
     sealed_recipients: list[str] = []
 
 
+# A10 (T-10): the parts of what a kept backup holds once restored, not compressed; other_bytes is the rest of its files.
+class InstanceBackupContentParts(BaseModel):
+    """What a kept backup holds once restored, by part."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    database_bytes: int = Field(ge=0)
+    uploads_bytes: int = Field(ge=0)
+    broker_reports_bytes: int = Field(ge=0)
+    other_bytes: int = Field(ge=0)
+
+
 # origin: who made the backup (the Backup tab, the command line, a hosting panel). The administrators' list of the kept
-# backups (FB-24); the job a hosting panel reads (InstanceBackupJob) has no origin.
+# backups (FB-24); the job a hosting panel reads (InstanceBackupJob) has no origin. content_bytes (A10, T-10): the space
+# its contents take once restored, not compressed, with content_parts; null for a backup made before they were recorded.
 class InstanceBackupEntry(InstanceBackupJob):
-    """A backup the instance keeps: its job, and where it came from."""
+    """A backup the instance keeps: its job, where it came from, and the space it takes once restored."""
 
     origin: Literal["ui", "cli", "pre-restore", "panel"]
+    content_bytes: int | None = Field(default=None, ge=0)
+    content_parts: InstanceBackupContentParts | None = None
 
 
 class InstanceBackupList(BaseModel):
@@ -303,6 +318,9 @@ class RestoreStageReport(BaseModel):
     secrets_rekeyed: int = Field(ge=0)
     secrets_unreadable: RestoreSecretCounts
     administrators: list[str]
+    # A10: the avatars of administrators set by an address on another site (http or https), by username; the page shows
+    # them as it shows any avatar set by address. An uploaded avatar is read from the copy (GET .../avatar/{username}).
+    administrator_avatar_addresses: dict[str, str] = {}
     warnings: list[
         Literal[
             "rows_changed",

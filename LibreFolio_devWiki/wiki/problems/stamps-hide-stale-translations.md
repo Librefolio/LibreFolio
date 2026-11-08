@@ -65,6 +65,7 @@ round's only stamp (`user/brokers/index`) had ported everything.
   translation; commit `7b929298a`): it catches identifier-level drift — it found the stale `none`/`unavailable` and
   several identifiers the model had translated — but not prose.
 - Run the stamp audit after each translation round. Making it a `translate-validate` option is backlog item M-3.
+  2026-11-07 lint: M-3 is still open; on 04/11 the developer moved it to release 1.4 (lot M6-1).
 
 ## Related: the cache bug fixed in the same round
 

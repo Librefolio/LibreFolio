@@ -23,6 +23,7 @@ Solo gli amministratori hanno questo gruppo. Fai clic su **Amministrazione** per
 
 - 👤 **Non sei un amministratore?** Non hai **Amministrazione**: le tue schede terminano con **Informazioni**. Un link a una delle schede di amministrazione apre invece il tuo **Profilo**. Le impostazioni dell'istanza si applicano comunque a te: le modifica il tuo amministratore.
 - 🔢 **Un numero sulla scheda Sicurezza**, ripetuto su **Amministrazione**, indica quanti elementi i controlli di sicurezza dell'istanza chiedono a un amministratore di esaminare.
+- 🔗 **Ogni scheda ha il suo indirizzo**, che puoi salvare tra i segnalibri o condividere: `/settings/profile`, `/settings/preferences`, `/settings/plugins`, `/settings/about` e, per gli amministratori, `/settings/admin/global`, `/settings/admin/users` e le altre schede del gruppo. L'indirizzo segue la scheda che apri, e **Indietro** torna alla scheda di prima. Un indirizzo che l'app non conosce apre la prima scheda.
 - 📱 **Su un telefono**, le schede mostrano solo le rispettive icone e il titolo sopra di esse riporta il nome della scheda aperta.
 
 ## ↔️ Quando le schede non ci stanno {: #tabs-overflow }

@@ -1,6 +1,7 @@
 ---
 title: "Drawdown: full_history warmup (signal toggle) + AI Export always full"
 category: decision
+status: resolved
 date: 2026-09-02
 tags: [backend, signals, risk, drawdown, ai-export, warmup]
 related:

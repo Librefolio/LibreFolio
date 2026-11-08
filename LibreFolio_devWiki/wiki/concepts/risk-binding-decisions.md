@@ -43,6 +43,10 @@ the entry point for whoever resumes Risk after release 1.2 (D382). The full reco
 | D384 | The broker preset in the Lab asks once |
 | 1.2 CHANGELOG | In the Lab only percentages, and no verdict on the selection as a whole; what cannot be measured shows a dash that says why, never a zero |
 
+> 2026-11-07 lint: D71's open point — whether the colours match across charts — was settled for the Dashboard on
+> 2026-11-06: one rank function per asset, read by the pie, the allocation history and the positions lines
+> ([[decisions/one-colour-rank-per-asset]]).
+
 Checked on the code at `102edada4`: D374 (`RISK_DISCARD_ATTEMPTS = 3` in `riskStore.svelte.ts`), D380–D381
 (`metrics.py`, `e860de140`, `9236ab804`). The open items these decisions leave are on the feature pages, «Still open
 (paused, after 1.2 — D382)».

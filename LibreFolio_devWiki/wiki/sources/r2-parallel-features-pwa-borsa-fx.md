@@ -26,7 +26,7 @@ Four independent features/fixes developed in a parallel terminal without formal 
 
 **Commits**: `2774d5c93`, `891049c88`, `52a97d3d6`, `963b83d9a`
 **Plan file**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Standalone/plan-pwa-mobile-optimizations.prompt.md`
-**Status**: ✅ Completed (2026-05-26)
+**Status**: ✅ Completed (2026-05-26) — the archived plan and its two post-completion bugfixes: [[sources/phase07-standalone-pwa]]
 
 ### What was done
 
@@ -48,7 +48,7 @@ Four independent features/fixes developed in a parallel terminal without formal 
 ### Source files
 | Role | Path |
 |------|------|
-| Service Worker | `frontend/static/service-worker.js` |
+| Service Worker (cited as `service-worker.js` at ingest; the file has been `sw.js` since `2774d5c93`) | `frontend/static/sw.js` |
 | Manifest | `frontend/static/manifest.json` |
 | Offline page | `frontend/static/offline.html` |
 | Install logic | `frontend/src/lib/components/layout/HelpMenu.svelte` |
@@ -79,7 +79,7 @@ Migrated all port defaults from `8000/8001/8002` to `6040/6041/6042`.
 **Mnemonic**: the "60/40 rule" — 60% equities, 40% bonds — the iconic asset allocation principle. Instantly memorable for a portfolio tracker application.
 
 ### Files touched
-- `.env.example`, `backend/app/config.py`, `dev.py`, `Dockerfile`, `docker-compose.yml`
+- `.env.example`, `backend/app/config.py` (today `backend/app/config/__init__.py`), `dev.py`, `Dockerfile`, `docker-compose.yml`
 - All E2E test files (`global-setup.ts`, spec files)
 - Backend test helpers (`test_server_helper.py`)
 - Documentation (README, skills, wiki pages)
@@ -88,7 +88,7 @@ Migrated all port defaults from `8000/8001/8002` to `6040/6041/6042`.
 ### Source files
 | Role | Path |
 |------|------|
-| Config defaults | `backend/app/config.py` |
+| Config defaults (`PORT`, `TEST_PORT`; `config.py` became a package in `ed2158e48`) | `backend/app/config/__init__.py` |
 | Docker compose | `docker-compose.yml` |
 | Dockerfile | `Dockerfile` |
 | Dev CLI | `dev.py` |
@@ -126,7 +126,7 @@ Uses the `borsa-italiana-scraping` library (optional dependency). Follows the st
 |------|------|
 | Provider implementation | `backend/app/services/asset_source_providers/borsa_italiana/plugin.py` |
 | Provider schema (enum) | `backend/app/schemas/provider.py` |
-| Service registry | `backend/app/services/asset_source.py` |
+| Service registry (was `services/asset_source.py`; `AssetProviderRegistry` since `7e094f276`) | `backend/app/services/assets/registry.py` |
 | Frontend search integration | `frontend/src/lib/components/assets/AssetSearchAutocomplete.svelte` |
 | Dev docs | `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md` |
 | Plugin guide | `mkdocs_src/docs/developer/architecture/patterns/asset_plugin_guide.md` |
@@ -154,7 +154,7 @@ Fixed FX provider removal flow + added UX improvements to the FX detail page edi
 ### Source files
 | Role | Path |
 |------|------|
-| Backend FX endpoint | `backend/app/api/v1/fx.py` |
+| Backend FX endpoint (`api/v1/fx.py` split by theme in `4180a59b6`; routes in `providers.py`) | `backend/app/api/v1/fx/providers.py` |
 | FX pair modal | `frontend/src/lib/components/fx/FxPairAddModal.svelte` |
 | FX detail page | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` |
 | Asset detail page (tip) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |

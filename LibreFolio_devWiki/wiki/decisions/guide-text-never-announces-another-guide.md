@@ -50,6 +50,6 @@ will start.*
 |------|------|
 | Copy gate | `frontend/src/lib/features/onboarding/guideCopy.test.ts` |
 | Step table (literal keys) | `frontend/src/lib/features/onboarding/components/OnboardingOverlayHost.svelte` |
-| Catalogue | `frontend/src/lib/i18n/base/en.json` |
+| Catalogue (in the base catalogue at filing, the onboarding one since `e47f45c98`) | `frontend/src/lib/i18n/onboarding/en.json` |
 | Authoring rules | `.github/skills/onboarding-tools/onboarding-guide/SKILL.md` |
 | Developer doc | `mkdocs_src/docs/developer/frontend/onboarding.md` |

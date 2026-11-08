@@ -79,6 +79,8 @@ The targeted Asset assembler regression remained green in the final canonical ga
 > [[concepts/silent-no-op-option]]: same family — code that is present, plausible, and
 > not the one that runs.
 >
+> *2026-11-07 lint: the two empty directories are gone as well; `ai_export/` now holds only the V3 path.*
+>
 > The surviving path is **V3 composition**: `components/` (one module per payload),
 > `datasets/` and `analyses/` (catalog + spec), `temporal/`, `composer.py` and
 > `runtime_service.py`. The table above points there.
@@ -88,9 +90,9 @@ The targeted Asset assembler regression remained green in the final canonical ga
 > the tree — the same failure that produced the invented `scripts/test_runner/` paths.
 
 > **How the defect was actually settled.** The successor module does not contain a better
-> fallback — it contains **no fallback**. `components/drawdown_context.py:31` says so in
+> fallback — it contains **no fallback**. `components/drawdown_context.py` says so in
 > as many words: *"never fails — there is deliberately no success-shaped fallback."*
 > A failed or unavailable drawdown now returns an explicit `FAILED` / `UNAVAILABLE` status
-> with a message naming the scope and period (`:288`, `:320`), instead of quietly
+> with a message naming the scope and period, instead of quietly
 > substituting a different history and returning something success-shaped. That is the
 > same lesson as [[concepts/silent-no-op-option]], reached from the other direction.

@@ -4,7 +4,8 @@
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
-    import {onDestroy, onMount} from 'svelte';
+    import {onDestroy, onMount, tick} from 'svelte';
+    import {page} from '$app/stores';
     import {debug} from '$lib/debug';
     import {BarChart3, ChevronDown, ChevronRight, CircleEllipsis, Clock, Database, Lock, RefreshCw, Settings, Shield, ShieldOff, Unlock, Users} from 'lucide-svelte';
     import {type SelectOption} from '$lib/components/ui/select';
@@ -28,6 +29,8 @@
     import {ConfirmModal} from '$lib/components/table';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {pendingSchedulerRetry} from '$lib/features/settings/schedulerRetry';
+    import {getInstanceStorage} from '$lib/features/backup/backupApi';
+    import {SETTINGS_FIELD_PARAM} from '$lib/features/settings/settingsPaths';
 
     // Props
     interface Props {
@@ -50,6 +53,7 @@
         default_currency: 'EUR',
         default_language: 'en',
         default_theme: 'auto',
+        storage_limit_mb: '0',
     };
 
     // Category definitions with icons
@@ -59,18 +63,21 @@
         keys: string[];
     }
 
+    // The space limit (FB-29, lot B10): a row of its own here, and still in Files › Advanced, where the space bar shows it.
+    const STORAGE_LIMIT_KEY = 'storage_limit_mb';
+
     const baseCategories: Category[] = [
         {id: 'session', icon: Clock, keys: ['session_ttl_hours']},
         {id: 'security', icon: Shield, keys: ['registration_mode', 'require_email_verification']},
         {id: 'sync', icon: RefreshCw, keys: ['scheduler_enabled']},
-        {id: 'memory', icon: Database, keys: ['max_file_upload_mb']},
+        {id: 'memory', icon: Database, keys: ['max_file_upload_mb', STORAGE_LIMIT_KEY]},
         {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language', 'default_theme']},
     ];
     const otherCategory: Category = {id: 'other', icon: CircleEllipsis, keys: []};
 
     // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
-    // Same for the clean-up of the kept backups (FB-24), which the Backup section edits, and the space limit (FB-29), which the space bar of the Files page edits.
-    const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone', 'backup_cleanup_max_mb', 'backup_cleanup_max_days', 'storage_limit_mb']);
+    // Same for the clean-up of the kept backups (FB-24), which the Backup section edits.
+    const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone', 'backup_cleanup_max_mb', 'backup_cleanup_max_days']);
 
     // Placeholder settings: rendered read-only with a "Coming soon" badge until the feature lands
     const PLACEHOLDER_KEYS = new Set<string>();
@@ -93,8 +100,21 @@
         return registrationModeOptions((key) => $_(key));
     });
 
+    // The hosting provider may fix the space limit (`LIBREFOLIO_STORAGE_LIMIT_MB`): the same answer the space bar reads
+    // (`GET /backup/instance/storage`, administrators only, as this tab) says so; the field is then read-only, and a save
+    // would only meet 409 SETTING_LOCKED_BY_ENV. Unknown until it answers: the server refuses a save anyway.
+    let storageLimitLocked = $state(false);
+
     function isLockedByEnv(key: string): boolean {
-        return key === REGISTRATION_KEY && registrationLocked;
+        return (key === REGISTRATION_KEY && registrationLocked) || (key === STORAGE_LIMIT_KEY && storageLimitLocked);
+    }
+
+    async function loadStorageLimitLock(): Promise<void> {
+        try {
+            storageLimitLocked = (await getInstanceStorage())?.limit_locked === true;
+        } catch (e) {
+            debug.log('GlobalSettingsTab', 'Failed to load the storage limit lock', e);
+        }
     }
 
     let settings: GlobalSetting[] = $state([]);
@@ -122,8 +142,25 @@
 
     onMount(async () => {
         debug.log('GlobalSettingsTab', 'onMount');
+        void loadStorageLimitLock();
         await loadSettings();
         await loadSchedulerState();
+    });
+
+    // `?setting=<key>` (an «Open the settings» link, lot B10): once the list is in, the row of that key is shown in its
+    // category, brought into view and highlighted. The lock stays as it is: the administrator opens it by hand, as always
+    // (the developer's choice, B10). Applied once per value.
+    let highlightedKey = $state('');
+    let appliedField = '';
+    $effect(() => {
+        const key = $page.url.searchParams.get(SETTINGS_FIELD_PARAM) ?? '';
+        if (!key || key === appliedField || isLoading) return;
+        const target = settings.find((setting) => setting.key === key && !SCHEDULER_HIDDEN_KEYS.has(setting.key));
+        if (!target) return;
+        appliedField = key;
+        selectedCategory = getClaimedCategoryForSetting(key)?.id ?? 'all';
+        highlightedKey = key;
+        void tick().then(() => document.querySelector(`[data-testid="global-setting-${key}"]`)?.scrollIntoView?.({block: 'center'}));
     });
 
     async function loadSchedulerState() {
@@ -312,6 +349,13 @@
     // Override map: backend setting keys whose label already exists under settings.*
     const SETTING_LABEL_OVERRIDES: Record<string, string> = {
         default_currency: 'settings.defaultCurrency',
+        // The space limit reads as it does in Files › Advanced.
+        storage_limit_mb: 'storage.limit.label',
+    };
+
+    // Override map: hints that already exist elsewhere
+    const SETTING_HINT_OVERRIDES: Record<string, string> = {
+        storage_limit_mb: 'storage.limit.hint',
     };
 
     // Override map: category ids whose label already exists under settings.*
@@ -354,6 +398,7 @@
     }
 
     function getSettingHint(key: string): string {
+        if (SETTING_HINT_OVERRIDES[key]) return $_(SETTING_HINT_OVERRIDES[key]);
         const localizedKey = `settings.globalSettingDescriptions.${key}`;
         const localized = $_(localizedKey);
         return localized !== localizedKey ? localized : '';
@@ -634,17 +679,22 @@
                         </div>
                     {:else if setting.value_type === 'int' || setting.value_type === 'float'}
                         <!-- Numeric input (self-contained component) -->
-                        <div class="bg-lf-panel rounded-lg px-4" data-testid="global-setting-{setting.key}">
+                        <div
+                            class="bg-lf-panel rounded-lg px-4 {highlightedKey === setting.key ? 'ring-2 ring-lf-focus' : ''}"
+                            data-testid="global-setting-{setting.key}"
+                            data-locked={setting.key === STORAGE_LIMIT_KEY ? String(storageLimitLocked) : undefined}
+                            data-highlighted={highlightedKey === setting.key ? 'true' : undefined}
+                        >
                             <SettingNumber
                                 value={editedValues[setting.key]}
                                 label={getSettingLabel(setting.key)}
-                                hint={getSettingHint(setting.key)}
+                                hint={setting.key === STORAGE_LIMIT_KEY && storageLimitLocked ? $_('storage.limit.locked') : getSettingHint(setting.key)}
                                 icon={category?.icon ?? null}
                                 type={setting.value_type === 'float' ? 'float' : 'int'}
                                 unit={getSettingUnit(setting.key)}
                                 isModified={changedKeys.includes(setting.key)}
                                 isNonDefault={nonDefaultKeys.includes(setting.key)}
-                                {isLocked}
+                                isLocked={isLocked || isLockedByEnv(setting.key)}
                                 {isSaving}
                                 onsave={() => saveSetting(setting.key)}
                                 onundo={() => undoSetting(setting.key)}

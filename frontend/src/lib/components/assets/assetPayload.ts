@@ -115,8 +115,9 @@ export function buildCreateItem(form: AssetFormFields) {
 
 /**
  * The item of the edit request. Unlike the create item, an empty user URL or identifier column is sent as `null` (a
- * deliberate clear) and the icon as it is; `classification_params` is present only when it differs from the one the
- * modal opened with (see `buildClassificationPatch`).
+ * deliberate clear) and the icon as it is; the OTHER identifiers always go as the whole list, `[]` when no row is left,
+ * because the backend reads `null` there as "leave unchanged"; `classification_params` is present only when it differs
+ * from the one the modal opened with (see `buildClassificationPatch`).
  */
 export function buildPatchItem(assetId: number, form: AssetFormFields, initialClassification: ClassificationParams | undefined) {
     const classificationPatch = buildClassificationPatch(initialClassification, buildClassificationParams(form.shortDescription, form.sectorDistribution, form.geographicDistribution));
@@ -138,7 +139,7 @@ export function buildPatchItem(assetId: number, form: AssetFormFields, initialCl
         identifier_sedol: idCols.identifier_sedol || null,
         identifier_figi: idCols.identifier_figi || null,
         identifier_uuid: idCols.identifier_uuid || null,
-        identifier_other: idCols.identifier_other || null,
+        identifier_other: idCols.identifier_other ?? [],
     };
 }
 

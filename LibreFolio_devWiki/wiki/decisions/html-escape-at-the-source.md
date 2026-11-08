@@ -58,6 +58,8 @@ the one the tooltip-HTML fix of 2026-10-09 extended ([[concepts/echarts-chart-go
   local copy in `CorrelationHeatmap.svelte` (Risk, 2026-09-24) that escapes only `& < >`. The interpolation gate
   accepts any call **named** `escapeHtml`, so a weaker copy with that name passes it; the heatmap's uses are all text
   content, where `& < >` suffice, so it is safe today — but "one helper" is a convention the gate does not enforce.
+  *2026-11-07 lint:* the heatmap's local copy was removed on 2026-10-16 (`052e16485`, «escaped tooltip values»):
+  `CorrelationHeatmap.svelte` now imports the canonical helper, so two definitions remain (canonical and KaTeX).
 - [[features/F-047]] listed "`escapeHtml()` × 4 copies cleanup (deferred)" — done by this work (corrected there).
 - **Residual K-15** (low, defence in depth): ECharts tooltip *function* formatters return HTML that ECharts renders
   as such. The ones reviewed escape their text with `escapeHtml`, but none of the 21 files with a `formatter` under
@@ -76,5 +78,5 @@ the one the tooltip-HTML fix of 2026-10-09 extended ([[concepts/echarts-chart-go
 | Helper tests | `frontend/src/lib/utils/core/__tests__/escapeHtml.test.ts` |
 | Sanitiser tests | `frontend/src/lib/utils/core/sanitizeHtml.test.ts` |
 | KaTeX variant (apostrophe kept) | `frontend/src/lib/utils/inlineMath.ts` |
-| Local copy (text content only) | `frontend/src/lib/features/risk/CorrelationHeatmap.svelte` |
+| Local copy (text content only; removed `052e16485`, now imports the helper) | `frontend/src/lib/features/risk/CorrelationHeatmap.svelte` |
 | Plan (step 13, item 0) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md` |

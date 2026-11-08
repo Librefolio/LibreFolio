@@ -4,7 +4,7 @@ category: decision
 date: 2026
 status: resolved
 tags: [backend, calculations, fifo, transactions, performance]
-related_features: [F-056]
+related: [features/F-056, entities/fifo-lot-engine, sources/fifo-v4-fee-tax-integration]
 ---
 
 # Decision: FIFO Cost Basis Computed at Runtime

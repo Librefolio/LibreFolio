@@ -12,7 +12,7 @@ related: [entities/api-router, entities/test-runner, concepts/runtime-lanes, pro
 `dev.py` is the single entry point for all developer operations in LibreFolio. It replaces ad-hoc shell scripts and manual commands with a unified, self-documenting CLI. Every project task — from running tests to translating docs — goes through `./dev.py`.
 
 ## Location
-`dev.py` (project root, 2 714 lines on 2026-10-09)
+`dev.py` (project root, 2 714 lines on 2026-10-09, 3 053 on 2026-11-07)
 
 ## Key Interfaces
 
@@ -28,11 +28,13 @@ related: [entities/api-router, entities/test-runner, concepts/runtime-lanes, pro
 | `mkdocs` | `mkdocs_src/aphra-pipeline/translate_docs.py` | `./dev.py mkdocs build`, `./dev.py mkdocs gallery`, `./dev.py mkdocs translate` |
 | `i18n` | `frontend/scripts/i18n-audit.py` | `./dev.py i18n audit`, `./dev.py i18n add`, `./dev.py i18n remove` |
 | `docker` | inline | `./dev.py docker build`, `./dev.py docker up` |
-| `cache` | inline | invalidate server-side caches |
+| `cache` | `scripts/update_js_cache.py` | `./dev.py cache js` — the static resource cache (JS libraries, fonts) kept locally for offline use |
 | `format` / `lint` | inline | `./dev.py format`, `./dev.py lint` (ruff + black) |
-| `shell` | inline | Django-style shell with app context |
+| `shell` | inline | opens the pipenv shell |
 | `install` | inline | `./dev.py install` (pip + npm) |
 | `info` | inline | environment info |
+| `backup` | `scripts/backup_cli.py` | instance backup: create, inspect, restore, decrypt, pending |
+| `graph` | inline | devWiki knowledge graph: `build`, `update`, `query`, `viz`, … |
 
 ### Ports
 | Port | Use |
@@ -44,17 +46,19 @@ related: [entities/api-router, entities/test-runner, concepts/runtime-lanes, pro
 
 ### Architecture
 Sub-commands imported from external modules via `register_subparser()`:
-- `scripts/test_runner/` (30-module package, see [[entities/test-runner]]) → `test *`
+- `scripts/test_runner/` (31 modules on 2026-11-07, see [[entities/test-runner]]) → `test *`
 - `scripts/user_cli.py` → `user *`
+- `scripts/backup_cli.py` → `backup *`
+- `scripts/update_js_cache.py` → `cache *`
 - `scripts/coverage_analysis.py` → `test coverage-report`
-- `mkdocs_src/aphra-pipeline/translate_docs.py` → `mkdocs translate*`
+- `mkdocs_src/aphra-pipeline/translate_docs.py`, `validate_translations.py` → `mkdocs translate*`
 - `frontend/scripts/i18n-audit.py` → `i18n *`
 
 ## Key Workflows
 
 | Trigger | Command |
 |---------|---------|
-| After DB model change | `./dev.py db create-clean` |
+| After DB model change | edit the release's migration file and test the upgrade; `./dev.py db create-clean` only for fresh/test DBs ([[concepts/single-migration-strategy]]; 2026-11-07 lint: was `db create-clean` alone) |
 | After API change | `./dev.py api sync` |
 | Run all tests | `./dev.py test all` |
 | Run with coverage | `./dev.py test --coverage api all` |
@@ -76,6 +80,7 @@ Sub-commands imported from external modules via `register_subparser()`:
 - 2026-05-26: `scripts/test_runner/` (4841-line monolith) refactored into 18-module package at `scripts/test_runner/`. See [[decisions/test-runner-package-split]].
 - 2026-09-10: runtime lanes (`4588506b9`) — [[sources/phase00-parallel-runtime-isolation-2026-09]].
 - 2026-10-08/09: image-aware command groups (train 19), `db <path>` honoured, `user` exit status, shared JWT secret — [[sources/phase00-dev-cli-image-2026-10]].
+- 2026-11-07 lint: command table completed with the `backup`, `graph` and `cache` groups as registered in `dev.py`.
 
 ## Source files
 

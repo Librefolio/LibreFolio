@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-07-22
 tags: [backend, frontend, fifo, net-metrics, status, data-quality]
-related: [fifo-v4-engine-architecture, fifo-v4-cost-allocation-ladder, entities/fifo-lot-engine, concepts/gross-net-dual-reporting, problems/datatable-net-columns-hidden-override-model]
+related: [decisions/fifo-v4-engine-architecture, decisions/fifo-v4-cost-allocation-ladder, entities/fifo-lot-engine, concepts/gross-net-dual-reporting, problems/datatable-net-columns-hidden-override-model]
 ---
 
 # Decision: FIFO v4 gross/net metrics and analysis-status model

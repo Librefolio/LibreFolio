@@ -1,13 +1,23 @@
 ---
 title: "Auto cost basis without a position: 0 is the correct fallback, and the user corrects that transaction"
 category: decision
-status: resolved
+status: superseded
 date: 2026-10-09
+superseded_date: 2026-10-17
 tags: [backend, frontend, transactions, cost-basis, wac, auto-mode, adjustment, transfer, product-decision]
 related: [decisions/wac-inline-validate-commit, decisions/financial-math-single-average-cost, decisions/cost-basis-currency-object, features/F-097, features/F-046, entities/transaction-batch-pipeline, sources/phase00-auto-cost-no-position-2026-10]
 ---
 
 # Decision: in Auto, an empty pool gives a cost of 0 — by choice
+
+> **Superseded on 2026-10-17 (2026-11-07 lint).** Coordinator's night decision N88 (17/10), confirmed by the developer
+> on 19/10 («J-57 resta e si completa»): the batch now **refuses** an Auto cost whose pool has nothing to average
+> (`3b6bc8e2d`, J-57). Two codes: `autoCostEmptyPool` (no units held on the date — never held or sold out) and
+> `autoCostUnknownPool` (units held, none at a known cost); a pool of free units keeps its 0, and a 0 typed by hand
+> (Manual) is still accepted, for a gift. The engine's state comes from `wac_pool_holding()` (`portfolio_service.py`),
+> the refusal from `NothingToAverageError` in `transactions/auto_cost.py`. The pinned test is now
+> `test_wac_inline.py::test_wacp27_empty_pool_is_refused`. The partly unknown pool is J-58. The page below records the
+> decision of 09/10 as it was taken. Source: `BACKLOG_POST_1.2.md`, J-41/J-57; plan 05, §10 «J-57».
 
 ## Context
 
@@ -59,7 +69,8 @@ incoming rows, so the default path produces it. Checked at `111c2c8f3`:
 
 ## Consequences
 
-- `test_wac_inline.py::test_wacp27_empty_pool_wac_zero` now pins the intended behaviour.
+- `test_wac_inline.py::test_wacp27_empty_pool_wac_zero` now pins the intended behaviour (renamed
+  `test_wacp27_empty_pool_is_refused` by `3b6bc8e2d`, which reverses it — see the note at the top).
 - **Not a contradiction of #32.** [[decisions/financial-math-single-average-cost]] forbids silent zeros for *missing
   exchange rates and unknown costs* — a movement whose cost is `None` is `ADD_UNKNOWN_COST` and surfaces as
   `MISSING_COST_BASIS`. Here the cost is not unknown: Auto computed it from an empty pool and wrote 0, a deliberate
@@ -85,5 +96,7 @@ incoming rows, so the default path produces it. Checked at `111c2c8f3`:
 | `ADD_ZERO_COST`, empty-pool unit cost | `backend/app/services/financial_math/average_cost.py` |
 | Form default (Auto) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | Bulk default for new rows (Auto) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
-| Test pinning the decision | `backend/test_scripts/test_api/test_wac_inline.py` |
+| Test pinning the decision (since `3b6bc8e2d` it pins the refusal) | `backend/test_scripts/test_api/test_wac_inline.py` |
+| The refusal (`NothingToAverageError`, `_nothing_to_average`) | `backend/app/services/transactions/auto_cost.py` |
+| Backlog J-41 / J-57 / J-58, N88 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Analysis and decision (§1, §2, §10) | `LibreFolio_developer_journal/Release_2/phases/39_autoCostNoPosition/plan-phase00AutoCostNoPosition.prompt.md` |

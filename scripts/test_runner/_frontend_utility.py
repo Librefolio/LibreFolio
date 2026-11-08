@@ -321,6 +321,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/email/emailApi.test.ts",
             "src/lib/features/email/emailLinks.test.ts",
             "src/lib/features/email/publicUrlExample.test.ts",
+            "src/lib/docs/tableCodeWrap.test.ts",
             "src/lib/features/email/verificationApi.test.ts",
             "src/lib/features/email/sendLinkApi.test.ts",
             "src/lib/features/email/forgotPasswordApi.test.ts",
@@ -599,7 +600,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/users/UserRow.verification.test.ts",
             "src/lib/features/settings/users/UserRow.pendingSetup.test.ts",
             "src/lib/features/settings/users/UserRow.avatar.test.ts",
-            "src/routes/(app)/settings/page.tabs.test.ts",
+            "src/lib/features/settings/users/UserRow.selfHint.test.ts",
+            "src/routes/(app)/settings/[...path]/page.tabs.test.ts",
             "src/lib/features/tools/ToolsHub.test.ts",
             "src/lib/features/tools/ToolHost.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/StateNotice.test.ts",
@@ -635,6 +637,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/files/StorageBar.test.ts",
             "src/lib/components/ui/feedback/StorageLimitRefusal.test.ts",
             "src/lib/features/backup/RestoreCard.test.ts",
+            "src/lib/features/backup/RestoreKeptModal.test.ts",
             "src/lib/features/backup/RestoreReportModal.test.ts",
             "src/lib/features/backup/OwnerChoiceModal.test.ts",
             "src/lib/features/backup/RestartOverlay.test.ts",
@@ -751,6 +754,16 @@ def front_security_tab(verbose: bool = False, ui: bool = False, headed: bool = F
     if not _ensure_test_users():
         return False
     return _run_playwright("settings/security-tab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_settings_addresses(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the addresses of the Settings tabs (lot B10) and «Open the settings» to the space limit in Global Settings."""
+    print_section("Frontend Settings Addresses Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/settings-addresses.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_legal_managed(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1348,6 +1361,15 @@ def populate_registry(registry: dict) -> None:
         desc="Settings › Security (accounts lot A8b) inside the «Administration» group (decision P13 b), read-only on the lane: e2e_test_admin sees a badge of at least 1 on settings-tab-administration before anything of the group is opened (the checks read by the page's prefetch, accounts.login_limit a warning with LIBREFOLIO_LOGIN_LIMIT=off, read first from GET /security/checks as a precondition); Security opened through the group settles data-status ready, lists accounts.login_limit as a warning and folds the passed checks (security-passed), its badge counting exactly the errors and warnings it lists and the group's including it; ?tab=security opens it inside the group, and «check again» re-reads (the request held: loading, busy, the refresh disabled, the last findings still listed; then ready with the warning); e2e_test_user, a member: no «Administration» group at all (N69-2), no settings-subtabs, no settings-tab-security, no badge, no read of the checks, and ?tab=security opens Profile without mounting the tab",
         prereq="Test users created (e2e_test_admin an administrator, e2e_test_user an ordinary member); the lane's server started with LIBREFOLIO_LOGIN_LIMIT=off (dev.py server --test's default)",
         tests="settings/security-tab.spec.ts",
+    )
+    add_test(
+        cat,
+        "settings-addresses",
+        front_settings_addresses,
+        name="Settings Addresses E2E",
+        desc="Lot B10, read-only on the lane: e2e_test_admin opens /settings/admin/backup on Backup inside «Administration»; Users writes /settings/admin/users, Preferences /settings/preferences, Back returns to Users; an unknown /settings/nope-… becomes /settings on Profile; /settings?tab=email (1.2) opens Email and becomes /settings/admin/email; a simulated 507 storage_limit_exceeded on an upload from Files offers «Open the settings», which opens /settings/admin/global?setting=storage_limit_mb with the limit's row highlighted and in view, the lock closed until opened by hand (nothing saved); e2e_test_user asking for /settings/admin/users lands on /settings, Profile, no «Administration»",
+        prereq="Test users created (e2e_test_admin an administrator, e2e_test_user an ordinary member); LIBREFOLIO_STORAGE_LIMIT_MB unset on the lane",
+        tests="settings/settings-addresses.spec.ts",
     )
     add_test(
         cat,

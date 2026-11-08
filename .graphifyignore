@@ -1,0 +1,85 @@
+# graphify corpus for the devWiki knowledge graph (./dev.py graph ...).
+# graphify scans the repository root; output goes to LibreFolio_devWiki/graphify-out/
+# (GRAPHIFY_OUT, set by dev.py). gitignore syntax, last match wins.
+# Allow-list: ignore everything at the root, then re-include only the corpus folders.
+
+/*
+
+# --- Docs: devWiki pages ---
+!/LibreFolio_devWiki/
+/LibreFolio_devWiki/*
+!/LibreFolio_devWiki/wiki/
+
+# --- Docs: MkDocs, English only (*.en.md + unsuffixed developer pages) ---
+!/mkdocs_src/
+/mkdocs_src/*
+!/mkdocs_src/docs/
+/mkdocs_src/docs/**/*.it.md
+/mkdocs_src/docs/**/*.fr.md
+/mkdocs_src/docs/**/*.es.md
+/mkdocs_src/docs/assets/
+/mkdocs_src/docs/javascripts/
+/mkdocs_src/docs/stylesheets/
+
+# --- Code: backend ---
+!/backend/
+/backend/*
+!/backend/app/
+!/backend/alembic/
+/backend/alembic/*
+!/backend/alembic/versions/
+
+# --- Code: frontend ---
+!/frontend/
+/frontend/*
+!/frontend/src/
+/frontend/src/*
+!/frontend/src/lib/
+!/frontend/src/routes/
+
+# --- Never: tests, generated code, builds, caches, data ---
+**/tests/
+**/__tests__/
+**/test_scripts/
+*.test.ts
+*.spec.ts
+*.d.ts
+/frontend/src/lib/api/zodios/
+/frontend/src/lib/api/generated.ts
+/frontend/src/lib/api/generated-tools.ts
+*.generated.ts
+__pycache__/
+*.pyc
+node_modules/
+build/
+dist/
+data/
+test_data/
+/LibreFolio_devWiki/graphify-out/
+/graphify-out/
+/.claude/worktrees/
+
+# --- Never: non-text assets and data files ---
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.webp
+*.ico
+*.woff
+*.woff2
+*.ttf
+*.mp4
+*.mp3
+*.pdf
+*.xlsx
+*.xls
+*.csv
+*.json
+*.txt
+*.yml
+*.yaml
+*.sh
+*.html
+*.gitkeep

@@ -35,7 +35,7 @@ not ingested here, except where a wiki page was stale because of them (the lots'
   globals; an AST guard (`test_layer_boundaries.py`) for the boundaries, the docstring-only `__init__.py` files and
   the old homes; D-11, the `financial-math.instructions.md` rules file; `developer/backend/financial_math.md`.
   Merged in train 45 (`d0d7e5e9f`); `all-backend` 12 390 passed, the base plus the 37 guard tests.
-- **devWiki**: the historian, in T's worktree, repointed the 58 «Source files» rows that cited moved modules
+- **devWiki**: the historian, working for workstream T, repointed the 58 «Source files» rows that cited moved modules
   (`aea95390d`); the 50 old paths left in the prose became backlog T-W1, realigned by this ingest on 2026-10-12.
 - **D-P7** ([[decisions/utils-leaf-functions-only]]): `utils/` keeps the leaf functions, which never import services;
   BU1 groups them into subfolders and BU2 moves the decimal truncation out — both planned for 1.2, not in the code at

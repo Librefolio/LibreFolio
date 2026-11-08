@@ -18,6 +18,10 @@ Access to a broker can be shared with other users in three tiers: Owner (full co
 
 File management is the bridge between the broker and the BRIM import pipeline. Users upload CSV or XLSX reports exported from their broker platforms. The system stores these files associated with the broker, allows preview and deletion, and feeds them into the BRIM parser. The BRIM framework auto-detects which of 11 broker-specific plugins should handle each file, parses the transactions and extracted asset hints, and presents them in a staging area where users review and confirm before committing to the database.
 
+> 2026-11-07 lint: manual entry is no longer «future» — the transaction modals ([[F-048]]) shipped. The plugin count
+> has grown: `backend/app/services/brim_providers/` holds 33 `broker_*` folders today (generic CSV and the Scalable
+> deposit variant included), so «11» here and below is the count of 2026-05.
+
 **UI v2 redesign (Phase 9 Milestone 3, 2026-07)**: the global Broker list and per-broker detail page (3 tabs
 — Panoramica/Posizioni/Transazioni) were redesigned to reuse the Dashboard's unified `/portfolio/report`
 widgets (see [[concepts/portfolio-report-unified]]) instead of the pre-Portfolio-Engine designs. This closed
@@ -28,6 +32,10 @@ quota%/NAV/Gain/multi-currency-cash without N+1 calls (see
 FIFO lots panel (bubble timeline of open/closed lots, see [[concepts/fifo-lot-tracking]]) — a UI/display
 layer over the existing FIFO engine, no engine changes.
 
+> 2026-11-07 lint: since 2026-11-03 the broker page mounts the Dashboard's `PortfolioView` for one broker, fed by one
+> shared data controller, and `GET /brokers/{id}/summary` is gone: [[decisions/broker-page-is-a-portfolio-view]],
+> [[decisions/api-routes-removed-without-deprecation]].
+
 ## Feature cluster
 
 | Code | Feature | Layer | Role in domain | Status |
@@ -37,14 +45,14 @@ layer over the existing FIFO engine, no engine changes.
 | [[F-011]] | File Management (upload/list/delete broker reports) | fullstack | core — file store for import reports | documented |
 | [[F-012]] | BRIM Framework (broker report import pipeline) | fullstack | core — abstract pipeline: detect→parse→stage→commit | implemented |
 | [[F-013]] | BRIM Plugins (11 broker parsers) | backend | core — concrete parsers for each broker format | documented |
-| [[F-014]] | Image Upload & Crop (broker icon) | fullstack | support — custom icon per broker | implemented |
+| [[F-014]] | Image Upload & Crop (broker icon) | fullstack | support — custom icon per broker | documented |
 
 ## Architecture at a glance
 
 ```mermaid
 graph TD
     User -->|POST /brokers| BrokerDB[(Broker + BrokerUserAccess)]
-    User -->|POST /brokers/:id/files/upload| FileStore[(UploadedFile)]
+    User -->|POST /brokers/import/upload| FileStore[(UploadedFile)]
     FileStore -->|POST /brokers/import/files/:id/parse| BRIMFw[BRIM Framework<br/>brim_provider.py]
     BRIMFw -->|auto-detect| PluginRegistry[BRIMProviderRegistry<br/>11 plugins]
     PluginRegistry --> IBKR[broker_ibkr/plugin.py]
@@ -54,7 +62,7 @@ graph TD
     Degiro --> ParseResult
     Other --> ParseResult
     ParseResult -->|fake asset IDs| StagingUI[F-049 BRIM Import UI<br/>asset matching wizard]
-    StagingUI -->|POST /transactions/bulk| TxDB[(Transaction DB<br/>F-046)]
+    StagingUI -->|POST /transactions/validate + /commit| TxDB[(Transaction DB<br/>F-046)]
 ```
 
 ## Key decisions that shaped this domain
@@ -70,16 +78,18 @@ No open problems in the implemented features.
 
 Pending gaps (Phase 7, see [[connections/transactions-connections]]):
 - F-013: plugins lack `plugin_version` tracking for cache invalidation — if a plugin is updated, previously parsed files are not automatically re-parsed.
+  *2026-11-07 lint: resolved — `plugin_version` is a property of the base (`backend/app/services/brim/brim_provider.py`), compared with `BRIMFileInfo.parsed_plugin_version` to offer a re-parse (`d205f241e`, 2026-04-20).*
 - F-049 BRIM Import UI: asset matching wizard is in-progress; the metadata preview columns are not yet dynamically driven by plugin metadata.
+  *2026-11-07 lint: the wizard has shipped — [[F-049]] is `documented`; see [[entities/import-wizard-modal]].*
 - F-050 File Preview System: planned — inline preview of uploaded files (image, CSV, text) before parsing. *Delivered on 2026-06-04 ([[F-050]]; lint 2026-10-12).*
 
 ## What comes next
 
 - [[F-048]] Staging Modal — manual `create-many`/`edit-many` modes done (Phase 7 Part 4); BRIM `create-brim` mode arriving in Part 5.
   *Delivered: the import wizard hands its rows to the bulk workspace, in 1.0.0 (C-64, 2026-10-12).*
-- [[F-049]] BRIM Import UI — the asset matching wizard (in-progress in Phase 7).
+- [[F-049]] BRIM Import UI — the asset matching wizard (in-progress in Phase 7). *2026-11-07 lint: delivered — `documented`.*
 - [[F-050]] File Preview System — inline preview panel for uploaded broker report files. *Delivered on 2026-06-04 (lint 2026-10-12).*
-- [[F-083]] Multi-File Multi-Broker Import — batch-import multiple files from multiple brokers in one workflow.
+- [[F-083]] Multi-File Multi-Broker Import — batch-import multiple files from multiple brokers in one workflow. *2026-11-07 lint: delivered — `documented`.*
 
 Broker List/Detail UI v2 (Phase 9 Milestone 3) is done — see
 [[sources/phase09-m3-broker-redesign-2026-07]] for the full redesign summary.
@@ -100,4 +110,5 @@ Broker List/Detail UI v2 (Phase 9 Milestone 3) is done — see
 | File upload API | `backend/app/api/v1/uploads.py` |
 | DB models (Broker, BrokerUserAccess) | `backend/app/db/models.py` |
 | Broker sharing/discovery UI (v2) | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte`, `BrokerSharingPanel.svelte`, `BrokerDiscoveryCard.svelte` |
+| Broker page = Dashboard view for one broker | `frontend/src/lib/features/portfolio-view/PortfolioView.svelte`, `frontend/src/lib/features/portfolio-view/portfolioData.ts` |
 | Broker v2 redesign plans (archived) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/` |

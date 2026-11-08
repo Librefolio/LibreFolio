@@ -44,6 +44,12 @@ canEdit(id: number): boolean                               // centralized viewer
 invalidate(): void                                         // after commit/delete → triggers reload
 ```
 
+> 2026-11-07 lint: the API above is the Plan C design. In the code the functions are module exports with a `txStore`
+> prefix — `txStoreSetAll`, `txStoreGet`, `txStoreGetAll`, `txStoreGetFiltered`, `txStoreCanEdit`, `txStoreInvalidate`,
+> plus `txStoreGetVersion` and `txStoreCount` (~90 LOC). `getPartner()` was removed in `52ddafdd2` (2026-09-03, audit 08
+> wave): partners are found through `related_transaction_id` and `txStoreGet`. The store also serves the broker page's
+> Transactions tab, not only the transactions page.
+
 ## WorkspaceIntent Pattern
 
 Toolbar actions no longer pass full data objects to BulkModal. Instead they pass a minimal intent:
@@ -56,7 +62,8 @@ type WorkspaceIntent =
   | { action: 'clone', txIds: number[] }
 ```
 
-BulkModal reads the actual data from txStore using the provided IDs.
+BulkModal reads the actual data from txStore using the provided IDs. (2026-11-07 lint: the code also has
+`{action: 'import'}`, which opens the Import Wizard — [[concepts/workspace-intent-pattern]].)
 
 ## PendingOp Model (Plan C3 — final architecture)
 
@@ -121,7 +128,8 @@ See [[decisions/pendingop-tagged-union]] for rationale.
 - **TransactionPickerModal**: reads `txStore.getAll()` directly — no props needed
 - **TransactionBulkModal**: reads individual rows via `txStore.get(id)`, resolves partners via `txStore.getPartner(id)`
 - **TransactionDeleteModal**: parent reads from txStore before passing to DeleteModal
-- **Page toolbar**: `txStore.canEdit()` for `filterEditableRows()`
+- **Page toolbar**: `txStore.canEdit()` for `filterEditableRows()` (today `guardEditableRows(rows, txStoreCanEdit, …)` in
+  `frontend/src/lib/features/transactions/bulk/selectionGuards.ts`, since `5db705d62`, 2026-10-28)
 
 ## Interface Deduplication
 

@@ -8,6 +8,7 @@ related:
   - decisions/data-quality-proved-on-real-data
   - features/F-054
   - sources/phase00-data-quality-e2e-2026-10
+  - decisions/broker-page-is-a-portfolio-view
 ---
 
 # Problem: open panels stayed stale after «Sync rates»
@@ -44,11 +45,18 @@ reload — was closed the same way in V's batch 2 (`86217eaf4`, train 58): red f
 (the lots panel already open must ask `POST /portfolio/lots/analysis` again, in the same page load), then
 `refreshVersion += 1` after `invalidate()`.
 
+2026-11-07 lint: the code has moved, the rule stays. The Dashboard body went into `PortfolioView.svelte`
+(`61ec8c3ab`, 03/11, Y6-7; [[decisions/broker-page-is-a-portfolio-view]]), and the banner actions into
+`portfolioBannerActions.svelte.ts` (`5f8dac5df`, 04/11). Both «Sync rates» (`syncMissingFxRates`) and «Sync prices»
+(`sync_asset_prices`) call `onDataChanged()`, which `PortfolioView` wires to `refreshVersion += 1`.
+
 ## Source files
 
 | Role | Path |
 |------|------|
-| `syncMissingFxRates`, `refreshVersion`, `handleBannerAction` | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| `syncMissingFxRates`, `refreshVersion`, `handleBannerAction` (at the time; now the route's shell only) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| `refreshVersion`, `onDataChanged: () => (refreshVersion += 1)` | `frontend/src/lib/features/portfolio-view/PortfolioView.svelte` |
+| `syncMissingFxRates`, `sync_asset_prices`, `onDataChanged()` | `frontend/src/lib/features/portfolio-view/portfolioBannerActions.svelte.ts` |
 | The listener in the lots panel | `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte` |
 | E1, the red then the green | `frontend/e2e/portfolio/data-quality-real.spec.ts` |
 | Developer doc (the `sync_fx_pair` CTA) | `mkdocs_src/docs/developer/frontend/data-quality-banner.md` |

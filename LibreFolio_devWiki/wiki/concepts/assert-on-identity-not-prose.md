@@ -62,7 +62,7 @@ assertion independent of the catalogue entirely:
 expect(panel()).toHaveAttribute('data-error-key', 'brokers.sharing.loadFailedBlocking');
 ```
 
-This is the precedent set by `BrokerSharingPanel.svelte` (L379), which publishes
+This is the precedent set by `BrokerSharingPanel.svelte` (L379 then, L455 on 2026-11-07), which publishes
 `data-error-key` alongside `data-access-state` and `aria-invalid`. Seven assertions
 across five tests were converted to it.
 
@@ -116,7 +116,7 @@ To prove that a label is not hardcoded, mount the component in a marker locale, 
 
 | Role | Path |
 |------|------|
-| Identity precedent — `data-error-key` | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` (L379) |
+| Identity precedent — `data-error-key` | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` (root `div`) |
 | Converted assertions | `frontend/src/lib/features/brokers/BrokerSharingPanel.test.ts` |
 | Catalogue-comparison precedent | `frontend/src/lib/utils/files/imageCrop.test.ts` |
 | English catalogue | `frontend/src/lib/i18n/base/en.json` |

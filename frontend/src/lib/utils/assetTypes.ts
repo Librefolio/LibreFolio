@@ -10,6 +10,7 @@
 
 import {schemas} from '$lib/api/generated';
 import type {TreeSelectGroup, TreeSelectItem} from '$lib/components/ui/select/treeSelect';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 // =============================================================================
 // ASSET TYPES — derived from backend enum via Zod schema
@@ -157,6 +158,19 @@ export function assetTypeBadgeClass(type: string | null | undefined): string {
 /** The background class of a subtype badge's dot, the colour of what it contains; `null` for a type with no content. */
 export function assetTypeBadgeDotClass(type: string | null | undefined): string | null {
     return BADGE_DOT_CLASS_MAP[(type ?? '').toUpperCase()] ?? null;
+}
+
+/**
+ * The asset-type badge as markup, for the views that build HTML strings: `AssetTable`'s cell and the asset pie's tooltip
+ * (T-3). The same chip as `AssetCard`'s: the family's colour, the type's icon, the label and a subtype's dot. `icon: false`
+ * leaves the type's icon out where one is already beside the badge. `label` is the translated type; it is escaped here.
+ */
+export function assetTypeBadgeHtml(type: string, label: string, options: {icon?: boolean} = {}): string {
+    const icon = options.icon ?? true;
+    const dot = assetTypeBadgeDotClass(type);
+    const iconHtml = icon ? `<img src="${escapeHtml(getAssetTypeIconUrl(type))}" alt="" class="w-3.5 h-3.5 object-contain" data-hide-on-error="display" />` : '';
+    const dotHtml = dot ? `<span class="inline-block w-1.5 h-1.5 shrink-0 rounded-full ${dot}" aria-hidden="true" data-testid="asset-type-dot"></span>` : '';
+    return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${assetTypeBadgeClass(type)}" data-testid="asset-type-badge" data-asset-type="${escapeHtml(type)}">${iconHtml}${escapeHtml(label)}${dotHtml}</span>`;
 }
 
 /**

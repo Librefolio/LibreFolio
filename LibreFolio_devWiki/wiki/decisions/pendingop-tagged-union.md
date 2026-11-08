@@ -71,7 +71,8 @@ type PendingOp = (
 - **Plan D unblocked**: Split = `markedDelete=true` on one side + `ops.push(createOpEmpty())` for detached side. Promote = two edit ops + shared `link_uuid`. ~10 LOC per action.
 - **LOC**: 1819 → 1748 (−71, −4%) — quality improvement, not brute reduction
 - **No external API change**: only `TransactionBulkModal.svelte` internal refactor; all E2E tests pass unchanged
-- **`data-action-id`**: added to DataTable for stable E2E selectors (complements `data-testid` rule)
+- **`data-action-id`**: added to DataTable for stable E2E selectors (complements `data-testid` rule) — *2026-11-07 lint:*
+  removed from `DataTable.svelte` in `9a3b47388` (2026-07-18); row actions carry a `data-testid`
 
 ## Links
 

@@ -1,7 +1,7 @@
 ---
 title: "A SimpleSelect list opened upward inside a table falls under the sticky header (W-B26)"
 category: problem
-status: open
+status: resolved
 date: 2026-10-15
 tags: [frontend, datatable, simpleselect, z-index, stacking-context, sticky, shared-component, e2e]
 related:
@@ -45,11 +45,16 @@ save) is proved red-first elsewhere: at the API (409 against 422) and in scenari
 
 ## Solution
 
-Open: backlog **W-B26**, for the owners of the shared UI and table components (to be assigned). The backlog suggests
+At filing open: backlog **W-B26**, for the owners of the shared UI and table components (to be assigned). The backlog suggests
 moving the list to `body` (a portal), like other fixed menus. The AI Export panel, for one, is portalled to
 `document.body` ([[decisions/ai-export-versioned-snapshot-boundary]]).
 
 Workaround in the test: test 3 changes the amount instead of the type, and passes (4/4).
+
+2026-11-07 lint: resolved by H6-1 (`34d5849a7`, 30/10, wave 6, owner H; backlog W-B26 marked ✅ 05/11). The list now
+carries `use:portal` (`frontend/src/lib/actions/portal.ts`), so it is moved to `body` and no ancestor's stacking
+context can paint over it. The regression is covered by `frontend/e2e/assets/asset-select-portal.spec.ts`. Test 3 of
+`asset-event-editor-save.spec.ts` still edits the amount (no dropdown).
 
 ## Prevention
 
@@ -68,8 +73,10 @@ Workaround in the test: test 3 changes the amount instead of the type, and passe
 
 | Role | Path |
 |------|------|
-| The list: `fixed z-[9999]`, not portalled (line 328) | `frontend/src/lib/components/ui/select/SimpleSelect.svelte` |
-| The sticky header (line 1621); the row's stacking context; the editable select cell | `frontend/src/lib/components/table/DataTable.svelte` |
+| The list: `fixed z-[9999]`, not portalled at filing (line 328); `use:portal` since H6-1 | `frontend/src/lib/components/ui/select/SimpleSelect.svelte` |
+| The sticky header (line 1621 at filing, 1296 on 07/11/2026); the row's stacking context; the editable select cell | `frontend/src/lib/components/table/DataTable.svelte` |
 | The E2E that met it (test 3) | `frontend/e2e/assets/asset-event-editor-save.spec.ts` |
+| The portal action (H6-1) | `frontend/src/lib/actions/portal.ts` |
+| The E2E of the fix (H6-1) | `frontend/e2e/assets/asset-select-portal.spec.ts` |
 | Backlog W-B26 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Plan 04, section E1, step 3 | `LibreFolio_developer_journal/Release_2/Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md` |

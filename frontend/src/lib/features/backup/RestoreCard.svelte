@@ -6,31 +6,23 @@
   `data-busy`. Events: `backup.restore.*` (`restoreFlow.svelte.ts`); a failure also raises an error toast.
 
   A secure backup (an .lfbk, lot B4) asks for its password before it is sent (state `password`); a wrong password asks
-  again, and the file is not sent again. The password leaves the field as soon as it is submitted.
+  again, and the file is not sent again. A10 (T-15): every restore goes on in a window: those steps in `RestoreStepsModal`
+  (shared with the modal of a kept backup, which «Restore» on a row of the list opens), then the report's. The card keeps
+  the choice of an archive, the checks waiting for a decision (to resume or discard), and a restore confirmed.
 -->
 <script lang="ts">
-    import {onMount} from 'svelte';
-    import {ArchiveRestore, FileArchive, KeyRound, LoaderCircle, RefreshCw, RotateCcw, ShieldAlert, TriangleAlert, Upload, X} from 'lucide-svelte';
-    import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
+    import {onMount, untrack} from 'svelte';
+    import {ArchiveRestore, FileArchive, LoaderCircle, RefreshCw, RotateCcw, ShieldAlert, TriangleAlert, Upload, X} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
-    import {formatBytes} from '$lib/utils/files/upload';
-    import type {RestorePhase} from './backupApi';
     import {RestoreFlowController} from './restoreFlow.svelte';
     import RestoreReportModal from './RestoreReportModal.svelte';
     import RestartOverlay from './RestartOverlay.svelte';
     import {verifyRestorePassword} from './backupApi';
-    import {restoreRequest, takeRestoreRequest} from './restoreRequest.svelte';
+    import {restoreSignal} from './restoreSignal.svelte';
+    import RestoreStepsModal from './RestoreStepsModal.svelte';
     import {restoreErrorKey, restoreReasonKey, restoreWaitingKey} from './restoreText';
-
-    const PHASE_KEYS: Record<RestorePhase, string> = {
-        decrypting: 'backup.restore.phase.decrypting',
-        checking: 'backup.restore.phase.checking',
-        unpacking: 'backup.restore.phase.unpacking',
-        upgrading: 'backup.restore.phase.upgrading',
-        verifying: 'backup.restore.phase.verifying',
-    };
 
     const controller = new RestoreFlowController({
         onEvent: (name, detail) =>
@@ -43,33 +35,34 @@
     });
 
     let fileInput = $state<HTMLInputElement | null>(null);
-    let reportOpen = $state(true);
-    let restorePassword = $state('');
+    // A10 (T-15): the name of the archive chosen on the computer, under the title of its window.
+    let chosenName = $state<string | null>(null);
 
     onMount(() => {
         void controller.load();
         return () => controller.dispose();
     });
 
-    // C9-9: «Restore» on a kept backup, asked from the list here or in Files: taken once the card is free for it.
+    // A10 (T-15): a kept backup is restored in its own modal; when it leaves a check for later, drops it or ends, the card
+    // reads its state again, to list what waits for a decision.
     $effect(() => {
-        if (restoreRequest.jobId !== null && (controller.state === 'idle' || controller.state === 'failed')) {
-            const jobId = takeRestoreRequest();
-            if (jobId !== null) void controller.fromKept(jobId);
-        }
+        if (restoreSignal.version === 0) return;
+        untrack(() => {
+            if (controller.state === 'idle' || controller.state === 'failed') void controller.load();
+        });
     });
 
-    // A new report opens the modal.
-    $effect(() => {
-        if (controller.state === 'report') reportOpen = true;
-    });
+    // A10 (T-15): every restore goes on in a window. Before its report: the password of a secure backup, the archive sent, its
+    // check; a request out to drop it or to confirm it. A cancel of a confirmed restore stays on the card.
+    const stepsOpen = $derived(controller.state === 'password' || controller.state === 'uploading' || controller.state === 'checking' || controller.state === 'confirming' || (controller.state === 'cancelling' && controller.stage !== null));
 
-    const uploadPercent = $derived(controller.totalBytes > 0 ? Math.min(100, Math.round((controller.uploadedBytes / controller.totalBytes) * 100)) : null);
-    const checkPercent = $derived.by(() => {
-        const stage = controller.stage;
-        if (stage === null || stage.total_bytes <= 0) return null;
-        return Math.min(100, Math.round((stage.done_bytes / stage.total_bytes) * 100));
-    });
+    /** The window closed: a secure backup forgets its password, an upload stops, a check under way goes on, listed to resume. */
+    function closeSteps() {
+        if (controller.state === 'password') controller.cancelPassword();
+        else if (controller.state === 'uploading') controller.abortUpload();
+        else if (controller.state === 'checking') void controller.later();
+    }
+
     // Developer decision P8: a restore kept says nothing (the data shows it); one rolled back says why.
     const lastResult = $derived(controller.state === 'idle' && controller.status?.state === 'rolled_back' ? controller.status : null);
 
@@ -81,19 +74,9 @@
         const input = event.currentTarget as HTMLInputElement;
         const file = input.files?.[0];
         input.value = '';
-        if (file) void controller.upload(file);
-    }
-
-    function submitPassword(event: SubmitEvent) {
-        event.preventDefault();
-        const typed = restorePassword;
-        restorePassword = '';
-        void controller.submitPassword(typed);
-    }
-
-    function cancelPassword() {
-        restorePassword = '';
-        controller.cancelPassword();
+        if (!file) return;
+        chosenName = file.name;
+        void controller.upload(file);
     }
 </script>
 
@@ -160,144 +143,6 @@
             <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
             <span>{$_('backup.restore.last.rolledBack', {values: {date: formatDateTime(lastResult.finished_at ?? ''), reason: $_(restoreReasonKey(lastResult.reason))}})}</span>
         </div>
-    {/if}
-
-    {#if controller.state === 'password'}
-        <form class="space-y-3" data-testid="restore-password-form" onsubmit={submitPassword} novalidate>
-            <p class="flex items-start gap-2 text-sm text-lf-secondary">
-                <KeyRound class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
-                <span>{$_('backup.restore.password.intro')}</span>
-            </p>
-            <div class="space-y-2">
-                <label class="block text-sm font-medium text-lf-secondary" for="restore-password">{$_('backup.restore.password.label')}</label>
-                <PasswordInput neverSaved bind:value={restorePassword} disabled={controller.submitting} hasError={controller.errorCode !== null} id="restore-password" name="restore-password" testId="restore-password" />
-            </div>
-            {#if controller.errorCode !== null}
-                <p class="flex items-start gap-2 text-sm text-lf-danger" role="alert" data-testid="restore-password-error" data-error-code={controller.errorCode}>
-                    <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
-                    <span>{$_(restoreErrorKey(controller.errorCode))}</span>
-                </p>
-            {/if}
-            <div class="flex flex-wrap items-center gap-2">
-                <button
-                    class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
-                    type="submit"
-                    data-testid="restore-password-submit"
-                    disabled={restorePassword === '' || controller.submitting}
-                >
-                    {#if controller.submitting}
-                        <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
-                    {:else}
-                        <KeyRound size={16} aria-hidden="true" />
-                    {/if}
-                    {$_('backup.restore.password.submit')}
-                </button>
-                <button
-                    class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
-                    type="button"
-                    data-testid="restore-password-cancel"
-                    disabled={controller.submitting}
-                    onclick={cancelPassword}
-                >
-                    <X size={16} aria-hidden="true" />
-                    {$_('backup.restore.password.cancel')}
-                </button>
-            </div>
-        </form>
-    {/if}
-
-    {#if controller.state === 'uploading'}
-        <div class="space-y-2" data-testid="restore-upload-progress">
-            {#if controller.totalBytes > 0}
-                <!-- C9-7: what the check will take, said before it does: the archive itself, then its opened version. -->
-                <p class="text-xs text-lf-muted" data-testid="restore-space-needed">{$_('backup.restore.spaceNeeded', {values: {size: formatBytes(controller.totalBytes, $_)}})}</p>
-            {/if}
-            <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span class="flex items-center gap-2 text-lf-secondary">
-                    <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
-                    {$_('backup.restore.uploading')}
-                </span>
-                <span class="tabular-nums text-lf-muted">{$_('backup.restore.progress', {values: {done: formatBytes(controller.uploadedBytes, $_), total: formatBytes(controller.totalBytes, $_)}})}</span>
-            </div>
-            <div class="h-2 overflow-hidden rounded-full bg-lf-neutral" role="progressbar" aria-label={$_('backup.restore.uploading')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadPercent ?? undefined}>
-                <div class="h-full rounded-full bg-lf-checked transition-[width] duration-300" style:width="{uploadPercent ?? 0}%"></div>
-            </div>
-            <button
-                class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-                type="button"
-                data-testid="restore-cancel-check"
-                onclick={() => controller.abortUpload()}
-            >
-                <X size={16} aria-hidden="true" />
-                {$_('backup.restore.cancelUpload')}
-            </button>
-        </div>
-    {/if}
-
-    {#if controller.state === 'checking'}
-        <div class="space-y-2" data-testid="restore-check-progress" data-phase={controller.stage?.phase ?? ''}>
-            <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span class="flex items-center gap-2 text-lf-secondary">
-                    <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
-                    {controller.stage?.phase ? $_(PHASE_KEYS[controller.stage.phase]) : $_('backup.restore.phase.checking')}
-                </span>
-                {#if controller.stage && checkPercent !== null}
-                    <span class="tabular-nums text-lf-muted">{$_('backup.restore.progress', {values: {done: formatBytes(controller.stage.done_bytes, $_), total: formatBytes(controller.stage.total_bytes, $_)}})}</span>
-                {/if}
-            </div>
-            <div class="h-2 overflow-hidden rounded-full bg-lf-neutral" role="progressbar" aria-label={$_('backup.restore.phase.checking')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={checkPercent ?? undefined}>
-                {#if checkPercent === null}
-                    <div class="h-full w-1/3 animate-pulse rounded-full bg-lf-checked"></div>
-                {:else}
-                    <div class="h-full rounded-full bg-lf-checked transition-[width] duration-300" style:width="{checkPercent}%"></div>
-                {/if}
-            </div>
-            {#if controller.dropRequested}
-                <p class="text-xs text-lf-muted" data-testid="restore-drop-requested">{$_('backup.restore.dropWhenDone')}</p>
-            {:else}
-                <button
-                    class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-                    type="button"
-                    data-testid="restore-cancel-check"
-                    onclick={() => controller.dropCheck()}
-                >
-                    <X size={16} aria-hidden="true" />
-                    {$_('backup.restore.cancelCheck')}
-                </button>
-            {/if}
-        </div>
-    {/if}
-
-    {#if controller.state === 'report' && controller.report}
-        <div class="flex flex-wrap items-center gap-2" data-testid="restore-report-ready" data-restorable={controller.report.restorable ? 'true' : 'false'}>
-            <button
-                class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-                type="button"
-                data-testid="restore-open-report"
-                onclick={() => (reportOpen = true)}
-            >
-                <FileArchive size={16} aria-hidden="true" />
-                {$_('backup.restore.openReport')}
-            </button>
-        </div>
-        <RestoreReportModal
-            open={reportOpen}
-            report={controller.report}
-            busy={false}
-            onConfirm={(ownerUserId) => controller.confirm(ownerUserId)}
-            onDrop={() => controller.dropCheck()}
-            onLater={() => void controller.later()}
-            stageId={controller.stage?.stage_id ?? null}
-            onVerify={(username, password) => verifyRestorePassword(controller.stage?.stage_id ?? '', username, password)}
-            onClose={() => (reportOpen = false)}
-        />
-    {/if}
-
-    {#if controller.state === 'confirming' || controller.state === 'cancelling'}
-        <p class="flex items-center gap-2 text-sm text-lf-secondary" data-testid="restore-working">
-            <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
-            {controller.state === 'confirming' ? $_('backup.restore.confirming') : $_('backup.restore.cancelling')}
-        </p>
     {/if}
 
     {#if controller.state === 'pending' && controller.status}
@@ -388,6 +233,25 @@
         {/if}
     {/if}
 </section>
+
+{#if stepsOpen}
+    <RestoreStepsModal {controller} title={$_('backup.restore.title')} subtitle={controller.state === 'uploading' || controller.state === 'password' ? chosenName : null} testIdPrefix="restore" onClose={closeSteps} />
+{/if}
+
+{#if controller.state === 'report' && controller.report}
+    <!-- A10 (T-15): closing the report leaves its check for later: the card lists it, and «Resume» opens it again. -->
+    <RestoreReportModal
+        open
+        report={controller.report}
+        busy={false}
+        onConfirm={(ownerUserId) => controller.confirm(ownerUserId)}
+        onDrop={() => controller.dropCheck()}
+        onLater={() => void controller.later()}
+        stageId={controller.stage?.stage_id ?? null}
+        onVerify={(username, password) => verifyRestorePassword(controller.stage?.stage_id ?? '', username, password)}
+        onClose={() => void controller.later()}
+    />
+{/if}
 
 {#if controller.state === 'restarting' && controller.outcome !== null}
     <RestartOverlay outcome={controller.outcome} slow={controller.slow} notStopping={controller.notStopping} status={controller.outcomeStatus} unreadableReason={controller.unreadableReason} onBack={() => controller.load()} />

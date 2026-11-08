@@ -79,6 +79,12 @@ D-1 … D-11 were approved by the developer as recommended on 2026-10-11 (plan 4
 | `portfolio/` — `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `engine` | daily portfolio state and its views | `services/portfolio_engine.py` |
 | `lots/` — `prices`, `conversions`, `economic_events`, `histories`, `average_cost_lines` | lots analysis math | the pure methods of `LotsAnalysisService` |
 
+*2026-11-07 lint:* the table is the home of 12/10. Modules added since, on the same rule: `change_days.py`,
+`fx_rates.py`, `holding_window.py`, `interest.py`, `ledger_totals.py`, `series_steps.py`, `splits.py`,
+`trade_amount.py`, `weights.py`; `lots/` gained `change_days`, `scope_boundary`, `summary`, and `portfolio/` gained
+`contributions`, `period`, `position_series`. The live map is the layer's `__init__.py` docstring and the «Financial
+Math — One Home» table of `backend.instructions.md`.
+
 `utils/financial/` is gone. `lots_analysis_service.py` stays as orchestration (loading, DTOs, data quality),
 `fx.py` stays as FX infrastructure (`convert_bulk` is the primitive). Risk, signals and PAC ([[features/F-107]]) stay where they are and
 take the common math from the layer.
@@ -150,6 +156,8 @@ take the common math from the layer.
 - [[decisions/financial-math-single-average-cost]] — the layer's first function and first rule
 - [[decisions/utils-leaf-functions-only]] — D-P7: what stays in `utils/`
 - [[concepts/backend-only-calculations]] — the frontend side of the same rule
+- [[problems/act-act-lost-a-day-per-year-end]], [[problems/maturity-settlement-counted-the-final-coupon-twice]] — interest
+  maths defects: ACT/ACT fixed in this layer (`interest.py`), the maturity settlement in the scheduled-investment plugin
 - [[entities/portfolio-engine]], [[entities/fifo-lot-engine]], [[entities/lots-analysis-service]],
   [[entities/native-cash]] — the moved and the new modules
 - Source: [[sources/phase00-financial-math-home-2026-10]]

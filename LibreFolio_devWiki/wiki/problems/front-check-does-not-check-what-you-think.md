@@ -63,6 +63,9 @@ in other people's files.
   to `HEAD` is evidence about the toolchain, not about the diff.
 - Never cite a `front check` pass as evidence that an E2E spec is type-correct.
   The only real gate on specs is running them.
+- *2026-11-07 lint: the false green is closed.* Since `4e51e8c9c` (2026-10-31, «E2E tsc gate») `./dev.py front check`
+  also runs `npm run check:e2e` (`tsc -p tsconfig.e2e.json`), so the specs are type-checked; svelte-check itself
+  still never opens them. A type-correct spec is still not a passing one.
 
 ## Prevention
 
@@ -84,6 +87,7 @@ reporting the absence of a generated file.
 | Role | Path |
 |------|------|
 | Excludes `e2e/**` | `frontend/tsconfig.json` |
-| Exists, referenced by no gate | `frontend/tsconfig.e2e.json` |
+| Referenced by no gate until `4e51e8c9c`; now run by `front check` (`check:e2e`) | `frontend/tsconfig.e2e.json` |
+| `cmd_fe_check` (svelte-check, then `check:e2e`) | `dev.py` |
 | Placeholder for the generated client | `frontend/src/lib/api/generated.ts.gitkeep` |
 | Post-generation fixup, evidence the class of problem is known | `frontend/scripts/fix-openapi-discriminators.mjs` |

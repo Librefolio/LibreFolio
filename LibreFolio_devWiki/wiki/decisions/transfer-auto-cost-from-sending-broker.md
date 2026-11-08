@@ -53,7 +53,7 @@ at 300 on 3 April, the receiving side on 5 April:
 
 ## Decision
 
-`_auto_cost_source()` (`transaction_service.py`, commit `48c3f52a9`, train 28) chooses the pool an Auto cost averages:
+`_auto_cost_source()` (`transaction_service.py`, commit `48c3f52a9`, train 28; in `auto_cost.py` today) chooses the pool an Auto cost averages:
 
 - the receiving side of a TRANSFER with `related_transaction_id` averages **its partner's broker, up to the partner's
   date, without the partner's outgoing leg and without itself**. The partner comes from the same batch, from the
@@ -69,7 +69,7 @@ at 300 on 3 April, the receiving side on 5 April:
   `test_wac_inline.py`; no regression in the WAC, promote, portfolio-WAC, transaction and broker suites, nor in six
   E2E specs on WAC and promotes.
 - Unchanged: Auto with no position stays 0, by decision P-1 ([[decisions/auto-cost-basis-zero-without-position]]);
-  the facade's other callers (`POST /portfolio/wac`, the PAC); the frontend.
+  the facade's other callers (`POST /portfolio/wac`, removed since in `d5e467847`; the PAC); the frontend.
 - The docs were aligned: `developer/backend/transactions/wac.md`, `developer/backend/transactions/split_promote.md`,
   and `developer/architecture/database/brokers_transactions.md`, where an older error was corrected too —
   `_compute_wac_for_auto_items()` writes the cost, `compute_wac_iterative()` only reads it. The theory page says it in

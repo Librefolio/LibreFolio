@@ -3,6 +3,7 @@ title: "Backend-Only Calculations Rule"
 category: concept
 tags: [architecture, backend, frontend, calculations]
 related_features: [F-056, F-057, F-058]
+related: [decisions/financial-math-one-home, decisions/signal-backend-plugin-architecture]
 ---
 
 # Concept: Backend-Only Calculations
@@ -23,6 +24,14 @@ All financial calculations in LibreFolio are performed exclusively in the backen
 
 **Exception**: the Signal Library ([[F-037]]) computes technical indicators (EMA, RSI, MACD) in the frontend on raw price series received from the API. This is intentional — signals are display-layer transformations, not financial calculations affecting stored data.
 
+> *2026-11-07 lint:* this exception is superseded. Since the signal platform ([[decisions/signal-backend-plugin-architecture]],
+> 2026-07-23) indicators are computed by backend `SignalPlugin`s (`backend/app/services/signal_plugins/`); the frontend
+> keeps only comparison signals, synthetic benchmarks and Measure. The rule itself was then amended twice: every
+> financial calculation has one home, `backend/app/services/financial_math/` ([[decisions/financial-math-one-home]],
+> rule 6: «interactive measures are the declared exception»), and small sums or multiplications (a form convenience, a
+> chart adapter) may live in the frontend in one shared helper (developer decision 25/10/2026, `CLAUDE.md` «Key
+> Architectural Decisions» 1).
+
 ## Why
 - Single source of truth — no risk of frontend and backend computing different numbers
 - Auditable and testable in isolation
@@ -36,7 +45,9 @@ All financial calculations in LibreFolio are performed exclusively in the backen
 
 | Role | Path |
 |------|------|
-| Transaction service (FIFO, ROI) | `backend/app/services/transactions/transaction_service.py` |
+| Financial math — the one home (FIFO, average cost, returns, portfolio engine) | `backend/app/services/financial_math/` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| Backend signal plugins | `backend/app/services/signal_plugins/` |
 | Asset service (sync, caching) | `backend/app/services/assets/` |
 | FX service (conversion graph) | `backend/app/services/fx/conversion.py` |
 | API schemas | `backend/app/schemas/` |

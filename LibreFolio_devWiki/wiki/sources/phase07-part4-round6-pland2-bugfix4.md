@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 — Plan D2 Bugfix 4: Split Suggest, PMC Overrid
 category: source
 source_type: plan
 date_ingested: 2026-05-31
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_4_SplitSuggestPmcOverrideUx.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/Bugfix/plan-bugfix4_SplitSuggestPmcOverrideUx.prompt.md
 tags: [phase07, transactions, bugfix, pmc-auto-calc, cost-basis-override, promote-suggest, split-payload, link-uuid, slider, ux]
 related:
   - sources/phase07-part4-round6-pland2-bugfix3

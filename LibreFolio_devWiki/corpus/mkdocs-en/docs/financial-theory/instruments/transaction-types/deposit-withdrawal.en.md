@@ -1,1 +1,0 @@
-../../../../../../../mkdocs_src/docs/financial-theory/instruments/transaction-types/deposit-withdrawal.en.md

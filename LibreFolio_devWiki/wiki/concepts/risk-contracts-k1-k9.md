@@ -24,7 +24,7 @@ lives.
 | Contract | What it fixes | Where it lives today |
 |----------|---------------|----------------------|
 | K1, A→E | The underwater series and the histogram bins | `services/risk/metrics.py` (`_MAX_HISTOGRAM_BINS`), `schemas/risk.py` |
-| K2, B→G | `primaryAssetType` returns the type held, not the container (D85) | `utils/assetTypes.ts`, `charts/allocationHierarchy.ts` |
+| K2, B→G | `primaryAssetType` returns the type held, not the container (D85) | `utils/assetTypes.ts`, `components/charts/allocationHierarchy.ts` |
 | K3, B→E,F | The benchmark selector in sections, reusing `AssetSelect` (D50, D60, D73) | `features/risk/BenchmarkSelect.svelte` |
 | K4, C→E,F,H | An optional field of `PortfolioRiskScope` slices the portfolio by asset | `schemas/risk.py` (`sliced_asset_ids`) |
 | K5, D→E,F | Display primitives under `ui/display` (history; replaced by round 2's `PRIMITIVE.md`) | `components/ui/display/KpiMetricBar.svelte` |

@@ -33,6 +33,12 @@ import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 let stack: string[] = [];
 
+/**
+ * Whether anything has shaped the stack since the app was loaded: a tracked navigation, or a sidebar reset. Only a
+ * stack nothing has shaped yet may take the page a navigation leaves as its floor; one the sidebar emptied stays empty.
+ */
+let shaped = false;
+
 /** `canGoBack` writes here, after every change of the stack. */
 const canGoBackState = writable(false);
 
@@ -59,17 +65,33 @@ let expectedReplacePathname: string | null = null;
  *
  * @param navigationType - `nav.type` from SvelteKit ('enter', 'link', 'goto', 'form', 'popstate')
  * @param fullUrl - `nav.to?.url.pathname + nav.to?.url.search` from SvelteKit (path + query)
+ * @param fromUrl - `nav.from?.url.pathname + nav.from?.url.search`: the page the navigation started on, when there was one
  */
-export function trackNavigation(navigationType: string | undefined, fullUrl: string | undefined) {
+export function trackNavigation(navigationType: string | undefined, fullUrl: string | undefined, fromUrl?: string) {
     if (!fullUrl) return;
-    applyNavigation(navigationType, fullUrl);
+    applyNavigation(navigationType, fullUrl, fromUrl);
     publishCanGoBack();
 }
 
-function applyNavigation(navigationType: string | undefined, fullUrl: string) {
+function applyNavigation(navigationType: string | undefined, fullUrl: string, fromUrl?: string) {
     // An announced replacement covers the next navigation only, wherever it goes.
     const replacePathname = expectedReplacePathname;
     expectedReplacePathname = null;
+    const newPathname = fullUrl.split('?')[0];
+    const fromPathname = fromUrl?.split('?')[0];
+    if (!shaped && navigationType !== 'popstate' && navigationType !== 'enter' && stack.length === 0 && fromUrl) {
+        // The page the app was entered on was never recorded: the layout that tracks navigations mounted after its
+        // `enter` (a slow device, a slow build). The page this navigation leaves is the floor of the stack.
+        stack = [fromUrl];
+    }
+    shaped = true;
+    if (navigationType !== 'popstate' && navigationType !== 'enter' && fromPathname === newPathname) {
+        // A page rewriting its own address (period, tab, filters) never goes deeper. It updates its entry while
+        // that entry is on top; once ← has already popped it, the rewrite lands late and is dropped — pushed, it
+        // would put the page back above the one ← returned to, and that page would draw a ← to nowhere.
+        if (stack.length > 0 && stack[stack.length - 1].split('?')[0] === newPathname) stack[stack.length - 1] = fullUrl;
+        return;
+    }
     if (navigationType === 'popstate') {
         // User pressed back/forward. Pop the top entry if it matches where
         // we were; otherwise trust the browser and re-anchor the stack.
@@ -87,7 +109,6 @@ function applyNavigation(navigationType: string | undefined, fullUrl: string) {
         // Compare pathnames only to avoid duplicate pushes from replaceState
         // query param updates on the same page.
         const currentPathname = stack.length > 0 ? stack[stack.length - 1].split('?')[0] : '';
-        const newPathname = fullUrl.split('?')[0];
         if (currentPathname === newPathname || (stack.length > 0 && newPathname === replacePathname)) {
             // Same page, different query params (e.g. filter change via replaceState)
             // → update in place instead of pushing. Likewise an announced replacement
@@ -126,6 +147,9 @@ export function goBack(fallbackPath: string) {
         // maintains the real history underneath.
         goto(prev);
     } else {
+        // Nothing below the current page: the fallback takes its place rather than stacking on it, or the page ←
+        // lands on would draw a ← of its own, back to the page just left.
+        expectedReplacePathname = fallbackPath.split('?')[0];
         goto(fallbackPath);
     }
 }
@@ -136,6 +160,7 @@ export function goBack(fallbackPath: string) {
  */
 export function resetNavDepth() {
     stack = [];
+    shaped = true;
     expectedReplacePathname = null;
     publishCanGoBack();
 }

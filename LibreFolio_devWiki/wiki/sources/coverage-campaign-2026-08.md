@@ -71,6 +71,11 @@ is the scheduler work and the tests covering it.
 > assume it is wrong, and here it is not.
 
 
+Sibling sources of the same campaign (folder `07_coverageAndConsolidationCampaign/`):
+[[sources/p7-js-coverage-instrumentation]], [[sources/coverage-fase012-and-branch-lanes]],
+[[sources/p8-runner-parallel-architecture]], [[sources/p9-test-semantics]], [[sources/frontend-parallelism-tappe-7-11]],
+[[sources/settings-lane-and-sixteen-defects]], [[sources/coda-beta-parametric-forkserver]].
+
 ## Key Takeaways
 
 - **Rate versus volume** is the campaign's central lesson: five lanes covered

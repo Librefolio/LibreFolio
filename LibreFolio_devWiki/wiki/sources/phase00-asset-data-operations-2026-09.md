@@ -22,7 +22,7 @@ One plan (~300 lines), shipped in `c56039fbf` (2026-09-10) and polished in `ab05
 ## Key takeaways
 
 - **A1 — bond categories**: the sector taxonomy gained `Corporate Bonds` and `Government Bonds` (with aliases such as
-  "corporate", "government"; `backend/app/utils/sector_fin_utils.py`); supranational bonds stay in `Financials`. No
+  "corporate", "government"; `backend/app/utils/sector_fin_utils.py`, now `backend/app/utils/asset/sector.py` after `25e19856d`); supranational bonds stay in `Financials`. No
   migration and no reclassification of existing data.
 - **A2 — distributions CSV import** (sector and geographic weights, not asset events): columns `name,weight`;
   `weight` is always a percentage 0–100, divided by 100 exactly once — never a guessed 0–1 scale, never rebalanced;

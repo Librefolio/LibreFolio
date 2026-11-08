@@ -87,14 +87,14 @@ not an empty report:
 ```text
 vitest     ──(istanbul provider)────▶ unit/<time>-<pid>/coverage-final.json ──▶ unit-combined/ ─┐
                                                                                                 ├──▶ combined/
-Playwright ──(window.__coverage__)──▶ e2e-raw/<one per test>.json           ──▶ e2e/           ─┘
+Playwright ──(window.__coverage__)──▶ e2e-raw/worker-<slot>-<pid>.json     ──▶ e2e/           ─┘
 ```
 
 Both levels speak **istanbul**, end to end; paths are relative to
 `frontend/coverage-js/`. While the tests run, each level only writes JSON files — one
-per vitest process, one per Playwright test — the same role `.coverage.<pid>` files
-play on the Python side before `coverage combine`. Nothing is merged until the run is
-over: then `_finalize_js_coverage()` (`scripts/test_runner/_coverage.py`) calls
+per vitest process, one per Playwright worker, holding the sum of that worker's tests —
+the same role `.coverage.<pid>` files play on the Python side before `coverage combine`.
+Across workers nothing is merged until the run is over: then `_finalize_js_coverage()` (`scripts/test_runner/_coverage.py`) calls
 `frontend/scripts/js-coverage-report.js` once per arrow on the right. The script
 merges its inputs with `istanbul-lib-coverage` — same file, same statement map, hit
 counts summed — and writes a `coverage-final.json`, an HTML report and a console
@@ -107,7 +107,8 @@ The moving parts:
 |------|------|
 | `frontend/vite.config.ts` | E2E level — `vite-plugin-istanbul` instruments the build when `COVERAGE_INSTRUMENT=1` |
 | `frontend/vitest.config.ts` | Unit level — vitest's istanbul provider (`@vitest/coverage-istanbul`), on when `COVERAGE_JS=1` |
-| `frontend/e2e/fixtures/playwright.ts` | The `jsCoverage` fixture — one JSON per test, read from `window.__coverage__` |
+| `frontend/e2e/fixtures/playwright.ts` | The `jsCoverage` fixture — reads `window.__coverage__` after every test |
+| `frontend/e2e/fixtures/js-coverage-sink.ts` | The worker's running sum of those slices, written to one JSON per worker |
 | `frontend/scripts/js-coverage-report.js` | Merges, remaps and filters its inputs into one report |
 | `scripts/test_runner/_frontend_common.py` | `_ensure_frontend_build()` — builds the instrumented frontend, and checks that it is |
 | `scripts/test_runner/_coverage.py` | Wipes `frontend/coverage-js/` before the run, builds the three reports after it |
@@ -140,9 +141,11 @@ start before the test — the instrumented build counts by itself — so the who
 happens in the teardown:
 
 1. read `window.__coverage__` from every page of the test's browser context (a page
-   that has already closed is skipped);
-2. write **one JSON file per test** to `frontend/coverage-js/e2e-raw/` — about 17 MB
-   each on the instrumented build — and keep nothing in memory.
+   that has already closed is skipped) — about 17 MB of JSON per test on the
+   instrumented build;
+2. merge it into the worker's sum, an istanbul `CoverageMap` held by the worker-scoped
+   fixture `jsCoverageSink` (`e2e/fixtures/js-coverage-sink.ts`), with the same
+   `istanbul-lib-coverage` merge the report uses. No file is written per test.
 
 `window.__coverage__` is keyed by source file, not by bundle chunk, and holds the
 statement, branch and function maps of every module the page loaded. Its positions
@@ -150,16 +153,38 @@ are those of the module as Vite transformed it; each entry carries the sourcemap
 to the source (`inputSourceMap`), and the report script follows it — see detail 3
 below.
 
-One file per test, rather than an accumulator inside the worker, is deliberate. The
-previous fixture kept every payload in memory — V8's came with sources and
-sourcemaps — and over the 25 spec files of a consolidated category, run in one
-worker, it reached 8 GB and took the worker down, reported against whichever test
-happened to be running. Writing and forgetting keeps the worker's memory flat; the
-merge happens once, at the end of the run. The consolidated pass still splits a
-category into Playwright runs of at most 8 specs under JS coverage
-(`_JS_COVERAGE_CHUNK` in `scripts/test_runner/_consolidate.py`): the limit was
-measured against that accumulator, which no longer exists, and it stays as a bound
-on how long one worker lives.
+The sum is written to **one file per worker**,
+`frontend/coverage-js/e2e-raw/worker-<parallelIndex>-<pid>.json`, every 20 tests that
+brought counters (`FLUSH_EVERY_TESTS`) and once more when the worker stops. Each write
+goes to a `.tmp` file renamed over the old one, so a kill mid-write leaves the previous
+sum whole — the report skips a file it cannot parse without saying so. Playwright stops
+a worker normally after a failed test and after its last one, and both run the final
+write; only a worker killed outright (out of memory, or force-killed) skips it, and
+loses at most the tests since its last write.
+
+A new worker also **absorbs the files of dead workers** that held its `parallelIndex`
+before it: it merges them into its sum and deletes them once its own file, which now
+contains them, has been written. Under JS coverage the runner splits a category into
+Playwright runs of at most 8 specs (`_JS_COVERAGE_CHUNK` in
+`scripts/test_runner/_consolidate.py`), and Playwright replaces a worker after every
+failed test, so a full run starts a hundred or more worker processes; with absorption it
+still leaves about one file per parallel slot. A file whose pid is still alive is never
+touched. A worker killed in the instant between writing its file and deleting the
+absorbed ones would count those tests' hits twice — hit counts change, covered and total
+do not.
+
+Until 8 November 2026 the fixture wrote **one file per test** instead, about 17 MB each
+and some 30 GB over a full run, all kept until the report. That design answered a real
+crash: the V8-era fixture kept every payload in memory — sources and sourcemaps
+included — and over the 25 spec files of a consolidated category, run in one worker, it
+reached 8 GB and took the worker down. An istanbul map does not grow that way.
+`FileCoverage.merge` replaces a file's hit counts and maps instead of appending a
+payload, and the bulk of a slice — the `inputSourceMap`, with the sources inside — is
+kept once per source file, from the first slice that loaded it. The map is bounded by
+the number of modules in the build, not by the number of tests: about one slice's size
+for the worker's whole life. Summing is associative, so the worker sums merged by the
+report give exactly the numbers the per-test files gave. `_JS_COVERAGE_CHUNK` was
+measured against the V8 accumulator, and stays as a bound on how long one worker lives.
 
 When no page exposes `window.__coverage__` and the build has no instrumentation
 sentinel, the fixture warns once per worker that nothing will be collected — the case

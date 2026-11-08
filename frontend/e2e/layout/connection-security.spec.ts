@@ -242,7 +242,7 @@ const isChecksUrl = (url: URL): boolean => url.pathname === CHECKS_PATH;
 /** Off on every lane (`dev.py server --test` sets LIBREFOLIO_LOGIN_LIMIT=off): a warning, in every server process. */
 const LOGIN_LIMIT = 'accounts.login_limit';
 /** Where the details' link leads: Settings › Security. */
-const SECURITY_TAB_HREF = '/settings?tab=security';
+const SECURITY_TAB_HREF = '/settings/admin/security';
 /** Loopback names: local hosts for the open-registration finding (`isLocalHost`), which the browser then never adds. */
 const LOOPBACK_HOST = /^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])$/;
 /** From a page load to the line's word on the checks: the bootstrap, the line's mount, then one GET, on a loaded lane. */
@@ -483,7 +483,7 @@ test.describe('An administrator: the security dot (N69-1)', () => {
             await expect(link).toHaveAttribute('href', SECURITY_TAB_HREF);
 
             await link.click();
-            await expect(page, 'the link opens Settings').toHaveURL((url) => url.pathname === '/settings', {timeout: CHECKS_TIMEOUT_MS});
+            await expect(page, 'the link opens Settings › Security, at its address').toHaveURL((url) => url.pathname === SECURITY_TAB_HREF, {timeout: CHECKS_TIMEOUT_MS});
             await expect(page.getByTestId('settings-tab-administration'), '… inside «Administration»').toHaveAttribute('aria-selected', 'true', {timeout: CHECKS_TIMEOUT_MS});
             await expect(page.getByTestId('settings-subtabs').getByTestId('settings-tab-security'), '… on Security').toHaveAttribute('aria-selected', 'true', {timeout: CHECKS_TIMEOUT_MS});
             const body = page.getByTestId('security-tab');

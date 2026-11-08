@@ -38,9 +38,12 @@ functions), so these tests monkeypatch the network boundary
 ``tmp_path``. No DB, no server, no network, no writes outside tmp_path — PURE.
 """
 
+import base64
 import hashlib
+import io
 import json
 import re
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -956,7 +959,9 @@ class TestCompanions:
 #
 # ``mermaid.mjs`` used to import Mermaid (``@11``, unpinned) and the ELK layout from jsDelivr: offline the
 # diagrams stayed code, online every page called a third party. Now ``mermaid.min.js`` is vendored like
-# MathJax, from an EXACT version, and the downloader refuses a body whose SHA-256 is not the pinned one.
+# MathJax, from an EXACT version, and the downloader refuses a body whose SHA-256 is not the pinned one. The ELK
+# layout came back (E9C) under the same rule: ``mermaid-layout-elk`` is vendored from an exact version, read from
+# the npm tarball and refused unless its SRI hash is the pinned one; ``mermaid-early.js`` imports it from the site.
 # A library entry without ``sha256`` (MathJax is ``@3``, unpinned) behaves as before.
 #
 # The page gets it from the template, not from ``extra_javascript``: Material's bundle draws the diagrams as soon
@@ -1002,6 +1007,163 @@ class TestMermaidEntry:
     def test_a_failure_of_mermaid_belongs_to_the_docs_build(self):
         js_cache._hard_fail("mermaid", "x")
         assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+
+
+ELK_VERSION = "0.2.3"
+ELK_INTEGRITY = "sha512-m46RVGfvKK1PSMdAFGDz2nksI4jusEkFxvf0lb48bYWmqLQxZpjtpruiw29MbOy9rlWJtuMf9EzG9fAF8CVZbg=="
+
+
+class TestMermaidElkEntry:
+    def test_the_entry_is_an_exact_version_that_takes_the_pinned_mermaid(self):
+        config = js_cache.LIBRARIES["mermaid-layout-elk"]
+        assert config["type"] == "npm-esm"
+        assert config["vendor_dir_key"] == "mkdocs"
+        assert re.fullmatch(rf"https://registry\.npmjs\.org/@mermaid-js/layout-elk/-/layout-elk-{re.escape(ELK_VERSION)}\.tgz", config["tarball"]), "an exact version: no range, no latest"
+        # The 0.2.x line takes Mermaid ^11.0.2; 1.x takes Mermaid 12, which the site does not serve.
+        assert ELK_VERSION.startswith("0.2.") and "11." in MERMAID_URL
+
+    def test_the_entry_pins_the_integrity_npm_publishes(self):
+        config = js_cache.LIBRARIES["mermaid-layout-elk"]
+        assert config["integrity"] == ELK_INTEGRITY
+        assert re.fullmatch(r"sha512-[A-Za-z0-9+/]{86}==", config["integrity"])
+
+    def test_only_the_minified_esm_build_is_served(self):
+        include = re.compile(js_cache.LIBRARIES["mermaid-layout-elk"]["include"])
+        for wanted in ("mermaid-layout-elk.esm.min.mjs", "chunks/mermaid-layout-elk.esm.min/render-T4E67GNI.mjs"):
+            assert include.fullmatch(wanted), wanted
+        for refused in ("mermaid-layout-elk.esm.min.mjs.map", "mermaid-layout-elk.core.mjs", "chunks/mermaid-layout-elk.esm/chunk-X.mjs", "chunks/mermaid-layout-elk.esm.min/a.mjs.map", "layouts.d.ts", "../x.mjs"):
+            assert not include.fullmatch(refused), refused
+
+    def test_a_failure_of_the_layout_belongs_to_the_docs_build(self):
+        js_cache._hard_fail("mermaid-layout-elk", "x")
+        assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    """Every file below ``root`` by its path from there, recursively."""
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def _elk_tarball(files: dict[str, bytes]) -> bytes:
+    """An npm tarball: every file under ``package/``."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        for name, data in files.items():
+            member = tarfile.TarInfo(f"package/{name}")
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
+    return buffer.getvalue()
+
+
+ELK_FILES = {
+    "dist/mermaid-layout-elk.esm.min.mjs": b"export default [];",
+    "dist/chunks/mermaid-layout-elk.esm.min/render-ABC.mjs": b"export const render = 1;",
+    "dist/chunks/mermaid-layout-elk.esm.min/render-ABC.mjs.map": b"{}",
+    "dist/mermaid-layout-elk.esm.min.mjs.map": b"{}",
+    "dist/mermaid-layout-elk.core.mjs": b"export default 'core';",
+    "dist/chunks/mermaid-layout-elk.core/other.mjs": b"x",
+    "dist/layouts.d.ts": b"declare",
+    "package.json": b"{}",
+}
+
+
+def _elk_config(tarball: bytes) -> dict:
+    config = dict(js_cache.LIBRARIES["mermaid-layout-elk"])
+    config["integrity"] = js_cache._sri_of(tarball)
+    return config
+
+
+class TestNpmEsmPackage:
+    """The mechanism, on a synthetic tarball: the pinned integrity, what is written, what is kept."""
+
+    @pytest.fixture(autouse=True)
+    def _registered(self, monkeypatch):
+        monkeypatch.setitem(js_cache.LIBRARIES, "mermaid-layout-elk", js_cache.LIBRARIES["mermaid-layout-elk"])
+
+    def test_sri_is_the_base64_of_the_sha512(self):
+        assert js_cache._sri_of(b"abc") == "sha512-" + base64.b64encode(hashlib.sha512(b"abc").digest()).decode()
+
+    def test_a_tarball_with_the_pinned_integrity_writes_only_the_served_files(self, tmp_path, monkeypatch):
+        tarball = _elk_tarball(ELK_FILES)
+        _fake_download(monkeypatch, tarball)
+        manifest: dict = {}
+
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", _elk_config(tarball)) is True
+
+        assert js_cache._HARD_FAILURES == []
+        written = _tree(tmp_path / "mermaid-layout-elk")
+        assert written == {
+            "mermaid-layout-elk.esm.min.mjs": b"export default [];",
+            "chunks/mermaid-layout-elk.esm.min/render-ABC.mjs": b"export const render = 1;",
+        }, "no source maps, no other builds, no types, nothing outside dist"
+        record = manifest["libraries"]["mermaid-layout-elk"]
+        assert record["integrity"] == js_cache._sri_of(tarball) and record["file_count"] == 2
+
+    def test_a_tarball_with_another_integrity_is_refused_and_nothing_is_written(self, tmp_path, monkeypatch):
+        good = _elk_tarball(ELK_FILES)
+        _fake_download(monkeypatch, _elk_tarball({**ELK_FILES, "dist/mermaid-layout-elk.esm.min.mjs": b"alert(1)"}))
+        manifest: dict = {}
+
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", _elk_config(good)) is False
+
+        assert len(js_cache._HARD_FAILURES) == 1
+        failure = js_cache._HARD_FAILURES[0]
+        assert "mermaid-layout-elk" in failure and "integrity" in failure and failure.consumer == "mkdocs"
+        assert not (tmp_path / "mermaid-layout-elk").exists() and manifest == {}
+
+    def test_a_refused_tarball_keeps_the_cached_good_copy(self, tmp_path, monkeypatch):
+        good = _elk_tarball(ELK_FILES)
+        config = _elk_config(good)
+        _fake_download(monkeypatch, good)
+        manifest: dict = {}
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", config) is True
+        before = _tree(tmp_path / "mermaid-layout-elk")
+
+        _fake_download(monkeypatch, b"<html>an error page with a 200</html>")
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", config, force=True) is False
+
+        assert len(js_cache._HARD_FAILURES) == 1
+        assert _tree(tmp_path / "mermaid-layout-elk") == before
+
+    def test_up_to_date_costs_no_download(self, tmp_path, monkeypatch):
+        tarball = _elk_tarball(ELK_FILES)
+        config = _elk_config(tarball)
+        manifest: dict = {}
+        _fake_download(monkeypatch, tarball)
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", config) is True
+
+        calls = _fake_download(monkeypatch, None)
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", config) is False
+
+        assert calls == [] and js_cache._HARD_FAILURES == []
+
+    def test_a_new_version_replaces_the_files_and_removes_the_ones_it_no_longer_has(self, tmp_path, monkeypatch):
+        first = _elk_tarball(ELK_FILES)
+        manifest: dict = {}
+        _fake_download(monkeypatch, first)
+        js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", _elk_config(first))
+        second = _elk_tarball({"dist/mermaid-layout-elk.esm.min.mjs": b"export default [1];", "dist/chunks/mermaid-layout-elk.esm.min/render-NEW.mjs": b"new"})
+        _fake_download(monkeypatch, second)
+
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", _elk_config(second)) is True
+
+        assert sorted(_tree(tmp_path / "mermaid-layout-elk")) == ["chunks/mermaid-layout-elk.esm.min/render-NEW.mjs", "mermaid-layout-elk.esm.min.mjs"]
+
+    def test_no_download_and_no_cache_is_a_hard_failure_of_the_docs_build(self, tmp_path, monkeypatch):
+        _fake_download(monkeypatch, None)
+
+        assert js_cache.update_library(tmp_path, {}, "mermaid-layout-elk", js_cache.LIBRARIES["mermaid-layout-elk"]) is False
+
+        assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+
+    def test_a_tarball_without_the_entry_point_is_refused(self, tmp_path, monkeypatch):
+        tarball = _elk_tarball({"dist/chunks/mermaid-layout-elk.esm.min/render-ABC.mjs": b"x"})
+        _fake_download(monkeypatch, tarball)
+
+        assert js_cache.update_library(tmp_path, {}, "mermaid-layout-elk", _elk_config(tarball)) is False
+
+        assert "mermaid-layout-elk.esm.min.mjs" in js_cache._HARD_FAILURES[0]
+        assert not (tmp_path / "mermaid-layout-elk").exists()
 
 
 PIN_CONFIG = {
@@ -1123,16 +1285,30 @@ class TestMermaidServedLocally:
         assert self._version(cdn.group(1)) == self._version(config_url)
         assert cdn.group(1) == config_url == MERMAID_URL, "the very same file the downloader pins by hash"
 
-    def test_the_early_script_is_a_classic_script_without_elk_or_unpinned_urls(self):
+    def test_the_early_script_is_a_classic_script_that_imports_the_elk_layout_only_from_the_site_or_the_pinned_file(self):
         raw = (JAVASCRIPTS_DIR / self.EARLY).read_text(encoding="utf-8")
         text = self._code_of(self.EARLY)
         assert not re.search(r"^\s*import\b", text, re.M), "a classic script: no static import"
-        assert not re.search(r"\bimport\s*\(", text), "no dynamic import either"
         assert not re.search(r"\bexport\b", text), "a classic script: no export"
-        for forbidden in ("layout-elk", "mermaid.esm", "mermaid@11/", "unpkg"):
-            assert forbidden not in text, f"{forbidden}: only the exactly pinned file may be named"
-        assert "elk" not in text.lower(), "the ELK layout is dropped"
+        assert len(re.findall(r"\bimport\s*\(", text)) == 1, "one dynamic import, of the ELK layout, in one place"
+        for forbidden in ("mermaid.esm", "mermaid@11/", "unpkg"):
+            assert forbidden not in text, f"{forbidden}: only the exactly pinned files may be named"
         assert "mermaid@11/" not in raw, "not even in a comment: a pin must not be written unpinned"
+
+    def test_the_early_script_pins_the_elk_layout_like_the_downloader(self):
+        text = self._code_of(self.EARLY)
+        cdn = re.search(r"""["'](https://cdn\.jsdelivr\.net/npm/@mermaid-js/layout-elk@([^/"']+)/dist/mermaid-layout-elk\.esm\.min\.mjs)["']""", text)
+        assert cdn, "mermaid-early.js names the pinned CDN copy of the layout it falls back on"
+        assert cdn.group(2) == ELK_VERSION == re.search(r"layout-elk-(\d+\.\d+\.\d+)\.tgz", js_cache.LIBRARIES["mermaid-layout-elk"]["tarball"]).group(1)
+        # The site's own copy, where the downloader writes it: <vendor>/<library name>/<entry point>
+        config = js_cache.LIBRARIES["mermaid-layout-elk"]
+        assert f"vendor/mermaid-layout-elk/{config['entry']}" in text
+
+    def test_mermaid_waits_for_the_layout_before_it_draws(self):
+        text = self._code_of(self.EARLY)
+        assert "registerLayoutLoaders" in text, "the layout is registered with Mermaid"
+        assert "mermaid.render" in text and re.search(r"ready\s*\.then", text), "a diagram drawn before the registration would use the default layout: render waits"
+        assert ".catch(" in text, "a layout that cannot be imported leaves the default one: the diagrams still draw"
 
     def test_the_early_script_adds_the_loose_security_level_to_what_material_passes(self):
         text = self._code_of(self.EARLY)
@@ -1166,19 +1342,20 @@ class TestMermaidServedLocally:
         end_if = re.search(r"\{%-?\s*endif\s*-?%\}", head[early:])
         assert end_if, "both scripts close inside the condition"
 
-    def test_no_docs_script_imports_mermaid_or_elk_from_a_cdn_any_more(self):
+    def test_no_docs_script_imports_mermaid_or_elk_from_a_cdn_except_the_pinned_fallbacks(self):
         offenders = []
         pinned = re.escape(MERMAID_URL)
+        pinned_elk = re.escape(f"https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@{ELK_VERSION}/dist/mermaid-layout-elk.esm.min.mjs")
         for path in sorted(JAVASCRIPTS_DIR.iterdir()):
             if not path.is_file() or path.suffix not in {".js", ".mjs"}:
                 continue  # vendor/ holds the downloaded libraries, not our scripts
             text = path.read_text(encoding="utf-8")
-            for forbidden in ("cdn.jsdelivr.net/npm/mermaid@11/", "@mermaid-js/layout-elk", "mermaid.esm", "unpkg.com/mermaid"):
+            for forbidden in ("cdn.jsdelivr.net/npm/mermaid@11/", "mermaid.esm", "unpkg.com/mermaid"):
                 if forbidden in text:
                     offenders.append(f"{path.name}: {forbidden}")
-            # Any other CDN address of mermaid: only the exactly pinned file may appear, and only in the early script.
-            for found in re.findall(r"https?://[^\s\"'`)]*mermaid[^\s\"'`)]*", text):
-                if not (path.name == self.EARLY and re.fullmatch(pinned, found)):
+            # Any other CDN address of mermaid or of its layout: only the two exactly pinned files may appear, and only in the early script.
+            for found in re.findall(r"https?://[^\s\"'`)]*(?:mermaid|layout-elk)[^\s\"'`)]*", text):
+                if not (path.name == self.EARLY and (re.fullmatch(pinned, found) or re.fullmatch(pinned_elk, found))):
                     offenders.append(f"{path.name}: {found}")
         assert offenders == []
 

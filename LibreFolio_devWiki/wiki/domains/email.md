@@ -2,7 +2,7 @@
 title: "Domain: EMAIL"
 category: domain
 features: []
-status: in-progress
+status: implemented
 mkdocs: "developer/backend/email.md"
 related: [domains/auth, decisions/link-tokens-in-the-url-fragment, problems/generated-client-widens-nullable-scalar, problems/openapi-zod-discriminator-type-erasure, problems/mutation-restore-keeps-old-mtime-skips-frontend-rebuild]
 ---
@@ -181,6 +181,10 @@ the why.
   queued, not delivered: what stops the email after the answer (the per-mailbox limit, the hourly budget, SMTP) is
   only logged. The per-mailbox limit is deliberately not checked before answering: it would tell anyone registering
   with another person's address whether that mailbox just received emails.
+  *2026-11-07 lint: the «10 registration emails an hour» above (and in «Behind a proxy» and the E5b.7 decision) is the
+  count of 22/10. Since `f3a3c1602` (23/10) one per-address counter, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 an hour
+  by default), is shared by registrations, «send the link again» and «forgot password», and `held` also covers a spent
+  hourly budget, with `verification_retry_after_seconds` (docstring of `register` in `backend/app/api/v1/auth.py`).*
 - **Early spend: fixed by lot E-25** (21/10). The verification page spent its link on load, so a mail scanner that
   runs JavaScript (Defender Safe Links and the like) could verify an address in place of its owner. The page now shows
   a `ready` state with **Confirm my email address** and spends the link only on that click; a pasted link
@@ -189,9 +193,14 @@ the why.
 - **Backlog E-7 and E-8.** A waiting account looks like any inactive one in the Users tab: the `holds_place` field
   exists, the badge is out of 1.3. «Send by email» always invites in the instance's default language:
   `POST /email/links` accepts `language`, the dialog has no selector.
+  *2026-11-07 lint: both shipped in 1.3 — the Users tab shows «Waiting for verification» (with an info icon), and «Send
+  by email» sends an invitation in the language chosen in the dialog (`language` in
+  `frontend/src/lib/features/email/sendLinkApi.ts`, decision N69); 1.3 CHANGELOG «Accounts» and «Email».*
 - **Lookups by identifier.** A's `get_user_by_username_or_email()` takes the first match without an order, and
   usernames may hold `@`, so login and «forgot password» can land on the wrong account — never a takeover, since the
   link goes to the found account's own address (routed to A: A-21). Since P18 the email half is case-insensitive.
+  *2026-11-07 lint: A-21 shipped — a username can no longer contain `@`, and an identifier with `@` is read as an email
+  address first (1.3 CHANGELOG «Security: accounts and sign-in», `3dedef7de`).*
 - **Aliases: resolved, with a remainder.** With open registration, `name+tag@` and Gmail's dots let one inbox receive
   up to the instance's hourly budget (backlog E-9, a note below the bar of the final security review, plan «E6.9»,
   16/10); since the night of 17/10 (N62) the per-mailbox limits fold them. Catch-all domains and Fastmail's sub-domain
@@ -200,6 +209,8 @@ the why.
   product question for the developer, whose cures (captcha or proof-of-work, registration limits) are not E's.
 - **Out of 1.3**: notifications (F19). `admin/email.en.md` is English only, by choice; the translation debt of the
   touched pages is declared, without stamps.
+  *2026-11-07 lint: no longer English only — `mkdocs_src/docs/admin/email.{it,fr,es}.md` exist, with
+  `email_flows` and `email_troubleshooting` in four languages (the Italian-first round of lot E9 is above).*
 
 ## Problems solved along the way
 
@@ -264,21 +275,54 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
   slot. Lesson: after touching `frontend/src`, build as a light check outside the slot, and leave only the spec to it
   (the same rule, seen from the other side: [[problems/mutation-restore-keeps-old-mtime-skips-frontend-rebuild]]).
 
+## Release 1.3 closing (lot E9, 07/11/2026)
+
+The developer configured Gmail on a server from the guide; the test email arrived. Three changes followed:
+
+- **The logo in every email.** The green header of `templates/layout.html` shows `templates/logo.png`, sent **inside the
+  message as an inline attachment** named by `cid:` (`compose_message`: `multipart/alternative`, the HTML part as
+  `multipart/related`), with an alternative text so the email reads without images. A `data:` image is blocked by
+  Gmail, and a link to the site would need `LIBREFOLIO_PUBLIC_URL` (`5befc3137`).
+- **«`LIBREFOLIO_PUBLIC_URL` is not set» says what to do.** The developer read it as a contradiction: the test email
+  had arrived with his address. It is not one: the test email uses the browser's address (the request's host), while
+  emailed links come only from `LIBREFOLIO_PUBLIC_URL`, because a request's host is written by whoever sends it
+  (decision 45, above). The notice in the Email tab, and the finding in the Security tab, now show an example built
+  from the address the administrator is using (`LIBREFOLIO_PUBLIC_URL=https://<that address>` in `.env`, then restart)
+  — a suggestion only, nothing is saved — with the Guide button the Security tab already used (`publicUrlExample.ts`).
+- **The admin guide**: «Restart LibreFolio. With Docker Compose, run `docker compose up -d`», the same sentence in
+  `configuration`, `connection_proxy`, `docker_advanced`; a comment header to copy with the variables; the Gmail app
+  password written **without spaces** (spaces in `FROM` are fine); and where to put the block (the `# Email` section of
+  a recent `.env`, or added to an old one).
+
+Also in this lot, the developer asked to reformat the admin manual with more line breaks, more code blocks and much less
+text, **in Italian only** for his review, before translating by hand: an exception to «English is the source» that he
+decided for this round (commits `edcb7d0d1`, `3c645b292`, `6ff1b3056`, «Italian only, for review»). Until the other
+languages follow, `translate-validate` reports structural differences between the Italian and the other languages of
+those pages: expected.
+
 ## What comes next
 
 - **Integration** (16/10): A's lots A7a, P18 and A-27 entered `dev_release2` (`f1c41cd8e`); E merged them, keeping
   every line of A's `update_profile` plus E's four additions, and applied E4c on top. E enters after its `all-backend`
   slot.
+  *2026-11-07 lint: done — workstream E is in `dev_release2`.*
 - **E6, what is left**: the domain's E2E and the `settings/email` gallery shot (with G), a delta security review of
   E4c, the CHANGELOG text for the coordinator, and backlog E-4 (the deprecated 422 name in `api/v1/settings.py`) with
   A's OK. Done: the C-99 rows, the TODO moved, the FAQ, the coherence pass on `admin/email.en.md`, the A7a docs (the
   `admin_setup` kind), the final security review (no finding; E-9 to the backlog, A-27 to A).
+  *2026-11-07 lint: shipped — the four E2E specs (Source files), the `settings/email` gallery shot
+  (`frontend/e2e/gallery.spec.ts`, fixture `galleryEmail.ts`), the «✉️ Email» chapter of the 1.3 CHANGELOG, and E-4
+  (`api/v1/settings.py` now answers `HTTP_422_UNPROCESSABLE_CONTENT`). The delta review of E4c was not checked.*
 - **Developer decisions**: the «Confirm» button on `/verify-email`, the message after a held email, the proxy, the instance budget that many mailboxes can drain (since E-9); and the review of the night decisions (the
   hold removed entirely, E-8, the notice-limit compromise, P1 as a `<details>`, N62).
+  *2026-11-07 lint: the «Confirm» button shipped (E-25), the held-email message too (E-26, then the wait time of
+  `f3a3c1602`), the proxy as `LIBREFOLIO_CLIENT_IP_HEADER` (E-13), E-8 and N62 are in the code. The drainable instance
+  budget (E-12) is not marked as decided anywhere checked.*
 - **Backlog «E · Email (fase 01)»**: E-1 and E-5 closed. E-2 (the widened optional type,
   [[problems/generated-client-widens-nullable-scalar]]), E-3 (`ApiError`) and E-6 (the settings tab registry) deferred
   to 1.4, as they touch shared files. E-4 in E6, with A's OK. E-7 out of 1.3. E-8 still open, proposed for 1.4. E-9
   done (N62, 17/10), leaving E-12 (catch-all and Fastmail addresses, low).
+  *2026-11-07 lint: E-4, E-7 and E-8 shipped in 1.3 after all (see above); E-12 still open.*
 
 ## Source files
 
@@ -298,7 +342,8 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
 | Email verification | `backend/app/services/email/verification.py` |
 | API routes | `backend/app/api/v1/email.py` |
 | Schemas, `EmailInstanceConfig` | `backend/app/schemas/email.py` |
-| Sliding-window limiter | `backend/app/utils/runtime/rate_window.py` |
+| Sliding-window limiter (also used by the login limiter of A8) | `backend/app/utils/runtime/rate_window.py` |
+| Login limiter (A8), on the same primitive | `backend/app/services/accounts/login_throttle.py` |
 | The client's address and its key for a limit (workstream H, P17) | `backend/app/services/platform/client_address.py` |
 | Hooks in login, register and `update_profile` (A's file) | `backend/app/api/v1/auth.py` |
 | Hook in `register_user()` (A's file) | `backend/app/services/accounts/registration_service.py` |
@@ -307,6 +352,8 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
 | `CONFIG_CHECKS`, closed by the email checks (H's file) | `backend/app/services/platform/config_audit.py` |
 | The `email` field of `/system/instance` (H's file) | `backend/app/api/v1/system/instance.py` |
 | Email tab, Send by email, forgot form, verification components | `frontend/src/lib/features/email/` |
+| The `LIBREFOLIO_PUBLIC_URL` example (E9) | `frontend/src/lib/features/email/publicUrlExample.ts` |
+| The logo sent inline (E9) | `backend/app/services/email/templates/logo.png` |
 | Verification page | `frontend/src/routes/verify-email/+page.svelte` |
 | i18n source `email` | `frontend/src/lib/i18n/email/` |
 | Forgot-password card hosting the form (A's file) | `frontend/src/lib/features/auth/ForgotPasswordCard.svelte` |

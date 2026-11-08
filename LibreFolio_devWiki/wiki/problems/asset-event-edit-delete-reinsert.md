@@ -67,7 +67,8 @@ Workstream W closed the items left open here in lots E0 and E1, under decisions 
   - (b) stays open as W-B16.
 - **I-12**: (a) the `DELETE` requires `asset_id` (decision 21); (b) the upsert is all or nothing (decision 22) — E1a.
 
-E1a and E1c are in `dev_release2` (`162e3cfab`); E1b was in W's worktree, not committed, at filing.
+E1a and E1c are in `dev_release2` (`162e3cfab`); E1b was not yet committed at filing. *(2026-11-07 lint: E1b has
+since landed — `delete_ids` is in `backend/app/schemas/assets/events.py`.)*
 
 ## Prevention
 

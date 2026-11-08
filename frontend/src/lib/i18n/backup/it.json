@@ -82,7 +82,6 @@
       },
       "dropWhenDone": "Il controllo viene scartato appena finisce.",
       "cancelCheck": "Interrompi il controllo",
-      "openReport": "Leggi il resoconto",
       "confirming": "Conferma del ripristino…",
       "cancelling": "Annullamento…",
       "pending": {
@@ -112,7 +111,7 @@
       },
       "blocker": {
         "no_administrator": "Il backup non ha nessun amministratore attivo: dopo un ripristino nessuno potrebbe gestire LibreFolio. Non può essere ripristinato.",
-        "storage_limit": "Ripristinare questo backup porterebbe LibreFolio oltre il suo spazio totale. Porta lo spazio totale ad almeno {required} in File › Avanzate, poi ricontrolla il backup.",
+        "storage_limit": "Ripristinare questo backup porterebbe LibreFolio oltre il suo spazio totale. Porta lo spazio totale ad almeno {required} in Impostazioni › Amministrazione › Impostazioni Globali, poi ricontrolla il backup.",
         "storage_limit_locked": "Ripristinare questo backup porterebbe LibreFolio oltre il suo spazio totale. Chiedi a chi ospita questa istanza di portare il limite ad almeno {required}, poi ricontrolla il backup.",
         "storage_limit_disk": "Anche il disco deve avere liberi almeno altri {missing}."
       },
@@ -261,6 +260,12 @@
         "match": "Con questa password accederai dopo il ripristino.",
         "mismatch": "Non è la sua password.",
         "failed": "Non è stato possibile verificare la password: riprova."
+      },
+      "kept": {
+        "title": "Ripristina un backup",
+        "backupOf": "Backup del {date}, conservato su questo server.",
+        "preparing": "Preparazione del backup per il controllo…",
+        "alreadyWaiting": "Un ripristino attende già il prossimo avvio di LibreFolio. Prima riavvia LibreFolio o annulla il ripristino in «Ripristina un archivio»."
       }
     },
     "checks": {
@@ -313,6 +318,7 @@
         "origin": "Fatto da",
         "kind": "Tipo",
         "size": "Dimensione",
+        "restored": "Una volta ripristinato",
         "sha256": "SHA-256",
         "actions": "Azioni"
       },
@@ -343,7 +349,10 @@
       },
       "retry": "Riprova",
       "refresh": "Aggiorna",
-      "restoreConfirm": "Ripristinare questo backup? Sostituirà i dati di tutti gli utenti. LibreFolio prima lo controlla e ti mostra cosa cambierebbe: nulla cambia finché non confermi."
+      "restored": {
+        "header": "Lo spazio che i contenuti del backup occupano una volta ripristinati, non compressi: il database, i file caricati e i report dei broker.",
+        "unknown": "Non noto per questo backup."
+      }
     },
     "cleanup": {
       "title": "Pulizia automatica",

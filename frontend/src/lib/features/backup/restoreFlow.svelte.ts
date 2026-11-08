@@ -302,9 +302,10 @@ export class RestoreFlowController {
         await this.#dropNow(stageId);
     }
 
-    /** «I'll decide later»: the report closes and its check stays on the server, listed for later (C9-6). */
+    /** «I'll decide later»: the report closes and its check stays on the server, listed for later (C9-6). A check still
+     * running is left the same way (A10): it goes on on the server, listed as running, and «Resume» follows it again. */
     async later(): Promise<void> {
-        if (this.state !== 'report') return;
+        if (this.state !== 'report' && (this.state !== 'checking' || this.dropRequested)) return;
         this.#forget();
         this.stage = null;
         await this.load();

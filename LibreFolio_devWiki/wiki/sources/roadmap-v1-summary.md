@@ -1,6 +1,9 @@
 ---
 title: "RoadMap V1 — Original Backend-Only Architecture"
 category: source
+source_type: plan
+date_ingested: 2026-04-24
+original_path: LibreFolio_developer_journal/RoadMapV1/01-Riassunto_generale.md
 date: 2024 (pre-frontend era)
 tags: [history, backend, v1, superseded]
 related_features: [F-056, F-030, F-034, F-059]
@@ -16,7 +19,8 @@ related_features: [F-056, F-030, F-034, F-059]
 The original project specification before any frontend existed. At this stage the plan assumed:
 - **Backend**: Python FastAPI + SQLModel + SQLite + Alembic
 - **Frontend**: React + TypeScript + Vite + Material UI + React Query + i18next ← **never built; replaced by SvelteKit**
-- **Scheduling**: APScheduler (still used today as [[F-052]] planned)
+- **Scheduling**: APScheduler (still used today as [[F-052]] planned) — *2026-11-07 lint*: [[F-052]] shipped in Phase 08 as an
+  embedded asyncio daemon with leader election, not APScheduler ([[sources/phase08-scheduler-backend]])
 - **Scraping**: httpx + BeautifulSoup4 (still used in CSS Scraper [[F-035]])
 - **FX**: forex-python or ECB feed (evolved into full multi-provider registry [[F-015]])
 

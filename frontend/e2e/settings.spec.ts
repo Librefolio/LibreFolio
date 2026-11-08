@@ -443,8 +443,8 @@ test.describe('Settings', () => {
                 // the old one.
                 await expect.poll(() => sessionCookies(page.context()), {message: 'Device A stores the session cookie the change re-issued', timeout: 5_000}).not.toEqual(cookieOfA);
                 expect(await sessionCookies(page.context()), 'Device A holds one session cookie: the re-issued one replaced the old').toHaveLength(1);
-                // Used: A is still in the app, on the page it changed the password from…
-                await expect(page).toHaveURL((url) => url.pathname === '/settings');
+                // Used: A is still in the app, on the page it changed the password from (the Profile tab's address)…
+                await expect(page).toHaveURL((url) => url.pathname === '/settings/profile');
                 await expect(page.getByTestId('app-shell')).toBeVisible();
                 // …and a new document, whose requests carry only what the jar holds, opens another app page, not the login.
                 await navigateTo(page, '/dashboard');
@@ -1458,7 +1458,7 @@ test.describe('G-15: the tab bars keep every tab reachable', () => {
 // The account is the test's own, deleted in `finally`: changing a shared E2E user's email would sign out every spec
 // running beside it. Both contexts live and die inside the one test, so the block stays parallel.
 test.describe('A6e: changing the email asks for the current password', () => {
-    const PROFILE_URL = '/settings?tab=profile';
+    const PROFILE_URL = '/settings/profile';
 
     /** The values of the `session` cookies a browser context holds: what its pages, and its `request`, send. */
     async function sessionCookies(context: BrowserContext): Promise<string[]> {
@@ -1487,7 +1487,7 @@ test.describe('A6e: changing the email asks for the current password', () => {
         await login(page, user);
         await skipDueFlowsExcept(page, []);
         await navigateTo(page, `/welcome?returnTo=${encodeURIComponent(PROFILE_URL)}`);
-        await expect(page).toHaveURL((url) => url.pathname === '/settings' && url.searchParams.get('tab') === 'profile', {timeout: 15_000});
+        await expect(page).toHaveURL((url) => url.pathname === PROFILE_URL, {timeout: 15_000});
         const shell = page.getByTestId('app-shell');
         await expect(shell).toBeVisible();
         await expect(shell).toHaveAttribute('data-guide-inert', 'false');
@@ -1584,7 +1584,7 @@ test.describe('A6e: changing the email asks for the current password', () => {
             // …and a new document, whose requests carry only what the jar holds, opens the Profile again, not the login.
             await navigateTo(page, PROFILE_URL);
             await expect(page.getByTestId('profile-tab'), 'Device A, which changed the email, still opens the app').toBeVisible({timeout: 15_000});
-            await expect(page).toHaveURL((url) => url.pathname === '/settings');
+            await expect(page).toHaveURL((url) => url.pathname === PROFILE_URL);
             await expect(page.getByTestId('login-page')).toBeHidden();
             await expect(page.getByTestId('profile-email')).toHaveValue(newEmail, {timeout: 10_000});
 

@@ -28,9 +28,9 @@ ledger ([[decisions/native-cash-daily-revaluation]]).
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
-| [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | core — lot matching, realized/unrealized P&L computation | implemented |
+| [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | core — lot matching, realized/unrealized P&L computation | documented |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | core — multi-hop cross-currency conversion | implemented |
-| [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | core — portfolio return percentage computation | implemented |
+| [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | core — portfolio return percentage computation | documented |
 | [[F-107]] | PAC allocator (a Tool: SCIP search, exact Decimal replay) | fullstack | plans purchases toward target weights; the frontend only builds the scenario and shows the result | documented |
 | [[F-110]] | Risk engine (analytic plugins over prepared series; QuantLib and riskfolio-lib in spawned processes) | backend | computes every risk figure the Risk tabs and the Lab show | documented |
 
@@ -60,6 +60,9 @@ graph TD
 - [[decisions/fifo-runtime-decision]] — FIFO lots are **never persisted**. The decision record covers the analysis of the alternative (caching lots in the DB): rejected because retroactive transaction edits (fixing a BRIM import error) would require cascading invalidation across cached lot states. Runtime recalculation is simpler and correct by construction.
 - **Backend-only calculations** (see [[concepts/backend-only-calculations]]) — all F-056, F-057, F-058 logic lives exclusively in the backend. The frontend receives pre-computed values (NAV in user currency, P&L numbers, ROI percentages) and renders them. This prevents divergence between the display and the truth, and allows any future client (mobile app, API consumer) to get consistent results.
 - **FIFO-first, fiscal method selection deferred** — Phase 7 ships FIFO only. LIFO, PMC (Prezzo Medio di Carico / Average Cost), and SelectID are deferred to Phase 8+ via [[F-081]]. The API response includes a `method` field from the start so clients can label which method was used.
+  *2026-11-07 lint: the average purchase cost (WAC, the PMC/PRU of the UI) is now computed and shown everywhere by one
+  function, `backend/app/services/financial_math/average_cost.py` ([[decisions/financial-math-single-average-cost]]);
+  what stays deferred is the user's choice of a fiscal sale method, [[F-081]] (`planned`).*
 - [[decisions/financial-math-one-home]] — one home for every financial calculation, moved by renames first and a cut second, guarded by an AST test (2026-10-12).
 - [[decisions/native-cash-daily-revaluation]] — foreign cash revalued every day; its exchange result is a return, never capital (2026-10-12).
 - [[decisions/pac-scip-searches-exact-replay-certifies]] and [[decisions/pac-lexicographic-fixed-l2-objective]] — the
@@ -69,6 +72,8 @@ graph TD
 ## Known problems / limitations
 
 No open problems in F-056, F-057 or F-058: they are implemented and correct. The FX conversion handles missing rates via `BackwardFillInfo` (returns the most recent prior rate with annotation). F-058 (TWRR/MWRR) is fully wired into the Dashboard via the unified `/portfolio/report` endpoint (see [[concepts/portfolio-report-unified]]). Open in the portfolio engine: a day on which only a security's exchange rate moves is not re-valued ([[problems/dirty-days-ignore-fx-only-moves]]).
+*2026-11-07 lint: no longer open — that problem is `resolved`: cash by lot 41 (`23cbffea9`, 2026-10-11), securities by
+workstream J lot CP-6 (2026-10-16).*
 
 > *Corrected 2026-10-12:* the diagram and the «Source files» table placed the FIFO engine in
 > `transaction_service.py`. It was `services/fifo_lot_engine.py` from 2026-07-16 (`a711d39f7`) and is
@@ -85,6 +90,7 @@ No open problems in F-056, F-057 or F-058: they are implemented and correct. The
 |------|------|
 | FIFO engine | `backend/app/services/financial_math/fifo/engine.py` |
 | Financial math layer (rule and module map) | `backend/app/services/financial_math/__init__.py` |
+| Average cost (WAC) | `backend/app/services/financial_math/average_cost.py` |
 | Native cash (since 2026-10-11) | `backend/app/services/financial_math/native_cash.py` |
 | Currency conversion | `backend/app/services/fx/conversion.py` |
 | FX conversion API | `backend/app/api/v1/fx/currencies.py` |

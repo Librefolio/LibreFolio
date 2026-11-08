@@ -39,6 +39,8 @@ how many bumps can accumulate before the release, and what else must move with a
      byte-identical — no bump (2026-10-12, [[problems/ai-export-probe-rejected-unavailable-hhi]]).
 2. **At most one +1 over the last released version, until the release ships** (the developer's rule, 2026-10-12): a
    component already moved in the cycle does not move again. The released reference is `v1.1.0`.
+   *2026-11-07 lint:* the rule is per cycle — for 1.3 the reference is the last release tag, `v1.2.1`
+   (`.github/instructions/ai-development.instructions.md`, «Versions»: «the last released version»).
 3. **A bump updates `COMPACT_COMPONENT_VERSIONS` in the same change**, or the section silently becomes YAML. This is the
    lesson of `asset.lot_detail`: beta fix F6 (`d1ae2fb49`, 2026-09-01) took it to v2 without the map, so from
    `v1.1.0` on its lots came out as a longer YAML block — a silent regression, found by workstream T and fixed on

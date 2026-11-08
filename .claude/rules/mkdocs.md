@@ -92,12 +92,20 @@ Then use the agent to fix reported differences (missing headings, broken links, 
 - **Emoji in headings**: H1-H3 always have 1 emoji
 - **Diagrams**: Mermaid inline (no PNG). 
   - Standard engine (Dagre) is the default, best for simple graphs.
-  - The site serves Mermaid from its own pinned copy (`./dev.py cache js`), **without the ELK layout**: a diagram
-    whose frontmatter says `layout: elk` is drawn with the default layout. Do not add the key to a new diagram;
-    keep a complex one readable by splitting it, or by choosing `flowchart LR` or `TD`.
+  - The site serves Mermaid and its **ELK layout** from its own pinned copies (`./dev.py cache js`: Mermaid 11.17.2 and
+    `@mermaid-js/layout-elk` 0.2.3, each checked against a pinned hash, nothing asked of a CDN when a page opens).
+    A diagram says `layout: elk` in its frontmatter when ELK reads better than Dagre (many nodes, nested subgraphs);
+    `javascripts/mermaid-early.js` registers the layout before Material draws. Keep a diagram small either way: few nodes,
+    short labels, `flowchart LR` or `TD`, or several small diagrams instead of one big one.
+  - **Colours**: a node that sets its own `fill` (`style X fill:#…` or a `classDef`) must also set `color:` — dark text
+    (`#1b1b1b`) on a light fill, white on a dark one. Without it the text takes the theme's colour, which is light in the
+    dark theme, and a pale box shows white text on white.
   - Clicking a diagram opens it full screen with zoom and pan (`javascripts/diagram-zoom.js`). A script that must see
     the diagram's SVG goes in the head of `overrides/main.html`, before Material's bundle, never in
     `extra_javascript`: Material draws into a closed shadow root and the script must open it first.
+- **Tables** need no markup for their widths: `static/extra.css` gives a table of three or more columns the width of the page,
+  a floor and a ceiling per cell and a higher floor for the last column, and `javascripts/table-code-wrap.js` lets a log
+  message in a cell wrap (an identifier keeps its line). Put a long log line in a table freely; do not force widths by hand.
 - Code blocks with correct language tag
 
 ## Gallery Images in Pages

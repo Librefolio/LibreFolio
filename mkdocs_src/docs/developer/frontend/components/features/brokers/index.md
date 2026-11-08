@@ -14,10 +14,10 @@ graph LR
     Modals -->|wraps| Forms
     Cards -->|uses| Forms
 
-    style Cards fill:#e3f2fd,stroke:#1565c0
-    style Forms fill:#e8f5e9,stroke:#2e7d32
-    style Modals fill:#fff3e0,stroke:#e65100
-    style Lots fill:#f3e5f5,stroke:#7b1fa2
+    style Cards fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style Forms fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style Modals fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style Lots fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
 Each sub-section has its own detailed composition diagram. See the pages below.

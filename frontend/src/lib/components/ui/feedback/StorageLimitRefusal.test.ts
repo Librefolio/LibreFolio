@@ -3,7 +3,7 @@
  * StorageLimitRefusal — component test (Vitest + jsdom), C9-1.
  *
  * The refusal of the space limit, said where the user is. An administrator reads the limit to raise and gets «Open the
- * settings», a link to Files › Advanced with its panel open; a member reads how much to free or to ask an administrator,
+ * settings», a link to Global Settings with the limit's row in view (lot B10); a member reads how much to free or to ask an administrator,
  * with no link; a limit the hosting provider fixes reads «ask whoever hosts it» for both, with no link. The translator
  * echoes its key, so the sentence asserted is the key the component chose.
  */
@@ -23,13 +23,13 @@ const numbers = (extra = {}) => ({requiredMb: 120, diskMissingBytes: 0, limitLoc
 const box = () => screen.getByTestId('storage-limit-refusal');
 
 describe('StorageLimitRefusal', () => {
-    it('an administrator: the limit to raise and «Open the settings», a link to Files › Advanced', () => {
+    it('an administrator: the limit to raise and «Open the settings», a link to the limit in Global Settings', () => {
         user.isAdmin = true;
         render(StorageLimitRefusal, {numbers: numbers()});
 
         expect(box()).toHaveAttribute('data-viewer', 'admin');
         expect(box()).toHaveTextContent('storage.limit.exceeded.raise');
-        expect(screen.getByTestId('storage-limit-open-settings')).toHaveAttribute('href', '/files?storage=limit');
+        expect(screen.getByTestId('storage-limit-open-settings')).toHaveAttribute('href', '/settings/admin/global?setting=storage_limit_mb');
         expect(screen.getByTestId('storage-limit-open-settings')).toHaveTextContent('storage.limit.openSettings');
     });
 

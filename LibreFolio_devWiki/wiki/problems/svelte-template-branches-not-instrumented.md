@@ -95,7 +95,7 @@ Until 2026-10-13 this section read «Accepted, not fixed»; the backlog's C-72 f
 > proposal was not taken. **Monocart was removed from the project**: its only job was
 > resolving V8 coverage ranges back through sourcemaps to `.svelte`/`.ts`, and
 > instrumenting the build at `vite` level removed the job. See the comment in
-> `frontend/e2e/fixtures/playwright.ts` (~L297): *"there is no monocart here any
+> `frontend/e2e/fixtures/playwright.ts` (~L339 on 2026-11-07; ~L297 when written): *"there is no monocart here any
 > more"*. JS coverage today is **istanbul end to end** — `vite-plugin-istanbul` for
 > the build, `@vitest/coverage-istanbul` for units, `istanbul-lib-coverage` for the
 > merge.

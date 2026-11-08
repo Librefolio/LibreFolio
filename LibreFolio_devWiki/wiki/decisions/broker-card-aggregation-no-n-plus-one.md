@@ -41,7 +41,7 @@ that the existing `BrokerBreakdown` schema didn't carry natively.
   cost.
 - `BrokerBreakdown` (in `POST /portfolio/report` responses) gains `cash_balances: List[Currency]` — the same
   field/pattern already used on `PortfolioSummary.cash_balances`, populated by projecting `broker_cash` per
-  broker with no new aggregation logic (`backend/app/schemas/portfolio.py:344-366`,
+  broker with no new aggregation logic (`backend/app/schemas/portfolio.py`, `BrokerBreakdown`,
   `backend/app/services/portfolio_service.py`).
 - The per-broker breakdown call is kept **separate** from `GET /brokers` (which feeds lightweight selectors
   used throughout the app) and is cached client-side by `portfolioStore` like every other `/report` call —

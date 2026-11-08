@@ -34,10 +34,14 @@ All `backend/app/` Python code. The TRACE level is registered in both Python std
 
 ## Implementation Details
 
-TRACE registration requires three patches in `configure_logging()`:
+TRACE registration requires three patches, applied at module import time (module level of `logging_config.py`, so
+`logger.log(TRACE, ...)` works even in test contexts where `configure_logging()` has not run yet):
 1. `logging.addLevelName(5, "TRACE")` + `logging.TRACE = 5`
 2. `logging.Logger.trace = _trace` method addition
 3. `structlog.stdlib.LEVEL_TO_NAME[5] = "trace"` (fixes `KeyError: 5` in structlog 25.5.0)
+
+> 2026-11-07 lint: originally written as three patches inside `configure_logging()`; the registration moved to import
+> time in `a5f7c4970` (2026-06-02). `TRACE` is also exported as a module constant.
 
 ## Source files
 

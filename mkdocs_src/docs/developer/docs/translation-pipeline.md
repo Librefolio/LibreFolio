@@ -78,12 +78,12 @@ flowchart TB
     refine --> clean["🧹 Post-process<br/>Strip [N] glossary, tags<br/>Restore code indentation"]
     clean --> output["source.it.md"]
 
-    style per_file fill:#e8f4fd,stroke:#2196f3
-    style per_lang fill:#fff3e0,stroke:#ff9800
-    style analyze fill:#e3f2fd,stroke:#1565c0
-    style critique fill:#e3f2fd,stroke:#1565c0
-    style translate fill:#fff8e1,stroke:#f57f17
-    style refine fill:#fff8e1,stroke:#f57f17
+    style per_file fill:#e8f4fd,color:#1b1b1b,stroke:#2196f3
+    style per_lang fill:#fff3e0,color:#1b1b1b,stroke:#ff9800
+    style analyze fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style critique fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style translate fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style refine fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
 ```
 
 !!! note "Step 2 (Search) skipped by default"
@@ -156,8 +156,8 @@ graph LR
     T -->|"draft"| C
     C -->|"feedback"| R
 
-    style reasoning fill:#e3f2fd,stroke:#1565c0
-    style generation fill:#fff8e1,stroke:#f57f17
+    style reasoning fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style generation fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
 ```
 
 ### Priority hierarchy
@@ -391,16 +391,16 @@ graph LR
     C2 --> R2["✨ Step 5\nRefine FR\n× 1"]
     C3 --> R3["✨ Step 5\nRefine ES\n× 1"]
 
-    style A1 fill:#e3f2fd,stroke:#1565c0
-    style T1 fill:#fff8e1,stroke:#f57f17
-    style T2 fill:#fff8e1,stroke:#f57f17
-    style T3 fill:#fff8e1,stroke:#f57f17
-    style C1 fill:#e3f2fd,stroke:#1565c0
-    style C2 fill:#e3f2fd,stroke:#1565c0
-    style C3 fill:#e3f2fd,stroke:#1565c0
-    style R1 fill:#fff8e1,stroke:#f57f17
-    style R2 fill:#fff8e1,stroke:#f57f17
-    style R3 fill:#fff8e1,stroke:#f57f17
+    style A1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style T1 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style T2 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style T3 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style C1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style C2 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style C3 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style R1 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style R2 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
+    style R3 fill:#fff8e1,color:#1b1b1b,stroke:#f57f17
 ```
 
 !!! tip "Greedy parallel execution with `--workers`"
@@ -689,6 +689,27 @@ while the structure stays intact:
   followed by the English path. Whether a corrected path resolves is left to
   `./dev.py mkdocs build`, which afterwards resolves every relative file URL of the built
   site (images, video and audio, links to files) and exits 1 on a broken one.
+
+### 🧬 Equivalence checks {: #equivalence-checks }
+
+A page can keep its headings, links and fences and still say something else in another language. These checks
+(`page_equivalence.py`, standard library only, wired into `ALL_CHECKS` and into the structural diff) compare what a
+reader needs to find. All are ❌ ERRORs; each language is compared with the English page, so when a page is
+translated by hand from another language (the Italian admin guide became the source of the English one in E9E)
+the same tools prove the four languages equivalent: English equal to Italian, and French and Spanish equal to English.
+
+| Check | What must be the same |
+|-------|----------------------|
+| `mermaid-count`, `mermaid-structure` | Number of diagrams; per diagram the *skeleton*: front matter, node ids and shapes, arrows, `subgraph` ids, `style` / `classDef` / `class` lines, sequence participants and message directions. Labels, messages, notes and titles are blanked before comparing, so they may be translated |
+| `tab-count`, `tab-marker`, `tab-nesting`, `tab-title`, `tab-indent` | Content tabs (`=== "…"`): count, marker (`===+`), nesting depth; a product name of the English title (Caddy, Fly.io, Nginx… the `PROPER_NAMES` set, or any word like `macOS` / `Node.js`) stays in the translated title; a body indented by less than 4 spaces |
+| `table-count`, `table-shape` | Tables outside code: count, rows, and cells per row (a pipe inside a code span or escaped does not split a cell) |
+| `variable-*`, `command-*`, `path-*` | The set of `UPPER_SNAKE` variables, `dev.py <subcommand…>` commands and paths cited in inline code and code blocks (comments and Mermaid labels aside; bare prose is not read: a theory page localizes lifecycle states on purpose) |
+| `code-block-content` | A fenced block is the same code once comments, `<placeholders>` and spacing are put aside. `code-block-modified` files every difference as «comments translated» (🌐 LOCALIZED, hidden by `-L`); this one is the error for a changed command, setting or log line |
+| `admonition-nested-count`, `admonition-sequence` | Admonitions at any depth (inside list items and tabs too): same order, marker (`!!!`, `???`, `???+`), type and depth. `admonition-count` reads column 0 only |
+| `anchor-id`, `anchor-order` | Every explicit `{: #id }` of the English stays, in order; the translation adds none except the id MkDocs builds from an English heading (a translated heading keeps the English id that way) |
+
+Tests: `utils translation-equivalence` (`test_translation_equivalence.py`), including a corpus guard that runs every check on
+every page of every language of `mkdocs_src/docs`.
 
 The HTML checks (`html-tag-mismatch`, `html-attr-missing`, `html-attr-mismatch`) read only
 rendered HTML: fenced code (any fence, found by `code_line_mask()` in `code_blocks.py`) and

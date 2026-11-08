@@ -4,7 +4,7 @@ category: problem
 status: workaround
 date: 2026-10-17
 tags: [e2e, playwright, test-lane, runner, bash, coordination]
-related: [concepts/page-busy-refresh-button, problems/e2e-chained-waits-outlast-the-test-budget]
+related: [concepts/page-busy-refresh-button, problems/e2e-chained-waits-outlast-the-test-budget, problems/editing-a-running-bash-script-corrupts-its-run]
 ---
 
 # Problem: A direct Playwright run in a test lane
@@ -13,6 +13,12 @@ related: [concepts/page-busy-refresh-button, problems/e2e-chained-waits-outlast-
 
 `./dev.py test` has no `--grep`, so running **one** E2E test (several times, or with `--trace on`) means launching
 Playwright directly. On the night of 16→17/10 that came within one step of two different mistakes:
+
+*2026-11-07 lint: the runner does take a test selection — positional test names after the action
+(`add_argument("test_names", nargs="*")` in `scripts/test_runner/_cli.py`, since `d3100fb44`), which
+`_run_playwright()` in `_frontend_common.py` joins into Playwright's `--grep`. What it has no option for is
+`--trace on` and `--repeat-each`, so a traced or repeated run still goes direct.*
+
 
 1. **The DB wipe.** Without `LF_SETUP_DONE=1`, `frontend/e2e/global-setup.ts` takes its full path:
    `populate_mock_data --force --with-reports`, which recreates the test DB of the lane it is pointed at.
@@ -27,19 +33,23 @@ Playwright directly. On the night of 16→17/10 that came within one step of two
      data dir: outside the lane, in a coordinated session.
    - Stopped during `--build-only`, before Playwright started. Nothing ran outside the lane.
 
+The trace this script was for (Y-22, the benchmark click that waited to the end of the budget) is told in
+[[problems/e2e-chained-waits-outlast-the-test-budget]].
+
 ## Root Cause
 
 - `global-setup.ts` is built for two callers: the runner, which prepares everything, and a developer running
   Playwright by hand on a throwaway DB. A coordinated lane is neither.
 - `playwright.config.ts` falls back to `TEST_PORT=6041` and `backend/data/test` when the variables are missing.
-- bash does not load a script before running it.
+- bash does not load a script before running it — the trap of
+  [[problems/editing-a-running-bash-script-corrupts-its-run]], five days earlier.
 
 ## Solution
 
 The direct-run script (`y22_trace.sh` in Y's session; the shape is what matters):
 
 ```bash
-export PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc
+export PIPENV_CUSTOM_VENV_NAME=<the main checkout's venv name>
 export TEST_PORT=<lane port> LIBREFOLIO_TEST_DATA_DIR=<lane data dir>     # at the top, for every step
 lsof -nP -iTCP:$TEST_PORT -sTCP:LISTEN && exit 2                          # a busy port is a collision
 nice -n 10 pipenv run python dev.py server --test --build-only            # build outside the startup timeout
@@ -59,7 +69,8 @@ cd frontend && LF_SETUP_DONE=1 nice -n 10 pipenv run npm run test:e2e -- <spec> 
 - In a coordinated lane, a direct Playwright run always carries the lane's port and data dir **and**
   `LF_SETUP_DONE=1`, behind a guard that refuses to start without them.
 - A `--grep` in the runner (`scripts/test_runner/`) would remove the need for direct runs: not done, since the runner
-  files are shared.
+  files are shared. *(2026-11-07 lint: the selection exists as positional test names, see above; `--trace` and
+  `--repeat-each` are what is missing.)*
 
 ## Impact
 

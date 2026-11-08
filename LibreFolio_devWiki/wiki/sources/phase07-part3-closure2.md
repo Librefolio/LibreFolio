@@ -1,6 +1,9 @@
 ---
 type: source
 title: "Phase 07 — Part 3 Closure_2: Batch 4 + BlockG test coverage (G1..G7)"
+category: source
+source_type: plan
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md
 date_ingested: 2026-04-24
 date_updated: 2026-04-25
 git_hash: a61b0dfa
@@ -75,7 +78,8 @@ via `CHANGED_POINTS_PAYLOAD_CAP`). Semantics:
 - list with up to 500 deltas when ≤ cap
 - `None` when above cap (frontend falls back to full series reload)
 
-Backend implementation in `backend/app/schemas/refresh.py` + `backend/app/services/asset_source.py`.
+Backend implementation in `backend/app/schemas/refresh.py` + `backend/app/services/asset_source.py` (today
+`backend/app/services/assets/refresh.py`).
 Frontend's live-poll now merges the polled point directly into the chart store
 without triggering a full series reload (commit `6a9c41b47` — "silent-sync detour
 removed"). The previous "silent sync" pattern compared the provider fetch with the
@@ -128,7 +132,7 @@ and `backup_fx_rates` from 0% to ~95–100%, plus `services/asset_source.py::wip
 
 ### 🐛 Production bug #1 — discovered & fixed in G-batch6
 
-`backend/app/api/v1/assets.py` — both `market_data_summary` and `wipe_market_data`
+`backend/app/api/v1/assets.py` (split into the `backend/app/api/v1/assets/` package in `37d8273a9`) — both `market_data_summary` and `wipe_market_data`
 caught `AssetSourceError` and read `e.code`, but the exception class only exposes
 `e.error_code`. Result: any failure path raised `AttributeError`, masking real
 errors as **HTTP 500** instead of the intended 404.
@@ -154,7 +158,7 @@ coverage **85.34% → 87.06%**.
 
 ### 🐛 Production bug #2 — discovered & fixed in G-batch7
 
-`backend/app/utils/currency_utils.py::normalize_currency` was relying on
+`backend/app/utils/currency_utils.py::normalize_currency` (today `backend/app/utils/fx/currency.py`) was relying on
 `babel.numbers.get_currency_symbol(code)`, which **echoes the input back** for
 unknown codes (so `get_currency_symbol("ZZZZZZ")` returns `"ZZZZZZ"`). The
 function therefore reported any garbage string as a valid currency.
@@ -206,7 +210,7 @@ with matching currency instead.
 | BrokerSharingModal | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte` |
 | CsvEditor | `frontend/src/lib/components/ui/data-editor/CsvEditor.svelte` |
 | Transaction validate test | `backend/test_scripts/test_api/test_transactions_validate.py` |
-| Events suggest test | `backend/test_scripts/test_api/test_events_suggest.py` |
+| Events suggest test — removed with its route `POST /transactions/events/suggest` in `d5e467847` ([[decisions/api-routes-removed-without-deprecation]]) | `test_events_suggest.py` (removed) |
 | OHLC sentinel test | `backend/test_scripts/test_api/test_ohlc_sentinel.py` |
 | Prices currency coherence test | `backend/test_scripts/test_api/test_prices_currency_coherence.py` |
 | Asset currency change test | `backend/test_scripts/test_api/test_asset_currency_change.py` |

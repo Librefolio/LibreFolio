@@ -2196,7 +2196,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
-                // Straight to the tab: the page honours ?tab= (settings/+page.svelte), as the onboarding replay below opens it. It
+                // Straight to the tab: the page honours ?tab= (settings/[...path]/+page.svelte), as the onboarding replay below opens it. It
                 // used to open on Profile and click Preferences only when an instant probe found the tab already drawn — under
                 // load it did not, and the shot was Profile's, or Preferences still loading.
                 await navigateTo(page, '/settings?tab=preferences');
@@ -2232,7 +2232,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
-                // Straight to the tab, as the preferences shots open theirs: the page honours ?tab= (settings/+page.svelte).
+                // Straight to the tab, as the preferences shots open theirs: the page honours ?tab= (settings/[...path]/+page.svelte).
                 await navigateTo(page, '/settings?tab=email');
                 await expect(page.getByTestId('settings-tab-email')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
                 // The status arrives after the tab is drawn: the panel says when it is in (data-busy).
@@ -2255,7 +2255,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_USER);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
-                // Straight to the tab, as the email shots open theirs: the page honours ?tab= (settings/+page.svelte).
+                // Straight to the tab, as the email shots open theirs: the page honours ?tab= (settings/[...path]/+page.svelte).
                 await navigateTo(page, '/settings?tab=plugins');
                 await expect(page.getByTestId('settings-tab-plugins')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
                 // The catalogue arrives after the tab is drawn: the tab says when it is in (data-busy).
@@ -2290,7 +2290,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
-                // Straight to the tab, as the email shots open theirs: the page honours ?tab= (settings/+page.svelte).
+                // Straight to the tab, as the email shots open theirs: the page honours ?tab= (settings/[...path]/+page.svelte).
                 await navigateTo(page, '/settings?tab=backup');
                 await expect(page.getByTestId('settings-tab-backup')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
                 // The job is read after the card is drawn: the card says when it is in (data-busy).

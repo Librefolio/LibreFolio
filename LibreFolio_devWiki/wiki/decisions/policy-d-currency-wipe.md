@@ -21,6 +21,14 @@ related:
 > `currency` and the asset has any price/event history. Implemented in
 > commit `4dc4ac8da` (2026-04-24, Phase 7 Part 3 Closure Batch 3 / R3-3 / R3-3b).
 
+> **2026-11-07 lint — amended by N68** (the developer's decision of 19/10/2026; `f62e303a8`, 2026-10-24): the currency
+> change is never refused and needs no second call. `PATCH /api/v1/assets` changes the currency and, in the same
+> transaction, deletes the prices and every event **except the SPLITs**, unlinks the transactions of the deleted events
+> and keeps each SPLIT with the transactions linked to it, so the position maths does not move. The 409 of
+> [[decisions/price-currency-hard-reject]] no longer exists; the modal first asks the dry-run counts
+> (`GET /assets/{id}/market-data/summary`, with `splits_kept`), and «Relink events» on Transactions proposes the event
+> to link again. The tables below describe Policy D as decided in April.
+
 ## Context
 
 After Blocco I.3 ([[decisions/price-currency-hard-reject]]) introduced the

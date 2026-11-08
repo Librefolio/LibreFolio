@@ -4,8 +4,7 @@ category: decision
 date: 2026-05-24
 status: resolved
 tags: [transactions, cost-basis, currency, schema, breaking-change, wac]
-related_features: [F-097, F-048]
-related_decisions: [decisions/unified-batch-pipeline]
+related: [features/F-097, features/F-048, decisions/unified-batch-pipeline]
 ---
 
 # Decision: cost_basis_override as Currency Object

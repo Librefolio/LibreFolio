@@ -70,6 +70,11 @@ ordinary tests, so it is more exposed to the false-green failure mode described
 in [[problems/i18n-key-assertion-false-green]] — a test that asserts an i18n key
 is green only until the key gets translated.
 
+> *2026-11-07 lint:* no test titled `CHARACTERISATION:` is left in `frontend/src`: the latches did their job and were
+> replaced when the decisions landed (e.g. `11c4d70b1`, 2026-08-31, removed the scheduler's two). The practice lives on
+> as marked blocks — a `// Characterisation.` comment in `SettingControls.test.ts`, the
+> «as it is today (characterization)» `describe` in `frontend/src/lib/stores/app/navigationStore.test.ts`.
+
 ## Source files
 
 | Role | Path |

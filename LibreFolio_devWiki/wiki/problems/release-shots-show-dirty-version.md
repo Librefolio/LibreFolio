@@ -48,6 +48,12 @@ Workstream M's batch 34 (train 80):
 `main` (commit 6fd90d7ee), reports `v1.1.0-1648-g1ee978788` — `git describe` of that merge — without `-dirty`.
 The developer's question 11 is closed.
 
+*2026-11-07 lint*: M-25 is closed too — CP7a of workstream H (`bf6fd84ae`, in `dev_release2` with `934f09dba`, 19/10):
+`_docker_ensure_assets_built()` freezes the version once, writes it to `frontend/build/.build-version`
+(`FRONTEND_BUILD_VERSION_MARKER` in `dev.py`), and rebuilds a frontend of another version. The backend side of the
+same family, a leftover `VERSION` in a checkout, was fixed by `50f9faaa6`
+([[problems/stale-version-file-shadows-git-describe]]).
+
 ## Source files
 
 | Role | Path |

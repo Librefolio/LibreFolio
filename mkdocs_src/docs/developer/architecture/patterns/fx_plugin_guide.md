@@ -55,13 +55,13 @@ graph TD
 
     E3 ~~~ S1
 
-    style E1 fill:#e3f2fd,stroke:#1565c0
-    style E2 fill:#e3f2fd,stroke:#1565c0
-    style E3 fill:#e3f2fd,stroke:#1565c0
-    style S1 fill:#e8f5e9,stroke:#2e7d32
-    style S2 fill:#fff3e0,stroke:#e65100
-    style S3 fill:#fff3e0,stroke:#e65100
-    style S4 fill:#f3e5f5,stroke:#7b1fa2
+    style E1 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style E2 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style E3 fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style S1 fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style S2 fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style S3 fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style S4 fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
 **Phase 1** happens when a user adds a new currency pair — the system queries providers to discover which currencies they support. That query is `GET /fx/providers`, which reaches `get_supported_currencies()` only through `backend/app/services/fx/catalog.py`: each provider's list is cached for 24 hours (named cache `fx_provider_currencies`, see [Cache Registry](../settings_cache.md)); if the call raises or takes longer than 5 seconds, the endpoint answers with the last list that provider returned in this process (empty before its first success) and tries again 5 minutes later. A provider may therefore fetch its list over the network, but must not rely on being called on every request.

@@ -22,7 +22,8 @@ commissions together ([[sources/beta-testing-2026-08-05]], finding B2). The impo
 but the user has it on the contract note.
 
 The importer already emitted several transactions from one row (fee and tax legs, the counter-entries of the
-*Deposito Titoli* layout). What was missing was a split **driven by the user**: the repair step edited one row as one
+*Deposito Titoli* layout — replaced on 2026-10-28 by the report set, [[decisions/credit-agricole-securities-only-cash-neutral-brim]]).
+What was missing was a split **driven by the user**: the repair step edited one row as one
 transaction, with no cash field and no extra leg.
 
 ## Decision
@@ -78,7 +79,7 @@ deduced. The gap only decides when the question is asked.
 | Split arithmetic | `frontend/src/lib/features/transactions/import/splitRowCharges.ts` |
 | Split tests | `frontend/src/lib/features/transactions/import/splitRowCharges.test.ts` |
 | Repair step | `frontend/src/lib/features/transactions/import/FixFlaggedStep.svelte` |
-| Hints, Crédit Agricole | `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` |
+| Hints, Crédit Agricole (since plugin 2.0.0, `d0be8c7f2`) | `backend/app/services/brim_providers/broker_credit_agricole/_booking.py` |
 | Hints, Danske Bank | `backend/app/services/brim_providers/broker_danske_bank/plugin.py` |
 | `INTEREST` cash rule | `backend/app/schemas/transactions/transactions.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00BrimCreditAgricoleTrades.prompt.md` |

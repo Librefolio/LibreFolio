@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-04-24
 tags: [frontend, i18n, translations, duplicates, consolidation]
-related_features: [F-008]
+related: [features/F-008, decisions/plugin-folders-and-split-i18n]
 ---
 
 # Decision: i18n Key Rationalization — Intentional Duplicates
@@ -123,11 +123,16 @@ If any of the above is false → **keep keys separate**.
 
 Full list: `knowledge_base/08_i18n_duplicates.md`
 
+*2026-11-07 lint:* the `chartSettings.signals.emaAbbr` example names no key in today's catalogues (grep over
+`frontend/src/lib/i18n`); the principle is unchanged. Since `e47f45c98` the keys live in per-subsystem catalogues
+(`frontend/src/lib/i18n/<subsystem>/<lang>.json`), with `base/` holding the shared ones such as `common.*`.
+
 ## Links
 
 - [[features/F-008]] — i18n System feature page
 - [[decisions/plugin-folders-and-split-i18n]] — planned (2026-10-12): the catalogues split into 17 subsystems plus a
-  `base`, plugin translations in their folders, no key renamed
+  `base`, plugin translations in their folders, no key renamed — done the same day (`e47f45c98`, «catalogue per
+  subsystem and plugin»; 2026-11-07 lint)
 - Source: `LibreFolio_developer_journal/knowledge_base/08_i18n_duplicates.md`
 - Plan: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step6/plan-phase06Step6-i18n-dedup.prompt.md`
 

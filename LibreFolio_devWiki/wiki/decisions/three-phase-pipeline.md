@@ -6,6 +6,7 @@ date: 2026-03-31
 tags: [backend, architecture, async, database, bulk-operations]
 related_features: [F-017, F-027]
 related_problems: [asset-sync-transaction-closed]
+related: [features/F-017, features/F-027, problems/asset-sync-transaction-closed, sources/phase06-step2c-sync-refactor]
 ---
 
 # Decision: 3-Phase Pipeline for Bulk Operations
@@ -138,6 +139,7 @@ Phase 3 — PERSIST (per-task session, parallel)
 ### Semaphore in Phase 2
 
 **Asset providers**: Added `asyncio.Semaphore(10)` to limit concurrent network calls. Without limit, 100 assets → 100 simultaneous HTTP requests → provider throttling or local resource exhaustion.
+*2026-11-07 lint:* today the bound is the `concurrency` argument of `bulk_refresh_prices()`, default 5.
 
 **FX providers**: Already grouped by provider (ECB serves 10 currencies in 1 call), so natural batching limits concurrency.
 

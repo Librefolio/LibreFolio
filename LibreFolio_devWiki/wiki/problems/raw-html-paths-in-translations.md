@@ -55,6 +55,8 @@ counted only WARNING/ERROR lines did not see it.
 - Read build logs for ⚠️/❌ as well as WARNING/ERROR; with the new check, the exit code is enough.
 - Still open (backlog): a deterministic pipeline step for the `../` of translations, only if the case recurs (M-2);
   the `../` of `srcset` and `poster` in `html-attr-mismatch` (M-6).
+  2026-11-07 lint: both were discarded by the developer on 22/10 — M-2 because the case did not recur, M-6 because no
+  page uses `srcset` or `poster` with `../`.
 
 ## Links
 

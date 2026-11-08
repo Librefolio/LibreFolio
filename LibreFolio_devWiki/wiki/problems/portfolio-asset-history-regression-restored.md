@@ -31,6 +31,12 @@ per-asset WAC/market-price series in the unified report response).
 Verified via `git log` that the route existed, was functional, and had tests before the removal. Restored in
 commit `852230803`; confirmed present again at `backend/app/api/v1/portfolio_api.py:137-151`.
 
+2026-11-07 lint: the route is gone again. `a711d39f7` («First iteration with fifo-engine», 2026-07-16) removed
+`GET /portfolio/asset-history` and added `POST /portfolio/lots/analysis`, whose response carries the per-asset series
+(`market_price_history`, `broker_wac_history`, `cumulative_wac_history` in `backend/app/schemas/portfolio.py`).
+`portfolio_api.py` today serves only `POST` routes (`/allocation-source`, `/report`, `/positions-series`,
+`/lots/analysis`).
+
 ## Prevention
 
 When bundling an endpoint cleanup with "supersede by unified endpoint" as the stated rationale, verify each
@@ -47,5 +53,6 @@ fixed same day.
 
 | Role | Path |
 |------|------|
-| Endpoint (restored) | `backend/app/api/v1/portfolio_api.py:137-151` |
+| Endpoint (restored; removed again in `a711d39f7`) | `backend/app/api/v1/portfolio_api.py` |
+| The per-asset WAC and market series since `a711d39f7` (lots analysis) | `backend/app/schemas/portfolio.py` |
 | Gap analysis that found it | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/README.md` |

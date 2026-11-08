@@ -539,7 +539,7 @@ test.describe('Who has the Users tab', () => {
         const hint = own.getByTestId('users-self-hint');
         // Presence barrier for the absence below: the panel is open, and holds the hint.
         await expect(hint, 'The open panel of this row holds the hint').toBeVisible({timeout: UI_MS});
-        await expect(hint.locator('a[href*="tab=profile"]'), 'whose link leads to the Profile tab').toBeVisible({timeout: UI_MS});
+        await expect(hint.locator('a[href="/settings/profile"]'), 'whose link leads to the Profile tab').toBeVisible({timeout: UI_MS});
         await expect(own.locator('[data-testid^="users-action-"]'), 'and no action at all: administrators change their own account from the profile').toHaveCount(0, {timeout: UI_MS});
     });
 });

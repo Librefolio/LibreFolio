@@ -765,7 +765,7 @@ describe('ConnectionSecurityIndicator — closing the details: the reason, and 3
  *   - the toggle's accessible name while `attention > 0`: «‹level label› — ‹attention text›», expanded and collapsed, and
  *     the `title` the same when collapsed; the attention text is `$_('connectionSecurity.attention', {values: {count}})`.
  *     Without attention, today's: the level label as `aria-label` and `title` when collapsed, neither when expanded;
- *   - in the details, after the reason: `connection-security-attention-link`, an `<a href="/settings?tab=security">` whose
+ *   - in the details, after the reason: `connection-security-attention-link`, an `<a href="/settings/admin/security">` whose
  *     text is the attention text, only while `attention > 0`; a click on it closes the details.
  *
  * The doubles. The checks' store is the fake at the top of the file: a case lands its answer by hand (`storeAnswers`),
@@ -782,7 +782,7 @@ describe('ConnectionSecurityIndicator — the security-attention dot (N69b)', ()
     const SEPARATOR = ' — ';
     const LAN_PAGE = 'http://lf.lan/';
     const LAN: ServerView = {clientClass: 'lan', cookieSecure: false};
-    const SECURITY_TAB = '/settings?tab=security';
+    const SECURITY_TAB = '/settings/admin/security';
 
     const finding = (id: string, severity: FakeFinding['severity']): FakeFinding => ({id, severity, messageKey: `test.${id}`, params: {}, source: 'server'});
     /** Two warnings and an info: 2, warning. */

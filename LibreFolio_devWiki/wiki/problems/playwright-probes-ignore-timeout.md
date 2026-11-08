@@ -81,12 +81,14 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `23a9427
   - *Update (train 78)*: the override moves only `Intl`'s fallback locale and `Accept-Language`; `navigator.language`,
     which `uiLocale()` reads since M-18, stays en-US — backlog M-24 (low), written into the header of
     `galleryLocale.ts` (`6e492723d`).
+    2026-11-07 lint: M-24 was discarded on 22/10 (developer: it shows only with `--headed`/`--ui`, and
+    `resolvedOptions().locale` is already right).
   - The 13 tests that shoot a page prepared once (3 auth pages, 2 PAC, 8 Files) now redraw it in each language.
   - **The trap**: `@playwright/test` gives every context `locale: 'en-US'`, and Chromium then refuses a second override
     («Another locale override is already in effect»). `test.use({locale: undefined})` falls back to that default; the
     gallery's describe uses a fixture that yields `undefined` instead.
 - **Proof**: full gallery 250 passed, 1 skipped by design, 1 failed — triaged as environment (a network change on the
-  shared machine aborted the requests in flight), the same test green three times alone. The Italian dashboard reads
+  test host aborted the requests in flight), the same test green three times alone. The Italian dashboard reads
   «+4788,01 €» and «50.000,00 €».
 - The `testing-frontend` skill gained the rule «Gallery: a language's shots are taken by a browser of that language».
 
@@ -109,6 +111,7 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `23a9427
   (`selectTransactionType`, table views, the wizard file row, the cache unlock, the broker edit, the asset search, the
   date presets): those should be `expect`. Also open there: the timed wait of the step-2 shot, the 7 class-C probes,
   and the same `isEnabled({timeout})` defect in `transactions/tx-picker-pagination.spec.ts`.
+  2026-11-07 lint: still open; on 04/11 the developer moved it to release 1.4 (lot W6-15).
 
 ## Planned in release 1.2 (assigned to I)
 

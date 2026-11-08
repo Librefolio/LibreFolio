@@ -249,6 +249,15 @@ def utils_gallery_webp(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Gallery WebP tests", verbose=verbose)
 
 
+def utils_docs_mermaid_colours(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a Mermaid node with its own fill also sets its text colour (E9C)."""
+    print_section("Utils: Docs Mermaid Colours")
+    print_info("Testing: every style/classDef line of every Mermaid block of mkdocs_src/docs")
+    print_info("Tests: a fill without a colour is an unreadable pale box in the dark theme")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_mermaid_colours.py", test_names)
+    return run_command(cmd, "Docs Mermaid colours tests", verbose=verbose)
+
+
 def utils_release_image_contract(verbose: bool = False, test_names: list = None) -> bool:
     """Test the release.yml / Dockerfile contract that keeps the gallery's debug build out of the images."""
     print_section("Utils: Release Image Contract")
@@ -460,6 +469,15 @@ def utils_translation_cache(verbose: bool = False, test_names: list = None) -> b
     print_info("Tests: failed, --lang-skipped and interrupted languages after an EN edit (parallel and sequential), an EN edit saved during the analysis (LF/CRLF), failed --force retry, stamp, plain success, the five transitions")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_cache.py", test_names)
     return run_command(cmd, "Translation cache tests", verbose=verbose)
+
+
+def utils_translation_equivalence(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the checks that a translated page says what its source says: Mermaid, tabs, tables, identifiers, code, admonitions, anchors (Aphra pipeline)."""
+    print_section("Utils: Translation Equivalence")
+    print_info("Testing: mkdocs_src/aphra-pipeline/page_equivalence.py, validate_translations.py (ALL_CHECKS), every page of mkdocs_src/docs against its English page")
+    print_info("Tests: Mermaid skeleton (ids, arrows, shapes, style/classDef, front matter), content tabs (count, proper names, 4-space body), table rows and cells, variables / dev.py commands / paths, code that is not a comment, nested admonitions, explicit anchors, corpus guard")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_equivalence.py", test_names)
+    return run_command(cmd, "Translation equivalence tests", verbose=verbose)
 
 
 def utils_translation_validator(verbose: bool = False, test_names: list = None) -> bool:
@@ -729,6 +747,15 @@ Tests for utility modules and helper functions:
     )
     add_test(
         cat,
+        "docs-mermaid-colours",
+        utils_docs_mermaid_colours,
+        name="Docs Mermaid Colours",
+        desc="every Mermaid style or classDef line of the documentation that sets a fill also sets the text colour, and the early script appends the rule that lets a node's <p> inherit it (Material colours .nodeLabel p with the theme's light label colour in the dark theme: a pale box showed white text)",
+        # Reads Markdown under mkdocs_src/docs: no DB, no server, no network, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "release-image-contract",
         utils_release_image_contract,
         name="Release Image Contract",
@@ -764,7 +791,7 @@ Tests for utility modules and helper functions:
         "js-cache-fail-loud",
         utils_js_cache_fail_loud,
         name="JS Cache Fail-Loud (I1)",
-        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0; consumer-scoped narrowing (a docs-only asset does not fail a frontend build, an unknown attribution still does); js companions (MathJax fonts): names from the cached script, fetched beside the CDN URL even when the script is up to date, refreshed on script change, --force or a missing record; a missing file with no cached copy → hard failure; only pattern-matching stale files removed; Mermaid pinned (exact version, sha256: a body with another hash is refused, nothing replaced, hard failure of the docs build; entries without sha256 unchanged) and served locally (overrides/main.html writes the vendored copy then mermaid-early.js before Material's bundle, early script pinned to the same version without imports or ELK, no mermaid.mjs, not in extra_javascript) (H6-3, M-22); the diagram zoom (diagram-zoom.js: classic script with no import, fetch or address, no word of the private repository, opens the shadow roots with mode open, four languages; overrides/main.html writes its stylesheet and script in the same mermaid condition as mermaid-early.js; neither listed in extra_javascript nor extra_css) (H6-4)",
+        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0; consumer-scoped narrowing (a docs-only asset does not fail a frontend build, an unknown attribution still does); js companions (MathJax fonts): names from the cached script, fetched beside the CDN URL even when the script is up to date, refreshed on script change, --force or a missing record; a missing file with no cached copy → hard failure; only pattern-matching stale files removed; Mermaid pinned (exact version, sha256: a body with another hash is refused, nothing replaced, hard failure of the docs build; entries without sha256 unchanged) and served locally (overrides/main.html writes the vendored copy then mermaid-early.js before Material's bundle, early script pinned to the same version, a classic script whose only dynamic import is the ELK layout, no mermaid.mjs, not in extra_javascript; the ELK layout of Mermaid vendored from the npm tarball of an exact version compatible with Mermaid 11, served only if its SRI hash is the pinned one, only the minified ESM build written, stale files removed, registered by the early script before Mermaid draws) (H6-3, M-22, E9C); the diagram zoom (diagram-zoom.js: classic script with no import, fetch or address, no word of the private repository, opens the shadow roots with mode open, four languages; overrides/main.html writes its stylesheet and script in the same mermaid condition as mermaid-early.js; neither listed in extra_javascript nor extra_css) (H6-4)",
         # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
         isolation="pure",
     )
@@ -975,6 +1002,15 @@ Tests for utility modules and helper functions:
         name="Coverage Combine",
         desc="Coverage parts are combined as a directory: a part coverage renames while the combine starts and one landing after coverage's own listing are both folded in with nothing left behind, the shared backend's parts in the cwd too (.coveragerc is never a part), and a failed combine turns the parallel pass red; a run's parts/run-* directory goes once combined and stays, named with the unreadable part, when not; --cov-clean-backend empties parts/ of coverage data and keeps the junit reports; a finished part holding coverage's schema and no rows is removed and named without failing the combine (worker parts and the shared backend's alike), one with a transient name is never judged empty",
         # Temporary files and coverage subprocesses on them, cwd moved into tmp_path: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-equivalence",
+        utils_translation_equivalence,
+        name="Translation Equivalence",
+        desc="A translated page says what its source says: same Mermaid diagrams (nodes, arrows, style/classDef), content tabs with their proper names and a 4-space body, tables with the same rows and cells, the same variables / dev.py commands / paths, code that differs only in comments and placeholders, nested admonitions with the same marker and depth, explicit anchors; translate-validate runs them as errors, and every page of every language passes them",
+        # Pure functions over strings, plus a read-only pass over mkdocs_src/docs: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(

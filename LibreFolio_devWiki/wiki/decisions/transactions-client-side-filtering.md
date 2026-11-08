@@ -55,6 +55,10 @@ GET /transactions      # loads ALL
 
 Also removed: `limit/offset` parameters from API, `FilterMap.broker_id`, `FilterMap.asset_id`, `FilterMap.date_from`, `FilterMap.date_to` from frontend state.
 
+*2026-11-07 lint:* `GET /transactions` accepts `limit`/`offset` and filters such as `broker_id`, `types`, `date_start`/`date_end`
+today; the `/transactions` page still calls it with no query (`routes/(app)/transactions/+page.svelte`) and filters in
+the browser, while the shared portfolio view passes `broker_id` and the period (`portfolioTransactions.svelte.ts`).
+
 ## Links
 
 - [[problems/transactions-without-asset-filter-nan-loop]] — the «without asset» filter once caused a NaN URL loop

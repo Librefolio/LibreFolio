@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 — Plan D2 Bugfix 2: Payload + Split Preview UX
 category: source
 source_type: plan
 date_ingested: 2026-05-31
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/Bugfix/plan-bugfix2_PayloadSplitPreviewUX.prompt.md
 tags: [phase07, transactions, bugfix, split-preview, payload, pipeline-reorder, batch-result-ids, access-guard]
 related:
   - sources/phase07-part4-round6-pland2-bugfix1

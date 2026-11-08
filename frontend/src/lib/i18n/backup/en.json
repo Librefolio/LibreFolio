@@ -82,7 +82,6 @@
       },
       "dropWhenDone": "The check is dropped as soon as it ends.",
       "cancelCheck": "Stop the check",
-      "openReport": "Read the report",
       "confirming": "Confirming the restore…",
       "cancelling": "Cancelling…",
       "pending": {
@@ -112,7 +111,7 @@
       },
       "blocker": {
         "no_administrator": "The backup has no active administrator: after a restore nobody could manage LibreFolio. It cannot be restored.",
-        "storage_limit": "Restoring this backup would take LibreFolio past its total space limit. Raise the total space to at least {required} in Files › Advanced, then check the backup again.",
+        "storage_limit": "Restoring this backup would take LibreFolio past its total space limit. Raise the total space to at least {required} in Settings › Administration › Global Settings, then check the backup again.",
         "storage_limit_locked": "Restoring this backup would take LibreFolio past its total space limit. Ask whoever hosts this instance to raise the limit to at least {required}, then check the backup again.",
         "storage_limit_disk": "The disk also needs at least {missing} more free."
       },
@@ -261,6 +260,12 @@
         "match": "With this password you will sign in after the restore.",
         "mismatch": "This is not their password.",
         "failed": "The password could not be checked: try again."
+      },
+      "kept": {
+        "title": "Restore a backup",
+        "backupOf": "Backup of {date}, kept on this server.",
+        "preparing": "Getting the backup ready for its check…",
+        "alreadyWaiting": "A restore already waits for the next start of LibreFolio. Restart or cancel it in «Restore an archive» first."
       }
     },
     "checks": {
@@ -313,6 +318,7 @@
         "origin": "Made from",
         "kind": "Type",
         "size": "Size",
+        "restored": "Once restored",
         "sha256": "SHA-256",
         "actions": "Actions"
       },
@@ -343,7 +349,10 @@
       },
       "retry": "Try again",
       "refresh": "Refresh",
-      "restoreConfirm": "Restore this backup? It will replace the data of every user. LibreFolio checks it first and shows you what would change: nothing changes until you confirm."
+      "restored": {
+        "header": "The space the backup's contents take once restored, not compressed: the database, the uploaded files and the broker reports.",
+        "unknown": "Not known for this backup."
+      }
     },
     "cleanup": {
       "title": "Automatic clean-up",

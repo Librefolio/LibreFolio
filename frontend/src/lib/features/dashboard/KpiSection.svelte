@@ -88,7 +88,7 @@
     /**
      * Card 1: the day change as a share of yesterday's NAV (`pnl_change_1d_vs_nav_percent`), beside the amount. Developer's decision of
      * 07/11/2026: it is the only share of the day's change, and Card 2 no longer repeats it. The share of yesterday's total P&L
-     * (`pnl_change_1d_vs_total_pnl_percent`) is gone from the answer: close to zero it explodes (−22.82 % where the NAV says −1.95 %).
+     * (`pnl_change_1d_vs_total_pnl_percent`) is gone from the answer: close to zero it explodes (for example −20 % where the NAV says −2 %).
      */
     const pnlDeltaDayPct = $derived(summary ? returnPct(summary.pnl_change_1d_vs_nav_percent) : null);
 

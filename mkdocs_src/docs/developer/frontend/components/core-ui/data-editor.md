@@ -12,11 +12,11 @@ graph TD
     DIM -.->|used by| FXI["FX CSV Import"]
     DE -.->|used by| FXD["FX Data Editor"]
 
-    style DIM fill:#e8f5e9,stroke:#2e7d32
-    style CSE fill:#e8f5e9,stroke:#2e7d32
-    style DE fill:#e8f5e9,stroke:#2e7d32
-    style MB fill:#f3e5f5,stroke:#7b1fa2
-    style SDP fill:#e3f2fd,stroke:#1565c0
+    style DIM fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style CSE fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style DE fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style MB fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+    style SDP fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
 ```
 
 ---

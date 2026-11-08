@@ -27,6 +27,9 @@ this reason.
 `$currentLanguage` inside a helper function called from the template compiles into `$.untrack`, so the template's
 expression does not depend on the store and is not recomputed.
 
+2026-11-07 lint: only `BrokerCard.svelte` is legacy (`export let`, still so today). `BrokerSharingPanel.svelte`
+already used `$props()` at `3d2378626`; it received the same template-level read, but not because of this trap.
+
 ## Solution
 
 Commit `3d2378626` (train 38): the store is read in the template expression itself —

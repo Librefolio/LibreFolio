@@ -1,5 +1,6 @@
 ---
 title: "saveWithRetry — Frontend Modal Save Pattern"
+category: concept
 tags: [frontend, pattern, error-handling, modals, ux]
 related_features: [F-002, F-003, F-024]
 related_sources: [sources/phase07-part3-closure2]
@@ -30,6 +31,10 @@ async function saveWithRetry(
 ): Promise<SaveResult>
 ```
 
+> 2026-11-07 lint: today's signature is `trySave<T>(call, options?: TrySaveOptions): Promise<SaveResult<T>>`, with
+> options `fallback`, `toast` (default `true`), `prefix` and `onError`; the error branch of `SaveResult` also carries
+> `error` and `status_code`. Error extraction is exported as `extractErrorMessage()` / `extractStatusCode()`.
+
 ### Error extraction
 
 The helper normalizes Zodios errors (structured `detail`, `message` fields) into a
@@ -59,12 +64,12 @@ onError: (err) => {
 | Modal | File |
 |-------|------|
 | `BrokerModal` | `frontend/src/lib/features/brokers/BrokerModal.svelte` |
-| `CashTransactionModal` | `frontend/src/lib/components/transactions/CashTransactionModal.svelte` |
+| `CashTransactionModal` | frontend/src/lib/components/brokers/CashTransactionModal.svelte — removed in `38c127baa` (2026-07-06, broker overview redesign) |
 | `AssetCurrencyChangeModal` | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
-| `PasswordChangeModal` | `frontend/src/routes/(app)/settings/+page.svelte` or component |
+| `PasswordChangeModal` | `frontend/src/lib/features/settings/PasswordChangeModal.svelte` |
 | `FxPairAddModal` | `frontend/src/lib/components/fx/FxPairAddModal.svelte` |
 | `BrokerImportFilesModal` | `frontend/src/lib/features/brokers/BrokerImportFilesModal.svelte` |
-| `BrokerSharingModal` | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte` |
+| `BrokerSharingModal` | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte` (modal chrome only; the save and its `trySave` now live in `BrokerSharingPanel.svelte`) |
 | `AssetModal` | `frontend/src/lib/components/assets/AssetModal.svelte` |
 
 ## `AssetModal` special case

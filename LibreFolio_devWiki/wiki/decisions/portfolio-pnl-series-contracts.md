@@ -40,7 +40,8 @@ obvious implementation that gives a wrong answer.
 - Different ownership shares leave (s_B − s_A)·X on the receiver's line; the total is unaffected.
 - Filtered views: a securities TRANSFER leg whose partner is outside the view, or whose partner was deleted,
   is capital at market value on its own date (`_transfer_leg_capital()`); a cash leg in the same position is
-  capital at its amount. B alone equals B in the combined view; A alone loses the in-transit move at departure.
+  capital at its amount (*2026-11-07 lint:* since 1.3 deleting a broker turns the surviving half into an ADJUSTMENT, or a
+  DEPOSIT/WITHDRAWAL for cash — [[decisions/orphan-transfer-becomes-an-adjustment]]). B alone equals B in the combined view; A alone loses the in-transit move at departure.
 - ADJUSTMENT pairs keep their capital at cost and get no internal flow.
 - **Broker cards read the same capital** (lot 41, step H). `PortfolioService.get_summary(include_breakdown=True)`
   no longer keeps its own per-broker capital (`broker_total_invested`: DEPOSIT/WITHDRAWAL plus in-kind
@@ -99,6 +100,7 @@ obvious implementation that gives a wrong answer.
 - [[concepts/echarts-chart-gotchas]] — the rendering traps met on the way.
 - [[decisions/broker-card-aggregation-no-n-plus-one]] — the broker cards that read the same capital since lot 41.
 - [[decisions/native-cash-daily-revaluation]] — lot 41 F, the cash the lines and cards are valued with.
+- [[decisions/pnl-day-change-against-yesterdays-nav]] — the P&L day change of 1.3, a share of yesterday's NAV.
 - Source: [[sources/phase00-performance-charts-2026-09]]; lot 41: [[sources/phase00-broker-pnl-flows-2026-10]].
 
 ## Source files

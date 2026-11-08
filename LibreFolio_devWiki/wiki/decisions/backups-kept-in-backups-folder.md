@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-11-05
 tags: [backup, storage, files, settings, cli]
-related: [entities/backup-router, decisions/api-routes-removed-without-deprecation]
+related: [entities/backup-router, decisions/api-routes-removed-without-deprecation, decisions/storage-limit-enforced, decisions/restore-waits-and-restores-from-kept-backup]
 ---
 
 # Decision: backups stay in `backups/`
@@ -23,10 +23,12 @@ removed.
   is always kept.
 - **A storage bar (FB-29).** The Files page shows administrators the space taken by the database, the uploaded files,
   the broker reports and the backups, against the disk or against a limit they can set
-  (`LIBREFOLIO_STORAGE_LIMIT_MB` sets it from the environment).
+  (`LIBREFOLIO_STORAGE_LIMIT_MB` sets it from the environment). In wave 6 the limit was only shown; since 06/11/2026
+  it is enforced — see [[decisions/storage-limit-enforced]]. The list gained a manual *Refresh* (backups made from the
+  console) and a *Restore* per row (see [[decisions/restore-waits-and-restores-from-kept-backup]]).
 
 ## Lessons
-- **`core.ignorecase` hid a test file.** The repository had `core.ignorecase=true` (inherited from a Mac checkout).
+- **`core.ignorecase` hid a test file.** The repository had `core.ignorecase=true` (the value Git sets when a repository is created on a case-insensitive filesystem).
   A test file `backupList.test.ts` and a different file `BackupList.test.ts` were confused by Git, and `git status`
   did not show the difference: the file was registered in the runner but never committed, and one frontend category
   went red only in the consolidated run. See [[problems/core-ignorecase-hides-a-test-file]].
@@ -36,3 +38,5 @@ removed.
 |------|------|
 | Backup API | `backend/app/api/v1/backup/` |
 | Backup command line | `scripts/backup_cli.py` |
+| Space limit | `backend/app/services/platform/storage_limit.py` |
+| Backups table (Refresh, Restore per row) | `frontend/src/lib/features/backup/BackupList.svelte` |

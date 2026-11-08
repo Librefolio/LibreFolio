@@ -29,7 +29,9 @@ As part of Phase 09 (Dashboard), LibreFolio introduces proper financial performa
    - Evaluates the user's specific performance (including their timing decisions).
    - Calculated using Newton-Raphson to find the Internal Rate of Return (IRR). This is a **deliberate,
      Newton-only** choice (no Brent/hybrid fallback) with a result cap as a display safety valve for pathological
-     inputs — not an open bug. See [[decisions/mwrr-solver-newton-cap]].
+     inputs — not an open bug. See [[decisions/mwrr-solver-newton-cap]]. *(2026-11-07 lint: superseded by `d82c0e920`,
+     2026-10-15 — the solver is now Newton with a verified root, else Brent on every sign change of a rate grid, and
+     `None` when no root is verified; no result cap. See the note at the top of that decision.)*
    - The double-counting boundary bug (synthetic `t=0` flow duplicating deposits) was fixed 2026-06-30 — see
      [[decisions/mwrr-boundary-fix]].
    - A period that starts on a data-less day once gave the MWRR a pole; the flows already embedded in the first

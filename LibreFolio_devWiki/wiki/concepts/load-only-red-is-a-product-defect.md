@@ -134,8 +134,8 @@ Its missing half, learned here: **the enclosing budget has to be raised too**. I
 
 | Role | Path |
 |------|------|
-| **Verbatim source of both cases** | `.github/agents/test-author.agent.md` (~538-552) |
-| Reprise of the first case | `.github/skills/devpy-tools/testing-frontend/SKILL.md` (~313) |
+| **Verbatim source of both cases** | `.github/agents/test-author.agent.md` (~566-580) |
+| Reprise of the first case | `.github/skills/devpy-tools/testing-frontend/SKILL.md` (~403) |
 | Triage protocol | `.github/skills/devpy-tools/test-triage/SKILL.md` |
 | Isolation classes | `scripts/test_runner/_inventory.py` |
 | Anti-bounce key sampling | `frontend/src/lib/features/transactions/useValidateScheduler.svelte.ts` |

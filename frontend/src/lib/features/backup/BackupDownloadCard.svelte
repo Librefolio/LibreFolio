@@ -245,7 +245,7 @@
             <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
             <span class="min-w-0 flex-1" data-testid="backup-error-message">{errorText(controller.errorCode, controller.errorStorage)}</span>
             {#if controller.errorCode === STORAGE_LIMIT_CODE && controller.errorStorage !== null && !controller.errorStorage.limitLocked}
-                <!-- C9-2: the card is the administrators': the limit is raised in Files › Advanced, its panel open. -->
+                <!-- C9-2: the card is the administrators': the limit is raised in Global Settings, its row in view (B10). -->
                 <a
                     class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-lf-danger-line bg-lf-card px-3 py-1.5 text-sm font-medium text-lf-primary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                     href={STORAGE_LIMIT_SETTINGS_HREF}

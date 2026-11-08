@@ -61,6 +61,11 @@ Also: the asset-list filters became `flex-1 min-w-0` in `oneColumn` (the Active/
 2026-10-13, see *Phones* below), and the asset-detail header containers got `min-w-0` after red bands at 330→320 and
 1060→1030 px.
 
+> 2026-11-07 lint: the Dashboard and broker detail thresholds no longer live in their routes: both pages mount
+> `PortfolioView` ([[decisions/broker-page-is-a-portfolio-view]]), and their `PageToolbar` reads the thresholds from the
+> scope profile (`portfolioScopeProfile.ts`: `dashboard` `denseRow` 990, `brokerDetail` `denseRow` 840 — the values
+> above, with the 2026-10-12 raise).
+
 ## The gate and its measuring rule
 
 `frontend/e2e/layout/toolbar-width-sweep.spec.ts` sweeps every bar in EN/FR/IT/ES (English since 2026-10-13) from
@@ -125,8 +130,9 @@ values.
 | Toolbar component | `frontend/src/lib/components/ui/toolbar/PageToolbar.svelte` |
 | Assets list thresholds, phone pill width | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Asset detail thresholds | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
-| Dashboard thresholds | `frontend/src/routes/(app)/dashboard/+page.svelte` |
-| Broker detail thresholds | `frontend/src/routes/(app)/brokers/[id]/+page.svelte` |
+| Dashboard and broker detail thresholds (since the shared `PortfolioView`, 2026-11; before, in each route's `+page.svelte`) | `frontend/src/lib/features/portfolio-view/portfolioScopeProfile.ts` |
+| Their toolbar (`PageToolbar` with the profile's thresholds) | `frontend/src/lib/features/portfolio-view/PortfolioToolbar.svelte` |
+| FX detail thresholds (`fxDetail`, not in the 2026-10-01 calibration table) | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` |
 | FX list thresholds | `frontend/src/routes/(app)/fx/+page.svelte` |
 | Scrollbar gutter | `frontend/src/app.css` |
 | Width sweep gate, phone pill test | `frontend/e2e/layout/toolbar-width-sweep.spec.ts` |

@@ -898,6 +898,8 @@ extra_javascript:
   - javascripts/moved-anchors.js
   # Buy Me a Coffee widget + header button
   - javascripts/bmc-widget.js
+  # Long code in a table cell wraps
+  - javascripts/table-code-wrap.js
 
 nav:
   - Home: index.md

@@ -1,5 +1,7 @@
 ---
 title: "Phase 07 Part 1 — Transaction System Foundation"
+source_type: plan
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte1/plan-phase07-transaction-Part1.md
 category: source
 source_file: "LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte1/plan-phase07-transaction-Part1.md"
 git_hash: "a61b0dfa"

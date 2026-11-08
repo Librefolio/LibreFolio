@@ -18,8 +18,7 @@ related:
 
 ## Summary
 
-The plan of workstream V (557 lines, 2026-10-12, still in `Phase_0/`), merged in train 56 (`5b4b9f188`, `845a49894`,
-`845a49894`). It turned items 21–23 of the developer's server checklist — missing FX rates and their sync, a missing
+The plan of workstream V (557 lines, 2026-10-12, still in `Phase_0/`), merged in train 56 (`5b4b9f188`, `845a49894`). It turned items 21–23 of the developer's server checklist — missing FX rates and their sync, a missing
 cost basis shown as «—», the unrealized breakdown tooltip — from fakes into end-to-end tests on real data, through
 the API and a disposable account per test. It proves the real «Sync rates» offline with the MOCKFX provider, reaches
 a missing cost three ways (the developer's D1, «(c) Entrambe»), and found and fixed one defect on the way: open

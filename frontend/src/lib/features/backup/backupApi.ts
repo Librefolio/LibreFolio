@@ -45,8 +45,13 @@ export async function deleteInstanceBackupJob(jobId: string): Promise<void> {
 // The backups the instance keeps (lot FB-24): the list, and the clean-up that bounds them
 // =============================================================================
 
-/** A backup the instance keeps: its job, and where it came from. (Built from the job's own type: the client's explicit type of the entry widens every nullable field, a branch its schema never lets through.) */
-export type InstanceBackupEntry = InstanceBackupJob & {origin: 'ui' | 'cli' | 'pre-restore' | 'panel'};
+/** What a kept backup holds once restored, by part (A10, T-10). */
+export type InstanceBackupContentParts = z.infer<typeof schemas.InstanceBackupContentParts>;
+
+/** A backup the instance keeps: its job, where it came from, and the space it takes once restored (`null`: made before it
+ * was recorded). (Built from the job's own type: the client's explicit type of the entry widens every nullable field, a
+ * branch its schema never lets through.) */
+export type InstanceBackupEntry = InstanceBackupJob & {origin: 'ui' | 'cli' | 'pre-restore' | 'panel'; content_bytes?: number | null; content_parts?: InstanceBackupContentParts | null};
 export type BackupKind = 'clear' | 'password' | 'sealed';
 
 /** The backups the instance keeps, the newest first as the server sends them (`GET /backup/instance/jobs`). */

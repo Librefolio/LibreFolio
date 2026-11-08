@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-09-25
 tags: [frontend, svelte, popover, events, ux]
-related: [tooltip-click-pins-over-modal, lab-eligibility-from-risk-engine]
+related: [problems/tooltip-click-pins-over-modal, decisions/lab-eligibility-from-risk-engine, problems/modal-layers-escape-and-backdrop]
 ---
 
 # Problem: A popover that closes on pointerdown swallows the next click

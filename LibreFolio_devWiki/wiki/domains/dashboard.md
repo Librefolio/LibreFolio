@@ -18,6 +18,13 @@ portfolio doing today?" It runs the [[entities/portfolio-engine]] once per reque
 `POST /portfolio/report` endpoint (see [[concepts/portfolio-report-unified]]) and renders every widget from
 that single `EngineResult` — no separate per-widget API calls, no risk of inconsistent NAV between widgets.
 
+> 2026-11-07 lint: the engine's result type is `PortfolioCalculationResult`
+> (`backend/app/services/financial_math/portfolio/models.py`); `EngineResult` does not exist. Since 2026-11-03 the
+> Dashboard route only mounts `PortfolioView`, which the broker page shares through one data controller
+> ([[decisions/broker-page-is-a-portfolio-view]]). The P&L day line compares with yesterday's NAV
+> ([[decisions/pnl-day-change-against-yesterdays-nav]]) and each asset keeps one colour rank across the charts
+> ([[decisions/one-colour-rank-per-asset]]).
+
 The KPI row shows Net Worth, Period P&L, and Weighted ROI (TWRR + MWRR — see [[concepts/twrr-mwrr-algorithms]]).
 The GrowthChart visualizes the 3-pool cash decomposition (NAV / capital / returns — see
 [[concepts/3-pool-cash-model]]) as a stacked area with a rich tooltip. The Allocation panel toggles between
@@ -37,7 +44,7 @@ are surfaced via `DataQualityBanner`, reading the now-populated `data_quality` f
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
-| [[F-054]] | Dashboard KPI & Overview | fullstack | core — KPI cards + unified `/portfolio/report` fetch | implemented |
+| [[F-054]] | Dashboard KPI & Overview | fullstack | core — KPI cards + unified `/portfolio/report` fetch | documented |
 | [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | frontend | display — GrowthChart, AllocationHistoryChart, Holdings/Performance panel | documented |
 | [[F-100]] | Yield on Cost (YOC) per position | fullstack | display — trailing-year income per eligible unit in the positions | documented |
 | [[F-111]] | Risk tab of the Dashboard and broker pages (L1–L4) | frontend | display — four progressive risk questions; the simulation rung stays beta | documented |
@@ -80,11 +87,15 @@ graph TD
 ## Known problems / limitations
 
 - [[problems/datatable-column-resize-noop]] — DataTable column-resize handle is a no-op in some tables
-  (unrelated pre-existing frontend bug, low priority).
+  (unrelated pre-existing frontend bug, low priority). *2026-11-07 lint: `resolved` (updated 2026-10-15).*
 - [[problems/test-transaction-implied-constructor-mismatch]] — `test_transaction_implied.py` (6 tests) fails
   due to a pre-existing, unrelated `DailyStateBuilder` constructor mismatch in the test's local helper.
+  *2026-11-07 lint: `resolved` (2026-07-13).*
 - Resolved: [[problems/portfolio-asset-history-regression-restored]] — `GET /portfolio/asset-history` was
   accidentally removed in a legacy-endpoint cleanup, then restored (found during Milestone 3 gap analysis).
+  *2026-11-07 lint: the route is gone again — removed with `get_asset_history`/`get_lots` in `a711d39f7`
+  (2026-07-16); `portfolio_api.py` now serves `/allocation-source`, `/report`, `/positions-series` and
+  `/lots/analysis`.*
 - Still open, low priority (see [[sources/phase09-m1-m2-archive-2026-07]]): `internal_transfer_flow` /
   `scope_transfer_flow` diagnostic fields not implemented; allocation history sampling (weekly/monthly) not
   implemented; WAC fallback for in-transit cost basis not implemented; `get_asset_history()` ROI/unit-mix
@@ -103,7 +114,8 @@ Later ideas:
 
 | Role | Path |
 |------|------|
-| Dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Dashboard page (mounts `PortfolioView`) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Page body shared with the broker page | `frontend/src/lib/features/portfolio-view/PortfolioView.svelte` |
 | API endpoint | `backend/app/api/v1/portfolio_api.py` |
 | Service | `backend/app/services/portfolio_service.py` |
 | Engine | `backend/app/services/financial_math/portfolio/engine.py` |

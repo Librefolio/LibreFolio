@@ -99,6 +99,8 @@ POLL_INTERVAL_S = 0.05
 KEPT_NAME = re.compile(r"librefolio-backup-\d{8}-\d{6}-(?P<origin>[a-z-]+)-(?P<short>[0-9a-f]{8})")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 ORIGINS = {"ui", "cli", "pre-restore", "panel"}
+#: What an entry adds to its job's view: who made it, and the space it takes once restored (A10, T-10).
+ENTRY_ONLY = {"origin", "content_bytes", "content_parts"}
 JOB_NOT_FOUND = (404, "backup_job_not_found")
 
 
@@ -307,7 +309,10 @@ async def test_the_list_shows_each_kept_backup_with_its_origin_hash_and_flags(in
         entry = entries[job_id]
         job = (await call("GET", f"{JOBS}/{job_id}")).json()
         assert entry["origin"] == origin, f"{job_id}: origin {origin!r}: {entry}"
-        assert {name: value for name, value in entry.items() if name != "origin"} == job, f"{job_id}: an entry is the job's own view plus origin"
+        assert {name: value for name, value in entry.items() if name not in ENTRY_ONLY} == job, f"{job_id}: an entry is the job's own view plus origin and its content"
+        parts = entry["content_parts"]
+        assert entry["content_bytes"] > 0 and parts["database_bytes"] > 0, f"{job_id}: A10, the space it takes once restored: {entry['content_bytes']}, {parts}"
+        assert sum(parts.values()) == entry["content_bytes"], f"{job_id}: its parts add up to it: {parts}"
         assert (entry["encrypted"], entry["status"]) == (encrypted, "done"), f"{job_id}: encrypted {encrypted}, done: {entry}"
         assert SHA256.fullmatch(entry["file_sha256"] or ""), f"{job_id}: file_sha256 is 64 lowercase hex digits: {entry['file_sha256']!r}"
         assert entry["file_name"] and entry["file_size"], f"{job_id}: the file's name and size: {entry}"
@@ -542,7 +547,7 @@ def test_the_list_answers_entries_that_are_a_job_plus_its_origin():
     item_ref = schemas["InstanceBackupList"]["properties"]["items"]["items"].get("$ref", "").rsplit("/", 1)[-1]
     assert item_ref == "InstanceBackupEntry", f"its items are InstanceBackupEntry: {item_ref!r}"
     entry, job = schemas["InstanceBackupEntry"]["properties"], schemas["InstanceBackupJob"]["properties"]
-    assert set(entry) == set(job) | {"origin"}, f"an entry is a job plus origin: extra {sorted(set(entry) - set(job))}, missing {sorted(set(job) - set(entry))}"
+    assert set(entry) == set(job) | ENTRY_ONLY, f"an entry is a job plus origin and its content: extra {sorted(set(entry) - set(job))}, missing {sorted(set(job) - set(entry))}"
     origin = entry["origin"]
     values = set(origin.get("enum") or [c.get("const") for c in origin.get("anyOf", []) + origin.get("oneOf", [])])
     assert values == ORIGINS, f"origin is one of {sorted(ORIGINS)}: {origin}"

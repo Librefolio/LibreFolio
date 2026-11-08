@@ -1,1 +1,0 @@
-../../../../../mkdocs_src/docs/financial-theory/index.en.md

@@ -126,6 +126,8 @@
 
     // --- C9-10: the avatars and what the backup holds -----------------------------------------------------------------
     const brokenAvatars = $state<Record<string, boolean>>({});
+    // A10: the API client types this map as `{}` (a field with a default): it is username → address.
+    const avatarAddresses = $derived((report.administrator_avatar_addresses ?? {}) as Record<string, string | undefined>);
     const partsFill: Record<string, string> = {database: 'bg-lf-brand', uploads: 'bg-lf-info', brokerReports: 'bg-lf-success', dataOther: 'bg-lf-checked'};
     const parts = $derived.by((): LinkedSegment[] => {
         const other = Math.max(0, report.files_size - (report.uploads_size ?? 0) - (report.broker_reports_size ?? 0));
@@ -253,7 +255,20 @@
                                 {#if brokenAvatars[name]}
                                     <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-lf-neutral text-xs font-semibold text-lf-secondary" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
                                 {:else}
-                                    <img class="h-6 w-6 rounded-full object-cover" src={restoreAdminAvatarUrl(stageId, name)} alt="" width="24" height="24" onerror={() => (brokenAvatars[name] = true)} data-testid="restore-report-admin-avatar" />
+                                    <!-- A10: an avatar set by an address on another site is shown from there, as the app shows it
+                                         everywhere, without telling that site which page asks; an uploaded one is read from the copy. -->
+                                    {@const address = avatarAddresses[name]}
+                                    <img
+                                        class="h-6 w-6 rounded-full object-cover"
+                                        src={address ?? restoreAdminAvatarUrl(stageId, name)}
+                                        alt=""
+                                        width="24"
+                                        height="24"
+                                        referrerpolicy="no-referrer"
+                                        onerror={() => (brokenAvatars[name] = true)}
+                                        data-testid="restore-report-admin-avatar"
+                                        data-source={address ? 'address' : 'copy'}
+                                    />
                                 {/if}
                                 <span>{name}</span>
                             </li>

@@ -14,6 +14,7 @@ related:
   - problems/release-images-shipped-debug-frontend
   - decisions/pdf-preview-viewer-only-local-assets
   - sources/phase00-release-images-and-gallery-2026-10
+  - decisions/gallery-webp-with-png-fallback
 ---
 
 # Decision: a release cannot ship a missing or invented screenshot
@@ -81,6 +82,8 @@ Then the rules for the new scenarios, approved for groups 3–7 of the repairs:
   ([[problems/playwright-favicon-aborted-by-routes]]), and probes that ignore their timeout
   ([[problems/playwright-probes-ignore-timeout]]).
 - The screenshots are generated, never committed: the PNGs under `mkdocs_src/docs/gallery/` are git-ignored.
+  *Since 2026-11-06* the site asks for a WebP converted from each PNG, the PNG kept as fallback; both are git-ignored —
+  [[decisions/gallery-webp-with-png-fallback]] (2026-11-07 lint).
 
 ## Source files
 

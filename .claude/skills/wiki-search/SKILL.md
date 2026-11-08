@@ -89,6 +89,7 @@ else:
 ### Step 3 — Read Source Files (Targeted)
 
 The graph returns `source_file` paths. Read only the 1-3 most relevant files directly.
+`source_file` is relative to the **repository root** (e.g. `LibreFolio_devWiki/wiki/...`, `backend/app/...`): the graph holds docs and code.
 Every wiki page has a `## Source files` section linking to actual codebase paths — use those for navigation.
 
 ### Step 4 — Summarize Context

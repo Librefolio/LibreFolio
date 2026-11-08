@@ -6,7 +6,7 @@ date_ingested: 2026-04-24
 original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step6/
 tags: [phase06, i18n, translations, polish, coverage, testing]
 related_features: [F-008]
-related_decisions: [i18n-key-rationalization]
+related_decisions: [decisions/i18n-key-rationalization]
 ---
 
 # Source: Phase 06 Step 6 — i18n Dedup + Polish + Coverage

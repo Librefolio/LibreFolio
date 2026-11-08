@@ -4,19 +4,22 @@ category: problem
 status: resolved
 date: 2026-03-31
 tags: [backend, async, database, sqlalchemy, concurrency]
-related_features: [F-027]
-related_decisions: [three-phase-pipeline]
+related: [features/F-027, decisions/three-phase-pipeline, decisions/fx-sync-pair-based, sources/phase06-step2c-sync-refactor]
 ---
 
 # Problem: Asset Sync "This Transaction is Closed" Error
 
 ## Symptom
 
-Bulk asset price sync (`POST /api/v1/assets/bulk-refresh-prices`) failed intermittently with SQLAlchemy error:
+Bulk asset price sync failed intermittently with SQLAlchemy error:
 
 ```
 sqlalchemy.exc.InvalidRequestError: This transaction is closed
 ```
+
+*(2026-11-07 lint: the bulk sync endpoint is `POST /api/v1/assets/prices/sync`, handler `sync_prices_bulk` in
+`backend/app/api/v1/assets/prices.py`, which calls `AssetSourceManager.bulk_refresh_prices`; the path
+`bulk-refresh-prices` this page used to name is found nowhere in the code history.)*
 
 **Frequency**: Appeared on ~30% of bulk syncs with 5+ assets. Single-asset refresh worked consistently.
 
@@ -146,5 +149,6 @@ async def bulk_op(items, session):
 | Role | Path |
 |------|------|
 | Fixed implementation | `backend/app/services/assets/refresh.py` (bulk_refresh_prices) |
-| Test suite | `backend/test_scripts/test_services/test_asset_source_refresh.py` (7 tests) |
+| Bulk sync endpoint (`sync_prices_bulk`) | `backend/app/api/v1/assets/prices.py` |
+| Test suite | `backend/test_scripts/test_services/test_asset_source_refresh.py` |
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step2/plan-phase06Step2cSyncDeleteRefactor.prompt.md` |

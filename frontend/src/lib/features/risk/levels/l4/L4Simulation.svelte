@@ -172,16 +172,18 @@
         {/each}
     </fieldset>
 
-    <div class="flex flex-col gap-3 pb-5 text-xs text-lf-muted sm:flex-row sm:flex-wrap sm:items-end">
-        <SimulationHorizonField bind:days={horizonDays} bind:valid={horizonValid} onchange={invalidate} />
-        <label class="flex flex-col gap-1">
+    <!-- T-4: on a phone one parameter per row, its label on the left and its field on the right; from sm up the fields share a row. -->
+    <div class="flex flex-col gap-3 text-xs text-lf-muted sm:flex-row sm:flex-wrap sm:items-end sm:pb-5">
+        <SimulationHorizonField bind:days={horizonDays} bind:valid={horizonValid} onchange={invalidate} phoneRow />
+        <label class="flex items-center justify-between gap-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1" data-testid="risk-simulation-paths-row">
             {$t('risk.params.paths')}
             <input type="number" min="1" bind:value={paths} onchange={invalidate} class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" data-testid="risk-simulation-paths" />
         </label>
         {#if showSampling}
-            <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between gap-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1" data-testid="risk-simulation-sampling-row">
                 <span>{$t('risk.params.sampling')}</span>
                 <SimpleSelect
+                    class="w-28 sm:w-auto"
                     value={sampling}
                     options={[
                         {value: 'mc', label: $t('risk.levels.l4.provenance.values.mc')},
@@ -198,12 +200,12 @@
             </div>
         {/if}
         {#if showSeed}
-            <label class="flex flex-col gap-1">
+            <label class="flex items-center justify-between gap-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1" data-testid="risk-simulation-seed-row">
                 {$t('risk.params.randomSeed')}
                 <input type="number" bind:value={randomSeed} onchange={invalidate} class="w-28 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" data-testid="risk-simulation-seed" />
             </label>
         {/if}
-        <button type="button" class="rounded-lg bg-lf-action px-3 py-1.5 text-sm text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={run} disabled={controller.simulationLoading || !horizonValid} data-testid="risk-simulation-run">
+        <button type="button" class="self-end rounded-lg bg-lf-action px-3 py-1.5 text-sm sm:self-auto text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={run} disabled={controller.simulationLoading || !horizonValid} data-testid="risk-simulation-run">
             {$t('risk.actions.simulate')}
         </button>
     </div>

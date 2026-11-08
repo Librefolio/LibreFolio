@@ -1,6 +1,6 @@
 <!--
   A refusal of the space limit, said where the user is (C9-1): inside the dialog of the upload, the import wizard, the backup
-  card. An administrator reads the limit to raise and gets «Open the settings» (Files › Advanced, its panel open); a member
+  card. An administrator reads the limit to raise and gets «Open the settings» (Global Settings, the limit's row in view); a member
   reads how much to free, or to ask an administrator. A limit the hosting provider fixes reads «ask whoever hosts it», with
   no button: nobody here can raise it.
 

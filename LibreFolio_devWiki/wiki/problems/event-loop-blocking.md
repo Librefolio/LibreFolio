@@ -4,8 +4,7 @@ category: problem
 status: resolved
 date: 2025 (recurring risk)
 tags: [backend, async, performance, uvicorn, yfinance]
-related_features: [F-025, F-060]
-related_concepts: [concepts/async-io-rule.md]
+related: [features/F-025, features/F-060, concepts/async-io-rule]
 ---
 
 # Problem: Event Loop Blocking

@@ -4,6 +4,9 @@
 > Read [[features/registry]] for feature descriptions.
 > Last updated: 2026-05-13
 > [[F-075]]–[[F-095]] range (21 planned/idea features) is now tracked in the registry. Inverse `enables:` links from their dependencies have been populated.
+> 2026-11-07 lint: the phase labels below are the 2026-05-13 snapshot. Since then Phase 7 and Phases 8-9 shipped
+> ([[F-046]], [[F-047]], [[F-051]], [[F-054]], [[F-056]] are `implemented`, [[F-049]] and [[F-052]] `documented` in the
+> registry) and [[F-075]] is `superseded`. The handoff endpoints were realigned with `backend/app/api/v1/` the same day.
 
 ---
 
@@ -138,15 +141,15 @@ F-054 Dashboard (accurate income tracking)
 | Backend Feature | Interface | Frontend Feature |
 |----------------|-----------|-----------------|
 | [[F-015]] FX Providers | `GET /api/v1/fx/providers` | [[F-016]] FX Pair Add Modal |
-| [[F-017]] FX Rate Sync | `POST /api/v1/fx/sync` | [[F-021]] FX List → sync button |
-| [[F-020]] FX Conversion | `GET /api/v1/fx/conversion-route` | [[F-057]] used in Asset prices |
-| [[F-025]] Asset Providers | `GET /api/v1/assets/provider/list` | [[F-026]] Provider Assignment form |
-| [[F-027]] Asset Sync | `POST /api/v1/assets/{id}/sync` | [[F-033]] Asset Detail → sync |
-| [[F-031]] Asset Events | `GET /api/v1/assets/{id}/events` | [[F-033]] Event markers on chart |
-| [[F-046]] TX Bulk API | `POST /api/v1/transactions/bulk` | [[F-048]] Staging Modal commit |
+| [[F-017]] FX Rate Sync | `POST /api/v1/fx/currencies/sync` | [[F-021]] FX List → sync button |
+| [[F-020]] FX Conversion | `GET /api/v1/fx/providers/routes` | [[F-057]] used in Asset prices |
+| [[F-025]] Asset Providers | `GET /api/v1/assets/provider` | [[F-026]] Provider Assignment form |
+| [[F-027]] Asset Sync | `POST /api/v1/assets/prices/sync` | [[F-033]] Asset Detail → sync |
+| [[F-031]] Asset Events | `GET /api/v1/assets/events` | [[F-033]] Event markers on chart |
+| [[F-046]] TX Bulk API | `POST /api/v1/transactions/validate` + `/commit` | [[F-048]] Staging Modal commit |
 | [[F-013]] BRIM Plugins | `POST /api/v1/brokers/import/files/{id}/parse` | [[F-049]] BRIM Import UI |
 | [[F-056]] FIFO | (embedded in portfolio endpoint) | [[F-054]] Dashboard KPI |
-| [[F-052]] Scheduler | `GET/POST /api/v1/settings/global` | [[F-053]] Scheduler Settings UI |
+| [[F-052]] Scheduler | `GET /api/v1/settings/global`, `PATCH /api/v1/settings/global/bulk` | [[F-053]] Scheduler Settings UI |
 
 ## Key source files
 

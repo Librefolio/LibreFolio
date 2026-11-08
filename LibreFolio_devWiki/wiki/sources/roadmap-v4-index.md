@@ -1,6 +1,9 @@
 ---
 title: "RoadMap V4 — Frontend Development Plan Index"
 category: source
+source_type: plan
+date_ingested: 2026-04-24
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/00-index.md
 date: 2026-01-09
 tags: [history, frontend, v4, roadmap, phases]
 related_features: [F-004, F-008, F-066]

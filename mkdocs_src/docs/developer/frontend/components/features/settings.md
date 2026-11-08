@@ -14,12 +14,13 @@ The settings system uses a modular architecture based on a common layout and reu
 ### 🗂️ Tab registry {: #tab-registry }
 
 The tabs of the Settings page are a registry: `SETTINGS_TABS` in
-`lib/features/settings/settingsTabs.ts`. `routes/(app)/settings/+page.svelte` names no tab itself:
+`lib/features/settings/settingsTabs.ts`. `routes/(app)/settings/[...path]/+page.svelte` names no tab itself:
 it draws its two bars and the active body from that list. Each entry is a `SettingsTab`:
 
 | Field | Role |
 |---|---|
-| `id` | The `?tab=` value that opens the tab, and the suffix of its `settings-tab-{id}` test id |
+| `id` | The suffix of its `settings-tab-{id}` test id, and the `?tab=` value of 1.2, still read |
+| `path` | Its address (lot B10), from the table of `settingsPaths.ts`: `/settings/<tab>`, or `/settings/admin/<tab>` for a member of Administration |
 | `labelKey` | Catalogue key of the label, drawn as `$_(labelKey)` on the tab and in the heading shown on a phone |
 | `icon` | Lucide icon of the tab button |
 | `order` | Position in the bar, left to right; for a member of a group, in the group's second bar |
@@ -109,14 +110,24 @@ The page is the runtime of the registry, written in Svelte 5 runes:
   when the auth store changes, the body on screen receives the new props. The heading shown on a
   phone names the active tab, a member and never its group: *Global Settings*, not
   *Administration*.
-- **Active tab**: always a tab, never a group. The first visible tab, unless `?tab=` names a visible
-  tab or a group: a member's `id` opens that member inside its group (with the second bar when the
+- **Addresses** (lot B10): every tab has one, `path`, and every group too (`/settings/admin`). One
+  route, `settings/[...path]`, serves them all, `/settings` included. `settingsPlaceOf(pathname,
+  tabs, groups)` reads an address back: the page, a tab, a group, or nothing the registry knows.
+  An address opens its tab at the first render and whenever it changes (Back, Forward, a link); a
+  group's address opens its first visible member. Choosing a tab writes its address with
+  `goto(path, {noScroll, keepFocus})`, as a new entry of the history. `/settings` opens the first
+  tab and keeps its address. An unknown address, or the address of a tab this user cannot see once
+  the user is known, goes back to `/settings` (`replaceState`). Links never write an address by hand:
+  `settingsTabHref(id, query?)` of `settingsPaths.ts`, a module that imports no tab body.
+- **Active tab**: always a tab, never a group. At `/settings`, the first visible tab, unless the
+  `?tab=` of 1.2 names a visible tab or a group; the address then becomes the tab's own
+  (`replaceState`): a member's `id` opens that member inside its group (with the second bar when the
   group has two visible members or more), a group's `id` its first visible member
   (`?tab=administration` opens `admin`, for an administrator). The choice runs in `$effect.pre`, so
   the tab that `?tab=` names is the first body mounted: the default body never mounts, not even for
-  an instant. Clicking a tab does not rewrite the URL, so a `?tab=` value is applied once: a later
-  page update that keeps it does not take back the tab the user picked, while a new value is
-  applied again. An unknown id, the id of a tab this user cannot see, or that of a group with no
+  an instant. A `?tab=` value is applied once: a later page update that keeps it does not take back
+  the tab the user picked, while a new value, or the same one after a tab's address, is applied
+  again. An unknown id, the id of a tab this user cannot see, or that of a group with no
   visible member, is ignored: a regular user's `?tab=admin` or `?tab=administration` opens
   `profile`, and the body of Global Settings never mounts for them. A `?tab=` naming a tab that
   becomes visible later (the user is promoted while on the page) is applied when the tab appears,
@@ -408,6 +419,19 @@ no longer reached from the interface and kept until a cleanup. Hiding the tab hi
 app still reads the global settings for every signed-in user, through `GET /api/v1/settings/global`
 ([Settings System](../../../architecture/settings.md)).
 
+**Space limit** (lot B10). `storage_limit_mb`, in the *Memory* category, is a `SettingNumber`
+(default `0`, no limit), named and explained as in Files › Advanced (`storage.limit.label`,
+`storage.limit.hint`, through the label and hint override maps). The hosting provider can fix it
+with `LIBREFOLIO_STORAGE_LIMIT_MB`; the tab learns it from the same answer as the space bar,
+`limit_locked` of `GET /backup/instance/storage` (`getInstanceStorage`): the field is then disabled
+even with the tab unlocked, its hint becomes `storage.limit.locked`, **Reset All to Defaults** skips
+it, and its card `global-setting-storage_limit_mb` carries `data-locked="true"` (`"false"`
+otherwise). **Open the settings** on a refusal of the limit links
+`/settings/admin/global?setting=storage_limit_mb` (`STORAGE_LIMIT_SETTINGS_HREF`): once the list is
+in, `?setting=<key>` selects the row's category, brings the row into view and highlights it
+(`data-highlighted="true"`), once per value. The lock stays closed: the administrator opens it by
+hand (the developer's choice). A key the tab hides, or no row, changes nothing.
+
 For the three *display* defaults (`default_language`, `default_currency`, `default_theme`) the
 tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passing the
 `embedded` prop (see below) so they sit inside the tab's own cards without double separators.
@@ -549,7 +573,7 @@ all four optional in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`,
   `data-avatar="image"` or `"initial"`: an image uploaded to the app asked for as its 48×48
   preview, an address elsewhere as it is, and the username's initial in a neutral circle for an
   account without one, `avatar_url` null or absent.
-- The own row (`isSelf`) has no action: `users-self-hint`, with a link to `/settings?tab=profile`.
+- The own row (`isSelf`) has no action: `users-self-hint`, with a link to `/settings/profile` (`settingsTabHref('profile')`).
 - The buttons: `users-action-deactivate` for an active account or `users-action-reactivate` for an
   inactive one, `users-action-cancel-setup` in its place for an account with `pending_setup`;
   `users-action-demote` for an administrator or `users-action-promote` for a regular
@@ -847,10 +871,10 @@ inputs.
   their message is the check's own `ok` sentence.
 - **Actions**, the in-app links where a setting of the app fixes the finding (`SERVER_ACTIONS`):
   `email.smtp`, `email.smtp_encryption` and `email.links` → `settings.securityTab.openEmail`
-  (*Open the Email tab*), `/settings?tab=email`; `platform.plugin_secrets` →
-  `settings.securityTab.openPlugins` (*Open the plugin settings*), `/settings?tab=plugins`; the
+  (*Open the Email tab*), `/settings/admin/email`; `platform.plugin_secrets` →
+  `settings.securityTab.openPlugins` (*Open the plugin settings*), `/settings/plugins`; the
   browser's finding → its notice's action, `auth.notices.openRegistrationAction`
-  (*Change who can sign up*), `/settings?tab=admin`. The other checks are fixed in the server's
+  (*Change who can sign up*), `/settings/admin/global`. The other checks are fixed in the server's
   configuration: no link.
 - `attentionCount(findings)`: the errors and the warnings of `attention`, the browser's included,
   never an info. It is the badge.
@@ -984,7 +1008,7 @@ store. Neither has a branch for the managed profile (D1 a): the dot is the same 
   before: by the level label in `aria-label` and `title` when collapsed, by its visible label when
   expanded.
 - **The link**, `connection-security-attention-link`: in the details, after the reason and before
-  the administrator's cookie line and the docs link, an `<a href="/settings?tab=security">` whose
+  the administrator's cookie line and the docs link, an `<a href="/settings/admin/security">` whose
   text is the attention text after a `ShieldAlert` icon, with `data-severity` the severity and its
   border and icon in `lf-bar-danger` or `lf-bar-warning`. A click calls `closeDetails()` while the app
   navigates to the tab.

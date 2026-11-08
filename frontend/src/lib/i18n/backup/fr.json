@@ -82,7 +82,6 @@
       },
       "dropWhenDone": "La vérification est abandonnée dès qu'elle se termine.",
       "cancelCheck": "Arrêter la vérification",
-      "openReport": "Lire le rapport",
       "confirming": "Confirmation de la restauration…",
       "cancelling": "Annulation…",
       "pending": {
@@ -112,7 +111,7 @@
       },
       "blocker": {
         "no_administrator": "La sauvegarde n'a aucun administrateur actif : après une restauration, personne ne pourrait gérer LibreFolio. Elle ne peut pas être restaurée.",
-        "storage_limit": "Restaurer cette sauvegarde ferait dépasser à LibreFolio son espace total. Portez l'espace total à au moins {required} dans Fichiers › Avancé, puis vérifiez à nouveau la sauvegarde.",
+        "storage_limit": "Restaurer cette sauvegarde ferait dépasser à LibreFolio son espace total. Portez l'espace total à au moins {required} dans Paramètres › Administration › Paramètres Globaux, puis vérifiez à nouveau la sauvegarde.",
         "storage_limit_locked": "Restaurer cette sauvegarde ferait dépasser à LibreFolio son espace total. Demandez à l'hébergeur de cette instance de porter la limite à au moins {required}, puis vérifiez à nouveau la sauvegarde.",
         "storage_limit_disk": "Le disque doit aussi avoir au moins {missing} de plus de libre."
       },
@@ -261,6 +260,12 @@
         "match": "Avec ce mot de passe, vous vous connecterez après la restauration.",
         "mismatch": "Ce n'est pas son mot de passe.",
         "failed": "Le mot de passe n'a pas pu être vérifié : réessayez."
+      },
+      "kept": {
+        "title": "Restaurer une sauvegarde",
+        "backupOf": "Sauvegarde du {date}, conservée sur ce serveur.",
+        "preparing": "Préparation de la sauvegarde pour sa vérification…",
+        "alreadyWaiting": "Une restauration attend déjà le prochain démarrage de LibreFolio. Redémarrez ou annulez-la d'abord dans « Restaurer une archive »."
       }
     },
     "checks": {
@@ -313,6 +318,7 @@
         "origin": "Créée depuis",
         "kind": "Type",
         "size": "Taille",
+        "restored": "Une fois restaurée",
         "sha256": "SHA-256",
         "actions": "Actions"
       },
@@ -343,7 +349,10 @@
       },
       "retry": "Réessayer",
       "refresh": "Actualiser",
-      "restoreConfirm": "Restaurer cette sauvegarde ? Elle remplacera les données de tous les utilisateurs. LibreFolio la vérifie d'abord et vous montre ce qui changerait : rien ne change tant que vous ne confirmez pas."
+      "restored": {
+        "header": "L'espace qu'occupent les contenus de la sauvegarde une fois restaurés, non compressés : la base de données, les fichiers téléversés et les rapports des courtiers.",
+        "unknown": "Inconnu pour cette sauvegarde."
+      }
     },
     "cleanup": {
       "title": "Nettoyage automatique",

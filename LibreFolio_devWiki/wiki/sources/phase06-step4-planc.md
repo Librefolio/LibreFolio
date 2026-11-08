@@ -1,4 +1,10 @@
 ---
+title: "Phase 06 Step 4 Plan C (Currency Conversion, Multi-FX Comparison, Provider Cache)"
+category: source
+source_type: plan
+date_ingested: 2026-05-24
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step4/PlanC/
+related: [features/F-020, features/F-042, features/F-060, features/F-061]
 type: source
 group: phase06-step4-planc
 ingested: 2026-05-24
@@ -25,7 +31,7 @@ PlanC + post-validation fixes covering: backend FX-aware price queries (C1-C2), 
 
 ## Key problems recorded
 
-- **BUG: `sync_pairs_bulk` returns None** (D1): `_process_route()` inner function defined but `asyncio.gather()` never called. Hard 500. Fix: 3 lines in `fx.py`. No dedicated problem page was ever created — verify directly in `backend/app/services/fx.py`, and see [[problems/fx-multi-route-no-fallback]] for the sibling defect in the same function.
+- **BUG: `sync_pairs_bulk` returns None** (D1): `_process_route()` inner function defined but `asyncio.gather()` never called. Hard 500. Fix: 3 lines in `fx.py`. No dedicated problem page was ever created — verify directly in `backend/app/services/fx.py` (today `backend/app/services/fx/sync.py`, `sync_pairs_bulk`), and see [[problems/fx-multi-route-no-fallback]] for the sibling defect in the same function.
 - **BUG: Staircase on comparison signals** (C4 Step 1): Backend returns unconverted (native currency) points mixed with converted (target currency) points when FX data is incomplete. The chart value axis mixes two scales. Fix: null-gap filtering in `loadComparisonData.ts`.
 - **BUG: `fxPairCreateSlug` guard always-true** (C5 Step 1): `fxPairCreateSlug = ''` then `if (!fxPairCreateSlug)` — guard was always `true`. Fix: extract `oncreated` as named function `handleFxPairCreated`, capture `wasForComparison` before clearing.
 

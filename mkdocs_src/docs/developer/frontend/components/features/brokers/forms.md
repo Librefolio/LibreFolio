@@ -92,10 +92,10 @@ graph LR
     B -->|not set or fails| C["Plugin icon<br/><small>default_import_plugin</small>"]
     C -->|not set or fails| D["Briefcase<br/><small>Lucide icon</small>"]
 
-    style A fill:#e8f5e9,stroke:#2e7d32
-    style B fill:#e3f2fd,stroke:#1565c0
-    style C fill:#fff3e0,stroke:#e65100
-    style D fill:#f3e5f5,stroke:#7b1fa2
+    style A fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style B fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style C fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style D fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
 When a `brokerId` is given but none of the three fields is, the icon asks `brokerStore` for them

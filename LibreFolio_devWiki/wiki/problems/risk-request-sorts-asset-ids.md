@@ -4,6 +4,7 @@ category: problem
 status: resolved
 date: 2026-09-18
 tags: [frontend, risk, testing, e2e, caching]
+related: [problems/front-check-does-not-check-what-you-think]
 ---
 
 # A risk request sorts `asset_ids`, so payload order is not render order

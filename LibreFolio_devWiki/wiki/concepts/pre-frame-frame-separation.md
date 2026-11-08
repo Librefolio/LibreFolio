@@ -17,6 +17,11 @@ related:
 
 # Concept: Pre-Frame / Frame Separation
 
+> **2026-11-07 lint: historical.** The pre-frame and `frame_start` were removed on 2026-10-17 by `2ad9a43b2` (MF-J1,
+> «one daily replay, no pre-frame»): the engine replays every day from the first movement with the same rules and emits
+> states from `date_from`; no production number changed, since every caller already ran from t=0. The page below
+> describes the mechanism as it was; the current pipeline is in [[entities/portfolio-engine]].
+
 ## Definition
 
 The portfolio engine divides its computation into two logically distinct phases:
@@ -24,7 +29,7 @@ The portfolio engine divides its computation into two logically distinct phases:
 - **Pre-frame** (`tx.date < t0`): processes all historical transactions before the requested start date. Updates accounting state (qty, WAC, cash, K/R/W pools) without performing any market valuation.
 - **Frame** (`t ∈ [t0, t1]`): computes full daily portfolio states with market prices, FX rates, position values, and pool snapshots.
 
-Introduced as an explicit design principle in `portfolio_engine_architecture_v2.md` and implemented in commit `39106380` (2026-06-30).
+Introduced as an explicit design principle in `portfolio_engine_architecture_v2.md` and implemented in commit `c04b9367e` (2026-06-30).
 
 ## Motivation
 
@@ -103,6 +108,13 @@ Within the frame, asset valuation uses a 3-tier fallback:
                       (not restricted to selected brokers S)
 3. MISSING          → excluded from NAV; data_quality flag raised
 ```
+
+> 2026-11-07 lint: the 3-tier list above is the 2026-06-30 design. `ValuationSource`
+> (`backend/app/services/financial_math/portfolio/models.py`) is today `MARKET_PRICE` → `LAST_TRADE_PRICE` (a
+> trade-derived mark: BUY/SELL, same-day average, carried with staleness, from one unified price resolver) →
+> `ESTIMATED_AT_COST` (no observation, known cost: counted at book cost as a declared estimate, J-17) → `MISSING`
+> (`DailyStateBuilder._market_value_for` in `daily_state.py`). See [[entities/portfolio-engine]] and
+> [[decisions/adjustment-is-never-a-price]].
 
 The `LAST_BUY_PRICE` fallback is intentionally **broker-scope-independent**: it uses `V(u)` (all brokers visible to the user), not `S` (currently selected). This is because price is a property of the _asset_, not the broker.
 
