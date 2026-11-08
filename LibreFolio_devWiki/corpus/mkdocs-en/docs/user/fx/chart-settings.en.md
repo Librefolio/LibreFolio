@@ -1,1 +1,0 @@
-../../../../../../mkdocs_src/docs/user/fx/chart-settings.en.md

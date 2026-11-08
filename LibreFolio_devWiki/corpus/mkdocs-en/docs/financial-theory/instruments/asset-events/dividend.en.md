@@ -1,1 +1,0 @@
-../../../../../../../mkdocs_src/docs/financial-theory/instruments/asset-events/dividend.en.md

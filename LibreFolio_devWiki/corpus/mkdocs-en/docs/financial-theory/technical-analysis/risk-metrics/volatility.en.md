@@ -1,1 +1,0 @@
-../../../../../../../mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/volatility.en.md

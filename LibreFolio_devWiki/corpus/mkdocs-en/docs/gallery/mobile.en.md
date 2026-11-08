@@ -1,1 +1,0 @@
-../../../../../mkdocs_src/docs/gallery/mobile.en.md

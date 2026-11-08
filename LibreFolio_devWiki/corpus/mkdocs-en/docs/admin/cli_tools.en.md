@@ -1,1 +1,0 @@
-../../../../../mkdocs_src/docs/admin/cli_tools.en.md
