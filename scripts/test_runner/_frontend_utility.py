@@ -635,6 +635,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/files/StorageBar.test.ts",
             "src/lib/components/ui/feedback/StorageLimitRefusal.test.ts",
             "src/lib/features/backup/RestoreCard.test.ts",
+            "src/lib/features/backup/RestoreKeptModal.test.ts",
             "src/lib/features/backup/RestoreReportModal.test.ts",
             "src/lib/features/backup/OwnerChoiceModal.test.ts",
             "src/lib/features/backup/RestartOverlay.test.ts",
