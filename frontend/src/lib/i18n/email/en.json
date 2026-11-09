@@ -125,7 +125,7 @@
       "toPlaceholder": "name@example.com",
       "resetTarget": "The link goes to the email address of the account.",
       "publicUrlHint": "The link in the email starts with the address set in LIBREFOLIO_PUBLIC_URL, which may differ from the one above.",
-      "sent": "Sent to {to}. Language: {language}.",
+      "sent": "Sent to {to}. Language: {language}. If it does not arrive, the recipient should check the spam folder too.",
       "errors": {
         "EMAIL_UNAVAILABLE": "Email is off or not working on this instance.",
         "EMAIL_LINKS_UNAVAILABLE": "Emails cannot carry links: LIBREFOLIO_PUBLIC_URL is not set, or cannot start a link.",

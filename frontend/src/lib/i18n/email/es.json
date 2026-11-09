@@ -125,7 +125,7 @@
       "toPlaceholder": "nombre@ejemplo.es",
       "resetTarget": "El enlace va a la dirección de correo de la cuenta.",
       "publicUrlHint": "El enlace del correo empieza por la dirección definida en LIBREFOLIO_PUBLIC_URL, que puede ser distinta de la de arriba.",
-      "sent": "Enviado a {to}. Idioma: {language}.",
+      "sent": "Enviado a {to}. Idioma: {language}. Si no llega, el destinatario debe revisar también la carpeta de spam.",
       "errors": {
         "EMAIL_UNAVAILABLE": "El correo está apagado o no funciona en esta instancia.",
         "EMAIL_LINKS_UNAVAILABLE": "Los correos no pueden llevar enlaces: LIBREFOLIO_PUBLIC_URL no está definida, o no puede iniciar un enlace.",
