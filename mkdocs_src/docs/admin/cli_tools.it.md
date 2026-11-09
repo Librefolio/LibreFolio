@@ -106,7 +106,7 @@ Il comando stampa un link valido una sola volta, per 7 giorni: invialo alla pers
 - 🔒 La parte segreta viene dopo `#`: i browser non la inviano mai al server, quindi non finisce nei log del server o del proxy. Invia il link per intero.
 - 🚪 Gli inviti funzionano con **Registrazione** **Aperta** o **Su invito**. Con **Chiusa**, il comando si arresta con `Registration is disabled: invitations cannot be created` ed esce con `1`; anche i link già inviati non funzionano.
 - 📏 Un invito occupa un posto del [limite utenti](configuration_accounts.md#user-limit) finché non è usato, revocato o scaduto. Al limite, il comando avvisa, poi crea comunque l'invito.
-- ⏳ Nessun comando annulla un invito: un link non usato scade dopo 7 giorni. Prima, **Revoca** nella scheda [Utenti](users.md#open-invitations), oppure via API: `GET /api/v1/users/invites` elenca gli inviti in attesa, `DELETE /api/v1/users/invites/<id>` ne revoca uno.
+- ⏳ Nessun comando annulla un invito: un link non usato scade dopo 7 giorni. Prima, **Revoca** nella scheda [Utenti](users.md#account-links), oppure via API: `GET /api/v1/users/account-links` elenca ogni link degli account con il suo stato, `DELETE /api/v1/users/account-links/<id>` ne revoca uno aperto.
 
 ### 🔑 Reimpostare una password o bloccare un account {: #reset-a-password-or-lock-an-account }
 

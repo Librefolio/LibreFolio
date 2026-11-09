@@ -106,7 +106,7 @@ La commande affiche un lien qui ne fonctionne qu'une fois, pendant 7 jours : env
 - 🔒 La partie secrète vient après `#` : les navigateurs ne l'envoient jamais au serveur, elle ne se retrouve donc pas dans les journaux du serveur ou du proxy. Envoyez le lien en entier.
 - 🚪 Les invitations fonctionnent avec **Inscription** **Ouverte** ou **Sur invitation**. Avec **Fermée**, la commande s'arrête avec `Registration is disabled: invitations cannot be created` et quitte avec le code `1` ; les liens déjà envoyés ne fonctionnent pas non plus.
 - 📏 Une invitation occupe une place de la [limite d'utilisateurs](configuration_accounts.md#user-limit) jusqu'à ce qu'elle soit utilisée, révoquée ou expirée. À la limite, la commande avertit, puis crée quand même l'invitation.
-- ⏳ Aucune commande n'annule une invitation : un lien que personne n'a utilisé expire après 7 jours. Plus tôt, **Révoquer** dans l'onglet [Utilisateurs](users.md#open-invitations), ou via l'API : `GET /api/v1/users/invites` liste les invitations en attente, `DELETE /api/v1/users/invites/<id>` en révoque une.
+- ⏳ Aucune commande n'annule une invitation : un lien que personne n'a utilisé expire après 7 jours. Plus tôt, **Révoquer** dans l'onglet [Utilisateurs](users.md#account-links), ou via l'API : `GET /api/v1/users/account-links` liste chaque lien de compte avec son état, `DELETE /api/v1/users/account-links/<id>` en révoque un ouvert.
 
 ### 🔑 Réinitialiser un mot de passe ou verrouiller un compte {: #reset-a-password-or-lock-an-account }
 

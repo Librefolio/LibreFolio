@@ -106,7 +106,7 @@ El comando imprime un enlace que funciona una sola vez, durante 7 días: envías
 - 🔒 La parte secreta va después de `#`: los navegadores nunca la envían al servidor, por lo que no acaba en los registros del servidor ni del proxy. Envía el enlace completo.
 - 🚪 Las invitaciones funcionan con **Registro** **Abierto** o **Por invitación**. Con **Cerrado**, el comando se detiene con `Registration is disabled: invitations cannot be created` y sale con `1`; los enlaces ya enviados tampoco funcionan.
 - 📏 Una invitación ocupa una plaza del [límite de usuarios](configuration_accounts.md#user-limit) hasta que se usa, se revoca o caduca. En el límite, el comando advierte y después crea la invitación de todos modos.
-- ⏳ Ningún comando cancela una invitación: un enlace que nadie usó caduca a los 7 días. Antes, **Revocar** en la pestaña [Usuarios](users.md#open-invitations), o mediante la API: `GET /api/v1/users/invites` enumera las invitaciones pendientes y `DELETE /api/v1/users/invites/<id>` revoca una.
+- ⏳ Ningún comando cancela una invitación: un enlace que nadie usó caduca a los 7 días. Antes, **Revocar** en la pestaña [Usuarios](users.md#account-links), o mediante la API: `GET /api/v1/users/account-links` enumera cada enlace de cuenta con su estado y `DELETE /api/v1/users/account-links/<id>` revoca uno abierto.
 
 ### 🔑 Restablecer una contraseña o bloquear una cuenta {: #reset-a-password-or-lock-an-account }
 

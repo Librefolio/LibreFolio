@@ -106,7 +106,7 @@ The command prints a link that works once, for 7 days: send it to the person, wh
 - 🔒 The secret part comes after `#`: browsers never send it to the server, so it does not end up in the server or proxy logs. Send the link whole.
 - 🚪 Invitations work with **Registration** **Open** or **By invitation**. With **Closed**, the command stops with `Registration is disabled: invitations cannot be created` and exits with `1`; the links already sent do not work either.
 - 📏 An invitation takes a place of the [user limit](configuration_accounts.md#user-limit) until it is used, revoked or expired. At the limit, the command warns, then creates the invitation anyway.
-- ⏳ No command cancels an invitation: a link nobody used expires after 7 days. Sooner, **Revoke** in the [Users](users.md#open-invitations) tab, or through the API: `GET /api/v1/users/invites` lists the pending invitations, `DELETE /api/v1/users/invites/<id>` revokes one.
+- ⏳ No command cancels an invitation: a link nobody used expires after 7 days. Sooner, **Revoke** in the [Users](users.md#account-links) tab, or through the API: `GET /api/v1/users/account-links` lists every account link with its state, `DELETE /api/v1/users/account-links/<id>` revokes an open one.
 
 ### 🔑 Reset a Password or Lock an Account {: #reset-a-password-or-lock-an-account }
 
