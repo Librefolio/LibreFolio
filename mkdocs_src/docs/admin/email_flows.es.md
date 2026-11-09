@@ -215,7 +215,7 @@ Es seguro porque cambiar la dirección de correo de una cuenta pide su contrase�
 
 | Estado de la instancia | Qué muestra la página |
 | --- | --- |
-| Correo **Listo** y un `LIBREFOLIO_PUBLIC_URL` utilizable | **¿Olvidaste tu contraseña?** abre el formulario para ello. Debajo, un panel cerrado hasta que se hace clic conserva el comando que un administrador puede ejecutar en el servidor. |
+| Correo **Listo** y un `LIBREFOLIO_PUBLIC_URL` utilizable | **¿Olvidaste tu contraseña?** abre el formulario para ello, sin los comandos del servidor (siguen en las [Herramientas de línea de comandos](cli_tools.md#reset-a-password-or-lock-an-account)). Tras una solicitud, el formulario dice *Correo enviado: revisa también la carpeta de spam.*, igual para todos, y su botón muestra una cuenta atrás de 5 minutos, el intervalo para una cuenta, antes de la siguiente solicitud; recargar la página mantiene la cuenta atrás. |
 | En otro caso | Ese comando, abierto, bajo la advertencia: *La recuperación por correo electrónico no está disponible en esta instancia. Restablece tu contraseña desde la terminal del servidor o pide a tu administrador un enlace para restablecerla.* |
 | La página no puede leer la configuración de la instancia desde el servidor | Solo el consejo: *Pide a tu administrador un enlace para restablecer la contraseña: puede crear uno para tu cuenta.* |
 

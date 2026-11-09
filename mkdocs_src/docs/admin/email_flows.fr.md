@@ -215,7 +215,7 @@ C'est sûr parce que changer l'adresse e-mail d'un compte demande le mot de pass
 
 | État de l'instance | Ce que la page affiche |
 | --- | --- |
-| E-mail **Prêt** et `LIBREFOLIO_PUBLIC_URL` utilisable | **Mot de passe oublié ?** ouvre le formulaire correspondant. En dessous, un panneau fermé jusqu'au clic conserve la commande qu'un administrateur peut exécuter sur le serveur. |
+| E-mail **Prêt** et `LIBREFOLIO_PUBLIC_URL` utilisable | **Mot de passe oublié ?** ouvre le formulaire correspondant, sans les commandes du serveur (elles restent dans les [Outils en ligne de commande](cli_tools.md#reset-a-password-or-lock-an-account)). Après une demande, le formulaire indique *E-mail envoyé : vérifiez aussi vos spams.*, identique pour tous, et son bouton affiche un compte à rebours de 5 minutes, l'intervalle pour un compte, avant la demande suivante ; recharger la page conserve le compte à rebours. |
 | Sinon | Cette commande, ouverte, sous l'avertissement : *La récupération par email n'est pas disponible sur cette instance. Réinitialisez votre mot de passe depuis le terminal du serveur, ou demandez à votre administrateur un lien de réinitialisation.* |
 | La page ne peut pas lire la configuration de l'instance depuis le serveur | Seulement le conseil : *Demandez à votre administrateur un lien de réinitialisation du mot de passe : il peut en créer un pour votre compte.* |
 

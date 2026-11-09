@@ -215,7 +215,7 @@ Ricerca dell'account e invio avvengono dopo la risposta: nessuno può usarla per
 
 | Stato dell'istanza | Cosa mostra la pagina |
 | --- | --- |
-| Email **Pronta** e `LIBREFOLIO_PUBLIC_URL` utilizzabile | **Password dimenticata?** apre il modulo per farlo. Sotto, un pannello chiuso finché non viene cliccato conserva il comando che un amministratore può eseguire sul server. |
+| Email **Pronta** e `LIBREFOLIO_PUBLIC_URL` utilizzabile | **Password dimenticata?** apre il modulo per farlo, senza i comandi del server (restano negli [Strumenti da riga di comando](cli_tools.md#reset-a-password-or-lock-an-account)). Dopo una richiesta il modulo dice *Email inviata: controlla anche lo spam.*, uguale per tutti, e il suo pulsante conta alla rovescia 5 minuti, l'intervallo per un account, prima della richiesta successiva; ricaricare la pagina mantiene il conto alla rovescia. |
 | Altrimenti | Quel comando, aperto, sotto l'avviso: *Il recupero via email non è disponibile su questa istanza. Reimposta la password dal terminale del server oppure chiedi all'amministratore un link di reimpostazione della password.* |
 | La pagina non riesce a leggere la configurazione dell'istanza dal server | Solo il suggerimento: *Chiedi all'amministratore un link di reimpostazione della password: può crearne uno per il tuo account.* |
 

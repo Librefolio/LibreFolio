@@ -215,7 +215,7 @@ It is safe because changing an account's email address asks for the current pass
 
 | State of the instance | What the page shows |
 | --- | --- |
-| Email **Ready** and a usable `LIBREFOLIO_PUBLIC_URL` | **Forgot Password?** opens the form for it. Below, a panel closed until clicked keeps the command an administrator can run on the server. |
+| Email **Ready** and a usable `LIBREFOLIO_PUBLIC_URL` | **Forgot Password?** opens the form for it, without the server commands (they stay in [Command-Line Tools](cli_tools.md#reset-a-password-or-lock-an-account)). After a request the form says *Email sent: check your spam folder too.*, the same for everyone, and its button counts down 5 minutes, the interval for one account, before the next request; a reload of the page keeps the countdown. |
 | Otherwise | That command, open, under the warning: *Email recovery is not available on this instance. Reset your password from the server terminal, or ask your administrator for a password-reset link.* |
 | The page cannot read the instance's configuration from the server | Only the advice: *Ask your administrator for a password-reset link: they can create one for your account.* |
 
