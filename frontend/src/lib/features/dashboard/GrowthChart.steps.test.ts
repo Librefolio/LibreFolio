@@ -93,7 +93,7 @@ import {uiLocale} from '$lib/stores/app/uiLocale';
 import {addDays} from '$lib/utils/dateOnly';
 import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointer, firePointerAt, tooltipHoldsDay, withoutTooltipDays} from '$test/timeAxisPointer';
 import GrowthChart from './GrowthChart.svelte';
-import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {chooseLineShape} from '$test/lineShape';
 
 const eur = (amount: number) => ({code: 'EUR', amount: amount.toFixed(2)});
 
@@ -163,7 +163,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
     chartInstances.length = 0;
-    setGlobalLineShape('steps');
+    chooseLineShape('steps');
 });
 afterEach(() => {
     cleanup();
@@ -268,7 +268,7 @@ describe('the tooltip of a step line', () => {
     });
 
     it('reads the drawn point under the pointer, not the pointed day, when the steps are not drawn', async () => {
-        setGlobalLineShape('segments');
+        chooseLineShape('segments');
         await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
         pointAt('2026-02-18');
         const html = tooltipFormatter()([{dataIndex: 3}]);
@@ -306,7 +306,7 @@ describe('the edges of the plot (Y2-I63, issue #63)', () => {
         expect(html).toContain(money(1_010));
     });
 
-    it('opens on the first day of a step and on its last, each with the step\'s own value', async () => {
+    it("opens on the first day of a step and on its last, each with the step's own value", async () => {
         await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
         for (const [day, value] of [
             ['2026-01-11', 1_030],
@@ -339,10 +339,14 @@ describe('the resolution badge on a long history (Y2 FB-6)', () => {
     });
     const longRange = {start: FIRST, end: addDays(FIRST, DAYS - 1)};
 
-    it('shows the Weekly badge: the days are grouped in weeks', async () => {
-        const {getByTestId} = await mount({history: longDaily, range: longRange, mwrrLine: []});
-        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'weekly'), {timeout: LONG_HISTORY_MS});
-    }, TEST_CEILING_MS);
+    it(
+        'shows the Weekly badge: the days are grouped in weeks',
+        async () => {
+            const {getByTestId} = await mount({history: longDaily, range: longRange, mwrrLine: []});
+            await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'weekly'), {timeout: LONG_HISTORY_MS});
+        },
+        TEST_CEILING_MS,
+    );
 });
 
 describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
@@ -352,40 +356,48 @@ describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
     const centuries: PortfolioHistoryPoint[] = Array.from({length: STEPS}, (_, index) => step(addDays(FIRST, index * 10), addDays(FIRST, index * 10 + 9), index));
     const range = {start: FIRST, end: addDays(FIRST, STEPS * 10 - 1)};
 
-    it('is drawn a point a year, linear, and the badge says Yearly', async () => {
-        const {getByTestId} = await mount({history: centuries, range, mwrrLine: []});
-        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'yearly'), {timeout: LONG_HISTORY_MS});
-        const lines = renderedSeries().filter((series) => series.type === 'line');
-        expect(
-            lines.some((series) => series.step === 'end'),
-            'a grouped resolution is the linear line',
-        ).toBe(false);
-        expect(lines[0].data.length, 'about a point a year: 140 of them').toBeGreaterThan(130);
-        expect(lines[0].data.length).toBeLessThan(160);
-    }, TEST_CEILING_MS);
+    it(
+        'is drawn a point a year, linear, and the badge says Yearly',
+        async () => {
+            const {getByTestId} = await mount({history: centuries, range, mwrrLine: []});
+            await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'yearly'), {timeout: LONG_HISTORY_MS});
+            const lines = renderedSeries().filter((series) => series.type === 'line');
+            expect(
+                lines.some((series) => series.step === 'end'),
+                'a grouped resolution is the linear line',
+            ).toBe(false);
+            expect(lines[0].data.length, 'about a point a year: 140 of them').toBeGreaterThan(130);
+            expect(lines[0].data.length).toBeLessThan(160);
+        },
+        TEST_CEILING_MS,
+    );
 
-    it('heads the tooltip of a yearly point with its year', async () => {
-        await mount({history: centuries, range, mwrrLine: []});
-        await waitFor(() => expect(renderedSeries().find((series) => series.type === 'line')?.data.length).toBeLessThan(160), {timeout: LONG_HISTORY_MS});
-        const html = tooltipFormatter()([{dataIndex: 70}]);
-        // The year of the 71st yearly bucket: 1886 + 70, as its own text and in no date form.
-        expect(html).toContain('1956');
-        expect(withoutTooltipDays(html)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
-    }, TEST_CEILING_MS);
+    it(
+        'heads the tooltip of a yearly point with its year',
+        async () => {
+            await mount({history: centuries, range, mwrrLine: []});
+            await waitFor(() => expect(renderedSeries().find((series) => series.type === 'line')?.data.length).toBeLessThan(160), {timeout: LONG_HISTORY_MS});
+            const html = tooltipFormatter()([{dataIndex: 70}]);
+            // The year of the 71st yearly bucket: 1886 + 70, as its own text and in no date form.
+            expect(html).toContain('1956');
+            expect(withoutTooltipDays(html)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+        },
+        TEST_CEILING_MS,
+    );
 });
 
 describe('the line shape the user chose (Y2 FB-3)', () => {
     const lineSeries = () => renderedSeries().filter((series) => series.type === 'line');
 
     it('joins the steps by segments when the choice is segments, the default of a new account', async () => {
-        setGlobalLineShape('segments');
+        chooseLineShape('segments');
         await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
         expect(lineSeries().length).toBeGreaterThan(0);
         expect(lineSeries().every((series) => series.step === false && (series as {smooth?: boolean}).smooth === false)).toBe(true);
     });
 
     it('draws a spline that cannot overshoot when the choice is spline', async () => {
-        setGlobalLineShape('spline');
+        chooseLineShape('spline');
         await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
         expect(lineSeries().every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true && (series as {smoothMonotone?: string}).smoothMonotone === 'x')).toBe(true);
     });

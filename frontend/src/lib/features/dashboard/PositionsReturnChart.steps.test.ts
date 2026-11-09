@@ -94,7 +94,7 @@ import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import PositionsReturnChart from './PositionsReturnChart.svelte';
-import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {chooseLineShape} from '$test/lineShape';
 import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 import type {PositionLine} from './positionsSeries';
 
@@ -147,7 +147,7 @@ beforeAll(async () => {
 afterAll(() => restoreRects?.());
 beforeEach(() => {
     chartInstances.length = 0;
-    setGlobalLineShape('steps');
+    chooseLineShape('steps');
 });
 
 async function mountChart(lines: PositionLine[]): Promise<DrawnOption> {
@@ -308,19 +308,19 @@ describe('the line shape the user chose (Y2 FB-3)', () => {
     const drawn = (option: DrawnOption) => option.series.filter((series) => series.id !== undefined);
 
     it('joins the points by segments when the choice is segments', async () => {
-        setGlobalLineShape('segments');
+        chooseLineShape('segments');
         const option = await mountChart([PORTFOLIO(), A(), B()]);
         expect(drawn(option).map((series) => series.step)).toEqual([false, false, false]);
     });
 
     it('draws smooth lines when the choice is spline', async () => {
-        setGlobalLineShape('spline');
+        chooseLineShape('spline');
         const option = await mountChart([PORTFOLIO(), A()]);
         expect(drawn(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
     });
 
     it('lists the points ECharts handed over, even with a pointed day, when the steps are not drawn', async () => {
-        setGlobalLineShape('segments');
+        chooseLineShape('segments');
         const option = await mountChart([A()]);
         pointAt('2026-01-21');
         const html = option.tooltip.formatter([{seriesId: '12-3', value: ['2026-01-21', 0]}]);
