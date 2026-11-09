@@ -17,13 +17,11 @@ from backend.app.db.models import (
     UserSettings,
 )
 from backend.app.schemas.settings import (
-    SETTINGS_REGISTRY,
     OnboardingProgressItem,
     OnboardingProgressResponse,
     OnboardingStepProgressItem,
     OnboardingWelcomeSettings,
 )
-from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -380,11 +378,6 @@ async def complete_welcome_onboarding(
                 user_id=user_id,
                 language=welcome_settings.language,
                 base_currency=welcome_settings.base_currency,
-                theme=await get_setting_value(
-                    session,
-                    SETTINGS_REGISTRY.global_.DEFAULT_THEME.key,
-                    "auto",
-                ),
                 avatar_url=welcome_settings.avatar_url,
                 created_at=now,
                 updated_at=now,

@@ -4,8 +4,9 @@ Settings service layer for LibreFolio.
 Dual responsibility (P2-9 — user columns vs global key-value, the two services
 stay separate by design):
 
-- USER settings: CRUD over the typed columns of the per-user `UserSettings`
-  row (`language`, `base_currency`, `theme`, `avatar_url`).
+- USER settings: CRUD over the per-user `UserSettings` row: the typed columns
+  (`language`, `base_currency`, `avatar_url`) and the JSON `ui_preferences`
+  (`theme`, `chart_line_shape`), whose absent keys follow their global defaults.
 - GLOBAL settings: CRUD over the admin-managed `GlobalSetting` key-value rows
   (registration, uploads, scheduler configuration, new-user defaults).
 
@@ -16,8 +17,9 @@ registry constants (e.g. `SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key`)
 instead of raw string literals.
 """
 
+import json
 from collections.abc import Callable, Sequence
-from typing import Optional, get_args
+from typing import Any, Optional, get_args
 
 import structlog
 from sqlalchemy import select
@@ -31,7 +33,10 @@ from backend.app.db.models import GlobalSetting, UserSettings
 from backend.app.schemas.settings import (
     GLOBAL_SETTINGS_DEFAULTS,
     SETTINGS_REGISTRY,
+    UI_PREFERENCES_MAX_BYTES,
     GlobalSettingRead,
+    UIPreferenceDefaults,
+    UIPreferences,
     UserSettingsRead,
     UserSettingsUpdate,
     validate_global_setting_value,
@@ -46,34 +51,101 @@ logger = structlog.get_logger(__name__)
 # USER SETTINGS
 # ============================================================================
 
-#: The themes the web app knows: the values ``UserSettingsRead.theme`` accepts, read from it.
-KNOWN_THEMES: frozenset[str] = frozenset(get_args(UserSettingsRead.model_fields["theme"].annotation))
-#: The theme shown when neither the stored one nor the instance's ``default_theme`` is known.
-FALLBACK_THEME = "auto"
+#: The value each interface preference takes when neither the user nor a readable global setting gives one.
+FALLBACK_UI_PREFERENCES: dict[str, str] = {"theme": "auto", "chart_line_shape": "segments"}
+#: The global setting that gives each interface preference its default.
+_UI_PREFERENCE_GLOBALS: dict[str, str] = {
+    "theme": SETTINGS_REGISTRY.global_.DEFAULT_THEME.key,
+    "chart_line_shape": SETTINGS_REGISTRY.global_.DEFAULT_CHART_LINE_SHAPE.key,
+}
 
 
-async def _shown_theme(session: AsyncSession, user_id: int, stored: str) -> str:
-    """The theme to show for the stored ``stored``: itself when the app knows it (A-11).
+class UIPreferencesTooLargeError(ValueError):
+    """A write would leave ``user_settings.ui_preferences`` longer than ``UI_PREFERENCES_MAX_BYTES``."""
 
-    Otherwise — a row or a ``default_theme`` written by hand, or a later version's theme after a downgrade — the instance's
-    ``default_theme`` when that is known, else ``auto``, with a warning. The row keeps its value: reading writes nothing,
-    and a version that knows the theme shows it again.
+
+def _known_values(key: str) -> frozenset[str]:
+    """The values ``UIPreferences.<key>`` accepts, read from the schema."""
+    annotation = UIPreferences.model_fields[key].annotation
+    return frozenset(value for arg in get_args(annotation) for value in get_args(arg))
+
+
+def _stored_ui_preferences(user_id: int, raw: Optional[str]) -> dict[str, Any]:
+    """What ``user_settings.ui_preferences`` holds, as a dict: ``{}`` for NULL, for text that is not JSON or not an object."""
+    if not raw:
+        return {}
+    try:
+        stored = json.loads(raw)
+    except ValueError:
+        logger.warning("The stored interface preferences are not JSON: none is used", user_id=user_id)
+        return {}
+    if not isinstance(stored, dict):
+        logger.warning("The stored interface preferences are not an object: none is used", user_id=user_id)
+        return {}
+    return stored
+
+
+def _readable_ui_preferences(user_id: int, raw: Optional[str]) -> UIPreferences:
+    """The user's own preferences this version can show (A-11, per key).
+
+    A key it does not know, or a value it does not know — written by hand, or by a later version before a downgrade — is
+    left out, with a warning: that preference follows its global default. Reading writes nothing, so the row keeps the
+    value, and a version that knows it shows it again.
     """
-    if stored in KNOWN_THEMES:
-        return stored
-    default = await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_THEME.key, FALLBACK_THEME)
-    shown = default if default in KNOWN_THEMES else FALLBACK_THEME
-    logger.warning("The stored theme is unknown: another one is shown", user_id=user_id, stored=str(stored)[:20], shown=shown)
-    return shown
+    stored = _stored_ui_preferences(user_id, raw)
+    readable: dict[str, str] = {}
+    for key in UIPreferences.model_fields:
+        value = stored.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str) and value in _known_values(key):
+            readable[key] = value
+        else:
+            logger.warning("A stored interface preference is unknown: its global default is shown", user_id=user_id, key=key, stored=str(value)[:20])
+    return UIPreferences(**readable)
+
+
+async def ui_preference_defaults(session: AsyncSession) -> UIPreferenceDefaults:
+    """The global default of every interface preference; one the app does not know falls back to ``FALLBACK_UI_PREFERENCES``."""
+    defaults: dict[str, str] = {}
+    for key, global_key in _UI_PREFERENCE_GLOBALS.items():
+        value = await get_setting_value(session, global_key, FALLBACK_UI_PREFERENCES[key])
+        if value not in _known_values(key):
+            logger.warning("A global interface default is unknown: the built-in one is used", key=global_key, stored=str(value)[:20])
+            value = FALLBACK_UI_PREFERENCES[key]
+        defaults[key] = value
+    return UIPreferenceDefaults(**defaults)
+
+
+def merged_ui_preferences(user_id: int, raw: Optional[str], changes: UIPreferences) -> Optional[str]:
+    """``raw`` with the keys ``changes`` names applied: a value sets its key, ``null`` removes it; NULL when nothing is left.
+
+    Only the named keys change, so two tabs that each write their own key never undo each other. A key this version does
+    not know is kept as it is: a later version wrote it.
+    """
+    merged = _stored_ui_preferences(user_id, raw)
+    for key in changes.model_fields_set:
+        value = getattr(changes, key)
+        if value is None:
+            merged.pop(key, None)
+        else:
+            merged[key] = value
+    if not merged:
+        return None
+    text = json.dumps(merged, separators=(",", ":"), sort_keys=True)
+    if len(text.encode("utf-8")) > UI_PREFERENCES_MAX_BYTES:
+        raise UIPreferencesTooLargeError(f"The interface preferences would take more than {UI_PREFERENCES_MAX_BYTES} bytes")
+    return text
 
 
 async def _settings_read(session: AsyncSession, settings: UserSettings) -> UserSettingsRead:
-    """``settings`` as the API answers them; a stored theme the app does not know is shown as another (A-11)."""
+    """``settings`` as the API answers them: the user's own interface preferences that this version knows, and their defaults."""
     return UserSettingsRead(
         language=settings.language,
         base_currency=settings.base_currency,
-        theme=await _shown_theme(session, settings.user_id, settings.theme),
         avatar_url=settings.avatar_url,
+        ui_preferences=_readable_ui_preferences(settings.user_id, settings.ui_preferences),
+        ui_preference_defaults=await ui_preference_defaults(session),
     )
 
 
@@ -89,6 +161,8 @@ async def get_user_settings(user_id: int, session: AsyncSession) -> Optional[Use
 async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> UserSettingsRead:
     """Get user settings, creating with defaults if not exists.
 
+    A new row holds no interface preference: each follows its global default until the user chooses it.
+
     Uses INSERT OR IGNORE (on_conflict_do_nothing) to be safe against concurrent
     requests for the same user (e.g. multiple Playwright workers calling /api/v1/settings/user
     simultaneously right after login).
@@ -96,14 +170,12 @@ async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> Us
     now = utcnow()
     default_language = await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_LANGUAGE.key, "en")
     default_currency = await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key, "EUR")
-    default_theme = await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_THEME.key, "auto")
     stmt = (
         sqlite_insert(UserSettings)
         .values(
             user_id=user_id,
             language=default_language,
             base_currency=default_currency,
-            theme=default_theme,
             created_at=now,
             updated_at=now,
         )
@@ -142,7 +214,11 @@ async def get_effective_base_currency(session: AsyncSession, user_id: int) -> st
 
 
 async def update_user_settings(user_id: int, updates: UserSettingsUpdate, session: AsyncSession) -> UserSettingsRead:
-    """Update user settings. Creates if not exists."""
+    """Update user settings. Creates if not exists.
+
+    ``updates.ui_preferences`` merges key by key (``merged_ui_preferences``); a write that would leave the column over
+    ``UI_PREFERENCES_MAX_BYTES`` raises ``UIPreferencesTooLargeError`` and saves nothing.
+    """
     # Get existing settings
     result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
@@ -153,8 +229,8 @@ async def update_user_settings(user_id: int, updates: UserSettingsUpdate, sessio
             user_id=user_id,
             language=updates.language or await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_LANGUAGE.key, "en"),
             base_currency=updates.base_currency or await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key, "EUR"),
-            theme=updates.theme or await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_THEME.key, "auto"),
             avatar_url=updates.avatar_url,
+            ui_preferences=merged_ui_preferences(user_id, None, updates.ui_preferences) if updates.ui_preferences is not None else None,
             created_at=utcnow(),
             updated_at=utcnow(),
         )
@@ -165,10 +241,10 @@ async def update_user_settings(user_id: int, updates: UserSettingsUpdate, sessio
             settings.language = updates.language
         if updates.base_currency is not None:
             settings.base_currency = updates.base_currency
-        if updates.theme is not None:
-            settings.theme = updates.theme
         if "avatar_url" in updates.model_fields_set:
             settings.avatar_url = updates.avatar_url
+        if updates.ui_preferences is not None:
+            settings.ui_preferences = merged_ui_preferences(user_id, settings.ui_preferences, updates.ui_preferences)
         settings.updated_at = utcnow()
 
     await session.commit()
