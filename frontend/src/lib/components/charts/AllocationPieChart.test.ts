@@ -502,7 +502,7 @@ describe("AllocationPieChart — the tooltip titles each arc with the type's own
 describe('AllocationPieChart — the type pie tooltip carries the type badge beside the icon', () => {
     const tooltipDom = (drawn: Drawing, arc: DrawnArc) => new DOMParser().parseFromString(drawn.tooltipOf(arc), 'text/html').body;
 
-    it('single ring: a typed arc shows one icon, the badge, then the name on its own line; the cash arc shows no badge', async () => {
+    it('single ring: a typed arc shows one icon, the badge, then the name on its own line; the cash arc shows the Liquidity badge, then the name on its own line', async () => {
         const drawn = await drawPie(SINGLETONS);
         expect(drawn.rings, 'barrier: no subtype, so one ring').toBe(false);
         const arc = sliceOf(drawn, 'BOND');
@@ -523,8 +523,20 @@ describe('AllocationPieChart — the type pie tooltip carries the type badge bes
         chartInstances.length = 0;
         const withCash = await drawPie([...SINGLETONS, slice(CASH_BUCKET, 10)]);
         const cash = tooltipDom(withCash, sliceOf(withCash, CASH_BUCKET));
-        expect(cash.querySelector('[data-testid="asset-type-badge"]'), 'the cash is not an asset type').toBeNull();
-        expect(cash.querySelectorAll('img')).toHaveLength(1);
+        const cashBadges = cash.querySelectorAll('[data-testid="asset-type-badge"]');
+        expect(cashBadges).toHaveLength(1);
+        expect(cashBadges[0].getAttribute('data-asset-type')).toBe('LIQUIDITY');
+        expect(cashBadges[0].className).toContain(K.assetTypeBadgeClass('LIQUIDITY'));
+        expect(cashBadges[0].className).toContain('bg-lf-cat-liquidity-soft');
+        expect(cashBadges[0].className).toContain('text-lf-cat-liquidity-on-soft');
+        expect(cash.querySelectorAll('img'), 'one icon: the arc’s, none inside the badge').toHaveLength(1);
+        expect(cashBadges[0].querySelector('img')).toBeNull();
+        const cashHtml = cash.innerHTML;
+        const cashBadgeAt = cashHtml.indexOf('asset-type-badge');
+        const cashBreakAt = cashHtml.indexOf('<br');
+        expect(cashBadgeAt).toBeGreaterThanOrEqual(0);
+        expect(cashBreakAt, 'the line break follows the cash badge').toBeGreaterThan(cashBadgeAt);
+        expect(cashHtml.indexOf(CASH_BUCKET, cashBreakAt), 'the name follows the line break').toBeGreaterThan(cashBreakAt);
     });
 
     it('rings: a subtype member badge carries the dot, its family arc badge does not', async () => {
@@ -1084,7 +1096,7 @@ describe('AllocationPieChart — the asset pie: one ring, the asset names as sen
                 vi.unstubAllGlobals();
             });
 
-            it('an asset shows its type badge, without a second type icon, then the name on its own line; the cash shows none', async () => {
+            it('an asset shows its type badge, without a second type icon, then the name on its own line; the cash shows the Liquidity badge; an asset without a type shows none', async () => {
                 const drawn = await drawAssetPie(SLICES);
                 const typed = tooltipDom(drawn, 'Typed');
                 const badge = typed.querySelector('[data-testid="asset-type-badge"]');
@@ -1093,7 +1105,18 @@ describe('AllocationPieChart — the asset pie: one ring, the asset names as sen
                 expect(typed.querySelectorAll('img'), 'one icon: the slice’s, none inside the badge').toHaveLength(1);
                 expect(typed.innerHTML.indexOf('<br>'), 'the name follows the badge line').toBeGreaterThan(typed.innerHTML.indexOf('asset-type-badge'));
                 expect(typed.innerHTML.indexOf('Typed')).toBeGreaterThan(typed.innerHTML.indexOf('<br>'));
-                expect(tooltipDom(drawn, CASH_BUCKET).querySelector('[data-testid="asset-type-badge"]'), 'the cash is not an asset type').toBeNull();
+                const cashTip = tooltipDom(drawn, CASH_BUCKET);
+                const cashBadges = cashTip.querySelectorAll('[data-testid="asset-type-badge"]');
+                expect(cashBadges).toHaveLength(1);
+                expect(cashBadges[0].getAttribute('data-asset-type')).toBe('LIQUIDITY');
+                expect(cashBadges[0].className).toContain(K.assetTypeBadgeClass('LIQUIDITY'));
+                expect(cashBadges[0].className).toContain('bg-lf-cat-liquidity-soft');
+                expect(cashBadges[0].className).toContain('text-lf-cat-liquidity-on-soft');
+                expect(cashTip.querySelectorAll('img'), 'one icon: the slice’s, none inside the badge').toHaveLength(1);
+                expect(cashBadges[0].querySelector('img')).toBeNull();
+                expect(cashTip.innerHTML.indexOf('<br>'), 'the name follows the badge line').toBeGreaterThan(cashTip.innerHTML.indexOf('asset-type-badge'));
+                expect(cashTip.innerHTML.indexOf(CASH_BUCKET, cashTip.innerHTML.indexOf('<br>'))).toBeGreaterThan(cashTip.innerHTML.indexOf('<br>'));
+                expect(tooltipDom(drawn, 'No type').querySelector('[data-testid="asset-type-badge"]'), 'an asset with an id but no type has no badge').toBeNull();
             });
 
             it('the own icon, once known to load, is drawn beside the type badge', async () => {
