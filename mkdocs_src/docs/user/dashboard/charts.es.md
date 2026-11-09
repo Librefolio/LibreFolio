@@ -193,7 +193,7 @@ El panel **Asignación de activos** muestra cómo se reparte tu cartera, hoy y a
 
 ### 🕰️ Ahora e historial
 
-- **Ahora** — la asignación en el último día del rango seleccionado: un donut para **Por tipo** y **Por sector**, un mapamundi para **Geográfico**. Pasa el cursor sobre una porción o un país para ver su porcentaje e importe. Por tipo, el donut puede tener [dos anillos](#allocation-type-rings).
+- **Ahora** — la asignación en el último día del rango seleccionado: un donut para **Por tipo** y **Por sector**, un mapamundi para **Geográfico**. Pasa el cursor sobre una porción o un país para ver su porcentaje e importe; por tipo, la información emergente también muestra el tipo de activo como insignia (Liquidez, tu efectivo, no tiene). Por tipo, el donut puede tener [dos anillos](#allocation-type-rings).
 - **Historial** — un gráfico de áreas apiladas al 100 % de cómo cambió la asignación a lo largo del tiempo, útil para ver el rebalanceo. Por tipo, cada familia es un área; al pasar el cursor sobre una fecha se listan sus subtipos, como *ETF genérico* y *ETF de renta variable*.
 
 El panel recuerda la vista y la pestaña en este navegador, para cada usuario, y las comparte con las páginas de brókeres.
@@ -202,7 +202,7 @@ El panel recuerda la vista y la pestaña en este navegador, para cada usuario, y
 
 ¿Qué activos individuales pesan más? **Por activo** divide la cartera activo por activo en lugar de por categoría.
 
-- **Ahora** — un gráfico circular con el peso de cada activo en el último día del rango seleccionado. Cada porción muestra el icono de su activo — el suyo, o el de su tipo si no tiene o no se puede cargar; el efectivo muestra el de Liquidez. No hay leyenda: pasa el ratón por una porción para leer el nombre, la parte y el importe.
+- **Ahora** — un gráfico circular con el peso de cada activo en el último día del rango seleccionado. Cada porción muestra el icono de su activo — el suyo, o el de su tipo si no tiene o no se puede cargar; el efectivo muestra el de Liquidez. No hay leyenda: pasa el ratón por una porción para leer el tipo de activo, como insignia, y luego el nombre, la parte y el importe.
 - **Historial** — cómo cambió la distribución por activo a lo largo del tiempo. **Se incluyen las posiciones cerradas**, por lo que un activo que vendiste sigue apareciendo en los días en que lo mantuviste.
 - **Los colores** siguen el peso de hoy: el activo más pesado recibe el primer color, luego los demás por peso, después los activos cerrados, empezando por el cerrado más recientemente. El gráfico circular y el historial usan el mismo color para el mismo activo, y también las líneas de [Rentabilidad de las posiciones](positions.md#return-of-the-positions).
 

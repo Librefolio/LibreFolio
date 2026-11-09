@@ -193,7 +193,7 @@ The **Asset Allocation** panel shows how your portfolio is split, today and over
 
 ### 🕰️ Now and History
 
-- **Now** — the allocation on the last day of the selected range: a donut for **By Type** and **By Sector**, a world map for **Geographic**. Hover a slice or a country for its percentage and amount. By type, the donut can have [two rings](#allocation-type-rings).
+- **Now** — the allocation on the last day of the selected range: a donut for **By Type** and **By Sector**, a world map for **Geographic**. Hover a slice or a country for its percentage and amount; by type, the tooltip also shows the asset type as a badge (Liquidity, your cash, has none). By type, the donut can have [two rings](#allocation-type-rings).
 - **History** — a 100% stacked area chart of how the allocation shifted over time, handy to see rebalancing. By type, each family is one area; hovering a date lists its subtypes, such as *Generic ETF* and *Equity ETF*.
 
 The panel remembers the view and the tab in this browser, for each user, and shares them with the broker pages.
@@ -202,7 +202,7 @@ The panel remembers the view and the tab in this browser, for each user, and sha
 
 Which single assets weigh most? **By Asset** splits the portfolio asset by asset instead of by category.
 
-- **Now** — a pie with the weight of every asset on the last day of the selected range. Each slice shows its asset's icon — its own, or its type's when it has none or it cannot be loaded; the cash shows the Liquidity one. There is no legend: hover a slice to read the name, the share and the amount.
+- **Now** — a pie with the weight of every asset on the last day of the selected range. Each slice shows its asset's icon — its own, or its type's when it has none or it cannot be loaded; the cash shows the Liquidity one. There is no legend: hover a slice to read the asset type, as a badge, then the name, the share and the amount.
 - **History** — how the distribution by asset changed over time. **Closed positions are included**, so an asset you sold still shows in the days you held it.
 - **Colours** follow the weight today: the heaviest asset gets the first colour, then the others by weight, then the closed assets, the most recently closed first. The pie, the history and the lines of [Return of the positions](positions.md#return-of-the-positions) use the same colour for the same asset.
 

@@ -193,7 +193,7 @@ Le panneau **Allocation des actifs** montre comment votre portefeuille est répa
 
 ### 🕰️ Maintenant et historique
 
-- **Maintenant** — l'allocation au dernier jour de la plage sélectionnée : un diagramme en anneau pour **Par type** et **Par secteur**, une carte mondiale pour **Géographique**. Survolez une part ou un pays pour obtenir son pourcentage et son montant. Pour le type, le diagramme en anneau peut comporter [deux anneaux](#allocation-type-rings).
+- **Maintenant** — l'allocation au dernier jour de la plage sélectionnée : un diagramme en anneau pour **Par type** et **Par secteur**, une carte mondiale pour **Géographique**. Survolez une part ou un pays pour obtenir son pourcentage et son montant ; par type, l'infobulle affiche aussi le type d'actif sous forme de badge (Liquidités, votre trésorerie, n'en a pas). Pour le type, le diagramme en anneau peut comporter [deux anneaux](#allocation-type-rings).
 - **Historique** — un graphique en aires empilées à 100 % montrant l'évolution de l'allocation dans le temps, pratique pour visualiser les rééquilibrages. Pour le type, chaque famille correspond à une aire ; en survolant une date, ses sous-types sont listés, par exemple *ETF générique* et *ETF actions*.
 
 Le panneau mémorise la vue et l'onglet dans ce navigateur, pour chaque utilisateur, et les partage avec les pages des courtiers.
@@ -202,7 +202,7 @@ Le panneau mémorise la vue et l'onglet dans ce navigateur, pour chaque utilisat
 
 Quels actifs individuels pèsent le plus ? **Par actif** décompose le portefeuille actif par actif plutôt que par catégorie.
 
-- **Maintenant** — un diagramme circulaire avec le poids de chaque actif au dernier jour de la plage sélectionnée. Chaque part affiche l'icône de son actif — la sienne, ou celle de son type s'il n'en a pas ou si elle ne se charge pas ; les liquidités affichent celle de Liquidités. Il n'y a pas de légende : survolez une part pour lire le nom, la part et le montant.
+- **Maintenant** — un diagramme circulaire avec le poids de chaque actif au dernier jour de la plage sélectionnée. Chaque part affiche l'icône de son actif — la sienne, ou celle de son type s'il n'en a pas ou si elle ne se charge pas ; les liquidités affichent celle de Liquidités. Il n'y a pas de légende : survolez une part pour lire le type d'actif, sous forme de badge, puis le nom, la part et le montant.
 - **Historique** — l'évolution de la distribution par actif dans le temps. **Les positions clôturées sont incluses**, de sorte qu'un actif que vous avez vendu apparaît encore les jours où vous le déteniez.
 - **Les couleurs** suivent le poids actuel : l'actif le plus lourd reçoit la première couleur, puis les autres par poids, puis les actifs clôturés, les plus récemment clôturés en premier. Le diagramme circulaire et l'historique utilisent la même couleur pour le même actif ; les courbes de [Rendement des positions](positions.md#return-of-the-positions) aussi.
 
