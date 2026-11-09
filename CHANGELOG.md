@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Data-quality warnings on the broker page:** old prices, missing or old exchange rates and their sync buttons appear there too, for every role.
 - **Positions chart: choose the window of the Rolling view.** One week, one month, three months, one year or a custom window; it starts from the automatic one.
 - The allocation pie by asset shows the asset's icon in its tooltip too, as the pie by type does.
-- Asset allocation pie: the tooltip shows the asset type as a badge next to the icon, and marks a custom icon.
+- Asset allocation pies: the By Asset and By Type tooltips show the asset type as a badge next to the icon.
 
 #### 📈 Charts
 
