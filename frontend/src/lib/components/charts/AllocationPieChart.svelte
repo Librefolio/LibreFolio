@@ -5,7 +5,8 @@
   - 'sector' (default): shows each sector's emoji inside its slice — read from the sector
     store, i.e. the backend's one map (GET /utilities/sectors), never from the data;
   - 'type': translates asset-type keys via assets.types.*; shows the PNG icon
-    inside each slice (ECharts rich text), icon + label in legend and tooltip;
+    inside each slice (ECharts rich text), icon + label in the legend; the tooltip opens with
+    the icon and the type's badge (none for the Liquidity slice, not an asset type);
   - 'asset': one ring, one slice per asset, the name exactly as sent (nobody's translation
     key, no emoji, no families), each slice in the colour of its weight rank (`colorRanks`,
     asset id -> rank) in the designer's sequence; an entry without an id (the cash) wears
@@ -38,7 +39,7 @@
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
-    import {assetTypeBadgeHtml, assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {ASSET_TYPES, assetTypeBadgeHtml, assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum} from '$lib/components/charts/allocationRings';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -520,6 +521,10 @@
                 // its vehicle and its content (the review of R12, 24/09/2026, asked for both).
                 const iconUrl = getAssetTypeIconUrl(rawKey);
                 const iconHtml = `<img src="${escapeHtml(iconUrl)}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
+                // T-3c: the same first line as the asset pie's, the icon then the type's badge (without the type's icon: it is
+                // already beside it), the name on its own line. The Liquidity slice is the cash, not an asset type: one line.
+                const isAssetType = (ASSET_TYPES as readonly string[]).includes(rawKey);
+                const badgeLine = isAssetType ? `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${assetTypeBadgeHtml(rawKey, tr(`assets.types.${rawKey}`) || rawKey, {icon: false})}</span><br/>` : '';
                 // The shading says "this belongs to that mass"; this line says how big
                 // the mass is. Only when there is actually a sibling — otherwise it
                 // would restate the slice's own number.
@@ -539,7 +544,8 @@
                     const parentTotal = roundedPercent(params.data?.primaryTotal ?? 0);
                     parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${escapeHtml(parentLabel)} ${formatPercent(parentTotal, {digits: 2, signed: false, trim: true})}</span>`;
                 }
-                return `${iconHtml}${escapeHtml(String(translated))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
+                const nameLine = `${escapeHtml(String(translated))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
+                return isAssetType ? `${badgeLine}${nameLine}` : `${iconHtml}${nameLine}`;
             }
             if (mode === 'asset') {
                 // The icon of the slice: the asset's own once it is known to load, else its type's (the cash: Liquidity).
@@ -547,13 +553,11 @@
                 const drawnIcon = assetSliceIconUrl(slice, iconProbe.loaded);
                 const iconHtml = `<img src="${escapeHtml(drawnIcon)}" alt="" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
                 const nameLine = `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
-                // T-3: an asset's first line is its icon and its type's badge (without the type's icon: the slice's is beside it),
-                // and a mark when the icon drawn is the asset's own; the name follows on its own line. The cash slice keeps one line.
+                // T-3: an asset's first line is its icon and its type's badge (without the type's icon: the slice's is beside it);
+                // the name follows on its own line. The cash slice keeps one line.
                 if (slice.assetId === null || !slice.assetType) return `${iconHtml}${nameLine}`;
                 const badge = assetTypeBadgeHtml(slice.assetType, tr(`assets.types.${slice.assetType}`) || slice.assetType, {icon: false});
-                const ownIcon = (slice.iconUrl ?? '').trim();
-                const customMark = ownIcon !== '' && drawnIcon === ownIcon ? ` <span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-lf-neutral text-lf-secondary" data-testid="allocation-pie-custom-icon">${escapeHtml(tr('assets.customIconBadge'))}</span>` : '';
-                return `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${badge}${customMark}</span><br/>${nameLine}`;
+                return `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${badge}</span><br/>${nameLine}`;
             }
             // Sector: display name already contains the emoji prefix
             return `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
