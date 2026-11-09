@@ -1599,4 +1599,53 @@ test.describe('A6e: changing the email asks for the current password', () => {
             await deleteDisposableUser(request, user);
         }
     });
+
+    // UA2: the password a change of address asks for sits in the right column, under the email field (ProfileTab.svelte).
+    // On a desktop width (≥ 640 px, Tailwind `sm`) it is right-aligned with the email input and stands in the right half
+    // of the tab, away from the label and its hint; on a phone (375 px) everything is stacked and the password is as wide
+    // as the email input. The label column has no data-testid of its own: "right of the label column" is measured as
+    // "left edge in the right half of `profile-tab`". The address is only typed, never saved: the account is the test's.
+    test('UA2: the current password sits under the email field — right-aligned on desktop, stacked full width on a phone', async ({page, request}) => {
+        test.setTimeout(60_000);
+        const user = await registerDisposableUser(request, 'ua2layout');
+        try {
+            await openProfile(page, user);
+            const tab = page.getByTestId('profile-tab');
+            await expect(tab).toHaveAttribute('data-busy', 'false');
+            await page.getByTestId('profile-edit-toggle').click();
+            const emailInput = page.getByTestId('profile-email');
+            await expect(emailInput).toBeEnabled();
+            const newEmail = `ua2_${uniqueSuffix()}@example.com`;
+            await emailInput.fill(newEmail);
+            await expect(emailInput).toHaveValue(newEmail);
+            const password = page.getByTestId('profile-email-password');
+            // The barrier: the block is conditional, and boundingBox() is a one-shot read.
+            await expect(password, 'A new address asks for the current password').toBeVisible();
+
+            const boxes = async () => {
+                const [email, field, panel] = await Promise.all([emailInput.boundingBox(), password.boundingBox(), tab.boundingBox()]);
+                expect(email && field && panel, 'the email input, the password field and the tab are laid out').toBeTruthy();
+                return {email: email!, field: field!, panel: panel!};
+            };
+
+            if ((page.viewportSize()?.width ?? 0) >= 640) {
+                const {email, field, panel} = await boxes();
+                expect(field.y, 'desktop: the password is under the email input').toBeGreaterThanOrEqual(email.y + email.height - 1);
+                expect(Math.abs(field.x + field.width - (email.x + email.width)), 'desktop: the password is right-aligned with the email input').toBeLessThanOrEqual(3);
+                expect(field.x, 'desktop: the password stands in the right column, not under the label').toBeGreaterThan(panel.x + panel.width / 2);
+            }
+
+            // A phone: one column, the password stacked under the email input and as wide as it.
+            await page.setViewportSize({width: 375, height: 812});
+            await expect(password).toBeVisible();
+            // The barrier, true only once the layout is the phone's: the password starts where the email input starts.
+            await expect.poll(async () => Math.abs(((await password.boundingBox())?.x ?? -1000) - ((await emailInput.boundingBox())?.x ?? 1000)), {message: 'phone: the layout reflowed to one column'}).toBeLessThanOrEqual(3);
+            const {email, field} = await boxes();
+            expect(field.y, 'phone: the password is under the email input').toBeGreaterThanOrEqual(email.y + email.height - 1);
+            expect(Math.abs(field.x - email.x), 'phone: the password starts where the email input starts').toBeLessThanOrEqual(3);
+            expect(Math.abs(field.width - email.width), 'phone: the password is as wide as the email input').toBeLessThanOrEqual(3);
+        } finally {
+            await deleteDisposableUser(request, user);
+        }
+    });
 });
