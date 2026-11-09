@@ -48,6 +48,45 @@ Los administradores ven una línea más en los detalles del indicador; el nivel 
     Usa `never` solo para el raro proxy que afirma usar HTTPS mientras el navegador está en HTTP sin cifrar.
     Todas las opciones: [Configuración](configuration.md#session-cookie-secure).
 
+### 🛤️ Qué le pasa a la dirección del visitante {: #address-path }
+
+```mermaid
+flowchart LR
+    V["👤 Visitante<br>203.0.113.7"] --> P["🔀 Proxy<br>añade X-Forwarded-For"]
+    P -->|"nueva conexión"| U["📊 uvicorn"]
+    U -->|"antes"| B["ve el proxy"]
+    U -->|"después"| A["ve 203.0.113.7"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class B no
+    class A ok
+```
+
+El visitante se conecta al proxy. El proxy abre su propia conexión hacia LibreFolio y escribe la dirección del
+visitante en `X-Forwarded-For`. uvicorn, el servidor web de LibreFolio, ve llegar la conexión desde el proxy.
+
+**Antes:** uvicorn ignora `X-Forwarded-For`, porque por defecto solo lo cree si llega desde `127.0.0.1`.
+Para LibreFolio, todos los visitantes tienen la dirección del proxy.
+
+**Después:** la dirección del proxy está en `FORWARDED_ALLOW_IPS`. Cuando una conexión llega desde ahí, uvicorn lee
+`X-Forwarded-For` y usa esa dirección como la del visitante.
+
+**Un proxy con una cabecera propia**, como Fly.io con `Fly-Client-IP`: uvicorn no la lee.
+La lee LibreFolio, cuando `LIBREFOLIO_CLIENT_IP_HEADER` la nombra.
+
+**Por qué importa:** los límites de inicios de sesión fallidos y de correos cuentan por dirección ([sección siguiente](#client-address)).
+
+**Leer el registro.** uvicorn escribe una línea por solicitud, que empieza con la dirección que ve:
+
+| Línea del registro | Qué significa |
+| --- | --- |
+| `172.18.0.2:51234 - "GET … HTTP/1.1" 200 OK` | Antes: la dirección del proxy, con el puerto de su conexión. |
+| `203.0.113.7:0 - "GET … HTTP/1.1" 200 OK` | Después: la dirección del visitante. El puerto es `0` porque la cabecera solo lleva la dirección. |
+| `127.0.0.1:<port> - "GET /api/v1/system/health HTTP/1.1" 200 OK` | La comprobación de estado de Docker, hecha dentro del contenedor: déjala de lado. |
+
+Con `LIBREFOLIO_CLIENT_IP_HEADER` el registro no cambia: uvicorn sigue escribiendo la dirección del proxy.
+Solo los límites de LibreFolio usan la cabecera.
+
 ### 🧭 La dirección del visitante {: #client-address }
 
 LibreFolio limita algunas solicitudes por dirección del visitante:
@@ -111,6 +150,96 @@ En el host, reinicia `./dev.py server`. LibreFolio lee la variable una vez por p
     - **Ningún perfil la establece**: la cabecera depende del proxy que haya delante de cada instancia.
     - **El indicador no la usa**: sigue leyendo `X-Forwarded-For`, como explica
       [La vista del servidor](connection_checks.md#server-view).
+
+### 🗺️ El camino, instalación por instalación {: #paths }
+
+Busca tu instalación: por dónde pasa la solicitud, y qué dirección ve LibreFolio antes y después del ajuste.
+Los pasos de cada proxy están en [Tu proxy, paso a paso](#per-proxy).
+
+#### 🖥️ Proxy y LibreFolio en el mismo servidor, sin Docker {: #path-host }
+
+```mermaid
+flowchart LR
+    V["👤 Visitante<br>203.0.113.7"] --> P["🔀 Proxy en el servidor<br>añade X-Forwarded-For"]
+    P -->|"desde 127.0.0.1"| U["📊 uvicorn"]
+    U -->|"siempre"| A["ve 203.0.113.7"]
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class A ok
+```
+
+El proxy (Nginx, Caddy, `tailscale serve`) se conecta a LibreFolio en `127.0.0.1`.
+uvicorn confía en esa dirección por defecto, así que lee `X-Forwarded-For` desde el principio.
+Nada que ajustar en `.env`. Nginx sigue necesitando sus dos líneas ([su pestaña](#per-proxy)).
+
+#### 🐳 Proxy en el servidor, LibreFolio en Docker {: #path-docker-host }
+
+```mermaid
+flowchart LR
+    V["📱 Dispositivo<br>100.x.y.z"] --> P["🔀 tailscale serve<br>añade X-Forwarded-For"]
+    P -->|"puerto 6040"| G["🐳 Puerta de enlace Docker<br>172.28.0.1"]
+    G --> U["📊 uvicorn<br>en el contenedor"]
+    U -->|"antes"| B["ve 172.28.0.1"]
+    U -->|"después"| A["ve 100.x.y.z"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class B no
+    class A ok
+```
+
+El proxy se ejecuta en el servidor y pasa la solicitud al puerto que Docker publica.
+Dentro del contenedor, la conexión llega desde la puerta de enlace de la red Docker, como `172.28.0.1`.
+
+**Antes:** uvicorn no confía en la puerta de enlace. Todos los visitantes tienen la dirección `172.28.0.1`.
+
+**Después:** la puerta de enlace está en `FORWARDED_ALLOW_IPS`. uvicorn lee `X-Forwarded-For`: la dirección de
+Tailscale del dispositivo, `100.x.y.z`; a través de Funnel, la dirección pública del visitante.
+
+Mismo camino para Nginx o Caddy instalados en el servidor, y para los sidecars del Nivel 4.
+Pasos: [Tailscale Serve y Funnel con Docker](#tailscale).
+
+#### 📦 Contenedor proxy en la red Docker {: #path-docker-network }
+
+```mermaid
+flowchart LR
+    V["👤 Visitante<br>203.0.113.7"] --> P["🔀 Contenedor proxy<br>172.18.0.2"]
+    P -->|"añade X-Forwarded-For"| U["📊 uvicorn<br>en el contenedor"]
+    U -->|"antes"| B["ve 172.18.0.2"]
+    U -->|"después"| A["ve 203.0.113.7"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class B no
+    class A ok
+```
+
+Caddy, Nginx o Traefik se ejecutan en un contenedor en la red Docker de LibreFolio.
+Llegan a LibreFolio directamente, sin el puerto publicado.
+La conexión llega desde la dirección del contenedor proxy, como `172.18.0.2`.
+
+**Antes:** uvicorn no confía en esa dirección. Todos los visitantes tienen la dirección del proxy.
+
+**Después:** la red `172.18.0.0/16` está en `FORWARDED_ALLOW_IPS`. uvicorn lee `X-Forwarded-For` y ve
+a cada visitante. Indicar toda la red sigue funcionando cuando el contenedor proxy cambia de dirección.
+
+#### 🏷️ Proxy con una cabecera propia {: #path-own-header }
+
+```mermaid
+flowchart LR
+    V["👤 Visitante<br>203.0.113.7"] --> P["🔀 Proxy de Fly.io<br>escribe Fly-Client-IP"]
+    P --> U["📊 uvicorn<br>registra el proxy"]
+    U --> L["⏱️ Límites de LibreFolio"]
+    L -->|"antes"| B["cuentan el proxy"]
+    L -->|"después"| A["cuentan 203.0.113.7"]
+    classDef no fill:#b71c1c,stroke:#7f0000,color:#ffffff
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class B no
+    class A ok
+```
+
+Fly.io escribe la dirección del visitante en `Fly-Client-IP`. Nginx puede escribirla en `X-Real-IP`.
+uvicorn no lee estas cabeceras: su registro sigue mostrando la dirección del proxy.
+
+**Después:** `LIBREFOLIO_CLIENT_IP_HEADER` nombra la cabecera, y los límites de LibreFolio cuentan con la dirección del visitante.
+Establécela solo cuando cada solicitud atraviese ese proxy ([advertencia de arriba](#client-address)).
 
 ### 🧩 Tu proxy, paso a paso {: #per-proxy }
 
@@ -283,15 +412,12 @@ a través de Docker, así que sus solicitudes proceden de la puerta de enlace de
     docker compose logs --tail 20 librefolio
     ```
 
-    uvicorn registra cada solicitud en una línea: la dirección que ve y luego la solicitud. A través de Tailscale,
-    esa dirección es la de la puerta de enlace:
+    uvicorn registra cada solicitud en una línea ([cómo leerla](#address-path)). A través de Tailscale,
+    la dirección es la de la puerta de enlace:
 
     ```text
     172.28.0.1:<port> - "GET … HTTP/1.1" 200 OK
     ```
-
-    Las líneas de `/api/v1/system/health` son la comprobación de estado de Docker, hecha dentro del contenedor: déjalas
-    de lado.
 
 3. **En el `.env` de LibreFolio**, incluye la puerta de enlace en `FORWARDED_ALLOW_IPS`, con tu propio valor:
 
