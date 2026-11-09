@@ -342,6 +342,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 👥 Accounts and sign-in
 
+- **«Forgot password?» answers with a short message**, the same whether an account matches or not, and its button counts down 5 minutes before the next request (the server's own interval), across a page reload. When the instance can email a reset link, the card no longer shows the server's reset commands: the administrator's guide keeps them.
 - **Settings › Administration is now for administrators only.** Other users no longer see a read-only copy of Global Settings; an old link to it opens their Profile.
 - After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
 - `./dev.py user deactivate` on the administrator still waiting for its setup cancels its setup link; `./dev.py user demote` refuses it.
