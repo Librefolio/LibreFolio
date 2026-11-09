@@ -499,7 +499,8 @@ jobs:
           name: playwright-screenshots
           path: |
             mkdocs_src/docs/gallery/**/*.png
-          retention-days: 1
+          # A week: time to look at the screenshots of a nightly before the next ones replace them.
+          retention-days: 7
           if-no-files-found: ignore
 
       # Only when the gallery failed (on dev too, where it is soft): the HTML report
