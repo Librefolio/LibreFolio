@@ -322,7 +322,7 @@ test.describe('Support copy-and-go', () => {
         const [payload] = await clipboardWrites(page);
         expect(payload).toBe(`${message}\n${PUBLIC_PROJECT_URL}`);
         await expect(page.getByTestId('support-social-share-copy')).toHaveAttribute('data-copy-state', 'pending');
-        await expect(page).toHaveURL(/\/settings$/);
+        await expect(page).toHaveURL(/\/settings\/about$/);
         await expect(page.getByTestId('about-tab')).toBeVisible();
         await expect(page.getByTestId('support-social-share-modal')).toBeVisible();
         expect(popup.url()).toBe('about:blank');
