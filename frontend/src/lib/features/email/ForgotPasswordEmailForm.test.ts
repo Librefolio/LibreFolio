@@ -14,16 +14,26 @@
  *     `forgotFailureMessage($_, readForgotFailure(error))`, drawn with `OUTCOME_CLASSES.failed`, and the event
  *     `email.forgot.refused` with the failure; the field keeps what was typed (the route has had no hold since lot E4b:
  *     no `FORGOT_PASSWORD_DISABLED` to word);
- *   - a new submit clears the previous outcome; the outcome follows a change of language.
+ *   - a new submit clears the previous outcome; the outcome follows a change of language;
+ *   - the wait (lot UA1): after an accepted request the submit stays disabled for `FORGOT_RESEND_WAIT_S` (300 s), its
+ *     label the countdown (`forgot-email-countdown`, `data-seconds`, `email.forgot.wait` with `{time}` = `m:ss`), never
+ *     inside the aria-live outcome; it ticks once a second and, at the deadline, the submit is back (`email.forgot.submit`)
+ *     with the countdown gone. A refused request — a 429 included — starts no wait. The deadline goes to `sessionStorage`
+ *     (`FORGOT_COOLDOWN_KEY`) and a new mount reads it back (a reload keeps the wait); a past, unreadable or too-far value
+ *     is ignored; storage that throws loses only the reload survival, never the form or the in-page wait.
  *
  * Mocks, all owned here: `./forgotPasswordApi`'s `requestPasswordResetEmail` is a fake the test answers (deferred where
  * the request in flight is the subject) — `readForgotFailure` stays the real one, and a refusal is built as the client
  * raises it, axios's own `AxiosError`; `$lib/stores/app/notify.svelte` a spy; `$lib/i18n`: `_` is a writable translator
- * answering `[<language>] <key> {<values>}`.
+ * answering `[<language>] <key> {<values>}`. The clock: where the wait's timing is the subject, `Date` and the
+ * interval timers are faked (`setTimeout` stays real, for testing-library's `waitFor`); `sessionStorage` is cleared before
+ * every test, and a storage that fails is a stand-in whose every call throws (`vi.stubGlobal`; a spy on
+ * `Storage.prototype` does not reach jsdom's `sessionStorage`), removed after each test.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {Writable} from 'svelte/store';
 import {AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
+import {flushSync, tick} from 'svelte';
 import {cleanup, fireEvent, render, screen, waitFor} from '$test/component';
 import {assertEffectsRun} from '$test/runes.svelte';
 
@@ -57,6 +67,7 @@ vi.mock('$lib/i18n', async () => {
 import ForgotPasswordEmailForm from './ForgotPasswordEmailForm.svelte';
 import {_} from '$lib/i18n';
 import {NOTICE_CLASSES, OUTCOME_CLASSES} from './emailText';
+import {FORGOT_COOLDOWN_KEY, FORGOT_RESEND_WAIT_S} from './forgotCooldown';
 
 type Translator = ReturnType<typeof fake.translatorFor>;
 const translator = _ as unknown as Writable<Translator>;
@@ -89,6 +100,7 @@ const form = () => screen.getByTestId('forgot-email-form');
 const field = () => screen.getByTestId('forgot-email-identifier') as HTMLInputElement;
 const submit = () => screen.getByTestId('forgot-email-submit');
 const outcome = () => screen.queryByTestId('forgot-email-outcome');
+const countdown = () => screen.queryByTestId('forgot-email-countdown');
 
 async function type(value: string): Promise<void> {
     await fireEvent.input(field(), {target: {value}});
@@ -103,6 +115,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+    sessionStorage.clear();
     fake.requestPasswordResetEmail.mockReset();
     fake.requestPasswordResetEmail.mockResolvedValue(undefined);
     fake.notify.mockReset();
@@ -111,6 +124,9 @@ beforeEach(() => {
 
 afterEach(() => {
     cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
 });
 
 describe('ForgotPasswordEmailForm — at rest', () => {
@@ -167,7 +183,16 @@ describe('ForgotPasswordEmailForm — asking for a link', () => {
         expect(outcome()).toHaveAttribute('aria-live', 'polite');
         expect(fake.notify).toHaveBeenCalledTimes(1);
         expect(fake.notify).toHaveBeenCalledWith({name: 'email.forgot.accepted'});
-        expect(submit()).toBeEnabled();
+        // The wait starts: the submit disabled for the server's interval, its label the countdown, outside the live region.
+        expect(submit()).toBeDisabled();
+        expect(countdown()).toHaveAttribute('data-seconds', String(FORGOT_RESEND_WAIT_S));
+        expect(submit()).toHaveTextContent(say('email.forgot.wait', {time: '5:00'}));
+        expect(submit()).toContainElement(countdown());
+        expect(outcome(), 'the countdown is not announced every second').not.toContainElement(countdown());
+        expect(Number(sessionStorage.getItem(FORGOT_COOLDOWN_KEY)), 'the deadline kept for a reload').toBeGreaterThan(Date.now());
+        expect(field(), 'the field keeps what was typed').toHaveValue('  zq_alice@example.com  ');
+        await fireEvent.submit(form());
+        expect(fake.requestPasswordResetEmail, 'a submit while it waits sends nothing').toHaveBeenCalledTimes(1);
     });
 
     it('FPF-04: a refusal — the instance cannot send — its message, and the event; the field keeps what was typed, the form usable again', async () => {
@@ -207,6 +232,11 @@ describe('ForgotPasswordEmailForm — asking for a link', () => {
         expect(outcome()).toHaveAttribute('class', OUTCOME_CLASSES.failed);
         expect(fake.notify).toHaveBeenCalledTimes(1);
         expect(fake.notify).toHaveBeenCalledWith({name: 'email.forgot.refused', detail: failure});
+        // A refusal starts no wait — a 429 included: the server's own wait is in its message.
+        expect(countdown()).toBeNull();
+        expect(submit()).toBeEnabled();
+        expect(submit()).toHaveTextContent(say('email.forgot.submit'));
+        expect(sessionStorage.getItem(FORGOT_COOLDOWN_KEY)).toBeNull();
     });
 
     it('FPF-06: a new submit clears the previous outcome while it runs, and the outcome follows a change of language', async () => {
@@ -216,6 +246,7 @@ describe('ForgotPasswordEmailForm — asking for a link', () => {
         await type('zq_alice');
         await fireEvent.click(submit());
         await waitFor(() => expect(outcome()).toHaveTextContent(say('email.forgot.errors.unavailable')));
+        expect(countdown(), 'the refusal started no wait').toBeNull();
 
         translator.set(fake.translatorFor('it'));
         await waitFor(() => expect(outcome()).toHaveTextContent(say('email.forgot.errors.unavailable', undefined, 'it')));
@@ -227,5 +258,134 @@ describe('ForgotPasswordEmailForm — asking for a link', () => {
         second.resolve();
         await waitFor(() => expect(outcome()).toHaveTextContent(say('email.forgot.accepted', undefined, 'it')));
         expect(fake.notify.mock.calls.map(([event]) => event.name)).toEqual(['email.forgot.refused', 'email.forgot.accepted']);
+        expect(countdown(), 'the accepted one did').toHaveTextContent(say('email.forgot.wait', {time: '5:00'}, 'it'));
+    });
+});
+
+describe('ForgotPasswordEmailForm — the wait after an accepted request (lot UA1)', () => {
+    /** A fixed instant: `Date` and the interval timers are faked from it; `setTimeout` stays real, for `waitFor`. */
+    const T0 = Date.UTC(2026, 10, 9, 10, 0, 0);
+
+    function fakeClock(): void {
+        vi.useFakeTimers({toFake: ['Date', 'setInterval', 'clearInterval']});
+        vi.setSystemTime(T0);
+    }
+
+    /** The clock moves by `ms`, the interval fires as it would, and the DOM follows. */
+    async function advance(ms: number): Promise<void> {
+        vi.advanceTimersByTime(ms);
+        flushSync();
+        await tick();
+    }
+
+    /** Draws the form and has one request accepted; ends on the wait shown, the form idle. */
+    async function acceptedOnce(): Promise<void> {
+        render(ForgotPasswordEmailForm);
+        await type('zq_alice');
+        await fireEvent.click(submit());
+        await waitFor(() => expect(countdown()).not.toBeNull());
+        await idle();
+        expect(outcome()).toHaveAttribute('data-outcome', 'accepted');
+    }
+
+    it('FPF-07: the countdown ticks down once a second, m:ss in every language', async () => {
+        fakeClock();
+        await acceptedOnce();
+        expect(countdown()).toHaveAttribute('data-seconds', '300');
+        expect(submit()).toHaveTextContent(say('email.forgot.wait', {time: '5:00'}));
+
+        await advance(1_000);
+        expect(countdown()).toHaveAttribute('data-seconds', '299');
+        expect(submit()).toHaveTextContent(say('email.forgot.wait', {time: '4:59'}));
+
+        await advance(59_000);
+        expect(countdown()).toHaveAttribute('data-seconds', '240');
+        expect(submit()).toHaveTextContent(say('email.forgot.wait', {time: '4:00'}));
+        expect(submit()).toBeDisabled();
+    });
+
+    it('FPF-08: at the deadline the submit is back — enabled, its own label, the countdown gone — and asks again', async () => {
+        fakeClock();
+        await acceptedOnce();
+
+        await advance(299_000);
+        expect(countdown(), 'one second left').toHaveAttribute('data-seconds', '1');
+        expect(submit()).toHaveTextContent(say('email.forgot.wait', {time: '0:01'}));
+        expect(submit()).toBeDisabled();
+
+        await advance(1_000);
+        expect(countdown()).toBeNull();
+        expect(submit()).toBeEnabled();
+        expect(submit()).toHaveTextContent(say('email.forgot.submit'));
+
+        await fireEvent.click(submit());
+        await waitFor(() => expect(fake.requestPasswordResetEmail).toHaveBeenCalledTimes(2));
+        await idle();
+        expect(countdown(), 'the second accepted request waits again').toHaveAttribute('data-seconds', '300');
+    });
+
+    it.each([
+        {label: 'two minutes left', left: 120_000, seconds: '120', time: '2:00'},
+        {label: 'the whole wait left, the furthest accepted', left: FORGOT_RESEND_WAIT_S * 1000, seconds: '300', time: '5:00'},
+    ])('FPF-09: a deadline stored by an earlier page ($label) — a new mount, as after a reload, waits for what is left', async ({left, seconds, time}) => {
+        fakeClock();
+        sessionStorage.setItem(FORGOT_COOLDOWN_KEY, String(T0 + left));
+
+        render(ForgotPasswordEmailForm);
+        await type('zq_alice');
+
+        expect(countdown()).toHaveAttribute('data-seconds', seconds);
+        expect(submit()).toHaveTextContent(say('email.forgot.wait', {time}));
+        expect(submit(), 'the identifier typed, the wait alone keeps it disabled').toBeDisabled();
+        await fireEvent.submit(form());
+        expect(fake.requestPasswordResetEmail).not.toHaveBeenCalled();
+
+        await advance(left);
+        expect(countdown()).toBeNull();
+        expect(submit()).toBeEnabled();
+    });
+
+    it.each([
+        {label: 'past', stored: String(T0 - 1_000)},
+        {label: 'exactly now', stored: String(T0)},
+        {label: 'not a number', stored: 'soon'},
+        {label: 'empty', stored: ''},
+        {label: 'further than the wait itself', stored: String(T0 + FORGOT_RESEND_WAIT_S * 1000 + 1)},
+    ])('FPF-10: a stored deadline $label is ignored — no wait, the submit enabled with its own label', async ({stored}) => {
+        fakeClock();
+        sessionStorage.setItem(FORGOT_COOLDOWN_KEY, stored);
+
+        render(ForgotPasswordEmailForm);
+        await type('zq_alice');
+
+        expect(countdown()).toBeNull();
+        expect(submit()).toBeEnabled();
+        expect(submit()).toHaveTextContent(say('email.forgot.submit'));
+    });
+
+    it('FPF-11: storage that throws — the form still asks, the wait still holds in the page; only a reload loses it', async () => {
+        fakeClock();
+        const blocked = () => {
+            throw new DOMException('The operation is insecure.', 'SecurityError');
+        };
+        // As a browser with blocked site data answers: every call throws.
+        const getItem = vi.fn(blocked);
+        const setItem = vi.fn(blocked);
+        vi.stubGlobal('sessionStorage', {getItem, setItem, removeItem: blocked, clear: blocked, key: blocked, length: 0});
+
+        await acceptedOnce();
+
+        expect(getItem, 'premise: the mount tried to read the deadline').toHaveBeenCalled();
+        expect(setItem, 'premise: the accepted request tried to store it').toHaveBeenCalled();
+        expect(fake.requestPasswordResetEmail).toHaveBeenCalledTimes(1);
+        expect(countdown()).toHaveAttribute('data-seconds', '300');
+        expect(submit()).toBeDisabled();
+
+        // A new mount, as after a reload: nothing could be stored, nothing is read back.
+        cleanup();
+        render(ForgotPasswordEmailForm);
+        await type('zq_alice');
+        expect(countdown()).toBeNull();
+        expect(submit()).toBeEnabled();
     });
 });
