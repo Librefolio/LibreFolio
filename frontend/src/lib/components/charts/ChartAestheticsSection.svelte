@@ -15,6 +15,7 @@
 
     import {numericArrows} from '$lib/actions/numericArrows';
     import LineShapePicker from './LineShapePicker.svelte';
+    import PreferenceSourceBadge from '$lib/components/ui/PreferenceSourceBadge.svelte';
     import type {LineShape} from './lineShape';
     // =========================================================================
     // Props
@@ -27,6 +28,11 @@
         staleGradient?: boolean;
         /** The shape of this chart's lines (FB-3). The row is shown only when the page passes `onlineshapechange`. */
         lineShape?: LineShape;
+        /**
+         * The chart has no shape of its own and the user none either: its lines follow the administrator's default, and the row
+         * says so with a «Global» badge (lot UIP).
+         */
+        lineShapeFollowsGlobal?: boolean;
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number | undefined;
         yAxisMax?: number | undefined;
@@ -58,6 +64,7 @@
         axisRows,
         onaxischange,
         lineShape = 'segments',
+        lineShapeFollowsGlobal = false,
         onlineshapechange,
         disabledFields = new Set<string>(),
     }: Props = $props();
@@ -197,7 +204,12 @@
             <!-- Line shape (FB-3) -->
             <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle sm:col-span-2 flex-wrap" data-testid="chart-aesthetic-line-shape-row">
                 <span>
-                    <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.lineShape')}</span>
+                    <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-lf-secondary">
+                        <span>{$t('chartSettings.lineShape')}</span>
+                        {#if lineShapeFollowsGlobal}
+                            <PreferenceSourceBadge kind="global" testId="chart-aesthetic-line-shape-badge-global" />
+                        {/if}
+                    </span>
                     <span class="block text-xs text-lf-muted">{$t('chartSettings.lineShapeDesc')}</span>
                 </span>
                 <LineShapePicker value={lineShape} onchange={onlineshapechange} testIdPrefix="chart-aesthetic-line-shape" />

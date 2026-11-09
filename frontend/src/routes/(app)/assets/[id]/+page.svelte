@@ -63,7 +63,7 @@
         type SignalInstanceResult,
         type SignalProblem,
     } from '$lib/charts/signals';
-    import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, resolveLineShape, setPairSettings, getGlobalLineShape, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, resolveLineShape, setPairSettings, getGlobalLineShape, lineShapeFollowsGlobal, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
@@ -2620,7 +2620,7 @@
                             gridLines={settings.gridLines}
                             staleGradient={settings.staleGradient}
                             lineShape={resolveLineShape(settings)}
-                            onlineshapechange={handleLineShapeChange}
+                            lineShapeFollowsGlobal={!settings.lineShape && lineShapeFollowsGlobal()} onlineshapechange={handleLineShapeChange}
                             axisRows={aestheticsAxisRows}
                             onchange={handleAestheticsChange}
                             onaxischange={handleAxisScaleChange}

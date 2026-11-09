@@ -54,7 +54,7 @@
         type SignalDefinition,
         type SignalInstanceResult,
     } from '$lib/charts/signals';
-    import {DEFAULT_AXIS_SCALE, effectiveCalendarReturnWindow, getGlobalLineShape, getSettingsForPair, normalizeAxisScaleSettings, resolveLineShape, setPairSettings, type AxisScaleSettings, type ChartPrimaryView} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, effectiveCalendarReturnWindow, getGlobalLineShape, getSettingsForPair, lineShapeFollowsGlobal, normalizeAxisScaleSettings, resolveLineShape, setPairSettings, type AxisScaleSettings, type ChartPrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -1810,7 +1810,7 @@
                     <button class="absolute top-0 right-0 p-1 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                         <X size={16} />
                     </button>
-                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} lineShape={resolveLineShape(settings)} onlineshapechange={handleLineShapeChange} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
+                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} lineShape={resolveLineShape(settings)} lineShapeFollowsGlobal={!settings.lineShape && lineShapeFollowsGlobal()} onlineshapechange={handleLineShapeChange} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
                 </div>
             {/if}
 
