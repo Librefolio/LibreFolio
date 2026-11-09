@@ -32,7 +32,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Avvisi sulla qualità dei dati nella pagina del broker:** prezzi obsoleti, tassi di cambio mancanti o obsoleti e i relativi pulsanti di sincronizzazione compaiono anche lì, per ogni ruolo.
 - **Grafico delle posizioni: scegli la finestra della vista Mobile.** Una settimana, un mese, tre mesi, un anno o una finestra personalizzata; si parte da quella automatica.
 - La torta dell'allocazione per asset mostra l'icona dell'asset anche nel tooltip, come la torta per tipo.
-- Torte dell'allocazione degli asset: i tooltip Per Asset e Per Tipo mostrano il tipo dell'asset come badge accanto all'icona.
+- Torte dell'allocazione degli asset: i tooltip Per Asset e Per Tipo mostrano il tipo dell'asset come badge accanto all'icona; la fetta della Liquidità mostra un badge Liquidità, nel colore della barra della liquidità.
 
 #### 📈 Grafici
 
@@ -41,7 +41,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Lotti: ogni marcatore sul grafico Ciclo del lotto si spiega.** Passa il mouse, tocca o porta il focus su un marcatore (▲ acquisto, ▼ vendita, ◆ trasferimento, + / × rettifica, │ split) sul grafico Ciclo del lotto e custodia per vedere cosa è successo, quando, quante unità (nascoste in modalità privacy) e presso quale broker: Da e A per un trasferimento tra i tuoi broker. Quando più eventi cadono nello stesso giorno, il tooltip li elenca tutti.
 - **Confronta un asset con un tasso di cambio, e viceversa.** Un confronto scelto nei segnali di una scheda o di un grafico ora viene disegnato sulle schede degli elenchi Asset e FX e su entrambe le pagine di dettaglio, anche quando la pagina viene aperta da zero.
 - **Scegli la forma delle linee dei tuoi grafici** nelle tue impostazioni: segmenti (predefinito), gradini o una spline morbida, per ogni grafico. Un amministratore imposta il valore predefinito per tutti in Impostazioni globali (**Forma Predefinita delle Linee**).
-- **Preferenze dice da dove vengono il tema e la forma delle linee**: un badge **Globale** quando seguono il valore predefinito dell'amministratore, un pulsante che rimuove la tua scelta per tornare a seguirlo, e un badge **Auto** quando il tema è lasciato al tuo browser.
+- **Preferenze dice da dove vengono il tema e la forma delle linee**: un badge **Globale** quando seguono il valore predefinito dell'amministratore, un pulsante per tornare a seguirlo, e un badge **Auto** quando il tema è lasciato al tuo browser. Come per la lingua e la valuta, una modifica al tema o alla forma delle linee, compreso il ritorno al predefinito, si applica solo quando premi **Salva**.
 - **I tooltip dei grafici mostrano il giorno della settimana** dopo la data, e il puntatore si ferma sui giorni, mai tra due.
 
 #### 📉 Analisi del rischio
