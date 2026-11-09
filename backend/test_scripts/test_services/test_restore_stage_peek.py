@@ -77,7 +77,6 @@ def data_dir(tmp_path) -> Path:
                             user_id=uid,
                             base_currency="EUR",
                             language="en",
-                            theme="light",
                             avatar_url=avatar,
                             created_at=when,
                             updated_at=when,

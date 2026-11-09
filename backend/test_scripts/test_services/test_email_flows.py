@@ -18,8 +18,8 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
    ``fr``); another account's row counts for nothing.
 4. With neither usable — and a ``default_language`` that is not one of the four languages, empty, or a row that is
    missing — English. ``account_language`` reads the language column alone: a row whose theme this version does not
-   know (outside light/dark/auto, written as a row), which the schema ``UserSettingsRead`` refuses, still gives its
-   language. It never creates nor changes a ``user_settings`` row: reading a language changes nothing.
+   know (a ``ui_preferences`` text holding a theme outside light/dark/auto, written as a row), which the settings read
+   leaves out, still gives its language. It never creates nor changes a ``user_settings`` row: reading a language changes nothing.
 5. ``send_test_email`` sends one message through ``send_email``: to the account's own address, from the configured
    sender; its subject and its text are those ``build_test_message`` writes for the account's language, the text naming
    ``instance`` and the user name. It returns that language and spends one unit of the hourly budget.
@@ -137,7 +137,6 @@ from urllib.parse import parse_qs
 
 import pytest
 import pytest_asyncio
-from pydantic import ValidationError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -146,9 +145,9 @@ from structlog.testing import capture_logs
 
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, User, UserSettings
-from backend.app.schemas.settings import SETTINGS_REGISTRY, UserSettingsRead
+from backend.app.schemas.settings import SETTINGS_REGISTRY
 from backend.app.services.accounts import token_service, user_service
-from backend.app.services.accounts.settings_service import initialize_global_settings
+from backend.app.services.accounts.settings_service import get_user_settings, initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenInspection, TokenStatus
 from backend.app.services.email import delivery, flows, smtp
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, EmailUnavailableError
@@ -190,8 +189,10 @@ ADMIN = "zq_admin"
 #: Addresses without an account: where an invitation goes.
 GUEST = "zq-guest@example.com"
 OTHER_GUEST = "zq-other-guest@example.com"
-#: A theme outside light/dark/auto, as an older or newer release could leave in a row: ``UserSettingsRead`` refuses it.
+#: A theme outside light/dark/auto, as an older or newer release could leave in a row's ``ui_preferences``: the settings read leaves it out.
 STALE_THEME = "sepia"
+#: The stored ``ui_preferences`` text holding it.
+STALE_UI_PREFERENCES = f'{{"theme":"{STALE_THEME}"}}'
 
 INVITE = AccountTokenPurpose.INVITE
 PASSWORD_RESET = AccountTokenPurpose.PASSWORD_RESET
@@ -332,10 +333,10 @@ async def _add_user(engine: AsyncEngine, username: str, *, email: str | None = N
     return user
 
 
-async def _set_account_language(engine: AsyncEngine, user_id: int, language: str, *, theme: str = "light") -> None:
-    """The account's ``user_settings`` row, its language ``language`` and its theme ``theme`` as stored — written as a row: a table model does not validate —, the other columns at their defaults."""
+async def _set_account_language(engine: AsyncEngine, user_id: int, language: str, *, ui_preferences: str | None = None) -> None:
+    """The account's ``user_settings`` row, its language ``language`` and its ``ui_preferences`` text as stored — written as a row: a table model does not validate —, the other columns at their defaults."""
     async with AsyncSession(engine) as session:
-        session.add(UserSettings(user_id=user_id, language=language, theme=theme))
+        session.add(UserSettings(user_id=user_id, language=language, ui_preferences=ui_preferences))
         await session.commit()
 
 
@@ -357,18 +358,19 @@ async def _settings_rows(engine: AsyncEngine) -> list[tuple[int, str]]:
     return [tuple(row) for row in rows]
 
 
-async def _settings_row(engine: AsyncEngine, user_id: int) -> tuple[str, str] | None:
-    """``(language, theme)`` of the account's ``user_settings`` row, read fresh; ``None`` without a row."""
+async def _settings_row(engine: AsyncEngine, user_id: int) -> tuple[str, str | None] | None:
+    """``(language, ui_preferences)`` of the account's ``user_settings`` row, read fresh; ``None`` without a row."""
     async with AsyncSession(engine) as session:
-        row = (await session.execute(select(UserSettings.language, UserSettings.theme).where(UserSettings.user_id == user_id))).one_or_none()
+        row = (await session.execute(select(UserSettings.language, UserSettings.ui_preferences).where(UserSettings.user_id == user_id))).one_or_none()
     return None if row is None else tuple(row)
 
 
-def _unknown_theme_refusal() -> str:
-    """The precondition, verified: the schema ``UserSettingsRead`` refuses ``STALE_THEME``, a theme this version does not know; what it said."""
-    with pytest.raises(ValidationError) as refused:
-        UserSettingsRead(language="it", base_currency="EUR", theme=STALE_THEME)
-    return str(refused.value)
+async def _read_omits_the_stale_theme(engine: AsyncEngine, user_id: int) -> None:
+    """The precondition, verified: the settings read of the account's row — which holds ``STALE_UI_PREFERENCES`` — leaves the theme out, and the row still holds it."""
+    async with AsyncSession(engine) as session:
+        read = await get_user_settings(user_id, session)
+    assert read is not None and read.ui_preferences.theme is None, f"barrier: the read must leave the unknown theme out: {read}"
+    assert (await _settings_row(engine, user_id))[1] == STALE_UI_PREFERENCES, "barrier: the row must hold the stale preferences"
 
 
 async def _language_of(engine: AsyncEngine, user_id: int) -> str:
@@ -584,22 +586,21 @@ async def test_with_neither_usable_the_language_is_english(engine: AsyncEngine, 
 
 @pytest.mark.asyncio
 async def test_a_theme_this_version_does_not_know_still_gives_its_language(engine: AsyncEngine) -> None:
-    """EMF-009 — contract 4: Alice's row holds ``it`` with a theme this version does not know (``sepia``, written as a row), the instance says ``fr``: ``account_language`` is ``it`` — it reads the language column alone — and the row is left as it was.
+    """EMF-009 — contract 4: Alice's row holds ``it`` with ``ui_preferences`` holding a theme this version does not know (``sepia``, written as a row), the instance says ``fr``: ``account_language`` is ``it`` — it reads the language column alone — and the row is left as it was.
 
-    Barrier first: the schema ``UserSettingsRead`` refuses that theme with a ``ValidationError`` naming it — otherwise
-    this would only be one more row with a valid theme.
+    Barrier first: the settings read leaves that theme out while the row holds it — otherwise this would only be one
+    more row with a valid theme.
     """
     print_section("EMF-009: a theme this version does not know")
-    refusal = _unknown_theme_refusal()
-    assert "theme" in refusal, f"barrier: the schema must refuse the theme: {refusal}"
     alice = await _add_user(engine, ALICE)
-    await _set_account_language(engine, alice.id, "it", theme=STALE_THEME)
+    await _set_account_language(engine, alice.id, "it", ui_preferences=STALE_UI_PREFERENCES)
+    await _read_omits_the_stale_theme(engine, alice.id)
     await _set_default_language(engine, "fr")
 
     language = await _language_of(engine, alice.id)
 
     assert language == "it", f"the account says 'it' with a theme this version does not know, the instance 'fr': got {language!r}"
-    assert await _settings_row(engine, alice.id) == ("it", STALE_THEME), "account_language must leave the row as it was"
+    assert await _settings_row(engine, alice.id) == ("it", STALE_UI_PREFERENCES), "account_language must leave the row as it was"
     print_success("'it' from a row with a theme this version does not know; the row untouched")
 
 
