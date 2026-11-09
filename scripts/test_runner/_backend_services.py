@@ -727,6 +727,16 @@ def services_registration(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Registration service tests", verbose=verbose)
 
 
+def services_account_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the account links administrators see (lot UA3): their state, the names they refer to, their revocation."""
+    print_section("Services: Account Links")
+    print_info("Testing: backend/app/services/accounts/account_links.py")
+    print_info("Tests: link_state order (revoked, used, expired, open; retired reads revoked), list_links newest first with usernames, revoke_link revoked/not_found/not_revocable, flush without commit")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_links.py", test_names)
+    return run_command(cmd, "Account links service tests", verbose=verbose)
+
+
 def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> bool:
     """Test F02, the initial administrator: its variables, the startup bootstrap, the setup link, setup-link."""
     print_section("Services: Initial Administrator (F02)")
@@ -2843,6 +2853,16 @@ Note: No backend server required.
         # server. The variables are set with monkeypatch in this process, and the once-per-process error log is checked
         # in this process too (the report cache cleared around each test); the race holds two connections to that
         # private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "account-links",
+        services_account_links,
+        name="Account Links",
+        desc="UA3: link_state reads revoked, used, expired, open in that order (a retired link reads revoked, expired at expires_at); list_links lists every link newest first with its account, issuer and user names; revoke_link revokes open invitations, reset and verification links once, answers not_found for what is not open and not_revocable for an open setup link or email change, flushes without committing",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server; every moment passed as now.
         isolation="pure",
     )
     add_test(

@@ -40,8 +40,8 @@ holds the whole rule, so that the API and the command line apply the same one. T
    - ``create_invite`` issues an invitation (the token service's ``IssuedToken``) unless registration is disabled
      (``REGISTRATION_DISABLED``) or the limit is reached, ``used >= max_users`` (``USER_LIMIT_REACHED``); a refusal
      writes nothing;
-   - ``list_pending_invites`` lists the live invitations; ``revoke_invite`` revokes one, ``True``, and answers ``False``
-     for anything that is not a live invitation;
+   - ``list_pending_invites`` lists the live invitations. An invitation is revoked as any account link, by
+     ``account_links.revoke_link`` (lot UA3; its contract is ``test_account_links.py``'s);
    - ``register_user`` holds the whole rule. The first account is the administrator in every mode, whatever role an
      invitation grants; the mode does not apply to it, but a token given with it is checked and spent all the same: a
      valid invitation is consumed by it, one that is not valid refuses it (``INVITE_INVALID``, the instance still
@@ -124,7 +124,6 @@ create_invite = registration_service.create_invite
 effective_registration_mode = registration_service.effective_registration_mode
 list_pending_invites = registration_service.list_pending_invites
 register_user = registration_service.register_user
-revoke_invite = registration_service.revoke_invite
 user_usage = registration_service.user_usage
 public_link = registration_service.public_link
 billing_link = registration_service.billing_link
@@ -344,13 +343,6 @@ async def _create_invite(engine: AsyncEngine, **arguments: Any) -> Union[IssuedT
             return refusal
         await session.commit()
     return issued
-
-
-async def _revoke_invite(engine: AsyncEngine, invite_id: int) -> bool:
-    async with AsyncSession(engine) as session:
-        revoked = await revoke_invite(session, invite_id)
-        await session.commit()
-    return revoked
 
 
 def _code(refusal: BaseException) -> str:
@@ -1041,43 +1033,6 @@ async def test_list_pending_invites_lists_the_live_invitations_only(engine: Asyn
     assert {item.id: (item.grants_admin, item.email, item.created_by_user_id) for item in at_moment} == expected, f"pending at {moment}: {at_moment}"
     assert {item.id for item in by_clock} == set(expected), f"pending by the clock: {by_clock}"
     print_success("two live invitations, nothing else")
-
-
-@pytest.mark.asyncio
-async def test_revoke_invite_revokes_a_live_invitation_once(engine: AsyncEngine) -> None:
-    """Contract 4: ``revoke_invite`` on a live invitation answers ``True`` and the invitation is revoked, out of the pending list; a second call answers ``False``."""
-    issued = await _issue(engine)
-
-    first = await _revoke_invite(engine, issued.record.id)
-    second = await _revoke_invite(engine, issued.record.id)
-
-    assert (first, second) == (True, False), f"revoking a live invitation: True, then False; got {(first, second)}"
-    assert await _status(engine, issued.token) == TokenStatus.REVOKED
-    async with AsyncSession(engine) as session:
-        assert issued.record.id not in {item.id for item in await list_pending_invites(session)}
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["unknown", "consumed", "expired", "password_reset"])
-async def test_revoke_invite_answers_false_for_anything_but_a_live_invitation(engine: AsyncEngine, kind: str) -> None:
-    """Contract 4: an unknown id, a consumed or an expired invitation — none is live — and a reset link — not an invitation — give ``False`` and stay as they were.
-
-    The API answers 404 for these: an administrator revoking invitations must not revoke somebody's reset link by its id.
-    """
-    owner = (await _add_users(engine, "alice"))["alice"]
-    token = await _invalid_invite(engine, kind, owner) if kind != "unknown" else None
-    purpose = PASSWORD_RESET if kind == "password_reset" else INVITE
-    async with AsyncSession(engine) as session:
-        found = (await inspect_token(session, token, purpose)).record if token else None
-    target = found.id if found is not None else 987654
-    before = await _token(engine, target) if found is not None else None
-
-    revoked = await _revoke_invite(engine, target)
-
-    assert revoked is False, f"revoke_invite on the {kind} token must answer False, got {revoked!r}"
-    if before is not None:
-        after = await _token(engine, target)
-        assert (after.revoked_at, after.consumed_at) == (before.revoked_at, before.consumed_at), f"the {kind} token must stay as it was: {before!r} → {after!r}"
 
 
 # =============================================================================

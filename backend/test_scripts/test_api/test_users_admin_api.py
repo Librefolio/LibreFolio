@@ -4,12 +4,18 @@ Users Admin API — release 1.3, workstream A, lot A5a (plan phase01Accounts, A5
 An administrator manages the accounts from the API. Every route below sits behind ``require_admin`` in
 ``api/v1/users.py``, its static routes declared before ``{user_id}``:
 
-1. ``GET /users/invites`` → ``{items: [{id, grants_admin, email, created_at, expires_at, created_by_user_id}], usage:
-   {used, max_users, billing_url}}``: the live invitations only (neither consumed, nor revoked, nor expired), whoever
-   issued them. ``used`` counts the active accounts plus the live invitations; ``max_users`` is ``LIBREFOLIO_MAX_USERS``
-   (null without a limit, 0 when the variable is not valid: a bad limit closes); ``billing_url`` is
-   ``LIBREFOLIO_BILLING_URL``, null when unset.
-2. ``POST /users/invites`` ``{grants_admin=false, email?}`` → 201 ``{invite, token, path, url}``: ``invite`` as listed,
+1. ``GET /users/account-links`` (lot UA3; it replaces ``GET /users/invites``) → ``{items}``: every account link of the
+   instance — invitations, reset links, verification links, the setup link, the owner's email change —, whoever issued
+   it, newest first, each exactly ``ACCOUNT_LINK_KEYS``: ``purpose``; ``state``, read revoked → used → expired → open;
+   ``revocable``, an open invitation, reset or verification link; ``user_id`` and ``username`` of the account it acts on
+   (null for an invitation); ``email``; ``grants_admin``; ``created_by_user_id`` and ``created_by_username``;
+   ``created_at``, ``expires_at``; ``used_at``, ``used_by_user_id`` and ``used_by_username`` for a used link only — the
+   account an invitation opened, or the link's own account —; ``revoked_at`` for a revoked one. Never its token, nor
+   its hash. The usage of the instance is ``GET /users``' (point 4): ``used`` counts the active accounts plus the live
+   invitations; ``max_users`` is ``LIBREFOLIO_MAX_USERS`` (null without a limit, 0 when the variable is not valid: a bad
+   limit closes); ``billing_url`` is ``LIBREFOLIO_BILLING_URL``, null when unset.
+2. ``POST /users/invites`` ``{grants_admin=false, email?}`` → 201 ``{invite, token, path, url}``: ``invite`` the six
+   fields the link of the invitation is then listed with,
    ``token`` the plaintext shown once, ``path`` its page with the token in the URL fragment (``/invite#token=…``: a
    browser never sends a fragment, so the token stays out of the access log and of proxy logs), ``url`` the public URL
    plus the path, null
@@ -17,8 +23,10 @@ An administrator manages the accounts from the API. Every route below sits behin
    with ``limit``, ``used`` and ``billing_url`` when ``used >= max_users`` (the caller is an administrator: the counts and
    the subscription link are for them); 409 ``REGISTRATION_DISABLED`` while registration is ``disabled``, by the row or
    by ``LIBREFOLIO_REGISTRATION``. A refusal issues nothing.
-3. ``DELETE /users/invites/{invite_id}`` → 204, and the invitation opens nothing any more; 404 when the id is not a live
-   invitation: revoked, consumed, expired, never issued, or a token of another purpose (which stays as it was).
+3. ``DELETE /users/account-links/{link_id}`` (lot UA3; it replaces ``DELETE /users/invites/{invite_id}``) → 204 for an
+   open invitation, reset link or verification link, which opens nothing any more; 404 when the id is not an open link:
+   revoked, used, expired or never issued; 409 ``{error_code: LINK_NOT_REVOCABLE}`` for an open setup link or owner's
+   email change. A refusal changes nothing.
 4. ``GET /users`` → ``{items: [{id, username, email, is_active, is_superuser, created_at, protected}], usage}``: every
    account, active or not; no hash, no secret. ``protected`` is added by lot A6a (point 12).
 5. ``PATCH /users/{user_id}`` ``{is_active?, is_superuser?}`` → 200 with the account as ``GET /users`` lists it; 404; 409
@@ -171,6 +179,14 @@ decision of 21/10/2026, Q1 yes) adds:
     the answer says false and false; an account whose link expired, reactivated on an instance with a free place, is
     active and not pending. Nothing else changes in either answer: an account is exactly its eleven fields, A7b's nine,
     ``avatar_url`` and ``pending_verification``; ``usage`` counts as before.
+
+Lot UA3 (the Users tab lists every account link, and revokes the open ones) adds UADM-LINK-01 to UADM-LINK-03 and moves
+UADM-001, UADM-004 to UADM-006, UADM-028 to UADM-030 to the two routes of points 1 and 3. A link is listed in every
+state, so «no longer listed» became «listed used» or «listed revoked». UADM-006's reset link, a 404 while only
+invitations were revoked, is now revocable: UADM-LINK-01 revokes one on the lane and its token resets nothing. UADM-LINK-02
+reads the listing for the plaintext and the SHA-256 of the tokens this case was handed, on the lane. UADM-LINK-03 runs
+in-process: an open setup link and an owner's email change are 409 there, and their rows are the test's own, never a
+pending administrator of the lane. UADM-028 reads every link of its private instance, with its state and names.
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
@@ -380,6 +396,7 @@ INVITE = AccountTokenPurpose.INVITE
 PASSWORD_RESET = AccountTokenPurpose.PASSWORD_RESET
 ADMIN_SETUP = AccountTokenPurpose.ADMIN_SETUP
 EMAIL_VERIFICATION = AccountTokenPurpose.EMAIL_VERIFICATION
+EMAIL_CHANGE = AccountTokenPurpose.EMAIL_CHANGE
 
 REGISTRATION_VARIABLE = "LIBREFOLIO_REGISTRATION"
 MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
@@ -396,6 +413,9 @@ BILLING_LINK = "https://billing.example.test/plans/family"
 #: An account as GET /users lists it and PATCH /users/{user_id} answers it; ``avatar_url`` is lot N69-4's (point 20), ``pending_verification`` lot E-7's (point 21).
 USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup", "pending_verification", "avatar_url"})
 INVITE_ITEM_KEYS = frozenset({"id", "grants_admin", "email", "created_at", "expires_at", "created_by_user_id"})
+#: An account link as GET /users/account-links lists it (lot UA3): never its token nor its hash.
+ACCOUNT_LINK_KEYS = frozenset({"id", "purpose", "state", "revocable", "user_id", "username", "email", "grants_admin", "created_by_user_id", "created_by_username", "created_at", "expires_at", "used_at", "used_by_user_id", "used_by_username", "revoked_at"})
+LINKS = "/users/account-links"
 USAGE_KEYS = frozenset({"used", "max_users", "billing_url"})
 ISSUED_INVITE_KEYS = frozenset({"invite", "token", "path", "url"})
 RESET_LINK_KEYS = frozenset({"token", "path", "url", "expires_at"})
@@ -592,6 +612,29 @@ def _issued_invite_violations(issued: Any, *, grants_admin: bool, email: Optiona
     return violations
 
 
+def _link_violations(item: Any, label: str, **expected: Any) -> list[str]:
+    """What is wrong with an account link as GET /users/account-links lists it: exactly its sixteen fields, these values, its timestamps, and ``used_at``/``revoked_at`` set exactly when its state says so."""
+    if not isinstance(item, dict) or set(item) != ACCOUNT_LINK_KEYS:
+        return [f"{label}: a link must be exactly {sorted(ACCOUNT_LINK_KEYS)}, never its token nor its hash: {item}"]
+    found = {key: item[key] for key in expected}
+    violations = [] if found == expected else [f"{label}: expected {expected}, got {found}"]
+    for key in ("created_at", "expires_at"):
+        _expect(violations, _instant(item[key]) is not None, f"{label}: {key} is not a timestamp: {item[key]!r}")
+    for key, state in (("used_at", "used"), ("revoked_at", "revoked")):
+        stamped = _instant(item[key]) is not None
+        _expect(violations, stamped == (item["state"] == state), f"{label}: {key} must be a timestamp exactly when the state is {state}: state {item['state']!r}, {key} {item[key]!r}")
+    return violations
+
+
+def _keys_named(value: Any, names: frozenset[str]) -> list[str]:
+    """Every key of ``names`` at any depth of a JSON value, by its path."""
+    if isinstance(value, dict):
+        return [f"{key}" for key in value if key in names] + [f"{key}.{inner}" for key, child in value.items() for inner in _keys_named(child, names)]
+    if isinstance(value, list):
+        return [f"[{index}].{inner}" for index, child in enumerate(value) for inner in _keys_named(child, names)]
+    return []
+
+
 def _reset_link_violations(link: Any) -> list[str]:
     """What is wrong with the 201 of POST /users/{id}/password-reset-link: its keys, the token, its path, its expiry."""
     if not isinstance(link, dict) or set(link) != RESET_LINK_KEYS:
@@ -776,7 +819,7 @@ async def _live_me_id(cookie: str) -> Optional[int]:
 
 
 async def _listed(cookie: str, path: str, item_id: int) -> Optional[dict[str, Any]]:
-    """The item of id ``item_id`` in GET ``path`` (/users or /users/invites) as this administrator sees it, found by id; None when absent."""
+    """The item of id ``item_id`` in GET ``path`` (/users or /users/account-links) as this administrator sees it, found by id; None when absent."""
     response = await _live("GET", path, cookie=cookie)
     assert response.status_code == 200, f"GET {path} as an administrator: expected 200, got {response.status_code} {response.text}"
     return next((item for item in response.json()["items"] if item.get("id") == item_id), None)
@@ -924,9 +967,9 @@ def _no_body(scene: _Scene) -> None:
 
 
 ADMIN_ROUTES = [
-    pytest.param(_Route("GET", lambda scene: "/users/invites", _no_body, 200), id="list-invites"),
+    pytest.param(_Route("GET", lambda scene: LINKS, _no_body, 200), id="list-account-links"),
     pytest.param(_Route("POST", lambda scene: "/users/invites", lambda scene: {"grants_admin": True, "email": scene.marker_email}, 201), id="create-invite"),
-    pytest.param(_Route("DELETE", lambda scene: f"/users/invites/{scene.invite_id}", _no_body, 204), id="revoke-invite"),
+    pytest.param(_Route("DELETE", lambda scene: f"{LINKS}/{scene.invite_id}", _no_body, 204), id="revoke-account-link"),
     pytest.param(_Route("GET", lambda scene: "/users", _no_body, 200), id="list-users"),
     pytest.param(_Route("PATCH", _on_target(""), lambda scene: {"is_active": False}, 200), id="deactivate-user"),
     pytest.param(_Route("POST", _on_target("/password-reset-link"), _no_body, 201), id="reset-link"),
@@ -1027,8 +1070,8 @@ class TestAccountsListOnTheLane:
 class TestInvitationsOnTheLane:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("grants_admin", "with_email"), [pytest.param(False, False, id="user-invitation"), pytest.param(True, True, id="admin-invitation-with-email")])
-    async def test_an_invitation_is_listed_opens_one_account_in_its_role_then_is_gone(self, lane: _LaneRows, grants_admin: bool, with_email: bool) -> None:
-        """UADM-004: POST /users/invites → 201 {invite, token, path, url}; GET /users/invites lists exactly that invitation; its token registers one account through POST /auth/register, in the invitation's role; then the invitation is no longer listed, its row is consumed by that account, and the same token registers nobody else (400 INVITE_INVALID)."""
+    async def test_an_invitation_is_listed_opens_one_account_in_its_role_then_is_used(self, lane: _LaneRows, grants_admin: bool, with_email: bool) -> None:
+        """UADM-004: POST /users/invites → 201 {invite, token, path, url}; GET /users/account-links lists its link, found by id, open and revocable, the six fields of ``invite`` as created, issued by the caller; its token registers one account through POST /auth/register, in the invitation's role; then the link is listed used by that account (no longer open, no longer revocable), its row is consumed by that account, and the same token registers nobody else (400 INVITE_INVALID)."""
         print_section(f"UADM-004: the life of an invitation, grants_admin={grants_admin}")
         admin = await _live_admin(lane)
         email = lane.new_email("uadm_invitee") if with_email else None
@@ -1043,8 +1086,11 @@ class TestInvitationsOnTheLane:
         token, invite = issued["token"], issued["invite"]
         lane.token_ids.append(invite["id"])
         _expect(violations, issued["url"] is None or issued["url"].endswith(issued["path"]), f"url must be null or end with the path: {issued}")
-        listed = await _listed(admin.cookie, "/users/invites", invite["id"])
-        _expect(violations, _comparable(listed) == _comparable(invite), f"GET /users/invites must list the invitation as it was created: listed {listed}, created {invite}")
+        listed = await _listed(admin.cookie, LINKS, invite["id"])
+        opened = {"purpose": "invite", "user_id": None, "username": None, "created_by_username": admin.account.username, "used_by_user_id": None, "used_by_username": None}
+        violations += _link_violations(listed, "the new invitation", state="open", revocable=True, **opened)
+        shared = None if listed is None else _comparable({key: listed.get(key) for key in INVITE_ITEM_KEYS})
+        _expect(violations, shared == _comparable(invite), f"GET {LINKS} must list the invitation as it was created: listed {listed}, created {invite}")
         row = await _lane_token_of(token)
         _expect(violations, row is not None and row.id == invite["id"] and row.purpose == INVITE.value and row.consumed_at is None, f"the token must be the stored hash of the live invitation {invite['id']}: {row}")
         assert not violations, f"the new invitation is not what was asked:{_verdict(violations)}"
@@ -1054,18 +1100,19 @@ class TestInvitationsOnTheLane:
         assert registered.status_code == 201, f"POST /auth/register with the invitation: expected 201, got {registered.status_code} {registered.text}"
         user = registered.json()["user"]
         _expect(violations, user["is_superuser"] is grants_admin, f"the account must take the invitation's role, is_superuser={grants_admin}: {user}")
-        _expect(violations, await _listed(admin.cookie, "/users/invites", invite["id"]) is None, "a consumed invitation must no longer be listed")
+        spent = {**opened, "used_by_user_id": user["id"], "used_by_username": user["username"]}
+        violations += _link_violations(await _listed(admin.cookie, LINKS, invite["id"]), "the consumed invitation", state="used", revocable=False, **spent)
         row = await _lane_token_of(token)
         _expect(violations, row is not None and row.consumed_by_user_id == user["id"], f"the invitation must be consumed by the account it opened: {row}")
         again_username, again = await _live_register_with(lane, "uadm_invited_again", token)
         _expect(violations, _refusal(again) == (400, "INVITE_INVALID"), f"a consumed invitation must register nobody else: {again.status_code} {again.text}")
         _expect(violations, await _lane_user_id(again_username) is None, f"{again_username} was created with a consumed invitation")
         assert not violations, f"An invitation must open one account, in its role, once:{_verdict(violations)}"
-        print_success(f"listed, opened {user['username']} (is_superuser={grants_admin}), then gone and spent")
+        print_success(f"listed open, opened {user['username']} (is_superuser={grants_admin}), then listed used and spent")
 
     @pytest.mark.asyncio
-    async def test_a_revoked_invitation_is_gone_and_opens_nothing(self, lane: _LaneRows) -> None:
-        """UADM-005: DELETE /users/invites/{id} → 204 with no body; the invitation is no longer listed and its row is revoked; a second DELETE → 404; its token → 400 INVITE_INVALID at POST /auth/register, and no account."""
+    async def test_a_revoked_invitation_is_listed_revoked_and_opens_nothing(self, lane: _LaneRows) -> None:
+        """UADM-005: DELETE /users/account-links/{id} of an open invitation → 204 with no body; the link is listed revoked, no longer revocable, and its row is revoked; a second DELETE → 404; its token → 400 INVITE_INVALID at POST /auth/register, and no account."""
         print_section("UADM-005: a revoked invitation")
         admin = await _live_admin(lane)
         created = await _live("POST", "/users/invites", cookie=admin.cookie, json={"grants_admin": False})
@@ -1073,46 +1120,120 @@ class TestInvitationsOnTheLane:
         invite_id, token = created.json()["invite"]["id"], created.json()["token"]
         lane.token_ids.append(invite_id)
 
-        revoked = await _live("DELETE", f"/users/invites/{invite_id}", cookie=admin.cookie)
-        again = await _live("DELETE", f"/users/invites/{invite_id}", cookie=admin.cookie)
+        revoked = await _live("DELETE", f"{LINKS}/{invite_id}", cookie=admin.cookie)
+        again = await _live("DELETE", f"{LINKS}/{invite_id}", cookie=admin.cookie)
         username, registered = await _live_register_with(lane, "uadm_revoked_invitee", token)
 
         violations: list[str] = []
         _expect(violations, (revoked.status_code, revoked.content) == (204, b""), f"DELETE: expected 204 with no body, got {revoked.status_code} {revoked.text}")
-        _expect(violations, await _listed(admin.cookie, "/users/invites", invite_id) is None, "a revoked invitation must no longer be listed")
+        listed = await _listed(admin.cookie, LINKS, invite_id)
+        violations += _link_violations(listed, "the revoked invitation", purpose="invite", state="revoked", revocable=False, created_by_user_id=admin.account.user_id, used_by_user_id=None, used_by_username=None)
         purpose, consumed_at, revoked_at = await _lane_token_state(invite_id)
         _expect(violations, revoked_at is not None and consumed_at is None, f"the row must be revoked, not consumed: consumed_at={consumed_at}, revoked_at={revoked_at}")
         _expect(violations, again.status_code == 404, f"a second DELETE: expected 404, got {again.status_code} {again.text}")
         _expect(violations, _refusal(registered) == (400, "INVITE_INVALID"), f"a revoked invitation must register nobody: {registered.status_code} {registered.text}")
         _expect(violations, await _lane_user_id(username) is None, f"{username} was created with a revoked invitation")
-        assert not violations, f"A revoked invitation must be gone:{_verdict(violations)}"
-        print_success("204, unlisted, 404 the second time, its token opens nothing")
+        assert not violations, f"A revoked invitation must open nothing:{_verdict(violations)}"
+        print_success("204, listed revoked, 404 the second time, its token opens nothing")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("kind", ["consumed-invitation", "live-reset-link"])
-    async def test_what_is_not_a_live_invitation_cannot_be_revoked_and_stays_as_it_was(self, lane: _LaneRows, kind: str) -> None:
-        """UADM-006: DELETE /users/invites/{id} of a consumed invitation, or of the id of a live password-reset link → 404, and the row is untouched: the reset link stays live.
+    @pytest.mark.parametrize("kind", ["consumed-invitation", "used-reset-link"])
+    async def test_a_used_link_cannot_be_revoked_and_stays_as_it_was(self, lane: _LaneRows, kind: str) -> None:
+        """UADM-006: DELETE /users/account-links/{id} of a consumed invitation, or of a used password-reset link → 404, and the row is untouched; it is still listed used.
 
-        Presence barrier first: a live invitation of this case is revoked with 204. A route that does not exist answers 404 too.
+        Presence barrier first: an open invitation of this case is revoked with 204. A route that does not exist answers 404 too.
+        Until lot UA3 the second kind was a live reset link, a 404 while only invitations were revoked: an open reset link is
+        revocable now (UADM-LINK-01).
         """
-        print_section(f"UADM-006: DELETE /users/invites/{{id}} of a {kind}")
+        print_section(f"UADM-006: DELETE {LINKS}/{{id}} of a {kind}")
         admin = await _live_admin(lane)
         holder = await _live_register(lane, "uadm_holder")
         barrier = await _lane_issue(lane, INVITE, created_by_user_id=admin.account.user_id)
-        revoked = await _live("DELETE", f"/users/invites/{barrier.record.id}", cookie=admin.cookie)
-        assert revoked.status_code == 204, f"Presence barrier: DELETE of a live invitation of this case must answer 204, or the 404 below proves nothing: {revoked.status_code} {revoked.text}"
-        if kind == "live-reset-link":
+        revoked = await _live("DELETE", f"{LINKS}/{barrier.record.id}", cookie=admin.cookie)
+        assert revoked.status_code == 204, f"Presence barrier: DELETE of an open invitation of this case must answer 204, or the 404 below proves nothing: {revoked.status_code} {revoked.text}"
+        if kind == "used-reset-link":
             issued = await _lane_issue(lane, PASSWORD_RESET, user_id=holder.user_id)
+            await _lane_consume(issued.token, PASSWORD_RESET, holder.user_id)
         else:
             issued = await _lane_issue(lane, INVITE, created_by_user_id=admin.account.user_id)
             await _lane_consume(issued.token, INVITE, holder.user_id)
         before = await _lane_token_state(issued.record.id)
 
-        response = await _live("DELETE", f"/users/invites/{issued.record.id}", cookie=admin.cookie)
+        response = await _live("DELETE", f"{LINKS}/{issued.record.id}", cookie=admin.cookie)
 
-        assert response.status_code == 404, f"only a live invitation can be revoked: expected 404 for a {kind}, got {response.status_code} {response.text}"
+        assert response.status_code == 404, f"only an open link can be revoked: expected 404 for a {kind}, got {response.status_code} {response.text}"
         assert await _lane_token_state(issued.record.id) == before, f"the {kind} changed: {before} → {await _lane_token_state(issued.record.id)}"
-        print_success(f"{kind}: 404, untouched")
+        violations = _link_violations(await _listed(admin.cookie, LINKS, issued.record.id), kind, state="used", revocable=False, used_by_user_id=holder.user_id, used_by_username=holder.username)
+        assert not violations, f"the {kind} must still be listed used:{_verdict(violations)}"
+        print_success(f"{kind}: 404, untouched, listed used")
+
+
+class TestAccountLinksOnTheLane:
+    """Lot UA3 on the lane's server: the case's own links, found by id among every neighbour's."""
+
+    @pytest.mark.asyncio
+    async def test_an_open_reset_link_is_revoked_and_resets_nothing(self, lane: _LaneRows) -> None:
+        """UADM-LINK-01: a reset link issued by POST /users/{id}/password-reset-link is listed open and revocable, for the holder, issued by the caller; DELETE /users/account-links/{id} → 204 with no body; it is listed revoked, its row revoked and not consumed; its token → 400 TOKEN_INVALID at POST /auth/password-reset and the old password still signs in; a second DELETE → 404."""
+        print_section("UADM-LINK-01: revoking a reset link")
+        admin = await _live_admin(lane)
+        holder = await _live_register(lane, "uadm_link_holder")
+        token = await _admin_reset_link(admin, holder.user_id)
+        row = await _lane_token_of(token)
+        assert row is not None and row.id is not None, "Setup: the reset link must be stored"
+        lane.token_ids.append(row.id)
+        link = {"purpose": "password_reset", "user_id": holder.user_id, "username": holder.username, "grants_admin": False, "created_by_user_id": admin.account.user_id, "created_by_username": admin.account.username, "used_by_user_id": None, "used_by_username": None}
+        violations = _link_violations(await _listed(admin.cookie, LINKS, row.id), "the open reset link", state="open", revocable=True, **link)
+        assert not violations, f"Presence barrier: the reset link must be listed open and revocable before it is revoked:{_verdict(violations)}"
+
+        revoked = await _live("DELETE", f"{LINKS}/{row.id}", cookie=admin.cookie)
+        used = await _live_reset_password(token, NEW_PASSWORD)
+        again = await _live("DELETE", f"{LINKS}/{row.id}", cookie=admin.cookie)
+
+        _expect(violations, (revoked.status_code, revoked.content) == (204, b""), f"DELETE: expected 204 with no body, got {revoked.status_code} {revoked.text}")
+        violations += _link_violations(await _listed(admin.cookie, LINKS, row.id), "the revoked reset link", state="revoked", revocable=False, **link)
+        _, consumed_at, revoked_at = await _lane_token_state(row.id)
+        _expect(violations, revoked_at is not None and consumed_at is None, f"the row must be revoked, not consumed: consumed_at={consumed_at}, revoked_at={revoked_at}")
+        _expect(violations, _refusal(used) == (400, "TOKEN_INVALID"), f"a revoked reset link: expected 400 TOKEN_INVALID, got {used.status_code} {used.text}")
+        _expect(violations, (await _live_login(holder)).status_code == 200, "a refused reset link must leave the password as it was")
+        _expect(violations, (await _live_login(holder, NEW_PASSWORD)).status_code == 401, "the revoked link must not have set the new password")
+        _expect(violations, again.status_code == 404, f"a second DELETE: expected 404, got {again.status_code} {again.text}")
+        assert not violations, f"A revoked reset link must reset nothing:{_verdict(violations)}"
+        print_success("listed open, 204, listed revoked, 400 TOKEN_INVALID, 404 the second time")
+
+    @pytest.mark.asyncio
+    async def test_the_listing_carries_no_token_and_no_hash(self, lane: _LaneRows) -> None:
+        """UADM-LINK-02: an invitation (POST /users/invites) and a reset link (POST /users/{id}/password-reset-link) of this case are both listed by GET /users/account-links, each exactly its sixteen fields; the body holds neither plaintext token those routes handed out nor its SHA-256, and no item of the listing, whoever's, has a key named ``token`` or ``token_hash``.
+
+        The presence of both links is the barrier: a listing that missed them would hold no token either.
+        """
+        print_section("UADM-LINK-02: no token in the listing")
+        admin = await _live_admin(lane)
+        holder = await _live_register(lane, "uadm_link_secret")
+        created = await _live("POST", "/users/invites", cookie=admin.cookie, json={"grants_admin": False, "email": lane.new_email("uadm_link_secret_invitee")})
+        assert created.status_code == 201, f"POST /users/invites: expected 201, got {created.status_code} {created.text}"
+        invite_id, invite_token = created.json()["invite"]["id"], created.json()["token"]
+        lane.token_ids.append(invite_id)
+        reset_token = await _admin_reset_link(admin, holder.user_id)
+        reset_row = await _lane_token_of(reset_token)
+        assert reset_row is not None and reset_row.id is not None, "Setup: the reset link must be stored"
+        lane.token_ids.append(reset_row.id)
+
+        response = await _live("GET", LINKS, cookie=admin.cookie)
+
+        assert response.status_code == 200, f"GET {LINKS}: expected 200, got {response.status_code} {response.text}"
+        body = response.json()
+        violations: list[str] = []
+        _expect(violations, isinstance(body, dict) and set(body) == {"items"}, f"GET {LINKS} must answer exactly {{items}}: {sorted(body) if isinstance(body, dict) else body}")
+        items = {item.get("id"): item for item in body.get("items", [])} if isinstance(body, dict) else {}
+        violations += _link_violations(items.get(invite_id), "the invitation", purpose="invite", state="open")
+        violations += _link_violations(items.get(reset_row.id), "the reset link", purpose="password_reset", state="open", user_id=holder.user_id)
+        secrets = {"the invitation's token": invite_token, "the reset link's token": reset_token, "the invitation's hash": hash_token(invite_token), "the reset link's hash": hash_token(reset_token)}
+        leaked = [name for name, secret in secrets.items() if secret in response.text]
+        _expect(violations, leaked == [], f"the listing carries {leaked}")
+        named = _keys_named(body, frozenset({"token", "token_hash"}))
+        _expect(violations, named == [], f"keys named token or token_hash in the listing: {named}")
+        assert not violations, f"GET {LINKS} must never show a token nor its hash:{_verdict(violations)}"
+        print_success("both links listed, no plaintext, no hash, no token key")
 
 
 # ============================================================================
@@ -1929,8 +2050,11 @@ class TestLinksAndInvitationsInProcess:
         print_success("7 days, 30 minutes, hashes only")
 
     @pytest.mark.asyncio
-    async def test_only_live_invitations_are_listed_and_counted_and_every_account_is_listed(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """UADM-028: two administrators, a member, an inactive account; invitations live (one from the API, one by the other administrator), revoked, consumed and expired, and a reset link. GET /users/invites lists exactly the two live ones; GET /users exactly the four accounts with their flags; both say usage {used: 3 active + 2 live = 5, max_users: 10, billing_url}; without the variables {used: 5, max_users: null, billing_url: null}."""
+    async def test_every_link_is_listed_with_its_state_only_live_invitations_are_counted_and_every_account_is_listed(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-028: two administrators, a member, an inactive account; invitations live (one from the API, one by the other administrator), revoked, consumed and expired, a reset link open and one spent through POST /auth/password-reset. GET /users/account-links lists exactly those seven links, newest first, each with its state and names — the consumed invitation used by the member, the spent reset link used by its own account —, revocable the three open ones only; GET /users exactly the four accounts with their flags and usage {used: 3 active + 2 live = 5, max_users: 10, billing_url}; without the variables {used: 5, max_users: null, billing_url: null}.
+
+        Every row of the private instance is the test's: the whole list is asserted, not only its own ids.
+        """
         print_section("UADM-028: what is listed and what is counted")
         root, cookie = await _admin(private)
         other = await _add_user(private, "other_admin", admin=True)
@@ -1939,58 +2063,134 @@ class TestLinksAndInvitationsInProcess:
         live = await _call(private, "POST", "/users/invites", cookie=cookie, json={})
         revoked = await _call(private, "POST", "/users/invites", cookie=cookie, json={})
         assert (live.status_code, revoked.status_code) == (201, 201), f"Setup: {live.status_code} {live.text}; {revoked.status_code} {revoked.text}"
-        assert (await _call(private, "DELETE", f"/users/invites/{revoked.json()['invite']['id']}", cookie=cookie)).status_code == 204, "Setup: revoke"
+        assert (await _call(private, "DELETE", f"{LINKS}/{revoked.json()['invite']['id']}", cookie=cookie)).status_code == 204, "Setup: revoke"
         live_by_other = await _private_issue(private, INVITE, created_by_user_id=other.user_id)
         consumed = await _private_issue(private, INVITE, created_by_user_id=other.user_id)
         await _private_consume(private, consumed.token, member.user_id)
-        await _private_issue(private, INVITE, created_by_user_id=other.user_id, now=utcnow() - DEFAULT_TTL[INVITE] - timedelta(minutes=1))
-        await _private_issue(private, PASSWORD_RESET, user_id=member.user_id)
+        expired = await _private_issue(private, INVITE, created_by_user_id=other.user_id, now=utcnow() - DEFAULT_TTL[INVITE] - timedelta(minutes=1))
+        reset_open = await _private_issue(private, PASSWORD_RESET, user_id=member.user_id)
+        reset_link = await _call(private, "POST", f"/users/{other.user_id}/password-reset-link", cookie=cookie)
+        assert reset_link.status_code == 201, f"Setup: a reset link for {other.username}: {reset_link.status_code} {reset_link.text}"
+        spent = await _call(private, "POST", "/auth/password-reset", json={"token": reset_link.json()["token"], "new_password": NEW_PASSWORD})
+        assert spent.status_code == 200, f"Setup: spending the reset link: {spent.status_code} {spent.text}"
+        reset_spent = next(row for row in await _private_tokens(private) if row.token_hash == hash_token(reset_link.json()["token"]))
         monkeypatch.setenv(MAX_USERS_VARIABLE, "10")
         monkeypatch.setenv(BILLING_URL_VARIABLE, BILLING_LINK)
 
-        invitations = await _call(private, "GET", "/users/invites", cookie=cookie)
+        links = await _call(private, "GET", LINKS, cookie=cookie)
         accounts = await _call(private, "GET", "/users", cookie=cookie)
         monkeypatch.delenv(MAX_USERS_VARIABLE)
         monkeypatch.delenv(BILLING_URL_VARIABLE)
-        unlimited = await _call(private, "GET", "/users/invites", cookie=cookie)
+        unlimited = await _call(private, "GET", "/users", cookie=cookie)
 
-        assert (invitations.status_code, accounts.status_code, unlimited.status_code) == (200, 200, 200), f"{invitations.text}; {accounts.text}; {unlimited.text}"
+        assert (links.status_code, accounts.status_code, unlimited.status_code) == (200, 200, 200), f"{links.text}; {accounts.text}; {unlimited.text}"
         usage = {"used": 5, "max_users": 10, "billing_url": BILLING_LINK}
         violations: list[str] = []
-        listed = sorted(item["id"] for item in invitations.json()["items"])
-        _expect(violations, listed == sorted([live.json()["invite"]["id"], live_by_other.record.id]), f"GET /users/invites must list the two live invitations only, whoever issued them: {listed}")
-        _expect(violations, invitations.json()["usage"] == usage, f"GET /users/invites usage: expected {usage}, got {invitations.json()['usage']}")
-        items = {item["id"]: item for item in accounts.json()["items"]}
-        _expect(violations, sorted(items) == sorted(account.user_id for account in (root, other, member, dormant)), f"GET /users must list every account, active or not: {sorted(items)}")
+        _expect(violations, set(links.json()) == {"items"}, f"GET {LINKS} must answer exactly {{items}}, the usage is GET /users': {sorted(links.json())}")
+        listed = links.json()["items"]
+        items = {item["id"]: item for item in listed}
+        nobody = {"used_by_user_id": None, "used_by_username": None}
+        expected = {
+            live.json()["invite"]["id"]: ("the live invitation", {"purpose": "invite", "state": "open", "revocable": True, "user_id": None, "username": None, "created_by_user_id": root.user_id, "created_by_username": root.username, **nobody}),
+            revoked.json()["invite"]["id"]: ("the revoked invitation", {"purpose": "invite", "state": "revoked", "revocable": False, "created_by_username": root.username, **nobody}),
+            live_by_other.record.id: ("the other administrator's live invitation", {"purpose": "invite", "state": "open", "revocable": True, "created_by_user_id": other.user_id, "created_by_username": other.username, **nobody}),
+            consumed.record.id: ("the consumed invitation", {"purpose": "invite", "state": "used", "revocable": False, "created_by_username": other.username, "used_by_user_id": member.user_id, "used_by_username": member.username}),
+            expired.record.id: ("the expired invitation", {"purpose": "invite", "state": "expired", "revocable": False, "created_by_username": other.username, **nobody}),
+            reset_open.record.id: ("the open reset link", {"purpose": "password_reset", "state": "open", "revocable": True, "user_id": member.user_id, "username": member.username, "created_by_user_id": None, "created_by_username": None, **nobody}),
+            reset_spent.id: ("the spent reset link", {"purpose": "password_reset", "state": "used", "revocable": False, "user_id": other.user_id, "username": other.username, "created_by_username": root.username, "used_by_user_id": other.user_id, "used_by_username": other.username}),
+        }
+        _expect(violations, sorted(items) == sorted(expected) and len(listed) == len(items), f"GET {LINKS} must list every link of the instance once, in every state: {[item['id'] for item in listed]}, expected {sorted(expected)}")
+        for link_id, (label, fields) in expected.items():
+            violations += _link_violations(items.get(link_id), label, **fields)
+        order = [item["id"] for item in listed]
+        newest_first = [item["id"] for item in sorted(listed, key=lambda item: (_instant(item["created_at"]), item["id"]), reverse=True)]
+        _expect(violations, order == newest_first, f"GET {LINKS} must list the newest first: {order}, expected {newest_first}")
+        accounts_listed = {item["id"]: item for item in accounts.json()["items"]}
+        _expect(violations, sorted(accounts_listed) == sorted(account.user_id for account in (root, other, member, dormant)), f"GET /users must list every account, active or not: {sorted(accounts_listed)}")
         for account, active, superuser in ((root, True, True), (other, True, True), (member, True, False), (dormant, False, False)):
-            violations += _user_item_violations(items.get(account.user_id), account, active=active, superuser=superuser)
+            violations += _user_item_violations(accounts_listed.get(account.user_id), account, active=active, superuser=superuser)
         _expect(violations, accounts.json()["usage"] == usage, f"GET /users usage: expected {usage}, got {accounts.json()['usage']}")
         _expect(violations, unlimited.json()["usage"] == {"used": 5, "max_users": None, "billing_url": None}, f"without the variables: {unlimited.json()['usage']}")
         assert not violations, f"Listing and usage broke their contract:{_verdict(violations)}"
-        print_success("two live invitations listed, four accounts, used 5")
+        print_success("seven links with their states, newest first; four accounts, used 5")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("kind", ["expired", "never-issued"])
-    async def test_an_expired_or_never_issued_invitation_cannot_be_revoked(self, private: _Private, kind: str) -> None:
-        """UADM-029: DELETE /users/invites/{id} of an expired invitation, or of an id never issued → 404, and nothing else is revoked.
+    @pytest.mark.parametrize("kind", ["expired", "never-issued", "expired-admin-setup"])
+    async def test_an_expired_or_never_issued_link_cannot_be_revoked(self, private: _Private, kind: str) -> None:
+        """UADM-029: DELETE /users/account-links/{id} of an expired invitation, of an id never issued, or of an expired setup link — not open, so 404 before the 409 of its purpose (UADM-LINK-03) — → 404, and nothing else is revoked.
 
         Presence barrier first: a live invitation is revoked with 204. A route that does not exist answers 404 too.
         """
-        print_section(f"UADM-029: DELETE an {kind} invitation")
+        print_section(f"UADM-029: DELETE an {kind} link")
         root, cookie = await _admin(private)
         live = await _private_issue(private, INVITE, created_by_user_id=root.user_id)
-        barrier = await _call(private, "DELETE", f"/users/invites/{live.record.id}", cookie=cookie)
+        barrier = await _call(private, "DELETE", f"{LINKS}/{live.record.id}", cookie=cookie)
         assert barrier.status_code == 204, f"Presence barrier: DELETE of a live invitation must answer 204, or the 404 below proves nothing: {barrier.status_code} {barrier.text}"
         invite_id = NEVER_ISSUED_ID
         if kind == "expired":
             invite_id = (await _private_issue(private, INVITE, created_by_user_id=root.user_id, now=utcnow() - DEFAULT_TTL[INVITE] - timedelta(minutes=1))).record.id
+        elif kind == "expired-admin-setup":
+            invite_id = (await _private_issue(private, ADMIN_SETUP, user_id=root.user_id, now=utcnow() - DEFAULT_TTL[ADMIN_SETUP] - timedelta(minutes=1))).record.id
         revoked_before = {row.id for row in await _private_tokens(private) if row.revoked_at is not None}
 
-        response = await _call(private, "DELETE", f"/users/invites/{invite_id}", cookie=cookie)
+        response = await _call(private, "DELETE", f"{LINKS}/{invite_id}", cookie=cookie)
 
-        assert response.status_code == 404, f"an {kind} invitation is not live: expected 404, got {response.status_code} {response.text}"
+        assert response.status_code == 404, f"an {kind} link is not open: expected 404, got {response.status_code} {response.text}"
         assert {row.id for row in await _private_tokens(private) if row.revoked_at is not None} == revoked_before, "a refused revocation must revoke nothing"
         print_success("404")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("purpose", "revocable"),
+        [
+            pytest.param(INVITE, True, id="invite"),
+            pytest.param(PASSWORD_RESET, True, id="password-reset"),
+            pytest.param(EMAIL_VERIFICATION, True, id="email-verification"),
+            pytest.param(ADMIN_SETUP, False, id="admin-setup"),
+            pytest.param(EMAIL_CHANGE, False, id="email-change"),
+        ],
+    )
+    async def test_only_the_open_links_of_three_purposes_are_revoked_here(self, private: _Private, purpose: AccountTokenPurpose, revocable: bool) -> None:
+        """UADM-LINK-03: an open link of each purpose, for an active member (an invitation for nobody), listed open with ``revocable`` true for an invitation, a reset link and a verification link, false for a setup link and an owner's email change. DELETE /users/account-links/{id}: the first three → 204, the link then inspects revoked; the other two → 409 ``detail: {error_code: LINK_NOT_REVOCABLE, message}``, their row untouched, the token still valid, the link still listed open.
+
+        In-process: an open setup link or email change on the lane would be a neighbour's to read; here every row is the test's.
+        """
+        print_section(f"UADM-LINK-03: DELETE an open {purpose.value} link")
+        _, cookie = await _admin(private)
+        member = await _add_user(private, "member")
+        arguments: dict[str, Any] = {} if purpose == INVITE else {"user_id": member.user_id}
+        if purpose in (EMAIL_VERIFICATION, EMAIL_CHANGE):
+            arguments["email"] = "member-new@example.com"
+        issued = await _private_issue(private, purpose, **arguments)
+        link_id = issued.record.id
+        violations = _link_violations(await _private_link_item(private, cookie, link_id), f"the open {purpose.value} link", purpose=purpose.value, state="open", revocable=revocable)
+        assert not violations, f"Presence barrier: the link must be listed open before the DELETE:{_verdict(violations)}"
+        before = next(row for row in await _private_token_columns(private) if row["id"] == link_id)
+
+        response = await _call(private, "DELETE", f"{LINKS}/{link_id}", cookie=cookie)
+
+        async with AsyncSession(private.engine) as session:
+            status = (await inspect_token(session, issued.token, purpose)).status
+        after = next(row for row in await _private_token_columns(private) if row["id"] == link_id)
+        listed = await _private_link_item(private, cookie, link_id)
+        if revocable:
+            _expect(violations, (response.status_code, response.content) == (204, b""), f"an open {purpose.value} link: expected 204 with no body, got {response.status_code} {response.text}")
+            _expect(violations, status == TokenStatus.REVOKED, f"the revoked link must inspect revoked, got {status.value}")
+            violations += _link_violations(listed, f"the revoked {purpose.value} link", state="revoked", revocable=False)
+        else:
+            _expect(violations, _refusal(response) == (409, "LINK_NOT_REVOCABLE") and set(_detail(response)) == {"error_code", "message"}, f"an open {purpose.value} link: expected 409 {{error_code: LINK_NOT_REVOCABLE, message}}, got {response.status_code} {response.text}")
+            _expect(violations, after == before, f"a refused revocation must change nothing: {before} → {after}")
+            _expect(violations, status == TokenStatus.VALID, f"the {purpose.value} link must still work, it inspects {status.value}")
+            violations += _link_violations(listed, f"the {purpose.value} link", state="open", revocable=False)
+        assert not violations, f"DELETE {LINKS}/{{id}} of an open {purpose.value} link:{_verdict(violations)}"
+        print_success(f"{purpose.value}: {response.status_code}")
+
+
+async def _private_link_item(private: _Private, cookie: str, link_id: int) -> Optional[dict[str, Any]]:
+    """The link of id ``link_id`` in GET /users/account-links of the private instance, after a 200; None when absent."""
+    response = await _call(private, "GET", LINKS, cookie=cookie)
+    assert response.status_code == 200, f"GET {LINKS} as an administrator: {response.status_code} {response.text}"
+    return next((item for item in response.json()["items"] if item.get("id") == link_id), None)
 
 
 # ============================================================================
@@ -2077,7 +2277,7 @@ class TestStructuredLogs:
                 return bodies[-1]
 
             invitation = await act("issue an invitation", "POST", "/users/invites", {"grants_admin": True, "email": "guest@example.com"}, 201)
-            await act("revoke the invitation", "DELETE", f"/users/invites/{invitation['invite']['id']}", None, 204)
+            await act("revoke the invitation", "DELETE", f"{LINKS}/{invitation['invite']['id']}", None, 204)
             first = await act("issue a reset link", "POST", f"/users/{member.user_id}/password-reset-link", None, 201)
             second = await act("issue another reset link", "POST", f"/users/{member.user_id}/password-reset-link", None, 201)
             await act("deactivate", "PATCH", f"/users/{member.user_id}", {"is_active": False})
@@ -2087,7 +2287,7 @@ class TestStructuredLogs:
             await act("revoke the sessions", "POST", f"/users/{member.user_id}/sessions/revoke", None, 204)
             await act("reset the onboarding", "POST", f"/users/{member.user_id}/onboarding/reset", {}, 204)
             await act("reset one flow", "POST", f"/users/{member.user_id}/onboarding/reset", {"flow": OnboardingFlow.INTRO_TOUR.value}, 204)
-            reads = [await _call(private, "GET", path, cookie=cookie) for path in ("/users/invites", "/users")]
+            reads = [await _call(private, "GET", path, cookie=cookie) for path in (LINKS, "/users")]
 
         assert any(event.get("event") == CANARY for event in events), "barrier: structlog events of the users module's logger do not reach capture_logs"
         assert any(record.getMessage() == CANARY for record in caplog.records), "barrier: stdlib records of the users module's logger do not reach caplog"

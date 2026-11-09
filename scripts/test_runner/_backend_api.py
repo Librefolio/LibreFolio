@@ -747,9 +747,9 @@ def api_registration(verbose: bool = False, test_names: list = None) -> bool:
 
 
 def api_users_admin(verbose: bool = False, test_names: list = None) -> bool:
-    """Run the users admin API tests: invitations, accounts and usage, PATCH with its guards, reset links, sessions, onboarding reset, logs."""
+    """Run the users admin API tests: invitations, account links, accounts and usage, PATCH with its guards, reset links, sessions, onboarding reset, logs."""
     print_section("Users Admin API Tests")
-    print_info("Testing GET/POST /users/invites, DELETE /users/invites/{id}, GET /users, PATCH /users/{id}, POST /users/{id}/password-reset-link, /sessions/revoke, /onboarding/reset")
+    print_info("Testing POST /users/invites, GET /users/account-links, DELETE /users/account-links/{id}, GET /users, PATCH /users/{id}, POST /users/{id}/password-reset-link, /sessions/revoke, /onboarding/reset")
     print_info("In-process on private databases where a mode, a variable, a limit or the last administrator is needed; on the lane's server only the case's own accounts and tokens")
     print_info("Note: Server will be automatically started and stopped by test")
 
@@ -1558,7 +1558,7 @@ Tests for REST API endpoints (server auto-started):
     )
     # Write-scoped, no exclusive_because: a waiting administrator exists only in-process on private databases; on the
     # lane's server only refusals that write nothing.
-    add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
+    add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, account links (list, states, revoke), accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
     add_test(api, "settings-currency-strict", api_settings_currency_strict, name="Settings Currency Strict API", desc="E-19a: base_currency strict on PUT /settings/user and the welcome flow; the 422 names the ISO code")
