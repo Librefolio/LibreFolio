@@ -28,7 +28,7 @@ vi.mock('$lib/stores/app/settings', async () => {
 import * as settingsModule from '$lib/stores/app/settings';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 import type {UserSettings} from '$lib/types';
-import {DEFAULT_CHART_SETTINGS, clearGlobalLineShape, getGlobalLineShape, getGlobalSettings, getSettingsForPair, lineShapeFollowsGlobal, resolveLineShape, setGlobalLineShape, setGlobalSettings, setPairSettings, type ChartSettings} from './chartSettingsStore.svelte';
+import {DEFAULT_CHART_SETTINGS, applySavedGlobalLineShape, getGlobalLineShape, getGlobalSettings, getSettingsForPair, lineShapeFollowsGlobal, resolveLineShape, setGlobalLineShape, setGlobalSettings, setPairSettings, type ChartSettings} from './chartSettingsStore.svelte';
 
 /** Y2 FB-3 + lot UIP: the shape of the lines is one global setting (kept by the server) that every chart follows, and one chart may override. */
 
@@ -122,13 +122,17 @@ describe('chartSettingsStore — the line shape (Y2 FB-3, lot UIP)', () => {
         expect(getSettingsForPair('EUR-USD', 'fx').lineShape).toBeUndefined();
     });
 
-    it('clearing the global shape sends null, so the administrator default applies again', async () => {
+    it('a shape already saved by the server reaches every chart without a write: per-chart overrides lose lineShape only', () => {
         freshUser();
-        fake.set(serverSettings({chart_line_shape: 'spline'}, {theme: 'auto', chart_line_shape: 'steps'}));
-        expect(await clearGlobalLineShape()).toBe(true);
-        expect(fake.updateUiPreference).toHaveBeenCalledExactlyOnceWith('chart_line_shape', null);
-        expect(lineShapeFollowsGlobal()).toBe(true);
+        setPairSettings('asset-7', {...DEFAULT_CHART_SETTINGS, lineShape: 'spline', areaFill: false});
+        expect(resolveLineShape(getSettingsForPair('asset-7', 'assets')), 'premise: the chart has its own shape').toBe('spline');
+        fake.set(serverSettings({chart_line_shape: 'steps'}));
+        applySavedGlobalLineShape();
+        expect(fake.updateUiPreference).not.toHaveBeenCalled();
         expect(getGlobalLineShape()).toBe('steps');
+        expect(getSettingsForPair('asset-7', 'assets').lineShape).toBeUndefined();
+        expect(resolveLineShape(getSettingsForPair('asset-7', 'assets'))).toBe('steps');
+        expect(getSettingsForPair('asset-7', 'assets').areaFill, 'nothing else of the chart is touched').toBe(false);
     });
 
     it('refuses a shape it does not know, without writing', async () => {
