@@ -6,12 +6,14 @@
     store, i.e. the backend's one map (GET /utilities/sectors), never from the data;
   - 'type': translates asset-type keys via assets.types.*; shows the PNG icon
     inside each slice (ECharts rich text), icon + label in the legend; the tooltip opens with
-    the icon and the type's badge (none for the Liquidity slice, not an asset type);
+    the icon and the type's badge (the Liquidity slice, the cash and not an asset type, gets the
+    Liquidity badge, in the colour of the cash bar of the net-worth card);
   - 'asset': one ring, one slice per asset, the name exactly as sent (nobody's translation
     key, no emoji, no families), each slice in the colour of its weight rank (`colorRanks`,
     asset id -> rank) in the designer's sequence; an entry without an id (the cash) wears
     the Liquidity type colour; each slice shows its asset's icon (its own, else its type's, the cash's the Liquidity one), and the pie has no legend:
-    the icons and the tooltip name the slices.
+    the icons and the tooltip name the slices; the tooltip opens with the icon and the type's
+    badge, the Liquidity one for the cash.
 
   Every slice wears its category's own colour (GR1 of the designer's round 2): the same
   family or sector is the same colour in every view, portfolio and period, read through
@@ -39,7 +41,7 @@
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
-    import {ASSET_TYPES, assetTypeBadgeHtml, assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {ASSET_TYPES, LIQUIDITY_KEY, assetTypeBadgeHtml, assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum} from '$lib/components/charts/allocationRings';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -522,9 +524,10 @@
                 const iconUrl = getAssetTypeIconUrl(rawKey);
                 const iconHtml = `<img src="${escapeHtml(iconUrl)}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
                 // T-3c: the same first line as the asset pie's, the icon then the type's badge (without the type's icon: it is
-                // already beside it), the name on its own line. The Liquidity slice is the cash, not an asset type: one line.
-                const isAssetType = (ASSET_TYPES as readonly string[]).includes(rawKey);
-                const badgeLine = isAssetType ? `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${assetTypeBadgeHtml(rawKey, tr(`assets.types.${rawKey}`) || rawKey, {icon: false})}</span><br/>` : '';
+                // already beside it), the name on its own line. The Liquidity slice is the cash, not an asset type, but it wears
+                // the Liquidity badge (R-6): the badge helper maps `LIQUIDITY` to the cash's own roles.
+                const hasBadge = (ASSET_TYPES as readonly string[]).includes(rawKey) || rawKey === LIQUIDITY_KEY;
+                const badgeLine = hasBadge ? `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${assetTypeBadgeHtml(rawKey, tr(`assets.types.${rawKey}`) || rawKey, {icon: false})}</span><br/>` : '';
                 // The shading says "this belongs to that mass"; this line says how big
                 // the mass is. Only when there is actually a sibling — otherwise it
                 // would restate the slice's own number.
@@ -545,7 +548,7 @@
                     parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${escapeHtml(parentLabel)} ${formatPercent(parentTotal, {digits: 2, signed: false, trim: true})}</span>`;
                 }
                 const nameLine = `${escapeHtml(String(translated))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
-                return isAssetType ? `${badgeLine}${nameLine}` : `${iconHtml}${nameLine}`;
+                return hasBadge ? `${badgeLine}${nameLine}` : `${iconHtml}${nameLine}`;
             }
             if (mode === 'asset') {
                 // The icon of the slice: the asset's own once it is known to load, else its type's (the cash: Liquidity).
@@ -554,9 +557,11 @@
                 const iconHtml = `<img src="${escapeHtml(drawnIcon)}" alt="" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
                 const nameLine = `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
                 // T-3: an asset's first line is its icon and its type's badge (without the type's icon: the slice's is beside it);
-                // the name follows on its own line. The cash slice keeps one line.
-                if (slice.assetId === null || !slice.assetType) return `${iconHtml}${nameLine}`;
-                const badge = assetTypeBadgeHtml(slice.assetType, tr(`assets.types.${slice.assetType}`) || slice.assetType, {icon: false});
+                // the name follows on its own line. The cash slice (no id) wears the Liquidity badge, as on the type pie (R-6);
+                // an asset with no type keeps one line.
+                const badgeType = slice.assetId === null ? LIQUIDITY_KEY : slice.assetType;
+                if (!badgeType) return `${iconHtml}${nameLine}`;
+                const badge = assetTypeBadgeHtml(badgeType, tr(`assets.types.${badgeType}`) || badgeType, {icon: false});
                 return `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${badge}</span><br/>${nameLine}`;
             }
             // Sector: display name already contains the emoji prefix

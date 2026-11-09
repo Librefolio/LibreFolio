@@ -147,6 +147,9 @@ const BADGE_DOT_CLASS_MAP: Record<string, string> = {
     CROWDFUND_REAL_ESTATE: 'bg-lf-cat-real-estate-on-soft',
 };
 
+/** The key of the cash bucket in the badge, icon and translation maps (`assets.types.LIQUIDITY`); not an `AssetType`. */
+export const LIQUIDITY_KEY = 'LIQUIDITY';
+
 /** The neutral chip for a type nobody mapped. The gate test exists so it never shows. */
 const BADGE_CLASS_FALLBACK = 'bg-lf-neutral text-lf-secondary';
 
@@ -164,6 +167,7 @@ export function assetTypeBadgeDotClass(type: string | null | undefined): string 
  * The asset-type badge as markup, for the views that build HTML strings: `AssetTable`'s cell and the asset pie's tooltip
  * (T-3). The same chip as `AssetCard`'s: the family's colour, the type's icon, the label and a subtype's dot. `icon: false`
  * leaves the type's icon out where one is already beside the badge. `label` is the translated type; it is escaped here.
+ * `LIQUIDITY_KEY` draws the cash's badge (R-6: the Liquidity slice of the allocation pies), on the cash's own roles.
  */
 export function assetTypeBadgeHtml(type: string, label: string, options: {icon?: boolean} = {}): string {
     const icon = options.icon ?? true;
